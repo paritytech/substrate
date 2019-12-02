@@ -195,6 +195,7 @@ fn import_block<Backend, Exec, Block, RtApi>(
 		header: block.header().clone(),
 		post_digests: Vec::new(),
 		body: Some(block.extrinsics().to_vec()),
+		storage_changes: None,
 		finalized: false,
 		justification: None,
 		auxiliary: Vec::new(),

@@ -18,7 +18,10 @@
 
 use super::*;
 use environment::HasVoted;
-use network::test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
+use network::test::{
+	Block, DummySpecialization, Hash, TestNetFactory, BlockImportAdapter, Peer,
+	PeersClient,
+};
 use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
@@ -26,11 +29,13 @@ use futures03::{StreamExt as _, TryStreamExt as _};
 use tokio::runtime::current_thread;
 use keyring::Ed25519Keyring;
 use client::LongestChain;
-use client_api::error::Result;
+use client_api::{backend::TransactionFor, error::Result};
 use sr_api::{ApiRef, ApiErrorExt, Core, RuntimeVersion, ApiExt, StorageProof, ProvideRuntimeApi};
 use test_client::{self, runtime::BlockNumber};
-use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult};
-use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport};
+use consensus_common::{
+	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
+};
+use consensus_common::import_queue::{BoxJustificationImport, BoxFinalityProofImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
 use codec::Decode;
@@ -108,9 +113,9 @@ impl TestNetFactory for GrandpaTestNet {
 		PassThroughVerifier(false) // use non-instant finality.
 	}
 
-	fn make_block_import(&self, client: PeersClient)
+	fn make_block_import<Transaction>(&self, client: PeersClient)
 		-> (
-			BoxBlockImport<Block>,
+			BlockImportAdapter<Transaction>,
 			Option<BoxJustificationImport<Block>>,
 			Option<BoxFinalityProofImport<Block>>,
 			Option<BoxFinalityProofRequestBuilder<Block>>,
@@ -125,8 +130,13 @@ impl TestNetFactory for GrandpaTestNet {
 					LongestChain::new(backend.clone()),
 				).expect("Could not create block import for fresh peer.");
 				let justification_import = Box::new(import.clone());
-				let block_import = Box::new(import);
-				(block_import, Some(justification_import), None, None, Mutex::new(Some(link)))
+				(
+					BlockImportAdapter::new_full(import),
+					Some(justification_import),
+					None,
+					None,
+					Mutex::new(Some(link)),
+				)
 			},
 			PeersClient::Light(ref client, ref backend) => {
 				use crate::light_import::tests::light_block_import_without_justifications;
@@ -142,8 +152,13 @@ impl TestNetFactory for GrandpaTestNet {
 				).expect("Could not create block import for fresh peer.");
 				let finality_proof_req_builder = import.0.create_finality_proof_request_builder();
 				let proof_import = Box::new(import.clone());
-				let block_import = Box::new(import);
-				(block_import, None, Some(proof_import), Some(finality_proof_req_builder), Mutex::new(None))
+				(
+					BlockImportAdapter::new_light(import),
+					None,
+					Some(proof_import),
+					Some(finality_proof_req_builder),
+					Mutex::new(None),
+				)
 			},
 		}
 	}
@@ -974,7 +989,9 @@ fn allows_reimporting_change_blocks() {
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import(client.clone());
+	let (mut block_import, ..) = net.make_block_import::<TransactionFor<test_client::Backend, Block>>(
+		client.clone(),
+	);
 
 	let full_client = client.as_full().unwrap();
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
@@ -992,6 +1009,7 @@ fn allows_reimporting_change_blocks() {
 			justification: None,
 			post_digests: Vec::new(),
 			body: Some(block.extrinsics),
+			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
@@ -1026,7 +1044,9 @@ fn test_bad_justification() {
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import(client.clone());
+	let (mut block_import, ..) = net.make_block_import::<TransactionFor<test_client::Backend, Block>>(
+		client.clone(),
+	);
 
 	let full_client = client.as_full().expect("only full clients are used in test");
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
@@ -1045,6 +1065,7 @@ fn test_bad_justification() {
 			justification: Some(Vec::new()),
 			post_digests: Vec::new(),
 			body: Some(block.extrinsics),
+			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
@@ -1133,7 +1154,10 @@ fn voter_persists_its_votes() {
 					Ok(Async::NotReady) => {}
 					Ok(Async::Ready(Some(()))) => {
 						let (_block_import, _, _, _, link) =
-							self.net.lock().make_block_import(self.client.clone());
+							self.net.lock()
+								.make_block_import::<TransactionFor<test_client::Backend, Block>>(
+									self.client.clone(),
+								);
 						let link = link.lock().take().unwrap();
 
 						let grandpa_params = GrandpaParams {
@@ -1204,7 +1228,8 @@ fn voter_persists_its_votes() {
 		};
 
 		let set_state = {
-			let (_, _, _, _, link) = net.lock().make_block_import(client);
+			let (_, _, _, _, link) = net.lock()
+				.make_block_import::<TransactionFor<test_client::Backend, Block>>(client);
 			let LinkHalf { persistent_data, .. } = link.lock().take().unwrap();
 			let PersistentData { set_state, .. } = persistent_data;
 			set_state
@@ -1694,7 +1719,9 @@ fn imports_justification_for_regular_blocks_on_import() {
 	let mut net = GrandpaTestNet::new(api.clone(), 1);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import(client.clone());
+	let (mut block_import, ..) = net.make_block_import::<TransactionFor<test_client::Backend, Block>>(
+		client.clone(),
+	);
 
 	let full_client = client.as_full().expect("only full clients are used in test");
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
@@ -1742,6 +1769,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 		justification: Some(justification.encode()),
 		post_digests: Vec::new(),
 		body: Some(block.extrinsics),
+		storage_changes: None,
 		finalized: false,
 		auxiliary: Vec::new(),
 		fork_choice: ForkChoiceStrategy::LongestChain,

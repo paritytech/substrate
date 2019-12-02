@@ -93,6 +93,25 @@ pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
 	pub changes_trie_transaction: Option<ChangesTrieTransaction<H, N>>,
 }
 
+impl<Transaction, H: Hasher, N: BlockNumber> StorageChanges<Transaction, H, N> {
+	/// Deconstruct into the inner values
+	pub fn into_inner(self) -> (
+		Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
+		Transaction,
+		H::Out,
+		Option<ChangesTrieTransaction<H, N>>,
+	) {
+		(
+			self.main_storage_changes,
+			self.child_storage_changes,
+			self.transaction,
+			self.transaction_storage_root,
+			self.changes_trie_transaction,
+		)
+	}
+}
+
 /// The storage transaction are calculated as part of the `storage_root` and
 /// `changes_trie_storage_root`. These transactions can be reused for importing the block into the
 /// storage. So, we cache them to not require a recomputation of those transactions.

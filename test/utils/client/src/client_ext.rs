@@ -81,8 +81,8 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 }
 
 /// This implementation is required, because of the weird api requirements around `BlockImport`.
-impl<Block: BlockT, T> ClientBlockImportExt<Block> for std::sync::Arc<T>
-	where for<'r> &'r T: BlockImport<Block, Error = ConsensusError>
+impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::Arc<T>
+	where for<'r> &'r T: BlockImport<Block, Error = ConsensusError, Transaction = Transaction>
 {
 	fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
@@ -92,6 +92,7 @@ impl<Block: BlockT, T> ClientBlockImportExt<Block> for std::sync::Arc<T>
 			justification: None,
 			post_digests: vec![],
 			body: Some(extrinsics),
+			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
@@ -109,6 +110,7 @@ impl<Block: BlockT, T> ClientBlockImportExt<Block> for std::sync::Arc<T>
 			justification: None,
 			post_digests: vec![],
 			body: Some(extrinsics),
+			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::Custom(true),
@@ -126,6 +128,7 @@ impl<Block: BlockT, T> ClientBlockImportExt<Block> for std::sync::Arc<T>
 			justification: None,
 			post_digests: vec![],
 			body: Some(extrinsics),
+			storage_changes: None,
 			finalized: true,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::Custom(true),
@@ -148,6 +151,7 @@ impl<Block: BlockT, T> ClientBlockImportExt<Block> for std::sync::Arc<T>
 			justification: Some(justification),
 			post_digests: vec![],
 			body: Some(extrinsics),
+			storage_changes: None,
 			finalized: true,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
@@ -170,6 +174,7 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 			justification: None,
 			post_digests: vec![],
 			body: Some(extrinsics),
+			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
@@ -187,6 +192,7 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 			justification: None,
 			post_digests: vec![],
 			body: Some(extrinsics),
+			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::Custom(true),
@@ -204,6 +210,7 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 			justification: None,
 			post_digests: vec![],
 			body: Some(extrinsics),
+			storage_changes: None,
 			finalized: true,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::Custom(true),
@@ -226,6 +233,7 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 			justification: Some(justification),
 			post_digests: vec![],
 			body: Some(extrinsics),
+			storage_changes: None,
 			finalized: true,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,

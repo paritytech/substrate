@@ -22,7 +22,7 @@ use futures::sync::mpsc;
 use parking_lot::RwLockWriteGuard;
 
 use client_api::{
-	backend::Backend, blockchain,
+	backend::{Backend, TransactionFor}, blockchain,
 	CallExecutor, blockchain::HeaderBackend, well_known_cache_keys,
 	utils::is_descendent_of,
 };
@@ -238,9 +238,11 @@ where
 		})
 	}
 
-	fn make_authorities_changes<'a>(&'a self, block: &mut BlockImportParams<Block>, hash: Block::Hash)
-		-> Result<PendingSetChanges<'a, Block>, ConsensusError>
-	{
+	fn make_authorities_changes<'a>(
+		&'a self,
+		block: &mut BlockImportParams<Block, TransactionFor<B, Block>>,
+		hash: Block::Hash,
+	) -> Result<PendingSetChanges<'a, Block>, ConsensusError> {
 		// when we update the authorities, we need to hold the lock
 		// until the block is written to prevent a race if we need to restore
 		// the old authority set on error or panic.
@@ -388,13 +390,15 @@ impl<B, E, Block: BlockT, RA, SC> BlockImport<Block>
 		E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
 		RA: Send + Sync,
-		for<'a> &'a Client<B, E, Block, RA>: BlockImport<Block, Error = ConsensusError>
+		for<'a> &'a Client<B, E, Block, RA>:
+			BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<B, Block>>,
 {
 	type Error = ConsensusError;
+	type Transaction = TransactionFor<B, Block>;
 
 	fn import_block(
 		&mut self,
-		mut block: BlockImportParams<Block>,
+		mut block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_header().hash();
@@ -419,12 +423,20 @@ impl<B, E, Block: BlockT, RA, SC> BlockImport<Block>
 			match import_result {
 				Ok(ImportResult::Imported(aux)) => aux,
 				Ok(r) => {
-					debug!(target: "afg", "Restoring old authority set after block import result: {:?}", r);
+					debug!(
+						target: "afg",
+						"Restoring old authority set after block import result: {:?}",
+						r,
+					);
 					pending_changes.revert();
 					return Ok(r);
 				},
 				Err(e) => {
-					debug!(target: "afg", "Restoring old authority set after block import error: {:?}", e);
+					debug!(
+						target: "afg",
+						"Restoring old authority set after block import error: {:?}",
+						e,
+					);
 					pending_changes.revert();
 					return Err(ConsensusError::ClientImport(e.to_string()).into());
 				},
@@ -512,9 +524,7 @@ impl<B, E, Block: BlockT, RA, SC> BlockImport<Block>
 	}
 }
 
-impl<B, E, Block: BlockT, RA, SC>
-	GrandpaBlockImport<B, E, Block, RA, SC>
-{
+impl<B, E, Block: BlockT, RA, SC> GrandpaBlockImport<B, E, Block, RA, SC> {
 	pub(crate) fn new(
 		inner: Arc<Client<B, E, Block, RA>>,
 		select_chain: SC,

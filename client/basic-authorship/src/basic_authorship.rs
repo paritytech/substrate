@@ -106,8 +106,8 @@ impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 				BlockBuilderApi<Block, Error = client::error::Error> +
 				ApiExt<Block, StateBackend = client_api::backend::StateBackendFor<B, Block>>,
 {
-	type BackendTransaction = backend::TransactionFor<Block, B>;
-	type Proposal = futures::future::Ready<Result<Proposal<Block, Self::BackendTransaction>, error::Error>>;
+	type Transaction = backend::TransactionFor<B, Block>;
+	type Proposal = futures::future::Ready<Result<Proposal<Block, Self::Transaction>, error::Error>>;
 	type Error = error::Error;
 
 	fn propose(
@@ -141,7 +141,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 		inherent_digests: DigestFor<Block>,
 		deadline: time::Instant,
 		record_proof: bool,
-	) -> Result<Proposal<Block, backend::TransactionFor<Block, B>>, error::Error> {
+	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>>, error::Error> {
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
 		/// It allows us to increase block utilization.

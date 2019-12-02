@@ -95,10 +95,12 @@ use client::Client;
 
 use block_builder_api::BlockBuilder as BlockBuilderApi;
 
-use slots::{CheckedHeader, check_equivocation};
 use futures::prelude::*;
 use log::{warn, debug, info, trace};
-use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
+use slots::{
+	CheckedHeader, check_equivocation, SlotWorker, SlotData, SlotInfo, SlotCompatible,
+	StorageChanges,
+};
 use epoch_changes::descendent_query;
 use header_metadata::HeaderMetadata;
 use schnorrkel::SignatureError;
@@ -289,8 +291,9 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
 	E: Environment<B, Error = Error> + Send + Sync,
-	E::Proposer: Proposer<B, Error = Error>,
-	I: BlockImport<B, Error = ConsensusError> + Send + Sync + 'static,
+	E::Proposer: Proposer<B, Error = Error, Transaction = sr_api::TransactionFor<C, B>>,
+	I: BlockImport<B, Error = ConsensusError, Transaction = sr_api::TransactionFor<C, B>> + Send
+		+ Sync + 'static,
 	Error: std::error::Error + Send + From<consensus_common::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 {
@@ -345,8 +348,8 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		HeaderMetadata<B, Error = ClientError>,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error = Error>,
-	E::Proposer: Proposer<B, Error = Error>,
-	I: BlockImport<B> + Send + Sync + 'static,
+	E::Proposer: Proposer<B, Error = Error, Transaction = sr_api::TransactionFor<C, B>>,
+	I: BlockImport<B, Transaction = sr_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<consensus_common::Error> + From<I::Error> + 'static,
 {
@@ -406,7 +409,11 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		s
 	}
 
-	fn pre_digest_data(&self, _slot_number: u64, claim: &Self::Claim) -> Vec<sr_primitives::DigestItem<B::Hash>> {
+	fn pre_digest_data(
+		&self,
+		_slot_number: u64,
+		claim: &Self::Claim,
+	) -> Vec<sr_primitives::DigestItem<B::Hash>> {
 		vec![
 			<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(claim.0.clone()),
 		]
@@ -416,20 +423,22 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		B::Header,
 		&B::Hash,
 		Vec<B::Extrinsic>,
+		StorageChanges<I::Transaction, B>,
 		Self::Claim,
-	) -> consensus_common::BlockImportParams<B> + Send> {
-		Box::new(|header, header_hash, body, (_, pair)| {
+	) -> consensus_common::BlockImportParams<B, I::Transaction> + Send> {
+		Box::new(|header, header_hash, body, storage_changes, (_, pair)| {
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
 			let signature = pair.sign(header_hash.as_ref());
-			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem>::babe_seal(signature);
+			let digest_item = <DigestItemFor<B> as CompatibleDigestItem>::babe_seal(signature);
 
 			BlockImportParams {
 				origin: BlockOrigin::Own,
 				header,
 				justification: None,
-				post_digests: vec![signature_digest_item],
+				post_digests: vec![digest_item],
 				body: Some(body),
+				storage_changes: Some(storage_changes),
 				finalized: false,
 				auxiliary: Vec::new(), // block-weight is written in block import.
 				// TODO: block-import handles fork choice and this shouldn't even have the
@@ -463,11 +472,11 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
 		HeaderBackend<B> +
 		HeaderMetadata<B, Error = ClientError> + Send + Sync,
 	C::Api: BabeApi<B>,
-	E: Environment<B, Error=Error> + Send + Sync,
-	E::Proposer: Proposer<B, Error=Error>,
-	I: BlockImport<B> + Send + Sync + 'static,
+	E: Environment<B, Error = Error> + Send + Sync,
+	E::Proposer: Proposer<B, Error = Error, Transaction = sr_api::TransactionFor<C, B>>,
+	I: BlockImport<B, Transaction = sr_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
-	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
+	Error: std::error::Error + Send + From<consensus_common::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Pin<Box<dyn Future<Output = Result<(), consensus_common::Error>> + Send>>;
 
@@ -642,7 +651,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 		header: Block::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<Block::Extrinsic>>,
-	) -> Result<(BlockImportParams<Block>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		trace!(
 			target: "babe",
 			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
@@ -746,6 +755,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					header: pre_header,
 					post_digests: vec![verified_info.seal],
 					body,
+					storage_changes: None,
 					finalized: false,
 					justification,
 					auxiliary: Vec::new(),
@@ -770,7 +780,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 }
 
 /// The BABE import queue type.
-pub type BabeImportQueue<B> = BasicQueue<B>;
+pub type BabeImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
 
 /// Register the babe inherent data provider, if not registered already.
 fn register_babe_inherent_data_provider(
@@ -836,20 +846,21 @@ impl<B, E, Block: BlockT, I, RA, PRA> BabeBlockImport<B, E, Block, I, RA, PRA> {
 
 impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, RA, PRA> where
 	Block: BlockT,
-	I: BlockImport<Block> + Send + Sync,
+	I: BlockImport<Block, Transaction = sr_api::TransactionFor<PRA, Block>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 	Client<B, E, Block, RA>: AuxStore,
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi<Block> + ProvideCache<Block>,
-	PRA::Api: BabeApi<Block>,
+	PRA::Api: BabeApi<Block> + ApiExt<Block, StateBackend = B::State>,
 {
 	type Error = ConsensusError;
+	type Transaction = sr_api::TransactionFor<PRA, Block>;
 
 	fn import_block(
 		&mut self,
-		mut block: BlockImportParams<Block>,
+		mut block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_header().hash();
@@ -1148,9 +1159,10 @@ pub fn import_queue<B, E, Block: BlockT, I, RA, PRA>(
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 	inherent_data_providers: InherentDataProviders,
-) -> ClientResult<BabeImportQueue<Block>> where
+) -> ClientResult<BabeImportQueue<Block, sr_api::TransactionFor<PRA, Block>>> where
 	B: Backend<Block> + 'static,
-	I: BlockImport<Block,Error=ConsensusError> + Send + Sync + 'static,
+	I: BlockImport<Block, Error = ConsensusError, Transaction = sr_api::TransactionFor<PRA, Block>>
+		+ Send + Sync + 'static,
 	E: CallExecutor<Block> + Clone + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,

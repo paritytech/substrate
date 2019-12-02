@@ -108,7 +108,7 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 		let select_chain = service.select_chain()
 			.ok_or(ServiceError::SelectChainRequired)?;
 
-		let aura = aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _>(
+		let aura = aura::start_aura::<_, _, _, _, _, AuraPair, _, _>(
 			aura::SlotDuration::get_or_compute(&*client)?,
 			client,
 			select_chain,

@@ -21,7 +21,7 @@ use parking_lot::RwLock;
 use client::Client;
 use client_api::{
 	CallExecutor,
-	backend::{AuxStore, Backend, Finalizer},
+	backend::{AuxStore, Backend, Finalizer, TransactionFor},
 	blockchain::HeaderBackend,
 	error::Error as ClientError,
 	well_known_cache_keys,
@@ -130,15 +130,17 @@ impl<B, E, Block: BlockT, RA> BlockImport<Block>
 		E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
 		RA: Send + Sync,
-		for<'a> &'a Client<B, E, Block, RA>: BlockImport<Block, Error = ConsensusError>
+		for<'a> &'a Client<B, E, Block, RA>:
+			BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<B, Block>>
 			+ Finalizer<Block, B>
 			+ AuxStore,
 {
 	type Error = ConsensusError;
+	type Transaction = TransactionFor<B, Block>;
 
 	fn import_block(
 		&mut self,
-		block: BlockImportParams<Block>,
+		block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		do_import_block::<_, _, _, GrandpaJustification<Block>>(
@@ -161,7 +163,8 @@ impl<B, E, Block: BlockT, RA> FinalityProofImport<Block>
 		E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
 		RA: Send + Sync,
-		for<'a> &'a Client<B, E, Block, RA>: BlockImport<Block, Error = ConsensusError>
+		for<'a> &'a Client<B, E, Block, RA>:
+			BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<B, Block>>
 			+ Finalizer<Block, B>
 			+ AuxStore,
 {
@@ -173,7 +176,9 @@ impl<B, E, Block: BlockT, RA> FinalityProofImport<Block>
 
 		let data = self.data.read();
 		for (pending_number, pending_hash) in data.consensus_changes.pending_changes() {
-			if *pending_number > chain_info.finalized_number && *pending_number <= chain_info.best_number {
+			if *pending_number > chain_info.finalized_number
+				&& *pending_number <= chain_info.best_number
+			{
 				out.push((pending_hash.clone(), *pending_number));
 			}
 		}
@@ -243,14 +248,14 @@ impl<B: BlockT> FinalityProofRequestBuilder<B> for GrandpaFinalityProofRequestBu
 fn do_import_block<B, C, Block: BlockT, J>(
 	mut client: C,
 	data: &mut LightImportData<Block>,
-	mut block: BlockImportParams<Block>,
+	mut block: BlockImportParams<Block, TransactionFor<B, Block>>,
 	new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 ) -> Result<ImportResult, ConsensusError>
 	where
 		C: HeaderBackend<Block>
 			+ AuxStore
 			+ Finalizer<Block, B>
-			+ BlockImport<Block>
+			+ BlockImport<Block, Transaction = TransactionFor<B, Block>>
 			+ Clone,
 		B: Backend<Block> + 'static,
 		NumberFor<Block>: grandpa::BlockNumberOps,
@@ -313,7 +318,7 @@ fn do_import_finality_proof<B, C, Block: BlockT, J>(
 		C: HeaderBackend<Block>
 			+ AuxStore
 			+ Finalizer<Block, B>
-			+ BlockImport<Block>
+			+ BlockImport<Block, Transaction = TransactionFor<B, Block>>
 			+ Clone,
 		B: Backend<Block> + 'static,
 		DigestFor<Block>: Encode,
@@ -333,15 +338,27 @@ fn do_import_finality_proof<B, C, Block: BlockT, J>(
 	// try to import all new headers
 	let block_origin = BlockOrigin::NetworkBroadcast;
 	for header_to_import in finality_effects.headers_to_import {
-		let (block_to_import, new_authorities) = verifier.verify(block_origin, header_to_import, None, None)
-			.map_err(|e| ConsensusError::ClientImport(e))?;
-		assert!(block_to_import.justification.is_none(), "We have passed None as justification to verifier.verify");
+		let (block_to_import, new_authorities) = verifier.verify(
+			block_origin,
+			header_to_import,
+			None,
+			None,
+		).map_err(|e| ConsensusError::ClientImport(e))?;
+		assert!(
+			block_to_import.justification.is_none(),
+			"We have passed None as justification to verifier.verify",
+		);
 
 		let mut cache = HashMap::new();
 		if let Some(authorities) = new_authorities {
 			cache.insert(well_known_cache_keys::AUTHORITIES, authorities.encode());
 		}
-		do_import_block::<_, _, _, J>(client.clone(), data, block_to_import, cache)?;
+		do_import_block::<_, _, _, J>(
+			client.clone(),
+			data,
+			block_to_import.convert_transaction(),
+			cache,
+		)?;
 	}
 
 	// try to import latest justification
@@ -587,15 +604,17 @@ pub mod tests {
 			E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 			DigestFor<Block>: Encode,
 			RA: Send + Sync,
-			for<'a> &'a Client<B, E, Block, RA>: BlockImport<Block, Error = ConsensusError>
+			for<'a> &'a Client<B, E, Block, RA>:
+				BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<B, Block>>
 				+ Finalizer<Block, B>
 				+ AuxStore,
 	{
 		type Error = ConsensusError;
+		type Transaction = TransactionFor<B, Block>;
 
 		fn import_block(
 			&mut self,
-			mut block: BlockImportParams<Block>,
+			mut block: BlockImportParams<Block, Self::Transaction>,
 			new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		) -> Result<ImportResult, Self::Error> {
 			block.justification.take();
@@ -617,7 +636,8 @@ pub mod tests {
 			E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 			DigestFor<Block>: Encode,
 			RA: Send + Sync,
-			for<'a> &'a Client<B, E, Block, RA>: BlockImport<Block, Error = ConsensusError>
+			for<'a> &'a Client<B, E, Block, RA>:
+				BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<B, Block>>
 				+ Finalizer<Block, B>
 				+ AuxStore,
 	{
@@ -679,6 +699,7 @@ pub mod tests {
 			justification,
 			post_digests: Vec::new(),
 			body: None,
+			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,

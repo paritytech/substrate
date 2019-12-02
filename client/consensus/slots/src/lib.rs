@@ -37,12 +37,18 @@ use futures_timer::Delay;
 use inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{Block as BlockT, Header};
+use sr_primitives::traits::{Block as BlockT, Header, HasherFor, NumberFor};
 use sr_api::{ProvideRuntimeApi, ApiRef};
 use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use parking_lot::Mutex;
 use client_api;
+
+/// The changes that need to applied to the storage to create the state for a block.
+///
+/// See [`state_machine::StorageChanges`] for more information.
+pub type StorageChanges<Transaction, Block> =
+	state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>;
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: BlockT> {
@@ -59,7 +65,8 @@ pub trait SlotWorker<B: BlockT> {
 /// out if block production takes too long.
 pub trait SimpleSlotWorker<B: BlockT> {
 	/// A handle to a `BlockImport`.
-	type BlockImport: BlockImport<B> + Send + 'static;
+	type BlockImport: BlockImport<B, Transaction = <Self::Proposer as Proposer<B>>::Transaction>
+		+ Send + 'static;
 
 	/// A handle to a `SyncOracle`.
 	type SyncOracle: SyncOracle;
@@ -81,7 +88,11 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 	/// Returns the epoch data necessary for authoring. For time-dependent epochs,
 	/// use the provided slot number as a canonical source of time.
-	fn epoch_data(&self, header: &B::Header, slot_number: u64) -> Result<Self::EpochData, consensus_common::Error>;
+	fn epoch_data(
+		&self,
+		header: &B::Header,
+		slot_number: u64,
+	) -> Result<Self::EpochData, consensus_common::Error>;
 
 	/// Returns the number of authorities given the epoch data.
 	fn authorities_len(&self, epoch_data: &Self::EpochData) -> usize;
@@ -95,15 +106,26 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	) -> Option<Self::Claim>;
 
 	/// Return the pre digest data to include in a block authored with the given claim.
-	fn pre_digest_data(&self, slot_number: u64, claim: &Self::Claim) -> Vec<sr_primitives::DigestItem<B::Hash>>;
+	fn pre_digest_data(
+		&self,
+		slot_number: u64,
+		claim: &Self::Claim,
+	) -> Vec<sr_primitives::DigestItem<B::Hash>>;
 
 	/// Returns a function which produces a `BlockImportParams`.
-	fn block_import_params(&self) -> Box<dyn Fn(
-		B::Header,
-		&B::Hash,
-		Vec<B::Extrinsic>,
-		Self::Claim,
-	) -> consensus_common::BlockImportParams<B> + Send>;
+	fn block_import_params(&self) -> Box<
+		dyn Fn(
+			B::Header,
+			&B::Hash,
+			Vec<B::Extrinsic>,
+			StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
+			Self::Claim,
+		) -> consensus_common::BlockImportParams<
+			B,
+			<Self::BlockImport as BlockImport<B>>::Transaction
+		>
+		+ Send
+	>;
 
 	/// Whether to force authoring if offline.
 	fn force_authoring(&self) -> bool;
@@ -206,8 +228,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let block_import = self.block_import();
 		let logging_target = self.logging_target();
 
-		Box::pin(proposal_work.map_ok(move |(block, claim)| {
-			let block = block.block;
+		Box::pin(proposal_work.map_ok(move |(proposal, claim)| {
+			let block = proposal.block;
 			// minor hack since we don't have access to the timestamp
 			// that is actually set by the proposer.
 			let slot_after_building = SignedDuration::default().slot_now(slot_duration);
@@ -232,13 +254,15 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				header,
 				&header_hash,
 				body,
+				proposal.storage_changes,
 				claim,
 			);
 
-			info!("Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
-					header_num,
-					block_import_params.post_header().hash(),
-					header_hash,
+			info!(
+				"Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
+				header_num,
+				block_import_params.post_header().hash(),
+				header_hash,
 			);
 
 			telemetry!(CONSENSUS_INFO; "slots.pre_sealed_block";

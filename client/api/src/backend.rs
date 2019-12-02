@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use primitives::ChangesTrieConfiguration;
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use sr_primitives::traits::{Block as BlockT, NumberFor, HasherFor};
-use state_machine::backend::Backend as StateBackend;
+pub use state_machine::backend::Backend as StateBackend;
 use state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction};
 use crate::{
 	blockchain::{
@@ -36,6 +36,12 @@ use parking_lot::Mutex;
 
 /// Extracts the state backend type for the given backend.
 pub type StateBackendFor<B, Block> = <B as Backend<Block>>::State;
+
+/// Extracts the transaction for the given state backend.
+pub type TransactionForSB<B, Block> = <B as StateBackend<HasherFor<Block>>>::Transaction;
+
+/// Extracts the transaction for the given backend.
+pub type TransactionFor<B, Block> = TransactionForSB<StateBackendFor<B, Block>, Block>;
 
 /// In memory array of storage values.
 pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
@@ -314,11 +320,6 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// a new block or calculating the best head.
 	fn get_import_lock(&self) -> &Mutex<()>;
 }
-
-/// Get the transaction type of a backend.
-pub type TransactionFor<Block, B> = <
-	<B as Backend<Block>>::State as StateBackend<HasherFor<Block>>
->::Transaction;
 
 /// Changes trie storage that supports pruning.
 pub trait PrunableStateChangesTrieStorage<Block: BlockT>:

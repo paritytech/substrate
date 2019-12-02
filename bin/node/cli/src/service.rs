@@ -409,6 +409,7 @@ mod tests {
 				internal_justification: Vec::new(),
 				finalized: false,
 				body: Some(block.extrinsics),
+				storage_changes: None,
 				header: block.header,
 				auxiliary: Vec::new(),
 			}
@@ -538,6 +539,7 @@ mod tests {
 					justification: None,
 					post_digests: vec![item],
 					body: Some(new_body),
+					storage_changes: None,
 					finalized: false,
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,

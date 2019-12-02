@@ -89,6 +89,16 @@ pub type StorageChanges<SBackend, Block> =
 		NumberFor<Block>
 	>;
 
+/// Extract the state backend type for a type that implements `ProvideRuntimeApi`.
+#[cfg(feature = "std")]
+pub type StateBackendFor<P, Block> =
+	<<P as ProvideRuntimeApi<Block>>::Api as ApiExt<Block>>::StateBackend;
+
+/// Extract the state backend transaction type for a type that implements `ProvideRuntimeApi`.
+#[cfg(feature = "std")]
+pub type TransactionFor<P, Block> =
+	<StateBackendFor<P, Block> as StateBackend<HasherFor<Block>>>::Transaction;
+
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
 pub trait ConstructRuntimeApi<Block: BlockT, C: CallApiAt<Block>> {

@@ -257,7 +257,7 @@ impl<B: BlockT, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S, Algorithm>
 		header: B::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let inherent_data = self.inherent_data_providers
 			.create_inherent_data().map_err(|e| e.into_string())?;
 		let timestamp_now = inherent_data.timestamp_inherent_data().map_err(|e| e.into_string())?;
@@ -290,19 +290,22 @@ impl<B: BlockT, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S, Algorithm>
 				timestamp_now
 			)?;
 
-			let (_, inner_body) = block.deconstruct();
-			body = Some(inner_body);
+			body = Some(block.deconstruct().1);
 		}
+
 		let key = aux_key(&hash);
 		let import_block = BlockImportParams {
 			origin,
 			header: checked_header,
 			post_digests: vec![seal],
 			body,
+			storage_changes: None,
 			finalized: false,
 			justification,
 			auxiliary: vec![(key, Some(aux.encode()))],
-			fork_choice: ForkChoiceStrategy::Custom(aux.total_difficulty > best_aux.total_difficulty),
+			fork_choice: ForkChoiceStrategy::Custom(
+				aux.total_difficulty > best_aux.total_difficulty
+			),
 			allow_missing_state: false,
 		};
 
@@ -325,17 +328,20 @@ pub fn register_pow_inherent_data_provider(
 }
 
 /// The PoW import queue type.
-pub type PowImportQueue<B> = BasicQueue<B>;
+pub type PowImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
 
 /// Import queue for PoW engine.
 pub fn import_queue<B, C, S, Algorithm>(
-	block_import: BoxBlockImport<B>,
+	block_import: BoxBlockImport<B, sr_api::TransactionFor<C, B>>,
 	client: Arc<C>,
 	algorithm: Algorithm,
 	check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
 	select_chain: Option<S>,
 	inherent_data_providers: InherentDataProviders,
-) -> Result<PowImportQueue<B>, consensus_common::Error> where
+) -> Result<
+	PowImportQueue<B, sr_api::TransactionFor<C, B>>,
+	consensus_common::Error
+> where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + HeaderBackend<B> + BlockOf + ProvideCache<B> + AuxStore,
 	C: Send + Sync + AuxStore + 'static,
@@ -372,7 +378,7 @@ pub fn import_queue<B, C, S, Algorithm>(
 /// CPU miner runs each time. This parameter should be tweaked so that each
 /// mining round is within sub-second time.
 pub fn start_mine<B: BlockT, C, Algorithm, E, SO, S>(
-	mut block_import: BoxBlockImport<B>,
+	mut block_import: BoxBlockImport<B, sr_api::TransactionFor<C, B>>,
 	client: Arc<C>,
 	algorithm: Algorithm,
 	mut env: E,
@@ -383,10 +389,11 @@ pub fn start_mine<B: BlockT, C, Algorithm, E, SO, S>(
 	select_chain: Option<S>,
 	inherent_data_providers: inherents::InherentDataProviders,
 ) where
-	C: HeaderBackend<B> + AuxStore + 'static,
+	C: HeaderBackend<B> + AuxStore + ProvideRuntimeApi<B> + 'static,
 	Algorithm: PowAlgorithm<B> + Send + Sync + 'static,
 	E: Environment<B> + Send + Sync + 'static,
 	E::Error: std::fmt::Debug,
+	E::Proposer: Proposer<B, Transaction = sr_api::TransactionFor<C, B>>,
 	SO: SyncOracle + Send + Sync + 'static,
 	S: SelectChain<B> + 'static,
 {
@@ -420,7 +427,7 @@ pub fn start_mine<B: BlockT, C, Algorithm, E, SO, S>(
 }
 
 fn mine_loop<B: BlockT, C, Algorithm, E, SO, S>(
-	block_import: &mut BoxBlockImport<B>,
+	block_import: &mut BoxBlockImport<B, sr_api::TransactionFor<C, B>>,
 	client: &C,
 	algorithm: &Algorithm,
 	env: &mut E,
@@ -431,12 +438,14 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S>(
 	select_chain: Option<&S>,
 	inherent_data_providers: &inherents::InherentDataProviders,
 ) -> Result<(), Error<B>> where
-	C: HeaderBackend<B> + AuxStore,
+	C: HeaderBackend<B> + AuxStore + ProvideRuntimeApi<B>,
 	Algorithm: PowAlgorithm<B>,
 	E: Environment<B>,
+	E::Proposer: Proposer<B, Transaction = sr_api::TransactionFor<C, B>>,
 	E::Error: std::fmt::Debug,
 	SO: SyncOracle,
 	S: SelectChain<B>,
+	sr_api::TransactionFor<C, B>: 'static,
 {
 	'outer: loop {
 		if sync_oracle.is_major_syncing() {
@@ -470,14 +479,14 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S>(
 		if let Some(preruntime) = &preruntime {
 			inherent_digest.push(DigestItem::PreRuntime(POW_ENGINE_ID, preruntime.to_vec()));
 		}
-		let block = futures::executor::block_on(proposer.propose(
+		let proposal = futures::executor::block_on(proposer.propose(
 			inherent_data,
 			inherent_digest,
 			build_time.clone(),
 			false,
-		)).map(|r| r.block).map_err(|e| Error::BlockProposingError(format!("{:?}", e)))?;
+		)).map_err(|e| Error::BlockProposingError(format!("{:?}", e)))?;
 
-		let (header, body) = block.deconstruct();
+		let (header, body) = proposal.block.deconstruct();
 		let (difficulty, seal) = {
 			let difficulty = algorithm.difficulty(
 				&BlockId::Hash(best_hash),
@@ -529,6 +538,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S>(
 			justification: None,
 			post_digests: vec![DigestItem::Seal(POW_ENGINE_ID, seal)],
 			body: Some(body),
+			storage_changes: Some(proposal.storage_changes),
 			finalized: false,
 			auxiliary: vec![(key, Some(aux.encode()))],
 			fork_choice: ForkChoiceStrategy::Custom(true),

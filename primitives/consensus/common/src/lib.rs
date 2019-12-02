@@ -101,9 +101,9 @@ pub trait Proposer<B: BlockT> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + std::fmt::Debug + 'static;
 	/// The transaction type used by the backend.
-	type BackendTransaction: Default + Send;
+	type Transaction: Default + Send + 'static;
 	/// Future that resolves to a committed proposal with an optional proof.
-	type Proposal: Future<Output = Result<Proposal<B, Self::BackendTransaction>, Self::Error>> +
+	type Proposal: Future<Output = Result<Proposal<B, Self::Transaction>, Self::Error>> +
 		Send + Unpin + 'static;
 
 	/// Create a proposal.

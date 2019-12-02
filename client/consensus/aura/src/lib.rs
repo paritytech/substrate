@@ -28,7 +28,9 @@
 //!
 //! NOTE: Aura itself is designed to be generic over the crypto used.
 #![forbid(missing_docs, unsafe_code)]
-use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin};
+use std::{
+	sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin
+};
 
 use codec::{Encode, Decode, Codec};
 use consensus_common::{
@@ -63,7 +65,7 @@ use paint_aura::{
 };
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
-use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible};
+use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible, StorageChanges};
 use slots::check_equivocation;
 
 use keystore::KeyStorePtr;
@@ -135,7 +137,7 @@ impl SlotCompatible for AuraSlotCompatible {
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
-pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
+pub fn start_aura<B, C, SC, E, I, P, SO, Error>(
 	slot_duration: SlotDuration,
 	client: Arc<C>,
 	select_chain: SC,
@@ -146,18 +148,17 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	force_authoring: bool,
 	keystore: KeyStorePtr,
 ) -> Result<impl futures01::Future<Item = (), Error = ()>, consensus_common::Error> where
-	B: BlockT<Header=H>,
+	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
-	E::Proposer: Proposer<B, Error = Error>,
+	E::Proposer: Proposer<B, Error = Error, Transaction = sr_api::TransactionFor<C, B>>,
 	P: Pair + Send + Sync,
 	P::Public: Hash + Member + Encode + Decode,
 	P::Signature: Hash + Member + Encode + Decode,
-	H: Header<Hash=B::Hash>,
-	I: BlockImport<B> + Send + Sync + 'static,
-	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
+	I: BlockImport<B, Transaction = sr_api::TransactionFor<C, B>> + Send + Sync + 'static,
+	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 {
 	let worker = AuraWorker {
@@ -193,19 +194,18 @@ struct AuraWorker<C, E, I, P, SO> {
 	_key_type: PhantomData<P>,
 }
 
-impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E, I, P, SO> where
-	B: BlockT<Header=H>,
+impl<B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E, I, P, SO> where
+	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error = Error>,
-	E::Proposer: Proposer<B, Error = Error>,
-	H: Header<Hash=B::Hash>,
-	I: BlockImport<B> + Send + Sync + 'static,
+	E::Proposer: Proposer<B, Error = Error, Transaction = sr_api::TransactionFor<C, B>>,
+	I: BlockImport<B, Transaction = sr_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
 	P::Public: Member + Encode + Decode + Hash,
 	P::Signature: Member + Encode + Decode + Hash + Debug,
 	SO: SyncOracle + Send + Clone,
-	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
+	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type EpochData = Vec<AuthorityId<P>>;
 	type Claim = P;
@@ -261,9 +261,10 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 		B::Header,
 		&B::Hash,
 		Vec<B::Extrinsic>,
+		StorageChanges<sr_api::TransactionFor<C, B>, B>,
 		Self::Claim,
-	) -> consensus_common::BlockImportParams<B> + Send> {
-		Box::new(|header, header_hash, body, pair| {
+	) -> consensus_common::BlockImportParams<B, sr_api::TransactionFor<C, B>> + Send> {
+		Box::new(|header, header_hash, body, storage_changes, pair| {
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
 			let signature = pair.sign(header_hash.as_ref());
@@ -275,6 +276,7 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 				justification: None,
 				post_digests: vec![signature_digest_item],
 				body: Some(body),
+				storage_changes: Some(storage_changes),
 				finalized: false,
 				auxiliary: Vec::new(),
 				fork_choice: ForkChoiceStrategy::LongestChain,
@@ -298,14 +300,13 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 	}
 }
 
-impl<H, B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
-	B: BlockT<Header=H>,
+impl<B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
+	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Sync + Send,
 	C::Api: AuraApi<B, AuthorityId<P>>,
-	E: Environment<B, Error=Error> + Send + Sync,
-	E::Proposer: Proposer<B, Error=Error>,
-	H: Header<Hash=B::Hash>,
-	I: BlockImport<B> + Send + Sync + 'static,
+	E: Environment<B, Error = Error> + Send + Sync,
+	E::Proposer: Proposer<B, Error = Error, Transaction = sr_api::TransactionFor<C, B>>,
+	I: BlockImport<B, Transaction = sr_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
 	P::Public: Member + Encode + Decode + Hash,
 	P::Signature: Member + Encode + Decode + Hash + Debug,
@@ -513,7 +514,7 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 		header: B::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let mut inherent_data = self.inherent_data_providers
 			.create_inherent_data()
 			.map_err(|e| e.into_string())?;
@@ -587,6 +588,7 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 					header: pre_header,
 					post_digests: vec![seal],
 					body,
+					storage_changes: None,
 					finalized: false,
 					justification,
 					auxiliary: Vec::new(),
@@ -658,7 +660,7 @@ fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, Consensus
 }
 
 /// The Aura import queue type.
-pub type AuraImportQueue<B> = BasicQueue<B>;
+pub type AuraImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
 
 /// Register the aura inherent data provider, if not registered already.
 fn register_aura_inherent_data_provider(
@@ -678,13 +680,13 @@ fn register_aura_inherent_data_provider(
 /// Start an import queue for the Aura consensus algorithm.
 pub fn import_queue<B, C, P, T>(
 	slot_duration: SlotDuration,
-	block_import: BoxBlockImport<B>,
+	block_import: BoxBlockImport<B, sr_api::TransactionFor<C, B>>,
 	justification_import: Option<BoxJustificationImport<B>>,
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
 	transaction_pool: Option<Arc<T>>,
-) -> Result<AuraImportQueue<B>, consensus_common::Error> where
+) -> Result<AuraImportQueue<B, sr_api::TransactionFor<C, B>>, consensus_common::Error> where
 	B: BlockT,
 	C: 'static + ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = client::error::Error>,
@@ -744,8 +746,8 @@ mod tests {
 
 	impl Proposer<TestBlock> for DummyProposer {
 		type Error = Error;
-		type BackendTransaction = client_api::TransactionFor<TestBlock, test_client::Backend>;
-		type Proposal = future::Ready<Result<Proposal<TestBlock, Self::BackendTransaction>, Error>>;
+		type Transaction = client_api::TransactionFor<test_client::Backend, TestBlock>;
+		type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction>, Error>>;
 
 		fn propose(
 			&mut self,
@@ -864,7 +866,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, _, AuthorityPair, _, _, _>(
+			let aura = start_aura::<_, _, _, _, _, AuthorityPair, _, _>(
 				slot_duration,
 				client.clone(),
 				select_chain,

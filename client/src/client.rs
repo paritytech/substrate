@@ -42,14 +42,13 @@ use sr_primitives::{
 use state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
-	ChangesTrieTransaction, ChangesTrieConfigurationRange, key_changes, key_changes_proof,
-	StorageProof, merge_storage_proofs,
+	ChangesTrieConfigurationRange, key_changes, key_changes_proof, StorageProof,
+	merge_storage_proofs,
 };
 use executor::{RuntimeVersion, RuntimeInfo};
 use consensus::{
-	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams,
-	ImportResult, BlockOrigin, ForkChoiceStrategy,
-	SelectChain, self,
+	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams, ImportResult,
+	BlockOrigin, ForkChoiceStrategy, SelectChain, self,
 };
 use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 
@@ -85,13 +84,6 @@ use crate::{
 	light::{call_executor::prove_execution, fetcher::ChangesProof},
 	in_mem, genesis, cht,
 };
-
-type StorageUpdate<B, Block> = <
-	<
-		<B as backend::Backend<Block>>::BlockImportOperation
-			as BlockImportOperation<Block>
-	>::State as state_machine::Backend<HasherFor<Block>>>::Transaction;
-type ChangesUpdate<Block> = ChangesTrieTransaction<HasherFor<Block>, NumberFor<Block>>;
 
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
@@ -747,7 +739,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	fn apply_block(
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
-		import_block: BlockImportParams<Block>,
+		import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> error::Result<ImportResult> where
 		E: CallExecutor<Block> + Send + Sync + Clone,
@@ -761,6 +753,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			justification,
 			post_digests,
 			body,
+			storage_changes,
 			finalized,
 			auxiliary,
 			fork_choice,
@@ -804,6 +797,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			import_headers,
 			justification,
 			body,
+			storage_changes,
 			new_cache,
 			finalized,
 			auxiliary,
@@ -832,6 +826,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_headers: PrePostHeader<Block::Header>,
 		justification: Option<Justification>,
 		body: Option<Vec<Block::Extrinsic>>,
+		storage_changes: Option<sr_api::StorageChanges<backend::StateBackendFor<B, Block>, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
@@ -865,8 +860,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			BlockOrigin::Genesis | BlockOrigin::NetworkInitialSync | BlockOrigin::File => false,
 		};
 
-		let storage_changes = match &body {
-			Some(body) if enact_state => {
+		let storage_changes = match body {
+			Some(ref body) if enact_state => {
 				self.backend.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
 
 				// ensure parent block is finalized to maintain invariant that
@@ -881,24 +876,25 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					)?;
 				}
 
-				// FIXME #1232: correct path logic for when to execute this function
-				let (storage_update, changes_update, storage_changes) = self.block_execution(
-					&operation.op,
-					&import_headers,
-					&body,
-				)?;
+				let storage_changes = storage_changes.map_or_else(
+					|| self.block_execution(&operation.op, &import_headers, &body),
+					|c| Ok(Some(c)),
+				)?.map(state_machine::StorageChanges::into_inner);
 
 				operation.op.update_cache(new_cache);
-				if let Some(storage_update) = storage_update {
-					operation.op.update_db_storage(storage_update)?;
+
+				if let Some((main_sc, child_sc, tx, _, changes_trie_tx)) = storage_changes {
+					operation.op.update_db_storage(tx)?;
+					operation.op.update_storage(main_sc.clone(), child_sc.clone())?;
+
+					if let Some(changes_trie_transaction) = changes_trie_tx {
+						operation.op.update_changes_trie(changes_trie_transaction)?;
+					}
+
+					Some((main_sc, child_sc))
+				} else {
+					None
 				}
-				if let Some(storage_changes) = storage_changes.clone() {
-					operation.op.update_storage(storage_changes.0, storage_changes.1)?;
-				}
-				if let Some(Some(changes_update)) = changes_update {
-					operation.op.update_changes_trie(changes_update)?;
-				}
-				storage_changes
 			},
 			_ => None,
 		};
@@ -967,14 +963,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		transaction: &B::BlockImportOperation,
 		import_headers: &PrePostHeader<Block::Header>,
 		body: &[Block::Extrinsic],
-	) -> error::Result<(
-		Option<StorageUpdate<B, Block>>,
-		Option<Option<ChangesUpdate<Block>>>,
-		Option<(
-			Vec<(Vec<u8>, Option<Vec<u8>>)>,
-			Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>
-		)>
-	)>
+	) -> error::Result<Option<sr_api::StorageChanges<backend::StateBackendFor<B, Block>, Block>>>
 		where
 			Self: ProvideRuntimeApi<Block>,
 			<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
@@ -998,17 +987,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				if import_headers.post().state_root() != &storage_changes.transaction_storage_root {
 					Err(error::Error::InvalidStateRoot)
 				} else {
-					Ok((
-						Some(storage_changes.transaction),
-						Some(storage_changes.changes_trie_transaction),
-						Some((
-							storage_changes.main_storage_changes,
-							storage_changes.child_storage_changes
-						))
-					))
+					Ok(Some(storage_changes))
 				}
 			},
-			None => Ok((None, None, None))
+			None => Ok(None)
 		}
 	}
 
@@ -1439,6 +1421,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for &Client<B, E, Block, RA>
 		ApiExt<Block, StateBackend = B::State>,
 {
 	type Error = ConsensusError;
+	type Transaction = backend::TransactionFor<B, Block>;
 
 	/// Import a checked and validated block. If a justification is provided in
 	/// `BlockImportParams` then `finalized` *must* be true.
@@ -1451,7 +1434,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for &Client<B, E, Block, RA>
 	/// algorithm, don't use this function.
 	fn import_block(
 		&mut self,
-		import_block: BlockImportParams<Block>,
+		import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		self.lock_import_and_run(|operation| {
@@ -1516,10 +1499,11 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		ApiExt<Block, StateBackend = B::State>,
 {
 	type Error = ConsensusError;
+	type Transaction = backend::TransactionFor<B, Block>;
 
 	fn import_block(
 		&mut self,
-		import_block: BlockImportParams<Block>,
+		import_block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		(&*self).import_block(import_block, new_cache)
