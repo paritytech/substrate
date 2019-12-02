@@ -4489,8 +4489,10 @@ dependencies = [
  "substrate-client 2.0.0",
  "substrate-finality-grandpa 2.0.0",
  "substrate-finality-grandpa-primitives 2.0.0",
+ "substrate-keyring 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-state-machine 2.0.0",
+ "substrate-test-runtime-client 2.0.0",
  "substrate-trie 2.0.0",
 ]
 

@@ -263,6 +263,7 @@ mod tests {
 	use sr_primitives::{
 		Perbill,
 		traits::{
+			Block as BlockT,
 			Header as HeaderT,
 			IdentityLookup
 		},
@@ -509,5 +510,70 @@ mod tests {
 			verify_ancestry(invalid_proof, ancestor.hash(), &child),
 			Error::InvalidAncestryProof
 		);
+	}
+
+	// TODO: Move this to the a better place
+	use test_client::prelude::*;
+	use fg::Commit;
+	use keyring::Ed25519Keyring;
+
+	// Currently stealing this from `core/finality-grandpa/src/test.rs`
+	fn create_grandpa_justification<Blk: BlockT<Hash=H256>>() -> GrandpaJustification<Blk> {
+		let client = test_client::new();
+		let header = Header {
+			parent_hash: H256::default(),
+			number: 1,
+			state_root: H256::default(),
+			extrinsics_root: H256::default(),
+			digest: Digest::default(),
+		};
+
+		// TODO: Change to authority
+		let peers = &[Ed25519Keyring::Alice];
+
+		let justification = {
+			let round = 1;
+			let set_id = 0;
+
+			let precommit = grandpa::Precommit {
+				target_hash: header.hash(),
+				target_number: *header.number(),
+			};
+
+			let msg = grandpa::Message::Precommit(precommit.clone());
+			let encoded = justification::localized_payload(round, set_id, &msg);
+			let signature = peers[0].sign(&encoded[..]).into();
+
+			let precommit = grandpa::SignedPrecommit {
+				precommit,
+				signature,
+				id: peers[0].public().into(),
+			};
+
+			let commit = grandpa::Commit {
+				target_hash: header.hash(),
+				target_number: *header.number(),
+				precommits: vec![precommit],
+			};
+
+			GrandpaJustification::<Blk>::from_commit(
+				&client,
+				round,
+				commit,
+			).unwrap()
+		};
+
+		justification
+	}
+
+	#[test]
+	fn can_create_valid_justifications() {
+		let justification = create_grandpa_justification();
+		let encoded = justification.encode();
+	}
+
+	#[test]
+	fn can_verify_grandpa_proofs() {
+		unimplemented!()
 	}
 }

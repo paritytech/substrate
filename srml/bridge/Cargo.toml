@@ -26,6 +26,8 @@ system = { package = "srml-system", path = "../system", default-features = false
 trie = { package = "substrate-trie", path = "../../core/trie", default-features = false }
 
 [dev-dependencies]
+keyring = { package = "substrate-keyring", path = "../../core/keyring" }
+test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
 
 [features]
 default = ["std"]
