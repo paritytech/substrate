@@ -49,7 +49,7 @@ runtime-io = { package = "sp-io", path = "../../../primitives/sr-io" }
 client-api = { package = "sc-client-api", path = "../../../client/api" }
 client = { package = "sc-client", path = "../../../client/" }
 chain-spec = { package = "sc-chain-spec", path = "../../../client/chain-spec" }
-txpool = { package = "sc-tracing-pool", path = "../../../client/transaction-pool" }
+txpool = { package = "sc-transaction-pool", path = "../../../client/transaction-pool" }
 txpool-api = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool" }
 network = { package = "sc-network", path = "../../../client/network" }
 babe = { package = "sc-consensus-babe", path = "../../../client/consensus/babe" }

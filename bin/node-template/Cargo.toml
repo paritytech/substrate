@@ -24,7 +24,7 @@ primitives = { package = "sp-core", path = "../../primitives/core" }
 sc-executor = { path = "../../client/executor" }
 sc-service = { path = "../../client/service" }
 inherents = { package = "sp-inherents", path = "../../primitives/inherents" }
-txpool = { package = "sc-tracing-pool", path = "../../client/transaction-pool" }
+txpool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
 txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
 network = { package = "sc-network", path = "../../client/network" }
 aura = { package = "sc-consensus-aura", path = "../../client/consensus/aura" }

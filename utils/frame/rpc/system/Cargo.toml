@@ -22,4 +22,4 @@ txpool-api = { package = "sp-transaction-pool-api", path = "../../../../primitiv
 [dev-dependencies]
 test-client = { package = "substrate-test-runtime-client", path = "../../../../test/utils/runtime/client" }
 env_logger = "0.7.0"
-txpool = { package = "sc-tracing-pool", path = "../../../../client/transaction-pool" }
+txpool = { package = "sc-transaction-pool", path = "../../../../client/transaction-pool" }
