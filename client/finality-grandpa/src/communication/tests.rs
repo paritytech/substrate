@@ -27,7 +27,7 @@ use codec::Encode;
 use sr_primitives::{ConsensusEngineId, traits::NumberFor};
 
 use crate::environment::SharedVoterSetState;
-use fg_primitives::AuthorityList;
+use fg_primitives::{AuthorityList, GRANDPA_ENGINE_ID};
 use super::gossip::{self, GossipValidator};
 use super::{AuthorityId, VoterSet, Round, SetId};
 
@@ -84,7 +84,7 @@ impl network_gossip::ValidatorContext<Block> for TestNetwork {
 		<Self as network_gossip::Network<Block>>::write_notification(
 			self,
 			who.clone(),
-			Default::default(),
+			GRANDPA_ENGINE_ID,
 			data
 		);
 	}
@@ -272,7 +272,7 @@ fn good_commit_leads_to_relay() {
 				Event::EventStream(sender) => {
 					let _ = sender.unbounded_send(NetworkEvent::NotifMessages {
 						remote: sender_id.clone(),
-						messages: vec![(Default::default(), commit_to_send.clone().into())],
+						messages: vec![(GRANDPA_ENGINE_ID, commit_to_send.clone().into())],
 					});
 
 					true
@@ -386,7 +386,7 @@ fn bad_commit_leads_to_report() {
 				Event::EventStream(sender) => {
 					let _ = sender.unbounded_send(NetworkEvent::NotifMessages {
 						remote: sender_id.clone(),
-						messages: vec![(Default::default(), commit_to_send.clone().into())],
+						messages: vec![(GRANDPA_ENGINE_ID, commit_to_send.clone().into())],
 					});
 
 					true
