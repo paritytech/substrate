@@ -105,7 +105,12 @@ impl<'a, G: RuntimeGenesis, E> BuildStorage for &'a ChainSpec<G, E> {
 enum Genesis<G> {
 	Runtime(G),
 	Raw(
+		// Map of values in the top trie.
 		HashMap<StorageKey, StorageData>,
+		// Map of child tries.
+		// Each child tries contains its map of values
+		// and a child info encoded as a byte array with the
+		// type of this child info as a u32.
 		HashMap<StorageKey, (HashMap<StorageKey, StorageData>, Vec<u8>, u32)>,
 	),
 }
