@@ -98,7 +98,8 @@ use crate::{environment, CatchUp, CompactCommit, SignedMessage};
 use super::{cost, benefit, Round, SetId};
 
 use std::collections::{HashMap, VecDeque, HashSet};
-use std::time::{Duration, Instant};
+use wasm_timer::Instant;
+use std::time::Duration;
 
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
 const CATCH_UP_REQUEST_TIMEOUT: Duration = Duration::from_secs(45);

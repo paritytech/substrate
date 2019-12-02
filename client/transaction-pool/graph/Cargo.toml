@@ -13,6 +13,7 @@ serde = { version = "1.0.101", features = ["derive"] }
 primitives = { package = "sp-core",  path = "../../../primitives/core" }
 sp-runtime = { path = "../../../primitives/sr-primitives" }
 txpool-api = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool" }
+wasm-timer = "0.2"
 
 [dev-dependencies]
 assert_matches = "1.3.0"

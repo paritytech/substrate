@@ -74,7 +74,7 @@ where
 				parent_id: id,
 				parent_number: *parent_header.number(),
 				transaction_pool: self.transaction_pool.clone(),
-				now,
+				now: Box::new(wasm_timer::Instant::now),
 			}),
 		};
 
@@ -117,7 +117,7 @@ struct ProposerInner<Block: BlockT, C, A: TransactionPool> {
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<A>,
-	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
+	now: Box<dyn Fn() -> wasm_timer::Instant + Send + Sync>,
 }
 
 impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
@@ -164,7 +164,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 		&self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
-		deadline: time::Instant,
+		deadline: wasm_timer::Instant
 	) -> Result<Block, sp_blockchain::Error> {
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
@@ -307,6 +307,11 @@ mod tests {
 		).unwrap();
 
 		// when
+		let cell = RefCell::new(wasm_timer::Instant::now());
+		proposer.now = Box::new(move || {
+			let new = *cell.borrow() + time::Duration::from_secs(2);
+			cell.replace(new)
+		});
 		let deadline = time::Duration::from_secs(3);
 		let block = futures::executor::block_on(proposer.propose(Default::default(), Default::default(), deadline))
 			.unwrap();

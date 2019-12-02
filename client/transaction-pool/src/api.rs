@@ -33,7 +33,6 @@ use crate::error::{self, Error};
 /// The transaction pool logic for full client.
 pub struct FullChainApi<T, Block> {
 	client: Arc<T>,
-	pool: ThreadPool,
 	_marker: PhantomData<Block>,
 }
 
@@ -44,11 +43,6 @@ impl<T, Block> FullChainApi<T, Block> where
 	pub fn new(client: Arc<T>) -> Self {
 		FullChainApi {
 			client,
-			pool: ThreadPoolBuilder::new()
-				.pool_size(2)
-				.name_prefix("txpool-verifier")
-				.create()
-				.expect("Failed to spawn verifier threads, that are critical for node operation."),
 			_marker: Default::default()
 		}
 	}
@@ -70,24 +64,13 @@ impl<T, Block> txpool::ChainApi for FullChainApi<T, Block> where
 		at: &BlockId<Self::Block>,
 		uxt: txpool::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
-		let (tx, rx) = oneshot::channel();
 		let client = self.client.clone();
 		let at = at.clone();
 
-		self.pool.spawn_ok(async move {
-			let res = client.runtime_api().validate_transaction(&at, uxt)
-				.map_err(|e| Error::RuntimeApi(format!("{:?}", e)));
-			if let Err(e) = tx.send(res) {
-				log::warn!("Unable to send a validate transaction result: {:?}", e);
-			}
-		});
+		let res = client.runtime_api().validate_transaction(&at, uxt)
+			.map_err(|e| Error::RuntimeApi(format!("{:?}", e)));
 
-		Box::pin(async move {
-			match rx.await {
-				Ok(r) => r,
-				Err(_) => Err(Error::RuntimeApi("Validation was canceled".into())),
-			}
-		})
+		Box::pin(async move { res })
 	}
 
 	fn block_id_to_number(

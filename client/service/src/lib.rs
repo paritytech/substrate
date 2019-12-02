@@ -31,7 +31,9 @@ use std::io;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
+use wasm_timer::Instant;
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 

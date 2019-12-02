@@ -48,8 +48,9 @@ use sp_runtime::traits::{
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
 	io::{Read, Write, Seek},
-	marker::PhantomData, sync::Arc, time::SystemTime
+	marker::PhantomData, sync::Arc, sync::atomic::AtomicBool
 };
+use wasm_timer::SystemTime;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 use txpool_api::{TransactionPool, TransactionPoolMaintainer};

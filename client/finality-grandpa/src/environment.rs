@@ -17,12 +17,12 @@
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use log::{debug, warn, info};
 use codec::{Decode, Encode};
 use futures::prelude::*;
-use tokio_timer::Delay;
+use wasm_timer::{Delay, Instant};
 use parking_lot::RwLock;
 use sp_blockchain::{HeaderBackend, Error as ClientError};
 

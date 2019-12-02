@@ -16,7 +16,7 @@
 
 use std::{mem, pin::Pin, time::Duration};
 use futures::{prelude::*, channel::mpsc, task::Context, task::Poll};
-use futures_timer::Delay;
+use wasm_timer::Delay;
 use sp_runtime::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 
 use crate::block_import::BlockOrigin;

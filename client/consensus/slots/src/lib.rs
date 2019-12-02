@@ -33,12 +33,12 @@ pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 use codec::{Decode, Encode};
 use consensus_common::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith};
 use futures::{prelude::*, future::{self, Either}};
-use futures_timer::Delay;
+use wasm_timer::{Delay, Instant};
 use inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{ApiRef, Block as BlockT, Header, ProvideRuntimeApi};
-use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::{Instant, Duration}};
+use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::Duration};
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use parking_lot::Mutex;
 use client_api;
@@ -224,7 +224,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			slot_remaining_duration,
 		).map_err(|e| consensus_common::Error::ClientImport(format!("{:?}", e)));
 		let delay: Box<dyn Future<Output=()> + Unpin + Send> = match proposing_remaining_duration {
-			Some(r) => Box::new(Delay::new(r)),
+			Some(r) => Box::new(Delay::new(r).map(drop)),
 			None => Box::new(future::pending()),
 		};
 

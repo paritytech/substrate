@@ -82,7 +82,7 @@ impl Store {
 	/// Optionally takes a password that will be used to encrypt/decrypt the keys.
 	pub fn open<T: Into<PathBuf>>(path: T, password: Option<Protected<String>>) -> Result<KeyStorePtr> {
 		let path = path.into();
-		fs::create_dir_all(&path)?;
+		//fs::create_dir_all(&path)?;
 
 		let instance = Self { path, additional: HashMap::new(), password };
 		Ok(Arc::new(RwLock::new(instance)))
@@ -113,9 +113,9 @@ impl Store {
 	///
 	/// Places it into the file system store.
 	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<()> {
-		let mut file = File::create(self.key_file_path(public, key_type)).map_err(Error::Io)?;
+		/*let mut file = File::create(self.key_file_path(public, key_type)).map_err(Error::Io)?;
 		serde_json::to_writer(&file, &suri).map_err(Error::Json)?;
-		file.flush().map_err(Error::Io)?;
+		file.flush().map_err(Error::Io)?;*/
 		Ok(())
 	}
 
@@ -144,9 +144,9 @@ impl Store {
 	/// Places it into the file system store.
 	pub fn generate_by_type<Pair: PairT>(&self, key_type: KeyTypeId) -> Result<Pair> {
 		let (pair, phrase, _) = Pair::generate_with_phrase(self.password.as_ref().map(|p| &***p));
-		let mut file = File::create(self.key_file_path(pair.public().as_slice(), key_type))?;
-		serde_json::to_writer(&file, &phrase)?;
-		file.flush()?;
+		//let mut file = File::create(self.key_file_path(pair.public().as_slice(), key_type))?;
+		//serde_json::to_writer(&file, &phrase)?;
+		//file.flush()?;
 		Ok(pair)
 	}
 
@@ -186,7 +186,7 @@ impl Store {
 			return Ok(pair)
 		}
 
-		let path = self.key_file_path(public.as_slice(), key_type);
+		/*let path = self.key_file_path(public.as_slice(), key_type);
 		let file = File::open(path)?;
 
 		let phrase: String = serde_json::from_reader(&file)?;
@@ -197,9 +197,9 @@ impl Store {
 
 		if &pair.public() == public {
 			Ok(pair)
-		} else {
+		} else {*/
 			Err(Error::InvalidPassword)
-		}
+		//}
 	}
 
 	/// Get a key pair for the given public key.

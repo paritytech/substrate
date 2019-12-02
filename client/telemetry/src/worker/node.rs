@@ -18,7 +18,7 @@
 
 use bytes::BytesMut;
 use futures::{prelude::*, compat::{Future01CompatExt as _, Compat01As03}};
-use futures_timer::Delay;
+use wasm_timer::Delay;
 use libp2p::Multiaddr;
 use libp2p::core::transport::Transport;
 use log::{trace, debug, warn, error};
@@ -254,7 +254,7 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 		if let Some(timeout) = self.timeout.as_mut() {
 			match Future::poll(Pin::new(timeout), cx) {
 				Poll::Pending => {},
-				Poll::Ready(()) => {
+				Poll::Ready(_) => {
 					self.timeout = None;
 					return Poll::Ready(Err(ConnectionError::Timeout))
 				}

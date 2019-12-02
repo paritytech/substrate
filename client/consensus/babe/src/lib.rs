@@ -63,7 +63,8 @@ pub use babe_primitives::{
 	CompatibleDigestItem,
 };
 pub use consensus_common::SyncOracle;
-use std::{collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration}};
+use std::{collections::HashMap, sync::Arc, u64, pin::Pin, time::Duration};
+use wasm_timer::Instant;
 use babe_primitives;
 use consensus_common::{ImportResult, CanAuthorWith};
 use consensus_common::import_queue::{

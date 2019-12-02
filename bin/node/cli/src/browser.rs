@@ -18,7 +18,7 @@ use crate::ChainSpec;
 use futures01::{prelude::*, sync::oneshot, sync::mpsc};
 use libp2p::wasm_ext;
 use log::{debug, info};
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 use sc_service::{AbstractService, RpcSession, Roles as ServiceRoles, Configuration, config::DatabaseConfig};
 use wasm_bindgen::prelude::*;
 
@@ -45,6 +45,7 @@ fn start_inner(wasm_ext: wasm_ext::ffi::Transport) -> Result<Client, Box<dyn std
 			allow_private_ipv4: true,
 			enable_mdns: false,
 		};
+		config.keystore_path = Some(Path::new("/").into());	// dummy path
 		config.telemetry_external_transport = Some(wasm_ext);
 		config.roles = ServiceRoles::LIGHT;
 		config.name = "Browser node".to_string();

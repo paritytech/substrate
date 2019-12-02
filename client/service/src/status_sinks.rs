@@ -17,8 +17,8 @@
 use futures::prelude::*;
 use futures::sync::mpsc;
 use futures::stream::futures_unordered::FuturesUnordered;
-use std::time::{Duration, Instant};
-use tokio_timer::Delay;
+use std::time::Duration;
+use wasm_timer::{Delay, Instant};
 
 /// Holds a list of `UnboundedSender`s, each associated with a certain time period. Every time the
 /// period elapses, we push an element on the sender.
@@ -29,7 +29,7 @@ pub struct StatusSinks<T> {
 }
 
 struct YieldAfter<T> {
-	delay: tokio_timer::Delay,
+	delay: Delay,
 	interval: Duration,
 	sender: Option<mpsc::UnboundedSender<T>>,
 }

@@ -23,8 +23,9 @@ use std::{
 	collections::HashMap,
 	hash,
 	iter,
-	time::{Duration, Instant},
+	time::Duration,
 };
+use wasm_timer::Instant;
 use parking_lot::RwLock;
 
 use crate::base_pool::Transaction;

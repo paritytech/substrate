@@ -11,6 +11,7 @@ sp-runtime = { path = "../sr-primitives", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 inherents = { package = "sp-inherents", path = "../inherents", default-features = false }
 impl-trait-for-tuples = "0.1.3"
+wasm-timer = "0.2"
 
 [features]
 default = [ "std" ]

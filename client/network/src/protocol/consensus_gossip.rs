@@ -272,7 +272,7 @@ pub struct ConsensusGossip<B: BlockT> {
 	messages: Vec<MessageEntry<B>>,
 	known_messages: LruCache<B::Hash, ()>,
 	validators: HashMap<ConsensusEngineId, Arc<dyn Validator<B>>>,
-	next_broadcast: time::Instant,
+	next_broadcast: wasm_timer::Instant,
 }
 
 impl<B: BlockT> ConsensusGossip<B> {
@@ -284,7 +284,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			messages: Default::default(),
 			known_messages: LruCache::new(KNOWN_MESSAGES_CACHE_SIZE),
 			validators: Default::default(),
-			next_broadcast: time::Instant::now() + REBROADCAST_INTERVAL,
+			next_broadcast: wasm_timer::Instant::now() + REBROADCAST_INTERVAL,
 		}
 	}
 
@@ -372,9 +372,9 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// Perform periodic maintenance
 	pub fn tick(&mut self, protocol: &mut dyn Context<B>) {
 		self.collect_garbage();
-		if time::Instant::now() >= self.next_broadcast {
+		if wasm_timer::Instant::now() >= self.next_broadcast {
 			self.rebroadcast(protocol);
-			self.next_broadcast = time::Instant::now() + REBROADCAST_INTERVAL;
+			self.next_broadcast = wasm_timer::Instant::now() + REBROADCAST_INTERVAL;
 		}
 	}
 
@@ -779,5 +779,110 @@ mod tests {
 
 		let _ = consensus.live_message_sinks.remove(&([0, 0, 0, 0], topic));
 		assert_eq!(stream.next(), None);
+	}
+
+	#[test]
+	fn keeps_track_of_broadcast_attempts() {
+		struct DummyNetworkContext;
+		impl<B: BlockT> Context<B> for DummyNetworkContext {
+			fn report_peer(&mut self, _who: PeerId, _reputation: i32) {}
+			fn disconnect_peer(&mut self, _who: PeerId) {}
+			fn send_consensus(&mut self, _who: PeerId, _consensus: Vec<ConsensusMessage>) {}
+			fn send_chain_specific(&mut self, _who: PeerId, _message: Vec<u8>) {}
+		}
+
+		// A mock gossip validator that never expires any message, allows
+		// setting whether messages should be allowed and keeps track of any
+		// messages passed to `message_allowed`.
+		struct MockValidator {
+			allow: AtomicBool,
+			messages: Arc<Mutex<Vec<(Vec<u8>, MessageIntent)>>>,
+		}
+
+		impl MockValidator {
+			fn new() -> MockValidator {
+				MockValidator {
+					allow: AtomicBool::new(false),
+					messages: Arc::new(Mutex::new(Vec::new())),
+				}
+			}
+		}
+
+		impl Validator<Block> for MockValidator {
+			fn validate(
+				&self,
+				_context: &mut dyn ValidatorContext<Block>,
+				_sender: &PeerId,
+				_data: &[u8],
+			) -> ValidationResult<H256> {
+				ValidationResult::ProcessAndKeep(H256::default())
+			}
+
+			fn message_expired<'a>(&'a self) -> Box<dyn FnMut(H256, &[u8]) -> bool + 'a> {
+				Box::new(move |_topic, _data| false)
+			}
+
+			fn message_allowed<'a>(&'a self) -> Box<dyn FnMut(&PeerId, MessageIntent, &H256, &[u8]) -> bool + 'a> {
+				let messages = self.messages.clone();
+				Box::new(move |_, intent, _, data| {
+					messages.lock().push((data.to_vec(), intent));
+					self.allow.load(Ordering::SeqCst)
+				})
+			}
+		}
+
+		// we setup an instance of the mock gossip validator, add a new peer to
+		// it and register a message.
+		let mut consensus = ConsensusGossip::<Block>::new();
+		let validator = Arc::new(MockValidator::new());
+		consensus.register_validator_internal([0, 0, 0, 0], validator.clone());
+		consensus.new_peer(
+			&mut DummyNetworkContext,
+			PeerId::random(),
+			Roles::AUTHORITY,
+		);
+
+		let data = vec![1, 2, 3];
+		let msg = ConsensusMessage { data: data.clone(), engine_id: [0, 0, 0, 0] };
+		consensus.register_message(H256::default(), msg);
+
+		// tick the gossip handler and make sure it triggers a message rebroadcast
+		let mut tick = || {
+			consensus.next_broadcast = wasm_timer::Instant::now();
+			consensus.tick(&mut DummyNetworkContext);
+		};
+
+		// by default we won't allow the message we registered, so everytime we
+		// tick the gossip handler, the message intent should be kept as
+		// `Broadcast` but the previous attempts should be incremented.
+		tick();
+		assert_eq!(
+			validator.messages.lock().pop().unwrap(),
+			(data.clone(), MessageIntent::Broadcast { previous_attempts: 0 }),
+		);
+
+		tick();
+		assert_eq!(
+			validator.messages.lock().pop().unwrap(),
+			(data.clone(), MessageIntent::Broadcast { previous_attempts: 1 }),
+		);
+
+		// we set the validator to allow the message to go through
+		validator.allow.store(true, Ordering::SeqCst);
+
+		// we still get the same message intent but it should be delivered now
+		tick();
+		assert_eq!(
+			validator.messages.lock().pop().unwrap(),
+			(data.clone(), MessageIntent::Broadcast { previous_attempts: 2 }),
+		);
+
+		// ticking the gossip handler again the message intent should change to
+		// `PeriodicRebroadcast` since it was sent.
+		tick();
+		assert_eq!(
+			validator.messages.lock().pop().unwrap(),
+			(data.clone(), MessageIntent::PeriodicRebroadcast),
+		);
 	}
 }
