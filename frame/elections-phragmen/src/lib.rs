@@ -611,8 +611,12 @@ impl<T: Trait> Module<T> {
 		);
 
 		if let Some(phragmen_result) = maybe_phragmen_result {
-			let old_members = <Members<T>>::take();
-			let old_runners = <RunnersUp<T>>::take();
+			let old_members_ids = <Members<T>>::take().into_iter()
+				.map(|(m, _)| m)
+				.collect::<Vec<T::AccountId>>();
+			let old_runners_up_ids = <RunnersUp<T>>::take().into_iter()
+				.map(|(r, _)| r)
+				.collect::<Vec<T::AccountId>>();
 
 			// filter out those who had literally no votes at all.
 			// AUDIT/NOTE: the need to do this is because all candidates, even those who have no
@@ -645,32 +649,35 @@ impl<T: Trait> Module<T> {
 				})
 				.collect::<Vec<(T::AccountId, BalanceOf<T>)>>();
 
-			// split new set into winners and runner ups.
+			// split new set into winners and runners up.
 			let split_point = desired_seats.min(new_set_with_stake.len());
 			let mut new_members = (&new_set_with_stake[..split_point]).to_vec();
+
+			// save the runners up as-is. They are sorted based on desirability.
+			// sort and save the members.
+			new_members.sort_by(|i, j| i.0.cmp(&j.0));
+
+			// new_members_ids is sorted by account id.
 			let new_members_ids = new_members
 				.iter()
 				.map(|(m, _)| m.clone())
 				.collect::<Vec<T::AccountId>>();
+
 			let new_runners_up = &new_set_with_stake[split_point..]
 				.into_iter()
 				.cloned()
 				.rev()
 				.collect::<Vec<(T::AccountId, BalanceOf<T>)>>();
+			// new_runners_up remains sorted by desirability.
 			let new_runners_up_ids = new_runners_up
 				.iter()
 				.map(|(r, _)| r.clone())
 				.collect::<Vec<T::AccountId>>();
 
-
-			// save the runners as-is. They are sorted based on desirability.
-			// sort and save the members.
-			new_members.sort();
-
 			// report member changes. We compute diff because we need the outgoing list.
 			let (incoming, outgoing) = T::ChangeMembers::compute_members_diff(
 				&new_members_ids,
-				&old_members.into_iter().map(|(m, _)| m).collect::<Vec<T::AccountId>>(),
+				&old_members_ids,
 			);
 			T::ChangeMembers::change_members_sorted(
 				&incoming,
@@ -685,7 +692,7 @@ impl<T: Trait> Module<T> {
 			{
 				let (_, outgoing) = T::ChangeMembers::compute_members_diff(
 					&new_runners_up_ids,
-					&old_runners.into_iter().map(|(r, _)| r).collect::<Vec<T::AccountId>>(),
+					&old_runners_up_ids,
 				);
 				to_burn_bond.extend(outgoing);
 			}
@@ -818,6 +825,24 @@ mod tests {
 	pub struct TestChangeMembers;
 	impl ChangeMembers<u64> for TestChangeMembers {
 		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
+			// new, incoming, outgoing must be sorted.
+			let mut new_sorted = new.to_vec();
+			new_sorted.sort();
+			assert_eq!(new, &new_sorted[..]);
+
+			let mut incoming_sorted = incoming.to_vec();
+			incoming_sorted.sort();
+			assert_eq!(incoming, &incoming_sorted[..]);
+
+			let mut outgoing_sorted = outgoing.to_vec();
+			outgoing_sorted.sort();
+			assert_eq!(outgoing, &outgoing_sorted[..]);
+
+			// incoming and outgoing must be disjoint
+			for x in incoming.iter() {
+				assert!(outgoing.binary_search(x).is_err());
+			}
+
 			let mut old_plus_incoming = MEMBERS.with(|m| m.borrow().to_vec());
 			old_plus_incoming.extend_from_slice(incoming);
 			old_plus_incoming.sort();
