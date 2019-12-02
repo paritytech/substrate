@@ -51,8 +51,8 @@ use log::{trace, debug};
 use futures03::channel::mpsc;
 use lru::LruCache;
 use libp2p::PeerId;
-use sr_primitives::traits::{Block as BlockT, Hash, HashFor};
-use sr_primitives::ConsensusEngineId;
+use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
+use sp_runtime::ConsensusEngineId;
 pub use crate::message::generic::{Message, ConsensusMessage};
 use crate::protocol::Context;
 use crate::config::Roles;
@@ -632,7 +632,7 @@ impl<B: BlockT> Validator<B> for DiscardAll {
 #[cfg(test)]
 mod tests {
 	use std::sync::Arc;
-	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
 	use futures03::executor::block_on_stream;
 
 	use super::*;

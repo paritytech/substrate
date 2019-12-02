@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Main entry point of the substrate-network crate.
+//! Main entry point of the sc-network crate.
 //!
 //! There are two main structs in this module: [`NetworkWorker`] and [`NetworkService`].
 //! The [`NetworkWorker`] *is* the network and implements the `Future` trait. It must be polled in
@@ -38,7 +38,7 @@ use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::swarm::NetworkBehaviour;
 use parking_lot::Mutex;
 use peerset::PeersetHandle;
-use sr_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
+use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
 use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse_addr}};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
@@ -607,7 +607,7 @@ pub trait NetworkStateInfo {
 
 impl<B, S, H> NetworkStateInfo for NetworkService<B, S, H>
 	where
-		B: sr_primitives::traits::Block,
+		B: sp_runtime::traits::Block,
 		S: NetworkSpecialization<B>,
 		H: ExHashT,
 {

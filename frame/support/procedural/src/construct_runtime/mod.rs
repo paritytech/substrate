@@ -93,10 +93,10 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 		#[derive(Clone, Copy, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		pub struct #name;
-		impl #scrate::sr_primitives::traits::GetNodeBlockType for #name {
+		impl #scrate::sp_runtime::traits::GetNodeBlockType for #name {
 			type NodeBlock = #node_block;
 		}
-		impl #scrate::sr_primitives::traits::GetRuntimeBlockType for #name {
+		impl #scrate::sp_runtime::traits::GetRuntimeBlockType for #name {
 			type RuntimeBlock = #block;
 		}
 
@@ -193,7 +193,7 @@ fn decl_outer_config<'a>(
 			)
 		});
 	quote!(
-		#scrate::sr_primitives::impl_outer_config! {
+		#scrate::sp_runtime::impl_outer_config! {
 			pub struct GenesisConfig for #runtime {
 				#(#modules_tokens)*
 			}

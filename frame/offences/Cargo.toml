@@ -7,16 +7,16 @@ edition = "2018"
 [dependencies]
 balances = { package = "pallet-balances", path = "../balances", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
+rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
 serde = { version = "1.0.101", optional = true }
-sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
-sr-staking-primitives = { path = "../../primitives/sr-staking-primitives", default-features = false }
+sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
+sp-staking = { path = "../../primitives/sr-staking-primitives", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }
 
 [dev-dependencies]
-runtime-io = { package = "sr-io", path = "../../primitives/sr-io" }
-substrate-primitives = { path = "../../primitives/core" }
+runtime-io = { package = "sp-io", path = "../../primitives/sr-io" }
+sp-core = { path = "../../primitives/core" }
 
 [features]
 default = ["std"]
@@ -25,8 +25,8 @@ std = [
 	"codec/std",
 	"rstd/std",
 	"serde",
-	"sr-primitives/std",
-	"sr-staking-primitives/std",
+	"sp-runtime/std",
+	"sp-staking/std",
 	"support/std",
 	"system/std",
 ]

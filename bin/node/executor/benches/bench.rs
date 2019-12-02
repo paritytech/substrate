@@ -28,7 +28,7 @@ use primitives::storage::well_known_keys;
 use primitives::traits::CodeExecutor;
 use runtime_support::Hashable;
 use state_machine::TestExternalities as CoreTestExternalities;
-use substrate_executor::{NativeExecutor, RuntimeInfo, WasmExecutionMethod, Externalities};
+use sc_executor::{NativeExecutor, RuntimeInfo, WasmExecutionMethod, Externalities};
 
 criterion_group!(benches, bench_execute_block);
 criterion_main!(benches);

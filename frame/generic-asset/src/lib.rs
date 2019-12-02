@@ -153,8 +153,8 @@
 
 use codec::{Decode, Encode, HasCompact, Input, Output, Error};
 
-use sr_primitives::RuntimeDebug;
-use sr_primitives::traits::{
+use sp_runtime::RuntimeDebug;
+use sp_runtime::traits::{
 	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, SimpleArithmetic,
 	Zero, Bounded,
 };

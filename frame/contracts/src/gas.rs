@@ -16,7 +16,7 @@
 
 use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
 use rstd::convert::TryFrom;
-use sr_primitives::traits::{
+use sp_runtime::traits::{
 	CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto,
 };
 use support::{

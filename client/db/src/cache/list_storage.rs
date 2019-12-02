@@ -22,8 +22,8 @@ use kvdb::{KeyValueDB, DBTransaction};
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use codec::{Encode, Decode};
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use crate::utils::{self, db_err, meta_keys};
 
 use crate::cache::{CacheItemT, ComplexBlockId};

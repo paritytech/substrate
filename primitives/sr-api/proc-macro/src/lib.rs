@@ -44,9 +44,9 @@ mod utils;
 /// # Example
 ///
 /// ```rust
-/// use sr_version::create_runtime_str;
+/// use sp_version::create_runtime_str;
 /// #
-/// # use sr_primitives::traits::GetNodeBlockType;
+/// # use sp_runtime::traits::GetNodeBlockType;
 /// # use test_client::runtime::{Block, Header};
 /// #
 /// # /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
@@ -56,7 +56,7 @@ mod utils;
 /// #     type NodeBlock = Block;
 /// # }
 /// #
-/// # sr_api::decl_runtime_apis! {
+/// # sp_api::decl_runtime_apis! {
 /// #     /// Declare the api trait.
 /// #     pub trait Balance {
 /// #         /// Get the balance.
@@ -70,9 +70,9 @@ mod utils;
 /// # }
 ///
 /// /// All runtime api implementations need to be done in one call of the macro!
-/// sr_api::impl_runtime_apis! {
-/// #   impl sr_api::Core<Block> for Runtime {
-/// #       fn version() -> sr_version::RuntimeVersion {
+/// sp_api::impl_runtime_apis! {
+/// #   impl sp_api::Core<Block> for Runtime {
+/// #       fn version() -> sp_version::RuntimeVersion {
 /// #           unimplemented!()
 /// #       }
 /// #       fn execute_block(_block: Block) {}
@@ -96,7 +96,7 @@ mod utils;
 /// }
 ///
 /// /// Runtime version. This needs to be declared for each runtime.
-/// pub const VERSION: sr_version::RuntimeVersion = sr_version::RuntimeVersion {
+/// pub const VERSION: sp_version::RuntimeVersion = sp_version::RuntimeVersion {
 ///     spec_name: create_runtime_str!("node"),
 ///     impl_name: create_runtime_str!("test-node"),
 ///     authoring_version: 1,
@@ -127,7 +127,7 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```rust
-/// sr_api::decl_runtime_apis! {
+/// sp_api::decl_runtime_apis! {
 ///     /// Declare the api trait.
 ///     pub trait Balance {
 ///         /// Get the balance.
@@ -159,7 +159,7 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 /// spec version!). Such a method also does not need to be implemented in the runtime.
 ///
 /// ```rust
-/// sr_api::decl_runtime_apis! {
+/// sp_api::decl_runtime_apis! {
 ///     /// Declare the api trait.
 ///     #[api_version(2)]
 ///     pub trait Balance {

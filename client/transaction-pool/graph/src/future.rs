@@ -23,7 +23,7 @@ use std::{
 };
 
 use primitives::hexdisplay::HexDisplay;
-use sr_primitives::transaction_validity::{
+use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };
 

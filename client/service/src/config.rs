@@ -19,7 +19,7 @@
 pub use client::ExecutionStrategies;
 pub use client_db::{kvdb::KeyValueDB, PruningMode};
 pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
-pub use substrate_executor::WasmExecutionMethod;
+pub use sc_executor::WasmExecutionMethod;
 
 use std::{path::PathBuf, net::SocketAddr, sync::Arc};
 pub use txpool::txpool::Options as TransactionPoolOptions;
@@ -103,7 +103,7 @@ pub struct Configuration<C, G, E = NoExtension> {
 	/// Tracing targets
 	pub tracing_targets: Option<String>,
 	/// Tracing receiver
-	pub tracing_receiver: substrate_tracing::TracingReceiver,
+	pub tracing_receiver: sc_tracing::TracingReceiver,
 }
 
 /// Configuration of the database of the client.

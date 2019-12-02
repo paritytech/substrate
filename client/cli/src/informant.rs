@@ -19,7 +19,7 @@
 use client_api::BlockchainEvents;
 use futures::{StreamExt, TryStreamExt, FutureExt, future, compat::Stream01CompatExt};
 use log::{info, warn};
-use sr_primitives::traits::Header;
+use sp_runtime::traits::Header;
 use service::AbstractService;
 use std::time::Duration;
 

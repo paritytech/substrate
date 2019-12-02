@@ -25,8 +25,8 @@
 
 use rstd::{prelude::*, result};
 use primitives::u32_trait::Value as U32;
-use sr_primitives::RuntimeDebug;
-use sr_primitives::traits::{Hash, EnsureOrigin};
+use sp_runtime::RuntimeDebug;
+use sp_runtime::traits::{Hash, EnsureOrigin};
 use support::weights::SimpleDispatchInfo;
 use support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
@@ -382,7 +382,7 @@ mod tests {
 	use system::{EventRecord, Phase};
 	use hex_literal::hex;
 	use primitives::H256;
-	use sr_primitives::{
+	use sp_runtime::{
 		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
 		BuildStorage,
 	};
@@ -422,8 +422,8 @@ mod tests {
 		type Event = Event;
 	}
 
-	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
-	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
 	support::construct_runtime!(
 		pub enum Test where

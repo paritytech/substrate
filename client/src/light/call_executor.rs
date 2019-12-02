@@ -25,7 +25,7 @@ use primitives::{
 	H256, Blake2Hasher, convert_hash, NativeOrEncoded,
 	traits::CodeExecutor,
 };
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, NumberFor},
 };
 use externalities::Extensions;
@@ -36,7 +36,7 @@ use state_machine::{
 };
 use hash_db::Hasher;
 
-use sr_api::{ProofRecorder, InitializeBlock};
+use sp_api::{ProofRecorder, InitializeBlock};
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
@@ -460,7 +460,7 @@ mod tests {
 		let remote_client = test_client::new();
 		for i in 1u32..3u32 {
 			let mut digest = Digest::default();
-			digest.push(sr_primitives::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
+			digest.push(sp_runtime::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
 			remote_client.import_justified(
 				BlockOrigin::Own,
 				remote_client.new_block(digest).unwrap().bake().unwrap(),

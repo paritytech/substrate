@@ -17,8 +17,8 @@
 //! Module helpers for offchain calls.
 
 use codec::Encode;
-use sr_primitives::app_crypto::{self, RuntimeAppPublic};
-use sr_primitives::traits::{Extrinsic as ExtrinsicT, IdentifyAccount};
+use sp_runtime::app_crypto::{self, RuntimeAppPublic};
+use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount};
 
 /// A trait responsible for signing a payload using given account.
 pub trait Signer<Public, Signature> {

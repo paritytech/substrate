@@ -53,11 +53,11 @@ use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash, traits::CodeExecutor};
 use primitives::storage::well_known_keys;
-use sr_primitives::{
+use sp_runtime::{
 	generic::{BlockId, DigestItem}, Justification, StorageOverlay, ChildrenStorageOverlay,
 	BuildStorage,
 };
-use sr_primitives::traits::{
+use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion
 };
 use executor::RuntimeInfo;
@@ -1561,8 +1561,8 @@ mod tests {
 	use crate::columns;
 	use client_api::backend::{Backend as BTrait, BlockImportOperation as Op};
 	use client::blockchain::Backend as BLBTrait;
-	use sr_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
-	use sr_primitives::traits::{Hash, BlakeTwo256};
+	use sp_runtime::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::traits::{Hash, BlakeTwo256};
 	use state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};
 	use sp_blockchain::{lowest_common_ancestor, tree_route};
 
@@ -1593,7 +1593,7 @@ mod tests {
 		changes: Vec<(Vec<u8>, Vec<u8>)>,
 		extrinsics_root: H256,
 	) -> H256 {
-		use sr_primitives::testing::Digest;
+		use sp_runtime::testing::Digest;
 		let (changes_root, changes_trie_update) = prepare_changes(changes);
 		let digest = Digest {
 			logs: vec![
