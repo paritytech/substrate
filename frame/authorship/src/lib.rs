@@ -27,7 +27,7 @@ use support::traits::{FindAuthor, VerifySeal, Get};
 use support::dispatch::Result as DispatchResult;
 use codec::{Encode, Decode};
 use system::ensure_none;
-use sr_primitives::traits::{Header as HeaderT, One, Zero};
+use sp_runtime::traits::{Header as HeaderT, One, Zero};
 use support::weights::SimpleDispatchInfo;
 use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
 use sp_authorship::{
@@ -144,7 +144,7 @@ where
 	}
 }
 
-#[derive(Encode, Decode, sr_primitives::RuntimeDebug)]
+#[derive(Encode, Decode, sp_runtime::RuntimeDebug)]
 #[cfg_attr(any(feature = "std", test), derive(PartialEq))]
 enum UncleEntryItem<BlockNumber, Hash, Author> {
 	InclusionHeight(BlockNumber),
@@ -362,7 +362,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 mod tests {
 	use super::*;
 	use primitives::H256;
-	use sr_primitives::{
+	use sp_runtime::{
 		traits::{BlakeTwo256, IdentityLookup}, testing::Header, generic::DigestItem, Perbill,
 	};
 	use support::{parameter_types, impl_outer_origin, ConsensusEngineId, weights::Weight};

@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 
-use sr_primitives::{
+use sp_runtime::{
     traits::{
         Block as BlockT, Header as HeaderT, NumberFor,
     },

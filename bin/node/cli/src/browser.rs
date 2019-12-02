@@ -19,7 +19,7 @@ use futures01::{prelude::*, sync::oneshot, sync::mpsc};
 use libp2p::wasm_ext;
 use log::{debug, info};
 use std::sync::Arc;
-use substrate_service::{AbstractService, RpcSession, Roles as ServiceRoles, Configuration, config::DatabaseConfig};
+use sc_service::{AbstractService, RpcSession, Roles as ServiceRoles, Configuration, config::DatabaseConfig};
 use wasm_bindgen::prelude::*;
 
 /// Starts the client.

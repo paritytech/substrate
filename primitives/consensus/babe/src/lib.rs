@@ -24,7 +24,7 @@ pub mod inherents;
 
 use codec::{Encode, Decode};
 use rstd::vec::Vec;
-use sr_primitives::{ConsensusEngineId, RuntimeDebug};
+use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 
 #[cfg(feature = "std")]
 pub use digest::{BabePreDigest, CompatibleDigestItem};
@@ -165,7 +165,7 @@ impl slots::SlotData for BabeConfiguration {
 	const SLOT_KEY: &'static [u8] = b"babe_configuration";
 }
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
 	pub trait BabeApi {
 		/// Return the configuration for BABE. Currently,

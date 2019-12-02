@@ -17,7 +17,7 @@
 #[doc(hidden)]
 pub use crate::rstd::vec::Vec;
 #[doc(hidden)]
-pub use crate::sr_primitives::traits::{Block as BlockT, Extrinsic};
+pub use crate::sp_runtime::traits::{Block as BlockT, Extrinsic};
 #[doc(hidden)]
 pub use inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatalError};
 

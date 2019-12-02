@@ -31,7 +31,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use sr_primitives::{traits::{Block as BlockT, DigestFor}, generic::BlockId};
+use sp_runtime::{traits::{Block as BlockT, DigestFor}, generic::BlockId};
 use futures::prelude::*;
 pub use inherents::InherentData;
 

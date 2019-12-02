@@ -63,9 +63,9 @@ use log::info;
 use lazy_static::lazy_static;
 use futures::{Future, FutureExt, TryFutureExt};
 use futures01::{Async, Future as _};
-use substrate_telemetry::TelemetryEndpoints;
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::Block as BlockT;
+use sc_telemetry::TelemetryEndpoints;
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::Block as BlockT;
 
 /// default sub directory to store network config
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
@@ -970,8 +970,8 @@ fn init_logger(pattern: &str) {
 	builder.filter(Some("ws"), log::LevelFilter::Off);
 	builder.filter(Some("hyper"), log::LevelFilter::Warn);
 	builder.filter(Some("cranelift_wasm"), log::LevelFilter::Warn);
-	// Always log the special target `substrate_tracing`, overrides global level
-	builder.filter(Some("substrate_tracing"), log::LevelFilter::Info);
+	// Always log the special target `sc_tracing`, overrides global level
+	builder.filter(Some("sc_tracing"), log::LevelFilter::Info);
 	// Enable info for others.
 	builder.filter(None, log::LevelFilter::Info);
 

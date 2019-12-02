@@ -23,7 +23,7 @@ use client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use fork_tree::ForkTree;
 use grandpa::round::State as RoundState;
-use sr_primitives::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use log::{info, warn};
 use fg_primitives::{AuthorityList, SetId, RoundNumber};
 

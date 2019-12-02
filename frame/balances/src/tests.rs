@@ -18,7 +18,7 @@
 
 use super::*;
 use mock::{Balances, ExtBuilder, Runtime, System, info_from_weight, CALL};
-use sr_primitives::traits::SignedExtension;
+use sp_runtime::traits::SignedExtension;
 use support::{
 	assert_noop, assert_ok, assert_err,
 	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,

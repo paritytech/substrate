@@ -23,9 +23,9 @@ use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
 use primitives::offchain::storage::{
 	InMemOffchainStorage as OffchainStorage
 };
-use sr_primitives::generic::{BlockId, DigestItem};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor};
-use sr_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
+use sp_runtime::generic::{BlockId, DigestItem};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor};
+use sp_runtime::{Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId, ChangesTrieTransaction};
 use hash_db::{Hasher, Prefix};

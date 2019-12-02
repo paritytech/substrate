@@ -29,7 +29,7 @@ use futures::{
 	channel::mpsc,
 	future::{Either, ready, join_all},
 };
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits::{self, SaturatedConversion},
 	transaction_validity::{TransactionValidity, TransactionTag as Tag, TransactionValidityError},
@@ -441,7 +441,7 @@ mod tests {
 	use futures::executor::block_on;
 	use super::*;
 	use txpool_api::TransactionStatus;
-	use sr_primitives::transaction_validity::{ValidTransaction, InvalidTransaction};
+	use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction};
 	use codec::Encode;
 	use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 	use assert_matches::assert_matches;

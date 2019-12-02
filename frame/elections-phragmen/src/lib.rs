@@ -83,7 +83,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use sr_primitives::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
+use sp_runtime::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
 use support::weights::SimpleDispatchInfo;
 use support::{
 	decl_storage, decl_event, ensure, decl_module, dispatch,
@@ -746,7 +746,7 @@ mod tests {
 	use support::{assert_ok, assert_noop, parameter_types, weights::Weight};
 	use substrate_test_utils::assert_eq_uvec;
 	use primitives::H256;
-	use sr_primitives::{
+	use sp_runtime::{
 		Perbill, testing::Header, BuildStorage,
 		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 	};
@@ -857,8 +857,8 @@ mod tests {
 		type BadReport = ();
 	}
 
-	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
-	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
 	support::construct_runtime!(
 		pub enum Test where

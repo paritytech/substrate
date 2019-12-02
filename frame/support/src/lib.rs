@@ -43,7 +43,7 @@ pub use state_machine::BasicExternalities;
 #[doc(hidden)]
 pub use runtime_io::storage::root as storage_root;
 #[doc(hidden)]
-pub use sr_primitives::RuntimeDebug;
+pub use sp_runtime::RuntimeDebug;
 
 #[macro_use]
 pub mod debug;
@@ -69,7 +69,7 @@ pub mod weights;
 pub use self::hash::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Hashable};
 pub use self::storage::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
 pub use self::dispatch::{Parameter, Callable, IsSubType};
-pub use sr_primitives::{self, ConsensusEngineId, print, traits::Printable};
+pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:

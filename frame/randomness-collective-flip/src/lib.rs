@@ -53,7 +53,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{prelude::*, convert::TryInto};
-use sr_primitives::traits::Hash;
+use sp_runtime::traits::Hash;
 use support::{decl_module, decl_storage, traits::Randomness};
 use safe_mix::TripletMix;
 use codec::Encode;
@@ -153,7 +153,7 @@ impl<T: Trait> Randomness<T::Hash> for Module<T> {
 mod tests {
 	use super::*;
 	use primitives::H256;
-	use sr_primitives::{
+	use sp_runtime::{
 		Perbill, traits::{BlakeTwo256, OnInitialize, Header as _, IdentityLookup}, testing::Header,
 	};
 	use support::{impl_outer_origin, parameter_types, weights::Weight, traits::Randomness};

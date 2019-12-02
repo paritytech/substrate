@@ -21,9 +21,9 @@
 use rstd::vec::Vec;
 
 #[cfg(feature = "std")]
-use sr_primitives::{generic::BlockId, traits::{ProvideRuntimeApi, Block as BlockT}};
+use sp_runtime::{generic::BlockId, traits::{ProvideRuntimeApi, Block as BlockT}};
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// Session keys runtime api.
 	pub trait SessionKeys {
 		/// Generate a set of session keys with optionally using the given seed.
@@ -44,7 +44,7 @@ pub fn generate_initial_session_keys<Block, T>(
 	client: std::sync::Arc<T>,
 	at: &BlockId<Block>,
 	seeds: Vec<String>,
-) -> Result<(), <<T as ProvideRuntimeApi>::Api as sr_api::ApiExt<Block>>::Error>
+) -> Result<(), <<T as ProvideRuntimeApi>::Api as sp_api::ApiExt<Block>>::Error>
 where
 	Block: BlockT,
 	T: ProvideRuntimeApi,

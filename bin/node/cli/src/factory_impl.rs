@@ -29,7 +29,7 @@ use node_runtime::{
 };
 use node_primitives::Signature;
 use primitives::{sr25519, crypto::Pair};
-use sr_primitives::{
+use sp_runtime::{
 	generic::Era, traits::{Block as BlockT, Header as HeaderT, SignedExtension, Verify, IdentifyAccount}
 };
 use transaction_factory::RuntimeAdapter;
@@ -71,7 +71,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 	type AccountId = node_primitives::AccountId;
 	type Balance = node_primitives::Balance;
 	type Block = node_primitives::Block;
-	type Phase = sr_primitives::generic::Phase;
+	type Phase = sp_runtime::generic::Phase;
 	type Secret = sr25519::Pair;
 	type Index = node_primitives::Index;
 

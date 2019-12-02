@@ -20,9 +20,9 @@ use client::Client as SubstrateClient;
 use sp_blockchain::Error;
 use client_api::{ChangesProof, StorageProof, ClientInfo, CallExecutor};
 use consensus::{BlockImport, BlockStatus, Error as ConsensusError};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT};
-use sr_primitives::generic::{BlockId};
-use sr_primitives::Justification;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sp_runtime::generic::{BlockId};
+use sp_runtime::Justification;
 use primitives::{H256, Blake2Hasher, storage::StorageKey};
 
 /// Local client abstraction for the network.
