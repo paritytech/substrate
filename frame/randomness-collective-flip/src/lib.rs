@@ -53,7 +53,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{prelude::*, convert::TryInto};
-use sr_primitives::traits::Hash;
+use sp_runtime::traits::Hash;
 use support::{decl_module, decl_storage, traits::Randomness};
 use safe_mix::TripletMix;
 use codec::Encode;
@@ -153,10 +153,10 @@ impl<T: Trait> Randomness<T::Hash> for Module<T> {
 mod tests {
 	use super::*;
 	use primitives::H256;
-	use sr_primitives::{
+	use sp_runtime::{
 		Perbill, traits::{BlakeTwo256, OnInitialize, Header as _, IdentityLookup}, testing::Header,
 	};
-	use support::{impl_outer_origin, parameter_types, traits::Randomness};
+	use support::{impl_outer_origin, parameter_types, weights::Weight, traits::Randomness};
 
 	#[derive(Clone, PartialEq, Eq)]
 	pub struct Test;
@@ -167,7 +167,7 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}

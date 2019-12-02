@@ -19,12 +19,12 @@
 #![cfg(test)]
 
 use crate::{Trait, Module, GenesisConfig};
-use substrate_consensus_aura_primitives::ed25519::AuthorityId;
-use sr_primitives::{
+use sp_consensus_aura::ed25519::AuthorityId;
+use sp_runtime::{
 	traits::IdentityLookup, Perbill,
 	testing::{Header, UintAuthorityId},
 };
-use support::{impl_outer_origin, parameter_types};
+use support::{impl_outer_origin, parameter_types, weights::Weight};
 use runtime_io;
 use primitives::H256;
 
@@ -38,7 +38,7 @@ pub struct Test;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 	pub const MinimumPeriod: u64 = 1;
@@ -50,7 +50,7 @@ impl system::Trait for Test {
 	type BlockNumber = u64;
 	type Call = ();
 	type Hash = H256;
-	type Hashing = ::sr_primitives::traits::BlakeTwo256;
+	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;

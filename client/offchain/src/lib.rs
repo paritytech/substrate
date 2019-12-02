@@ -37,12 +37,12 @@ use std::{fmt, marker::PhantomData, sync::Arc};
 
 use parking_lot::Mutex;
 use threadpool::ThreadPool;
-use sr_api::ApiExt;
+use sp_api::ApiExt;
 use futures::future::Future;
 use log::{debug, warn};
 use network::NetworkStateInfo;
 use primitives::{offchain::{self, OffchainStorage}, ExecutionContext};
-use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
+use sp_runtime::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
 
 mod api;
 
@@ -145,9 +145,11 @@ impl<Client, Storage, Block> OffchainWorkers<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use network::{Multiaddr, PeerId};
 	use std::sync::Arc;
-	use transaction_pool::txpool::Pool;
+	use network::{Multiaddr, PeerId};
+	use test_client::runtime::Block;
+	use txpool::{BasicPool, FullChainApi};
+	use txpool_api::{TransactionPool, InPoolTransaction};
 
 	struct MockNetworkStateInfo();
 
@@ -161,15 +163,26 @@ mod tests {
 		}
 	}
 
+	struct TestPool(BasicPool<FullChainApi<test_client::TestClient, Block>, Block>);
+
+	impl txpool_api::OffchainSubmitTransaction<Block> for TestPool {
+		fn submit_at(
+			&self,
+			at: &BlockId<Block>,
+			extrinsic: <Block as sp_runtime::traits::Block>::Extrinsic,
+		) -> Result<(), ()> {
+			futures::executor::block_on(self.0.submit_one(&at, extrinsic))
+				.map(|_| ())
+				.map_err(|_| ())
+		}
+	}
+
 	#[test]
 	fn should_call_into_runtime_and_produce_extrinsic() {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(Pool::new(
-				Default::default(),
-				transaction_pool::FullChainApi::new(client.clone())
-		));
+		let pool = Arc::new(TestPool(BasicPool::new(Default::default(), FullChainApi::new(client.clone()))));
 		client.execution_extensions()
 			.register_transaction_pool(Arc::downgrade(&pool.clone()) as _);
 		let db = client_db::offchain::LocalStorage::new_test();
@@ -180,7 +193,7 @@ mod tests {
 		futures::executor::block_on(offchain.on_block_imported(&0u64, network_state, false));
 
 		// then
-		assert_eq!(pool.status().ready, 1);
-		assert_eq!(pool.ready().next().unwrap().is_propagateable(), false);
+		assert_eq!(pool.0.status().ready, 1);
+		assert_eq!(pool.0.ready().next().unwrap().is_propagateable(), false);
 	}
 }

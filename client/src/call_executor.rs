@@ -16,7 +16,7 @@
 
 use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
 };
 use state_machine::{
@@ -30,10 +30,8 @@ use primitives::{
 	H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue,
 	traits::CodeExecutor,
 };
-use sr_api::{ProofRecorder, InitializeBlock};
-use client_api::{
-	error, backend, call_executor::CallExecutor,
-};
+use sp_api::{ProofRecorder, InitializeBlock};
+use client_api::{backend, call_executor::CallExecutor};
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
@@ -65,10 +63,10 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 }
 
 impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
-where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CodeExecutor + RuntimeInfo,
-	Block: BlockT<Hash=H256>,
+	where
+		B: backend::Backend<Block, Blake2Hasher>,
+		E: CodeExecutor + RuntimeInfo,
+		Block: BlockT<Hash=H256>,
 {
 	type Error = E::Error;
 
@@ -79,7 +77,7 @@ where
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
 		extensions: Option<Extensions>,
-	) -> error::Result<Vec<u8>> {
+	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		let return_data = StateMachine::new(
@@ -105,7 +103,7 @@ where
 
 	fn contextual_call<
 		'a,
-		IB: Fn() -> error::Result<()>,
+		IB: Fn() -> sp_blockchain::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
@@ -124,7 +122,7 @@ where
 		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
 		extensions: Option<Extensions>,
-	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
+	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {
 			InitializeBlock::Do(ref init_block)
 				if init_block.borrow().as_ref().map(|id| id != at).unwrap_or(true) => {
@@ -189,7 +187,7 @@ where
 		Ok(result)
 	}
 
-	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
+	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 
@@ -204,7 +202,7 @@ where
 			let _lock = self.backend.get_import_lock().read();
 			self.backend.destroy_state(state)?;
 		}
-		version.ok_or(error::Error::VersionInvalid.into())
+		version.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
 	}
 
 	fn call_at_state<
@@ -223,7 +221,7 @@ where
 		manager: ExecutionManager<F>,
 		native_call: Option<NC>,
 		extensions: Option<Extensions>,
-	) -> error::Result<(
+	) -> sp_blockchain::Result<(
 		NativeOrEncoded<R>,
 		(S::Transaction, <Blake2Hasher as Hasher>::Out),
 		Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
@@ -255,21 +253,36 @@ where
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, StorageProof), error::Error> {
+	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
 		state_machine::prove_execution_on_trie_backend(
 			trie_state,
 			overlay,
 			&self.executor,
 			method,
 			call_data,
-			// Passing `None` here, since we don't really want to prove anything
-			// about our local keys.
-			None,
 		)
 		.map_err(Into::into)
 	}
 
 	fn native_runtime_version(&self) -> Option<&NativeVersion> {
 		Some(self.executor.native_version())
+	}
+}
+
+impl<B, E, Block> runtime_version::GetRuntimeVersion<Block> for LocalCallExecutor<B, E>
+	where
+		B: backend::Backend<Block, Blake2Hasher>,
+		E: CodeExecutor + RuntimeInfo,
+		Block: BlockT<Hash=H256>,
+{
+	fn native_version(&self) -> &runtime_version::NativeVersion {
+		self.executor.native_version()
+	}
+
+	fn runtime_version(
+		&self,
+		at: &BlockId<Block>,
+	) -> Result<runtime_version::RuntimeVersion, String> {
+		CallExecutor::runtime_version(self, at).map_err(|e| format!("{:?}", e))
 	}
 }

@@ -2,9 +2,9 @@ use crate::service;
 use futures::{future::{select, Map}, FutureExt, TryFutureExt, channel::oneshot, compat::Future01CompatExt};
 use std::cell::RefCell;
 use tokio::runtime::Runtime;
-pub use substrate_cli::{VersionInfo, IntoExit, error};
-use substrate_cli::{display_role, informant, parse_and_prepare, ParseAndPrepare, NoCustom};
-use substrate_service::{AbstractService, Roles as ServiceRoles, Configuration};
+pub use sc_cli::{VersionInfo, IntoExit, error};
+use sc_cli::{display_role, informant, parse_and_prepare, ParseAndPrepare, NoCustom};
+use sc_service::{AbstractService, Roles as ServiceRoles, Configuration};
 use aura_primitives::sr25519::{AuthorityPair as AuraPair};
 use crate::chain_spec;
 use log::info;
@@ -43,6 +43,8 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 		ParseAndPrepare::ExportBlocks(cmd) => cmd.run_with_builder(|config: Config<_>|
 			Ok(new_full_start!(config).0), load_spec, exit),
 		ParseAndPrepare::ImportBlocks(cmd) => cmd.run_with_builder(|config: Config<_>|
+			Ok(new_full_start!(config).0), load_spec, exit),
+		ParseAndPrepare::CheckBlock(cmd) => cmd.run_with_builder(|config: Config<_>|
 			Ok(new_full_start!(config).0), load_spec, exit),
 		ParseAndPrepare::PurgeChain(cmd) => cmd.run(load_spec),
 		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder(|config: Config<_>|

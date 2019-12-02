@@ -110,12 +110,50 @@ impl<T> tokio_executor::TypedExecutor<T> for Executor
 	}
 }
 
+/// An error that may occur during server runtime.
+#[derive(Debug, derive_more::Display, derive_more::From)]
+pub enum RunError {
+	/// Propagated hyper server error.
+	Hyper(hyper::Error),
+	/// Initial bind IO error.
+	Io(std::io::Error),
+}
+
+impl std::error::Error for RunError {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match *self {
+			Self::Hyper(ref e) => Some(e),
+			Self::Io(ref e) => Some(e),
+		}
+	}
+}
+
 /// Start the data source server.
 #[cfg(not(target_os = "unknown"))]
-pub async fn run_server(address: std::net::SocketAddr) -> Result<(), hyper::Error> {
+pub async fn run_server(mut address: std::net::SocketAddr) -> Result<(), RunError> {
+	use async_std::{net, io};
 	use crate::networking::Incoming;
 
-	let listener = async_std::net::TcpListener::bind(&address).await.unwrap();
+	let listener = loop {
+		let listener = net::TcpListener::bind(&address).await;
+		match listener {
+			Ok(listener) => {
+				log::info!("Grafana data source server started at {}", address);
+				break listener
+			},
+			Err(err) => match err.kind() {
+				io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied if address.port() != 0 => {
+					log::warn!(
+						"Unable to bind grafana data source server to {}. Trying random port.",
+						address
+					);
+					address.set_port(0);
+					continue;
+				},
+				_ => Err(err)?,
+			}
+		}
+	};
 
 	let service = make_service_fn(|_| {
 		async {
@@ -128,11 +166,12 @@ pub async fn run_server(address: std::net::SocketAddr) -> Result<(), hyper::Erro
 		.serve(service)
 		.boxed();
 
-	let clean = clean_up(Duration::days(1), Duration::weeks(1))
+	let every = std::time::Duration::from_secs(24 * 3600);
+	let clean = clean_up(every, Duration::weeks(1))
 		.boxed();
 
 	let result = match select(server, clean).await {
-		Either::Left((result, _)) => result,
+		Either::Left((result, _)) => result.map_err(Into::into),
 		Either::Right(_) => Ok(())
 	};
 
@@ -140,14 +179,14 @@ pub async fn run_server(address: std::net::SocketAddr) -> Result<(), hyper::Erro
 }
 
 #[cfg(target_os = "unknown")]
-pub async fn run_server(_: std::net::SocketAddr) -> Result<(), hyper::Error> {
+pub async fn run_server(_: std::net::SocketAddr) -> Result<(), RunError> {
 	Ok(())
 }
 
 /// Periodically remove old metrics.
-async fn clean_up(every: Duration, before: Duration) {
+async fn clean_up(every: std::time::Duration, before: Duration) {
 	loop {
-		Delay::new(every.to_std().unwrap()).await;
+		Delay::new(every).await;
 
 		let oldest_allowed = (Utc::now() - before).timestamp_millis();
 

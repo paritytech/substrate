@@ -25,13 +25,13 @@ use std::sync::Arc;
 
 use executor::RuntimeInfo;
 use primitives::{H256, Blake2Hasher, traits::CodeExecutor};
-use sr_primitives::BuildStorage;
-use sr_primitives::traits::Block as BlockT;
+use sp_runtime::BuildStorage;
+use sp_runtime::traits::Block as BlockT;
+use sp_blockchain::Result as ClientResult;
 
 use crate::call_executor::LocalCallExecutor;
 use crate::client::Client;
 use client_api::{
-	error::Result as ClientResult,
 	light::Storage as BlockchainStorage,
 };
 use crate::light::backend::Backend;

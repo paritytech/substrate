@@ -25,7 +25,7 @@ use primitives::{
 	H256, Blake2Hasher, convert_hash, NativeOrEncoded,
 	traits::CodeExecutor,
 };
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, NumberFor},
 };
 use externalities::Extensions;
@@ -36,11 +36,12 @@ use state_machine::{
 };
 use hash_db::Hasher;
 
-use sr_api::{ProofRecorder, InitializeBlock};
+use sp_api::{ProofRecorder, InitializeBlock};
+
+use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
 use client_api::{
 	backend::RemoteBackend,
-	error::{Error as ClientError, Result as ClientResult},
 	light::RemoteCallRequest,
 	call_executor::CallExecutor
 };
@@ -113,7 +114,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
-        extensions: Option<Extensions>,
+		extensions: Option<Extensions>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values
@@ -277,7 +278,6 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 		executor,
 		"Core_initialize_block",
 		&next_header.encode(),
-		None,
 	)?;
 
 	// execute method
@@ -287,7 +287,6 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 		executor,
 		&request.method,
 		&request.call_data,
-		None,
 	).map_err(Into::into)
 }
 
@@ -452,7 +451,7 @@ mod tests {
 				),
 			);
 			match execution_result {
-				Err(client_api::error::Error::Execution(_)) => (),
+				Err(sp_blockchain::Error::Execution(_)) => (),
 				_ => panic!("Unexpected execution result: {:?}", execution_result),
 			}
 		}
@@ -461,7 +460,7 @@ mod tests {
 		let remote_client = test_client::new();
 		for i in 1u32..3u32 {
 			let mut digest = Digest::default();
-			digest.push(sr_primitives::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
+			digest.push(sp_runtime::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
 			remote_client.import_justified(
 				BlockOrigin::Own,
 				remote_client.new_block(digest).unwrap().bake().unwrap(),

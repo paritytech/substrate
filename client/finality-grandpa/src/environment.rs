@@ -24,13 +24,13 @@ use codec::{Decode, Encode};
 use futures::prelude::*;
 use tokio_timer::Delay;
 use parking_lot::RwLock;
+use sp_blockchain::{HeaderBackend, Error as ClientError};
 
 use client_api::{
-	HeaderBackend, BlockchainEvents,
+	BlockchainEvents,
 	backend::{Backend},
 	Finalizer,
 	call_executor::CallExecutor,
-	error::Error as ClientError,
 	utils::is_descendent_of,
 };
 use client::{
@@ -41,11 +41,11 @@ use grandpa::{
 	voter, voter_set::VoterSet,
 };
 use primitives::{Blake2Hasher, H256, Pair};
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 };
-use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
@@ -534,7 +534,7 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 {
 	if base == block { return Err(GrandpaError::NotDescendent) }
 
-	let tree_route_res = header_metadata::tree_route(client, block, base);
+	let tree_route_res = sp_blockchain::tree_route(client, block, base);
 
 	let tree_route = match tree_route_res {
 		Ok(tree_route) => tree_route,
@@ -865,6 +865,7 @@ where
 					historical_votes.seen().iter().skip(n_existing_votes).cloned()
 				);
 				already_completed.state = state;
+				crate::aux_schema::write_concluded_round(&*self.client, &already_completed)?;
 			}
 
 			let set_state = VoterSetState::<Block>::Live {

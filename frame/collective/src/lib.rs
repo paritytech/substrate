@@ -25,8 +25,8 @@
 
 use rstd::{prelude::*, result};
 use primitives::u32_trait::Value as U32;
-use sr_primitives::RuntimeDebug;
-use sr_primitives::traits::{Hash, EnsureOrigin};
+use sp_runtime::RuntimeDebug;
+use sp_runtime::traits::{Hash, EnsureOrigin};
 use support::weights::SimpleDispatchInfo;
 use support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
@@ -378,11 +378,11 @@ impl<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use support::{Hashable, assert_ok, assert_noop, parameter_types};
+	use support::{Hashable, assert_ok, assert_noop, parameter_types, weights::Weight};
 	use system::{EventRecord, Phase};
 	use hex_literal::hex;
 	use primitives::H256;
-	use sr_primitives::{
+	use sp_runtime::{
 		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
 		BuildStorage,
 	};
@@ -390,7 +390,7 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
@@ -422,8 +422,8 @@ mod tests {
 		type Event = Event;
 	}
 
-	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
-	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
 	support::construct_runtime!(
 		pub enum Test where

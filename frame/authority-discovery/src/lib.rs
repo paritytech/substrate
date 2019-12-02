@@ -59,7 +59,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 
@@ -96,11 +96,11 @@ mod tests {
 	use app_crypto::Pair;
 	use primitives::{crypto::key_types, H256};
 	use runtime_io::TestExternalities;
-	use sr_primitives::{
+	use sp_runtime::{
 		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
 		Perbill, KeyTypeId,
 	};
-	use support::{impl_outer_origin, parameter_types};
+	use support::{impl_outer_origin, parameter_types, weights::Weight};
 
 	type AuthorityDiscovery = Module<Test>;
 	type SessionIndex = u32;
@@ -144,7 +144,7 @@ mod tests {
 		pub const Offset: BlockNumber = 0;
 		pub const UncleGenerations: u64 = 0;
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
@@ -155,7 +155,7 @@ mod tests {
 		type BlockNumber = BlockNumber;
 		type Call = ();
 		type Hash = H256;
-		type Hashing = ::sr_primitives::traits::BlakeTwo256;
+		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = AuthorityId;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;

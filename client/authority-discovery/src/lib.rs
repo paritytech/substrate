@@ -64,8 +64,8 @@ use network::{DhtEvent, ExHashT};
 use primitives::crypto::{key_types, Pair};
 use primitives::traits::BareCryptoStorePtr;
 use prost::Message;
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{Block as BlockT, ProvideRuntimeApi};
 
 type Interval = Box<dyn Stream<Item = ()> + Unpin + Send + Sync>;
 
@@ -117,7 +117,7 @@ where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = client_api::error::Error>,
+	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
 	Self: Future<Output = ()>,
 {
 	/// Return a new authority discovery.
@@ -358,7 +358,7 @@ where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = client_api::error::Error>,
+	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
 {
 	type Output = ();
 
@@ -472,13 +472,13 @@ fn interval_at(start: Instant, duration: Duration) -> Interval {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sr_api::{ApiExt, Core, RuntimeVersion, StorageProof};
+	use sp_api::{ApiExt, Core, RuntimeVersion, StorageProof};
 	use futures::channel::mpsc::channel;
 	use futures::executor::block_on;
 	use futures::future::poll_fn;
 	use primitives::{ExecutionContext, NativeOrEncoded, testing::KeyStore};
-	use sr_primitives::traits::Zero;
-	use sr_primitives::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
+	use sp_runtime::traits::Zero;
+	use sp_runtime::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
 	use std::sync::{Arc, Mutex};
 	use test_client::runtime::Block;
 
@@ -500,7 +500,7 @@ mod tests {
 		fn header(
 			&self,
 			_id: BlockId<Block>,
-		) -> std::result::Result<Option<Block::Header>, client_api::error::Error> {
+		) -> std::result::Result<Option<Block::Header>, sp_blockchain::Error> {
 			Ok(None)
 		}
 
@@ -517,21 +517,21 @@ mod tests {
 		fn status(
 			&self,
 			_id: BlockId<Block>,
-		) -> std::result::Result<client_api::blockchain::BlockStatus, client_api::error::Error> {
+		) -> std::result::Result<client_api::blockchain::BlockStatus, sp_blockchain::Error> {
 			Ok(client_api::blockchain::BlockStatus::Unknown)
 		}
 
 		fn number(
 			&self,
 			_hash: Block::Hash,
-		) -> std::result::Result<Option<NumberFor<Block>>, client_api::error::Error> {
+		) -> std::result::Result<Option<NumberFor<Block>>, sp_blockchain::Error> {
 			Ok(None)
 		}
 
 		fn hash(
 			&self,
 			_number: NumberFor<Block>,
-		) -> std::result::Result<Option<Block::Hash>, client_api::error::Error> {
+		) -> std::result::Result<Option<Block::Hash>, sp_blockchain::Error> {
 			Ok(None)
 		}
 	}
@@ -547,7 +547,7 @@ mod tests {
 			_: ExecutionContext,
 			_: Option<()>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<RuntimeVersion>, client_api::error::Error> {
+		) -> std::result::Result<NativeOrEncoded<RuntimeVersion>, sp_blockchain::Error> {
 			unimplemented!("Not required for testing!")
 		}
 
@@ -557,7 +557,7 @@ mod tests {
 			_: ExecutionContext,
 			_: Option<(Block)>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<()>, client_api::error::Error> {
+		) -> std::result::Result<NativeOrEncoded<()>, sp_blockchain::Error> {
 			unimplemented!("Not required for testing!")
 		}
 
@@ -567,13 +567,13 @@ mod tests {
 			_: ExecutionContext,
 			_: Option<&<Block as BlockT>::Header>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<()>, client_api::error::Error> {
+		) -> std::result::Result<NativeOrEncoded<()>, sp_blockchain::Error> {
 			unimplemented!("Not required for testing!")
 		}
 	}
 
 	impl ApiExt<Block> for RuntimeApi {
-		type Error = client_api::error::Error;
+		type Error = sp_blockchain::Error;
 
 		fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
 			&self,
@@ -585,7 +585,7 @@ mod tests {
 		fn runtime_version_at(
 			&self,
 			_: &BlockId<Block>,
-		) -> std::result::Result<RuntimeVersion, client_api::error::Error> {
+		) -> std::result::Result<RuntimeVersion, sp_blockchain::Error> {
 			unimplemented!("Not required for testing!")
 		}
 
@@ -605,7 +605,7 @@ mod tests {
 			_: ExecutionContext,
 			_: Option<()>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<Vec<AuthorityId>>, client_api::error::Error> {
+		) -> std::result::Result<NativeOrEncoded<Vec<AuthorityId>>, sp_blockchain::Error> {
 			return Ok(NativeOrEncoded::Native(self.authorities.clone()));
 		}
 	}

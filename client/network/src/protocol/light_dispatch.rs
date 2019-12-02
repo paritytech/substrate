@@ -25,14 +25,14 @@ use std::time::{Instant, Duration};
 use log::{trace, info};
 use futures::sync::oneshot::{Sender as OneShotSender};
 use linked_hash_map::{Entry, LinkedHashMap};
-use client_api::error::Error as ClientError;
+use sp_blockchain::Error as ClientError;
 use client_api::{FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof,
 	RemoteReadChildRequest, RemoteBodyRequest, StorageProof};
 use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 use libp2p::PeerId;
 use crate::config::Roles;
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -676,8 +676,8 @@ pub mod tests {
 	use std::sync::Arc;
 	use std::time::Instant;
 	use futures::{Future, sync::oneshot};
-	use sr_primitives::traits::{Block as BlockT, NumberFor, Header as HeaderT};
-	use client_api::{error::{Error as ClientError, Result as ClientResult}};
+	use sp_runtime::traits::{Block as BlockT, NumberFor, Header as HeaderT};
+	use sp_blockchain::{Error as ClientError, Result as ClientResult};
 	use client_api::{FetchChecker, RemoteHeaderRequest,
 		ChangesProof, RemoteCallRequest, RemoteReadRequest,
 		RemoteReadChildRequest, RemoteChangesRequest, RemoteBodyRequest};

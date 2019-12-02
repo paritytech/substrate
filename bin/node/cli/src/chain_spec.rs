@@ -26,14 +26,14 @@ use node_runtime::{
 };
 use node_runtime::Block;
 use node_runtime::constants::currency::*;
-use substrate_service;
+use sc_service;
 use hex_literal::hex;
-use substrate_telemetry::TelemetryEndpoints;
+use sc_telemetry::TelemetryEndpoints;
 use grandpa_primitives::{AuthorityId as GrandpaId};
 use babe_primitives::{AuthorityId as BabeId};
 use im_online::sr25519::{AuthorityId as ImOnlineId};
 use authority_discovery_primitives::AuthorityId as AuthorityDiscoveryId;
-use sr_primitives::{Perbill, traits::{Verify, IdentifyAccount}};
+use sp_runtime::{Perbill, traits::{Verify, IdentifyAccount}};
 
 pub use node_primitives::{AccountId, Balance, Signature};
 pub use node_runtime::GenesisConfig;
@@ -53,7 +53,7 @@ pub struct Extensions {
 }
 
 /// Specialized `ChainSpec`.
-pub type ChainSpec = substrate_service::ChainSpec<
+pub type ChainSpec = sc_service::ChainSpec<
 	GenesisConfig,
 	Extensions,
 >;
@@ -347,7 +347,7 @@ pub fn local_testnet_config() -> ChainSpec {
 pub(crate) mod tests {
 	use super::*;
 	use crate::service::new_full;
-	use substrate_service::Roles;
+	use sc_service::Roles;
 	use service_test;
 
 	fn local_testnet_genesis_instant_single() -> GenesisConfig {

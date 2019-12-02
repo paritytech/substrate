@@ -16,7 +16,7 @@
 
 #![recursion_limit="128"]
 
-use sr_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};
+use sp_runtime::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};
 use support::{
 	Parameter, traits::Get, parameter_types,
 	metadata::{
@@ -86,7 +86,7 @@ mod module1 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
+	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
 	pub enum Origin<T: Trait<I>, I> where T::BlockNumber: From<u32> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
@@ -148,7 +148,7 @@ mod module2 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
+	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
 	pub enum Origin<T: Trait<I>, I=DefaultInstance> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
@@ -471,15 +471,4 @@ const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
 fn test_instance_storage_metadata() {
 	let metadata = Module2_2::storage_metadata();
 	pretty_assertions::assert_eq!(EXPECTED_METADATA, metadata);
-}
-
-#[test]
-fn instance_prefix_is_prefix_of_entries() {
-	use module2::Instance;
-
-	let prefix = module2::Instance2::PREFIX;
-	assert!(module2::Instance2::PREFIX_FOR_Value.starts_with(prefix));
-	assert!(module2::Instance2::PREFIX_FOR_Map.starts_with(prefix));
-	assert!(module2::Instance2::PREFIX_FOR_LinkedMap.starts_with(prefix));
-	assert!(module2::Instance2::PREFIX_FOR_DoubleMap.starts_with(prefix));
 }

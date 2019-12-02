@@ -19,8 +19,8 @@
 use codec::Encode;
 use rstd::convert::TryInto;
 use rstd::prelude::Vec;
-use sr_primitives::app_crypto::{self, RuntimeAppPublic, AppPublic, AppSignature};
-use sr_primitives::traits::{Extrinsic as ExtrinsicT, IdentifyAccount};
+use sp_runtime::app_crypto::{self, RuntimeAppPublic, AppPublic, AppSignature};
+use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount};
 use support::debug;
 
 /// Creates runtime-specific signed transaction.

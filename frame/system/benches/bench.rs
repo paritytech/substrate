@@ -16,9 +16,9 @@
 
 use criterion::{Criterion, criterion_group, criterion_main, black_box};
 use frame_system as system;
-use support::{decl_module, decl_event, impl_outer_origin, impl_outer_event};
+use support::{decl_module, decl_event, impl_outer_origin, impl_outer_event, weights::Weight};
 use primitives::H256;
-use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 mod module {
 	use super::*;
@@ -52,7 +52,7 @@ impl_outer_event! {
 
 support::parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 4 * 1024 * 1024;
+	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
 	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }

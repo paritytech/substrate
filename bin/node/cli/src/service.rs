@@ -26,17 +26,16 @@ use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
 use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
-use substrate_service::{
+use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
 };
-use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 
-use substrate_service::{Service, NetworkStatus};
+use sc_service::{Service, NetworkStatus};
 use client::{Client, LocalCallExecutor};
 use client_db::Backend;
-use sr_primitives::traits::Block as BlockT;
+use sp_runtime::traits::Block as BlockT;
 use node_executor::NativeExecutor;
 use network::NetworkService;
 use offchain::OffchainWorkers;
@@ -53,22 +52,26 @@ construct_simple_protocol! {
 /// be able to perform chain operations.
 macro_rules! new_full_start {
 	($config:expr) => {{
-		type RpcExtension = jsonrpc_core::IoHandler<substrate_rpc::Metadata>;
+		type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 		let mut import_setup = None;
 		let inherent_data_providers = inherents::InherentDataProviders::new();
 
-		let builder = substrate_service::ServiceBuilder::new_full::<
+		let builder = sc_service::ServiceBuilder::new_full::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
 		>($config)?
 			.with_select_chain(|_config, backend| {
 				Ok(client::LongestChain::new(backend.clone()))
 			})?
-			.with_transaction_pool(|config, client|
-				Ok(transaction_pool::txpool::Pool::new(config, transaction_pool::FullChainApi::new(client)))
-			)?
+			.with_transaction_pool(|config, client, _fetcher| {
+				let pool_api = txpool::FullChainApi::new(client.clone());
+				let pool = txpool::BasicPool::new(config, pool_api);
+				let maintainer = txpool::FullBasicPoolMaintainer::new(pool.pool().clone(), client);
+				let maintainable_pool = txpool_api::MaintainableTransactionPool::new(pool, maintainer);
+				Ok(maintainable_pool)
+			})?
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
-					.ok_or_else(|| substrate_service::Error::SelectChainRequired)?;
+					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
 					client.clone(),
 					&*client,
@@ -96,8 +99,8 @@ macro_rules! new_full_start {
 				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
-			.with_rpc_extensions(|client, pool, _backend| -> RpcExtension {
-				node_rpc::create(client, pool)
+			.with_rpc_extensions(|client, pool, _backend, fetcher, _remote_blockchain| -> Result<RpcExtension, _> {
+				Ok(node_rpc::create(client, pool, node_rpc::LightDeps::none(fetcher)))
 			})?;
 
 		(builder, import_setup, inherent_data_providers)
@@ -157,14 +160,17 @@ macro_rules! new_full {
 		($with_startup_data)(&block_import, &babe_link);
 
 		if participates_in_consensus {
-			let proposer = substrate_basic_authorship::ProposerFactory {
+			let proposer = sc_basic_authority::ProposerFactory {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
 			};
 
 			let client = service.client();
 			let select_chain = service.select_chain()
-				.ok_or(substrate_service::Error::SelectChainRequired)?;
+				.ok_or(sc_service::Error::SelectChainRequired)?;
+
+			let can_author_with =
+				consensus_common::CanAuthorWithNativeVersion::new(client.executor().clone());
 
 			let babe_config = babe::BabeParams {
 				keystore: service.keystore(),
@@ -176,6 +182,7 @@ macro_rules! new_full {
 				inherent_data_providers: inherent_data_providers.clone(),
 				force_authoring,
 				babe_link,
+				can_author_with,
 			};
 
 			let babe = babe::start_babe(babe_config)?;
@@ -267,6 +274,17 @@ type ConcreteClient =
 	>;
 #[allow(dead_code)]
 type ConcreteBackend = Backend<ConcreteBlock>;
+#[allow(dead_code)]
+type ConcreteTransactionPool = txpool_api::MaintainableTransactionPool<
+	txpool::BasicPool<
+		txpool::FullChainApi<ConcreteClient, ConcreteBlock>,
+		ConcreteBlock
+	>,
+	txpool::FullBasicPoolMaintainer<
+		ConcreteClient,
+		txpool::FullChainApi<ConcreteClient, Block>
+	>
+>;
 
 /// A specialized configuration object for setting up the node..
 pub type NodeConfiguration<C> = Configuration<C, GenesisConfig, crate::chain_spec::Extensions>;
@@ -280,7 +298,7 @@ pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 		LongestChain<ConcreteBackend, ConcreteBlock>,
 		NetworkStatus<ConcreteBlock>,
 		NetworkService<ConcreteBlock, crate::service::NodeProtocol, <ConcreteBlock as BlockT>::Hash>,
-		TransactionPool<transaction_pool::FullChainApi<ConcreteClient, ConcreteBlock>>,
+		ConcreteTransactionPool,
 		OffchainWorkers<
 			ConcreteClient,
 			<ConcreteBackend as client_api::backend::Backend<Block, Blake2Hasher>>::OffchainStorage,
@@ -296,16 +314,22 @@ pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 /// Builds a new service for a light client.
 pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 -> Result<impl AbstractService, ServiceError> {
-	type RpcExtension = jsonrpc_core::IoHandler<substrate_rpc::Metadata>;
+	type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 	let inherent_data_providers = InherentDataProviders::new();
 
 	let service = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
 		.with_select_chain(|_config, backend| {
 			Ok(LongestChain::new(backend.clone()))
 		})?
-		.with_transaction_pool(|config, client|
-			Ok(TransactionPool::new(config, transaction_pool::FullChainApi::new(client)))
-		)?
+		.with_transaction_pool(|config, client, fetcher| {
+			let fetcher = fetcher
+				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
+			let pool_api = txpool::LightChainApi::new(client.clone(), fetcher.clone());
+			let pool = txpool::BasicPool::new(config, pool_api);
+			let maintainer = txpool::LightBasicPoolMaintainer::with_defaults(pool.pool().clone(), client, fetcher);
+			let maintainable_pool = txpool_api::MaintainableTransactionPool::new(pool, maintainer);
+			Ok(maintainable_pool)
+		})?
 		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
@@ -344,8 +368,14 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?
-		.with_rpc_extensions(|client, pool, _backend| -> RpcExtension {
-			node_rpc::create(client, pool)
+		.with_rpc_extensions(|client, pool, _backend, fetcher, remote_blockchain| -> Result<RpcExtension, _> {
+			let fetcher = fetcher
+				.ok_or_else(|| "Trying to start node RPC without active fetcher")?;
+			let remote_blockchain = remote_blockchain
+				.ok_or_else(|| "Trying to start node RPC without active remote blockchain")?;
+
+			let light_deps = node_rpc::LightDeps { remote_blockchain, fetcher };
+			Ok(node_rpc::create(client, pool, Some(light_deps)))
 		})?
 		.build()?;
 
@@ -364,7 +394,7 @@ mod tests {
 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
 	use codec::{Encode, Decode};
 	use primitives::{crypto::Pair as CryptoPair, H256};
-	use sr_primitives::{
+	use sp_runtime::{
 		generic::{BlockId, Era, Digest, SignedPayload},
 		traits::Block as BlockT,
 		traits::Verify,
@@ -373,9 +403,9 @@ mod tests {
 	use sp_timestamp;
 	use sp_finality_tracker;
 	use keyring::AccountKeyring;
-	use substrate_service::{AbstractService, Roles};
+	use sc_service::{AbstractService, Roles};
 	use crate::service::new_full;
-	use sr_primitives::traits::IdentifyAccount;
+	use sp_runtime::traits::IdentifyAccount;
 
 	type AccountPublic = <Signature as Verify>::Signer;
 
@@ -488,7 +518,7 @@ mod tests {
 
 				let parent_id = BlockId::number(service.client().info().chain.best_number);
 				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
-				let mut proposer_factory = substrate_basic_authorship::ProposerFactory {
+				let mut proposer_factory = sc_basic_authority::ProposerFactory {
 					client: service.client(),
 					transaction_pool: service.transaction_pool(),
 				};
@@ -542,6 +572,7 @@ mod tests {
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
 					allow_missing_state: false,
+					import_existing: false,
 				};
 
 				block_import.import_block(params, Default::default())

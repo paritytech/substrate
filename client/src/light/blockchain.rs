@@ -20,10 +20,13 @@
 use std::future::Future;
 use std::sync::Arc;
 
-use sr_primitives::{Justification, generic::BlockId};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
+use sp_runtime::{Justification, generic::BlockId};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
-use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
+use sp_blockchain::{
+	HeaderMetadata, CachedHeaderMetadata,
+	Error as ClientError, Result as ClientResult,
+};
 pub use client_api::{
 	backend::{
 		AuxStore, NewBlockState
@@ -32,9 +35,6 @@ pub use client_api::{
 		Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 		HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo, ProvideCache,
 		well_known_cache_keys,
-	},
-	error::{
-		Error as ClientError, Result as ClientResult
 	},
 	light::{
 		RemoteBlockchain, LocalOrRemote, Storage

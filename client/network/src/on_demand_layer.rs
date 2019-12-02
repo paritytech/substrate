@@ -22,11 +22,11 @@ use std::sync::Arc;
 use futures::{prelude::*, sync::mpsc, sync::oneshot};
 use futures03::compat::{Compat01As03, Future01CompatExt as _};
 use parking_lot::Mutex;
-use client_api::error::Error as ClientError;
+use sp_blockchain::Error as ClientError;
 use client_api::{Fetcher, FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest,
 	RemoteReadChildRequest, RemoteBodyRequest};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 /// Implements the `Fetcher` trait of the client. Makes it possible for the light client to perform
 /// network requests for some state.

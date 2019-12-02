@@ -112,7 +112,7 @@ use primitives::crypto::UncheckedFrom;
 use rstd::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use runtime_io::hashing::blake2_256;
-use sr_primitives::{
+use sp_runtime::{
 	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension},
 	transaction_validity::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
