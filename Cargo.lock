@@ -3148,7 +3148,7 @@ dependencies = [
  "sp-keyring 2.0.0",
  "sp-offchain 2.0.0",
  "sp-runtime 2.0.0",
- "sp-sesssion 2.0.0",
+ "sp-session 2.0.0",
  "sp-staking 2.0.0",
  "sp-std 2.0.0",
  "sp-transaction-pool-runtime-api 2.0.0",
@@ -3216,7 +3216,7 @@ dependencies = [
  "sp-io 2.0.0",
  "sp-offchain 2.0.0",
  "sp-runtime 2.0.0",
- "sp-sesssion 2.0.0",
+ "sp-session 2.0.0",
  "sp-std 2.0.0",
  "sp-transaction-pool-runtime-api 2.0.0",
  "sp-version 2.0.0",
@@ -5392,7 +5392,7 @@ dependencies = [
  "sp-io 2.0.0",
  "sp-rpc 2.0.0",
  "sp-runtime 2.0.0",
- "sp-sesssion 2.0.0",
+ "sp-session 2.0.0",
  "sp-state-machine 2.0.0",
  "sp-transaction-pool-api 2.0.0",
  "sp-version 2.0.0",
@@ -5487,7 +5487,7 @@ dependencies = [
  "sp-finality-granpda 2.0.0",
  "sp-io 2.0.0",
  "sp-runtime 2.0.0",
- "sp-sesssion 2.0.0",
+ "sp-session 2.0.0",
  "sp-transaction-pool-api 2.0.0",
  "sp-transaction-pool-runtime-api 2.0.0",
  "substrate-test-runtime-client 2.0.0",
@@ -6319,7 +6319,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-sesssion"
+name = "sp-session"
 version = "2.0.0"
 dependencies = [
  "sp-api 2.0.0",
@@ -6646,7 +6646,7 @@ dependencies = [
  "sp-offchain 2.0.0",
  "sp-runtime 2.0.0",
  "sp-runtime-interface 2.0.0",
- "sp-sesssion 2.0.0",
+ "sp-session 2.0.0",
  "sp-state-machine 2.0.0",
  "sp-std 2.0.0",
  "sp-transaction-pool-runtime-api 2.0.0",
