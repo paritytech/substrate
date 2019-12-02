@@ -84,9 +84,8 @@
 
 use rstd::prelude::*;
 use sp_runtime::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
-use support::weights::SimpleDispatchInfo;
 use support::{
-	decl_storage, decl_event, ensure, decl_module, dispatch,
+	decl_storage, decl_event, ensure, decl_module, dispatch, weights::SimpleDispatchInfo,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason
@@ -391,11 +390,11 @@ decl_module! {
 		/// Writes: O(do_phragmen)
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(2_000_000)]
-		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) {
+		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) -> dispatch::Result {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
-			return Self::remove_and_replace_member(&who).map(|had_replacement| {
+			Self::remove_and_replace_member(&who).map(|had_replacement| {
 				let (imbalance, _) = T::Currency::slash_reserved(&who, T::CandidacyBond::get());
 				T::KickedMember::on_unbalanced(imbalance);
 				Self::deposit_event(RawEvent::MemberKicked(who.clone()));
@@ -403,8 +402,6 @@ decl_module! {
 				if !had_replacement {
 					Self::do_phragmen();
 				}
-
-				()
 			})
 		}
 
@@ -452,37 +449,25 @@ impl<T: Trait> Module<T> {
 		if let Ok(index) = members_with_stake.binary_search_by(|(ref m, ref _s)| m.cmp(who)) {
 			members_with_stake.remove(index);
 
-			let mut runners_up = Self::runners_up();
-			if let Some((replacement, stake)) = runners_up.pop() {
-				// replace the outgoing with the best runner up.
-				if let Err(index) = members_with_stake
-					.binary_search_by(|(ref m, ref _s)| m.cmp(&replacement))
-				{
-					members_with_stake.insert(index, (replacement.clone(), stake));
-					ElectionRounds::mutate(|v| *v += 1);
-					T::ChangeMembers::change_members_sorted(
-						&[replacement],
-						&[who.clone()],
-						&members_with_stake
-							.iter()
-							.map(|(m, _)| m.clone())
-							.collect::<Vec<T::AccountId>>(),
-					);
-				}
-				// else it would mean that the runner up was already a member. This cannot
-				// happen. If it does, not much that we can do about it.
+			let next_up = <RunnersUp<T>>::mutate(|runners_up| runners_up.pop());
+			let maybe_replacement = next_up.and_then(|(replacement, stake)|
+				members_with_stake.binary_search_by(|(ref m, ref _s)| m.cmp(&replacement))
+					.err()
+					.map(|index| {
+						members_with_stake.insert(index, (replacement.clone(), stake));
+						replacement
+					})
+			);
 
-				<Members<T>>::put(members_with_stake);
-				<RunnersUp<T>>::put(runners_up);
-
-				Ok(true)
-			} else {
-				// update `Members` storage -- `do_phragmen` adds this to the candidate list.
-				<Members<T>>::put(members_with_stake);
-
-				// signal caller that no replacement has been found.
-				Ok(false)
+			<Members<T>>::put(&members_with_stake);
+			let members = members_with_stake.into_iter().map(|m| m.0).collect::<Vec<_>>();
+			let result = Ok(maybe_replacement.is_some());
+			let old = [who.clone()];
+			match maybe_replacement {
+				Some(new) => T::ChangeMembers::change_members_sorted(&[new], &old, &members),
+				None => T::ChangeMembers::change_members_sorted(&[], &old, &members),
 			}
+			result
 		} else {
 			Err("not a member")
 		}
@@ -690,7 +675,7 @@ impl<T: Trait> Module<T> {
 			T::ChangeMembers::change_members_sorted(
 				&incoming,
 				&outgoing.clone(),
-				&Self::members_ids(),
+				&new_members_ids,
 			);
 
 			// outgoing candidates lose their bond.
@@ -826,9 +811,25 @@ mod tests {
 		fn get() -> u64 { TERM_DURATION.with(|v| *v.borrow()) }
 	}
 
+	thread_local! {
+	pub static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
+}
+
 	pub struct TestChangeMembers;
 	impl ChangeMembers<u64> for TestChangeMembers {
-		fn change_members_sorted(_: &[u64], _: &[u64], _: &[u64]) {}
+		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
+			let mut old_plus_incoming = MEMBERS.with(|m| m.borrow().to_vec());
+			old_plus_incoming.extend_from_slice(incoming);
+			old_plus_incoming.sort();
+
+			let mut new_plus_outgoing = new.to_vec();
+			new_plus_outgoing.extend_from_slice(outgoing);
+			new_plus_outgoing.sort();
+
+			assert_eq!(old_plus_incoming, new_plus_outgoing);
+
+			MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
+		}
 	}
 
 	/// Simple structure that exposes how u64 currency can be represented as... u64.
