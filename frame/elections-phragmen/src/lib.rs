@@ -812,8 +812,8 @@ mod tests {
 	}
 
 	thread_local! {
-	pub static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-}
+		pub static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
+	}
 
 	pub struct TestChangeMembers;
 	impl ChangeMembers<u64> for TestChangeMembers {
