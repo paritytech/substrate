@@ -21,7 +21,7 @@ use network::Context;
 use network::message::generic::ConsensusMessage;
 use network::{Event, config::Roles};
 
-use futures::{prelude::*, channel::mpsc, compat::Compat01As03};
+use futures::{prelude::*, channel::mpsc, compat::Compat01As03, task::SpawnExt as _};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sr_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
@@ -42,6 +42,7 @@ impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
 	pub fn new<N: Network<B> + Send + Clone + 'static>(
 		network: N,
+		executor: &impl futures::task::Spawn,
 		engine_id: ConsensusEngineId,
 		validator: Arc<dyn Validator<B>>,
 	) -> Self where B: 'static {
@@ -71,7 +72,7 @@ impl<B: BlockT> GossipEngine<B> {
 			engine_id,
 		};
 
-		async_std::task::spawn({
+		let res = executor.spawn({
 			let inner = Arc::downgrade(&inner);
 			async move {
 				loop {
@@ -87,7 +88,12 @@ impl<B: BlockT> GossipEngine<B> {
 			}
 		});
 
-		async_std::task::spawn(async move {
+		// Note: we consider the chances of an error to spawn a background task almost null.
+		if res.is_err() {
+			log::error!(target: "gossip", "Failed to spawn background task");
+		}
+
+		let res = executor.spawn(async move {
 			let mut stream = Compat01As03::new(event_stream);
 			while let Some(Ok(event)) = stream.next().await {
 				match event {
@@ -125,6 +131,11 @@ impl<B: BlockT> GossipEngine<B> {
 				}
 			}
 		});
+
+		// Note: we consider the chances of an error to spawn a background task almost null.
+		if res.is_err() {
+			log::error!(target: "gossip", "Failed to spawn background task");
+		}
 
 		gossip_engine
 	}

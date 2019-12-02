@@ -521,7 +521,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 }
 
 /// Parameters used to run Grandpa.
-pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X> {
+pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp> {
 	/// Configuration for the GRANDPA service.
 	pub config: Config,
 	/// A link to the block import worker.
@@ -536,12 +536,14 @@ pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X> {
 	pub telemetry_on_connect: Option<mpsc::UnboundedReceiver<()>>,
 	/// A voting rule used to potentially restrict target votes.
 	pub voting_rule: VR,
+	/// How to spawn background tasks.
+	pub executor: Sp,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
-	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
+pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp>(
+	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X, Sp>,
 ) -> sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -553,6 +555,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
+	Sp: futures03::task::Spawn + 'static,
 {
 	let GrandpaParams {
 		config,
@@ -562,6 +565,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 		on_exit,
 		telemetry_on_connect,
 		voting_rule,
+		executor,
 	} = grandpa_params;
 
 	let LinkHalf {
@@ -575,6 +579,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 		network,
 		config.clone(),
 		persistent_data.set_state.clone(),
+		&executor,
 		on_exit.clone(),
 	);
 
@@ -869,8 +874,8 @@ where
 }
 
 #[deprecated(since = "1.1.0", note = "Please switch to run_grandpa_voter.")]
-pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
-	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
+pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp>(
+	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X, Sp>,
 ) -> ::sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -882,6 +887,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	RA: Send + Sync + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
+	Sp: futures03::task::Spawn + 'static,
 {
 	run_grandpa_voter(grandpa_params)
 }

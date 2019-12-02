@@ -147,7 +147,7 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 }
 
 // needs to run in a tokio runtime.
-fn make_test_network() -> (
+fn make_test_network(executor: &impl futures03::task::Spawn) -> (
 	impl Future<Item=Tester,Error=()>,
 	TestNetwork,
 ) {
@@ -170,6 +170,7 @@ fn make_test_network() -> (
 		net.clone(),
 		config(),
 		voter_set_state(),
+		executor,
 		Exit,
 	);
 
@@ -244,7 +245,8 @@ fn good_commit_leads_to_relay() {
 	let id = network::PeerId::random();
 	let global_topic = super::global_topic::<Block>(set_id);
 
-	let test = make_test_network().0
+	let threads_pool = futures03::executor::ThreadPool::new().unwrap();
+	let test = make_test_network(&threads_pool).0
 		.and_then(move |tester| {
 			// register a peer.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::FULL);
@@ -359,7 +361,8 @@ fn bad_commit_leads_to_report() {
 	let id = network::PeerId::random();
 	let global_topic = super::global_topic::<Block>(set_id);
 
-	let test = make_test_network().0
+	let threads_pool = futures03::executor::ThreadPool::new().unwrap();
+	let test = make_test_network(&threads_pool).0
 		.and_then(move |tester| {
 			// register a peer.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::FULL);
@@ -432,7 +435,8 @@ fn bad_commit_leads_to_report() {
 fn peer_with_higher_view_leads_to_catch_up_request() {
 	let id = network::PeerId::random();
 
-	let (tester, mut net) = make_test_network();
+	let threads_pool = futures03::executor::ThreadPool::new().unwrap();
+	let (tester, mut net) = make_test_network(&threads_pool);
 	let test = tester
 		.and_then(move |tester| {
 			// register a peer with authority role.

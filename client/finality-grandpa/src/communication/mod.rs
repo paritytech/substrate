@@ -29,8 +29,7 @@
 
 use std::sync::Arc;
 
-use futures::prelude::*;
-use futures::sync::mpsc;
+use futures::{prelude::*, future::Executor as _, sync::mpsc};
 use futures03::{compat::Compat, stream::StreamExt};
 use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use grandpa::{voter, voter_set::VoterSet};
@@ -40,7 +39,6 @@ use codec::{Encode, Decode};
 use primitives::Pair;
 use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
-use tokio_executor::Executor;
 
 use crate::{
 	CatchUp, Commit, CommunicationIn, CommunicationOut, CompactCommit, Error,
@@ -125,19 +123,19 @@ impl<B: BlockT> NetworkBridge<B> {
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
+		executor: &impl futures03::task::Spawn,
 		on_exit: impl Future<Item = (), Error = ()> + Clone + Send + 'static,
 	) -> (
 		Self,
 		impl Future<Item = (), Error = ()> + Send + 'static,
 	) {
-
 		let (validator, report_stream) = GossipValidator::new(
 			config,
 			set_state.clone(),
 		);
 
 		let validator = Arc::new(validator);
-		let service = GossipEngine::new(service, GRANDPA_ENGINE_ID, validator.clone());
+		let service = GossipEngine::new(service, executor, GRANDPA_ENGINE_ID, validator.clone());
 
 		{
 			// register all previous votes with the gossip service so that they're
@@ -182,18 +180,13 @@ impl<B: BlockT> NetworkBridge<B> {
 
 		let bridge = NetworkBridge { service, validator, neighbor_sender };
 
-		let startup_work = futures::future::lazy(move || {
-			// lazily spawn these jobs onto their own tasks. the lazy future has access
-			// to tokio globals, which aren't available outside.
-			let mut executor = tokio_executor::DefaultExecutor::current();
-			executor.spawn(Box::new(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(()))))
-				.expect("failed to spawn grandpa rebroadcast job task");
-			executor.spawn(Box::new(reporting_job.select(on_exit.clone()).then(|_| Ok(()))))
-				.expect("failed to spawn grandpa reporting job task");
-			Ok(())
-		});
+		let executor = Compat::new(executor);
+		executor.execute(Box::new(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(()))))
+			.expect("failed to spawn grandpa rebroadcast job task");
+		executor.execute(Box::new(reporting_job.select(on_exit.clone()).then(|_| Ok(()))))
+			.expect("failed to spawn grandpa reporting job task");
 
-		(bridge, startup_work)
+		(bridge, futures::future::ok(()))
 	}
 
 	/// Note the beginning of a new round to the `GossipValidator`.

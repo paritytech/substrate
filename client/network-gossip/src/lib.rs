@@ -15,8 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use self::bridge::GossipEngine;
-// TODO: remove
-pub use self::state_machine::*;
+pub use self::state_machine::{TopicNotification, MessageRecipient, MessageIntent};
+pub use self::state_machine::{Validator, ValidatorContext, ValidationResult};
+pub use self::state_machine::DiscardAll;
 
 use network::{specialization::NetworkSpecialization, Event, ExHashT, NetworkService, PeerId};
 use sr_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
