@@ -33,11 +33,11 @@ use sp_blockchain::{
 	HeaderBackend,
 	Error as ClientError
 };
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits,
 };
-use substrate_primitives::hexdisplay::HexDisplay;
+use sp_core::hexdisplay::HexDisplay;
 use txpool_api::{TransactionPool, InPoolTransaction};
 
 pub use frame_system_rpc_runtime_api::AccountNonceApi;

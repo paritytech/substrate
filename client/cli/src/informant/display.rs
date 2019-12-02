@@ -18,7 +18,7 @@ use ansi_term::Colour;
 use client_api::ClientInfo;
 use log::info;
 use network::SyncState;
-use sr_primitives::traits::{Block as BlockT, CheckedDiv, NumberFor, Zero, Saturating};
+use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Zero, Saturating};
 use service::NetworkStatus;
 use std::{convert::{TryFrom, TryInto}, fmt, time};
 

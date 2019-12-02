@@ -20,7 +20,7 @@ use std::{collections::HashMap, ops::Deref};
 use lazy_static::lazy_static;
 use primitives::{ed25519::{Pair, Public, Signature}, Pair as PairT, Public as PublicT, H256};
 pub use primitives::ed25519;
-use sr_primitives::AccountId32;
+use sp_runtime::AccountId32;
 
 /// Set of test accounts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumIter)]
@@ -106,9 +106,9 @@ impl From<Keyring> for &'static str {
 	}
 }
 
-impl From<Keyring> for sr_primitives::MultiSigner {
+impl From<Keyring> for sp_runtime::MultiSigner {
 	fn from(x: Keyring) -> Self {
-		sr_primitives::MultiSigner::Ed25519(x.into())
+		sp_runtime::MultiSigner::Ed25519(x.into())
 	}
 }
 

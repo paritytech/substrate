@@ -781,7 +781,7 @@ pub extern fn oom(_: core::alloc::Layout) -> ! {
 
 /// Type alias for Externalities implementation used in tests.
 #[cfg(feature = "std")]
-pub type TestExternalities = substrate_state_machine::TestExternalities<primitives::Blake2Hasher, u64>;
+pub type TestExternalities = sp_state_machine::TestExternalities<primitives::Blake2Hasher, u64>;
 
 /// The host functions Substrate provides for the Wasm runtime environment.
 ///
@@ -803,7 +803,7 @@ pub type SubstrateHostFunctions = (
 mod tests {
 	use super::*;
 	use primitives::map;
-	use substrate_state_machine::BasicExternalities;
+	use sp_state_machine::BasicExternalities;
 
 	#[test]
 	fn storage_works() {

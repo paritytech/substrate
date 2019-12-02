@@ -39,7 +39,7 @@ pub use state_machine::{StorageProof, ExecutionStrategy};
 pub mod utils {
     use sp_blockchain::{HeaderBackend, HeaderMetadata, Error};
     use primitives::H256;
-	use sr_primitives::traits::{Block as BlockT};
+	use sp_runtime::traits::{Block as BlockT};
 	use std::borrow::Borrow;
 
 	/// Returns a function for checking block ancestry, the returned function will

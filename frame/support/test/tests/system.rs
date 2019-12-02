@@ -38,7 +38,7 @@ support::decl_error! {
 }
 
 /// Origin for the system module.
-#[derive(PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
 pub enum RawOrigin<AccountId> {
 	Root,
 	Signed(AccountId),

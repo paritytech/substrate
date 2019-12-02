@@ -1,4 +1,4 @@
-use sr_primitives::traits::GetNodeBlockType;
+use sp_runtime::traits::GetNodeBlockType;
 use test_client::runtime::Block;
 
 /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
@@ -8,12 +8,12 @@ impl GetNodeBlockType for Runtime {
 	type NodeBlock = Block;
 }
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	pub trait Api {
 		fn test(data: u64);
 	}
 }
 
-sr_api::impl_runtime_apis! {}
+sp_api::impl_runtime_apis! {}
 
 fn main() {}

@@ -26,16 +26,16 @@ use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
 use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
-use substrate_service::{
+use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
 };
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 
-use substrate_service::{Service, NetworkStatus};
+use sc_service::{Service, NetworkStatus};
 use client::{Client, LocalCallExecutor};
 use client_db::Backend;
-use sr_primitives::traits::Block as BlockT;
+use sp_runtime::traits::Block as BlockT;
 use node_executor::NativeExecutor;
 use network::NetworkService;
 use offchain::OffchainWorkers;
@@ -52,11 +52,11 @@ construct_simple_protocol! {
 /// be able to perform chain operations.
 macro_rules! new_full_start {
 	($config:expr) => {{
-		type RpcExtension = jsonrpc_core::IoHandler<substrate_rpc::Metadata>;
+		type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 		let mut import_setup = None;
 		let inherent_data_providers = inherents::InherentDataProviders::new();
 
-		let builder = substrate_service::ServiceBuilder::new_full::<
+		let builder = sc_service::ServiceBuilder::new_full::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
 		>($config)?
 			.with_select_chain(|_config, backend| {
@@ -71,7 +71,7 @@ macro_rules! new_full_start {
 			})?
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
-					.ok_or_else(|| substrate_service::Error::SelectChainRequired)?;
+					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
 					client.clone(),
 					&*client,
@@ -160,14 +160,14 @@ macro_rules! new_full {
 		($with_startup_data)(&block_import, &babe_link);
 
 		if participates_in_consensus {
-			let proposer = substrate_basic_authorship::ProposerFactory {
+			let proposer = sc_basic_authority::ProposerFactory {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
 			};
 
 			let client = service.client();
 			let select_chain = service.select_chain()
-				.ok_or(substrate_service::Error::SelectChainRequired)?;
+				.ok_or(sc_service::Error::SelectChainRequired)?;
 
 			let can_author_with =
 				consensus_common::CanAuthorWithNativeVersion::new(client.executor().clone());
@@ -314,7 +314,7 @@ pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 /// Builds a new service for a light client.
 pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 -> Result<impl AbstractService, ServiceError> {
-	type RpcExtension = jsonrpc_core::IoHandler<substrate_rpc::Metadata>;
+	type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 	let inherent_data_providers = InherentDataProviders::new();
 
 	let service = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
@@ -394,7 +394,7 @@ mod tests {
 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
 	use codec::{Encode, Decode};
 	use primitives::{crypto::Pair as CryptoPair, H256};
-	use sr_primitives::{
+	use sp_runtime::{
 		generic::{BlockId, Era, Digest, SignedPayload},
 		traits::Block as BlockT,
 		traits::Verify,
@@ -403,9 +403,9 @@ mod tests {
 	use sp_timestamp;
 	use sp_finality_tracker;
 	use keyring::AccountKeyring;
-	use substrate_service::{AbstractService, Roles};
+	use sc_service::{AbstractService, Roles};
 	use crate::service::new_full;
-	use sr_primitives::traits::IdentifyAccount;
+	use sp_runtime::traits::IdentifyAccount;
 
 	type AccountPublic = <Signature as Verify>::Signer;
 
@@ -518,7 +518,7 @@ mod tests {
 
 				let parent_id = BlockId::number(service.client().info().chain.best_number);
 				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
-				let mut proposer_factory = substrate_basic_authorship::ProposerFactory {
+				let mut proposer_factory = sc_basic_authority::ProposerFactory {
 					client: service.client(),
 					transaction_pool: service.transaction_pool(),
 				};

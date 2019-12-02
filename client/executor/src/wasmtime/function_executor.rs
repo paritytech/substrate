@@ -283,7 +283,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		return_val_len: u32,
 		state: u32,
 	) -> WResult<u32> {
-		trace!(target: "sr-sandbox", "invoke, instance_idx={}", instance_id);
+		trace!(target: "sp-sandbox", "invoke, instance_idx={}", instance_id);
 
 		// Deserialize arguments and convert them into wasmi types.
 		let args = Vec::<sandbox_primitives::TypedValue>::decode(&mut &args[..])

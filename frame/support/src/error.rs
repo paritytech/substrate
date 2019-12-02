@@ -17,7 +17,7 @@
 //! Macro for declaring a module error.
 
 #[doc(hidden)]
-pub use sr_primitives::traits::LookupError;
+pub use sp_runtime::traits::LookupError;
 pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 
 /// Declare an error type for a runtime module.

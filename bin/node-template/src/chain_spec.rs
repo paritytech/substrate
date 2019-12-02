@@ -5,14 +5,14 @@ use runtime::{
 };
 use aura_primitives::sr25519::{AuthorityId as AuraId};
 use grandpa_primitives::{AuthorityId as GrandpaId};
-use substrate_service;
-use sr_primitives::traits::{Verify, IdentifyAccount};
+use sc_service;
+use sp_runtime::traits::{Verify, IdentifyAccount};
 
 // Note this is the URL for the telemetry server
 //const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
-pub type ChainSpec = substrate_service::ChainSpec<GenesisConfig>;
+pub type ChainSpec = sc_service::ChainSpec<GenesisConfig>;
 
 /// The chain specification option. This is expected to come in from the CLI and
 /// is little more than one of a number of alternatives which can easily be converted

@@ -195,7 +195,7 @@ macro_rules! define_env {
 mod tests {
 	use parity_wasm::elements::FunctionType;
 	use parity_wasm::elements::ValueType;
-	use sr_primitives::traits::Zero;
+	use sp_runtime::traits::Zero;
 	use sandbox::{self, ReturnValue, TypedValue};
 	use crate::wasm::tests::MockExt;
 	use crate::wasm::Runtime;

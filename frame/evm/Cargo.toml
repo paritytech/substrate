@@ -11,10 +11,10 @@ support = { package = "frame-support", path = "../support", default-features = f
 system = { package = "frame-system", path = "../system", default-features = false }
 timestamp = { package = "pallet-timestamp", path = "../timestamp", default-features = false }
 balances = { package = "pallet-balances", path = "../balances", default-features = false }
-primitives = { package = "substrate-primitives", path = "../../primitives/core", default-features = false }
-sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
-rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
-runtime-io = { package = "sr-io", path = "../../primitives/sr-io", default-features = false }
+primitives = { package = "sp-core", path = "../../primitives/core", default-features = false }
+sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
+rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
 primitive-types = { version = "0.6", default-features = false, features = ["rlp"] }
 rlp = { version = "0.4", default-features = false }
 evm = { version = "0.14", default-features = false }
@@ -26,7 +26,7 @@ std = [
 	"serde",
 	"codec/std",
 	"primitives/std",
-	"sr-primitives/std",
+	"sp-runtime/std",
 	"support/std",
 	"system/std",
 	"balances/std",

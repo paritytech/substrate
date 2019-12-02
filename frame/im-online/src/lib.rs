@@ -76,7 +76,7 @@ use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use rstd::prelude::*;
 use rstd::convert::TryInto;
 use session::historical::IdentificationTuple;
-use sr_primitives::{
+use sp_runtime::{
 	RuntimeDebug,
 	traits::{Convert, Member, Printable, Saturating}, Perbill,
 	transaction_validity::{
@@ -84,7 +84,7 @@ use sr_primitives::{
 		TransactionPriority,
 	},
 };
-use sr_staking_primitives::{
+use sp_staking::{
 	SessionIndex,
 	offence::{ReportOffence, Offence, Kind},
 };
@@ -509,7 +509,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = T::AuthorityId;
 }
 

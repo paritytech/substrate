@@ -34,9 +34,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{prelude::*, collections::btree_map::BTreeMap};
-use sr_primitives::RuntimeDebug;
-use sr_primitives::{helpers_128bit::multiply_by_rational, Perbill, Rational128};
-use sr_primitives::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating, Bounded};
+use sp_runtime::RuntimeDebug;
+use sp_runtime::{helpers_128bit::multiply_by_rational, Perbill, Rational128};
+use sp_runtime::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating, Bounded};
 
 #[cfg(test)]
 mod mock;
