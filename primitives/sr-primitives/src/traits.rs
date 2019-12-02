@@ -355,9 +355,9 @@ pub trait OnInitialize<BlockNumber> {
 pub trait OffchainWorker<BlockNumber> {
 	/// This function is being called on every block.
 	///
-	/// Implement this and use special `extern`s to generate transactions or inherents.
+	/// Implement this and use `sp_io` to generate transactions or inherents.
 	/// Any state alterations are lost and are not persisted.
-	fn generate_extrinsics(_n: BlockNumber) {}
+	fn offchain_worker(_n: BlockNumber) {}
 }
 
 /// Abstraction around hashing
