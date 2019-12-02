@@ -26,7 +26,7 @@ use sr_staking_primitives::{SessionIndex, offence::ReportOffence};
 use sr_primitives::testing::{Header, UintAuthorityId, TestXt};
 use sr_primitives::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
 use primitives::H256;
-use support::{impl_outer_origin, impl_outer_dispatch, parameter_types};
+use support::{impl_outer_origin, impl_outer_dispatch, parameter_types, weights::Weight};
 use {runtime_io, system};
 
 impl_outer_origin!{
@@ -96,7 +96,7 @@ pub struct Runtime;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }

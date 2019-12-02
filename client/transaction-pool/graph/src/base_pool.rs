@@ -341,7 +341,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 		if removed.iter().any(|tx| tx.hash == hash) {
 			// We still need to remove all transactions that we promoted
 			// since they depend on each other and will never get to the best iterator.
-			self.ready.remove_invalid(&promoted);
+			self.ready.remove_subtree(&promoted);
 
 			debug!(target: "txpool", "[{:?}] Cycle detected, bailing.", hash);
 			return Err(error::Error::CycleDetected)
@@ -403,7 +403,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 				});
 
 			if let Some(minimal) = minimal {
-				removed.append(&mut self.remove_invalid(&[minimal.transaction.hash.clone()]))
+				removed.append(&mut self.remove_subtree(&[minimal.transaction.hash.clone()]))
 			} else {
 				break;
 			}
@@ -423,7 +423,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 				});
 
 			if let Some(minimal) = minimal {
-				removed.append(&mut self.remove_invalid(&[minimal.transaction.hash.clone()]))
+				removed.append(&mut self.remove_subtree(&[minimal.transaction.hash.clone()]))
 			} else {
 				break;
 			}
@@ -440,8 +440,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 	/// they were part of a chain, you may attempt to re-import them later.
 	/// NOTE If you want to remove ready transactions that were already used
 	/// and you don't want them to be stored in the pool use `prune_tags` method.
-	pub fn remove_invalid(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex>>> {
-		let mut removed = self.ready.remove_invalid(hashes);
+	pub fn remove_subtree(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex>>> {
+		let mut removed = self.ready.remove_subtree(hashes);
 		removed.extend(self.future.remove(hashes));
 		removed
 	}
@@ -454,7 +454,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 	/// Prunes transactions that provide given list of tags.
 	///
 	/// This will cause all transactions that provide these tags to be removed from the pool,
-	/// but unlike `remove_invalid`, dependent transactions are not touched.
+	/// but unlike `remove_subtree`, dependent transactions are not touched.
 	/// Additional transactions from future queue might be promoted to ready if you satisfy tags
 	/// that the pool didn't previously know about.
 	pub fn prune_tags(&mut self, tags: impl IntoIterator<Item=Tag>) -> PruneStatus<Hash, Ex> {
@@ -905,7 +905,7 @@ mod tests {
 		assert_eq!(pool.future.len(), 1);
 
 		// when
-		pool.remove_invalid(&[6, 1]);
+		pool.remove_subtree(&[6, 1]);
 
 		// then
 		assert_eq!(pool.ready().count(), 1);

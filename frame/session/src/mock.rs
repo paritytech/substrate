@@ -18,7 +18,7 @@
 
 use super::*;
 use std::cell::RefCell;
-use support::{impl_outer_origin, parameter_types};
+use support::{impl_outer_origin, parameter_types, weights::Weight};
 use primitives::{crypto::key_types::DUMMY, H256};
 use sr_primitives::{
 	Perbill, impl_opaque_keys, traits::{BlakeTwo256, IdentityLookup, ConvertInto},
@@ -152,7 +152,7 @@ pub struct Test;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const MinimumPeriod: u64 = 5;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();

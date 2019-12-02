@@ -287,7 +287,7 @@ impl<T: balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
 {
 	fn weigh_data(&self, target: (&BalanceOf<T>,)) -> Weight {
 		let multiplier = self.0;
-		(*target.0 * multiplier).saturated_into::<u32>()
+		(*target.0 * multiplier).saturated_into::<Weight>()
 	}
 }
 
@@ -665,7 +665,7 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
