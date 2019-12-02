@@ -30,7 +30,7 @@ use support::traits::{Currency, WithdrawReason, ExistenceRequirement};
 use system::ensure_signed;
 use sp_runtime::ModuleId;
 use support::weights::SimpleDispatchInfo;
-use sr_runtime::traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion};
+use sp_runtime::traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion};
 use primitives::{U256, H256, H160};
 use evm::{ExitReason, ExitSucceed, ExitError};
 use evm::executor::StackExecutor;
