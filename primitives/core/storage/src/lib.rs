@@ -23,7 +23,7 @@ use serde::{Serialize, Deserialize};
 use substrate_debug_derive::RuntimeDebug;
 
 use rstd::{vec::Vec, borrow::Cow};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, Compact};
 
 /// Storage key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
@@ -202,10 +202,10 @@ impl<'a> ChildInfo<'a> {
 		match child_type {
 			x if x == ChildType::CryptoUniqueId as u32 => Some(ChildInfo::new_default(data)),
 			x if x == ChildType::CryptoUniqueIdRootApi as u32 => {
-				let data_cursor = &mut data.clone();
+				let data_cursor = &mut &data[..];
 				// u32 is considered enough for a root size.
-				let number: u32 = match Decode::decode(data_cursor) {
-					Ok(number) => number,
+				let number = match Compact::<u32>::decode(data_cursor) {
+					Ok(number) => number.0,
 					Err(_) => return None,
 				};
 				let offset = data.len() - data_cursor.len();
@@ -287,7 +287,8 @@ impl OwnedChildInfo {
 	/// Instantiates info for a default child trie.
 	pub fn new_default(mut unique_id: Vec<u8>, root: Option<Vec<u8>>) -> Self {
 		let (offset, root_end, encoded) = if let Some(mut root) = root {
-			let mut encoded = Encode::encode(&(root.len() as u32));
+			let mut encoded = Encode::encode(&Compact(root.len() as u32));
+
 			let offset = encoded.len();
 			encoded.append(&mut root);
 			(offset, encoded.len(), Some(encoded)) 
@@ -389,15 +390,28 @@ fn test_encode() {
 	let unique_id = vec![2; 16];
 	let owned_child = OwnedChildInfo::new_default(unique_id.clone(), Some(root.clone()));
 	let child = owned_child.as_ref(); 
+	let (child_info, child_type) = child.info();
+	let child_info = child_info.to_vec();
+	assert_eq!(child.keyspace(), &unique_id[..]);
+	assert_eq!(child.root(), Some(&root[..]));
+
+	let child = ChildInfo::resolve_child_info(child_type, &child_info[..]).unwrap();
 	assert_eq!(child.keyspace(), &unique_id[..]);
 	assert_eq!(child.root(), Some(&root[..]));
 
 	let owned_child = OwnedChildInfo::new_default(unique_id.clone(), None);
 	let child = owned_child.as_ref(); 
+	let (child_info, child_type) = child.info();
+	let child_info = child_info.to_vec();
 	assert_eq!(child.keyspace(), &unique_id[..]);
 	assert_eq!(child.root(), None);
-	
+
+	let child = ChildInfo::resolve_child_info(child_type, &child_info[..]).unwrap();
+	assert_eq!(child.keyspace(), &unique_id[..]);
+	assert_eq!(child.root(), None);
+
 	let child = ChildInfo::new_default(&unique_id[..]);
 	assert_eq!(child.keyspace(), &unique_id[..]);
 	assert_eq!(child.root(), None);
+
 }
