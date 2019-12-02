@@ -270,6 +270,10 @@ fn good_commit_leads_to_relay() {
 			let sender_id = id.clone();
 			let send_message = tester.filter_network_events(move |event| match event {
 				Event::EventStream(sender) => {
+					let _ = sender.unbounded_send(NetworkEvent::NotifOpened {
+						remote: sender_id.clone(),
+						engine_id: GRANDPA_ENGINE_ID,
+					});
 					let _ = sender.unbounded_send(NetworkEvent::NotifMessages {
 						remote: sender_id.clone(),
 						messages: vec![(GRANDPA_ENGINE_ID, commit_to_send.clone().into())],
@@ -297,11 +301,7 @@ fn good_commit_leads_to_relay() {
 			send_message.join(handle_commit).and_then(move |(tester, ())| {
 				tester.filter_network_events(move |event| match event {
 					Event::WriteNotification(_, data) => {
-						if data == encoded_commit {
-							true
-						} else {
-							panic!("Trying to gossip something strange")
-						}
+						data == encoded_commit
 					}
 					_ => false,
 				})
@@ -310,11 +310,12 @@ fn good_commit_leads_to_relay() {
 				.map(|_| ())
 		});
 
-	current_thread::block_on_all(test).unwrap();
+	current_thread::Runtime::new().unwrap().block_on(test).unwrap();
 }
 
 #[test]
 fn bad_commit_leads_to_report() {
+	env_logger::init();
 	let private = [Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let public = make_ids(&private[..]);
 	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
@@ -384,6 +385,10 @@ fn bad_commit_leads_to_report() {
 			let sender_id = id.clone();
 			let send_message = tester.filter_network_events(move |event| match event {
 				Event::EventStream(sender) => {
+					let _ = sender.unbounded_send(NetworkEvent::NotifOpened {
+						remote: sender_id.clone(),
+						engine_id: GRANDPA_ENGINE_ID,
+					});
 					let _ = sender.unbounded_send(NetworkEvent::NotifMessages {
 						remote: sender_id.clone(),
 						messages: vec![(GRANDPA_ENGINE_ID, commit_to_send.clone().into())],
@@ -411,11 +416,7 @@ fn bad_commit_leads_to_report() {
 			send_message.join(handle_commit).and_then(move |(tester, ())| {
 				tester.filter_network_events(move |event| match event {
 					Event::Report(who, cost_benefit) => {
-						if who == id && cost_benefit == super::cost::INVALID_COMMIT {
-							true
-						} else {
-							panic!("reported unknown peer or unexpected cost");
-						}
+						who == id && cost_benefit == super::cost::INVALID_COMMIT
 					}
 					_ => false,
 				})
@@ -424,7 +425,7 @@ fn bad_commit_leads_to_report() {
 				.map(|_| ())
 		});
 
-	current_thread::block_on_all(test).unwrap();
+	current_thread::Runtime::new().unwrap().block_on(test).unwrap();
 }
 
 #[test]
@@ -482,5 +483,5 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 				.map(|_| ())
 		});
 
-	current_thread::block_on_all(test).unwrap();
+	current_thread::Runtime::new().unwrap().block_on(test).unwrap();
 }
