@@ -137,7 +137,12 @@ impl<T> SyncOracle for Arc<T> where T: ?Sized, for<'r> &'r T: SyncOracle {
 /// at the given block.
 pub trait CanAuthorWith<Block: BlockT> {
 	/// See trait docs for more information.
-	fn can_author_with(&self, at: &BlockId<Block>) -> bool;
+	///
+	/// # Return
+	///
+	/// - Returns `Ok(())` when authoring is supported.
+	/// - Returns `Err(_)` when authoring is not supported.
+	fn can_author_with(&self, at: &BlockId<Block>) -> Result<(), String>;
 }
 
 /// Checks if the node can author blocks by using
@@ -154,18 +159,15 @@ impl<T> CanAuthorWithNativeVersion<T> {
 impl<T: runtime_version::GetRuntimeVersion<Block>, Block: BlockT> CanAuthorWith<Block>
 	for CanAuthorWithNativeVersion<T>
 {
-	fn can_author_with(&self, at: &BlockId<Block>) -> bool {
+	fn can_author_with(&self, at: &BlockId<Block>) -> Result<(), String> {
 		match self.0.runtime_version(at) {
 			Ok(version) => self.0.native_version().can_author_with(&version),
 			Err(e) => {
-				error!(
-					target: "CanAuthorWithNativeVersion",
+				Err(format!(
 					"Failed to get runtime version at `{}` and will disable authoring. Error: {}",
 					at,
 					e,
-				);
-
-				false
+				))
 			}
 		}
 	}
@@ -175,7 +177,7 @@ impl<T: runtime_version::GetRuntimeVersion<Block>, Block: BlockT> CanAuthorWith<
 pub struct AlwaysCanAuthor;
 
 impl<Block: BlockT> CanAuthorWith<Block> for AlwaysCanAuthor {
-	fn can_author_with(&self, _: &BlockId<Block>) -> bool {
-		true
+	fn can_author_with(&self, _: &BlockId<Block>) -> Result<(), String> {
+		Ok(())
 	}
 }
