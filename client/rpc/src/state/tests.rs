@@ -29,7 +29,7 @@ use test_client::{
 	runtime,
 };
 
-const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(b"unique_id", None);
+const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(b"unique_id");
 
 #[test]
 fn should_return_storage() {
@@ -48,7 +48,7 @@ fn should_return_storage() {
 	let key = StorageKey(KEY.to_vec());
 	let storage_key = StorageKey(STORAGE_KEY.to_vec());
 	let (child_info, child_type) = CHILD_INFO.info();
-	let child_info = StorageKey(child_info);
+	let child_info = StorageKey(child_info.to_vec());
 
 	assert_eq!(
 		client.storage(key.clone(), Some(genesis_hash).into()).wait()
@@ -77,7 +77,7 @@ fn should_return_storage() {
 #[test]
 fn should_return_child_storage() {
 	let (child_info, child_type) = CHILD_INFO.info();
-	let child_info = StorageKey(child_info);
+	let child_info = StorageKey(child_info.to_vec());
 	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::TestClientBuilder::new()
 		.add_child_storage("test", "key", CHILD_INFO, vec![42_u8])

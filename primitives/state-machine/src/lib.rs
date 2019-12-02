@@ -691,7 +691,7 @@ where
 	H::Out: Ord + Codec,
 {
 	// Not a prefixed memory db, using empty unique id and include root resolution.
-	proving_backend.child_storage(storage_key, ChildInfo::new_default(&[], None), key)
+	proving_backend.child_storage(storage_key, ChildInfo::new_default(&[]), key)
 		.map_err(|e| Box::new(e) as Box<dyn Error>)
 }
 
@@ -754,7 +754,7 @@ mod tests {
 		fallback_succeeds: bool,
 	}
 
-	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1", None);
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 
 	impl CodeExecutor for DummyCodeExecutor {
 		type Error = u8;
@@ -1094,8 +1094,8 @@ mod tests {
 
 	#[test]
 	fn child_storage_uuid() {
-		const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1", None);
-		const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2", None);
+		const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
+		const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2");
 		use crate::trie_backend::tests::test_trie;
 		let mut overlay = OverlayedChanges::default();
 

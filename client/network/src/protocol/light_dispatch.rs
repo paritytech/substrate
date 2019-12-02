@@ -1031,13 +1031,14 @@ pub mod tests {
 		light_dispatch.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
 
 		let (tx, response) = oneshot::channel();
-		let child_info = ChildInfo::new_default(b"unique_id_1", None).info();
+		let child_info = ChildInfo::new_default(b"unique_id_1");
+		let (child_info, child_type) = child_info.info();
 		light_dispatch.add_request(&mut network_interface, RequestData::RemoteReadChild(RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
 			storage_key: b":child_storage:sub".to_vec(),
-			child_info: child_info.0.to_vec(),
-			child_type: child_info.1,
+			child_info: child_info.to_vec(),
+			child_type,
 			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		}, tx));

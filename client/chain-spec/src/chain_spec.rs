@@ -267,14 +267,15 @@ impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
 					.collect();
 				let children = storage.1.into_iter()
 					.map(|(sk, child)| {
-						let (info, ci_type) = child.1.as_ref().info();
+						let info = child.1.as_ref();
+						let (info, ci_type) = info.info();
 						(
 							StorageKey(sk),
 							(
 								child.0.into_iter()
 									.map(|(k, v)| (StorageKey(k), StorageData(v))) 
 									.collect(),
-								info,
+								info.to_vec(),
 								ci_type,
 							),
 					)})

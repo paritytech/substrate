@@ -27,17 +27,19 @@
 
 use crate::rstd::prelude::*;
 use codec::{Codec, Encode, Decode};
+pub use primitives::storage::ChildInfo;
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(
 	storage_key: &[u8],
-	unique_id: &[u8],
+	child_info: ChildInfo,
 	key: &[u8],
 ) -> Option<T> {
+	let (data, child_type) = child_info.info();
 	runtime_io::storage::child_get(
 		storage_key,
-		unique_id,
-		primitives::storage::ChildType::CryptoUniqueId as u32,
+		data,
+		child_type,
 		key,
 	).and_then(|v| {
 		Decode::decode(&mut &v[..]).map(Some).unwrap_or_else(|_| {
@@ -52,46 +54,47 @@ pub fn get<T: Decode + Sized>(
 /// explicit entry.
 pub fn get_or_default<T: Decode + Sized + Default>(
 	storage_key: &[u8],
-	unique_id: &[u8],
+	child_info: ChildInfo,
 	key: &[u8],
 ) -> T {
-	get(storage_key, unique_id, key).unwrap_or_else(Default::default)
+	get(storage_key, child_info, key).unwrap_or_else(Default::default)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
 /// explicit entry.
 pub fn get_or<T: Decode + Sized>(
 	storage_key: &[u8],
-	unique_id: &[u8],
+	child_info: ChildInfo,
 	key: &[u8],
 	default_value: T,
 ) -> T {
-	get(storage_key, unique_id, key).unwrap_or(default_value)
+	get(storage_key, child_info, key).unwrap_or(default_value)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry.
 pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(
 	storage_key: &[u8],
-	unique_id: &[u8],
+	child_info: ChildInfo,
 	key: &[u8],
 	default_value: F,
 ) -> T {
-	get(storage_key, unique_id, key).unwrap_or_else(default_value)
+	get(storage_key, child_info, key).unwrap_or_else(default_value)
 }
 
 /// Put `value` in storage under `key`.
 pub fn put<T: Encode>(
 	storage_key: &[u8],
-	unique_id: &[u8],
+	child_info: ChildInfo,
 	key: &[u8],
 	value: &T,
 ) {
+	let (data, child_type) = child_info.info();
 	value.using_encoded(|slice|
 		runtime_io::storage::child_set(
 			storage_key,
-			unique_id,
-			primitives::storage::ChildType::CryptoUniqueId as u32,
+			data,
+			child_type,
 			key,
 			slice,
 		)
@@ -101,12 +104,12 @@ pub fn put<T: Encode>(
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
 pub fn take<T: Decode + Sized>(
 	storage_key: &[u8],
-	unique_id: &[u8],
+	child_info: ChildInfo,
 	key: &[u8],
 ) -> Option<T> {
-	let r = get(storage_key, unique_id, key);
+	let r = get(storage_key, child_info, key);
 	if r.is_some() {
-		kill(storage_key, unique_id, key);
+		kill(storage_key, child_info, key);
 	}
 	r
 }
@@ -115,43 +118,43 @@ pub fn take<T: Decode + Sized>(
 /// the default for its type.
 pub fn take_or_default<T: Codec + Sized + Default>(
 	storage_key: &[u8],
-	unique_id: &[u8],
+	child_info: ChildInfo,
 	key: &[u8],
 ) -> T {
-	take(storage_key, unique_id, key).unwrap_or_else(Default::default)
+	take(storage_key, child_info, key).unwrap_or_else(Default::default)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
 pub fn take_or<T: Codec + Sized>(
 	storage_key: &[u8],
-	unique_id: &[u8],
+	child_info: ChildInfo,
 	key: &[u8],
 	default_value: T,
 ) -> T {
-	take(storage_key, unique_id, key).unwrap_or(default_value)
+	take(storage_key, child_info, key).unwrap_or(default_value)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
 pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(
 	storage_key: &[u8],
-	unique_id: &[u8],
+	child_info: ChildInfo,
 	key: &[u8],
 	default_value: F,
 ) -> T {
-	take(storage_key, unique_id, key).unwrap_or_else(default_value)
+	take(storage_key, child_info, key).unwrap_or_else(default_value)
 }
 
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(
 	storage_key: &[u8],
-	unique_id: &[u8],
+	child_info: ChildInfo,
 	key: &[u8],
 ) -> bool {
+	let (data, child_type) = child_info.info();
 	runtime_io::storage::child_read(
-		storage_key, unique_id,
-		primitives::storage::ChildType::CryptoUniqueId as u32,
+		storage_key, data, child_type,
 		key, &mut [0;0][..], 0,
 	).is_some()
 }
@@ -159,25 +162,27 @@ pub fn exists(
 /// Remove all `storage_key` key/values
 pub fn kill_storage(
 	storage_key: &[u8],
-	unique_id: &[u8],
+	child_info: ChildInfo,
 ) {
+	let (data, child_type) = child_info.info();
 	runtime_io::storage::child_storage_kill(
 		storage_key,
-		unique_id,
-		primitives::storage::ChildType::CryptoUniqueId as u32,
+		data,
+		child_type,
 	)
 }
 
 /// Ensure `key` has no explicit entry in storage.
 pub fn kill(
 	storage_key: &[u8],
-	unique_id: &[u8],
+	child_info: ChildInfo,
 	key: &[u8],
 ) {
+	let (data, child_type) = child_info.info();
 	runtime_io::storage::child_clear(
 		storage_key,
-		unique_id,
-		primitives::storage::ChildType::CryptoUniqueId as u32,
+		data,
+		child_type,
 		key,
 	);
 }
@@ -185,13 +190,14 @@ pub fn kill(
 /// Get a Vec of bytes from storage.
 pub fn get_raw(
 	storage_key: &[u8],
-	unique_id: &[u8],
+	child_info: ChildInfo,
 	key: &[u8],
 ) -> Option<Vec<u8>> {
+	let (data, child_type) = child_info.info();
 	runtime_io::storage::child_get(
 		storage_key,
-		unique_id,
-		primitives::storage::ChildType::CryptoUniqueId as u32,
+		data,
+		child_type,
 		key,
 	)
 }
@@ -199,14 +205,15 @@ pub fn get_raw(
 /// Put a raw byte slice into storage.
 pub fn put_raw(
 	storage_key: &[u8],
-	unique_id: &[u8],
+	child_info: ChildInfo,
 	key: &[u8],
 	value: &[u8],
 ) {
+	let (data, child_type) = child_info.info();
 	runtime_io::storage::child_set(
 		storage_key,
-		unique_id,
-		primitives::storage::ChildType::CryptoUniqueId as u32,
+		data,
+		child_type,
 		key,
 		value,
 	)

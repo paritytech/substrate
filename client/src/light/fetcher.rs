@@ -344,7 +344,7 @@ pub mod tests {
 	use state_machine::Backend;
 	use super::*;
 
-	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1", None);
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 
 	type TestChecker = LightDataChecker<
 		NativeExecutor<test_client::LocalExecutor>,
@@ -501,7 +501,7 @@ pub mod tests {
 				block: remote_block_header.hash(),
 				header: remote_block_header,
 				storage_key: b":child_storage:default:child1".to_vec(),
-				child_info: child_infos.0,
+				child_info: child_infos.0.to_vec(),
 				child_type: child_infos.1,
 				keys: vec![b"key1".to_vec()],
 				retry_count: None,

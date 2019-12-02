@@ -238,7 +238,7 @@ pub mod tests {
 	const CHILD_KEY_1: &[u8] = b":child_storage:default:sub1";
 
 	const CHILD_UUID_1: &[u8] = b"unique_id_1";
-	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(CHILD_UUID_1, None);
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(CHILD_UUID_1);
 
 	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256) {
 		let mut root = H256::default();

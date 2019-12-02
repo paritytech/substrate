@@ -176,20 +176,20 @@ pub enum OwnedChildInfo {
 
 impl<'a> ChildInfo<'a> {
 	/// Instantiates information for a default child trie.
-	pub const fn new_default(unique_id: &'a[u8], root: Option<&'a[u8]>) -> Self {
+	pub const fn new_default(unique_id: &'a[u8]) -> Self {
 		ChildInfo::Default(ChildTrie {
-			unique_id,
-			root,
+			root: 0,
+			data: unique_id,
 		})
 	}
 
 	/// Instantiates a owned version of this child info.
 	pub fn to_owned(&self) -> OwnedChildInfo {
 		match self {
-			ChildInfo::Default(ChildTrie { unique_id, root })
+			ChildInfo::Default(ChildTrie { data, root })
 				=> OwnedChildInfo::Default(OwnedChildTrie {
-					unique_id: unique_id.to_vec(),
-					root: root.as_ref().map(|s| s.to_vec()),
+					root: *root,
+					data: data.to_vec(),
 				}),
 		}
 	}
@@ -197,9 +197,12 @@ impl<'a> ChildInfo<'a> {
 	/// Create child info from a linear byte packed value and a given type. 
 	pub fn resolve_child_info(child_type: u32, data: &'a[u8]) -> Option<Self> {
 		match child_type {
-			x if x == ChildType::CryptoUniqueId as u32 => Some(ChildInfo::new_default(data, None)),
+			x if x == ChildType::CryptoUniqueId as u32 => Some(ChildInfo::new_default(data)),
 			x if x == ChildType::CryptoUniqueIdRoot32Api as u32 => if data.len() >= 32 {
-				Some(ChildInfo::new_default(&data[32..], Some(&data[..32])))
+				Some(ChildInfo::Default(ChildTrie {
+					root: 32,
+					data,
+				}))
 			} else { None },
 			_ => None,
 		}
@@ -207,20 +210,18 @@ impl<'a> ChildInfo<'a> {
 
 	/// Return a single byte vector containing packed child info content and its child info type.
 	/// This can be use as input for `resolve_child_info`.
-	pub fn info(&self) -> (Vec<u8>, u32) {
+	pub fn info(&self) -> (&[u8], u32) {
 		match self {
 			ChildInfo::Default(ChildTrie {
 				root,
-				unique_id,
+				data,
 			}) => {
-				if let Some(root) = root {
-					if root.len() == 32 {
-						let mut buf = root.to_vec();
-						buf.extend_from_slice(unique_id);
-						return (buf, ChildType::CryptoUniqueIdRoot32Api as u32);
+				if *root > 0 {
+					if *root == 32 {
+						return (data, ChildType::CryptoUniqueIdRoot32Api as u32);
 					}
 				}
-				(unique_id.to_vec(), ChildType::CryptoUniqueId as u32)
+				(data, ChildType::CryptoUniqueId as u32)
 			},
 		}
 	}
@@ -231,9 +232,9 @@ impl<'a> ChildInfo<'a> {
 	pub fn keyspace(&self) -> &[u8] {
 		match self {
 			ChildInfo::Default(ChildTrie {
-				root: _root,
-				unique_id,
-			}) => unique_id,
+				root,
+				data,
+			}) => &data[*root..],
 		}
 	}
 
@@ -245,8 +246,12 @@ impl<'a> ChildInfo<'a> {
 		match self {
 			ChildInfo::Default(ChildTrie {
 				root,
-				unique_id: _unique_id,
-			}) => *root,
+				data,
+			}) => if *root > 0 {
+				Some(&data[..*root])
+			} else {
+				None
+			}
 		}
 	}
 
@@ -266,10 +271,16 @@ pub enum ChildType {
 
 impl OwnedChildInfo {
 	/// Instantiates info for a default child trie.
-	pub fn new_default(unique_id: Vec<u8>, root: Option<Vec<u8>>) -> Self {
+	pub fn new_default(mut unique_id: Vec<u8>, root: Option<Vec<u8>>) -> Self {
+		debug_assert!(root.as_ref().map(|r| r.len()).unwrap_or(32) == 32);
 		OwnedChildInfo::Default(OwnedChildTrie {
-			unique_id,
-			root,
+			root: root.as_ref().map(|r| r.len()).unwrap_or(0),
+			data: if let Some(mut root) = root {
+				root.append(&mut unique_id);
+				root
+			} else {
+				unique_id
+			}
 		})
 	}
 
@@ -284,10 +295,10 @@ impl OwnedChildInfo {
 	/// Get `ChildInfo` reference to this owned child info.
 	pub fn as_ref(&self) -> ChildInfo {
 		match self {
-			OwnedChildInfo::Default(OwnedChildTrie { unique_id, root })
+			OwnedChildInfo::Default(OwnedChildTrie { data, root })
 				=> ChildInfo::Default(ChildTrie {
-					unique_id: unique_id.as_slice(),
-					root: root.as_ref().map(Vec::as_slice),
+					data: data.as_slice(),
+					root: *root,
 				}),
 		}
 	}
@@ -300,13 +311,16 @@ impl OwnedChildInfo {
 /// crypto hash).
 #[derive(Clone, Copy)]
 pub struct ChildTrie<'a> {
-	/// If root was fetch it can be memoïzed in this field
-	/// to avoid querying it explicitly.
-	pub root: Option<&'a[u8]>,
+	/// If root was fetch it can be memoïzed as first part of
+	/// the encoded data to avoid querying it explicitly.
+	/// This field keep trace of the stored root size.
+	root: usize,
 
+	/// Data containing unique id.
 	/// Unique id must but unique and free of any possible key collision
 	/// (depending on its storage behavior).
-	pub unique_id: &'a[u8],
+	/// Data can also contain root in first position.
+	data: &'a[u8],
 }
 
 /// Owned version of default child trie `ChildTrie`.
@@ -314,10 +328,10 @@ pub struct ChildTrie<'a> {
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub struct OwnedChildTrie {
 	/// See `ChildTrie` reference field documentation.
-	pub root: Option<Vec<u8>>,
+	root: usize,
 
 	/// See `ChildTrie` reference field documentation.
-	pub unique_id: Vec<u8>,
+	data: Vec<u8>,
 }
 
 impl OwnedChildTrie {
@@ -326,13 +340,15 @@ impl OwnedChildTrie {
 	fn try_update(&mut self, other: ChildInfo) -> bool {
 		match other {
 			ChildInfo::Default(other) => {
-				if self.unique_id != other.unique_id {
+				if self.data[self.root..] != other.data[other.root..] {
 					return false;
 				}
-				if self.root.is_none() {
-					self.root = other.root.as_ref().map(|s| s.to_vec());
+				if self.root == 0 {
+					self.root = other.root;
+					self.data = other.data.to_vec();
+				} else {
+					debug_assert!(self.data[..self.root] == other.data[..other.root]);
 				}
-				debug_assert!(self.root.as_ref().map(|v| v.as_slice()) == other.root);
 			},
 		}
 		true

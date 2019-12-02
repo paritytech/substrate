@@ -280,7 +280,7 @@ mod tests {
 	use primitives::storage::well_known_keys::CODE;
 	use hex_literal::hex;
 
-	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1", None);
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 
 	#[test]
 	fn commit_should_work() {

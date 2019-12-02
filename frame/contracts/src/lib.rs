@@ -225,15 +225,15 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 
 impl<CodeHash, Balance, BlockNumber> RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	/// Associated child trie unique id is built from the hash part of the trie id.
-	pub fn child_trie_unique_id(&self) -> &[u8] {
+	pub fn child_trie_unique_id(&self) -> child::ChildInfo {
 		trie_unique_id(&self.trie_id[..])
 	}
 }
 
 /// Associated child trie unique id is built from the hash part of the trie id.
-pub(crate) fn trie_unique_id(trie_id: &[u8]) -> &[u8] {
+pub(crate) fn trie_unique_id(trie_id: &[u8]) -> child::ChildInfo {
 	let start = CHILD_STORAGE_KEY_PREFIX.len() + b"default:".len();
-	&trie_id[start ..]
+	child::ChildInfo::new_default(&trie_id[start ..])
 }
 
 pub type TombstoneContractInfo<T> =
