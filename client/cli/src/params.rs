@@ -311,12 +311,12 @@ arg_enum! {
 	}
 }
 
-impl Into<sc_transaction::TracingReceiver> for TracingReceiver {
-	fn into(self) -> sc_transaction::TracingReceiver {
+impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
+	fn into(self) -> sc_tracing::TracingReceiver {
 		match self {
-			TracingReceiver::Log => sc_transaction::TracingReceiver::Log,
-			TracingReceiver::Telemetry => sc_transaction::TracingReceiver::Telemetry,
-			TracingReceiver::Grafana => sc_transaction::TracingReceiver::Grafana,
+			TracingReceiver::Log => sc_tracing::TracingReceiver::Log,
+			TracingReceiver::Telemetry => sc_tracing::TracingReceiver::Telemetry,
+			TracingReceiver::Grafana => sc_tracing::TracingReceiver::Grafana,
 		}
 	}
 }

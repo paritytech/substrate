@@ -45,7 +45,7 @@ txpool-runtime-api = { package = "sp-transaction-pool-runtime-api", path = "../.
 client_db = { package = "sc-client-db", path = "../db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 sc-executor = { path = "../executor" }
-txpool = { package = "sc-transaction-pool", path = "../transaction-pool" }
+txpool = { package = "sc-tracing-pool", path = "../transaction-pool" }
 txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
 rpc-servers = { package = "sc-rpc-server", path = "../rpc-servers" }
 rpc = { package = "sc-rpc", path = "../rpc" }
@@ -53,7 +53,7 @@ tel = { package = "sc-telemetry", path = "../telemetry" }
 offchain = { package = "sc-offchain", path = "../offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
 grafana-data-source = { path = "../grafana-data-source" }
-sc-transaction = { package = "sc-transaction", path = "../tracing" }
+sc-tracing = { package = "sc-tracing", path = "../tracing" }
 tracing = "0.1.10"
 
 [dev-dependencies]

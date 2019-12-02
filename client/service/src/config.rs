@@ -103,7 +103,7 @@ pub struct Configuration<C, G, E = NoExtension> {
 	/// Tracing targets
 	pub tracing_targets: Option<String>,
 	/// Tracing receiver
-	pub tracing_receiver: sc_transaction::TracingReceiver,
+	pub tracing_receiver: sc_tracing::TracingReceiver,
 }
 
 /// Configuration of the database of the client.
