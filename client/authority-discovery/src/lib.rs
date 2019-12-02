@@ -59,6 +59,7 @@ use client_api::blockchain::HeaderBackend;
 use codec::{Decode, Encode};
 use error::{Error, Result};
 use log::{debug, error, log_enabled, warn};
+use libp2p::Multiaddr;
 use network::specialization::NetworkSpecialization;
 use network::{DhtEvent, ExHashT};
 use primitives::crypto::{key_types, Pair};
@@ -93,6 +94,13 @@ where
 	client: Arc<Client>,
 
 	network: Arc<Network>,
+	/// List of sentry node public addresses.
+	//
+	// There are 3 states:
+	//   None => No addresses were specified.
+	//   Some(vec![]) => Addresses were specified, but none could be parsed as proper Multiaddresses.
+	//   Some(vec![a, b, c, ...]) => Valid addresses were specified.
+	sentry_nodes: Option<Vec<Multiaddr>>,
 	/// Channel we receive Dht events on.
 	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
 
@@ -107,7 +115,7 @@ where
 	/// addresses of other authorities one by one from the network. To use the peerset interface we need to cache the
 	/// addresses and always overwrite the entire peerset priority group. To ensure this map doesn't grow indefinitely
 	/// `purge_old_authorities_from_cache` function is called each time we add a new entry.
-	address_cache: HashMap<AuthorityId, Vec<libp2p::Multiaddr>>,
+	address_cache: HashMap<AuthorityId, Vec<Multiaddr>>,
 
 	phantom: PhantomData<Block>,
 }
@@ -121,9 +129,13 @@ where
 	Self: Future<Output = ()>,
 {
 	/// Return a new authority discovery.
+	///
+	/// Note: When specifying `sentry_nodes` this module will not advertise the public addresses of
+	/// the node itself but only the public addresses of its sentry nodes.
 	pub fn new(
 		client: Arc<Client>,
 		network: Arc<Network>,
+		sentry_nodes: Vec<String>,
 		key_store: BareCryptoStorePtr,
 		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
 	) -> Self {
@@ -142,11 +154,27 @@ where
 			Duration::from_secs(10 * 60),
 		);
 
+		let sentry_nodes = if !sentry_nodes.is_empty() {
+			Some(sentry_nodes.into_iter().filter_map(|a| match a.parse() {
+				Ok(addr) => Some(addr),
+				Err(e) => {
+					error!(
+						target: "sub-authority-discovery",
+						"Failed to parse sentry node public address '{:?}', continuing anyways.", e,
+					);
+					None
+				}
+			}).collect())
+		} else {
+			None
+		};
+
 		let address_cache = HashMap::new();
 
 		AuthorityDiscovery {
 			client,
 			network,
+			sentry_nodes,
 			dht_event_rx,
 			key_store,
 			publish_interval,
@@ -156,18 +184,20 @@ where
 		}
 	}
 
-	fn publish_own_ext_addresses(&mut self) -> Result<()> {
-		let addresses = self
-			.network
-			.external_addresses()
-			.into_iter()
-			.map(|a| {
-				a.with(libp2p::core::multiaddr::Protocol::P2p(
+	/// Publish either our own or if specified the public addresses of our sentry nodes.
+	fn publish_ext_addresses(&mut self) -> Result<()> {
+		let addresses = match &self.sentry_nodes {
+			Some(addrs) => addrs.clone().into_iter()
+				.map(|a| a.to_vec())
+				.collect(),
+			None => self.network.external_addresses()
+				.into_iter()
+				.map(|a| a.with(libp2p::core::multiaddr::Protocol::P2p(
 					self.network.local_peer_id().into(),
-				))
-			})
-			.map(|a| a.to_vec())
-			.collect();
+				)))
+				.map(|a| a.to_vec())
+				.collect(),
+		};
 
 		let mut serialized_addresses = vec![];
 		schema::AuthorityAddresses { addresses }
@@ -374,7 +404,7 @@ where
 				// tick.
 				while let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {}
 
-				self.publish_own_ext_addresses()?;
+				self.publish_ext_addresses()?;
 			}
 
 			if let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {
@@ -703,7 +733,7 @@ mod tests {
 	}
 
 	#[test]
-	fn publish_own_ext_addresses_puts_record_on_dht() {
+	fn publish_ext_addresses_puts_record_on_dht() {
 		let (_dht_event_tx, dht_event_rx) = channel(1000);
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
 		let key_store = KeyStore::new();
@@ -711,9 +741,9 @@ mod tests {
 		let test_api = Arc::new(TestApi {authorities: vec![public.into()]});
 
 		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), key_store, dht_event_rx.boxed());
+			AuthorityDiscovery::new(test_api, network.clone(), vec![], key_store, dht_event_rx.boxed());
 
-		authority_discovery.publish_own_ext_addresses().unwrap();
+		authority_discovery.publish_ext_addresses().unwrap();
 
 		// Expect authority discovery to put a new record onto the dht.
 		assert_eq!(network.put_value_call.lock().unwrap().len(), 1);
@@ -735,7 +765,7 @@ mod tests {
 		let key_store = KeyStore::new();
 
 		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), key_store, dht_event_rx.boxed());
+			AuthorityDiscovery::new(test_api, network.clone(), vec![], key_store, dht_event_rx.boxed());
 
 		authority_discovery.request_addresses_of_others().unwrap();
 
@@ -754,7 +784,7 @@ mod tests {
 		let key_store = KeyStore::new();
 
 		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), key_store, dht_event_rx.boxed());
+			AuthorityDiscovery::new(test_api, network.clone(), vec![], key_store, dht_event_rx.boxed());
 
 		// Create sample dht event.
 
