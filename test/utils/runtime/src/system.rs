@@ -24,7 +24,7 @@ use runtime_io::{
 };
 use runtime_support::storage;
 use runtime_support::{decl_storage, decl_module};
-use sr_primitives::{
+use sp_runtime::{
 	traits::{Hash as HashT, BlakeTwo256, Header as _}, generic, ApplyExtrinsicResult,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionValidityError,
@@ -257,7 +257,7 @@ pub fn finalize_block() -> Header {
 
 #[inline(always)]
 fn check_signature(utx: &Extrinsic) -> Result<(), TransactionValidityError> {
-	use sr_primitives::traits::BlindCheckable;
+	use sp_runtime::traits::BlindCheckable;
 	utx.clone().check().map_err(|_| InvalidTransaction::BadProof.into()).map(|_| ())
 }
 
@@ -325,9 +325,9 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 #[cfg(not(feature = "std"))]
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	if given != expected {
-		sr_primitives::print("Hash not equal");
-		sr_primitives::print(given.as_bytes());
-		sr_primitives::print(expected.as_bytes());
+		sp_runtime::print("Hash not equal");
+		sp_runtime::print(given.as_bytes());
+		sp_runtime::print(expected.as_bytes());
 	}
 }
 
@@ -339,7 +339,7 @@ mod tests {
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
 	use crate::{Header, Transfer, WASM_BINARY};
 	use primitives::{NeverNativeValue, map, traits::CodeExecutor};
-	use substrate_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
+	use sc_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
 	use runtime_io::hashing::twox_128;
 
 	// Declare an instance of the native executor dispatch for the test runtime.

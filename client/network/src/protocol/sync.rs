@@ -43,7 +43,7 @@ use either::Either;
 use extra_requests::ExtraRequests;
 use libp2p::PeerId;
 use log::{debug, trace, warn, info, error};
-use sr_primitives::{
+use sp_runtime::{
 	Justification,
 	generic::BlockId,
 	traits::{Block as BlockT, Header, NumberFor, Zero, One, CheckedSub, SaturatedConversion}

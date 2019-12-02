@@ -26,10 +26,10 @@ use futures03::{
 	TryFutureExt as _,
 };
 use primitives::{Blake2Hasher, Hasher};
-use sr_primitives::traits::{
+use sp_runtime::traits::{
 	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
 };
-use sr_primitives::generic::{BlockId, SignedBlock};
+use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader};
 use client::Client;
 use consensus_common::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};

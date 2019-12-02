@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 use futures::channel::mpsc;
 use primitives::storage::StorageKey;
-use sr_primitives::{
+use sp_runtime::{
     traits::{Block as BlockT, NumberFor},
     generic::BlockId
 };

@@ -28,10 +28,10 @@ use consensus_common::{
 	BlockCheckParams, Error as ConsensusError,
 };
 use network::config::{BoxFinalityProofRequestBuilder, FinalityProofRequestBuilder};
-use sr_primitives::Justification;
-use sr_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT, DigestFor};
+use sp_runtime::Justification;
+use sp_runtime::traits::{NumberFor, Block as BlockT, Header as HeaderT, DigestFor};
 use fg_primitives::{self, AuthorityList};
-use sr_primitives::generic::BlockId;
+use sp_runtime::generic::BlockId;
 use primitives::{H256, Blake2Hasher};
 
 use crate::GenesisAuthoritySetProvider;

@@ -18,8 +18,8 @@
 
 use super::*;
 use mock::*;
-use sr_primitives::{assert_eq_error_rate, traits::OnInitialize};
-use sr_staking_primitives::offence::OffenceDetails;
+use sp_runtime::{assert_eq_error_rate, traits::OnInitialize};
+use sp_staking::offence::OffenceDetails;
 use support::{assert_ok, assert_noop, traits::{Currency, ReservableCurrency}};
 use substrate_test_utils::assert_eq_uvec;
 

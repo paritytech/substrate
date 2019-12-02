@@ -35,7 +35,7 @@ pub type AuthorityId = app::Public;
 /// An authority discovery authority signature.
 pub type AuthoritySignature = app::Signature;
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// The authority discovery api.
 	///
 	/// This api is used by the `core/authority-discovery` module to retrieve identifiers

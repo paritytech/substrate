@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use substrate_debug_derive::RuntimeDebug;
+use sp_debug_derive::RuntimeDebug;
 
 #[derive(RuntimeDebug)]
 struct Unnamed(u64, String);

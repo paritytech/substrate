@@ -24,8 +24,8 @@ use std::{
 use serde::Serialize;
 use log::debug;
 use parking_lot::RwLock;
-use sr_primitives::traits::Member;
-use sr_primitives::transaction_validity::{
+use sp_runtime::traits::Member;
+use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };
 use txpool_api::error;

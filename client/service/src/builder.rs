@@ -40,12 +40,12 @@ use network::{config::BoxFinalityProofRequestBuilder, specialization::NetworkSpe
 use parking_lot::{Mutex, RwLock};
 use primitives::{Blake2Hasher, H256, Hasher};
 use rpc;
-use sr_api::ConstructRuntimeApi;
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{
+use sp_api::ConstructRuntimeApi;
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{
 	Block as BlockT, ProvideRuntimeApi, NumberFor, Header, SaturatedConversion,
 };
-use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
+use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
 	io::{Read, Write, Seek},
 	marker::PhantomData, sync::Arc, time::SystemTime
@@ -712,11 +712,11 @@ ServiceBuilder<
 > where
 	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi,
 	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi>::Api:
-		sr_api::Metadata<TBl> +
+		sp_api::Metadata<TBl> +
 		offchain::OffchainWorkerApi<TBl> +
 		txpool_runtime_api::TaggedTransactionQueue<TBl> +
 		session::SessionKeys<TBl> +
-		sr_api::ApiExt<TBl, Error = sp_blockchain::Error>,
+		sp_api::ApiExt<TBl, Error = sp_blockchain::Error>,
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TRtApi: ConstructRuntimeApi<TBl, Client<TBackend, TExec, TBl, TRtApi>> + 'static + Send + Sync,
 	TCfg: Default,
@@ -1119,7 +1119,7 @@ ServiceBuilder<
 
 		// Instrumentation
 		if let Some(tracing_targets) = config.tracing_targets.as_ref() {
-			let subscriber = substrate_tracing::ProfilingSubscriber::new(
+			let subscriber = sc_tracing::ProfilingSubscriber::new(
 				config.tracing_receiver, tracing_targets
 			);
 			match tracing::subscriber::set_global_default(subscriber) {

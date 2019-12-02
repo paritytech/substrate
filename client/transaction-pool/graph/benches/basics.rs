@@ -18,10 +18,10 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 use futures::executor::block_on;
 use sc_transaction_graph::*;
-use sr_primitives::transaction_validity::{ValidTransaction, InvalidTransaction};
+use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction};
 use codec::Encode;
 use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };

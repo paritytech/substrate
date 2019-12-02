@@ -21,14 +21,14 @@
 use std::cell::RefCell;
 use crate::{Module, Trait};
 use codec::Encode;
-use sr_primitives::Perbill;
-use sr_staking_primitives::{
+use sp_runtime::Perbill;
+use sp_staking::{
 	SessionIndex,
 	offence::{self, Kind, OffenceDetails},
 };
-use sr_primitives::testing::Header;
-use sr_primitives::traits::{IdentityLookup, BlakeTwo256};
-use substrate_primitives::H256;
+use sp_runtime::testing::Header;
+use sp_runtime::traits::{IdentityLookup, BlakeTwo256};
+use sp_core::H256;
 use support::{
 	impl_outer_origin, impl_outer_event, parameter_types, StorageMap, StorageDoubleMap,
 	weights::Weight,

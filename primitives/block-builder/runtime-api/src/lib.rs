@@ -18,7 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sr_primitives::{traits::Block as BlockT, ApplyExtrinsicResult};
+use sp_runtime::{traits::Block as BlockT, ApplyExtrinsicResult};
 
 use inherents::{InherentData, CheckInherentsResult};
 
@@ -27,7 +27,7 @@ use inherents::{InherentData, CheckInherentsResult};
 /// These definitions are taken from the 2c58e30246a029b53d51e5b24c31974ac539ee8b git revision.
 #[deprecated(note = "These definitions here are only for compatibility reasons")]
 pub mod compatability_v3 {
-	use sr_primitives::{DispatchOutcome, transaction_validity};
+	use sp_runtime::{DispatchOutcome, transaction_validity};
 	use codec::{Encode, Decode};
 
 	#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode, Debug)]
@@ -41,7 +41,7 @@ pub mod compatability_v3 {
 	pub type ApplyResult = Result<DispatchOutcome, ApplyError>;
 }
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides the required functionality for building a block.
 	#[api_version(4)]
 	pub trait BlockBuilder {

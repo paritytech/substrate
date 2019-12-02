@@ -25,16 +25,16 @@ use std::fmt;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
 #[cfg(feature = "std")]
-use sr_primitives::traits::RuntimeApiInfo;
+use sp_runtime::traits::RuntimeApiInfo;
 
 use codec::Encode;
 #[cfg(feature = "std")]
 use codec::Decode;
-use sr_primitives::RuntimeString;
-pub use sr_primitives::create_runtime_str;
+use sp_runtime::RuntimeString;
+pub use sp_runtime::create_runtime_str;
 
 #[cfg(feature = "std")]
-use sr_primitives::{traits::Block as BlockT, generic::BlockId};
+use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 
 /// The identity of a particular API interface that the runtime might provide.
 pub type ApiId = [u8; 8];
@@ -65,7 +65,7 @@ macro_rules! create_apis_vec {
 /// This triplet have different semantics and mis-interpretation could cause problems.
 /// In particular: bug fixes should result in an increment of `spec_version` and possibly `authoring_version`,
 /// absolutely not `impl_version` since they change the semantics of the runtime.
-#[derive(Clone, PartialEq, Eq, Encode, Default, sr_primitives::RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Default, sp_runtime::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Decode))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct RuntimeVersion {
@@ -161,10 +161,30 @@ pub struct NativeVersion {
 #[cfg(feature = "std")]
 impl NativeVersion {
 	/// Check if this version matches other version for authoring blocks.
-	pub fn can_author_with(&self, other: &RuntimeVersion) -> bool {
-		self.runtime_version.spec_name == other.spec_name &&
-			(self.runtime_version.authoring_version == other.authoring_version ||
-			self.can_author_with.contains(&other.authoring_version))
+	///
+	/// # Return
+	///
+	/// - Returns `Ok(())` when authoring is supported.
+	/// - Returns `Err(_)` with a detailed error when authoring is not supported.
+	pub fn can_author_with(&self, other: &RuntimeVersion) -> Result<(), String> {
+		if self.runtime_version.spec_name != other.spec_name {
+			Err(format!(
+				"`spec_name` does not match `{}` vs `{}`",
+				self.runtime_version.spec_name,
+				other.spec_name,
+			))
+		} else if (self.runtime_version.authoring_version != other.authoring_version
+			&& !self.can_author_with.contains(&other.authoring_version))
+		{
+			Err(format!(
+				"`authoring_version` does not match `{version}` vs `{other_version}` and \
+				`can_author_with` not contains `{other_version}`",
+				version = self.runtime_version.authoring_version,
+				other_version = other.authoring_version,
+			))
+		} else {
+			Ok(())
+		}
 	}
 }
 

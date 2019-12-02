@@ -1,14 +1,14 @@
 [package]
-name = "sr-sandbox"
+name = "sp-sandbox"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
 wasmi = { version = "0.6.2", optional = true }
-primitives = { package = "substrate-primitives", path = "../core", default-features = false }
-rstd = { package = "sr-std", path = "../sr-std", default-features = false }
-runtime-io = { package = "sr-io", path = "../sr-io", default-features = false }
+primitives = { package = "sp-core", path = "../core", default-features = false }
+rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+runtime-io = { package = "sp-io", path = "../sr-io", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 
 [dev-dependencies]

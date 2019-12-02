@@ -64,8 +64,8 @@ use network::{DhtEvent, ExHashT};
 use primitives::crypto::{key_types, Pair};
 use primitives::traits::BareCryptoStorePtr;
 use prost::Message;
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{Block as BlockT, ProvideRuntimeApi};
 
 type Interval = Box<dyn Stream<Item = ()> + Unpin + Send + Sync>;
 
@@ -472,13 +472,13 @@ fn interval_at(start: Instant, duration: Duration) -> Interval {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sr_api::{ApiExt, Core, RuntimeVersion, StorageProof};
+	use sp_api::{ApiExt, Core, RuntimeVersion, StorageProof};
 	use futures::channel::mpsc::channel;
 	use futures::executor::block_on;
 	use futures::future::poll_fn;
 	use primitives::{ExecutionContext, NativeOrEncoded, testing::KeyStore};
-	use sr_primitives::traits::Zero;
-	use sr_primitives::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
+	use sp_runtime::traits::Zero;
+	use sp_runtime::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
 	use std::sync::{Arc, Mutex};
 	use test_client::runtime::Block;
 

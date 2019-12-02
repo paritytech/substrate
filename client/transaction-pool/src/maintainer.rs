@@ -31,7 +31,7 @@ use client_api::{
 	light::{Fetcher, RemoteBodyRequest},
 };
 use primitives::{Blake2Hasher, H256};
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Extrinsic, Header, NumberFor, ProvideRuntimeApi, SimpleArithmetic},
 };
@@ -384,8 +384,8 @@ mod tests {
 		let fetcher = Arc::new(test_client::new_light_fetcher()
 			.with_remote_body(Some(Box::new(move |_| Ok(vec![fetcher_transaction.clone()]))))
 			.with_remote_call(Some(Box::new(move |_| {
-				let validity: sr_primitives::transaction_validity::TransactionValidity =
-					Ok(sr_primitives::transaction_validity::ValidTransaction {
+				let validity: sp_runtime::transaction_validity::TransactionValidity =
+					Ok(sp_runtime::transaction_validity::ValidTransaction {
 						priority: 0,
 						requires: Vec::new(),
 						provides: vec![vec![42]],
@@ -449,7 +449,7 @@ mod tests {
 	#[test]
 	fn should_revalidate_transactions_at_light_pool() {
 		use std::sync::atomic;
-		use sr_primitives::transaction_validity::*;
+		use sp_runtime::transaction_validity::*;
 
 		let build_fetcher = || {
 			let validated = Arc::new(atomic::AtomicBool::new(false));

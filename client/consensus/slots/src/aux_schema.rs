@@ -19,7 +19,7 @@
 use codec::{Encode, Decode};
 use client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
-use sr_primitives::traits::Header;
+use sp_runtime::traits::Header;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 const SLOT_HEADER_START: &[u8] = b"slot_header_start";
@@ -153,7 +153,7 @@ pub fn check_equivocation<C, H, P>(
 mod test {
 	use primitives::{sr25519, Pair};
 	use primitives::hash::H256;
-	use sr_primitives::testing::{Header as HeaderTest, Digest as DigestTest};
+	use sp_runtime::testing::{Header as HeaderTest, Digest as DigestTest};
 	use test_client;
 
 	use super::{MAX_SLOT_CAPACITY, PRUNING_BOUND, check_equivocation};

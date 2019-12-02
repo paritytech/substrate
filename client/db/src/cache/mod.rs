@@ -24,8 +24,8 @@ use kvdb::{KeyValueDB, DBTransaction};
 use client_api::blockchain::{well_known_cache_keys::{self, Id as CacheKeyId}, Cache as BlockchainCache};
 use sp_blockchain::Result as ClientResult;
 use codec::{Encode, Decode};
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 use crate::utils::{self, COLUMN_META, db_err};
 
 use self::list_cache::{ListCache, PruningStrategy};

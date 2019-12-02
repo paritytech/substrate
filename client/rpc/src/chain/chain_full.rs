@@ -23,7 +23,7 @@ use api::Subscriptions;
 use client_api::{CallExecutor, backend::Backend};
 use client::Client;
 use primitives::{H256, Blake2Hasher};
-use sr_primitives::{
+use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT},
 };

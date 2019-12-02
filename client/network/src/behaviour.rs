@@ -28,7 +28,11 @@ use libp2p::kad::record;
 use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
 use log::{debug, warn};
+<<<<<<< HEAD
 use sr_primitives::{traits::{Block as BlockT, NumberFor}, Justification};
+=======
+use sp_runtime::traits::Block as BlockT;
+>>>>>>> upstream/master
 use std::iter;
 use void;
 

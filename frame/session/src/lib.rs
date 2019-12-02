@@ -121,10 +121,10 @@
 
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
-use sr_primitives::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
+use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
 use support::weights::SimpleDispatchInfo;
-use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
-use sr_staking_primitives::SessionIndex;
+use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};
+use sp_staking::SessionIndex;
 use support::{dispatch::Result, ConsensusEngineId, decl_module, decl_event, decl_storage};
 use support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter};
 use system::{self, ensure_signed};
@@ -307,7 +307,7 @@ impl<AId> SessionHandler<AId> for Tuple {
 /// `SessionHandler` for tests that use `UintAuthorityId` as `Keys`.
 pub struct TestSessionHandler;
 impl<AId> SessionHandler<AId> for TestSessionHandler {
-	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[sr_primitives::key_types::DUMMY];
+	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[sp_runtime::key_types::DUMMY];
 
 	fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
 
@@ -716,7 +716,7 @@ mod tests {
 	use super::*;
 	use support::assert_ok;
 	use primitives::crypto::key_types::DUMMY;
-	use sr_primitives::{traits::OnInitialize, testing::UintAuthorityId};
+	use sp_runtime::{traits::OnInitialize, testing::UintAuthorityId};
 	use mock::{
 		NEXT_VALIDATORS, SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
 		set_next_validators, set_session_length, session_changed, Test, Origin, System, Session,

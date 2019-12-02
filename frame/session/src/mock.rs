@@ -20,11 +20,11 @@ use super::*;
 use std::cell::RefCell;
 use support::{impl_outer_origin, parameter_types, weights::Weight};
 use primitives::{crypto::key_types::DUMMY, H256};
-use sr_primitives::{
+use sp_runtime::{
 	Perbill, impl_opaque_keys, traits::{BlakeTwo256, IdentityLookup, ConvertInto},
 	testing::{Header, UintAuthorityId}
 };
-use sr_staking_primitives::SessionIndex;
+use sp_staking::SessionIndex;
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
@@ -66,7 +66,7 @@ impl ShouldEndSession<u64> for TestShouldEndSession {
 
 pub struct TestSessionHandler;
 impl SessionHandler<u64> for TestSessionHandler {
-	const KEY_TYPE_IDS: &'static [sr_primitives::KeyTypeId] = &[UintAuthorityId::ID];
+	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[UintAuthorityId::ID];
 	fn on_genesis_session<T: OpaqueKeys>(_validators: &[(u64, T)]) {}
 	fn on_new_session<T: OpaqueKeys>(
 		changed: bool,
@@ -204,7 +204,7 @@ impl Trait for Test {
 #[cfg(feature = "historical")]
 impl crate::historical::Trait for Test {
 	type FullIdentification = u64;
-	type FullIdentificationOf = sr_primitives::traits::ConvertInto;
+	type FullIdentificationOf = sp_runtime::traits::ConvertInto;
 }
 
 pub type System = system::Module<Test>;

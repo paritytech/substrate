@@ -24,7 +24,7 @@ use tokio::runtime::current_thread;
 use std::sync::Arc;
 use keyring::Ed25519Keyring;
 use codec::Encode;
-use sr_primitives::{ConsensusEngineId, traits::NumberFor};
+use sp_runtime::{ConsensusEngineId, traits::NumberFor};
 
 use crate::environment::SharedVoterSetState;
 use fg_primitives::{AuthorityList, GRANDPA_ENGINE_ID};

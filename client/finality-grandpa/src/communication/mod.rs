@@ -37,8 +37,8 @@ use log::{debug, trace};
 use network_gossip::{GossipEngine, Network};
 use codec::{Encode, Decode};
 use primitives::Pair;
-use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
-use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
+use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use crate::{
 	CatchUp, Commit, CommunicationIn, CommunicationOut, CompactCommit, Error,
