@@ -825,6 +825,24 @@ mod tests {
 	pub struct TestChangeMembers;
 	impl ChangeMembers<u64> for TestChangeMembers {
 		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
+			// new, incoming, outgoing must be sorted.
+			let mut new_sorted = new.to_vec();
+			new_sorted.sort();
+			assert_eq!(new, &new_sorted[..]);
+
+			let mut incoming_sorted = incoming.to_vec();
+			incoming_sorted.sort();
+			assert_eq!(incoming, &incoming_sorted[..]);
+
+			let mut outgoing_sorted = outgoing.to_vec();
+			outgoing_sorted.sort();
+			assert_eq!(outgoing, &outgoing_sorted[..]);
+
+			// incoming and outgoing must be disjoint
+			for x in incoming.iter() {
+				assert!(outgoing.binary_search(x).is_err());
+			}
+
 			let mut old_plus_incoming = MEMBERS.with(|m| m.borrow().to_vec());
 			old_plus_incoming.extend_from_slice(incoming);
 			old_plus_incoming.sort();
