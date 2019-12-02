@@ -36,10 +36,10 @@ use futures::{prelude::*, future::{self, Either}};
 use futures_timer::Delay;
 use inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{ApiRef, Block as BlockT, Header, ProvideRuntimeApi};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{ApiRef, Block as BlockT, Header, ProvideRuntimeApi};
 use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::{Instant, Duration}};
-use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use parking_lot::Mutex;
 use client_api;
 
@@ -94,7 +94,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	) -> Option<Self::Claim>;
 
 	/// Return the pre digest data to include in a block authored with the given claim.
-	fn pre_digest_data(&self, slot_number: u64, claim: &Self::Claim) -> Vec<sr_primitives::DigestItem<B::Hash>>;
+	fn pre_digest_data(&self, slot_number: u64, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem<B::Hash>>;
 
 	/// Returns a function which produces a `BlockImportParams`.
 	fn block_import_params(&self) -> Box<dyn Fn(
@@ -218,7 +218,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		// deadline our production to approx. the end of the slot
 		let proposing = proposer.propose(
 			slot_info.inherent_data,
-			sr_primitives::generic::Digest {
+			sp_runtime::generic::Digest {
 				logs,
 			},
 			slot_remaining_duration,
@@ -348,7 +348,16 @@ where
 				}
 			};
 
-			if can_author_with.can_author_with(&BlockId::Hash(chain_head.hash())) {
+			if let Err(err) = can_author_with.can_author_with(&BlockId::Hash(chain_head.hash())) {
+				warn!(
+					target: "slots",
+					"Unable to author block in slot {},. `can_author_with` returned: {} \
+					Probably a node update is required!",
+					slot_num,
+					err,
+				);
+				Either::Right(future::ready(Ok(())))
+			} else {
 				Either::Left(
 					worker.on_slot(chain_head, slot_info)
 						.map_err(|e| {
@@ -356,14 +365,6 @@ where
 						})
 						.or_else(|_| future::ready(Ok(())))
 				)
-			} else {
-				warn!(
-					target: "slots",
-					"Unable to author block in slot {}. `can_author_with` returned `false`. \
-					Probably a node update is required!",
-					slot_num,
-				);
-				Either::Right(future::ready(Ok(())))
 			}
 		}).then(|res| {
 			if let Err(err) = res {
@@ -448,7 +449,7 @@ impl<T: Clone> SlotDuration<T> {
 					})
 				}),
 			None => {
-				use sr_primitives::traits::Zero;
+				use sp_runtime::traits::Zero;
 				let genesis_slot_duration =
 					cb(client.runtime_api(), &BlockId::number(Zero::zero()))?;
 

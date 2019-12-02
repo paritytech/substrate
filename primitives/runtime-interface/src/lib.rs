@@ -59,7 +59,7 @@
 //! Declaring a runtime interface is similar to declaring a trait in Rust:
 //!
 //! ```
-//! #[substrate_runtime_interface::runtime_interface]
+//! #[sp_runtime_interface::runtime_interface]
 //! trait RuntimeInterface {
 //!     fn some_function(value: &[u8]) -> bool {
 //!         value.iter().all(|v| *v > 125)
@@ -79,7 +79,7 @@ pub use wasm_interface;
 #[doc(hidden)]
 pub use rstd;
 
-pub use substrate_runtime_interface_proc_macro::runtime_interface;
+pub use sp_runtime_interface_proc_macro::runtime_interface;
 
 #[doc(hidden)]
 #[cfg(feature = "std")]

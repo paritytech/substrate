@@ -69,8 +69,8 @@ use consensus_common::{ImportResult, CanAuthorWith};
 use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
-use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
-use sr_primitives::traits::{
+use sp_runtime::{generic::{BlockId, OpaqueDigestItemId}, Justification};
+use sp_runtime::traits::{
 	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi,
 	Zero,
 };
@@ -78,7 +78,7 @@ use keystore::KeyStorePtr;
 use parking_lot::Mutex;
 use primitives::{Blake2Hasher, H256, Pair};
 use inherents::{InherentDataProviders, InherentData};
-use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
+use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use consensus_common::{
 	self, BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
@@ -107,7 +107,7 @@ use sp_blockchain::{
 };
 use schnorrkel::SignatureError;
 
-use sr_api::ApiExt;
+use sp_api::ApiExt;
 
 mod aux_schema;
 mod verification;
@@ -411,7 +411,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		s
 	}
 
-	fn pre_digest_data(&self, _slot_number: u64, claim: &Self::Claim) -> Vec<sr_primitives::DigestItem<B::Hash>> {
+	fn pre_digest_data(&self, _slot_number: u64, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem<B::Hash>> {
 		vec![
 			<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(claim.0.clone()),
 		]

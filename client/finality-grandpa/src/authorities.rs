@@ -21,7 +21,7 @@ use parking_lot::RwLock;
 use grandpa::voter_set::VoterSet;
 use codec::{Encode, Decode};
 use log::{debug, info};
-use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use fg_primitives::{AuthorityId, AuthorityList};
 
 use std::cmp::Ord;

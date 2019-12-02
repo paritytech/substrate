@@ -23,7 +23,7 @@ use std::marker::PhantomData;
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use codec::{Decode, Encode};
 use primitives::{convert_hash, traits::CodeExecutor, H256};
-use sr_primitives::traits::{
+use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	SimpleArithmetic, CheckedConversion, Zero,
 };
@@ -340,7 +340,7 @@ pub mod tests {
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use primitives::{blake2_256, Blake2Hasher, H256};
 	use primitives::storage::{well_known_keys, StorageKey};
-	use sr_primitives::generic::BlockId;
+	use sp_runtime::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
 

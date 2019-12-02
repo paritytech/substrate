@@ -17,7 +17,7 @@
 //! List-cache storage entries.
 
 use sp_blockchain::Result as ClientResult;
-use sr_primitives::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use codec::{Encode, Decode};
 
 use crate::cache::{CacheItemT, ComplexBlockId};

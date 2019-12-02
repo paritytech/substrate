@@ -21,7 +21,7 @@ use crate::gas::{Gas, GasMeter, Token, approx_gas_for_balance};
 use crate::rent;
 
 use rstd::prelude::*;
-use sr_primitives::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
+use sp_runtime::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
 use support::{
 	storage::unhashed,
 	traits::{WithdrawReason, Currency, Time, Randomness},
@@ -64,7 +64,7 @@ impl ExecReturnValue {
 /// VM-specific errors during execution (eg. division by 0, OOB access, failure to satisfy some
 /// precondition of a system call, etc.) or errors with the orchestration (eg. out-of-gas errors, a
 /// non-existent destination contract, etc.).
-#[cfg_attr(test, derive(sr_primitives::RuntimeDebug))]
+#[cfg_attr(test, derive(sp_runtime::RuntimeDebug))]
 pub struct ExecError {
 	pub reason: &'static str,
 	/// This is an allocated buffer that may be reused. The buffer must be cleared explicitly
@@ -239,7 +239,7 @@ impl<T: Trait> Token<T> for ExecFeeToken {
 }
 
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq, Clone))]
-#[derive(sr_primitives::RuntimeDebug)]
+#[derive(sp_runtime::RuntimeDebug)]
 pub enum DeferredAction<T: Trait> {
 	DepositEvent {
 		/// A list of topics this event will be deposited with.

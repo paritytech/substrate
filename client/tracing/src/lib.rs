@@ -54,7 +54,7 @@ use tracing_core::{
 };
 
 use grafana_data_source::{self, record_metrics};
-use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
+use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 
 /// Used to configure how to receive the metrics
 #[derive(Debug, Clone)]

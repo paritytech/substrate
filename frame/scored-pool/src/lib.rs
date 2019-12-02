@@ -98,7 +98,7 @@ use support::{
 	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
 };
 use system::{self, ensure_root, ensure_signed};
-use sr_primitives::{
+use sp_runtime::{
 	traits::{EnsureOrigin, SimpleArithmetic, MaybeSerializeDeserialize, Zero, StaticLookup},
 };
 

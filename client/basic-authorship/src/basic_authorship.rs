@@ -16,7 +16,7 @@
 
 //! A consensus proposer for "basic" chains which use the primitive inherent-data.
 
-// FIXME #1021 move this into substrate-consensus-common
+// FIXME #1021 move this into sp-consensus
 
 use std::{time, sync::Arc};
 use client_api::CallExecutor;
@@ -27,14 +27,14 @@ use consensus_common::{evaluation};
 use inherents::InherentData;
 use log::{error, info, debug, trace};
 use primitives::{H256, Blake2Hasher, ExecutionContext};
-use sr_primitives::{
+use sp_runtime::{
 	traits::{
 		Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, DigestFor, BlakeTwo256
 	},
 	generic::BlockId,
 };
 use txpool_api::{TransactionPool, InPoolTransaction};
-use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use block_builder::BlockBuilderApi;
 
 /// Proposer factory.

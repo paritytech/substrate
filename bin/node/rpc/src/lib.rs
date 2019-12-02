@@ -18,7 +18,7 @@
 //!
 //! Since `substrate` core functionality makes no assumptions
 //! about the modules used inside the runtime, so do
-//! RPC methods defined in `substrate-rpc` crate.
+//! RPC methods defined in `sc-rpc` crate.
 //! It means that `client/rpc` can't have any methods that
 //! need some strong assumptions about the particular runtime.
 //!
@@ -33,7 +33,7 @@ use std::sync::Arc;
 
 use node_primitives::{Block, AccountId, Index, Balance};
 use node_runtime::UncheckedExtrinsic;
-use sr_primitives::traits::ProvideRuntimeApi;
+use sp_runtime::traits::ProvideRuntimeApi;
 use txpool_api::TransactionPool;
 
 /// Light client extra dependencies.

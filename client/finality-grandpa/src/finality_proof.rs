@@ -46,12 +46,12 @@ use client_api::{
 use client::Client;
 use codec::{Encode, Decode};
 use grandpa::BlockNumberOps;
-use sr_primitives::{
+use sp_runtime::{
 	Justification, generic::BlockId,
 	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
 };
 use primitives::{H256, Blake2Hasher, storage::StorageKey};
-use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use fg_primitives::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
 
 use crate::justification::GrandpaJustification;

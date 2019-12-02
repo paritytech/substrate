@@ -25,7 +25,7 @@ use log::{debug, warn};
 use tokio_timer::Delay;
 
 use network::PeerId;
-use sr_primitives::traits::{NumberFor, Block as BlockT};
+use sp_runtime::traits::{NumberFor, Block as BlockT};
 use super::{gossip::{NeighborPacket, GossipMessage}, Network};
 
 // how often to rebroadcast, if no other

@@ -17,7 +17,7 @@
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
 use codec::{Ref, FullCodec, FullEncode, Encode, EncodeLike, EncodeAppend};
-use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}};
+use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}, traits::Len};
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
 ///
@@ -137,6 +137,29 @@ where
 		G::from_optional_value_to_query(value)
 	}
 
+	fn swap<XKArg1, XKArg2, YKArg1, YKArg2>(x_k1: XKArg1, x_k2: XKArg2, y_k1: YKArg1, y_k2: YKArg2)
+	where
+		XKArg1: EncodeLike<K1>,
+		XKArg2: EncodeLike<K2>,
+		YKArg1: EncodeLike<K1>,
+		YKArg2: EncodeLike<K2>
+	{
+		let final_x_key = Self::storage_double_map_final_key(x_k1, x_k2);
+		let final_y_key = Self::storage_double_map_final_key(y_k1, y_k2);
+
+		let v1 = unhashed::get_raw(&final_x_key);
+		if let Some(val) = unhashed::get_raw(&final_y_key) {
+			unhashed::put_raw(&final_x_key, &val);
+		} else {
+			unhashed::kill(&final_x_key)
+		}
+		if let Some(val) = v1 {
+			unhashed::put_raw(&final_y_key, &val);
+		} else {
+			unhashed::kill(&final_y_key)
+		}
+	}
+
 	fn insert<KArg1, KArg2, VArg>(k1: KArg1, k2: KArg2, val: VArg)
 	where
 		KArg1: EncodeLike<K1>,
@@ -224,5 +247,22 @@ where
 	{
 		Self::append(Ref::from(&k1), Ref::from(&k2), items.clone())
 			.unwrap_or_else(|_| Self::insert(k1, k2, items));
+	}
+
+	fn decode_len<KArg1, KArg2>(key1: KArg1, key2: KArg2) -> Result<usize, &'static str>
+		where KArg1: EncodeLike<K1>,
+		      KArg2: EncodeLike<K2>,
+		      V: codec::DecodeLength + Len,
+	{
+		let final_key = Self::storage_double_map_final_key(key1, key2);
+		if let Some(v) = unhashed::get_raw(&final_key) {
+			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
+		} else {
+			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
+				.map(|v| v.len())
+				.unwrap_or(0);
+
+			Ok(len)
+		}
 	}
 }

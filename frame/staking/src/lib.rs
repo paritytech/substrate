@@ -266,7 +266,7 @@ use support::{
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators};
-use sr_primitives::{
+use sp_runtime::{
 	Perbill,
 	RuntimeDebug,
 	curve::PiecewiseLinear,
@@ -275,12 +275,12 @@ use sr_primitives::{
 		SimpleArithmetic, EnsureOrigin,
 	}
 };
-use sr_staking_primitives::{
+use sp_staking::{
 	SessionIndex,
 	offence::{OnOffenceHandler, OffenceDetails, Offence, ReportOffence},
 };
 #[cfg(feature = "std")]
-use sr_primitives::{Serialize, Deserialize};
+use sp_runtime::{Serialize, Deserialize};
 use system::{ensure_signed, ensure_root};
 
 use phragmen::{ExtendedBalance, PhragmenStakedAssignment};

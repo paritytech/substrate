@@ -42,7 +42,7 @@ pub use serde;
 #[doc(hidden)]
 pub use codec::{Encode, Decode};
 
-pub use substrate_debug_derive::RuntimeDebug;
+pub use sp_debug_derive::RuntimeDebug;
 
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;

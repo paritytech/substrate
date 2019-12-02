@@ -21,7 +21,7 @@
 pub mod error;
 
 pub use error::IntoPoolError;
-pub use sr_primitives::transaction_validity::{
+pub use sp_runtime::transaction_validity::{
 	TransactionLongevity, TransactionPriority, TransactionTag,
 };
 
@@ -35,7 +35,7 @@ use futures::{
 	channel::mpsc,
 };
 use serde::{Deserialize, Serialize};
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member},
 };
@@ -98,7 +98,7 @@ pub type TransactionStatusStreamFor<P> = TransactionStatusStream<TxHash<P>, Bloc
 /// In-pool transaction interface.
 ///
 /// The pool is container of transactions that are implementing this trait.
-/// See `sr_primitives::ValidTransaction` for details about every field.
+/// See `sp_runtime::ValidTransaction` for details about every field.
 pub trait InPoolTransaction {
 	/// Transaction type.
 	type Transaction;
