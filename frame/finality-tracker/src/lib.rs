@@ -199,7 +199,7 @@ mod tests {
 		testing::Header, Perbill,
 		traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT},
 	};
-	use support::{assert_ok, impl_outer_origin, parameter_types};
+	use support::{assert_ok, impl_outer_origin, parameter_types, weights::Weight};
 	use frame_system as system;
 	use std::cell::RefCell;
 
@@ -230,7 +230,7 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}

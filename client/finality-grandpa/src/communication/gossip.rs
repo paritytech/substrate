@@ -517,7 +517,7 @@ impl<N: Ord> Peers<N> {
 	}
 
 	fn reshuffle(&mut self) {
-		let mut lucky_peers : Vec<_> = self.inner
+		let mut lucky_peers: Vec<_> = self.inner
 			.iter()
 			.filter_map(|(id, info)| if !info.roles.is_authority() { Some(id.clone()) } else { None })
 			.collect();
@@ -670,7 +670,7 @@ impl<Block: BlockT> Inner<Block> {
 			let set_id = local_view.set_id;
 
 			debug!(target: "afg", "Voter {} noting beginning of round {:?} to network.",
-				self.config.name(), (round,set_id));
+				self.config.name(), (round, set_id));
 
 			local_view.round = round;
 

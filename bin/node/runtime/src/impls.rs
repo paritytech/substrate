@@ -340,7 +340,7 @@ mod tests {
 			mb,
 			10 * mb,
 			Weight::max_value() / 2,
-			Weight::max_value()
+			Weight::max_value(),
 		].into_iter().for_each(|i| {
 			run_with_system_weight(i, || {
 				let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed64::default());

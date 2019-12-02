@@ -23,7 +23,7 @@ use futures::{
 	Future, FutureExt,
 	future::{Either, join, ready},
 };
-use log::warn;
+use log::{warn, debug};
 use parking_lot::Mutex;
 
 use client_api::{
@@ -79,13 +79,14 @@ where
 		let retracted_transactions = retracted.to_vec().into_iter()
 			.filter_map(move |hash| client_copy.block_body(&BlockId::hash(hash)).ok().unwrap_or(None))
 			.flat_map(|block| block.into_iter())
-			.filter(|tx| tx.is_signed().unwrap_or(false));
+			// if signed information is not present, attempt to resubmit anyway.
+			.filter(|tx| tx.is_signed().unwrap_or(true));
 		let resubmit_future = self.pool
 			.submit_at(id, retracted_transactions, true)
 			.then(|resubmit_result| ready(match resubmit_result {
 				Ok(_) => (),
 				Err(e) => {
-					warn!("Error re-submitting transactions: {:?}", e);
+					debug!(target: "txpool", "Error re-submitting transactions: {:?}", e);
 					()
 				}
 			}));

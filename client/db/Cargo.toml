@@ -7,10 +7,9 @@ edition = "2018"
 [dependencies]
 parking_lot = "0.9.0"
 log = "0.4.8"
-kvdb = { git = "https://github.com/paritytech/parity-common", rev="03a2ba08f47f4af4219280e660a1ea92cb8896bd" }
-# FIXME replace with release as soon as our rocksdb changes are released upstream https://github.com/paritytech/parity-common/issues/88
-kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", rev="03a2ba08f47f4af4219280e660a1ea92cb8896bd", optional = true }
-kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="03a2ba08f47f4af4219280e660a1ea92cb8896bd" }
+kvdb = "0.1.1"
+kvdb-rocksdb = { version = "0.2", optional = true }
+kvdb-memorydb = "0.1.2"
 linked-hash-map = "0.5.2"
 hash-db = "0.15.2"
 client-api = { package = "substrate-client-api", path = "../api" }

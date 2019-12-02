@@ -194,7 +194,7 @@ mod tests {
 	use super::*;
 
 	use std::cell::RefCell;
-	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types};
+	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
 	use primitives::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
@@ -212,7 +212,7 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
