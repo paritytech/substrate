@@ -228,6 +228,7 @@ macro_rules! new_full {
 					grandpa_link,
 					service.network(),
 					service.on_exit(),
+					service.spawn_task_handle(),
 				)?);
 			},
 			(true, false) => {

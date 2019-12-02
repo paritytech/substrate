@@ -703,11 +703,11 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	event_streams: Vec<mpsc::UnboundedSender<Event>>,
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for NetworkWorker<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for NetworkWorker<B, S, H> {
 	type Item = ();
 	type Error = io::Error;
 
-	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		// Poll the import queue for actions to perform.
 		let _ = futures03::future::poll_fn(|cx| {
 			self.import_queue.poll_actions(cx, &mut NetworkLink {
@@ -727,7 +727,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 			// Process the next message coming from the `NetworkService`.
 			let msg = match self.from_worker.poll() {
 				Ok(Async::Ready(Some(msg))) => msg,
-				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(None)),
+				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
 				Ok(Async::NotReady) => break,
 			};
 

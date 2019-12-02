@@ -158,6 +158,7 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 				grandpa_link,
 				service.network(),
 				service.on_exit(),
+				service.spawn_task_handle(),
 			)?);
 		},
 		(true, false) => {
