@@ -137,26 +137,26 @@ where
 		G::from_optional_value_to_query(value)
 	}
 
-	fn swap<KArg1, KArg2, KArg3, KArg4>(key11: KArg1, key12: KArg2, key21: KArg3, key22: KArg4)
+	fn swap<XKArg1, XKArg2, YKArg1, YKArg2>(x_k1: XKArg1, x_k2: XKArg2, y_k1: YKArg1, y_k2: YKArg2)
 	where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
-		KArg3: EncodeLike<K1>,
-		KArg4: EncodeLike<K2>,
+		XKArg1: EncodeLike<K1>,
+		XKArg2: EncodeLike<K2>,
+		YKArg1: EncodeLike<K1>,
+		YKArg2: EncodeLike<K2>
 	{
-		let final_k1 = Self::storage_double_map_final_key(key11, key12);
-		let final_k2 = Self::storage_double_map_final_key(key21, key22);
+		let final_x_key = Self::storage_double_map_final_key(x_k1, x_k2);
+		let final_y_key = Self::storage_double_map_final_key(y_k1, y_k2);
 
-		let v1 = unhashed::get_raw(&final_k1);
-		if let Some(val) = unhashed::get_raw(&final_k2) {
-			unhashed::put_raw(&final_k1, &val);
+		let v1 = unhashed::get_raw(&final_x_key);
+		if let Some(val) = unhashed::get_raw(&final_y_key) {
+			unhashed::put_raw(&final_x_key, &val);
 		} else {
-			unhashed::kill(&final_k1)
+			unhashed::kill(&final_x_key)
 		}
 		if let Some(val) = v1 {
-			unhashed::put_raw(&final_k2, &val);
+			unhashed::put_raw(&final_y_key, &val);
 		} else {
-			unhashed::kill(&final_k2)
+			unhashed::kill(&final_y_key)
 		}
 	}
 

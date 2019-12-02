@@ -285,12 +285,12 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg2: EncodeLike<K2>;
 
 	/// Swap the values of two key-pairs.
-	fn swap<KArg1, KArg2, KArg3, KArg4>(key11: KArg1, key12: KArg2, key21: KArg3, key22: KArg4)
+	fn swap<XKArg1, XKArg2, YKArg1, YKArg2>(x_k1: XKArg1, x_k2: XKArg2, y_k1: YKArg1, y_k2: YKArg2)
 	where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
-		KArg3: EncodeLike<K1>,
-		KArg4: EncodeLike<K2>;
+		XKArg1: EncodeLike<K1>,
+		XKArg2: EncodeLike<K2>,
+		YKArg1: EncodeLike<K1>,
+		YKArg2: EncodeLike<K2>;
 
 	fn insert<KArg1, KArg2, VArg>(k1: KArg1, k2: KArg2, val: VArg)
 	where
