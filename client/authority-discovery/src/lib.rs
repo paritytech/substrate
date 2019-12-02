@@ -482,6 +482,67 @@ mod tests {
 	use std::sync::{Arc, Mutex};
 	use test_client::runtime::Block;
 
+	#[test]
+	fn interval_at_with_start_now() {
+		let start = Instant::now();
+
+		let mut interval = interval_at(
+			std::time::Instant::now(),
+			std::time::Duration::from_secs(10),
+		);
+
+		futures::executor::block_on(async {
+			interval.next().await;
+		});
+
+		assert!(
+			Instant::now().saturating_duration_since(start) < Duration::from_secs(1),
+			"Expected low resolution instant interval to fire within less than a second.",
+		);
+	}
+
+	#[test]
+	fn interval_at_is_queuing_events() {
+		let start = Instant::now();
+
+		let interval = interval_at(
+			std::time::Instant::now(),
+			std::time::Duration::from_millis(10),
+		);
+
+		// Let's wait for 100ms, thus 10 elements should be queued up.
+		std::thread::sleep(Duration::from_millis(100));
+
+		futures::executor::block_on(async {
+			interval.take(10).collect::<Vec<()>>().await;
+		});
+
+		// Make sure we did not just wait for yet another 100ms (10 elements).
+		assert!(
+			Instant::now().saturating_duration_since(start) < Duration::from_millis(150),
+			"Expect interval to /queue/ events when not polled for a while.",
+		);
+	}
+
+	#[test]
+	fn interval_at_with_initial_delay() {
+		let start = Instant::now();
+
+		let mut interval = interval_at(
+			std::time::Instant::now() + Duration::from_millis(100),
+			std::time::Duration::from_secs(10),
+		);
+
+		futures::executor::block_on(async {
+			interval.next().await;
+		});
+
+		assert!(
+			Instant::now().saturating_duration_since(start) > Duration::from_millis(100),
+			"Expected interval with initial delay not to fire right away.",
+		);
+	}
+
 	#[derive(Clone)]
 	struct TestApi {
 		authorities: Vec<AuthorityId>,
