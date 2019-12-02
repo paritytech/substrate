@@ -23,7 +23,7 @@ safe-mix = { version = "1.0.0", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-api = { path = "../../../primitives/sr-api", default-features = false }
 sp-runtime = { path = "../../../primitives/sr-primitives", default-features = false }
-sp-sesssion = { path = "../../../primitives/session", default-features = false }
+sp-session = { path = "../../../primitives/session", default-features = false }
 sudo = { package = "pallet-sudo", path = "../../../frame/sudo", default-features = false }
 support = { package = "frame-support", path = "../../../frame/support", default-features = false }
 system = { package = "frame-system", path = "../../../frame/system", default-features = false }
@@ -56,7 +56,7 @@ std = [
 	"serde",
 	"sp-api/std",
 	"sp-runtime/std",
-	"sp-sesssion/std",
+	"sp-session/std",
 	"sudo/std",
 	"support/std",
 	"system/std",
