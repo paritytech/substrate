@@ -223,6 +223,9 @@ pub trait TestClientBuilderExt<B>: Sized {
 
 	/// Build the test client and longest chain selector.
 	fn build_with_longest_chain(self) -> (Client<B>, client::LongestChain<B, runtime::Block>);
+
+	/// Build the test client and the backend.
+	fn build_with_backend(self) -> (Client<B>, Arc<B>);
 }
 
 impl<B> TestClientBuilderExt<B> for TestClientBuilder<
@@ -240,6 +243,11 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 
 	fn build_with_longest_chain(self) -> (Client<B>, client::LongestChain<B, runtime::Block>) {
 		self.build_with_native_executor(None)
+	}
+
+	fn build_with_backend(self) -> (Client<B>, Arc<B>) {
+		let backend = self.backend();
+		(self.build_with_native_executor(None).0, backend)
 	}
 }
 

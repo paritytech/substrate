@@ -82,11 +82,6 @@ impl<Block: BlockT, Executor, G: GenesisInit> TestClientBuilder<Executor, Backen
 		Self::with_backend(backend)
 	}
 
-	/// Give access to the underlying backend of these clients
-	pub fn backend(&self) -> Arc<Backend<Block>> {
-		self.backend.clone()
-	}
-
 	/// Create new `TestClientBuilder` with default backend and pruning window size
 	pub fn with_pruning_window(keep_blocks: u32) -> Self {
 		let backend = Arc::new(Backend::new_test(keep_blocks, 0));
@@ -116,6 +111,11 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 	/// Alter the genesis storage parameters.
 	pub fn genesis_init_mut(&mut self) -> &mut G {
 		&mut self.genesis_init
+	}
+
+	/// Give access to the underlying backend of these clients
+	pub fn backend(&self) -> Arc<Backend> {
+		self.backend.clone()
 	}
 
 	/// Extend child storage

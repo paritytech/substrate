@@ -247,7 +247,12 @@ mod tests {
 
 	use std::cell::RefCell;
 	use consensus_common::{Environment, Proposer};
-	use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
+	use test_client::{
+		self, runtime::{Extrinsic, Transfer}, AccountKeyring, DefaultTestClientBuilderExt,
+		TestClientBuilderExt,
+	};
+	use sr_api::Core;
+	use client_api::backend::Backend;
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		Transfer {
@@ -293,5 +298,52 @@ mod tests {
 		// block should have some extrinsics although we have some more in the pool.
 		assert_eq!(block.extrinsics().len(), 1);
 		assert_eq!(txpool.ready().count(), 2);
+	}
+
+	#[test]
+	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
+		let (client, backend) = test_client::TestClientBuilder::new().build_with_backend();
+		let client = Arc::new(client);
+		let chain_api = transaction_pool::FullChainApi::new(client.clone());
+		let txpool = Arc::new(TransactionPool::new(Default::default(), chain_api));
+		let genesis_hash = client.info().chain.best_hash;
+		let block_id = BlockId::Hash(genesis_hash);
+
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0)], false)
+		).unwrap();
+
+		let mut proposer_factory = ProposerFactory {
+			client: client.clone(),
+			transaction_pool: txpool.clone(),
+		};
+
+		let mut proposer = proposer_factory.init(
+			&client.header(&block_id).unwrap().unwrap(),
+		).unwrap();
+
+		let deadline = time::Duration::from_secs(9);
+		let proposal = futures::executor::block_on(
+			proposer.propose(Default::default(), Default::default(), deadline, false),
+		).unwrap();
+
+		assert_eq!(proposal.block.extrinsics().len(), 1);
+
+		let api = client.runtime_api();
+		api.execute_block(&block_id, proposal.block).unwrap();
+
+		let state = backend.state_at(block_id).unwrap();
+		let changes_trie_storage = backend.changes_trie_storage();
+
+		let storage_changes = unsafe {
+			api.consume_inner(|a|
+				a.into_storage_changes(&state, changes_trie_storage, genesis_hash)
+			).unwrap()
+		};
+
+		assert_eq!(
+			proposal.storage_changes.transaction_storage_root,
+			storage_changes.transaction_storage_root,
+		);
 	}
 }
