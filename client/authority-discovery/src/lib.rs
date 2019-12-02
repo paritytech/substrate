@@ -457,14 +457,11 @@ fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
 }
 
 fn interval_at(start: Instant, duration: Duration) -> Interval {
-	let stream = futures::stream::unfold((), move |_| {
-		let wait_time = start.saturating_duration_since(Instant::now());
+	let stream = futures::stream::unfold(start, move |next| {
+		let time_until_next =  next.saturating_duration_since(Instant::now());
 
-		futures::future::join(
-			Delay::new(wait_time),
-			Delay::new(duration)
-		).map(|_| Some(((), ())))
-	}).map(drop);
+		Delay::new(time_until_next).map(move |_| Some(((), next + duration)))
+	});
 
 	Box::new(stream)
 }
