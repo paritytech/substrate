@@ -178,6 +178,7 @@ decl_module! {
 				Self::deposit_event(RawEvent::Executed(proposal_hash, ok));
 			} else {
 				let index = Self::proposal_count();
+				// cannot overflow: we will not get to 2^64 proposals in a few hundred years
 				<ProposalCount<I>>::mutate(|i| *i += 1);
 				<Proposals<T, I>>::mutate(|proposals| proposals.push(proposal_hash));
 				<ProposalOf<T, I>>::insert(proposal_hash, *proposal);

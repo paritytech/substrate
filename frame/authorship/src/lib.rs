@@ -238,6 +238,7 @@ impl<T: Trait> Module<T> {
 
 			T::EventHandler::note_uncle(
 				author.clone().unwrap_or_default(),
+				// WARN `uncle` cannot be after `now`
 				now - uncle.number().clone(),
 			);
 			uncles.push(UncleEntryItem::Uncle(hash, author));

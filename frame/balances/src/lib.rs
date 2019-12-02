@@ -290,6 +290,7 @@ impl<Balance: SimpleArithmetic + Copy, BlockNumber: SimpleArithmetic + Copy> Ves
 		let vested_block_count = n.saturating_sub(self.starting_block);
 		// Return amount that is still locked in vesting
 		if let Some(x) = Balance::from(vested_block_count).checked_mul(&self.per_block) {
+			// cannot overflow, a.max(b) will always be >= b
 			self.locked.max(x) - x
 		} else {
 			Zero::zero()
@@ -309,6 +310,7 @@ decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Balances {
 		/// The total units issued in the system.
 		pub TotalIssuance get(fn total_issuance) build(|config: &GenesisConfig<T, I>| {
+			// WARN overflow will be caught at genesis
 			config.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n)
 		}): T::Balance;
 
@@ -459,16 +461,20 @@ decl_module! {
 
 			let current_free = <FreeBalance<T, I>>::get(&who);
 			if new_free > current_free {
+				// cannot overflow ― checked
 				mem::drop(PositiveImbalance::<T, I>::new(new_free - current_free));
 			} else if new_free < current_free {
+				// ditto
 				mem::drop(NegativeImbalance::<T, I>::new(current_free - new_free));
 			}
 			Self::set_free_balance(&who, new_free);
 
 			let current_reserved = <ReservedBalance<T, I>>::get(&who);
 			if new_reserved > current_reserved {
+				// ditto
 				mem::drop(PositiveImbalance::<T, I>::new(new_reserved - current_reserved));
 			} else if new_reserved < current_reserved {
+				// ditto
 				mem::drop(NegativeImbalance::<T, I>::new(current_reserved - new_reserved));
 			}
 			Self::set_reserved_balance(&who, new_reserved);
@@ -661,6 +667,7 @@ mod imbalances {
 		}
 		fn split(self, amount: T::Balance) -> (Self, Self) {
 			let first = self.0.min(amount);
+			// cannot overflow: a.min(b) always <= a
 			let second = self.0 - first;
 
 			mem::forget(self);
@@ -681,8 +688,10 @@ mod imbalances {
 			mem::forget((self, other));
 
 			if a >= b {
+				// cannot overflow ― checked above
 				Ok(Self(a - b))
 			} else {
+				// ditto
 				Err(NegativeImbalance::new(b - a))
 			}
 		}
@@ -712,6 +721,7 @@ mod imbalances {
 		}
 		fn split(self, amount: T::Balance) -> (Self, Self) {
 			let first = self.0.min(amount);
+			// cannot overflow: a.min(b) always <= a
 			let second = self.0 - first;
 
 			mem::forget(self);
@@ -732,8 +742,10 @@ mod imbalances {
 			mem::forget((self, other));
 
 			if a >= b {
+				// cannot overflow: checked
 				Ok(Self(a - b))
 			} else {
+				// ditto
 				Err(PositiveImbalance::new(b - a))
 			}
 		}
@@ -819,6 +831,7 @@ where
 	type NegativeImbalance = NegativeImbalance<T, I>;
 
 	fn total_balance(who: &T::AccountId) -> Self::Balance {
+		// WARN cannot overflow: total balance does not exceed u64
 		Self::free_balance(who) + Self::reserved_balance(who)
 	}
 
@@ -851,6 +864,7 @@ where
 	fn issue(mut amount: Self::Balance) -> Self::NegativeImbalance {
 		<TotalIssuance<T, I>>::mutate(|issued|
 			*issued = issued.checked_add(&amount).unwrap_or_else(|| {
+				// cannot overflow: max_value >= any Self::Balance
 				amount = Self::Balance::max_value() - *issued;
 				Self::Balance::max_value()
 			})
@@ -975,6 +989,7 @@ where
 		let free_slash = cmp::min(free_balance, value);
 
 		Self::set_free_balance(who, free_balance - free_slash);
+		// min always <= each argument
 		let remaining_slash = value - free_slash;
 		// NOTE: `slash()` prefers free balance, but assumes that reserve balance can be drawn
 		// from in extreme circumstances. `can_slash()` should be used prior to `slash()` to avoid having
@@ -983,7 +998,9 @@ where
 		if !remaining_slash.is_zero() {
 			let reserved_balance = Self::reserved_balance(who);
 			let reserved_slash = cmp::min(reserved_balance, remaining_slash);
+			// min always <= each argument
 			Self::set_reserved_balance(who, reserved_balance - reserved_slash);
+			// WARN cannot overflow: min always <= each argument, and total balance <= u64::MAX
 			(NegativeImbalance::new(free_slash + reserved_slash), remaining_slash - reserved_slash)
 		} else {
 			(NegativeImbalance::new(value), Zero::zero())
@@ -997,7 +1014,11 @@ where
 		if Self::total_balance(who).is_zero() {
 			return Err("beneficiary account must pre-exist");
 		}
-		Self::set_free_balance(who, Self::free_balance(who) + value);
+		let free_balance = Self::free_balance(who);
+		// max_value - anything will never overflow
+		ensure!(Self::Balance::max_value() - value >= free_balance, "deposit would overflow");
+		// checked for overflow above
+		Self::set_free_balance(who, free_balance + value);
 		Ok(PositiveImbalance::new(value))
 	}
 
@@ -1005,7 +1026,11 @@ where
 		who: &T::AccountId,
 		value: Self::Balance,
 	) -> Self::PositiveImbalance {
-		let (imbalance, _) = Self::make_free_balance_be(who, Self::free_balance(who) + value);
+		let free_balance = Self::free_balance(who);
+		// max_value - anything will never overflow
+		check_overflow!(Self::Balance::max_value() - value >= free_balance, "deposit would overflow");
+		// checked for overflow above
+		let (imbalance, _) = Self::make_free_balance_be(who, free_balance + value);
 		if let SignedImbalance::Positive(p) = imbalance {
 			p
 		} else {
@@ -1033,8 +1058,10 @@ where
 			)
 		}
 		let imbalance = if original <= balance {
+			// cannot overflow: we just checked that it would not
 			SignedImbalance::Positive(PositiveImbalance::new(balance - original))
 		} else {
+			// ditto
 			SignedImbalance::Negative(NegativeImbalance::new(original - balance))
 		};
 		// If the balance is too low, then the account is reaped.
@@ -1059,6 +1086,12 @@ where
 	}
 }
 
+macro_rules! check_overflow {
+	(s: $ty, v1: $expr, v2: $expr) => {
+		ensure!($s::Balance::max_value() - $v1 >= $v2, "new amount would overflow")
+	}
+}
+
 impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 where
 	T::Balance: MaybeSerializeDeserialize + Debug
@@ -1077,12 +1110,15 @@ where
 
 	fn reserve(who: &T::AccountId, value: Self::Balance) -> result::Result<(), &'static str> {
 		let b = Self::free_balance(who);
-		if b < value {
-			return Err("not enough free funds")
-		}
+		ensure!(b < value, "not enough free funds");
+		// checked above
 		let new_balance = b - value;
 		Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), new_balance)?;
-		Self::set_reserved_balance(who, Self::reserved_balance(who) + value);
+
+		let reserved = Self::reserved_balance(who);
+		check_overflow!(Self, reserved, value);
+		// checked above
+		Self::set_reserved_balance(who, reserved + value);
 		Self::set_free_balance(who, new_balance);
 		Ok(())
 	}
@@ -1101,8 +1137,9 @@ where
 	) -> (Self::NegativeImbalance, Self::Balance) {
 		let b = Self::reserved_balance(who);
 		let slash = cmp::min(b, value);
-		// underflow should never happen, but it if does, there's nothing to be done here.
+		// cannot underflow
 		Self::set_reserved_balance(who, b - slash);
+		// cannot underflow
 		(NegativeImbalance::new(slash), value - slash)
 	}
 

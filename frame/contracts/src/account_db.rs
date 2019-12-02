@@ -218,9 +218,13 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 
 				for (k, v) in changed.storage.into_iter() {
 					if let Some(value) = child::get_raw(&new_info.trie_id[..], &blake2_256(&k)) {
+                        assert!(u32::MAX >= value.len());
+						assert!(new_info.storage_size >= value.len() as u32);
 						new_info.storage_size -= value.len() as u32;
 					}
 					if let Some(value) = v {
+                        assert!(u32::MAX >= value.len());
+						assert!(u32::MAX - new_info.storage_size >= value.len() as u32);
 						new_info.storage_size += value.len() as u32;
 						child::put_raw(&new_info.trie_id[..], &blake2_256(&k), &value[..]);
 					} else {

@@ -408,6 +408,7 @@ decl_module! {
 				.map_err(|_| "proposer's balance too low")?;
 
 			let index = Self::public_prop_count();
+			ensure!(PropIndex::max_value() - 1 >= index, "would overflow u32");
 			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (value, &[&who][..]));
 
@@ -536,12 +537,12 @@ decl_module! {
 				"next external proposal not simple majority"
 			);
 			ensure!(proposal_hash == e_proposal_hash, "invalid hash");
-
-			<NextExternal<T>>::kill();
-			let now = <system::Module<T>>::block_number();
 			// We don't consider it an error if `vote_period` is too low, like `emergency_propose`.
-			let period = voting_period.max(T::EmergencyVotingPeriod::get());
-			Self::inject_referendum(now + period, proposal_hash, threshold, delay).map(|_| ())?;
+			let period: u64 = voting_period.max(T::EmergencyVotingPeriod::get());
+			let now = <system::Module<T>>::block_number();
+			ensure!(u64::max_value() - now >= period(), "referendum voting period would overflow");
+			<NextExternal<T>>::kill();
+			Self::inject_referendum(now + period, proposal_hash, threshold, delay).map(drop)?;
 		}
 
 		/// Veto and blacklist the external proposal hash.
@@ -562,6 +563,8 @@ decl_module! {
 				.err().ok_or("identity may not veto a proposal twice")?;
 
 			existing_vetoers.insert(insert_position, who.clone());
+			// WARN: safe: will not overflow for a few hundred years, assuming `CooloffPeriod` is
+			// reasonable.
 			let until = <system::Module<T>>::block_number() + T::CooloffPeriod::get();
 			<Blacklist<T>>::insert(&proposal_hash, (until, existing_vetoers));
 
@@ -668,7 +671,7 @@ decl_module! {
 			let (_, conviction) = <Delegations<T>>::take(&who);
 			// Indefinite lock is reduced to the maximum voting lock that could be possible.
 			let now = <system::Module<T>>::block_number();
-			let locked_until = now + T::EnactmentPeriod::get() * conviction.lock_periods().into();
+			let locked_until = now.saturating_add(T::EnactmentPeriod::get().saturating_mul(conviction.lock_periods().into()));
 			T::Currency::set_lock(
 				DEMOCRACY_ID,
 				&who,
@@ -734,7 +737,7 @@ decl_module! {
 
 			if let Some((_, old, deposit, then)) = <Preimages<T>>::get(&proposal_hash) {
 				let now = <system::Module<T>>::block_number();
-				if now >= then + T::EnactmentPeriod::get() + T::VotingPeriod::get() {
+				if now >= then.saturating_add(T::EnactmentPeriod::get().saturating_add(T::VotingPeriod::get())) {
 					// allowed to claim the deposit.
 					let _ = T::Currency::repatriate_reserved(&old, &who, deposit);
 					<Preimages<T>>::remove(&proposal_hash);
@@ -751,6 +754,7 @@ impl<T: Trait> Module<T> {
 	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal
 	/// index.
 	pub fn locked_for(proposal: PropIndex) -> Option<BalanceOf<T>> {
+		// ERROR what is the best solution here?
 		Self::deposit_of(proposal).map(|(d, l)| d * (l.len() as u32).into())
 	}
 
@@ -798,6 +802,7 @@ impl<T: Trait> Module<T> {
 						(Zero::zero(), votes, turnout)
 					}
 				}).fold(
+				    // ERROR what to do if there is overflow?
 					(Zero::zero(), Zero::zero(), Zero::zero()),
 					|(a, b, c), (d, e, f)| (a + d, b + e, c + f)
 				);
@@ -820,8 +825,10 @@ impl<T: Trait> Module<T> {
 					MAX_RECURSION_LIMIT
 				);
 				if aye {
+					// ERROR overflow
 					(approve_acc + votes, against_acc, turnout_acc + turnout)
 				} else {
+					// ERROR overflow
 					(approve_acc, against_acc + votes, turnout_acc + turnout)
 				}
 			}
@@ -848,8 +855,10 @@ impl<T: Trait> Module<T> {
 						ref_index,
 						delegator,
 						conviction,
+						// SAFE: we checked that recursion_limit > 0 earlier
 						recursion_limit - 1
 					);
+					// ERROR what if this overflows?
 					(votes_acc + votes + del_votes, turnout_acc + turnout + del_turnout)
 				}
 			)
@@ -869,6 +878,7 @@ impl<T: Trait> Module<T> {
 		delay: T::BlockNumber
 	) -> result::Result<ReferendumIndex, &'static str> {
 		<Module<T>>::inject_referendum(
+			// WARN could overflow if chain parameters are bad
 			<system::Module<T>>::block_number() + T::VotingPeriod::get(),
 			proposal_hash,
 			threshold,
@@ -910,6 +920,7 @@ impl<T: Trait> Module<T> {
 			Err("Cannot inject a referendum that ends earlier than preceeding referendum")?
 		}
 
+		// ERROR: we can hit 2^32 referenda.  Should change to a u64.
 		ReferendumCount::put(ref_index + 1);
 		let item = ReferendumInfo { end, proposal_hash, threshold, delay };
 		<ReferendumInfoOf<T>>::insert(ref_index, item);
@@ -963,6 +974,7 @@ impl<T: Trait> Module<T> {
 			LastTabledWasExternal::put(true);
 			Self::deposit_event(RawEvent::ExternalTabled);
 			Self::inject_referendum(
+				// WARN safe for reasonable parameters
 				now + T::VotingPeriod::get(),
 				proposal,
 				threshold,
@@ -992,6 +1004,7 @@ impl<T: Trait> Module<T> {
 				}
 				Self::deposit_event(RawEvent::Tabled(prop_index, deposit, depositors));
 				Self::inject_referendum(
+					// SAFE for reasonable parameters
 					now + T::VotingPeriod::get(),
 					proposal,
 					VoteThreshold::SuperMajorityApprove,
@@ -1025,6 +1038,7 @@ impl<T: Trait> Module<T> {
 		{
 			// now plus: the base lock period multiplied by the number of periods this voter
 			// offered to lock should they win...
+			// ERROR what if this overflows?
 			let locked_until = now + T::EnactmentPeriod::get() * conviction.lock_periods().into();
 			// ...extend their bondage until at least then.
 			T::Currency::extend_lock(
@@ -1043,6 +1057,7 @@ impl<T: Trait> Module<T> {
 				let _ = Self::enact_proposal(info.proposal_hash, index);
 			} else {
 				<DispatchQueue<T>>::append_or_insert(
+					// ERROR what if this overflows?
 					now + info.delay,
 					&[Some((info.proposal_hash, index))][..]
 				);
@@ -1050,6 +1065,7 @@ impl<T: Trait> Module<T> {
 		} else {
 			Self::deposit_event(RawEvent::NotPassed(index));
 		}
+		// ERROR what if this overflows?
 		NextTally::put(index + 1);
 
 		Ok(())

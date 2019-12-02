@@ -515,6 +515,7 @@ fn compute_randomness(
 	rho: impl Iterator<Item=[u8; VRF_OUTPUT_LENGTH]>,
 	rho_size_hint: Option<usize>,
 ) -> [u8; RANDOMNESS_LENGTH] {
+	// WARN can this overflow?
 	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * VRF_OUTPUT_LENGTH);
 	s.extend_from_slice(&last_epoch_randomness);
 	s.extend_from_slice(&epoch_index.to_le_bytes());

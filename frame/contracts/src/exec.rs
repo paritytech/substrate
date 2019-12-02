@@ -873,6 +873,7 @@ mod tests {
 			// Generate code hashes as monotonically increasing values.
 			let code_hash = <Test as system::Trait>::Hash::from_low_u64_be(self.counter);
 
+			// cannot overflow: will not overflow for a few hundred years
 			self.counter += 1;
 			self.map.insert(code_hash, MockExecutable::new(f));
 			code_hash

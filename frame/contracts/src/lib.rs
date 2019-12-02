@@ -815,10 +815,11 @@ impl<T: Trait> Module<T> {
 			return Err("Tombstones don't match");
 		}
 
-		origin_contract.storage_size -= key_values_taken.iter()
+		let delta = key_values_taken.iter()
 			.map(|(_, value)| value.len() as u32)
 			.sum::<u32>();
-
+		assert!(u32::MAX - origin_contract.storage_size >= delta);
+		origin_contract.storage_size -= delta;
 		<ContractInfoOf<T>>::remove(&origin);
 		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(RawAliveContractInfo {
 			trie_id: origin_contract.trie_id,

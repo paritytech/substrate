@@ -179,7 +179,9 @@ decl_module! {
 			ensure!(origin_balance >= amount, "origin account balance must be greater than or equal to the transfer amount");
 
 			Self::deposit_event(RawEvent::Transferred(id, origin, target.clone(), amount));
+			// we check above that this will not overflow
 			<Balances<T>>::insert(origin_account, origin_balance - amount);
+			// sum of all issuances cannot exceed u64, so this will not overflow WARN
 			<Balances<T>>::mutate((id, target), |balance| *balance += amount);
 		}
 
@@ -189,6 +191,7 @@ decl_module! {
 			let balance = <Balances<T>>::take((id, &origin));
 			ensure!(!balance.is_zero(), "origin balance should be non-zero");
 
+			// the total supply must not be less than the balance WARN
 			<TotalSupply<T>>::mutate(id, |total_supply| *total_supply -= balance);
 			Self::deposit_event(RawEvent::Destroyed(id, origin, balance));
 		}
