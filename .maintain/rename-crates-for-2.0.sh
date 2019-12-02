@@ -22,7 +22,6 @@ function rename() {
     rename_gitlabci $old $new
     # and it appears, we have the same syntax in rust files
     rust_rename $old $new
-
     # but generally we have the snail case syntax in rust files
     old=$(echo $old | sed s/-/_/g );
     new=$(echo $new | sed s/-/_/g );
@@ -103,7 +102,6 @@ TO_RENAME=(
     "substrate-state-db sc-state-db"
     "substrate-telemetry sc-telemetry"
     "substrate-tracing sc-tracing"
-
 );
 
 for rule in "${TO_RENAME[@]}"
