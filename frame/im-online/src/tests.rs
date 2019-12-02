@@ -27,7 +27,7 @@ use primitives::offchain::{
 	testing::{TestOffchainExt, TestTransactionPoolExt},
 };
 use support::{dispatch, assert_noop};
-use sr_primitives::testing::UintAuthorityId;
+use sp_runtime::testing::UintAuthorityId;
 
 #[test]
 fn test_unresponsiveness_slash_fraction() {

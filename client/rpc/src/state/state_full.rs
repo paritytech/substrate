@@ -38,12 +38,12 @@ use primitives::{
 };
 use runtime_version::RuntimeVersion;
 use state_machine::ExecutionStrategy;
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header, NumberFor, ProvideRuntimeApi, SaturatedConversion},
 };
 
-use sr_api::Metadata;
+use sp_api::Metadata;
 
 use super::{StateBackend, error::{FutureResult, Error, Result}, client_err};
 

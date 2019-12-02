@@ -40,8 +40,8 @@
 //!
 //! If you're interested in hacking on this module, it is useful to understand the interaction with
 //! `substrate/primitives/inherents/src/lib.rs` and, specifically, the required implementation of
-//! [`ProvideInherent`](../substrate_inherents/trait.ProvideInherent.html) and
-//! [`ProvideInherentData`](../substrate_inherents/trait.ProvideInherentData.html) to create and check inherents.
+//! [`ProvideInherent`](../sp_inherents/trait.ProvideInherent.html) and
+//! [`ProvideInherentData`](../sp_inherents/trait.ProvideInherentData.html) to create and check inherents.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -53,13 +53,13 @@ use support::{
 	decl_storage, decl_module, Parameter, traits::{Get, FindAuthor},
 	ConsensusEngineId,
 };
-use sr_primitives::{
+use sp_runtime::{
 	RuntimeAppPublic,
 	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
 };
 use sp_timestamp::OnTimestampSet;
 use inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
-use substrate_consensus_aura_primitives::{
+use sp_consensus_aura::{
 	AURA_ENGINE_ID, ConsensusLog, AuthorityIndex,
 	inherents::{INHERENT_IDENTIFIER, AuraInherentData},
 };
@@ -109,7 +109,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = T::AuthorityId;
 }
 

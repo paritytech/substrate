@@ -71,7 +71,7 @@ mod tests {
 
 	use primitives::H256;
 	use support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
-	use sr_primitives::{
+	use sp_runtime::{
 		traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill,
 	};
 

@@ -20,7 +20,7 @@
 
 #![cfg(test)]
 
-use sr_primitives::{
+use sp_runtime::{
 	Perbill,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},

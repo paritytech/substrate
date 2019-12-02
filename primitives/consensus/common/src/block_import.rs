@@ -16,8 +16,8 @@
 
 //! Block import helpers.
 
-use sr_primitives::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
-use sr_primitives::Justification;
+use sp_runtime::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
+use sp_runtime::Justification;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;

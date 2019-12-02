@@ -22,7 +22,7 @@ use std::{
 };
 use serde::Serialize;
 use crate::watcher;
-use sr_primitives::traits;
+use sp_runtime::traits;
 use log::{debug, trace, warn};
 
 /// Extrinsic pool default listener.

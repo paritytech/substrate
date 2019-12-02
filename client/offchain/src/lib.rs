@@ -37,12 +37,12 @@ use std::{fmt, marker::PhantomData, sync::Arc};
 
 use parking_lot::Mutex;
 use threadpool::ThreadPool;
-use sr_api::ApiExt;
+use sp_api::ApiExt;
 use futures::future::Future;
 use log::{debug, warn};
 use network::NetworkStateInfo;
 use primitives::{offchain::{self, OffchainStorage}, ExecutionContext};
-use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
+use sp_runtime::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
 
 mod api;
 
@@ -169,7 +169,7 @@ mod tests {
 		fn submit_at(
 			&self,
 			at: &BlockId<Block>,
-			extrinsic: <Block as sr_primitives::traits::Block>::Extrinsic,
+			extrinsic: <Block as sp_runtime::traits::Block>::Extrinsic,
 		) -> Result<(), ()> {
 			futures::executor::block_on(self.0.submit_one(&at, extrinsic))
 				.map(|_| ())

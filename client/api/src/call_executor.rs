@@ -18,7 +18,7 @@
 
 use std::{cmp::Ord, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
 };
 use state_machine::{
@@ -30,7 +30,7 @@ use externalities::Extensions;
 use hash_db::Hasher;
 use primitives::{Blake2Hasher, NativeOrEncoded};
 
-use sr_api::{ProofRecorder, InitializeBlock};
+use sp_api::{ProofRecorder, InitializeBlock};
 use sp_blockchain;
 
 /// Method call executor.

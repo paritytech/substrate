@@ -19,8 +19,8 @@
 #![cfg(test)]
 
 use crate::{Trait, Module, GenesisConfig};
-use substrate_consensus_aura_primitives::ed25519::AuthorityId;
-use sr_primitives::{
+use sp_consensus_aura::ed25519::AuthorityId;
+use sp_runtime::{
 	traits::IdentityLookup, Perbill,
 	testing::{Header, UintAuthorityId},
 };
@@ -50,7 +50,7 @@ impl system::Trait for Test {
 	type BlockNumber = u64;
 	type Call = ();
 	type Hash = H256;
-	type Hashing = ::sr_primitives::traits::BlakeTwo256;
+	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;

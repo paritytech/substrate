@@ -20,7 +20,7 @@
 use rstd::vec::Vec;
 
 use codec::{Encode, Decode};
-use sr_primitives::Perbill;
+use sp_runtime::Perbill;
 
 use crate::SessionIndex;
 
@@ -135,7 +135,7 @@ impl<Reporter, Offender> OnOffenceHandler<Reporter, Offender> for () {
 }
 
 /// A details about an offending authority for a particular kind of offence.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, sr_primitives::RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub struct OffenceDetails<Reporter, Offender> {
 	/// The offending authority id
 	pub offender: Offender,

@@ -21,7 +21,7 @@
 use rstd::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode};
 use primitives::u32_trait::Value as U32;
-use sr_primitives::{
+use sp_runtime::{
 	ConsensusEngineId,
 	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
 };

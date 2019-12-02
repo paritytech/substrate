@@ -265,7 +265,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 /// # Example
 ///
 /// ```
-/// substrate_executor::native_executor_instance!(
+/// sc_executor::native_executor_instance!(
 ///     pub MyExecutor,
 ///     test_runtime::api::dispatch,
 ///     test_runtime::native_version,
@@ -287,7 +287,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 ///     }
 /// }
 ///
-/// substrate_executor::native_executor_instance!(
+/// sc_executor::native_executor_instance!(
 ///     pub MyExecutor,
 ///     test_runtime::api::dispatch,
 ///     test_runtime::native_version,
