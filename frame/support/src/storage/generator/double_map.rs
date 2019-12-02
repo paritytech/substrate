@@ -17,7 +17,7 @@
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
 use codec::{Ref, FullCodec, FullEncode, Encode, EncodeLike, EncodeAppend};
-use crate::{storage::{self, unhashed}, hash::StorageHasher};
+use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}, traits::Len};
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
 ///
@@ -29,7 +29,7 @@ use crate::{storage::{self, unhashed}, hash::StorageHasher};
 ///
 /// Thus value for (key1, key2) is stored at:
 /// ```nocompile
-/// Hasher1(key1_prefix ++ key1) ++ Hasher2(key2)
+/// Twox128(module_prefix) ++ Twox128(storage_prefix) ++ Hasher1(encode(key1)) ++ Hasher2(encode(key2))
 /// ```
 ///
 /// # Warning
@@ -49,8 +49,11 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// Hasher for the second key.
 	type Hasher2: StorageHasher;
 
-	/// Get the prefix for first key.
-	fn key1_prefix() -> &'static [u8];
+	/// Module prefix. Used for generating final key.
+	fn module_prefix() -> &'static [u8];
+
+	/// Storage prefix. Used for generating final key.
+	fn storage_prefix() -> &'static [u8];
 
 	/// Convert an optional value retrieved from storage to the type queried.
 	fn from_optional_value_to_query(v: Option<V>) -> Self::Query;
@@ -59,13 +62,23 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	fn from_query_to_optional_value(v: Self::Query) -> Option<V>;
 
 	/// Generate the first part of the key used in top storage.
-	fn storage_double_map_final_key1<KArg1>(k1: KArg1) -> <Self::Hasher1 as StorageHasher>::Output
+	fn storage_double_map_final_key1<KArg1>(k1: KArg1) -> Vec<u8>
 	where
 		KArg1: EncodeLike<K1>,
 	{
-		let mut final_key1 = Self::key1_prefix().to_vec();
-		k1.encode_to(&mut final_key1);
-		Self::Hasher1::hash(&final_key1)
+		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
+		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+		let key_hashed = k1.borrow().using_encoded(Self::Hasher1::hash);
+
+		let mut final_key = Vec::with_capacity(
+			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.as_ref().len()
+		);
+
+		final_key.extend_from_slice(&module_prefix_hashed[..]);
+		final_key.extend_from_slice(&storage_prefix_hashed[..]);
+		final_key.extend_from_slice(key_hashed.as_ref());
+
+		final_key
 	}
 
 	/// Generate the full key used in top storage.
@@ -74,7 +87,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 	{
-		let mut final_key = Self::storage_double_map_final_key1(k1).as_ref().to_vec();
+		let mut final_key = Self::storage_double_map_final_key1(k1);
 		final_key.extend_from_slice(k2.using_encoded(Self::Hasher2::hash).as_ref());
 		final_key
 	}
@@ -122,6 +135,29 @@ where
 
 		let value = unhashed::take(&final_key);
 		G::from_optional_value_to_query(value)
+	}
+
+	fn swap<XKArg1, XKArg2, YKArg1, YKArg2>(x_k1: XKArg1, x_k2: XKArg2, y_k1: YKArg1, y_k2: YKArg2)
+	where
+		XKArg1: EncodeLike<K1>,
+		XKArg2: EncodeLike<K2>,
+		YKArg1: EncodeLike<K1>,
+		YKArg2: EncodeLike<K2>
+	{
+		let final_x_key = Self::storage_double_map_final_key(x_k1, x_k2);
+		let final_y_key = Self::storage_double_map_final_key(y_k1, y_k2);
+
+		let v1 = unhashed::get_raw(&final_x_key);
+		if let Some(val) = unhashed::get_raw(&final_y_key) {
+			unhashed::put_raw(&final_x_key, &val);
+		} else {
+			unhashed::kill(&final_x_key)
+		}
+		if let Some(val) = v1 {
+			unhashed::put_raw(&final_y_key, &val);
+		} else {
+			unhashed::kill(&final_y_key)
+		}
 	}
 
 	fn insert<KArg1, KArg2, VArg>(k1: KArg1, k2: KArg2, val: VArg)
@@ -211,5 +247,22 @@ where
 	{
 		Self::append(Ref::from(&k1), Ref::from(&k2), items.clone())
 			.unwrap_or_else(|_| Self::insert(k1, k2, items));
+	}
+
+	fn decode_len<KArg1, KArg2>(key1: KArg1, key2: KArg2) -> Result<usize, &'static str>
+		where KArg1: EncodeLike<K1>,
+		      KArg2: EncodeLike<K2>,
+		      V: codec::DecodeLength + Len,
+	{
+		let final_key = Self::storage_double_map_final_key(key1, key2);
+		if let Some(v) = unhashed::get_raw(&final_key) {
+			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
+		} else {
+			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
+				.map(|v| v.len())
+				.unwrap_or(0);
+
+			Ok(len)
+		}
 	}
 }

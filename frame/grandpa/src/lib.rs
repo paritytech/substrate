@@ -28,15 +28,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // re-export since this is necessary for `impl_apis` in runtime.
-pub use substrate_finality_grandpa_primitives as fg_primitives;
+pub use sp_finality_granpda as fg_primitives;
 
 use rstd::prelude::*;
 use codec::{self as codec, Encode, Decode, Error};
 use support::{decl_event, decl_storage, decl_module, dispatch::Result, storage};
-use sr_primitives::{
+use sp_runtime::{
 	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
 };
-use sr_staking_primitives::{
+use sp_staking::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
@@ -400,7 +400,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 

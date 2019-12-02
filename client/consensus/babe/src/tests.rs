@@ -31,7 +31,7 @@ use consensus_common::import_queue::{
 use network::test::*;
 use network::test::{Block as TestBlock, PeersClient};
 use network::config::BoxFinalityProofRequestBuilder;
-use sr_primitives::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
+use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
 use client_api::BlockchainEvents;
@@ -41,7 +41,7 @@ use std::{time::Duration, cell::RefCell};
 
 type Item = DigestItem<Hash>;
 
-type Error = client::error::Error;
+type Error = sp_blockchain::Error;
 
 type TestClient = client::Client<
 	test_client::Backend,
@@ -404,6 +404,7 @@ fn run_one_test(
 			force_authoring: false,
 			babe_link: data.link.clone(),
 			keystore,
+			can_author_with: consensus_common::AlwaysCanAuthor,
 		}).expect("Starts babe"));
 	}
 
@@ -539,7 +540,7 @@ fn propose_and_import_block(
 		parent_pre_digest.slot_number() + 1
 	});
 
-	let pre_digest = sr_primitives::generic::Digest {
+	let pre_digest = sp_runtime::generic::Digest {
 		logs: vec![
 			Item::babe_pre_digest(
 				BabePreDigest::Secondary {
@@ -579,6 +580,7 @@ fn propose_and_import_block(
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		},
 		Default::default(),
 	).unwrap();

@@ -21,10 +21,12 @@
 use rstd::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode};
 use primitives::u32_trait::Value as U32;
-use sr_primitives::{
+use sp_runtime::{
 	ConsensusEngineId,
 	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
 };
+
+use crate::dispatch::Parameter;
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
@@ -600,6 +602,29 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	);
 }
 
+/// A currency whose accounts can have balances which vest over time.
+pub trait VestingCurrency<AccountId>: Currency<AccountId> {
+	/// The quantity used to denote time; usually just a `BlockNumber`.
+	type Moment;
+
+	/// Get the amount that is currently being vested and cannot be transferred out of this account.
+	fn vesting_balance(who: &AccountId) -> Self::Balance;
+
+	/// Adds a vesting schedule to a given account.
+	///
+	/// If there already exists a vesting schedule for the given account, an `Err` is returned
+	/// and nothing is updated.
+	fn add_vesting_schedule(
+		who: &AccountId,
+		locked: Self::Balance,
+		per_block: Self::Balance,
+		starting_block: Self::Moment,
+	) -> result::Result<(), &'static str>;
+
+	/// Remove a vesting schedule for a given account.
+	fn remove_vesting_schedule(who: &AccountId);
+}
+
 bitmask! {
 	/// Reasons for moving funds out of an account.
 	#[derive(Encode, Decode)]
@@ -622,7 +647,7 @@ bitmask! {
 }
 
 pub trait Time {
-	type Moment: SimpleArithmetic + FullCodec + Clone + Default + Copy;
+	type Moment: SimpleArithmetic + Parameter + Default + Copy;
 
 	fn now() -> Self::Moment;
 }

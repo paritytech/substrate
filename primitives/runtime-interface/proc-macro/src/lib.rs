@@ -101,7 +101,7 @@ mod utils;
 ///             .expect("`set_or_clear` called outside of an Externalities-provided environment.")
 ///     }
 ///
-///     /// This type implements the `HostFunctions` trait (from `substrate-wasm-interface`) and
+///     /// This type implements the `HostFunctions` trait (from `sp-wasm-interface`) and
 ///     /// provides the host implementation for the wasm side. The host implementation converts the
 ///     /// arguments from wasm to native and calls the corresponding native function.
 ///     ///
@@ -132,7 +132,7 @@ mod utils;
 ///         }
 ///     }
 ///
-///     /// The type is actually `ExchangeableFunction` (from `substrate-runtime-interface`).
+///     /// The type is actually `ExchangeableFunction` (from `sp-runtime-interface`).
 ///     ///
 ///     /// This can be used to replace the implementation of the `call_some_complex_code` function.
 ///     /// Instead of calling into the host, the callee will automatically call the other
@@ -161,7 +161,7 @@ mod utils;
 /// # Argument types
 ///
 /// The macro supports any kind of argument type, as long as it implements `RIType` and the required
-/// `FromFFIValue`/`IntoFFIValue` from `substrate-runtime-interface`. The macro will convert each
+/// `FromFFIValue`/`IntoFFIValue` from `sp-runtime-interface`. The macro will convert each
 /// argument to the corresponding FFI representation and will call into the host using this FFI
 /// representation. On the host each argument is converted back to the native representation and
 /// the native implementation is called. Any return value is handled in the same way.
@@ -174,7 +174,7 @@ mod utils;
 ///
 /// 1. The generated functions are not callable from the native side.
 /// 2. The trait as shown above is not implemented for `Externalities` and is instead implemented
-///    for `FunctionExecutor` (from `substrate-wasm-interface`).
+///    for `FunctionExecutor` (from `sp-wasm-interface`).
 #[proc_macro_attribute]
 pub fn runtime_interface(
 	attrs: proc_macro::TokenStream,

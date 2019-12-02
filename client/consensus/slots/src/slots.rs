@@ -71,6 +71,8 @@ pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
 pub struct SlotInfo {
 	/// The slot number.
 	pub number: u64,
+	/// The last slot number produced.
+	pub last_number: u64,
 	/// Current timestamp.
 	pub timestamp: u64,
 	/// The instant at which the slot ends.
@@ -79,18 +81,6 @@ pub struct SlotInfo {
 	pub inherent_data: InherentData,
 	/// Slot duration.
 	pub duration: u64,
-}
-
-impl SlotInfo {
-	/// Yields the remaining duration in the slot.
-	pub fn remaining_duration(&self) -> Duration {
-		let now = Instant::now();
-		if now < self.ends_at {
-			self.ends_at.duration_since(now)
-		} else {
-			Duration::from_millis(0)
-		}
-	}
 }
 
 /// A stream that returns every time there is a new slot.
@@ -160,11 +150,13 @@ impl<SC: SlotCompatible + Unpin> Stream for Slots<SC> {
 
 			// never yield the same slot twice.
 			if slot_num > self.last_slot {
+				let last_slot = self.last_slot;
 				self.last_slot = slot_num;
 
 				break Poll::Ready(Some(Ok(SlotInfo {
 					number: slot_num,
 					duration: self.slot_duration,
+					last_number: last_slot,
 					timestamp,
 					ends_at,
 					inherent_data,

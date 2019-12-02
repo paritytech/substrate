@@ -94,22 +94,18 @@ mod tests {
 
 		let t = GenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
-			let prefix = NumberMap::prefix();
-
 			// start with a map of u32 -> u32.
 			for i in 0u32..100u32 {
-				let final_key = <Format as KeyFormat>::storage_linked_map_final_key(
-					prefix, &i,
-				);
+				let final_key = <Format as KeyFormat>::storage_linked_map_final_key(&i);
 
-				let linkage = linked_map::new_head_linkage::<_, u32, u32, Format>(&i, prefix);
+				let linkage = linked_map::new_head_linkage::<_, u32, u32, Format>(&i);
 				unhashed::put(final_key.as_ref(), &(&i, linkage));
 			}
 
 			let head = linked_map::read_head::<u32, Format>().unwrap();
 
 			assert_eq!(
-				Enumerator::<u32, u32, Format>::from_head(head, prefix).collect::<Vec<_>>(),
+				Enumerator::<u32, u32, Format>::from_head(head).collect::<Vec<_>>(),
 				(0..100).rev().map(|x| (x, x)).collect::<Vec<_>>(),
 			);
 

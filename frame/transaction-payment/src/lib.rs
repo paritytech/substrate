@@ -38,7 +38,7 @@ use support::{
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason},
 	weights::{Weight, DispatchInfo, GetDispatchInfo},
 };
-use sr_primitives::{
+use sp_runtime::{
 	Fixed64,
 	transaction_validity::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
@@ -120,7 +120,7 @@ impl<T: Trait> Module<T> {
 		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
 
 		let partial_fee = <ChargeTransactionPayment<T>>::compute_fee(len, dispatch_info, 0u32.into());
-		let DispatchInfo { weight, class } = dispatch_info;
+		let DispatchInfo { weight, class, .. } = dispatch_info;
 
 		RuntimeDispatchInfo { weight, class, partial_fee }
 	}
@@ -154,28 +154,28 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	where
 		BalanceOf<T>: Sync + Send,
 	{
-		let len_fee = if info.pay_length_fee() {
+		if info.pays_fee {
 			let len = <BalanceOf<T>>::from(len);
 			let base = T::TransactionBaseFee::get();
 			let per_byte = T::TransactionByteFee::get();
-			base.saturating_add(per_byte.saturating_mul(len))
+			let len_fee = base.saturating_add(per_byte.saturating_mul(len));
+
+			let weight_fee = {
+				// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
+				// maximum of its data type, which is not desired.
+				let capped_weight = info.weight.min(<T as system::Trait>::MaximumBlockWeight::get());
+				T::WeightToFee::convert(capped_weight)
+			};
+
+			// everything except for tip
+			let basic_fee = len_fee.saturating_add(weight_fee);
+			let fee_update = NextFeeMultiplier::get();
+			let adjusted_fee = fee_update.saturated_multiply_accumulate(basic_fee);
+
+			adjusted_fee.saturating_add(tip)
 		} else {
-			Zero::zero()
-		};
-
-		let weight_fee = {
-			// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
-			// maximum of its data type, which is not desired.
-			let capped_weight = info.weight.min(<T as system::Trait>::MaximumBlockWeight::get());
-			T::WeightToFee::convert(capped_weight)
-		};
-
-		// everything except for tip
-		let basic_fee = len_fee.saturating_add(weight_fee);
-		let fee_update = NextFeeMultiplier::get();
-		let adjusted_fee = fee_update.saturated_multiply_accumulate(basic_fee);
-
-		adjusted_fee.saturating_add(tip)
+			tip
+		}
 	}
 }
 
@@ -242,7 +242,7 @@ mod tests {
 		weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
 	};
 	use primitives::H256;
-	use sr_primitives::{
+	use sp_runtime::{
 		Perbill,
 		testing::{Header, TestXt},
 		traits::{BlakeTwo256, IdentityLookup, Extrinsic},
@@ -269,7 +269,7 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
@@ -400,7 +400,7 @@ mod tests {
 
 	/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 	pub fn info_from_weight(w: Weight) -> DispatchInfo {
-		DispatchInfo { weight: w, ..Default::default() }
+		DispatchInfo { weight: w, pays_fee: true, ..Default::default() }
 	}
 
 	#[test]
@@ -461,12 +461,14 @@ mod tests {
 			// 1 ain't have a penny.
 			assert_eq!(Balances::free_balance(&1), 0);
 
+			let len = 100;
+
 			// like a FreeOperational
 			let operational_transaction = DispatchInfo {
 				weight: 0,
-				class: DispatchClass::Operational
+				class: DispatchClass::Operational,
+				pays_fee: false,
 			};
-			let len = 100;
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(0)
 					.validate(&1, CALL, operational_transaction , len)
@@ -476,7 +478,8 @@ mod tests {
 			// like a FreeNormal
 			let free_transaction = DispatchInfo {
 				weight: 0,
-				class: DispatchClass::Normal
+				class: DispatchClass::Normal,
+				pays_fee: true,
 			};
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(0)
@@ -540,5 +543,4 @@ mod tests {
 		});
 	}
 }
-
 

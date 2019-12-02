@@ -25,9 +25,9 @@ pub use frame_metadata::{
 };
 pub use crate::weights::{
 	SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch,
-	TransactionPriority, Weight, WeighBlock,
+	TransactionPriority, Weight, WeighBlock, PaysFee,
 };
-pub use sr_primitives::{
+pub use sp_runtime::{
 	traits::{Dispatchable, DispatchResult, ModuleDispatchError},
 	DispatchError,
 };
@@ -48,6 +48,9 @@ pub trait Callable<T> {
 // https://github.com/rust-lang/rust/issues/51331
 pub type CallableCallFor<A, T> = <A as Callable<T>>::Call;
 
+/// A type that can be used as a parameter in a dispatchable function.
+///
+/// When using `decl_module` all arguments for call functions must implement this trait.
 pub trait Parameter: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 
@@ -199,12 +202,12 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// The following reserved functions also take the block number (with type `T::BlockNumber`) as an optional input:
 ///
 /// * `on_initialize`: Executes at the beginning of a block. Using this function will
-/// implement the [`OnInitialize`](../sr_primitives/traits/trait.OnInitialize.html) trait.
+/// implement the [`OnInitialize`](../sp_runtime/traits/trait.OnInitialize.html) trait.
 /// * `on_finalize`: Executes at the end of a block. Using this function will
-/// implement the [`OnFinalize`](../sr_primitives/traits/trait.OnFinalize.html) trait.
+/// implement the [`OnFinalize`](../sp_runtime/traits/trait.OnFinalize.html) trait.
 /// * `offchain_worker`: Executes at the beginning of a block and produces extrinsics for a future block
 /// upon completion. Using this function will implement the
-/// [`OffchainWorker`](../sr_primitives/traits/trait.OffchainWorker.html) trait.
+/// [`OffchainWorker`](../sp_runtime/traits/trait.OffchainWorker.html) trait.
 #[macro_export]
 macro_rules! decl_module {
 	// Entry point #1.
@@ -858,14 +861,14 @@ macro_rules! decl_module {
 		fn on_initialize() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::sr_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
+			$crate::sp_runtime::traits::OnInitialize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize(_block_number_not_used: $trait_instance::BlockNumber) {
 				use $crate::rstd::if_std;
 				if_std! {
 					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::INFO, "on_initialize");
+					let span = tracing::span!(tracing::Level::DEBUG, "on_initialize");
 					let _enter = span.enter();
 				}
 				{ $( $impl )* }
@@ -880,14 +883,14 @@ macro_rules! decl_module {
 		fn on_initialize($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::sr_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
+			$crate::sp_runtime::traits::OnInitialize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize($param: $param_ty) {
 				use $crate::rstd::if_std;
 				if_std! {
 					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::INFO, "on_initialize");
+					let span = tracing::span!(tracing::Level::DEBUG, "on_initialize");
 					let _enter = span.enter();
 				}
 				{ $( $impl )* }
@@ -900,7 +903,7 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::sr_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
+			$crate::sp_runtime::traits::OnInitialize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{}
 	};
@@ -912,14 +915,14 @@ macro_rules! decl_module {
 		fn on_finalize() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::sr_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
+			$crate::sp_runtime::traits::OnFinalize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize(_block_number_not_used: $trait_instance::BlockNumber) {
 				use $crate::rstd::if_std;
 				if_std! {
 					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::INFO, "on_finalize");
+					let span = tracing::span!(tracing::Level::DEBUG, "on_finalize");
 					let _enter = span.enter();
 				}
 				{ $( $impl )* }
@@ -934,14 +937,14 @@ macro_rules! decl_module {
 		fn on_finalize($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::sr_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
+			$crate::sp_runtime::traits::OnFinalize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize($param: $param_ty) {
 				use $crate::rstd::if_std;
 				if_std! {
 					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::INFO, "on_finalize");
+					let span = tracing::span!(tracing::Level::DEBUG, "on_finalize");
 					let _enter = span.enter();
 				}
 				{ $( $impl )* }
@@ -954,7 +957,7 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::sr_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
+			$crate::sp_runtime::traits::OnFinalize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 		}
@@ -995,7 +998,7 @@ macro_rules! decl_module {
 		fn offchain_worker() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::sr_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
+			$crate::sp_runtime::traits::OffchainWorker<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn generate_extrinsics(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
@@ -1008,7 +1011,7 @@ macro_rules! decl_module {
 		fn offchain_worker($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::sr_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
+			$crate::sp_runtime::traits::OffchainWorker<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn generate_extrinsics($param: $param_ty) { $( $impl )* }
@@ -1020,7 +1023,7 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::sr_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
+			$crate::sp_runtime::traits::OffchainWorker<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{}
 	};
@@ -1044,7 +1047,7 @@ macro_rules! decl_module {
 			use $crate::rstd::if_std;
 			if_std! {
 				use $crate::tracing;
-				let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+				let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
 				let _enter = span.enter();
 			}
 			{
@@ -1070,7 +1073,7 @@ macro_rules! decl_module {
 			use $crate::rstd::if_std;
 			if_std! {
 				use $crate::tracing;
-				let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+				let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
 				let _enter = span.enter();
 			}
 			{ $( $impl )* }
@@ -1321,7 +1324,10 @@ macro_rules! decl_module {
 							&$weight,
 							($( $param_name, )*)
 						);
-						return $crate::dispatch::DispatchInfo { weight, class };
+						let pays_fee = <dyn $crate::dispatch::PaysFee>::pays_fee(
+							&$weight
+						);
+						return $crate::dispatch::DispatchInfo { weight, class, pays_fee };
 					}
 					if let $call_type::__PhantomItem(_, _) = self { unreachable!("__PhantomItem should never be used.") }
 				)*
@@ -1337,7 +1343,10 @@ macro_rules! decl_module {
 					&$crate::dispatch::SimpleDispatchInfo::default(),
 					()
 				);
-				$crate::dispatch::DispatchInfo { weight, class }
+				let pays_fee = <dyn $crate::dispatch::PaysFee>::pays_fee(
+					&$crate::dispatch::SimpleDispatchInfo::default()
+				);
+				$crate::dispatch::DispatchInfo { weight, class, pays_fee }
 
 			}
 		}
@@ -1876,7 +1885,7 @@ macro_rules! __check_reserved_fn_name {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use crate::sr_primitives::traits::{OnInitialize, OnFinalize};
+	use crate::sp_runtime::traits::{OnInitialize, OnFinalize};
 	use crate::weights::{DispatchInfo, DispatchClass};
 
 	pub trait Trait: system::Trait + Sized where Self::AccountId: From<u32> {
@@ -2066,17 +2075,17 @@ mod tests {
 		// operational.
 		assert_eq!(
 			Call::<TraitImpl>::operational().get_dispatch_info(),
-			DispatchInfo { weight: 5, class: DispatchClass::Operational },
+			DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: true },
 		);
 		// default weight.
 		assert_eq!(
 			Call::<TraitImpl>::aux_0().get_dispatch_info(),
-			DispatchInfo { weight: 10_000, class: DispatchClass::Normal },
+			DispatchInfo { weight: 10_000, class: DispatchClass::Normal, pays_fee: true },
 		);
 		// custom basic
 		assert_eq!(
 			Call::<TraitImpl>::aux_3().get_dispatch_info(),
-			DispatchInfo { weight: 3, class: DispatchClass::Normal },
+			DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: true },
 		);
 	}
 

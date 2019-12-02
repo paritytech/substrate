@@ -17,8 +17,8 @@
 //! A `CodeExecutor` specialization which uses natively compiled runtime when the wasm to be
 //! executed is equivalent to the natively compiled code.
 
-pub use substrate_executor::NativeExecutor;
-use substrate_executor::native_executor_instance;
+pub use sc_executor::NativeExecutor;
+use sc_executor::native_executor_instance;
 
 // Declare an instance of the native executor named `Executor`. Include the wasm binary as the
 // equivalent wasm code.
@@ -30,7 +30,7 @@ native_executor_instance!(
 
 #[cfg(test)]
 mod tests {
-	use substrate_executor::error::Result;
+	use sc_executor::error::Result;
 	use super::Executor;
 	use {balances, contracts, indices, system, timestamp};
 	use codec::{Encode, Decode, Joiner};
@@ -44,12 +44,12 @@ mod tests {
 		Blake2Hasher, NeverNativeValue, NativeOrEncoded, map,
 		traits::{CodeExecutor, Externalities}, storage::well_known_keys,
 	};
-	use sr_primitives::{
+	use sp_runtime::{
 		Fixed64, traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyExtrinsicResult,
 		transaction_validity::InvalidTransaction,
 	};
 	use contracts::ContractAddressFor;
-	use substrate_executor::{NativeExecutor, WasmExecutionMethod};
+	use sc_executor::{NativeExecutor, WasmExecutionMethod};
 	use system::{EventRecord, Phase};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
@@ -467,7 +467,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: Event::system(system::Event::ExtrinsicSuccess(
-						DispatchInfo { weight: 10000, class: DispatchClass::Operational }
+						DispatchInfo { weight: 10000, class: DispatchClass::Operational, pays_fee: true }
 					)),
 					topics: vec![],
 				},
@@ -489,7 +489,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess(
-						DispatchInfo { weight: 1000000, class: DispatchClass::Normal }
+						DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
 					)),
 					topics: vec![],
 				},
@@ -520,7 +520,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: Event::system(system::Event::ExtrinsicSuccess(
-						DispatchInfo { weight: 10000, class: DispatchClass::Operational }
+						DispatchInfo { weight: 10000, class: DispatchClass::Operational, pays_fee: true }
 					)),
 					topics: vec![],
 				},
@@ -544,7 +544,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess(
-						DispatchInfo { weight: 1000000, class: DispatchClass::Normal }
+						DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
 					)),
 					topics: vec![],
 				},
@@ -568,7 +568,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
 					event: Event::system(system::Event::ExtrinsicSuccess(
-						DispatchInfo { weight: 1000000, class: DispatchClass::Normal }
+						DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
 					)),
 					topics: vec![],
 				},
@@ -913,7 +913,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		assert!(t.ext().storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
+		assert!(t.ext().storage_changes_root(&GENESIS_HASH.encode()).unwrap().is_some());
 	}
 
 	#[test]
@@ -929,7 +929,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		assert!(t.ext().storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
+		assert!(t.ext().storage_changes_root(&GENESIS_HASH.encode()).unwrap().is_some());
 	}
 
 	#[test]

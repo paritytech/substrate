@@ -132,7 +132,7 @@ fn impl_build_storage(
 	let builder_blocks = &builders.blocks;
 
 	let build_storage_impl_trait = quote!(
-		#scrate::sr_primitives::BuildModuleGenesisStorage<#runtime_generic, #inherent_instance>
+		#scrate::sp_runtime::BuildModuleGenesisStorage<#runtime_generic, #inherent_instance>
 	);
 
 	quote!{
@@ -140,8 +140,8 @@ fn impl_build_storage(
 		impl#genesis_impl GenesisConfig#genesis_struct #genesis_where_clause {
 			pub fn build_storage #fn_generic (&self) -> std::result::Result<
 				(
-					#scrate::sr_primitives::StorageOverlay,
-					#scrate::sr_primitives::ChildrenStorageOverlay,
+					#scrate::sp_runtime::StorageOverlay,
+					#scrate::sp_runtime::ChildrenStorageOverlay,
 				),
 				String
 			> #fn_where_clause {
@@ -154,8 +154,8 @@ fn impl_build_storage(
 			pub fn assimilate_storage #fn_generic (
 				&self,
 				tuple_storage: &mut (
-					#scrate::sr_primitives::StorageOverlay,
-					#scrate::sr_primitives::ChildrenStorageOverlay,
+					#scrate::sp_runtime::StorageOverlay,
+					#scrate::sp_runtime::ChildrenStorageOverlay,
 				),
 			) -> std::result::Result<(), String> #fn_where_clause {
 				#scrate::BasicExternalities::execute_with_storage(tuple_storage, || {
@@ -172,8 +172,8 @@ fn impl_build_storage(
 			fn build_module_genesis_storage(
 				&self,
 				storage: &mut (
-					#scrate::sr_primitives::StorageOverlay,
-					#scrate::sr_primitives::ChildrenStorageOverlay,
+					#scrate::sp_runtime::StorageOverlay,
+					#scrate::sp_runtime::ChildrenStorageOverlay,
 				),
 			) -> std::result::Result<(), String> {
 				self.assimilate_storage::<#fn_traitinstance> (storage)

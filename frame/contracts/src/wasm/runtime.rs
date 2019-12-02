@@ -27,7 +27,7 @@ use rstd::prelude::*;
 use rstd::convert::TryInto;
 use rstd::mem;
 use codec::{Decode, Encode};
-use sr_primitives::traits::{Bounded, SaturatedConversion};
+use sp_runtime::traits::{Bounded, SaturatedConversion};
 
 /// The value returned from ext_call and ext_instantiate contract external functions if the call or
 /// instantiation traps. This value is chosen as if the execution does not trap, the return value
@@ -824,7 +824,7 @@ define_env!(Env, <E: Ext>,
 	ext_println(ctx, str_ptr: u32, str_len: u32) => {
 		let data = read_sandbox_memory(ctx, str_ptr, str_len)?;
 		if let Ok(utf8) = core::str::from_utf8(&data) {
-			sr_primitives::print(utf8);
+			sp_runtime::print(utf8);
 		}
 		Ok(())
 	},

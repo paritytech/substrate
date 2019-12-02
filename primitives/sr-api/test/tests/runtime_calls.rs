@@ -19,7 +19,7 @@ use test_client::{
 	DefaultTestClientBuilderExt, TestClientBuilder,
 	runtime::{TestAPI, DecodeFails, Transfer, Header},
 };
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits::{ProvideRuntimeApi, Header as HeaderT, Hash as HashT},
 };
@@ -209,6 +209,5 @@ fn record_proof_works() {
 		&executor,
 		"Core_execute_block",
 		&block.encode(),
-		None,
 	).expect("Executes block while using the proof backend");
 }

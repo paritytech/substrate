@@ -50,7 +50,7 @@ use primitives::{
 };
 
 #[cfg(feature = "std")]
-use trie::{TrieConfiguration, trie_types::Layout};
+use ::trie::{TrieConfiguration, trie_types::Layout};
 
 use runtime_interface::{runtime_interface, Pointer};
 
@@ -186,19 +186,32 @@ pub trait Storage {
 	}
 
 	/// "Commit" all existing operations and compute the resulting storage root.
-	fn root(&mut self) -> H256 {
+	///
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns the SCALE encoded hash.
+	fn root(&mut self) -> Vec<u8> {
 		self.storage_root()
 	}
 
 	/// "Commit" all existing operations and compute the resulting child storage root.
+	///
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns the SCALE encoded hash.
 	fn child_root(&mut self, child_storage_key: &[u8]) -> Vec<u8> {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
 		self.child_storage_root(storage_key)
 	}
 
 	/// "Commit" all existing operations and get the resulting storage change root.
-	fn changes_root(&mut self, parent_hash: [u8; 32]) -> Option<H256> {
-		self.storage_changes_root(parent_hash.into()).ok().and_then(|h| h)
+	/// `parent_hash` is a SCALE encoded hash.
+	///
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns an `Option` that holds the SCALE encoded hash.
+	fn changes_root(&mut self, parent_hash: &[u8]) -> Option<Vec<u8>> {
+		self.storage_changes_root(parent_hash).ok().and_then(|h| h)
 	}
 
 	/// Start a new transaction.
@@ -216,13 +229,18 @@ pub trait Storage {
 		self.storage_commit_transaction();
 	}
 
+}
+
+/// Interface that provides trie related functionality.
+#[runtime_interface]
+pub trait Trie {
 	/// A trie root formed from the iterated items.
-	fn blake2_256_trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
+	fn blake2_256_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
 		Layout::<primitives::Blake2Hasher>::trie_root(input)
 	}
 
 	/// A trie root formed from the enumerated items.
-	fn blake2_256_ordered_trie_root(input: Vec<Vec<u8>>) -> H256 {
+	fn blake2_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
 		Layout::<primitives::Blake2Hasher>::ordered_trie_root(input)
 	}
 }
@@ -397,6 +415,11 @@ pub trait Hashing {
 	/// Conduct a 256-bit Keccak hash.
 	fn keccak_256(data: &[u8]) -> [u8; 32] {
 		primitives::hashing::keccak_256(data)
+	}
+
+	/// Conduct a 256-bit Sha2 hash.
+	fn sha2_256(data: &[u8]) -> [u8; 32] {
+		primitives::hashing::sha2_256(data)
 	}
 
 	/// Conduct a 128-bit Blake2 hash.
@@ -758,7 +781,7 @@ mod allocator_impl {
 pub fn panic(info: &core::panic::PanicInfo) -> ! {
 	unsafe {
 		let message = rstd::alloc::format!("{}", info);
-		misc::print_utf8(message.as_bytes());
+		logging::log(LogLevel::Error, "runtime", message.as_bytes());
 		core::intrinsics::abort()
 	}
 }
@@ -766,17 +789,15 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 #[cfg(all(not(feature = "disable_oom"), not(feature = "std")))]
 #[alloc_error_handler]
 pub extern fn oom(_: core::alloc::Layout) -> ! {
-	static OOM_MSG: &str = "Runtime memory exhausted. Aborting";
-
 	unsafe {
-		misc::print_utf8(OOM_MSG.as_bytes());
+		logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
 		core::intrinsics::abort();
 	}
 }
 
 /// Type alias for Externalities implementation used in tests.
 #[cfg(feature = "std")]
-pub type TestExternalities = substrate_state_machine::TestExternalities<primitives::Blake2Hasher, u64>;
+pub type TestExternalities = sp_state_machine::TestExternalities<primitives::Blake2Hasher, u64>;
 
 /// The host functions Substrate provides for the Wasm runtime environment.
 ///
@@ -791,13 +812,14 @@ pub type SubstrateHostFunctions = (
 	allocator::HostFunctions,
 	logging::HostFunctions,
 	sandbox::HostFunctions,
+	crate::trie::HostFunctions,
 );
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use primitives::map;
-	use substrate_state_machine::BasicExternalities;
+	use sp_state_machine::BasicExternalities;
 
 	#[test]
 	fn storage_works() {

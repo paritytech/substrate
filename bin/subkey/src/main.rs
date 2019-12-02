@@ -28,7 +28,7 @@ use primitives::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, Ss58Codec},
 	ed25519, sr25519, ecdsa, Pair, Public, H256, hexdisplay::HexDisplay,
 };
-use sr_primitives::{traits::{IdentifyAccount, Verify}, generic::Era};
+use sp_runtime::{traits::{IdentifyAccount, Verify}, generic::Era};
 use std::{
 	convert::{TryInto, TryFrom},
 	io::{stdin, Read},

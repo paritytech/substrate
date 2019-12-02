@@ -87,7 +87,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use sr_primitives::{
+use sp_runtime::{
 	traits::{StaticLookup, Dispatchable}, DispatchError,
 };
 use support::{
@@ -129,7 +129,7 @@ decl_module! {
 				Ok(_) => true,
 				Err(e) => {
 					let e: DispatchError = e.into();
-					sr_primitives::print(e);
+					sp_runtime::print(e);
 					false
 				}
 			};
@@ -179,7 +179,7 @@ decl_module! {
 				Ok(_) => true,
 				Err(e) => {
 					let e: DispatchError = e.into();
-					sr_primitives::print(e);
+					sp_runtime::print(e);
 					false
 				}
 			};

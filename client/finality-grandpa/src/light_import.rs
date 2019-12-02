@@ -19,13 +19,8 @@ use std::sync::Arc;
 use log::{info, trace, warn};
 use parking_lot::RwLock;
 use client::Client;
-use client_api::{
-	CallExecutor,
-	backend::{AuxStore, Backend, Finalizer},
-	blockchain::HeaderBackend,
-	error::Error as ClientError,
-	well_known_cache_keys,
-};
+use client_api::{CallExecutor, backend::{AuxStore, Backend, Finalizer}};
+use sp_blockchain::{HeaderBackend, Error as ClientError, well_known_cache_keys};
 use codec::{Encode, Decode};
 use consensus_common::{
 	import_queue::Verifier,
@@ -33,10 +28,10 @@ use consensus_common::{
 	BlockCheckParams, Error as ConsensusError,
 };
 use network::config::{BoxFinalityProofRequestBuilder, FinalityProofRequestBuilder};
-use sr_primitives::Justification;
-use sr_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT, DigestFor};
+use sp_runtime::Justification;
+use sp_runtime::traits::{NumberFor, Block as BlockT, Header as HeaderT, DigestFor};
 use fg_primitives::{self, AuthorityList};
-use sr_primitives::generic::BlockId;
+use sp_runtime::generic::BlockId;
 use primitives::{H256, Blake2Hasher};
 
 use crate::GenesisAuthoritySetProvider;
@@ -664,6 +659,7 @@ pub mod tests {
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: true,
+			import_existing: false,
 		};
 		do_import_block::<_, _, _, TestJustification>(
 			&client,

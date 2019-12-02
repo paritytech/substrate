@@ -18,7 +18,7 @@
 
 use super::*;
 use mock::{new_test_ext, Babe, Test};
-use sr_primitives::{traits::OnFinalize, testing::{Digest, DigestItem}};
+use sp_runtime::{traits::OnFinalize, testing::{Digest, DigestItem}};
 use session::ShouldEndSession;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [

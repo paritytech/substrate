@@ -1,11 +1,11 @@
 [package]
-name = "substrate-primitives"
+name = "sp-core"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+rstd = { package = "sp-std", path = "../sr-std", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 rustc-hex = { version = "2.0.1", default-features = false }
 log = { version = "0.4.8", default-features = false }
@@ -17,7 +17,7 @@ impl-serde = { version = "0.2.3", optional = true }
 wasmi = { version = "0.6.2", optional = true }
 hash-db = { version = "0.15.2", default-features = false }
 hash256-std-hasher = { version = "0.15.2", default-features = false }
-ed25519-dalek = { version = "0.9.1", default-features = false, features = ["u64_backend"], optional = true }
+ed25519-dalek = { version = "1.0.0-pre.2", default-features = false, features = ["u64_backend"], optional = true }
 base58 = { version = "0.1.0", optional = true }
 blake2-rfc = { version = "0.2.18", default-features = false, optional = true }
 schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"], default-features = false, optional = true }
@@ -33,13 +33,13 @@ lazy_static = { version = "1.4.0", default-features = false, optional = true }
 parking_lot = { version = "0.9.0", optional = true }
 libsecp256k1 = { version = "0.3.0", default-features = false, optional = true }
 tiny-keccak = { version = "2.0.1", features = ["keccak"], optional = true }
-substrate-debug-derive = { version = "2.0.0", path = "./debug-derive" }
-externalities = { package = "substrate-externalities", path = "../externalities", optional = true }
-primitives-storage = { package = "substrate-primitives-storage", path = "storage", default-features = false }
-runtime-interface = { package = "substrate-runtime-interface", path = "../runtime-interface", default-features = false }
+sp-debug-derive = { version = "2.0.0", path = "./debug-derive" }
+externalities = { package = "sp-externalities", path = "../externalities", optional = true }
+primitives-storage = { package = "sp-core-storage", path = "storage", default-features = false }
+runtime-interface = { package = "sp-runtime-interface", path = "../runtime-interface", default-features = false }
 
 [dev-dependencies]
-substrate-serializer = { path = "../serializer" }
+sp-serializer = { path = "../serializer" }
 pretty_assertions = "0.6.1"
 hex-literal = "0.2.1"
 rand = "0.7.2"
@@ -89,7 +89,7 @@ std = [
 	"num-traits/std",
 	"libsecp256k1",
 	"tiny-keccak",
-	"substrate-debug-derive/std",
+	"sp-debug-derive/std",
 	"externalities",
 	"primitives-storage/std",
 	"runtime-interface/std",
