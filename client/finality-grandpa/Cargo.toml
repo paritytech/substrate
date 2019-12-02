@@ -1,5 +1,5 @@
 [package]
-name = "substrate-finality-grandpa"
+name = "sc-finality-grandpa"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -14,29 +14,29 @@ tokio-executor = "0.1.8"
 tokio-timer = "0.2.11"
 rand = "0.7.2"
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-sr-primitives = {  path = "../../primitives/sr-primitives" }
-consensus_common = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
-primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
-substrate-telemetry = { path = "../telemetry" }
-keystore = { package = "substrate-keystore", path = "../keystore" }
+sp-runtime = {  path = "../../primitives/sr-primitives" }
+consensus_common = { package = "sp-consensus", path = "../../primitives/consensus/common" }
+primitives = { package = "sp-core",  path = "../../primitives/core" }
+sc-telemetry = { path = "../telemetry" }
+keystore = { package = "sc-keystore", path = "../keystore" }
 serde_json = "1.0.41"
-client-api = { package = "substrate-client-api", path = "../api" }
-client = { package = "substrate-client", path = "../" }
-inherents = { package = "substrate-inherents", path = "../../primitives/inherents" }
+client-api = { package = "sc-client-api", path = "../api" }
+client = { package = "sc-client", path = "../" }
+inherents = { package = "sp-inherents", path = "../../primitives/inherents" }
 sp-blockchain = { path = "../../primitives/blockchain" }
-network = { package = "substrate-network", path = "../network" }
+network = { package = "sc-network", path = "../network" }
 sp-finality-tracker = { path = "../../primitives/finality-tracker" }
-fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../primitives/finality-grandpa" }
+fg_primitives = { package = "sp-finality-granpda", path = "../../primitives/finality-grandpa" }
 grandpa = { package = "finality-grandpa", version = "0.10.1", features = ["derive-codec"] }
 
 [dev-dependencies]
 grandpa = { package = "finality-grandpa", version = "0.10.1", features = ["derive-codec", "test-helpers"] }
-network = { package = "substrate-network", path = "../network", features = ["test-helpers"] }
-keyring = { package = "substrate-keyring", path = "../../primitives/keyring" }
+network = { package = "sc-network", path = "../network", features = ["test-helpers"] }
+keyring = { package = "sp-keyring", path = "../../primitives/keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client"}
-babe_primitives = { package = "substrate-consensus-babe-primitives", path = "../../primitives/consensus/babe" }
-state_machine = { package = "substrate-state-machine", path = "../../primitives/state-machine" }
+babe_primitives = { package = "sp-consensus-babe", path = "../../primitives/consensus/babe" }
+state_machine = { package = "sp-state-machine", path = "../../primitives/state-machine" }
 env_logger = "0.7.0"
 tokio = "0.1.22"
 tempfile = "3.1.0"
-sr-api = { path = "../../primitives/sr-api" }
+sp-api = { path = "../../primitives/sr-api" }

@@ -16,7 +16,7 @@
 
 //! Test utilities
 
-use sr_primitives::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header};
+use sp_runtime::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header};
 use primitives::H256;
 use runtime_io;
 use support::{impl_outer_origin, parameter_types};
@@ -65,7 +65,7 @@ impl system::Trait for Runtime {
 	type BlockNumber = u64;
 	type Call = ();
 	type Hash = H256;
-	type Hashing = ::sr_primitives::traits::BlakeTwo256;
+	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;

@@ -1,5 +1,5 @@
 [package]
-name = "sc-transaction-pool"
+name = "sc-tracing-pool"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -10,15 +10,15 @@ derive_more = "0.99.2"
 futures = { version = "0.3.1", features = ["compat", "compat"] }
 log = "0.4.8"
 parking_lot = "0.9.0"
-primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
-sr-api = { path = "../../primitives/sr-api" }
-sr-primitives = { path = "../../primitives/sr-primitives" }
-txpool = { package = "sc-transaction-graph", path = "./graph" }
+primitives = { package = "sp-core",  path = "../../primitives/core" }
+sp-api = { path = "../../primitives/sr-api" }
+sp-runtime = { path = "../../primitives/sr-primitives" }
+txpool = { package = "sc-tracing-graph", path = "./graph" }
 txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
 txpool-runtime-api = { package = "sp-transaction-pool-runtime-api", path = "../../primitives/transaction-pool/runtime-api" }
-client-api = { package = "substrate-client-api", path = "../api" }
+client-api = { package = "sc-client-api", path = "../api" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 
 [dev-dependencies]
-keyring = { package = "substrate-keyring", path = "../../primitives/keyring" }
+keyring = { package = "sp-keyring", path = "../../primitives/keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }

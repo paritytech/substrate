@@ -94,7 +94,7 @@ use rstd::{result, cmp};
 use inherents::{ProvideInherent, InherentData, InherentIdentifier};
 use support::{Parameter, decl_storage, decl_module};
 use support::traits::{Time, Get};
-use sr_primitives::{
+use sp_runtime::{
 	RuntimeString,
 	traits::{
 		SimpleArithmetic, Zero, SaturatedConversion, Scale
@@ -243,7 +243,7 @@ mod tests {
 	use support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
 	use runtime_io::TestExternalities;
 	use primitives::H256;
-	use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}

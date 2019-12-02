@@ -38,7 +38,7 @@ use support::{
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason},
 	weights::{Weight, DispatchInfo, GetDispatchInfo},
 };
-use sr_primitives::{
+use sp_runtime::{
 	Fixed64,
 	transaction_validity::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
@@ -242,7 +242,7 @@ mod tests {
 		weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
 	};
 	use primitives::H256;
-	use sr_primitives::{
+	use sp_runtime::{
 		Perbill,
 		testing::{Header, TestXt},
 		traits::{BlakeTwo256, IdentityLookup, Extrinsic},

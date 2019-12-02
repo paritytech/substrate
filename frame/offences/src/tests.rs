@@ -23,7 +23,7 @@ use crate::mock::{
 	Offences, System, Offence, TestEvent, KIND, new_test_ext, with_on_offence_fractions,
 	offence_reports,
 };
-use sr_primitives::Perbill;
+use sp_runtime::Perbill;
 use system::{EventRecord, Phase};
 
 #[test]

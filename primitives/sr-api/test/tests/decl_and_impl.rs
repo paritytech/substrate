@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sr_api::{RuntimeApiInfo, decl_runtime_apis, impl_runtime_apis};
+use sp_api::{RuntimeApiInfo, decl_runtime_apis, impl_runtime_apis};
 
-use sr_primitives::{traits::{GetNodeBlockType, Block as BlockT}, generic::BlockId};
+use sp_runtime::{traits::{GetNodeBlockType, Block as BlockT}, generic::BlockId};
 
 use test_client::runtime::Block;
 use sp_blockchain::Result;
@@ -68,8 +68,8 @@ impl_runtime_apis! {
 		fn same_name() {}
 	}
 
-	impl sr_api::Core<Block> for Runtime {
-		fn version() -> sr_version::RuntimeVersion {
+	impl sp_api::Core<Block> for Runtime {
+		fn version() -> sp_version::RuntimeVersion {
 			unimplemented!()
 		}
 		fn execute_block(_: Block) {
@@ -124,5 +124,5 @@ fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
 fn check_runtime_api_versions() {
 	check_runtime_api_versions_contains::<dyn Api<Block, Error = ()>>();
 	check_runtime_api_versions_contains::<dyn ApiWithCustomVersion<Block, Error = ()>>();
-	check_runtime_api_versions_contains::<dyn sr_api::Core<Block, Error = ()>>();
+	check_runtime_api_versions_contains::<dyn sp_api::Core<Block, Error = ()>>();
 }

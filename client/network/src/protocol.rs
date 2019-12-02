@@ -31,11 +31,11 @@ use consensus::{
 	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
 };
 use codec::{Decode, Encode};
-use sr_primitives::{generic::BlockId, ConsensusEngineId, Justification};
-use sr_primitives::traits::{
+use sp_runtime::{generic::BlockId, ConsensusEngineId, Justification};
+use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, CheckedSub
 };
-use sr_arithmetic::traits::SaturatedConversion;
+use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
 use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};

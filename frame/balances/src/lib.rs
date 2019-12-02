@@ -122,7 +122,7 @@
 //!
 //! ```
 //! use support::traits::{WithdrawReasons, LockableCurrency};
-//! use sr_primitives::traits::Bounded;
+//! use sp_runtime::traits::Bounded;
 //! pub trait Trait: system::Trait {
 //! 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 //! }
@@ -172,7 +172,7 @@ use support::{
 	weights::SimpleDispatchInfo,
 	dispatch::Result,
 };
-use sr_primitives::{
+use sp_runtime::{
 	RuntimeDebug,
 	traits::{
 		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
@@ -328,7 +328,7 @@ decl_storage! {
 						// Total genesis `balance` minus `liquid` equals funds locked for vesting
 						let locked = balance.saturating_sub(liquid);
 						// Number of units unlocked per block after `begin`
-						let per_block = locked / length.max(sr_primitives::traits::One::one());
+						let per_block = locked / length.max(sp_runtime::traits::One::one());
 
 						(who.clone(), VestingSchedule {
 							locked: locked,

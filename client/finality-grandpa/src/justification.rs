@@ -22,8 +22,8 @@ use sp_blockchain::Error as ClientError;
 use codec::{Encode, Decode};
 use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{NumberFor, Block as BlockT, Header as HeaderT};
 use primitives::{H256, Blake2Hasher};
 use fg_primitives::AuthorityId;
 

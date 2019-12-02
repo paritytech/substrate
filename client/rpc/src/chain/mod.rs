@@ -38,7 +38,7 @@ use client::{
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::{H256, Blake2Hasher};
 use rpc_primitives::{number::NumberOrHex, list::ListOrValue};
-use sr_primitives::{
+use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT, Header, NumberFor},
 };

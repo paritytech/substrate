@@ -18,9 +18,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sr_primitives::{transaction_validity::TransactionValidity, traits::Block as BlockT};
+use sp_runtime::{transaction_validity::TransactionValidity, traits::Block as BlockT};
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// The `TaggedTransactionQueue` api trait for interfering with the transaction queue.
 	pub trait TaggedTransactionQueue {
 		/// Validate the given transaction.

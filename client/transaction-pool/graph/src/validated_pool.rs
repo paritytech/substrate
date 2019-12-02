@@ -31,7 +31,7 @@ use log::{debug, warn};
 
 use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits::{self, SaturatedConversion},
 	transaction_validity::TransactionTag as Tag,

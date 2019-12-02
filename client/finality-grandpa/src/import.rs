@@ -30,9 +30,9 @@ use consensus_common::{
 	SelectChain,
 };
 use fg_primitives::{GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog};
-use sr_primitives::Justification;
-use sr_primitives::generic::{BlockId, OpaqueDigestItemId};
-use sr_primitives::traits::{
+use sp_runtime::Justification;
+use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
+use sp_runtime::traits::{
 	Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero,
 };
 use primitives::{H256, Blake2Hasher};
