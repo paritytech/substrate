@@ -14,21 +14,21 @@ rustc-hex = { version = "2.0", optional = true }
 serde = { version = "1.0.102", optional = true }
 
 # primitives
-authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../../primitives/authority-discovery", default-features = false }
-babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe", default-features = false }
-block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api", default-features = false}
-inherents = { package = "substrate-inherents", path = "../../../primitives/inherents", default-features = false }
+authority-discovery-primitives = { package = "sp-authority-discovery", path = "../../../primitives/authority-discovery", default-features = false }
+babe-primitives = { package = "sp-consensus-babe", path = "../../../primitives/consensus/babe", default-features = false }
+block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder/runtime-api", default-features = false}
+inherents = { package = "sp-inherents", path = "../../../primitives/inherents", default-features = false }
 node-primitives = { path = "../primitives", default-features = false }
-offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../primitives/offchain", default-features = false }
-primitives = { package = "substrate-primitives",  path = "../../../primitives/core", default-features = false }
-rstd = { package = "sr-std", path = "../../../primitives/sr-std", default-features = false }
-sr-api = { path = "../../../primitives/sr-api", default-features = false }
-sr-primitives = { path = "../../../primitives/sr-primitives", default-features = false }
-sr-staking-primitives = { path = "../../../primitives/sr-staking-primitives", default-features = false }
-substrate-keyring = { path = "../../../primitives/keyring", optional = true }
-substrate-session = { path = "../../../primitives/session", default-features = false }
+offchain-primitives = { package = "sp-offchain", path = "../../../primitives/offchain", default-features = false }
+primitives = { package = "sp-core",  path = "../../../primitives/core", default-features = false }
+rstd = { package = "sp-std", path = "../../../primitives/sr-std", default-features = false }
+sp-api = { path = "../../../primitives/sr-api", default-features = false }
+sp-runtime = { path = "../../../primitives/sr-primitives", default-features = false }
+sp-staking = { path = "../../../primitives/sr-staking-primitives", default-features = false }
+sp-keyring = { path = "../../../primitives/keyring", optional = true }
+sp-sesssion = { path = "../../../primitives/session", default-features = false }
 txpool-runtime-api = { package = "sp-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
-version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
+version = { package = "sp-version", path = "../../../primitives/sr-version", default-features = false }
 
 # frame dependencies
 authority-discovery = { package = "pallet-authority-discovery", path = "../../../frame/authority-discovery", default-features = false }
@@ -66,7 +66,7 @@ transaction-payment-rpc-runtime-api = { package = "pallet-transaction-payment-rp
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", path = "../../../client/utils/wasm-builder-runner", version = "1.0.4" }
 
 [dev-dependencies]
-runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
+runtime_io = { package = "sp-io", path = "../../../primitives/sr-io" }
 
 [features]
 default = ["std"]
@@ -102,12 +102,12 @@ std = [
 	"safe-mix/std",
 	"serde",
 	"session/std",
-	"sr-api/std",
-	"sr-primitives/std",
-	"sr-staking-primitives/std",
+	"sp-api/std",
+	"sp-runtime/std",
+	"sp-staking/std",
 	"staking/std",
-	"substrate-keyring",
-	"substrate-session/std",
+	"sp-keyring",
+	"sp-sesssion/std",
 	"sudo/std",
 	"support/std",
 	"system-rpc-runtime-api/std",

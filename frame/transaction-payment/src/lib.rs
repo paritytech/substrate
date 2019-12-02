@@ -38,7 +38,7 @@ use support::{
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason},
 	weights::{Weight, DispatchInfo, GetDispatchInfo},
 };
-use sr_primitives::{
+use sp_runtime::{
 	Fixed64,
 	transaction_validity::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
@@ -242,7 +242,7 @@ mod tests {
 		weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
 	};
 	use primitives::H256;
-	use sr_primitives::{
+	use sp_runtime::{
 		Perbill,
 		testing::{Header, TestXt},
 		traits::{BlakeTwo256, IdentityLookup, Extrinsic},
@@ -269,7 +269,7 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}

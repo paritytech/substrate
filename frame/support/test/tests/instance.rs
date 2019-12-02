@@ -16,7 +16,7 @@
 
 #![recursion_limit="128"]
 
-use sr_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};
+use sp_runtime::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};
 use support::{
 	Parameter, traits::Get, parameter_types,
 	metadata::{
@@ -86,7 +86,7 @@ mod module1 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
+	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
 	pub enum Origin<T: Trait<I>, I> where T::BlockNumber: From<u32> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
@@ -148,7 +148,7 @@ mod module2 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
+	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
 	pub enum Origin<T: Trait<I>, I=DefaultInstance> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),

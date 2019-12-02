@@ -23,7 +23,7 @@ use futures::{
 	Future, FutureExt,
 	future::{Either, join, ready},
 };
-use log::warn;
+use log::{warn, debug};
 use parking_lot::Mutex;
 
 use client_api::{
@@ -31,7 +31,7 @@ use client_api::{
 	light::{Fetcher, RemoteBodyRequest},
 };
 use primitives::{Blake2Hasher, H256};
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Extrinsic, Header, NumberFor, ProvideRuntimeApi, SimpleArithmetic},
 };
@@ -79,13 +79,14 @@ where
 		let retracted_transactions = retracted.to_vec().into_iter()
 			.filter_map(move |hash| client_copy.block_body(&BlockId::hash(hash)).ok().unwrap_or(None))
 			.flat_map(|block| block.into_iter())
-			.filter(|tx| tx.is_signed().unwrap_or(false));
+			// if signed information is not present, attempt to resubmit anyway.
+			.filter(|tx| tx.is_signed().unwrap_or(true));
 		let resubmit_future = self.pool
 			.submit_at(id, retracted_transactions, true)
 			.then(|resubmit_result| ready(match resubmit_result {
 				Ok(_) => (),
 				Err(e) => {
-					warn!("Error re-submitting transactions: {:?}", e);
+					debug!(target: "txpool", "Error re-submitting transactions: {:?}", e);
 					()
 				}
 			}));
@@ -383,8 +384,8 @@ mod tests {
 		let fetcher = Arc::new(test_client::new_light_fetcher()
 			.with_remote_body(Some(Box::new(move |_| Ok(vec![fetcher_transaction.clone()]))))
 			.with_remote_call(Some(Box::new(move |_| {
-				let validity: sr_primitives::transaction_validity::TransactionValidity =
-					Ok(sr_primitives::transaction_validity::ValidTransaction {
+				let validity: sp_runtime::transaction_validity::TransactionValidity =
+					Ok(sp_runtime::transaction_validity::ValidTransaction {
 						priority: 0,
 						requires: Vec::new(),
 						provides: vec![vec![42]],
@@ -448,7 +449,7 @@ mod tests {
 	#[test]
 	fn should_revalidate_transactions_at_light_pool() {
 		use std::sync::atomic;
-		use sr_primitives::transaction_validity::*;
+		use sp_runtime::transaction_validity::*;
 
 		let build_fetcher = || {
 			let validated = Arc::new(atomic::AtomicBool::new(false));

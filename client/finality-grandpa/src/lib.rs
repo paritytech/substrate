@@ -59,13 +59,13 @@ use client_api::{BlockchainEvents, CallExecutor, backend::Backend, ExecutionStra
 use sp_blockchain::{HeaderBackend, Error as ClientError};
 use client::Client;
 use codec::{Decode, Encode};
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
 use keystore::KeyStorePtr;
 use inherents::InherentDataProviders;
 use consensus_common::SelectChain;
 use primitives::{H256, Blake2Hasher, Pair};
-use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
+use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
 
 use sp_finality_tracker;

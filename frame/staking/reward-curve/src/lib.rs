@@ -42,7 +42,7 @@ use syn::parse::{Parse, ParseStream};
 ///
 /// ```
 /// # fn main() {}
-/// use sr_primitives::curve::PiecewiseLinear;
+/// use sp_runtime::curve::PiecewiseLinear;
 ///
 /// pallet_staking_reward_curve::build! {
 /// 	const I_NPOS: PiecewiseLinear<'static> = curve!(
@@ -64,10 +64,10 @@ pub fn build(input: TokenStream) -> TokenStream {
 	let declaration = generate_piecewise_linear(points);
 	let test_module = generate_test_module(&input);
 
-	let imports = match crate_name("sr-primitives") {
-		Ok(sr_primitives) => {
-			let ident = syn::Ident::new(&sr_primitives, Span::call_site());
-			quote!( extern crate #ident as _sr_primitives; )
+	let imports = match crate_name("sp-runtime") {
+		Ok(sp_runtime) => {
+			let ident = syn::Ident::new(&sp_runtime, Span::call_site());
+			quote!( extern crate #ident as _sp_runtime; )
 		},
 		Err(e) => syn::Error::new(Span::call_site(), &e).to_compile_error(),
 	};
@@ -345,16 +345,16 @@ fn generate_piecewise_linear(points: Vec<(u32, u32)>) -> TokenStream2 {
 
 		points_tokens.extend(quote!(
 			(
-				_sr_primitives::Perbill::from_parts(#x_perbill),
-				_sr_primitives::Perbill::from_parts(#y_perbill),
+				_sp_runtime::Perbill::from_parts(#x_perbill),
+				_sp_runtime::Perbill::from_parts(#y_perbill),
 			),
 		));
 	}
 
 	quote!(
-		_sr_primitives::curve::PiecewiseLinear::<'static> {
+		_sp_runtime::curve::PiecewiseLinear::<'static> {
 			points: & [ #points_tokens ],
-			maximum: _sr_primitives::Perbill::from_parts(#max),
+			maximum: _sp_runtime::Perbill::from_parts(#max),
 		}
 	)
 }

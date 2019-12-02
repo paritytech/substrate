@@ -21,10 +21,11 @@
 use std::cell::RefCell;
 use support::{
 	StorageValue, StorageMap, parameter_types, assert_ok,
-	traits::{Get, ChangeMembers, Currency}
+	traits::{Get, ChangeMembers, Currency},
+	weights::Weight,
 };
 use primitives::H256;
-use sr_primitives::{
+use sp_runtime::{
 	Perbill, BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 };
 use crate as elections;
@@ -32,7 +33,7 @@ use crate as elections;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
@@ -141,8 +142,8 @@ impl elections::Trait for Test {
 	type DecayRatio = DecayRatio;
 }
 
-pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
 support::construct_runtime!(
 	pub enum Test where

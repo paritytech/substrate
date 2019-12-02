@@ -32,22 +32,22 @@ pub fn unwrap_or_error(res: Result<TokenStream>) -> TokenStream {
 }
 
 fn generate_hidden_includes_mod_name(unique_id: &'static str) -> Ident {
-	Ident::new(&format!("sr_api_hidden_includes_{}", unique_id), Span::call_site())
+	Ident::new(&format!("sp_api_hidden_includes_{}", unique_id), Span::call_site())
 }
 
 /// Generates the hidden includes that are required to make the macro independent from its scope.
 pub fn generate_hidden_includes(unique_id: &'static str) -> TokenStream {
-	if env::var("CARGO_PKG_NAME").unwrap() == "sr-api" {
+	if env::var("CARGO_PKG_NAME").unwrap() == "sp-api" {
 		TokenStream::new()
 	} else {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);
-		match crate_name("sr-api") {
+		match crate_name("sp-api") {
 			Ok(client_name) => {
 				let client_name = Ident::new(&client_name, Span::call_site());
 				quote!(
 					#[doc(hidden)]
 					mod #mod_name {
-						pub extern crate #client_name as sr_api;
+						pub extern crate #client_name as sp_api;
 					}
 				)
 			},
@@ -60,13 +60,13 @@ pub fn generate_hidden_includes(unique_id: &'static str) -> TokenStream {
 	}.into()
 }
 
-/// Generates the access to the `substrate_client` crate.
+/// Generates the access to the `sc_client` crate.
 pub fn generate_crate_access(unique_id: &'static str) -> TokenStream {
-	if env::var("CARGO_PKG_NAME").unwrap() == "sr-api" {
+	if env::var("CARGO_PKG_NAME").unwrap() == "sp-api" {
 		quote!( crate )
 	} else {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);
-		quote!( self::#mod_name::sr_api )
+		quote!( self::#mod_name::sp_api )
 	}.into()
 }
 

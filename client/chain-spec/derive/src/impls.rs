@@ -19,7 +19,7 @@ use quote::quote;
 use syn::{DeriveInput, Ident, Error};
 use proc_macro_crate::crate_name;
 
-const CRATE_NAME: &str = "substrate-chain-spec";
+const CRATE_NAME: &str = "sc-chain-spec";
 const ATTRIBUTE_NAME: &str = "forks";
 
 /// Implements `Extension's` `Group` accessor.

@@ -82,13 +82,13 @@
 //!
 //! We only send polite messages to peers,
 
-use sr_primitives::traits::{NumberFor, Block as BlockT, Zero};
+use sp_runtime::traits::{NumberFor, Block as BlockT, Zero};
 use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
 use network::{config::Roles, PeerId};
 use codec::{Encode, Decode};
 use fg_primitives::AuthorityId;
 
-use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
+use sc_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug, warn};
 use futures::prelude::*;
 use futures::sync::mpsc;
@@ -517,7 +517,7 @@ impl<N: Ord> Peers<N> {
 	}
 
 	fn reshuffle(&mut self) {
-		let mut lucky_peers : Vec<_> = self.inner
+		let mut lucky_peers: Vec<_> = self.inner
 			.iter()
 			.filter_map(|(id, info)| if !info.roles.is_authority() { Some(id.clone()) } else { None })
 			.collect();
@@ -670,7 +670,7 @@ impl<Block: BlockT> Inner<Block> {
 			let set_id = local_view.set_id;
 
 			debug!(target: "afg", "Voter {} noting beginning of round {:?} to network.",
-				self.config.name(), (round,set_id));
+				self.config.name(), (round, set_id));
 
 			local_view.round = round;
 

@@ -19,9 +19,9 @@
 //! # Example
 //!
 //! ```
-//! # use substrate_basic_authorship::ProposerFactory;
+//! # use sc_basic_authority::ProposerFactory;
 //! # use consensus_common::{Environment, Proposer};
-//! # use sr_primitives::generic::BlockId;
+//! # use sp_runtime::generic::BlockId;
 //! # use std::{sync::Arc, time::Duration};
 //! # use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
 //! # use txpool::{BasicPool, FullChainApi};

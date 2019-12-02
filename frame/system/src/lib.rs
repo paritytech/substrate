@@ -95,8 +95,8 @@ use rstd::prelude::*;
 use rstd::map;
 use rstd::marker::PhantomData;
 use rstd::fmt::Debug;
-use sr_version::RuntimeVersion;
-use sr_primitives::{
+use sp_version::RuntimeVersion;
+use sp_runtime::{
 	RuntimeDebug,
 	generic::{self, Era}, Perbill, DispatchOutcome, DispatchError,
 	transaction_validity::{
@@ -1139,7 +1139,7 @@ impl<T: Trait> Lookup for ChainContext<T> {
 mod tests {
 	use super::*;
 	use primitives::H256;
-	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
+	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
 	use support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin! {

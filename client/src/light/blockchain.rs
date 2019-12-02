@@ -20,8 +20,8 @@
 use std::future::Future;
 use std::sync::Arc;
 
-use sr_primitives::{Justification, generic::BlockId};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
+use sp_runtime::{Justification, generic::BlockId};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use sp_blockchain::{
 	HeaderMetadata, CachedHeaderMetadata,

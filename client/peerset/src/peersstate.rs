@@ -249,8 +249,8 @@ impl PeersState {
 
 	/// Tries to accept the peer as an incoming connection.
 	///
-	/// If there are enough slots available, switches the node to "connected" and returns `Ok`. If
-	/// the slots are full, the node stays "not connected" and we return `Err`.
+	/// If there are enough slots available, switches the node to "connected" and returns `true`. If
+	/// the slots are full, the node stays "not connected" and we return `false`.
 	///
 	/// Note that reserved nodes don't count towards the number of slots.
 	fn try_accept_incoming(&mut self, peer_id: &PeerId) -> bool {

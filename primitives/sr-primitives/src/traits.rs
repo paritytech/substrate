@@ -1112,7 +1112,7 @@ macro_rules! count {
 /// `KeyTypeIdProviders` is set to the types given as fields.
 ///
 /// ```rust
-/// use sr_primitives::{
+/// use sp_runtime::{
 /// 	impl_opaque_keys, KeyTypeId, BoundToRuntimeAppPublic, app_crypto::{sr25519, ed25519}
 /// };
 ///

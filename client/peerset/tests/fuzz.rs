@@ -19,7 +19,7 @@ use libp2p::PeerId;
 use rand::distributions::{Distribution, Uniform, WeightedIndex};
 use rand::seq::IteratorRandom;
 use std::{collections::HashMap, collections::HashSet, iter, pin::Pin, task::Poll};
-use substrate_peerset::{IncomingIndex, Message, PeersetConfig, Peerset};
+use sc_peerset::{IncomingIndex, Message, PeersetConfig, Peerset};
 
 #[test]
 fn run() {

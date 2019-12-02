@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use serde::{Serialize, Deserialize};
 use primitives::storage::{StorageKey, StorageData};
-use sr_primitives::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
+use sp_runtime::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
 use serde_json as json;
 use crate::RuntimeGenesis;
 use network::Multiaddr;

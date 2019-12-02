@@ -23,11 +23,11 @@ extern crate test;
 use test::Bencher;
 
 use rand::{self, Rng};
-extern crate substrate_phragmen as phragmen;
+extern crate sp_phragmen as phragmen;
 use phragmen::{Support, SupportMap, PhragmenStakedAssignment};
 
 use std::collections::BTreeMap;
-use sr_primitives::traits::{Convert, SaturatedConversion};
+use sp_runtime::traits::{Convert, SaturatedConversion};
 
 const VALIDATORS: u64 = 1000;
 const NOMINATORS: u64 = 10_000;

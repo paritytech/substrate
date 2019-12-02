@@ -21,7 +21,7 @@
 
 use primitives::Pair;
 use aura_primitives::AURA_ENGINE_ID;
-use sr_primitives::generic::{DigestItem, OpaqueDigestItemId};
+use sp_runtime::generic::{DigestItem, OpaqueDigestItemId};
 use codec::{Encode, Codec};
 use std::fmt::Debug;
 

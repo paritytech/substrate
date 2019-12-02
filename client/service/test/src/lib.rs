@@ -35,7 +35,7 @@ use service::{
 };
 use network::{multiaddr, Multiaddr};
 use network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
-use sr_primitives::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use txpool_api::TransactionPool;
 
 /// Maximum duration of single wait call.

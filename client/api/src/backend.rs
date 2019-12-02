@@ -20,8 +20,8 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use primitives::ChangesTrieConfiguration;
 use primitives::offchain::OffchainStorage;
-use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
-use sr_primitives::traits::{Block as BlockT, NumberFor};
+use sp_runtime::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction};
 use crate::{
