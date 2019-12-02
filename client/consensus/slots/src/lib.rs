@@ -348,7 +348,16 @@ where
 				}
 			};
 
-			if can_author_with.can_author_with(&BlockId::Hash(chain_head.hash())) {
+			if let Err(err) = can_author_with.can_author_with(&BlockId::Hash(chain_head.hash())) {
+				warn!(
+					target: "slots",
+					"Unable to author block in slot {},. `can_author_with` returned: {} \
+					Probably a node update is required!",
+					slot_num,
+					err,
+				);
+				Either::Right(future::ready(Ok(())))
+			} else {
 				Either::Left(
 					worker.on_slot(chain_head, slot_info)
 						.map_err(|e| {
@@ -356,14 +365,6 @@ where
 						})
 						.or_else(|_| future::ready(Ok(())))
 				)
-			} else {
-				warn!(
-					target: "slots",
-					"Unable to author block in slot {}. `can_author_with` returned `false`. \
-					Probably a node update is required!",
-					slot_num,
-				);
-				Either::Right(future::ready(Ok(())))
 			}
 		}).then(|res| {
 			if let Err(err) = res {
