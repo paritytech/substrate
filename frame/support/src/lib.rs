@@ -293,6 +293,36 @@ mod tests {
 	}
 
 	#[test]
+	fn double_map_swap_works() {
+		new_test_ext().execute_with(|| {
+			DataDM::insert(0, 1, 1);
+			DataDM::insert(1, 0, 2);
+			DataDM::insert(1, 1, 3);
+
+			let get_all = || vec![
+				DataDM::get(0, 1),
+				DataDM::get(1, 0),
+				DataDM::get(1, 1),
+				DataDM::get(2, 0),
+				DataDM::get(2, 1),
+			];
+			assert_eq!(get_all(), vec![1, 2, 3, 0, 0]);
+
+			// Two existing
+			DataDM::swap(0, 1, 1, 0);
+			assert_eq!(get_all(), vec![2, 1, 3, 0, 0]);
+
+			// Left existing
+			DataDM::swap(1, 0, 2, 0);
+			assert_eq!(get_all(), vec![2, 0, 3, 1, 0]);
+
+			// Right existing
+			DataDM::swap(2, 1, 1, 1);
+			assert_eq!(get_all(), vec![2, 0, 0, 1, 3]);
+		});
+	}
+
+	#[test]
 	fn linked_map_basic_insert_remove_should_work() {
 		new_test_ext().execute_with(|| {
 			// initialized during genesis
