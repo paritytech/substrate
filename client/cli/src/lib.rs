@@ -674,11 +674,13 @@ fn fill_network_configuration(
 	config.boot_nodes.extend(cli.bootnodes.into_iter());
 	config.config_path = Some(config_path.to_string_lossy().into());
 	config.net_config_path = config.config_path.clone();
-	config.reserved_nodes.extend(cli.reserved_nodes.into_iter());
 
+	config.reserved_nodes.extend(cli.reserved_nodes.into_iter());
 	if cli.reserved_only {
 		config.non_reserved_mode = NonReservedPeerMode::Deny;
 	}
+
+	config.sentry_nodes.extend(cli.sentry_nodes.into_iter());
 
 	for addr in cli.listen_addr.iter() {
 		let addr = addr.parse().ok().ok_or(error::Error::InvalidListenMultiaddress)?;
