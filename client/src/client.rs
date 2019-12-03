@@ -834,6 +834,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> sp_blockchain::Result<ImportResult> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
+		let span = tracing::info_span!(
+			"execute_and_import_block",
+			?hash,
+			?origin,
+			finalized,
+			enact_state
+		);
+		let _guard = span.enter();
 		let parent_hash = import_headers.post().parent_hash().clone();
 		let status = self.backend.blockchain().status(BlockId::Hash(hash))?;
 		match (import_existing, status) {
@@ -880,12 +888,18 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 				operation.op.update_cache(new_cache);
 				if let Some(storage_update) = storage_update {
+					let span = tracing::info_span!("storage_update");
+					let _guard = span.enter();
 					operation.op.update_db_storage(storage_update)?;
 				}
 				if let Some(storage_changes) = storage_changes.clone() {
+					let span = tracing::info_span!("storage_changes");
+					let _guard = span.enter();
 					operation.op.update_storage(storage_changes.0, storage_changes.1)?;
 				}
 				if let Some(Some(changes_update)) = changes_update {
+					let span = tracing::info_span!("changes_update");
+					let _guard = span.enter();
 					operation.op.update_changes_trie(changes_update)?;
 				}
 				storage_changes

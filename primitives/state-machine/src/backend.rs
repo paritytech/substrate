@@ -137,6 +137,8 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		I2: IntoIterator<Item=(Vec<u8>, I2i)>,
 		H::Out: Ord + Encode,
 	{
+		let span = tracing::info_span!("full_storage_root");
+		let _guard = span.enter();
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
