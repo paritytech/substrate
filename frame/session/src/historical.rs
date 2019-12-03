@@ -27,12 +27,12 @@
 
 use rstd::prelude::*;
 use codec::{Encode, Decode};
-use sr_primitives::KeyTypeId;
-use sr_primitives::traits::{Convert, OpaqueKeys, Hash as HashT};
+use sp_runtime::KeyTypeId;
+use sp_runtime::traits::{Convert, OpaqueKeys, Hash as HashT};
 use support::{decl_module, decl_storage};
 use support::{Parameter, print};
-use substrate_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
-use substrate_trie::trie_types::{TrieDBMut, TrieDB};
+use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
+use sp_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
 
 type ValidatorCount = u32;
@@ -214,7 +214,7 @@ impl<T: Trait> ProvingTrie<T> {
 	}
 
 	fn from_nodes(root: T::Hash, nodes: &[Vec<u8>]) -> Self {
-		use substrate_trie::HashDBT;
+		use sp_trie::HashDBT;
 
 		let mut memory_db = MemoryDB::default();
 		for node in nodes {
@@ -311,7 +311,7 @@ impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, 
 mod tests {
 	use super::*;
 	use primitives::crypto::key_types::DUMMY;
-	use sr_primitives::{traits::OnInitialize, testing::UintAuthorityId};
+	use sp_runtime::{traits::OnInitialize, testing::UintAuthorityId};
 	use crate::mock::{
 		NEXT_VALIDATORS, force_new_session,
 		set_next_validators, Test, System, Session,

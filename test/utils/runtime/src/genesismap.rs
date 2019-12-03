@@ -22,7 +22,7 @@ use super::{AuthorityId, AccountId, WASM_BINARY, system};
 use codec::{Encode, KeyedVec, Joiner};
 use primitives::{ChangesTrieConfiguration, map};
 use primitives::storage::{well_known_keys, OwnedChildInfo};
-use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
@@ -108,7 +108,7 @@ pub fn insert_genesis_block(
 	let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 		storage.0.clone().into_iter().collect()
 	);
-	let block: crate::Block = substrate_client::genesis::construct_genesis_block(state_root);
+	let block: crate::Block = sc_client::genesis::construct_genesis_block(state_root);
 	let genesis_hash = block.header.hash();
 	storage.0.extend(additional_storage_with_genesis(&block));
 	genesis_hash

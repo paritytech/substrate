@@ -1,6 +1,6 @@
-use sr_primitives::traits::Block as BlockT;
+use sp_runtime::traits::Block as BlockT;
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	pub trait Api<B: BlockT> {
 		fn test();
 	}

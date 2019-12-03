@@ -21,7 +21,7 @@ use std::sync::Arc;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
-use sr_primitives::traits::{Block as BlockT, Header};
+use sp_runtime::traits::{Block as BlockT, Header};
 use primitives::hexdisplay::HexDisplay;
 use primitives::storage::ChildInfo;
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
@@ -628,7 +628,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
 	use state_machine::backend::InMemory;
 	use primitives::Blake2Hasher;
 
@@ -876,7 +876,7 @@ mod qc {
 	use quickcheck::{quickcheck, TestResult, Arbitrary};
 
 	use super::*;
-	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
 	use state_machine::backend::InMemory;
 	use primitives::Blake2Hasher;
 

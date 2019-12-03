@@ -14,7 +14,7 @@ use runtime_io::{
 	crypto::{ed25519_verify, sr25519_verify},
 };
 #[cfg(not(feature = "std"))]
-use sr_primitives::{print, traits::{BlakeTwo256, Hash}};
+use sp_runtime::{print, traits::{BlakeTwo256, Hash}};
 #[cfg(not(feature = "std"))]
 use primitives::{ed25519, sr25519};
 

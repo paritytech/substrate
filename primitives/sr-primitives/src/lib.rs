@@ -586,15 +586,15 @@ macro_rules! impl_outer_config {
 ///
 /// ```rust
 /// # fn main() {
-/// sr_primitives::assert_eq_error_rate!(10, 10, 0);
-/// sr_primitives::assert_eq_error_rate!(10, 11, 1);
-/// sr_primitives::assert_eq_error_rate!(12, 10, 2);
+/// sp_runtime::assert_eq_error_rate!(10, 10, 0);
+/// sp_runtime::assert_eq_error_rate!(10, 11, 1);
+/// sp_runtime::assert_eq_error_rate!(12, 10, 2);
 /// # }
 /// ```
 ///
 /// ```rust,should_panic
 /// # fn main() {
-/// sr_primitives::assert_eq_error_rate!(12, 10, 1);
+/// sp_runtime::assert_eq_error_rate!(12, 10, 1);
 /// # }
 /// ```
 #[macro_export]

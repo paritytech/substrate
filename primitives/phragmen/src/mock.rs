@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use crate::{elect, PhragmenResult, PhragmenAssignment};
-use sr_primitives::{
+use sp_runtime::{
 	assert_eq_error_rate, Perbill,
 	traits::{Convert, Member, SaturatedConversion}
 };

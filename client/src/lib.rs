@@ -28,7 +28,7 @@
 //! Creating a [`Client`] is done by calling the `new` method and passing to it a
 //! [`Backend`](backend::Backend) and an [`Executor`](CallExecutor).
 //!
-//! The former is typically provided by the `substrate-client-db` crate.
+//! The former is typically provided by the `sc-client-db` crate.
 //!
 //! The latter typically requires passing one of:
 //!
@@ -46,9 +46,9 @@
 //!
 //! ```
 //! use std::sync::Arc;
-//! use substrate_client::{Client, in_mem::Backend, LocalCallExecutor};
+//! use sc_client::{Client, in_mem::Backend, LocalCallExecutor};
 //! use primitives::Blake2Hasher;
-//! use sr_primitives::{StorageOverlay, ChildrenStorageOverlay};
+//! use sp_runtime::{StorageOverlay, ChildrenStorageOverlay};
 //! use executor::{NativeExecutor, WasmExecutionMethod};
 //!
 //! // In this example, we're using the `Block` and `RuntimeApi` types from the

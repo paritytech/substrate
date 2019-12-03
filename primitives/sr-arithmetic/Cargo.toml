@@ -1,5 +1,5 @@
 [package]
-name = "sr-arithmetic"
+name = "sp-arithmetic"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -8,9 +8,9 @@ edition = "2018"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 integer-sqrt = "0.1.2"
 num-traits = { version = "0.2.8", default-features = false }
-rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+rstd = { package = "sp-std", path = "../sr-std", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-substrate-debug-derive = { path = "../../primitives/core/debug-derive", default-features = false }
+sp-debug-derive = { path = "../../primitives/core/debug-derive", default-features = false }
 
 [dev-dependencies]
 primitive-types = "0.6.0"
@@ -24,7 +24,7 @@ std = [
 	"num-traits/std",
 	"rstd/std",
 	"serde",
-	"substrate-debug-derive/std",
+	"sp-debug-derive/std",
 ]
 
 [[bench]]

@@ -20,7 +20,7 @@
 
 use rstd::prelude::*;
 use rstd::{result, convert::TryFrom};
-use sr_primitives::{
+use sp_runtime::{
 	RuntimeDebug,
 	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable, Saturating},
 };
@@ -283,7 +283,7 @@ decl_storage! {
 			map ReferendumIndex => Option<(ReferendumInfo<T::BlockNumber, T::Hash>)>;
 		/// Queue of successful referenda to be dispatched.
 		pub DispatchQueue get(fn dispatch_queue):
-			map T::BlockNumber => Vec<Option<(T::Hash, ReferendumIndex)>>;
+			map hasher(twox_64_concat) T::BlockNumber => Vec<Option<(T::Hash, ReferendumIndex)>>;
 
 		/// Get the voters for the current proposal.
 		pub VotersFor get(fn voters_for): map ReferendumIndex => Vec<T::AccountId>;
@@ -597,7 +597,7 @@ decl_module! {
 
 		fn on_initialize(n: T::BlockNumber) {
 			if let Err(e) = Self::begin_block(n) {
-				sr_primitives::print(e);
+				sp_runtime::print(e);
 			}
 		}
 
@@ -1092,7 +1092,7 @@ mod tests {
 		weights::Weight,
 	};
 	use primitives::H256;
-	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup, Bounded}, testing::Header, Perbill};
+	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, Bounded}, testing::Header, Perbill};
 	use balances::BalanceLock;
 	use system::EnsureSignedBy;
 

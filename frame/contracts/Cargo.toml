@@ -10,11 +10,11 @@ pwasm-utils = { version = "0.12.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 parity-wasm = { version = "0.41.0", default-features = false }
 wasmi-validation = { version = "0.3.0", default-features = false }
-primitives = { package = "substrate-primitives",  path = "../../primitives/core", default-features = false }
-sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
-runtime-io = { package = "sr-io", path = "../../primitives/sr-io", default-features = false }
-rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
-sandbox = { package = "sr-sandbox", path = "../../primitives/sr-sandbox", default-features = false }
+primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
+sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
+runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sandbox = { package = "sp-sandbox", path = "../../primitives/sr-sandbox", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }
 
@@ -32,7 +32,7 @@ std = [
 	"serde",
 	"codec/std",
 	"primitives/std",
-	"sr-primitives/std",
+	"sp-runtime/std",
 	"runtime-io/std",
 	"rstd/std",
 	"sandbox/std",

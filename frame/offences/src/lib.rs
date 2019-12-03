@@ -28,8 +28,8 @@ use rstd::vec::Vec;
 use support::{
 	decl_module, decl_event, decl_storage, Parameter,
 };
-use sr_primitives::traits::Hash;
-use sr_staking_primitives::{
+use sp_runtime::traits::Hash;
+use sp_staking::{
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails},
 };
 use codec::{Encode, Decode};

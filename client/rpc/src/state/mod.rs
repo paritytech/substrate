@@ -33,11 +33,11 @@ use primitives::{
 	storage::{StorageKey, StorageData, StorageChangeSet},
 };
 use runtime_version::RuntimeVersion;
-use sr_primitives::{
+use sp_runtime::{
 	traits::{Block as BlockT, ProvideRuntimeApi},
 };
 
-use sr_api::Metadata;
+use sp_api::Metadata;
 
 use self::error::{Error, FutureResult};
 

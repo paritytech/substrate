@@ -20,7 +20,7 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use substrate_debug_derive::RuntimeDebug;
+use sp_debug_derive::RuntimeDebug;
 
 use rstd::{vec::Vec, borrow::Cow};
 

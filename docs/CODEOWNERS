@@ -66,3 +66,7 @@
 
 # Support crates
 /frame/support/ @thiolliere @kianenigma
+
+# Authority discovery
+/client/authority-discovery/ @mxinden
+/frame/authority-discovery/ @mxinden

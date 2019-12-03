@@ -25,7 +25,7 @@ use jsonrpc_derive::rpc;
 use primitives::{H256, Bytes};
 use rpc_primitives::number;
 use serde::{Deserialize, Serialize};
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, ProvideRuntimeApi},
 };

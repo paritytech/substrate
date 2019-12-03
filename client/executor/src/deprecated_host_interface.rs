@@ -79,13 +79,13 @@ impl_wasm_host_interface! {
 	impl SubstrateExternals where context {
 		ext_malloc(size: WordSize) -> Pointer<u8> {
 			let r = context.allocate_memory(size)?;
-			debug_trace!(target: "sr-io", "malloc {} bytes at {:?}", size, r);
+			debug_trace!(target: "sp-io", "malloc {} bytes at {:?}", size, r);
 			Ok(r)
 		}
 
 		ext_free(addr: Pointer<u8>) {
 			context.deallocate_memory(addr)?;
-			debug_trace!(target: "sr-io", "free {:?}", addr);
+			debug_trace!(target: "sp-io", "free {:?}", addr);
 			Ok(())
 		}
 
