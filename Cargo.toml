@@ -146,3 +146,7 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.crates-io]
+trie-db = { path = '../parity-trie/trie-db' }
+hash-db = { path = '../parity-trie/hash-db' }
