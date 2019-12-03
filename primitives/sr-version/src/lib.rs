@@ -173,8 +173,8 @@ impl NativeVersion {
 				self.runtime_version.spec_name,
 				other.spec_name,
 			))
-		} else if (self.runtime_version.authoring_version != other.authoring_version
-			&& !self.can_author_with.contains(&other.authoring_version))
+		} else if self.runtime_version.authoring_version != other.authoring_version
+			&& !self.can_author_with.contains(&other.authoring_version)
 		{
 			Err(format!(
 				"`authoring_version` does not match `{version}` vs `{other_version}` and \

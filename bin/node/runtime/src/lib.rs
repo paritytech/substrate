@@ -78,7 +78,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 197,
+	spec_version: 198,
 	impl_version: 198,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -711,7 +711,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl sp_sesssion::SessionKeys<Block> for Runtime {
+	impl sp_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
 			SessionKeys::generate(seed)
 		}

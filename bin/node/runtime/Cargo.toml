@@ -26,7 +26,7 @@ sp-api = { path = "../../../primitives/sr-api", default-features = false }
 sp-runtime = { path = "../../../primitives/sr-primitives", default-features = false }
 sp-staking = { path = "../../../primitives/sr-staking-primitives", default-features = false }
 sp-keyring = { path = "../../../primitives/keyring", optional = true }
-sp-sesssion = { path = "../../../primitives/session", default-features = false }
+sp-session = { path = "../../../primitives/session", default-features = false }
 txpool-runtime-api = { package = "sp-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
 version = { package = "sp-version", path = "../../../primitives/sr-version", default-features = false }
 
@@ -107,7 +107,7 @@ std = [
 	"sp-staking/std",
 	"staking/std",
 	"sp-keyring",
-	"sp-sesssion/std",
+	"sp-session/std",
 	"sudo/std",
 	"support/std",
 	"system-rpc-runtime-api/std",
