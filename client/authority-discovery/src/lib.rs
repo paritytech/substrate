@@ -18,8 +18,9 @@
 
 //! Substrate authority discovery.
 //!
-//! This crate enables Substrate authorities to directly connect to other authorities. [`AuthorityDiscovery`] implements
-//! the Future trait. By polling [`AuthorityDiscovery`] an authority:
+//! This crate enables Substrate authorities to directly connect to other authorities.
+//! [`AuthorityDiscovery`] implements the Future trait. By polling [`AuthorityDiscovery`] an
+//! authority:
 //!
 //!
 //! 1. **Makes itself discoverable**
@@ -54,7 +55,9 @@ use futures::task::{Context, Poll};
 use futures::{Future, FutureExt, Stream, StreamExt};
 use futures_timer::Delay;
 
-use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
+use authority_discovery_primitives::{
+	AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair
+};
 use client_api::blockchain::HeaderBackend;
 use codec::{Decode, Encode};
 use error::{Error, Result};
@@ -79,7 +82,8 @@ mod schema {
 /// Upper bound estimation on how long one should wait before accessing the Kademlia DHT.
 const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
 
-/// Name of the Substrate peerset priority group for authorities discovered through the authority discovery module.
+/// Name of the Substrate peerset priority group for authorities discovered through the authority
+/// discovery module.
 const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
 
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
@@ -97,9 +101,10 @@ where
 	/// List of sentry node public addresses.
 	//
 	// There are 3 states:
-	//   None => No addresses were specified.
-	//   Some(vec![]) => Addresses were specified, but none could be parsed as proper Multiaddresses.
-	//   Some(vec![a, b, c, ...]) => Valid addresses were specified.
+	//   - None: No addresses were specified.
+	//   - Some(vec![]): Addresses were specified, but none could be parsed as proper
+	//     Multiaddresses.
+	//   - Some(vec![a, b, c, ...]): Valid addresses were specified.
 	sentry_nodes: Option<Vec<Multiaddr>>,
 	/// Channel we receive Dht events on.
 	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
@@ -111,10 +116,11 @@ where
 	/// Interval on which to query for addresses of other authorities.
 	query_interval: Interval,
 
-	/// The network peerset interface for priority groups lets us only set an entire group, but we retrieve the
-	/// addresses of other authorities one by one from the network. To use the peerset interface we need to cache the
-	/// addresses and always overwrite the entire peerset priority group. To ensure this map doesn't grow indefinitely
-	/// `purge_old_authorities_from_cache` function is called each time we add a new entry.
+	/// The network peerset interface for priority groups lets us only set an entire group, but we
+	/// retrieve the addresses of other authorities one by one from the network. To use the peerset
+	/// interface we need to cache the addresses and always overwrite the entire peerset priority
+	/// group. To ensure this map doesn't grow indefinitely `purge_old_authorities_from_cache`
+	/// function is called each time we add a new entry.
 	address_cache: HashMap<AuthorityId, Vec<Multiaddr>>,
 
 	phantom: PhantomData<Block>,
@@ -139,16 +145,18 @@ where
 		key_store: BareCryptoStorePtr,
 		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
 	) -> Self {
-		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h. Given that a node
-		// could restart at any point in time, one can not depend on the republishing process, thus publishing own
-		// external addresses should happen on an interval < 36h.
+		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h.
+		// Given that a node could restart at any point in time, one can not depend on the
+		// republishing process, thus publishing own external addresses should happen on an interval
+		// < 36h.
 		let publish_interval = interval_at(
 			Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
 			Duration::from_secs(12 * 60 * 60),
 		);
 
-		// External addresses of other authorities can change at any given point in time. The interval on which to query
-		// for external addresses of other authorities is a trade off between efficiency and performance.
+		// External addresses of other authorities can change at any given point in time. The
+		// interval on which to query for external addresses of other authorities is a trade off
+		// between efficiency and performance.
 		let query_interval = interval_at(
 			Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
 			Duration::from_secs(10 * 60),
@@ -247,7 +255,10 @@ where
 				DhtEvent::ValueFound(v) => {
 					if log_enabled!(log::Level::Debug) {
 						let hashes = v.iter().map(|(hash, _value)| hash.clone());
-						debug!(target: "sub-authority-discovery", "Value for hash '{:?}' found on Dht.", hashes);
+						debug!(
+							target: "sub-authority-discovery",
+							"Value for hash '{:?}' found on Dht.", hashes,
+						);
 					}
 
 					self.handle_dht_value_found_event(v)?;
@@ -277,8 +288,9 @@ where
 
 		let block_id = BlockId::hash(self.client.info().best_hash);
 
-		// From the Dht we only get the hashed authority id. In order to retrieve the actual authority id and to ensure
-		// it is actually an authority, we match the hash against the hash of the authority id of all other authorities.
+		// From the Dht we only get the hashed authority id. In order to retrieve the actual
+		// authority id and to ensure it is actually an authority, we match the hash against the
+		// hash of the authority id of all other authorities.
 		let authorities = self.client.runtime_api().authorities(&block_id)?;
 		self.purge_old_authorities_from_cache(&authorities);
 
@@ -297,7 +309,8 @@ where
 				signature,
 				addresses,
 			} = schema::SignedAuthorityAddresses::decode(value).map_err(Error::DecodingProto)?;
-			let signature = AuthoritySignature::decode(&mut &signature[..]).map_err(Error::EncodingDecodingScale)?;
+			let signature = AuthoritySignature::decode(&mut &signature[..])
+				.map_err(Error::EncodingDecodingScale)?;
 
 			if !AuthorityPair::verify(&signature, &addresses, authority_id) {
 				return Err(Error::VerifyingDhtPayload);
@@ -323,7 +336,10 @@ where
 				.flatten(),
 		);
 
-		debug!(target: "sub-authority-discovery", "Applying priority group {:#?} to peerset.", addresses);
+		debug!(
+			target: "sub-authority-discovery",
+			"Applying priority group {:#?} to peerset.", addresses,
+		);
 		self.network
 			.set_priority_group(AUTHORITIES_PRIORITY_GROUP_NAME.to_string(), addresses)
 			.map_err(Error::SettingPeersetPriorityGroup)?;
@@ -398,20 +414,20 @@ where
 			self.handle_dht_events(cx)?;
 
 			if let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {
-				// Make sure to call interval.poll until it returns Async::NotReady once. Otherwise, in case one of the
-				// function calls within this block do a `return`, we don't call `interval.poll` again and thereby the
-				// underlying Tokio task is never registered with Tokio's Reactor to be woken up on the next interval
-				// tick.
+				// Make sure to call interval.poll until it returns Async::NotReady once. Otherwise,
+				// in case one of the function calls within this block do a `return`, we don't call
+				// `interval.poll` again and thereby the underlying Tokio task is never registered
+				// with Tokio's Reactor to be woken up on the next interval tick.
 				while let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {}
 
 				self.publish_ext_addresses()?;
 			}
 
 			if let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {
-				// Make sure to call interval.poll until it returns Async::NotReady once. Otherwise, in case one of the
-				// function calls within this block do a `return`, we don't call `interval.poll` again and thereby the
-				// underlying Tokio task is never registered with Tokio's Reactor to be woken up on the next interval
-				// tick.
+				// Make sure to call interval.poll until it returns Async::NotReady once. Otherwise,
+				// in case one of the function calls within this block do a `return`, we don't call
+				// `interval.poll` again and thereby the underlying Tokio task is never registered
+				// with Tokio's Reactor to be woken up on the next interval tick.
 				while let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {}
 
 				self.request_addresses_of_others()?;
@@ -425,13 +441,15 @@ where
 			Err(e) => error!(target: "sub-authority-discovery", "Poll failure: {:?}", e),
 		};
 
-		// Make sure to always return NotReady as this is a long running task with the same lifetime as the node itself.
+		// Make sure to always return NotReady as this is a long running task with the same lifetime
+		// as the node itself.
 		Poll::Pending
 	}
 }
 
-/// NetworkProvider provides AuthorityDiscovery with all necessary hooks into the underlying Substrate networking. Using
-/// this trait abstraction instead of NetworkService directly is necessary to unit test AuthorityDiscovery.
+/// NetworkProvider provides AuthorityDiscovery with all necessary hooks into the underlying
+/// Substrate networking. Using this trait abstraction instead of NetworkService directly is
+/// necessary to unit test AuthorityDiscovery.
 pub trait NetworkProvider {
 	/// Returns the local external addresses.
 	fn external_addresses(&self) -> Vec<libp2p::Multiaddr>;
@@ -700,7 +718,8 @@ mod tests {
 
 	#[derive(Default)]
 	struct TestNetwork {
-		// Whenever functions on `TestNetwork` are called, the function arguments are added to the vectors below.
+		// Whenever functions on `TestNetwork` are called, the function arguments are added to the
+		// vectors below.
 		pub put_value_call: Arc<Mutex<Vec<(libp2p::kad::record::Key, Vec<u8>)>>>,
 		pub get_value_call: Arc<Mutex<Vec<libp2p::kad::record::Key>>>,
 		pub set_priority_group_call: Arc<Mutex<Vec<(String, HashSet<libp2p::Multiaddr>)>>>,
@@ -737,11 +756,14 @@ mod tests {
 		let (_dht_event_tx, dht_event_rx) = channel(1000);
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
 		let key_store = KeyStore::new();
-		let public = key_store.write().sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None).unwrap();
+		let public = key_store.write()
+			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
+			.unwrap();
 		let test_api = Arc::new(TestApi {authorities: vec![public.into()]});
 
-		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), vec![], key_store, dht_event_rx.boxed());
+		let mut authority_discovery = AuthorityDiscovery::new(
+			test_api, network.clone(), vec![], key_store, dht_event_rx.boxed(),
+		);
 
 		authority_discovery.publish_ext_addresses().unwrap();
 
@@ -764,8 +786,9 @@ mod tests {
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
 		let key_store = KeyStore::new();
 
-		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), vec![], key_store, dht_event_rx.boxed());
+		let mut authority_discovery = AuthorityDiscovery::new(
+			test_api, network.clone(), vec![], key_store, dht_event_rx.boxed(),
+		);
 
 		authority_discovery.request_addresses_of_others().unwrap();
 
@@ -783,8 +806,9 @@ mod tests {
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
 		let key_store = KeyStore::new();
 
-		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), vec![], key_store, dht_event_rx.boxed());
+		let mut authority_discovery = AuthorityDiscovery::new(
+			test_api, network.clone(), vec![], key_store, dht_event_rx.boxed(),
+		);
 
 		// Create sample dht event.
 
