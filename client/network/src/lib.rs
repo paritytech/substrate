@@ -199,6 +199,7 @@ pub use libp2p::multiaddr;
 
 pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
 pub use on_demand_layer::{OnDemand, RemoteResponse};
+pub use peerset::ReputationChange;
 
 // Used by the `construct_simple_protocol!` macro.
 #[doc(hidden)]

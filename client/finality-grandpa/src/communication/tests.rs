@@ -34,7 +34,7 @@ use super::{AuthorityId, VoterSet, Round, SetId};
 enum Event {
 	EventStream(mpsc::UnboundedSender<NetworkEvent>),
 	WriteNotification(network::PeerId, Vec<u8>),
-	Report(network::PeerId, i32),
+	Report(network::PeerId, network::ReputationChange),
 	Announce(Hash),
 }
 
@@ -51,7 +51,7 @@ impl network_gossip::Network<Block> for TestNetwork {
 		Box::new(rx)
 	}
 
-	fn report_peer(&self, who: network::PeerId, cost_benefit: i32) {
+	fn report_peer(&self, who: network::PeerId, cost_benefit: network::ReputationChange) {
 		let _ = self.sender.unbounded_send(Event::Report(who, cost_benefit));
 	}
 

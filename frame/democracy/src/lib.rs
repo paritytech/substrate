@@ -283,7 +283,7 @@ decl_storage! {
 			map ReferendumIndex => Option<(ReferendumInfo<T::BlockNumber, T::Hash>)>;
 		/// Queue of successful referenda to be dispatched.
 		pub DispatchQueue get(fn dispatch_queue):
-			map T::BlockNumber => Vec<Option<(T::Hash, ReferendumIndex)>>;
+			map hasher(twox_64_concat) T::BlockNumber => Vec<Option<(T::Hash, ReferendumIndex)>>;
 
 		/// Get the voters for the current proposal.
 		pub VotersFor get(fn voters_for): map ReferendumIndex => Vec<T::AccountId>;

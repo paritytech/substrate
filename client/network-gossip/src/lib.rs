@@ -19,7 +19,7 @@ pub use self::state_machine::{TopicNotification, MessageRecipient, MessageIntent
 pub use self::state_machine::{Validator, ValidatorContext, ValidationResult};
 pub use self::state_machine::DiscardAll;
 
-use network::{specialization::NetworkSpecialization, Event, ExHashT, NetworkService, PeerId};
+use network::{specialization::NetworkSpecialization, Event, ExHashT, NetworkService, PeerId, ReputationChange};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 use std::sync::Arc;
 
@@ -32,7 +32,7 @@ pub trait Network<B: BlockT> {
 	fn event_stream(&self) -> Box<dyn futures01::Stream<Item = Event, Error = ()> + Send>;
 
 	/// Adjust the reputation of a node.
-	fn report_peer(&self, peer_id: PeerId, reputation: i32);
+	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange);
 
 	/// Force-disconnect a peer.
 	fn disconnect_peer(&self, who: PeerId);
@@ -71,7 +71,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network<B> for Arc<Netw
 		Box::new(NetworkService::event_stream(self))
 	}
 
-	fn report_peer(&self, peer_id: PeerId, reputation: i32) {
+	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange) {
 		NetworkService::report_peer(self, peer_id, reputation);
 	}
 

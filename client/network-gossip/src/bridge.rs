@@ -19,7 +19,7 @@ use crate::state_machine::{ConsensusGossip, Validator, TopicNotification};
 
 use network::Context;
 use network::message::generic::ConsensusMessage;
-use network::{Event, config::Roles};
+use network::{Event, config::Roles, ReputationChange};
 
 use futures::{prelude::*, channel::mpsc, compat::Compat01As03, task::SpawnExt as _};
 use libp2p::PeerId;
@@ -145,7 +145,7 @@ impl<B: BlockT> GossipEngine<B> {
 		self.inner.lock().state_machine.abort();
 	}
 
-	pub fn report(&self, who: PeerId, reputation: i32) {
+	pub fn report(&self, who: PeerId, reputation: ReputationChange) {
 		self.inner.lock().context.report_peer(who, reputation);
 	}
 
@@ -260,7 +260,7 @@ struct ContextOverService<N> {
 }
 
 impl<B: BlockT, N: Network<B>> Context<B> for ContextOverService<N> {
-	fn report_peer(&mut self, who: PeerId, reputation: i32) {
+	fn report_peer(&mut self, who: PeerId, reputation: ReputationChange) {
 		self.network.report_peer(who, reputation);
 	}
 
