@@ -400,7 +400,8 @@ decl_module! {
 
 			ensure!(assumed_vote_index == Self::vote_index(), "vote index not current");
 			ensure!(
-				assumed_vote_index > last_active + T::InactiveGracePeriod::get(),
+				assumed_vote_index > last_active &&
+				assumed_vote_index - last_active > T::InactiveGracePeriod::get(),
 				"cannot reap during grace period"
 			);
 
@@ -508,6 +509,7 @@ decl_module! {
 				candidates[slot] = who;
 			}
 			<Candidates<T>>::put(candidates);
+			// SAFE we assume we will never have over 2^32 candidates
 			CandidateCount::put(count as u32 + 1);
 		}
 
@@ -537,6 +539,7 @@ decl_module! {
 			ensure!(index == Self::vote_index(), "index not current");
 			let (_, _, expiring) = Self::next_finalize()
 				.ok_or("cannot present outside of presentation period")?;
+			// SAFE for reasonable parameters
 			let bad_presentation_punishment =
 				T::PresentSlashPerVoter::get()
 				* BalanceOf::<T>::from(Self::voter_count() as u32);
@@ -566,7 +569,9 @@ decl_module! {
 						let last_win = b.last_win;
 						let now = Self::vote_index();
 						let stake = b.stake;
+						debug_assert!(now >= last_win);
 						let offset = Self::get_offset(stake, now - last_win);
+						// SAFE for reasonable choices, but we need to enforce limits
 						let weight = stake + offset + b.pot;
 						if Self::approvals_of_at(voter, candidate_index as usize) {
 							Some(weight)
@@ -574,7 +579,7 @@ decl_module! {
 					},
 					_ => None,
 				})
-				.fold(Zero::zero(), |acc, n| acc + n);
+				.fold(Zero::zero(), |acc, n| acc + n); // SAFE if we enforce limits
 			let dupe = leaderboard.iter().find(|&&(_, ref c)| c == &candidate).is_some();
 			if total == actual_total && !dupe {
 				// insert into leaderboard
@@ -734,8 +739,11 @@ impl<T: Trait> Module<T> {
 	fn remove_voter(voter: &T::AccountId, index: usize) {
 		let (set_index, vec_index) = Self::split_index(index, VOTER_SET_SIZE);
 		let mut set = Self::voters(set_index);
+		let r = &mut set[vec_index];
+		ensure!(r.is_some(), "cannot remove nonexistent votor");
 		set[vec_index] = None;
 		<Voters<T>>::insert(set_index, set);
+		// cannot overflow: votor count will not exceed u32::MAX
 		VoterCount::mutate(|c| *c = *c - 1);
 		Self::remove_all_approvals_of(voter);
 		<VoterInfoOf<T>>::remove(voter);
@@ -783,6 +791,7 @@ impl<T: Trait> Module<T> {
 			let last_win = info.last_win;
 			let now = index;
 			let offset = Self::get_offset(info.stake, now - last_win);
+			// SAFE: sum of all balances fits in a balance
 			pot_to_set = info.pot + offset;
 		} else {
 			// not yet a voter. Index _could be valid_. Fee might apply. Bond will be reserved O(1).
@@ -814,7 +823,8 @@ impl<T: Trait> Module<T> {
 						// NOTE: this is safe since the `withdraw()` will check this.
 						locked_balance -= T::VotingFee::get();
 					}
-					if set_len + 1 == VOTER_SET_SIZE {
+					if set_len == VOTER_SET_SIZE - 1 {
+						// SAFETY: we assume that we will not have more than 2^32 voters
 						NextVoterSet::put(next + 1);
 					}
 					<Voters<T>>::append_or_insert(next, &[Some(who.clone())][..])
@@ -822,6 +832,7 @@ impl<T: Trait> Module<T> {
 			}
 
 			T::Currency::reserve(&who, T::VotingBond::get())?;
+			// SAFETY: we assume that we will not have more than 2^32 voters
 			VoterCount::mutate(|c| *c = *c + 1);
 		}
 
@@ -879,6 +890,7 @@ impl<T: Trait> Module<T> {
 				.ok_or("finalize can only be called after a tally is started.")?;
 		let leaderboard: Vec<(BalanceOf<T>, T::AccountId)> = <Leaderboard<T>>::take()
 			.unwrap_or_default();
+		// SAFETY: will not overflow for reasonable amounts of time
 		let new_expiry = <system::Module<T>>::block_number() + Self::term_duration();
 
 		// return bond to winners.
@@ -900,6 +912,7 @@ impl<T: Trait> Module<T> {
 				.filter_map(|mv| mv.as_ref())
 				.filter(|v| Self::approvals_of_at(*v, index))
 				.for_each(|v| <VoterInfoOf<T>>::mutate(v, |a| {
+					// OVERFLOW; will not overflow for reasonable numbers of voters
 					if let Some(activity) = a { activity.last_win = Self::vote_index() + 1; }
 				}));
 		});
@@ -931,6 +944,7 @@ impl<T: Trait> Module<T> {
 		let mut count = 0u32;
 		for (address, slot) in runners_up {
 			new_candidates[slot as usize] = address;
+			// SAFETY: we assume reasonable number of candidates
 			count += 1;
 		}
 		for (old, new) in candidates.iter().zip(new_candidates.iter()) {
@@ -951,6 +965,7 @@ impl<T: Trait> Module<T> {
 		if let Some(last_index) = new_candidates
 			.iter()
 			.rposition(|c| *c != T::AccountId::default()) {
+				// OVERFLOW: we assume a reasonable number of candidates
 				new_candidates.truncate(last_index + 1);
 			}
 
@@ -958,6 +973,7 @@ impl<T: Trait> Module<T> {
 
 		<Candidates<T>>::put(new_candidates);
 		CandidateCount::put(count);
+		// OVERFLOW: we assume a reasonable number of voters
 		VoteCount::put(Self::vote_index() + 1);
 		Ok(())
 	}
@@ -983,6 +999,7 @@ impl<T: Trait> Module<T> {
 			if next_set.is_empty() {
 				break;
 			} else {
+				// OVERFLOW: will not have too many voters
 				index += 1;
 				all.extend(next_set);
 			}
@@ -1072,7 +1089,7 @@ impl<T: Trait> Module<T> {
 		let mut counter = 0;
 		loop {
 			let shl_index = counter % APPROVAL_FLAG_LEN;
-			result[index] += (if x[counter] { 1 } else { 0 }) << shl_index;
+			result[index] |= (if x[counter] { 1 } else { 0 }) << shl_index;
 			counter += 1;
 			if counter > x.len() - 1 { break; }
 			if counter % APPROVAL_FLAG_LEN == 0 {
@@ -1093,6 +1110,7 @@ impl<T: Trait> Module<T> {
 			)
 			.for_each(|c| {
 				let last_approve = match c.iter().rposition(|n| *n) {
+					// OVERFLOW: vec can’t use all memory
 					Some(index) => index + 1,
 					None => 0
 				};
@@ -1110,6 +1128,7 @@ impl<T: Trait> Module<T> {
 			let chunk = Self::approvals_of((who.clone(), index));
 			if chunk.is_empty() { break; }
 			all.extend(Self::flag_to_bool(chunk));
+			// OVERFLOW: vec can’t use all memory
 			index += 1;
 		}
 		all
@@ -1122,6 +1141,7 @@ impl<T: Trait> Module<T> {
 			let set = Self::approvals_of((who.clone(), index));
 			if set.len() > 0 {
 				<ApprovalsOf<T>>::remove((who.clone(), index));
+				// OVERFLOW: index cannot get too large
 				index += 1;
 			} else {
 				break
@@ -1141,12 +1161,14 @@ impl<T: Trait> Module<T> {
 	/// returned if `t` is zero.
 	fn get_offset(stake: BalanceOf<T>, t: VoteIndex) -> BalanceOf<T> {
 		let decay_ratio: BalanceOf<T> = T::DecayRatio::get().into();
+		// ERROR overflow
 		if t > 150 { return stake * decay_ratio }
 		let mut offset = stake;
 		let mut r = Zero::zero();
 		let decay = decay_ratio + One::one();
 		for _ in 0..t {
 			offset = offset.saturating_sub(offset / decay);
+			// ERROR overflow
 			r += offset
 		}
 		r

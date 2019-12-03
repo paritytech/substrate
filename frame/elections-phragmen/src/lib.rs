@@ -199,6 +199,7 @@ decl_module! {
 			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0) as usize;
 			let members_count = <Members<T>>::decode_len().unwrap_or(0) as usize;
 			// addition is valid: candidates and members never overlap.
+			// overflow will not happen: we assume we don’t have that many potential voters
 			let allowed_votes = candidates_count + members_count;
 
 			ensure!(!allowed_votes.is_zero(), "cannot vote when no candidates or members exist");
@@ -587,6 +588,7 @@ impl<T: Trait> Module<T> {
 	fn do_phragmen() {
 		let desired_seats = Self::desired_members() as usize;
 		let desired_runners_up = Self::desired_runners_up() as usize;
+		// overflow: we assume a reasonable number of candidates
 		let num_to_elect = desired_runners_up + desired_seats;
 
 		let mut candidates = Self::candidates();
@@ -720,6 +722,7 @@ impl<T: Trait> Module<T> {
 		// clean candidates.
 		<Candidates<T>>::kill();
 
+		// overflow: we assume a reasonable number of rounds
 		ElectionRounds::mutate(|v| *v += 1);
 	}
 }

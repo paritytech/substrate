@@ -408,7 +408,8 @@ decl_module! {
 				.map_err(|_| "proposer's balance too low")?;
 
 			let index = Self::public_prop_count();
-			ensure!(PropIndex::max_value() - 1 >= index, "would overflow u32");
+			// ASSUMPTION: we do not have 4 billion proposals
+			// ensure!(PropIndex::max_value() - 1 >= index, "would overflow u32");
 			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (value, &[&who][..]));
 
@@ -540,7 +541,7 @@ decl_module! {
 			// We don't consider it an error if `vote_period` is too low, like `emergency_propose`.
 			let period: u64 = voting_period.max(T::EmergencyVotingPeriod::get());
 			let now = <system::Module<T>>::block_number();
-			ensure!(u64::max_value() - now >= period(), "referendum voting period would overflow");
+			ensure!(u64::max_value() - now >= period, "referendum voting period would overflow");
 			<NextExternal<T>>::kill();
 			Self::inject_referendum(now + period, proposal_hash, threshold, delay).map(drop)?;
 		}
@@ -755,7 +756,7 @@ impl<T: Trait> Module<T> {
 	/// index.
 	pub fn locked_for(proposal: PropIndex) -> Option<BalanceOf<T>> {
 		// ERROR what is the best solution here?
-		Self::deposit_of(proposal).map(|(d, l)| d * (l.len() as u32).into())
+		Self::deposit_of(proposal).map(|(d, l)| d.saturating_mul(l.len() as u32).into())
 	}
 
 	/// Return true if `ref_index` is an on-going referendum.
@@ -803,10 +804,13 @@ impl<T: Trait> Module<T> {
 					}
 				}).fold(
 				    // ERROR what to do if there is overflow?
+					// This could be okay on the grounds there will not be 4 billion
+					// votors, but that needs to be checked.
 					(Zero::zero(), Zero::zero(), Zero::zero()),
 					|(a, b, c), (d, e, f)| (a + d, b + e, c + f)
 				);
 		let (del_approve, del_against, del_capital) = Self::tally_delegation(ref_index);
+		// ditto
 		(approve + del_approve, against + del_against, capital + del_capital)
 	}
 
@@ -825,10 +829,10 @@ impl<T: Trait> Module<T> {
 					MAX_RECURSION_LIMIT
 				);
 				if aye {
-					// ERROR overflow
+					// WARN is this safe in practice?
 					(approve_acc + votes, against_acc, turnout_acc + turnout)
 				} else {
-					// ERROR overflow
+					// WARN is this safe in practice?
 					(approve_acc, against_acc + votes, turnout_acc + turnout)
 				}
 			}
@@ -858,7 +862,7 @@ impl<T: Trait> Module<T> {
 						// SAFE: we checked that recursion_limit > 0 earlier
 						recursion_limit - 1
 					);
-					// ERROR what if this overflows?
+					// WARN is this safe in practice?
 					(votes_acc + votes + del_votes, turnout_acc + turnout + del_turnout)
 				}
 			)
@@ -920,7 +924,7 @@ impl<T: Trait> Module<T> {
 			Err("Cannot inject a referendum that ends earlier than preceeding referendum")?
 		}
 
-		// ERROR: we can hit 2^32 referenda.  Should change to a u64.
+		// SAFE: we assume we will not hit 2^32 referenda
 		ReferendumCount::put(ref_index + 1);
 		let item = ReferendumInfo { end, proposal_hash, threshold, delay };
 		<ReferendumInfoOf<T>>::insert(ref_index, item);
@@ -974,7 +978,7 @@ impl<T: Trait> Module<T> {
 			LastTabledWasExternal::put(true);
 			Self::deposit_event(RawEvent::ExternalTabled);
 			Self::inject_referendum(
-				// WARN safe for reasonable parameters
+				// SAFE will not overflow in any reasonable amount of time.
 				now + T::VotingPeriod::get(),
 				proposal,
 				threshold,
@@ -1038,8 +1042,7 @@ impl<T: Trait> Module<T> {
 		{
 			// now plus: the base lock period multiplied by the number of periods this voter
 			// offered to lock should they win...
-			// ERROR what if this overflows?
-			let locked_until = now + T::EnactmentPeriod::get() * conviction.lock_periods().into();
+			let locked_until = now.saturating_add(T::EnactmentPeriod::get().saturating_mul(conviction.lock_periods().into()));
 			// ...extend their bondage until at least then.
 			T::Currency::extend_lock(
 				DEMOCRACY_ID,
@@ -1057,15 +1060,14 @@ impl<T: Trait> Module<T> {
 				let _ = Self::enact_proposal(info.proposal_hash, index);
 			} else {
 				<DispatchQueue<T>>::append_or_insert(
-					// ERROR what if this overflows?
-					now + info.delay,
+					now.saturating_add(info.delay),
 					&[Some((info.proposal_hash, index))][..]
 				);
 			}
 		} else {
 			Self::deposit_event(RawEvent::NotPassed(index));
 		}
-		// ERROR what if this overflows?
+		// safe in practice
 		NextTally::put(index + 1);
 
 		Ok(())
