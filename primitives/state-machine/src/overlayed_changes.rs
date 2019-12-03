@@ -366,6 +366,31 @@ impl OverlayedChanges {
 			(_, prospective_key) => prospective_key,
 		}
 	}
+
+	/// Returns the next (in lexicographic order) child storage key in the overlayed alongside its
+	/// value.  If no value is next then `None` is returned.
+	pub fn next_child_storage_key_change(
+		&self,
+		storage_key: &[u8],
+		key: &[u8]
+	) -> Option<(&[u8], &OverlayedValue)> {
+		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
+
+		let next_prospective_key = self.prospective.children.get(storage_key)
+			.and_then(|map| map.range::<[u8], _>(range).next().map(|(k, v)| (&k[..], v)));
+
+		let next_committed_key = self.committed.children.get(storage_key)
+			.and_then(|map| map.range::<[u8], _>(range).next().map(|(k, v)| (&k[..], v)));
+
+		match (next_committed_key, next_prospective_key) {
+			// Committed is strictly less than prospective
+			(Some(committed_key), Some(prospective_key)) if committed_key.0 < prospective_key.0 =>
+				Some(committed_key),
+			(committed_key, None) => committed_key,
+			// Prospective key is less or equal to committed or committed doesn't exist
+			(_, prospective_key) => prospective_key,
+		}
+	}
 }
 
 #[cfg(test)]

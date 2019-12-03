@@ -70,6 +70,13 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Return the next key in storage in lexicographic order or `None` if there is no value.
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
+	/// Return the next key in child storage in lexicographic order or `None` if there is no value.
+	fn next_child_storage_key(
+		&self,
+		storage_key: &[u8],
+		key: &[u8]
+	) -> Result<Option<Vec<u8>>, Self::Error>;
+
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F);
 
@@ -176,6 +183,10 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		(*self).next_storage_key(key)
+	}
+
+	fn next_child_storage_key(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		(*self).next_child_storage_key(storage_key, key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
@@ -390,6 +401,14 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
 		let next_key = self.inner.get(&None)
+			.and_then(|map| map.range::<[u8], _>(range).next().map(|(k, _)| k).cloned());
+
+		Ok(next_key)
+	}
+
+	fn next_child_storage_key(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
+		let next_key = self.inner.get(&Some(storage_key.to_vec()))
 			.and_then(|map| map.range::<[u8], _>(range).next().map(|(k, _)| k).cloned());
 
 		Ok(next_key)

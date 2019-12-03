@@ -67,13 +67,45 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	/// Return the next key in the trie i.e. the minimum key that is strictly superior to `key` in
 	/// lexicographic order.
 	pub fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+		self.next_storage_key_from_root(&self.root, key)
+	}
+
+	/// Return the next key in the child trie i.e. the minimum key that is strictly superior to
+	/// `key` in lexicographic order.
+	pub fn next_child_storage_key(
+		&self,
+		storage_key: &[u8],
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, String> {
+		let child_root = match self.storage(storage_key)? {
+			Some(child_root) => child_root,
+			None => return Ok(None),
+		};
+
+		let mut hash = H::Out::default();
+
+		if child_root.len() != hash.as_ref().len() {
+			return Err(format!("Invalid child storage hash at {:?}", storage_key));
+		}
+		// note: child_root and hash must be same size, panics otherwise.
+		hash.as_mut().copy_from_slice(&child_root[..]);
+
+		self.next_storage_key_from_root(&hash, key)
+	}
+
+	/// Return next key from main trie or child trie by providing corresponding root.
+	fn next_storage_key_from_root(
+		&self,
+		root: &H::Out,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, String> {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
 			storage: &self.storage,
 			overlay: &mut read_overlay,
 		};
 
-		let trie = TrieDB::<H>::new(&eph, &self.root)
+		let trie = TrieDB::<H>::new(&eph, root)
 			.map_err(|e| format!("TrieDB creation error: {}", e))?;
 		let mut iter = trie.iter()
 			.map_err(|e| format!("TrieDB iteration error: {}", e))?;

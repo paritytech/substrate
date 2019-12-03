@@ -352,6 +352,26 @@ where
 		}
 	}
 
+	fn next_child_storage_key(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
+		// TODO TODO: cache next_backend_key with some cache.
+		let next_backend_key = self.backend.next_child_storage_key(storage_key.as_ref(), key)
+			.expect(EXT_NOT_ALLOWED_TO_FAIL);
+		let next_overlay_key_change = self.overlay.next_child_storage_key_change(
+			storage_key.as_ref(),
+			key
+		);
+
+		match (next_backend_key, next_overlay_key_change) {
+			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
+			(backend_key, None) => backend_key,
+			(_, Some(overlay_key)) => if overlay_key.1.value.is_some() {
+				Some(overlay_key.0.to_vec())
+			} else {
+				self.next_storage_key(&overlay_key.0[..])
+			},
+		}
+	}
+
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
 		trace!(target: "state-trace", "{:04x}: Put {}={:?}",
 			self.id,

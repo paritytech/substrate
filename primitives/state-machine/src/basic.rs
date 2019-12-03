@@ -158,6 +158,12 @@ impl Externalities for BasicExternalities {
 		self.top.range::<[u8], _>(range).next().map(|(k, _)| k).cloned()
 	}
 
+	fn next_child_storage_key(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
+		let range = (Bound::Excluded(key), Bound::Unbounded);
+		self.children.get(storage_key.as_ref())
+			.and_then(|child| child.range::<[u8], _>(range).next().map(|(k, _)| k).cloned())
+	}
+
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
 		if is_child_storage_key(&key) {
 			warn!(target: "trie", "Refuse to set child storage key via main storage");

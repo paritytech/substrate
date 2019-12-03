@@ -218,6 +218,13 @@ pub trait Storage {
 	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		self.next_storage_key(&key)
 	}
+
+	/// Get the next key in storage after the given one in lexicographic order in child storage.
+	fn child_next_key(&mut self, child_storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+		let storage_key = child_storage_key_or_panic(child_storage_key);
+		self.next_child_storage_key(storage_key, key)
+	}
+	//TODo todo make test for childs
 }
 
 /// Interface that provides trie related functionality.
