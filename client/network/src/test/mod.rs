@@ -401,8 +401,8 @@ impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 		&self,
 		_report_handle: ReportHandle,
 		_who: PeerId,
-		_rep_change_good: i32,
-		_rep_change_bad: i32,
+		_rep_change_good: crate::ReputationChange,
+		_rep_change_bad: crate::ReputationChange,
 		_transaction: Extrinsic
 	) {}
 
