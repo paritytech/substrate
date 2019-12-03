@@ -24,7 +24,7 @@ use network::{Event, config::Roles};
 use futures::{prelude::*, channel::mpsc, compat::Compat01As03, task::SpawnExt as _};
 use libp2p::PeerId;
 use parking_lot::Mutex;
-use sr_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
+use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 use std::{sync::Arc, time::Duration};
 
 pub struct GossipEngine<B: BlockT> {

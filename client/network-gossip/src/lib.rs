@@ -20,7 +20,7 @@ pub use self::state_machine::{Validator, ValidatorContext, ValidationResult};
 pub use self::state_machine::DiscardAll;
 
 use network::{specialization::NetworkSpecialization, Event, ExHashT, NetworkService, PeerId};
-use sr_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
+use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 use std::sync::Arc;
 
 mod bridge;
