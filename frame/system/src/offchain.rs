@@ -176,10 +176,11 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 	///
 	/// Technically it finds an intersection between given list of `AccountId`s
 	/// and accounts that are represented by public keys in local keystore.
+	/// If `None` is passed it returns all accounts in the keystore.
 	///
 	/// Returns both public keys and `AccountId`s of accounts that are available.
 	/// Such accounts can later be used to sign a payload or send signed transactions.
-	fn find_local_keys(accounts: impl IntoIterator<Item = T::AccountId>) -> Vec<(
+	fn find_local_keys(accounts: Option<impl IntoIterator<Item = T::AccountId>>) -> Vec<(
 		T::AccountId,
 		PublicOf<T, Call, Self::SignAndSubmit>,
 	)>;
@@ -191,9 +192,10 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 	/// with every of them.
 	///
 	/// Returns a vector of results and account ids that were supported.
+	#[must_use]
 	fn submit_signed(
-		accounts: impl IntoIterator<Item= T::AccountId>,
 		call: impl Into<Call> + Clone,
+		accounts: Option<impl IntoIterator<Item= T::AccountId>>,
 	) -> Vec<(T::AccountId, Result<(), ()>)> {
 		let keys = Self::find_local_keys(accounts);
 
@@ -271,30 +273,37 @@ impl<T, C, E, S, Call> SubmitSignedTransaction<T, Call> for TransactionSubmitter
 {
 	type SignAndSubmit = Self;
 
-	fn find_local_keys(accounts: impl IntoIterator<Item = T::AccountId>) -> Vec<(
+	fn find_local_keys(accounts: Option<impl IntoIterator<Item = T::AccountId>>) -> Vec<(
 		T::AccountId,
 		PublicOf<T, Call, Self::SignAndSubmit>,
 	)> {
 		// Convert app-specific keys into generic ones.
-		let local_keys = S::all().into_iter().map(|app_key| {
-			app_key.into()
-		}).collect::<Vec<<S as AppPublic>::Generic>>();
+		let local_accounts_and_keys = S::all()
+			.into_iter()
+			.map(|app_key| {
+				// unwrap app-crypto
+				let generic_pub_key: <S as AppPublic>::Generic = app_key.into();
+				// convert to expected public key type (might be MultiSigner)
+				let signer_pub_key: PublicOf<T, Call, Self::SignAndSubmit> = generic_pub_key.into();
+				// lookup accountid for that pubkey
+				let account = signer_pub_key.clone().into_account();
+				(account, signer_pub_key)
+			}).collect::<Vec<_>>();
 
-		// lookup accountids for the pub keys.
-		let mut local_accounts = local_keys.clone().into_iter().map(|pub_key| {
-			pub_key.into().into_account()
-		}).collect::<Vec<_>>();
-		// sort to allow bin-search.
-		local_accounts.sort();
+		if let Some(accounts) = accounts {
+			let mut local_accounts_and_keys = local_accounts_and_keys;
+			// sort by accountId to allow bin-search.
+			local_accounts_and_keys.sort_by(|a, b| a.0.cmp(&b.0));
 
-		// get all the matching accounts
-		accounts.into_iter().filter_map(|acc| {
-			let idx = local_accounts.binary_search(&acc).ok()?;
-			Some((
-				local_accounts.get(idx)?.clone(),
-				local_keys.get(idx)?.clone().into(),
-			))
-		}).collect()
+			// get all the matching accounts
+			accounts.into_iter().filter_map(|acc| {
+				let idx = local_accounts_and_keys.binary_search_by(|a| a.0.cmp(&acc)).ok()?;
+				local_accounts_and_keys.get(idx).cloned()
+			}).collect()
+		} else {
+			// just return all account ids and keys
+			local_accounts_and_keys
+		}
 	}
 }
 
