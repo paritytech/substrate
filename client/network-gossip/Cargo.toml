@@ -7,7 +7,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-async-std = "1.0"
 log = "0.4.8"
 futures01 = { package = "futures", version = "0.1.29" }
 futures = { version = "0.3.1", features = ["compat"] }

@@ -5339,7 +5339,6 @@ dependencies = [
 name = "sc-network-gossip"
 version = "2.0.0"
 dependencies = [
- "async-std 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-timer 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",

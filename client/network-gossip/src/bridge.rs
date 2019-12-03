@@ -76,7 +76,7 @@ impl<B: BlockT> GossipEngine<B> {
 			let inner = Arc::downgrade(&inner);
 			async move {
 				loop {
-					async_std::task::sleep(Duration::from_millis(1100)).await;
+					let _ = futures_timer::Delay::new(Duration::from_millis(1100)).await;
 					if let Some(inner) = inner.upgrade() {
 						let mut inner = inner.lock();
 						let inner = &mut *inner;
