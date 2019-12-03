@@ -85,14 +85,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, String> {
-		let fetched_root;
-		let root = if let Some(root) = child_info.root() {
-			root
-		} else {
-			fetched_root = self.storage(storage_key)?
-				.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key).encode());
-			&fetched_root
-		};
+		let root = self.storage(storage_key)?
+			.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key).encode());
 
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
@@ -102,7 +96,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_child_trie_value::<Layout<H>, _>(storage_key, child_info.keyspace(), &eph, root, key)
+		read_child_trie_value::<Layout<H>, _>(storage_key, child_info.keyspace(), &eph, &root, key)
 			.map_err(map_e)
 	}
 
@@ -113,18 +107,12 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		child_info: ChildInfo,
 		f: F,
 	) {
-		let fetched_root;
-		let root = if let Some(root) = child_info.root() {
-			root
-		} else {
-			fetched_root = match self.storage(storage_key) {
-				Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key).encode()),
-				Err(e) => {
-					debug!(target: "trie", "Error while iterating child storage: {}", e);
-					return;
-				}
-			};
-			&fetched_root
+		let root = match self.storage(storage_key) {
+			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key).encode()),
+			Err(e) => {
+				debug!(target: "trie", "Error while iterating child storage: {}", e);
+				return;
+			}
 		};
 
 		let mut read_overlay = S::Overlay::default();
@@ -152,20 +140,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		prefix: &[u8],
 		mut f: F,
 	) {
-		let fetched_root;
-		let root_vec = if let Some(root) = child_info.root() {
-			root
-		} else {
-			fetched_root = match self.storage(storage_key) {
-				Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key).encode()),
-				Err(e) => {
-					debug!(target: "trie", "Error while iterating child storage with prefix: {}", e);
-					return;
-				}
-			};
-			&fetched_root
+		let root_vec = match self.storage(storage_key) {
+			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key).encode()),
+			Err(e) => {
+				debug!(target: "trie", "Error while iterating child storage: {}", e);
+				return;
+			}
 		};
-
 		let mut root = H::Out::default();
 		root.as_mut().copy_from_slice(&root_vec);
 		self.keys_values_with_prefix_inner(&root, prefix, |k, _v| f(k), Some(child_info))

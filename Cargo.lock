@@ -6284,7 +6284,6 @@ name = "substrate-primitives-storage"
 version = "2.0.0"
 dependencies = [
  "impl-serde 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 2.0.0",
  "substrate-debug-derive 2.0.0",

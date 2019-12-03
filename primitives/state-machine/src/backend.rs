@@ -627,7 +627,7 @@ mod tests {
 	#[test]
 	fn in_memory_with_child_trie_only() {
 		let storage = InMemory::<primitives::Blake2Hasher>::default();
-		let child_info = OwnedChildInfo::new_default(b"unique_id_1".to_vec(), None);
+		let child_info = OwnedChildInfo::new_default(b"unique_id_1".to_vec());
 		let mut storage = storage.update(
 			vec![(
 				Some((b"1".to_vec(), child_info.clone())),
