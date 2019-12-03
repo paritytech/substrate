@@ -10,7 +10,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 rstd = { package = "sp-std", path = "../sr-std", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-api = { path = "../sr-api", default-features = false }
-sp-runtime = { path = "../sr-primitives", default-features = false }
+sp-runtime = { path = "../runtime", default-features = false }
 
 [features]
 default = ["std"]

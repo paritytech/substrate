@@ -30,7 +30,7 @@ sysinfo = "0.9.5"
 target_info = "0.1.0"
 keystore = { package = "sc-keystore", path = "../keystore" }
 sp-io = { path = "../../primitives/sr-io" }
-sp-runtime = { path = "../../primitives/sr-primitives" }
+sp-runtime = { path = "../../primitives/runtime" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
 session = { package = "sp-session", path = "../../primitives/session" }

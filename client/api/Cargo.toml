@@ -25,7 +25,7 @@ primitives = { package = "sp-core", path = "../../primitives/core", default-feat
 rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
 runtime-version = { package = "sp-version", path = "../../primitives/sr-version", default-features = false }
 sp-api = { path = "../../primitives/sr-api" }
-sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
+sp-runtime = { path = "../../primitives/runtime", default-features = false }
 state-machine = { package = "sp-state-machine", path = "../../primitives/state-machine" }
 sc-telemetry = { path = "../telemetry" }
 trie = { package = "sp-trie", path = "../../primitives/trie" }
@@ -39,4 +39,3 @@ test-primitives = { package = "substrate-test-primitives", path = "../../test/ut
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 kvdb-memorydb = "0.1.2"
 panic-handler = { package = "sp-panic-handler", path = "../../primitives/panic-handler" }
-

@@ -11,4 +11,4 @@ log = "0.4.8"
 serde = { version = "1.0.101", features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 primitives = { package = "sp-core",  path = "../core" }
-sp-runtime = { path = "../sr-primitives" }
+sp-runtime = { path = "../runtime" }
