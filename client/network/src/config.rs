@@ -255,6 +255,8 @@ pub struct NetworkConfiguration {
 	pub reserved_nodes: Vec<String>,
 	/// The non-reserved peer mode.
 	pub non_reserved_mode: NonReservedPeerMode,
+	/// List of sentry node public addresses.
+	pub sentry_nodes: Vec<String>,
 	/// Client identifier. Sent over the wire for debugging purposes.
 	pub client_version: String,
 	/// Name of the node. Sent over the wire for debugging purposes.
@@ -278,6 +280,7 @@ impl Default for NetworkConfiguration {
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
+			sentry_nodes: Vec::new(),
 			client_version: "unknown".into(),
 			node_name: "unknown".into(),
 			transport: TransportConfig::Normal {
