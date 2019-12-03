@@ -193,12 +193,31 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 	///
 	/// Returns a vector of results and account ids that were supported.
 	#[must_use]
+	fn submit_signed_from(
+		call: impl Into<Call> + Clone,
+		accounts: impl IntoIterator<Item= T::AccountId>,
+	) -> Vec<(T::AccountId, Result<(), ()>)> {
+		let keys = Self::find_local_keys(Some(accounts));
+		keys.into_iter().map(|(account, pub_key)| {
+			let call = call.clone().into();
+			(
+				account,
+				Self::SignAndSubmit::sign_and_submit(call, pub_key)
+			)
+		}).collect()
+	}
+
+	/// Create and submit signed transactions from all local accounts.
+	///
+	/// This method submits a signed transaction from all local accounts
+	/// for given application crypto.
+	///
+	/// Returns a vector of results and account ids that were supported.
+	#[must_use]
 	fn submit_signed(
 		call: impl Into<Call> + Clone,
-		accounts: Option<impl IntoIterator<Item= T::AccountId>>,
 	) -> Vec<(T::AccountId, Result<(), ()>)> {
-		let keys = Self::find_local_keys(accounts);
-
+		let keys = Self::find_local_keys(None as Option<Vec<_>>);
 		keys.into_iter().map(|(account, pub_key)| {
 			let call = call.clone().into();
 			(
