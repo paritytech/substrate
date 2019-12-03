@@ -19,7 +19,7 @@
 use codec::Encode;
 use rstd::convert::TryInto;
 use rstd::prelude::Vec;
-use sp_runtime::app_crypto::{self, RuntimeAppPublic, AppPublic, AppSignature};
+use sp_runtime::app_crypto::{RuntimeAppPublic, AppPublic, AppSignature};
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount};
 use support::debug;
 
