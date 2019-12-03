@@ -104,6 +104,7 @@ impl<T: Trait> Module<T> {
 		// the sample size has just been shrunk.
 		{
 			// take into account the item we haven't pushed yet.
+			// overflow: we assume a reasonable number of recents
 			let to_prune = (recent.len() + 1).saturating_sub(window_size.saturated_into::<usize>());
 
 			for drained in recent.drain(..to_prune) {
@@ -132,6 +133,7 @@ impl<T: Trait> Module<T> {
 				let b = ordered[(len / 2) - 1];
 
 				// compute average.
+				// ERROR: overflow
 				(a + b) / two
 			} else {
 				ordered[len / 2]
@@ -149,8 +151,9 @@ impl<T: Trait> Module<T> {
 			let latency = T::ReportLatency::get();
 
 			// the delay is the latency plus half the window size.
+			// overflow: we assume that the latency will be reasonable
 			let delay = latency + (window_size / two);
-			// median may be at most n - delay
+			// median may be at most n - delay, so cannot overflow
 			if median + delay <= now {
 				T::OnFinalizationStalled::on_stalled(window_size - T::BlockNumber::one(), median);
 			}
