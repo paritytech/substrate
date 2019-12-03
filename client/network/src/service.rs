@@ -42,7 +42,7 @@ use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
 use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse_addr}};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
-use crate::{transport, config::NonReservedPeerMode};
+use crate::{transport, config::NonReservedPeerMode, ReputationChange};
 use crate::config::{Params, TransportConfig};
 use crate::error::Error;
 use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, PeerInfo};
@@ -71,8 +71,8 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 		&self,
 		report_handle: ReportHandle,
 		who: PeerId,
-		reputation_change_good: i32,
-		reputation_change_bad: i32,
+		reputation_change_good: ReputationChange,
+		reputation_change_bad: ReputationChange,
 		transaction: B::Extrinsic,
 	);
 	/// Notify the pool about transactions broadcast.
@@ -94,7 +94,7 @@ impl From<PeersetHandle> for ReportHandle {
 impl ReportHandle {
 	/// Report a given peer as either beneficial (+) or costly (-) according to the
 	/// given scalar.
-	pub fn report_peer(&self, who: PeerId, cost_benefit: i32) {
+	pub fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
 		self.inner.report_peer(who, cost_benefit);
 	}
 }
@@ -449,7 +449,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 
 	/// Report a given peer as either beneficial (+) or costly (-) according to the
 	/// given scalar.
-	pub fn report_peer(&self, who: PeerId, cost_benefit: i32) {
+	pub fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
 		self.peerset.report_peer(who, cost_benefit);
 	}
 
@@ -786,7 +786,7 @@ impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for Network
 		if !success {
 			info!("Invalid justification provided by {} for #{}", who, hash);
 			self.protocol.user_protocol_mut().disconnect_peer(&who);
-			self.protocol.user_protocol_mut().report_peer(who, i32::min_value());
+			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid justification"));
 		}
 	}
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
@@ -806,7 +806,7 @@ impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for Network
 		if !success {
 			info!("Invalid finality proof provided by {} for #{}", who, request_block.0);
 			self.protocol.user_protocol_mut().disconnect_peer(&who);
-			self.protocol.user_protocol_mut().report_peer(who, i32::min_value());
+			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid finality proof"));
 		}
 	}
 }
