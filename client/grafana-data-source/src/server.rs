@@ -147,7 +147,7 @@ pub async fn run_server(mut address: std::net::SocketAddr) -> Result<(), Error> 
 }
 
 #[cfg(target_os = "unknown")]
-pub async fn run_server(_: std::net::SocketAddr) -> Result<(), RunError> {
+pub async fn run_server(_: std::net::SocketAddr) -> Result<(), Error> {
 	Ok(())
 }
 
