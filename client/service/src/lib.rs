@@ -629,8 +629,8 @@ where
 		&self,
 		report_handle: ReportHandle,
 		who: PeerId,
-		reputation_change_good: i32,
-		reputation_change_bad: i32,
+		reputation_change_good: network::ReputationChange,
+		reputation_change_bad: network::ReputationChange,
 		transaction: B::Extrinsic
 	) {
 		if !self.imports_external_transactions {
