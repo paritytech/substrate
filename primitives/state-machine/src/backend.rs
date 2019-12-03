@@ -16,7 +16,7 @@
 
 //! State machine backends. These manage the code and storage of contracts.
 
-use std::{error, fmt, cmp::Ord, collections::{HashMap, BTreeMap}, marker::PhantomData};
+use std::{error, fmt, cmp::Ord, collections::{HashMap, BTreeMap}, marker::PhantomData, ops};
 use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
@@ -387,10 +387,12 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		Ok(self.inner.get(&None).map(|map| map.get(key).is_some()).unwrap_or(false))
 	}
 
-	/// Next storage key is not optimised in InMemory
-	// TODO TODO: should we optimize this ?
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		Ok(self.inner.get(&None).and_then(|map| map.keys().filter(|k| &k[..] > key).min().cloned()))
+		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
+		let next_key = self.inner.get(&None)
+			.and_then(|map| map.range::<[u8], _>(range).next().map(|(k, _)| k).cloned());
+
+		Ok(next_key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {

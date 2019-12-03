@@ -154,7 +154,8 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.top.keys().filter(|k| &k[..] > key).min().cloned()
+		let range = (Bound::Excluded(key), Bound::Unbounded);
+		self.top.range::<[u8], _>(range).next().map(|(k, _)| k).cloned()
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
