@@ -3043,6 +3043,7 @@ dependencies = [
  "pallet-balances 2.0.0",
  "pallet-contracts 2.0.0",
  "pallet-grandpa 2.0.0",
+ "pallet-im-online 0.1.0",
  "pallet-indices 2.0.0",
  "pallet-session 2.0.0",
  "pallet-timestamp 2.0.0",

@@ -37,7 +37,6 @@ use node_primitives::Balance;
 use node_testing::keyring::*;
 
 mod common;
-
 use self::common::{*, sign};
 
 #[test]

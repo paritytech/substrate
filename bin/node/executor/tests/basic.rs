@@ -45,7 +45,6 @@ use wabt;
 use node_testing::keyring::*;
 
 mod common;
-
 use self::common::{*, sign};
 
 
