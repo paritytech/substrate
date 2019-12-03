@@ -20,7 +20,7 @@ use crate::Error;
 
 pub struct Database {
 	base_timestamp: i64,
-	storage: HashMap<&'static str, Vec<Datapoint>>
+	storage: HashMap<String, Vec<Datapoint>>
 }
 
 impl Database {
@@ -33,8 +33,10 @@ impl Database {
 	}
 
 	/// Produce an iterator for keys starting with a base string.
-	pub fn keys_starting_with<'a>(&'a self, base: &'a str) -> impl Iterator<Item = &'static str> + 'a {
-		self.storage.keys().filter(move |key| key.starts_with(base)).cloned()
+	pub fn keys_starting_with<'a>(&'a self, base: &'a str) -> impl Iterator<Item = String> + 'a {
+		self.storage.keys()
+			.filter(move |key| key.starts_with(base))
+			.cloned()
 	}
 
 	/// Select `max_datapoints` datapoints that have been added between `from` and `to`.
@@ -65,8 +67,8 @@ impl Database {
 
 	/// Push a new datapoint. Will error if the base timestamp hasn't been updated in `2^32`
 	/// milliseconds (49 days).
-	pub fn push(&mut self, key: &'static str, value: f32) -> Result<(), Error> {
-		self.storage.entry(key)
+	pub fn push(&mut self, key: &str, value: f32) -> Result<(), Error> {
+		self.storage.entry(key.into())
 			.or_insert_with(Vec::new)
 			.push(Datapoint::new(self.base_timestamp, value)?);
 

@@ -46,7 +46,7 @@ lazy_static! {
 /// Write metrics to `METRICS`.
 #[macro_export]
 macro_rules! record_metrics(
-	($($key:expr => $value:expr),*) => {
+	($($key:expr => $value:expr,)*) => {
 		$crate::record_metrics_slice(&[
 			$( ($key, $value as f32), )*
 		]);
@@ -54,7 +54,7 @@ macro_rules! record_metrics(
 );
 
 /// Write metrics to `METRICS` as a slice. Intended to be only used via `record_metrics!`.
-pub fn record_metrics_slice(metrics: &[(&'static str, f32)]) -> Result<(), Error> {
+pub fn record_metrics_slice(metrics: &[(&str, f32)]) -> Result<(), Error> {
 	let mut database = crate::DATABASE.write();
 
 	for &(key, value) in metrics.iter() {
