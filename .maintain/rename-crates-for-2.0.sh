@@ -46,7 +46,7 @@ TO_RENAME=(
     "substrate-debug-derive sp-debug-derive"
     "substrate-primitives-storage sp-storage"
     "substrate-externalities sp-externalities"
-    "substrate-finality-grandpa-primitives sp-finality-granpda"
+    "substrate-finality-grandpa-primitives sp-finality-grandpa"
     "substrate-inherents sp-inherents"
     "substrate-keyring sp-keyring"
     "substrate-offchain-primitives sp-offchain"
