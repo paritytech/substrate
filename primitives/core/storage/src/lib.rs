@@ -284,7 +284,7 @@ impl OwnedChildTrie {
 	/// are not compatible.
 	fn try_update(&mut self, other: ChildInfo) -> bool {
 		match other {
-			ChildInfo::Default(other) => self.data[..] != other.data[..],
+			ChildInfo::Default(other) => self.data[..] == other.data[..],
 		}
 	}
 }
