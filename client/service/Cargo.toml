@@ -60,5 +60,5 @@ tracing = "0.1.10"
 substrate-test-runtime-client = { path = "../../test/utils/runtime/client" }
 babe-primitives = { package = "sp-consensus-babe", path = "../../primitives/consensus/babe" }
 grandpa = { package = "sc-finality-grandpa", path = "../finality-grandpa" }
-grandpa-primitives = { package = "sp-finality-granpda", path = "../../primitives/finality-grandpa" }
+grandpa-primitives = { package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 tokio = "0.1"
