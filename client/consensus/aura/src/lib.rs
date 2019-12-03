@@ -31,9 +31,9 @@
 use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin};
 
 use codec::{Encode, Decode, Codec};
-use consensus_common::{self, BlockImport, Environment, Proposer,
-	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
-	SelectChain,
+use consensus_common::{
+	self, BlockImport, Environment, Proposer, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
+	BlockOrigin, Error as ConsensusError, SelectChain,
 };
 use consensus_common::import_queue::{
 	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
@@ -48,8 +48,8 @@ use sp_blockchain::{
 
 use block_builder_api::BlockBuilder as BlockBuilderApi;
 
-use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
-use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
+use sp_runtime::{generic::{BlockId, OpaqueDigestItemId}, Justification};
+use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
 
 use primitives::crypto::Pair;
 use inherents::{InherentDataProviders, InherentData};
@@ -63,14 +63,14 @@ use sp_timestamp::{
 	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
 };
 
-use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible};
 use slots::check_equivocation;
 
 use keystore::KeyStorePtr;
 
-use sr_api::ApiExt;
+use sp_api::ApiExt;
 
 pub use aura_primitives::{
 	ConsensusLog, AuraApi, AURA_ENGINE_ID,
@@ -143,7 +143,7 @@ impl SlotCompatible for AuraSlotCompatible {
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
-pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
+pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error, H>(
 	slot_duration: SlotDuration,
 	client: Arc<C>,
 	select_chain: SC,
@@ -153,6 +153,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 	keystore: KeyStorePtr,
+	can_author_with: CAW,
 ) -> Result<impl futures01::Future<Item = (), Error = ()>, consensus_common::Error> where
 	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
@@ -168,6 +169,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
+	CAW: CanAuthorWith<B> + Send,
 {
 	let worker = AuraWorker {
 		client: client.clone(),
@@ -182,13 +184,14 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 		&inherent_data_providers,
 		slot_duration.0.slot_duration()
 	)?;
-	Ok(slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible>(
+	Ok(slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
 		slot_duration.0,
 		select_chain,
 		worker,
 		sync_oracle,
 		inherent_data_providers,
 		AuraSlotCompatible,
+		can_author_with,
 	).map(|()| Ok::<(), ()>(())).compat())
 }
 
@@ -253,7 +256,7 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 		})
 	}
 
-	fn pre_digest_data(&self, slot_number: u64, _claim: &Self::Claim) -> Vec<sr_primitives::DigestItem<B::Hash>> {
+	fn pre_digest_data(&self, slot_number: u64, _claim: &Self::Claim) -> Vec<sp_runtime::DigestItem<B::Hash>> {
 		vec![
 			<DigestItemFor<B> as CompatibleDigestItem<P>>::aura_pre_digest(slot_number),
 		]
@@ -281,6 +284,7 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 				auxiliary: Vec::new(),
 				fork_choice: ForkChoiceStrategy::LongestChain,
 				allow_missing_state: false,
+				import_existing: false,
 			}
 		})
 	}
@@ -590,6 +594,7 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
 					allow_missing_state: false,
+					import_existing: false,
 				};
 
 				Ok((block_import_params, maybe_keys))
@@ -715,7 +720,7 @@ mod tests {
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient, PeersFullClient};
-	use sr_primitives::traits::{Block as BlockT, DigestFor};
+	use sp_runtime::traits::{Block as BlockT, DigestFor};
 	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
@@ -862,7 +867,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, _, AuthorityPair, _, _, _>(
+			let aura = start_aura::<_, _, _, _, _, AuthorityPair, _, _, _, _>(
 				slot_duration,
 				client.clone(),
 				select_chain,
@@ -872,6 +877,7 @@ mod tests {
 				inherent_data_providers,
 				false,
 				keystore,
+				consensus_common::AlwaysCanAuthor,
 			).expect("Starts aura");
 
 			runtime.spawn(aura);

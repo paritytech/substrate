@@ -16,7 +16,7 @@
 
 //! A high-level helpers for making HTTP requests from Offchain Workers.
 //!
-//! `sr-io` crate exposes a low level methods to make and control HTTP requests
+//! `sp-io` crate exposes a low level methods to make and control HTTP requests
 //! available only for Offchain Workers. Those might be hard to use
 //! and usually that level of control is not really necessary.
 //! This module aims to provide high-level wrappers for those APIs
@@ -25,7 +25,7 @@
 //!
 //! Example:
 //! ```rust,no_run
-//! use sr_primitives::offchain::http::Request;
+//! use sp_runtime::offchain::http::Request;
 //!
 //! // initiate a GET request to localhost:1234
 //! let request: Request = Request::get("http://localhost:1234");

@@ -21,15 +21,18 @@
 use std::cell::RefCell;
 use crate::{Module, Trait};
 use codec::Encode;
-use sr_primitives::Perbill;
-use sr_staking_primitives::{
+use sp_runtime::Perbill;
+use sp_staking::{
 	SessionIndex,
 	offence::{self, Kind, OffenceDetails},
 };
-use sr_primitives::testing::Header;
-use sr_primitives::traits::{IdentityLookup, BlakeTwo256};
-use substrate_primitives::H256;
-use support::{impl_outer_origin, impl_outer_event, parameter_types, StorageMap, StorageDoubleMap};
+use sp_runtime::testing::Header;
+use sp_runtime::traits::{IdentityLookup, BlakeTwo256};
+use sp_core::H256;
+use support::{
+	impl_outer_origin, impl_outer_event, parameter_types, StorageMap, StorageDoubleMap,
+	weights::Weight,
+};
 use {runtime_io, system};
 
 impl_outer_origin!{
@@ -46,6 +49,7 @@ impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender> for OnOff
 	fn on_offence(
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
+		_offence_session: SessionIndex,
 	) {
 		ON_OFFENCE_PERBILL.with(|f| {
 			*f.borrow_mut() = slash_fraction.to_vec();
@@ -64,7 +68,7 @@ pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> 
 pub struct Runtime;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
@@ -148,9 +152,7 @@ impl<T: Clone> offence::Offence<T> for Offence<T> {
 	}
 
 	fn session_index(&self) -> SessionIndex {
-		// session index is not used by the pallet-offences directly, but rather it exists only for
-		// filtering historical reports.
-		unimplemented!()
+		1
 	}
 
 	fn slash_fraction(

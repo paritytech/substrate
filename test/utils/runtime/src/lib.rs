@@ -29,11 +29,11 @@ use primitives::{Blake2Hasher, OpaqueMetadata, RuntimeDebug};
 use app_crypto::{ed25519, sr25519, RuntimeAppPublic};
 pub use app_crypto;
 use trie_db::{TrieMut, Trie};
-use substrate_trie::PrefixedMemoryDB;
-use substrate_trie::trie_types::{TrieDB, TrieDBMut};
+use sp_trie::PrefixedMemoryDB;
+use sp_trie::trie_types::{TrieDB, TrieDBMut};
 
-use sr_api::{decl_runtime_apis, impl_runtime_apis};
-use sr_primitives::{
+use sp_api::{decl_runtime_apis, impl_runtime_apis};
+use sp_runtime::{
 	ApplyExtrinsicResult, create_runtime_str, Perbill, impl_opaque_keys,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
@@ -47,7 +47,7 @@ use runtime_version::RuntimeVersion;
 pub use primitives::{hash::H256};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
-use runtime_support::{impl_outer_origin, parameter_types};
+use runtime_support::{impl_outer_origin, parameter_types, weights::Weight};
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 
@@ -124,7 +124,7 @@ impl BlindCheckable for Extrinsic {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
 			Extrinsic::Transfer(transfer, signature) => {
-				if sr_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
+				if sp_runtime::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
 					Ok(Extrinsic::Transfer(transfer, signature))
 				} else {
 					Err(InvalidTransaction::BadProof.into())
@@ -173,17 +173,17 @@ pub type BlockNumber = u64;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.
-pub type DigestItem = sr_primitives::generic::DigestItem<H256>;
+pub type DigestItem = sp_runtime::generic::DigestItem<H256>;
 /// The digest of a block.
-pub type Digest = sr_primitives::generic::Digest<H256>;
+pub type Digest = sp_runtime::generic::Digest<H256>;
 /// A test block.
-pub type Block = sr_primitives::generic::Block<Header, Extrinsic>;
+pub type Block = sp_runtime::generic::Block<Header, Extrinsic>;
 /// A test block's header.
-pub type Header = sr_primitives::generic::Header<BlockNumber, BlakeTwo256>;
+pub type Header = sp_runtime::generic::Header<BlockNumber, BlakeTwo256>;
 
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
-	use sr_primitives::print;
+	use sp_runtime::print;
 
 	print("run_tests...");
 	let block = Block::decode(&mut input).unwrap();
@@ -353,7 +353,7 @@ impl From<frame_system::Event> for Event {
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	pub const MinimumPeriod: u64 = 5;
-	pub const MaximumBlockWeight: u32 = 4 * 1024 * 1024;
+	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
 	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }
@@ -457,7 +457,7 @@ static mut MUTABLE_STATIC: u64 = 32;
 cfg_if! {
 	if #[cfg(feature = "std")] {
 		impl_runtime_apis! {
-			impl sr_api::Core<Block> for Runtime {
+			impl sp_api::Core<Block> for Runtime {
 				fn version() -> RuntimeVersion {
 					version()
 				}
@@ -471,13 +471,13 @@ cfg_if! {
 				}
 			}
 
-			impl sr_api::Metadata<Block> for Runtime {
+			impl sp_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
 				}
 			}
 
-			impl transaction_pool_api::TaggedTransactionQueue<Block> for Runtime {
+			impl txpool_runtime_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction {
@@ -642,7 +642,7 @@ cfg_if! {
 		}
 	} else {
 		impl_runtime_apis! {
-			impl sr_api::Core<Block> for Runtime {
+			impl sp_api::Core<Block> for Runtime {
 				fn version() -> RuntimeVersion {
 					version()
 				}
@@ -656,13 +656,13 @@ cfg_if! {
 				}
 			}
 
-			impl sr_api::Metadata<Block> for Runtime {
+			impl sp_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
 				}
 			}
 
-			impl transaction_pool_api::TaggedTransactionQueue<Block> for Runtime {
+			impl txpool_runtime_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction{
@@ -937,7 +937,7 @@ mod tests {
 		DefaultTestClientBuilderExt, TestClientBuilder,
 		runtime::TestAPI,
 	};
-	use sr_primitives::{
+	use sp_runtime::{
 		generic::BlockId,
 		traits::ProvideRuntimeApi,
 	};

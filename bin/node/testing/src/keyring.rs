@@ -19,7 +19,7 @@
 use keyring::{AccountKeyring, Sr25519Keyring, Ed25519Keyring};
 use node_primitives::{AccountId, Balance, Index};
 use node_runtime::{CheckedExtrinsic, UncheckedExtrinsic, SessionKeys, SignedExtra};
-use sr_primitives::generic::Era;
+use sp_runtime::generic::Era;
 use codec::Encode;
 
 /// Alice's account id.

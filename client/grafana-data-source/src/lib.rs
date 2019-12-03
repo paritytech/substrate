@@ -65,12 +65,13 @@ pub fn record_metrics_slice(metrics: &[(&'static str, f32)]) -> Result<(), Error
 }
 
 /// Error type that can be returned by either `record_metrics` or `run_server`.
-#[derive(Debug, derive_more::Display)]
+#[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	Hyper(hyper::Error),
 	Serde(serde_json::Error),
 	Http(hyper::http::Error),
 	Timestamp(TryFromIntError),
+	Io(std::io::Error)
 }
 
 impl std::error::Error for Error {
@@ -79,7 +80,8 @@ impl std::error::Error for Error {
 			Error::Hyper(error) => Some(error),
 			Error::Serde(error) => Some(error),
 			Error::Http(error) => Some(error),
-			Error::Timestamp(error) => Some(error)
+			Error::Timestamp(error) => Some(error),
+			Error::Io(error) => Some(error)
 		}
 	}
 }

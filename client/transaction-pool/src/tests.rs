@@ -21,7 +21,7 @@ use codec::Encode;
 use futures::executor::block_on;
 use txpool::{self, Pool};
 use test_client::{runtime::{AccountId, Block, Hash, Index, Extrinsic, Transfer}, AccountKeyring::{self, *}};
-use sr_primitives::{
+use sp_runtime::{
 	generic::{self, BlockId},
 	traits::{Hash as HashT, BlakeTwo256},
 	transaction_validity::{TransactionValidity, ValidTransaction},

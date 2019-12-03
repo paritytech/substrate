@@ -1,7 +1,7 @@
 error: can't qualify macro invocation with `pub`
  --> $DIR/invalid_api_version_2.rs:1:1
   |
-1 | / sr_api::decl_runtime_apis! {
+1 | / sp_api::decl_runtime_apis! {
 2 | |     #[api_version("1")]
 3 | |     pub trait Api {
 4 | |         fn test(data: u64);
@@ -16,7 +16,7 @@ error: can't qualify macro invocation with `pub`
 error: Unexpected `api_version` attribute. The supported format is `api_version(1)`
  --> $DIR/invalid_api_version_2.rs:1:1
   |
-1 | / sr_api::decl_runtime_apis! {
+1 | / sp_api::decl_runtime_apis! {
 2 | |     #[api_version("1")]
 3 | |     pub trait Api {
 4 | |         fn test(data: u64);

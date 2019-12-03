@@ -38,7 +38,7 @@ pub struct RuntimeDispatchInfo<Balance> {
 	pub partial_fee: Balance,
 }
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	pub trait TransactionPaymentApi<Balance, Extrinsic> where
 		Balance: Codec,
 		Extrinsic: Codec,

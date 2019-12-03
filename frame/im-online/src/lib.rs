@@ -76,7 +76,7 @@ use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use rstd::prelude::*;
 use rstd::convert::TryInto;
 use session::historical::IdentificationTuple;
-use sr_primitives::{
+use sp_runtime::{
 	RuntimeDebug,
 	traits::{Convert, Member, Printable, Saturating}, Perbill,
 	transaction_validity::{
@@ -84,7 +84,7 @@ use sr_primitives::{
 		TransactionPriority,
 	},
 };
-use sr_staking_primitives::{
+use sp_staking::{
 	SessionIndex,
 	offence::{ReportOffence, Offence, Kind},
 };
@@ -509,7 +509,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = T::AuthorityId;
 }
 
@@ -653,8 +653,14 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 	}
 
 	fn slash_fraction(offenders: u32, validator_set_count: u32) -> Perbill {
-		// the formula is min((3 * (k - 1)) / n, 1) * 0.05
-		let x = Perbill::from_rational_approximation(3 * (offenders - 1), validator_set_count);
-		x.saturating_mul(Perbill::from_percent(5))
+		// the formula is min((3 * (k - (n / 10 + 1))) / n, 1) * 0.07
+		// basically, 10% can be offline with no slash, but after that, it linearly climbs up to 7%
+		// when 13/30 are offline (around 5% when 1/3 are offline).
+		if let Some(threshold) = offenders.checked_sub(validator_set_count / 10 + 1) {
+			let x = Perbill::from_rational_approximation(3 * threshold, validator_set_count);
+			x.saturating_mul(Perbill::from_percent(7))
+		} else {
+			Perbill::default()
+		}
 	}
 }

@@ -181,7 +181,7 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 	parent_hash: H::Out,
 ) -> Result<Option<(MemoryDB<H>, H::Out, CacheAction<H::Out, Number>)>, ()>
 	where
-		H::Out: Ord + 'static,
+		H::Out: Ord + 'static + Encode,
 {
 	let (storage, config) = match (storage, changes.changes_trie_config.as_ref()) {
 		(Some(storage), Some(config)) => (storage, config),

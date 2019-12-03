@@ -7,8 +7,8 @@ edition = "2018"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
-primitives = { package = "substrate-primitives", path = "../../primitives/core", default-features = false }
+rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+primitives = { package = "sp-core", path = "../../primitives/core", default-features = false }
 
 [features]
 default = ["std"]

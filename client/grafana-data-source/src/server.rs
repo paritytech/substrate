@@ -98,10 +98,30 @@ impl<T> tokio_executor::TypedExecutor<T> for Executor
 
 /// Start the data source server.
 #[cfg(not(target_os = "unknown"))]
-pub async fn run_server(address: std::net::SocketAddr) -> Result<(), Error> {
+pub async fn run_server(mut address: std::net::SocketAddr) -> Result<(), Error> {
+	use async_std::{net, io};
 	use crate::networking::Incoming;
 
-	let listener = async_std::net::TcpListener::bind(&address).await.unwrap();
+	let listener = loop {
+		let listener = net::TcpListener::bind(&address).await;
+		match listener {
+			Ok(listener) => {
+				log::info!("Grafana data source server started at {}", address);
+				break listener
+			},
+			Err(err) => match err.kind() {
+				io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied if address.port() != 0 => {
+					log::warn!(
+						"Unable to bind grafana data source server to {}. Trying random port.",
+						address
+					);
+					address.set_port(0);
+					continue;
+				},
+				_ => Err(err)?,
+			}
+		}
+	};
 
 	let service = make_service_fn(|_| {
 		async {
@@ -114,11 +134,12 @@ pub async fn run_server(address: std::net::SocketAddr) -> Result<(), Error> {
 		.serve(service)
 		.boxed();
 
-	let clean = clean_up(Duration::days(1), Duration::weeks(1))
+	let every = std::time::Duration::from_secs(24 * 3600);
+	let clean = clean_up(every, Duration::weeks(1))
 		.boxed();
 
 	let result = match select(server, clean).await {
-		Either::Left((result, _)) => result.map_err(Error::Hyper),
+		Either::Left((result, _)) => result.map_err(Into::into),
 		Either::Right((result, _)) => result
 	};
 
@@ -126,14 +147,14 @@ pub async fn run_server(address: std::net::SocketAddr) -> Result<(), Error> {
 }
 
 #[cfg(target_os = "unknown")]
-pub async fn run_server(_: std::net::SocketAddr) -> Result<(), hyper::Error> {
+pub async fn run_server(_: std::net::SocketAddr) -> Result<(), RunError> {
 	Ok(())
 }
 
 /// Periodically remove old metrics.
-async fn clean_up(every: Duration, before: Duration) -> Result<(), Error> {
+async fn clean_up(every: std::time::Duration, before: Duration) -> Result<(), Error> {
 	loop {
-		Delay::new(every.to_std().unwrap()).await;
+		Delay::new(every).await;
 
 		let oldest_allowed = (Utc::now() - before).timestamp_millis();
 		DATABASE.write().truncate(oldest_allowed)?;

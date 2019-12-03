@@ -6,17 +6,17 @@ edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
-phragmen = { package = "substrate-phragmen", path = "../../primitives/phragmen", default-features = false }
+sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
+phragmen = { package = "sp-phragmen", path = "../../primitives/phragmen", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }
-rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
+rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
 
 [dev-dependencies]
-runtime_io = { package = "sr-io", path = "../../primitives/sr-io" }
+runtime_io = { package = "sp-io", path = "../../primitives/sr-io" }
 hex-literal = "0.2.1"
 balances = { package = "pallet-balances", path = "../balances" }
-primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
+primitives = { package = "sp-core",  path = "../../primitives/core" }
 substrate-test-utils = { path = "../../test/utils" }
 serde = { version = "1.0.101" }
 
@@ -25,7 +25,7 @@ default = ["std"]
 std = [
 	"codec/std",
 	"support/std",
-	"sr-primitives/std",
+	"sp-runtime/std",
 	"phragmen/std",
 	"system/std",
 	"rstd/std",

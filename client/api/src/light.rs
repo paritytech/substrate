@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 
-use sr_primitives::{
+use sp_runtime::{
     traits::{
         Block as BlockT, Header as HeaderT, NumberFor,
     },
@@ -139,15 +139,30 @@ pub struct RemoteBodyRequest<Header: HeaderT> {
 /// is correct (see FetchedDataChecker) and return already checked data.
 pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Remote header future.
-	type RemoteHeaderResult: Future<Output = Result<Block::Header, ClientError>> + Send + 'static;
+	type RemoteHeaderResult: Future<Output = Result<
+		Block::Header,
+		ClientError,
+	>> + Unpin + Send + 'static;
 	/// Remote storage read future.
-	type RemoteReadResult: Future<Output = Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>> + Send + 'static;
+	type RemoteReadResult: Future<Output = Result<
+		HashMap<Vec<u8>, Option<Vec<u8>>>,
+		ClientError,
+	>> + Unpin + Send + 'static;
 	/// Remote call result future.
-	type RemoteCallResult: Future<Output = Result<Vec<u8>, ClientError>> + Send + 'static;
+	type RemoteCallResult: Future<Output = Result<
+		Vec<u8>,
+		ClientError,
+	>> + Unpin + Send + 'static;
 	/// Remote changes result future.
-	type RemoteChangesResult: Future<Output = Result<Vec<(NumberFor<Block>, u32)>, ClientError>> + Send + 'static;
+	type RemoteChangesResult: Future<Output = Result<
+		Vec<(NumberFor<Block>, u32)>,
+		ClientError,
+	>> + Unpin + Send + 'static;
 	/// Remote block body result future.
-	type RemoteBodyResult: Future<Output = Result<Vec<Block::Extrinsic>, ClientError>> + Send + 'static;
+	type RemoteBodyResult: Future<Output = Result<
+		Vec<Block::Extrinsic>,
+		ClientError,
+	>> + Unpin + Send + 'static;
 
 	/// Fetch remote header.
 	fn remote_header(&self, request: RemoteHeaderRequest<Block::Header>) -> Self::RemoteHeaderResult;

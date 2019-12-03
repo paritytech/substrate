@@ -43,7 +43,7 @@ use either::Either;
 use extra_requests::ExtraRequests;
 use libp2p::PeerId;
 use log::{debug, trace, warn, info, error};
-use sr_primitives::{
+use sp_runtime::{
 	Justification,
 	generic::BlockId,
 	traits::{Block as BlockT, Header, NumberFor, Zero, One, CheckedSub, SaturatedConversion}
@@ -662,6 +662,7 @@ impl<B: BlockT> ChainSync<B> {
 									justification: block_data.block.justification,
 									origin: block_data.origin,
 									allow_missing_state: false,
+									import_existing: false,
 								}
 							}).collect()
 					}
@@ -675,6 +676,7 @@ impl<B: BlockT> ChainSync<B> {
 								justification: b.justification,
 								origin: Some(who.clone()),
 								allow_missing_state: true,
+								import_existing: false,
 							}
 						}).collect()
 					}

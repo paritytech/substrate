@@ -37,8 +37,8 @@
 //! ```no_run
 //! use futures::prelude::*;
 //!
-//! let telemetry = substrate_telemetry::init_telemetry(substrate_telemetry::TelemetryConfig {
-//! 	endpoints: substrate_telemetry::TelemetryEndpoints::new(vec![
+//! let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
+//! 	endpoints: sc_telemetry::TelemetryEndpoints::new(vec![
 //! 		// The `0` is the maximum verbosity level of messages to send to this endpoint.
 //! 		("wss://example.com".into(), 0)
 //! 	]),
@@ -52,7 +52,7 @@
 //! });
 //!
 //! // Sends a message on the telemetry.
-//! substrate_telemetry::telemetry!(substrate_telemetry::SUBSTRATE_INFO; "test";
+//! sc_telemetry::telemetry!(sc_telemetry::SUBSTRATE_INFO; "test";
 //! 	"foo" => "bar",
 //! )
 //! ```
@@ -124,7 +124,7 @@ pub struct Telemetry {
 /// Behind the `Mutex` in `Telemetry`.
 ///
 /// Note that ideally we wouldn't have to make the `Telemetry` clonable, as that would remove the
-/// need for a `Mutex`. However there is currently a weird hack in place in `substrate-service`
+/// need for a `Mutex`. However there is currently a weird hack in place in `sc-service`
 /// where we extract the telemetry registration so that it continues running during the shutdown
 /// process.
 struct TelemetryInner {

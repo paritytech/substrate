@@ -1,5 +1,5 @@
 [package]
-name = "substrate-consensus-common"
+name = "sp-consensus"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Common utilities for substrate consensus"
@@ -9,13 +9,13 @@ edition = "2018"
 derive_more = "0.99.2"
 libp2p = { version = "0.13.0", default-features = false }
 log = "0.4.8"
-primitives = { package = "substrate-primitives", path= "../../core" }
-inherents = { package = "substrate-inherents", path = "../../inherents" }
+primitives = { package = "sp-core", path= "../../core" }
+inherents = { package = "sp-inherents", path = "../../inherents" }
 futures = { version = "0.3.1", features = ["thread-pool"] }
 futures-timer = "0.4.0"
-rstd = { package = "sr-std", path = "../../sr-std" }
-runtime_version = { package = "sr-version", path = "../../sr-version" }
-sr-primitives = {  path = "../../sr-primitives" }
+rstd = { package = "sp-std", path = "../../sr-std" }
+runtime_version = { package = "sp-version", path = "../../sr-version" }
+sp-runtime = {  path = "../../sr-primitives" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 parking_lot = "0.9.0"
 
