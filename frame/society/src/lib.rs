@@ -34,7 +34,7 @@ mod tests;
 use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
 use rstd::prelude::*;
 use codec::{Encode, Decode};
-use sr_primitives::{Percent, Perbill, ModuleId, RuntimeDebug, traits::{
+use sp_runtime::{Percent, Perbill, ModuleId, RuntimeDebug, traits::{
 	EnsureOrigin, StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot,
 	TrailingZeroInput,
 }};
@@ -522,7 +522,7 @@ impl<T: Trait> Module<T> {
 			let mut slashed = <BalanceOf<T>>::zero();
 			let mut dropped = 0;
 			for (when, amount) in payouts.iter() {
-				
+
 			}
 			let rest = payout.value.saturating_sub(payout.paid);
 			let slash = T::WrongSideDeduction::get() * rest;

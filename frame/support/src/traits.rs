@@ -23,9 +23,8 @@ use codec::{FullCodec, Codec, Encode, Decode};
 use primitives::u32_trait::Value as U32;
 use sp_runtime::{
 	ConsensusEngineId,
-	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
+	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating, TrailingZeroInput},
 };
-use sr_primitives::traits::TrailingZeroInput;
 
 use crate::dispatch::Parameter;
 
