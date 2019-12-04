@@ -954,16 +954,16 @@ ServiceBuilder<
 				"bandwidth_upload" => bandwidth_upload,
 				"used_state_cache_size" => used_state_cache_size,
 			);
-			record_metrics!(
-				"peers".to_owned() => num_peers,
-				"height".to_owned() => best_number,
-				"txcount".to_owned() => txpool_status.ready,
-				"cpu".to_owned() => cpu_usage,
-				"memory".to_owned() => memory,
-				"finalized_height".to_owned() => finalized_number,
-				"bandwidth_download".to_owned() => bandwidth_download,
-				"bandwidth_upload".to_owned() => bandwidth_upload,
-				"used_state_cache_size".to_owned() => used_state_cache_size
+			let _ = record_metrics!(
+				"peers" => num_peers,
+				"height" => best_number,
+				"txcount" => txpool_status.ready,
+				"cpu" => cpu_usage,
+				"memory" => memory,
+				"finalized_height" => finalized_number,
+				"bandwidth_download" => bandwidth_download,
+				"bandwidth_upload" => bandwidth_upload,
+				"used_state_cache_size" => used_state_cache_size,
 			);
 
 			Ok(())
