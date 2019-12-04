@@ -61,7 +61,7 @@ pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
-use futures::{Future, compat::Future01CompatExt};
+use futures::{Future, compat::Future01CompatExt, executor::block_on};
 use sc_telemetry::TelemetryEndpoints;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::Block as BlockT;
@@ -397,7 +397,7 @@ impl<'a> ParseAndPrepareExport<'a> {
 		let (exit_send, exit_recv) = std::sync::mpsc::channel();
 		let exit = exit.into_exit();
 		std::thread::spawn(move || {
-			exit.wait();
+			block_on(exit);
 			let _ = exit_send.send(());
 		});
 
@@ -456,7 +456,7 @@ impl<'a> ParseAndPrepareImport<'a> {
 		let (exit_send, exit_recv) = std::sync::mpsc::channel();
 		let exit = exit.into_exit();
 		std::thread::spawn(move || {
-			exit.wait();
+			block_on(exit);
 			let _ = exit_send.send(());
 		});
 

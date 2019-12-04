@@ -59,7 +59,7 @@ where
 	pub fn init_with_now(
 		&mut self,
 		parent_header: &<Block as BlockT>::Header,
-		now: Box<dyn Fn() -> time::Instant + Send + Sync>,
+		now: Box<dyn Fn() -> wasm_timer::Instant + Send + Sync>,
 	) -> Result<Proposer<Block, SubstrateClient<B, E, Block, RA>, A>, sp_blockchain::Error> {
 		let parent_hash = parent_header.hash();
 
@@ -74,7 +74,7 @@ where
 				parent_id: id,
 				parent_number: *parent_header.number(),
 				transaction_pool: self.transaction_pool.clone(),
-				now: Box::new(wasm_timer::Instant::now),
+				now,
 			}),
 		};
 
