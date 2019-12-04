@@ -15,6 +15,7 @@ stages:
 
 variables:
   GIT_STRATEGY:                    fetch
+  GIT_DEPTH:                       "3"
   CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
   SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
   CARGO_INCREMENTAL:               0
@@ -55,6 +56,8 @@ variables:
       - runner_system_failure
       - unknown_failure
       - api_failure
+  dependencies:                    []
+  interruptible:                   true
   tags:
     - linux-docker
 
@@ -79,6 +82,7 @@ check-runtime:
     GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
   script:
     - ./.maintain/gitlab/check_runtime.sh
+  interruptible:                   true
   allow_failure:                   true
 
 
@@ -90,6 +94,7 @@ check-line-width:
     - /^[0-9]+$/
   script:
     - ./.maintain/gitlab/check_line_width.sh
+  interruptible:                   true
   allow_failure:                   true
 
 
@@ -351,8 +356,6 @@ check_polkadot:
   stage:                           build
   <<:                              *docker-env
   allow_failure:                   true
-  dependencies:
-    - test-linux-stable
   script:
     - COMMIT_HASH=$(git rev-parse HEAD)
     - SUBSTRATE_PATH=$(pwd)

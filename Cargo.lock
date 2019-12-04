@@ -3023,7 +3023,7 @@ dependencies = [
  "sp-consensus 2.0.0",
  "sp-consensus-babe 2.0.0",
  "sp-core 2.0.0",
- "sp-finality-granpda 2.0.0",
+ "sp-finality-grandpa 2.0.0",
  "sp-finality-tracker 2.0.0",
  "sp-inherents 2.0.0",
  "sp-io 2.0.0",
@@ -3159,7 +3159,7 @@ dependencies = [
  "sp-keyring 2.0.0",
  "sp-offchain 2.0.0",
  "sp-runtime 2.0.0",
- "sp-sesssion 2.0.0",
+ "sp-session 2.0.0",
  "sp-staking 2.0.0",
  "sp-std 2.0.0",
  "sp-transaction-pool-runtime-api 2.0.0",
@@ -3190,7 +3190,7 @@ dependencies = [
  "sp-consensus 2.0.0",
  "sp-consensus-aura 2.0.0",
  "sp-core 2.0.0",
- "sp-finality-granpda 2.0.0",
+ "sp-finality-grandpa 2.0.0",
  "sp-inherents 2.0.0",
  "sp-io 2.0.0",
  "sp-runtime 2.0.0",
@@ -3227,7 +3227,7 @@ dependencies = [
  "sp-io 2.0.0",
  "sp-offchain 2.0.0",
  "sp-runtime 2.0.0",
- "sp-sesssion 2.0.0",
+ "sp-session 2.0.0",
  "sp-std 2.0.0",
  "sp-transaction-pool-runtime-api 2.0.0",
  "sp-version 2.0.0",
@@ -3714,7 +3714,7 @@ dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-core 2.0.0",
- "sp-finality-granpda 2.0.0",
+ "sp-finality-grandpa 2.0.0",
  "sp-io 2.0.0",
  "sp-runtime 2.0.0",
  "sp-staking 2.0.0",
@@ -5251,7 +5251,7 @@ dependencies = [
  "sp-consensus 2.0.0",
  "sp-consensus-babe 2.0.0",
  "sp-core 2.0.0",
- "sp-finality-granpda 2.0.0",
+ "sp-finality-grandpa 2.0.0",
  "sp-finality-tracker 2.0.0",
  "sp-inherents 2.0.0",
  "sp-keyring 2.0.0",
@@ -5402,7 +5402,7 @@ dependencies = [
  "sp-io 2.0.0",
  "sp-rpc 2.0.0",
  "sp-runtime 2.0.0",
- "sp-sesssion 2.0.0",
+ "sp-session 2.0.0",
  "sp-state-machine 2.0.0",
  "sp-transaction-pool-api 2.0.0",
  "sp-version 2.0.0",
@@ -5494,10 +5494,10 @@ dependencies = [
  "sp-consensus 2.0.0",
  "sp-consensus-babe 2.0.0",
  "sp-core 2.0.0",
- "sp-finality-granpda 2.0.0",
+ "sp-finality-grandpa 2.0.0",
  "sp-io 2.0.0",
  "sp-runtime 2.0.0",
- "sp-sesssion 2.0.0",
+ "sp-session 2.0.0",
  "sp-transaction-pool-api 2.0.0",
  "sp-transaction-pool-runtime-api 2.0.0",
  "substrate-test-runtime-client 2.0.0",
@@ -6148,7 +6148,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-finality-granpda"
+name = "sp-finality-grandpa"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6329,7 +6329,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-sesssion"
+name = "sp-session"
 version = "2.0.0"
 dependencies = [
  "sp-api 2.0.0",
@@ -6656,7 +6656,7 @@ dependencies = [
  "sp-offchain 2.0.0",
  "sp-runtime 2.0.0",
  "sp-runtime-interface 2.0.0",
- "sp-sesssion 2.0.0",
+ "sp-session 2.0.0",
  "sp-state-machine 2.0.0",
  "sp-std 2.0.0",
  "sp-transaction-pool-runtime-api 2.0.0",

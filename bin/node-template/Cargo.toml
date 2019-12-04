@@ -31,7 +31,7 @@ aura = { package = "sc-consensus-aura", path = "../../client/consensus/aura" }
 aura-primitives = { package = "sp-consensus-aura", path = "../../primitives/consensus/aura" }
 consensus-common = { package = "sp-consensus", path = "../../primitives/consensus/common" }
 grandpa = { package = "sc-finality-grandpa", path = "../../client/finality-grandpa" }
-grandpa-primitives = { package = "sp-finality-granpda", path = "../../primitives/finality-grandpa" }
+grandpa-primitives = { package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 sc-client = {  path = "../../client/" }
 runtime = { package = "node-template-runtime", path = "runtime" }
 sp-runtime = { path = "../../primitives/sr-primitives" }
