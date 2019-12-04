@@ -198,11 +198,13 @@ impl<B: ChainApi> Pool<B> {
 					now.elapsed().as_millis()
 				);
 				let now = Instant::now();
-				let res = revalidated_transactions.map(move |revalidated_transactions|
-					validated_pool.resubmit(revalidated_transactions)
+				let res = revalidated_transactions.map(
+					|revalidated_transactions| validated_pool.resubmit(revalidated_transactions)
 				);
 				log::debug!(target: "txpool",
-					"Resubmitted. Took {} ms", now.elapsed().as_millis()
+					"Resubmitted. Took {} ms. Status: {:?}",
+					now.elapsed().as_millis(),
+					validated_pool.status()
 				);
 				res
 			})
