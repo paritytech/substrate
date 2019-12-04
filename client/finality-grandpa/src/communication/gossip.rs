@@ -109,7 +109,6 @@ const CATCH_UP_THRESHOLD: u64 = 2;
 
 const PROPAGATION_ALL: u32 = 4; //in rounds;
 const PROPAGATION_ALL_AUTHORITIES: u32 = 2; //in rounds;
-const PROPAGATION_SOME_NON_AUTHORITIES: u32 = 3; //in rounds;
 const ROUND_DURATION: u32 = 4; // measured in gossip durations
 
 const MIN_LUCKY: usize = 5;
@@ -1097,14 +1096,12 @@ impl<Block: BlockT> Inner<Block> {
 		} else {
 			// the node is not an authority so we apply stricter filters
 			if round_elapsed >= round_duration * PROPAGATION_ALL {
-				// if we waited for 3 (or more) rounds
+				// if we waited for enough
 				// then it is allowed to be sent to all peers.
 				true
-			} else if round_elapsed >= round_duration * PROPAGATION_SOME_NON_AUTHORITIES {
+			} else {
 				// otherwise we only send it to `sqrt(non-authorities)`.
 				self.peers.lucky_peers.contains(who)
-			} else {
-				false
 			}
 		}
 	}
@@ -1146,11 +1143,11 @@ impl<Block: BlockT> Inner<Block> {
 		} else {
 			let non_authorities = self.peers.non_authorities();
 
-			// the target node is not an authority, on the first and second
-			// round duration we start by sending the message to only
+			// the target node is not an authority. on the first few
+			// round durations we start by sending the message to only
 			// `sqrt(non_authorities)` (if we're connected to at least
 			// `MIN_LUCKY`).
-			if round_elapsed < round_duration * PROPAGATION_SOME_NON_AUTHORITIES
+			if round_elapsed < round_duration * PROPAGATION_ALL
 				&& non_authorities > MIN_LUCKY
 			{
 				self.peers.lucky_peers.contains(who)

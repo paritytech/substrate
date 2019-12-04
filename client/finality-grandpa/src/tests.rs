@@ -1503,7 +1503,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
-			voting_rule: (),
+			voting_rule: voting_rule::ThreeQuartersOfTheUnfinalizedChain,
 			executor: threads_pool.clone(),
 		};
 
@@ -1523,11 +1523,16 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			)
 		};
 
+		let set_state = link.persistent_data.set_state.clone();
+
 		finality_notifications.push(
 			client.finality_notification_stream()
 				.map(|v| Ok::<_, ()>(v)).compat()
 				.take_while(|n| Ok(n.header.number() < &50))
 				.for_each(move |_| Ok(()))
+				.map(move |_|
+					assert!(set_state.read().last_completed_round().number >= 4)
+				)
 		);
 
 		let (keystore, keystore_path) = create_keystore(*key);
@@ -1541,7 +1546,6 @@ fn voter_catches_up_to_latest_round_when_behind() {
 	// wait for them to finalize block 50. since they'll vote on 3/4 of the
 	// unfinalized chain it will take at least 4 rounds to do it.
 	let wait_for_finality = ::futures::future::join_all(finality_notifications)
-		.map(|_| ())
 		.map_err(|_| ());
 
 	// spawn a new voter, it should be behind by at least 4 rounds and should be
