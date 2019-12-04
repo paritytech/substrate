@@ -73,7 +73,7 @@ use sp_finality_tracker;
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
 
-use std::fmt;
+use std::{fmt, io};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -230,7 +230,7 @@ pub enum Error {
 	/// An invariant has been violated (e.g. not finalizing pending change blocks in-order)
 	Safety(String),
 	/// A timer failed to fire.
-	Timer(tokio_timer::Error),
+	Timer(io::Error),
 }
 
 impl From<GrandpaError> for Error {

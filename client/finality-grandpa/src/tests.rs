@@ -22,6 +22,7 @@ use network::test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, Peer
 use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
+use futures_timer::Delay;
 use futures03::{StreamExt as _, TryStreamExt as _};
 use tokio::runtime::current_thread;
 use keyring::Ed25519Keyring;
@@ -1255,7 +1256,14 @@ fn voter_persists_its_votes() {
 				let net = net.clone();
 				let voter_tx = voter_tx.clone();
 				let round_tx = round_tx.clone();
-				future::Either::A(tokio_timer::Interval::new_interval(Duration::from_millis(200))
+
+				let interval = futures03::stream::unfold(Delay::new(Duration::from_millis(200)), |delay|
+					Box::pin(async move {
+						delay.await;
+						Some(((), Delay::new(Duration::from_millis(200))))
+					})).map(Ok::<_, ()>).compat();
+
+				future::Either::A(interval
 					.take_while(move |_| {
 						Ok(net2.lock().peer(1).client().info().chain.best_number != 40)
 					})

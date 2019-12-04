@@ -17,12 +17,13 @@
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use log::{debug, warn, info};
 use codec::{Decode, Encode};
 use futures::prelude::*;
-use tokio_timer::Delay;
+use futures03::future::{FutureExt as _, TryFutureExt as _};
+use futures_timer::Delay;
 use parking_lot::RwLock;
 use sp_blockchain::{HeaderBackend, Error as ClientError};
 
@@ -585,9 +586,8 @@ where
 		&self,
 		round: RoundNumber,
 	) -> voter::RoundData<Self::Id, Self::Timer, Self::In, Self::Out> {
-		let now = Instant::now();
-		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
-		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
+		let prevote_timer = Delay::new(self.config.gossip_duration * 2);
+		let precommit_timer = Delay::new(self.config.gossip_duration * 4);
 
 		let local_key = crate::is_voter(&self.voters, &self.config.keystore);
 
@@ -625,8 +625,8 @@ where
 
 		voter::RoundData {
 			voter_id: local_key.map(|pair| pair.public()),
-			prevote_timer: Box::new(prevote_timer.map_err(|e| Error::Timer(e).into())),
-			precommit_timer: Box::new(precommit_timer.map_err(|e| Error::Timer(e).into())),
+			prevote_timer: Box::new(prevote_timer.map(Ok).compat()),
+			precommit_timer: Box::new(precommit_timer.map(Ok).compat()),
 			incoming,
 			outgoing,
 		}
@@ -900,9 +900,7 @@ where
 
 		//random between 0-1 seconds.
 		let delay: u64 = thread_rng().gen_range(0, 1000);
-		Box::new(Delay::new(
-			Instant::now() + Duration::from_millis(delay)
-		).map_err(|e| Error::Timer(e).into()))
+		Box::new(Delay::new(Duration::from_millis(delay)).map(Ok).compat())
 	}
 
 	fn prevote_equivocation(

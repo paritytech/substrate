@@ -21,8 +21,9 @@ use std::time::{Instant, Duration};
 use codec::Encode;
 use futures::prelude::*;
 use futures::sync::mpsc;
+use futures_timer::Delay;
+use futures03::future::{FutureExt as _, TryFutureExt as _};
 use log::{debug, warn};
-use tokio_timer::Delay;
 
 use network::PeerId;
 use network_gossip::GossipEngine;
@@ -67,7 +68,7 @@ pub(super) fn neighbor_packet_worker<B>(net: GossipEngine<B>) -> (
 {
 	let mut last = None;
 	let (tx, mut rx) = mpsc::unbounded::<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>();
-	let mut delay = Delay::new(rebroadcast_instant());
+	let mut delay = Delay::new(REBROADCAST_AFTER);
 
 	let work = futures::future::poll_fn(move || {
 		loop {
@@ -88,7 +89,7 @@ pub(super) fn neighbor_packet_worker<B>(net: GossipEngine<B>) -> (
 		// has to be done in a loop because it needs to be polled after
 		// re-scheduling.
 		loop {
-			match delay.poll() {
+			match (&mut delay).unit_error().compat().poll() {
 				Err(e) => {
 					warn!(target: "afg", "Could not rebroadcast neighbor packets: {:?}", e);
 					delay.reset(rebroadcast_instant());
