@@ -311,8 +311,9 @@ impl<B: ChainApi> ValidatedPool<B> {
 				match final_status {
 					Status::Future => listener.future(&hash),
 					Status::Ready => listener.ready(&hash, None),
-					Status::Failed => listener.invalid(&hash),
 					Status::Dropped => listener.dropped(&hash, None),
+					Status::Failed if initial_status.is_none() => listener.invalid(&hash),
+					_ => {},
 				}
 			}
 		}
