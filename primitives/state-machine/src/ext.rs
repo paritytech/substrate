@@ -688,4 +688,38 @@ mod tests {
 		// next_overlay exist but next_backend doesn't exist
 		assert_eq!(ext.next_storage_key(&[40]), Some(vec![50]));
 	}
+
+	#[test]
+	fn next_child_storage_key_works() {
+		let child = || ChildStorageKey::from_slice(b":child_storage:default:Child1").unwrap();
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_child_storage(child().as_ref().to_vec(), vec![20], None);
+		overlay.set_child_storage(child().as_ref().to_vec(), vec![30], Some(vec![31]));
+		let backend = vec![
+			(None, vec![10], Some(vec![10])),
+			(None, vec![20], Some(vec![20])),
+			(None, vec![40], Some(vec![40])),
+		].into();
+
+		let ext = TestExt::new(&mut overlay, &backend, None, None);
+
+		// next_backend < next_overlay
+		assert_eq!(ext.next_child_storage_key(child(), &[5]), Some(vec![10]));
+
+		// next_backend == next_overlay but next_overlay is a delete
+		assert_eq!(ext.next_child_storage_key(child(), &[10]), Some(vec![30]));
+
+		// next_overlay < next_backend
+		assert_eq!(ext.next_child_storage_key(child(), &[20]), Some(vec![30]));
+
+		// next_backend exist but next_overlay doesn't exist
+		assert_eq!(ext.next_child_storage_key(child(), &[30]), Some(vec![40]));
+
+		drop(ext);
+		overlay.set_child_storage(child().as_ref().to_vec(), vec![50], Some(vec![50]));
+		let ext = TestExt::new(&mut overlay, &backend, None, None);
+
+		// next_overlay exist but next_backend doesn't exist
+		assert_eq!(ext.next_child_storage_key(child(), &[40]), Some(vec![50]));
+	}
 }

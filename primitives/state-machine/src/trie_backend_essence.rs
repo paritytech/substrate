@@ -424,20 +424,38 @@ mod test {
 
 	#[test]
 	fn next_storage_key_works() {
-		let mut root = H256::default();
+		// Contains values
+		let mut root_1 = H256::default();
+		// Contains child trie
+		let mut root_2 = H256::default();
+
 		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
 		{
-			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
+			let mut trie = TrieDBMut::new(&mut mdb, &mut root_1);
 			trie.insert(b"3", &[1]).expect("insert failed");
 			trie.insert(b"4", &[1]).expect("insert failed");
 			trie.insert(b"6", &[1]).expect("insert failed");
+		}
+		{
+			let mut trie = TrieDBMut::new(&mut mdb, &mut root_2);
+			trie.insert(b"MyChild", root_1.as_ref()).expect("insert failed");
 		};
-		let essence = TrieBackendEssence::new(mdb, root);
 
-		assert_eq!(essence.next_storage_key(b"2"), Ok(Some(b"3".to_vec())));
-		assert_eq!(essence.next_storage_key(b"3"), Ok(Some(b"4".to_vec())));
-		assert_eq!(essence.next_storage_key(b"4"), Ok(Some(b"6".to_vec())));
-		assert_eq!(essence.next_storage_key(b"5"), Ok(Some(b"6".to_vec())));
-		assert_eq!(essence.next_storage_key(b"6"), Ok(None))
+		let essence_1 = TrieBackendEssence::new(mdb, root_1);
+
+		assert_eq!(essence_1.next_storage_key(b"2"), Ok(Some(b"3".to_vec())));
+		assert_eq!(essence_1.next_storage_key(b"3"), Ok(Some(b"4".to_vec())));
+		assert_eq!(essence_1.next_storage_key(b"4"), Ok(Some(b"6".to_vec())));
+		assert_eq!(essence_1.next_storage_key(b"5"), Ok(Some(b"6".to_vec())));
+		assert_eq!(essence_1.next_storage_key(b"6"), Ok(None));
+
+		let mdb = essence_1.into_storage();
+		let essence_2 = TrieBackendEssence::new(mdb, root_2);
+
+		assert_eq!(essence_2.next_child_storage_key(b"MyChild", b"2"), Ok(Some(b"3".to_vec())));
+		assert_eq!(essence_2.next_child_storage_key(b"MyChild", b"3"), Ok(Some(b"4".to_vec())));
+		assert_eq!(essence_2.next_child_storage_key(b"MyChild", b"4"), Ok(Some(b"6".to_vec())));
+		assert_eq!(essence_2.next_child_storage_key(b"MyChild", b"5"), Ok(Some(b"6".to_vec())));
+		assert_eq!(essence_2.next_child_storage_key(b"MyChild", b"6"), Ok(None));
 	}
 }
