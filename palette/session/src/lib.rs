@@ -333,6 +333,16 @@ impl<V> SelectInitialValidators<V> for () {
 	}
 }
 
+pub trait ValidatorRegistration<ValidatorId> {
+    fn is_registered(id: &ValidatorId) -> bool;
+}
+
+impl<T: Trait> ValidatorRegistration<T::ValidatorId> for Module<T> {
+	fn is_registered(id: &T::ValidatorId) -> bool {
+		Self::load_keys(id).is_some()
+	}
+}
+
 pub trait Trait: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
@@ -662,7 +672,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	pub fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
+	fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
 		<NextKeys<T>>::get(DEDUP_KEY_PREFIX, v)
 	}
 
@@ -674,7 +684,7 @@ impl<T: Trait> Module<T> {
 		<NextKeys<T>>::insert(DEDUP_KEY_PREFIX, v, keys);
 	}
 
-	pub fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
+	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
 		<KeyOwner<T>>::get(DEDUP_KEY_PREFIX, (id, key_data))
 	}
 
