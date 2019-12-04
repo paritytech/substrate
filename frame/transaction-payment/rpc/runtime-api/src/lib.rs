@@ -27,6 +27,7 @@ use sp_runtime::traits::{UniqueSaturatedInto, SaturatedConversion};
 
 /// Some information related to a dispatchable that can be queried from the runtime.
 #[derive(Eq, PartialEq, Encode, Decode, Default)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct RuntimeDispatchInfo<Balance> {
 	/// Weight of this dispatch.
 	pub weight: Weight,
