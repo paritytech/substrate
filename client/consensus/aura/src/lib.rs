@@ -321,8 +321,11 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 		// in normal cases we only attempt to issue blocks up to the end of the slot.
 		// when the chain has been stalled for a few slots, we give more lenience.
 		let slot_lenience = slot_info.number.saturating_sub(parent_slot + 1);
+		println!("{:?}, {:?}, {:?}", slot_remaining, parent_slot, slot_lenience);
 		let slot_lenience = std::cmp::min(slot_lenience, BACKOFF_CAP);
+		println!("{:?}, {:?}, {:?}", slot_remaining, parent_slot, slot_lenience);
 		let slot_lenience = Duration::from_secs(slot_lenience * slot_info.duration);
+		println!("{:?}, {:?}, {:?}, {:?}", slot_remaining, parent_slot, slot_lenience, slot_lenience + slot_remaining);
 		Some(slot_lenience + slot_remaining)
 	}
 }
