@@ -953,7 +953,6 @@ mod tests {
 
 		#[test]
 		fn should_handle_pruning_in_the_middle_of_import() {
-			let _ = env_logger::try_init();
 			// given
 			let (ready, is_ready) = std::sync::mpsc::sync_channel(0);
 			let (tx, rx) = std::sync::mpsc::sync_channel(1);
