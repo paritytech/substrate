@@ -337,7 +337,6 @@ where
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
-		// TODO TODO: cache next_backend_key with a cache: `Option<(Vec<u8>, Vec<u8>)>`
 		let next_backend_key = self.backend.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		let next_overlay_key_change = self.overlay.next_storage_key_change(key);
 
@@ -353,7 +352,6 @@ where
 	}
 
 	fn next_child_storage_key(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
-		// TODO TODO: cache next_backend_key with some cache.
 		let next_backend_key = self.backend.next_child_storage_key(storage_key.as_ref(), key)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 		let next_overlay_key_change = self.overlay.next_child_storage_key_change(
