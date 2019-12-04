@@ -197,6 +197,7 @@ impl<B: ChainApi> Pool<B> {
 					"Re-verified transactions, took {} ms. Resubmitting.",
 					now.elapsed().as_millis()
 				);
+				let now = Instant::now();
 				let res = revalidated_transactions.map(move |revalidated_transactions|
 					validated_pool.resubmit(revalidated_transactions)
 				);
