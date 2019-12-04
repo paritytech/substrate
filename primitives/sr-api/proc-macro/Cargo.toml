@@ -1,5 +1,5 @@
 [package]
-name = "sr-api-proc-macro"
+name = "sp-api-proc-macro"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -15,9 +15,9 @@ blake2-rfc = "0.2.18"
 proc-macro-crate = "0.1.4"
 
 [dev-dependencies]
-sr-api = { path = ".." }
-sr-primitives = { path = "../../sr-primitives" }
-sr-version = { path = "../../sr-version" }
+sp-api = { path = ".." }
+sp-runtime = { path = "../../sr-primitives" }
+sp-version = { path = "../../sr-version" }
 test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
 
 # Required for the doc tests

@@ -17,12 +17,12 @@
 //! Blockchain access trait
 
 use client::Client as SubstrateClient;
-use client_api::error::Error;
+use sp_blockchain::Error;
 use client_api::{ChangesProof, StorageProof, ClientInfo, CallExecutor};
 use consensus::{BlockImport, BlockStatus, Error as ConsensusError};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sr_primitives::generic::{BlockId};
-use sr_primitives::Justification;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_runtime::generic::{BlockId};
+use sp_runtime::Justification;
 use primitives::storage::StorageKey;
 
 /// Local client abstraction for the network.
@@ -174,7 +174,7 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 			return Ok(false);
 		}
 
-		let ancestor = header_metadata::lowest_common_ancestor(self, *block, *base)?;
+		let ancestor = sp_blockchain::lowest_common_ancestor(self, *block, *base)?;
 
 		Ok(ancestor.hash == *base)
 	}

@@ -28,7 +28,7 @@ use crate::{
 use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeSet};
 
-use codec::Decode;
+use codec::{Decode, Encode};
 
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 
@@ -427,7 +427,7 @@ impl OverlayedChanges {
 		changes_trie_storage: Option<&T>,
 		parent_hash: H::Out,
 		mut cache: StorageTransactionCache<B::Transaction, H, N>,
-	) -> Result<StorageChanges<B::Transaction, H, N>, String> where H::Out: Ord + 'static {
+	) -> Result<StorageChanges<B::Transaction, H, N>, String> where H::Out: Ord + Encode + 'static {
 		// If the transaction does not exist, we generate it.
 		if cache.transaction.is_none() {
 			self.storage_root(backend, &mut cache);
@@ -466,7 +466,6 @@ impl OverlayedChanges {
 	/// Inserts storage entry responsible for current extrinsic index.
 	#[cfg(test)]
 	pub(crate) fn set_extrinsic_index(&mut self, extrinsic_index: u32) {
-		use codec::Encode;
 		self.prospective.top.insert(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
 			value: Some(extrinsic_index.encode()),
 			extrinsics: None,
@@ -497,7 +496,7 @@ impl OverlayedChanges {
 		backend: &B,
 		cache: &mut StorageTransactionCache<B::Transaction, H, N>,
 	) -> H::Out
-		where H::Out: Ord
+		where H::Out: Ord + Encode,
 	{
 		let child_storage_keys = self.prospective.children.keys()
 			.chain(self.committed.children.keys());
@@ -535,7 +534,7 @@ impl OverlayedChanges {
 		parent_hash: H::Out,
 		panic_on_storage_error: bool,
 		cache: &mut StorageTransactionCache<B::Transaction, H, N>,
-	) -> Result<Option<H::Out>, ()> where H::Out: Ord + 'static {
+	) -> Result<Option<H::Out>, ()> where H::Out: Ord + Encode + 'static {
 		build_changes_trie::<_, T, H, N>(
 			backend,
 			changes_trie_storage,
@@ -562,7 +561,7 @@ impl From<Option<Vec<u8>>> for OverlayedValue {
 mod tests {
 	use hex_literal::hex;
 	use primitives::{
-		Blake2Hasher, H256, traits::Externalities, storage::well_known_keys::EXTRINSIC_INDEX,
+		Blake2Hasher, traits::Externalities, storage::well_known_keys::EXTRINSIC_INDEX,
 	};
 	use crate::InMemoryBackend;
 	use crate::changes_trie::InMemoryStorage as InMemoryChangesTrieStorage;
@@ -638,7 +637,7 @@ mod tests {
 		);
 		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 
-		assert_eq!(ext.storage_root(), H256::from(ROOT));
+		assert_eq!(&ext.storage_root()[..], &ROOT);
 	}
 
 	#[test]

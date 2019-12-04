@@ -27,7 +27,7 @@ use log::{debug, info, warn};
 use consensus_common::SelectChain;
 use client_api::{CallExecutor, backend::{AuxStore, Backend}};
 use client::Client;
-use sr_primitives::traits::{NumberFor, Block as BlockT};
+use sp_runtime::traits::{NumberFor, Block as BlockT};
 
 use crate::{
 	global_communication, CommandOrError, CommunicationIn, Config, environment,
@@ -155,7 +155,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC>(
 	link: LinkHalf<B, E, Block, RA, SC>,
 	network: N,
 	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
-) -> client_api::error::Result<impl Future<Item = (), Error = ()> + Send + 'static> where
+) -> sp_blockchain::Result<impl Future<Item = (), Error = ()> + Send + 'static> where
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
 	N: Network<Block> + Send + Sync + 'static,

@@ -58,37 +58,38 @@
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
-pub use babe_primitives::*;
+pub use babe_primitives::{
+	BabeApi, ConsensusLog, BABE_ENGINE_ID, BabePreDigest, SlotNumber, BabeConfiguration,
+	CompatibleDigestItem,
+};
 pub use consensus_common::SyncOracle;
 use std::{collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration}};
 use babe_primitives;
-use consensus_common::ImportResult;
+use consensus_common::{ImportResult, CanAuthorWith};
 use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
-use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
-use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, Zero};
-use sr_api::ProvideRuntimeApi;
+use sp_runtime::{
+    generic::{BlockId, OpaqueDigestItemId}, Justification,
+    traits::{Block as BlockT, Header, DigestItemFor, Zero},
+};
+use sp_api::ProvideRuntimeApi;
 use keystore::KeyStorePtr;
 use parking_lot::Mutex;
 use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData};
-use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
+use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use consensus_common::{
 	self, BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
 };
-use paint_babe::{
-	BabeInherentData,
-	timestamp::{TimestampInherentData, InherentType as TimestampInherent}
-};
+use babe_primitives::inherents::BabeInherentData;
+use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
 use consensus_common::SelectChain;
 use consensus_common::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use client_api::{
 	backend::{AuxStore, Backend},
 	call_executor::CallExecutor,
-	error::{Result as ClientResult, Error as ClientError},
-	blockchain::{self, HeaderBackend, ProvideCache},
 	BlockchainEvents, ProvideUncles,
 };
 use client::Client;
@@ -102,10 +103,13 @@ use slots::{
 	StorageChanges,
 };
 use epoch_changes::descendent_query;
-use header_metadata::HeaderMetadata;
+use sp_blockchain::{
+	Result as ClientResult, Error as ClientError,
+	HeaderBackend, ProvideCache, HeaderMetadata
+};
 use schnorrkel::SignatureError;
 
-use sr_api::ApiExt;
+use sp_api::ApiExt;
 
 mod aux_schema;
 mod verification;
@@ -156,11 +160,11 @@ enum Error<B: BlockT> {
 	#[display(fmt = "VRF verification failed: {:?}", _0)]
 	VRFVerificationFailed(SignatureError),
 	#[display(fmt = "Could not fetch parent header: {:?}", _0)]
-	FetchParentHeader(client_api::error::Error),
+	FetchParentHeader(sp_blockchain::Error),
 	#[display(fmt = "Expected epoch change to happen at {:?}, s{}", _0, _1)]
 	ExpectedEpochChange(B::Hash, u64),
 	#[display(fmt = "Could not look up epoch: {:?}", _0)]
-	CouldNotLookUpEpoch(Box<fork_tree::Error<client_api::error::Error>>),
+	CouldNotLookUpEpoch(Box<fork_tree::Error<sp_blockchain::Error>>),
 	#[display(fmt = "Block {} is not valid under any epoch.", _0)]
 	BlockNotValid(B::Hash),
 	#[display(fmt = "Unexpected epoch change")]
@@ -169,9 +173,9 @@ enum Error<B: BlockT> {
 	ParentBlockNoAssociatedWeight(B::Hash),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
 	CheckInherents(String),
-	Client(client_api::error::Error),
+	Client(sp_blockchain::Error),
 	Runtime(inherents::Error),
-	ForkTree(Box<fork_tree::Error<client_api::error::Error>>),
+	ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
 }
 
 impl<B: BlockT> std::convert::From<Error<B>> for String {
@@ -205,7 +209,7 @@ impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
 	pub fn get_or_compute<B: BlockT, C>(client: &C) -> ClientResult<Self> where
-		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B, Error = client_api::error::Error>,
+		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B, Error = sp_blockchain::Error>,
 	{
 		trace!(target: "babe", "Getting slot duration");
 		match slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self) {
@@ -239,7 +243,7 @@ impl std::ops::Deref for Config {
 }
 
 /// Parameters for BABE.
-pub struct BabeParams<B: BlockT, C, E, I, SO, SC> {
+pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	/// The keystore that manages the keys of the node.
 	pub keystore: KeyStorePtr,
 
@@ -268,10 +272,13 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC> {
 
 	/// The source of timestamps for relative slots
 	pub babe_link: BabeLink<B>,
+
+	/// Checks if the current native implementation can author with a runtime at a given block.
+	pub can_author_with: CAW,
 }
 
 /// Start the babe worker. The returned future should be run in a tokio runtime.
-pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
+pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	keystore,
 	client,
 	select_chain,
@@ -281,7 +288,8 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 	inherent_data_providers,
 	force_authoring,
 	babe_link,
-}: BabeParams<B, C, E, I, SO, SC>) -> Result<
+	can_author_with,
+}: BabeParams<B, C, E, I, SO, SC, CAW>) -> Result<
 	impl futures01::Future<Item=(), Error=()>,
 	consensus_common::Error,
 > where
@@ -291,11 +299,12 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
 	E: Environment<B, Error = Error> + Send + Sync,
-	E::Proposer: Proposer<B, Error = Error, Transaction = sr_api::TransactionFor<C, B>>,
-	I: BlockImport<B, Error = ConsensusError, Transaction = sr_api::TransactionFor<C, B>> + Send
+	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
+	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<C, B>> + Send
 		+ Sync + 'static,
 	Error: std::error::Error + Send + From<consensus_common::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
+	CAW: CanAuthorWith<B> + Send,
 {
 	let config = babe_link.config;
 	let worker = BabeWorker {
@@ -324,6 +333,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 		sync_oracle,
 		inherent_data_providers,
 		babe_link.time_source,
+		can_author_with,
 	);
 
 	Ok(slot_worker.map(|_| Ok::<(), ()>(())).compat())
@@ -348,8 +358,8 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		HeaderMetadata<B, Error = ClientError>,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error = Error>,
-	E::Proposer: Proposer<B, Error = Error, Transaction = sr_api::TransactionFor<C, B>>,
-	I: BlockImport<B, Transaction = sr_api::TransactionFor<C, B>> + Send + Sync + 'static,
+	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
+	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<consensus_common::Error> + From<I::Error> + 'static,
 {
@@ -413,7 +423,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		&self,
 		_slot_number: u64,
 		claim: &Self::Claim,
-	) -> Vec<sr_primitives::DigestItem<B::Hash>> {
+	) -> Vec<sp_runtime::DigestItem<B::Hash>> {
 		vec![
 			<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(claim.0.clone()),
 		]
@@ -446,6 +456,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 				// https://github.com/paritytech/substrate/issues/3623
 				fork_choice: ForkChoiceStrategy::LongestChain,
 				allow_missing_state: false,
+				import_existing: false,
 			}
 		})
 	}
@@ -463,6 +474,32 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 			consensus_common::Error::ClientImport(format!("{:?}", e))
 		})
 	}
+
+	fn proposing_remaining_duration(
+		&self,
+		head: &B::Header,
+		slot_info: &SlotInfo
+	) -> Option<std::time::Duration> {
+		// never give more than 20 times more lenience.
+		const BACKOFF_CAP: u64 = 20;
+
+		let slot_remaining = self.slot_remaining_duration(slot_info);
+		let parent_slot = match find_pre_digest::<B>(head) {
+			Err(_) => return Some(slot_remaining),
+			Ok(d) => d.slot_number(),
+		};
+
+		// we allow a lenience of the number of slots since the head of the
+		// chain was produced, minus 1 (since there is always a difference of at least 1)
+		//
+		// linear back-off.
+		// in normal cases we only attempt to issue blocks up to the end of the slot.
+		// when the chain has been stalled for a few slots, we give more lenience.
+		let slot_lenience = slot_info.number.saturating_sub(parent_slot + 1);
+		let slot_lenience = std::cmp::min(slot_lenience, BACKOFF_CAP);
+		let slot_lenience = Duration::from_secs(slot_lenience * slot_info.duration);
+		Some(slot_lenience + slot_remaining)
+	}
 }
 
 impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
@@ -473,8 +510,8 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
 		HeaderMetadata<B, Error = ClientError> + Send + Sync,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error = Error> + Send + Sync,
-	E::Proposer: Proposer<B, Error = Error, Transaction = sr_api::TransactionFor<C, B>>,
-	I: BlockImport<B, Transaction = sr_api::TransactionFor<C, B>> + Send + Sync + 'static,
+	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
+	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 	Error: std::error::Error + Send + From<consensus_common::Error> + From<I::Error> + 'static,
 {
@@ -573,7 +610,7 @@ impl<B, E, Block: BlockT, RA, PRA> BabeVerifier<B, E, Block, RA, PRA> {
 	) -> Result<(), Error<Block>>
 		where
 			PRA: ProvideRuntimeApi<Block>,
-			PRA::Api: BlockBuilderApi<Block, Error = client_api::error::Error>
+			PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
 	{
 		let inherent_res = self.api.runtime_api().check_inherents(
 			&block_id,
@@ -642,8 +679,8 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi<Block> + Send + Sync + AuxStore + ProvideCache<Block>,
-	PRA::Api: BlockBuilderApi<Block, Error = client_api::error::Error>
-		+ BabeApi<Block, Error = client_api::error::Error>,
+	PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
+		+ BabeApi<Block, Error = sp_blockchain::Error>,
 {
 	fn verify(
 		&mut self,
@@ -764,6 +801,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					// https://github.com/paritytech/substrate/issues/3623
 					fork_choice: ForkChoiceStrategy::LongestChain,
 					allow_missing_state: false,
+					import_existing: false,
 				};
 
 				Ok((block_import_params, Default::default()))
@@ -788,9 +826,9 @@ fn register_babe_inherent_data_provider(
 	slot_duration: u64,
 ) -> Result<(), consensus_common::Error> {
 	debug!(target: "babe", "Registering");
-	if !inherent_data_providers.has_provider(&paint_babe::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(&babe_primitives::inherents::INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(paint_babe::InherentDataProvider::new(slot_duration))
+			.register_provider(babe_primitives::inherents::InherentDataProvider::new(slot_duration))
 			.map_err(Into::into)
 			.map_err(consensus_common::Error::InherentData)
 	} else {
@@ -846,7 +884,7 @@ impl<B, E, Block: BlockT, I, RA, PRA> BabeBlockImport<B, E, Block, I, RA, PRA> {
 
 impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, RA, PRA> where
 	Block: BlockT,
-	I: BlockImport<Block, Transaction = sr_api::TransactionFor<PRA, Block>> + Send + Sync,
+	I: BlockImport<Block, Transaction = sp_api::TransactionFor<PRA, Block>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
@@ -856,7 +894,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 	PRA::Api: BabeApi<Block> + ApiExt<Block, StateBackend = B::State>,
 {
 	type Error = ConsensusError;
-	type Transaction = sr_api::TransactionFor<PRA, Block>;
+	type Transaction = sp_api::TransactionFor<PRA, Block>;
 
 	fn import_block(
 		&mut self,
@@ -869,8 +907,8 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		// early exit if block already in chain, otherwise the check for
 		// epoch changes will error when trying to re-import an epoch change
 		match self.client.status(BlockId::Hash(hash)) {
-			Ok(blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
-			Ok(blockchain::BlockStatus::Unknown) => {},
+			Ok(sp_blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
+			Ok(sp_blockchain::BlockStatus::Unknown) => {},
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 		}
 
@@ -925,7 +963,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				slot_number,
 				|slot| self.config.genesis_epoch(slot),
 			)
-				.map_err(|e: fork_tree::Error<client_api::error::Error>| ConsensusError::ChainLookup(
+				.map_err(|e: fork_tree::Error<sp_blockchain::Error>| ConsensusError::ChainLookup(
 					babe_err(Error::<Block>::CouldNotLookUpEpoch(Box::new(e))).into()
 				))?
 				.ok_or_else(|| ConsensusError::ClientImport(
@@ -1159,14 +1197,14 @@ pub fn import_queue<B, E, Block: BlockT, I, RA, PRA>(
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 	inherent_data_providers: InherentDataProviders,
-) -> ClientResult<BabeImportQueue<Block, sr_api::TransactionFor<PRA, Block>>> where
+) -> ClientResult<BabeImportQueue<Block, sp_api::TransactionFor<PRA, Block>>> where
 	B: Backend<Block> + 'static,
-	I: BlockImport<Block, Error = ConsensusError, Transaction = sr_api::TransactionFor<PRA, Block>>
+	I: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<PRA, Block>>
 		+ Send + Sync + 'static,
 	E: CallExecutor<Block> + Clone + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
-	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = client_api::error::Error>,
+	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = sp_blockchain::Error>,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
 

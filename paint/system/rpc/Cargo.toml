@@ -5,17 +5,17 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-client = { package = "substrate-client", path = "../../../client/" }
+client = { package = "sc-client", path = "../../../client/" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 jsonrpc-core = "14.0.3"
 jsonrpc-core-client = "14.0.3"
 jsonrpc-derive = "14.0.3"
 log = "0.4.8"
 serde = { version = "1.0.101", features = ["derive"] }
-sr-primitives = { path = "../../../primitives/sr-primitives" }
-sr-api = { path = "../../../primitives/sr-api" }
+sp-runtime = { path = "../../../primitives/sr-primitives" }
+sp-api = { path = "../../../primitives/sr-api" }
 paint-system-rpc-runtime-api = { path = "./runtime-api" }
-substrate-primitives = { path = "../../../primitives/core" }
+sp-core = { path = "../../../primitives/core" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../../client/transaction-pool" }
 
 [dev-dependencies]

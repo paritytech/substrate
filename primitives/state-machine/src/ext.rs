@@ -24,10 +24,11 @@ use crate::{
 use hash_db::Hasher;
 use primitives::{
 	storage::{ChildStorageKey, well_known_keys::is_child_storage_key},
-	traits::Externalities, hexdisplay::HexDisplay, hash::H256,
+	traits::Externalities, hexdisplay::HexDisplay,
 };
 use trie::{trie_types::Layout, default_child_trie_root};
 use externalities::Extensions;
+use codec::{Decode, Encode};
 
 use std::{error, fmt, any::{Any, TypeId}};
 use log::{warn, trace};
@@ -61,14 +62,6 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 			Error::Executor(..) => "executor error",
 		}
 	}
-}
-
-/// Use SCALE codec to convert between the generic `Block::Hash` and `H256`. Both are currently the
-/// same. To prevent the requirement on putting everywhere `BlockT<Hash = H256>`, we use this hack.
-/// To properly solve this, we need to change block dependent externality functions to return
-/// and take the hash as an encoded value.
-fn convert_hack<I: codec::Encode, O: codec::Decode>(val: I) -> O {
-	codec::Decode::decode(&mut &val.encode()[..]).unwrap()
 }
 
 /// Wraps a read-only backend, call executor, and current overlayed changes.
@@ -173,26 +166,25 @@ where
 		result
 	}
 
-	fn storage_hash(&self, key: &[u8]) -> Option<H256> {
+	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
 			.storage(key)
 			.map(|x| x.map(|x| H::hash(x)))
-			.unwrap_or_else(||
-				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
-			);
+			.unwrap_or_else(|| self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
+
 		trace!(target: "state-trace", "{:04x}: Hash {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
 			result,
 		);
-
-		result.map(convert_hack)
+		result.map(|r| r.encode())
 	}
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let result = self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+
 		trace!(target: "state-trace", "{:04x}: GetOriginal {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
@@ -201,16 +193,16 @@ where
 		result
 	}
 
-	fn original_storage_hash(&self, key: &[u8]) -> Option<H256> {
+	fn original_storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let result = self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+
 		trace!(target: "state-trace", "{:04x}: GetOriginalHash {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
 			result,
 		);
-
-		result.map(convert_hack)
+		result.map(|r| r.encode())
 	}
 
 	fn child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
@@ -232,7 +224,7 @@ where
 		result
 	}
 
-	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
+	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
 			.child_storage(storage_key.as_ref(), key)
@@ -248,7 +240,7 @@ where
 			result,
 		);
 
-		result.map(convert_hack)
+		result.map(|r| r.encode())
 	}
 
 	fn original_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
@@ -267,7 +259,11 @@ where
 		result
 	}
 
-	fn original_child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
+	fn original_child_storage_hash(
+		&self,
+		storage_key: ChildStorageKey,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let result = self.backend
 			.child_storage_hash(storage_key.as_ref(), key)
@@ -279,8 +275,7 @@ where
 			HexDisplay::from(&key),
 			result,
 		);
-
-		result.map(convert_hack)
+		result.map(|r| r.encode())
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> bool {
@@ -403,19 +398,19 @@ where
 		42
 	}
 
-	fn storage_root(&mut self) -> H256 {
+	fn storage_root(&mut self) -> Vec<u8> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {
 			trace!(target: "state-trace", "{:04x}: Root (cached) {}",
 				self.id,
 				HexDisplay::from(&root.as_ref()),
 			);
-			return convert_hack(root.clone())
+			return root.encode();
 		}
 
 		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache);
 		trace!(target: "state-trace", "{:04x}: Root {}", self.id, HexDisplay::from(&root.as_ref()));
-		convert_hack(root)
+		root.encode()
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey) -> Vec<u8> {
@@ -423,6 +418,7 @@ where
 		if self.storage_transaction_cache.transaction_storage_root.is_some() {
 			let root = self
 				.storage(storage_key.as_ref())
+				.and_then(|k| Decode::decode(&mut &k[..]).ok())
 				.unwrap_or(
 					default_child_trie_root::<Layout<H>>(storage_key.as_ref())
 				);
@@ -431,7 +427,7 @@ where
 				HexDisplay::from(&storage_key.as_ref()),
 				HexDisplay::from(&root.as_ref()),
 			);
-			root
+			root.encode()
 		} else {
 			let storage_key = storage_key.as_ref();
 
@@ -449,7 +445,7 @@ where
 			if is_empty {
 				self.overlay.set_storage(storage_key.into(), None);
 			} else {
-				self.overlay.set_storage(storage_key.into(), Some(root.clone()));
+				self.overlay.set_storage(storage_key.into(), Some(root.encode()));
 			}
 
 			trace!(target: "state-trace", "{:04x}: ChildRoot({}) {}",
@@ -457,27 +453,33 @@ where
 				HexDisplay::from(&storage_key.as_ref()),
 				HexDisplay::from(&root.as_ref()),
 			);
-			root
-
+			root.encode()
 		}
 	}
 
-	fn storage_changes_root(&mut self, parent_hash: H256) -> Result<Option<H256>, ()> {
+	fn storage_changes_root(&mut self, parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let root = self.overlay.changes_trie_root(
 			self.backend,
 			self.changes_trie_storage.clone(),
-			convert_hack(parent_hash),
+			Decode::decode(&mut &parent_hash[..]).map_err(|e|
+				trace!(
+					target: "state-trace",
+					"Failed to decode changes root parent hash: {}",
+					e,
+				)
+			)?,
 			true,
 			self.storage_transaction_cache,
 		);
+
 		trace!(target: "state-trace", "{:04x}: ChangesRoot({}) {:?}",
 			self.id,
-			HexDisplay::from(&parent_hash.as_ref()),
+			HexDisplay::from(&parent_hash),
 			root,
 		);
 
-		root.map(convert_hack)
+		root.map(|r| r.map(|o| o.encode()))
 	}
 }
 
@@ -498,7 +500,7 @@ mod tests {
 	use super::*;
 	use hex_literal::hex;
 	use codec::Encode;
-	use primitives::{Blake2Hasher, storage::well_known_keys::EXTRINSIC_INDEX};
+	use primitives::{H256, Blake2Hasher, storage::well_known_keys::EXTRINSIC_INDEX};
 	use crate::{
 		changes_trie::{
 			Configuration as ChangesTrieConfiguration,
@@ -536,7 +538,7 @@ mod tests {
 		let mut cache = StorageTransactionCache::default();
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
-		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(), None);
+		assert_eq!(ext.storage_changes_root(&H256::default().encode()).unwrap(), None);
 	}
 
 	#[test]
@@ -547,7 +549,7 @@ mod tests {
 		let storage = TestChangesTrieStorage::with_blocks(vec![(100, Default::default())]);
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &mut cache, &backend, Some(&storage), None);
-		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(), None);
+		assert_eq!(ext.storage_changes_root(&H256::default().encode()).unwrap(), None);
 	}
 
 	#[test]
@@ -558,8 +560,8 @@ mod tests {
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &mut cache, &backend, Some(&storage), None);
 		assert_eq!(
-			ext.storage_changes_root(Default::default()).unwrap(),
-			Some(hex!("bb0c2ef6e1d36d5490f9766cfcc7dfe2a6ca804504c3bb206053890d6dd02376").into()),
+			ext.storage_changes_root(&H256::default().encode()).unwrap(),
+			Some(hex!("bb0c2ef6e1d36d5490f9766cfcc7dfe2a6ca804504c3bb206053890d6dd02376").to_vec()),
 		);
 	}
 
@@ -572,8 +574,8 @@ mod tests {
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &mut cache, &backend, Some(&storage), None);
 		assert_eq!(
-			ext.storage_changes_root(Default::default()).unwrap(),
-			Some(hex!("96f5aae4690e7302737b6f9b7f8567d5bbb9eac1c315f80101235a92d9ec27f4").into()),
+			ext.storage_changes_root(&H256::default().encode()).unwrap(),
+			Some(hex!("96f5aae4690e7302737b6f9b7f8567d5bbb9eac1c315f80101235a92d9ec27f4").to_vec()),
 		);
 	}
 }

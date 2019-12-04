@@ -24,17 +24,19 @@ use kvdb::{KeyValueDB, DBTransaction};
 
 use client_api::backend::{AuxStore, NewBlockState};
 use client::blockchain::{
-	BlockStatus, Cache as BlockchainCache,
-	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo,
-	well_known_cache_keys,
+	BlockStatus, Cache as BlockchainCache,Info as BlockchainInfo,
 };
 use client::cht;
-use client::error::{Error as ClientError, Result as ClientResult};
+use sp_blockchain::{
+	CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache,
+	Error as ClientError, Result as ClientResult,
+	HeaderBackend as BlockchainHeaderBackend,
+	well_known_cache_keys,
+};
 use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
-use sr_primitives::generic::{DigestItem, BlockId};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor, HasherFor};
-use header_metadata::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
+use sp_runtime::generic::{DigestItem, BlockId};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor, HasherFor};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
 use crate::DatabaseSettings;
@@ -234,7 +236,7 @@ impl<Block: BlockT> LightStorage<Block> {
 		// handle reorg.
 		let meta = self.meta.read();
 		if meta.best_hash != Default::default() {
-			let tree_route = header_metadata::tree_route(self, meta.best_hash, route_to)?;
+			let tree_route = sp_blockchain::tree_route(self, meta.best_hash, route_to)?;
 
 			// update block number to hash lookup entries.
 			for retracted in tree_route.retracted() {
@@ -281,7 +283,7 @@ impl<Block: BlockT> LightStorage<Block> {
 	) -> ClientResult<()> {
 		let meta = self.meta.read();
 		if &meta.finalized_hash != header.parent_hash() {
-			return Err(::client::error::Error::NonSequentialFinalization(
+			return Err(::sp_blockchain::Error::NonSequentialFinalization(
 				format!("Last finalized {:?} not parent of {:?}",
 					meta.finalized_hash, hash),
 			).into())
@@ -557,9 +559,9 @@ fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 #[cfg(test)]
 pub(crate) mod tests {
 	use client::cht;
-	use sr_primitives::generic::DigestItem;
-	use sr_primitives::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
-	use header_metadata::{lowest_common_ancestor, tree_route};
+	use sp_runtime::generic::DigestItem;
+	use sp_runtime::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
+	use sp_blockchain::{lowest_common_ancestor, tree_route};
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;

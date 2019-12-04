@@ -29,8 +29,9 @@ use futures03::{StreamExt as _, TryStreamExt as _};
 use tokio::runtime::current_thread;
 use keyring::Ed25519Keyring;
 use client::LongestChain;
-use client_api::{backend::TransactionFor, error::Result};
-use sr_api::{ApiRef, ApiErrorExt, Core, RuntimeVersion, ApiExt, StorageProof, ProvideRuntimeApi};
+use client_api::backend::TransactionFor;
+use sp_blockchain::Result;
+use sp_api::{ApiRef, ApiErrorExt, Core, RuntimeVersion, ApiExt, StorageProof, ProvideRuntimeApi};
 use test_client::{self, runtime::BlockNumber};
 use consensus_common::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
@@ -39,8 +40,8 @@ use consensus_common::import_queue::{BoxJustificationImport, BoxFinalityProofImp
 use std::collections::{HashMap, HashSet};
 use std::result;
 use codec::Decode;
-use sr_primitives::traits::{Header as HeaderT, HasherFor};
-use sr_primitives::generic::{BlockId, DigestItem};
+use sp_runtime::traits::{Header as HeaderT, HasherFor};
+use sp_runtime::generic::{BlockId, DigestItem};
 use primitives::{NativeOrEncoded, ExecutionContext, crypto::Public, H256};
 use fg_primitives::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
 use state_machine::{InMemoryBackend, prove_read, read_proof_check};
@@ -259,7 +260,7 @@ impl Core<Block> for RuntimeApi {
 }
 
 impl ApiErrorExt for RuntimeApi {
-	type Error = client_api::error::Error;
+	type Error = sp_blockchain::Error;
 }
 
 impl ApiExt<Block> for RuntimeApi {
@@ -287,13 +288,13 @@ impl ApiExt<Block> for RuntimeApi {
 	}
 
 	fn into_storage_changes<
-		T: sr_api::ChangesTrieStorage<sr_api::HasherFor<Block>, sr_api::NumberFor<Block>>
+		T: sp_api::ChangesTrieStorage<sp_api::HasherFor<Block>, sp_api::NumberFor<Block>>
 	>(
 		self,
 		_: &Self::StateBackend,
 		_: Option<&T>,
-		_: <Block as sr_api::BlockT>::Hash,
-	) -> std::result::Result<sr_api::StorageChanges<Self::StateBackend, Block>, String>
+		_: <Block as sp_api::BlockT>::Hash,
+	) -> std::result::Result<sp_api::StorageChanges<Self::StateBackend, Block>, String>
 		where Self: Sized
 	{
 		unimplemented!("Not required for testing!")
@@ -1014,6 +1015,7 @@ fn allows_reimporting_change_blocks() {
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		}
 	};
 
@@ -1070,6 +1072,7 @@ fn test_bad_justification() {
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		}
 	};
 
@@ -1706,6 +1709,19 @@ fn grandpa_environment_respects_voting_rules() {
 		).unwrap().1,
 		19,
 	);
+
+	// we finalize block 20 with block 20 being the best block
+	peer.client().finalize_block(BlockId::Number(20), None, false).unwrap();
+
+	// even though the default environment will always try to not vote on the
+	// best block, there's a hard rule that we can't cast any votes lower than
+	// the given base (#20).
+	assert_eq!(
+		default_env.best_chain_containing(
+			peer.client().info().chain.finalized_hash
+		).unwrap().1,
+		20,
+	);
 }
 
 #[test]
@@ -1774,6 +1790,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 		auxiliary: Vec::new(),
 		fork_choice: ForkChoiceStrategy::LongestChain,
 		allow_missing_state: false,
+		import_existing: false,
 	};
 
 	assert_eq!(

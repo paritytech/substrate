@@ -16,13 +16,13 @@
 
 use std::{panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
-use sr_primitives::{generic::BlockId, traits::{Block as BlockT, HasherFor}};
+use sp_runtime::{generic::BlockId, traits::{Block as BlockT, HasherFor}};
 use state_machine::{self, OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof};
 use executor::{RuntimeVersion, NativeVersion};
-use primitives::{offchain::OffchainExt, NativeOrEncoded};
+use primitives::NativeOrEncoded;
+use externalities::Extensions;
 
-use sr_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
-use crate::error;
+use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 
 /// Method call executor.
 pub trait CallExecutor<B: BlockT> {
@@ -41,8 +41,8 @@ pub trait CallExecutor<B: BlockT> {
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
-		side_effects_handler: Option<OffchainExt>,
-	) -> Result<Vec<u8>, error::Error>;
+		extensions: Option<Extensions>,
+	) -> Result<Vec<u8>, sp_blockchain::Error>;
 
 	/// Execute a contextual call on top of state in a block of a given hash.
 	///
@@ -51,7 +51,7 @@ pub trait CallExecutor<B: BlockT> {
 	/// of the execution context.
 	fn contextual_call<
 		'a,
-		IB: Fn() -> error::Result<()>,
+		IB: Fn() -> sp_blockchain::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
@@ -71,15 +71,14 @@ pub trait CallExecutor<B: BlockT> {
 		initialize_block: InitializeBlock<'a, B>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		side_effects_handler: Option<OffchainExt>,
 		proof_recorder: &Option<ProofRecorder<B>>,
-		enable_keystore: bool,
-	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
+		extensions: Option<Extensions>,
+	) -> sp_blockchain::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
 	///
 	/// No changes are made.
-	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, error::Error>;
+	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, sp_blockchain::Error>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
@@ -90,7 +89,7 @@ pub trait CallExecutor<B: BlockT> {
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, StorageProof), error::Error> {
+	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
 		let trie_state = state.as_trie_backend()
 			.ok_or_else(||
 				Box::new(state_machine::ExecutionError::UnableToGenerateProof)
@@ -108,7 +107,7 @@ pub trait CallExecutor<B: BlockT> {
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, StorageProof), error::Error>;
+	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;
 
 	/// Get runtime version if supported.
 	fn native_runtime_version(&self) -> Option<&NativeVersion>;

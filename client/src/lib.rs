@@ -28,7 +28,7 @@
 //! Creating a [`Client`] is done by calling the `new` method and passing to it a
 //! [`Backend`](backend::Backend) and an [`Executor`](CallExecutor).
 //!
-//! The former is typically provided by the `substrate-client-db` crate.
+//! The former is typically provided by the `sc-client-db` crate.
 //!
 //! The latter typically requires passing one of:
 //!
@@ -46,9 +46,9 @@
 //!
 //! ```
 //! use std::sync::Arc;
-//! use substrate_client::{Client, in_mem::Backend, LocalCallExecutor};
+//! use sc_client::{Client, in_mem::Backend, LocalCallExecutor};
 //! use primitives::Blake2Hasher;
-//! use sr_primitives::{StorageOverlay, ChildrenStorageOverlay};
+//! use sp_runtime::{StorageOverlay, ChildrenStorageOverlay};
 //! use executor::{NativeExecutor, WasmExecutionMethod};
 //!
 //! // In this example, we're using the `Block` and `RuntimeApi` types from the
@@ -63,7 +63,6 @@
 //! 	LocalCallExecutor::new(
 //! 		backend.clone(),
 //! 		NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None),
-//! 		None,
 //!		),
 //! 	// This parameter provides the storage for the chain genesis.
 //! 	<(StorageOverlay, ChildrenStorageOverlay)>::default(),
@@ -85,7 +84,6 @@ mod call_executor;
 mod client;
 
 pub use client_api::{
-	error,
 	blockchain,
 	blockchain::well_known_cache_keys,
 	blockchain::Info as ChainInfo,
@@ -93,13 +91,15 @@ pub use client_api::{
 	call_executor::CallExecutor,
 	utils,
 };
-pub use crate::call_executor::LocalCallExecutor;
-pub use crate::client::{
-	new_with_backend,
-	new_in_mem,
-	BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents,
-	BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-	LongestChain, BlockOf, ProvideUncles, ForkBlocks, apply_aux,
+pub use crate::{
+	call_executor::LocalCallExecutor,
+	client::{
+		new_with_backend,
+		new_in_mem,
+		BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents,
+		BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
+		LongestChain, BlockOf, ProvideUncles, ForkBlocks, apply_aux,
+	},
+	leaves::LeafSet,
 };
 pub use state_machine::{ExecutionStrategy, StorageProof};
-pub use crate::leaves::LeafSet;

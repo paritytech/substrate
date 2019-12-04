@@ -17,34 +17,33 @@
 //! Block Builder extensions for tests.
 
 use runtime;
-use sr_api::{ApiExt, ProvideRuntimeApi};
-use generic_test_client::client;
+use sp_api::{ApiExt, ProvideRuntimeApi};
 use client_api::backend;
-use sr_primitives::traits::HasherFor;
+use sp_runtime::traits::HasherFor;
 
 use block_builder::BlockBuilderApi;
 
 /// Extension trait for test block builder.
 pub trait BlockBuilderExt {
 	/// Add transfer extrinsic to the block.
-	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error>;
+	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), sp_blockchain::Error>;
 	/// Add storage change extrinsic to the block.
 	fn push_storage_change(
 		&mut self,
 		key: Vec<u8>,
 		value: Option<Vec<u8>>,
-	) -> Result<(), client::error::Error>;
+	) -> Result<(), sp_blockchain::Error>;
 }
 
 impl<'a, A, B> BlockBuilderExt for block_builder::BlockBuilder<'a, runtime::Block, A, B> where
 	A: ProvideRuntimeApi<runtime::Block> + 'a,
-	A::Api: BlockBuilderApi<runtime::Block, Error = client::error::Error> +
+	A::Api: BlockBuilderApi<runtime::Block, Error = sp_blockchain::Error> +
 		ApiExt<runtime::Block, StateBackend = backend::StateBackendFor<B, runtime::Block>>,
 	B: backend::Backend<runtime::Block>,
 	// Rust bug: https://github.com/rust-lang/rust/issues/24159
 	backend::StateBackendFor<B, runtime::Block>: state_machine::Backend<HasherFor<runtime::Block>>,
 {
-	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {
+	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), sp_blockchain::Error> {
 		self.push(transfer.into_signed_tx())
 	}
 
@@ -52,7 +51,7 @@ impl<'a, A, B> BlockBuilderExt for block_builder::BlockBuilder<'a, runtime::Bloc
 		&mut self,
 		key: Vec<u8>,
 		value: Option<Vec<u8>>,
-	) -> Result<(), client::error::Error> {
+	) -> Result<(), sp_blockchain::Error> {
 		self.push(runtime::Extrinsic::StorageChange(key, value))
 	}
 }

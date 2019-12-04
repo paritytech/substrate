@@ -28,14 +28,15 @@ use log::info;
 
 use client::Client;
 use block_builder_api::BlockBuilder;
-use sr_api::{ConstructRuntimeApi, ProvideRuntimeApi, ApiExt};
+use sp_api::{ConstructRuntimeApi, ProvideRuntimeApi, ApiExt};
 use consensus_common::{
 	BlockOrigin, BlockImportParams, InherentData, ForkChoiceStrategy, SelectChain
 };
 use consensus_common::block_import::BlockImport;
 use codec::{Decode, Encode};
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, SimpleArithmetic, One, Zero};
+use sp_runtime::{
+	generic::BlockId, traits::{Block as BlockT, Header as HeaderT, SimpleArithmetic, One, Zero},
+};
 pub use crate::modes::Mode;
 
 pub mod modes;
@@ -100,7 +101,7 @@ where
 	Backend: client_api::backend::Backend<Block> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
-		BlockBuilder<Block, Error = client::error::Error> +
+		BlockBuilder<Block, Error = sp_blockchain::Error> +
 		ApiExt<Block, StateBackend = Backend::State>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	Sc: SelectChain<Block>,
@@ -161,7 +162,7 @@ where
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
-		BlockBuilder<Block, Error = client::error::Error> +
+		BlockBuilder<Block, Error = sp_blockchain::Error> +
 		ApiExt<Block, StateBackend = Backend::State>,
 	RA: RuntimeAdapter,
 {
@@ -187,7 +188,7 @@ fn import_block<Backend, Exec, Block, RtApi>(
 	Backend: client_api::backend::Backend<Block> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
-		sr_api::Core<Block, Error = client::error::Error> +
+		sp_api::Core<Block, Error = sp_blockchain::Error> +
 		ApiExt<Block, StateBackend = Backend::State>,
 {
 	let import = BlockImportParams {
@@ -201,6 +202,7 @@ fn import_block<Backend, Exec, Block, RtApi>(
 		auxiliary: Vec::new(),
 		fork_choice: ForkChoiceStrategy::LongestChain,
 		allow_missing_state: false,
+		import_existing: false,
 	};
 	client.import_block(import, HashMap::new()).expect("Failed to import block");
 }

@@ -19,9 +19,9 @@
 #[cfg(test)]
 mod tests;
 
-use futures03::{channel::{mpsc, oneshot}, compat::Compat};
+use futures::{channel::{mpsc, oneshot}, compat::Compat};
 use api::Receiver;
-use sr_primitives::traits::{self, Header as HeaderT};
+use sp_runtime::traits::{self, Header as HeaderT};
 use self::error::Result;
 
 pub use api::system::*;

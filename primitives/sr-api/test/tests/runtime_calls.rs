@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sr_api::ProvideRuntimeApi;
+use sp_api::ProvideRuntimeApi;
 use test_client::{
 	prelude::*,
 	DefaultTestClientBuilderExt, TestClientBuilder,
 	runtime::{TestAPI, DecodeFails, Transfer, Header},
 };
-use sr_primitives::{generic::BlockId, traits::{Header as HeaderT, Hash as HashT}};
+use sp_runtime::{generic::BlockId, traits::{Header as HeaderT, Hash as HashT}};
 use state_machine::{
 	ExecutionStrategy, create_proof_check_backend,
 	execution_proof_check_on_trie_backend,
@@ -191,6 +191,5 @@ fn record_proof_works() {
 		&executor,
 		"Core_execute_block",
 		&block.encode(),
-		None,
 	).expect("Executes block while using the proof backend");
 }

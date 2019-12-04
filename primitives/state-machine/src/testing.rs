@@ -37,7 +37,10 @@ use externalities::{Extensions, Extension};
 type StorageTuple = (HashMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>);
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher=Blake2Hasher, N: ChangesTrieBlockNumber=u64> {
+pub struct TestExternalities<H: Hasher = Blake2Hasher, N: ChangesTrieBlockNumber = u64>
+where
+	H::Out: codec::Codec,
+{
 	overlay: OverlayedChanges,
 	storage_transaction_cache: StorageTransactionCache<
 		<InMemoryBackend<H> as Backend<H>>::Transaction, H, N
@@ -138,7 +141,9 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 	}
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N>
+	where H::Out: codec::Codec,
+{
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, self.backend.pairs())
 	}
@@ -173,6 +178,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> From<StorageTuple> for TestExternalit
 
 impl<H, N> externalities::ExtensionStore for TestExternalities<H, N> where
 	H: Hasher,
+	H::Out: codec::Codec,
 	N: ChangesTrieBlockNumber,
 {
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
@@ -194,7 +200,7 @@ mod tests {
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
 		const ROOT: [u8; 32] = hex!("2a340d3dfd52f5992c6b117e9e45f479e6da5afffafeb26ab619cf137a95aeb8");
-		assert_eq!(ext.storage_root(), primitives::H256::from(ROOT));
+		assert_eq!(&ext.storage_root()[..], &ROOT);
 	}
 
 	#[test]

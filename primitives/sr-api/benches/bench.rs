@@ -19,11 +19,11 @@ use test_client::{
 	DefaultTestClientBuilderExt, TestClientBuilder,
 	TestClientBuilderExt, runtime::TestAPI,
 };
-use sr_primitives::generic::BlockId;
+use sp_runtime::generic::BlockId;
 use state_machine::ExecutionStrategy;
-use sr_api::ProvideRuntimeApi;
+use sp_api::ProvideRuntimeApi;
 
-fn sr_api_benchmark(c: &mut Criterion) {
+fn sp_api_benchmark(c: &mut Criterion) {
 	c.bench_function("add one with same runtime api", |b| {
 		let client = test_client::new();
 		let runtime_api = client.runtime_api();
@@ -69,5 +69,5 @@ fn sr_api_benchmark(c: &mut Criterion) {
 	});
 }
 
-criterion_group!(benches, sr_api_benchmark);
+criterion_group!(benches, sp_api_benchmark);
 criterion_main!(benches);

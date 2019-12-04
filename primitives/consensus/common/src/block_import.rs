@@ -16,7 +16,7 @@
 
 //! Block import helpers.
 
-use sr_primitives::{
+use sp_runtime::{
 	Justification,
 	traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor, HasherFor},
 };
@@ -107,6 +107,8 @@ pub struct BlockCheckParams<Block: BlockT> {
 	pub parent_hash: Block::Hash,
 	/// Allow importing the block skipping state verification if parent state is missing.
 	pub allow_missing_state: bool,
+	/// Re-validate existing block.
+	pub import_existing: bool,
 }
 
 /// Data required to import a Block.
@@ -149,6 +151,8 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	pub fork_choice: ForkChoiceStrategy,
 	/// Allow importing the block skipping state verification if parent state is missing.
 	pub allow_missing_state: bool,
+	/// Re-validate existing block.
+	pub import_existing: bool,
 }
 
 impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
@@ -208,6 +212,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 			auxiliary: self.auxiliary,
 			allow_missing_state: self.allow_missing_state,
 			fork_choice: self.fork_choice,
+			import_existing: self.import_existing,
 		}
 	}
 }

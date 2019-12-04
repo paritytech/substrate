@@ -17,14 +17,14 @@
 //! Blockchain API backend for light nodes.
 
 use std::sync::Arc;
-use futures03::{future::ready, FutureExt, TryFutureExt};
+use futures::{future::ready, FutureExt, TryFutureExt};
 use rpc::futures::future::{result, Future, Either};
 
 use api::Subscriptions;
 use client::{
 	self, Client, light::{fetcher::{Fetcher, RemoteBodyRequest}, blockchain::RemoteBlockchain},
 };
-use sr_primitives::{
+use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT},
 };

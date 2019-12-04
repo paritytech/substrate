@@ -51,9 +51,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::task::{Context, Poll};
-use futures::Future;
-use futures_timer::Interval;
-use futures::prelude::*;
+use futures::{Future, FutureExt, Stream, StreamExt};
+use futures_timer::Delay;
 
 use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use client_api::blockchain::HeaderBackend;
@@ -65,9 +64,10 @@ use network::{DhtEvent, ExHashT};
 use primitives::crypto::{key_types, Pair};
 use primitives::traits::BareCryptoStorePtr;
 use prost::Message;
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::Block as BlockT;
-use sr_api::ProvideRuntimeApi;
+use sp_runtime::{traits::Block as BlockT, generic::BlockId};
+use sp_api::ProvideRuntimeApi;
+
+type Interval = Box<dyn Stream<Item = ()> + Unpin + Send + Sync>;
 
 mod error;
 /// Dht payload schemas generated from Protobuf definitions via Prost crate in build.rs.
@@ -117,7 +117,7 @@ where
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi<Block>>::Api:
-		AuthorityDiscoveryApi<Block, Error = client_api::error::Error>,
+		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
 	Self: Future<Output = ()>,
 {
 	/// Return a new authority discovery.
@@ -130,14 +130,14 @@ where
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h. Given that a node
 		// could restart at any point in time, one can not depend on the republishing process, thus publishing own
 		// external addresses should happen on an interval < 36h.
-		let publish_interval = Interval::new_at(
+		let publish_interval = interval_at(
 			Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
 			Duration::from_secs(12 * 60 * 60),
 		);
 
 		// External addresses of other authorities can change at any given point in time. The interval on which to query
 		// for external addresses of other authorities is a trade off between efficiency and performance.
-		let query_interval = Interval::new_at(
+		let query_interval = interval_at(
 			Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
 			Duration::from_secs(10 * 60),
 		);
@@ -359,7 +359,7 @@ where
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi<Block>>::Api:
-		AuthorityDiscoveryApi<Block, Error = client_api::error::Error>,
+		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
 {
 	type Output = ();
 
@@ -457,16 +457,28 @@ fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
 		.map_err(Error::HashingAuthorityId)
 }
 
+fn interval_at(start: Instant, duration: Duration) -> Interval {
+	let stream = futures::stream::unfold((), move |_| {
+		let wait_time = start.saturating_duration_since(Instant::now());
+
+		futures::future::join(
+			Delay::new(wait_time),
+			Delay::new(duration)
+		).map(|_| Some(((), ())))
+	}).map(drop);
+
+	Box::new(stream)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sr_api::{ApiRef, ApiErrorExt, ApiExt, Core, RuntimeVersion, StorageProof};
+	use sp_api::{ApiRef, ApiErrorExt, ApiExt, Core, RuntimeVersion, StorageProof};
 	use futures::channel::mpsc::channel;
 	use futures::executor::block_on;
 	use futures::future::poll_fn;
 	use primitives::{ExecutionContext, NativeOrEncoded, testing::KeyStore};
-	use sr_primitives::traits::Zero;
-	use sr_primitives::traits::NumberFor;
+	use sp_runtime::traits::{Zero, NumberFor};
 	use std::sync::{Arc, Mutex};
 	use test_client::runtime::Block;
 
@@ -488,7 +500,7 @@ mod tests {
 		fn header(
 			&self,
 			_id: BlockId<Block>,
-		) -> std::result::Result<Option<Block::Header>, client_api::error::Error> {
+		) -> std::result::Result<Option<Block::Header>, sp_blockchain::Error> {
 			Ok(None)
 		}
 
@@ -505,21 +517,21 @@ mod tests {
 		fn status(
 			&self,
 			_id: BlockId<Block>,
-		) -> std::result::Result<client_api::blockchain::BlockStatus, client_api::error::Error> {
+		) -> std::result::Result<client_api::blockchain::BlockStatus, sp_blockchain::Error> {
 			Ok(client_api::blockchain::BlockStatus::Unknown)
 		}
 
 		fn number(
 			&self,
 			_hash: Block::Hash,
-		) -> std::result::Result<Option<NumberFor<Block>>, client_api::error::Error> {
+		) -> std::result::Result<Option<NumberFor<Block>>, sp_blockchain::Error> {
 			Ok(None)
 		}
 
 		fn hash(
 			&self,
 			_number: NumberFor<Block>,
-		) -> std::result::Result<Option<Block::Hash>, client_api::error::Error> {
+		) -> std::result::Result<Option<Block::Hash>, sp_blockchain::Error> {
 			Ok(None)
 		}
 	}
@@ -535,7 +547,7 @@ mod tests {
 			_: ExecutionContext,
 			_: Option<()>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<RuntimeVersion>, client_api::error::Error> {
+		) -> std::result::Result<NativeOrEncoded<RuntimeVersion>, sp_blockchain::Error> {
 			unimplemented!("Not required for testing!")
 		}
 
@@ -545,7 +557,7 @@ mod tests {
 			_: ExecutionContext,
 			_: Option<(Block)>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<()>, client_api::error::Error> {
+		) -> std::result::Result<NativeOrEncoded<()>, sp_blockchain::Error> {
 			unimplemented!("Not required for testing!")
 		}
 
@@ -555,13 +567,13 @@ mod tests {
 			_: ExecutionContext,
 			_: Option<&<Block as BlockT>::Header>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<()>, client_api::error::Error> {
+		) -> std::result::Result<NativeOrEncoded<()>, sp_blockchain::Error> {
 			unimplemented!("Not required for testing!")
 		}
 	}
 
 	impl ApiErrorExt for RuntimeApi {
-		type Error = client_api::error::Error;
+		type Error = sp_blockchain::Error;
 	}
 
 	impl ApiExt<Block> for RuntimeApi {
@@ -579,7 +591,7 @@ mod tests {
 		fn runtime_version_at(
 			&self,
 			_: &BlockId<Block>,
-		) -> std::result::Result<RuntimeVersion, client_api::error::Error> {
+		) -> std::result::Result<RuntimeVersion, sp_blockchain::Error> {
 			unimplemented!("Not required for testing!")
 		}
 
@@ -592,13 +604,13 @@ mod tests {
 		}
 
 		fn into_storage_changes<
-			T: sr_api::ChangesTrieStorage<sr_api::HasherFor<Block>, sr_api::NumberFor<Block>>
+			T: sp_api::ChangesTrieStorage<sp_api::HasherFor<Block>, sp_api::NumberFor<Block>>
 		>(
 			self,
 			_: &Self::StateBackend,
 			_: Option<&T>,
-			_: <Block as sr_api::BlockT>::Hash,
-		) -> std::result::Result<sr_api::StorageChanges<Self::StateBackend, Block>, String>
+			_: <Block as sp_api::BlockT>::Hash,
+		) -> std::result::Result<sp_api::StorageChanges<Self::StateBackend, Block>, String>
 			where
 				Self: Sized
 		{
@@ -613,7 +625,7 @@ mod tests {
 			_: ExecutionContext,
 			_: Option<()>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<Vec<AuthorityId>>, client_api::error::Error> {
+		) -> std::result::Result<NativeOrEncoded<Vec<AuthorityId>>, sp_blockchain::Error> {
 			return Ok(NativeOrEncoded::Native(self.authorities.clone()));
 		}
 	}

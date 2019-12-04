@@ -21,7 +21,7 @@ use std::sync::Arc;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
-use sr_primitives::traits::{Block as BlockT, Header, HasherFor, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header, HasherFor, NumberFor};
 use primitives::hexdisplay::HexDisplay;
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
@@ -315,7 +315,7 @@ impl<B: BlockT> CacheChanges<B> {
 	/// that are invalidated by chain reorganization. `sync_cache`
 	/// should be called after the block has been committed and the
 	/// blockchain route has been calculated.
-	pub fn sync_cache<F: FnOnce() -> bool> (
+	pub fn sync_cache(
 		&mut self,
 		enacted: &[B::Hash],
 		retracted: &[B::Hash],
@@ -323,10 +323,9 @@ impl<B: BlockT> CacheChanges<B> {
 		child_changes: ChildStorageCollection,
 		commit_hash: Option<B::Hash>,
 		commit_number: Option<NumberFor<B>>,
-		is_best: F,
+		is_best: bool,
 	) {
 		let mut cache = self.shared_cache.lock();
-		let is_best = is_best();
 		trace!(
 			"Syncing cache, id = (#{:?}, {:?}), parent={:?}, best={}",
 			commit_number,
@@ -580,11 +579,9 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		self.state.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(
-		&self,
-		storage_key: &[u8],
-		delta: I,
-	) -> (Vec<u8>, bool, Self::Transaction) where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (B::Hash, bool, Self::Transaction)
+		where
+			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
 		self.state.child_storage_root(storage_key, delta)
 	}
@@ -609,7 +606,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
 	use state_machine::InMemoryBackend;
 	use primitives::Blake2Hasher;
 
@@ -635,24 +632,24 @@ mod tests {
 		let mut s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
 			shared.clone(),
-			Some(root_parent.clone()),
+			Some(root_parent),
 		);
 		s.cache.sync_cache(
 			&[],
 			&[],
 			vec![(key.clone(), Some(vec![2]))],
 			vec![],
-			Some(h0.clone()),
+			Some(h0),
 			Some(0),
-			|| true,
+			true,
 		);
 
 		let mut s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
 			shared.clone(),
-			Some(h0.clone()),
+			Some(h0),
 		);
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1a), Some(1), || true);
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1a), Some(1), true);
 
 		let mut s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
@@ -666,13 +663,13 @@ mod tests {
 			vec![],
 			Some(h1b),
 			Some(1),
-			|| false,
+			false,
 		);
 
 		let mut s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
 			shared.clone(),
-			Some(h1b.clone()),
+			Some(h1b),
 		);
 		s.cache.sync_cache(
 			&[],
@@ -681,13 +678,13 @@ mod tests {
 			vec![],
 			Some(h2b),
 			Some(2),
-			|| false,
+			false,
 		);
 
 		let mut s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
 			shared.clone(),
-			Some(h1a.clone()),
+			Some(h1a),
 		);
 		s.cache.sync_cache(
 			&[],
@@ -696,7 +693,7 @@ mod tests {
 			vec![],
 			Some(h2a),
 			Some(2),
-			|| true,
+			true,
 		);
 
 		let mut s = CachingState::new(
@@ -704,7 +701,7 @@ mod tests {
 			shared.clone(),
 			Some(h2a),
 		);
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h3a), Some(3), || true);
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h3a), Some(3), true);
 
 		let s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
@@ -748,7 +745,7 @@ mod tests {
 			vec![],
 			Some(h3b),
 			Some(3),
-			|| true,
+			true,
 		);
 		let s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
@@ -783,7 +780,7 @@ mod tests {
 			vec![],
 			Some(h1),
 			Some(1),
-			|| true,
+			true,
 		);
 
 		let mut s = CachingState::new(
@@ -791,7 +788,7 @@ mod tests {
 			shared.clone(),
 			Some(h1),
 		);
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), || true);
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), true);
 
 		let mut s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
@@ -805,7 +802,7 @@ mod tests {
 			vec![],
 			Some(h2b),
 			Some(2),
-			|| false,
+			false,
 		);
 
 		let mut s = CachingState::new(
@@ -820,7 +817,7 @@ mod tests {
 			vec![],
 			Some(h3b),
 			Some(2),
-			|| false,
+			false,
 		);
 
 		let s = CachingState::new(
@@ -848,14 +845,14 @@ mod tests {
 			shared.clone(),
 			Some(root_parent),
 		);
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1), Some(1), || true);
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1), Some(1), true);
 
 		let mut s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
 			shared.clone(),
 			Some(h1),
 		);
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), || true);
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), true);
 
 		let mut s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
@@ -869,7 +866,7 @@ mod tests {
 			vec![],
 			Some(h3a),
 			Some(3),
-			|| true,
+			true,
 		);
 
 		let mut s = CachingState::new(
@@ -877,7 +874,7 @@ mod tests {
 			shared.clone(),
 			Some(h1),
 		);
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2b), Some(2), || false);
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2b), Some(2), false);
 
 		let mut s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
@@ -891,7 +888,7 @@ mod tests {
 			vec![],
 			Some(h3b),
 			Some(3),
-			|| false,
+			false,
 		);
 
 		let s = CachingState::new(
@@ -921,7 +918,7 @@ mod tests {
 			vec![],
 			Some(h0),
 			Some(0),
-			|| true,
+			true,
 		);
 		// 32 key, 3 byte size
 		assert_eq!(shared.lock().used_storage_cache_size(), 35 /* bytes */);
@@ -934,7 +931,7 @@ mod tests {
 			vec![(s_key.clone(), vec![(key.clone(), Some(vec![1, 2]))])],
 			Some(h0),
 			Some(0),
-			|| true,
+			true,
 		);
 		// 35 + (2 * 32) key, 2 byte size
 		assert_eq!(shared.lock().used_storage_cache_size(), 101 /* bytes */);
@@ -960,7 +957,7 @@ mod tests {
 			vec![],
 			Some(h0),
 			Some(0),
-			|| true,
+			true,
 		);
 		// 32 key, 4 byte size
 		assert_eq!(shared.lock().used_storage_cache_size(), 36 /* bytes */);
@@ -973,7 +970,7 @@ mod tests {
 			vec![],
 			Some(h0),
 			Some(0),
-			|| true,
+			true,
 		);
 		// 32 key, 2 byte size
 		assert_eq!(shared.lock().used_storage_cache_size(), 34 /* bytes */);
@@ -1002,7 +999,7 @@ mod tests {
 			vec![],
 			Some(h0.clone()),
 			Some(0),
-			|| true,
+			true,
 		);
 
 		let mut s = CachingState::new(
@@ -1017,7 +1014,7 @@ mod tests {
 			vec![],
 			Some(h1),
 			Some(1),
-			|| true,
+			true,
 		);
 
 		let mut s = CachingState::new(
@@ -1041,7 +1038,7 @@ mod tests {
 		s.cache.local_cache.write().storage.insert(key.clone(), Some(vec![42]));
 
 		// New value is propagated.
-		s.cache.sync_cache(&[], &[], vec![], vec![], None, None, || true);
+		s.cache.sync_cache(&[], &[], vec![], vec![], None, None, true);
 
 		let s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
@@ -1059,7 +1056,7 @@ mod qc {
 	use quickcheck::{quickcheck, TestResult, Arbitrary};
 
 	use super::*;
-	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
 	use state_machine::InMemoryBackend;
 	use primitives::Blake2Hasher;
 
@@ -1271,7 +1268,7 @@ mod qc {
 						vec![],
 						Some(hash),
 						Some(total_h as u64),
-						|| false,
+						false,
 					);
 
 					state
@@ -1310,7 +1307,7 @@ mod qc {
 						vec![],
 						Some(hash),
 						Some(self.canon.len() as u64 + 1),
-						|| true,
+						true,
 					);
 
 					self.canon.push(next);
@@ -1358,7 +1355,7 @@ mod qc {
 								vec![],
 								Some(hash),
 								Some(height),
-								|| true,
+								true,
 							);
 
 							state

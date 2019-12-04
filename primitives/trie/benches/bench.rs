@@ -20,11 +20,11 @@ criterion_main!(benches);
 
 fn benchmark(c: &mut Criterion) {
 	trie_bench::standard_benchmark::<
-		substrate_trie::Layout<primitives::Blake2Hasher>,
-		substrate_trie::TrieStream,
+		sp_trie::Layout<primitives::Blake2Hasher>,
+		sp_trie::TrieStream,
 	>(c, "substrate-blake2");
 	trie_bench::standard_benchmark::<
-		substrate_trie::Layout<primitives::Blake2Hasher>,
-		substrate_trie::TrieStream,
+		sp_trie::Layout<primitives::Blake2Hasher>,
+		sp_trie::TrieStream,
 	>(c, "substrate-keccak");
 }

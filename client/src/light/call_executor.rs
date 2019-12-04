@@ -21,8 +21,9 @@ use std::{
 };
 
 use codec::{Encode, Decode};
-use primitives::{offchain::OffchainExt, convert_hash, NativeOrEncoded, traits::CodeExecutor};
-use sr_primitives::{generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HasherFor}};
+use primitives::{convert_hash, NativeOrEncoded, traits::CodeExecutor};
+use sp_runtime::{generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HasherFor}};
+use externalities::Extensions;
 use state_machine::{
 	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
 	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof,
@@ -30,11 +31,12 @@ use state_machine::{
 };
 use hash_db::Hasher;
 
-use sr_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
+use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
+
+use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
 use client_api::{
 	backend::RemoteBackend,
-	error::{Error as ClientError, Result as ClientResult},
 	light::RemoteCallRequest,
 	call_executor::CallExecutor
 };
@@ -81,10 +83,10 @@ impl<Block, B, Local> CallExecutor<Block> for
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
-		side_effects_handler: Option<OffchainExt>,
+		extensions: Option<Extensions>,
 	) -> ClientResult<Vec<u8>> {
 		match self.backend.is_local_state_available(id) {
-			true => self.local.call(id, method, call_data, strategy, side_effects_handler),
+			true => self.local.call(id, method, call_data, strategy, extensions),
 			false => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
@@ -109,9 +111,8 @@ impl<Block, B, Local> CallExecutor<Block> for
 		initialize_block: InitializeBlock<'a, Block>,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		side_effects_handler: Option<OffchainExt>,
 		recorder: &Option<ProofRecorder<Block>>,
-		enable_keystore: bool,
+		extensions: Option<Extensions>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values
@@ -136,9 +137,8 @@ impl<Block, B, Local> CallExecutor<Block> for
 				initialize_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
-				side_effects_handler,
 				recorder,
-				enable_keystore,
+				extensions,
 			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
 			false => Err(ClientError::NotAvailableOnLightClient),
 		}
@@ -263,7 +263,6 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 		executor,
 		"Core_initialize_block",
 		&next_header.encode(),
-		None,
 	)?;
 
 	// execute method
@@ -273,7 +272,6 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 		executor,
 		&request.method,
 		&request.call_data,
-		None,
 	).map_err(Into::into)
 }
 
@@ -300,7 +298,7 @@ mod tests {
 			_method: &str,
 			_call_data: &[u8],
 			_strategy: ExecutionStrategy,
-			_side_effects_handler: Option<OffchainExt>,
+			_extensions: Option<Extensions>,
 		) -> Result<Vec<u8>, ClientError> {
 			Ok(vec![42])
 		}
@@ -330,9 +328,8 @@ mod tests {
 			_initialize_block: InitializeBlock<'a, Block>,
 			_execution_manager: ExecutionManager<EM>,
 			_native_call: Option<NC>,
-			_side_effects_handler: Option<OffchainExt>,
 			_proof_recorder: &Option<ProofRecorder<Block>>,
-			_enable_keystore: bool,
+			_extensions: Option<Extensions>,
 		) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 			unreachable!()
 		}
@@ -420,7 +417,7 @@ mod tests {
 				),
 			);
 			match execution_result {
-				Err(client_api::error::Error::Execution(_)) => (),
+				Err(sp_blockchain::Error::Execution(_)) => (),
 				_ => panic!("Unexpected execution result: {:?}", execution_result),
 			}
 		}
@@ -429,7 +426,7 @@ mod tests {
 		let mut remote_client = test_client::new();
 		for i in 1u32..3u32 {
 			let mut digest = Digest::default();
-			digest.push(sr_primitives::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
+			digest.push(sp_runtime::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
 			remote_client.import_justified(
 				BlockOrigin::Own,
 				remote_client.new_block(digest).unwrap().bake().unwrap().0,

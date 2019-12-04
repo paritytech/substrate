@@ -22,7 +22,7 @@ use rpc::futures::future::result;
 use api::Subscriptions;
 use client_api::{CallExecutor, backend::Backend};
 use client::Client;
-use sr_primitives::{generic::{BlockId, SignedBlock}, traits::{Block as BlockT}};
+use sp_runtime::{generic::{BlockId, SignedBlock}, traits::{Block as BlockT}};
 
 use super::{ChainBackend, client_err, error::FutureResult};
 

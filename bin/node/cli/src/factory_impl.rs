@@ -29,14 +29,14 @@ use node_runtime::{
 };
 use node_primitives::Signature;
 use primitives::{sr25519, crypto::Pair};
-use sr_primitives::{
+use sp_runtime::{
 	generic::Era, traits::{Block as BlockT, Header as HeaderT, SignedExtension, Verify, IdentifyAccount}
 };
 use transaction_factory::RuntimeAdapter;
 use transaction_factory::modes::Mode;
 use inherents::InherentData;
-use timestamp;
-use finality_tracker;
+use sp_timestamp;
+use sp_finality_tracker;
 
 type AccountPublic = <Signature as Verify>::Signer;
 
@@ -71,7 +71,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 	type AccountId = node_primitives::AccountId;
 	type Balance = node_primitives::Balance;
 	type Block = node_primitives::Block;
-	type Phase = sr_primitives::generic::Phase;
+	type Phase = sp_runtime::generic::Phase;
 	type Secret = sr25519::Pair;
 	type Index = node_primitives::Index;
 
@@ -160,9 +160,9 @@ impl RuntimeAdapter for FactoryState<Number> {
 		let timestamp = (self.block_no as u64 + 1) * MinimumPeriod::get();
 
 		let mut inherent = InherentData::new();
-		inherent.put_data(timestamp::INHERENT_IDENTIFIER, &timestamp)
+		inherent.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
 			.expect("Failed putting timestamp inherent");
-		inherent.put_data(finality_tracker::INHERENT_IDENTIFIER, &self.block_no)
+		inherent.put_data(sp_finality_tracker::INHERENT_IDENTIFIER, &self.block_no)
 			.expect("Failed putting finalized number inherent");
 		inherent
 	}

@@ -19,14 +19,16 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::{RwLock, Mutex};
+use parking_lot::RwLock;
 
-use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{
 	Backend as StateBackend, TrieBackend, InMemoryBackend, ChangesTrieTransaction,
 };
-use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header, HasherFor};
+use primitives::offchain::storage::InMemOffchainStorage;
+use sp_runtime::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero, Header, HasherFor};
 use crate::in_mem::{self, check_genesis_storage};
+use sp_blockchain::{ Error as ClientError, Result as ClientResult };
 use client_api::{
 	backend::{
 		AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
@@ -35,13 +37,9 @@ use client_api::{
 	blockchain::{
 		HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys,
 	},
-	error::{
-		Error as ClientError, Result as ClientResult
-	},
 	light::Storage as BlockchainStorage,
-	InMemOffchainStorage,
 };
-use crate::light::blockchain::{Blockchain};
+use crate::light::blockchain::Blockchain;
 use hash_db::Hasher;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always succeeds; qed";
@@ -50,7 +48,7 @@ const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type
 pub struct Backend<S, H: Hasher> {
 	blockchain: Arc<Blockchain<S>>,
 	genesis_state: RwLock<Option<InMemoryBackend<H>>>,
-	import_lock: Mutex<()>,
+	import_lock: RwLock<()>,
 }
 
 /// Light block (header and justification) import operation.
@@ -221,7 +219,7 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
-	fn get_import_lock(&self) -> &Mutex<()> {
+	fn get_import_lock(&self) -> &RwLock<()> {
 		&self.import_lock
 	}
 }
@@ -356,7 +354,7 @@ impl<H: Hasher> std::fmt::Debug for GenesisOrUnavailableState<H> {
 
 impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	where
-		H::Out: Ord,
+		H::Out: Ord + codec::Codec,
 {
 	type Error = ClientError;
 	type Transaction = <InMemoryBackend<H> as StateBackend<H>>::Transaction;
@@ -424,17 +422,17 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn child_storage_root<I>(&self, key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, key: &[u8], delta: I) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		match *self {
-			GenesisOrUnavailableState::Genesis(ref state) => state.child_storage_root(key, delta),
-			GenesisOrUnavailableState::Unavailable => (
-				H::Out::default().as_ref().to_vec(),
-				true,
-				Default::default(),
-			),
+			GenesisOrUnavailableState::Genesis(ref state) => {
+				let (root, is_equal, _) = state.child_storage_root(key, delta);
+				(root, is_equal, Default::default())
+			},
+			GenesisOrUnavailableState::Unavailable =>
+				(H::Out::default(), true, Default::default()),
 		}
 	}
 

@@ -22,6 +22,7 @@ use hash_db::Hasher;
 use trie::{
 	MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration, trie_types::Layout,
 };
+use codec::Codec;
 
 /// Error impossible.
 // FIXME: use `!` type when stabilized. https://github.com/rust-lang/rust/issues/35121
@@ -157,7 +158,7 @@ impl<H: Hasher> InMemory<H> {
 	}
 }
 
-impl<H: Hasher> Backend<H> for InMemory<H> {
+impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	type Error = Void;
 	type Transaction = Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>;
 	type TrieBackendStorage = MemoryDB<H>;
@@ -222,7 +223,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		(root, transaction)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord

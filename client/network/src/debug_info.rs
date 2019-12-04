@@ -27,7 +27,7 @@ use log::{debug, trace, error};
 use std::collections::hash_map::Entry;
 use std::time::{Duration, Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
-use futures_timer::Interval;
+use crate::utils::interval;
 
 /// Time after we disconnect from a node before we purge its information from the cache.
 const CACHE_EXPIRE: Duration = Duration::from_secs(10 * 60);
@@ -76,7 +76,7 @@ impl<TSubstream> DebugInfoBehaviour<TSubstream> {
 			ping: Ping::new(PingConfig::new()),
 			identify,
 			nodes_info: FnvHashMap::default(),
-			garbage_collect: Box::new(Interval::new(GARBAGE_COLLECT_INTERVAL).map(|()| Ok(())).compat()),
+			garbage_collect: Box::new(interval(GARBAGE_COLLECT_INTERVAL).map(|()| Ok(())).compat()),
 		}
 	}
 

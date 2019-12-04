@@ -21,9 +21,9 @@ use client_api::backend::Finalizer;
 use consensus::{
 	BlockImportParams, BlockImport, BlockOrigin, Error as ConsensusError, ForkChoiceStrategy,
 };
-use sr_primitives::Justification;
-use sr_primitives::traits::{Block as BlockT};
-use sr_primitives::generic::BlockId;
+use sp_runtime::Justification;
+use sp_runtime::traits::{Block as BlockT};
+use sp_runtime::generic::BlockId;
 use codec::alloc::collections::hash_map::HashMap;
 
 /// Extension trait for a test client.
@@ -33,7 +33,7 @@ pub trait ClientExt<Block: BlockT>: Sized {
 		&self,
 		id: BlockId<Block>,
 		justification: Option<Justification>,
-	) -> client::error::Result<()>;
+	) -> sp_blockchain::Result<()>;
 
 	/// Returns hash of the genesis block.
 	fn genesis_hash(&self) -> <Block as BlockT>::Hash;
@@ -71,7 +71,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 		&self,
 		id: BlockId<Block>,
 		justification: Option<Justification>,
-	) -> client::error::Result<()> {
+	) -> sp_blockchain::Result<()> {
 		Finalizer::finalize_block(self, id, justification, true)
 	}
 
@@ -97,6 +97,7 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
@@ -115,6 +116,7 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::Custom(true),
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
@@ -133,6 +135,7 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::Custom(true),
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
@@ -156,6 +159,7 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
@@ -179,6 +183,7 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
@@ -197,6 +202,7 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::Custom(true),
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
@@ -215,6 +221,7 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::Custom(true),
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
@@ -238,6 +245,7 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())

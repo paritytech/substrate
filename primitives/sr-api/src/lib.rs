@@ -45,7 +45,7 @@ pub use hash_db::Hasher;
 #[cfg(not(feature = "std"))]
 pub use primitives::to_substrate_wasm_fn_return_value;
 #[doc(hidden)]
-pub use sr_primitives::{
+pub use sp_runtime::{
 	traits::{
 		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, HasherFor, NumberFor,
 		Header as HeaderT, Hash as HashT,
@@ -55,7 +55,7 @@ pub use sr_primitives::{
 #[doc(hidden)]
 pub use primitives::{offchain, ExecutionContext};
 #[doc(hidden)]
-pub use sr_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
+pub use sp_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
 #[doc(hidden)]
 pub use rstd::{slice, mem};
 #[cfg(feature = "std")]
@@ -66,7 +66,7 @@ use primitives::OpaqueMetadata;
 #[cfg(feature = "std")]
 use std::{panic::UnwindSafe, cell::RefCell};
 
-pub use sr_api_proc_macro::{decl_runtime_apis, impl_runtime_apis};
+pub use sp_api_proc_macro::{decl_runtime_apis, impl_runtime_apis};
 
 /// A type that records all accessed trie nodes and generates a proof out of it.
 #[cfg(feature = "std")]

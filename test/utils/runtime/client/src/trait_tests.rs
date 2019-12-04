@@ -27,8 +27,7 @@ use client_api::blockchain::{Backend as BlockChainBackendT, HeaderBackend};
 use crate::{AccountKeyring, ClientBlockImportExt, TestClientBuilder, TestClientBuilderExt};
 use generic_test_client::consensus::BlockOrigin;
 use runtime::{self, Transfer};
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{Block as BlockT, HasherFor};
+use sp_runtime::{generic::BlockId, traits::{Block as BlockT, HasherFor}};
 
 /// helper to test the `leaves` implementation for various backends
 pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where

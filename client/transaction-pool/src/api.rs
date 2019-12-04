@@ -17,20 +17,23 @@
 //! Chain api required for the transaction pool.
 
 use std::{marker::PhantomData, pin::Pin, sync::Arc};
+use codec::{Decode, Encode};
+use futures::{
+	channel::oneshot, executor::{ThreadPool, ThreadPoolBuilder}, future::{Future, FutureExt, ready},
+};
 
-use codec::Encode;
-
-use futures::{channel::oneshot, executor::{ThreadPool, ThreadPoolBuilder}, future::Future};
-
-use sr_primitives::{generic::BlockId, traits, transaction_validity::TransactionValidity};
-
+use client_api::{blockchain::HeaderBackend, light::{Fetcher, RemoteCallRequest}};
 use primitives::Hasher;
-
-use tx_runtime_api::TaggedTransactionQueue;
+use sp_runtime::{
+	generic::BlockId, traits::{self, Block as BlockT, Hash as HashT, Header as HeaderT},
+	transaction_validity::TransactionValidity
+};
+use txpool_runtime_api::TaggedTransactionQueue;
+use sp_api::ProvideRuntimeApi;
 
 use crate::error::{self, Error};
 
-/// The transaction pool logic
+/// The transaction pool logic for full client.
 pub struct FullChainApi<T, Block> {
 	client: Arc<T>,
 	pool: ThreadPool,
@@ -38,8 +41,9 @@ pub struct FullChainApi<T, Block> {
 }
 
 impl<T, Block> FullChainApi<T, Block> where
-	Block: traits::Block,
-	T: sr_api::ProvideRuntimeApi<Block> + traits::BlockIdTo<Block> {
+	Block: BlockT,
+	T: ProvideRuntimeApi<Block> + traits::BlockIdTo<Block>,
+{
 	/// Create new transaction pool logic.
 	pub fn new(client: Arc<T>) -> Self {
 		FullChainApi {
@@ -55,10 +59,10 @@ impl<T, Block> FullChainApi<T, Block> where
 }
 
 impl<T, Block> txpool::ChainApi for FullChainApi<T, Block> where
-	Block: traits::Block,
-	T: sr_api::ProvideRuntimeApi<Block> + traits::BlockIdTo<Block> + 'static + Send + Sync,
+	Block: BlockT,
+	T: ProvideRuntimeApi<Block> + traits::BlockIdTo<Block> + 'static + Send + Sync,
 	T::Api: TaggedTransactionQueue<Block>,
-	sr_api::ApiErrorFor<T, Block>: Send,
+	sp_api::ApiErrorFor<T, Block>: Send,
 {
 	type Block = Block;
 	type Hash = Block::Hash;
@@ -107,6 +111,87 @@ impl<T, Block> txpool::ChainApi for FullChainApi<T, Block> where
 	fn hash_and_length(&self, ex: &txpool::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
 		ex.using_encoded(|x| {
 			(traits::HasherFor::<Block>::hash(x), x.len())
+		})
+	}
+}
+
+/// The transaction pool logic for light client.
+pub struct LightChainApi<T, F, Block> {
+	client: Arc<T>,
+	fetcher: Arc<F>,
+	_phantom: PhantomData<Block>,
+}
+
+impl<T, F, Block> LightChainApi<T, F, Block> where
+	Block: BlockT,
+	T: HeaderBackend<Block>,
+	F: Fetcher<Block>,
+{
+	/// Create new transaction pool logic.
+	pub fn new(client: Arc<T>, fetcher: Arc<F>) -> Self {
+		LightChainApi {
+			client,
+			fetcher,
+			_phantom: Default::default(),
+		}
+	}
+}
+
+impl<T, F, Block> txpool::ChainApi for LightChainApi<T, F, Block> where
+	Block: BlockT,
+	T: HeaderBackend<Block> + 'static,
+	F: Fetcher<Block> + 'static,
+{
+	type Block = Block;
+	type Hash = Block::Hash;
+	type Error = error::Error;
+	type ValidationFuture = Box<dyn Future<Output = error::Result<TransactionValidity>> + Send + Unpin>;
+
+	fn validate_transaction(
+		&self,
+		at: &BlockId<Self::Block>,
+		uxt: txpool::ExtrinsicFor<Self>,
+	) -> Self::ValidationFuture {
+		let header_hash = self.client.expect_block_hash_from_id(at);
+		let header_and_hash = header_hash
+			.and_then(|header_hash| self.client.expect_header(BlockId::Hash(header_hash))
+				.map(|header| (header_hash, header)));
+		let (block, header) = match header_and_hash {
+			Ok((header_hash, header)) => (header_hash, header),
+			Err(err) => return Box::new(ready(Err(err.into()))),
+		};
+		let remote_validation_request = self.fetcher.remote_call(RemoteCallRequest {
+			block,
+			header,
+			method: "TaggedTransactionQueue_validate_transaction".into(),
+			call_data: uxt.encode(),
+			retry_count: None,
+		});
+		let remote_validation_request = remote_validation_request.then(move |result| {
+			let result: error::Result<TransactionValidity> = result
+				.map_err(Into::into)
+				.and_then(|result| Decode::decode(&mut &result[..])
+					.map_err(|e| Error::RuntimeApi(
+						format!("Error decoding tx validation result: {:?}", e)
+					))
+				);
+			ready(result)
+		});
+
+		Box::new(remote_validation_request)
+	}
+
+	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::NumberFor<Self>>> {
+		Ok(self.client.block_number_from_id(at)?)
+	}
+
+	fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::BlockHash<Self>>> {
+		Ok(self.client.block_hash_from_id(at)?)
+	}
+
+	fn hash_and_length(&self, ex: &txpool::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+		ex.using_encoded(|x| {
+			(<<Block::Header as HeaderT>::Hashing as HashT>::hash(x), x.len())
 		})
 	}
 }

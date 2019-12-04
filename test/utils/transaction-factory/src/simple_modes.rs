@@ -38,9 +38,8 @@ use std::sync::Arc;
 use log::info;
 use client::Client;
 use block_builder_api::BlockBuilder;
-use sr_api::{ConstructRuntimeApi, ProvideRuntimeApi};
-use sr_primitives::traits::{Block as BlockT, One};
-use sr_primitives::generic::BlockId;
+use sp_api::{ConstructRuntimeApi, ProvideRuntimeApi};
+use sp_runtime::{generic::BlockId, traits::{Block as BlockT, One}};
 
 use crate::{Mode, RuntimeAdapter, create_block};
 
@@ -58,8 +57,8 @@ where
 	Backend: client_api::backend::Backend<Block> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
-		BlockBuilder<Block, Error = client::error::Error> +
-		sr_api::ApiExt<Block, StateBackend = Backend::State>,
+		BlockBuilder<Block, Error = sp_blockchain::Error> +
+		sp_api::ApiExt<Block, StateBackend = Backend::State>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	RA: RuntimeAdapter,
 {

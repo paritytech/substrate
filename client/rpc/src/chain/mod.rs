@@ -23,7 +23,7 @@ mod chain_light;
 mod tests;
 
 use std::sync::Arc;
-use futures03::{future, StreamExt as _, TryStreamExt as _};
+use futures::{future, StreamExt, TryStreamExt};
 use log::warn;
 use rpc::{
 	Result as RpcResult,
@@ -36,8 +36,8 @@ use client::{
 	light::{fetcher::Fetcher, blockchain::RemoteBlockchain},
 };
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use rpc_primitives::number;
-use sr_primitives::{
+use rpc_primitives::{number::NumberOrHex, list::ListOrValue};
+use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT, Header, NumberFor},
 };
@@ -78,7 +78,7 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 	/// By default returns latest block hash.
 	fn block_hash(
 		&self,
-		number: Option<number::NumberOrHex<NumberFor<Block>>>,
+		number: Option<NumberOrHex<NumberFor<Block>>>,
 	) -> Result<Option<Block::Hash>> {
 		Ok(match number {
 			None => Some(self.client().info().chain.best_hash),
@@ -210,8 +210,19 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 		self.backend.block(hash)
 	}
 
-	fn block_hash(&self, number: Option<number::NumberOrHex<NumberFor<Block>>>) -> Result<Option<Block::Hash>> {
-		self.backend.block_hash(number)
+	fn block_hash(
+		&self,
+		number: Option<ListOrValue<NumberOrHex<NumberFor<Block>>>>
+	) -> Result<ListOrValue<Option<Block::Hash>>> {
+		match number {
+			None => self.backend.block_hash(None).map(ListOrValue::Value),
+			Some(ListOrValue::Value(number)) => self.backend.block_hash(Some(number)).map(ListOrValue::Value),
+			Some(ListOrValue::List(list)) => Ok(ListOrValue::List(list
+				.into_iter()
+				.map(|number| self.backend.block_hash(Some(number)))
+				.collect::<Result<_>>()?
+			))
+		}
 	}
 
 	fn finalized_head(&self) -> Result<Block::Hash> {
@@ -276,6 +287,6 @@ fn subscribe_headers<B, E, Block, RA, F, G, S, ERR>(
 	});
 }
 
-fn client_err(err: client::error::Error) -> Error {
+fn client_err(err: sp_blockchain::Error) -> Error {
 	Error::Client(Box::new(err))
 }

@@ -20,7 +20,8 @@
 
 pub mod client_ext;
 
-pub use client::{ExecutionStrategies, blockchain, self};
+pub use client::{blockchain, self};
+pub use client_api::execution_extensions::{ExecutionStrategies, ExecutionExtensions};
 pub use client_db::{Backend, self};
 pub use client_ext::{ClientExt, ClientBlockImportExt};
 pub use consensus;
@@ -31,13 +32,13 @@ pub use keyring::{
 	sr25519::Keyring as Sr25519Keyring,
 };
 pub use primitives::{Blake2Hasher, traits::BareCryptoStorePtr};
-pub use sr_primitives::{StorageOverlay, ChildrenStorageOverlay};
+pub use sp_runtime::{StorageOverlay, ChildrenStorageOverlay};
 pub use state_machine::ExecutionStrategy;
 
 use std::sync::Arc;
 use std::collections::HashMap;
 use primitives::storage::well_known_keys;
-use sr_primitives::traits::Block as BlockT;
+use sp_runtime::traits::Block as BlockT;
 use client::LocalCallExecutor;
 
 /// Test client light database backend.
@@ -177,7 +178,10 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 			executor,
 			storage,
 			Default::default(),
-			self.execution_strategies,
+			ExecutionExtensions::new(
+				self.execution_strategies,
+				self.keystore.clone(),
+			)
 		).expect("Creates new client");
 
 		let longest_chain = client::LongestChain::new(self.backend);
@@ -193,7 +197,7 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 > {
 	/// Build the test client with the given native executor.
 	pub fn build_with_native_executor<Block, RuntimeApi, I>(
-		mut self,
+		self,
 		executor: I,
 	) -> (
 		client::Client<
@@ -212,7 +216,7 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 		let executor = executor.into().unwrap_or_else(||
 			NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
 		);
-		let executor = LocalCallExecutor::new(self.backend.clone(), executor, self.keystore.take());
+		let executor = LocalCallExecutor::new(self.backend.clone(), executor);
 
 		self.build_with_executor(executor)
 	}

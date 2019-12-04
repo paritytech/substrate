@@ -32,26 +32,24 @@
 use std::sync::Arc;
 use std::thread;
 use std::collections::HashMap;
-use client_api::{
-	BlockOf, blockchain::{HeaderBackend, ProvideCache}, backend::AuxStore,
-	well_known_cache_keys::Id as CacheKeyId,
-};
+use client_api::{BlockOf, backend::AuxStore};
+use sp_blockchain::{HeaderBackend, ProvideCache, well_known_cache_keys::Id as CacheKeyId};
 use block_builder_api::BlockBuilder as BlockBuilderApi;
-use sr_primitives::{Justification, RuntimeString};
-use sr_primitives::generic::{BlockId, Digest, DigestItem};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT};
-use sr_api::ProvideRuntimeApi;
-use paint_timestamp::{TimestampInherentData, InherentError as TIError};
+use sp_runtime::{Justification, RuntimeString};
+use sp_runtime::generic::{BlockId, Digest, DigestItem};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sp_api::ProvideRuntimeApi;
 use pow_primitives::{Seal, TotalDifficulty, POW_ENGINE_ID};
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{
 	BlockImportParams, BlockOrigin, ForkChoiceStrategy, SyncOracle, Environment, Proposer,
-	SelectChain, Error as ConsensusError
+	SelectChain, Error as ConsensusError, CanAuthorWith,
 };
 use consensus_common::import_queue::{BoxBlockImport, BasicQueue, Verifier};
 use codec::{Encode, Decode};
 use client_api;
 use log::*;
+use sp_timestamp::{InherentError as TIError, TimestampInherentData};
 
 #[derive(derive_more::Display, Debug)]
 pub enum Error<B: BlockT> {
@@ -66,7 +64,7 @@ pub enum Error<B: BlockT> {
 	#[display(fmt = "Fetching best header failed using select chain: {:?}", _0)]
 	BestHeaderSelectChain(ConsensusError),
 	#[display(fmt = "Fetching best header failed: {:?}", _0)]
-	BestHeader(client_api::error::Error),
+	BestHeader(sp_blockchain::Error),
 	#[display(fmt = "Best header does not exist")]
 	NoBestHeader,
 	#[display(fmt = "Block proposing error: {:?}", _0)]
@@ -79,7 +77,7 @@ pub enum Error<B: BlockT> {
 	CreateInherents(inherents::Error),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
 	CheckInherents(String),
-	Client(client_api::error::Error),
+	Client(sp_blockchain::Error),
 	Codec(codec::Error),
 	Environment(String),
 	Runtime(RuntimeString)
@@ -209,7 +207,7 @@ impl<B: BlockT, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 		inherent_data: InherentData,
 		timestamp_now: u64,
 	) -> Result<(), Error<B>> where
-		C: ProvideRuntimeApi<B>, C::Api: BlockBuilderApi<B, Error = client_api::error::Error>
+		C: ProvideRuntimeApi<B>, C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
@@ -247,7 +245,7 @@ impl<B: BlockT, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 
 impl<B: BlockT, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S, Algorithm> where
 	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
-	C::Api: BlockBuilderApi<B, Error = client_api::error::Error>,
+	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
 	S: SelectChain<B>,
 	Algorithm: PowAlgorithm<B> + Send + Sync,
 {
@@ -307,6 +305,7 @@ impl<B: BlockT, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S, Algorithm>
 				aux.total_difficulty > best_aux.total_difficulty
 			),
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		Ok((import_block, None))
@@ -317,9 +316,9 @@ impl<B: BlockT, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S, Algorithm>
 pub fn register_pow_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
 ) -> Result<(), consensus_common::Error> {
-	if !inherent_data_providers.has_provider(&paint_timestamp::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(&sp_timestamp::INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(paint_timestamp::InherentDataProvider)
+			.register_provider(sp_timestamp::InherentDataProvider)
 			.map_err(Into::into)
 			.map_err(consensus_common::Error::InherentData)
 	} else {
@@ -332,20 +331,20 @@ pub type PowImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
 
 /// Import queue for PoW engine.
 pub fn import_queue<B, C, S, Algorithm>(
-	block_import: BoxBlockImport<B, sr_api::TransactionFor<C, B>>,
+	block_import: BoxBlockImport<B, sp_api::TransactionFor<C, B>>,
 	client: Arc<C>,
 	algorithm: Algorithm,
 	check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
 	select_chain: Option<S>,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<
-	PowImportQueue<B, sr_api::TransactionFor<C, B>>,
+	PowImportQueue<B, sp_api::TransactionFor<C, B>>,
 	consensus_common::Error
 > where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + HeaderBackend<B> + BlockOf + ProvideCache<B> + AuxStore,
 	C: Send + Sync + AuxStore + 'static,
-	C::Api: BlockBuilderApi<B, Error = client_api::error::Error>,
+	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
 	Algorithm: PowAlgorithm<B> + Send + Sync + 'static,
 	S: SelectChain<B> + 'static,
 {
@@ -377,8 +376,8 @@ pub fn import_queue<B, C, S, Algorithm>(
 /// information, or just be a graffiti. `round` is for number of rounds the
 /// CPU miner runs each time. This parameter should be tweaked so that each
 /// mining round is within sub-second time.
-pub fn start_mine<B: BlockT, C, Algorithm, E, SO, S>(
-	mut block_import: BoxBlockImport<B, sr_api::TransactionFor<C, B>>,
+pub fn start_mine<B: BlockT, C, Algorithm, E, SO, S, CAW>(
+	mut block_import: BoxBlockImport<B, sp_api::TransactionFor<C, B>>,
 	client: Arc<C>,
 	algorithm: Algorithm,
 	mut env: E,
@@ -388,14 +387,16 @@ pub fn start_mine<B: BlockT, C, Algorithm, E, SO, S>(
 	build_time: std::time::Duration,
 	select_chain: Option<S>,
 	inherent_data_providers: inherents::InherentDataProviders,
+	can_author_with: CAW,
 ) where
 	C: HeaderBackend<B> + AuxStore + ProvideRuntimeApi<B> + 'static,
 	Algorithm: PowAlgorithm<B> + Send + Sync + 'static,
 	E: Environment<B> + Send + Sync + 'static,
 	E::Error: std::fmt::Debug,
-	E::Proposer: Proposer<B, Transaction = sr_api::TransactionFor<C, B>>,
+	E::Proposer: Proposer<B, Transaction = sp_api::TransactionFor<C, B>>,
 	SO: SyncOracle + Send + Sync + 'static,
 	S: SelectChain<B> + 'static,
+	CAW: CanAuthorWith<B> + Send + 'static,
 {
 	if let Err(_) = register_pow_inherent_data_provider(&inherent_data_providers) {
 		warn!("Registering inherent data provider for timestamp failed");
@@ -413,7 +414,8 @@ pub fn start_mine<B: BlockT, C, Algorithm, E, SO, S>(
 				&mut sync_oracle,
 				build_time.clone(),
 				select_chain.as_ref(),
-				&inherent_data_providers
+				&inherent_data_providers,
+				&can_author_with,
 			) {
 				Ok(()) => (),
 				Err(e) => error!(
@@ -426,8 +428,8 @@ pub fn start_mine<B: BlockT, C, Algorithm, E, SO, S>(
 	});
 }
 
-fn mine_loop<B: BlockT, C, Algorithm, E, SO, S>(
-	block_import: &mut BoxBlockImport<B, sr_api::TransactionFor<C, B>>,
+fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
+	block_import: &mut BoxBlockImport<B, sp_api::TransactionFor<C, B>>,
 	client: &C,
 	algorithm: &Algorithm,
 	env: &mut E,
@@ -437,15 +439,17 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S>(
 	build_time: std::time::Duration,
 	select_chain: Option<&S>,
 	inherent_data_providers: &inherents::InherentDataProviders,
+	can_author_with: &CAW,
 ) -> Result<(), Error<B>> where
 	C: HeaderBackend<B> + AuxStore + ProvideRuntimeApi<B>,
 	Algorithm: PowAlgorithm<B>,
 	E: Environment<B>,
-	E::Proposer: Proposer<B, Transaction = sr_api::TransactionFor<C, B>>,
+	E::Proposer: Proposer<B, Transaction = sp_api::TransactionFor<C, B>>,
 	E::Error: std::fmt::Debug,
 	SO: SyncOracle,
 	S: SelectChain<B>,
-	sr_api::TransactionFor<C, B>: 'static,
+	sp_api::TransactionFor<C, B>: 'static,
+	CAW: CanAuthorWith<B>,
 {
 	'outer: loop {
 		if sync_oracle.is_major_syncing() {
@@ -469,6 +473,18 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S>(
 				(hash, header)
 			},
 		};
+
+		if let Err(err) = can_author_with.can_author_with(&BlockId::Hash(best_hash)) {
+			warn!(
+				target: "pow",
+				"Skipping proposal `can_author_with` returned: {} \
+				Probably a node update is required!",
+				err,
+			);
+			std::thread::sleep(std::time::Duration::from_secs(1));
+			continue 'outer
+		}
+
 		let mut aux = PowAux::read(client, &best_hash)?;
 		let mut proposer = env.init(&best_header)
 			.map_err(|e| Error::Environment(format!("{:?}", e)))?;
@@ -543,6 +559,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S>(
 			auxiliary: vec![(key, Some(aux.encode()))],
 			fork_choice: ForkChoiceStrategy::Custom(true),
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		block_import.import_block(import_block, HashMap::default())

@@ -22,11 +22,11 @@ use codec::{self, Codec, Encode};
 use client::blockchain::HeaderBackend;
 use jsonrpc_core::{Result, Error, ErrorCode};
 use jsonrpc_derive::rpc;
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits,
 };
-use substrate_primitives::hexdisplay::HexDisplay;
+use sp_core::hexdisplay::HexDisplay;
 use transaction_pool::txpool::{self, Pool};
 
 pub use paint_system_rpc_runtime_api::AccountNonceApi;
@@ -66,7 +66,7 @@ impl<P: txpool::ChainApi, C, B> System<P, C, B> {
 
 impl<P, C, Block, AccountId, Index> SystemApi<AccountId, Index> for System<P, C, Block>
 where
-	C: sr_api::ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
+	C: sp_api::ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 	C::Api: AccountNonceApi<Block, AccountId, Index>,
 	P: txpool::ChainApi + Sync + Send + 'static,
 	Block: traits::Block,
