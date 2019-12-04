@@ -38,10 +38,31 @@ enum Action {
 	AddReservedPeer(PeerId),
 	RemoveReservedPeer(PeerId),
 	SetReservedOnly(bool),
-	ReportPeer(PeerId, i32),
+	ReportPeer(PeerId, ReputationChange),
 	SetPriorityGroup(String, HashSet<PeerId>),
 	AddToPriorityGroup(String, PeerId),
 	RemoveFromPriorityGroup(String, PeerId),
+}
+
+/// Shared handle to the peer set manager (PSM). Distributed around the code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReputationChange {
+	/// Reputation delta.
+	pub value: i32,
+	/// Reason for reputation change.
+	pub reason: &'static str,
+}
+
+impl ReputationChange {
+	/// New reputation change with given delta and reason.
+	pub const fn new(value: i32, reason: &'static str) -> ReputationChange {
+		ReputationChange { value, reason }
+	}
+
+	/// New reputation change that forces minimum possible reputation.
+	pub const fn new_fatal(reason: &'static str) -> ReputationChange {
+		ReputationChange { value: i32::min_value(), reason }
+	}
 }
 
 /// Shared handle to the peer set manager (PSM). Distributed around the code.
@@ -75,7 +96,7 @@ impl PeersetHandle {
 	}
 
 	/// Reports an adjustment to the reputation of the given peer.
-	pub fn report_peer(&self, peer_id: PeerId, score_diff: i32) {
+	pub fn report_peer(&self, peer_id: PeerId, score_diff: ReputationChange) {
 		let _ = self.tx.unbounded_send(Action::ReportPeer(peer_id, score_diff));
 	}
 
@@ -258,20 +279,27 @@ impl Peerset {
 		self.alloc_slots();
 	}
 
-	fn on_report_peer(&mut self, peer_id: PeerId, score_diff: i32) {
+	fn on_report_peer(&mut self, peer_id: PeerId, change: ReputationChange) {
 		// We want reputations to be up-to-date before adjusting them.
 		self.update_time();
 
 		match self.data.peer(&peer_id) {
 			peersstate::Peer::Connected(mut peer) => {
-				peer.add_reputation(score_diff);
+				peer.add_reputation(change.value);
 				if peer.reputation() < BANNED_THRESHOLD {
+					debug!(target: "peerset", "Report {}: {:+} to {}. Reason: {}, Disconnecting",
+						peer_id, change.value, peer.reputation(), change.reason
+					);
 					peer.disconnect();
 					self.message_queue.push_back(Message::Drop(peer_id));
+				} else {
+					trace!(target: "peerset", "Report {}: {:+} to {}. Reason: {}",
+						peer_id, change.value, peer.reputation(), change.reason
+					);
 				}
 			},
-			peersstate::Peer::NotConnected(mut peer) => peer.add_reputation(score_diff),
-			peersstate::Peer::Unknown(peer) => peer.discover().add_reputation(score_diff),
+			peersstate::Peer::NotConnected(mut peer) => peer.add_reputation(change.value),
+			peersstate::Peer::Unknown(peer) => peer.discover().add_reputation(change.value),
 		}
 	}
 
@@ -293,7 +321,7 @@ impl Peerset {
 		// takes `ln(0.5) / ln(k)` seconds to reduce the reputation by half. Use this formula to
 		// empirically determine a value of `k` that looks correct.
 		for _ in 0..secs_diff {
-			for peer in self.data.peers().cloned().collect::<Vec<_>>() {
+			for peer_id in self.data.peers().cloned().collect::<Vec<_>>() {
 				// We use `k = 0.98`, so we divide by `50`. With that value, it takes 34.3 seconds
 				// to reduce the reputation by half.
 				fn reput_tick(reput: i32) -> i32 {
@@ -305,13 +333,21 @@ impl Peerset {
 					}
 					reput.saturating_sub(diff)
 				}
-				match self.data.peer(&peer) {
-					peersstate::Peer::Connected(mut peer) =>
-						peer.set_reputation(reput_tick(peer.reputation())),
-					peersstate::Peer::NotConnected(mut peer) =>
-						peer.set_reputation(reput_tick(peer.reputation())),
+				match self.data.peer(&peer_id) {
+					peersstate::Peer::Connected(mut peer) => {
+						let before = peer.reputation();
+						let after = reput_tick(before);
+						trace!(target: "peerset", "Fleeting {}: {} -> {}", peer_id, before, after);
+						peer.set_reputation(after)
+					}
+					peersstate::Peer::NotConnected(mut peer) => {
+						let before = peer.reputation();
+						let after = reput_tick(before);
+						trace!(target: "peerset", "Fleeting {}: {} -> {}", peer_id, before, after);
+						peer.set_reputation(after)
+					}
 					peersstate::Peer::Unknown(_) => unreachable!("We iterate over known peers; qed")
-				}
+				};
 			}
 		}
 	}
@@ -432,7 +468,7 @@ impl Peerset {
 	}
 
 	/// Reports an adjustment to the reputation of the given peer.
-	pub fn report_peer(&mut self, peer_id: PeerId, score_diff: i32) {
+	pub fn report_peer(&mut self, peer_id: PeerId, score_diff: ReputationChange) {
 		// We don't immediately perform the adjustments in order to have state consistency. We
 		// don't want the reporting here to take priority over messages sent using the
 		// `PeersetHandle`.
@@ -510,7 +546,7 @@ impl Stream for Peerset {
 mod tests {
 	use libp2p::PeerId;
 	use futures::prelude::*;
-	use super::{PeersetConfig, Peerset, Message, IncomingIndex, BANNED_THRESHOLD};
+	use super::{PeersetConfig, Peerset, Message, IncomingIndex, ReputationChange, BANNED_THRESHOLD};
 	use std::{pin::Pin, task::Poll, thread, time::Duration};
 
 	fn assert_messages(mut peerset: Peerset, messages: Vec<Message>) -> Peerset {
@@ -620,7 +656,7 @@ mod tests {
 
 		// We ban a node by setting its reputation under the threshold.
 		let peer_id = PeerId::random();
-		handle.report_peer(peer_id.clone(), BANNED_THRESHOLD - 1);
+		handle.report_peer(peer_id.clone(), ReputationChange::new(BANNED_THRESHOLD - 1, ""));
 
 		let fut = futures::future::poll_fn(move |cx| {
 			// We need one polling for the message to be processed.

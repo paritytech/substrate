@@ -19,14 +19,14 @@ error[E0053]: method `test` has an incompatible type for trait
 error[E0053]: method `Api_test_runtime_api_impl` has an incompatible type for trait
   --> $DIR/type_reference_in_impl_runtime_apis_call.rs:17:1
    |
-11 | / sr_api::decl_runtime_apis! {
+11 | / sp_api::decl_runtime_apis! {
 12 | |     pub trait Api {
 13 | |         fn test(data: u64);
 14 | |     }
 15 | | }
    | |_- type in trait
 16 | 
-17 |   sr_api::impl_runtime_apis! {
+17 |   sp_api::impl_runtime_apis! {
    |   -^^^^^^^^^^^^^^^^^^^^^^^^^
    |   |
    |  _expected u64, found &u64
@@ -39,13 +39,13 @@ error[E0053]: method `Api_test_runtime_api_impl` has an incompatible type for tr
 35 | | }
    | |_- in this macro invocation
    |
-   = note: expected type `fn(&RuntimeApiImpl<RuntimeApiImplCall>, &sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::BlockId<sr_primitives::generic::block::Block<sr_primitives::generic::header::Header<u64, sr_primitives::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>, sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::ExecutionContext, std::option::Option<u64>, std::vec::Vec<u8>) -> std::result::Result<sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::NativeOrEncoded<()>, <RuntimeApiImplCall as sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::CallRuntimeAt<sr_primitives::generic::block::Block<sr_primitives::generic::header::Header<u64, sr_primitives::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>>::Error>`
-              found type `fn(&RuntimeApiImpl<RuntimeApiImplCall>, &sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::BlockId<sr_primitives::generic::block::Block<sr_primitives::generic::header::Header<u64, sr_primitives::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>, sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::ExecutionContext, std::option::Option<&u64>, std::vec::Vec<u8>) -> std::result::Result<sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::NativeOrEncoded<()>, <RuntimeApiImplCall as sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::CallRuntimeAt<sr_primitives::generic::block::Block<sr_primitives::generic::header::Header<u64, sr_primitives::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>>::Error>`
+   = note: expected type `fn(&RuntimeApiImpl<RuntimeApiImplCall>, &sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::BlockId<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>, sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::ExecutionContext, std::option::Option<u64>, std::vec::Vec<u8>) -> std::result::Result<sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::NativeOrEncoded<()>, <RuntimeApiImplCall as sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::CallRuntimeAt<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>>::Error>`
+              found type `fn(&RuntimeApiImpl<RuntimeApiImplCall>, &sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::BlockId<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>, sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::ExecutionContext, std::option::Option<&u64>, std::vec::Vec<u8>) -> std::result::Result<sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::NativeOrEncoded<()>, <RuntimeApiImplCall as sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::CallRuntimeAt<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>>::Error>`
 
 error[E0308]: mismatched types
   --> $DIR/type_reference_in_impl_runtime_apis_call.rs:17:1
    |
-17 | / sr_api::impl_runtime_apis! {
+17 | / sp_api::impl_runtime_apis! {
 18 | |     impl self::Api<Block> for Runtime {
 19 | |         fn test(data: &u64) {
 20 | |             unimplemented!()

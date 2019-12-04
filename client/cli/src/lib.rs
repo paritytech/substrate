@@ -56,16 +56,16 @@ use params::{
 	NetworkConfigurationParams, MergeParameters, TransactionPoolParams,
 	NodeKeyParams, NodeKeyType, Cors, CheckBlockCmd,
 };
-pub use params::{NoCustom, CoreParams, SharedParams, ExecutionStrategy as ExecutionStrategyParam};
+pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy};
 pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
 use futures::{Future, FutureExt, TryFutureExt};
 use futures01::{Async, Future as _};
-use substrate_telemetry::TelemetryEndpoints;
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::Block as BlockT;
+use sc_telemetry::TelemetryEndpoints;
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::Block as BlockT;
 
 /// default sub directory to store network config
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
@@ -440,7 +440,8 @@ impl<'a> ParseAndPrepareImport<'a> {
 		E: ChainSpecExtension,
 		Exit: IntoExit
 	{
-		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		fill_import_params(&mut config, &self.params.import_params, service::Roles::FULL)?;
 
 		let file: Box<dyn ReadPlusSeek + Send> = match self.params.input {
 			Some(filename) => Box::new(File::open(filename)?),
@@ -499,7 +500,8 @@ impl<'a> CheckBlock<'a> {
 			E: ChainSpecExtension,
 			Exit: IntoExit
 	{
-		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		fill_import_params(&mut config, &self.params.import_params, service::Roles::FULL)?;
 
 		let input = if self.params.input.starts_with("0x") { &self.params.input[2..] } else { &self.params.input[..] };
 		let block_id = match FromStr::from_str(input) {
@@ -672,11 +674,13 @@ fn fill_network_configuration(
 	config.boot_nodes.extend(cli.bootnodes.into_iter());
 	config.config_path = Some(config_path.to_string_lossy().into());
 	config.net_config_path = config.config_path.clone();
-	config.reserved_nodes.extend(cli.reserved_nodes.into_iter());
 
+	config.reserved_nodes.extend(cli.reserved_nodes.into_iter());
 	if cli.reserved_only {
 		config.non_reserved_mode = NonReservedPeerMode::Deny;
 	}
+
+	config.sentry_nodes.extend(cli.sentry_nodes.into_iter());
 
 	for addr in cli.listen_addr.iter() {
 		let addr = addr.parse().ok().ok_or(error::Error::InvalidListenMultiaddress)?;
@@ -738,17 +742,23 @@ fn fill_config_keystore_password<C, G, E>(
 	Ok(())
 }
 
-fn fill_shared_config<C, G, E>(config: &mut Configuration<C, G, E>, cli: &SharedParams, role: service::Roles)
-	-> error::Result<()>
-where
-	C: Default,
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
+/// Put block import CLI params into `config` object.
+pub fn fill_import_params<C, G, E>(
+	config: &mut Configuration<C, G, E>,
+	cli: &ImportParams,
+	role: service::Roles,
+) -> error::Result<()>
+	where
+		C: Default,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
 {
-	config.database = DatabaseConfig::Path {
-		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
-		cache_size: Some(cli.database_cache_size),
-	};
+	match config.database {
+		DatabaseConfig::Path { ref mut cache_size, .. } =>
+			*cache_size = Some(cli.database_cache_size),
+		DatabaseConfig::Custom(_) => {},
+	}
+
 	config.state_cache_size = cli.state_cache_size;
 
 	// by default we disable pruning if the node is an authority (i.e.
@@ -776,7 +786,7 @@ where
 	config.wasm_method = cli.wasm_method.into();
 
 	let exec = &cli.execution_strategies;
-	let exec_all_or = |strat: params::ExecutionStrategy| exec.execution.unwrap_or(strat).into();
+	let exec_all_or = |strat: ExecutionStrategy| exec.execution.unwrap_or(strat).into();
 	config.execution_strategies = ExecutionStrategies {
 		syncing: exec_all_or(exec.execution_syncing),
 		importing: exec_all_or(exec.execution_import_block),
@@ -796,9 +806,7 @@ where
 	E: ChainSpecExtension,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 {
-	let spec = load_spec(&cli.shared_params, spec_factory)?;
-	let base_path = base_path(&cli.shared_params, &version);
-	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), Some(base_path));
+	let mut config = create_config_with_db_path(spec_factory, &cli.shared_params, &version)?;
 
 	fill_config_keystore_password(&mut config, &cli)?;
 
@@ -813,7 +821,7 @@ where
 			service::Roles::FULL
 		};
 
-	fill_shared_config(&mut config, &cli.shared_params, role)?;
+	fill_import_params(&mut config, &cli.import_params, role)?;
 
 	config.impl_name = impl_name;
 	config.impl_commit = version.commit;
@@ -924,8 +932,16 @@ where
 	let spec = load_spec(cli, spec_factory)?;
 	let base_path = base_path(cli, version);
 
-	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), Some(base_path));
-	fill_shared_config(&mut config, &cli, service::Roles::FULL)?;
+	let mut config = service::Configuration::default_with_spec_and_base_path(
+		spec.clone(),
+		Some(base_path),
+	);
+
+	config.database = DatabaseConfig::Path {
+		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
+		cache_size: None,
+	};
+
 	Ok(config)
 }
 
@@ -956,8 +972,8 @@ fn init_logger(pattern: &str) {
 	builder.filter(Some("ws"), log::LevelFilter::Off);
 	builder.filter(Some("hyper"), log::LevelFilter::Warn);
 	builder.filter(Some("cranelift_wasm"), log::LevelFilter::Warn);
-	// Always log the special target `substrate_tracing`, overrides global level
-	builder.filter(Some("substrate_tracing"), log::LevelFilter::Info);
+	// Always log the special target `sc_tracing`, overrides global level
+	builder.filter(Some("sc_tracing"), log::LevelFilter::Info);
 	// Enable info for others.
 	builder.filter(None, log::LevelFilter::Info);
 

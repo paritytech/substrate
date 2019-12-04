@@ -65,12 +65,12 @@ pub use babe_primitives::{
 pub use consensus_common::SyncOracle;
 use std::{collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration}};
 use babe_primitives;
-use consensus_common::ImportResult;
+use consensus_common::{ImportResult, CanAuthorWith};
 use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
-use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
-use sr_primitives::traits::{
+use sp_runtime::{generic::{BlockId, OpaqueDigestItemId}, Justification};
+use sp_runtime::traits::{
 	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi,
 	Zero,
 };
@@ -78,7 +78,7 @@ use keystore::KeyStorePtr;
 use parking_lot::Mutex;
 use primitives::{Blake2Hasher, H256, Pair};
 use inherents::{InherentDataProviders, InherentData};
-use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
+use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use consensus_common::{
 	self, BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
@@ -107,7 +107,7 @@ use sp_blockchain::{
 };
 use schnorrkel::SignatureError;
 
-use sr_api::ApiExt;
+use sp_api::ApiExt;
 
 mod aux_schema;
 mod verification;
@@ -241,7 +241,7 @@ impl std::ops::Deref for Config {
 }
 
 /// Parameters for BABE.
-pub struct BabeParams<B: BlockT, C, E, I, SO, SC> {
+pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	/// The keystore that manages the keys of the node.
 	pub keystore: KeyStorePtr,
 
@@ -270,10 +270,13 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC> {
 
 	/// The source of timestamps for relative slots
 	pub babe_link: BabeLink<B>,
+
+	/// Checks if the current native implementation can author with a runtime at a given block.
+	pub can_author_with: CAW,
 }
 
 /// Start the babe worker. The returned future should be run in a tokio runtime.
-pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
+pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	keystore,
 	client,
 	select_chain,
@@ -283,7 +286,8 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 	inherent_data_providers,
 	force_authoring,
 	babe_link,
-}: BabeParams<B, C, E, I, SO, SC>) -> Result<
+	can_author_with,
+}: BabeParams<B, C, E, I, SO, SC, CAW>) -> Result<
 	impl futures01::Future<Item=(), Error=()>,
 	consensus_common::Error,
 > where
@@ -298,6 +302,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 	I: BlockImport<B,Error=ConsensusError> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
+	CAW: CanAuthorWith<B> + Send,
 {
 	let config = babe_link.config;
 	let worker = BabeWorker {
@@ -326,6 +331,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 		sync_oracle,
 		inherent_data_providers,
 		babe_link.time_source,
+		can_author_with,
 	);
 
 	Ok(slot_worker.map(|_| Ok::<(), ()>(())).compat())
@@ -405,7 +411,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		s
 	}
 
-	fn pre_digest_data(&self, _slot_number: u64, claim: &Self::Claim) -> Vec<sr_primitives::DigestItem<B::Hash>> {
+	fn pre_digest_data(&self, _slot_number: u64, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem<B::Hash>> {
 		vec![
 			<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(claim.0.clone()),
 		]

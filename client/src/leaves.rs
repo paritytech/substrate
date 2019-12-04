@@ -19,7 +19,7 @@
 use std::collections::BTreeMap;
 use std::cmp::Reverse;
 use kvdb::{KeyValueDB, DBTransaction};
-use sr_primitives::traits::SimpleArithmetic;
+use sp_runtime::traits::SimpleArithmetic;
 use codec::{Encode, Decode};
 use sp_blockchain::{Error, Result};
 

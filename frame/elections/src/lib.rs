@@ -24,7 +24,7 @@
 #![recursion_limit="128"]
 
 use rstd::prelude::*;
-use sr_primitives::{
+use sp_runtime::{
 	RuntimeDebug,
 	print,
 	traits::{Zero, One, StaticLookup, Bounded, Saturating},

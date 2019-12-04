@@ -5,10 +5,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-primitives = { package = "substrate-primitives",  version = "*", path = "../../primitives/core" }
+primitives = { package = "sp-core",  version = "*", path = "../../primitives/core" }
 node-runtime = { version = "*", path = "../node/runtime" }
 node-primitives = { version = "*", path = "../node/primitives" }
-sr-primitives = { version = "*", path = "../../primitives/sr-primitives" }
+sp-runtime = { version = "*", path = "../../primitives/sr-primitives" }
 rand = "0.7.2"
 clap = "2.33.0"
 tiny-bip39 = "0.6.2"

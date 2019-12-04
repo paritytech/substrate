@@ -19,7 +19,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
-use sr_primitives::traits::{One, Zero, SaturatedConversion};
+use sp_runtime::traits::{One, Zero, SaturatedConversion};
 use rstd::{prelude::*, result, cmp, vec};
 use support::{decl_module, decl_storage};
 use support::traits::Get;
@@ -195,11 +195,11 @@ mod tests {
 
 	use runtime_io::TestExternalities;
 	use primitives::H256;
-	use sr_primitives::{
+	use sp_runtime::{
 		testing::Header, Perbill,
 		traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT},
 	};
-	use support::{assert_ok, impl_outer_origin, parameter_types};
+	use support::{assert_ok, impl_outer_origin, parameter_types, weights::Weight};
 	use frame_system as system;
 	use std::cell::RefCell;
 
@@ -230,7 +230,7 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}

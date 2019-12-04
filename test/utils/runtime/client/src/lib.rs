@@ -30,7 +30,7 @@ pub use runtime;
 
 use primitives::sr25519;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor};
 use client::{
 	light::fetcher::{
 		Fetcher,

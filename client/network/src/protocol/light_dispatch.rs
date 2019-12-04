@@ -32,7 +32,8 @@ use client_api::{FetchChecker, RemoteHeaderRequest,
 use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 use libp2p::PeerId;
 use crate::config::Roles;
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use peerset::ReputationChange;
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -44,7 +45,7 @@ const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 8);
 /// Trait used by the `LightDispatch` service to communicate messages back to the network.
 pub trait LightDispatchNetwork<B: BlockT> {
 	/// Adjusts the reputation of the given peer.
-	fn report_peer(&mut self, who: &PeerId, reputation_change: i32);
+	fn report_peer(&mut self, who: &PeerId, reputation_change: ReputationChange);
 
 	/// Disconnect from the given peer. Used in case of misbehaviour.
 	fn disconnect_peer(&mut self, who: &PeerId);
@@ -267,7 +268,7 @@ impl<B: BlockT> LightDispatch<B> where
 			Some(request) => request,
 			None => {
 				info!("Invalid remote {} response from peer {}", rtype, peer);
-				network.report_peer(&peer, i32::min_value());
+				network.report_peer(&peer, ReputationChange::new_fatal("Invalid remote response"));
 				network.disconnect_peer(&peer);
 				self.remove_peer(peer);
 				return;
@@ -279,7 +280,7 @@ impl<B: BlockT> LightDispatch<B> where
 			Accept::Ok => (retry_count, None),
 			Accept::CheckFailed(error, retry_request_data) => {
 				info!("Failed to check remote {} response from peer {}: {}", rtype, peer, error);
-				network.report_peer(&peer, i32::min_value());
+				network.report_peer(&peer, ReputationChange::new_fatal("Failed remote response check"));
 				network.disconnect_peer(&peer);
 				self.remove_peer(peer);
 
@@ -293,7 +294,7 @@ impl<B: BlockT> LightDispatch<B> where
 			},
 			Accept::Unexpected(retry_request_data) => {
 				info!("Unexpected response to remote {} from peer", rtype);
-				network.report_peer(&peer, i32::min_value());
+				network.report_peer(&peer, ReputationChange::new_fatal("Unexpected remote response"));
 				network.disconnect_peer(&peer);
 				self.remove_peer(peer);
 
@@ -350,7 +351,7 @@ impl<B: BlockT> LightDispatch<B> where
 
 			let (bad_peer, request) = self.active_peers.pop_front().expect("front() is Some as checked above");
 			self.pending_requests.push_front(request);
-			network.report_peer(&bad_peer, TIMEOUT_REPUTATION_CHANGE);
+			network.report_peer(&bad_peer, ReputationChange::new(TIMEOUT_REPUTATION_CHANGE, "Light request timeout"));
 			network.disconnect_peer(&bad_peer);
 		}
 
@@ -676,7 +677,7 @@ pub mod tests {
 	use std::sync::Arc;
 	use std::time::Instant;
 	use futures::{Future, sync::oneshot};
-	use sr_primitives::traits::{Block as BlockT, NumberFor, Header as HeaderT};
+	use sp_runtime::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use sp_blockchain::{Error as ClientError, Result as ClientResult};
 	use client_api::{FetchChecker, RemoteHeaderRequest,
 		ChangesProof, RemoteCallRequest, RemoteReadRequest,
@@ -800,7 +801,7 @@ pub mod tests {
 	}
 
 	impl<'a, B: BlockT> LightDispatchNetwork<B> for &'a mut DummyNetwork {
-		fn report_peer(&mut self, _: &PeerId, _: i32) {}
+		fn report_peer(&mut self, _: &PeerId, _: crate::ReputationChange) {}
 		fn disconnect_peer(&mut self, who: &PeerId) {
 			self.disconnected_peers.insert(who.clone());
 		}

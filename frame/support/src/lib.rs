@@ -43,7 +43,7 @@ pub use state_machine::BasicExternalities;
 #[doc(hidden)]
 pub use runtime_io::storage::root as storage_root;
 #[doc(hidden)]
-pub use sr_primitives::RuntimeDebug;
+pub use sp_runtime::RuntimeDebug;
 
 #[macro_use]
 pub mod debug;
@@ -69,7 +69,7 @@ pub mod weights;
 pub use self::hash::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Hashable};
 pub use self::storage::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
 pub use self::dispatch::{Parameter, Callable, IsSubType};
-pub use sr_primitives::{self, ConsensusEngineId, print, traits::Printable};
+pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:
@@ -289,6 +289,36 @@ mod tests {
 			// Right existing
 			OptionLinkedMap::swap(5, 2);
 			assert_eq!(collect(), vec![(2, 2), (3, 3), (1, 1), (0, 0)]);
+		});
+	}
+
+	#[test]
+	fn double_map_swap_works() {
+		new_test_ext().execute_with(|| {
+			DataDM::insert(0, 1, 1);
+			DataDM::insert(1, 0, 2);
+			DataDM::insert(1, 1, 3);
+
+			let get_all = || vec![
+				DataDM::get(0, 1),
+				DataDM::get(1, 0),
+				DataDM::get(1, 1),
+				DataDM::get(2, 0),
+				DataDM::get(2, 1),
+			];
+			assert_eq!(get_all(), vec![1, 2, 3, 0, 0]);
+
+			// Two existing
+			DataDM::swap(0, 1, 1, 0);
+			assert_eq!(get_all(), vec![2, 1, 3, 0, 0]);
+
+			// Left existing
+			DataDM::swap(1, 0, 2, 0);
+			assert_eq!(get_all(), vec![2, 0, 3, 1, 0]);
+
+			// Right existing
+			DataDM::swap(2, 1, 1, 1);
+			assert_eq!(get_all(), vec![2, 0, 0, 1, 3]);
 		});
 	}
 

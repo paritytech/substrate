@@ -31,8 +31,8 @@ use primitives::{
 	storage::{StorageKey, StorageData, well_known_keys},
 	traits::CodeExecutor,
 };
-use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
-use sr_primitives::{
+use sc_telemetry::{telemetry, SUBSTRATE_INFO};
+use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
@@ -59,7 +59,7 @@ use sp_blockchain::{self as blockchain,
 	HeaderMetadata, CachedHeaderMetadata,
 };
 
-use sr_api::{CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder, InitializeBlock};
+use sp_api::{CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder, InitializeBlock};
 use block_builder::BlockBuilderApi;
 
 pub use client_api::{
@@ -1313,7 +1313,7 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 	}
 }
 
-impl<B, E, Block, RA> sr_primitives::traits::BlockIdTo<Block> for Client<B, E, Block, RA> where
+impl<B, E, Block, RA> sp_runtime::traits::BlockIdTo<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	Block: BlockT<Hash=H256>,
@@ -1753,9 +1753,10 @@ where
 }
 
 impl<BE, E, B, RA> consensus::block_validation::Chain<B> for Client<BE, E, B, RA>
-	where BE: backend::Backend<B, Blake2Hasher>,
-		  E: CallExecutor<B, Blake2Hasher>,
-		  B: BlockT<Hash = H256>
+	where
+		BE: backend::Backend<B, Blake2Hasher>,
+		E: CallExecutor<B, Blake2Hasher>,
+		B: BlockT<Hash = H256>
 {
 	fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn std::error::Error + Send>> {
 		Client::block_status(self, id).map_err(|e| Box::new(e) as Box<_>)
@@ -1767,7 +1768,7 @@ pub(crate) mod tests {
 	use std::collections::HashMap;
 	use super::*;
 	use primitives::blake2_256;
-	use sr_primitives::DigestItem;
+	use sp_runtime::DigestItem;
 	use consensus::{BlockOrigin, SelectChain, BlockImport};
 	use test_client::{
 		prelude::*,

@@ -21,7 +21,7 @@
 use crate::mock::*;
 use crate::{elect, PhragmenResult};
 use substrate_test_utils::assert_eq_uvec;
-use sr_primitives::Perbill;
+use sp_runtime::Perbill;
 
 #[test]
 fn float_phragmen_poc_works() {

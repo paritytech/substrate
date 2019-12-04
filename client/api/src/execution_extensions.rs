@@ -27,7 +27,7 @@ use primitives::{
 	offchain::{self, OffchainExt, TransactionPoolExt},
 	traits::{BareCryptoStorePtr, KeystoreExt},
 };
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits,
 };

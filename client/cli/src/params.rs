@@ -109,7 +109,11 @@ pub struct SharedParams {
 	/// Sets a custom logging filter.
 	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
 	pub log: Option<String>,
+}
 
+/// Parameters for block import.
+#[derive(Debug, StructOpt, Clone)]
+pub struct ImportParams {
 	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
 	///
 	/// Default is to keep all block states if the node is running as a
@@ -172,6 +176,14 @@ pub struct NetworkConfigurationParams {
 	/// nodes regardless of whether they are defined as reserved nodes.
 	#[structopt(long = "reserved-only")]
 	pub reserved_only: bool,
+
+	/// Specify a list of sentry node public addresses.
+	#[structopt(
+		long = "sentry-nodes",
+		value_name = "URL",
+		conflicts_with_all = &[ "sentry" ]
+	)]
+	pub sentry_nodes: Vec<String>,
 
 	/// Listen on this multiaddress.
 	#[structopt(long = "listen-addr", value_name = "LISTEN_ADDR")]
@@ -307,12 +319,12 @@ arg_enum! {
 	}
 }
 
-impl Into<substrate_tracing::TracingReceiver> for TracingReceiver {
-	fn into(self) -> substrate_tracing::TracingReceiver {
+impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
+	fn into(self) -> sc_tracing::TracingReceiver {
 		match self {
-			TracingReceiver::Log => substrate_tracing::TracingReceiver::Log,
-			TracingReceiver::Telemetry => substrate_tracing::TracingReceiver::Telemetry,
-			TracingReceiver::Grafana => substrate_tracing::TracingReceiver::Grafana,
+			TracingReceiver::Log => sc_tracing::TracingReceiver::Log,
+			TracingReceiver::Telemetry => sc_tracing::TracingReceiver::Telemetry,
+			TracingReceiver::Grafana => sc_tracing::TracingReceiver::Grafana,
 		}
 	}
 }
@@ -504,6 +516,10 @@ pub struct RunCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub import_params: ImportParams,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -764,6 +780,10 @@ pub struct ImportBlocksCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub import_params: ImportParams,
 }
 
 impl_get_log_filter!(ImportBlocksCmd);
@@ -784,6 +804,10 @@ pub struct CheckBlockCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub import_params: ImportParams,
 }
 
 impl_get_log_filter!(CheckBlockCmd);

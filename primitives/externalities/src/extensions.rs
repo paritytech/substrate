@@ -41,7 +41,7 @@ pub trait Extension: Send + Any {
 ///
 /// # Example
 /// ```
-/// # use substrate_externalities::decl_extension;
+/// # use sp_externalities::decl_extension;
 /// decl_extension! {
 ///     /// Some test extension
 ///     struct TestExt(String);

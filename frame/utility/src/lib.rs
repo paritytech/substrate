@@ -23,7 +23,7 @@
 use rstd::prelude::*;
 use support::{decl_module, decl_event, Parameter, weights::SimpleDispatchInfo};
 use system::ensure_root;
-use sr_primitives::{traits::Dispatchable, DispatchError};
+use sp_runtime::{traits::Dispatchable, DispatchError};
 
 /// Configuration trait.
 pub trait Trait: system::Trait {
@@ -63,9 +63,12 @@ decl_module! {
 mod tests {
 	use super::*;
 
-	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch};
+	use support::{
+		assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch,
+		weights::Weight
+	};
 	use primitives::H256;
-	use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -85,7 +88,7 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}

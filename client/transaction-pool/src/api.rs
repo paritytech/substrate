@@ -25,7 +25,7 @@ use client_api::{
 	light::{Fetcher, RemoteCallRequest}
 };
 use primitives::{H256, Blake2Hasher, Hasher};
-use sr_primitives::{generic::BlockId, traits::{self, Block as BlockT}, transaction_validity::TransactionValidity};
+use sp_runtime::{generic::BlockId, traits::{self, Block as BlockT}, transaction_validity::TransactionValidity};
 use txpool_runtime_api::TaggedTransactionQueue;
 
 use crate::error::{self, Error};
@@ -58,7 +58,7 @@ impl<T, Block> txpool::ChainApi for FullChainApi<T, Block> where
 	Block: BlockT<Hash = H256>,
 	T: traits::ProvideRuntimeApi + traits::BlockIdTo<Block> + 'static + Send + Sync,
 	T::Api: TaggedTransactionQueue<Block>,
-	sr_api::ApiErrorFor<T, Block>: Send,
+	sp_api::ApiErrorFor<T, Block>: Send,
 {
 	type Block = Block;
 	type Hash = H256;

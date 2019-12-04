@@ -65,8 +65,8 @@ use support::traits::{
 	Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced,
 	ReservableCurrency, WithdrawReason
 };
-use sr_primitives::{Permill, ModuleId};
-use sr_primitives::traits::{
+use sp_runtime::{Permill, ModuleId};
+use sp_runtime::traits::{
 	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating
 };
 use support::weights::SimpleDispatchInfo;
@@ -201,7 +201,7 @@ decl_module! {
 
 /// A spending proposal.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, sr_primitives::RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, sp_runtime::RuntimeDebug)]
 pub struct Proposal<AccountId, Balance> {
 	proposer: AccountId,
 	value: Balance,
@@ -351,9 +351,9 @@ impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
 mod tests {
 	use super::*;
 
-	use support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
+	use support::{assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight};
 	use primitives::H256;
-	use sr_primitives::{
+	use sp_runtime::{
 		traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header, Perbill
 	};
 
@@ -365,7 +365,7 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}

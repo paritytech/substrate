@@ -19,7 +19,7 @@ use libp2p::PeerId;
 use rand::distributions::{Distribution, Uniform, WeightedIndex};
 use rand::seq::IteratorRandom;
 use std::{collections::HashMap, collections::HashSet, iter, pin::Pin, task::Poll};
-use substrate_peerset::{IncomingIndex, Message, PeersetConfig, Peerset};
+use sc_peerset::{IncomingIndex, Message, PeersetConfig, Peerset, ReputationChange};
 
 #[test]
 fn run() {
@@ -97,7 +97,7 @@ fn test_once() {
 				// If we generate 2, adjust a random reputation.
 				2 => if let Some(id) = known_nodes.iter().choose(&mut rng) {
 					let val = Uniform::new_inclusive(i32::min_value(), i32::max_value()).sample(&mut rng);
-					peerset_handle.report_peer(id.clone(), val);
+					peerset_handle.report_peer(id.clone(), ReputationChange::new(val, ""));
 				}
 
 				// If we generate 3, disconnect from a random node.

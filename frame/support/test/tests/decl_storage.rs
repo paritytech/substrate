@@ -521,6 +521,10 @@ mod test_append_and_len {
 			MapVecWithDefault: map u32 => Vec<u32> = vec![6, 9];
 			OptionMapVec: map u32 => Option<Vec<u32>>;
 
+			DoubleMapVec: double_map u32, blake2_256(u32) => Vec<u32>;
+			DoubleMapVecWithDefault: double_map u32, blake2_256(u32) => Vec<u32> = vec![6, 9];
+			OptionDoubleMapVec: double_map u32, blake2_256(u32) => Option<Vec<u32>>;
+
 			LinkedMapVec: linked_map u32 => Vec<u32>;
 			LinkedMapVecWithDefault: linked_map u32 => Vec<u32> = vec![6, 9];
 			OptionLinkedMapVec: linked_map u32 => Option<Vec<u32>>;
@@ -596,11 +600,13 @@ mod test_append_and_len {
 			OptionVec::put(&vec![1, 2, 3, 4, 5]);
 			MapVec::insert(1, &vec![1, 2, 3, 4, 5, 6]);
 			LinkedMapVec::insert(2, &vec![1, 2, 3]);
+			DoubleMapVec::insert(0, 1, &vec![1, 2]);
 
 			assert_eq!(JustVec::decode_len().unwrap(), 4);
 			assert_eq!(OptionVec::decode_len().unwrap(), 5);
 			assert_eq!(MapVec::decode_len(1).unwrap(), 6);
 			assert_eq!(LinkedMapVec::decode_len(2).unwrap(), 3);
+			assert_eq!(DoubleMapVec::decode_len(0, 1).unwrap(), 2);
 		});
 	}
 
@@ -636,6 +642,16 @@ mod test_append_and_len {
 
 			assert_eq!(OptionLinkedMapVec::get(0), None);
 			assert_eq!(OptionLinkedMapVec::decode_len(0), Ok(0));
+
+			// Double map
+			assert_eq!(DoubleMapVec::get(0, 0), vec![]);
+			assert_eq!(DoubleMapVec::decode_len(0, 1), Ok(0));
+
+			assert_eq!(DoubleMapVecWithDefault::get(0, 0), vec![6, 9]);
+			assert_eq!(DoubleMapVecWithDefault::decode_len(0, 1), Ok(2));
+
+			assert_eq!(OptionDoubleMapVec::get(0, 0), None);
+			assert_eq!(OptionDoubleMapVec::decode_len(0, 1), Ok(0));
 		});
 	}
 }

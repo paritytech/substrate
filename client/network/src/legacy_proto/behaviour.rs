@@ -940,7 +940,10 @@ where
 				// a different chain, or a node that doesn't speak the same protocol(s). We
 				// decrease the node's reputation, hence lowering the chances we try this node
 				// again in the short term.
-				self.peerset.report_peer(source.clone(), i32::min_value());
+				self.peerset.report_peer(
+					source.clone(),
+					peerset::ReputationChange::new(i32::min_value(), "Protocol error")
+				);
 				self.disconnect_peer_inner(&source, Some(Duration::from_secs(5)));
 			}
 		}

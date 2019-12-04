@@ -1,17 +1,17 @@
 [package]
-name = "substrate-phragmen"
+name = "sp-phragmen"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-rstd = { package = "sr-std", path = "../sr-std", default-features = false }
-sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
+rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
 
 [dev-dependencies]
 substrate-test-utils = { path = "../../test/utils" }
-runtime-io ={ package = "sr-io", path = "../../primitives/sr-io" }
+runtime-io ={ package = "sp-io", path = "../../primitives/sr-io" }
 rand = "0.7.2"
 
 [features]
@@ -19,5 +19,5 @@ default = ["std"]
 std = [
 	"serde",
 	"rstd/std",
-	"sr-primitives/std",
+	"sp-runtime/std",
 ]

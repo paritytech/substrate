@@ -24,7 +24,7 @@
 
 use rstd::vec::Vec;
 use codec::{Encode, Decode, Codec};
-use sr_primitives::RuntimeDebug;
+use sp_runtime::RuntimeDebug;
 
 /// A result of execution of a contract.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
@@ -59,7 +59,7 @@ pub enum GetStorageError {
 	IsTombstone,
 }
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// The API to interact with contracts without using executive.
 	pub trait ContractsApi<AccountId, Balance> where
 		AccountId: Codec,

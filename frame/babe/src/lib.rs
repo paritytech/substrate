@@ -26,9 +26,9 @@ use sp_timestamp;
 use rstd::{result, prelude::*};
 use support::{decl_storage, decl_module, traits::FindAuthor, traits::Get};
 use sp_timestamp::OnTimestampSet;
-use sr_primitives::{generic::DigestItem, ConsensusEngineId, Perbill};
-use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
-use sr_staking_primitives::{
+use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
+use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
+use sp_staking::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
@@ -306,7 +306,7 @@ impl<T: Trait> Module<T> {
 		// epoch 0 as having started at the slot of block 1. We want to use
 		// the same randomness and validator set as signalled in the genesis,
 		// so we don't rotate the epoch.
-		now != sr_primitives::traits::One::one() && {
+		now != sp_runtime::traits::One::one() && {
 			let diff = CurrentSlot::get().saturating_sub(Self::current_epoch_start());
 			diff >= T::EpochDuration::get()
 		}
@@ -472,7 +472,7 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
-impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 

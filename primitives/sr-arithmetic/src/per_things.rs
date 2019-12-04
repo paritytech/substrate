@@ -20,7 +20,7 @@ use serde::{Serialize, Deserialize};
 use rstd::{ops, prelude::*, convert::TryInto};
 use codec::{Encode, Decode, CompactAs};
 use crate::traits::{SaturatedConversion, UniqueSaturatedInto, Saturating};
-use substrate_debug_derive::RuntimeDebug;
+use sp_debug_derive::RuntimeDebug;
 
 macro_rules! implement_per_thing {
 	($name:ident, $test_mod:ident, [$($test_units:tt),+], $max:tt, $type:ty, $upper_type:ty, $title:expr $(,)?) => {

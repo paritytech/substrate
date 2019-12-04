@@ -27,7 +27,7 @@ use crate::{
 use assert_matches::assert_matches;
 use hex_literal::*;
 use codec::{Decode, Encode, KeyedVec};
-use sr_primitives::{
+use sp_runtime::{
 	Perbill, BuildStorage, transaction_validity::{InvalidTransaction, ValidTransaction},
 	traits::{BlakeTwo256, Hash, IdentityLookup, SignedExtension},
 	testing::{Digest, DigestItem, Header, UintAuthorityId, H256},
@@ -35,7 +35,7 @@ use sr_primitives::{
 use support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
 	storage::child, StorageMap, StorageValue, traits::{Currency, Get},
-	weights::{DispatchInfo, DispatchClass},
+	weights::{DispatchInfo, DispatchClass, Weight},
 };
 use std::{cell::RefCell, sync::atomic::{AtomicUsize, Ordering}};
 use primitives::storage::well_known_keys;
@@ -94,7 +94,7 @@ impl Get<u64> for BlockGasLimit {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
