@@ -42,6 +42,7 @@ use crate::storage_proof::StorageProofChecker;
 
 use core::iter::FromIterator;
 use codec::{Encode, Decode};
+use client::error::Error as ClientError; // Not sure if this is allowed to be brought in...
 use fg_primitives::{AuthorityId, AuthorityWeight, AuthorityList, SetId};
 use grandpa::voter_set::VoterSet;
 use primitives::H256;
@@ -177,6 +178,18 @@ decl_error! {
 		InvalidAncestryProof,
 		NoSuchBridgeExists,
 		InvalidFinalityProof,
+		UnknownClientError,
+	}
+}
+
+impl From<ClientError> for Error {
+	fn from(e: ClientError) -> Self {
+		match e {
+			ClientError::BadJustification(_) | ClientError::JustificationDecode => {
+				Error::InvalidFinalityProof
+			},
+			_ => Error::UnknownClientError,
+		}
 	}
 }
 
@@ -249,18 +262,14 @@ where
 	NumberFor<B>: grandpa::BlockNumberOps,
 {
 	// We don't really care about the justification, as long as it's valid
-	let j = GrandpaJustification::<B>::decode_and_verify_finalizes(
+	let _ = GrandpaJustification::<B>::decode_and_verify_finalizes(
 		&justification,
 		(hash, number),
 		set_id,
 		voters,
-	);
+	)?;
 
-	// Uh, there's got to be a nicer way of doing this...
-	match j {
-		Err(_e) => Err(Error::InvalidFinalityProof),
-		Ok(_) => Ok(()),
-	}
+	Ok(())
 }
 
 #[cfg(test)]
