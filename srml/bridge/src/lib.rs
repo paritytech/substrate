@@ -159,6 +159,8 @@ decl_module! {
 						"We succesfully got this bridge earlier, therefore it exists; qed"
 					).last_finalized_block_header = header;
 			});
+
+			// TODO: Update validator set if necessary. Still need to figure out details.
 		}
 	}
 }
@@ -255,9 +257,8 @@ where
 	);
 
 	// Uh, there's got to be a nicer way of doing this...
-	// TODO: Remote dbg!
 	match j {
-		Err(_e) => { dbg!(_e); Err(Error::InvalidFinalityProof) },
+		Err(_e) => Err(Error::InvalidFinalityProof),
 		Ok(_) => Ok(()),
 	}
 }
@@ -266,6 +267,7 @@ where
 mod tests {
 	use super::*;
 
+	use keyring::Ed25519Keyring;
 	use primitives::{Blake2Hasher, H256, Public};
 	use sr_primitives::{
 		Perbill,
@@ -397,7 +399,6 @@ mod tests {
 			extrinsics_root: H256::default(),
 			digest: Digest::default(),
 		};
-		let test_hash = test_header.hash();
 
 		new_test_ext().execute_with(|| {
 			assert_eq!(MockBridge::num_bridges(), 0);
@@ -518,17 +519,15 @@ mod tests {
 		);
 	}
 
-	// TODO: Move this to the a better place
-	use test_client::prelude::*;
-	use fg::Commit;
-	use keyring::Ed25519Keyring;
 
 	// Currently stealing this from `core/finality-grandpa/src/test.rs`
-	fn create_grandpa_justification(header: Header, round: RoundNumber, set_id: SetId) -> GrandpaJustification<impl BlockT> {
+	fn create_grandpa_justification(
+		authority: Ed25519Keyring,
+		header: Header,
+		round: RoundNumber,
+		set_id: SetId,
+	) -> GrandpaJustification<impl BlockT> {
 		let client = test_client::new();
-
-		// TODO: Change to authority
-		let peers = &[Ed25519Keyring::Alice];
 
 		let justification = {
 			let precommit = grandpa::Precommit {
@@ -538,12 +537,12 @@ mod tests {
 
 			let msg = grandpa::Message::Precommit(precommit.clone());
 			let encoded = justification::localized_payload(round, set_id, &msg);
-			let signature = peers[0].sign(&encoded[..]).into();
+			let signature = authority.sign(&encoded[..]).into();
 
 			let precommit = grandpa::SignedPrecommit {
 				precommit,
 				signature,
-				id: peers[0].public().into(),
+				id: authority.public().into(),
 			};
 
 			let commit = grandpa::Commit {
@@ -564,7 +563,8 @@ mod tests {
 
 	#[test]
 	fn correctly_accepts_a_new_finalized_header() {
-		let authorities = vec![(Ed25519Keyring::Alice.public().into(), 1)];
+		let signer = Ed25519Keyring::Alice;
+		let authorities = vec![(signer.public().into(), 1)];
 		let (storage_root, validator_proof) = create_dummy_validator_proof(authorities.clone());
 
 		let ancestor = Header {
@@ -581,7 +581,7 @@ mod tests {
 
 		let round = 1;
 		let set_id = 0;
-		let justification = create_grandpa_justification(child.clone(), round, set_id);
+		let justification = create_grandpa_justification(signer, child.clone(), round, set_id);
 		let encoded: Justification = justification.encode();
 
 		new_test_ext().execute_with(|| {
@@ -621,6 +621,68 @@ mod tests {
 					last_finalized_block_header: child,
 					current_validator_set: authorities,
 				})
+			);
+		});
+	}
+
+	#[test]
+	fn rejects_header_if_proof_is_signed_by_wrong_authorities() {
+		let signer = Ed25519Keyring::Alice;
+		let bad_signer = Ed25519Keyring::Bob;
+		let authorities = vec![(signer.public().into(), 1)];
+
+		let (storage_root, validator_proof) = create_dummy_validator_proof(authorities.clone());
+
+		let ancestor = Header {
+			parent_hash: H256::default(),
+			number: 1,
+			state_root: storage_root,
+			extrinsics_root: H256::default(),
+			digest: Digest::default(),
+		};
+
+		// A valid proof doesn't include the child header, so remove it
+		let mut block_ancestry_proof = build_header_chain(ancestor.clone(), 5);
+		let child = block_ancestry_proof.remove(0);
+
+		let round = 1;
+		let set_id = 0;
+
+		// Create a justification with an authority that's *not* part of the authority set
+		let justification = create_grandpa_justification(bad_signer, child.clone(), round, set_id);
+		let encoded: Justification = justification.encode();
+
+		new_test_ext().execute_with(|| {
+			assert_eq!(MockBridge::num_bridges(), 0);
+			assert_ok!(
+				MockBridge::initialize_bridge(
+					Origin::signed(1),
+					ancestor.clone(),
+					authorities.clone(),
+					validator_proof,
+			));
+
+			// Check that the header we sent on initialization was stored
+			assert_eq!(
+				MockBridge::tracked_bridges(1),
+				Some(BridgeInfo {
+					last_finalized_block_header: ancestor.clone(),
+					current_validator_set: authorities.clone(),
+				})
+			);
+
+			// Send over the new header + proofs
+			let bridge_id = 1;
+			assert_err!(
+				MockBridge::submit_finalized_headers(
+					Origin::signed(1),
+					bridge_id,
+					child.clone(),
+					block_ancestry_proof,
+					authorities.clone(),
+					encoded,
+				),
+				Error::InvalidFinalityProof.into()
 			);
 		});
 	}
