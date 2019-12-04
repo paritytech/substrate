@@ -173,7 +173,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC, Sp>(
 		voter_commands_rx,
 	} = link;
 
-	let (network, network_startup) = NetworkBridge::new(
+	let network = NetworkBridge::new(
 		network,
 		config.clone(),
 		persistent_data.set_state.clone(),
@@ -194,8 +194,6 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC, Sp>(
 		.map_err(|e| {
 			warn!("GRANDPA Observer failed: {:?}", e);
 		});
-
-	let observer_work = network_startup.and_then(move |()| observer_work);
 
 	Ok(observer_work.select(on_exit).map(|_| ()).map_err(|_| ()))
 }

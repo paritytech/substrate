@@ -1214,14 +1214,13 @@ fn voter_persists_its_votes() {
 			set_state
 		};
 
-		let (network, routing_work) = communication::NetworkBridge::new(
+		let network = communication::NetworkBridge::new(
 			net.lock().peers[1].network_service().clone(),
 			config.clone(),
 			set_state,
 			&threads_pool,
 			Exit,
 		);
-		runtime.block_on(routing_work).unwrap();
 
 		let (round_rx, round_tx) = network.round_communication(
 			communication::Round(1),
@@ -1613,7 +1612,7 @@ fn grandpa_environment_respects_voting_rules() {
 			observer_enabled: true,
 		};
 
-		let (network, _) = NetworkBridge::new(
+		let network = NetworkBridge::new(
 			network_service.clone(),
 			config.clone(),
 			set_state.clone(),

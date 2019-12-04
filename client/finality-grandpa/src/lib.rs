@@ -575,7 +575,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp>(
 		voter_commands_rx,
 	} = link;
 
-	let (network, network_startup) = NetworkBridge::new(
+	let network = NetworkBridge::new(
 		network,
 		config.clone(),
 		persistent_data.set_state.clone(),
@@ -629,8 +629,6 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp>(
 			error!("GRANDPA Voter failed: {:?}", e);
 			telemetry!(CONSENSUS_WARN; "afg.voter_failed"; "e" => ?e);
 		});
-
-	let voter_work = network_startup.and_then(move |()| voter_work);
 
 	// Make sure that `telemetry_task` doesn't accidentally finish and kill grandpa.
 	let telemetry_task = telemetry_task

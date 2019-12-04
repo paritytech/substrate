@@ -166,7 +166,7 @@ fn make_test_network(executor: &impl futures03::task::Spawn) -> (
 		}
 	}
 
-	let (bridge, startup_work) = super::NetworkBridge::new(
+	let bridge = super::NetworkBridge::new(
 		net.clone(),
 		config(),
 		voter_set_state(),
@@ -175,7 +175,7 @@ fn make_test_network(executor: &impl futures03::task::Spawn) -> (
 	);
 
 	(
-		startup_work.map(move |()| Tester {
+		futures::future::ok(Tester {
 			gossip_validator: bridge.validator.clone(),
 			net_handle: bridge,
 			events: rx,

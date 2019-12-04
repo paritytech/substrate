@@ -128,10 +128,7 @@ impl<B: BlockT> NetworkBridge<B> {
 		set_state: crate::environment::SharedVoterSetState<B>,
 		executor: &impl futures03::task::Spawn,
 		on_exit: impl Future<Item = (), Error = ()> + Clone + Send + 'static,
-	) -> (
-		Self,
-		impl Future<Item = (), Error = ()> + Send + 'static,
-	) {
+	) -> Self {
 		let (validator, report_stream) = GossipValidator::new(
 			config,
 			set_state.clone(),
@@ -189,7 +186,7 @@ impl<B: BlockT> NetworkBridge<B> {
 		executor.execute(Box::new(reporting_job.select(on_exit.clone()).then(|_| Ok(()))))
 			.expect("failed to spawn grandpa reporting job task");
 
-		(bridge, futures::future::ok(()))
+		bridge
 	}
 
 	/// Note the beginning of a new round to the `GossipValidator`.
