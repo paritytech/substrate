@@ -180,15 +180,31 @@ impl<B: ChainApi> Pool<B> {
 		at: &BlockId<B::Block>,
 		max: Option<usize>,
 	) -> impl Future<Output=Result<(), B::Error>> {
+		use std::time::Instant;
+		log::debug!(target: "txpool",
+			"Fetching ready transactions (up to: {})",
+			max.map(|x| format!("{}", x)).unwrap_or_else(|| "all".into())
+		);
 		let validated_pool = self.validated_pool.clone();
 		let ready = self.validated_pool.ready()
 			.map(|tx| tx.data.clone())
 			.take(max.unwrap_or_else(usize::max_value));
 
+		let now = Instant::now();
 		self.verify(at, ready, false)
-			.map(move |revalidated_transactions| revalidated_transactions.map(
-				move |revalidated_transactions| validated_pool.resubmit(revalidated_transactions)
-			))
+			.map(move |revalidated_transactions| {
+				log::debug!(target: "txpool",
+					"Re-verified transactions, took {} ms. Resubmitting.",
+					now.elapsed().as_millis()
+				);
+				let res = revalidated_transactions.map(move |revalidated_transactions|
+					validated_pool.resubmit(revalidated_transactions)
+				);
+				log::debug!(target: "txpool",
+					"Resubmitted. Took {} ms", now.elapsed().as_millis()
+				);
+				res
+			})
 	}
 
 	/// Prunes known ready transactions.

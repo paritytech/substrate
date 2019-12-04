@@ -75,10 +75,7 @@ where
 		retracted: &[Block::Hash],
 	) -> Box<dyn Future<Output=()> + Send + Unpin> {
 		let now = std::time::Instant::now();
-		let took = move || {
-			let took = std::time::Instant::now().duration_since(now);
-			format!("Took {} ms", took.as_millis())
-		};
+		let took = move || format!("Took {} ms", now.elapsed().as_millis());
 
 		let id = *id;
 		trace!(target: "txpool", "[{:?}] Starting pool maintainance", id);
@@ -131,14 +128,14 @@ where
 
 		let revalidate_future = self.pool
 			.revalidate_ready(&id, Some(16))
-			.map(move |result| match result {
+			.then(move |result| ready(match result {
 				Ok(_) => debug!(target: "txpool",
 					"[{:?}] Revalidation done: {}", id, took()
 				),
 				Err(e) => warn!(target: "txpool",
 					"[{:?}] Encountered errors while revalidating transactions: {:?}", id, e
 				),
-			});
+			}));
 
 		Box::new(prune_future.then(|_| revalidate_future))
 	}
