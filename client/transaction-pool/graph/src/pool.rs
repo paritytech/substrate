@@ -175,9 +175,16 @@ impl<B: ChainApi> Pool<B> {
 	///
 	/// Returns future that performs validation of all ready transactions and
 	/// then resubmits all transactions back to the pool.
-	pub fn revalidate_ready(&self, at: &BlockId<B::Block>) -> impl Future<Output=Result<(), B::Error>> {
+	pub fn revalidate_ready(
+		&self,
+		at: &BlockId<B::Block>,
+		max: Option<usize>,
+	) -> impl Future<Output=Result<(), B::Error>> {
 		let validated_pool = self.validated_pool.clone();
-		let ready = self.validated_pool.ready().map(|tx| tx.data.clone());
+		let ready = self.validated_pool.ready()
+			.map(|tx| tx.data.clone())
+			.take(max.unwrap_or_else(usize::max_value));
+
 		self.verify(at, ready, false)
 			.map(move |revalidated_transactions| revalidated_transactions.map(
 				move |revalidated_transactions| validated_pool.resubmit(revalidated_transactions)
@@ -1014,7 +1021,7 @@ mod tests {
 		pool.validated_pool.api().invalidate.lock().insert(hash3);
 		pool.validated_pool.api().clear_requirements.lock().insert(hash1);
 		pool.validated_pool.api().add_requirements.lock().insert(hash0);
-		block_on(pool.revalidate_ready(&BlockId::Number(0))).unwrap();
+		block_on(pool.revalidate_ready(&BlockId::Number(0), None)).unwrap();
 
 		// then
 		// hash0 now has unsatisfied requirements => it is moved to the future queue
