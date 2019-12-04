@@ -28,7 +28,7 @@ use log::info;
 
 use client::Client;
 use block_builder_api::BlockBuilder;
-use sr_api::ConstructRuntimeApi;
+use sp_api::ConstructRuntimeApi;
 use consensus_common::{
 	BlockOrigin, BlockImportParams, InherentData, ForkChoiceStrategy,
 	SelectChain
@@ -36,8 +36,8 @@ use consensus_common::{
 use consensus_common::block_import::BlockImport;
 use codec::{Decode, Encode};
 use primitives::{Blake2Hasher, Hasher};
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, ProvideRuntimeApi, SimpleArithmetic,
 	One, Zero,
 };
@@ -105,7 +105,7 @@ where
 	Backend: client_api::backend::Backend<Block, Blake2Hasher> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
-		BlockBuilder<Block, Error = client::error::Error>,
+		BlockBuilder<Block, Error = sp_blockchain::Error>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	Sc: SelectChain<Block>,
 	RA: RuntimeAdapter,
@@ -165,7 +165,7 @@ where
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
-		BlockBuilder<Block, Error = client::error::Error>,
+		BlockBuilder<Block, Error = sp_blockchain::Error>,
 	RA: RuntimeAdapter,
 {
 	let mut block = client.new_block(Default::default()).expect("Failed to create new block");
@@ -199,6 +199,7 @@ fn import_block<Backend, Exec, Block, RtApi>(
 		auxiliary: Vec::new(),
 		fork_choice: ForkChoiceStrategy::LongestChain,
 		allow_missing_state: false,
+		import_existing: false,
 	};
 	(&**client).import_block(import, HashMap::new()).expect("Failed to import block");
 }

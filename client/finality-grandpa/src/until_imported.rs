@@ -35,7 +35,7 @@ use futures::stream::Fuse;
 use futures03::{StreamExt as _, TryStreamExt as _};
 use grandpa::voter;
 use parking_lot::Mutex;
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use tokio_timer::Interval;
 
 use std::collections::{HashMap, VecDeque};

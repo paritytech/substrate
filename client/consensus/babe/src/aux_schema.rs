@@ -19,11 +19,9 @@
 use log::info;
 use codec::{Decode, Encode};
 
-use client_api::{
-	backend::AuxStore,
-	error::{Result as ClientResult, Error as ClientError},
-};
-use sr_primitives::traits::Block as BlockT;
+use client_api::backend::AuxStore;
+use sp_blockchain::{Result as ClientResult, Error as ClientError};
+use sp_runtime::traits::Block as BlockT;
 use babe_primitives::BabeBlockWeight;
 
 use super::{epoch_changes::EpochChangesFor, SharedEpochChanges};

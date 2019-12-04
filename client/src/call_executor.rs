@@ -16,7 +16,7 @@
 
 use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
 };
 use state_machine::{
@@ -24,23 +24,20 @@ use state_machine::{
 	backend::Backend as _, ChangesTrieTransaction, StorageProof,
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
+use externalities::Extensions;
 use hash_db::Hasher;
 use primitives::{
-	offchain::OffchainExt, H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue,
-	traits::{CodeExecutor, KeystoreExt},
+	H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue,
+	traits::CodeExecutor,
 };
-
-use sr_api::{ProofRecorder, InitializeBlock};
-use client_api::{
-	error, backend, call_executor::CallExecutor,
-};
+use sp_api::{ProofRecorder, InitializeBlock};
+use client_api::{backend, call_executor::CallExecutor};
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
 pub struct LocalCallExecutor<B, E> {
 	backend: Arc<B>,
 	executor: E,
-	keystore: Option<primitives::traits::BareCryptoStorePtr>,
 }
 
 impl<B, E> LocalCallExecutor<B, E> {
@@ -48,12 +45,10 @@ impl<B, E> LocalCallExecutor<B, E> {
 	pub fn new(
 		backend: Arc<B>,
 		executor: E,
-		keystore: Option<primitives::traits::BareCryptoStorePtr>,
 	) -> Self {
 		LocalCallExecutor {
 			backend,
 			executor,
-			keystore,
 		}
 	}
 }
@@ -63,16 +58,15 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 		LocalCallExecutor {
 			backend: self.backend.clone(),
 			executor: self.executor.clone(),
-			keystore: self.keystore.clone(),
 		}
 	}
 }
 
 impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
-where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CodeExecutor + RuntimeInfo,
-	Block: BlockT<Hash=H256>,
+	where
+		B: backend::Backend<Block, Blake2Hasher>,
+		E: CodeExecutor + RuntimeInfo,
+		Block: BlockT<Hash=H256>,
 {
 	type Error = E::Error;
 
@@ -82,32 +76,34 @@ where
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
-		side_effects_handler: Option<OffchainExt>,
-	) -> error::Result<Vec<u8>> {
+		extensions: Option<Extensions>,
+	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		let return_data = StateMachine::new(
 			&state,
 			self.backend.changes_trie_storage(),
-			side_effects_handler,
 			&mut changes,
 			&self.executor,
 			method,
 			call_data,
-			self.keystore.clone().map(KeystoreExt),
+			extensions.unwrap_or_default(),
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			false,
 			None,
 		)
 		.map(|(result, _, _)| result)?;
-		self.backend.destroy_state(state)?;
+		{
+			let _lock = self.backend.get_import_lock().read();
+			self.backend.destroy_state(state)?;
+		}
 		Ok(return_data.into_encoded())
 	}
 
 	fn contextual_call<
 		'a,
-		IB: Fn() -> error::Result<()>,
+		IB: Fn() -> sp_blockchain::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
@@ -124,10 +120,9 @@ where
 		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		side_effects_handler: Option<OffchainExt>,
 		recorder: &Option<ProofRecorder<Block>>,
-		enable_keystore: bool,
-	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
+		extensions: Option<Extensions>,
+	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {
 			InitializeBlock::Do(ref init_block)
 				if init_block.borrow().as_ref().map(|id| id != at).unwrap_or(true) => {
@@ -136,12 +131,6 @@ where
 			// We don't need to initialize the runtime at a block.
 			_ => {},
 		}
-
-		let keystore = if enable_keystore {
-			self.keystore.clone().map(KeystoreExt)
-		} else {
-			None
-		};
 
 		let mut state = self.backend.state_at(*at)?;
 
@@ -161,12 +150,11 @@ where
 				StateMachine::new(
 					&backend,
 					self.backend.changes_trie_storage(),
-					side_effects_handler,
 					&mut *changes.borrow_mut(),
 					&self.executor,
 					method,
 					call_data,
-					keystore,
+					extensions.unwrap_or_default(),
 				)
 				.execute_using_consensus_failure_handler(
 					execution_manager,
@@ -179,12 +167,11 @@ where
 			None => StateMachine::new(
 				&state,
 				self.backend.changes_trie_storage(),
-				side_effects_handler,
 				&mut *changes.borrow_mut(),
 				&self.executor,
 				method,
 				call_data,
-				keystore,
+				extensions.unwrap_or_default(),
 			)
 			.execute_using_consensus_failure_handler(
 				execution_manager,
@@ -193,11 +180,14 @@ where
 			)
 			.map(|(result, _, _)| result)
 		}?;
-		self.backend.destroy_state(state)?;
+		{
+			let _lock = self.backend.get_import_lock().read();
+			self.backend.destroy_state(state)?;
+		}
 		Ok(result)
 	}
 
-	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
+	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 
@@ -208,8 +198,11 @@ where
 			None,
 		);
 		let version = self.executor.runtime_version(&mut ext);
-		self.backend.destroy_state(state)?;
-		version.ok_or(error::Error::VersionInvalid.into())
+		{
+			let _lock = self.backend.get_import_lock().read();
+			self.backend.destroy_state(state)?;
+		}
+		version.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
 	}
 
 	fn call_at_state<
@@ -227,8 +220,8 @@ where
 		call_data: &[u8],
 		manager: ExecutionManager<F>,
 		native_call: Option<NC>,
-		side_effects_handler: Option<OffchainExt>,
-	) -> error::Result<(
+		extensions: Option<Extensions>,
+	) -> sp_blockchain::Result<(
 		NativeOrEncoded<R>,
 		(S::Transaction, <Blake2Hasher as Hasher>::Out),
 		Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
@@ -236,12 +229,11 @@ where
 		StateMachine::new(
 			state,
 			self.backend.changes_trie_storage(),
-			side_effects_handler,
 			changes,
 			&self.executor,
 			method,
 			call_data,
-			self.keystore.clone().map(KeystoreExt),
+			extensions.unwrap_or_default(),
 		).execute_using_consensus_failure_handler(
 			manager,
 			true,
@@ -261,19 +253,36 @@ where
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, StorageProof), error::Error> {
+	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
 		state_machine::prove_execution_on_trie_backend(
 			trie_state,
 			overlay,
 			&self.executor,
 			method,
 			call_data,
-			self.keystore.clone().map(KeystoreExt),
 		)
 		.map_err(Into::into)
 	}
 
 	fn native_runtime_version(&self) -> Option<&NativeVersion> {
 		Some(self.executor.native_version())
+	}
+}
+
+impl<B, E, Block> runtime_version::GetRuntimeVersion<Block> for LocalCallExecutor<B, E>
+	where
+		B: backend::Backend<Block, Blake2Hasher>,
+		E: CodeExecutor + RuntimeInfo,
+		Block: BlockT<Hash=H256>,
+{
+	fn native_version(&self) -> &runtime_version::NativeVersion {
+		self.executor.native_version()
+	}
+
+	fn runtime_version(
+		&self,
+		at: &BlockId<Block>,
+	) -> Result<runtime_version::RuntimeVersion, String> {
+		CallExecutor::runtime_version(self, at).map_err(|e| format!("{:?}", e))
 	}
 }

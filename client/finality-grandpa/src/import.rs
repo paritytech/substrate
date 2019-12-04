@@ -21,11 +21,8 @@ use codec::Encode;
 use futures::sync::mpsc;
 use parking_lot::RwLockWriteGuard;
 
-use client_api::{
-	backend::Backend, blockchain,
-	CallExecutor, blockchain::HeaderBackend, well_known_cache_keys,
-	utils::is_descendent_of,
-};
+use sp_blockchain::{HeaderBackend, BlockStatus, well_known_cache_keys};
+use client_api::{backend::Backend, CallExecutor, utils::is_descendent_of};
 use client::Client;
 use consensus_common::{
 	BlockImport, Error as ConsensusError,
@@ -33,9 +30,9 @@ use consensus_common::{
 	SelectChain,
 };
 use fg_primitives::{GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog};
-use sr_primitives::Justification;
-use sr_primitives::generic::{BlockId, OpaqueDigestItemId};
-use sr_primitives::traits::{
+use sp_runtime::Justification;
+use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
+use sp_runtime::traits::{
 	Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero,
 };
 use primitives::{H256, Blake2Hasher};
@@ -403,8 +400,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC> BlockImport<Block>
 		// early exit if block already in chain, otherwise the check for
 		// authority changes will error when trying to re-import a change block
 		match self.inner.status(BlockId::Hash(hash)) {
-			Ok(blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
-			Ok(blockchain::BlockStatus::Unknown) => {},
+			Ok(BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
+			Ok(BlockStatus::Unknown) => {},
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
 		}
 

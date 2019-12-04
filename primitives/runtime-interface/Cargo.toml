@@ -1,25 +1,25 @@
 [package]
-name = "substrate-runtime-interface"
+name = "sp-runtime-interface"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-wasm-interface = { package = "substrate-wasm-interface", path = "../wasm-interface", optional = true }
-rstd = { package = "sr-std", path = "../sr-std", default-features = false }
-substrate-runtime-interface-proc-macro = { path = "proc-macro" }
-externalities = { package = "substrate-externalities", path = "../externalities", optional = true }
+wasm-interface = { package = "sp-wasm-interface", path = "../wasm-interface", optional = true }
+rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-runtime-interface-proc-macro = { path = "proc-macro" }
+externalities = { package = "sp-externalities", path = "../externalities", optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false }
 environmental = { version = "1.0.2", optional = true }
 static_assertions = "1.0.0"
 primitive-types = { version = "0.6.1", default-features = false }
 
 [dev-dependencies]
-executor = { package = "substrate-executor", path = "../../client/executor" }
-test-wasm = { package = "substrate-runtime-interface-test-wasm", path = "test-wasm" }
-state_machine = { package = "substrate-state-machine", path = "../../primitives/state-machine"  }
-primitives = { package = "substrate-primitives", path = "../core" }
-runtime-io = { package = "sr-io", path = "../sr-io" }
+executor = { package = "sc-executor", path = "../../client/executor" }
+test-wasm = { package = "sp-runtime-interface-test-wasm", path = "test-wasm" }
+state_machine = { package = "sp-state-machine", path = "../../primitives/state-machine"  }
+primitives = { package = "sp-core", path = "../core" }
+runtime-io = { package = "sp-io", path = "../sr-io" }
 
 [features]
 default = [ "std" ]

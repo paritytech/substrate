@@ -16,7 +16,7 @@
 #[macro_use]
 extern crate criterion;
 
-use substrate_primitives as primitives;
+use sp_core as primitives;
 use criterion::{Criterion, black_box, Bencher, Fun};
 use std::time::Duration;
 use primitives::crypto::Pair as _;

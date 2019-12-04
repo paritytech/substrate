@@ -20,7 +20,7 @@
 use rstd::vec::Vec;
 
 use codec::{Encode, Decode};
-use sr_primitives::Perbill;
+use sp_runtime::Perbill;
 
 use crate::SessionIndex;
 
@@ -117,9 +117,12 @@ pub trait OnOffenceHandler<Reporter, Offender> {
 	/// the authorities should be slashed and is computed
 	/// according to the `OffenceCount` already. This is of the same length as `offenders.`
 	/// Zero is a valid value for a fraction.
+	///
+	/// The `session` parameter is the session index of the offence.
 	fn on_offence(
 		offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
+		session: SessionIndex,
 	);
 }
 
@@ -127,11 +130,12 @@ impl<Reporter, Offender> OnOffenceHandler<Reporter, Offender> for () {
 	fn on_offence(
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		_slash_fraction: &[Perbill],
+		_session: SessionIndex,
 	) {}
 }
 
 /// A details about an offending authority for a particular kind of offence.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, sr_primitives::RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub struct OffenceDetails<Reporter, Offender> {
 	/// The offending authority id
 	pub offender: Offender,

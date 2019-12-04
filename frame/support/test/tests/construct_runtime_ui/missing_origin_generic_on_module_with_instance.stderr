@@ -1,0 +1,5 @@
+error: Instantiable module with no generic `Origin` cannot be constructed: module `Balance` must have generic `Origin`
+  --> $DIR/missing_origin_generic_on_module_with_instance.rs:10:3
+   |
+10 |         Balance: balances::<Instance1>::{Origin},
+   |         ^^^^^^^

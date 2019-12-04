@@ -38,21 +38,20 @@ use std::iter;
 use std::sync::Arc;
 use log::{trace, warn};
 
+use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
 use client_api::{
-	backend::Backend, blockchain::Backend as BlockchainBackend, CallExecutor,
-	error::{Error as ClientError, Result as ClientResult},
+	backend::Backend, CallExecutor, StorageProof,
 	light::{FetchChecker, RemoteReadRequest},
-	StorageProof,
 };
 use client::Client;
 use codec::{Encode, Decode};
 use grandpa::BlockNumberOps;
-use sr_primitives::{
+use sp_runtime::{
 	Justification, generic::BlockId,
 	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
 };
 use primitives::{H256, Blake2Hasher, storage::StorageKey};
-use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use fg_primitives::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
 
 use crate::justification::GrandpaJustification;
@@ -259,7 +258,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 	authorities_set_id: u64,
 	begin: Block::Hash,
 	end: Block::Hash,
-) -> ::client_api::error::Result<Option<Vec<u8>>>
+) -> ::sp_blockchain::Result<Option<Vec<u8>>>
 	where
 		J: ProvableJustification<Block::Header>,
 {

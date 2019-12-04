@@ -21,6 +21,7 @@ use test_client::{
 	consensus::BlockOrigin,
 	runtime::{H256, Block, Header},
 };
+use rpc_primitives::list::ListOrValue;
 
 #[test]
 fn should_return_header() {
@@ -120,34 +121,39 @@ fn should_return_block_hash() {
 
 	assert_matches!(
 		api.block_hash(None.into()),
-		Ok(Some(ref x)) if x == &client.genesis_hash()
+		Ok(ListOrValue::Value(Some(ref x))) if x == &client.genesis_hash()
 	);
 
 
 	assert_matches!(
-		api.block_hash(Some(0u64.into()).into()),
-		Ok(Some(ref x)) if x == &client.genesis_hash()
+		api.block_hash(Some(ListOrValue::Value(0u64.into())).into()),
+		Ok(ListOrValue::Value(Some(ref x))) if x == &client.genesis_hash()
 	);
 
 	assert_matches!(
-		api.block_hash(Some(1u64.into()).into()),
-		Ok(None)
+		api.block_hash(Some(ListOrValue::Value(1u64.into())).into()),
+		Ok(ListOrValue::Value(None))
 	);
 
 	let block = client.new_block(Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, block.clone()).unwrap();
 
 	assert_matches!(
-		api.block_hash(Some(0u64.into()).into()),
-		Ok(Some(ref x)) if x == &client.genesis_hash()
+		api.block_hash(Some(ListOrValue::Value(0u64.into())).into()),
+		Ok(ListOrValue::Value(Some(ref x))) if x == &client.genesis_hash()
 	);
 	assert_matches!(
-		api.block_hash(Some(1u64.into()).into()),
-		Ok(Some(ref x)) if x == &block.hash()
+		api.block_hash(Some(ListOrValue::Value(1u64.into())).into()),
+		Ok(ListOrValue::Value(Some(ref x))) if x == &block.hash()
 	);
 	assert_matches!(
-		api.block_hash(Some(::primitives::U256::from(1u64).into()).into()),
-		Ok(Some(ref x)) if x == &block.hash()
+		api.block_hash(Some(ListOrValue::Value(primitives::U256::from(1u64).into())).into()),
+		Ok(ListOrValue::Value(Some(ref x))) if x == &block.hash()
+	);
+
+	assert_matches!(
+		api.block_hash(Some(vec![0u64.into(), 1.into(), 2.into()].into())),
+		Ok(ListOrValue::List(list)) if list == &[client.genesis_hash().into(), block.hash().into(), None]
 	);
 }
 
