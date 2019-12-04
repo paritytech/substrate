@@ -311,7 +311,7 @@ where
 
 	/// Start an offchain worker and generate extrinsics.
 	pub fn offchain_worker(n: System::BlockNumber) {
-		<AllModules as OffchainWorker<System::BlockNumber>>::generate_extrinsics(n)
+		<AllModules as OffchainWorker<System::BlockNumber>>::offchain_worker(n)
 	}
 }
 

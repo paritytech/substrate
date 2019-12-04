@@ -38,13 +38,12 @@ services:
       - "--base-path"
       - "/tmp/alice"
       - "--chain=local"
-      - "--key"
-      - "//Alice"
       - "--port"
       - "30333"
       - "--validator"
-      - "--name"
-      - "AlicesNode"
+      - "--alice"
+      - "--sentry-nodes"
+      - "/dns4/sentry-a/tcp/30333/p2p/QmV7EhW6J6KgmNdr558RH1mPx2xGGznW7At4BhXzntRFsi"
       - "--reserved-nodes"
       - "/dns4/sentry-a/tcp/30333/p2p/QmV7EhW6J6KgmNdr558RH1mPx2xGGznW7At4BhXzntRFsi"
       # Not only bind to localhost.
@@ -54,6 +53,8 @@ services:
       # - "sub-libp2p=trace"
       # - "--log"
       # - "afg=trace"
+      - "--log"
+      - "sub-authority-discovery=trace"
       - "--no-telemetry"
       - "--rpc-cors"
       - "all"
@@ -74,28 +75,24 @@ services:
       - "--base-path"
       - "/tmp/sentry"
       - "--chain=local"
-      # Don't configure a key, as sentry-a is not a validator.
-      # - "--key"
-      # - "//Charlie"
       - "--port"
       - "30333"
-      # sentry-a is not a validator.
-      # - "--validator"
-      - "--name"
-      - "CharliesNode"
+      - "--charlie"
       - "--bootnodes"
       - "/dns4/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
       - "--bootnodes"
       - "/dns4/validator-b/tcp/30333/p2p/QmSVnNf9HwVMT1Y4cK1P6aoJcEZjmoTXpjKBmAABLMnZEk"
+      - "--reserved-nodes"
+      - "/dns4/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
       - "--no-telemetry"
       - "--rpc-cors"
       - "all"
       # Not only bind to localhost.
       - "--ws-external"
       - "--rpc-external"
-      # Make sure sentry-a still participates as a grandpa voter to forward
-      # grandpa finality gossip messages.
-      - "--grandpa-voter"
+      - "--log"
+      - "sub-authority-discovery=trace"
+      - "--sentry"
 
   validator-b:
     image: parity/substrate
@@ -112,13 +109,10 @@ services:
       - "--base-path"
       - "/tmp/bob"
       - "--chain=local"
-      - "--key"
-      - "//Bob"
       - "--port"
       - "30333"
       - "--validator"
-      - "--name"
-      - "BobsNode"
+      - "--bob"
       - "--bootnodes"
       - "/dns4/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
       - "--bootnodes"
@@ -129,6 +123,8 @@ services:
       # Not only bind to localhost.
       - "--ws-external"
       - "--rpc-external"
+      - "--log"
+      - "sub-authority-discovery=trace"
 
   ui:
     image: polkadot-js/apps

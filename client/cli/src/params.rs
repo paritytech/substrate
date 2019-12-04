@@ -177,6 +177,14 @@ pub struct NetworkConfigurationParams {
 	#[structopt(long = "reserved-only")]
 	pub reserved_only: bool,
 
+	/// Specify a list of sentry node public addresses.
+	#[structopt(
+		long = "sentry-nodes",
+		value_name = "URL",
+		conflicts_with_all = &[ "sentry" ]
+	)]
+	pub sentry_nodes: Vec<String>,
+
 	/// Listen on this multiaddress.
 	#[structopt(long = "listen-addr", value_name = "LISTEN_ADDR")]
 	pub listen_addr: Vec<String>,
