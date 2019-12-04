@@ -108,14 +108,6 @@ enum PrePostHeader<H> {
 }
 
 impl<H> PrePostHeader<H> {
-	// get a reference to the "pre-header" -- the header as it should be just after the runtime.
-	fn pre(&self) -> &H {
-		match *self {
-			PrePostHeader::Same(ref h) => h,
-			PrePostHeader::Different(ref h, _) => h,
-		}
-	}
-
 	// get a reference to the "post-header" -- the header as it should be after all changes are applied.
 	fn post(&self) -> &H {
 		match *self {
@@ -757,24 +749,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			finalized,
 			auxiliary,
 			fork_choice,
-			allow_missing_state,
 			import_existing,
+			..
 		} = import_block;
 
 		assert!(justification.is_some() && finalized || justification.is_none());
-
-		let parent_hash = header.parent_hash().clone();
-		let mut enact_state = true;
-
-		match self.block_status(&BlockId::Hash(parent_hash))? {
-			BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
-			BlockStatus::InChainWithState | BlockStatus::Queued => {},
-			BlockStatus::InChainPruned if allow_missing_state => {
-				enact_state = false;
-			},
-			BlockStatus::InChainPruned => return Ok(ImportResult::MissingState),
-			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
-		}
 
 		let import_headers = if post_digests.is_empty() {
 			PrePostHeader::Same(header)
@@ -803,7 +782,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			finalized,
 			auxiliary,
 			fork_choice,
-			enact_state,
 			import_existing,
 		);
 
@@ -833,7 +811,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		fork_choice: ForkChoiceStrategy,
-		enact_state: bool,
 		import_existing: bool,
 	) -> sp_blockchain::Result<ImportResult> where
 		E: CallExecutor<Block> + Send + Sync + Clone,
@@ -847,7 +824,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			(false, blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
 			(false, blockchain::BlockStatus::Unknown) => {},
 			(true, blockchain::BlockStatus::InChain) =>  {},
-			(true, blockchain::BlockStatus::Unknown) => return Err(Error::UnknownBlock(format!("{:?}", hash))),
+			(true, blockchain::BlockStatus::Unknown) =>
+				return Err(Error::UnknownBlock(format!("{:?}", hash))),
 		}
 
 		let info = self.backend.blockchain().info();
@@ -866,8 +844,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			BlockOrigin::Genesis | BlockOrigin::NetworkInitialSync | BlockOrigin::File => false,
 		};
 
-		let storage_changes = match body {
-			Some(ref body) if enact_state => {
+		let storage_changes = match storage_changes {
+			Some(storage_changes) => {
 				self.backend.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
 
 				// ensure parent block is finalized to maintain invariant that
@@ -882,27 +860,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					)?;
 				}
 
-				let storage_changes = storage_changes.map_or_else(
-					|| self.block_execution(&operation.op, &import_headers, &body),
-					|c| Ok(Some(c)),
-				)?.map(state_machine::StorageChanges::into_inner);
-
 				operation.op.update_cache(new_cache);
 
-				if let Some((main_sc, child_sc, tx, _, changes_trie_tx)) = storage_changes {
-					operation.op.update_db_storage(tx)?;
-					operation.op.update_storage(main_sc.clone(), child_sc.clone())?;
+				let (main_sc, child_sc, tx, _, changes_trie_tx) = storage_changes.into_inner();
 
-					if let Some(changes_trie_transaction) = changes_trie_tx {
-						operation.op.update_changes_trie(changes_trie_transaction)?;
-					}
+				operation.op.update_db_storage(tx)?;
+				operation.op.update_storage(main_sc.clone(), child_sc.clone())?;
 
-					Some((main_sc, child_sc))
-				} else {
-					None
+				if let Some(changes_trie_transaction) = changes_trie_tx {
+					operation.op.update_changes_trie(changes_trie_transaction)?;
 				}
+
+				Some((main_sc, child_sc))
 			},
-			_ => None,
+			None => None,
 		};
 
 		let is_new_best = finalized || match fork_choice {
@@ -964,40 +935,78 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(ImportResult::imported(is_new_best))
 	}
 
-	fn block_execution(
+	/// Prepares the storage changes for a block.
+	///
+	/// It checks if the state should be enacted and if the `import_block` maybe already provides
+	/// the required storage changes. If the state should be enacted and the storage changes are not
+	/// provided, the block is re-executed to get the storage changes.
+	fn prepare_block_storage_changes(
 		&self,
-		transaction: &B::BlockImportOperation,
-		import_headers: &PrePostHeader<Block::Header>,
-		body: &[Block::Extrinsic],
-	) -> sp_blockchain::Result<Option<sp_api::StorageChanges<backend::StateBackendFor<B, Block>, Block>>>
+		import_block: &mut BlockImportParams<Block, backend::TransactionFor<B, Block>>,
+	) -> sp_blockchain::Result<Option<ImportResult>>
 		where
 			Self: ProvideRuntimeApi<Block>,
 			<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
 				ApiExt<Block, StateBackend = B::State>,
 	{
-		match transaction.state()? {
-			Some(transaction_state) => {
-				let at = BlockId::Hash(*import_headers.pre().parent_hash());
+		let parent_hash = import_block.header.parent_hash();
+		let at = BlockId::Hash(*parent_hash);
+		let enact_state = match self.block_status(&at)? {
+			BlockStatus::Unknown => return Ok(Some(ImportResult::UnknownParent)),
+			BlockStatus::InChainWithState | BlockStatus::Queued => true,
+			BlockStatus::InChainPruned if import_block.allow_missing_state => false,
+			BlockStatus::InChainPruned => return Ok(Some(ImportResult::MissingState)),
+			BlockStatus::KnownBad => return Ok(Some(ImportResult::KnownBad)),
+		};
+
+		match (enact_state, &mut import_block.storage_changes, &mut import_block.body) {
+			// We have storage changes and should enact the state, so we don't need to do anything
+			// here
+			(true, Some(_), _) => {},
+			// We should enact state, but don't have any storage changes, so we need to execute the
+			// block.
+			(true, ref mut storage_changes @ None, Some(ref body)) => {
 				let runtime_api = self.runtime_api();
 
-				runtime_api.execute_block(&at, Block::new(import_headers.pre().clone(), body.into()))?;
+				runtime_api.execute_block(
+					&at,
+					Block::new(import_block.header.clone(), body.clone()),
+				)?;
 
-				let storage_changes = unsafe {
+				let state = self.backend.state_at(at)?;
+
+				let gen_storage_changes = unsafe {
 					runtime_api.consume_inner(|a| a.into_storage_changes(
-						transaction_state,
+						&state,
 						self.backend.changes_trie_storage(),
-						*import_headers.pre().parent_hash(),
-					))?
+						*parent_hash,
+					))
 				};
 
-				if import_headers.post().state_root() != &storage_changes.transaction_storage_root {
-					Err(Error::InvalidStateRoot)
+				{
+					let _lock = self.backend.get_import_lock().read();
+					self.backend.destroy_state(state)?;
+				}
+
+				let gen_storage_changes = gen_storage_changes?;
+
+				if import_block.header.state_root()
+					!= &gen_storage_changes.transaction_storage_root
+				{
+					return Err(Error::InvalidStateRoot)
 				} else {
-					Ok(Some(storage_changes))
+					**storage_changes = Some(gen_storage_changes);
 				}
 			},
-			None => Ok(None)
-		}
+			// No block body, no storage changes
+			(true, None, None) => {},
+			// We should not enact the state, so we set the storage changes to `None`.
+			(false, changes, _) => {
+				changes.take();
+			}
+		};
+
+		Ok(None)
 	}
 
 	fn apply_finality_with_block_hash(
@@ -1426,9 +1435,16 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for &Client<B, E, Block, RA>
 	/// algorithm, don't use this function.
 	fn import_block(
 		&mut self,
-		import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
+		mut import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
+		if let Some(res) = self.prepare_block_storage_changes(&mut import_block).map_err(|e| {
+			warn!("Block prepare storage changes error:\n{:?}", e);
+			ConsensusError::ClientImport(e.to_string())
+		})? {
+			return Ok(res)
+		}
+
 		self.lock_import_and_run(|operation| {
 			self.apply_block(operation, import_block, new_cache)
 		}).map_err(|e| {

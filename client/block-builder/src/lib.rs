@@ -181,6 +181,11 @@ where
 			)
 		};
 
+		{
+			let _lock = self.backend.get_import_lock().read();
+			self.backend.destroy_state(state)?;
+		}
+
 		Ok((<Block as BlockT>::new(header, self.extrinsics), storage_changes?, proof))
 	}
 }
