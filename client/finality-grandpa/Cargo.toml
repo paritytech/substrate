@@ -26,7 +26,7 @@ inherents = { package = "sp-inherents", path = "../../primitives/inherents" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 network = { package = "sc-network", path = "../network" }
 sp-finality-tracker = { path = "../../primitives/finality-tracker" }
-fg_primitives = { package = "sp-finality-granpda", path = "../../primitives/finality-grandpa" }
+fg_primitives = { package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 grandpa = { package = "finality-grandpa", version = "0.10.1", features = ["derive-codec"] }
 
 [dev-dependencies]

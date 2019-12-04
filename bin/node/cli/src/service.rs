@@ -125,12 +125,14 @@ macro_rules! new_full {
 			is_authority,
 			force_authoring,
 			name,
-			disable_grandpa
+			disable_grandpa,
+			sentry_nodes,
 		) = (
 			$config.roles.is_authority(),
 			$config.force_authoring,
 			$config.name.clone(),
-			$config.disable_grandpa
+			$config.disable_grandpa,
+			$config.network.sentry_nodes.clone(),
 		);
 
 		// sentry nodes announce themselves as authorities to the network
@@ -194,6 +196,7 @@ macro_rules! new_full {
 			let authority_discovery = authority_discovery::AuthorityDiscovery::new(
 				service.client(),
 				service.network(),
+				sentry_nodes,
 				service.keystore(),
 				future03_dht_event_rx,
 			);
