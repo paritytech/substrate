@@ -120,7 +120,8 @@ impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SpawnTaskHandle
 		&self,
 		future: Box<dyn Future<Item = (), Error = ()> + Send>,
 	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
-		let future = Box::new(future.select(self.on_exit.clone()).then(|_| Ok(())));
+		let exit = self.on_exit.clone().map(Ok).compat();
+		let future = Box::new(future.select(exit).then(|_| Ok(())));
 		if let Err(err) = self.sender.unbounded_send(future) {
 			let kind = futures::future::ExecuteErrorKind::Shutdown;
 			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
@@ -236,7 +237,8 @@ where
 	}
 
 	fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let task = task.select(self.on_exit()).then(|_| Ok(()));
+		let exit = self.on_exit().map(Ok).compat();
+		let task = task.select(exit).then(|_| Ok(()));
 		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
 	}
 
@@ -249,7 +251,8 @@ where
 				let _ = essential_failed.send(());
 				Ok(())
 			});
-		let task = essential_task.select(self.on_exit()).then(|_| Ok(()));
+		let exit = self.on_exit().map(Ok::<_, ()>).compat();
+		let task = essential_task.select(exit).then(|_| Ok(()));
 
 		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
 	}
@@ -503,7 +506,7 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
 		if let Some(signal) = self.signal.take() {
-			signal.fire();
+			let _ = signal.fire();
 		}
 	}
 }

@@ -289,7 +289,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
-		on_exit: impl Future<Item = (), Error = ()> + Clone + Send + 'static,
+		on_exit: impl futures03::Future<Output = ()> + Clone + Send + Unpin + 'static,
 	) -> (
 		Self,
 		impl Future<Item = (), Error = ()> + Send + 'static,
@@ -350,9 +350,20 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			// lazily spawn these jobs onto their own tasks. the lazy future has access
 			// to tokio globals, which aren't available outside.
 			let mut executor = tokio_executor::DefaultExecutor::current();
-			executor.spawn(Box::new(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(()))))
+
+			use futures03::{FutureExt, TryFutureExt};
+
+			let rebroadcast_job = rebroadcast_job
+				.select(on_exit.clone().map(Ok).compat())
+				.then(|_| Ok(()));
+
+			let reporting_job = reporting_job
+				.select(on_exit.clone().map(Ok).compat())
+				.then(|_| Ok(()));
+
+			executor.spawn(Box::new(rebroadcast_job))
 				.expect("failed to spawn grandpa rebroadcast job task");
-			executor.spawn(Box::new(reporting_job.select(on_exit.clone()).then(|_| Ok(()))))
+			executor.spawn(Box::new(reporting_job))
 				.expect("failed to spawn grandpa reporting job task");
 			Ok(())
 		});

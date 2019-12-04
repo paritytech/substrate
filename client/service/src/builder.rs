@@ -28,7 +28,7 @@ use chain_spec::{RuntimeGenesis, Extension};
 use consensus_common::import_queue::ImportQueue;
 use futures::{prelude::*, sync::mpsc};
 use futures03::{
-	compat::{Compat, Future01CompatExt},
+	compat::Compat,
 	FutureExt as _, TryFutureExt as _,
 	StreamExt as _, TryStreamExt as _,
 	future::{select, Either}
@@ -880,7 +880,7 @@ ServiceBuilder<
 
 					Ok(())
 				})
-				.select(exit.clone())
+				.select(exit.clone().map(Ok).compat())
 				.then(|_| Ok(()));
 			let _ = to_spawn_tx.unbounded_send(Box::new(events));
 		}
@@ -902,7 +902,7 @@ ServiceBuilder<
 					);
 					Ok(())
 				})
-				.select(exit.clone())
+				.select(exit.clone().map(Ok).compat())
 				.then(|_| Ok(()));
 
 			let _ = to_spawn_tx.unbounded_send(Box::new(events));
@@ -967,7 +967,7 @@ ServiceBuilder<
 			);
 
 			Ok(())
-		}).select(exit.clone()).then(|_| Ok(()));
+		}).select(exit.clone().map(Ok).compat()).then(|_| Ok(()));
 		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
 
 		// Periodically send the network state to the telemetry.
@@ -980,7 +980,7 @@ ServiceBuilder<
 				"state" => network_state,
 			);
 			Ok(())
-		}).select(exit.clone()).then(|_| Ok(()));
+		}).select(exit.clone().map(Ok).compat()).then(|_| Ok(()));
 		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task_2));
 
 		// RPC
@@ -1054,7 +1054,7 @@ ServiceBuilder<
 			dht_event_tx,
 		)
 			.map_err(|_| ())
-			.select(exit.clone())
+			.select(exit.clone().map(Ok).compat())
 			.then(|_| Ok(()))));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
@@ -1099,7 +1099,7 @@ ServiceBuilder<
 					Ok(())
 				});
 			let _ = to_spawn_tx.unbounded_send(Box::new(future
-				.select(exit.clone())
+				.select(exit.clone().map(Ok).compat())
 				.then(|_| Ok(()))));
 			telemetry
 		});
@@ -1108,7 +1108,7 @@ ServiceBuilder<
 		if let Some(port) = config.grafana_port {
 			let future = select(
 				grafana_data_source::run_server(port).boxed(),
-				exit.clone().compat()
+				exit.clone()
 			).map(|either| match either {
 				Either::Left((result, _)) => result.map_err(|_| ()),
 				Either::Right(_) => Ok(())
