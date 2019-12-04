@@ -71,7 +71,7 @@ impl network_gossip::Network<Block> for TestNetwork {
 		&self,
 		_peers: Vec<network::PeerId>,
 		_hash: Hash,
-		_number: NumberFor<Block>
+		_number: NumberFor<Block>,
 	) {}
 }
 
@@ -85,7 +85,7 @@ impl network_gossip::ValidatorContext<Block> for TestNetwork {
 			self,
 			who.clone(),
 			GRANDPA_ENGINE_ID,
-			data
+			data,
 		);
 	}
 
