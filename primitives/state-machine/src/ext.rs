@@ -367,7 +367,7 @@ where
 			(_, Some(overlay_key)) => if overlay_key.1.value.is_some() {
 				Some(overlay_key.0.to_vec())
 			} else {
-				self.next_storage_key(&overlay_key.0[..])
+				self.next_child_storage_key(storage_key, &overlay_key.0[..])
 			},
 		}
 	}
@@ -696,9 +696,9 @@ mod tests {
 		overlay.set_child_storage(child().as_ref().to_vec(), vec![20], None);
 		overlay.set_child_storage(child().as_ref().to_vec(), vec![30], Some(vec![31]));
 		let backend = vec![
-			(None, vec![10], Some(vec![10])),
-			(None, vec![20], Some(vec![20])),
-			(None, vec![40], Some(vec![40])),
+			(Some(child().as_ref().to_vec()), vec![10], Some(vec![10])),
+			(Some(child().as_ref().to_vec()), vec![20], Some(vec![20])),
+			(Some(child().as_ref().to_vec()), vec![40], Some(vec![40])),
 		].into();
 
 		let ext = TestExt::new(&mut overlay, &backend, None, None);
