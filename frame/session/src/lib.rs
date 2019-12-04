@@ -487,7 +487,7 @@ decl_module! {
 		/// - One extra DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
-		pub fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> Result {
+		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> Result {
 			let who = ensure_signed(origin)?;
 
 			ensure!(keys.ownership_proof_is_valid(&proof), "invalid ownership proof");
