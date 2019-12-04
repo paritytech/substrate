@@ -1103,7 +1103,7 @@ dependencies = [
 [[package]]
 name = "exit-future"
 version = "0.2.0"
-source = "git+https://github.com/expenses/exit-future?branch=modernize#05b07ca0b9d3a0ee14dc146ccf4079ee1c1bee91"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -5451,7 +5451,7 @@ name = "sc-service"
 version = "2.0.0"
 dependencies = [
  "derive_more 0.99.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "exit-future 0.2.0 (git+https://github.com/expenses/exit-future?branch=modernize)",
+ "exit-future 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "grafana-data-source 2.0.0",
@@ -8085,7 +8085,7 @@ dependencies = [
 "checksum evm-core 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3bcde5af3d542874ddeb53de0919302d57586ea04b3f76f54d865f8a6cdc70ae"
 "checksum evm-gasometer 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b82bc9f275cb59d2bcc05d85c98736ddfaba003a7ef7b73893fa7c1c1fab29dc"
 "checksum evm-runtime 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0dbbc89d29618c3722c17ba78ddf432d40ace8ee27e3f8b28b52a85921112e4b"
-"checksum exit-future 0.2.0 (git+https://github.com/expenses/exit-future?branch=modernize)" = "<none>"
+"checksum exit-future 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e43f2f1833d64e33f15592464d6fdd70f349dda7b1a53088eb83cd94014008c5"
 "checksum faerie 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f902f2af041f6c7177a2a04f805687cdc71e69c7cbef059a2755d8923f4cd7a8"
 "checksum failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "f8273f13c977665c5db7eb2b99ae520952fe5ac831ae4cd09d80c4c7042b5ed9"
 "checksum failure_derive 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "0bc225b78e0391e4b8683440bf2e63c2deeeb2ce5189eab46e2b68c6d3725d08"
