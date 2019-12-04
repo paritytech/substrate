@@ -478,7 +478,6 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 		let mut listener = self.listener.write();
 		for tx in &invalid {
-			debug!(target: "txpool", "[{:?}] Removed as invalid.", tx.hash);
 			listener.invalid(&tx.hash);
 		}
 
