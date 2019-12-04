@@ -555,7 +555,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
-	X: Future<Item=(),Error=()> + Clone + Send + 'static,
+	X: futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
 {
 	let GrandpaParams {
 		config,
@@ -634,7 +634,9 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	let telemetry_task = telemetry_task
 		.then(|_| futures::future::empty::<(), ()>());
 
-	Ok(voter_work.select(on_exit).select2(telemetry_task).then(|_| Ok(())))
+	use futures03::{FutureExt, TryFutureExt};
+
+	Ok(voter_work.select(on_exit.map(Ok).compat()).select2(telemetry_task).then(|_| Ok(())))
 }
 
 /// Future that powers the voter.
@@ -889,7 +891,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
-	X: Future<Item=(),Error=()> + Clone + Send + 'static,
+	X: futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
 {
 	run_grandpa_voter(grandpa_params)
 }
