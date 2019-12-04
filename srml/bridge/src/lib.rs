@@ -42,8 +42,8 @@ use crate::storage_proof::StorageProofChecker;
 
 use core::iter::FromIterator;
 use codec::{Encode, Decode};
-use fg_primitives::{AuthorityId, AuthorityWeight, AuthorityList, SetId, RoundNumber};
-use grandpa::voter_set::VoterSet; // TODO: Check for `no_std`
+use fg_primitives::{AuthorityId, AuthorityWeight, AuthorityList, SetId};
+use grandpa::voter_set::VoterSet;
 use primitives::H256;
 use num::AsPrimitive;
 use sr_primitives::Justification;
@@ -127,6 +127,7 @@ decl_module! {
 			header: T::Header,
 			ancestry_proof: Vec<T::Header>,
 			validator_set: AuthorityList,
+			validator_set_id: SetId,
 			grandpa_proof: Justification,
 		) {
 			let _sender = ensure_signed(origin)?;
@@ -147,7 +148,7 @@ decl_module! {
 				grandpa_proof,
 				block_hash,
 				block_num,
-				0, // TODO: Use an actual set id
+				validator_set_id,
 				&voter_set,
 			)?;
 
@@ -236,7 +237,6 @@ where
 	Err(Error::InvalidAncestryProof)
 }
 
-// NOTE: Currently looking at `import::import_justification()` as a reference
 fn verify_grandpa_proof<B>(
 	justification: Justification,
 	hash: B::Hash,
@@ -267,6 +267,7 @@ where
 mod tests {
 	use super::*;
 
+	use fg_primitives::RoundNumber;
 	use keyring::Ed25519Keyring;
 	use primitives::{Blake2Hasher, H256, Public};
 	use sr_primitives::{
@@ -611,6 +612,7 @@ mod tests {
 				child.clone(),
 				block_ancestry_proof,
 				authorities.clone(),
+				set_id,
 				encoded,
 			));
 
@@ -680,6 +682,7 @@ mod tests {
 					child.clone(),
 					block_ancestry_proof,
 					authorities.clone(),
+					set_id,
 					encoded,
 				),
 				Error::InvalidFinalityProof.into()
