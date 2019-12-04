@@ -137,22 +137,22 @@ Behaviour<B, S, H> {
 				self.events.push(BehaviourOut::JustificationImport(origin, hash, nb, justification)),
 			CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
 				self.events.push(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)),
-			CustomMessageOutcome::NotifOpened { remote, protocols } =>
+			CustomMessageOutcome::NotificationsStreamOpened { remote, protocols } =>
 				for engine_id in protocols {
-					self.events.push(BehaviourOut::Event(Event::NotifOpened {
+					self.events.push(BehaviourOut::Event(Event::NotificationsStreamOpened {
 						remote: remote.clone(),
 						engine_id,
 					}));
 				},
-			CustomMessageOutcome::NotifClosed { remote, protocols } =>
+			CustomMessageOutcome::NotificationsStreamClosed { remote, protocols } =>
 				for engine_id in protocols {
-					self.events.push(BehaviourOut::Event(Event::NotifClosed {
+					self.events.push(BehaviourOut::Event(Event::NotificationsStreamClosed {
 						remote: remote.clone(),
 						engine_id,
 					}));
 				},
-			CustomMessageOutcome::NotifMessages { remote, messages } => {
-				let ev = Event::NotifMessages { remote, messages };
+			CustomMessageOutcome::NotificationsReceived { remote, messages } => {
+				let ev = Event::NotificationsReceived { remote, messages };
 				self.events.push(BehaviourOut::Event(ev));
 			},
 			CustomMessageOutcome::None => {}

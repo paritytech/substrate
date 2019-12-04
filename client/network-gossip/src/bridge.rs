@@ -82,6 +82,8 @@ impl<B: BlockT> GossipEngine<B> {
 						let inner = &mut *inner;
 						inner.state_machine.tick(&mut *inner.context);
 					} else {
+						// We reach this branch if the `Arc<GossipEngineInner>` has no reference
+						// left. We can now let the task end.
 						break;
 					}
 				}
@@ -97,7 +99,7 @@ impl<B: BlockT> GossipEngine<B> {
 			let mut stream = Compat01As03::new(event_stream);
 			while let Some(Ok(event)) = stream.next().await {
 				match event {
-					Event::NotifOpened { remote, engine_id: msg_engine_id } => {
+					Event::NotificationsStreamOpened { remote, engine_id: msg_engine_id } => {
 						if msg_engine_id != engine_id {
 							continue;
 						}
@@ -106,7 +108,7 @@ impl<B: BlockT> GossipEngine<B> {
 						// TODO: for now we hard-code the roles to FULL; fix that
 						inner.state_machine.new_peer(&mut *inner.context, remote, Roles::FULL);
 					}
-					Event::NotifClosed { remote, engine_id: msg_engine_id } => {
+					Event::NotificationsStreamClosed { remote, engine_id: msg_engine_id } => {
 						if msg_engine_id != engine_id {
 							continue;
 						}
@@ -114,7 +116,7 @@ impl<B: BlockT> GossipEngine<B> {
 						let inner = &mut *inner;
 						inner.state_machine.peer_disconnected(&mut *inner.context, remote);
 					},
-					Event::NotifMessages { remote, messages } => {
+					Event::NotificationsReceived { remote, messages } => {
 						let mut inner = inner.lock();
 						let inner = &mut *inner;
 						inner.state_machine.on_incoming(
@@ -150,7 +152,7 @@ impl<B: BlockT> GossipEngine<B> {
 	}
 
 	/// Registers a message without propagating it to any peers. The message
-	/// becomes available to new peers or when the service is asked to GossipEngine
+	/// becomes available to new peers or when the service is asked to gossip
 	/// the message's topic. No validation is performed on the message, if the
 	/// message is already expired it should be dropped on the next garbage
 	/// collection.
@@ -174,7 +176,7 @@ impl<B: BlockT> GossipEngine<B> {
 		inner.state_machine.broadcast_topic(&mut *inner.context, topic, force);
 	}
 
-	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile)
+	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile).
 	pub fn messages_for(&self, topic: B::Hash)
 		-> mpsc::UnboundedReceiver<TopicNotification>
 	{

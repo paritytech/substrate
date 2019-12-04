@@ -272,11 +272,11 @@ fn good_commit_leads_to_relay() {
 			let sender_id = id.clone();
 			let send_message = tester.filter_network_events(move |event| match event {
 				Event::EventStream(sender) => {
-					let _ = sender.unbounded_send(NetworkEvent::NotifOpened {
+					let _ = sender.unbounded_send(NetworkEvent::NotificationsStreamOpened {
 						remote: sender_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
 					});
-					let _ = sender.unbounded_send(NetworkEvent::NotifMessages {
+					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id.clone(),
 						messages: vec![(GRANDPA_ENGINE_ID, commit_to_send.clone().into())],
 					});
@@ -388,11 +388,11 @@ fn bad_commit_leads_to_report() {
 			let sender_id = id.clone();
 			let send_message = tester.filter_network_events(move |event| match event {
 				Event::EventStream(sender) => {
-					let _ = sender.unbounded_send(NetworkEvent::NotifOpened {
+					let _ = sender.unbounded_send(NetworkEvent::NotificationsStreamOpened {
 						remote: sender_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
 					});
-					let _ = sender.unbounded_send(NetworkEvent::NotifMessages {
+					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id.clone(),
 						messages: vec![(GRANDPA_ENGINE_ID, commit_to_send.clone().into())],
 					});

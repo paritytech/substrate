@@ -655,7 +655,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.on_remote_read_child_request(who, request),
 			GenericMessage::Consensus(msg) =>
 				return if self.registered_notif_protocols.contains(&msg.engine_id) {
-					CustomMessageOutcome::NotifMessages {
+					CustomMessageOutcome::NotificationsReceived {
 						remote: who.clone(),
 						messages: vec![(msg.engine_id, From::from(msg.data))],
 					}
@@ -677,7 +677,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					.collect::<Vec<_>>();
 
 				return if !messages.is_empty() {
-					CustomMessageOutcome::NotifMessages {
+					CustomMessageOutcome::NotificationsReceived {
 						remote: who.clone(),
 						messages,
 					}
@@ -1107,7 +1107,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		// we handle it by notifying that we opened channels with everyone.
 		self.behaviour.open_peers()
 			.map(|peer|
-				event::Event::NotifOpened {
+				event::Event::NotificationsStreamOpened {
 					remote: peer.clone(),
 					engine_id,
 				})
@@ -1784,11 +1784,11 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
 	/// Notifications protocols have been opened with a remote.
-	NotifOpened { remote: PeerId, protocols: Vec<ConsensusEngineId> },
+	NotificationsStreamOpened { remote: PeerId, protocols: Vec<ConsensusEngineId> },
 	/// Notifications protocols have been closed with a remote.
-	NotifClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
+	NotificationsStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
 	/// Messages have been received on one or more notifications protocols.
-	NotifMessages { remote: PeerId, messages: Vec<(ConsensusEngineId, Bytes)> },
+	NotificationsReceived { remote: PeerId, messages: Vec<(ConsensusEngineId, Bytes)> },
 	None,
 }
 
@@ -1920,7 +1920,7 @@ Protocol<B, S, H> {
 				);
 				self.on_peer_connected(peer_id.clone());
 				// Notify all the notification protocols as open.
-				CustomMessageOutcome::NotifOpened {
+				CustomMessageOutcome::NotificationsStreamOpened {
 					remote: peer_id,
 					protocols: self.registered_notif_protocols.iter().cloned().collect(),
 				}
@@ -1928,7 +1928,7 @@ Protocol<B, S, H> {
 			LegacyProtoOut::CustomProtocolClosed { peer_id, .. } => {
 				self.on_peer_disconnected(peer_id.clone());
 				// Notify all the notification protocols as closed.
-				CustomMessageOutcome::NotifClosed {
+				CustomMessageOutcome::NotificationsStreamClosed {
 					remote: peer_id,
 					protocols: self.registered_notif_protocols.iter().cloned().collect(),
 				}
