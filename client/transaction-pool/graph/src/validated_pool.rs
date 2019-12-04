@@ -312,7 +312,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 					Status::Future => listener.future(&hash),
 					Status::Ready => listener.ready(&hash, None),
 					Status::Dropped => listener.dropped(&hash, None),
-					Status::Failed if initial_status.is_none() => listener.invalid(&hash),
+					Status::Failed if !initial_status.is_none() => listener.invalid(&hash),
 					_ => {},
 				}
 			}
