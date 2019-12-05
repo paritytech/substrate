@@ -154,8 +154,8 @@ decl_module! {
 
 			let mut members = <Members<T, I>>::get();
 			let location = members.binary_search(&remove).ok().ok_or("not a member")?;
+			let _ = members.binary_search(&add).err().ok_or("already a member")?;
 			members[location] = add.clone();
-			let _location = members.binary_search(&add).err().ok_or("already a member")?;
 			members.sort();
 			<Members<T, I>>::put(&members);
 
@@ -199,8 +199,8 @@ decl_module! {
 			if remove != new {
 				let mut members = <Members<T, I>>::get();
 				let location = members.binary_search(&remove).ok().ok_or("not a member")?;
+				let _ = members.binary_search(&new).err().ok_or("already a member")?;
 				members[location] = new.clone();
-				let _location = members.binary_search(&new).err().ok_or("already a member")?;
 				members.sort();
 				<Members<T, I>>::put(&members);
 
@@ -361,12 +361,30 @@ mod tests {
 	}
 
 	#[test]
+	fn swap_member_works_that_does_not_change_order() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Membership::swap_member(Origin::signed(3), 10, 5));
+			assert_eq!(Membership::members(), vec![5, 20, 30]);
+			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
+		});
+	}
+
+	#[test]
 	fn change_key_works() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(Membership::change_key(Origin::signed(3), 25), "not a member");
 			assert_noop!(Membership::change_key(Origin::signed(10), 20), "already a member");
 			assert_ok!(Membership::change_key(Origin::signed(10), 40));
 			assert_eq!(Membership::members(), vec![20, 30, 40]);
+			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
+		});
+	}
+
+	#[test]
+	fn change_key_works_that_does_not_change_order() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Membership::change_key(Origin::signed(10), 5));
+			assert_eq!(Membership::members(), vec![5, 20, 30]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
 		});
 	}
