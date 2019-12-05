@@ -4814,6 +4814,7 @@ version = "2.0.0"
 dependencies = [
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "derive_more 0.99.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-timer 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -86,6 +86,12 @@ const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
 /// discovery module.
 const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
 
+/// The maximum number of sentry node public addresses that we accept per authority.
+///
+/// Everything above this threshold should be dropped to prevent a single authority from filling up
+/// our peer set priority group.
+const MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY: usize = 5;
+
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
 pub struct AuthorityDiscovery<Client, Network, Block>
 where
@@ -316,13 +322,25 @@ where
 				return Err(Error::VerifyingDhtPayload);
 			}
 
-			let addresses: Vec<libp2p::Multiaddr> = schema::AuthorityAddresses::decode(addresses)
+			let mut addresses: Vec<libp2p::Multiaddr> = schema::AuthorityAddresses::decode(addresses)
 				.map(|a| a.addresses)
 				.map_err(Error::DecodingProto)?
 				.into_iter()
 				.map(|a| a.try_into())
 				.collect::<std::result::Result<_, _>>()
 				.map_err(Error::ParsingMultiaddress)?;
+
+			if addresses.len() > MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY {
+				warn!(
+					target: "sub-authority-discovery",
+					"Got more than MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY ({:?}) for Authority
+					'{:?}' from DHT, dropping the remainder.",
+					MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY,	authority_id,
+				);
+				addresses = addresses.into_iter()
+					.take(MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY)
+					.collect();
+			}
 
 			self.address_cache.insert(authority_id.clone(), addresses);
 		}
@@ -800,6 +818,7 @@ mod tests {
 
 	#[test]
 	fn handle_dht_events_with_value_found_should_call_set_priority_group() {
+		let _ = ::env_logger::try_init();
 		// Create authority discovery.
 
 		let (mut dht_event_tx, dht_event_rx) = channel(1000);
