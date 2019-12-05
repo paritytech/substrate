@@ -204,6 +204,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		#[derive(Debug, Clone, Copy, PartialEq)]
 		enum Status { Future, Ready, Failed, Dropped };
 
+		println!("Updated: {:?}", updated_transactions);
 		let (mut initial_statuses, final_statuses) = {
 			let mut pool = self.pool.write();
 
@@ -245,6 +246,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				updated_transactions.remove(&hash);
 			}
 
+			println!("Updated2: {:?}", updated_transactions);
 			// if we're rejecting future transactions, then insertion order matters here:
 			// if tx1 depends on tx2, then if tx1 is inserted before tx2, then it goes
 			// to the future queue and gets rejected immediately
