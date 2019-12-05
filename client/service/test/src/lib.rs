@@ -155,6 +155,7 @@ fn node_config<G, E: Clone> (
 		out_peers: 450,
 		reserved_nodes: vec![],
 		non_reserved_mode: NonReservedPeerMode::Accept,
+		sentry_nodes: vec![],
 		client_version: "network/test/0.1".to_owned(),
 		node_name: "unknown".to_owned(),
 		transport: TransportConfig::Normal {

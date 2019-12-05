@@ -106,7 +106,12 @@ impl<B: ChainApi> ValidatedPool<B> {
 			.map(|validated_tx| self.submit_one(validated_tx))
 			.collect::<Vec<_>>();
 
-		let removed = self.enforce_limits();
+		// only enforce limits if there is at least one imported transaction
+		let removed = if results.iter().any(|res| res.is_ok()) {
+			self.enforce_limits()
+		} else {
+			Default::default()
+		};
 
 		results.into_iter().map(|res| match res {
 			Ok(ref hash) if removed.contains(hash) => Err(error::Error::ImmediatelyDropped.into()),
@@ -236,6 +241,8 @@ impl<B: ChainApi> ValidatedPool<B> {
 					initial_statuses.insert(removed_hash.clone(), Status::Ready);
 					txs_to_resubmit.push((removed_hash, tx_to_resubmit));
 				}
+				// make sure to remove the hash even if it's not present in the pool any more.
+				updated_transactions.remove(&hash);
 			}
 
 			// if we're rejecting future transactions, then insertion order matters here:

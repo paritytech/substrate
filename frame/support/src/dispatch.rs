@@ -1001,7 +1001,7 @@ macro_rules! decl_module {
 			$crate::sp_runtime::traits::OffchainWorker<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn generate_extrinsics(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
+			fn offchain_worker(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
 		}
 	};
 
@@ -1014,7 +1014,7 @@ macro_rules! decl_module {
 			$crate::sp_runtime::traits::OffchainWorker<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn generate_extrinsics($param: $param_ty) { $( $impl )* }
+			fn offchain_worker($param: $param_ty) { $( $impl )* }
 		}
 	};
 

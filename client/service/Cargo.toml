@@ -23,7 +23,7 @@ log = "0.4.8"
 slog = { version = "2.5.2", features = ["nested-values"] }
 tokio-executor = "0.1.8"
 tokio-timer = "0.2.11"
-exit-future = "0.1.4"
+exit-future = "0.2.0"
 serde = "1.0.101"
 serde_json = "1.0.41"
 sysinfo = "0.9.5"
@@ -60,5 +60,5 @@ tracing = "0.1.10"
 substrate-test-runtime-client = { path = "../../test/utils/runtime/client" }
 babe-primitives = { package = "sp-consensus-babe", path = "../../primitives/consensus/babe" }
 grandpa = { package = "sc-finality-grandpa", path = "../finality-grandpa" }
-grandpa-primitives = { package = "sp-finality-granpda", path = "../../primitives/finality-grandpa" }
+grandpa-primitives = { package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 tokio = "0.1"
