@@ -155,7 +155,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC, Sp>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA, SC>,
 	network: N,
-	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
+	on_exit: impl futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
 	executor: Sp,
 ) -> ::sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -195,7 +195,9 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC, Sp>(
 			warn!("GRANDPA Observer failed: {:?}", e);
 		});
 
-	Ok(observer_work.select(on_exit).map(|_| ()).map_err(|_| ()))
+	use futures03::{FutureExt, TryFutureExt};
+
+	Ok(observer_work.select(on_exit.map(Ok).compat()).map(|_| ()).map_err(|_| ()))
 }
 
 /// Future that powers the observer.

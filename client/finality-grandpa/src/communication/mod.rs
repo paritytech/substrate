@@ -30,7 +30,7 @@
 use std::sync::Arc;
 
 use futures::{prelude::*, future::Executor as _, sync::mpsc};
-use futures03::{compat::Compat, stream::StreamExt};
+use futures03::{compat::Compat, stream::StreamExt, future::FutureExt as _, future::TryFutureExt as _};
 use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
@@ -127,7 +127,7 @@ impl<B: BlockT> NetworkBridge<B> {
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		executor: &impl futures03::task::Spawn,
-		on_exit: impl Future<Item = (), Error = ()> + Clone + Send + 'static,
+		on_exit: impl futures03::Future<Output = ()> + Clone + Send + Unpin + 'static,
 	) -> Self {
 		let (validator, report_stream) = GossipValidator::new(
 			config,
@@ -181,9 +181,9 @@ impl<B: BlockT> NetworkBridge<B> {
 		let bridge = NetworkBridge { service, validator, neighbor_sender };
 
 		let executor = Compat::new(executor);
-		executor.execute(Box::new(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(()))))
+		executor.execute(Box::new(rebroadcast_job.select(on_exit.clone().map(Ok).compat()).then(|_| Ok(()))))
 			.expect("failed to spawn grandpa rebroadcast job task");
-		executor.execute(Box::new(reporting_job.select(on_exit.clone()).then(|_| Ok(()))))
+		executor.execute(Box::new(reporting_job.select(on_exit.clone().map(Ok).compat()).then(|_| Ok(()))))
 			.expect("failed to spawn grandpa reporting job task");
 
 		bridge

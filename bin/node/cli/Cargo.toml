@@ -36,7 +36,7 @@ structopt = "0.3.3"
 # primitives
 authority-discovery-primitives = { package = "sp-authority-discovery", path = "../../../primitives/authority-discovery"}
 babe-primitives = { package = "sp-consensus-babe", path = "../../../primitives/consensus/babe" }
-grandpa_primitives = { package = "sp-finality-granpda", path = "../../../primitives/finality-grandpa" }
+grandpa_primitives = { package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
 primitives = { package = "sp-core", path = "../../../primitives/core" }
 sp-runtime = { path = "../../../primitives/sr-primitives" }
 sp-timestamp = { path = "../../../primitives/timestamp", default-features = false }

@@ -23,13 +23,14 @@ mod backend;
 
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
-use rstd::vec::Vec;
+use rstd::{vec::Vec, marker::PhantomData};
 use support::{dispatch::Result, decl_module, decl_storage, decl_event};
+use support::weights::{Weight, WeighData, ClassifyDispatch, DispatchClass, PaysFee};
 use support::traits::{Currency, WithdrawReason, ExistenceRequirement};
 use system::ensure_signed;
 use sp_runtime::ModuleId;
 use support::weights::SimpleDispatchInfo;
-use sp_runtime::traits::{UniqueSaturatedInto, AccountIdConversion};
+use sp_runtime::traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion};
 use primitives::{U256, H256, H160};
 use evm::{ExitReason, ExitSucceed, ExitError};
 use evm::executor::StackExecutor;
@@ -79,6 +80,38 @@ impl Precompiles for () {
 		_target_gas: Option<usize>
 	) -> Option<core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError>> {
 		None
+	}
+}
+
+struct WeightForCallCreate<F>(PhantomData<F>);
+
+impl<F> Default for WeightForCallCreate<F> {
+	fn default() -> Self {
+		Self(PhantomData)
+	}
+}
+
+impl<F: FeeCalculator> WeighData<(&H160, &Vec<u8>, &U256, &u32)> for WeightForCallCreate<F> {
+	fn weigh_data(&self, (_, _, _, gas_provided): (&H160, &Vec<u8>, &U256, &u32)) -> Weight {
+		F::gas_price().saturated_into::<Weight>().saturating_mul(*gas_provided)
+	}
+}
+
+impl<F: FeeCalculator> WeighData<(&Vec<u8>, &U256, &u32)> for WeightForCallCreate<F> {
+	fn weigh_data(&self, (_, _, gas_provided): (&Vec<u8>, &U256, &u32)) -> Weight {
+		F::gas_price().saturated_into::<Weight>().saturating_mul(*gas_provided)
+	}
+}
+
+impl<F: FeeCalculator, T> ClassifyDispatch<T> for WeightForCallCreate<F> {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+
+impl<F: FeeCalculator> PaysFee for WeightForCallCreate<F> {
+	fn pays_fee(&self) -> bool {
+		true
 	}
 }
 
@@ -161,7 +194,7 @@ decl_module! {
 			Ok(())
 		}
 
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = WeightForCallCreate::<T::FeeCalculator>::default()]
 		fn call(origin, target: H160, input: Vec<u8>, value: U256, gas_limit: u32) -> Result {
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
@@ -212,7 +245,7 @@ decl_module! {
 			ret
 		}
 
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = WeightForCallCreate::<T::FeeCalculator>::default()]
 		fn create(origin, init: Vec<u8>, value: U256, gas_limit: u32) -> Result {
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
