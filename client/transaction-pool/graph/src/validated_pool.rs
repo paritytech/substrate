@@ -138,7 +138,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				Err(err.into())
 			},
 			ValidatedTransaction::Unknown(hash, err) => {
-				self.listener.write().invalid(&hash);
+				self.listener.write().invalid(&hash, false);
 				Err(err.into())
 			}
 		}
@@ -311,8 +311,8 @@ impl<B: ChainApi> ValidatedPool<B> {
 				match final_status {
 					Status::Future => listener.future(&hash),
 					Status::Ready => listener.ready(&hash, None),
-					Status::Failed => listener.invalid(&hash),
 					Status::Dropped => listener.dropped(&hash, None),
+					Status::Failed => listener.invalid(&hash, initial_status.is_some()),
 				}
 			}
 		}
@@ -478,7 +478,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 		let mut listener = self.listener.write();
 		for tx in &invalid {
-			listener.invalid(&tx.hash);
+			listener.invalid(&tx.hash, true);
 		}
 
 		invalid
@@ -506,7 +506,7 @@ fn fire_events<H, H2, Ex>(
 		base::Imported::Ready { ref promoted, ref failed, ref removed, ref hash } => {
 			listener.ready(hash, None);
 			for f in failed {
-				listener.invalid(f);
+				listener.invalid(f, true);
 			}
 			for r in removed {
 				listener.dropped(&r.hash, Some(hash));
