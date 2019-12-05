@@ -80,6 +80,35 @@ pub struct CallRequest<AccountId, Balance> {
 	input_data: Bytes,
 }
 
+/// An RPC serializable result of contract execution
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+pub enum RpcContractExecResult {
+	/// Successful execution
+	Success {
+		/// Status code
+		status: u8,
+		/// Output data
+		data: Bytes,
+	},
+	/// Error execution
+	Error(()),
+}
+
+impl From<ContractExecResult> for RpcContractExecResult {
+	fn from(r: ContractExecResult) -> Self {
+		match r {
+			ContractExecResult::Success { status, data } => {
+				RpcContractExecResult::Success { status, data: data.into() }
+			},
+			ContractExecResult::Error => {
+				RpcContractExecResult::Error(())
+			},
+		}
+	}
+}
+
 /// Contracts RPC methods.
 #[rpc]
 pub trait ContractsApi<BlockHash, AccountId, Balance> {
@@ -94,7 +123,7 @@ pub trait ContractsApi<BlockHash, AccountId, Balance> {
 		&self,
 		call_request: CallRequest<AccountId, Balance>,
 		at: Option<BlockHash>,
-	) -> Result<ContractExecResult>;
+	) -> Result<RpcContractExecResult>;
 
 	/// Returns the value under a specified storage `key` in a contract given by `address` param,
 	/// or `None` if it is not set.
@@ -138,7 +167,7 @@ where
 		&self,
 		call_request: CallRequest<AccountId, Balance>,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<ContractExecResult> {
+	) -> Result<RpcContractExecResult> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
@@ -178,7 +207,7 @@ where
 				data: Some(format!("{:?}", e).into()),
 			})?;
 
-		Ok(exec_result)
+		Ok(exec_result.into())
 	}
 
 	fn get_storage(
@@ -205,5 +234,22 @@ where
 			.map(Bytes);
 
 		Ok(get_storage_result)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn should_serialize_deserialize_properly() {
+		fn test(expected: &str) {
+			let res: RpcContractExecResult  = serde_json::from_str(expected).unwrap();
+			let actual = serde_json::to_string(&res).unwrap();
+			assert_eq!(actual, expected);
+		}
+
+		test(r#"{"success":{"status":5,"data":"0x1234"}}"#);
+		test(r#"{"error":null}"#);
 	}
 }
