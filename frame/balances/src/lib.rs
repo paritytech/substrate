@@ -934,9 +934,14 @@ where
 			if !<FreeBalance<T, I>>::exists(dest) {
 				Self::new_account(dest, new_to_balance);
 			}
+
+			// Emit transfer event.
+			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
+
+			// Take action on the set_free_balance call.
+			// This will emit events that _resulted_ from the transfer.
 			Self::set_free_balance(dest, new_to_balance);
 			T::TransferPayment::on_unbalanced(NegativeImbalance::new(fee));
-			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
 		}
 
 		Ok(())

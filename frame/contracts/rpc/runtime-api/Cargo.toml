@@ -8,7 +8,6 @@ edition = "2018"
 sp-api = { path = "../../../../primitives/sr-api", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 rstd = { package = "sp-std", path = "../../../../primitives/sr-std", default-features = false }
-serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-runtime = { path = "../../../../primitives/sr-primitives", default-features = false }
 
 [features]
@@ -17,6 +16,5 @@ std = [
 	"sp-api/std",
 	"codec/std",
 	"rstd/std",
-	"serde",
 	"sp-runtime/std",
 ]
