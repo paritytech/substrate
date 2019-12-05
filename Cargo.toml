@@ -157,272 +157,272 @@ members = [
 ]
 
 [dependencies]
-client = { optional = true, path = "client" }
-client-api = { optional = true, path = "client/api" }
-client-authority-discovery = { optional = true, path = "client/authority-discovery" }
-client-basic-authorship = { optional = true, path = "client/basic-authorship" }
-client-block-builder = { optional = true, path = "client/block-builder" }
-client-chain-spec = { optional = true, path = "client/chain-spec" }
-client-chain-spec-derive = { optional = true, path = "client/chain-spec/derive" }
-client-cli = { optional = true, path = "client/cli" }
-client-consensus-aura = { optional = true, path = "client/consensus/aura" }
-client-consensus-babe = { optional = true, path = "client/consensus/babe" }
-client-consensus-pow = { optional = true, path = "client/consensus/pow" }
-client-consensus-slots = { optional = true, path = "client/consensus/slots" }
-client-consensus-uncles = { optional = true, path = "client/consensus/uncles" }
-client-db = { optional = true, path = "client/db" }
-client-executor = { optional = true, path = "client/executor" }
-client-executor-runtime-test = { optional = true, path = "client/executor/runtime-test" }
-client-finality-grandpa = { optional = true, path = "client/finality-grandpa" }
-client-tracing = { optional = true, path = "client/tracing" }
-client-keystore = { optional = true, path = "client/keystore" }
-client-network = { optional = true, path = "client/network" }
-client-offchain = { optional = true, path = "client/offchain" }
-client-peerset = { optional = true, path = "client/peerset" }
-client-rpc-servers = { optional = true, path = "client/rpc-servers" }
-client-rpc = { optional = true, path = "client/rpc" }
-client-rpc-api = { optional = true, path = "client/rpc/api" }
-client-service = { optional = true, path = "client/service" }
-client-service-test = { optional = true, path = "client/service/test" }
-client-state-db = { optional = true, path = "client/state-db" }
-client-telemetry = { optional = true, path = "client/telemetry" }
-client-transaction-pool = { optional = true, path = "client/transaction-pool" }
-client-transaction-pool-graph = { optional = true, path = "client/transaction-pool/graph" }
-client-utils-wasm-builder-runner = { optional = true, path = "client/utils/wasm-builder-runner" }
-client-grafana-data-source = { optional = true, path = "client/grafana-data-source" }
-client-grafana-data-source-test = { optional = true, path = "client/grafana-data-source/test" }
-frame-assets = { optional = true, path = "frame/assets" }
-frame-aura = { optional = true, path = "frame/aura" }
-frame-authority-discovery = { optional = true, path = "frame/authority-discovery" }
-frame-authorship = { optional = true, path = "frame/authorship" }
-frame-babe = { optional = true, path = "frame/babe" }
-frame-balances = { optional = true, path = "frame/balances" }
-frame-collective = { optional = true, path = "frame/collective" }
-frame-contracts = { optional = true, path = "frame/contracts" }
-frame-contracts-rpc = { optional = true, path = "frame/contracts/rpc" }
-frame-contracts-rpc-runtime-api = { optional = true, path = "frame/contracts/rpc/runtime-api" }
-frame-democracy = { optional = true, path = "frame/democracy" }
-frame-elections-phragmen = { optional = true, path = "frame/elections-phragmen" }
-frame-elections = { optional = true, path = "frame/elections" }
-frame-evm = { optional = true, path = "frame/evm" }
-frame-example = { optional = true, path = "frame/example" }
-frame-executive = { optional = true, path = "frame/executive" }
-frame-finality-tracker = { optional = true, path = "frame/finality-tracker" }
-frame-generic-asset = { optional = true, path = "frame/generic-asset" }
-frame-grandpa = { optional = true, path = "frame/grandpa" }
-frame-im-online = { optional = true, path = "frame/im-online" }
-frame-indices = { optional = true, path = "frame/indices" }
-frame-membership = { optional = true, path = "frame/membership" }
-frame-metadata = { optional = true, path = "frame/metadata" }
-frame-nicks = { optional = true, path = "frame/nicks" }
-frame-offences = { optional = true, path = "frame/offences" }
-frame-randomness-collective-flip = { optional = true, path = "frame/randomness-collective-flip" }
-frame-scored-pool = { optional = true, path = "frame/scored-pool" }
-frame-session = { optional = true, path = "frame/session" }
-frame-staking = { optional = true, path = "frame/staking" }
-frame-staking-reward-curve = { optional = true, path = "frame/staking/reward-curve" }
-frame-sudo = { optional = true, path = "frame/sudo" }
-frame-support = { optional = true, path = "frame/support" }
-frame-support-procedural = { optional = true, path = "frame/support/procedural" }
-frame-support-procedural-tools = { optional = true, path = "frame/support/procedural/tools" }
-frame-support-procedural-tools-derive = { optional = true, path = "frame/support/procedural/tools/derive" }
-frame-support-test = { optional = true, path = "frame/support/test" }
-frame-system = { optional = true, path = "frame/system" }
-frame-system-rpc-runtime-api = { optional = true, path = "frame/system/rpc/runtime-api" }
-frame-timestamp = { optional = true, path = "frame/timestamp" }
-frame-transaction-payment = { optional = true, path = "frame/transaction-payment" }
-frame-transaction-payment-rpc = { optional = true, path = "frame/transaction-payment/rpc" }
-frame-transaction-payment-rpc-runtime-api = { optional = true, path = "frame/transaction-payment/rpc/runtime-api" }
-frame-treasury = { optional = true, path = "frame/treasury" }
-frame-utility = { optional = true, path = "frame/utility" }
-primitives-application-crypto = { optional = true, path = "primitives/application-crypto" }
-primitives-authority-discovery = { optional = true, path = "primitives/authority-discovery" }
-primitives-authorship = { optional = true, path = "primitives/authorship" }
-primitives-block-builder-runtime-api = { optional = true, path = "primitives/block-builder/runtime-api" }
-primitives-blockchain = { optional = true, path = "primitives/blockchain" }
-primitives-consensus-aura = { optional = true, path = "primitives/consensus/aura" }
-primitives-consensus-babe = { optional = true, path = "primitives/consensus/babe" }
-primitives-consensus-common = { optional = true, path = "primitives/consensus/common" }
-primitives-consensus-pow = { optional = true, path = "primitives/consensus/pow" }
-primitives-core = { optional = true, path = "primitives/core" }
-primitives-core-debug-derive = { optional = true, path = "primitives/core/debug-derive" }
-primitives-core-storage = { optional = true, path = "primitives/core/storage" }
-primitives-externalities = { optional = true, path = "primitives/externalities" }
-primitives-finality-tracker = { optional = true, path = "primitives/finality-tracker" }
-primitives-finality-grandpa = { optional = true, path = "primitives/finality-grandpa" }
-primitives-inherents = { optional = true, path = "primitives/inherents" }
-primitives-keyring = { optional = true, path = "primitives/keyring" }
-primitives-offchain = { optional = true, path = "primitives/offchain" }
-primitives-panic-handler = { optional = true, path = "primitives/panic-handler" }
-primitives-phragmen = { optional = true, path = "primitives/phragmen" }
-primitives-rpc = { optional = true, path = "primitives/rpc" }
-primitives-runtime-interface = { optional = true, path = "primitives/runtime-interface" }
-primitives-runtime-interface-proc-macro = { optional = true, path = "primitives/runtime-interface/proc-macro" }
-primitives-runtime-interface-test-wasm = { optional = true, path = "primitives/runtime-interface/test-wasm" }
-primitives-serializer = { optional = true, path = "primitives/serializer" }
-primitives-session = { optional = true, path = "primitives/session" }
-primitives-sr-api = { optional = true, path = "primitives/sr-api" }
-primitives-sr-api-proc-macro = { optional = true, path = "primitives/sr-api/proc-macro" }
-primitives-sr-api-test = { optional = true, path = "primitives/sr-api/test" }
-primitives-sr-arithmetic = { optional = true, path = "primitives/sr-arithmetic" }
-primitives-sr-io = { optional = true, path = "primitives/sr-io" }
-primitives-sr-primitives = { optional = true, path = "primitives/sr-primitives" }
-primitives-sr-sandbox = { optional = true, path = "primitives/sr-sandbox" }
-primitives-sr-staking-primitives = { optional = true, path = "primitives/sr-staking-primitives" }
-primitives-sr-std = { optional = true, path = "primitives/sr-std" }
-primitives-sr-version = { optional = true, path = "primitives/sr-version" }
-primitives-state-machine = { optional = true, path = "primitives/state-machine" }
-primitives-timestamp = { optional = true, path = "primitives/timestamp" }
-primitives-transaction-pool = { optional = true, path = "primitives/transaction-pool" }
-primitives-transaction-pool-runtime-api = { optional = true, path = "primitives/transaction-pool/runtime-api" }
-primitives-trie = { optional = true, path = "primitives/trie" }
-primitives-wasm-interface = { optional = true, path = "primitives/wasm-interface" }
-test-utils-chain-spec-builder = { optional = true, path = "test/utils/chain-spec-builder" }
-test-utils-client = { optional = true, path = "test/utils/client" }
-test-utils-primitives = { optional = true, path = "test/utils/primitives" }
-test-utils-runtime = { optional = true, path = "test/utils/runtime" }
-test-utils-runtime-client = { optional = true, path = "test/utils/runtime/client" }
-test-utils-transaction-factory = { optional = true, path = "test/utils/transaction-factory" }
-utils-build-script-utils = { optional = true, path = "utils/build-script-utils" }
-utils-fork-tree = { optional = true, path = "utils/fork-tree" }
-utils-frame-rpc-support = { optional = true, path = "utils/frame/rpc/support" }
-utils-frame-rpc-system = { optional = true, path = "utils/frame/rpc/system" }
-utils-wasm-builder = { optional = true, path = "utils/wasm-builder" }
+sc-client = { path = "client", optional = true, version = "*" }
+sc-client-api = { path = "client/api", optional = true, version = "*" }
+sc-authority-discovery = { path = "client/authority-discovery", optional = true, version = "*" }
+sc-basic-authority = { path = "client/basic-authorship", optional = true, version = "*" }
+sc-block-builder = { path = "client/block-builder", optional = true, version = "*" }
+sc-chain-spec = { path = "client/chain-spec", optional = true, version = "*" }
+sc-chain-spec-derive = { path = "client/chain-spec/derive", optional = true, version = "*" }
+sc-cli = { path = "client/cli", optional = true, version = "*" }
+sc-consensus-aura = { path = "client/consensus/aura", optional = true, version = "*" }
+sc-consensus-babe = { path = "client/consensus/babe", optional = true, version = "*" }
+sc-consensus-pow = { path = "client/consensus/pow", optional = true, version = "*" }
+sc-consensus-slots = { path = "client/consensus/slots", optional = true, version = "*" }
+sc-consensus-uncles = { path = "client/consensus/uncles", optional = true, version = "*" }
+sc-client-db = { path = "client/db", optional = true, version = "*" }
+sc-executor = { path = "client/executor", optional = true, version = "*" }
+sc-runtime-test = { path = "client/executor/runtime-test", optional = true, version = "*" }
+sc-finality-grandpa = { path = "client/finality-grandpa", optional = true, version = "*" }
+sc-tracing = { path = "client/tracing", optional = true, version = "*" }
+sc-keystore = { path = "client/keystore", optional = true, version = "*" }
+sc-network = { path = "client/network", optional = true, version = "*" }
+sc-offchain = { path = "client/offchain", optional = true, version = "*" }
+sc-peerset = { path = "client/peerset", optional = true, version = "*" }
+sc-rpc-server = { path = "client/rpc-servers", optional = true, version = "*" }
+sc-rpc = { path = "client/rpc", optional = true, version = "*" }
+sc-rpc-api = { path = "client/rpc/api", optional = true, version = "*" }
+sc-service = { path = "client/service", optional = true, version = "*" }
+sc-service-test = { path = "client/service/test", optional = true, version = "*" }
+sc-state-db = { path = "client/state-db", optional = true, version = "*" }
+sc-telemetry = { path = "client/telemetry", optional = true, version = "*" }
+sc-transaction-pool = { path = "client/transaction-pool", optional = true, version = "*" }
+sc-transaction-graph = { path = "client/transaction-pool/graph", optional = true, version = "*" }
+substrate-wasm-builder-runner = { path = "client/utils/wasm-builder-runner", optional = true, version = "*" }
+grafana-data-source = { path = "client/grafana-data-source", optional = true, version = "*" }
+grafana-data-source-test = { path = "client/grafana-data-source/test", optional = true, version = "*" }
+pallet-assets = { path = "frame/assets", optional = true, version = "*" }
+pallet-aura = { path = "frame/aura", optional = true, version = "*" }
+pallet-authority-discovery = { path = "frame/authority-discovery", optional = true, version = "*" }
+pallet-authorship = { path = "frame/authorship", optional = true, version = "*" }
+pallet-babe = { path = "frame/babe", optional = true, version = "*" }
+pallet-balances = { path = "frame/balances", optional = true, version = "*" }
+pallet-collective = { path = "frame/collective", optional = true, version = "*" }
+pallet-contracts = { path = "frame/contracts", optional = true, version = "*" }
+pallet-contracts-rpc = { path = "frame/contracts/rpc", optional = true, version = "*" }
+pallet-contracts-rpc-runtime-api = { path = "frame/contracts/rpc/runtime-api", optional = true, version = "*" }
+pallet-democracy = { path = "frame/democracy", optional = true, version = "*" }
+pallet-elections-phragmen = { path = "frame/elections-phragmen", optional = true, version = "*" }
+pallet-elections = { path = "frame/elections", optional = true, version = "*" }
+pallet-evm = { path = "frame/evm", optional = true, version = "*" }
+pallet-example = { path = "frame/example", optional = true, version = "*" }
+frame-executive = { path = "frame/executive", optional = true, version = "*" }
+pallet-finality-tracker = { path = "frame/finality-tracker", optional = true, version = "*" }
+pallet-generic-asset = { path = "frame/generic-asset", optional = true, version = "*" }
+pallet-grandpa = { path = "frame/grandpa", optional = true, version = "*" }
+pallet-im-online = { path = "frame/im-online", optional = true, version = "*" }
+pallet-indices = { path = "frame/indices", optional = true, version = "*" }
+pallet-membership = { path = "frame/membership", optional = true, version = "*" }
+frame-metadata = { path = "frame/metadata", optional = true, version = "*" }
+pallet-nicks = { path = "frame/nicks", optional = true, version = "*" }
+pallet-offences = { path = "frame/offences", optional = true, version = "*" }
+pallet-randomness-collective-flip = { path = "frame/randomness-collective-flip", optional = true, version = "*" }
+pallet-scored-pool = { path = "frame/scored-pool", optional = true, version = "*" }
+pallet-session = { path = "frame/session", optional = true, version = "*" }
+pallet-staking = { path = "frame/staking", optional = true, version = "*" }
+pallet-staking-reward-curve = { path = "frame/staking/reward-curve", optional = true, version = "*" }
+pallet-sudo = { path = "frame/sudo", optional = true, version = "*" }
+frame-support = { path = "frame/support", optional = true, version = "*" }
+frame-support-procedural = { path = "frame/support/procedural", optional = true, version = "*" }
+frame-support-procedural-tools = { path = "frame/support/procedural/tools", optional = true, version = "*" }
+frame-support-procedural-tools-derive = { path = "frame/support/procedural/tools/derive", optional = true, version = "*" }
+frame-support-test = { path = "frame/support/test", optional = true, version = "*" }
+frame-system = { path = "frame/system", optional = true, version = "*" }
+frame-system-rpc-runtime-api = { path = "frame/system/rpc/runtime-api", optional = true, version = "*" }
+pallet-timestamp = { path = "frame/timestamp", optional = true, version = "*" }
+pallet-transaction-payment = { path = "frame/transaction-payment", optional = true, version = "*" }
+pallet-transaction-payment-rpc = { path = "frame/transaction-payment/rpc", optional = true, version = "*" }
+pallet-transaction-payment-rpc-runtime-api = { path = "frame/transaction-payment/rpc/runtime-api", optional = true, version = "*" }
+pallet-treasury = { path = "frame/treasury", optional = true, version = "*" }
+frame-utility = { path = "frame/utility", optional = true, version = "*" }
+sc-application-crypto = { path = "primitives/application-crypto", optional = true, version = "*" }
+sp-authority-discovery = { path = "primitives/authority-discovery", optional = true, version = "*" }
+sp-authorship = { path = "primitives/authorship", optional = true, version = "*" }
+sp-block-builder = { path = "primitives/block-builder/runtime-api", optional = true, version = "*" }
+sp-blockchain = { path = "primitives/blockchain", optional = true, version = "*" }
+sp-consensus-aura = { path = "primitives/consensus/aura", optional = true, version = "*" }
+sp-consensus-babe = { path = "primitives/consensus/babe", optional = true, version = "*" }
+sp-consensus = { path = "primitives/consensus/common", optional = true, version = "*" }
+sp-consensus-pow = { path = "primitives/consensus/pow", optional = true, version = "*" }
+sp-core = { path = "primitives/core", optional = true, version = "*" }
+sp-debug-derive = { path = "primitives/core/debug-derive", optional = true, version = "*" }
+sp-core-storage = { path = "primitives/core/storage", optional = true, version = "*" }
+sp-externalities = { path = "primitives/externalities", optional = true, version = "*" }
+sp-finality-tracker = { path = "primitives/finality-tracker", optional = true, version = "*" }
+sp-finality-grandpa = { path = "primitives/finality-grandpa", optional = true, version = "*" }
+sp-inherents = { path = "primitives/inherents", optional = true, version = "*" }
+sp-keyring = { path = "primitives/keyring", optional = true, version = "*" }
+sp-offchain = { path = "primitives/offchain", optional = true, version = "*" }
+sp-panic-handler = { path = "primitives/panic-handler", optional = true, version = "*" }
+sp-phragmen = { path = "primitives/phragmen", optional = true, version = "*" }
+sp-rpc = { path = "primitives/rpc", optional = true, version = "*" }
+sp-runtime-interface = { path = "primitives/runtime-interface", optional = true, version = "*" }
+sp-runtime-interface-proc-macro = { path = "primitives/runtime-interface/proc-macro", optional = true, version = "*" }
+sp-runtime-interface-test-wasm = { path = "primitives/runtime-interface/test-wasm", optional = true, version = "*" }
+sp-serializer = { path = "primitives/serializer", optional = true, version = "*" }
+sp-session = { path = "primitives/session", optional = true, version = "*" }
+sp-api = { path = "primitives/sr-api", optional = true, version = "*" }
+sp-api-proc-macro = { path = "primitives/sr-api/proc-macro", optional = true, version = "*" }
+sp-api-test = { path = "primitives/sr-api/test", optional = true, version = "*" }
+sp-arithmetic = { path = "primitives/sr-arithmetic", optional = true, version = "*" }
+sp-io = { path = "primitives/sr-io", optional = true, version = "*" }
+sp-runtime = { path = "primitives/sr-primitives", optional = true, version = "*" }
+sp-sandbox = { path = "primitives/sr-sandbox", optional = true, version = "*" }
+sp-staking = { path = "primitives/sr-staking-primitives", optional = true, version = "*" }
+sp-std = { path = "primitives/sr-std", optional = true, version = "*" }
+sp-version = { path = "primitives/sr-version", optional = true, version = "*" }
+sp-state-machine = { path = "primitives/state-machine", optional = true, version = "*" }
+sp-timestamp = { path = "primitives/timestamp", optional = true, version = "*" }
+sp-transaction-pool-api = { path = "primitives/transaction-pool", optional = true, version = "*" }
+sp-transaction-pool-runtime-api = { path = "primitives/transaction-pool/runtime-api", optional = true, version = "*" }
+sp-trie = { path = "primitives/trie", optional = true, version = "*" }
+sp-wasm-interface = { path = "primitives/wasm-interface", optional = true, version = "*" }
+chain-spec-builder = { path = "test/utils/chain-spec-builder", optional = true, version = "*" }
+substrate-test-client = { path = "test/utils/client", optional = true, version = "*" }
+substrate-test-primitives = { path = "test/utils/primitives", optional = true, version = "*" }
+substrate-test-runtime = { path = "test/utils/runtime", optional = true, version = "*" }
+substrate-test-runtime-client = { path = "test/utils/runtime/client", optional = true, version = "*" }
+transaction-factory = { path = "test/utils/transaction-factory", optional = true, version = "*" }
+substrate-build-script-utils = { path = "utils/build-script-utils", optional = true, version = "*" }
+fork-tree = { path = "utils/fork-tree", optional = true, version = "*" }
+substrate-frame-rpc-support = { path = "utils/frame/rpc/support", optional = true, version = "*" }
+substrate-frame-rpc-system = { path = "utils/frame/rpc/system", optional = true, version = "*" }
+substrate-wasm-builder = { path = "utils/wasm-builder", optional = true, version = "*" }
 
 [features]
 default = ["frame-system"]
 
-use-client = ["client"]
-use-client-api = ["client-api"]
-use-client-authority-discovery = ["client-authority-discovery"]
-use-client-basic-authorship = ["client-basic-authorship"]
-use-client-block-builder = ["client-block-builder"]
-use-client-chain-spec = ["client-chain-spec"]
-use-client-chain-spec-derive = ["client-chain-spec-derive"]
-use-client-cli = ["client-cli"]
-use-client-consensus-aura = ["client-consensus-aura"]
-use-client-consensus-babe = ["client-consensus-babe"]
-use-client-consensus-pow = ["client-consensus-pow"]
-use-client-consensus-slots = ["client-consensus-slots"]
-use-client-consensus-uncles = ["client-consensus-uncles"]
-use-client-db = ["client-db"]
-use-client-executor = ["client-executor"]
-use-client-executor-runtime-test = ["client-executor-runtime-test"]
-use-client-finality-grandpa = ["client-finality-grandpa"]
-use-client-tracing = ["client-tracing"]
-use-client-keystore = ["client-keystore"]
-use-client-network = ["client-network"]
-use-client-offchain = ["client-offchain"]
-use-client-peerset = ["client-peerset"]
-use-client-rpc-servers = ["client-rpc-servers"]
-use-client-rpc = ["client-rpc"]
-use-client-rpc-api = ["client-rpc-api"]
-use-client-service = ["client-service"]
-use-client-service-test = ["client-service-test"]
-use-client-state-db = ["client-state-db"]
-use-client-telemetry = ["client-telemetry"]
-use-client-transaction-pool = ["client-transaction-pool"]
-use-client-transaction-pool-graph = ["client-transaction-pool-graph"]
-use-client-utils-wasm-builder-runner = ["client-utils-wasm-builder-runner"]
-use-client-grafana-data-source = ["client-grafana-data-source"]
-use-client-grafana-data-source-test = ["client-grafana-data-source-test"]
-use-frame-assets = ["frame-assets"]
-use-frame-aura = ["frame-aura"]
-use-frame-authority-discovery = ["frame-authority-discovery"]
-use-frame-authorship = ["frame-authorship"]
-use-frame-babe = ["frame-babe"]
-use-frame-balances = ["frame-balances"]
-use-frame-collective = ["frame-collective"]
-use-frame-contracts = ["frame-contracts"]
-use-frame-contracts-rpc = ["frame-contracts-rpc"]
-use-frame-contracts-rpc-runtime-api = ["frame-contracts-rpc-runtime-api"]
-use-frame-democracy = ["frame-democracy"]
-use-frame-elections-phragmen = ["frame-elections-phragmen"]
-use-frame-elections = ["frame-elections"]
-use-frame-evm = ["frame-evm"]
-use-frame-example = ["frame-example"]
-use-frame-executive = ["frame-executive"]
-use-frame-finality-tracker = ["frame-finality-tracker"]
-use-frame-generic-asset = ["frame-generic-asset"]
-use-frame-grandpa = ["frame-grandpa"]
-use-frame-im-online = ["frame-im-online"]
-use-frame-indices = ["frame-indices"]
-use-frame-membership = ["frame-membership"]
-use-frame-metadata = ["frame-metadata"]
-use-frame-nicks = ["frame-nicks"]
-use-frame-offences = ["frame-offences"]
-use-frame-randomness-collective-flip = ["frame-randomness-collective-flip"]
-use-frame-scored-pool = ["frame-scored-pool"]
-use-frame-session = ["frame-session"]
-use-frame-staking = ["frame-staking"]
-use-frame-staking-reward-curve = ["frame-staking-reward-curve"]
-use-frame-sudo = ["frame-sudo"]
-use-frame-support = ["frame-support"]
-use-frame-support-procedural = ["frame-support-procedural"]
-use-frame-support-procedural-tools = ["frame-support-procedural-tools"]
-use-frame-support-procedural-tools-derive = ["frame-support-procedural-tools-derive"]
-use-frame-support-test = ["frame-support-test"]
-use-frame-system = ["frame-system"]
-use-frame-system-rpc-runtime-api = ["frame-system-rpc-runtime-api"]
-use-frame-timestamp = ["frame-timestamp"]
-use-frame-transaction-payment = ["frame-transaction-payment"]
-use-frame-transaction-payment-rpc = ["frame-transaction-payment-rpc"]
-use-frame-transaction-payment-rpc-runtime-api = ["frame-transaction-payment-rpc-runtime-api"]
-use-frame-treasury = ["frame-treasury"]
-use-frame-utility = ["frame-utility"]
-use-primitives-application-crypto = ["primitives-application-crypto"]
-use-primitives-authority-discovery = ["primitives-authority-discovery"]
-use-primitives-authorship = ["primitives-authorship"]
-use-primitives-block-builder-runtime-api = ["primitives-block-builder-runtime-api"]
-use-primitives-blockchain = ["primitives-blockchain"]
-use-primitives-consensus-aura = ["primitives-consensus-aura"]
-use-primitives-consensus-babe = ["primitives-consensus-babe"]
-use-primitives-consensus-common = ["primitives-consensus-common"]
-use-primitives-consensus-pow = ["primitives-consensus-pow"]
-use-primitives-core = ["primitives-core"]
-use-primitives-core-debug-derive = ["primitives-core-debug-derive"]
-use-primitives-core-storage = ["primitives-core-storage"]
-use-primitives-externalities = ["primitives-externalities"]
-use-primitives-finality-tracker = ["primitives-finality-tracker"]
-use-primitives-finality-grandpa = ["primitives-finality-grandpa"]
-use-primitives-inherents = ["primitives-inherents"]
-use-primitives-keyring = ["primitives-keyring"]
-use-primitives-offchain = ["primitives-offchain"]
-use-primitives-panic-handler = ["primitives-panic-handler"]
-use-primitives-phragmen = ["primitives-phragmen"]
-use-primitives-rpc = ["primitives-rpc"]
-use-primitives-runtime-interface = ["primitives-runtime-interface"]
-use-primitives-runtime-interface-proc-macro = ["primitives-runtime-interface-proc-macro"]
-use-primitives-runtime-interface-test-wasm = ["primitives-runtime-interface-test-wasm"]
-use-primitives-serializer = ["primitives-serializer"]
-use-primitives-session = ["primitives-session"]
-use-primitives-sr-api = ["primitives-sr-api"]
-use-primitives-sr-api-proc-macro = ["primitives-sr-api-proc-macro"]
-use-primitives-sr-api-test = ["primitives-sr-api-test"]
-use-primitives-sr-arithmetic = ["primitives-sr-arithmetic"]
-use-primitives-sr-io = ["primitives-sr-io"]
-use-primitives-sr-primitives = ["primitives-sr-primitives"]
-use-primitives-sr-sandbox = ["primitives-sr-sandbox"]
-use-primitives-sr-staking-primitives = ["primitives-sr-staking-primitives"]
-use-primitives-sr-std = ["primitives-sr-std"]
-use-primitives-sr-version = ["primitives-sr-version"]
-use-primitives-state-machine = ["primitives-state-machine"]
-use-primitives-timestamp = ["primitives-timestamp"]
-use-primitives-transaction-pool = ["primitives-transaction-pool"]
-use-primitives-transaction-pool-runtime-api = ["primitives-transaction-pool-runtime-api"]
-use-primitives-trie = ["primitives-trie"]
-use-primitives-wasm-interface = ["primitives-wasm-interface"]
-use-test-utils-chain-spec-builder = ["test-utils-chain-spec-builder"]
-use-test-utils-client = ["test-utils-client"]
-use-test-utils-primitives = ["test-utils-primitives"]
-use-test-utils-runtime = ["test-utils-runtime"]
-use-test-utils-runtime-client = ["test-utils-runtime-client"]
-use-test-utils-transaction-factory = ["test-utils-transaction-factory"]
-use-utils-build-script-utils = ["utils-build-script-utils"]
-use-utils-fork-tree = ["utils-fork-tree"]
-use-utils-frame-rpc-support = ["utils-frame-rpc-support"]
-use-utils-frame-rpc-system = ["utils-frame-rpc-system"]
-use-utils-wasm-builder = ["utils-wasm-builder"]
+client = ["sc-client"]
+client-api = ["sc-client-api"]
+client-authority-discovery = ["sc-authority-discovery"]
+client-basic-authority = ["sc-basic-authority"]
+client-block-builder = ["sc-block-builder"]
+client-chain-spec = ["sc-chain-spec"]
+client-chain-spec-derive = ["sc-chain-spec-derive"]
+client-cli = ["sc-cli"]
+client-consensus-aura = ["sc-consensus-aura"]
+client-consensus-babe = ["sc-consensus-babe"]
+client-consensus-pow = ["sc-consensus-pow"]
+client-consensus-slots = ["sc-consensus-slots"]
+client-consensus-uncles = ["sc-consensus-uncles"]
+client-db = ["sc-client-db"]
+client-executor = ["sc-executor"]
+client-executor-runtime-test = ["sc-runtime-test"]
+client-finality-grandpa = ["sc-finality-grandpa"]
+client-tracing = ["sc-tracing"]
+client-keystore = ["sc-keystore"]
+client-network = ["sc-network"]
+client-offchain = ["sc-offchain"]
+client-peerset = ["sc-peerset"]
+client-rpc-server = ["sc-rpc-server"]
+client-rpc = ["sc-rpc"]
+client-rpc-api = ["sc-rpc-api"]
+client-service = ["sc-service"]
+client-service-test = ["sc-service-test"]
+client-state-db = ["sc-state-db"]
+client-telemetry = ["sc-telemetry"]
+client-transaction-pool = ["sc-transaction-pool"]
+client-transaction-pool-graph = ["sc-transaction-graph"]
+client-utils-wasm-builder-runner = ["substrate-wasm-builder-runner"]
+client-grafana-data-source = ["grafana-data-source"]
+client-grafana-data-source-test = ["grafana-data-source-test"]
+frame-assets = ["pallet-assets"]
+frame-aura = ["pallet-aura"]
+frame-authority-discovery = ["pallet-authority-discovery"]
+frame-authorship = ["pallet-authorship"]
+frame-babe = ["pallet-babe"]
+frame-balances = ["pallet-balances"]
+frame-collective = ["pallet-collective"]
+frame-contracts = ["pallet-contracts"]
+frame-contracts-rpc = ["pallet-contracts-rpc"]
+frame-contracts-rpc-runtime-api = ["pallet-contracts-rpc-runtime-api"]
+frame-democracy = ["pallet-democracy"]
+frame-elections-phragmen = ["pallet-elections-phragmen"]
+frame-elections = ["pallet-elections"]
+frame-evm = ["pallet-evm"]
+frame-example = ["pallet-example"]
+sf-frame-executive = ["frame-executive"]
+frame-finality-tracker = ["pallet-finality-tracker"]
+frame-generic-asset = ["pallet-generic-asset"]
+frame-grandpa = ["pallet-grandpa"]
+frame-im-online = ["pallet-im-online"]
+frame-indices = ["pallet-indices"]
+frame-membership = ["pallet-membership"]
+sf-frame-metadata = ["frame-metadata"]
+frame-nicks = ["pallet-nicks"]
+frame-offences = ["pallet-offences"]
+frame-randomness-collective-flip = ["pallet-randomness-collective-flip"]
+frame-scored-pool = ["pallet-scored-pool"]
+frame-session = ["pallet-session"]
+frame-staking = ["pallet-staking"]
+frame-staking-reward-curve = ["pallet-staking-reward-curve"]
+frame-sudo = ["pallet-sudo"]
+sf-frame-support = ["frame-support"]
+sf-frame-support-procedural = ["frame-support-procedural"]
+sf-frame-support-procedural-tools = ["frame-support-procedural-tools"]
+sf-frame-support-procedural-tools-derive = ["frame-support-procedural-tools-derive"]
+sf-frame-support-test = ["frame-support-test"]
+sf-frame-system = ["frame-system"]
+sf-frame-system-rpc-runtime-api = ["frame-system-rpc-runtime-api"]
+frame-timestamp = ["pallet-timestamp"]
+frame-transaction-payment = ["pallet-transaction-payment"]
+frame-transaction-payment-rpc = ["pallet-transaction-payment-rpc"]
+frame-transaction-payment-rpc-runtime-api = ["pallet-transaction-payment-rpc-runtime-api"]
+frame-treasury = ["pallet-treasury"]
+sf-frame-utility = ["frame-utility"]
+primitives-application-crypto = ["sc-application-crypto"]
+primitives-authority-discovery = ["sp-authority-discovery"]
+primitives-authorship = ["sp-authorship"]
+primitives-block-builder-runtime-api = ["sp-block-builder"]
+primitives-blockchain = ["sp-blockchain"]
+primitives-consensus-aura = ["sp-consensus-aura"]
+primitives-consensus-babe = ["sp-consensus-babe"]
+primitives-consensus-common = ["sp-consensus"]
+primitives-consensus-pow = ["sp-consensus-pow"]
+primitives-core = ["sp-core"]
+primitives-core-debug-derive = ["sp-debug-derive"]
+primitives-core-storage = ["sp-core-storage"]
+primitives-externalities = ["sp-externalities"]
+primitives-finality-tracker = ["sp-finality-tracker"]
+primitives-finality-grandpa = ["sp-finality-grandpa"]
+primitives-inherents = ["sp-inherents"]
+primitives-keyring = ["sp-keyring"]
+primitives-offchain = ["sp-offchain"]
+primitives-panic-handler = ["sp-panic-handler"]
+primitives-phragmen = ["sp-phragmen"]
+primitives-rpc = ["sp-rpc"]
+primitives-runtime-interface = ["sp-runtime-interface"]
+primitives-runtime-interface-proc-macro = ["sp-runtime-interface-proc-macro"]
+primitives-runtime-interface-test-wasm = ["sp-runtime-interface-test-wasm"]
+primitives-serializer = ["sp-serializer"]
+primitives-session = ["sp-session"]
+primitives-sr-api = ["sp-api"]
+primitives-sr-api-proc-macro = ["sp-api-proc-macro"]
+primitives-sr-api-test = ["sp-api-test"]
+primitives-sr-arithmetic = ["sp-arithmetic"]
+primitives-sr-io = ["sp-io"]
+primitives-sr-primitives = ["sp-runtime"]
+primitives-sr-sandbox = ["sp-sandbox"]
+primitives-sr-staking-primitives = ["sp-staking"]
+primitives-sr-std = ["sp-std"]
+primitives-sr-version = ["sp-version"]
+primitives-state-machine = ["sp-state-machine"]
+primitives-timestamp = ["sp-timestamp"]
+primitives-transaction-pool = ["sp-transaction-pool-api"]
+primitives-transaction-pool-runtime-api = ["sp-transaction-pool-runtime-api"]
+primitives-trie = ["sp-trie"]
+primitives-wasm-interface = ["sp-wasm-interface"]
+test-utils-chain-spec-builder = ["chain-spec-builder"]
+test-utils-client = ["substrate-test-client"]
+test-utils-primitives = ["substrate-test-primitives"]
+test-utils-runtime = ["substrate-test-runtime"]
+test-utils-runtime-client = ["substrate-test-runtime-client"]
+test-utils-transaction-factory = ["transaction-factory"]
+utils-build-script-utils = ["substrate-build-script-utils"]
+utils-fork-tree = ["fork-tree"]
+utils-frame-rpc-support = ["substrate-frame-rpc-support"]
+utils-frame-rpc-system = ["substrate-frame-rpc-system"]
+utils-wasm-builder = ["substrate-wasm-builder"]
 
 [profile.release]
 # Substrate runtime requires unwinding.
