@@ -101,7 +101,7 @@ where
 		&mut self,
 		parent_header: &<Block as BlockT>::Header,
 	) -> Result<Self::Proposer, sp_blockchain::Error> {
-		self.init_with_now(parent_header, Box::new(time::Instant::now))
+		self.init_with_now(parent_header, Box::new(wasm_timer::Instant::now))
 	}
 }
 
