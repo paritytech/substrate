@@ -28,7 +28,7 @@ use support::{
 	traits::{ChangeMembers, InitializeMembers},
 	weights::SimpleDispatchInfo,
 };
-use system::ensure_root;
+use system::{ensure_root, ensure_signed};
 use sp_runtime::traits::EnsureOrigin;
 
 pub trait Trait<I=DefaultInstance>: system::Trait {
@@ -86,6 +86,8 @@ decl_event!(
 		MembersSwapped,
 		/// The membership was reset; see the transaction for who the new set is.
 		MembersReset,
+		/// One of the members' keys changed.
+		KeyChanged,
 		/// Phantom member, never used.
 		Dummy(rstd::marker::PhantomData<(AccountId, Event)>),
 	}
@@ -185,6 +187,31 @@ decl_module! {
 			});
 
 			Self::deposit_event(RawEvent::MembersReset);
+		}
+
+		/// Swap out the sending member for some other key `new`.
+		///
+		/// May only be called from `Signed` origin of a current member.
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		fn change_key(origin, new: T::AccountId) {
+			let remove = ensure_signed(origin)?;
+
+			if remove != new {
+				let mut members = <Members<T, I>>::get();
+				let location = members.binary_search(&remove).ok().ok_or("not a member")?;
+				members[location] = new.clone();
+				let _location = members.binary_search(&new).err().ok_or("already a member")?;
+				members.sort();
+				<Members<T, I>>::put(&members);
+
+				T::MembershipChanged::change_members_sorted(
+					&[new],
+					&[remove],
+					&members[..],
+				);
+			}
+
+			Self::deposit_event(RawEvent::KeyChanged);
 		}
 	}
 }
@@ -329,6 +356,17 @@ mod tests {
 			assert_eq!(Membership::members(), vec![10, 20, 30]);
 			assert_ok!(Membership::swap_member(Origin::signed(3), 10, 25));
 			assert_eq!(Membership::members(), vec![20, 25, 30]);
+			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
+		});
+	}
+
+	#[test]
+	fn change_key_works() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(Membership::change_key(Origin::signed(3), 25), "not a member");
+			assert_noop!(Membership::change_key(Origin::signed(10), 20), "already a member");
+			assert_ok!(Membership::change_key(Origin::signed(10), 40));
+			assert_eq!(Membership::members(), vec![20, 30, 40]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
 		});
 	}
