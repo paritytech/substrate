@@ -481,6 +481,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 		let mut listener = self.listener.write();
 		for tx in &invalid {
+			println!("Removing invalid");
 			listener.invalid(&tx.hash);
 		}
 
@@ -509,6 +510,7 @@ fn fire_events<H, H2, Ex>(
 		base::Imported::Ready { ref promoted, ref failed, ref removed, ref hash } => {
 			listener.ready(hash, None);
 			for f in failed {
+				println!("Failed");
 				listener.invalid(f);
 			}
 			for r in removed {
