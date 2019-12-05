@@ -39,7 +39,7 @@ use sp_runtime::traits::{
 use version::RuntimeVersion;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
-use primitives::OpaqueMetadata;
+use primitives::{Bytes, OpaqueMetadata};
 use grandpa::AuthorityList as GrandpaAuthorityList;
 use grandpa::fg_primitives;
 use im_online::sr25519::{AuthorityId as ImOnlineId};
@@ -679,7 +679,7 @@ impl_runtime_apis! {
 			match exec_result {
 				Ok(v) => ContractExecResult::Success {
 					status: v.status,
-					data: v.data,
+					data: Bytes(v.data),
 				},
 				Err(_) => ContractExecResult::Error,
 			}
