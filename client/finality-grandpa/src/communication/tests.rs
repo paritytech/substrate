@@ -18,7 +18,7 @@
 
 use futures::sync::mpsc;
 use futures::prelude::*;
-use network::{Event as NetworkEvent, PeerId, test::{Block, Hash}};
+use network::{Event as NetworkEvent, PeerId, config::Roles, test::{Block, Hash}};
 use network_gossip::Validator;
 use tokio::runtime::current_thread;
 use std::sync::Arc;
@@ -275,6 +275,7 @@ fn good_commit_leads_to_relay() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsStreamOpened {
 						remote: sender_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
+						roles: Roles::FULL,
 					});
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id.clone(),
@@ -391,6 +392,7 @@ fn bad_commit_leads_to_report() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsStreamOpened {
 						remote: sender_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
+						roles: Roles::FULL,
 					});
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id.clone(),

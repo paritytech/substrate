@@ -19,7 +19,7 @@ use crate::state_machine::{ConsensusGossip, Validator, TopicNotification};
 
 use network::Context;
 use network::message::generic::ConsensusMessage;
-use network::{Event, config::Roles, ReputationChange};
+use network::{Event, ReputationChange};
 
 use futures::{prelude::*, channel::mpsc, compat::Compat01As03, task::SpawnExt as _};
 use libp2p::PeerId;
@@ -99,14 +99,13 @@ impl<B: BlockT> GossipEngine<B> {
 			let mut stream = Compat01As03::new(event_stream);
 			while let Some(Ok(event)) = stream.next().await {
 				match event {
-					Event::NotificationsStreamOpened { remote, engine_id: msg_engine_id } => {
+					Event::NotificationsStreamOpened { remote, engine_id: msg_engine_id, roles } => {
 						if msg_engine_id != engine_id {
 							continue;
 						}
 						let mut inner = inner.lock();
 						let inner = &mut *inner;
-						// TODO: for now we hard-code the roles to FULL; fix that
-						inner.state_machine.new_peer(&mut *inner.context, remote, Roles::FULL);
+						inner.state_machine.new_peer(&mut *inner.context, remote, roles);
 					}
 					Event::NotificationsStreamClosed { remote, engine_id: msg_engine_id } => {
 						if msg_engine_id != engine_id {

@@ -611,7 +611,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		stats.count_in += 1;
 
 		match message {
-			GenericMessage::Status(s) => self.on_status_message(who, s),
+			GenericMessage::Status(s) => return self.on_status_message(who, s),
 			GenericMessage::BlockRequest(r) => self.on_block_request(who, r),
 			GenericMessage::BlockResponse(r) => {
 				// Note, this is safe because only `ordinary bodies` and `remote bodies` are received in this matter.
@@ -956,7 +956,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Called by peer to report status
-	fn on_status_message(&mut self, who: PeerId, status: message::Status<B>) {
+	fn on_status_message(&mut self, who: PeerId, status: message::Status<B>) -> CustomMessageOutcome<B> {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
 		let _protocol_version = {
 			if self.context_data.peers.contains_key(&who) {
@@ -966,7 +966,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					"Unexpected status packet from {}", who
 				);
 				self.peerset_handle.report_peer(who, rep::UNEXPECTED_STATUS);
-				return;
+				return CustomMessageOutcome::None;
 			}
 			if status.genesis_hash != self.genesis_hash {
 				log!(
@@ -977,7 +977,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				);
 				self.peerset_handle.report_peer(who.clone(), rep::GENESIS_MISMATCH);
 				self.behaviour.disconnect_peer(&who);
-				return;
+				return CustomMessageOutcome::None;
 			}
 			if status.version < MIN_VERSION && CURRENT_VERSION < status.min_supported_version {
 				log!(
@@ -987,7 +987,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				);
 				self.peerset_handle.report_peer(who.clone(), rep::BAD_PROTOCOL);
 				self.behaviour.disconnect_peer(&who);
-				return;
+				return CustomMessageOutcome::None;
 			}
 
 			if self.config.roles.is_light() {
@@ -996,7 +996,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					debug!(target: "sync", "Peer {} is unable to serve light requests", who);
 					self.peerset_handle.report_peer(who.clone(), rep::BAD_ROLE);
 					self.behaviour.disconnect_peer(&who);
-					return;
+					return CustomMessageOutcome::None;
 				}
 
 				// we don't interested in peers that are far behind us
@@ -1013,7 +1013,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
 					self.peerset_handle.report_peer(who.clone(), rep::PEER_BEHIND_US_LIGHT);
 					self.behaviour.disconnect_peer(&who);
-					return;
+					return CustomMessageOutcome::None;
 				}
 			}
 
@@ -1028,7 +1028,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				},
 				None => {
 					error!(target: "sync", "Received status from previously unconnected node {}", who);
-					return;
+					return CustomMessageOutcome::None;
 				},
 			};
 
@@ -1063,8 +1063,16 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			}
 		}
+
 		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		self.specialization.on_connect(&mut context, who, status);
+		self.specialization.on_connect(&mut context, who.clone(), status);
+
+		// Notify all the notification protocols as open.
+		CustomMessageOutcome::NotificationsStreamOpened {
+			remote: who,
+			protocols: self.registered_notif_protocols.iter().cloned().collect(),
+			roles: info.roles,
+		}
 	}
 
 	/// Send a notification to the given peer we're connected to.
@@ -1105,11 +1113,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		// Registering a protocol while we already have open connections isn't great, but for now
 		// we handle it by notifying that we opened channels with everyone.
-		self.behaviour.open_peers()
-			.map(|peer|
+		self.context_data.peers.iter()
+			.map(|(peer_id, peer)|
 				event::Event::NotificationsStreamOpened {
-					remote: peer.clone(),
+					remote: peer_id.clone(),
 					engine_id,
+					roles: peer.info.roles,
 				})
 			.collect()
 	}
@@ -1784,7 +1793,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
 	/// Notifications protocols have been opened with a remote.
-	NotificationsStreamOpened { remote: PeerId, protocols: Vec<ConsensusEngineId> },
+	NotificationsStreamOpened { remote: PeerId, protocols: Vec<ConsensusEngineId>, roles: Roles },
 	/// Notifications protocols have been closed with a remote.
 	NotificationsStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
 	/// Messages have been received on one or more notifications protocols.
@@ -1919,11 +1928,7 @@ Protocol<B, S, H> {
 					&& version >= MIN_VERSION as u8
 				);
 				self.on_peer_connected(peer_id.clone());
-				// Notify all the notification protocols as open.
-				CustomMessageOutcome::NotificationsStreamOpened {
-					remote: peer_id,
-					protocols: self.registered_notif_protocols.iter().cloned().collect(),
-				}
+				CustomMessageOutcome::None
 			}
 			LegacyProtoOut::CustomProtocolClosed { peer_id, .. } => {
 				self.on_peer_disconnected(peer_id.clone());

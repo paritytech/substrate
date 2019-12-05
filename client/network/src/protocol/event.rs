@@ -17,6 +17,7 @@
 //! Network event types. These are are not the part of the protocol, but rather
 //! events that happen on the network like DHT get/put results received.
 
+use crate::config::Roles;
 use bytes::Bytes;
 use libp2p::core::PeerId;
 use libp2p::kad::record::Key;
@@ -54,6 +55,8 @@ pub enum Event {
 		remote: PeerId,
 		/// The concerned protocol. Each protocol uses a different substream.
 		engine_id: ConsensusEngineId,
+		/// Roles that the remote .
+		roles: Roles,
 	},
 
 	/// Closed a substream with the given node. Always matches a corresponding previous
