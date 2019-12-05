@@ -26,9 +26,7 @@ use trie::{
 	trie_types::{TrieDBMut, Layout},
 };
 use codec::{Encode, Codec};
-use primitives::storage::{ChildInfo, OwnedChildInfo};
-
-pub(crate) type StorageTuple = primitives::storage::Storage;
+use primitives::storage::{ChildInfo, OwnedChildInfo, Storage};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -378,8 +376,8 @@ impl<H: Hasher> From<HashMap<Option<(Vec<u8>, OwnedChildInfo)>, HashMap<Vec<u8>,
 	}
 }
 
-impl<H: Hasher> From<StorageTuple> for InMemory<H> {
-	fn from(inners: StorageTuple) -> Self {
+impl<H: Hasher> From<Storage> for InMemory<H> {
+	fn from(inners: Storage) -> Self {
 		let mut inner: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, HashMap<Vec<u8>, Vec<u8>>>
 			= inners.children.into_iter().map(|(k, c)| (Some((k, c.child_info)), c.data)).collect();
 		inner.insert(None, inners.top);

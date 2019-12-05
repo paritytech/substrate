@@ -17,7 +17,7 @@
 //! Basic implementation for Externalities.
 
 use std::{collections::HashMap, any::{TypeId, Any}, iter::FromIterator};
-use crate::backend::{Backend, InMemory, StorageTuple};
+use crate::backend::{Backend, InMemory};
 use hash_db::Hasher;
 use trie::{TrieConfiguration, default_child_trie_root};
 use trie::trie_types::Layout;
@@ -49,7 +49,7 @@ impl BasicExternalities {
 	}
 
 	/// Consume self and returns inner storages
-	pub fn into_storages(self) -> StorageTuple {
+	pub fn into_storages(self) -> Storage {
 		self.inner
 	}
 

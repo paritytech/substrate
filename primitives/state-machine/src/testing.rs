@@ -19,7 +19,7 @@
 use std::any::{Any, TypeId};
 use hash_db::Hasher;
 use crate::{
-	backend::{InMemory, Backend, StorageTuple}, OverlayedChanges,
+	backend::{InMemory, Backend}, OverlayedChanges,
 	changes_trie::{
 		InMemoryStorage as ChangesTrieInMemoryStorage,
 		BlockNumber as ChangesTrieBlockNumber,
@@ -28,7 +28,8 @@ use crate::{
 };
 use primitives::{
 	storage::{
-		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key}
+		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
+		Storage,
 	},
 	hash::H256, Blake2Hasher,
 };
@@ -55,12 +56,12 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	}
 
 	/// Create a new instance of `TestExternalities` with storage.
-	pub fn new(storage: StorageTuple) -> Self {
+	pub fn new(storage: Storage) -> Self {
 		Self::new_with_code(&[], storage)
 	}
 
 	/// Create a new instance of `TestExternalities` with code and storage.
-	pub fn new_with_code(code: &[u8], mut storage: StorageTuple) -> Self {
+	pub fn new_with_code(code: &[u8], mut storage: Storage) -> Self {
 		let mut overlay = OverlayedChanges::default();
 
 		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
@@ -146,8 +147,8 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> Default for TestExternaliti
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> From<StorageTuple> for TestExternalities<H, N> {
-	fn from(storage: StorageTuple) -> Self {
+impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> From<Storage> for TestExternalities<H, N> {
+	fn from(storage: Storage) -> Self {
 		Self::new(storage)
 	}
 }
