@@ -54,7 +54,7 @@ use parking_lot::{Mutex, RwLock};
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash, traits::CodeExecutor};
 use primitives::storage::{well_known_keys, ChildInfo};
 use sp_runtime::{
-	generic::{BlockId, DigestItem}, Justification, StorageOverlay, ChildrenStorageOverlay,
+	generic::{BlockId, DigestItem}, Justification, Storage,
 	BuildStorage,
 };
 use sp_runtime::traits::{
@@ -546,26 +546,26 @@ impl<Block> client_api::backend::BlockImportOperation<Block, Blake2Hasher>
 
 	fn reset_storage(
 		&mut self,
-		top: StorageOverlay,
-		children: ChildrenStorageOverlay
+		storage: Storage,
 	) -> ClientResult<H256> {
 
-		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
+		if storage.top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
 			return Err(sp_blockchain::Error::GenesisInvalid.into());
 		}
 
-		for child_key in children.keys() {
+		for child_key in storage.children.keys() {
 			if !well_known_keys::is_child_storage_key(&child_key) {
 				return Err(sp_blockchain::Error::GenesisInvalid.into());
 			}
 		}
 
-		let child_delta = children.into_iter()
-			.map(|(storage_key, child_content)|
-				(storage_key, child_content.0.into_iter().map(|(k, v)| (k, Some(v))), child_content.1));
+		let child_delta = storage.children.into_iter().map(|(storage_key, child_content)|	(
+			storage_key,
+			child_content.data.into_iter().map(|(k, v)| (k, Some(v))), child_content.child_info),
+		);
 
 		let (root, transaction) = self.old_state.full_storage_root(
-			top.into_iter().map(|(k, v)| (k, Some(v))),
+			storage.top.into_iter().map(|(k, v)| (k, Some(v))),
 			child_delta
 		);
 
@@ -1735,7 +1735,10 @@ mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.reset_storage(storage.iter().cloned().collect(), Default::default()).unwrap();
+			op.reset_storage(Storage {
+				top: storage.iter().cloned().collect(),
+				children: Default::default(),
+			}).unwrap();
 			op.set_block_data(
 				header.clone(),
 				Some(vec![]),
@@ -1817,7 +1820,10 @@ mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.reset_storage(storage.iter().cloned().collect(), Default::default()).unwrap();
+			op.reset_storage(Storage {
+				top: storage.iter().cloned().collect(),
+				children: Default::default(),
+			}).unwrap();
 
 			key = op.db_updates.insert(EMPTY_PREFIX, b"hello");
 			op.set_block_data(

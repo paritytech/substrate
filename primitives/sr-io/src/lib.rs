@@ -883,6 +883,7 @@ mod tests {
 	use super::*;
 	use primitives::map;
 	use sp_state_machine::BasicExternalities;
+	use primitives::storage::Storage;
 
 	#[test]
 	fn storage_works() {
@@ -895,7 +896,10 @@ mod tests {
 			storage::set(b"foo", &[1, 2, 3][..]);
 		});
 
-		t = BasicExternalities::new(map![b"foo".to_vec() => b"bar".to_vec()], map![]);
+		t = BasicExternalities::new(Storage {
+			top: map![b"foo".to_vec() => b"bar".to_vec()],
+			children: map![],
+		});
 
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
@@ -905,10 +909,10 @@ mod tests {
 
 	#[test]
 	fn read_storage_works() {
-		let mut t = BasicExternalities::new(
-			map![b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()],
-			map![],
-		);
+		let mut t = BasicExternalities::new(Storage {
+			top: map![b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()],
+			children: map![],
+		});
 
 		t.execute_with(|| {
 			let mut v = [0u8; 4];
@@ -922,15 +926,15 @@ mod tests {
 
 	#[test]
 	fn clear_prefix_works() {
-		let mut t = BasicExternalities::new(
-			map![
+		let mut t = BasicExternalities::new(Storage {
+			top: map![
 				b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 				b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 				b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 				b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 			],
-			map![],
-		);
+			children: map![],
+		});
 
 		t.execute_with(|| {
 			storage::clear_prefix(b":abc");

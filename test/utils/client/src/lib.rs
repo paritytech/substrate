@@ -32,13 +32,13 @@ pub use keyring::{
 	sr25519::Keyring as Sr25519Keyring,
 };
 pub use primitives::{Blake2Hasher, traits::BareCryptoStorePtr};
-pub use sp_runtime::{StorageOverlay, ChildrenStorageOverlay};
+pub use sp_runtime::{Storage, StorageChild};
 pub use state_machine::ExecutionStrategy;
 
 use std::sync::Arc;
 use std::collections::HashMap;
 use hash_db::Hasher;
-use primitives::storage::{well_known_keys, OwnedChildInfo, ChildInfo};
+use primitives::storage::{well_known_keys, ChildInfo};
 use sp_runtime::traits::Block as BlockT;
 use client::LocalCallExecutor;
 
@@ -51,11 +51,11 @@ pub type LightBackend<Block> = client::light::backend::Backend<
 /// A genesis storage initialisation trait.
 pub trait GenesisInit: Default {
 	/// Construct genesis storage.
-	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay);
+	fn genesis_storage(&self) -> Storage;
 }
 
 impl GenesisInit for () {
-	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
+	fn genesis_storage(&self) -> Storage {
 		Default::default()
 	}
 }
@@ -64,7 +64,7 @@ impl GenesisInit for () {
 pub struct TestClientBuilder<Executor, Backend, G: GenesisInit> {
 	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
-	child_storage_extension: HashMap<Vec<u8>, (Vec<(Vec<u8>, Vec<u8>)>, OwnedChildInfo)>,
+	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<Executor>,
 	keystore: Option<BareCryptoStorePtr>,
@@ -140,8 +140,11 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		value: impl AsRef<[u8]>,
 	) -> Self {
 		let entry = self.child_storage_extension.entry(key.as_ref().to_vec())
-			.or_insert_with(|| (Vec::new(), child_info.to_owned()));
-		entry.0.push((child_key.as_ref().to_vec(), value.as_ref().to_vec()));
+			.or_insert_with(|| StorageChild {
+				data: Default::default(),
+				child_info: child_info.to_owned(),
+			});
+		entry.data.insert(child_key.as_ref().to_vec(), value.as_ref().to_vec());
 		self
 	}
 
@@ -183,9 +186,12 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 
 			// Add some child storage keys.
 			for (key, child_content) in self.child_storage_extension {
-				storage.1.insert(
+				storage.children.insert(
 					well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().cloned().chain(key).collect(),
-					(child_content.0.into_iter().collect(), child_content.1),
+					StorageChild {
+						data: child_content.data.into_iter().collect(),
+						child_info: child_content.child_info,
+					},
 				);
 			}
 

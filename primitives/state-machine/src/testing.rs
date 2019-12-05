@@ -63,17 +63,17 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	pub fn new_with_code(code: &[u8], mut storage: StorageTuple) -> Self {
 		let mut overlay = OverlayedChanges::default();
 
-		assert!(storage.0.keys().all(|key| !is_child_storage_key(key)));
-		assert!(storage.1.keys().all(|key| is_child_storage_key(key)));
+		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
+		assert!(storage.children.keys().all(|key| is_child_storage_key(key)));
 
 		super::set_changes_trie_config(
 			&mut overlay,
-			storage.0.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned(),
+			storage.top.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned(),
 			false,
 		).expect("changes trie configuration is correct in test env; qed");
 
-		storage.0.insert(HEAP_PAGES.to_vec(), 8u64.encode());
-		storage.0.insert(CODE.to_vec(), code.to_vec());
+		storage.top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
+		storage.top.insert(CODE.to_vec(), code.to_vec());
 
 		TestExternalities {
 			overlay,

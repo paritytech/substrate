@@ -28,10 +28,7 @@ use trie::{
 use codec::{Encode, Codec};
 use primitives::storage::{ChildInfo, OwnedChildInfo};
 
-pub(crate) type StorageTuple = (
-	HashMap<Vec<u8>, Vec<u8>>,
-	HashMap<Vec<u8>, (HashMap<Vec<u8>, Vec<u8>>, OwnedChildInfo)>,
-);
+pub(crate) type StorageTuple = primitives::storage::Storage;
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -384,8 +381,8 @@ impl<H: Hasher> From<HashMap<Option<(Vec<u8>, OwnedChildInfo)>, HashMap<Vec<u8>,
 impl<H: Hasher> From<StorageTuple> for InMemory<H> {
 	fn from(inners: StorageTuple) -> Self {
 		let mut inner: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, HashMap<Vec<u8>, Vec<u8>>>
-			= inners.1.into_iter().map(|(k, (v, ci))| (Some((k, ci)), v)).collect();
-		inner.insert(None, inners.0);
+			= inners.children.into_iter().map(|(k, c)| (Some((k, c.child_info)), c.data)).collect();
+		inner.insert(None, inners.top);
 		InMemory {
 			inner: inner,
 			trie: None,

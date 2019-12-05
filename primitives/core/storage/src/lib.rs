@@ -40,16 +40,40 @@ pub struct StorageData(
 	pub Vec<u8>,
 );
 
+
+/// Map of data to use in a storage, it is a collection of
+/// byte key and values.
+#[cfg(feature = "std")]
+pub type StorageMap = std::collections::HashMap<Vec<u8>, Vec<u8>>;
+
+#[cfg(feature = "std")]
+#[derive(Debug, PartialEq, Eq, Clone)]
+/// Child trie storage data.
+pub struct StorageChild {
+	/// Child data for storage.
+	pub data: StorageMap,
+	/// Associated child info for a child
+	/// trie.
+	pub child_info: OwnedChildInfo,
+}
+
+#[cfg(feature = "std")]
+#[derive(Default, Debug, Clone)]
+/// Struct containing data needed for a storage.
+pub struct Storage {
+	/// Top trie storage data.
+	pub top: StorageMap,
+	/// Children trie storage data by storage key.
+	pub children: std::collections::HashMap<Vec<u8>, StorageChild>,
+}
+
 /// A set of key value pairs for storage.
 #[cfg(feature = "std")]
-pub type StorageOverlay = std::collections::HashMap<Vec<u8>, Vec<u8>>;
+pub type StorageOverlay = StorageMap;
 
 /// A set of key value pairs for children storage;
 #[cfg(feature = "std")]
-pub type ChildrenStorageOverlay = std::collections::HashMap<
-	Vec<u8>,
-	(StorageOverlay, OwnedChildInfo),
->;
+pub type ChildrenStorageOverlay = std::collections::HashMap<Vec<u8>, StorageChild>;
 
 /// Storage change set
 #[derive(RuntimeDebug)]

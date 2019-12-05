@@ -26,7 +26,7 @@ use state_machine::{
 	Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction
 };
 use primitives::offchain::storage::InMemOffchainStorage;
-use sp_runtime::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
+use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
 use sp_blockchain::{ Error as ClientError, Result as ClientResult };
@@ -281,21 +281,21 @@ where
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> ClientResult<H::Out> {
-		check_genesis_storage(&top, &children)?;
+	fn reset_storage(&mut self, input: Storage) -> ClientResult<H::Out> {
+		check_genesis_storage(&input)?;
 
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
-		let mut storage: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, StorageOverlay> = HashMap::new();
-		storage.insert(None, top);
+		let mut storage: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, _> = HashMap::new();
+		storage.insert(None, input.top);
 
 		// create a list of children keys to re-compute roots for
-		let child_delta = children.iter()
-			.map(|(storage_key, (_m, child_info))| (storage_key.clone(), None, child_info.clone()))
+		let child_delta = input.children.iter()
+			.map(|(storage_key, storage_child)| (storage_key.clone(), None, storage_child.child_info.clone()))
 			.collect::<Vec<_>>();
 
 		// make sure to persist the child storage
-		for (child_key, (child_storage, child_info)) in children {
-			storage.insert(Some((child_key, child_info)), child_storage);
+		for (child_key, storage_child) in input.children {
+			storage.insert(Some((child_key, storage_child.child_info)), storage_child.data);
 		}
 
 		let storage_update: InMemoryState<H> = storage.into();
@@ -478,7 +478,7 @@ mod tests {
 		let backend: Backend<_, Blake2Hasher> = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
 		let mut op = backend.begin_operation().unwrap();
 		op.set_block_data(header0, None, None, NewBlockState::Final).unwrap();
-		op.reset_storage(Default::default(), Default::default()).unwrap();
+		op.reset_storage(Default::default()).unwrap();
 		backend.commit_operation(op).unwrap();
 
 		match backend.state_at(BlockId::Number(0)).unwrap() {
