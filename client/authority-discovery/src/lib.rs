@@ -547,24 +547,26 @@ mod tests {
 	}
 
 	#[test]
-	fn interval_at_is_queuing_events() {
+	fn interval_at_is_queuing_ticks() {
 		let start = Instant::now();
 
 		let interval = interval_at(
-			std::time::Instant::now(),
-			std::time::Duration::from_millis(10),
+			start,
+			std::time::Duration::from_millis(100),
 		);
 
-		// Let's wait for 100ms, thus 10 elements should be queued up.
-		std::thread::sleep(Duration::from_millis(100));
+		// Let's wait for 200ms, thus 3 elements should be queued up (1st at 0ms, 2nd at 100ms, 3rd
+		// at 200ms).
+		std::thread::sleep(Duration::from_millis(200));
 
 		futures::executor::block_on(async {
-			interval.take(10).collect::<Vec<()>>().await;
+			interval.take(3).collect::<Vec<()>>().await;
 		});
 
-		// Make sure we did not just wait for yet another 100ms (10 elements).
+		// Make sure we did not wait for more than 300 ms, which would imply that `at_interval` is
+		// not queuing ticks.
 		assert!(
-			Instant::now().saturating_duration_since(start) < Duration::from_millis(150),
+			Instant::now().saturating_duration_since(start) < Duration::from_millis(300),
 			"Expect interval to /queue/ events when not polled for a while.",
 		);
 	}
