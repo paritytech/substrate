@@ -199,9 +199,12 @@ decl_module! {
 			if remove != new {
 				let mut members = <Members<T, I>>::get();
 				let location = members.binary_search(&remove).ok().ok_or("not a member")?;
-				members[location] = new.clone();
-				let _location = members.binary_search(&new).err().ok_or("already a member")?;
-				members.sort();
+				members.remove(location);
+
+				let location = members.binary_search(&new).err().ok_or("already a member")?;
+				// Insert into list without while maintaining the sort order
+				members.insert(location, new.clone());
+
 				<Members<T, I>>::put(&members);
 
 				T::MembershipChanged::change_members_sorted(
@@ -367,6 +370,15 @@ mod tests {
 			assert_noop!(Membership::change_key(Origin::signed(10), 20), "already a member");
 			assert_ok!(Membership::change_key(Origin::signed(10), 40));
 			assert_eq!(Membership::members(), vec![20, 30, 40]);
+			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
+		});
+	}
+
+	#[test]
+	fn change_key_works_that_does_not_change_order() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Membership::change_key(Origin::signed(10), 5));
+			assert_eq!(Membership::members(), vec![5, 20, 30]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
 		});
 	}
