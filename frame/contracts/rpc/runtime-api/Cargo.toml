@@ -10,6 +10,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 rstd = { package = "sp-std", path = "../../../../primitives/sr-std", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-runtime = { path = "../../../../primitives/sr-primitives", default-features = false }
+sp-core = { package = "sp-core",  path = "../../../../primitives/core" }
 
 [features]
 default = ["std"]
@@ -19,4 +20,5 @@ std = [
 	"rstd/std",
 	"serde",
 	"sp-runtime/std",
+	"sp-core/std",
 ]

@@ -24,7 +24,8 @@
 
 use rstd::vec::Vec;
 use codec::{Encode, Decode, Codec};
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{RuntimeDebug};
+use sp_core::Bytes;
 
 /// A result of execution of a contract.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
@@ -39,7 +40,7 @@ pub enum ContractExecResult {
 		/// Output data returned by the contract.
 		///
 		/// Can be empty.
-		data: Vec<u8>,
+		data: Bytes,
 	},
 	/// The contract execution either trapped or returned an error.
 	Error,
