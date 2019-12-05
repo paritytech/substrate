@@ -8,7 +8,7 @@ edition = "2018"
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
-sp-finality-granpda = { path = "../../primitives/finality-grandpa", default-features = false }
+sp-finality-grandpa = { path = "../../primitives/finality-grandpa", default-features = false }
 rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
 sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
 sp-staking = { path = "../../primitives/sr-staking-primitives", default-features = false }
@@ -26,7 +26,7 @@ std = [
 	"serde",
 	"codec/std",
 	"primitives/std",
-	"sp-finality-granpda/std",
+	"sp-finality-grandpa/std",
 	"rstd/std",
 	"support/std",
 	"sp-runtime/std",
