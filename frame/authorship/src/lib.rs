@@ -22,7 +22,7 @@
 
 use rstd::{result, prelude::*};
 use rstd::collections::btree_set::BTreeSet;
-use support::{decl_module, decl_storage};
+use support::{decl_module, decl_storage, ensure};
 use support::traits::{FindAuthor, VerifySeal, Get};
 use support::dispatch::Result as DispatchResult;
 use codec::{Encode, Decode};
@@ -33,6 +33,8 @@ use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalErro
 use sp_authorship::{
 	INHERENT_IDENTIFIER, UnclesInherentData,
 };
+
+const MAX_UNCLES: usize = 10;
 
 pub trait Trait: system::Trait {
 	/// Find the author of a block.
@@ -187,6 +189,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> DispatchResult {
 			ensure_none(origin)?;
+			ensure!(new_uncles.len() <= MAX_UNCLES, "Too many uncles");
 
 			if <Self as Store>::DidSetUncles::get() {
 				return Err("Uncles already set in block.");
