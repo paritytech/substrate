@@ -769,3 +769,12 @@ pub trait Randomness<Output> {
 		Self::random(&[][..])
 	}
 }
+
+/// Implementors of this trait provide information about whether or not some validator has
+/// been registered with them. The [Session module](../../pallet_session/index.html) is an implementor.
+pub trait ValidatorRegistration<ValidatorId> {
+	/// Returns true if the provided validator ID has been registered with the implementing runtime
+	/// module
+	fn is_registered(id: &ValidatorId) -> bool;
+}
+
