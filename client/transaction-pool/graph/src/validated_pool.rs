@@ -138,7 +138,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				Err(err.into())
 			},
 			ValidatedTransaction::Unknown(hash, err) => {
-				self.listener.write().invalid(&hash);
+				self.listener.write().invalid(&hash, false);
 				Err(err.into())
 			}
 		}
@@ -204,7 +204,6 @@ impl<B: ChainApi> ValidatedPool<B> {
 		#[derive(Debug, Clone, Copy, PartialEq)]
 		enum Status { Future, Ready, Failed, Dropped };
 
-		println!("Updated: {:?}", updated_transactions);
 		let (mut initial_statuses, final_statuses) = {
 			let mut pool = self.pool.write();
 
@@ -246,7 +245,6 @@ impl<B: ChainApi> ValidatedPool<B> {
 				updated_transactions.remove(&hash);
 			}
 
-			println!("Updated2: {:?}", updated_transactions);
 			// if we're rejecting future transactions, then insertion order matters here:
 			// if tx1 depends on tx2, then if tx1 is inserted before tx2, then it goes
 			// to the future queue and gets rejected immediately
@@ -314,8 +312,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 					Status::Future => listener.future(&hash),
 					Status::Ready => listener.ready(&hash, None),
 					Status::Dropped => listener.dropped(&hash, None),
-					Status::Failed if !initial_status.is_none() => listener.invalid(&hash),
-					_ => {},
+					Status::Failed => listener.invalid(&hash, initial_status.is_some()),
 				}
 			}
 		}
@@ -481,8 +478,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 		let mut listener = self.listener.write();
 		for tx in &invalid {
-			println!("Removing invalid");
-			listener.invalid(&tx.hash);
+			listener.invalid(&tx.hash, true);
 		}
 
 		invalid
@@ -510,8 +506,7 @@ fn fire_events<H, H2, Ex>(
 		base::Imported::Ready { ref promoted, ref failed, ref removed, ref hash } => {
 			listener.ready(hash, None);
 			for f in failed {
-				println!("Failed");
-				listener.invalid(f);
+				listener.invalid(f, true);
 			}
 			for r in removed {
 				listener.dropped(&r.hash, Some(hash));
