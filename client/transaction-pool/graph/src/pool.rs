@@ -175,13 +175,39 @@ impl<B: ChainApi> Pool<B> {
 	///
 	/// Returns future that performs validation of all ready transactions and
 	/// then resubmits all transactions back to the pool.
-	pub fn revalidate_ready(&self, at: &BlockId<B::Block>) -> impl Future<Output=Result<(), B::Error>> {
+	pub fn revalidate_ready(
+		&self,
+		at: &BlockId<B::Block>,
+		max: Option<usize>,
+	) -> impl Future<Output=Result<(), B::Error>> {
+		use std::time::Instant;
+		log::debug!(target: "txpool",
+			"Fetching ready transactions (up to: {})",
+			max.map(|x| format!("{}", x)).unwrap_or_else(|| "all".into())
+		);
 		let validated_pool = self.validated_pool.clone();
-		let ready = self.validated_pool.ready().map(|tx| tx.data.clone());
+		let ready = self.validated_pool.ready()
+			.map(|tx| tx.data.clone())
+			.take(max.unwrap_or_else(usize::max_value));
+
+		let now = Instant::now();
 		self.verify(at, ready, false)
-			.map(move |revalidated_transactions| revalidated_transactions.map(
-				move |revalidated_transactions| validated_pool.resubmit(revalidated_transactions)
-			))
+			.map(move |revalidated_transactions| {
+				log::debug!(target: "txpool",
+					"Re-verified transactions, took {} ms. Resubmitting.",
+					now.elapsed().as_millis()
+				);
+				let now = Instant::now();
+				let res = revalidated_transactions.map(
+					|revalidated_transactions| validated_pool.resubmit(revalidated_transactions)
+				);
+				log::debug!(target: "txpool",
+					"Resubmitted. Took {} ms. Status: {:?}",
+					now.elapsed().as_millis(),
+					validated_pool.status()
+				);
+				res
+			})
 	}
 
 	/// Prunes known ready transactions.
@@ -927,7 +953,6 @@ mod tests {
 
 		#[test]
 		fn should_handle_pruning_in_the_middle_of_import() {
-			let _ = env_logger::try_init();
 			// given
 			let (ready, is_ready) = std::sync::mpsc::sync_channel(0);
 			let (tx, rx) = std::sync::mpsc::sync_channel(1);
@@ -1014,7 +1039,7 @@ mod tests {
 		pool.validated_pool.api().invalidate.lock().insert(hash3);
 		pool.validated_pool.api().clear_requirements.lock().insert(hash1);
 		pool.validated_pool.api().add_requirements.lock().insert(hash0);
-		block_on(pool.revalidate_ready(&BlockId::Number(0))).unwrap();
+		block_on(pool.revalidate_ready(&BlockId::Number(0), None)).unwrap();
 
 		// then
 		// hash0 now has unsatisfied requirements => it is moved to the future queue

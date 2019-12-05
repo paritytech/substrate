@@ -126,7 +126,7 @@ use support::weights::SimpleDispatchInfo;
 use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};
 use sp_staking::SessionIndex;
 use support::{dispatch::Result, ConsensusEngineId, decl_module, decl_event, decl_storage};
-use support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter};
+use support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor, ValidatorRegistration}, Parameter};
 use system::{self, ensure_signed};
 
 #[cfg(test)]
@@ -330,6 +330,12 @@ pub trait SelectInitialValidators<ValidatorId> {
 impl<V> SelectInitialValidators<V> for () {
 	fn select_initial_validators() -> Option<Vec<V>> {
 		None
+	}
+}
+
+impl<T: Trait> ValidatorRegistration<T::ValidatorId> for Module<T> {
+	fn is_registered(id: &T::ValidatorId) -> bool {
+		Self::load_keys(id).is_some()
 	}
 }
 

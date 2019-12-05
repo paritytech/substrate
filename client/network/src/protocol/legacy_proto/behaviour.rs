@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
-use crate::legacy_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOut, CustomProtoHandlerIn};
-use crate::legacy_proto::upgrade::RegisteredProtocol;
+use crate::protocol::legacy_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOut, CustomProtoHandlerIn};
+use crate::protocol::legacy_proto::upgrade::RegisteredProtocol;
 use bytes::BytesMut;
 use fnv::FnvHashMap;
 use futures::prelude::*;
