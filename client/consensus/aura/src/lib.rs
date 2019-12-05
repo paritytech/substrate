@@ -730,7 +730,7 @@ pub fn import_queue<B, C, P, T>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use consensus_common::{NoNetwork as DummyOracle, Proposal};
+	use consensus_common::{NoNetwork as DummyOracle, Proposal, RecordProof};
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient, PeersFullClient};
 	use sp_runtime::traits::{Block as BlockT, DigestFor};
@@ -768,7 +768,7 @@ mod tests {
 			_: InherentData,
 			digests: DigestFor<TestBlock>,
 			_: Duration,
-			_: bool,
+			_: RecordProof,
 		) -> Self::Proposal {
 			let r = self.1.new_block(digests).unwrap().bake().map_err(|e| e.into());
 

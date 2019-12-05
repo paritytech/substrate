@@ -43,7 +43,7 @@ use pow_primitives::{Seal, TotalDifficulty, POW_ENGINE_ID};
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{
 	BlockImportParams, BlockOrigin, ForkChoiceStrategy, SyncOracle, Environment, Proposer,
-	SelectChain, Error as ConsensusError, CanAuthorWith,
+	SelectChain, Error as ConsensusError, CanAuthorWith, RecordProof,
 };
 use consensus_common::import_queue::{BoxBlockImport, BasicQueue, Verifier};
 use codec::{Encode, Decode};
@@ -499,7 +499,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 			inherent_data,
 			inherent_digest,
 			build_time.clone(),
-			false,
+			RecordProof::No,
 		)).map_err(|e| Error::BlockProposingError(format!("{:?}", e)))?;
 
 		let (header, body) = proposal.block.deconstruct();

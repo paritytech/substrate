@@ -93,6 +93,37 @@ pub struct Proposal<Block: BlockT, Transaction> {
 	pub storage_changes: state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>,
 }
 
+/// Used as parameter to [`Proposer`] to tell the requirement on recording a proof.
+///
+/// When `RecordProof::Yes` is given, all accessed trie nodes should be saved. These recorded
+/// trie nodes can be used by a third party to proof this proposal without having access to the
+/// full storage.
+#[derive(Copy, Clone, PartialEq)]
+pub enum RecordProof {
+	Yes,
+	No,
+}
+
+impl RecordProof {
+	/// Returns if `Self` == `Yes`.
+	pub fn yes(&self) -> bool {
+		match self {
+			Self::Yes => true,
+			Self::No => false,
+		}
+	}
+}
+
+impl From<bool> for RecordProof {
+	fn from(val: bool) -> Self {
+		if val {
+			Self::Yes
+		} else {
+			Self::No
+		}
+	}
+}
+
 /// Logic for a proposer.
 ///
 /// This will encapsulate creation and evaluation of proposals at a specific
@@ -114,10 +145,6 @@ pub trait Proposer<B: BlockT> {
 	/// a maximum duration for building this proposal is given. If building the proposal takes
 	/// longer than this maximum, the proposal will be very likely discarded.
 	///
-	/// When `record_proof` is set to `true`, all accessed trie nodes should be saved. These recorded
-	/// trie nodes can be used by a third party to proof this proposal without having access to the
-	/// full storage.
-	///
 	/// # Return
 	///
 	/// Returns a future that resolves to a [`Proposal`] or to [`Self::Error`].
@@ -126,7 +153,7 @@ pub trait Proposer<B: BlockT> {
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<B>,
 		max_duration: Duration,
-		record_proof: bool,
+		record_proof: RecordProof,
 	) -> Self::Proposal;
 }
 

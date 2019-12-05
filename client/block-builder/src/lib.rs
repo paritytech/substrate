@@ -35,6 +35,8 @@ use primitives::ExecutionContext;
 
 use sp_api::{Core, ApiExt, ApiErrorFor, ApiRef, ProvideRuntimeApi, StorageChanges, StorageProof};
 
+use sp_consensus::RecordProof;
+
 pub use runtime_api::BlockBuilder as BlockBuilderApi;
 
 use client_api::backend;
@@ -65,7 +67,7 @@ where
 		api: &'a A,
 		parent_hash: Block::Hash,
 		parent_number: NumberFor<Block>,
-		proof_recording: bool,
+		record_proof: RecordProof,
 		inherent_digests: DigestFor<Block>,
 		backend: &'a B,
 	) -> Result<Self, ApiErrorFor<A, Block>> {
@@ -79,7 +81,7 @@ where
 
 		let mut api = api.runtime_api();
 
-		if proof_recording {
+		if record_proof.yes() {
 			api.record_proof();
 		}
 

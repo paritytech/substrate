@@ -20,11 +20,11 @@
 //!
 //! ```
 //! # use sc_basic_authority::ProposerFactory;
-//! # use consensus_common::{Environment, Proposer};
+//! # use consensus_common::{Environment, Proposer, RecordProof};
 //! # use sp_runtime::generic::BlockId;
 //! # use std::{sync::Arc, time::Duration};
 //! # use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
-//! # use txpool::{BasicPool, FullChainApi};
+//! # use tx_pool::{BasicPool, FullChainApi};
 //! # let client = Arc::new(test_client::new());
 //! # let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 //! // The first step is to create a `ProposerFactory`.
@@ -44,7 +44,7 @@
 //! 	Default::default(),
 //! 	Default::default(),
 //! 	Duration::from_secs(2),
-//! 	false,
+//! 	RecordProof::Yes,
 //! );
 //!
 //! // We wait until the proposition is performed.

@@ -4872,6 +4872,7 @@ dependencies = [
  "sp-api 2.0.0",
  "sp-block-builder 2.0.0",
  "sp-blockchain 2.0.0",
+ "sp-consensus 2.0.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
 ]

@@ -22,7 +22,7 @@ use std::{time, sync::Arc};
 use client_api::{CallExecutor, backend};
 use client::Client as SubstrateClient;
 use codec::Decode;
-use consensus_common::{evaluation, Proposal};
+use consensus_common::{evaluation, Proposal, RecordProof};
 use inherents::InherentData;
 use log::{error, info, debug, trace};
 use primitives::ExecutionContext;
@@ -144,7 +144,7 @@ impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		max_duration: time::Duration,
-		record_proof: bool,
+		record_proof: RecordProof,
 	) -> Self::Proposal {
 		let inner = self.inner.clone();
 		tokio_executor::blocking::run(move || {
@@ -171,7 +171,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		deadline: time::Instant,
-		record_proof: bool,
+		record_proof: RecordProof,
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>>, sp_blockchain::Error> {
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
@@ -328,7 +328,7 @@ mod tests {
 		// when
 		let deadline = time::Duration::from_secs(3);
 		let block = futures::executor::block_on(
-			proposer.propose(Default::default(), Default::default(), deadline, false)
+			proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No)
 		).map(|r| r.block).unwrap();
 
 		// then
@@ -361,7 +361,7 @@ mod tests {
 
 		let deadline = time::Duration::from_secs(9);
 		let proposal = futures::executor::block_on(
-			proposer.propose(Default::default(), Default::default(), deadline, false),
+			proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No),
 		).unwrap();
 
 		assert_eq!(proposal.block.extrinsics().len(), 1);

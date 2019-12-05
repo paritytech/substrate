@@ -47,7 +47,7 @@ use state_machine::{
 use executor::{RuntimeVersion, RuntimeInfo};
 use consensus::{
 	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams, ImportResult,
-	BlockOrigin, ForkChoiceStrategy, SelectChain, self,
+	BlockOrigin, ForkChoiceStrategy, SelectChain, RecordProof,
 };
 use sp_blockchain::{self as blockchain,
 	Backend as ChainBackend,
@@ -660,7 +660,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			self,
 			info.chain.best_hash,
 			info.chain.best_number,
-			false,
+			RecordProof::No,
 			inherent_digests,
 			&self.backend,
 		)
@@ -671,11 +671,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// When proof recording is enabled, all accessed trie nodes are saved.
 	/// These recorded trie nodes can be used by a third party to proof the
 	/// output of this block builder without having access to the full storage.
-	pub fn new_block_at(
+	pub fn new_block_at<R: Into<RecordProof>>(
 		&self,
 		parent: &BlockId<Block>,
 		inherent_digests: DigestFor<Block>,
-		enable_proof_recording: bool,
+		record_proof: R,
 	) -> sp_blockchain::Result<block_builder::BlockBuilder<Block, Self, B>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
@@ -687,7 +687,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			self,
 			self.expect_block_hash_from_id(parent)?,
 			self.expect_block_number_from_id(parent)?,
-			enable_proof_recording,
+			record_proof.into(),
 			inherent_digests,
 			&self.backend
 		)

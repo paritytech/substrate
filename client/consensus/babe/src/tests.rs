@@ -24,9 +24,9 @@ use authorship::claim_slot;
 
 use babe_primitives::{AuthorityPair, SlotNumber};
 use block_builder::BlockBuilder;
-use consensus_common::{NoNetwork as DummyOracle, Proposal};
-use consensus_common::import_queue::{
-	BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
+use consensus_common::{
+	NoNetwork as DummyOracle, Proposal, RecordProof,
+	import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport},
 };
 use network::test::*;
 use network::test::Block as TestBlock;
@@ -157,7 +157,7 @@ impl Proposer<TestBlock> for DummyProposer {
 		_: InherentData,
 		pre_digests: DigestFor<TestBlock>,
 		_: Duration,
-		_: bool,
+		_: RecordProof,
 	) -> Self::Proposal {
 		self.propose_with(pre_digests)
 	}

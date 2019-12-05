@@ -31,7 +31,7 @@ use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 use codec::{Decode, Encode};
-use consensus_common::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith};
+use consensus_common::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, RecordProof};
 use futures::{prelude::*, future::{self, Either}};
 use futures_timer::Delay;
 use inherents::{InherentData, InherentDataProviders};
@@ -245,7 +245,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				logs,
 			},
 			slot_remaining_duration,
-			false,
+			RecordProof::No,
 		).map_err(|e| consensus_common::Error::ClientImport(format!("{:?}", e)));
 		let delay: Box<dyn Future<Output=()> + Unpin + Send> = match proposing_remaining_duration {
 			Some(r) => Box::new(Delay::new(r)),

@@ -12,3 +12,4 @@ runtime_api = { package = "sp-block-builder", path = "../../primitives/block-bui
 sp-api = { path = "../../primitives/sr-api" }
 client-api = { package = "sc-client-api", path = "../api" }
 sp-blockchain = { path = "../../primitives/blockchain" }
+sp-consensus = { path = "../../primitives/consensus/common" }

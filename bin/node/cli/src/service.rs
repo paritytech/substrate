@@ -390,6 +390,7 @@ mod tests {
 	use babe::CompatibleDigestItem;
 	use consensus_common::{
 		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy, BlockImport,
+		RecordProof,
 	};
 	use node_primitives::{Block, DigestItem, Signature};
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
@@ -552,7 +553,7 @@ mod tests {
 					inherent_data,
 					digest,
 					std::time::Duration::from_secs(1),
-					false,
+					RecordProof::Yes,
 				)).expect("Error making test block").block;
 
 				let (new_header, new_body) = new_block.deconstruct();
