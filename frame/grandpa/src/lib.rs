@@ -207,6 +207,7 @@ decl_module! {
 				}
 
 				// enact the change if we've reached the enacting block
+				// OVERFLOW: what would go wrong here if it did happen?
 				if block_number == pending_change.scheduled_at + pending_change.delay {
 					Self::set_grandpa_authorities(&pending_change.next_authorities);
 					Self::deposit_event(
@@ -225,6 +226,7 @@ decl_module! {
 					}
 
 					// enact change to paused state
+					// ERROR audit for overflow
 					if block_number == scheduled_at + delay {
 						<State<T>>::put(StoredState::Paused);
 						Self::deposit_event(Event::Paused);
@@ -237,6 +239,7 @@ decl_module! {
 					}
 
 					// enact change to live state
+					// ERROR audit for overflow
 					if block_number == scheduled_at + delay {
 						<State<T>>::put(StoredState::Live);
 						Self::deposit_event(Event::Resumed);
@@ -324,6 +327,7 @@ impl<T: Trait> Module<T> {
 
 				// only allow the next forced change when twice the window has passed since
 				// this one.
+				// ERROR audit for overflow
 				<NextForced<T>>::put(scheduled_at + in_blocks * 2.into());
 			}
 
@@ -429,6 +433,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T>
 			} else {
 				let _ = Self::schedule_change(next_authorities, Zero::zero(), None);
 			}
+			// safe, we will not reach 2^32 sets
 			CurrentSetId::mutate(|s| { *s += 1; *s })
 		} else {
 			// nothing's changed, neither economic conditions nor session keys. update the pointer
@@ -503,6 +508,7 @@ impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocat
 		validator_set_count: u32,
 	) -> Perbill {
 		// the formula is min((3k / n)^2, 1)
+		// will not overflow, we do not have enough validators
 		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
 		// _ ^ 2
 		x.square()
