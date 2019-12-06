@@ -23,11 +23,11 @@ use support::weights::{Weight, DispatchClass};
 use codec::{Encode, Codec, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
+use sp_runtime::traits::{UniqueSaturatedInto, SaturatedConversion};
 
 /// Some information related to a dispatchable that can be queried from the runtime.
 #[derive(Eq, PartialEq, Encode, Decode, Default)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct RuntimeDispatchInfo<Balance> {
 	/// Weight of this dispatch.
 	pub weight: Weight,
@@ -36,6 +36,41 @@ pub struct RuntimeDispatchInfo<Balance> {
 	/// The partial inclusion fee of this dispatch. This does not include tip or anything else which
 	/// is dependent on the signature (aka. depends on a `SignedExtension`).
 	pub partial_fee: Balance,
+}
+
+/// A capped version of `RuntimeDispatchInfo`.
+///
+/// The `Balance` is capped (or expanded) to `u64` to avoid serde issues with `u128`.
+#[derive(Eq, PartialEq, Encode, Decode, Default)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+pub struct CappedDispatchInfo {
+	/// Weight of this dispatch.
+	pub weight: Weight,
+	/// Class of this dispatch.
+	pub class: DispatchClass,
+	/// The partial inclusion fee of this dispatch. This does not include tip or anything else which
+	/// is dependent on the signature (aka. depends on a `SignedExtension`).
+	pub partial_fee: u64,
+}
+
+impl CappedDispatchInfo {
+	/// Create a new `CappedDispatchInfo` from `RuntimeDispatchInfo`.
+	pub fn new<Balance: UniqueSaturatedInto<u64>>(
+		dispatch: RuntimeDispatchInfo<Balance>,
+	) -> Self {
+		let RuntimeDispatchInfo {
+			weight,
+			class,
+			partial_fee,
+		} = dispatch;
+
+		Self {
+			weight,
+			class,
+			partial_fee: partial_fee.saturated_into(),
+		}
+	}
 }
 
 sp_api::decl_runtime_apis! {
@@ -59,6 +94,7 @@ mod tests {
 			partial_fee: 1_000_000_u64,
 		};
 
+		let info = CappedDispatchInfo::new(info);
 		assert_eq!(
 			serde_json::to_string(&info).unwrap(),
 			r#"{"weight":5,"class":"normal","partialFee":1000000}"#,
