@@ -69,7 +69,7 @@ impl<Block, B> VotingRule<Block, B> for () where
 
 /// A custom voting rule that guarantees that our vote is always behind the best
 /// block, in the best case exactly one block behind it.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone)]
 pub struct BeforeBestBlock;
 impl<Block, B> VotingRule<Block, B> for BeforeBestBlock where
 	Block: BlockT,
@@ -100,7 +100,6 @@ impl<Block, B> VotingRule<Block, B> for BeforeBestBlock where
 /// A custom voting rule that limits votes towards 3/4 of the unfinalized chain,
 /// using the given `base` and `best_target` to figure where the 3/4 target
 /// should fall.
-#[derive(Clone, Copy, Debug)]
 pub struct ThreeQuartersOfTheUnfinalizedChain;
 
 impl<Block, B> VotingRule<Block, B> for ThreeQuartersOfTheUnfinalizedChain where
