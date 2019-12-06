@@ -27,6 +27,8 @@ use parking_lot::Mutex;
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 use std::{sync::Arc, time::Duration};
 
+/// Wraps around an implementation of the `Network` crate and provides gossiping capabilities on
+/// top of it.
 pub struct GossipEngine<B: BlockT> {
 	inner: Arc<Mutex<GossipEngineInner<B>>>,
 	engine_id: ConsensusEngineId,
@@ -270,7 +272,6 @@ impl<B: BlockT, N: Network<B>> Context<B> for ContextOverService<N> {
 	}
 
 	fn send_consensus(&mut self, who: PeerId, messages: Vec<ConsensusMessage>) {
-		// TODO: send batch
 		for message in messages {
 			self.network.write_notification(who.clone(), message.engine_id, message.data);
 		}
