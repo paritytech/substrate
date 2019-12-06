@@ -110,13 +110,11 @@ pub fn new_test_ext() -> runtime_io::TestExternalities {
 	// We use default for brevity, but you can configure as desired if needed.
 	balances::GenesisConfig::<Test> {
 		balances: vec![
-			(5, 500_000),
-			(10, 500_000),
-			(15, 500_000),
-			(20, 500_000),
-			(31, 500_000),
-			(40, 500_000),
-			(99, 1),
+			(10, 1_000),
+			(20, 1_000),
+			(30, 1_000),
+			(40, 1_000),
+			(50, 1_000),
 		],
 		vesting: vec![],
 	}.assimilate_storage(&mut t).unwrap();

@@ -31,3 +31,41 @@ fn founding_works() {
 		assert_noop!(Society::found(Origin::signed(1), 3), "already founded");
 	});
 }
+
+#[test]
+fn basic_new_member_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Society::found(Origin::signed(1), 10));
+		assert_ok!(Society::bid(Origin::signed(20), 0));
+		run_to_block(4);
+		assert_eq!(Society::candidates(), vec![(0, 20, BidKind::Deposit)]);
+		assert_ok!(Society::vote(Origin::signed(10), 20, true));
+		run_to_block(8);
+		assert_eq!(Society::members(), vec![10, 20]);
+	});
+}
+
+#[test]
+fn basic_new_member_skeptic_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Society::found(Origin::signed(1), 10));
+		assert_ok!(Society::bid(Origin::signed(20), 0));
+		run_to_block(4);
+		assert_eq!(Society::candidates(), vec![(0, 20, BidKind::Deposit)]);
+		run_to_block(8);
+		assert_eq!(Society::members(), vec![10]);
+	});
+}
+
+#[test]
+fn basic_new_member_reject_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Society::found(Origin::signed(1), 10));
+		assert_ok!(Society::bid(Origin::signed(20), 0));
+		run_to_block(4);
+		assert_eq!(Society::candidates(), vec![(0, 20, BidKind::Deposit)]);
+		assert_ok!(Society::vote(Origin::signed(10), 20, false));
+		run_to_block(8);
+		assert_eq!(Society::members(), vec![10]);
+	});
+}

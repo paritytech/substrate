@@ -159,7 +159,8 @@ decl_storage! {
 		Vouching: Vec<T::AccountId>;
 
 		/// The current set of candidates; bidders that are attempting to become members.
-		Candidates: Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>;
+		pub Candidates get(candidates):
+			Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>;
 
 		/// Amount of our account balance that is specifically for the next round's bid(s).
 		Pot: BalanceOf<T>;
@@ -418,11 +419,7 @@ impl<T: Trait> Module<T> {
 
 		let mut members = <Members<T>>::get();
 
-		// we assume there's at least one member or this logic won't work.
-		if members.is_empty() { return }
-
-		let candidates = <Candidates<T>>::take();
-		members.reserve(candidates.len());
+		let mut pot = <Pot<T>>::get();
 
 		// we'll need a random seed here.
 		let seed = T::Randomness::random(phrase);
@@ -431,114 +428,125 @@ impl<T: Trait> Module<T> {
 			.expect("input is padded with zeroes; qed");
 		let mut rng = ChaChaRng::from_seed(seed);
 
-		let maturity = <system::Module<T>>::block_number()
-			+ Self::lock_duration(members.len() as u32);
+		// we assume there's at least one member or this logic won't work.
+		if !members.is_empty() {
+			let candidates = <Candidates<T>>::take();
+			members.reserve(candidates.len());
 
-		let mut pot = <Pot<T>>::get();
+			let maturity = <system::Module<T>>::block_number()
+				+ Self::lock_duration(members.len() as u32);
 
-		let mut rewardees = Vec::new();
-		let mut total_approvals = 0;
-		let mut total_slash = <BalanceOf<T>>::zero();
-		let mut total_payouts = <BalanceOf<T>>::zero();
+			let mut rewardees = Vec::new();
+			let mut total_approvals = 0;
+			let mut total_slash = <BalanceOf<T>>::zero();
+			let mut total_payouts = <BalanceOf<T>>::zero();
 
-		let accepted = candidates.into_iter().filter_map(|(value, candidate, kind)| {
-			let mut approval_count = 0;
-			let votes = members.iter()
-				.filter_map(|m| <Votes<T>>::get(&candidate, m).map(|v| (v, m)))
-				.inspect(|&(v, _)| if v == Vote::Approve { approval_count += 1 })
-				.collect::<Vec<_>>();
-			let accepted = pick_item(&mut rng, &votes).map(|x| x.0) == Some(Vote::Approve);
+			let accepted = candidates.into_iter().filter_map(|(value, candidate, kind)| {
+				let mut approval_count = 0;
+				let votes = members.iter()
+					.filter_map(|m| <Votes<T>>::get(&candidate, m).map(|v| (v, m)))
+					.inspect(|&(v, _)| if v == Vote::Approve { approval_count += 1 })
+					.collect::<Vec<_>>();
+				let accepted = pick_item(&mut rng, &votes).map(|x| x.0) == Some(Vote::Approve);
 
-			// collect together voters who voted the right way
-			let matching_vote = if accepted { Vote::Approve } else { Vote::Reject };
-			let bad_vote = |m: &T::AccountId| {
-				// voter voted wrong way (or was just a lazy skeptic) then reduce their payout
-				// and increase their strikes. after MaxStrikes then they go into suspension.
-				let (_when, amount) = Self::slash_payout(m, T::WrongSideDeduction::get());
+				// collect together voters who voted the right way
+				let matching_vote = if accepted { Vote::Approve } else { Vote::Reject };
+				let bad_vote = |m: &T::AccountId| {
+					// voter voted wrong way (or was just a lazy skeptic) then reduce their payout
+					// and increase their strikes. after MaxStrikes then they go into suspension.
+					let (_when, amount) = Self::slash_payout(m, T::WrongSideDeduction::get());
 
-				let strikes = <Strikes<T>>::mutate(m, |s| { *s += 1; *s });
-				if strikes >= T::MaxStrikes::get() {
-					Self::suspend_member(m);
-				}
-				amount
-			};
-			rewardees.extend(votes.into_iter()
-				.filter_map(|(v, m)|
-					if v == matching_vote { Some(m) } else { total_slash += bad_vote(m); None }
-				).cloned()
-			);
-
-			if accepted {
-				total_approvals += approval_count;
-				total_payouts += value;
-				members.push(candidate.clone());
-
-				// only in the case that the bid is accepted do we unset the vouching status and
-				// transfer the tip over to the voucher.
-				let value = if let BidKind::Vouch(who, tip) = kind {
-					Self::bump_payout(&who, maturity, tip);
-					// really shouldn't fail given the conditional we're in.
-					let _ = Self::unset_vouching(&who);
-					value.saturating_sub(tip)
-				} else {
-					value
+					let strikes = <Strikes<T>>::mutate(m, |s| {
+						*s += 1;
+						*s
+					});
+					if strikes >= T::MaxStrikes::get() {
+						Self::suspend_member(m);
+					}
+					amount
 				};
+				rewardees.extend(votes.into_iter()
+					.filter_map(|(v, m)|
+						if v == matching_vote { Some(m) } else {
+							total_slash += bad_vote(m);
+							None
+						}
+					).cloned()
+				);
 
-				Self::bump_payout(&candidate, maturity, value);
+				if accepted {
+					total_approvals += approval_count;
+					total_payouts += value;
+					members.push(candidate.clone());
 
-				Some((candidate, total_approvals))
-			} else {
-				Self::suspend_candidate(&candidate);
-				None
+					// only in the case that the bid is accepted do we unset the vouching status and
+					// transfer the tip over to the voucher.
+					let value = if let BidKind::Vouch(who, tip) = kind {
+						Self::bump_payout(&who, maturity, tip);
+						// really shouldn't fail given the conditional we're in.
+						let _ = Self::unset_vouching(&who);
+						value.saturating_sub(tip)
+					} else {
+						value
+					};
+
+					Self::bump_payout(&candidate, maturity, value);
+
+					Some((candidate, total_approvals))
+				} else {
+					Self::suspend_candidate(&candidate);
+					None
+				}
+			}).collect::<Vec<_>>();
+
+			// Reward one of the voters who voted the right way.
+			if !total_slash.is_zero() {
+				if let Some(winner) = pick_item(&mut rng, &rewardees) {
+					// if we can't reward them, not much that can be done.
+					Self::bump_payout(winner, maturity, total_slash);
+				} else {
+					// Move the slashed amount back from payouts account to local treasury.
+					let _ = T::Currency::transfer(&Self::payouts(), &Self::account_id(), total_slash, AllowDeath);
+				}
 			}
-		}).collect::<Vec<_>>();
+			if !total_payouts.is_zero() {
+				// remove payout from pot and shift needed funds to the payout account.
+				pot = pot.saturating_sub(total_payouts);
 
-		// Reward one of the voters who voted the right way.
-		if !total_slash.is_zero() {
-			if let Some(winner) = pick_item(&mut rng, &rewardees) {
-				// if we can't reward them, not much that can be done.
-				Self::bump_payout(winner, maturity, total_slash);
-			} else {
-				// Move the slashed amount back from payouts account to local treasury.
-				let _ = T::Currency::transfer(&Self::payouts(), &Self::account_id(), total_slash, AllowDeath);
+				// this should never fail since we ensure the pot can afford the payouts in a previous
+				// block, but there's not much we can do to recover if it fails anyway.
+				let _ = T::Currency::transfer(&Self::account_id(), &Self::payouts(), total_payouts, AllowDeath);
 			}
+
+			// if at least one candidate was accepted...
+			if !accepted.is_empty() {
+				// select one as primary, randomly chosen from the accepted, weighted by approvals.
+				let primary_point = pick_usize(&mut rng, total_approvals - 1);
+				let primary = accepted.iter().find(|e| e.1 > primary_point)
+					.expect("e.1 of final item == total_approvals; \
+						worst case find will always return that item; qed")
+					.0.clone();
+				let accounts = accepted.into_iter().map(|x| x.0).collect::<Vec<_>>();
+
+				// then write everything back out, signal the changed membership and leave an event.
+				members.sort();
+				<Members<T>>::put(&members);
+				<Head<T>>::put(&primary);
+
+				T::MembershipChanged::change_members_sorted(&accounts, &[], &members);
+				Self::deposit_event(RawEvent::Inducted(primary, accounts));
+			}
+
+			// Bump the pot by at most PeriodSpend, but less if there's not very much left in our
+			// account.
+			let unaccounted = T::Currency::free_balance(&Self::account_id()).saturating_sub(pot);
+			pot += T::PeriodSpend::get().min(unaccounted / 2u8.into());
 		}
-		if !total_payouts.is_zero() {
-			// remove payout from pot and shift needed funds to the payout account.
-			pot = pot.saturating_sub(total_payouts);
-
-			// this should never fail since we ensure the pot can afford the payouts in a previous
-			// block, but there's not much we can do to recover if it fails anyway.
-			let _ = T::Currency::transfer(&Self::account_id(), &Self::payouts(), total_payouts, AllowDeath);
-		}
-
-		// if at least one candidate was accepted...
-		if !accepted.is_empty() {
-			// select one as primary, randomly chosen from the accepted, weighted by approvals.
-			let primary_point = pick_usize(&mut rng, total_approvals - 1);
-			let primary = accepted.iter().find(|e| e.1 > primary_point)
-				.expect("e.1 of final item == total_approvals; \
-					worst case find will always return that item; qed")
-				.0.clone();
-			let accounts = accepted.into_iter().map(|x| x.0).collect::<Vec<_>>();
-
-			// then write everything back out, signal the changed membership and leave an event.
-			members.sort();
-			<Members<T>>::put(&members);
-			<Head<T>>::put(&primary);
-
-			T::MembershipChanged::change_members_sorted(&accounts, &[], &members);
-			Self::deposit_event(RawEvent::Inducted(primary, accounts));
-		}
-
-		// Bump the pot by at most PeriodSpend, but less if there's not very much left in our
-		// account.
-		let unaccounted = T::Currency::free_balance(&Self::account_id()).saturating_sub(pot);
-		pot += T::PeriodSpend::get().min(unaccounted / 2u8.into());
 
 		// setup the candidates for the new intake
 		let candidates = Self::take_selected(pot);
 		<Candidates<T>>::put(&candidates);
+
 		// initialise skeptics
 		let pick_member = |_| pick_item(&mut rng, &members[..]).expect("exited if members empty; qed");
 		for skeptic in (0..members.len().integer_sqrt()).map(pick_member) {
@@ -582,11 +590,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn suspend_member(_who: &T::AccountId) {
-		unimplemented!();
+//		unimplemented!();
 	}
 
 	fn suspend_candidate(_who: &T::AccountId) {
-		unimplemented!();
+//		unimplemented!();
 	}
 
 	/// The account ID of the treasury pot.
