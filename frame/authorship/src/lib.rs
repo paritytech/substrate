@@ -322,7 +322,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		let uncles = data.uncles().unwrap_or_default();
 		let mut set_uncles = Vec::new();
 
-		if !uncles.is_empty() && uncles.len() <= MAX_UNCLES {
+		if !uncles.is_empty() {
 			let prev_uncles = <Self as Store>::Uncles::get();
 			let mut existing_hashes: Vec<_> = prev_uncles.into_iter().filter_map(|entry|
 				match entry {
@@ -339,6 +339,10 @@ impl<T: Trait> ProvideInherent for Module<T> {
 						let hash = uncle.hash();
 						set_uncles.push(uncle);
 						existing_hashes.push(hash);
+
+						if set_uncles.len() == MAX_UNCLES {
+							break
+						}
 					}
 					Err(_) => {
 						// skip this uncle
