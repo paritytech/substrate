@@ -170,7 +170,6 @@
 
 mod behaviour;
 mod chain;
-mod legacy_proto;
 mod debug_info;
 mod discovery;
 mod on_demand_layer;

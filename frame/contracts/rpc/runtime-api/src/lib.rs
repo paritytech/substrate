@@ -28,7 +28,6 @@ use sp_runtime::RuntimeDebug;
 
 /// A result of execution of a contract.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum ContractExecResult {
 	/// The contract returned successfully.
 	///

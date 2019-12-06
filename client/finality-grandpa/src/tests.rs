@@ -39,6 +39,7 @@ use sp_runtime::generic::{BlockId, DigestItem};
 use primitives::{NativeOrEncoded, ExecutionContext, crypto::Public};
 use fg_primitives::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
 use state_machine::{backend::InMemory, prove_read, read_proof_check};
+use std::{pin::Pin, task};
 
 use authorities::AuthoritySet;
 use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
@@ -175,12 +176,11 @@ impl TestNetFactory for GrandpaTestNet {
 #[derive(Clone)]
 struct Exit;
 
-impl Future for Exit {
-	type Item = ();
-	type Error = ();
+impl futures03::Future for Exit {
+	type Output = ();
 
-	fn poll(&mut self) -> Poll<(), ()> {
-		Ok(Async::NotReady)
+	fn poll(self: Pin<&mut Self>, _: &mut task::Context) -> task::Poll<()> {
+		task::Poll::Pending
 	}
 }
 

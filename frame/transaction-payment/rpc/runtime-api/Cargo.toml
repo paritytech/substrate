@@ -23,4 +23,5 @@ std = [
 	"codec/std",
 	"rstd/std",
 	"sp-runtime/std",
+	"support/std",
 ]

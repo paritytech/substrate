@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
-use crate::legacy_proto::{LegacyProto, LegacyProtoOut};
+use legacy_proto::{LegacyProto, LegacyProtoOut};
 use crate::utils::interval;
 use bytes::BytesMut;
 use futures::prelude::*;
@@ -55,7 +55,9 @@ use client_api::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
 use util::LruHashSet;
 
+mod legacy_proto;
 mod util;
+
 pub mod consensus_gossip;
 pub mod message;
 pub mod event;
