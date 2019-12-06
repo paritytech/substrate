@@ -18,13 +18,12 @@
 
 use super::*;
 
-use std::cell::RefCell;
 use support::{impl_outer_origin, parameter_types};
 use primitives::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
-use sr_primitives::{
-	Percent, Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
+use sp_runtime::{
+	Perbill, traits::{BlakeTwo256, IdentityLookup, OnInitialize, OnFinalize}, testing::Header,
 };
 use system::EnsureSignedBy;
 
@@ -39,11 +38,12 @@ impl_outer_origin! {
 pub struct Test;
 parameter_types! {
 	pub const CandidateDeposit: u64 = 25;
-	pub const WrongSideDeduction: Percent = Percent::from_percent(5);
+	pub const WrongSideDeduction: u64 = 2;
 	pub const MaxStrikes: u32 = 2;
 	pub const Period: u64 = 4;
 	pub const PeriodSpend: u64 = 100;
 	pub const MaxLockDuration: u64 = 100;
+	pub const FounderSetAccount: u64 = 1;
 
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 1024;
@@ -96,10 +96,15 @@ impl Trait for Test {
 	type MembershipChanged = ();
 	type Period = Period;
 	type MaxLockDuration = MaxLockDuration;
+	type FounderOrigin = EnsureSignedBy<FounderSetAccount, u64>;
 }
 
-// This function basically just builds a genesis storage key/value store according to
-// our desired mockup.
+pub type Society = Module<Test>;
+pub type System = system::Module<Test>;
+pub type Balances = balances::Module<Test>;
+
+/// This function basically just builds a genesis storage key/value store according to
+/// our desired mockup.
 pub fn new_test_ext() -> runtime_io::TestExternalities {
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	// We use default for brevity, but you can configure as desired if needed.
@@ -115,8 +120,24 @@ pub fn new_test_ext() -> runtime_io::TestExternalities {
 		],
 		vesting: vec![],
 	}.assimilate_storage(&mut t).unwrap();
-	GenesisConfig::<Test>{
+	// Can be enabled once we have #4315
+	/*GenesisConfig::<Test>{
 		members: vec![5],
-	}.assimilate_storage(&mut t).unwrap();
+	}.assimilate_storage(&mut t).unwrap();*/
 	t.into()
+}
+
+/// Run until a particular block.
+pub fn run_to_block(n: u64) {
+	println!("Running until block {}", n);
+	while System::block_number() < n {
+		if System::block_number() > 1 {
+			println!("Finalizing {}", System::block_number());
+			System::on_finalize(System::block_number());
+		}
+		System::set_block_number(System::block_number() + 1);
+		println!("Initializing {}", System::block_number());
+		System::on_initialize(System::block_number());
+		Society::on_initialize(System::block_number());
+	}
 }

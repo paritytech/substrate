@@ -20,15 +20,14 @@ use super::*;
 use mock::*;
 
 use support::{assert_ok, assert_noop};
-use sr_primitives::traits::OnInitialize;
-
-type Society = Module<Test>;
-type System = system::Module<Test>;
-type Balances = balances::Module<Test>;
 
 #[test]
-fn query_membership_works() {
+fn founding_works() {
 	new_test_ext().execute_with(|| {
-
+		assert_noop!(Society::found(Origin::signed(5), 2), "Invalid origin");
+		assert_ok!(Society::found(Origin::signed(1), 2));
+		assert_eq!(Society::members(), vec![2]);
+		assert_eq!(Society::head(), Some(2));
+		assert_noop!(Society::found(Origin::signed(1), 3), "already founded");
 	});
 }

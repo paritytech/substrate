@@ -26,7 +26,7 @@ use std::sync::Arc;
 use keyring::Ed25519Keyring;
 use codec::Encode;
 use sp_runtime::traits::NumberFor;
-
+use std::{pin::Pin, task::{Context, Poll}};
 use crate::environment::SharedVoterSetState;
 use fg_primitives::AuthorityList;
 use super::gossip::{self, GossipValidator};
@@ -175,12 +175,11 @@ fn make_test_network() -> (
 	#[derive(Clone)]
 	struct Exit;
 
-	impl Future for Exit {
-		type Item = ();
-		type Error = ();
+	impl futures03::Future for Exit {
+		type Output = ();
 
-		fn poll(&mut self) -> Poll<(), ()> {
-			Ok(Async::NotReady)
+		fn poll(self: Pin<&mut Self>, _: &mut Context) -> Poll<()> {
+			Poll::Pending
 		}
 	}
 
