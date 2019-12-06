@@ -169,7 +169,7 @@ where
 		);
 
 		let sentry_nodes = if !sentry_nodes.is_empty() {
-			Some(sentry_nodes.into_iter().filter_map(|a| match a.parse() {
+			let addrs = sentry_nodes.into_iter().filter_map(|a| match a.parse() {
 				Ok(addr) => Some(addr),
 				Err(e) => {
 					error!(
@@ -178,10 +178,22 @@ where
 					);
 					None
 				}
-			}).collect())
+			}).collect::<Vec<Multiaddr>>();
+
+			if addrs.len() > MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY {
+				warn!(
+					target: "sub-authority-discovery",
+					"More than MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY ({:?}) were specified. Other \
+					nodes will likely ignore the remainder.",
+					MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY,
+				);
+			}
+
+			Some(addrs)
 		} else {
 			None
 		};
+
 
 		let address_cache = HashMap::new();
 
@@ -333,7 +345,7 @@ where
 			if addresses.len() > MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY {
 				warn!(
 					target: "sub-authority-discovery",
-					"Got more than MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY ({:?}) for Authority
+					"Got more than MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY ({:?}) for Authority \
 					'{:?}' from DHT, dropping the remainder.",
 					MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY,	authority_id,
 				);
@@ -793,6 +805,7 @@ mod tests {
 
 	#[test]
 	fn request_addresses_of_others_triggers_dht_get_query() {
+		let _ = ::env_logger::try_init();
 		let (_dht_event_tx, dht_event_rx) = channel(1000);
 
 		// Generate authority keys
