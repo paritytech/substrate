@@ -21,7 +21,7 @@ use sp_runtime::transaction_validity::{
 };
 
 /// Transaction pool result.
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = core::result::Result<T, Error>;
 
 /// Transaction pool error type.
 #[derive(Debug, derive_more::Display, derive_more::From)]
@@ -43,7 +43,7 @@ pub enum Error {
 	TemporarilyBanned,
 	/// The transaction is already in the pool.
 	#[display(fmt="[{:?}] Already imported", _0)]
-	AlreadyImported(Box<dyn std::any::Any + Send>),
+	AlreadyImported(Box<dyn core::any::Any + Send>),
 	/// The transaction cannot be imported cause it's a replacement and has too low priority.
 	#[display(fmt="Too low priority ({} > {})", old, new)]
 	TooLowPriority {
@@ -65,18 +65,18 @@ pub enum Error {
 	RejectedFutureTransaction,
 }
 
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}
 
 /// Transaction pool error conversion.
-pub trait IntoPoolError: ::std::error::Error + Send + Sized {
+pub trait IntoPoolError: core::error::Error + Send + Sized {
 	/// Try to extract original `Error`
 	///
 	/// This implementation is optional and used only to
 	/// provide more descriptive error messages for end users
 	/// of RPC API.
-	fn into_pool_error(self) -> ::std::result::Result<Error, Self> { Err(self) }
+	fn into_pool_error(self) -> core::result::Result<Error, Self> { Err(self) }
 }
 
 impl IntoPoolError for Error {
-	fn into_pool_error(self) -> ::std::result::Result<Error, Self> { Ok(self) }
+	fn into_pool_error(self) -> core::result::Result<Error, Self> { Ok(self) }
 }
