@@ -16,7 +16,7 @@
 
 use criterion::{Criterion, black_box, Bencher};
 use criterion::{criterion_group, criterion_main};
-use substrate_state_machine::OverlayedChanges;
+use sp_state_machine::OverlayedChanges;
 
 const CONTENT_KEY_SIZE: usize = 32;
 
