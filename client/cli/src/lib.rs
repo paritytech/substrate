@@ -189,11 +189,11 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 /// `RP` are custom parameters for the run command. This needs to be a `struct`! The custom
 /// parameters are visible to the user as if they were normal run command parameters. If no custom
 /// parameters are required, `NoCustom` can be used as type here.
-pub fn parse_and_prepare<'a, CC, RP, I>(
+pub fn parse_and_prepare<'a, CC, RP, I, BlockNumber>(
 	version: &'a VersionInfo,
 	impl_name: &'static str,
 	args: I,
-) -> ParseAndPrepare<'a, CC, RP>
+) -> ParseAndPrepare<'a, CC, RP, BlockNumber>
 where
 	CC: StructOpt + Clone + GetLogFilter,
 	RP: StructOpt + Clone + AugmentClap,
@@ -258,13 +258,13 @@ pub fn display_role<A, B, C>(config: &Configuration<A, B, C>) -> String {
 
 /// Output of calling `parse_and_prepare`.
 #[must_use]
-pub enum ParseAndPrepare<'a, CC, RP> {
+pub enum ParseAndPrepare<'a, CC, RP, BlockNumber> {
 	/// Command ready to run the main client.
 	Run(ParseAndPrepareRun<'a, RP>),
 	/// Command ready to build chain specs.
 	BuildSpec(ParseAndPrepareBuildSpec<'a>),
 	/// Command ready to export the chain.
-	ExportBlocks(ParseAndPrepareExport<'a>),
+	ExportBlocks(ParseAndPrepareExport<'a, BlockNumber>),
 	/// Command ready to import the chain.
 	ImportBlocks(ParseAndPrepareImport<'a>),
 	/// Command to check a block.
@@ -357,12 +357,12 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 }
 
 /// Command ready to export the chain.
-pub struct ParseAndPrepareExport<'a> {
-	params: ExportBlocksCmd,
+pub struct ParseAndPrepareExport<'a, T> {
+	params: ExportBlocksCmd<T>,
 	version: &'a VersionInfo,
 }
 
-impl<'a> ParseAndPrepareExport<'a> {
+impl<'a, T> ParseAndPrepareExport<'a, T> {
 	/// Runs the command and exports from the chain.
 	pub fn run_with_builder<C, G, E, F, B, S, Exit>(
 		self,
