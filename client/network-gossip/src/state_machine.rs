@@ -67,16 +67,6 @@ struct MessageEntry<B: BlockT> {
 	sender: Option<PeerId>,
 }
 
-/// Consensus message destination.
-pub enum MessageRecipient {
-	/// Send to all peers.
-	BroadcastToAll,
-	/// Send to peers that don't have that message already.
-	BroadcastNew,
-	/// Send to specific peer.
-	Peer(PeerId),
-}
-
 /// The reason for sending out the message.
 #[derive(Eq, PartialEq, Copy, Clone)]
 #[cfg_attr(test, derive(Debug))]

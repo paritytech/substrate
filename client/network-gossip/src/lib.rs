@@ -55,7 +55,7 @@
 //! used to inform peers of a current view of protocol state.
 
 pub use self::bridge::GossipEngine;
-pub use self::state_machine::{TopicNotification, MessageRecipient, MessageIntent};
+pub use self::state_machine::{TopicNotification, MessageIntent};
 pub use self::state_machine::{Validator, ValidatorContext, ValidationResult};
 pub use self::state_machine::DiscardAll;
 
