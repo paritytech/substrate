@@ -47,7 +47,7 @@ lazy_static! {
 #[macro_export]
 macro_rules! record_metrics(
 	($($key:expr => $value:expr,)*) => {
-		if cfg!(not(target_os = "unknown")) {
+		if cfg!(not(feature = "std")) {
 			$crate::record_metrics_slice(&[
 				$( ($key, $value as f32), )*
 			])
