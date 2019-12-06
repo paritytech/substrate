@@ -345,6 +345,7 @@ impl<T: Trait> Module<T> {
 		<AuthoredBlocks<T>>::mutate(
 			&current_session,
 			author,
+			// will not overflow (just a counter)
 			|authored| *authored += 1,
 		);
 	}
@@ -531,6 +532,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		// the hearbeat is defered a bit to prevent spaming.
 		let block_number = <system::Module<T>>::block_number();
 		let half_session = T::SessionDuration::get() / 2.into();
+		// block number won't overflow
 		<GossipAt<T>>::put(block_number + half_session);
 
 		// Remember who the authorities are for the new session.
@@ -657,6 +659,7 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 		// basically, 10% can be offline with no slash, but after that, it linearly climbs up to 7%
 		// when 13/30 are offline (around 5% when 1/3 are offline).
 		if let Some(threshold) = offenders.checked_sub(validator_set_count / 10 + 1) {
+			// won't overflow, can’t have that many validators
 			let x = Perbill::from_rational_approximation(3 * threshold, validator_set_count);
 			x.saturating_mul(Perbill::from_percent(7))
 		} else {

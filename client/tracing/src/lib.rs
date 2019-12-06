@@ -293,5 +293,5 @@ fn send_telemetry(span_datum: SpanDatum) {
 
 fn send_grafana(span_datum: SpanDatum) {
 	let name = format!("{}::{}", span_datum.target, span_datum.name);
-	record_metrics!(name => span_datum.overall_time.as_nanos());
+	record_metrics!(&name => span_datum.overall_time.as_nanos(),);
 }
