@@ -30,9 +30,7 @@ use system::ensure_none;
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
 use support::weights::SimpleDispatchInfo;
 use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
-use sp_authorship::{
-	INHERENT_IDENTIFIER, UnclesInherentData,
-};
+use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
 const MAX_UNCLES: usize = 10;
 
@@ -317,14 +315,14 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = Call<T>;
-	type Error = MakeFatalError<()>;
+	type Error = InherentError;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
 		let uncles = data.uncles().unwrap_or_default();
 		let mut set_uncles = Vec::new();
 
-		if !uncles.is_empty() {
+		if !uncles.is_empty() && uncles.len() <= MAX_UNCLES {
 			let prev_uncles = <Self as Store>::Uncles::get();
 			let mut existing_hashes: Vec<_> = prev_uncles.into_iter().filter_map(|entry|
 				match entry {
@@ -356,8 +354,15 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		}
 	}
 
-	fn check_inherent(_call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
-		Ok(())
+	fn check_inherent(call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
+		match call {
+			Call::set_uncles(ref uncles) if uncles.len() > MAX_UNCLES => {
+				Err(InherentError::Uncles("Too many uncles".into()))
+			},
+			_ => {
+				Ok(())
+			},
+		}
 	}
 }
 
