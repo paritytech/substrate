@@ -41,12 +41,11 @@ chain-spec = { package = "sc-chain-spec", path = "../chain-spec" }
 client-api = { package = "sc-client-api", path = "../api" }
 client = { package = "sc-client", path = "../" }
 sp-api = { path = "../../primitives/sr-api" }
-txpool-runtime-api = { package = "sp-transaction-pool-runtime-api", path = "../../primitives/transaction-pool/runtime-api" }
 client_db = { package = "sc-client-db", path = "../db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 sc-executor = { path = "../executor" }
 txpool = { package = "sc-transaction-pool", path = "../transaction-pool" }
-txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
+sp-transaction-pool = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
 rpc-servers = { package = "sc-rpc-server", path = "../rpc-servers" }
 rpc = { package = "sc-rpc", path = "../rpc" }
 tel = { package = "sc-telemetry", path = "../telemetry" }

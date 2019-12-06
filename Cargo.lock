@@ -3146,7 +3146,7 @@ dependencies = [
  "sp-session 2.0.0",
  "sp-staking 2.0.0",
  "sp-std 2.0.0",
- "sp-transaction-pool-runtime-api 2.0.0",
+ "sp-transaction-pool-api 2.0.0",
  "sp-version 2.0.0",
  "substrate-wasm-builder-runner 1.0.4",
 ]
@@ -3213,7 +3213,7 @@ dependencies = [
  "sp-runtime 2.0.0",
  "sp-session 2.0.0",
  "sp-std 2.0.0",
- "sp-transaction-pool-runtime-api 2.0.0",
+ "sp-transaction-pool-api 2.0.0",
  "sp-version 2.0.0",
  "substrate-wasm-builder-runner 1.0.4",
 ]
@@ -5484,7 +5484,6 @@ dependencies = [
  "sp-runtime 2.0.0",
  "sp-session 2.0.0",
  "sp-transaction-pool-api 2.0.0",
- "sp-transaction-pool-runtime-api 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "sysinfo 0.9.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "target_info 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5597,7 +5596,6 @@ dependencies = [
  "sp-keyring 2.0.0",
  "sp-runtime 2.0.0",
  "sp-transaction-pool-api 2.0.0",
- "sp-transaction-pool-runtime-api 2.0.0",
  "substrate-test-runtime-client 2.0.0",
 ]
 
@@ -6374,14 +6372,6 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-core 2.0.0",
- "sp-runtime 2.0.0",
-]
-
-[[package]]
-name = "sp-transaction-pool-runtime-api"
-version = "2.0.0"
-dependencies = [
  "sp-api 2.0.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
@@ -6643,7 +6633,7 @@ dependencies = [
  "sp-session 2.0.0",
  "sp-state-machine 2.0.0",
  "sp-std 2.0.0",
- "sp-transaction-pool-runtime-api 2.0.0",
+ "sp-transaction-pool-api 2.0.0",
  "sp-trie 2.0.0",
  "sp-version 2.0.0",
  "substrate-test-runtime-client 2.0.0",
