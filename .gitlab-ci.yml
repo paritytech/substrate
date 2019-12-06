@@ -364,12 +364,11 @@ check_polkadot:
     - cd polkadot
     # Within Polkadot 'master' alter each Cargo.toml that references the
     # Substrate 'polkadot-master' branch:
-    # 1. Replace the 'branch = "polkadot-master"' statements with the rev of our
-    #    commit.
+    # 1. Remove the 'branch = "polkadot-master"'
     # 2. Replace 'git = "https://.*"' with 'git = "file://.*"' (the local
     #    checked out Substrate repository one folder above).
     # 3. Remove any trailing commas.
-    - git grep -l "polkadot-master" | grep toml | xargs sed -i "s/branch.*=.*\"polkadot-master\"/rev = \"$COMMIT_HASH\"/; s~https://github.com/paritytech/substrate~file://$SUBSTRATE_PATH~; s/,\s*}/ }/"
+    - git grep -l "polkadot-master" | grep toml | xargs sed -i -r "s/branch.*=.*\"polkadot-master\"\s*,?//; s~https://github.com/paritytech/substrate~file://$SUBSTRATE_PATH~; s/,\s*}/ }/"
     # Make sure 'Cargo.lock' matches 'Cargo.toml'. It's enough to update one
     # package, others are updated along the way.
     - cargo update -p sp-io
