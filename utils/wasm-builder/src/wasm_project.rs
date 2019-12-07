@@ -179,8 +179,9 @@ fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
 		.into_iter()
 		.filter_map(|p| p.ok())
 		.map(|d| d.into_path())
-		.filter(|p| p.is_dir() && !p.ends_with("target") && !p.starts_with("."))
+		.filter(|p| p.is_dir() && !p.ends_with("target"))
 		.filter_map(|p| p.file_name().map(|f| f.to_owned()).and_then(|s| s.into_string().ok()))
+		.filter(|f| !f.starts_with("."))
 		.collect::<Vec<_>>();
 
 	let crate_metadata = MetadataCommand::new()
