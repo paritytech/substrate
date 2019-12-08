@@ -127,14 +127,11 @@ pub fn new_test_ext() -> runtime_io::TestExternalities {
 
 /// Run until a particular block.
 pub fn run_to_block(n: u64) {
-	println!("Running until block {}", n);
 	while System::block_number() < n {
 		if System::block_number() > 1 {
-			println!("Finalizing {}", System::block_number());
 			System::on_finalize(System::block_number());
 		}
 		System::set_block_number(System::block_number() + 1);
-		println!("Initializing {}", System::block_number());
 		System::on_initialize(System::block_number());
 		Society::on_initialize(System::block_number());
 	}
