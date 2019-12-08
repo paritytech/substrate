@@ -21,17 +21,29 @@
 //!
 //! ## Overview
 //!
-//! Identity is a trivial module for keeping track of account names on-chain. It makes no effort to
-//! create a name hierarchy, be a DNS replacement or provide reverse lookups.
+//! A federated naming system, allowing for multiple registrars to be added from a specified origin.
+//! Registrars can set a fee to provide identity-verification service. Anyone can put forth a
+//! proposed identity for a fixed deposit and ask for review by any number of registrars (paying
+//! each of their fees). Registrar judgements are multi-tier allowing for more sophisticated
+//! opinions than a boolean true or false.
+//!
+//! A super-user can remove accounts and slash the deposit.
+//!
+//! All accounts may also have a limited number of sub-accounts which have equivalent ownership.
+//!
+//! The number of registrars should be limited, and the deposit made sufficiently large, to ensure
+//! no state-bloat attack is viable.
+//!
+//!
 //!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
 //!
-//! * `set_name` - Set the associated name of an account; a small deposit is reserved if not already
+//! * `set_identity` - Set the associated identity of an account; a small deposit is reserved if not already
 //!   taken.
-//! * `clear_name` - Remove an account's associated name; the deposit is returned.
-//! * `kill_name` - Forcibly remove the associated name; the deposit is lost.
+//! * `clear_identity` - Remove an account's associated identity; the deposit is returned.
+//! * `kill_identity` - Forcibly remove the associated identity; the deposit is lost.
 //!
 //! [`Call`]: ./enum.Call.html
 //! [`Trait`]: ./trait.Trait.html
@@ -39,7 +51,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use rstd::fmt::Debug;
+use rstd::{fmt::Debug, ops::Add};
 use sp_runtime::{
 	traits::{StaticLookup, EnsureOrigin, Zero}, RuntimeDebug,
 };
@@ -66,6 +78,12 @@ pub trait Trait: system::Trait {
 
 	/// The amount held on deposit per additional field for a registered identity.
 	type FieldDeposit: Get<BalanceOf<Self>>;
+
+	/// The amount held on deposit for a registered subaccount.
+	type SubAccountDeposit: Get<BalanceOf<Self>>;
+
+	/// The amount held on deposit for a registered subaccount.
+	type MaximumSubAccounts: Get<u32>;
 
 	/// What to do with slashed funds.
 	type Slashed: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -210,6 +228,17 @@ pub struct Registration<
 	pub info: IdentityInfo<Hash>,
 }
 
+impl <
+	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
+	Hash: Encode + Decode + Clone + Debug + Eq + PartialEq
+> Registration<Balance, Hash> {
+	fn total_deposit(&self) -> Balance {
+		self.deposit + self.judgements.iter()
+			.map(|(_, ref j)| if let Judgement::FeePaid(fee) = j { *fee } else { Zero::zero() })
+			.fold(Zero::zero(), |a, i| a + i)
+	}
+}
+
 /// Information concerning the a registrar.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct RegistrarInfo<
@@ -229,7 +258,7 @@ decl_storage! {
 		IdentityOf: map T::AccountId => Option<Registration<BalanceOf<T>, T::Hash>>;
 
 		/// Alternative "sub" identites of this account.
-		SubsOf: map T::AccountId => Vec<T::AccountId>;
+		SubsOf: map T::AccountId => (BalanceOf<T>, Vec<(T::AccountId, Data<T::Hash>)>);
 
 		/// The set of registrars. Not expected to get very big as can only be added through a
 		/// special origin (likely a council motion).
@@ -318,8 +347,36 @@ decl_module! {
 			Self::deposit_event(RawEvent::IdentitySet(sender));
 		}
 
+		/// Set the sub-accounts of the sender.
+		///
+		/// The sender must have a registered identity.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		fn set_subs(origin, subs: Vec<(T::AccountId, Data<T::Hash>)>) {
+			let sender = ensure_signed(origin)?;
+			ensure!(<IdentityOf<T>>::exists(&sender), "not found");
+			ensure!(subs.len() <= T::MaximumSubAccounts::get() as usize, "too many subs");
+
+			let old_deposit = <SubsOf<T>>::get(&sender).0;
+			let new_deposit = T::SubAccountDeposit::get() * <BalanceOf<T>>::from(subs.len() as u32);
+
+			if old_deposit < new_deposit {
+				T::Currency::reserve(&sender, new_deposit - old_deposit)?;
+			}
+			// do nothing if they're equal.
+			if old_deposit > new_deposit {
+				let _ = T::Currency::unreserve(&sender, old_deposit - new_deposit);
+			}
+
+			if subs.is_empty() {
+				<SubsOf<T>>::remove(&sender);
+			} else {
+				<SubsOf<T>>::insert(&sender, (new_deposit, subs));
+			}
+		}
+
 		/// Clear an account's identity info and return the deposit. Fails if the account was not
-		/// named.
+		/// named. All sub-accounts are removed also.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -452,7 +509,8 @@ decl_module! {
 			// Figure out who we're meant to be clearing.
 			let target = T::Lookup::lookup(target)?;
 			// Grab their deposit (and check that they have one).
-			let deposit = <IdentityOf<T>>::take(&target).ok_or("Not named")?.deposit;
+			let deposit = <IdentityOf<T>>::take(&target).ok_or("Not named")?.total_deposit()
+				+ <SubsOf<T>>::take(&target).0;
 			// Slash their deposit from them.
 			T::Slashed::on_unbalanced(T::Currency::slash_reserved(&target, deposit).0);
 
@@ -468,6 +526,7 @@ mod tests {
 	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
 	use primitives::H256;
 	use system::EnsureSignedBy;
+	use balances;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
@@ -523,19 +582,23 @@ mod tests {
 		type CreationFee = CreationFee;
 	}
 	parameter_types! {
-		pub const ReservationFee: u64 = 2;
-		pub const MinLength: usize = 3;
-		pub const MaxLength: usize = 16;
+		pub const BasicDeposit: u64 = 1;
+		pub const FieldDeposit: u64 = 1;
+		pub const SubAccountDeposit: u64 = 1;
+		pub const MaximumSubAccounts: u32 = 2;
 		pub const One: u64 = 1;
+		pub const Two: u64 = 2;
 	}
 	impl Trait for Test {
 		type Event = ();
 		type Currency = Balances;
-		type ReservationFee = ReservationFee;
 		type Slashed = ();
+		type BasicDeposit = BasicDeposit;
+		type FieldDeposit = FieldDeposit;
+		type SubAccountDeposit = SubAccountDeposit;
+		type MaximumSubAccounts = MaximumSubAccounts;
 		type ForceOrigin = EnsureSignedBy<One, u64>;
-		type MinLength = MinLength;
-		type MaxLength = MaxLength;
+		type RegistrarOrigin = EnsureSignedBy<Two, u64>;
 	}
 	type Balances = balances::Module<Test>;
 	type Identity = Module<Test>;
@@ -554,7 +617,7 @@ mod tests {
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
-
+/*
 	#[test]
 	fn kill_name_should_work() {
 		new_test_ext().execute_with(|| {
@@ -617,5 +680,5 @@ mod tests {
 			assert_noop!(Identity::kill_name(Origin::signed(2), 1), "bad origin");
 			assert_noop!(Identity::force_name(Origin::signed(2), 1, b"Whatever".to_vec()), "bad origin");
 		});
-	}
+	}*/
 }
