@@ -658,15 +658,13 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
-			assert_ok!(Identity::set_identity(Origin::signed(10), IdentityInfo {
-				display: Data::Raw(b"ten".to_vec()),
-				.. Default::default()
-			}));
-			assert_eq!(Identity::identity(10).unwrap().info, IdentityInfo {
-				display: Data::Raw(b"ten".to_vec()),
-				.. Default::default()
-			});
+			let id = IdentityInfo { display: Data::Raw(b"ten".to_vec()), .. Default::default() };
+			assert_ok!(Identity::set_identity(Origin::signed(10), id.clone()));
+			assert_eq!(Identity::identity(10).unwrap().info, id);
 			assert_eq!(Balances::free_balance(10), 90);
+			assert_ok!(Identity::clear_identity(Origin::signed(10)));
+			assert_eq!(Balances::free_balance(10), 100);
+			assert_noop!(Identity::clear_identity(Origin::signed(10)), "not found");
 		});
 	}
 

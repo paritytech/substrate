@@ -15,13 +15,12 @@ system = { package = "frame-system", path = "../system", default-features = fals
 
 [dev-dependencies]
 primitives = { package = "sp-core",  path = "../../primitives/core" }
-balances = { package = "pallet-balances", path = "../balances", default-features = false }
+balances = { package = "pallet-balances", path = "../balances" }
 
 [features]
 default = ["std"]
 std = [
 	"serde",
-	"balances/std",
 	"codec/std",
 	"rstd/std",
 	"runtime-io/std",
