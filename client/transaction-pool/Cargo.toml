@@ -15,7 +15,6 @@ sp-api = { path = "../../primitives/sr-api" }
 sp-runtime = { path = "../../primitives/sr-primitives" }
 txpool = { package = "sc-transaction-graph", path = "./graph" }
 txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
-txpool-runtime-api = { package = "sp-transaction-pool-runtime-api", path = "../../primitives/transaction-pool/runtime-api" }
 client-api = { package = "sc-client-api", path = "../api" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 
