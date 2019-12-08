@@ -109,6 +109,21 @@ pub enum Data<Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> {
 	Hash(Hash),
 }
 
+impl <Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> Data<Hash> {
+	fn ensure_valid(&self) -> Result {
+		if let Data::Raw(ref x) = self {
+			ensure!(x.len() <= 32, "oversize raw data");
+		}
+		Ok(())
+	}
+}
+
+impl <Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> Default for Data<Hash> {
+	fn default() -> Self {
+		Self::None
+	}
+}
+
 /// An identifier for a single name registrar/identity verification service.
 pub type RegistrarIndex = u32;
 
@@ -167,6 +182,7 @@ impl<
 /// NOTE: This should be stored at the end of the storage item to facilitate the addition of extra
 /// fields in a backwards compatible way through a specialised `Decode` impl.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[cfg_attr(test, derive(Default))]
 pub struct IdentityInfo<
 	Hash: Encode + Decode + Clone + Debug + Eq + PartialEq
 > {
@@ -255,16 +271,16 @@ pub struct RegistrarInfo<
 decl_storage! {
 	trait Store for Module<T: Trait> as Sudo {
 		/// Information that is pertinent to an account. Registrer
-		IdentityOf: map T::AccountId => Option<Registration<BalanceOf<T>, T::Hash>>;
+		pub IdentityOf get(fn identity): map T::AccountId => Option<Registration<BalanceOf<T>, T::Hash>>;
 
 		/// Alternative "sub" identites of this account.
-		SubsOf: map T::AccountId => (BalanceOf<T>, Vec<(T::AccountId, Data<T::Hash>)>);
+		pub SubsOf get(fn subs): map T::AccountId => (BalanceOf<T>, Vec<(T::AccountId, Data<T::Hash>)>);
 
 		/// The set of registrars. Not expected to get very big as can only be added through a
 		/// special origin (likely a council motion).
 		///
 		/// The index into this can be cast to `RegistrarIndex` to get a valid value.
-		Registrars: Vec<Option<RegistrarInfo<BalanceOf<T>, T::AccountId>>>;
+		pub Registrars get(fn registrars): Vec<Option<RegistrarInfo<BalanceOf<T>, T::AccountId>>>;
 	}
 }
 
@@ -328,20 +344,27 @@ decl_module! {
 		fn set_identity(origin, info: IdentityInfo<T::Hash>) {
 			let sender = ensure_signed(origin)?;
 			let fd = <BalanceOf<T>>::from(info.additional.len() as u32) * T::FieldDeposit::get();
+
+			for (s, t) in info.additional.iter() { s.ensure_valid()?; t.ensure_valid()?; }
+
 			let mut id = match <IdentityOf<T>>::get(&sender) {
 				Some(mut id) => {
 					// Only keep non-positive judgements.
 					id.judgements.retain(|j| j.1.is_sticky());
-					// Return the deposit, if possible.
-					let _ = T::Currency::unreserve(&sender, id.deposit);
 					id.info = info;
 					id
 				}
 				None => Registration { info, judgements: Vec::new(), deposit: Zero::zero() },
 			};
 
+			let old_deposit = id.deposit;
 			id.deposit = T::BasicDeposit::get() + fd;
-			T::Currency::reserve(&sender, id.deposit)?;
+			if id.deposit > old_deposit {
+				T::Currency::reserve(&sender, id.deposit - old_deposit)?;
+			}
+			if old_deposit > id.deposit {
+				let _ = T::Currency::unreserve(&sender, old_deposit - id.deposit);
+			}
 
 			<IdentityOf<T>>::insert(&sender, id);
 			Self::deposit_event(RawEvent::IdentitySet(sender));
@@ -581,9 +604,9 @@ mod tests {
 		type CreationFee = CreationFee;
 	}
 	parameter_types! {
-		pub const BasicDeposit: u64 = 1;
-		pub const FieldDeposit: u64 = 1;
-		pub const SubAccountDeposit: u64 = 1;
+		pub const BasicDeposit: u64 = 10;
+		pub const FieldDeposit: u64 = 10;
+		pub const SubAccountDeposit: u64 = 10;
 		pub const MaximumSubAccounts: u32 = 2;
 		pub const One: u64 = 1;
 		pub const Two: u64 = 2;
@@ -596,8 +619,8 @@ mod tests {
 		type FieldDeposit = FieldDeposit;
 		type SubAccountDeposit = SubAccountDeposit;
 		type MaximumSubAccounts = MaximumSubAccounts;
-		type ForceOrigin = EnsureSignedBy<One, u64>;
-		type RegistrarOrigin = EnsureSignedBy<Two, u64>;
+		type RegistrarOrigin = EnsureSignedBy<One, u64>;
+		type ForceOrigin = EnsureSignedBy<Two, u64>;
 	}
 	type Balances = balances::Module<Test>;
 	type Identity = Module<Test>;
@@ -611,73 +634,58 @@ mod tests {
 			balances: vec![
 				(1, 10),
 				(2, 10),
+				(3, 10),
+				(10, 100),
+				(20, 100),
+				(30, 100),
 			],
 			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
-/*
+
 	#[test]
-	fn kill_name_should_work() {
+	fn adding_registrar_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::set_name(Origin::signed(2), b"Dave".to_vec()));
-			assert_eq!(Balances::total_balance(&2), 10);
-			assert_ok!(Identity::kill_name(Origin::signed(1), 2));
-			assert_eq!(Balances::total_balance(&2), 8);
-			assert_eq!(<IdentityOf<Test>>::get(2), None);
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
+			assert_eq!(Identity::registrars(), vec![Some(RegistrarInfo { account: 3, fee: 10 })]);
 		});
 	}
 
 	#[test]
-	fn force_name_should_work() {
+	fn registration_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(
-				Identity::set_name(Origin::signed(2), b"Dr. David Brubeck, III".to_vec()),
-				"Identity too long"
-			);
-
-			assert_ok!(Identity::set_name(Origin::signed(2), b"Dave".to_vec()));
-			assert_eq!(Balances::reserved_balance(&2), 2);
-			assert_ok!(Identity::force_name(Origin::signed(1), 2, b"Dr. David Brubeck, III".to_vec()));
-			assert_eq!(Balances::reserved_balance(&2), 2);
-			assert_eq!(<IdentityOf<Test>>::get(2).unwrap(), (b"Dr. David Brubeck, III".to_vec(), 2));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
+			assert_ok!(Identity::set_identity(Origin::signed(10), IdentityInfo {
+				display: Data::Raw(b"ten".to_vec()),
+				.. Default::default()
+			}));
+			assert_eq!(Identity::identity(10).unwrap().info, IdentityInfo {
+				display: Data::Raw(b"ten".to_vec()),
+				.. Default::default()
+			});
+			assert_eq!(Balances::free_balance(10), 90);
 		});
 	}
 
 	#[test]
-	fn normal_operation_should_work() {
+	fn field_deposit_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::set_name(Origin::signed(1), b"Gav".to_vec()));
-			assert_eq!(Balances::reserved_balance(&1), 2);
-			assert_eq!(Balances::free_balance(&1), 8);
-			assert_eq!(<IdentityOf<Test>>::get(1).unwrap().0, b"Gav".to_vec());
-
-			assert_ok!(Identity::set_name(Origin::signed(1), b"Gavin".to_vec()));
-			assert_eq!(Balances::reserved_balance(&1), 2);
-			assert_eq!(Balances::free_balance(&1), 8);
-			assert_eq!(<IdentityOf<Test>>::get(1).unwrap().0, b"Gavin".to_vec());
-
-			assert_ok!(Identity::clear_name(Origin::signed(1)));
-			assert_eq!(Balances::reserved_balance(&1), 0);
-			assert_eq!(Balances::free_balance(&1), 10);
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
+			assert_noop!(Identity::set_identity(Origin::signed(10), IdentityInfo {
+				additional: vec![(Data::Raw(b"number".to_vec()), Data::Raw(vec![0; 33]))],
+				.. Default::default()
+			}), "oversize raw data");
+			assert_ok!(Identity::set_identity(Origin::signed(10), IdentityInfo {
+				additional: vec![
+					(Data::Raw(b"number".to_vec()), Data::Raw(10u32.encode())),
+					(Data::Raw(b"text".to_vec()), Data::Raw(b"10".to_vec())),
+				], .. Default::default()
+			}));
+			assert_eq!(Balances::free_balance(10), 70);
 		});
 	}
-
-	#[test]
-	fn error_catching_should_work() {
-		new_test_ext().execute_with(|| {
-			assert_noop!(Identity::clear_name(Origin::signed(1)), "Not named");
-
-			assert_noop!(Identity::set_name(Origin::signed(3), b"Dave".to_vec()), "not enough free funds");
-
-			assert_noop!(Identity::set_name(Origin::signed(1), b"Ga".to_vec()), "Identity too short");
-			assert_noop!(
-				Identity::set_name(Origin::signed(1), b"Gavin James Wood, Esquire".to_vec()),
-				"Identity too long"
-			);
-			assert_ok!(Identity::set_name(Origin::signed(1), b"Dave".to_vec()));
-			assert_noop!(Identity::kill_name(Origin::signed(2), 1), "bad origin");
-			assert_noop!(Identity::force_name(Origin::signed(2), 1, b"Whatever".to_vec()), "bad origin");
-		});
-	}*/
 }

@@ -21,6 +21,7 @@ balances = { package = "pallet-balances", path = "../balances", default-features
 default = ["std"]
 std = [
 	"serde",
+	"balances/std",
 	"codec/std",
 	"rstd/std",
 	"runtime-io/std",
