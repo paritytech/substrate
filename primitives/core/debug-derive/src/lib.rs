@@ -25,7 +25,7 @@
 //! blob from unneeded code.
 //!
 //! ```rust
-//! #[derive(substrate_debug_derive::RuntimeDebug)]
+//! #[derive(sp_debug_derive::RuntimeDebug)]
 //!	struct MyStruct;
 //!
 //!	assert_eq!(format!("{:?}", MyStruct), "MyStruct");

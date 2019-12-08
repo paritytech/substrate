@@ -19,13 +19,8 @@ use std::sync::Arc;
 use log::{info, trace, warn};
 use parking_lot::RwLock;
 use client::Client;
-use client_api::{
-	CallExecutor,
-	backend::{AuxStore, Backend, Finalizer},
-	blockchain::HeaderBackend,
-	error::Error as ClientError,
-	well_known_cache_keys,
-};
+use client_api::{CallExecutor, backend::{AuxStore, Backend, Finalizer}};
+use sp_blockchain::{HeaderBackend, Error as ClientError, well_known_cache_keys};
 use codec::{Encode, Decode};
 use consensus_common::{
 	import_queue::Verifier,
@@ -33,10 +28,10 @@ use consensus_common::{
 	BlockCheckParams, Error as ConsensusError,
 };
 use network::config::{BoxFinalityProofRequestBuilder, FinalityProofRequestBuilder};
-use sr_primitives::Justification;
-use sr_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT, DigestFor};
+use sp_runtime::Justification;
+use sp_runtime::traits::{NumberFor, Block as BlockT, Header as HeaderT, DigestFor};
 use fg_primitives::{self, AuthorityList};
-use sr_primitives::generic::BlockId;
+use sp_runtime::generic::BlockId;
 use primitives::{H256, Blake2Hasher};
 
 use crate::GenesisAuthoritySetProvider;
@@ -664,6 +659,7 @@ pub mod tests {
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: true,
+			import_existing: false,
 		};
 		do_import_block::<_, _, _, TestJustification>(
 			&client,
@@ -687,7 +683,7 @@ pub mod tests {
 
 	#[test]
 	fn finality_proof_not_required_when_consensus_data_does_not_changes_and_correct_justification_provided() {
-		let justification = TestJustification(true, Vec::new()).encode();
+		let justification = TestJustification((0, vec![(AuthorityId::from_slice(&[1; 32]), 1)]), Vec::new()).encode();
 		assert_eq!(import_block(HashMap::new(), Some(justification)), ImportResult::Imported(ImportedAux {
 			clear_justification_requests: false,
 			needs_justification: false,
@@ -714,7 +710,7 @@ pub mod tests {
 
 	#[test]
 	fn finality_proof_required_when_consensus_data_changes_and_incorrect_justification_provided() {
-		let justification = TestJustification(false, Vec::new()).encode();
+		let justification = TestJustification((0, vec![]), Vec::new()).encode();
 		let mut cache = HashMap::new();
 		cache.insert(well_known_cache_keys::AUTHORITIES, vec![AuthorityId::from_slice(&[2; 32])].encode());
 		assert_eq!(

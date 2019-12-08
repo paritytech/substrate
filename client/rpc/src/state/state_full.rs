@@ -19,7 +19,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::ops::Range;
-use futures03::{future, StreamExt as _, TryStreamExt as _};
+use futures::{future, StreamExt as _, TryStreamExt as _};
 use log::warn;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use rpc::{
@@ -28,20 +28,23 @@ use rpc::{
 };
 
 use api::Subscriptions;
-use client_api::{backend::Backend, error::Result as ClientResult, error::Error as ClientError};
-use client::{Client, CallExecutor, BlockchainEvents};
+use client_api::backend::Backend;
+use sp_blockchain::{Result as ClientResult, Error as ClientError};
+use client::{
+	Client, CallExecutor, BlockchainEvents, 
+};
 use primitives::{
 	H256, Blake2Hasher, Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet},
 };
 use runtime_version::RuntimeVersion;
 use state_machine::ExecutionStrategy;
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor, ProvideRuntimeApi, SaturatedConversion},
 };
 use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 
-use sr_api::Metadata;
+use sp_api::Metadata;
 
 use super::{StateBackend, error::{FutureResult, Error, Result}, client_err};
 
@@ -221,7 +224,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		RA: Send + Sync + 'static,
 		Client<B, E, Block, RA>: ProvideRuntimeApi,
 		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-			Metadata<Block, Error = client::error::Error>,
+			Metadata<Block, Error = sp_blockchain::Error>,
 {
 	fn call(
 		&self,

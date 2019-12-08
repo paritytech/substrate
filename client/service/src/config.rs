@@ -19,10 +19,10 @@
 pub use client::ExecutionStrategies;
 pub use client_db::{kvdb::KeyValueDB, PruningMode};
 pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
-pub use substrate_executor::WasmExecutionMethod;
+pub use sc_executor::WasmExecutionMethod;
 
 use std::{path::PathBuf, net::SocketAddr, sync::Arc};
-use transaction_pool;
+pub use txpool::txpool::Options as TransactionPoolOptions;
 use chain_spec::{ChainSpec, RuntimeGenesis, Extension, NoExtension};
 use primitives::crypto::Protected;
 use target_info::Target;
@@ -40,7 +40,7 @@ pub struct Configuration<C, G, E = NoExtension> {
 	/// Node roles.
 	pub roles: Roles,
 	/// Extrinsic pool configuration.
-	pub transaction_pool: transaction_pool::txpool::Options,
+	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
 	pub network: NetworkConfiguration,
 	/// Path to the base configuration directory.
@@ -73,6 +73,8 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub rpc_ws_max_connections: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
+	/// Grafana data source http port. `None` if disabled.
+	pub grafana_port: Option<SocketAddr>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
 	/// External WASM transport for the telemetry. If `Some`, when connection to a telemetry
@@ -98,6 +100,10 @@ pub struct Configuration<C, G, E = NoExtension> {
 	///
 	/// Should only be set when `node` is running development mode.
 	pub dev_key_seed: Option<String>,
+	/// Tracing targets
+	pub tracing_targets: Option<String>,
+	/// Tracing receiver
+	pub tracing_receiver: sc_tracing::TracingReceiver,
 }
 
 /// Configuration of the database of the client.
@@ -147,6 +153,7 @@ impl<C, G, E> Configuration<C, G, E> where
 			rpc_ws: None,
 			rpc_ws_max_connections: None,
 			rpc_cors: Some(vec![]),
+			grafana_port: None,
 			telemetry_endpoints: None,
 			telemetry_external_transport: None,
 			default_heap_pages: None,
@@ -156,6 +163,8 @@ impl<C, G, E> Configuration<C, G, E> where
 			disable_grandpa: false,
 			keystore_password: None,
 			dev_key_seed: None,
+			tracing_targets: Default::default(),
+			tracing_receiver: Default::default(),
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 

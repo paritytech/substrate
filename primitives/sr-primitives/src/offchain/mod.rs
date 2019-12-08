@@ -14,6 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! A collection of higher lever helpers for offchain workers.
+//! A collection of higher lever helpers for offchain calls.
 
 pub mod http;
