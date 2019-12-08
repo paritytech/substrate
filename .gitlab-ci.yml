@@ -15,6 +15,7 @@ stages:
 
 variables:
   GIT_STRATEGY:                    fetch
+  GIT_DEPTH:                       "3"
   CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
   SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
   CARGO_INCREMENTAL:               0
@@ -55,6 +56,8 @@ variables:
       - runner_system_failure
       - unknown_failure
       - api_failure
+  dependencies:                    []
+  interruptible:                   true
   tags:
     - linux-docker
 
@@ -79,6 +82,7 @@ check-runtime:
     GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
   script:
     - ./.maintain/gitlab/check_runtime.sh
+  interruptible:                   true
   allow_failure:                   true
 
 
@@ -90,6 +94,7 @@ check-line-width:
     - /^[0-9]+$/
   script:
     - ./.maintain/gitlab/check_line_width.sh
+  interruptible:                   true
   allow_failure:                   true
 
 
@@ -354,23 +359,16 @@ check_polkadot:
   stage:                           build
   <<:                              *docker-env
   allow_failure:                   true
-  dependencies:
-    - test-linux-stable
   script:
-    - COMMIT_HASH=$(git rev-parse HEAD)
     - SUBSTRATE_PATH=$(pwd)
     # Clone the current Polkadot master branch into ./polkadot.
     - git clone --depth 1 https://gitlab.parity.io/parity/polkadot.git
     - cd polkadot
-    # Within Polkadot 'master' alter each Cargo.toml that references the
-    # Substrate 'polkadot-master' branch:
-    # 1. Replace the 'branch = "polkadot-master"' statements with the rev of our
-    #    commit.
-    # 2. Replace 'git = "https://.*"' with 'git = "file://.*"' (the local
-    #    checked out Substrate repository one folder above).
-    # 3. Remove any trailing commas.
-    - git grep -l "polkadot-master" | grep toml | xargs sed -i "s/branch.*=.*\"polkadot-master\"/rev = \"$COMMIT_HASH\"/; s~https://github.com/paritytech/substrate~file://$SUBSTRATE_PATH~; s/,\s*}/ }/"
-    # Make sure 'Cargo.lock' matches 'Cargo.toml'. It's enough to update one
+    # Make sure we override the crates in native and wasm build
+    - mkdir .cargo
+    - echo "paths = [ \"$SUBSTRATE_PATH\" ]" > .cargo/config
+    - mkdir -p target/debug/wbuild/.cargo
+    - echo "paths = [ \"$SUBSTRATE_PATH\" ]" > target/debug/wbuild/.cargo/config
     # package, others are updated along the way.
     - cargo update -p sp-io
     # Check whether Polkadot 'master' branch builds with this Substrate commit.

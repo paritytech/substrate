@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
-use crate::legacy_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOut, CustomProtoHandlerIn};
-use crate::legacy_proto::upgrade::RegisteredProtocol;
+use crate::protocol::legacy_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOut, CustomProtoHandlerIn};
+use crate::protocol::legacy_proto::upgrade::RegisteredProtocol;
 use bytes::BytesMut;
 use fnv::FnvHashMap;
 use futures::prelude::*;
@@ -940,7 +940,10 @@ where
 				// a different chain, or a node that doesn't speak the same protocol(s). We
 				// decrease the node's reputation, hence lowering the chances we try this node
 				// again in the short term.
-				self.peerset.report_peer(source.clone(), i32::min_value());
+				self.peerset.report_peer(
+					source.clone(),
+					peerset::ReputationChange::new(i32::min_value(), "Protocol error")
+				);
 				self.disconnect_peer_inner(&source, Some(Duration::from_secs(5)));
 			}
 		}

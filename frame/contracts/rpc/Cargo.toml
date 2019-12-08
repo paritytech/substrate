@@ -15,3 +15,6 @@ rpc-primitives = { package = "sp-rpc", path = "../../../primitives/rpc" }
 serde = { version = "1.0.101", features = ["derive"] }
 sp-runtime = { path = "../../../primitives/sr-primitives" }
 pallet-contracts-rpc-runtime-api = { path = "./runtime-api" }
+
+[dev-dependencies]
+serde_json = "1.0.41"
