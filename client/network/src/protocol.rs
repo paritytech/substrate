@@ -1070,7 +1070,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.specialization.on_connect(&mut context, who.clone(), status);
 
 		// Notify all the notification protocols as open.
-		CustomMessageOutcome::NotificationsStreamOpened {
+		CustomMessageOutcome::NotificationStreamOpened {
 			remote: who,
 			protocols: self.registered_notif_protocols.iter().cloned().collect(),
 			roles: info.roles,
@@ -1117,7 +1117,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		// we handle it by notifying that we opened channels with everyone.
 		self.context_data.peers.iter()
 			.map(|(peer_id, peer)|
-				event::Event::NotificationsStreamOpened {
+				event::Event::NotificationStreamOpened {
 					remote: peer_id.clone(),
 					engine_id,
 					roles: peer.info.roles,
@@ -1794,9 +1794,9 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
-	/// Notifications protocols have been opened with a remote.
-	NotificationsStreamOpened { remote: PeerId, protocols: Vec<ConsensusEngineId>, roles: Roles },
-	/// Notifications protocols have been closed with a remote.
+	/// Notification protocols have been opened with a remote.
+	NotificationStreamOpened { remote: PeerId, protocols: Vec<ConsensusEngineId>, roles: Roles },
+	/// Notification protocols have been closed with a remote.
 	NotificationsStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
 	/// Messages have been received on one or more notifications protocols.
 	NotificationsReceived { remote: PeerId, messages: Vec<(ConsensusEngineId, Bytes)> },

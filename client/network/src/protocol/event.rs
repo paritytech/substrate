@@ -50,7 +50,7 @@ pub enum Event {
 	/// Opened a substream with the given node with the given notifications protocol.
 	///
 	/// The protocol is always one of the notification protocols that have been registered.
-	NotificationsStreamOpened {
+	NotificationStreamOpened {
 		/// Node we opened the substream with.
 		remote: PeerId,
 		/// The concerned protocol. Each protocol uses a different substream.
@@ -60,7 +60,7 @@ pub enum Event {
 	},
 
 	/// Closed a substream with the given node. Always matches a corresponding previous
-	/// `NotificationsStreamOpened` message.
+	/// `NotificationStreamOpened` message.
 	NotificationsStreamClosed {
 		/// Node we closed the substream with.
 		remote: PeerId,

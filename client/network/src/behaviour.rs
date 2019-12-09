@@ -137,9 +137,9 @@ Behaviour<B, S, H> {
 				self.events.push(BehaviourOut::JustificationImport(origin, hash, nb, justification)),
 			CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
 				self.events.push(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)),
-			CustomMessageOutcome::NotificationsStreamOpened { remote, protocols, roles } =>
+			CustomMessageOutcome::NotificationStreamOpened { remote, protocols, roles } =>
 				for engine_id in protocols {
-					self.events.push(BehaviourOut::Event(Event::NotificationsStreamOpened {
+					self.events.push(BehaviourOut::Event(Event::NotificationStreamOpened {
 						remote: remote.clone(),
 						engine_id,
 						roles,

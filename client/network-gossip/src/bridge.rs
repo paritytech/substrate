@@ -101,7 +101,7 @@ impl<B: BlockT> GossipEngine<B> {
 			let mut stream = Compat01As03::new(event_stream);
 			while let Some(Ok(event)) = stream.next().await {
 				match event {
-					Event::NotificationsStreamOpened { remote, engine_id: msg_engine_id, roles } => {
+					Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, roles } => {
 						if msg_engine_id != engine_id {
 							continue;
 						}

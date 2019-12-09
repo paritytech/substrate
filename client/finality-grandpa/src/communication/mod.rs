@@ -112,18 +112,18 @@ pub(crate) fn register_dummy_protocol<B: BlockT, N: Network<B>>(network: N) {
 
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
 pub(crate) struct NetworkBridge<B: BlockT> {
-	service: GossipEngine<B>,
+	gossip_engine: GossipEngine<B>,
 	validator: Arc<GossipValidator<B>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
 }
 
 impl<B: BlockT> NetworkBridge<B> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
-	/// handle and a future that must be polled to completion to finish startup.
+	/// handle.
 	/// On creation it will register previous rounds' votes with the gossip
 	/// service taken from the VoterSetState.
 	pub(crate) fn new<N: Network<B> + Clone + Send + 'static>(
-		service: N,
+		gossip_engine: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		executor: &impl futures03::task::Spawn,
@@ -135,7 +135,7 @@ impl<B: BlockT> NetworkBridge<B> {
 		);
 
 		let validator = Arc::new(validator);
-		let service = GossipEngine::new(service, executor, GRANDPA_ENGINE_ID, validator.clone());
+		let gossip_engine = GossipEngine::new(gossip_engine, executor, GRANDPA_ENGINE_ID, validator.clone());
 
 		{
 			// register all previous votes with the gossip service so that they're
@@ -159,7 +159,7 @@ impl<B: BlockT> NetworkBridge<B> {
 						}
 					);
 
-					service.register_gossip_message(
+					gossip_engine.register_gossip_message(
 						topic,
 						message.encode(),
 					);
@@ -175,10 +175,10 @@ impl<B: BlockT> NetworkBridge<B> {
 			}
 		}
 
-		let (rebroadcast_job, neighbor_sender) = periodic::neighbor_packet_worker(service.clone());
-		let reporting_job = report_stream.consume(service.clone());
+		let (rebroadcast_job, neighbor_sender) = periodic::neighbor_packet_worker(gossip_engine.clone());
+		let reporting_job = report_stream.consume(gossip_engine.clone());
 
-		let bridge = NetworkBridge { service, validator, neighbor_sender };
+		let bridge = NetworkBridge { gossip_engine, validator, neighbor_sender };
 
 		let executor = Compat::new(executor);
 		executor.execute(Box::new(rebroadcast_job.select(on_exit.clone().map(Ok).compat()).then(|_| Ok(()))))
@@ -238,7 +238,7 @@ impl<B: BlockT> NetworkBridge<B> {
 		});
 
 		let topic = round_topic::<B>(round.0, set_id.0);
-		let incoming = Compat::new(self.service.messages_for(topic)
+		let incoming = Compat::new(self.gossip_engine.messages_for(topic)
 			.map(|item| Ok::<_, ()>(item)))
 			.filter_map(|notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
@@ -295,7 +295,7 @@ impl<B: BlockT> NetworkBridge<B> {
 		let outgoing = OutgoingMessages::<B> {
 			round: round.0,
 			set_id: set_id.0,
-			network: self.service.clone(),
+			network: self.gossip_engine.clone(),
 			locals,
 			sender: tx,
 			has_voted,
@@ -329,7 +329,7 @@ impl<B: BlockT> NetworkBridge<B> {
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 
-		let service = self.service.clone();
+		let service = self.gossip_engine.clone();
 		let topic = global_topic::<B>(set_id.0);
 		let incoming = incoming_global(
 			service,
@@ -340,7 +340,7 @@ impl<B: BlockT> NetworkBridge<B> {
 		);
 
 		let outgoing = CommitsOut::<B>::new(
-			self.service.clone(),
+			self.gossip_engine.clone(),
 			set_id.0,
 			is_voter,
 			self.validator.clone(),
@@ -362,12 +362,12 @@ impl<B: BlockT> NetworkBridge<B> {
 	/// should make a best effort to fetch the block from any peers it is
 	/// connected to (NOTE: this assumption will change in the future #3629).
 	pub(crate) fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		self.service.set_sync_fork_request(peers, hash, number)
+		self.gossip_engine.set_sync_fork_request(peers, hash, number)
 	}
 }
 
 fn incoming_global<B: BlockT>(
-	mut service: GossipEngine<B>,
+	mut gossip_engine: GossipEngine<B>,
 	topic: B::Hash,
 	voters: Arc<VoterSet<AuthorityId>>,
 	gossip_validator: Arc<GossipValidator<B>>,
@@ -376,7 +376,7 @@ fn incoming_global<B: BlockT>(
 	let process_commit = move |
 		msg: FullCommitMessage<B>,
 		mut notification: network_gossip::TopicNotification,
-		service: &mut GossipEngine<B>,
+		gossip_engine: &mut GossipEngine<B>,
 		gossip_validator: &Arc<GossipValidator<B>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
@@ -398,7 +398,7 @@ fn incoming_global<B: BlockT>(
 			msg.set_id,
 		) {
 			if let Some(who) = notification.sender {
-				service.report(who, cost);
+				gossip_engine.report(who, cost);
 			}
 
 			return None;
@@ -408,7 +408,7 @@ fn incoming_global<B: BlockT>(
 		let commit = msg.message;
 		let finalized_number = commit.target_number;
 		let gossip_validator = gossip_validator.clone();
-		let service = service.clone();
+		let gossip_engine = gossip_engine.clone();
 		let neighbor_sender = neighbor_sender.clone();
 		let cb = move |outcome| match outcome {
 			voter::CommitProcessingOutcome::Good(_) => {
@@ -420,12 +420,12 @@ fn incoming_global<B: BlockT>(
 					|to, neighbor| neighbor_sender.send(to, neighbor),
 				);
 
-				service.gossip_message(topic, notification.message.clone(), false);
+				gossip_engine.gossip_message(topic, notification.message.clone(), false);
 			}
 			voter::CommitProcessingOutcome::Bad(_) => {
 				// report peer and do not gossip.
 				if let Some(who) = notification.sender.take() {
-					service.report(who, cost::INVALID_COMMIT);
+					gossip_engine.report(who, cost::INVALID_COMMIT);
 				}
 			}
 		};
@@ -438,12 +438,12 @@ fn incoming_global<B: BlockT>(
 	let process_catch_up = move |
 		msg: FullCatchUpMessage<B>,
 		mut notification: network_gossip::TopicNotification,
-		service: &mut GossipEngine<B>,
+		gossip_engine: &mut GossipEngine<B>,
 		gossip_validator: &Arc<GossipValidator<B>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
 		let gossip_validator = gossip_validator.clone();
-		let service = service.clone();
+		let gossip_engine = gossip_engine.clone();
 
 		if let Err(cost) = check_catch_up::<B>(
 			&msg.message,
@@ -451,7 +451,7 @@ fn incoming_global<B: BlockT>(
 			msg.set_id,
 		) {
 			if let Some(who) = notification.sender {
-				service.report(who, cost);
+				gossip_engine.report(who, cost);
 			}
 
 			return None;
@@ -461,7 +461,7 @@ fn incoming_global<B: BlockT>(
 			if let voter::CatchUpProcessingOutcome::Bad(_) = outcome {
 				// report peer
 				if let Some(who) = notification.sender.take() {
-					service.report(who, cost::INVALID_CATCH_UP);
+					gossip_engine.report(who, cost::INVALID_CATCH_UP);
 				}
 			}
 
@@ -473,7 +473,7 @@ fn incoming_global<B: BlockT>(
 		Some(voter::CommunicationIn::CatchUp(msg.message, cb))
 	};
 
-	Compat::new(service.messages_for(topic)
+	Compat::new(gossip_engine.messages_for(topic)
 		.map(|m| Ok::<_, ()>(m)))
 		.filter_map(|notification| {
 			// this could be optimized by decoding piecewise.
@@ -486,9 +486,9 @@ fn incoming_global<B: BlockT>(
 		.filter_map(move |(notification, msg)| {
 			match msg {
 				GossipMessage::Commit(msg) =>
-					process_commit(msg, notification, &mut service, &gossip_validator, &*voters),
+					process_commit(msg, notification, &mut gossip_engine, &gossip_validator, &*voters),
 				GossipMessage::CatchUp(msg) =>
-					process_catch_up(msg, notification, &mut service, &gossip_validator, &*voters),
+					process_catch_up(msg, notification, &mut gossip_engine, &gossip_validator, &*voters),
 				_ => {
 					debug!(target: "afg", "Skipping unknown message type");
 					return None;
@@ -501,7 +501,7 @@ fn incoming_global<B: BlockT>(
 impl<B: BlockT> Clone for NetworkBridge<B> {
 	fn clone(&self) -> Self {
 		NetworkBridge {
-			service: self.service.clone(),
+			gossip_engine: self.gossip_engine.clone(),
 			validator: Arc::clone(&self.validator),
 			neighbor_sender: self.neighbor_sender.clone(),
 		}
