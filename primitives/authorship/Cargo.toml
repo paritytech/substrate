@@ -6,15 +6,16 @@ description = "Authorship primitives"
 edition = "2018"
 
 [dependencies]
-sp-inherents = { package = "sp-inherents", path = "../inherents", default-features = false }
-sr-primitives = { package = "sp-runtime", path = "../sr-primitives", default-features = false }
+sp-inherents = { path = "../inherents", default-features = false }
+sp-runtime = { path = "../runtime", default-features = false }
 rstd = { package = "sp-std", path = "../sr-std", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 
 [features]
 default = [ "std" ]
 std = [
-    "codec/std",
-    "rstd/std",
-    "sp-inherents/std",
+	"codec/std",
+	"rstd/std",
+	"sp-inherents/std",
+	"sp-runtime/std",
 ]
