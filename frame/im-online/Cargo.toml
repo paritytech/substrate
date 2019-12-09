@@ -13,7 +13,7 @@ rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features 
 serde = { version = "1.0.101", optional = true }
 session = { package = "pallet-session", path = "../session", default-features = false }
 runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
-sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
+sp-runtime = { path = "../../primitives/runtime", default-features = false }
 sp-staking = { path = "../../primitives/sr-staking-primitives", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }

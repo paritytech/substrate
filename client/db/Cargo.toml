@@ -14,7 +14,7 @@ linked-hash-map = "0.5.2"
 hash-db = "0.15.2"
 client-api = { package = "sc-client-api", path = "../api" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
-sp-runtime = {  path = "../../primitives/sr-primitives" }
+sp-runtime = {  path = "../../primitives/runtime" }
 client = { package = "sc-client", path = "../" }
 state-machine = { package = "sp-state-machine", path = "../../primitives/state-machine" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
