@@ -63,6 +63,7 @@ members = [
 	"frame/finality-tracker",
 	"frame/generic-asset",
 	"frame/grandpa",
+	"frame/identity",
 	"frame/im-online",
 	"frame/indices",
 	"frame/membership",

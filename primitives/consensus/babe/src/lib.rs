@@ -157,7 +157,7 @@ pub struct BabeConfiguration {
 }
 
 #[cfg(feature = "std")]
-impl slots::SlotData for BabeConfiguration {
+impl sp_consensus::SlotData for BabeConfiguration {
 	fn slot_duration(&self) -> u64 {
 		self.slot_duration
 	}

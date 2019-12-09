@@ -16,9 +16,9 @@
 
 //! Stuff to do with the runtime's storage.
 
-use rstd::prelude::*;
+use rstd::{prelude::*, marker::PhantomData};
 use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
-use crate::traits::Len;
+use crate::{traits::Len, hash::{Twox128, StorageHasher}};
 
 pub mod unhashed;
 pub mod hashed;
@@ -351,4 +351,127 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 			KArg1: EncodeLike<K1>,
 			KArg2: EncodeLike<K2>,
 			V: codec::DecodeLength + Len;
+}
+
+/// Iterator for prefixed map.
+pub struct PrefixIterator<Value> {
+	prefix: Vec<u8>,
+	previous_key: Vec<u8>,
+	phantom_data: PhantomData<Value>,
+}
+
+impl<Value: Decode> Iterator for PrefixIterator<Value> {
+	type Item = Value;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		match runtime_io::storage::next_key(&self.previous_key) {
+			Some(next_key) if next_key.starts_with(&self.prefix[..]) => {
+				let value = unhashed::get(&next_key);
+
+				if value.is_none() {
+					runtime_print!(
+						"ERROR: returned next_key has no value:\nkey is {:?}\nnext_key is {:?}",
+						&self.previous_key, &next_key,
+					);
+				}
+
+				self.previous_key = next_key;
+
+				value
+			},
+			_ => None,
+		}
+	}
+}
+
+/// Trait for maps that store all its value after a unique prefix.
+///
+/// By default the final prefix is:
+/// ```nocompile
+/// Twox128(module_prefix) ++ Twox128(storage_prefix)
+/// ```
+pub trait StoragePrefixedMap<Value: FullCodec> {
+
+	/// Module prefix. Used for generating final key.
+	fn module_prefix() -> &'static [u8];
+
+	/// Storage prefix. Used for generating final key.
+	fn storage_prefix() -> &'static [u8];
+
+	fn final_prefix() -> [u8; 32] {
+		let mut final_key = [0u8; 32];
+		final_key[0..16].copy_from_slice(&Twox128::hash(Self::module_prefix()));
+		final_key[16..32].copy_from_slice(&Twox128::hash(Self::storage_prefix()));
+		final_key
+	}
+
+	fn remove_all() {
+		runtime_io::storage::clear_prefix(&Self::final_prefix())
+	}
+
+	fn iter() -> PrefixIterator<Value> {
+		let prefix = Self::final_prefix();
+		PrefixIterator {
+			prefix: prefix.to_vec(),
+			previous_key: prefix.to_vec(),
+			phantom_data: Default::default(),
+		}
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use primitives::hashing::twox_128;
+	use runtime_io::TestExternalities;
+	use crate::storage::{unhashed, StoragePrefixedMap};
+
+	#[test]
+	fn prefixed_map_works() {
+		TestExternalities::default().execute_with(|| {
+			struct MyStorage;
+			impl StoragePrefixedMap<u64> for MyStorage {
+				fn module_prefix() -> &'static [u8] {
+					b"MyModule"
+				}
+
+				fn storage_prefix() -> &'static [u8] {
+					b"MyStorage"
+				}
+			}
+
+			let key_before = {
+				let mut k = MyStorage::final_prefix();
+				let last = k.iter_mut().last().unwrap();
+				*last = last.checked_sub(1).unwrap();
+				k
+			};
+			let key_after = {
+				let mut k = MyStorage::final_prefix();
+				let last = k.iter_mut().last().unwrap();
+				*last = last.checked_add(1).unwrap();
+				k
+			};
+
+			unhashed::put(&key_before[..], &32u64);
+			unhashed::put(&key_after[..], &33u64);
+
+			let k = [twox_128(b"MyModule"), twox_128(b"MyStorage")].concat();
+			assert_eq!(MyStorage::final_prefix().to_vec(), k);
+
+			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![]);
+
+			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u64);
+			unhashed::put(&[&k[..], &vec![1, 1][..]].concat(), &2u64);
+			unhashed::put(&[&k[..], &vec![8][..]].concat(), &3u64);
+			unhashed::put(&[&k[..], &vec![10][..]].concat(), &4u64);
+
+			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![1, 2, 3, 4]);
+
+			MyStorage::remove_all();
+
+			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(unhashed::get(&key_before[..]), Some(32u64));
+			assert_eq!(unhashed::get(&key_after[..]), Some(33u64));
+		});
+	}
 }
