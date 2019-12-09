@@ -37,12 +37,11 @@
 mod storage_proof;
 mod justification;
 
-use crate::justification::GrandpaJustification;
+use crate::justification::{GrandpaJustification, JustificationError};
 use crate::storage_proof::{StorageProof, StorageProofChecker};
 
 use core::iter::FromIterator;
 use codec::{Encode, Decode};
-use client::error::Error as ClientError; // Not sure if this is allowed to be brought in...
 use fg_primitives::{AuthorityId, AuthorityWeight, AuthorityList, SetId};
 use grandpa::voter_set::VoterSet;
 use primitives::H256;
@@ -181,13 +180,12 @@ decl_error! {
 	}
 }
 
-impl From<ClientError> for Error {
-	fn from(e: ClientError) -> Self {
+impl From<JustificationError> for Error {
+	fn from(e: JustificationError) -> Self {
 		match e {
-			ClientError::BadJustification(_) | ClientError::JustificationDecode => {
+			JustificationError::BadJustification | JustificationError::JustificationDecode => {
 				Error::InvalidFinalityProof
 			},
-			_ => Error::UnknownClientError,
 		}
 	}
 }

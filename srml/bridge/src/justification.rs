@@ -18,12 +18,9 @@
 //! can be thought of as a finality proof. GRANDPA justifications consist
 //! of a commit message plus an ancestry proof for pre-commits.
 
-use client::{CallExecutor, Client};
-use client::backend::Backend;
-use client::error::Error as ClientError;
 use codec::{Encode, Decode};
 use core::cmp::{Ord, Ordering};
-use fg::{Commit, Error, Message};
+use fg::{Commit, Message}; // TODO: I can't import this stuff
 use fg_primitives::{AuthorityId, RoundNumber, SetId as SetIdNumber, AuthoritySignature};
 use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};
@@ -35,9 +32,17 @@ use rstd::collections::{
 };
 
 use sr_primitives::app_crypto::RuntimeAppPublic;
-use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
-use primitives::{H256, Blake2Hasher};
+use primitives::{H256};
+
+#[cfg(test)]
+use sr_primitives::generic::BlockId;
+#[cfg(test)]
+use primitives::Blake2Hasher;
+#[cfg(test)]
+use client::{CallExecutor, Client};
+#[cfg(test)]
+use client::backend::Backend;
 
 /// A GRANDPA justification for block finality, it includes a commit message and
 /// an ancestry proof including all headers routing all precommit target blocks
@@ -57,11 +62,12 @@ pub struct GrandpaJustification<Block: BlockT> {
 impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	/// Create a GRANDPA justification from the given commit. This method
 	/// assumes the commit is valid and well-formed.
+	#[cfg(test)]
 	pub(crate) fn from_commit<B, E, RA>(
 		client: &Client<B, E, Block, RA>,
 		round: u64,
 		commit: Commit<Block>,
-	) -> Result<GrandpaJustification<Block>, Error> where
+	) -> Result<GrandpaJustification<Block>, JustificationError> where
 		B: Backend<Block, Blake2Hasher>,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 		RA: Send + Sync,
@@ -70,8 +76,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		let mut votes_ancestries = Vec::new();
 
 		let error = || {
-			let msg = "invalid precommits for target commit".to_string();
-			Err(Error::Client(ClientError::BadJustification(msg)))
+			Err(JustificationError::BadJustification)
 		};
 
 		for signed in commit.precommits.iter() {
@@ -107,22 +112,22 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		finalized_target: (Block::Hash, NumberFor<Block>),
 		set_id: u64,
 		voters: &VoterSet<AuthorityId>,
-	) -> Result<GrandpaJustification<Block>, ClientError> where
+	) -> Result<GrandpaJustification<Block>, JustificationError> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
 		let justification = GrandpaJustification::<Block>::decode(&mut &*encoded)
-			.map_err(|_| ClientError::JustificationDecode)?;
+			.map_err(|_| JustificationError::JustificationDecode)?;
 
 		if (justification.commit.target_hash, justification.commit.target_number) != finalized_target {
-			let msg = "invalid commit target in grandpa justification".to_string();
-			Err(ClientError::BadJustification(msg))
+			// let msg = "invalid commit target in grandpa justification".to_string();
+			Err(JustificationError::BadJustification)
 		} else {
 			justification.verify(set_id, voters).map(|_| justification)
 		}
 	}
 
 	/// Validate the commit and the votes' ancestry proofs.
-	pub(crate) fn verify(&self, set_id: u64, voters: &VoterSet<AuthorityId>) -> Result<(), ClientError>
+	pub(crate) fn verify(&self, set_id: u64, voters: &VoterSet<AuthorityId>) -> Result<(), JustificationError>
 	where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
@@ -137,8 +142,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		) {
 			Ok(ref result) if result.ghost().is_some() => {},
 			_ => {
-				let msg = "invalid commit in grandpa justification".to_string();
-				return Err(ClientError::BadJustification(msg));
+				return Err(JustificationError::BadJustification);
 			}
 		}
 
@@ -151,8 +155,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 				self.round,
 				set_id,
 			) {
-				return Err(ClientError::BadJustification(
-					"invalid signature for precommit in grandpa justification".to_string()).into());
+				return Err(JustificationError::BadJustification)
 			}
 
 			if self.commit.target_hash == signed.precommit.target_hash {
@@ -168,8 +171,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 					}
 				},
 				_ => {
-					return Err(ClientError::BadJustification(
-						"invalid precommit ancestry proof in grandpa justification".to_string()).into());
+					return Err(JustificationError::BadJustification)
 				},
 			}
 		}
@@ -180,15 +182,14 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			.collect();
 
 		if visited_hashes != ancestry_hashes {
-			return Err(ClientError::BadJustification(
-				"invalid precommit ancestries in grandpa justification with unused headers".to_string()).into());
+			return Err(JustificationError::BadJustification)
 		}
 
 		Ok(())
 	}
 
 	/// Get the current commit message from the GRANDPA justification
-	pub(crate) fn get_commit(&self) -> Commit<Block> {
+	pub(crate) fn _get_commit(&self) -> Commit<Block> {
 		self.commit.clone()
 	}
 }
@@ -292,4 +293,9 @@ fn check_message_sig<Block: BlockT>(
 		// debug!(target: "afg", "Bad signature on message from {:?}", id);
 		Err(())
 	}
+}
+
+pub(crate) enum JustificationError {
+	BadJustification,
+	JustificationDecode,
 }

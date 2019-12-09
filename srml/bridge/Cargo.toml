@@ -8,7 +8,6 @@ edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
-client = { package = "substrate-client", path = "../../core/client" }
 fg = { package = "substrate-finality-grandpa", path = "../../core/finality-grandpa/" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path ="../../core/finality-grandpa/primitives", default-features = false }
 grandpa = { package = "finality-grandpa", version = "0.9.1", default-features = false, features = ["derive-codec"] }
