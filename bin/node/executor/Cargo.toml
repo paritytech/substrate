@@ -19,7 +19,7 @@ node-runtime = { path = "../runtime" }
 [dev-dependencies]
 node-testing = { path = "../testing" }
 test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
-sp-runtime = { path = "../../../primitives/sr-primitives" }
+sp-runtime = { path = "../../../primitives/runtime" }
 runtime_support = { package = "frame-support", path = "../../../frame/support" }
 balances = { package = "pallet-balances", path = "../../../frame/balances" }
 transaction-payment = { package = "pallet-transaction-payment", path = "../../../frame/transaction-payment" }
@@ -45,4 +45,3 @@ stress-test = []
 [[bench]]
 name = "bench"
 harness = false
-

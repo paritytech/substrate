@@ -27,7 +27,7 @@ runtime_version = { package = "sp-version", path = "../../../primitives/sr-versi
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 session = { package = "sp-session", path = "../../../primitives/session", default-features = false }
 sp-api = { path = "../../../primitives/sr-api", default-features = false }
-sp-runtime = {  path = "../../../primitives/sr-primitives", default-features = false }
+sp-runtime = { path = "../../../primitives/runtime", default-features = false }
 pallet-babe = { path = "../../../frame/babe", default-features = false }
 frame-system = { path = "../../../frame/system", default-features = false }
 frame-system-rpc-runtime-api = { path = "../../../frame/system/rpc/runtime-api", default-features = false }
