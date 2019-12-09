@@ -19,7 +19,7 @@ log = { version = "0.4.8", optional = true }
 memory-db = { version = "0.15.2", default-features = false }
 offchain-primitives = { package = "sp-offchain", path = "../../../primitives/offchain", default-features = false}
 primitives = { package = "sp-core", path = "../../../primitives/core", default-features = false }
-rstd = { package = "sp-std", path = "../../../primitives/sr-std", default-features = false }
+rstd = { package = "sp-std", path = "../../../primitives/sp-std", default-features = false }
 runtime-interface = { package = "sp-runtime-interface", path = "../../../primitives/runtime-interface", default-features = false}
 runtime_io = { package = "sp-io", path = "../../../primitives/sr-io", default-features = false }
 runtime_support = { package = "frame-support", path = "../../../frame/support", default-features = false }
@@ -27,7 +27,7 @@ runtime_version = { package = "sp-version", path = "../../../primitives/sr-versi
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 session = { package = "sp-session", path = "../../../primitives/session", default-features = false }
 sp-api = { path = "../../../primitives/sr-api", default-features = false }
-sp-runtime = {  path = "../../../primitives/sr-primitives", default-features = false }
+sp-runtime = { path = "../../../primitives/runtime", default-features = false }
 pallet-babe = { path = "../../../frame/babe", default-features = false }
 frame-system = { path = "../../../frame/system", default-features = false }
 frame-system-rpc-runtime-api = { path = "../../../frame/system/rpc/runtime-api", default-features = false }

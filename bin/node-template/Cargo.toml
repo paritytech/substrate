@@ -34,7 +34,7 @@ grandpa = { package = "sc-finality-grandpa", path = "../../client/finality-grand
 grandpa-primitives = { package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 sc-client = {  path = "../../client/" }
 runtime = { package = "node-template-runtime", path = "runtime" }
-sp-runtime = { path = "../../primitives/sr-primitives" }
+sp-runtime = { path = "../../primitives/runtime" }
 basic-authorship = { package = "sc-basic-authority", path  = "../../client/basic-authorship"}
 
 [build-dependencies]

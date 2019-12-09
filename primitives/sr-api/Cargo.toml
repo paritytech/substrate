@@ -8,8 +8,8 @@ edition = "2018"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 sp-api-proc-macro = { path = "proc-macro" }
 primitives = { package = "sp-core", path = "../core", default-features = false }
-rstd = { package = "sp-std", path = "../sr-std", default-features = false }
-sp-runtime = { path = "../sr-primitives", default-features = false }
+rstd = { package = "sp-std", path = "../sp-std", default-features = false }
+sp-runtime = { path = "../runtime", default-features = false }
 sp-version = { path = "../sr-version", default-features = false }
 state-machine = { package = "sp-state-machine", path = "../../primitives/state-machine", optional = true }
 

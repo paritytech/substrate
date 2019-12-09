@@ -11,7 +11,7 @@ runtime-io ={ package = "sp-io", path = "../../../primitives/sr-io", default-fea
 state-machine ={ package = "sp-state-machine", path = "../../../primitives/state-machine", optional = true }
 support = { package = "frame-support", version = "2", path = "../", default-features = false }
 inherents = { package = "sp-inherents", path = "../../../primitives/inherents", default-features = false }
-sp-runtime = { package = "sp-runtime", path = "../../../primitives/sr-primitives", default-features = false }
+sp-runtime = { package = "sp-runtime", path = "../../../primitives/runtime", default-features = false }
 primitives = { package = "sp-core", path = "../../../primitives/core", default-features = false }
 trybuild = "1.0.17"
 pretty_assertions = "0.6.1"

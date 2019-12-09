@@ -7,8 +7,8 @@ edition = "2018"
 [dependencies]
 sp-api = { path = "../../../../primitives/sr-api", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-rstd = { package = "sp-std", path = "../../../../primitives/sr-std", default-features = false }
-sp-runtime = { path = "../../../../primitives/sr-primitives", default-features = false }
+rstd = { package = "sp-std", path = "../../../../primitives/sp-std", default-features = false }
+sp-runtime = { path = "../../../../primitives/runtime", default-features = false }
 
 [features]
 default = ["std"]
