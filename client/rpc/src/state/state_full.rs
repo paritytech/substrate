@@ -29,7 +29,9 @@ use rpc::{
 
 use api::Subscriptions;
 use client_api::backend::Backend;
-use sp_blockchain::{Result as ClientResult, Error as ClientError};
+use sp_blockchain::{
+	Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata
+};
 use client::{
 	Client, CallExecutor, BlockchainEvents, 
 };
@@ -42,7 +44,6 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor, ProvideRuntimeApi, SaturatedConversion},
 };
-use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 
 use sp_api::Metadata;
 
