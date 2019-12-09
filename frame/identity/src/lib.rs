@@ -346,7 +346,20 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		/// Add a registrar to the system.
+		///
+		/// The dispatch origin for this call must be `RegistrarOrigin` or `Root`.
+		///
+		/// - `account`: the account of the registrar.
+		///
+		/// Emits `RegistrarAdded` if successful.
+		///
+		/// # <weight>
+		/// - `O(R)` where `R` registrar-count (governance-bounded).
+		/// - One storage mutation (codec `O(R)`).
+		/// - One event.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn add_registrar(origin, account: T::AccountId) {
 			T::RegistrarOrigin::try_origin(origin)
 				.map(|_| ())
@@ -361,17 +374,22 @@ decl_module! {
 			Self::deposit_event(RawEvent::RegistrarAdded(i));
 		}
 
-		/// Set an account's identity information.
+		/// Set an account's identity information and reserve the appropriate deposit.
 		///
-		/// If the account doesn't already have a name, then a fee of `ReservationFee` is reserved
-		/// in the account.
+		/// If the account already has identity information, the deposit is taken as part payment
+		/// for the new deposit.
 		///
-		/// The dispatch origin for this call must be _Signed_.
+		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
+		/// identity.
+		///
+		/// - `info`: The identity information.
+		///
+		/// Emits `IdentitySet` if successful.
 		///
 		/// # <weight>
-		/// - O(1).
+		/// - `O(X + R)` where `X` additional-field-count (deposit-bounded).
 		/// - At most two balance operations.
-		/// - One storage read/write.
+		/// - One storage mutation (codec `O(X + R)`).
 		/// - One event.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
@@ -404,9 +422,19 @@ decl_module! {
 
 		/// Set the sub-accounts of the sender.
 		///
-		/// The sender must have a registered identity.
+		/// Payment: Any aggregate balance reserved by previous `set_subs` calls will be returned
+		/// and an amount `SubAccountDeposit` will be reserved for each item in `subs`.
 		///
-		/// The dispatch origin for this call must be _Signed_.
+		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
+		/// identity.
+		///
+		/// - `subs`: The identity's sub-accounts.
+		///
+		/// # <weight>
+		/// - `O(S)` where `S` subs-count (hard- and deposit-bounded).
+		/// - At most two balance operations.
+		/// - One storage mutation (codec `O(S)`); one storage-exists.
+		/// # </weight>
 		fn set_subs(origin, subs: Vec<(T::AccountId, Data<T::Hash>)>) {
 			let sender = ensure_signed(origin)?;
 			ensure!(<IdentityOf<T>>::exists(&sender), "not found");
@@ -430,34 +458,67 @@ decl_module! {
 			}
 		}
 
-		/// Clear an account's identity info and return the deposit. Fails if the account was not
-		/// named. All sub-accounts are removed also.
+		/// Clear an account's identity info and all sub-account and return deposits.
 		///
-		/// The dispatch origin for this call must be _Signed_.
+		/// Payment: Reserved balances from `set_subs` and `set_identity` are returned. Verification
+		/// request deposits are not returned; they should be cancelled manually using
+		/// `cancel_request`.
+		///
+		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
+		/// identity.
+		///
+		/// Emits `IdentityCleared` if successful.
 		///
 		/// # <weight>
-		/// - O(1).
-		/// - One balance operation.
-		/// - One storage read/write.
+		/// - `O(R + S + X)`.
+		/// - One balance-reserve operation.
+		/// - Two storage mutations.
 		/// - One event.
 		/// # </weight>
 		fn clear_identity(origin) {
 			let sender = ensure_signed(origin)?;
 
-			let deposit = <IdentityOf<T>>::take(&sender).ok_or("not found")?.deposit;
+			let deposit = <IdentityOf<T>>::take(&sender).ok_or("not named")?.total_deposit()
+				+ <SubsOf<T>>::take(&sender).0;
 
 			let _ = T::Currency::unreserve(&sender, deposit.clone());
 
 			Self::deposit_event(RawEvent::IdentityCleared(sender, deposit));
 		}
 
-		/// Request a judgement from a registrar. A fee will be taken.
+		/// Request a judgement from a registrar.
+		///
+		/// Payment: At most `max_fee` will be reserved for payment to the registrar if judgement
+		/// given.
+		///
+		/// The dispatch origin for this call must be _Signed_ and the sender must have a
+		/// registered identity.
+		///
+		/// - `reg_index`: The index of the registrar whose judgement is requested.
+		/// - `max_fee`: The maximum fee that may be paid. This should just be auto-populated as:
+		///
+		/// ```
+		/// Self::registrars(reg_index).fee
+		/// ```
+		///
+		/// Emits `JudgementRequested` if successful.
+		///
+		/// # <weight>
+		/// - `O(R + X)`.
+		/// - One balance-reserve operation.
+		/// - Storage: 1 read `O(R)`, 1 mutate `O(X + R)`.
+		/// - One event.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn request_judgement(origin, reg_index: RegistrarIndex) {
+		fn request_judgement(origin,
+			#[compact] reg_index: RegistrarIndex,
+			#[compact] max_fee: BalanceOf<T>,
+		) {
 			let sender = ensure_signed(origin)?;
 			let registrars = <Registrars<T>>::get();
 			let registrar = registrars.get(reg_index as usize).and_then(Option::as_ref)
 				.ok_or("empty index")?;
+			ensure!(max_fee >= registrar.fee, "fee changed");
 			let mut id = <IdentityOf<T>>::get(&sender).ok_or("no identity")?;
 
 			let item = (reg_index, Judgement::FeePaid(registrar.fee));
@@ -477,6 +538,23 @@ decl_module! {
 			Self::deposit_event(RawEvent::JudgementRequested(sender, reg_index));
 		}
 
+		/// Cancel a previous request.
+		///
+		/// Payment: A previously reserved deposit is returned on success.
+		///
+		/// The dispatch origin for this call must be _Signed_ and the sender must have a
+		/// registered identity.
+		///
+		/// - `reg_index`: The index of the registrar whose judgement is no longer requested.
+		///
+		/// Emits `JudgementUnrequested` if successful.
+		///
+		/// # <weight>
+		/// - `O(R + X)`.
+		/// - One balance-reserve operation.
+		/// - One storage mutation `O(R + X)`.
+		/// - One event.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn cancel_request(origin, reg_index: RegistrarIndex) {
 			let sender = ensure_signed(origin)?;
@@ -496,6 +574,18 @@ decl_module! {
 			Self::deposit_event(RawEvent::JudgementUnrequested(sender, reg_index));
 		}
 
+		/// Set the fee required for a judgement to be requested from a registrar.
+		///
+		/// The dispatch origin for this call must be _Signed_ and the sender must be the account
+		/// of the registrar whose index is `index`.
+		///
+		/// - `index`: the index of the registrar whose fee is to be set.
+		/// - `fee`: the new fee.
+		///
+		/// # <weight>
+		/// - `O(R)`.
+		/// - One storage mutation `O(R)`.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn set_fee(origin,
 			#[compact] index: RegistrarIndex,
@@ -511,6 +601,20 @@ decl_module! {
 			)
 		}
 
+		/// DESCRIPTION
+		///
+		/// The sender must have a registered identity.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Emits `Event` if successful.
+		///
+		/// # <weight>
+		/// - `O(R + S + X)`.
+		/// - One balance-reserve operation.
+		/// - Two storage mutations.
+		/// - One event.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn provide_judgement(origin,
 			#[compact] reg_index: RegistrarIndex,
@@ -541,6 +645,20 @@ decl_module! {
 			Self::deposit_event(RawEvent::JudgementGiven(target, reg_index));
 		}
 
+		/// DESCRIPTION
+		///
+		/// The sender must have a registered identity.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Emits `Event` if successful.
+		///
+		/// # <weight>
+		/// - `O(R + S + X)`.
+		/// - One balance-reserve operation.
+		/// - Two storage mutations.
+		/// - One event.
+		/// # </weight>
 		/// Remove an account's name and take charge of the deposit.
 		///
 		/// Fails if `who` has not been named. The deposit is dealt with through `T::Slashed`
