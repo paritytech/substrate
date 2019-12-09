@@ -98,7 +98,7 @@ pub trait Trait: system::Trait {
 /// Either underlying data or a hash of it, if the data is less than 32 bytes.
 ///
 /// Can also be `None`.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, RuntimeDebug)]
 pub enum Data<Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> {
 	/// No data here.
 	None,
@@ -109,14 +109,41 @@ pub enum Data<Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> {
 	Hash(Hash),
 }
 
-impl <Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> Data<Hash> {
-	fn ensure_valid(&self) -> Result {
-		if let Data::Raw(ref x) = self {
-			ensure!(x.len() <= 32, "oversize raw data");
-		}
-		Ok(())
+impl <Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> Decode for Data<Hash> {
+	fn decode<I: codec::Input>(input: &mut I) -> rstd::result::Result<Self, codec::Error> {
+		let b = input.read_byte()?;
+		Ok(match b {
+			0 => Data::None,
+			1 => Data::Hash(Hash::decode(input)?),
+			n @ 2 ..= 34 => {
+				let mut r = vec![0u8; n as usize - 2];
+				input.read(&mut r[..])?;
+				Data::Raw(r)
+			}
+			_ => return Err(codec::Error::from("invalid leading byte")),
+		})
 	}
 }
+
+impl <Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> Encode for Data<Hash> {
+	fn encode(&self) -> Vec<u8> {
+		match self {
+			Data::None => vec![0u8; 1],
+			Data::Hash(ref h) => {
+				let mut r = h.encode();
+				r.insert(0, 1);
+				r
+			}
+			Data::Raw(ref x) => {
+				let l = x.len().min(32);
+				let mut r = vec![l as u8 + 2; l + 1];
+				&mut r[1..].copy_from_slice(&x[..l as usize]);
+				r
+			}
+		}
+	}
+}
+impl <Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> codec::EncodeLike for Data<Hash> {}
 
 impl <Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> Default for Data<Hash> {
 	fn default() -> Self {
@@ -155,13 +182,6 @@ pub enum Judgement<
 impl<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
 > Judgement<Balance> {
-	fn is_evil(&self) -> bool {
-		match self {
-			Judgement::Erroneous => true,
-			_ => false,
-		}
-	}
-
 	fn has_deposit(&self) -> bool {
 		match self {
 			Judgement::FeePaid(_) => true,
@@ -345,8 +365,6 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			let fd = <BalanceOf<T>>::from(info.additional.len() as u32) * T::FieldDeposit::get();
 
-			for (s, t) in info.additional.iter() { s.ensure_valid()?; t.ensure_valid()?; }
-
 			let mut id = match <IdentityOf<T>>::get(&sender) {
 				Some(mut id) => {
 					// Only keep non-positive judgements.
@@ -419,26 +437,26 @@ decl_module! {
 			Self::deposit_event(RawEvent::IdentityCleared(sender, deposit));
 		}
 
-		/// Ask for a judgement from a registrar. A fee will be taken.
+		/// Request a judgement from a registrar. A fee will be taken.
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn ask_judgement(origin, reg_index: RegistrarIndex) {
+		fn request_judgement(origin, reg_index: RegistrarIndex) {
 			let sender = ensure_signed(origin)?;
 			let registrars = <Registrars<T>>::get();
 			let registrar = registrars.get(reg_index as usize).and_then(Option::as_ref)
 				.ok_or("empty index")?;
 			let mut id = <IdentityOf<T>>::get(&sender).ok_or("no identity")?;
 
-			T::Currency::reserve(&sender, registrar.fee)?;
-
 			let item = (reg_index, Judgement::FeePaid(registrar.fee));
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
-				Ok(i) => if id.judgements[i].1.is_evil() {
-					return Err("evil account")
+				Ok(i) => if id.judgements[i].1.is_sticky() {
+					return Err("sticky judgement")
 				} else {
 					id.judgements[i] = item
 				},
 				Err(i) => id.judgements.insert(i, item),
 			}
+
+			T::Currency::reserve(&sender, registrar.fee)?;
 
 			<IdentityOf<T>>::insert(&sender, id);
 
@@ -446,7 +464,7 @@ decl_module! {
 		}
 
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn unask_judgement(origin, reg_index: RegistrarIndex) {
+		fn cancel_request_judgement(origin, reg_index: RegistrarIndex) {
 			let sender = ensure_signed(origin)?;
 			let mut id = <IdentityOf<T>>::get(&sender).ok_or("no identity")?;
 
@@ -644,6 +662,14 @@ mod tests {
 		t.into()
 	}
 
+	fn ten() -> IdentityInfo<H256> {
+		IdentityInfo {
+			display: Data::Raw(b"ten".to_vec()),
+			legal: Data::Raw(b"The Right Ordinal Ten, Esq.".to_vec()),
+			.. Default::default()
+		}
+	}
+
 	#[test]
 	fn adding_registrar_should_work() {
 		new_test_ext().execute_with(|| {
@@ -658,9 +684,8 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
-			let id = IdentityInfo { display: Data::Raw(b"ten".to_vec()), .. Default::default() };
-			assert_ok!(Identity::set_identity(Origin::signed(10), id.clone()));
-			assert_eq!(Identity::identity(10).unwrap().info, id);
+			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+			assert_eq!(Identity::identity(10).unwrap().info, ten());
 			assert_eq!(Balances::free_balance(10), 90);
 			assert_ok!(Identity::clear_identity(Origin::signed(10)));
 			assert_eq!(Balances::free_balance(10), 100);
@@ -669,14 +694,107 @@ mod tests {
 	}
 
 	#[test]
+	fn uninvited_judgement_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(
+				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable),
+				"invalid index"
+			);
+
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			assert_noop!(
+				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable),
+				"invalid target"
+			);
+
+			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+			assert_noop!(
+				Identity::provide_judgement(Origin::signed(10), 0, 10, Judgement::Reasonable),
+				"invalid index"
+			);
+			assert_noop!(
+				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::FeePaid(1)),
+				"invalid judgement"
+			);
+
+			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
+			assert_eq!(Identity::identity(10).unwrap().judgements, vec![(0, Judgement::Reasonable)]);
+		});
+	}
+
+	#[test]
+	fn clearing_judgement_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
+			assert_ok!(Identity::clear_identity(Origin::signed(10)));
+			assert_eq!(Identity::identity(10), None);
+		});
+	}
+
+	#[test]
+	fn setting_subaccounts_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+			let subs = vec![(20, Data::Raw(vec![40; 1]))];
+			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
+			assert_eq!(Balances::free_balance(10), 80);
+			assert_eq!(Identity::subs(10), (10, subs.clone()));
+
+			assert_ok!(Identity::set_subs(Origin::signed(10), vec![]));
+			assert_eq!(Balances::free_balance(10), 90);
+			assert_eq!(Identity::subs(10), (0, vec![]));
+		});
+	}
+
+	#[test]
+	fn cancelling_requested_judgement_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
+			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+			assert_ok!(Identity::request_judgement(Origin::signed(10), 0));
+			assert_ok!(Identity::cancel_request_judgement(Origin::signed(10), 0));
+			assert_eq!(Balances::free_balance(10), 90);
+		});
+	}
+
+	#[test]
+	fn requested_judgement_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
+			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+			assert_ok!(Identity::request_judgement(Origin::signed(10), 0));
+			// 10 for the judgement request, 10 for the identity.
+			assert_eq!(Balances::free_balance(10), 80);
+
+			// Re-requesting won't work as we already paid.
+			assert_noop!(Identity::request_judgement(Origin::signed(10), 0), "sticky judgement");
+			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Erroneous));
+			// Registrar got their payment now.
+			assert_eq!(Balances::free_balance(3), 20);
+
+			// Re-requesting still won't work as it's erroneous.
+			assert_noop!(Identity::request_judgement(Origin::signed(10), 0), "sticky judgement");
+
+			// Requesting from a second registrar still works.
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 4));
+			assert_ok!(Identity::request_judgement(Origin::signed(10), 1));
+
+			// Re-requesting after the judgement has been reduced works.
+			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::OutOfDate));
+			assert_ok!(Identity::request_judgement(Origin::signed(10), 0));
+
+		});
+	}
+
+	#[test]
 	fn field_deposit_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
-			assert_noop!(Identity::set_identity(Origin::signed(10), IdentityInfo {
-				additional: vec![(Data::Raw(b"number".to_vec()), Data::Raw(vec![0; 33]))],
-				.. Default::default()
-			}), "oversize raw data");
 			assert_ok!(Identity::set_identity(Origin::signed(10), IdentityInfo {
 				additional: vec![
 					(Data::Raw(b"number".to_vec()), Data::Raw(10u32.encode())),
