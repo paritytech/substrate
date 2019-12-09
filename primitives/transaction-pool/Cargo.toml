@@ -20,7 +20,7 @@ std = [
 	"derive_more",
 	"futures",
 	"log",
-	"primitives",
+	"primitives/std",
 	"serde",
 	"sp-api/std",
 	"sp-runtime/std",
