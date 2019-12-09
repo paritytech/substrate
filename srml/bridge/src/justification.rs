@@ -110,7 +110,6 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	) -> Result<GrandpaJustification<Block>, ClientError> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
-
 		let justification = GrandpaJustification::<Block>::decode(&mut &*encoded)
 			.map_err(|_| ClientError::JustificationDecode)?;
 
@@ -197,7 +196,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 // Since keys in a `BTreeMap` need to implement `Ord` we can't use Block::Hash directly.
 // Instead we'll use a wrapper which implements `Ord` by leveraging the fact that
 // `Block::Hash` implements `AsRef<u8>`, which itself implements `Ord`
-#[derive(Eq)]
+#[derive(Eq, PartialEq)]
 struct BlockHashKey<Block: BlockT>(Block::Hash);
 
 impl<Block: BlockT> BlockHashKey<Block> {
@@ -215,12 +214,6 @@ impl<Block: BlockT> Ord for BlockHashKey<Block> {
 impl<Block: BlockT> PartialOrd for BlockHashKey<Block> {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		Some(self.0.as_ref().cmp(other.0.as_ref()))
-	}
-}
-
-impl<Block: BlockT> PartialEq for BlockHashKey<Block> {
-	fn eq(&self, other: &Self) -> bool {
-		self.0.as_ref() == other.0.as_ref()
 	}
 }
 
@@ -271,6 +264,12 @@ impl<Block: BlockT> grandpa::Chain<Block::Hash, NumberFor<Block>> for AncestryCh
 	}
 }
 
+#[cfg(not(test))]
+fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
+	(message, round, set_id).encode()
+}
+
+#[cfg(test)]
 pub(crate) fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
 }
