@@ -17,7 +17,6 @@
 //! Linear arrangement of historical data with transactional
 //! support.
 //!
-//!
 //! Described as a synchronized module as it contains historical
 //! data that do not require a separated state for most operation.
 //! Global state operation must therefore apply on all local values
@@ -78,7 +77,7 @@ impl States {
 		self.current_layer = 1;
 	}
 
-	/// After a prospective was discarded, clear prospective history. 
+	/// After a prospective was discarded, clear prospective history.
 	pub fn apply_discard_prospective<V>(value: &mut History<V>) -> CleaningResult {
 		if value.0.len() == 0 {
 			return CleaningResult::Cleared;

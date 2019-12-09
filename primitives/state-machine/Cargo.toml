@@ -32,4 +32,6 @@ harness = false
 
 [features]
 default = []
-test-helpers = []
+test-helpers = [
+				"historical-data/test-helpers",
+]

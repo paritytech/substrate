@@ -71,7 +71,6 @@ pub struct OverlayedChangeSet {
 #[cfg(test)]
 impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 	fn from_iter<T: IntoIterator<Item = (Vec<u8>, OverlayedValue)>>(iter: T) -> Self {
-
 		let mut result = OverlayedChangeSet::default();
 		result.top = iter.into_iter().map(|(k, value)| (k, {
 			let mut history = History::default();

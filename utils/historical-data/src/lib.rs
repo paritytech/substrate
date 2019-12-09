@@ -22,8 +22,7 @@
 pub mod synch_linear_transaction;
 
 /// An entry at a given history index.
-#[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test-helpers"), derive(PartialEq))]
+#[derive(Debug, Clone, PartialEq)]
 pub struct HistoricalValue<V, I> {
 	/// The stored value.
 	pub value: V,
@@ -43,8 +42,7 @@ impl<V, I: Clone> HistoricalValue<V, I> {
 	}
 }
 
-#[derive(PartialEq)]
-#[cfg_attr(any(test, feature = "test"), derive(Debug))]
+#[derive(Debug, PartialEq)]
 /// Results from cleaning a data with history.
 /// It should be used to update from the calling context,
 /// for instance remove this data from a map if it was cleared.
@@ -55,8 +53,7 @@ pub enum CleaningResult {
 }
 
 /// History of value and their state.
-#[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test-helpers"), derive(PartialEq))]
+#[derive(Debug, Clone, PartialEq)]
 pub struct History<V, I>(pub(crate) smallvec::SmallVec<[HistoricalValue<V, I>; ALLOCATED_HISTORY]>);
 
 impl<V, I> Default for History<V, I> {
@@ -71,6 +68,7 @@ impl<V, I> Default for History<V, I> {
 const ALLOCATED_HISTORY: usize = 2;
 
 impl<V, I> History<V, I> {
+	#[cfg(any(test, feature = "test-helpers"))]
 	/// Get current number of stored historical values.
 	pub fn len(&self) -> usize {
 		self.0.len()
