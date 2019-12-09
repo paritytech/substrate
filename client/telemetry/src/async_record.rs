@@ -6,7 +6,6 @@
 use slog::{Record, RecordStatic, Level, SingleKV, KV, BorrowedKV};
 use slog::{Serializer, OwnedKVList, Key};
 
-use slog::Drain;
 use std::fmt;
 use take_mut::take;
 
@@ -139,25 +138,6 @@ impl AsyncRecord {
             logger_values: logger_values.clone(),
             kv: ser.finish(),
         }
-    }
-
-    /// Writes the record to a `Drain`.
-    pub fn to_drain<D: Drain>(self, drain: &D) -> Result<D::Ok, D::Err> {
-        let rs = RecordStatic {
-            location: &*self.location,
-            level: self.level,
-            tag: &self.tag,
-        };
-
-        drain
-            .log(
-                &Record::new(
-                    &rs,
-                    &format_args!("{}", self.msg),
-                    BorrowedKV(&self.kv),
-                ),
-                &self.logger_values,
-            )
     }
 
     /// Deconstruct this `AsyncRecord` into a record and `OwnedKVList`.
