@@ -143,7 +143,7 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 			.unwrap_or_else(|| {
 				match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
 					Some(value) => value.encode(),
-					None => vec![],
+					None => Vec::new(),
 				}
 			});
 
