@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 rstd = { package = "sp-std", path = "../sr-std", default-features = false }
-sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
+sp-runtime = { path = "../../primitives/runtime", default-features = false }
 
 [dev-dependencies]
 substrate-test-utils = { path = "../../test/utils" }
