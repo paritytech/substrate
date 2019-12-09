@@ -68,6 +68,7 @@ use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::{Duration, Instant}}
 pub use slog_scope::with_logger;
 pub use slog;
 
+mod async_record;
 mod worker;
 
 /// Configuration for telemetry.
@@ -131,13 +132,13 @@ struct TelemetryInner {
 	/// Worker for the telemetry.
 	worker: worker::TelemetryWorker,
 	/// Receives log entries for them to be dispatched to the worker.
-	receiver: mpsc::Receiver<slog_async::AsyncRecord>,
+	receiver: mpsc::Receiver<async_record::AsyncRecord>,
 }
 
 /// Implements `slog::Drain`.
 struct TelemetryDrain {
 	/// Sends log entries.
-	sender: std::panic::AssertUnwindSafe<mpsc::Sender<slog_async::AsyncRecord>>,
+	sender: std::panic::AssertUnwindSafe<mpsc::Sender<async_record::AsyncRecord>>,
 }
 
 /// Initializes the telemetry. See the crate root documentation for more information.
@@ -241,7 +242,7 @@ impl slog::Drain for TelemetryDrain {
 	fn log(&self, record: &slog::Record, values: &slog::OwnedKVList) -> Result<Self::Ok, Self::Err> {
 		let before = Instant::now();
 
-		let serialized = slog_async::AsyncRecord::from(record, values);
+		let serialized = async_record::AsyncRecord::from(record, values);
 		// Note: interestingly, `try_send` requires a `&mut` because it modifies some internal value, while `clone()`
 		// is lock-free.
 		if let Err(err) = self.sender.clone().try_send(serialized) {
