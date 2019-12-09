@@ -6103,9 +6103,9 @@ version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-application-crypto 2.0.0",
- "sc-consensus-slots 2.0.0",
  "schnorrkel 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
+ "sp-consensus 2.0.0",
  "sp-inherents 2.0.0",
  "sp-runtime 2.0.0",
  "sp-std 2.0.0",
