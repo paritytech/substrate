@@ -52,7 +52,8 @@
 //! * `cancel_request` - Cancel the previous request for a judgement.
 //!
 //! #### For registrars
-//! * `set_fee` - Set the fee required to be paid for a judgement to be given by this registrar.
+//! * `set_fee` - Set the fee required to be paid for a judgement to be given by the registrar.
+//! * `set_fields` - Set the fields that a registrar cares about in their judgements.
 //! * `provide_judgement` - Provide a judgement to an identity.
 //!
 //! #### For super-users
