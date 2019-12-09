@@ -12,7 +12,7 @@ system = { package = "frame-system", path = "../system", default-features = fals
 timestamp = { package = "pallet-timestamp", path = "../timestamp", default-features = false }
 balances = { package = "pallet-balances", path = "../balances", default-features = false }
 primitives = { package = "sp-core", path = "../../primitives/core", default-features = false }
-sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
+sp-runtime = { path = "../../primitives/runtime", default-features = false }
 rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
 runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
 primitive-types = { version = "0.6", default-features = false, features = ["rlp"] }

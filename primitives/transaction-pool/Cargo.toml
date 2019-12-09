@@ -12,7 +12,7 @@ log = { version = "0.4.8", optional = true }
 primitives = { package = "sp-core",  path = "../core", optional = true}
 serde = { version = "1.0.101", features = ["derive"], optional = true}
 sp-api = { path = "../sr-api", default-features = false }
-sp-runtime = { path = "../sr-primitives", default-features = false }
+sp-runtime = { path = "../runtime", default-features = false }
 
 [features]
 std = [
