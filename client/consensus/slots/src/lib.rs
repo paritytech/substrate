@@ -31,7 +31,7 @@ use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 use codec::{Decode, Encode};
-use consensus_common::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith};
+use consensus_common::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData};
 use futures::{prelude::*, future::{self, Either}};
 use futures_timer::Delay;
 use inherents::{InherentData, InherentDataProviders};
@@ -384,23 +384,6 @@ pub enum CheckedHeader<H, S> {
 	///
 	/// Includes the digest item that encoded the seal.
 	Checked(H, S),
-}
-
-/// A type from which a slot duration can be obtained.
-pub trait SlotData {
-	/// Gets the slot duration.
-	fn slot_duration(&self) -> u64;
-
-	/// The static slot key
-	const SLOT_KEY: &'static [u8];
-}
-
-impl SlotData for u64 {
-	fn slot_duration(&self) -> u64 {
-		*self
-	}
-
-	const SLOT_KEY: &'static [u8] = b"aura_slot_duration";
 }
 
 /// A slot duration. Create with `get_or_compute`.
