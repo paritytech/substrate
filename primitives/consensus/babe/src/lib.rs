@@ -23,7 +23,7 @@ mod digest;
 pub mod inherents;
 
 use codec::{Encode, Decode};
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 
 #[cfg(feature = "std")]

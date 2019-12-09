@@ -47,10 +47,10 @@
 //! assert_eq!(body.error(), &None);
 //! ```
 
-use rstd::str;
-use rstd::prelude::Vec;
+use sp_std::str;
+use sp_std::prelude::Vec;
 #[cfg(not(feature = "std"))]
-use rstd::prelude::vec;
+use sp_std::prelude::vec;
 use primitives::RuntimeDebug;
 use primitives::offchain::{
 	Timestamp,

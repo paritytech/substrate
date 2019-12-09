@@ -25,7 +25,7 @@ use crate::Schedule;
 use parity_wasm::elements::{self, Internal, External, MemoryType, Type, ValueType};
 use pwasm_utils;
 use pwasm_utils::rules;
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use sp_runtime::traits::{SaturatedConversion};
 
 struct ContractModule<'a> {

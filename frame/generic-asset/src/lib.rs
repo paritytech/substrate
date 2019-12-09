@@ -159,8 +159,8 @@ use sp_runtime::traits::{
 	Zero, Bounded,
 };
 
-use rstd::prelude::*;
-use rstd::{cmp, result, fmt::Debug};
+use sp_std::prelude::*;
+use sp_std::{cmp, result, fmt::Debug};
 use support::dispatch::Result;
 use support::{
 	decl_event, decl_module, decl_storage, ensure,
@@ -625,7 +625,7 @@ impl<T: Trait> Module<T> {
 	/// NOTE: This is different behavior than `reserve`.
 	pub fn unreserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> T::Balance {
 		let b = Self::reserved_balance(asset_id, who);
-		let actual = rstd::cmp::min(b, amount);
+		let actual = sp_std::cmp::min(b, amount);
 		let original_free_balance = Self::free_balance(asset_id, who);
 		let new_free_balance = original_free_balance + actual;
 		Self::set_free_balance(asset_id, who, new_free_balance);
@@ -642,7 +642,7 @@ impl<T: Trait> Module<T> {
 	/// the caller will do this.
 	fn slash(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
 		let free_balance = Self::free_balance(asset_id, who);
-		let free_slash = rstd::cmp::min(free_balance, amount);
+		let free_slash = sp_std::cmp::min(free_balance, amount);
 		let new_free_balance = free_balance - free_slash;
 		Self::set_free_balance(asset_id, who, new_free_balance);
 		if free_slash < amount {
@@ -660,7 +660,7 @@ impl<T: Trait> Module<T> {
 	/// the caller will do this.
 	fn slash_reserved(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
-		let slash = rstd::cmp::min(original_reserve_balance, amount);
+		let slash = sp_std::cmp::min(original_reserve_balance, amount);
 		let new_reserve_balance = original_reserve_balance - slash;
 		Self::set_reserved_balance(asset_id, who, new_reserve_balance);
 		if amount == slash {
@@ -684,7 +684,7 @@ impl<T: Trait> Module<T> {
 		amount: T::Balance,
 	) -> T::Balance {
 		let b = Self::reserved_balance(asset_id, who);
-		let slash = rstd::cmp::min(b, amount);
+		let slash = sp_std::cmp::min(b, amount);
 
 		let original_free_balance = Self::free_balance(asset_id, beneficiary);
 		let new_free_balance = original_free_balance + slash;
@@ -866,14 +866,14 @@ mod imbalances {
 	use super::{
 		result, AssetIdProvider, Imbalance, Saturating, StorageMap, Subtrait, Zero, TryDrop
 	};
-	use rstd::mem;
+	use sp_std::mem;
 
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
 	/// funds have been created without any equal and opposite accounting.
 	#[must_use]
 	pub struct PositiveImbalance<T: Subtrait, U: AssetIdProvider<AssetId = T::AssetId>>(
 		T::Balance,
-		rstd::marker::PhantomData<U>,
+		sp_std::marker::PhantomData<U>,
 	);
 	impl<T, U> PositiveImbalance<T, U>
 	where
@@ -890,7 +890,7 @@ mod imbalances {
 	#[must_use]
 	pub struct NegativeImbalance<T: Subtrait, U: AssetIdProvider<AssetId = T::AssetId>>(
 		T::Balance,
-		rstd::marker::PhantomData<U>,
+		sp_std::marker::PhantomData<U>,
 	);
 	impl<T, U> NegativeImbalance<T, U>
 	where
@@ -1091,7 +1091,7 @@ impl<T: Subtrait> Trait for ElevatedTrait<T> {
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct AssetCurrency<T, U>(rstd::marker::PhantomData<T>, rstd::marker::PhantomData<U>);
+pub struct AssetCurrency<T, U>(sp_std::marker::PhantomData<T>, sp_std::marker::PhantomData<U>);
 
 impl<T, U> Currency<T::AccountId> for AssetCurrency<T, U>
 where
@@ -1264,7 +1264,7 @@ where
 	}
 }
 
-pub struct StakingAssetIdProvider<T>(rstd::marker::PhantomData<T>);
+pub struct StakingAssetIdProvider<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Trait> AssetIdProvider for StakingAssetIdProvider<T> {
 	type AssetId = T::AssetId;
@@ -1273,7 +1273,7 @@ impl<T: Trait> AssetIdProvider for StakingAssetIdProvider<T> {
 	}
 }
 
-pub struct SpendingAssetIdProvider<T>(rstd::marker::PhantomData<T>);
+pub struct SpendingAssetIdProvider<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Trait> AssetIdProvider for SpendingAssetIdProvider<T> {
 	type AssetId = T::AssetId;

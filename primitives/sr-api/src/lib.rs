@@ -52,9 +52,9 @@ pub use primitives::{offchain, ExecutionContext};
 #[doc(hidden)]
 pub use sp_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
 #[doc(hidden)]
-pub use rstd::{slice, mem};
+pub use sp_std::{slice, mem};
 #[cfg(feature = "std")]
-use rstd::result;
+use sp_std::result;
 #[doc(hidden)]
 pub use codec::{Encode, Decode};
 use primitives::OpaqueMetadata;

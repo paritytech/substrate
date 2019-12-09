@@ -16,7 +16,7 @@
 
 //! Stuff to do with the runtime's storage.
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
 use crate::traits::Len;
 

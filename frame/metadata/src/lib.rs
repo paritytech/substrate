@@ -27,7 +27,7 @@ use serde::Serialize;
 #[cfg(feature = "std")]
 use codec::{Decode, Input, Error};
 use codec::{Encode, Output};
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 use primitives::RuntimeDebug;
 
 #[cfg(feature = "std")]
@@ -85,12 +85,12 @@ impl<B, O> Eq for DecodeDifferent<B, O>
 	where B: Encode + Eq + PartialEq + 'static, O: Encode + Eq + PartialEq + 'static
 {}
 
-impl<B, O> rstd::fmt::Debug for DecodeDifferent<B, O>
+impl<B, O> sp_std::fmt::Debug for DecodeDifferent<B, O>
 	where
-		B: rstd::fmt::Debug + Eq + 'static,
-		O: rstd::fmt::Debug + Eq + 'static,
+		B: sp_std::fmt::Debug + Eq + 'static,
+		O: sp_std::fmt::Debug + Eq + 'static,
 {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		match self {
 			DecodeDifferent::Encode(b) => b.fmt(f),
 			DecodeDifferent::Decoded(o) => o.fmt(f),
@@ -151,8 +151,8 @@ impl<E: Encode + PartialEq> PartialEq for FnEncode<E> {
 	}
 }
 
-impl<E: Encode + rstd::fmt::Debug> rstd::fmt::Debug for FnEncode<E> {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+impl<E: Encode + sp_std::fmt::Debug> sp_std::fmt::Debug for FnEncode<E> {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		self.0().fmt(f)
 	}
 }
@@ -261,8 +261,8 @@ impl serde::Serialize for DefaultByteGetter {
 	}
 }
 
-impl rstd::fmt::Debug for DefaultByteGetter {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+impl sp_std::fmt::Debug for DefaultByteGetter {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		self.0.default_byte().fmt(f)
 	}
 }
