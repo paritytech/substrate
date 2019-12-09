@@ -127,7 +127,6 @@ members = [
 	"primitives/state-machine",
 	"primitives/timestamp",
 	"primitives/transaction-pool",
-	"primitives/transaction-pool/runtime-api",
 	"primitives/trie",
 	"primitives/wasm-interface",
 	"test/utils/chain-spec-builder",
