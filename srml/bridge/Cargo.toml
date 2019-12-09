@@ -10,11 +10,11 @@ edition = "2018"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 client = { package = "substrate-client", path = "../../core/client" }
 fg = { package = "substrate-finality-grandpa", path = "../../core/finality-grandpa/" }
-fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../core/finality-grandpa/primitives" }
-grandpa = { package = "finality-grandpa", version = "0.9.1", features = ["derive-codec"] }
+fg_primitives = { package = "substrate-finality-grandpa-primitives", path ="../../core/finality-grandpa/primitives", default-features = false }
+grandpa = { package = "finality-grandpa", version = "0.9.1", default-features = false, features = ["derive-codec"] }
 hash-db = { version = "0.15.2", default-features = false }
-primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
-num = { package = "num-traits", version = "0.2", default-features = false}
+primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
+num = { package = "num-traits", version = "0.2", default-features = false }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
 runtime-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false, features = ["historical"] }
