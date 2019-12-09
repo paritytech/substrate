@@ -116,7 +116,7 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 				last = hdr;
 			}
 			if last.hash != from_meta.hash {
-				return Err(invalid_block_range(&from_meta, &to_meta, "invalid block range".to_owned()))
+				return Err(invalid_block_range(&from_meta, &to_meta, "from and to are on different forks".to_owned()))
 			}
 			blocks.reverse();
 			blocks
