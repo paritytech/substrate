@@ -67,9 +67,11 @@ pub enum Error {
 	Other(Box<dyn error::Error + Send>),
 	/// Error from the client while importing
 	#[display(fmt="Import failed: {}", _0)]
+	#[from(ignore)]
 	ClientImport(String),
 	/// Error from the client while importing
 	#[display(fmt="Chain lookup failed: {}", _0)]
+	#[from(ignore)]
 	ChainLookup(String),
 }
 

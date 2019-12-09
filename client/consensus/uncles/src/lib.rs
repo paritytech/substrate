@@ -23,7 +23,7 @@ use consensus_common::SelectChain;
 use inherents::{InherentDataProviders};
 use log::warn;
 use client_api::ProvideUncles;
-use sr_primitives::traits::{Block as BlockT, Header};
+use sp_runtime::traits::{Block as BlockT, Header};
 use std::sync::Arc;
 use sp_authorship;
 

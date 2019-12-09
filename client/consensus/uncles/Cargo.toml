@@ -1,15 +1,15 @@
 [package]
-name = "substrate-consensus-uncles"
+name = "sc-consensus-uncles"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic uncle inclusion utilities for consensus"
 edition = "2018"
 
 [dependencies]
-client-api = { package = "substrate-client-api", path = "../../api" }
-primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
-sr-primitives = {  path = "../../../primitives/sr-primitives" }
+client-api = { package = "sc-client-api", path = "../../api" }
+primitives = { package = "sp-core", path = "../../../primitives/core" }
+sp-runtime = {  path = "../../../primitives/runtime" }
 sp-authorship = {  path = "../../../primitives/authorship" }
-consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
-inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
+consensus_common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
+inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
 log = "0.4.8"

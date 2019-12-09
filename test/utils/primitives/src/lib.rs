@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The Substrate test primitives to share 
+//! The Substrate test primitives to share
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -24,7 +24,7 @@ use app_crypto::sr25519;
 pub use app_crypto;
 
 pub use primitives::{hash::H256, RuntimeDebug};
-use sr_primitives::traits::{BlakeTwo256, Verify, Extrinsic as ExtrinsicT,};
+use sp_runtime::traits::{BlakeTwo256, Verify, Extrinsic as ExtrinsicT,};
 
 /// Extrinsic for test-runtime.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
@@ -69,10 +69,10 @@ pub type BlockNumber = u64;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.
-pub type DigestItem = sr_primitives::generic::DigestItem<H256>;
+pub type DigestItem = sp_runtime::generic::DigestItem<H256>;
 /// The digest of a block.
-pub type Digest = sr_primitives::generic::Digest<H256>;
+pub type Digest = sp_runtime::generic::Digest<H256>;
 /// A test block.
-pub type Block = sr_primitives::generic::Block<Header, Extrinsic>;
+pub type Block = sp_runtime::generic::Block<Header, Extrinsic>;
 /// A test block's header.
-pub type Header = sr_primitives::generic::Header<BlockNumber, BlakeTwo256>;
+pub type Header = sp_runtime::generic::Header<BlockNumber, BlakeTwo256>;

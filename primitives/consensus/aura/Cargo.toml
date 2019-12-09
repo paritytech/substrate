@@ -1,17 +1,17 @@
 [package]
-name = "substrate-consensus-aura-primitives"
+name = "sp-consensus-aura"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for Aura consensus"
 edition = "2018"
 
 [dependencies]
-app-crypto = { package = "substrate-application-crypto", path = "../../application-crypto", default-features = false }
+app-crypto = { package = "sc-application-crypto", path = "../../application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
-rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
-sr-api = { path = "../../sr-api", default-features = false }
-sr-primitives = { path = "../../sr-primitives", default-features = false }
-inherents = { package = "substrate-inherents", path = "../../inherents", default-features = false }
+rstd = { package = "sp-std", path = "../../sr-std", default-features = false }
+sp-api = { path = "../../sr-api", default-features = false }
+sp-runtime = { path = "../../runtime", default-features = false }
+inherents = { package = "sp-inherents", path = "../../inherents", default-features = false }
 sp-timestamp = {  path = "../../timestamp", default-features = false }
 
 [features]
@@ -20,8 +20,8 @@ std = [
 	"app-crypto/std",
 	"codec/std",
 	"rstd/std",
-	"sr-api/std",
-	"sr-primitives/std",
+	"sp-api/std",
+	"sp-runtime/std",
 	"inherents/std",
 	"sp-timestamp/std",
 ]

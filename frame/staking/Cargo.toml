@@ -1,0 +1,47 @@
+[package]
+name = "pallet-staking"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0.101", optional = true }
+safe-mix = { version = "1.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+sp-keyring = { path = "../../primitives/keyring", optional = true }
+rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+phragmen = { package = "sp-phragmen", path = "../../primitives/phragmen", default-features = false }
+runtime-io ={ package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+sp-runtime = { path = "../../primitives/runtime", default-features = false }
+sp-staking = { path = "../../primitives/sr-staking-primitives", default-features = false }
+support = { package = "frame-support", path = "../support", default-features = false }
+system = { package = "frame-system", path = "../system", default-features = false }
+session = { package = "pallet-session", path = "../session", default-features = false, features = ["historical"] }
+authorship = { package = "pallet-authorship", path = "../authorship", default-features = false }
+
+[dev-dependencies]
+primitives = { package = "sp-core",  path = "../../primitives/core" }
+balances = { package = "pallet-balances", path = "../balances" }
+timestamp = { package = "pallet-timestamp", path = "../timestamp" }
+pallet-staking-reward-curve = { path = "../staking/reward-curve"}
+substrate-test-utils = { path = "../../test/utils" }
+
+[features]
+equalize = []
+migrate = []
+default = ["std", "equalize"]
+std = [
+	"serde",
+	"safe-mix/std",
+	"sp-keyring",
+	"codec/std",
+	"rstd/std",
+	"phragmen/std",
+	"runtime-io/std",
+	"support/std",
+	"sp-runtime/std",
+	"sp-staking/std",
+	"session/std",
+	"system/std",
+	"authorship/std",
+]

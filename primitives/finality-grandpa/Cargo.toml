@@ -1,16 +1,16 @@
 [package]
-name = "substrate-finality-grandpa-primitives"
+name = "sp-finality-grandpa"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-app-crypto = { package = "substrate-application-crypto", path = "../application-crypto", default-features = false }
+app-crypto = { package = "sc-application-crypto", path = "../application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+rstd = { package = "sp-std", path = "../sr-std", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sr-api = { path = "../sr-api", default-features = false }
-sr-primitives = { path = "../sr-primitives", default-features = false }
+sp-api = { path = "../sr-api", default-features = false }
+sp-runtime = { path = "../runtime", default-features = false }
 
 [features]
 default = ["std"]
@@ -19,6 +19,6 @@ std = [
 	"codec/std",
 	"rstd/std",
 	"serde",
-	"sr-api/std",
-	"sr-primitives/std",
+	"sp-api/std",
+	"sp-runtime/std",
 ]

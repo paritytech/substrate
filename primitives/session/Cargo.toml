@@ -1,14 +1,14 @@
 [package]
-name = "substrate-session"
+name = "sp-session"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sr-api = { path = "../sr-api", default-features = false }
-rstd = { package = "sr-std", path = "../sr-std", default-features = false }
-sr-primitives = { path = "../sr-primitives", optional = true }
+sp-api = { path = "../sr-api", default-features = false }
+rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-runtime = { path = "../runtime", optional = true }
 
 [features]
 default = [ "std" ]
-std = [ "sr-api/std", "rstd/std", "sr-primitives" ]
+std = [ "sp-api/std", "rstd/std", "sp-runtime" ]

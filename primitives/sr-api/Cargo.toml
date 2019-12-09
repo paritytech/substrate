@@ -1,17 +1,17 @@
 [package]
-name = "sr-api"
+name = "sp-api"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
-sr-api-proc-macro = { path = "proc-macro" }
-primitives = { package = "substrate-primitives", path = "../core", default-features = false }
-rstd = { package = "sr-std", path = "../sr-std", default-features = false }
-sr-primitives = { path = "../sr-primitives", default-features = false }
-sr-version = { path = "../sr-version", default-features = false }
-state-machine = { package = "substrate-state-machine", path = "../../primitives/state-machine", optional = true }
+sp-api-proc-macro = { path = "proc-macro" }
+primitives = { package = "sp-core", path = "../core", default-features = false }
+rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-runtime = { path = "../runtime", default-features = false }
+sp-version = { path = "../sr-version", default-features = false }
+state-machine = { package = "sp-state-machine", path = "../../primitives/state-machine", optional = true }
 
 [dev-dependencies]
 criterion = "0.3.0"
@@ -27,7 +27,7 @@ std = [
 	"codec/std",
 	"primitives/std",
 	"rstd/std",
-	"sr-primitives/std",
+	"sp-runtime/std",
 	"state-machine",
-	"sr-version/std",
+	"sp-version/std",
 ]

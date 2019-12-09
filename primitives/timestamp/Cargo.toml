@@ -5,19 +5,19 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sr-api = { path = "../sr-api", default-features = false }
-rstd = { package = "sr-std", path = "../sr-std", default-features = false }
-sr-primitives = { path = "../sr-primitives", default-features = false }
+sp-api = { path = "../sr-api", default-features = false }
+rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-runtime = { path = "../runtime", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-inherents = { package = "substrate-inherents", path = "../inherents", default-features = false }
+inherents = { package = "sp-inherents", path = "../inherents", default-features = false }
 impl-trait-for-tuples = "0.1.3"
 
 [features]
 default = [ "std" ]
 std = [
-	"sr-api/std",
+	"sp-api/std",
 	"rstd/std",
-	"sr-primitives/std",
+	"sp-runtime/std",
 	"codec/std",
 	"inherents/std",
 ]

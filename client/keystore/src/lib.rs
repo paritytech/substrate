@@ -226,7 +226,7 @@ impl Store {
 			// skip directories and non-unicode file names (hex is unicode)
 			if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
 				match hex::decode(name) {
-					Ok(ref hex) => {
+					Ok(ref hex) if hex.len() > 4 => {
 						if &hex[0..4] != &key_type.0 { continue	}
 						let public = TPublic::from_slice(&hex[4..]);
 						public_keys.push(public);
@@ -317,12 +317,12 @@ impl BareCryptoStore for Store {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use tempdir::TempDir;
+	use tempfile::TempDir;
 	use primitives::{testing::{SR25519}, crypto::{Ss58Codec}};
 
 	#[test]
 	fn basic_store() {
-		let temp_dir = TempDir::new("keystore").unwrap();
+		let temp_dir = TempDir::new().unwrap();
 		let store = Store::open(temp_dir.path(), None).unwrap();
 
 		assert!(store.read().public_keys::<ed25519::AppPublic>().unwrap().is_empty());
@@ -337,7 +337,7 @@ mod tests {
 
 	#[test]
 	fn test_insert_ephemeral_from_seed() {
-		let temp_dir = TempDir::new("keystore").unwrap();
+		let temp_dir = TempDir::new().unwrap();
 		let store = Store::open(temp_dir.path(), None).unwrap();
 
 		let pair: ed25519::AppPair = store
@@ -358,7 +358,7 @@ mod tests {
 	#[test]
 	fn password_being_used() {
 		let password = String::from("password");
-		let temp_dir = TempDir::new("keystore").unwrap();
+		let temp_dir = TempDir::new().unwrap();
 		let store = Store::open(temp_dir.path(), Some(password.clone().into())).unwrap();
 
 		let pair: ed25519::AppPair = store.write().generate().unwrap();
@@ -380,7 +380,7 @@ mod tests {
 
 	#[test]
 	fn public_keys_are_returned() {
-		let temp_dir = TempDir::new("keystore").unwrap();
+		let temp_dir = TempDir::new().unwrap();
 		let store = Store::open(temp_dir.path(), None).unwrap();
 
 		let mut public_keys = Vec::new();
@@ -403,7 +403,7 @@ mod tests {
 
 	#[test]
 	fn store_unknown_and_extract_it() {
-		let temp_dir = TempDir::new("keystore").unwrap();
+		let temp_dir = TempDir::new().unwrap();
 		let store = Store::open(temp_dir.path(), None).unwrap();
 
 		let secret_uri = "//Alice";
@@ -421,5 +421,18 @@ mod tests {
 		).expect("Gets key pair from keystore");
 
 		assert_eq!(key_pair.public(), store_key_pair.public());
+	}
+
+	#[test]
+	fn store_ignores_files_with_invalid_name() {
+		let temp_dir = TempDir::new().unwrap();
+		let store = Store::open(temp_dir.path(), None).unwrap();
+
+		let file_name = temp_dir.path().join(hex::encode(&SR25519.0[..2]));
+		fs::write(file_name, "test").expect("Invalid file is written");
+
+		assert!(
+			store.read().public_keys_by_type::<sr25519::AppPublic>(SR25519).unwrap().is_empty(),
+		);
 	}
 }

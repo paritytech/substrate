@@ -1,16 +1,16 @@
 [package]
-name = "substrate-runtime-test"
+name = "sc-runtime-test"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 build = "build.rs"
 
 [dependencies]
-rstd = { package = "sr-std", path = "../../../primitives/sr-std", default-features = false }
-runtime_io = { package = "sr-io", path = "../../../primitives/sr-io", default-features = false }
-sandbox = { package = "sr-sandbox", path = "../../../primitives/sr-sandbox", default-features = false }
-primitives = { package = "substrate-primitives",  path = "../../../primitives/core", default-features = false }
-sr-primitives = { package = "sr-primitives",  path = "../../../primitives/sr-primitives", default-features = false }
+rstd = { package = "sp-std", path = "../../../primitives/sr-std", default-features = false }
+runtime_io = { package = "sp-io", path = "../../../primitives/sr-io", default-features = false }
+sandbox = { package = "sp-sandbox", path = "../../../primitives/sr-sandbox", default-features = false }
+primitives = { package = "sp-core",  path = "../../../primitives/core", default-features = false }
+sp-runtime = { package = "sp-runtime",  path = "../../../primitives/runtime", default-features = false }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", path = "../../../client/utils/wasm-builder-runner", version = "1.0.4" }

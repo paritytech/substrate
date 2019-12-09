@@ -1,0 +1,40 @@
+[package]
+name = "pallet-session"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition =  "2018"
+
+[dependencies]
+serde = { version = "1.0.101", optional = true }
+safe-mix = { version = "1.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-runtime = { path = "../../primitives/runtime", default-features = false }
+sp-staking = { path = "../../primitives/sr-staking-primitives", default-features = false }
+support = { package = "frame-support", path = "../support", default-features = false }
+system = { package = "frame-system", path = "../system", default-features = false }
+timestamp = { package = "pallet-timestamp", path = "../timestamp", default-features = false }
+sp-trie = { path = "../../primitives/trie", default-features = false, optional = true }
+runtime-io ={ package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+impl-trait-for-tuples = "0.1.3"
+
+[dev-dependencies]
+primitives = { package = "sp-core",  path = "../../primitives/core" }
+app-crypto = { package = "sc-application-crypto",  path = "../../primitives/application-crypto" }
+lazy_static = "1.4.0"
+
+[features]
+default = ["std", "historical"]
+historical = ["sp-trie"]
+std = [
+	"serde",
+	"safe-mix/std",
+	"codec/std",
+	"rstd/std",
+	"support/std",
+	"sp-runtime/std",
+	"sp-staking/std",
+	"timestamp/std",
+	"sp-trie/std",
+	"runtime-io/std",
+]

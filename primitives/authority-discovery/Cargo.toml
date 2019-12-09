@@ -1,16 +1,16 @@
 [package]
-name = "substrate-authority-discovery-primitives"
+name = "sp-authority-discovery"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Authority discovery primitives"
 edition = "2018"
 
 [dependencies]
-app-crypto = { package = "substrate-application-crypto", path = "../application-crypto", default-features = false }
+app-crypto = { package = "sc-application-crypto", path = "../application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
-rstd = { package = "sr-std", path = "../sr-std", default-features = false }
-sr-api = { path = "../sr-api", default-features = false }
-sr-primitives = { path = "../sr-primitives", default-features = false }
+rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-api = { path = "../sr-api", default-features = false }
+sp-runtime = { path = "../runtime", default-features = false }
 
 [features]
 default = ["std"]
@@ -18,6 +18,6 @@ std = [
 	"app-crypto/std",
 	"codec/std",
 	"rstd/std",
-	"sr-api/std",
-	"sr-primitives/std"
+	"sp-api/std",
+	"sp-runtime/std"
 ]

@@ -17,7 +17,7 @@
 use rstd::{cmp::Ordering, prelude::*};
 use crate::helpers_128bit;
 use num_traits::Zero;
-use substrate_debug_derive::RuntimeDebug;
+use sp_debug_derive::RuntimeDebug;
 
 /// A wrapper for any rational number with a 128 bit numerator and denominator.
 #[derive(Clone, Copy, Default, Eq, RuntimeDebug)]

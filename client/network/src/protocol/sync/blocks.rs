@@ -21,7 +21,7 @@ use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use log::trace;
 use libp2p::PeerId;
-use sr_primitives::traits::{Block as BlockT, NumberFor, One};
+use sp_runtime::traits::{Block as BlockT, NumberFor, One};
 use crate::message;
 
 /// Block data with origin.
@@ -215,7 +215,7 @@ impl<B: BlockT> BlockCollection<B> {
 mod test {
 	use super::{BlockCollection, BlockData, BlockRangeState};
 	use crate::{message, PeerId};
-	use sr_primitives::testing::{Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
 	use primitives::H256;
 
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;

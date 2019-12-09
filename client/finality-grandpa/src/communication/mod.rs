@@ -35,12 +35,12 @@ use futures03::stream::{StreamExt, TryStreamExt};
 use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
-use network::{consensus_gossip as network_gossip, NetworkService};
+use network::{consensus_gossip as network_gossip, NetworkService, ReputationChange};
 use network_gossip::ConsensusMessage;
 use codec::{Encode, Decode};
 use primitives::Pair;
-use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
-use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
+use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use tokio_executor::Executor;
 
 use crate::{
@@ -65,33 +65,35 @@ pub use fg_primitives::GRANDPA_ENGINE_ID;
 
 // cost scalars for reporting peers.
 mod cost {
-	pub(super) const PAST_REJECTION: i32 = -50;
-	pub(super) const BAD_SIGNATURE: i32 = -100;
-	pub(super) const MALFORMED_CATCH_UP: i32 = -1000;
-	pub(super) const MALFORMED_COMMIT: i32 = -1000;
-	pub(super) const FUTURE_MESSAGE: i32 = -500;
-	pub(super) const UNKNOWN_VOTER: i32 = -150;
+	use network::ReputationChange as Rep;
+	pub(super) const PAST_REJECTION: Rep = Rep::new(-50, "Grandpa: Past message");
+	pub(super) const BAD_SIGNATURE: Rep = Rep::new(-100, "Grandpa: Bad signature");
+	pub(super) const MALFORMED_CATCH_UP: Rep = Rep::new(-1000, "Grandpa: Malformed cath-up");
+	pub(super) const MALFORMED_COMMIT: Rep = Rep::new(-1000, "Grandpa: Malformed commit");
+	pub(super) const FUTURE_MESSAGE: Rep = Rep::new(-500, "Grandpa: Future message");
+	pub(super) const UNKNOWN_VOTER: Rep = Rep::new(-150, "Grandpa: Uknown voter");
 
-	pub(super) const INVALID_VIEW_CHANGE: i32 = -500;
+	pub(super) const INVALID_VIEW_CHANGE: Rep = Rep::new(-500, "Grandpa: Invalid view change");
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
 	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
 	pub(super) const PER_BLOCK_LOADED: i32 = -10;
-	pub(super) const INVALID_CATCH_UP: i32 = -5000;
-	pub(super) const INVALID_COMMIT: i32 = -5000;
-	pub(super) const OUT_OF_SCOPE_MESSAGE: i32 = -500;
-	pub(super) const CATCH_UP_REQUEST_TIMEOUT: i32 = -200;
+	pub(super) const INVALID_CATCH_UP: Rep = Rep::new(-5000, "Grandpa: Invalid catch-up");
+	pub(super) const INVALID_COMMIT: Rep = Rep::new(-5000, "Grandpa: Invalid commit");
+	pub(super) const OUT_OF_SCOPE_MESSAGE: Rep = Rep::new(-500, "Grandpa: Out-of-scope message");
+	pub(super) const CATCH_UP_REQUEST_TIMEOUT: Rep = Rep::new(-200, "Grandpa: Catch-up reqeust timeout");
 
 	// cost of answering a catch up request
-	pub(super) const CATCH_UP_REPLY: i32 = -200;
-	pub(super) const HONEST_OUT_OF_SCOPE_CATCH_UP: i32 = -200;
+	pub(super) const CATCH_UP_REPLY: Rep = Rep::new(-200, "Grandpa: Catch-up reply");
+	pub(super) const HONEST_OUT_OF_SCOPE_CATCH_UP: Rep = Rep::new(-200, "Grandpa: Out-of-scope catch-up");
 }
 
 // benefit scalars for reporting peers.
 mod benefit {
-	pub(super) const NEIGHBOR_MESSAGE: i32 = 100;
-	pub(super) const ROUND_MESSAGE: i32 = 100;
-	pub(super) const BASIC_VALIDATED_CATCH_UP: i32 = 200;
-	pub(super) const BASIC_VALIDATED_COMMIT: i32 = 100;
+	use network::ReputationChange as Rep;
+	pub(super) const NEIGHBOR_MESSAGE: Rep = Rep::new(100, "Grandpa: Neighbor message");
+	pub(super) const ROUND_MESSAGE: Rep = Rep::new(100, "Grandpa: Round message");
+	pub(super) const BASIC_VALIDATED_CATCH_UP: Rep = Rep::new(200, "Grandpa: Catch-up message");
+	pub(super) const BASIC_VALIDATED_COMMIT: Rep = Rep::new(100, "Grandpa: Commit");
 	pub(super) const PER_EQUIVOCATION: i32 = 10;
 }
 
@@ -125,7 +127,7 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>);
 
 	/// Report a peer's cost or benefit after some action.
-	fn report(&self, who: network::PeerId, cost_benefit: i32);
+	fn report(&self, who: network::PeerId, cost_benefit: ReputationChange);
 
 	/// Inform peers that a block with given hash should be downloaded.
 	fn announce(&self, block: Block::Hash, associated_data: Vec<u8>);
@@ -217,7 +219,7 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 		})
 	}
 
-	fn report(&self, who: network::PeerId, cost_benefit: i32) {
+	fn report(&self, who: network::PeerId, cost_benefit: ReputationChange) {
 		self.report_peer(who, cost_benefit)
 	}
 
@@ -287,7 +289,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
-		on_exit: impl Future<Item = (), Error = ()> + Clone + Send + 'static,
+		on_exit: impl futures03::Future<Output = ()> + Clone + Send + Unpin + 'static,
 	) -> (
 		Self,
 		impl Future<Item = (), Error = ()> + Send + 'static,
@@ -348,9 +350,20 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			// lazily spawn these jobs onto their own tasks. the lazy future has access
 			// to tokio globals, which aren't available outside.
 			let mut executor = tokio_executor::DefaultExecutor::current();
-			executor.spawn(Box::new(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(()))))
+
+			use futures03::{FutureExt, TryFutureExt};
+
+			let rebroadcast_job = rebroadcast_job
+				.select(on_exit.clone().map(Ok).compat())
+				.then(|_| Ok(()));
+
+			let reporting_job = reporting_job
+				.select(on_exit.clone().map(Ok).compat())
+				.then(|_| Ok(()));
+
+			executor.spawn(Box::new(rebroadcast_job))
 				.expect("failed to spawn grandpa rebroadcast job task");
-			executor.spawn(Box::new(reporting_job.select(on_exit.clone()).then(|_| Ok(()))))
+			executor.spawn(Box::new(reporting_job))
 				.expect("failed to spawn grandpa reporting job task");
 			Ok(())
 		});
@@ -803,7 +816,7 @@ fn check_compact_commit<Block: BlockT>(
 	voters: &VoterSet<AuthorityId>,
 	round: Round,
 	set_id: SetId,
-) -> Result<(), i32> {
+) -> Result<(), ReputationChange> {
 	// 4f + 1 = equivocations from f voters.
 	let f = voters.total_weight() - voters.threshold();
 	let full_threshold = voters.total_weight() + f;
@@ -862,7 +875,7 @@ fn check_catch_up<Block: BlockT>(
 	msg: &CatchUp<Block>,
 	voters: &VoterSet<AuthorityId>,
 	set_id: SetId,
-) -> Result<(), i32> {
+) -> Result<(), ReputationChange> {
 	// 4f + 1 = equivocations from f voters.
 	let f = voters.total_weight() - voters.threshold();
 	let full_threshold = voters.total_weight() + f;
@@ -872,7 +885,7 @@ fn check_catch_up<Block: BlockT>(
 		voters: &'a VoterSet<AuthorityId>,
 		votes: impl Iterator<Item=&'a AuthorityId>,
 		full_threshold: u64,
-	) -> Result<(), i32> {
+	) -> Result<(), ReputationChange> {
 		let mut total_weight = 0;
 
 		for id in votes {
@@ -911,7 +924,7 @@ fn check_catch_up<Block: BlockT>(
 		round: RoundNumber,
 		set_id: SetIdNumber,
 		mut signatures_checked: usize,
-	) -> Result<usize, i32> where
+	) -> Result<usize, ReputationChange> where
 		B: BlockT,
 		I: Iterator<Item=(Message<B>, &'a AuthorityId, &'a AuthoritySignature)>,
 	{

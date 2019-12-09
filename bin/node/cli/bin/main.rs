@@ -18,16 +18,16 @@
 
 #![warn(missing_docs)]
 
-use futures::sync::oneshot;
-use futures::{future, Future};
-use substrate_cli::VersionInfo;
+use futures::channel::oneshot;
+use futures::{future, FutureExt};
+use sc_cli::VersionInfo;
 
 use std::cell::RefCell;
 
 // handles ctrl-c
 struct Exit;
-impl substrate_cli::IntoExit for Exit {
-	type Exit = future::MapErr<oneshot::Receiver<()>, fn(oneshot::Canceled) -> ()>;
+impl sc_cli::IntoExit for Exit {
+	type Exit = future::Map<oneshot::Receiver<()>, fn(Result<(), oneshot::Canceled>) -> ()>;
 	fn into_exit(self) -> Self::Exit {
 		// can't use signal directly here because CtrlC takes only `Fn`.
 		let (exit_send, exit) = oneshot::channel();
@@ -39,11 +39,11 @@ impl substrate_cli::IntoExit for Exit {
 			}
 		}).expect("Error setting Ctrl-C handler");
 
-		exit.map_err(drop)
+		exit.map(|_| ())
 	}
 }
 
-fn main() -> Result<(), substrate_cli::error::Error> {
+fn main() -> Result<(), sc_cli::error::Error> {
 	let version = VersionInfo {
 		name: "Substrate Node",
 		commit: env!("VERGEN_SHA_SHORT"),

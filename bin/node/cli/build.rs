@@ -16,7 +16,7 @@
 
 use std::{fs, env, path::Path};
 use structopt::{StructOpt, clap::Shell};
-use substrate_cli::{NoCustom, CoreParams};
+use sc_cli::{NoCustom, CoreParams};
 use vergen::{ConstantsFlags, generate_cargo_keys};
 
 fn main() {
