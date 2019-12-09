@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,11 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Substrate runtime api for the transaction queue.
+//! Tagged Transaction Queue Runtime API.
 
-#![cfg_attr(not(feature = "std"), no_std)]
-
-use sp_runtime::{transaction_validity::TransactionValidity, traits::Block as BlockT};
+use sp_runtime::transaction_validity::TransactionValidity;
+use sp_runtime::traits::Block as BlockT;
 
 sp_api::decl_runtime_apis! {
 	/// The `TaggedTransactionQueue` api trait for interfering with the transaction queue.

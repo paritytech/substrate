@@ -25,7 +25,7 @@ primitives = { package = "sp-core", path = "../primitives/core" }
 rstd = { package = "sp-std", path = "../primitives/sr-std" }
 runtime-version = { package = "sp-version", path = "../primitives/sr-version" }
 sp-api = { path = "../primitives/sr-api" }
-sp-runtime = { path = "../primitives/sr-primitives" }
+sp-runtime = { path = "../primitives/runtime" }
 sp-blockchain = { path = "../primitives/blockchain" }
 state-machine = { package = "sp-state-machine", path = "../primitives/state-machine" }
 sc-telemetry = { path = "telemetry" }

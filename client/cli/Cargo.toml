@@ -24,7 +24,7 @@ panic-handler = { package = "sp-panic-handler", path = "../../primitives/panic-h
 client-api = { package = "sc-client-api", path = "../api" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 network = { package = "sc-network", path = "../network" }
-sp-runtime = { path = "../../primitives/sr-primitives" }
+sp-runtime = { path = "../../primitives/runtime" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
 service = { package = "sc-service", path = "../service", default-features = false }
 state-machine = { package = "sp-state-machine", path = "../../primitives/state-machine" }

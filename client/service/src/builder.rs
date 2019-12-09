@@ -53,7 +53,7 @@ use std::{
 use wasm_timer::SystemTime;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
-use txpool_api::{TransactionPool, TransactionPoolMaintainer};
+use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer};
 use sp_blockchain;
 use grafana_data_source::{self, record_metrics};
 
@@ -715,7 +715,7 @@ ServiceBuilder<
 	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi>::Api:
 		sp_api::Metadata<TBl> +
 		offchain::OffchainWorkerApi<TBl> +
-		txpool_runtime_api::TaggedTransactionQueue<TBl> +
+		sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl> +
 		session::SessionKeys<TBl> +
 		sp_api::ApiExt<TBl, Error = sp_blockchain::Error>,
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,

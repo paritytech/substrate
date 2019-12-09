@@ -9,7 +9,7 @@ impl-serde = { version = "0.2.3", optional = true }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.5", default-features = false, features = ["derive"] }
 rstd = { package = "sp-std", path = "../sr-std", default-features = false }
-sp-runtime = {  path = "../sr-primitives", default-features = false }
+sp-runtime = {  path = "../runtime", default-features = false }
 
 [features]
 default = ["std"]

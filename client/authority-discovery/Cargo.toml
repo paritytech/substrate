@@ -24,7 +24,7 @@ primitives = { package = "sp-core", path = "../../primitives/core" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 prost = "0.5.0"
 serde_json = "1.0.41"
-sp-runtime = { path = "../../primitives/sr-primitives" }
+sp-runtime = { path = "../../primitives/runtime" }
 
 [dev-dependencies]
 env_logger = "0.7.0"
