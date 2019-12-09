@@ -103,7 +103,6 @@ impl Serializer for ToSendSerializer {
 		Ok(())
 	}
 
-	#[cfg(feature = "nested-values")]
 	fn emit_serde(&mut self, key: Key, value: &slog::SerdeValue) -> slog::Result {
 		let val = value.to_sendable();
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
@@ -153,4 +152,4 @@ impl AsyncRecord {
 			BorrowedKV(&self.kv),
 		), &self.logger_values)
 	}
-}    
+}
