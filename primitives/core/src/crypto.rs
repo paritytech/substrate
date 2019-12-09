@@ -18,7 +18,9 @@
 //! Cryptographic utilities.
 // end::description[]
 
-use rstd::{vec::Vec, hash::Hash};
+#[cfg(feature = "std")]
+use rstd::vec::Vec;
+use rstd::hash::Hash;
 #[cfg(feature = "std")]
 use rstd::convert::TryInto;
 use rstd::convert::TryFrom;
@@ -772,8 +774,8 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	///
 	/// `None` is returned if no matches are found.
 	#[cfg(feature = "std")]
-	fn from_string_with_seed(s: &str, password_override: Option<&str>) 
-		-> Result<(Self, Option<Self::Seed>), SecretStringError> 
+	fn from_string_with_seed(s: &str, password_override: Option<&str>)
+		-> Result<(Self, Option<Self::Seed>), SecretStringError>
 	{
 		let re = Regex::new(r"^(?P<phrase>[\d\w ]+)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
 			.expect("constructed from known-good static value; qed");
