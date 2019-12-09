@@ -7,7 +7,7 @@ build = "build.rs"
 
 [dependencies]
 rstd = { package = "sp-std", path = "../../../primitives/sr-std", default-features = false }
-runtime_io = { package = "sp-io", path = "../../../primitives/sr-io", default-features = false }
+runtime_io = { package = "sp-io", path = "../../../primitives/sp-io", default-features = false }
 sandbox = { package = "sp-sandbox", path = "../../../primitives/sr-sandbox", default-features = false }
 primitives = { package = "sp-core",  path = "../../../primitives/core", default-features = false }
 sp-runtime = { package = "sp-runtime",  path = "../../../primitives/runtime", default-features = false }
