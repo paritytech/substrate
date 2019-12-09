@@ -111,7 +111,7 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 			while last.number > from_number {
 				let hdr = self.client
 					.header_metadata(last.parent)
-					.map_err(|e| invalid_block_range::<Block>(&from_meta, &to_meta, e.to_string()))?;
+					.map_err(|e| invalid_block_range::<Block>(&last, &to_meta, e.to_string()))?;
 				blocks.push(hdr.hash);
 				last = hdr;
 			}
