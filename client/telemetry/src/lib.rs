@@ -68,8 +68,8 @@ use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::{Duration, Instant}}
 pub use slog_scope::with_logger;
 pub use slog;
 
-mod worker;
 mod async_record;
+mod worker;
 
 /// Configuration for telemetry.
 pub struct TelemetryConfig {
