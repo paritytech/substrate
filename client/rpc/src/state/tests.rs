@@ -23,7 +23,7 @@ use assert_matches::assert_matches;
 use futures01::stream::Stream;
 use primitives::storage::well_known_keys;
 use primitives::hash::H256;
-use sr_io::hashing::blake2_256;
+use sp_io::hashing::blake2_256;
 use test_client::{
 	prelude::*,
 	consensus::BlockOrigin,
