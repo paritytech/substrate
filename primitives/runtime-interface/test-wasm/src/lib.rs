@@ -99,10 +99,10 @@ pub fn force_old_runtime_interface_import() {
 	unsafe { ext_keccak_256(rstd::ptr::null(), 0, rstd::ptr::null_mut()); }
 }
 
-/// This function is not used, but we require it for the compiler to include `runtime-io`.
-/// `runtime-io` is required for its panic and oom handler.
+/// This function is not used, but we require it for the compiler to include `sp-io`.
+/// `sp-io` is required for its panic and oom handler.
 #[no_mangle]
-pub fn import_runtime_io() {
+pub fn import_sp_io() {
 	sp_io::misc::print_utf8(&[]);
 }
 

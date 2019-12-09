@@ -33,7 +33,7 @@ use support::{
 	impl_outer_origin, impl_outer_event, parameter_types, StorageMap, StorageDoubleMap,
 	weights::Weight,
 };
-use {runtime_io, system};
+use {sp_io, system};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}

@@ -27,7 +27,7 @@ use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
 use primitives::H256;
 use support::{impl_outer_origin, impl_outer_dispatch, parameter_types, weights::Weight};
-use {runtime_io, system};
+use {sp_io, system};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
