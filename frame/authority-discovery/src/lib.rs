@@ -95,7 +95,7 @@ mod tests {
 	use authority_discovery_primitives::{AuthorityPair};
 	use app_crypto::Pair;
 	use primitives::{crypto::key_types, H256};
-	use runtime_io::TestExternalities;
+	use sp_io::TestExternalities;
 	use sp_runtime::{
 		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
 		Perbill, KeyTypeId,

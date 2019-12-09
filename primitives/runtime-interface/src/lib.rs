@@ -134,7 +134,7 @@ mod tests {
 			_,
 			(
 				HF,
-				runtime_io::SubstrateHostFunctions,
+				sp_io::SubstrateHostFunctions,
 				executor::deprecated_host_interface::SubstrateExternals
 			)
 		>(

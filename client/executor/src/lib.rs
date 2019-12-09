@@ -94,13 +94,13 @@ pub trait RuntimeInfo {
 mod tests {
 	use super::*;
 	use runtime_test::WASM_BINARY;
-	use runtime_io::TestExternalities;
+	use sp_io::TestExternalities;
 
 	#[test]
 	fn call_in_interpreted_wasm_works() {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
-		let res = call_in_wasm::<_, runtime_io::SubstrateHostFunctions>(
+		let res = call_in_wasm::<_, sp_io::SubstrateHostFunctions>(
 			"test_empty_return",
 			&[],
 			WasmExecutionMethod::Interpreted,

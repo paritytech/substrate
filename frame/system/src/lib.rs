@@ -119,7 +119,7 @@ use support::{
 use codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
-use runtime_io::TestExternalities;
+use sp_io::TestExternalities;
 
 #[cfg(any(feature = "std", test))]
 use primitives::ChangesTrieConfiguration;
@@ -422,11 +422,11 @@ decl_storage! {
 		build(|config: &GenesisConfig| {
 			use codec::Encode;
 
-			runtime_io::storage::set(well_known_keys::CODE, &config.code);
-			runtime_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
+			sp_io::storage::set(well_known_keys::CODE, &config.code);
+			sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
 
 			if let Some(ref changes_trie_config) = config.changes_trie_config {
-				runtime_io::storage::set(
+				sp_io::storage::set(
 					well_known_keys::CHANGES_TRIE_CONFIG,
 					&changes_trie_config.encode(),
 				);
@@ -668,9 +668,9 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		let storage_root = T::Hash::decode(&mut &runtime_io::storage::root()[..])
+		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..])
 			.expect("Node is configured to use the same hash; qed");
-		let storage_changes_root = runtime_io::storage::changes_root(&parent_hash.encode());
+		let storage_changes_root = sp_io::storage::changes_root(&parent_hash.encode());
 
 		// we can't compute changes trie root earlier && put it to the Digest
 		// because it will include all currently existing temporaries.
@@ -1187,7 +1187,7 @@ mod tests {
 
 	const CALL: &<Test as Trait>::Call = &();
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
+	fn new_test_ext() -> sp_io::TestExternalities {
 		GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 

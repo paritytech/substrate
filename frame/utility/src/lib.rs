@@ -132,7 +132,7 @@ mod tests {
 	type Balances = balances::Module<Test>;
 	type Utility = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
+	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		balances::GenesisConfig::<Test> {
 			balances: vec![(1, 10), (2, 0)],

@@ -95,7 +95,7 @@ impl Trait for Runtime {
 	type Event = ();
 }
 
-pub fn new_test_ext() -> runtime_io::TestExternalities {
+pub fn new_test_ext() -> sp_io::TestExternalities {
 	{
 		let mut h = ALIVE.borrow_mut();
 		h.clear();

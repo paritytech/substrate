@@ -103,7 +103,7 @@ pub fn force_old_runtime_interface_import() {
 /// `runtime-io` is required for its panic and oom handler.
 #[no_mangle]
 pub fn import_runtime_io() {
-	runtime_io::misc::print_utf8(&[]);
+	sp_io::misc::print_utf8(&[]);
 }
 
 wasm_export_functions! {

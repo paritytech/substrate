@@ -26,7 +26,7 @@ use codec::{Codec, Encode, Decode};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(storage_key: &[u8], key: &[u8]) -> Option<T> {
-	runtime_io::storage::child_get(storage_key, key).and_then(|v| {
+	sp_io::storage::child_get(storage_key, key).and_then(|v| {
 		Decode::decode(&mut &v[..]).map(Some).unwrap_or_else(|_| {
 			// TODO #3700: error should be handleable.
 			runtime_print!("ERROR: Corrupted state in child trie at {:?}/{:?}", storage_key, key);
@@ -59,7 +59,7 @@ pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(
 
 /// Put `value` in storage under `key`.
 pub fn put<T: Encode>(storage_key: &[u8], key: &[u8], value: &T) {
-	value.using_encoded(|slice| runtime_io::storage::child_set(storage_key, key, slice));
+	value.using_encoded(|slice| sp_io::storage::child_set(storage_key, key, slice));
 }
 
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
@@ -95,25 +95,25 @@ pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(
 
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(storage_key: &[u8], key: &[u8]) -> bool {
-	runtime_io::storage::child_read(storage_key, key, &mut [0;0][..], 0).is_some()
+	sp_io::storage::child_read(storage_key, key, &mut [0;0][..], 0).is_some()
 }
 
 /// Remove all `storage_key` key/values
 pub fn kill_storage(storage_key: &[u8]) {
-	runtime_io::storage::child_storage_kill(storage_key)
+	sp_io::storage::child_storage_kill(storage_key)
 }
 
 /// Ensure `key` has no explicit entry in storage.
 pub fn kill(storage_key: &[u8], key: &[u8]) {
-	runtime_io::storage::child_clear(storage_key, key);
+	sp_io::storage::child_clear(storage_key, key);
 }
 
 /// Get a Vec of bytes from storage.
 pub fn get_raw(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-	runtime_io::storage::child_get(storage_key, key)
+	sp_io::storage::child_get(storage_key, key)
 }
 
 /// Put a raw byte slice into storage.
 pub fn put_raw(storage_key: &[u8], key: &[u8], value: &[u8]) {
-	runtime_io::storage::child_set(storage_key, key, value)
+	sp_io::storage::child_set(storage_key, key, value)
 }

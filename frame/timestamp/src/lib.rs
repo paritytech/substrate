@@ -241,7 +241,7 @@ mod tests {
 	use super::*;
 
 	use support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
-	use runtime_io::TestExternalities;
+	use sp_io::TestExternalities;
 	use primitives::H256;
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
