@@ -181,10 +181,10 @@ impl Default for Data {
 /// An identifier for a single name registrar/identity verification service.
 pub type RegistrarIndex = u32;
 
-/// An attesttion of a registrar over how accurate some `IdentityInfo` is in describing an account.
+/// An attestation of a registrar over how accurate some `IdentityInfo` is in describing an account.
 ///
 /// NOTE: Registrars may pay little attention to come fields. Registrars may want to make clear
-/// which fields their attesttion is relevant for by off-chain means.
+/// which fields their attestation is relevant for by off-chain means.
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub enum Judgement<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
@@ -213,7 +213,7 @@ impl<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
 > Judgement<Balance> {
 	/// Returns `true` if this judgement is indicative of a deposit being currently held. This means
-	/// it should not be cleared or replaced except by an operation which utilises the deposit.
+	/// it should not be cleared or replaced except by an operation which utilizes the deposit.
 	fn has_deposit(&self) -> bool {
 		match self {
 			Judgement::FeePaid(_) => true,
@@ -222,7 +222,7 @@ impl<
 	}
 
 	/// Returns `true` if this judgement is one that should not be generally be replaced outside
-	/// of specialised handlers. Examples include "malicious" judgements and deposit-holding
+	/// of specialized handlers. Examples include "malicious" judgements and deposit-holding
 	/// judgements.
 	fn is_sticky(&self) -> bool {
 		match self {
@@ -266,7 +266,7 @@ impl Decode for IdentityFields {
 /// Information concerning the identity of the controller of an account.
 ///
 /// NOTE: This should be stored at the end of the storage item to facilitate the addition of extra
-/// fields in a backwards compatible way through a specialised `Decode` impl.
+/// fields in a backwards compatible way through a specialized `Decode` impl.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 #[cfg_attr(test, derive(Default))]
 pub struct IdentityInfo {
@@ -308,14 +308,14 @@ pub struct IdentityInfo {
 	pub pgp_fingerprint: Option<[u8; 20]>,
 
 	/// An graphic image representing the controller of the account. Should be a company,
-	/// organisation or project logo or a headshot in the case of a human.
+	/// organization or project logo or a headshot in the case of a human.
 	pub image: Data,
 }
 
 /// Information concerning the identity of the controller of an account.
 ///
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
-/// backwards compatible way through a specialised `Decode` impl.
+/// backwards compatible way through a specialized `Decode` impl.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct Registration<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
@@ -360,10 +360,10 @@ pub struct RegistrarInfo<
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Sudo {
-		/// Information that is pertinent to an account. Registrer
+		/// Information that is pertinent to an account. Registerer
 		pub IdentityOf get(fn identity): map T::AccountId => Option<Registration<BalanceOf<T>>>;
 
-		/// Alternative "sub" identites of this account.
+		/// Alternative "sub" identities of this account.
 		pub SubsOf get(fn subs): map T::AccountId => (BalanceOf<T>, Vec<(T::AccountId, Data)>);
 
 		/// The set of registrars. Not expected to get very big as can only be added through a
