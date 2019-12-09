@@ -15,6 +15,7 @@ sp-api = { path = "../sr-api", default-features = false }
 sp-runtime = { path = "../runtime", default-features = false }
 
 [features]
+default = [ "std" ]
 std = [
 	"codec",
 	"derive_more",
