@@ -118,7 +118,7 @@ members = [
 	"primitives/sr-api/proc-macro",
 	"primitives/sr-api/test",
 	"primitives/sr-arithmetic",
-	"primitives/sp-io",
+	"primitives/io",
 	"primitives/runtime",
 	"primitives/sr-sandbox",
 	"primitives/sr-staking-primitives",
