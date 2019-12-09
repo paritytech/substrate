@@ -13,7 +13,7 @@ system = { package = "frame-system", path = "../system", default-features = fals
 rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
 
 [dev-dependencies]
-runtime_io = { package = "sp-io", path = "../../primitives/io" }
+runtime_io = { package = "sp-io", path = "../../primitives/sr-io" }
 hex-literal = "0.2.1"
 balances = { package = "pallet-balances", path = "../balances" }
 primitives = { package = "sp-core",  path = "../../primitives/core" }

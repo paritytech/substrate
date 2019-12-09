@@ -12,7 +12,7 @@ system = { package = "frame-system", path = "../system", default-features = fals
 balances = { package = "pallet-balances", path = "../balances", default-features = false }
 sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
 rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
-runtime-io = { package = "sp-io", path = "../../primitives/io", default-features = false }
+runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
 
 [dev-dependencies]
 primitives = { package = "sp-core",  path = "../../primitives/core" }
