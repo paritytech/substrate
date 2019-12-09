@@ -84,12 +84,16 @@ impl ProvideInherentData for InherentDataProvider {
 		&self,
 		inherent_data: &mut InherentData,
 	) ->Result<(), Error> {
+		use sp_timestamp::TimestampInherentData;
+
 		let timestamp = inherent_data.timestamp_inherent_data()?;
 		let slot_num = timestamp / self.slot_duration;
 		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_num)
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
+		use codec::Decode;
+
 		inherents::Error::decode(&mut &error[..]).map(|e| e.into_string()).ok()
 	}
 }

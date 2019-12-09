@@ -1241,7 +1241,7 @@ mod tests {
 		h
 	}
 
-	fn propose_set_balance(who: u64, value: u64, delay: u64) -> super::Result {
+	fn propose_set_balance(who: u64, value: u64, delay: u64) -> dispatch::Result {
 		Democracy::propose(
 			Origin::signed(who),
 			set_balance_proposal_hash(value),
@@ -1249,7 +1249,7 @@ mod tests {
 		)
 	}
 
-	fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> super::Result {
+	fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> dispatch::Result {
 		Democracy::propose(
 			Origin::signed(who),
 			set_balance_proposal_hash_and_note(value),
