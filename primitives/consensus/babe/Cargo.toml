@@ -12,7 +12,7 @@ rstd = { package = "sp-std", path = "../../sr-std", default-features = false }
 schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"], optional = true }
 slots = { package = "sc-consensus-slots", path = "../../../client/consensus/slots", optional = true }
 sp-api = { path = "../../sr-api", default-features = false }
-sp-runtime = {  path = "../../sr-primitives", default-features = false }
+sp-runtime = {  path = "../../runtime", default-features = false }
 sp-inherents = { package = "sp-inherents", path = "../../inherents", default-features = false }
 sp-timestamp = { path = "../../timestamp", default-features = false }
 

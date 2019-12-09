@@ -11,7 +11,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
 rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
 runtime-io ={ package = "sp-io", path = "../../primitives/sr-io", default-features = false }
-sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
+sp-runtime = { path = "../../primitives/runtime", default-features = false }
 sp-version = { path = "../../primitives/sr-version", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 impl-trait-for-tuples = "0.1.3"

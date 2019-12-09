@@ -14,7 +14,6 @@ consensus_common = { package = "sp-consensus", path = "../../../primitives/conse
 log = "0.4.8"
 primitives = { package = "sp-core", path = "../../../primitives/core" }
 sp-api = { path = "../../../primitives/sr-api" }
-sp-runtime = { path = "../../../primitives/sr-primitives" }
+sp-runtime = { path = "../../../primitives/runtime" }
 sc-service = { path = "../../../client/service" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
-

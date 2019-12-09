@@ -10,7 +10,7 @@ app-crypto = { package = "sc-application-crypto", path = "../../application-cryp
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 rstd = { package = "sp-std", path = "../../sr-std", default-features = false }
 sp-api = { path = "../../sr-api", default-features = false }
-sp-runtime = { path = "../../sr-primitives", default-features = false }
+sp-runtime = { path = "../../runtime", default-features = false }
 inherents = { package = "sp-inherents", path = "../../inherents", default-features = false }
 sp-timestamp = {  path = "../../timestamp", default-features = false }
 
