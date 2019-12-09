@@ -20,7 +20,7 @@ primitives = { package = "sp-core", path = "../../../primitives/core" }
 runtime-io = { package = "sp-io", path = "../../../primitives/sr-io" }
 runtime_support = { package = "frame-support", path = "../../../frame/support" }
 session = { package = "pallet-session", path = "../../../frame/session" }
-sp-runtime = { path = "../../../primitives/sr-primitives" }
+sp-runtime = { path = "../../../primitives/runtime" }
 staking = { package = "pallet-staking", path = "../../../frame/staking" }
 sc-executor = { path = "../../../client/executor" }
 system = { package = "frame-system", path = "../../../frame/system" }

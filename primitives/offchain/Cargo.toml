@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 sp-api = { path = "../sr-api", default-features = false }
-sp-runtime = {  path = "../sr-primitives", default-features = false }
+sp-runtime = {  path = "../runtime", default-features = false }
 
 [features]
 default = ["std"]

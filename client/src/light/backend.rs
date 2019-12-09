@@ -365,6 +365,22 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		match *self {
+			GenesisOrUnavailableState::Genesis(ref state) =>
+				Ok(state.next_storage_key(key).expect(IN_MEMORY_EXPECT_PROOF)),
+			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
+		}
+	}
+
+	fn next_child_storage_key(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		match *self {
+			GenesisOrUnavailableState::Genesis(ref state) =>
+				Ok(state.next_child_storage_key(storage_key, key).expect(IN_MEMORY_EXPECT_PROOF)),
+			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
+		}
+	}
+
 	fn for_keys_with_prefix<A: FnMut(&[u8])>(&self, prefix: &[u8], action: A) {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => state.for_keys_with_prefix(prefix, action),

@@ -15,6 +15,6 @@ hash-db = "0.15.2"
 keyring = { package = "sp-keyring", path = "../../../primitives/keyring" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 primitives = { package = "sp-core", path = "../../../primitives/core" }
-sp-runtime = {  path = "../../../primitives/sr-primitives" }
+sp-runtime = {  path = "../../../primitives/runtime" }
 sp-blockchain = {  path = "../../../primitives/blockchain" }
 state_machine = { package = "sp-state-machine", path = "../../../primitives/state-machine" }

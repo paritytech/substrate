@@ -6,10 +6,9 @@ edition = "2018"
 
 [dependencies]
 state-machine = { package = "sp-state-machine", path = "../../primitives/state-machine" }
-sp-runtime = { path = "../../primitives/sr-primitives" }
+sp-runtime = { path = "../../primitives/runtime" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
 codec = { package = "parity-scale-codec", version = "1.0.6", features = ["derive"] }
 runtime_api = { package = "sp-block-builder", path = "../../primitives/block-builder/runtime-api" }
 sp-api = { path = "../../primitives/sr-api" }
-

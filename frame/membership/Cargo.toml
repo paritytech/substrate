@@ -11,7 +11,7 @@ rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features 
 runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }
-sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
+sp-runtime = { path = "../../primitives/runtime", default-features = false }
 
 [dev-dependencies]
 primitives = { package = "sp-core",  path = "../../primitives/core" }
