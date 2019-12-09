@@ -22,13 +22,13 @@ use rstd::{result::Result, prelude::*};
 
 use codec::{Encode, Decode};
 use sp_inherents::{Error, InherentIdentifier, InherentData, IsFatalError};
-use sr_primitives::RuntimeString;
+use sp_runtime::RuntimeString;
 
 /// The identifier for the `uncles` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"uncles00";
 
 /// Errors that can occur while checking the authorship inherent.
-#[derive(Encode, sr_primitives::RuntimeDebug)]
+#[derive(Encode, sp_runtime::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode))]
 pub enum InherentError {
 	Uncles(RuntimeString),
