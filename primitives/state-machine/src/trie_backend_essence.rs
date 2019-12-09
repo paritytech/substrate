@@ -423,7 +423,7 @@ mod test {
 	use super::*;
 
 	#[test]
-	fn next_storage_key_works() {
+	fn next_storage_key_and_next_child_storage_key_work() {
 		// Contains values
 		let mut root_1 = H256::default();
 		// Contains child trie

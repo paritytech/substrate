@@ -224,7 +224,6 @@ pub trait Storage {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
 		self.next_child_storage_key(storage_key, key)
 	}
-	//TODo todo make test for childs
 }
 
 /// Interface that provides trie related functionality.
