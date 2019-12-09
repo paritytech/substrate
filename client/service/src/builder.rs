@@ -95,7 +95,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImp
 }
 
 /// Full client type.
-type TFullClient<TBl, TRtApi, TExecDisp> = Client<
+pub type TFullClient<TBl, TRtApi, TExecDisp> = Client<
 	TFullBackend<TBl>,
 	TFullCallExecutor<TBl, TExecDisp>,
 	TBl,
@@ -112,7 +112,7 @@ type TFullCallExecutor<TBl, TExecDisp> = client::LocalCallExecutor<
 >;
 
 /// Light client type.
-type TLightClient<TBl, TRtApi, TExecDisp> = Client<
+pub type TLightClient<TBl, TRtApi, TExecDisp> = Client<
 	TLightBackend<TBl>,
 	TLightCallExecutor<TBl, TExecDisp>,
 	TBl,
