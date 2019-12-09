@@ -66,10 +66,11 @@
 
 use rstd::prelude::*;
 use rstd::{fmt::Debug, ops::Add};
+use enumflags2::BitFlags;
+use codec::{Encode, Decode};
 use sp_runtime::{
 	traits::{StaticLookup, EnsureOrigin, Zero}, RuntimeDebug,
 };
-use codec::{Encode, Decode};
 use support::{
 	decl_module, decl_event, decl_storage, ensure, dispatch::Result,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
@@ -113,53 +114,64 @@ pub trait Trait: system::Trait {
 ///
 /// Can also be `None`.
 #[derive(Clone, Eq, PartialEq, RuntimeDebug)]
-pub enum Data<Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> {
+pub enum Data {
 	/// No data here.
 	None,
 	/// The data is stored directly.
 	Raw(Vec<u8>),
-	/// Only a hash of the data is stored. The preimage of the hash may be retrieved through
-	/// some hash-lookup service.
-	Hash(Hash),
+	/// Only the Blake2 hash of the data is stored. The preimage of the hash may be retrieved
+	/// through some hash-lookup service.
+	BlakeTwo256([u8; 32]),
+	/// Only the SHA2-256 hash of the data is stored. The preimage of the hash may be retrieved
+	/// through some hash-lookup service.
+	Sha256([u8; 32]),
+	/// Only the Keccak-256 hash of the data is stored. The preimage of the hash may be retrieved
+	/// through some hash-lookup service.
+	Keccak256([u8; 32]),
+	/// Only the SHA3-256 hash of the data is stored. The preimage of the hash may be retrieved
+	/// through some hash-lookup service.
+	ShaThree256([u8; 32]),
 }
 
-impl <Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> Decode for Data<Hash> {
+impl Decode for Data {
 	fn decode<I: codec::Input>(input: &mut I) -> rstd::result::Result<Self, codec::Error> {
 		let b = input.read_byte()?;
 		Ok(match b {
 			0 => Data::None,
-			1 => Data::Hash(Hash::decode(input)?),
-			n @ 2 ..= 34 => {
-				let mut r = vec![0u8; n as usize - 2];
+			n @ 1 ..= 33 => {
+				let mut r = vec![0u8; n as usize - 1];
 				input.read(&mut r[..])?;
 				Data::Raw(r)
 			}
+			34 => Data::BlakeTwo256(<[u8; 32]>::decode(input)?),
+			35 => Data::Sha256(<[u8; 32]>::decode(input)?),
+			36 => Data::Keccak256(<[u8; 32]>::decode(input)?),
+			37 => Data::ShaThree256(<[u8; 32]>::decode(input)?),
 			_ => return Err(codec::Error::from("invalid leading byte")),
 		})
 	}
 }
 
-impl <Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> Encode for Data<Hash> {
+impl Encode for Data {
 	fn encode(&self) -> Vec<u8> {
 		match self {
 			Data::None => vec![0u8; 1],
-			Data::Hash(ref h) => {
-				let mut r = h.encode();
-				r.insert(0, 1);
-				r
-			}
 			Data::Raw(ref x) => {
 				let l = x.len().min(32);
-				let mut r = vec![l as u8 + 2; l + 1];
+				let mut r = vec![l as u8 + 1; l + 1];
 				&mut r[1..].copy_from_slice(&x[..l as usize]);
 				r
 			}
+			Data::BlakeTwo256(ref h) => (34u8..35u8).chain(h.iter().cloned()).collect(),
+			Data::Sha256(ref h) => (35u8..36u8).chain(h.iter().cloned()).collect(),
+			Data::Keccak256(ref h) => (36u8..37u8).chain(h.iter().cloned()).collect(),
+			Data::ShaThree256(ref h) => (37u8..38u8).chain(h.iter().cloned()).collect(),
 		}
 	}
 }
-impl <Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> codec::EncodeLike for Data<Hash> {}
+impl codec::EncodeLike for Data {}
 
-impl <Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> Default for Data<Hash> {
+impl Default for Data {
 	fn default() -> Self {
 		Self::None
 	}
@@ -199,6 +211,8 @@ pub enum Judgement<
 impl<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
 > Judgement<Balance> {
+	/// Returns `true` if this judgement is indicative of a deposit being currently held. This means
+	/// it should not be cleared or replaced except by an operation which utilises the deposit.
 	fn has_deposit(&self) -> bool {
 		match self {
 			Judgement::FeePaid(_) => true,
@@ -206,11 +220,45 @@ impl<
 		}
 	}
 
+	/// Returns `true` if this judgement is one that should not be generally be replaced outside
+	/// of specialised handlers. Examples include "malicious" judgements and deposit-holding
+	/// judgements.
 	fn is_sticky(&self) -> bool {
 		match self {
 			Judgement::FeePaid(_) | Judgement::Erroneous => true,
 			_ => false,
 		}
+	}
+}
+
+/// The fields that we use to identify the owner of an account with. Each corresponds to a field
+/// in the `IdentityInfo` struct.
+#[repr(u64)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug)]
+pub enum IdentityField {
+	Display        = 0b0000000000000000000000000000000000000000000000000000000000000001,
+	Legal          = 0b0000000000000000000000000000000000000000000000000000000000000010,
+	Web            = 0b0000000000000000000000000000000000000000000000000000000000000100,
+	Riot           = 0b0000000000000000000000000000000000000000000000000000000000001000,
+	Email          = 0b0000000000000000000000000000000000000000000000000000000000010000,
+	PgpFingerprint = 0b0000000000000000000000000000000000000000000000000000000000100000,
+	Image          = 0b0000000000000000000000000000000000000000000000000000000001000000,
+}
+
+/// Wrapper type for `BitFlags<IdentityField>` that implements `Codec`.
+#[derive(Clone, Copy, PartialEq, Default, RuntimeDebug)]
+pub struct IdentityFields(BitFlags<IdentityField>);
+
+impl Eq for IdentityFields {}
+impl Encode for IdentityFields {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.bits().using_encoded(f)
+	}
+}
+impl Decode for IdentityFields {
+	fn decode<I: codec::Input>(input: &mut I) -> rstd::result::Result<Self, codec::Error> {
+		let field = u64::decode(input)?;
+		Ok(Self(<BitFlags<IdentityField>>::from_bits(field as u64).map_err(|_| "invalid value")?))
 	}
 }
 
@@ -220,45 +268,47 @@ impl<
 /// fields in a backwards compatible way through a specialised `Decode` impl.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 #[cfg_attr(test, derive(Default))]
-pub struct IdentityInfo<
-	Hash: Encode + Decode + Clone + Debug + Eq + PartialEq
-> {
+pub struct IdentityInfo {
 	/// Additional fields of the identity that are not catered for with the structs explicit
 	/// fields. Stored ordered.
-	pub additional: Vec<(Data<Hash>, Data<Hash>)>,
+	pub additional: Vec<(Data, Data)>,
 
 	/// A reasonable display name for the controller of the account. This should be whatever is it
 	/// that it is typically known as and should not be confusable with other entities, given
 	/// reasonable context.
 	///
 	/// Stored as UTF-8.
-	pub display: Data<Hash>,
+	pub display: Data,
 
 	/// The full legal name in the local jurisdiction of the entity. This might be a bit
 	/// long-winded.
 	///
 	/// Stored as UTF-8.
-	pub legal: Data<Hash>,
+	pub legal: Data,
 
 	/// A representative website held by the controller of the account.
 	///
 	/// NOTE: `https://` is automatically prepended.
 	///
 	/// Stored as UTF-8.
-	pub web: Data<Hash>,
+	pub web: Data,
 
 	/// The Riot handle held by the controller of the account.
 	///
 	/// Stored as UTF-8.
-	pub riot: Data<Hash>,
+	pub riot: Data,
 
 	/// The email address of the controller of the account.
 	///
 	/// Stored as UTF-8.
-	pub email: Data<Hash>,
+	pub email: Data,
 
 	/// The PGP/GPG public key of the controller of the account.
 	pub pgp_fingerprint: Option<[u8; 20]>,
+
+	/// An graphic image representing the controller of the account. Should be a company,
+	/// organisation or project logo or a headshot in the case of a human.
+	pub image: Data,
 }
 
 /// Information concerning the identity of the controller of an account.
@@ -267,8 +317,7 @@ pub struct IdentityInfo<
 /// backwards compatible way through a specialised `Decode` impl.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct Registration<
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq,
-	Hash: Encode + Decode + Clone + Debug + Eq + PartialEq
+	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
 > {
 	/// Judgements from the registrars on this identity. Stored ordered by RegistrarIndex. There
 	/// may be only a single judgement from each registrar.
@@ -278,13 +327,12 @@ pub struct Registration<
 	pub deposit: Balance,
 
 	/// Information on the identity.
-	pub info: IdentityInfo<Hash>,
+	pub info: IdentityInfo,
 }
 
 impl <
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
-	Hash: Encode + Decode + Clone + Debug + Eq + PartialEq
-> Registration<Balance, Hash> {
+> Registration<Balance> {
 	fn total_deposit(&self) -> Balance {
 		self.deposit + self.judgements.iter()
 			.map(|(_, ref j)| if let Judgement::FeePaid(fee) = j { *fee } else { Zero::zero() })
@@ -303,15 +351,19 @@ pub struct RegistrarInfo<
 
 	/// Amount required to be given to the registrar for them to check the account.
 	pub fee: Balance,
+
+	/// Relevant fields for this registrar. Registrar judgements are limited to attestations on
+	/// these fields.
+	pub fields: IdentityFields,
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Sudo {
 		/// Information that is pertinent to an account. Registrer
-		pub IdentityOf get(fn identity): map T::AccountId => Option<Registration<BalanceOf<T>, T::Hash>>;
+		pub IdentityOf get(fn identity): map T::AccountId => Option<Registration<BalanceOf<T>>>;
 
 		/// Alternative "sub" identites of this account.
-		pub SubsOf get(fn subs): map T::AccountId => (BalanceOf<T>, Vec<(T::AccountId, Data<T::Hash>)>);
+		pub SubsOf get(fn subs): map T::AccountId => (BalanceOf<T>, Vec<(T::AccountId, Data)>);
 
 		/// The set of registrars. Not expected to get very big as can only be added through a
 		/// special origin (likely a council motion).
@@ -325,8 +377,6 @@ decl_event!(
 	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId, Balance = BalanceOf<T> {
 		/// A name was set or reset (which will remove all judgements).
 		IdentitySet(AccountId),
-		/// A name was forcibly set.
-		IdentityForced(AccountId),
 		/// A name was cleared, and the given balance returned.
 		IdentityCleared(AccountId, Balance),
 		/// A name was removed and the given balance slashed.
@@ -339,8 +389,6 @@ decl_event!(
 		JudgementGiven(AccountId, RegistrarIndex),
 		/// A registrar was added.
 		RegistrarAdded(RegistrarIndex),
-		/// A registrar was removed.
-		RegistrarRemvoed(RegistrarIndex),
 	}
 );
 
@@ -370,7 +418,7 @@ decl_module! {
 				.map_err(|_| "bad origin")?;
 
 			let i = <Registrars<T>>::mutate(|r| {
-				r.push(Some(RegistrarInfo { account, fee: Zero::zero() }));
+				r.push(Some(RegistrarInfo { account, fee: Zero::zero(), fields: Default::default() }));
 				(r.len() - 1) as RegistrarIndex
 			});
 
@@ -396,7 +444,7 @@ decl_module! {
 		/// - One event.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn set_identity(origin, info: IdentityInfo<T::Hash>) {
+		fn set_identity(origin, info: IdentityInfo) {
 			let sender = ensure_signed(origin)?;
 			let fd = <BalanceOf<T>>::from(info.additional.len() as u32) * T::FieldDeposit::get();
 
@@ -438,7 +486,7 @@ decl_module! {
 		/// - At most two balance operations.
 		/// - One storage mutation (codec `O(S)`); one storage-exists.
 		/// # </weight>
-		fn set_subs(origin, subs: Vec<(T::AccountId, Data<T::Hash>)>) {
+		fn set_subs(origin, subs: Vec<(T::AccountId, Data)>) {
 			let sender = ensure_signed(origin)?;
 			ensure!(<IdentityOf<T>>::exists(&sender), "not found");
 			ensure!(subs.len() <= T::MaximumSubAccounts::get() as usize, "too many subs");
@@ -498,7 +546,7 @@ decl_module! {
 		/// - `reg_index`: The index of the registrar whose judgement is requested.
 		/// - `max_fee`: The maximum fee that may be paid. This should just be auto-populated as:
 		///
-		/// ```
+		/// ```nocompile
 		/// Self::registrars(reg_index).fee
 		/// ```
 		///
@@ -598,6 +646,33 @@ decl_module! {
 				rs.get_mut(index as usize)
 					.and_then(|x| x.as_mut())
 					.and_then(|r| if r.account == who { r.fee = fee; Some(()) } else { None })
+					.ok_or("invalid index")
+			)
+		}
+
+		/// Set the field information for a registrar.
+		///
+		/// The dispatch origin for this call must be _Signed_ and the sender must be the account
+		/// of the registrar whose index is `index`.
+		///
+		/// - `index`: the index of the registrar whose fee is to be set.
+		/// - `fields`: the fields that the registrar concerns themselves with.
+		///
+		/// # <weight>
+		/// - `O(R)`.
+		/// - One storage mutation `O(R)`.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		fn set_fields(origin,
+			#[compact] index: RegistrarIndex,
+			fields: IdentityFields,
+		) -> Result {
+			let who = ensure_signed(origin)?;
+
+			<Registrars<T>>::mutate(|rs|
+				rs.get_mut(index as usize)
+					.and_then(|x| x.as_mut())
+					.and_then(|r| if r.account == who { r.fields = fields; Some(()) } else { None })
 					.ok_or("invalid index")
 			)
 		}
@@ -792,7 +867,7 @@ mod tests {
 		t.into()
 	}
 
-	fn ten() -> IdentityInfo<H256> {
+	fn ten() -> IdentityInfo {
 		IdentityInfo {
 			display: Data::Raw(b"ten".to_vec()),
 			legal: Data::Raw(b"The Right Ordinal Ten, Esq.".to_vec()),
@@ -805,7 +880,11 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
-			assert_eq!(Identity::registrars(), vec![Some(RegistrarInfo { account: 3, fee: 10 })]);
+			let fields = IdentityFields(IdentityField::Display | IdentityField::Legal);
+			assert_ok!(Identity::set_fields(Origin::signed(3), 0, fields));
+			assert_eq!(Identity::registrars(), vec![
+				Some(RegistrarInfo { account: 3, fee: 10, fields })
+			]);
 		});
 	}
 
@@ -819,7 +898,7 @@ mod tests {
 			assert_eq!(Balances::free_balance(10), 90);
 			assert_ok!(Identity::clear_identity(Origin::signed(10)));
 			assert_eq!(Balances::free_balance(10), 100);
-			assert_noop!(Identity::clear_identity(Origin::signed(10)), "not found");
+			assert_noop!(Identity::clear_identity(Origin::signed(10)), "not named");
 		});
 	}
 
@@ -903,7 +982,7 @@ mod tests {
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), "no identity");
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_ok!(Identity::request_judgement(Origin::signed(10), 0));
+			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 			assert_ok!(Identity::cancel_request(Origin::signed(10), 0));
 			assert_eq!(Balances::free_balance(10), 90);
 			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), "not found");
@@ -919,26 +998,27 @@ mod tests {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_ok!(Identity::request_judgement(Origin::signed(10), 0));
+			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 9), "fee changed");
+			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 			// 10 for the judgement request, 10 for the identity.
 			assert_eq!(Balances::free_balance(10), 80);
 
 			// Re-requesting won't work as we already paid.
-			assert_noop!(Identity::request_judgement(Origin::signed(10), 0), "sticky judgement");
+			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10), "sticky judgement");
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Erroneous));
 			// Registrar got their payment now.
 			assert_eq!(Balances::free_balance(3), 20);
 
 			// Re-requesting still won't work as it's erroneous.
-			assert_noop!(Identity::request_judgement(Origin::signed(10), 0), "sticky judgement");
+			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10), "sticky judgement");
 
 			// Requesting from a second registrar still works.
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 4));
-			assert_ok!(Identity::request_judgement(Origin::signed(10), 1));
+			assert_ok!(Identity::request_judgement(Origin::signed(10), 1, 10));
 
 			// Re-requesting after the judgement has been reduced works.
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::OutOfDate));
-			assert_ok!(Identity::request_judgement(Origin::signed(10), 0));
+			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 		});
 	}
 
