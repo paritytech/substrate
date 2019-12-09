@@ -278,7 +278,7 @@ fn should_query_storage() {
 			Err(Error::InvalidBlockRange {
 				from: format!("1 ({:?})", block1_hash),
 				to: format!("0 ({:?})", genesis_hash),
-				details: "from number > to number".to_owned(),
+				details: "from number >= to number".to_owned(),
 			}).map_err(|e| e.to_string())
 		);
 

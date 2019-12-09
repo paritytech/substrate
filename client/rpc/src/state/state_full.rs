@@ -99,27 +99,27 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 		let from_meta = self.client.header_metadata(from).map_err(invalid_block_err)?;
 		let to_meta = self.client.header_metadata(to).map_err(invalid_block_err)?;
 
-		if from_meta.number > to_meta.number {
-			return Err(invalid_block_range(&from_meta, &to_meta, "from number > to number".to_owned()))
+		if from_meta.number >= to_meta.number {
+			return Err(invalid_block_range(&from_meta, &to_meta, "from number >= to number".to_owned()))
 		}
 
 		// check if we can get from `to` to `from` by going through parent_hashes.
 		let from_number = from_meta.number;
-		let blocks = {
-			let mut blocks = vec![to_meta.hash];
+		let hashes = {
+			let mut hashes = vec![to_meta.hash];
 			let mut last = to_meta.clone();
 			while last.number > from_number {
-				let hdr = self.client
+				let header_metadata = self.client
 					.header_metadata(last.parent)
 					.map_err(|e| invalid_block_range::<Block>(&last, &to_meta, e.to_string()))?;
-				blocks.push(hdr.hash);
-				last = hdr;
+				hashes.push(header_metadata.hash);
+				last = header_metadata;
 			}
 			if last.hash != from_meta.hash {
 				return Err(invalid_block_range(&from_meta, &to_meta, "from and to are on different forks".to_owned()))
 			}
-			blocks.reverse();
-			blocks
+			hashes.reverse();
+			hashes
 		};
 
 		// check if we can filter blocks-with-changes from some (sub)range using changes tries
@@ -128,10 +128,10 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 			.map_err(client_err)?;
 		let filtered_range_begin = changes_trie_range
 			.map(|(begin, _)| (begin - from_number).saturated_into::<usize>());
-		let (unfiltered_range, filtered_range) = split_range(blocks.len(), filtered_range_begin);
+		let (unfiltered_range, filtered_range) = split_range(hashes.len(), filtered_range_begin);
 
 		Ok(QueryStorageRange {
-			hashes: blocks,
+			hashes,
 			first_number: from_number,
 			unfiltered_range,
 			filtered_range,
