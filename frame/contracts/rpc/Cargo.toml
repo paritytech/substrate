@@ -13,7 +13,7 @@ sp-blockchain = { path = "../../../primitives/blockchain" }
 primitives = { package = "sp-core",  path = "../../../primitives/core" }
 rpc-primitives = { package = "sp-rpc", path = "../../../primitives/rpc" }
 serde = { version = "1.0.101", features = ["derive"] }
-sp-runtime = { path = "../../../primitives/sr-primitives" }
+sp-runtime = { path = "../../../primitives/runtime" }
 pallet-contracts-rpc-runtime-api = { path = "./runtime-api" }
 
 [dev-dependencies]
