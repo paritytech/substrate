@@ -113,7 +113,10 @@ use rstd::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use runtime_io::hashing::blake2_256;
 use sp_runtime::{
-	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension},
+	traits::{
+		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension, Convert,
+		UniqueSaturatedInto, CheckedDiv,
+	},
 	transaction_validity::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
 	},
@@ -122,7 +125,11 @@ use support::dispatch::{Result, Dispatchable};
 use support::{
 	Parameter, decl_module, decl_event, decl_storage, storage::child,
 	parameter_types, IsSubType,
-	weights::DispatchInfo,
+	weights::{DispatchInfo, Weight},
+	traits::{
+		Currency, Get, OnFreeBalanceZero, Time, Randomness, OnUnbalanced, ExistenceRequirement,
+		WithdrawReason, Imbalance,
+	},
 };
 use system::{ensure_signed, RawOrigin, ensure_root};
 use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
@@ -142,7 +149,7 @@ pub trait ComputeDispatchFee<Call, Balance> {
 
 /// Information for managing an acocunt and its sub trie abstraction.
 /// This is the required info to cache for an account
-#[derive(Encode, Decode, RuntimeDebug)]
+#[derive(Encode, Decode, sp_runtime::RuntimeDebug)]
 pub enum ContractInfo<T: Trait> {
 	Alive(AliveContractInfo<T>),
 	Tombstone(TombstoneContractInfo<T>),
@@ -205,7 +212,7 @@ pub type AliveContractInfo<T> =
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, sp_runtime::RuntimeDebug)]
 pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
@@ -224,7 +231,7 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 pub type TombstoneContractInfo<T> =
 	RawTombstoneContractInfo<<T as system::Trait>::Hash, <T as system::Trait>::Hashing>;
 
-#[derive(Encode, Decode, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, PartialEq, Eq, sp_runtime::RuntimeDebug)]
 pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
 
 impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
@@ -910,7 +917,7 @@ impl<T: Trait> Config<T> {
 
 /// Definition of the cost schedule and other parameterizations for wasm vm.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, sp_runtime::RuntimeDebug)]
 pub struct Schedule {
 	/// Version of the schedule.
 	pub version: u32,
@@ -1106,7 +1113,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 		call: &Self::Call,
 		_: DispatchInfo,
 		_: usize,
-	) -> rstd::result::Result<Self::Pre, ApplyError> {
+	) -> rstd::result::Result<Self::Pre, TransactionValidityError> {
 		Self::perform_pre_dispatch_checks(who, call)
 			.map_err(Into::into)
 	}

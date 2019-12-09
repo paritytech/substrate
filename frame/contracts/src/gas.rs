@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
+use crate::{Module, Trait, BalanceOf, NegativeImbalanceOf};
 use rstd::convert::TryFrom;
 use sp_runtime::traits::{
 	CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto,
