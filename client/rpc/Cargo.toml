@@ -33,7 +33,7 @@ assert_matches = "1.3.0"
 futures01 = { package = "futures", version = "0.1.29" }
 network = { package = "sc-network", path = "../network" }
 rustc-hex = "2.0.1"
-sp-io = { path = "../../primitives/sr-io" }
+sp-io = { path = "../../primitives/io" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 tokio = "0.1.22"
 txpool = { package = "sc-transaction-pool", path = "../transaction-pool" }
