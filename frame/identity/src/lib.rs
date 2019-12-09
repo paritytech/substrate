@@ -550,7 +550,7 @@ decl_module! {
 			// Figure out who we're meant to be clearing.
 			let target = T::Lookup::lookup(target)?;
 			// Grab their deposit (and check that they have one).
-			let deposit = <IdentityOf<T>>::take(&target).ok_or("Not named")?.total_deposit()
+			let deposit = <IdentityOf<T>>::take(&target).ok_or("not named")?.total_deposit()
 				+ <SubsOf<T>>::take(&target).0;
 			// Slash their deposit from them.
 			T::Slashed::on_unbalanced(T::Currency::slash_reserved(&target, deposit).0);
@@ -734,10 +734,24 @@ mod tests {
 	}
 
 	#[test]
-	fn setting_subaccounts_should_work() {
+	fn killing_slashing_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			let subs = vec![(20, Data::Raw(vec![40; 1]))];
+			assert_noop!(Identity::kill_identity(Origin::signed(1), 10), "bad origin");
+			assert_ok!(Identity::kill_identity(Origin::signed(2), 10));
+			assert_eq!(Identity::identity(10), None);
+			assert_eq!(Balances::free_balance(10), 90);
+			assert_noop!(Identity::kill_identity(Origin::signed(2), 10), "not named");
+		});
+	}
+
+	#[test]
+	fn setting_subaccounts_should_work() {
+		new_test_ext().execute_with(|| {
+			let mut subs = vec![(20, Data::Raw(vec![40; 1]))];
+			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone()), "not found");
+
+			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 			assert_eq!(Balances::free_balance(10), 80);
 			assert_eq!(Identity::subs(10), (10, subs.clone()));
@@ -745,6 +759,10 @@ mod tests {
 			assert_ok!(Identity::set_subs(Origin::signed(10), vec![]));
 			assert_eq!(Balances::free_balance(10), 90);
 			assert_eq!(Identity::subs(10), (0, vec![]));
+
+			subs.push((30, Data::Raw(vec![41; 1])));
+			subs.push((40, Data::Raw(vec![42; 1])));
+			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone()), "too many subs");
 		});
 	}
 
@@ -753,15 +771,20 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
+			assert_noop!(Identity::cancel_request_judgement(Origin::signed(10), 0), "no identity");
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 0));
 			assert_ok!(Identity::cancel_request_judgement(Origin::signed(10), 0));
 			assert_eq!(Balances::free_balance(10), 90);
+			assert_noop!(Identity::cancel_request_judgement(Origin::signed(10), 0), "not found");
+
+			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
+			assert_noop!(Identity::cancel_request_judgement(Origin::signed(10), 0), "judgement given");
 		});
 	}
 
 	#[test]
-	fn requested_judgement_should_work() {
+	fn requesting_judgement_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
@@ -786,7 +809,6 @@ mod tests {
 			// Re-requesting after the judgement has been reduced works.
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::OutOfDate));
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 0));
-
 		});
 	}
 
