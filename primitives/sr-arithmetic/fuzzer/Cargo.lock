@@ -308,7 +308,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sr-std"
+name = "std"
 version = "2.0.0"
 
 [[package]]
