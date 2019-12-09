@@ -13,7 +13,7 @@ jsonrpc-core-client = "14.0.3"
 jsonrpc-derive = "14.0.3"
 log = "0.4.8"
 serde = { version = "1.0.101", features = ["derive"] }
-sp-runtime = { path = "../../../../primitives/sr-primitives" }
+sp-runtime = { path = "../../../../primitives/runtime" }
 frame-system-rpc-runtime-api = { path = "../../../../frame/system/rpc/runtime-api" }
 sp-core = { path = "../../../../primitives/core" }
 sp-blockchain = { path = "../../../../primitives/blockchain" }

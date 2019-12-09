@@ -27,7 +27,7 @@ runtime_io = { package = "sp-io", path = "../../../primitives/sr-io" }
 runtime_version = { package = "sp-version", path = "../../../primitives/sr-version" }
 slots = { package = "sc-consensus-slots", path = "../slots" }
 sp-api = { path = "../../../primitives/sr-api" }
-sp-runtime = {  path = "../../../primitives/sr-primitives" }
+sp-runtime = {  path = "../../../primitives/runtime" }
 sp-timestamp = {  path = "../../../primitives/timestamp" }
 sc-telemetry = { path = "../../telemetry" }
 

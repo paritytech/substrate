@@ -27,7 +27,7 @@ sp-blockchain = { path = "../../../primitives/blockchain" }
 consensus-common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
 uncles = { package = "sc-consensus-uncles", path = "../uncles" }
 slots = { package = "sc-consensus-slots", path = "../slots"  }
-sp-runtime = {  path = "../../../primitives/sr-primitives" }
+sp-runtime = {  path = "../../../primitives/runtime" }
 fork-tree = { path = "../../../utils/fork-tree" }
 futures = { version = "0.3.1", features = ["compat"] }
 futures01 = { package = "futures", version = "0.1" }

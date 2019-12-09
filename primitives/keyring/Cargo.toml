@@ -6,6 +6,6 @@ edition = "2018"
 
 [dependencies]
 primitives = { package = "sp-core",  path = "../core" }
-sp-runtime = { path = "../sr-primitives" }
+sp-runtime = { path = "../runtime" }
 lazy_static = "1.4.0"
 strum = { version = "0.16.0", features = ["derive"] }

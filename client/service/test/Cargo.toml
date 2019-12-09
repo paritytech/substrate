@@ -16,6 +16,6 @@ service = { package = "sc-service", path = "../../service", default-features = f
 network = { package = "sc-network", path = "../../network" }
 consensus = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
 client = { package = "sc-client", path = "../../" }
-sp-runtime = { path = "../../../primitives/sr-primitives" }
+sp-runtime = { path = "../../../primitives/runtime" }
 primitives = { package = "sp-core", path = "../../../primitives/core" }
 txpool-api = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool" }

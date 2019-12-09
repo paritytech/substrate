@@ -14,7 +14,7 @@ runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-featu
 
 [dev-dependencies]
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
-sp-runtime = { path = "../../primitives/sr-primitives" }
+sp-runtime = { path = "../../primitives/runtime" }
 
 [features]
 default = [ "std" ]

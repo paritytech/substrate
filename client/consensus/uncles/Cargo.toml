@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 client-api = { package = "sc-client-api", path = "../../api" }
 primitives = { package = "sp-core", path = "../../../primitives/core" }
-sp-runtime = {  path = "../../../primitives/sr-primitives" }
+sp-runtime = {  path = "../../../primitives/runtime" }
 sp-authorship = {  path = "../../../primitives/authorship" }
 consensus_common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
 inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
