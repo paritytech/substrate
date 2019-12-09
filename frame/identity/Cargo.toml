@@ -1,5 +1,5 @@
 [package]
-name = "pallet-nicks"
+name = "pallet-identity"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+enumflags2 = { version = "0.6.2" }
 rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
 runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
