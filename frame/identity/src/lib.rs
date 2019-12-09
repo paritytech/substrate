@@ -66,12 +66,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use rstd::{fmt::Debug, ops::Add};
+use rstd::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
-use sp_runtime::{
-	traits::{StaticLookup, EnsureOrigin, Zero}, RuntimeDebug,
-};
+use sp_runtime::{traits::{StaticLookup, EnsureOrigin, Zero}, RuntimeDebug};
 use support::{
 	decl_module, decl_event, decl_storage, ensure, dispatch::Result,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
@@ -111,7 +109,8 @@ pub trait Trait: system::Trait {
 	type RegistrarOrigin: EnsureOrigin<Self::Origin>;
 }
 
-/// Either underlying data or a hash of it, if the data is less than 32 bytes.
+/// Either underlying data blob if it is at most 32 bytes, or a hash of it. If the data is greater
+/// than 32-bytes then it will be truncated when encoding.
 ///
 /// Can also be `None`.
 #[derive(Clone, Eq, PartialEq, RuntimeDebug)]
@@ -163,10 +162,10 @@ impl Encode for Data {
 				&mut r[1..].copy_from_slice(&x[..l as usize]);
 				r
 			}
-			Data::BlakeTwo256(ref h) => (34u8..35u8).chain(h.iter().cloned()).collect(),
-			Data::Sha256(ref h) => (35u8..36u8).chain(h.iter().cloned()).collect(),
-			Data::Keccak256(ref h) => (36u8..37u8).chain(h.iter().cloned()).collect(),
-			Data::ShaThree256(ref h) => (37u8..38u8).chain(h.iter().cloned()).collect(),
+			Data::BlakeTwo256(ref h) => once(34u8).chain(h.iter().cloned()).collect(),
+			Data::Sha256(ref h) => once(35u8).chain(h.iter().cloned()).collect(),
+			Data::Keccak256(ref h) => once(36u8).chain(h.iter().cloned()).collect(),
+			Data::ShaThree256(ref h) => once(37u8).chain(h.iter().cloned()).collect(),
 		}
 	}
 }
@@ -183,7 +182,7 @@ pub type RegistrarIndex = u32;
 
 /// An attesttion of a registrar over how accurate some `IdentityInfo` is in describing an account.
 ///
-/// NOTE: Registrars may pay little attention to come fields. Registrars may want to make clear
+/// NOTE: Registrars may pay little attention to some fields. Registrars may want to make clear
 /// which fields their attesttion is relevant for by off-chain means.
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub enum Judgement<
@@ -271,7 +270,7 @@ impl Decode for IdentityFields {
 #[cfg_attr(test, derive(Default))]
 pub struct IdentityInfo {
 	/// Additional fields of the identity that are not catered for with the structs explicit
-	/// fields. Stored ordered.
+	/// fields.
 	pub additional: Vec<(Data, Data)>,
 
 	/// A reasonable display name for the controller of the account. This should be whatever is it
@@ -360,7 +359,7 @@ pub struct RegistrarInfo<
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Sudo {
-		/// Information that is pertinent to an account. Registrer
+		/// Information that is pertinent to identify the entity behind an account.
 		pub IdentityOf get(fn identity): map T::AccountId => Option<Registration<BalanceOf<T>>>;
 
 		/// Alternative "sub" identites of this account.
@@ -548,7 +547,7 @@ decl_module! {
 		/// - `max_fee`: The maximum fee that may be paid. This should just be auto-populated as:
 		///
 		/// ```nocompile
-		/// Self::registrars(reg_index).fee
+		/// Self::registrars(reg_index).uwnrap().fee
 		/// ```
 		///
 		/// Emits `JudgementRequested` if successful.
