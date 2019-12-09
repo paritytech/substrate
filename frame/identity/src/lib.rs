@@ -168,7 +168,10 @@ impl <Hash: Encode + Decode + Clone + Debug + Eq + PartialEq> Default for Data<H
 /// An identifier for a single name registrar/identity verification service.
 pub type RegistrarIndex = u32;
 
-/// An opinion of a registrar over how accurate some `IdentityInfo` is in describing an account.
+/// An attesttion of a registrar over how accurate some `IdentityInfo` is in describing an account.
+///
+/// NOTE: Registrars may pay little attention to come fields. Registrars may want to make clear
+/// which fields their attesttion is relevant for by off-chain means.
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub enum Judgement<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
@@ -241,17 +244,17 @@ pub struct IdentityInfo<
 	///
 	/// NOTE: `https://` is automatically prepended.
 	///
-	/// Stored as 7-bit ASCII.
+	/// Stored as UTF-8.
 	pub web: Data<Hash>,
 
 	/// The Riot handle held by the controller of the account.
 	///
-	/// Stored as 7-bit ASCII.
+	/// Stored as UTF-8.
 	pub riot: Data<Hash>,
 
 	/// The email address of the controller of the account.
 	///
-	/// Stored as 7-bit ASCII.
+	/// Stored as UTF-8.
 	pub email: Data<Hash>,
 
 	/// The PGP/GPG public key of the controller of the account.
@@ -458,11 +461,9 @@ decl_module! {
 			}
 		}
 
-		/// Clear an account's identity info and all sub-account and return deposits.
+		/// Clear an account's identity info and all sub-account and return all deposits.
 		///
-		/// Payment: Reserved balances from `set_subs` and `set_identity` are returned. Verification
-		/// request deposits are not returned; they should be cancelled manually using
-		/// `cancel_request`.
+		/// Payment: All reserved balances on the account are returned.
 		///
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// identity.
@@ -589,7 +590,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn set_fee(origin,
 			#[compact] index: RegistrarIndex,
-			#[compact] fee: BalanceOf<T>
+			#[compact] fee: BalanceOf<T>,
 		) -> Result {
 			let who = ensure_signed(origin)?;
 
@@ -601,25 +602,30 @@ decl_module! {
 			)
 		}
 
-		/// DESCRIPTION
+		/// Provide a judgement for an account's identity.
 		///
-		/// The sender must have a registered identity.
+		/// The dispatch origin for this call must be _Signed_ and the sender must be the account
+		/// of the registrar whose index is `reg_index`.
 		///
-		/// The dispatch origin for this call must be _Signed_.
+		/// - `reg_index`: the index of the registrar whose judgement is being made.
+		/// - `target`: the account whose identity the judgement is upon. This must be an account
+		///   with a registered identity.
+		/// - `judgement`: the judgement of the registrar of index `reg_index` about `target`.
 		///
-		/// Emits `Event` if successful.
+		/// Emits `JudgementGiven` if successful.
 		///
 		/// # <weight>
-		/// - `O(R + S + X)`.
-		/// - One balance-reserve operation.
-		/// - Two storage mutations.
+		/// - `O(R + X)`.
+		/// - One balance-transfer operation.
+		/// - Up to one account-lookup operation.
+		/// - Storage: 1 read `O(R)`, 1 mutate `O(R + X)`.
 		/// - One event.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn provide_judgement(origin,
 			#[compact] reg_index: RegistrarIndex,
 			target: <T::Lookup as StaticLookup>::Source,
-			judgement: Judgement<BalanceOf<T>>
+			judgement: Judgement<BalanceOf<T>>,
 		) {
 			let sender = ensure_signed(origin)?;
 			let target = T::Lookup::lookup(target)?;
@@ -645,31 +651,23 @@ decl_module! {
 			Self::deposit_event(RawEvent::JudgementGiven(target, reg_index));
 		}
 
-		/// DESCRIPTION
+		/// Remove an account's identity and sub-account information and slash the deposits.
 		///
-		/// The sender must have a registered identity.
+		/// Payment: Reserved balances from `set_subs` and `set_identity` are slashed and handled by
+		/// `Slash`. Verification request deposits are not returned; they should be cancelled
+		/// manually using `cancel_request`.
 		///
-		/// The dispatch origin for this call must be _Signed_.
+		/// The dispatch origin for this call must be _Root_ or match `T::ForceOrigin`.
 		///
-		/// Emits `Event` if successful.
+		/// - `target`: the account whose identity the judgement is upon. This must be an account
+		///   with a registered identity.
+		///
+		/// Emits `IdentityKilled` if successful.
 		///
 		/// # <weight>
 		/// - `O(R + S + X)`.
 		/// - One balance-reserve operation.
 		/// - Two storage mutations.
-		/// - One event.
-		/// # </weight>
-		/// Remove an account's name and take charge of the deposit.
-		///
-		/// Fails if `who` has not been named. The deposit is dealt with through `T::Slashed`
-		/// imbalance handler.
-		///
-		/// The dispatch origin for this call must be _Root_ or match `T::ForceOrigin`.
-		///
-		/// # <weight>
-		/// - O(1).
-		/// - One unbalanced handler (probably a balance transfer)
-		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FreeOperational]
