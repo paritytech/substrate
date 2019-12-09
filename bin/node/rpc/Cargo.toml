@@ -9,7 +9,7 @@ client = { package = "sc-client", path = "../../../client/" }
 jsonrpc-core = "14.0.3"
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
-sp-runtime = { path = "../../../primitives/sr-primitives" }
+sp-runtime = { path = "../../../primitives/runtime" }
 pallet-contracts-rpc = { path = "../../../frame/contracts/rpc/" }
 pallet-transaction-payment-rpc = { path = "../../../frame/transaction-payment/rpc/" }
 substrate-frame-rpc-system = { path = "../../../utils/frame/rpc/system" }
