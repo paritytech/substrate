@@ -18,8 +18,6 @@
 //! Cryptographic utilities.
 // end::description[]
 
-#[cfg(feature = "std")]
-use rstd::vec::Vec;
 use rstd::hash::Hash;
 #[cfg(feature = "std")]
 use rstd::convert::TryInto;
