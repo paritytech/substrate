@@ -7,6 +7,7 @@ edition = "2018"
 
 [dependencies]
 sp-inherents = { package = "sp-inherents", path = "../inherents", default-features = false }
+sr-primitives = { package = "sp-runtime", path = "../sr-primitives", default-features = false }
 rstd = { package = "sp-std", path = "../sr-std", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 
