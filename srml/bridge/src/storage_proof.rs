@@ -17,10 +17,11 @@
 //! Logic for checking Substrate storage proofs.
 
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX};
-use state_machine::StorageProof;
 use trie::{MemoryDB, Trie, trie_types::TrieDB};
 
 use crate::Error;
+
+pub(crate) type StorageProof = Vec<Vec<u8>>;
 
 /// This struct is used to read storage values from a subset of a Merklized database. The "proof"
 /// is a subset of the nodes in the Merkle structure of the database, so that it provides
@@ -40,7 +41,7 @@ impl<H> StorageProofChecker<H>
 	/// This returns an error if the given proof is invalid with respect to the given root.
 	pub fn new(root: H::Out, proof: StorageProof) -> Result<Self, Error> {
 		let mut db = MemoryDB::default();
-		for item in proof.iter_nodes() {
+		for item in proof {
 			db.insert(EMPTY_PREFIX, &item);
 		}
 		let checker = StorageProofChecker {
@@ -73,7 +74,6 @@ mod tests {
 
 	use primitives::{Blake2Hasher, H256};
 	use state_machine::{prove_read, backend::{Backend, InMemory}};
-	// use trie::{PrefixedMemoryDB, TrieDBMut};
 
 	#[test]
 	fn storage_proof_check() {
@@ -86,7 +86,10 @@ mod tests {
 			(None, b"key11".to_vec(), Some(vec![0u8; 32])),
 		]);
 		let root = backend.storage_root(std::iter::empty()).0;
-		let proof = prove_read(backend, &[&b"key1"[..], &b"key2"[..], &b"key22"[..]]).unwrap();
+		let proof: StorageProof = prove_read(backend, &[&b"key1"[..], &b"key2"[..], &b"key22"[..]])
+			.unwrap()
+			.iter_nodes()
+			.collect();
 
 		// check proof in runtime
 		let checker = <StorageProofChecker<Blake2Hasher>>::new(root, proof.clone()).unwrap();

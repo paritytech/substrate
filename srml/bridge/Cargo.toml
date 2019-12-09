@@ -20,13 +20,13 @@ runtime-io = { package = "sr-io", path = "../../core/sr-io", default-features = 
 session = { package = "srml-session", path = "../session", default-features = false, features = ["historical"] }
 serde = { version = "1.0", optional = true }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
-state-machine = { package = "substrate-state-machine",  path = "../../core/state-machine" }
 support = { package = "srml-support", path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 trie = { package = "substrate-trie", path = "../../core/trie", default-features = false }
 
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
+state-machine = { package = "substrate-state-machine",  path = "../../core/state-machine" }
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
 
 [features]

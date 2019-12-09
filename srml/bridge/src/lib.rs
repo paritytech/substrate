@@ -38,7 +38,7 @@ mod storage_proof;
 mod justification;
 
 use crate::justification::GrandpaJustification;
-use crate::storage_proof::StorageProofChecker;
+use crate::storage_proof::{StorageProof, StorageProofChecker};
 
 use core::iter::FromIterator;
 use codec::{Encode, Decode};
@@ -49,7 +49,6 @@ use primitives::H256;
 use num::AsPrimitive;
 use sr_primitives::Justification;
 use sr_primitives::traits::{Block as BlockT, Header, NumberFor};
-use state_machine::StorageProof;
 use support::{
 	decl_error, decl_module, decl_storage,
 };
@@ -369,7 +368,10 @@ mod tests {
 		let root = backend.storage_root(std::iter::empty()).0;
 
 		// Generates a storage read proof
-		let proof = prove_read(backend, &[&b":grandpa_authorities"[..]]).unwrap();
+		let proof: StorageProof = prove_read(backend, &[&b":grandpa_authorities"[..]])
+			.unwrap()
+			.iter_nodes()
+			.collect();
 
 		(root, proof)
 	}
