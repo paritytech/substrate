@@ -42,7 +42,7 @@
 //! ## Usage
 //!
 //! ```
-//! use support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch};
 //! use system::ensure_signed;
 //! use pallet_im_online::{self as im_online};
 //!
@@ -50,7 +50,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn is_online(origin, authority_index: u32) -> Result {
+//! 		pub fn is_online(origin, authority_index: u32) -> dispatch::Result {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _is_online = <im_online::Module<T>>::is_online(authority_index);
 //! 			Ok(())

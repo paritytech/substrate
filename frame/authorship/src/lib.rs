@@ -22,9 +22,8 @@
 
 use rstd::{result, prelude::*};
 use rstd::collections::btree_set::BTreeSet;
-use support::{decl_module, decl_storage};
+use support::{decl_module, decl_storage, dispatch};
 use support::traits::{FindAuthor, VerifySeal, Get};
-use support::dispatch::Result as DispatchResult;
 use codec::{Encode, Decode};
 use system::ensure_none;
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
@@ -185,7 +184,7 @@ decl_module! {
 
 		/// Provide a set of uncles.
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
-		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> DispatchResult {
+		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> dispatch::Result {
 			ensure_none(origin)?;
 
 			if <Self as Store>::DidSetUncles::get() {
@@ -219,7 +218,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> DispatchResult {
+	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> dispatch::Result {
 		let now = <system::Module<T>>::block_number();
 
 		let mut uncles = <Self as Store>::Uncles::get();
