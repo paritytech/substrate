@@ -24,25 +24,39 @@
 //! A federated naming system, allowing for multiple registrars to be added from a specified origin.
 //! Registrars can set a fee to provide identity-verification service. Anyone can put forth a
 //! proposed identity for a fixed deposit and ask for review by any number of registrars (paying
-//! each of their fees). Registrar judgements are multi-tier allowing for more sophisticated
-//! opinions than a boolean true or false.
+//! each of their fees). Registrar judgements are given as an `enum`, allowing for sophisticated,
+//! multi-tier opinions.
 //!
-//! A super-user can remove accounts and slash the deposit.
+//! Some judgements are identified as *sticky*, which means they cannot be removed except by
+//! complete removal of the identity, or by the registrar. Judgements are allowed to represent a
+//! portion of funds that have been reserved for the registrar.
 //!
-//! All accounts may also have a limited number of sub-accounts which have equivalent ownership.
+//! A super-user can remove accounts and in doing so, slash the deposit.
+//!
+//! All accounts may also have a limited number of sub-accounts which may be specified by the owner;
+//! by definition, these have equivalent ownership and each has an individual name.
 //!
 //! The number of registrars should be limited, and the deposit made sufficiently large, to ensure
 //! no state-bloat attack is viable.
-//!
-//!
 //!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
 //!
-//! * `set_identity` - Set the associated identity of an account; a small deposit is reserved if not already
-//!   taken.
+//! #### For general users
+//! * `set_identity` - Set the associated identity of an account; a small deposit is reserved if not
+//!   already taken.
+//! * `set_subs` - Set the sub-accounts of an identity.
 //! * `clear_identity` - Remove an account's associated identity; the deposit is returned.
+//! * `request_judgement` - Request a judgement from a registrar, paying a fee.
+//! * `cancel_request` - Cancel the previous request for a judgement.
+//!
+//! #### For registrars
+//! * `set_fee` - Set the fee required to be paid for a judgement to be given by this registrar.
+//! * `provide_judgement` - Provide a judgement to an identity.
+//!
+//! #### For super-users
+//! * `add_registrar` - Add a new registrar to the system.
 //! * `kill_identity` - Forcibly remove the associated identity; the deposit is lost.
 //!
 //! [`Call`]: ./enum.Call.html
@@ -464,7 +478,7 @@ decl_module! {
 		}
 
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn cancel_request_judgement(origin, reg_index: RegistrarIndex) {
+		fn cancel_request(origin, reg_index: RegistrarIndex) {
 			let sender = ensure_signed(origin)?;
 			let mut id = <IdentityOf<T>>::get(&sender).ok_or("no identity")?;
 
@@ -771,15 +785,15 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
-			assert_noop!(Identity::cancel_request_judgement(Origin::signed(10), 0), "no identity");
+			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), "no identity");
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 0));
-			assert_ok!(Identity::cancel_request_judgement(Origin::signed(10), 0));
+			assert_ok!(Identity::cancel_request(Origin::signed(10), 0));
 			assert_eq!(Balances::free_balance(10), 90);
-			assert_noop!(Identity::cancel_request_judgement(Origin::signed(10), 0), "not found");
+			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), "not found");
 
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
-			assert_noop!(Identity::cancel_request_judgement(Origin::signed(10), 0), "judgement given");
+			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), "judgement given");
 		});
 	}
 
