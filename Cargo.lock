@@ -1011,6 +1011,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "enumflags2"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "enumflags2_derive 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "enumflags2_derive"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "proc-macro2 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "env_logger"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3712,6 +3730,22 @@ dependencies = [
  "sp-io 2.0.0",
  "sp-runtime 2.0.0",
  "sp-staking 2.0.0",
+ "sp-std 2.0.0",
+]
+
+[[package]]
+name = "pallet-identity"
+version = "2.0.0"
+dependencies = [
+ "enumflags2 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "frame-support 2.0.0",
+ "frame-system 2.0.0",
+ "pallet-balances 2.0.0",
+ "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-core 2.0.0",
+ "sp-io 2.0.0",
+ "sp-runtime 2.0.0",
  "sp-std 2.0.0",
 ]
 
@@ -8093,6 +8127,8 @@ dependencies = [
 "checksum ed25519-dalek 1.0.0-pre.2 (registry+https://github.com/rust-lang/crates.io-index)" = "845aaacc16f01178f33349e7c992ecd0cee095aa5e577f0f4dee35971bd36455"
 "checksum either 1.5.3 (registry+https://github.com/rust-lang/crates.io-index)" = "bb1f6b1ce1c140482ea30ddd3335fc0024ac7ee112895426e0a629a6c20adfe3"
 "checksum elastic-array 0.10.3 (registry+https://github.com/rust-lang/crates.io-index)" = "580f3768bd6465780d063f5b8213a2ebd506e139b345e4a81eb301ceae3d61e1"
+"checksum enumflags2 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)" = "33121c8782ba948ba332dab29311b026a8716dc65a1599e5b88f392d38496af8"
+"checksum enumflags2_derive 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)" = "ecf634c5213044b8d54a46dd282cf5dd1f86bb5cb53e92c409cb4680a7fb9894"
 "checksum env_logger 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)" = "aafcde04e90a5226a6443b7aabdb016ba2f8307c847d524724bd9b346dd1a2d3"
 "checksum env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)" = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
 "checksum environmental 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "34f8467a0284de039e6bd0e25c14519538462ba5beb548bb1f03e645097837a8"
