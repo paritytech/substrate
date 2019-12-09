@@ -106,6 +106,12 @@ pub trait Externalities: ExtensionStore {
 		self.child_storage(storage_key, key).is_some()
 	}
 
+	/// Returns the key immediately following the given key, if it exists.
+	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Returns the key immediately following the given key, if it exists, in child storage.
+	fn next_child_storage_key(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>>;
+
 	/// Clear an entire child storage.
 	fn kill_child_storage(&mut self, storage_key: ChildStorageKey);
 
