@@ -35,7 +35,6 @@ tracing = "0.1.10"
 [dev-dependencies]
 env_logger = "0.7.0"
 tempfile = "3.1.0"
-client-db = { package = "sc-client-db", path = "./db", features = ["kvdb-rocksdb"] }
 test-client = { package = "substrate-test-runtime-client", path = "../test/utils/runtime/client" }
 kvdb-memorydb = "0.1.2"
 panic-handler = { package = "sp-panic-handler", path = "../primitives/panic-handler" }
