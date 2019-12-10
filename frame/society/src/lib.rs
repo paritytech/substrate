@@ -119,7 +119,7 @@ pub type StrikeCount = u32;
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum BidKind<AccountId, Balance> {
 	/// The CandidateDeposit was paid for this bid.
-	Deposit,
+	Deposit(Balance),
 	/// A member vouched for this bid. The account should be reinstated into `Members` once the
 	/// bid is successful (or if it is rescinded prior to launch).
 	Vouch(AccountId, Balance),
@@ -142,46 +142,41 @@ impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
 // This module's storage items.
 decl_storage! {
 	trait Store for Module<T: Trait> as Fratority {
-		/// The current bids.
-		Bids: Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>;
-
-		/// The current set of members, ordered.
-		Members get(fn members)
-		// The following can be enabled once we have fixed #4315
-/*			build(|config: &GenesisConfig<T>| {
-				let mut m = config.members;
-				m.sort();
-				m
-			})*/:
-			Vec<T::AccountId>;
-
-		/// Members currently vouching, stored ordered
-		Vouching: Vec<T::AccountId>;
-
 		/// The current set of candidates; bidders that are attempting to become members.
 		pub Candidates get(candidates):
 			Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>;
 
 		/// Amount of our account balance that is specifically for the next round's bid(s).
-		Pot: BalanceOf<T>;
+		pub Pot get(fn pot) config(): BalanceOf<T>;
 
 		/// The most primary from the most recently approved members.
-		Head get(head)
-		// The following can be enabled once we have fixed #4315
-		/*build(|config: &GenesisConfig<T>| config.members.first().cloned())*/:
+		pub Head get(head) build(|config: &GenesisConfig<T>| config.members.first().cloned()):
 			Option<T::AccountId>;
 
-		/// Double map from Candidate -> Voter -> (Maybe) Vote.
-		Votes: double_map
-			hasher(twox_64_concat) T::AccountId,
-			twox_64_concat(T::AccountId)
-		=> Option<Vote>;
+		/// The current set of members, ordered.
+		pub Members get(fn members) build(|config: &GenesisConfig<T>| {
+			let mut m = config.members.clone();
+			m.sort();
+			m
+		}): Vec<T::AccountId>;
+
+		/// The current bids.
+		Bids: Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>;
+
+		/// Members currently vouching, stored ordered
+		Vouching: Vec<T::AccountId>;
 
 		/// Pending payouts; ordered by block number, with the amount that should be paid out.
 		Payouts: map T::AccountId => Vec<(T::BlockNumber, BalanceOf<T>)>;
 
 		/// The ongoing number of losing votes cast by the member.
 		Strikes: map T::AccountId => StrikeCount;
+
+		/// Double map from Candidate -> Voter -> (Maybe) Vote.
+		Votes: double_map
+			hasher(twox_64_concat) T::AccountId,
+			twox_64_concat(T::AccountId)
+		=> Option<Vote>;
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
@@ -201,9 +196,10 @@ decl_module! {
 		/// Alters Bids (O(N) decode+encode, O(logN) search, <=2*O(N) write).
 		pub fn bid(origin, value: BalanceOf<T>) -> Result {
 			let who = ensure_signed(origin)?;
-			T::Currency::reserve(&who, T::CandidateDeposit::get())?;
+			let deposit = T::CandidateDeposit::get();
+			T::Currency::reserve(&who, deposit)?;
 
-			Self::put_bid(who.clone(), value.clone(), BidKind::Deposit);
+			Self::put_bid(who.clone(), value.clone(), BidKind::Deposit(deposit));
 			Self::deposit_event(RawEvent::Bid(who, value));
 			Ok(())
 		}
@@ -214,7 +210,17 @@ decl_module! {
 			let pos = pos as usize;
 			<Bids<T>>::mutate(|b|
 				if pos < b.len() && b[pos].1 == who {
-					b.remove(pos);
+					// Either unreserve the deposit or free up the vouching member.
+					// In neither case can we do much if the action isn't completable, but there's
+					// no reason that either should fail.
+					match b.remove(pos).2 {
+						BidKind::Deposit(deposit) => {
+							let _ = T::Currency::unreserve(&who, deposit);
+						}
+						BidKind::Vouch(voucher, _) => {
+							let _ = Self::unset_vouching(&voucher);
+						}
+					}
 					Self::deposit_event(RawEvent::Unbid(who));
 					Ok(())
 				} else {
@@ -513,7 +519,7 @@ impl<T: Trait> Module<T> {
 				// remove payout from pot and shift needed funds to the payout account.
 				pot = pot.saturating_sub(total_payouts);
 
-				// this should never fail since we ensure the pot can afford the payouts in a previous
+				// this should never fail since we ensure we can afford the payouts in a previous
 				// block, but there's not much we can do to recover if it fails anyway.
 				let _ = T::Currency::transfer(&Self::account_id(), &Self::payouts(), total_payouts, AllowDeath);
 			}
@@ -541,6 +547,8 @@ impl<T: Trait> Module<T> {
 			// account.
 			let unaccounted = T::Currency::free_balance(&Self::account_id()).saturating_sub(pot);
 			pot += T::PeriodSpend::get().min(unaccounted / 2u8.into());
+
+			<Pot<T>>::put(&pot);
 		}
 
 		// setup the candidates for the new intake

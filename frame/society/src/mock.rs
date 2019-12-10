@@ -41,7 +41,7 @@ parameter_types! {
 	pub const WrongSideDeduction: u64 = 2;
 	pub const MaxStrikes: u32 = 2;
 	pub const Period: u64 = 4;
-	pub const PeriodSpend: u64 = 100;
+	pub const PeriodSpend: u64 = 1000;
 	pub const MaxLockDuration: u64 = 100;
 	pub const FounderSetAccount: u64 = 1;
 
@@ -62,7 +62,7 @@ impl system::Trait for Test {
 	type Hash = H256;
 	type Call = ();
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = u128;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
@@ -96,33 +96,71 @@ impl Trait for Test {
 	type MembershipChanged = ();
 	type Period = Period;
 	type MaxLockDuration = MaxLockDuration;
-	type FounderOrigin = EnsureSignedBy<FounderSetAccount, u64>;
+	type FounderOrigin = EnsureSignedBy<FounderSetAccount, u128>;
 }
 
 pub type Society = Module<Test>;
 pub type System = system::Module<Test>;
 pub type Balances = balances::Module<Test>;
 
-/// This function basically just builds a genesis storage key/value store according to
-/// our desired mockup.
-pub fn new_test_ext() -> runtime_io::TestExternalities {
-	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	// We use default for brevity, but you can configure as desired if needed.
-	balances::GenesisConfig::<Test> {
-		balances: vec![
-			(10, 1_000),
-			(20, 1_000),
-			(30, 1_000),
-			(40, 1_000),
-			(50, 1_000),
-		],
-		vesting: vec![],
-	}.assimilate_storage(&mut t).unwrap();
-	// Can be enabled once we have #4315
-	/*GenesisConfig::<Test>{
-		members: vec![5],
-	}.assimilate_storage(&mut t).unwrap();*/
-	t.into()
+pub struct EnvBuilder {
+	members: Vec<u128>,
+	balance: u64,
+	balances: Vec<(u128, u64)>,
+	pot: u64,
+}
+
+impl EnvBuilder {
+	pub fn new() -> Self {
+		Self {
+			members: vec![10],
+			balance: 10_000,
+			balances: vec![
+				(10, 50),
+				(20, 50),
+				(30, 50),
+				(40, 50),
+				(50, 50),
+				(60, 50),
+			],
+			pot: 0,
+		}
+	}
+
+	pub fn execute<R, F: FnOnce() -> R>(mut self, f: F) -> R {
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		self.balances.push((Society::account_id(), self.balance.max(self.pot)));
+		balances::GenesisConfig::<Test> {
+			balances: self.balances,
+			vesting: vec![],
+		}.assimilate_storage(&mut t).unwrap();
+		GenesisConfig::<Test>{
+			members: self.members,
+			pot: self.pot,
+		}.assimilate_storage(&mut t).unwrap();
+		let mut ext: runtime_io::TestExternalities = t.into();
+		ext.execute_with(f)
+	}
+
+	pub fn with_members(mut self, m: Vec<u128>) -> Self {
+		self.members = m;
+		self
+	}
+
+	pub fn with_balances(mut self, b: Vec<(u128, u64)>) -> Self {
+		self.balances = b;
+		self
+	}
+
+	pub fn with_pot(mut self, p: u64) -> Self {
+		self.pot = p;
+		self
+	}
+
+	pub fn with_balance(mut self, b: u64) -> Self {
+		self.balance = b;
+		self
+	}
 }
 
 /// Run until a particular block.
