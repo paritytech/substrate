@@ -18,8 +18,8 @@
 
 use super::*;
 use mock::*;
-use sr_primitives::{assert_eq_error_rate, traits::OnInitialize};
-use sr_staking_primitives::offence::OffenceDetails;
+use sp_runtime::{assert_eq_error_rate, traits::OnInitialize};
+use sp_staking::offence::OffenceDetails;
 use support::{assert_ok, assert_noop, traits::{Currency, ReservableCurrency}};
 use substrate_test_utils::assert_eq_uvec;
 
@@ -965,7 +965,6 @@ fn validator_payment_prefs_work() {
 	// This test will focus on validator payment.
 	ExtBuilder::default().build().execute_with(|| {
 		// Initial config
-		let validator_cut = 5;
 		let stash_initial_balance = Balances::total_balance(&11);
 
 		// check the balance of a validator accounts.
@@ -983,7 +982,7 @@ fn validator_payment_prefs_work() {
 		});
 		<Payee<Test>>::insert(&2, RewardDestination::Stash);
 		<Validators<Test>>::insert(&11, ValidatorPrefs {
-			validator_payment: validator_cut
+			commission: Perbill::from_percent(50),
 		});
 
 		// Compute total payout now for whole duration as other parameter won't change
@@ -994,9 +993,9 @@ fn validator_payment_prefs_work() {
 		start_era(1);
 
 		// whats left to be shared is the sum of 3 rounds minus the validator's cut.
-		let shared_cut = total_payout_0 - validator_cut;
+		let shared_cut = total_payout_0 / 2;
 		// Validator's payee is Staked account, 11, reward will be paid here.
-		assert_eq!(Balances::total_balance(&11), stash_initial_balance + shared_cut / 2 + validator_cut);
+		assert_eq!(Balances::total_balance(&11), stash_initial_balance + shared_cut / 2 + shared_cut);
 		// Controller account will not get any reward.
 		assert_eq!(Balances::total_balance(&10), 1);
 		// Rest of the reward will be shared and paid to the nominator in stake.

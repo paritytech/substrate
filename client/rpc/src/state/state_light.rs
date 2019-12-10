@@ -53,7 +53,7 @@ use primitives::{
 	storage::{StorageKey, StorageData, StorageChangeSet},
 };
 use runtime_version::RuntimeVersion;
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits::Block as BlockT,
 };
@@ -547,7 +547,8 @@ fn runtime_version<Block: BlockT, F: Fetcher<Block>>(
 		Bytes(Vec::new()),
 	)
 	.then(|version| ready(version.and_then(|version|
-		Decode::decode(&mut &version.0[..]).map_err(|_| client_err(ClientError::VersionInvalid))
+		Decode::decode(&mut &version.0[..])
+			.map_err(|e| client_err(ClientError::VersionInvalid(e.what().into())))
 	)))
 }
 
@@ -696,7 +697,7 @@ fn ignore_error<F, T>(future: F) -> impl std::future::Future<Output=Result<Optio
 	future.then(|result| ready(match result {
 		Ok(result) => Ok(Some(result)),
 		Err(()) => Ok(None),
-	}))	
+	}))
 }
 
 #[cfg(test)]

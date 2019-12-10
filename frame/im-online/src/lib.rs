@@ -42,7 +42,7 @@
 //! ## Usage
 //!
 //! ```
-//! use support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch};
 //! use system::ensure_signed;
 //! use pallet_im_online::{self as im_online};
 //!
@@ -50,7 +50,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn is_online(origin, authority_index: u32) -> Result {
+//! 		pub fn is_online(origin, authority_index: u32) -> dispatch::Result {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _is_online = <im_online::Module<T>>::is_online(authority_index);
 //! 			Ok(())
@@ -73,10 +73,10 @@ mod tests;
 use app_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
 use primitives::offchain::{OpaqueNetworkState, StorageKind};
-use rstd::prelude::*;
-use rstd::convert::TryInto;
+use sp_std::prelude::*;
+use sp_std::convert::TryInto;
 use session::historical::IdentificationTuple;
-use sr_primitives::{
+use sp_runtime::{
 	RuntimeDebug,
 	traits::{Convert, Member, Printable, Saturating}, Perbill,
 	transaction_validity::{
@@ -84,7 +84,7 @@ use sr_primitives::{
 		TransactionPriority,
 	},
 };
-use sr_staking_primitives::{
+use sp_staking::{
 	SessionIndex,
 	offence::{ReportOffence, Offence, Kind},
 };
@@ -509,7 +509,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = T::AuthorityId;
 }
 

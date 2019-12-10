@@ -8,10 +8,9 @@ edition = "2018"
 log = "0.4.8"
 lru = "0.4.0"
 parking_lot = "0.9.0"
-derive_more = "0.99.2" 
+derive_more = "0.99.2"
 parity-scale-codec = {  version = "1.0.0", default-features = false, features = ["derive"] }
-sp_consensus = { package = "substrate-consensus-common", path = "../consensus/common" }
-sr-primitives = { path = "../sr-primitives" }
-sp-block-builder-runtime-api = { package = "substrate-block-builder-runtime-api", path = "../block-builder/runtime-api" }
-sp-state-machine = { package = "substrate-state-machine", path = "../state-machine" }
-
+sp_consensus = { package = "sp-consensus", path = "../consensus/common" }
+sp-runtime = { path = "../runtime" }
+sp-block-builder-runtime-api = { package = "sp-block-builder", path = "../block-builder/runtime-api" }
+sp-state-machine = { package = "sp-state-machine", path = "../state-machine" }

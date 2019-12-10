@@ -27,18 +27,19 @@ use tokio::runtime::current_thread;
 use keyring::Ed25519Keyring;
 use client::LongestChain;
 use sp_blockchain::Result;
-use sr_api::{Core, RuntimeVersion, ApiExt, StorageProof};
+use sp_api::{Core, RuntimeVersion, ApiExt, StorageProof};
 use test_client::{self, runtime::BlockNumber};
 use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult};
 use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
 use codec::Decode;
-use sr_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
-use sr_primitives::generic::{BlockId, DigestItem};
+use sp_runtime::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
+use sp_runtime::generic::{BlockId, DigestItem};
 use primitives::{NativeOrEncoded, ExecutionContext, crypto::Public};
 use fg_primitives::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
 use state_machine::{backend::InMemory, prove_read, read_proof_check};
+use std::{pin::Pin, task};
 
 use authorities::AuthoritySet;
 use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
@@ -175,12 +176,11 @@ impl TestNetFactory for GrandpaTestNet {
 #[derive(Clone)]
 struct Exit;
 
-impl Future for Exit {
-	type Item = ();
-	type Error = ();
+impl futures03::Future for Exit {
+	type Output = ();
 
-	fn poll(&mut self) -> Poll<(), ()> {
-		Ok(Async::NotReady)
+	fn poll(self: Pin<&mut Self>, _: &mut task::Context) -> task::Poll<()> {
+		task::Poll::Pending
 	}
 }
 
@@ -975,6 +975,7 @@ fn allows_reimporting_change_blocks() {
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		}
 	};
 
@@ -1028,6 +1029,7 @@ fn test_bad_justification() {
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		}
 	};
 
@@ -1738,6 +1740,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 		auxiliary: Vec::new(),
 		fork_choice: ForkChoiceStrategy::LongestChain,
 		allow_missing_state: false,
+		import_existing: false,
 	};
 
 	assert_eq!(

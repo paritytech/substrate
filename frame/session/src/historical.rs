@@ -25,15 +25,15 @@
 //! These roots and proofs of inclusion can be generated at any time during the current session.
 //! Afterwards, the proofs can be fed to a consensus module when reporting misbehavior.
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use session_primitives::MembershipProof;
-use sr_primitives::KeyTypeId;
-use sr_primitives::traits::{Convert, OpaqueKeys, Hash as HashT};
+use sp_runtime::KeyTypeId;
+use sp_runtime::traits::{Convert, OpaqueKeys, Hash as HashT};
+use sp_session::MembershipProof;
 use support::{decl_module, decl_storage};
 use support::{Parameter, print};
-use substrate_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
-use substrate_trie::trie_types::{TrieDBMut, TrieDB};
+use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
+use sp_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
 
 type ValidatorCount = u32;
@@ -80,7 +80,7 @@ impl<T: Trait> Module<T> {
 				None => return, // nothing to prune.
 			};
 
-			let up_to = rstd::cmp::min(up_to, end);
+			let up_to = sp_std::cmp::min(up_to, end);
 
 			if up_to < start {
 				return // out of bounds. harmless.
@@ -109,7 +109,7 @@ pub trait OnSessionEnding<ValidatorId, FullIdentification>: crate::OnSessionEndi
 
 /// An `OnSessionEnding` implementation that wraps an inner `I` and also
 /// sets the historical trie root of the ending session.
-pub struct NoteHistoricalRoot<T, I>(rstd::marker::PhantomData<(T, I)>);
+pub struct NoteHistoricalRoot<T, I>(sp_std::marker::PhantomData<(T, I)>);
 
 impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<T, I>
 	where I: OnSessionEnding<T::ValidatorId, T::FullIdentification>
@@ -215,7 +215,7 @@ impl<T: Trait> ProvingTrie<T> {
 	}
 
 	fn from_nodes(root: T::Hash, nodes: &[Vec<u8>]) -> Self {
-		use substrate_trie::HashDBT;
+		use sp_trie::HashDBT;
 
 		let mut memory_db = MemoryDB::default();
 		for node in nodes {
@@ -316,7 +316,7 @@ impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, 
 mod tests {
 	use super::*;
 	use primitives::crypto::key_types::DUMMY;
-	use sr_primitives::{traits::OnInitialize, testing::UintAuthorityId};
+	use sp_runtime::{traits::OnInitialize, testing::UintAuthorityId};
 	use crate::mock::{
 		NEXT_VALIDATORS, force_new_session,
 		set_next_validators, Test, System, Session,

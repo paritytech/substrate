@@ -21,7 +21,7 @@
 use std::{fmt, result, collections::HashMap, panic::UnwindSafe, marker::PhantomData};
 use log::{warn, trace};
 use hash_db::Hasher;
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, Codec};
 use primitives::{
 	storage::well_known_keys, NativeOrEncoded, NeverNativeValue,
 	traits::CodeExecutor, hexdisplay::HexDisplay, hash::H256,
@@ -567,7 +567,7 @@ pub fn prove_child_read<B, H, I>(
 where
 	B: Backend<H>,
 	H: Hasher,
-	H::Out: Ord,
+	H::Out: Ord + Codec,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
@@ -584,7 +584,7 @@ pub fn prove_read_on_trie_backend<S, H, I>(
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher,
-	H::Out: Ord,
+	H::Out: Ord + Codec,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
@@ -606,7 +606,7 @@ pub fn prove_child_read_on_trie_backend<S, H, I>(
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher,
-	H::Out: Ord,
+	H::Out: Ord + Codec,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
@@ -627,7 +627,7 @@ pub fn read_proof_check<H, I>(
 ) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, Box<dyn Error>>
 where
 	H: Hasher,
-	H::Out: Ord,
+	H::Out: Ord + Codec,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
@@ -649,7 +649,7 @@ pub fn read_child_proof_check<H, I>(
 ) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, Box<dyn Error>>
 where
 	H: Hasher,
-	H::Out: Ord,
+	H::Out: Ord + Codec,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
@@ -673,7 +673,7 @@ pub fn read_proof_check_on_proving_backend<H>(
 ) -> Result<Option<Vec<u8>>, Box<dyn Error>>
 where
 	H: Hasher,
-	H::Out: Ord,
+	H::Out: Ord + Codec,
 {
 	proving_backend.storage(key).map_err(|e| Box::new(e) as Box<dyn Error>)
 }
@@ -686,7 +686,7 @@ pub fn read_child_proof_check_on_proving_backend<H>(
 ) -> Result<Option<Vec<u8>>, Box<dyn Error>>
 where
 	H: Hasher,
-	H::Out: Ord,
+	H::Out: Ord + Codec,
 {
 	proving_backend.child_storage(storage_key, key).map_err(|e| Box::new(e) as Box<dyn Error>)
 }
@@ -731,7 +731,7 @@ fn try_read_overlay_value<H, B>(
 
 #[cfg(test)]
 mod tests {
-	use std::collections::HashMap;
+	use std::collections::BTreeMap;
 	use codec::Encode;
 	use overlayed_changes::OverlayedValue;
 	use super::*;
@@ -921,7 +921,7 @@ mod tests {
 
 	#[test]
 	fn clear_prefix_in_ext_works() {
-		let initial: HashMap<_, _> = map![
+		let initial: BTreeMap<_, _> = map![
 			b"aaa".to_vec() => b"0".to_vec(),
 			b"abb".to_vec() => b"1".to_vec(),
 			b"abc".to_vec() => b"2".to_vec(),

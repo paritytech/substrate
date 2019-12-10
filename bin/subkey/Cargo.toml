@@ -5,16 +5,16 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-primitives = { package = "substrate-primitives",  version = "*", path = "../../primitives/core" }
+primitives = { package = "sp-core",  version = "*", path = "../../primitives/core" }
 node-runtime = { version = "*", path = "../node/runtime" }
 node-primitives = { version = "*", path = "../node/primitives" }
-sr-primitives = { version = "*", path = "../../primitives/sr-primitives" }
+sp-runtime = { version = "*", path = "../../primitives/runtime" }
 rand = "0.7.2"
 clap = "2.33.0"
 tiny-bip39 = "0.6.2"
 rustc-hex = "2.0.1"
 substrate-bip39 = "0.3.1"
-hex = "0.3.2"
+hex = "0.4.0"
 hex-literal = "0.2.1"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 system = { package = "frame-system", path = "../../frame/system" }

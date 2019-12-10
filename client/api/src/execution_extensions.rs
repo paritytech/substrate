@@ -27,10 +27,9 @@ use primitives::{
 	offchain::{self, OffchainExt, TransactionPoolExt},
 	traits::{BareCryptoStorePtr, KeystoreExt},
 };
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits,
-	offchain::{TransactionPool},
 };
 use state_machine::{ExecutionStrategy, ExecutionManager, DefaultHandler};
 use externalities::Extensions;
@@ -71,7 +70,7 @@ impl Default for ExecutionStrategies {
 pub struct ExecutionExtensions<Block: traits::Block> {
 	strategies: ExecutionStrategies,
 	keystore: Option<BareCryptoStorePtr>,
-	transaction_pool: RwLock<Option<Weak<dyn TransactionPool<Block>>>>,
+	transaction_pool: RwLock<Option<Weak<dyn txpool_api::OffchainSubmitTransaction<Block>>>>,
 }
 
 impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
@@ -105,7 +104,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	/// extension to be a `Weak` reference.
 	/// That's also the reason why it's being registered lazily instead of
 	/// during initialisation.
-	pub fn register_transaction_pool(&self, pool: Weak<dyn TransactionPool<Block>>) {
+	pub fn register_transaction_pool(&self, pool: Weak<dyn txpool_api::OffchainSubmitTransaction<Block>>) {
 		*self.transaction_pool.write() = Some(pool);
 	}
 
@@ -166,7 +165,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 /// A wrapper type to pass `BlockId` to the actual transaction pool.
 struct TransactionPoolAdapter<Block: traits::Block> {
 	at: BlockId<Block>,
-	pool: Arc<dyn TransactionPool<Block>>,
+	pool: Arc<dyn txpool_api::OffchainSubmitTransaction<Block>>,
 }
 
 impl<Block: traits::Block> offchain::TransactionPool for TransactionPoolAdapter<Block> {

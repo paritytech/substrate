@@ -25,9 +25,9 @@ extern crate alloc;
 use serde::Serialize;
 
 use codec::{Encode, Decode, Input, Codec};
-use sr_primitives::{ConsensusEngineId, RuntimeDebug, traits::NumberFor};
-use rstd::borrow::Cow;
-use rstd::vec::Vec;
+use sp_runtime::{ConsensusEngineId, RuntimeDebug, traits::NumberFor};
+use sp_std::borrow::Cow;
+use sp_std::vec::Vec;
 
 #[cfg(feature = "std")]
 use log::debug;
@@ -338,7 +338,7 @@ pub fn sign_message<H, N>(
 	H: Encode,
 	N: Encode,
 {
-	use primitives::Pair;
+	use sp_core::Pair;
 
 	let encoded = localized_payload(round, set_id, &message);
 	let signature = pair.sign(&encoded[..]);
@@ -404,7 +404,7 @@ impl<'a> Decode for VersionedAuthorityList<'a> {
 	}
 }
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// APIs for integrating the GRANDPA finality gadget into runtimes.
 	/// This should be implemented on the runtime side.
 	///

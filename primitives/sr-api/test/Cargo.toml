@@ -1,18 +1,18 @@
 [package]
-name = "sr-api-test"
+name = "sp-api-test"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sr-api = { path = "../" }
+sp-api = { path = "../" }
 test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
-sr-version = { path = "../../sr-version" }
-sr-primitives = { path = "../../sr-primitives" }
+sp-version = { path = "../../sr-version" }
+sp-runtime = { path = "../../runtime" }
 sp-blockchain = { path = "../../blockchain" }
-consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
+consensus_common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-state-machine = { package = "substrate-state-machine", path = "../../../primitives/state-machine" }
+state-machine = { package = "sp-state-machine", path = "../../../primitives/state-machine" }
 trybuild = "1.0.17"
 rustversion = "1.0.0"
 

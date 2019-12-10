@@ -122,7 +122,7 @@
 //!
 //! ```
 //! use support::traits::{WithdrawReasons, LockableCurrency};
-//! use sr_primitives::traits::Bounded;
+//! use sp_runtime::traits::Bounded;
 //! pub trait Trait: system::Trait {
 //! 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 //! }
@@ -159,20 +159,20 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
-use rstd::{cmp, result, mem, fmt::Debug};
+use sp_std::prelude::*;
+use sp_std::{cmp, result, mem, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module,
 	traits::{
 		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced, TryDrop,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
-		Imbalance, SignedImbalance, ReservableCurrency, Get,
+		Imbalance, SignedImbalance, ReservableCurrency, Get, VestingCurrency,
 	},
 	weights::SimpleDispatchInfo,
 	dispatch::Result,
 };
-use sr_primitives::{
+use sp_runtime::{
 	RuntimeDebug,
 	traits::{
 		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
@@ -328,7 +328,7 @@ decl_storage! {
 						// Total genesis `balance` minus `liquid` equals funds locked for vesting
 						let locked = balance.saturating_sub(liquid);
 						// Number of units unlocked per block after `begin`
-						let per_block = locked / length.max(sr_primitives::traits::One::one());
+						let per_block = locked / length.max(sp_runtime::traits::One::one());
 
 						(who.clone(), VestingSchedule {
 							locked: locked,
@@ -510,19 +510,6 @@ decl_module! {
 }
 
 impl<T: Trait<I>, I: Instance> Module<T, I> {
-
-	// PUBLIC IMMUTABLES
-
-	/// Get the amount that is currently being vested and cannot be transferred out of this account.
-	pub fn vesting_balance(who: &T::AccountId) -> T::Balance {
-		if let Some(v) = Self::vesting(who) {
-			Self::free_balance(who)
-				.min(v.locked_at(<system::Module<T>>::block_number()))
-		} else {
-			Zero::zero()
-		}
-	}
-
 	// PRIVATE MUTABLES
 
 	/// Set the reserved balance of an account to some new value. Will enforce `ExistentialDeposit`
@@ -627,7 +614,7 @@ mod imbalances {
 		result, Subtrait, DefaultInstance, Imbalance, Trait, Zero, Instance, Saturating,
 		StorageValue, TryDrop,
 	};
-	use rstd::mem;
+	use sp_std::mem;
 
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
 	/// funds have been created without any equal and opposite accounting.
@@ -947,9 +934,14 @@ where
 			if !<FreeBalance<T, I>>::exists(dest) {
 				Self::new_account(dest, new_to_balance);
 			}
+
+			// Emit transfer event.
+			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
+
+			// Take action on the set_free_balance call.
+			// This will emit events that _resulted_ from the transfer.
 			Self::set_free_balance(dest, new_to_balance);
 			T::TransferPayment::on_unbalanced(NegativeImbalance::new(fee));
-			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
 		}
 
 		Ok(())
@@ -1206,6 +1198,50 @@ where
 				None
 			}).collect::<Vec<_>>();
 		<Locks<T, I>>::insert(who, locks);
+	}
+}
+
+impl<T: Trait<I>, I: Instance> VestingCurrency<T::AccountId> for Module<T, I>
+where
+	T::Balance: MaybeSerializeDeserialize + Debug
+{
+	type Moment = T::BlockNumber;
+
+	/// Get the amount that is currently being vested and cannot be transferred out of this account.
+	fn vesting_balance(who: &T::AccountId) -> T::Balance {
+		if let Some(v) = Self::vesting(who) {
+			Self::free_balance(who)
+				.min(v.locked_at(<system::Module<T>>::block_number()))
+		} else {
+			Zero::zero()
+		}
+	}
+
+	/// Adds a vesting schedule to a given account.
+	///
+	/// If there already exists a vesting schedule for the given account, an `Err` is returned
+	/// and nothing is updated.
+	fn add_vesting_schedule(
+		who: &T::AccountId,
+		locked: T::Balance,
+		per_block: T::Balance,
+		starting_block: T::BlockNumber
+	) -> Result {
+		if <Vesting<T, I>>::exists(who) {
+			return Err("A vesting schedule already exists for this account.");
+		}
+		let vesting_schedule = VestingSchedule {
+			locked,
+			per_block,
+			starting_block
+		};
+		<Vesting<T, I>>::insert(who, vesting_schedule);
+		Ok(())
+	}
+
+	/// Remove a vesting schedule for a given account.
+	fn remove_vesting_schedule(who: &T::AccountId) {
+		<Vesting<T, I>>::remove(who);
 	}
 }
 

@@ -22,8 +22,6 @@
 //!
 //! This crate exposes the main [`Externalities`] trait.
 
-use primitive_types::H256;
-
 use std::any::{Any, TypeId};
 
 use primitives_storage::ChildStorageKey;
@@ -42,26 +40,40 @@ pub trait Externalities: ExtensionStore {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Get storage value hash. This may be optimized for large values.
-	fn storage_hash(&self, key: &[u8]) -> Option<H256>;
+	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Get child storage value hash. This may be optimized for large values.
-	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256>;
+	///
+	/// Returns an `Option` that holds the SCALE encoded hash.
+	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Read original runtime storage, ignoring any overlayed changes.
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Read original runtime child storage, ignoring any overlayed changes.
+	///
+	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn original_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Get original storage value hash, ignoring any overlayed changes.
 	/// This may be optimized for large values.
-	fn original_storage_hash(&self, key: &[u8]) -> Option<H256>;
+	///
+	/// Returns an `Option` that holds the SCALE encoded hash.
+	fn original_storage_hash(&self, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Get original child storage value hash, ignoring any overlayed changes.
 	/// This may be optimized for large values.
-	fn original_child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256>;
+	///
+	/// Returns an `Option` that holds the SCALE encoded hash.
+	fn original_child_storage_hash(
+		&self,
+		storage_key: ChildStorageKey,
+		key: &[u8],
+	) -> Option<Vec<u8>>;
 
 	/// Read child runtime storage.
+	///
+	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Set storage entry `key` of current contract being called (effective immediately).
@@ -94,6 +106,12 @@ pub trait Externalities: ExtensionStore {
 		self.child_storage(storage_key, key).is_some()
 	}
 
+	/// Returns the key immediately following the given key, if it exists.
+	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Returns the key immediately following the given key, if it exists, in child storage.
+	fn next_child_storage_key(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>>;
+
 	/// Clear an entire child storage.
 	fn kill_child_storage(&mut self, storage_key: ChildStorageKey);
 
@@ -107,14 +125,23 @@ pub trait Externalities: ExtensionStore {
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Set or clear a child storage entry. Return whether the operation succeeds.
-	fn place_child_storage(&mut self, storage_key: ChildStorageKey, key: Vec<u8>, value: Option<Vec<u8>>);
+	fn place_child_storage(
+		&mut self,
+		storage_key: ChildStorageKey,
+		key: Vec<u8>,
+		value: Option<Vec<u8>>,
+	);
 
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;
 
 	/// Get the trie root of the current storage map. This will also update all child storage keys
 	/// in the top-level storage map.
-	fn storage_root(&mut self) -> H256;
+	///
+	/// The hash is defined by the `Block`.
+	///
+	/// Returns the SCALE encoded hash.
+	fn storage_root(&mut self) -> Vec<u8>;
 
 	/// Get the trie root of a child storage map. This will also update the value of the child
 	/// storage keys in the top-level storage map.
@@ -123,7 +150,12 @@ pub trait Externalities: ExtensionStore {
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey) -> Vec<u8>;
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.
-	fn storage_changes_root(&mut self, parent: H256) -> Result<Option<H256>, ()>;
+	/// `parent` is expects a SCALE endcoded hash.
+	///
+	/// The hash is defined by the `Block`.
+	///
+	/// Returns the SCALE encoded hash.
+	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()>;
 }
 
 /// Extension for the [`Externalities`] trait.

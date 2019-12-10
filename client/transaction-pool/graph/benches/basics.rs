@@ -18,10 +18,10 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 use futures::executor::block_on;
 use sc_transaction_graph::*;
-use sr_primitives::transaction_validity::{ValidTransaction, InvalidTransaction};
+use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction};
 use codec::Encode;
 use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
@@ -48,8 +48,8 @@ fn to_tag(nonce: u64, from: AccountId) -> Tag {
 impl ChainApi for TestApi {
 	type Block = Block;
 	type Hash = H256;
-	type Error = error::Error;
-	type ValidationFuture = futures::future::Ready<error::Result<TransactionValidity>>;
+	type Error = txpool_api::error::Error;
+	type ValidationFuture = futures::future::Ready<txpool_api::error::Result<TransactionValidity>>;
 
 	fn validate_transaction(
 		&self,

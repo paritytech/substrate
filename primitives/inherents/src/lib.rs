@@ -35,7 +35,7 @@
 
 use codec::{Encode, Decode};
 
-use rstd::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
+use sp_std::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
 
 #[cfg(feature = "std")]
 use parking_lot::RwLock;

@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use rstd::{cmp::Ordering, prelude::*};
+use sp_std::{cmp::Ordering, prelude::*};
 use crate::helpers_128bit;
 use num_traits::Zero;
-use substrate_debug_derive::RuntimeDebug;
+use sp_debug_derive::RuntimeDebug;
 
 /// A wrapper for any rational number with a 128 bit numerator and denominator.
 #[derive(Clone, Copy, Default, Eq, RuntimeDebug)]

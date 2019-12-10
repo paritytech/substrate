@@ -8,10 +8,10 @@ edition = "2018"
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.7", features = [ "full", "visit" ] }
+syn = { version = "1.0.7", features = ["full", "visit"] }
 quote = "1.0"
 proc-macro2 = "1.0.6"
 proc-macro-crate = "0.1.4"
 
 [dev-dependencies]
-sr-primitives = { path = "../../../primitives/sr-primitives" }
+sp-runtime = { path = "../../../primitives/runtime" }

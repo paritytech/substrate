@@ -5,12 +5,12 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-client = { package = "substrate-client", path = "../../../client/" }
+client = { package = "sc-client", path = "../../../client/" }
 jsonrpc-core = "14.0.3"
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
-sr-primitives = { path = "../../../primitives/sr-primitives" }
+sp-runtime = { path = "../../../primitives/runtime" }
 pallet-contracts-rpc = { path = "../../../frame/contracts/rpc/" }
 pallet-transaction-payment-rpc = { path = "../../../frame/transaction-payment/rpc/" }
 substrate-frame-rpc-system = { path = "../../../utils/frame/rpc/system" }
-transaction_pool = { package = "sc-transaction-pool", path = "../../../client/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool" }

@@ -28,7 +28,7 @@ use codec::Encode;
 use trie;
 
 use primitives::{H256, convert_hash};
-use sr_primitives::traits::{Header as HeaderT, SimpleArithmetic, Zero, One};
+use sp_runtime::traits::{Header as HeaderT, SimpleArithmetic, Zero, One};
 use state_machine::backend::InMemory as InMemoryState;
 use state_machine::{MemoryDB, TrieBackend, Backend as StateBackend, StorageProof,
 	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend};
@@ -92,7 +92,7 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
-		Hasher::Out: Ord,
+		Hasher::Out: Ord + codec::Codec,
 		BlocksI: IntoIterator<Item=Header::Number>,
 		HashesI: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
 {
@@ -119,7 +119,7 @@ pub fn check_proof<Header, Hasher>(
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
-		Hasher::Out: Ord,
+		Hasher::Out: Ord + codec::Codec,
 {
 	do_check_proof::<Header, Hasher, _>(
 		local_root,
@@ -148,7 +148,7 @@ pub fn check_proof_on_proving_backend<Header, Hasher>(
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
-		Hasher::Out: Ord,
+		Hasher::Out: Ord + codec::Codec,
 {
 	do_check_proof::<Header, Hasher, _>(
 		local_root,

@@ -1,5 +1,5 @@
 [package]
-name = "substrate-serializer"
+name = "sp-serializer"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"

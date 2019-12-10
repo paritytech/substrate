@@ -16,7 +16,9 @@
 
 //! Basic implementation for Externalities.
 
-use std::{collections::HashMap, any::{TypeId, Any}, iter::FromIterator};
+use std::{
+	collections::{HashMap, BTreeMap}, any::{TypeId, Any}, iter::FromIterator, mem, ops::Bound
+};
 use crate::backend::{Backend, InMemory};
 use hash_db::Hasher;
 use trie::{TrieConfiguration, default_child_trie_root};
@@ -26,9 +28,10 @@ use primitives::{
 		well_known_keys::is_child_storage_key, ChildStorageKey, StorageOverlay,
 		ChildrenStorageOverlay
 	},
-	traits::Externalities, Blake2Hasher, hash::H256,
+	traits::Externalities, Blake2Hasher,
 };
 use log::warn;
+use codec::Encode;
 
 /// Simple HashMap-based Externalities impl.
 #[derive(Debug)]
@@ -53,8 +56,8 @@ impl BasicExternalities {
 
 	/// Consume self and returns inner storages
 	pub fn into_storages(self) -> (
-		HashMap<Vec<u8>, Vec<u8>>,
-		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+		BTreeMap<Vec<u8>, Vec<u8>>,
+		HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>,
 	) {
 		(self.top, self.children)
 	}
@@ -67,8 +70,8 @@ impl BasicExternalities {
 		f: impl FnOnce() -> R,
 	) -> R {
 		let mut ext = Self {
-			top: storage.0.drain().collect(),
-			children: storage.1.drain().collect(),
+			top: mem::replace(&mut storage.0, BTreeMap::default()),
+			children: mem::replace(&mut storage.1, HashMap::default()),
 		};
 
 		let r = ext.execute_with(f);
@@ -104,8 +107,8 @@ impl Default for BasicExternalities {
 	fn default() -> Self { Self::new(Default::default(), Default::default()) }
 }
 
-impl From<HashMap<Vec<u8>, Vec<u8>>> for BasicExternalities {
-	fn from(hashmap: HashMap<Vec<u8>, Vec<u8>>) -> Self {
+impl From<BTreeMap<Vec<u8>, Vec<u8>>> for BasicExternalities {
+	fn from(hashmap: BTreeMap<Vec<u8>, Vec<u8>>) -> Self {
 		BasicExternalities {
 			top: hashmap,
 			children: Default::default(),
@@ -118,15 +121,15 @@ impl Externalities for BasicExternalities {
 		self.top.get(key).cloned()
 	}
 
-	fn storage_hash(&self, key: &[u8]) -> Option<H256> {
-		self.storage(key).map(|v| Blake2Hasher::hash(&v))
+	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.storage(key).map(|v| Blake2Hasher::hash(&v).encode())
 	}
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.storage(key)
 	}
 
-	fn original_storage_hash(&self, key: &[u8]) -> Option<H256> {
+	fn original_storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.storage_hash(key)
 	}
 
@@ -134,16 +137,31 @@ impl Externalities for BasicExternalities {
 		self.children.get(storage_key.as_ref()).and_then(|child| child.get(key)).cloned()
 	}
 
-	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
-		self.child_storage(storage_key, key).map(|v| Blake2Hasher::hash(&v))
+	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
+		self.child_storage(storage_key, key).map(|v| Blake2Hasher::hash(&v).encode())
 	}
 
-	fn original_child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
+	fn original_child_storage_hash(
+		&self,
+		storage_key: ChildStorageKey,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
 		self.child_storage_hash(storage_key, key)
 	}
 
 	fn original_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		Externalities::child_storage(self, storage_key, key)
+	}
+
+	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
+		let range = (Bound::Excluded(key), Bound::Unbounded);
+		self.top.range::<[u8], _>(range).next().map(|(k, _)| k).cloned()
+	}
+
+	fn next_child_storage_key(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
+		let range = (Bound::Excluded(key), Bound::Unbounded);
+		self.children.get(storage_key.as_ref())
+			.and_then(|child| child.range::<[u8], _>(range).next().map(|(k, _)| k).cloned())
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
@@ -185,18 +203,34 @@ impl Externalities for BasicExternalities {
 			return;
 		}
 
-		self.top.retain(|key, _| !key.starts_with(prefix));
+		let to_remove = self.top.range::<[u8], _>((Bound::Included(prefix), Bound::Unbounded))
+			.map(|(k, _)| k)
+			.take_while(|k| k.starts_with(prefix))
+			.cloned()
+			.collect::<Vec<_>>();
+
+		for key in to_remove {
+			self.top.remove(&key);
+		}
 	}
 
 	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]) {
 		if let Some(child) = self.children.get_mut(storage_key.as_ref()) {
-			child.retain(|key, _| !key.starts_with(prefix));
+			let to_remove = child.range::<[u8], _>((Bound::Included(prefix), Bound::Unbounded))
+				.map(|(k, _)| k)
+				.take_while(|k| k.starts_with(prefix))
+				.cloned()
+				.collect::<Vec<_>>();
+
+			for key in to_remove {
+				child.remove(&key);
+			}
 		}
 	}
 
 	fn chain_id(&self) -> u64 { 42 }
 
-	fn storage_root(&mut self) -> H256 {
+	fn storage_root(&mut self) -> Vec<u8> {
 		let mut top = self.top.clone();
 		let keys: Vec<_> = self.children.keys().map(|k| k.to_vec()).collect();
 		// Single child trie implementation currently allows using the same child
@@ -215,7 +249,7 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		Layout::<Blake2Hasher>::trie_root(self.top.clone())
+		Layout::<Blake2Hasher>::trie_root(self.top.clone()).as_ref().into()
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey) -> Vec<u8> {
@@ -225,10 +259,10 @@ impl Externalities for BasicExternalities {
 			InMemory::<Blake2Hasher>::default().child_storage_root(storage_key.as_ref(), delta).0
 		} else {
 			default_child_trie_root::<Layout<Blake2Hasher>>(storage_key.as_ref())
-		}
+		}.encode()
 	}
 
-	fn storage_changes_root(&mut self, _parent: H256) -> Result<Option<H256>, ()> {
+	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		Ok(None)
 	}
 }
@@ -243,7 +277,7 @@ impl externalities::ExtensionStore for BasicExternalities {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::{H256, map};
+	use primitives::map;
 	use primitives::storage::well_known_keys::CODE;
 	use hex_literal::hex;
 
@@ -255,7 +289,7 @@ mod tests {
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
 		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 
-		assert_eq!(ext.storage_root(), H256::from(ROOT));
+		assert_eq!(&ext.storage_root()[..], &ROOT);
 	}
 
 	#[test]

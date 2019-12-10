@@ -138,7 +138,7 @@
 //! ### Example: Rewarding a validator by id.
 //!
 //! ```
-//! use support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch};
 //! use system::ensure_signed;
 //! use pallet_staking::{self as staking};
 //!
@@ -147,7 +147,7 @@
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //!			/// Reward a validator.
-//! 		pub fn reward_myself(origin) -> Result {
+//! 		pub fn reward_myself(origin) -> dispatch::Result {
 //! 			let reported = ensure_signed(origin)?;
 //! 			<staking::Module<T>>::reward_by_ids(vec![(reported, 10)]);
 //! 			Ok(())
@@ -187,7 +187,7 @@
 //! The validator and its nominator split their reward as following:
 //!
 //! The validator can declare an amount, named
-//! [`validator_payment`](./struct.ValidatorPrefs.html#structfield.validator_payment), that does not
+//! [`commission`](./struct.ValidatorPrefs.html#structfield.commission), that does not
 //! get shared with the nominators at each reward payout through its
 //! [`ValidatorPrefs`](./struct.ValidatorPrefs.html). This value gets deducted from the total reward
 //! that is paid to the validator and its nominators. The remaining portion is split among the
@@ -255,7 +255,7 @@ mod slashing;
 
 pub mod inflation;
 
-use rstd::{prelude::*, result};
+use sp_std::{prelude::*, result};
 use codec::{HasCompact, Encode, Decode};
 use support::{
 	decl_module, decl_event, decl_storage, ensure,
@@ -266,7 +266,7 @@ use support::{
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators};
-use sr_primitives::{
+use sp_runtime::{
 	Perbill,
 	RuntimeDebug,
 	curve::PiecewiseLinear,
@@ -275,12 +275,12 @@ use sr_primitives::{
 		SimpleArithmetic, EnsureOrigin,
 	}
 };
-use sr_staking_primitives::{
+use sp_staking::{
 	SessionIndex,
 	offence::{OnOffenceHandler, OffenceDetails, Offence, ReportOffence},
 };
 #[cfg(feature = "std")]
-use sr_primitives::{Serialize, Deserialize};
+use sp_runtime::{Serialize, Deserialize};
 use system::{ensure_signed, ensure_root};
 
 use phragmen::{ExtendedBalance, PhragmenStakedAssignment};
@@ -347,19 +347,19 @@ impl Default for RewardDestination {
 	}
 }
 
-/// Preference of what happens on a slash event.
+/// Preference of what happens regarding validation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct ValidatorPrefs<Balance: HasCompact> {
+pub struct ValidatorPrefs {
 	/// Reward that validator takes up-front; only the rest is split between themselves and
 	/// nominators.
 	#[codec(compact)]
-	pub validator_payment: Balance,
+	pub commission: Perbill,
 }
 
-impl<B: Default + HasCompact + Copy> Default for ValidatorPrefs<B> {
+impl Default for ValidatorPrefs {
 	fn default() -> Self {
 		ValidatorPrefs {
-			validator_payment: Default::default(),
+			commission: Default::default(),
 		}
 	}
 }
@@ -445,7 +445,7 @@ impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
 				// don't leave a dust balance in the staking system.
 				if *target <= minimum_balance {
 					slash_from_target += *target;
-					*value += rstd::mem::replace(target, Zero::zero());
+					*value += sp_std::mem::replace(target, Zero::zero());
 				}
 
 				*total_remaining = total_remaining.saturating_sub(slash_from_target);
@@ -657,7 +657,7 @@ decl_storage! {
 		pub Payee get(fn payee): map T::AccountId => RewardDestination;
 
 		/// The map from (wannabe) validator stash key to the preferences of that validator.
-		pub Validators get(fn validators): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
+		pub Validators get(fn validators): linked_map T::AccountId => ValidatorPrefs;
 
 		/// The map from nominator stash key to the set of stash keys of all validators to nominate.
 		///
@@ -982,7 +982,7 @@ decl_module! {
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
-		fn validate(origin, prefs: ValidatorPrefs<BalanceOf<T>>) {
+		fn validate(origin, prefs: ValidatorPrefs) {
 			Self::ensure_storage_upgraded();
 
 			let controller = ensure_signed(origin)?;
@@ -1252,8 +1252,8 @@ impl<T: Trait> Module<T> {
 	/// nominators' balance, pro-rata based on their exposure, after having removed the validator's
 	/// pre-payout cut.
 	fn reward_validator(stash: &T::AccountId, reward: BalanceOf<T>) -> PositiveImbalanceOf<T> {
-		let off_the_table = reward.min(Self::validators(stash).validator_payment);
-		let reward = reward - off_the_table;
+		let off_the_table = Self::validators(stash).commission * reward;
+		let reward = reward.saturating_sub(off_the_table);
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
 		let validator_cut = if reward.is_zero() {
 			Zero::zero()
@@ -1304,7 +1304,7 @@ impl<T: Trait> Module<T> {
 		let points = CurrentEraPointsEarned::take();
 		let now = T::Time::now();
 		let previous_era_start = <CurrentEraStart<T>>::mutate(|v| {
-			rstd::mem::replace(v, now)
+			sp_std::mem::replace(v, now)
 		});
 		let era_duration = now - previous_era_start;
 		if !era_duration.is_zero() {
@@ -1641,7 +1641,7 @@ impl<T: Trait + authorship::Trait> authorship::EventHandler<T::AccountId, T::Blo
 
 /// A `Convert` implementation that finds the stash of the given controller account,
 /// if any.
-pub struct StashOf<T>(rstd::marker::PhantomData<T>);
+pub struct StashOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Trait> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 	fn convert(controller: T::AccountId) -> Option<T::AccountId> {
@@ -1651,7 +1651,7 @@ impl<T: Trait> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 
 /// A typed conversion from stash account ID to the current exposure of nominators
 /// on that account.
-pub struct ExposureOf<T>(rstd::marker::PhantomData<T>);
+pub struct ExposureOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>>>
 	for ExposureOf<T>
@@ -1751,7 +1751,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 
 /// Filter historical offences out and only allow those from the bonding period.
 pub struct FilterHistoricalOffences<T, R> {
-	_inner: rstd::marker::PhantomData<(T, R)>,
+	_inner: sp_std::marker::PhantomData<(T, R)>,
 }
 
 impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>

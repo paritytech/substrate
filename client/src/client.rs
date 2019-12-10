@@ -31,8 +31,8 @@ use primitives::{
 	storage::{StorageKey, StorageData, well_known_keys},
 	traits::CodeExecutor,
 };
-use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
-use sr_primitives::{
+use sc_telemetry::{telemetry, SUBSTRATE_INFO};
+use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
@@ -59,7 +59,7 @@ use sp_blockchain::{self as blockchain,
 	HeaderMetadata, CachedHeaderMetadata,
 };
 
-use sr_api::{CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder, InitializeBlock};
+use sp_api::{CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder, InitializeBlock};
 use block_builder::BlockBuilderApi;
 
 pub use client_api::{
@@ -756,6 +756,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			auxiliary,
 			fork_choice,
 			allow_missing_state,
+			import_existing,
 		} = import_block;
 
 		assert!(justification.is_some() && finalized || justification.is_none());
@@ -800,6 +801,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			auxiliary,
 			fork_choice,
 			enact_state,
+			import_existing,
 		);
 
 		if let Ok(ImportResult::Imported(ref aux)) = result {
@@ -828,13 +830,17 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		fork_choice: ForkChoiceStrategy,
 		enact_state: bool,
+		import_existing: bool,
 	) -> sp_blockchain::Result<ImportResult> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
 		let parent_hash = import_headers.post().parent_hash().clone();
-		match self.backend.blockchain().status(BlockId::Hash(hash))? {
-			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
-			blockchain::BlockStatus::Unknown => {},
+		let status = self.backend.blockchain().status(BlockId::Hash(hash))?;
+		match (import_existing, status) {
+			(false, blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
+			(false, blockchain::BlockStatus::Unknown) => {},
+			(true, blockchain::BlockStatus::InChain) =>  {},
+			(true, blockchain::BlockStatus::Unknown) => return Err(Error::UnknownBlock(format!("{:?}", hash))),
 		}
 
 		let info = self.backend.blockchain().info();
@@ -1307,7 +1313,7 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 	}
 }
 
-impl<B, E, Block, RA> sr_primitives::traits::BlockIdTo<Block> for Client<B, E, Block, RA> where
+impl<B, E, Block, RA> sp_runtime::traits::BlockIdTo<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	Block: BlockT<Hash=H256>,
@@ -1454,7 +1460,7 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		let BlockCheckParams { hash, number, parent_hash, allow_missing_state } = block;
+		let BlockCheckParams { hash, number, parent_hash, allow_missing_state, import_existing } = block;
 
 		if let Some(h) = self.fork_blocks.as_ref().and_then(|x| x.get(&number)) {
 			if &hash != h  {
@@ -1473,7 +1479,8 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 		match self.block_status(&BlockId::Hash(hash))
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
-			BlockStatus::InChainWithState | BlockStatus::Queued => return Ok(ImportResult::AlreadyInChain),
+			BlockStatus::InChainWithState | BlockStatus::Queued if !import_existing  => return Ok(ImportResult::AlreadyInChain),
+			BlockStatus::InChainWithState | BlockStatus::Queued => {},
 			BlockStatus::InChainPruned => return Ok(ImportResult::AlreadyInChain),
 			BlockStatus::Unknown => {},
 			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
@@ -1746,9 +1753,10 @@ where
 }
 
 impl<BE, E, B, RA> consensus::block_validation::Chain<B> for Client<BE, E, B, RA>
-	where BE: backend::Backend<B, Blake2Hasher>,
-		  E: CallExecutor<B, Blake2Hasher>,
-		  B: BlockT<Hash = H256>
+	where
+		BE: backend::Backend<B, Blake2Hasher>,
+		E: CallExecutor<B, Blake2Hasher>,
+		B: BlockT<Hash = H256>
 {
 	fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn std::error::Error + Send>> {
 		Client::block_status(self, id).map_err(|e| Box::new(e) as Box<_>)
@@ -1760,7 +1768,7 @@ pub(crate) mod tests {
 	use std::collections::HashMap;
 	use super::*;
 	use primitives::blake2_256;
-	use sr_primitives::DigestItem;
+	use sp_runtime::DigestItem;
 	use consensus::{BlockOrigin, SelectChain, BlockImport};
 	use test_client::{
 		prelude::*,
@@ -2773,7 +2781,8 @@ pub(crate) mod tests {
 			hash: a1.hash().clone(),
 			number: 0,
 			parent_hash: a1.header().parent_hash().clone(),
-			allow_missing_state: false
+			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		assert_eq!(client.check_block(check_block_a1.clone()).unwrap(), ImportResult::imported(false));
@@ -2792,7 +2801,8 @@ pub(crate) mod tests {
 			hash: a2.hash().clone(),
 			number: 1,
 			parent_hash: a1.header().parent_hash().clone(),
-			allow_missing_state: false
+			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		assert_eq!(client.check_block(check_block_a1.clone()).unwrap(), ImportResult::AlreadyInChain);
@@ -2808,7 +2818,8 @@ pub(crate) mod tests {
 			hash: a3.hash().clone(),
 			number: 2,
 			parent_hash: a2.header().parent_hash().clone(),
-			allow_missing_state: false
+			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		// a1 and a2 are both pruned at this point
@@ -2823,7 +2834,8 @@ pub(crate) mod tests {
 			hash: b1.hash().clone(),
 			number: 0,
 			parent_hash: b1.header().parent_hash().clone(),
-			allow_missing_state: false
+			allow_missing_state: false,
+			import_existing: false,
 		};
 		assert_eq!(client.check_block(check_block_b1.clone()).unwrap(), ImportResult::MissingState);
 		check_block_b1.allow_missing_state = true;

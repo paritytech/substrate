@@ -29,7 +29,7 @@ use client::{
 	},
 };
 use primitives::{H256, Blake2Hasher};
-use sr_primitives::{
+use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT},
 };

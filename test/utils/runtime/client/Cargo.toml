@@ -5,12 +5,13 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-block-builder = { package = "substrate-block-builder", path = "../../../../client/block-builder" }
+block-builder = { package = "sc-block-builder", path = "../../../../client/block-builder" }
 generic-test-client = { package = "substrate-test-client", path = "../../client" }
-primitives = { package = "substrate-primitives", path = "../../../../primitives/core" }
+primitives = { package = "sp-core", path = "../../../../primitives/core" }
 runtime = { package = "substrate-test-runtime", path = "../../runtime" }
-sr-primitives = { path = "../../../../primitives/sr-primitives" }
+sp-runtime = { path = "../../../../primitives/runtime" }
 sp-blockchain = { path = "../../../../primitives/blockchain" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-client-api = { package = "substrate-client-api", path = "../../../../client/api" }
-client = { package = "substrate-client", path = "../../../../client/" }
+client-api = { package = "sc-client-api", path = "../../../../client/api" }
+client = { package = "sc-client", path = "../../../../client/" }
+futures = "0.3.1"

@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use criterion::{Criterion, Throughput, BenchmarkId, criterion_group, criterion_main};
-use sr_arithmetic::biguint::{BigUint, Single};
+use sp_arithmetic::biguint::{BigUint, Single};
 use rand::Rng;
 
 fn random_big_uint(size: usize) -> BigUint {

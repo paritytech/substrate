@@ -22,7 +22,8 @@ use std::sync::Arc;
 use assert_matches::assert_matches;
 use futures01::stream::Stream;
 use primitives::storage::well_known_keys;
-use sr_io::hashing::blake2_256;
+use primitives::hash::H256;
+use sp_io::hashing::blake2_256;
 use test_client::{
 	prelude::*,
 	consensus::BlockOrigin,
@@ -255,6 +256,98 @@ fn should_query_storage() {
 			],
 		});
 		assert_eq!(result.wait().unwrap(), expected);
+
+		// Query changes up to block2.
+		let result = api.query_storage(
+			keys.clone(),
+			genesis_hash,
+			Some(block2_hash),
+		);
+
+		assert_eq!(result.wait().unwrap(), expected);
+
+		// Inverted range.
+		let result = api.query_storage(
+			keys.clone(),
+			block1_hash,
+			Some(genesis_hash),
+		);
+
+		assert_eq!(
+			result.wait().map_err(|e| e.to_string()),
+			Err(Error::InvalidBlockRange {
+				from: format!("1 ({:?})", block1_hash),
+				to: format!("0 ({:?})", genesis_hash),
+				details: "from number >= to number".to_owned(),
+			}).map_err(|e| e.to_string())
+		);
+
+		let random_hash1 = H256::random();
+		let random_hash2 = H256::random();
+
+		// Invalid second hash.
+		let result = api.query_storage(
+			keys.clone(),
+			genesis_hash,
+			Some(random_hash1),
+		);
+
+		assert_eq!(
+			result.wait().map_err(|e| e.to_string()),
+			Err(Error::InvalidBlockRange {
+				from: format!("{:?}", genesis_hash),
+				to: format!("{:?}", Some(random_hash1)),
+				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
+			}).map_err(|e| e.to_string())
+		);
+
+		// Invalid first hash with Some other hash.
+		let result = api.query_storage(
+			keys.clone(),
+			random_hash1,
+			Some(genesis_hash),
+		);
+
+		assert_eq!(
+			result.wait().map_err(|e| e.to_string()),
+			Err(Error::InvalidBlockRange {
+				from: format!("{:?}", random_hash1),
+				to: format!("{:?}", Some(genesis_hash)),
+				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
+			}).map_err(|e| e.to_string()),
+		);
+
+		// Invalid first hash with None.
+		let result = api.query_storage(
+			keys.clone(),
+			random_hash1,
+			None,
+		);
+
+		assert_eq!(
+			result.wait().map_err(|e| e.to_string()),
+			Err(Error::InvalidBlockRange {
+				from: format!("{:?}", random_hash1),
+				to: format!("{:?}", Some(block2_hash)), // Best block hash.
+				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
+			}).map_err(|e| e.to_string()),
+		);
+
+		// Both hashes invalid.
+		let result = api.query_storage(
+			keys.clone(), 
+			random_hash1,
+			Some(random_hash2),
+		);
+
+		assert_eq!(
+			result.wait().map_err(|e| e.to_string()),
+			Err(Error::InvalidBlockRange {
+				from: format!("{:?}", random_hash1), // First hash not found.
+				to: format!("{:?}", Some(random_hash2)),
+				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
+			}).map_err(|e| e.to_string()),
+		);
 	}
 
 	run_tests(Arc::new(test_client::new()));

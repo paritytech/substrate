@@ -1,5 +1,5 @@
 [package]
-name = "substrate-basic-authorship"
+name = "sc-basic-authority"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -8,18 +8,19 @@ edition = "2018"
 log = "0.4.8"
 futures = "0.3.1"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sr-primitives = { path = "../../primitives/sr-primitives" }
-primitives = { package = "substrate-primitives", path = "../../primitives/core" }
+sp-runtime = { path = "../../primitives/runtime" }
+primitives = { package = "sp-core", path = "../../primitives/core" }
 sp-blockchain = { path = "../../primitives/blockchain" }
-client = { package = "substrate-client", path = "../" }
-client-api = { package = "substrate-client-api", path = "../api" }
-consensus_common = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
-inherents = { package = "substrate-inherents", path = "../../primitives/inherents" }
-substrate-telemetry = { path = "../telemetry" }
-transaction_pool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
-block-builder = { package = "substrate-block-builder", path = "../block-builder" }
+client = { package = "sc-client", path = "../" }
+client-api = { package = "sc-client-api", path = "../api" }
+consensus_common = { package = "sp-consensus", path = "../../primitives/consensus/common" }
+inherents = { package = "sp-inherents", path = "../../primitives/inherents" }
+sc-telemetry = { path = "../telemetry" }
+txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
+block-builder = { package = "sc-block-builder", path = "../block-builder" }
 tokio-executor = { version = "0.2.0-alpha.6", features = ["blocking"] }
 
 [dev-dependencies]
+txpool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 parking_lot = "0.9"

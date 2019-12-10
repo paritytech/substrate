@@ -19,45 +19,31 @@ use hyper::{Body, Request, Response, header, service::{service_fn, make_service_
 use chrono::{Duration, Utc};
 use futures_util::{FutureExt, future::{Future, select, Either}};
 use futures_timer::Delay;
-use crate::{METRICS, util, types::{Target, Query, TimeseriesData}};
-
-#[derive(Debug, derive_more::Display)]
-enum Error {
-	Hyper(hyper::Error),
-	Serde(serde_json::Error),
-	Http(hyper::http::Error)
-}
-
-impl std::error::Error for Error {}
+use crate::{DATABASE, Error, types::{Target, Query, TimeseriesData, Range}};
 
 async fn api_response(req: Request<Body>) -> Result<Response<Body>, Error> {
 	match req.uri().path() {
 		"/search" => {
 			map_request_to_response(req, |target: Target| {
 				// Filter and return metrics relating to the target
-				METRICS.read()
-					.keys()
-					.filter(|key| key.starts_with(&target.target))
-					.cloned()
+				DATABASE.read()
+					.keys_starting_with(&target.target)
 					.collect::<Vec<_>>()
 			}).await
 		},
 		"/query" => {
 			map_request_to_response(req, |query: Query| {
-				let metrics = METRICS.read();
+				let metrics = DATABASE.read();
+
+				let Query {
+					range: Range { from, to },
+					max_datapoints, ..
+				} = query;
 
 				// Return timeseries data related to the specified metrics
 				query.targets.iter()
 					.map(|target| {
-						let datapoints = metrics.get(target.target.as_str())
-							.map(|metric| {
-								let from = util::find_index(&metric, query.range.from);
-								let to = util::find_index(&metric, query.range.to);
-
-								// Avoid returning more than `max_datapoints` (mostly to stop
-								// the web browser from having to do a ton of work)
-								util::select_points(&metric[from .. to], query.max_datapoints)
-							})
+						let datapoints = metrics.datapoints_between(&target.target, from, to, max_datapoints)
 							.unwrap_or_else(Vec::new);
 
 						TimeseriesData {
@@ -112,10 +98,30 @@ impl<T> tokio_executor::TypedExecutor<T> for Executor
 
 /// Start the data source server.
 #[cfg(not(target_os = "unknown"))]
-pub async fn run_server(address: std::net::SocketAddr) -> Result<(), hyper::Error> {
+pub async fn run_server(mut address: std::net::SocketAddr) -> Result<(), Error> {
+	use async_std::{net, io};
 	use crate::networking::Incoming;
 
-	let listener = async_std::net::TcpListener::bind(&address).await.unwrap();
+	let listener = loop {
+		let listener = net::TcpListener::bind(&address).await;
+		match listener {
+			Ok(listener) => {
+				log::info!("Grafana data source server started at {}", address);
+				break listener
+			},
+			Err(err) => match err.kind() {
+				io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied if address.port() != 0 => {
+					log::warn!(
+						"Unable to bind grafana data source server to {}. Trying random port.",
+						address
+					);
+					address.set_port(0);
+					continue;
+				},
+				_ => Err(err)?,
+			}
+		}
+	};
 
 	let service = make_service_fn(|_| {
 		async {
@@ -128,38 +134,29 @@ pub async fn run_server(address: std::net::SocketAddr) -> Result<(), hyper::Erro
 		.serve(service)
 		.boxed();
 
-	let clean = clean_up(Duration::days(1), Duration::weeks(1))
+	let every = std::time::Duration::from_secs(24 * 3600);
+	let clean = clean_up(every, Duration::weeks(1))
 		.boxed();
 
 	let result = match select(server, clean).await {
-		Either::Left((result, _)) => result,
-		Either::Right(_) => Ok(())
+		Either::Left((result, _)) => result.map_err(Into::into),
+		Either::Right((result, _)) => result
 	};
 
 	result
 }
 
 #[cfg(target_os = "unknown")]
-pub async fn run_server(_: std::net::SocketAddr) -> Result<(), hyper::Error> {
+pub async fn run_server(_: std::net::SocketAddr) -> Result<(), Error> {
 	Ok(())
 }
 
 /// Periodically remove old metrics.
-async fn clean_up(every: Duration, before: Duration) {
+async fn clean_up(every: std::time::Duration, before: Duration) -> Result<(), Error> {
 	loop {
-		Delay::new(every.to_std().unwrap()).await;
+		Delay::new(every).await;
 
 		let oldest_allowed = (Utc::now() - before).timestamp_millis();
-
-		let mut metrics = METRICS.write();
-
-		for metric in metrics.values_mut() {
-			// Find the index of the oldest allowed timestamp and cut out all those before it.
-			let index = util::find_index(&metric, oldest_allowed);
-
-			if index > 0 {
-				*metric = metric[index..].to_vec();
-			}
-		}
+		DATABASE.write().truncate(oldest_allowed)?;
 	}
 }

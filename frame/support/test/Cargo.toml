@@ -7,12 +7,12 @@ edition = "2018"
 [dependencies]
 serde = { version = "1.0.101", default-features = false, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-runtime-io ={ package = "sr-io", path = "../../../primitives/sr-io", default-features = false }
-state-machine ={ package = "substrate-state-machine", path = "../../../primitives/state-machine", optional = true }
+runtime-io ={ package = "sp-io", path = "../../../primitives/sr-io", default-features = false }
+state-machine ={ package = "sp-state-machine", path = "../../../primitives/state-machine", optional = true }
 support = { package = "frame-support", version = "2", path = "../", default-features = false }
-inherents = { package = "substrate-inherents", path = "../../../primitives/inherents", default-features = false }
-sr-primitives = { package = "sr-primitives", path = "../../../primitives/sr-primitives", default-features = false }
-primitives = { package = "substrate-primitives", path = "../../../primitives/core", default-features = false }
+inherents = { package = "sp-inherents", path = "../../../primitives/inherents", default-features = false }
+sp-runtime = { package = "sp-runtime", path = "../../../primitives/runtime", default-features = false }
+primitives = { package = "sp-core", path = "../../../primitives/core", default-features = false }
 trybuild = "1.0.17"
 pretty_assertions = "0.6.1"
 
@@ -25,6 +25,6 @@ std = [
 	"support/std",
 	"inherents/std",
 	"primitives/std",
-	"sr-primitives/std",
+	"sp-runtime/std",
 	"state-machine",
 ]

@@ -21,7 +21,7 @@ use std::sync::Arc;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
-use sr_primitives::traits::{Block as BlockT, Header};
+use sp_runtime::traits::{Block as BlockT, Header};
 use primitives::hexdisplay::HexDisplay;
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
@@ -544,6 +544,14 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.exists_child_storage(storage_key, key)
 	}
 
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.next_storage_key(key)
+	}
+
+	fn next_child_storage_key(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.next_child_storage_key(storage_key, key)
+	}
+
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
 		self.state.for_keys_in_child_storage(storage_key, f)
 	}
@@ -568,7 +576,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (H::Out, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 			H::Out: Ord
@@ -596,7 +604,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
 	use state_machine::backend::InMemory;
 	use primitives::Blake2Hasher;
 
@@ -844,7 +852,7 @@ mod qc {
 	use quickcheck::{quickcheck, TestResult, Arbitrary};
 
 	use super::*;
-	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
 	use state_machine::backend::InMemory;
 	use primitives::Blake2Hasher;
 

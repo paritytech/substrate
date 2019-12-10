@@ -119,14 +119,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
+use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
-use sr_primitives::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
+use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
 use support::weights::SimpleDispatchInfo;
-use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
-use sr_staking_primitives::SessionIndex;
-use support::{dispatch::Result, ConsensusEngineId, decl_module, decl_event, decl_storage};
-use support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter};
+use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};
+use sp_staking::SessionIndex;
+use support::{dispatch, ConsensusEngineId, decl_module, decl_event, decl_storage};
+use support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor, ValidatorRegistration}, Parameter};
 use system::{self, ensure_signed};
 
 #[cfg(test)]
@@ -307,7 +307,7 @@ impl<AId> SessionHandler<AId> for Tuple {
 /// `SessionHandler` for tests that use `UintAuthorityId` as `Keys`.
 pub struct TestSessionHandler;
 impl<AId> SessionHandler<AId> for TestSessionHandler {
-	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[sr_primitives::key_types::DUMMY];
+	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[sp_runtime::key_types::DUMMY];
 
 	fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
 
@@ -330,6 +330,12 @@ pub trait SelectInitialValidators<ValidatorId> {
 impl<V> SelectInitialValidators<V> for () {
 	fn select_initial_validators() -> Option<Vec<V>> {
 		None
+	}
+}
+
+impl<T: Trait> ValidatorRegistration<T::ValidatorId> for Module<T> {
+	fn is_registered(id: &T::ValidatorId) -> bool {
+		Self::load_keys(id).is_some()
 	}
 }
 
@@ -477,7 +483,7 @@ decl_module! {
 		/// - One extra DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
-		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> Result {
+		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::Result {
 			let who = ensure_signed(origin)?;
 
 			ensure!(keys.ownership_proof_is_valid(&proof), "invalid ownership proof");
@@ -619,13 +625,13 @@ impl<T: Trait> Module<T> {
 	/// Returns `Ok(true)` if more than `DisabledValidatorsThreshold` validators in current
 	/// session is already disabled.
 	/// If used with the staking module it allows to force a new era in such case.
-	pub fn disable(c: &T::ValidatorId) -> rstd::result::Result<bool, ()> {
+	pub fn disable(c: &T::ValidatorId) -> sp_std::result::Result<bool, ()> {
 		Self::validators().iter().position(|i| i == c).map(Self::disable_index).ok_or(())
 	}
 
 	// perform the set_key operation, checking for duplicates.
 	// does not set `Changed`.
-	fn do_set_keys(who: &T::ValidatorId, keys: T::Keys) -> Result {
+	fn do_set_keys(who: &T::ValidatorId, keys: T::Keys) -> dispatch::Result {
 		let old_keys = Self::load_keys(&who);
 
 		for id in T::Keys::key_ids() {
@@ -696,7 +702,7 @@ impl<T: Trait> OnFreeBalanceZero<T::ValidatorId> for Module<T> {
 /// Wraps the author-scraping logic for consensus engines that can recover
 /// the canonical index of an author. This then transforms it into the
 /// registering account-ID of that session key index.
-pub struct FindAccountFromAuthorIndex<T, Inner>(rstd::marker::PhantomData<(T, Inner)>);
+pub struct FindAccountFromAuthorIndex<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
 
 impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 	for FindAccountFromAuthorIndex<T, Inner>
@@ -716,7 +722,7 @@ mod tests {
 	use super::*;
 	use support::assert_ok;
 	use primitives::crypto::key_types::DUMMY;
-	use sr_primitives::{traits::OnInitialize, testing::UintAuthorityId};
+	use sp_runtime::{traits::OnInitialize, testing::UintAuthorityId};
 	use mock::{
 		NEXT_VALIDATORS, SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
 		set_next_validators, set_session_length, session_changed, Test, Origin, System, Session,

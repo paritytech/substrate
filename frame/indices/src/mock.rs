@@ -20,10 +20,10 @@
 
 use std::collections::HashSet;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
-use sr_primitives::testing::Header;
-use sr_primitives::Perbill;
+use sp_runtime::testing::Header;
+use sp_runtime::Perbill;
 use primitives::H256;
-use support::{impl_outer_origin, parameter_types};
+use support::{impl_outer_origin, parameter_types, weights::Weight};
 use {runtime_io, system};
 use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
 
@@ -67,7 +67,7 @@ impl ResolveHint<u64, u64> for TestResolveHint {
 pub struct Runtime;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
@@ -77,7 +77,7 @@ impl system::Trait for Runtime {
 	type BlockNumber = u64;
 	type Call = ();
 	type Hash = H256;
-	type Hashing = ::sr_primitives::traits::BlakeTwo256;
+	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = Indices;
 	type Header = Header;

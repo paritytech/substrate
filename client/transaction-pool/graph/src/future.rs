@@ -23,7 +23,7 @@ use std::{
 };
 
 use primitives::hexdisplay::HexDisplay;
-use sr_primitives::transaction_validity::{
+use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };
 
@@ -225,6 +225,12 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	/// Returns iterator over all future transactions
 	pub fn all(&self) -> impl Iterator<Item=&Transaction<Hash, Ex>> {
 		self.waiting.values().map(|waiting| &*waiting.transaction)
+	}
+
+	/// Removes and returns all future transactions.
+	pub fn clear(&mut self) -> Vec<Arc<Transaction<Hash, Ex>>> {
+		self.wanted_tags.clear();
+		self.waiting.drain().map(|(_, tx)| tx.transaction).collect()
 	}
 
 	/// Returns number of transactions in the Future queue.

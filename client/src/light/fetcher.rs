@@ -23,7 +23,7 @@ use std::marker::PhantomData;
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use codec::{Decode, Encode};
 use primitives::{convert_hash, traits::CodeExecutor, H256};
-use sr_primitives::traits::{
+use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	SimpleArithmetic, CheckedConversion, Zero,
 };
@@ -70,7 +70,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 	) -> ClientResult<Vec<(NumberFor<B>, u32)>>
 		where
 			H: Hasher,
-			H::Out: Ord,
+			H::Out: Ord + codec::Codec,
 	{
 		// since we need roots of all changes tries for the range begin..max
 		// => remote node can't use max block greater that one that we have passed
@@ -148,7 +148,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 	) -> ClientResult<()>
 		where
 			H: Hasher,
-			H::Out: Ord,
+			H::Out: Ord + codec::Codec,
 	{
 		// all the checks are sharing the same storage
 		let storage = create_proof_check_backend_storage(remote_roots_proof);
@@ -340,7 +340,7 @@ pub mod tests {
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use primitives::{blake2_256, Blake2Hasher, H256};
 	use primitives::storage::{well_known_keys, StorageKey};
-	use sr_primitives::generic::BlockId;
+	use sp_runtime::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
 

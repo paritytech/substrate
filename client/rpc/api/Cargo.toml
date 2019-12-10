@@ -14,9 +14,9 @@ jsonrpc-derive = "14.0.3"
 jsonrpc-pubsub = "14.0.3"
 log = "0.4.8"
 parking_lot = "0.9.0"
-primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
-runtime_version = { package = "sr-version", path = "../../../primitives/sr-version" }
+primitives = { package = "sp-core", path = "../../../primitives/core" }
+runtime_version = { package = "sp-version", path = "../../../primitives/sr-version" }
 serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.41"
-txpool = { package = "sc-transaction-graph", path = "../../../client/transaction-pool/graph" }
-rpc-primitives = { package = "substrate-rpc-primitives", path = "../../../primitives/rpc" }
+txpool-api = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool" }
+rpc-primitives = { package = "sp-rpc", path = "../../../primitives/rpc" }

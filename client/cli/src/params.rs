@@ -46,7 +46,7 @@ impl Into<client_api::ExecutionStrategy> for ExecutionStrategy {
 arg_enum! {
 	/// How to execute Wasm runtime code
 	#[allow(missing_docs)]
-	#[derive(Debug, Clone)]
+	#[derive(Debug, Clone, Copy)]
 	pub enum WasmExecutionMethod {
 		// Uses an interpreter.
 		Interpreted,
@@ -111,6 +111,48 @@ pub struct SharedParams {
 	pub log: Option<String>,
 }
 
+/// Parameters for block import.
+#[derive(Debug, StructOpt, Clone)]
+pub struct ImportParams {
+	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
+	///
+	/// Default is to keep all block states if the node is running as a
+	/// validator (i.e. 'archive'), otherwise state is only kept for the last
+	/// 256 blocks.
+	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
+	pub pruning: Option<String>,
+
+	/// Force start with unsafe pruning settings.
+	///
+	/// When running as a validator it is highly recommended to disable state
+	/// pruning (i.e. 'archive') which is the default. The node will refuse to
+	/// start as a validator if pruning is enabled unless this option is set.
+	#[structopt(long = "unsafe-pruning")]
+	pub unsafe_pruning: bool,
+
+	/// Method for executing Wasm runtime code.
+	#[structopt(
+		long = "wasm-execution",
+		value_name = "METHOD",
+		possible_values = &WasmExecutionMethod::enabled_variants(),
+		case_insensitive = true,
+		default_value = "Interpreted"
+	)]
+	pub wasm_method: WasmExecutionMethod,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub execution_strategies: ExecutionStrategies,
+
+	/// Limit the memory the database cache can use.
+	#[structopt(long = "db-cache", value_name = "MiB", default_value = "1024")]
+	pub database_cache_size: u32,
+
+	/// Specify the state cache size.
+	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
+	pub state_cache_size: usize,
+}
+
 impl GetLogFilter for SharedParams {
 	fn get_log_filter(&self) -> Option<String> {
 		self.log.clone()
@@ -134,6 +176,14 @@ pub struct NetworkConfigurationParams {
 	/// nodes regardless of whether they are defined as reserved nodes.
 	#[structopt(long = "reserved-only")]
 	pub reserved_only: bool,
+
+	/// Specify a list of sentry node public addresses.
+	#[structopt(
+		long = "sentry-nodes",
+		value_name = "URL",
+		conflicts_with_all = &[ "sentry" ]
+	)]
+	pub sentry_nodes: Vec<String>,
 
 	/// Listen on this multiaddress.
 	#[structopt(long = "listen-addr", value_name = "LISTEN_ADDR")]
@@ -269,12 +319,12 @@ arg_enum! {
 	}
 }
 
-impl Into<substrate_tracing::TracingReceiver> for TracingReceiver {
-	fn into(self) -> substrate_tracing::TracingReceiver {
+impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
+	fn into(self) -> sc_tracing::TracingReceiver {
 		match self {
-			TracingReceiver::Log => substrate_tracing::TracingReceiver::Log,
-			TracingReceiver::Telemetry => substrate_tracing::TracingReceiver::Telemetry,
-			TracingReceiver::Grafana => substrate_tracing::TracingReceiver::Grafana,
+			TracingReceiver::Log => sc_tracing::TracingReceiver::Log,
+			TracingReceiver::Telemetry => sc_tracing::TracingReceiver::Telemetry,
+			TracingReceiver::Grafana => sc_tracing::TracingReceiver::Grafana,
 		}
 	}
 }
@@ -386,14 +436,6 @@ pub struct RunCmd {
 	#[structopt(long = "light")]
 	pub light: bool,
 
-	/// Limit the memory the database cache can use.
-	#[structopt(long = "db-cache", value_name = "MiB", default_value = "1024")]
-	pub database_cache_size: u32,
-
-	/// Specify the state cache size.
-	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
-	pub state_cache_size: usize,
-
 	/// Listen to all RPC interfaces.
 	///
 	/// Default is local.
@@ -438,22 +480,6 @@ pub struct RunCmd {
 	#[structopt(long = "grafana-port", value_name = "PORT")]
 	pub grafana_port: Option<u16>,
 
-	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
-	///
-	/// Default is to keep all block states if the node is running as a
-	/// validator (i.e. 'archive'), otherwise state is only kept for the last
-	/// 256 blocks.
-	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
-	pub pruning: Option<String>,
-
-	/// Force start with unsafe pruning settings.
-	///
-	/// When running as a validator it is highly recommended to disable state
-	/// pruning (i.e. 'archive') which is the default. The node will refuse to
-	/// start as a validator if pruning is enabled unless this option is set.
-	#[structopt(long = "unsafe-pruning")]
-	pub unsafe_pruning: bool,
-
 	/// The human-readable name for this node.
 	///
 	/// The node name will be reported to the telemetry server, if enabled.
@@ -487,23 +513,13 @@ pub struct RunCmd {
 	)]
 	pub offchain_worker: OffchainWorkerEnabled,
 
-	/// Method for executing Wasm runtime code.
-	#[structopt(
-		long = "wasm-execution",
-		value_name = "METHOD",
-		possible_values = &WasmExecutionMethod::enabled_variants(),
-		case_insensitive = true,
-		default_value = "Interpreted"
-	)]
-	pub wasm_method: WasmExecutionMethod,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub execution_strategies: ExecutionStrategies,
-
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub import_params: ImportParams,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -765,28 +781,36 @@ pub struct ImportBlocksCmd {
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 
-	/// Method for executing Wasm runtime code.
-	#[structopt(
-		long = "wasm-execution",
-		value_name = "METHOD",
-		possible_values = &WasmExecutionMethod::variants(),
-		case_insensitive = true,
-		default_value = "Interpreted"
-	)]
-	pub wasm_method: WasmExecutionMethod,
-
-	/// The means of execution used when calling into the runtime while importing blocks.
-	#[structopt(
-		long = "execution",
-		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategy::variants(),
-		case_insensitive = true,
-		default_value = "NativeElseWasm"
-	)]
-	pub execution: ExecutionStrategy,
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub import_params: ImportParams,
 }
 
 impl_get_log_filter!(ImportBlocksCmd);
+
+/// The `check-block` command used to validate blocks.
+#[derive(Debug, StructOpt, Clone)]
+pub struct CheckBlockCmd {
+	/// Block hash or number
+	#[structopt(value_name = "HASH or NUMBER")]
+	pub input: String,
+
+	/// The default number of 64KB pages to ever allocate for Wasm execution.
+	///
+	/// Don't alter this unless you know what you're doing.
+	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
+	pub default_heap_pages: Option<u32>,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub import_params: ImportParams,
+}
+
+impl_get_log_filter!(CheckBlockCmd);
 
 /// The `revert` command used revert the chain to a previous state.
 #[derive(Debug, StructOpt, Clone)]
@@ -835,6 +859,9 @@ pub enum CoreParams<CC, RP> {
 	/// Import blocks from file.
 	ImportBlocks(ImportBlocksCmd),
 
+	/// Validte a single block.
+	CheckBlock(CheckBlockCmd),
+
 	/// Revert chain to the previous state.
 	Revert(RevertCmd),
 
@@ -869,6 +896,10 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 				.about("Import blocks from file.")
 		)
 		.subcommand(
+			CheckBlockCmd::augment_clap(SubCommand::with_name("check-block"))
+				.about("Re-validate a known block.")
+		)
+		.subcommand(
 			RevertCmd::augment_clap(SubCommand::with_name("revert"))
 				.about("Revert chain to the previous state.")
 		)
@@ -886,6 +917,8 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 				CoreParams::ExportBlocks(ExportBlocksCmd::from_clap(matches)),
 			("import-blocks", Some(matches)) =>
 				CoreParams::ImportBlocks(ImportBlocksCmd::from_clap(matches)),
+			("check-block", Some(matches)) =>
+				CoreParams::CheckBlock(CheckBlockCmd::from_clap(matches)),
 			("revert", Some(matches)) => CoreParams::Revert(RevertCmd::from_clap(matches)),
 			("purge-chain", Some(matches)) =>
 				CoreParams::PurgeChain(PurgeChainCmd::from_clap(matches)),
@@ -902,6 +935,7 @@ impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
 			CoreParams::BuildSpec(c) => c.get_log_filter(),
 			CoreParams::ExportBlocks(c) => c.get_log_filter(),
 			CoreParams::ImportBlocks(c) => c.get_log_filter(),
+			CoreParams::CheckBlock(c) => c.get_log_filter(),
 			CoreParams::PurgeChain(c) => c.get_log_filter(),
 			CoreParams::Revert(c) => c.get_log_filter(),
 			CoreParams::Custom(c) => c.get_log_filter(),

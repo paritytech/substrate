@@ -27,7 +27,7 @@ use crate::on_demand_layer::OnDemand;
 use crate::service::{ExHashT, TransactionPool};
 use bitflags::bitflags;
 use consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
-use sr_primitives::traits::{Block as BlockT};
+use sp_runtime::traits::{Block as BlockT};
 use libp2p::identity::{Keypair, ed25519};
 use libp2p::wasm_ext;
 use libp2p::{PeerId, Multiaddr, multiaddr};
@@ -171,7 +171,7 @@ impl ProtocolId {
 /// # Example
 ///
 /// ```
-/// # use substrate_network::{Multiaddr, PeerId, config::parse_str_addr};
+/// # use sc_network::{Multiaddr, PeerId, config::parse_str_addr};
 /// let (peer_id, addr) = parse_str_addr(
 /// 	"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"
 /// ).unwrap();
@@ -255,6 +255,8 @@ pub struct NetworkConfiguration {
 	pub reserved_nodes: Vec<String>,
 	/// The non-reserved peer mode.
 	pub non_reserved_mode: NonReservedPeerMode,
+	/// List of sentry node public addresses.
+	pub sentry_nodes: Vec<String>,
 	/// Client identifier. Sent over the wire for debugging purposes.
 	pub client_version: String,
 	/// Name of the node. Sent over the wire for debugging purposes.
@@ -278,6 +280,7 @@ impl Default for NetworkConfiguration {
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
+			sentry_nodes: Vec::new(),
 			client_version: "unknown".into(),
 			node_name: "unknown".into(),
 			transport: TransportConfig::Normal {
@@ -502,7 +505,11 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use tempdir::TempDir;
+	use tempfile::TempDir;
+
+	fn tempdir_with_prefix(prefix: &str) -> TempDir {
+		tempfile::Builder::new().prefix(prefix).tempdir().unwrap()
+	}
 
 	fn secret_bytes(kp: &Keypair) -> Vec<u8> {
 		match kp {
@@ -514,7 +521,7 @@ mod tests {
 
 	#[test]
 	fn test_secret_file() {
-		let tmp = TempDir::new("x").unwrap();
+		let tmp = tempdir_with_prefix("x");
 		std::fs::remove_dir(tmp.path()).unwrap(); // should be recreated
 		let file = tmp.path().join("x").to_path_buf();
 		let kp1 = NodeKeyConfig::Ed25519(Secret::File(file.clone())).into_keypair().unwrap();

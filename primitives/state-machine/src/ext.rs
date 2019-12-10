@@ -30,6 +30,7 @@ use primitives::{
 };
 use trie::{trie_types::Layout, MemoryDB, default_child_trie_root};
 use externalities::Extensions;
+use codec::{Decode, Encode};
 
 use std::{error, fmt, any::{Any, TypeId}};
 use log::{warn, trace};
@@ -189,25 +190,25 @@ where
 		result
 	}
 
-	fn storage_hash(&self, key: &[u8]) -> Option<H256> {
+	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
 			.storage(key)
 			.map(|x| x.map(|x| H::hash(x)))
-			.unwrap_or_else(||
-				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
-			);
+			.unwrap_or_else(|| self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
+
 		trace!(target: "state-trace", "{:04x}: Hash {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
 			result,
 		);
-		result
+		result.map(|r| r.encode())
 	}
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let result = self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+
 		trace!(target: "state-trace", "{:04x}: GetOriginal {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
@@ -216,15 +217,16 @@ where
 		result
 	}
 
-	fn original_storage_hash(&self, key: &[u8]) -> Option<H256> {
+	fn original_storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let result = self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+
 		trace!(target: "state-trace", "{:04x}: GetOriginalHash {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
 			result,
 		);
-		result
+		result.map(|r| r.encode())
 	}
 
 	fn child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
@@ -246,7 +248,7 @@ where
 		result
 	}
 
-	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
+	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
 			.child_storage(storage_key.as_ref(), key)
@@ -262,7 +264,7 @@ where
 			result,
 		);
 
-		result
+		result.map(|r| r.encode())
 	}
 
 	fn original_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
@@ -280,7 +282,11 @@ where
 		result
 	}
 
-	fn original_child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
+	fn original_child_storage_hash(
+		&self,
+		storage_key: ChildStorageKey,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let result = self.backend
 			.child_storage_hash(storage_key.as_ref(), key)
@@ -292,7 +298,7 @@ where
 			HexDisplay::from(&key),
 			result,
 		);
-		result
+		result.map(|r| r.encode())
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> bool {
@@ -328,6 +334,40 @@ where
 			result,
 		);
 		result
+	}
+
+	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
+		let next_backend_key = self.backend.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+		let next_overlay_key_change = self.overlay.next_storage_key_change(key);
+
+		match (next_backend_key, next_overlay_key_change) {
+			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
+			(backend_key, None) => backend_key,
+			(_, Some(overlay_key)) => if overlay_key.1.value.is_some() {
+				Some(overlay_key.0.to_vec())
+			} else {
+				self.next_storage_key(&overlay_key.0[..])
+			},
+		}
+	}
+
+	fn next_child_storage_key(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
+		let next_backend_key = self.backend.next_child_storage_key(storage_key.as_ref(), key)
+			.expect(EXT_NOT_ALLOWED_TO_FAIL);
+		let next_overlay_key_change = self.overlay.next_child_storage_key_change(
+			storage_key.as_ref(),
+			key
+		);
+
+		match (next_backend_key, next_overlay_key_change) {
+			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
+			(backend_key, None) => backend_key,
+			(_, Some(overlay_key)) => if overlay_key.1.value.is_some() {
+				Some(overlay_key.0.to_vec())
+			} else {
+				self.next_child_storage_key(storage_key, &overlay_key.0[..])
+			},
+		}
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
@@ -415,14 +455,14 @@ where
 		42
 	}
 
-	fn storage_root(&mut self) -> H256 {
+	fn storage_root(&mut self) -> Vec<u8> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		if let Some((_, ref root)) = self.storage_transaction {
 			trace!(target: "state-trace", "{:04x}: Root (cached) {}",
 				self.id,
 				HexDisplay::from(&root.as_ref()),
 			);
-			return root.clone();
+			return root.encode();
 		}
 
 		let child_storage_keys =
@@ -447,7 +487,7 @@ where
 			self.id,
 			HexDisplay::from(&root.as_ref()),
 		);
-		root
+		root.encode()
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey) -> Vec<u8> {
@@ -455,6 +495,7 @@ where
 		if self.storage_transaction.is_some() {
 			let root = self
 				.storage(storage_key.as_ref())
+				.and_then(|k| Decode::decode(&mut &k[..]).ok())
 				.unwrap_or(
 					default_child_trie_root::<Layout<H>>(storage_key.as_ref())
 				);
@@ -463,7 +504,7 @@ where
 				HexDisplay::from(&storage_key.as_ref()),
 				HexDisplay::from(&root.as_ref()),
 			);
-			root
+			root.encode()
 		} else {
 			let storage_key = storage_key.as_ref();
 
@@ -481,7 +522,7 @@ where
 			if is_empty {
 				self.overlay.set_storage(storage_key.into(), None);
 			} else {
-				self.overlay.set_storage(storage_key.into(), Some(root.clone()));
+				self.overlay.set_storage(storage_key.into(), Some(root.encode()));
 			}
 
 			trace!(target: "state-trace", "{:04x}: ChildRoot({}) {}",
@@ -489,20 +530,29 @@ where
 				HexDisplay::from(&storage_key.as_ref()),
 				HexDisplay::from(&root.as_ref()),
 			);
-			root
-
+			root.encode()
 		}
 	}
 
-	fn storage_changes_root(&mut self, parent_hash: H256) -> Result<Option<H256>, ()> {
+	fn storage_changes_root(&mut self, parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		let _guard = panic_handler::AbortGuard::force_abort();
+
 		self.changes_trie_transaction = build_changes_trie::<_, T, H, N>(
 			self.backend,
 			self.changes_trie_storage.clone(),
 			self.overlay,
-			parent_hash,
+			H256::decode(&mut &parent_hash[..]).map_err(|e|
+				trace!(
+					target: "state-trace",
+					"Failed to decode changes root parent hash: {}",
+					e,
+				)
+			)?,
 		)?;
-		let result = Ok(self.changes_trie_transaction.as_ref().map(|(_, root, _)| root.clone()));
+		let result = Ok(
+			self.changes_trie_transaction.as_ref().map(|(_, root, _)| root.encode())
+		);
+
 		trace!(target: "state-trace", "{:04x}: ChangesRoot({}) {:?}",
 			self.id,
 			HexDisplay::from(&parent_hash.as_ref()),
@@ -566,7 +616,7 @@ mod tests {
 		let mut overlay = prepare_overlay_with_changes();
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, None, None);
-		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(), None);
+		assert_eq!(ext.storage_changes_root(&H256::default().encode()).unwrap(), None);
 	}
 
 	#[test]
@@ -576,7 +626,7 @@ mod tests {
 		let storage = TestChangesTrieStorage::with_blocks(vec![(100, Default::default())]);
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
-		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(), None);
+		assert_eq!(ext.storage_changes_root(&H256::default().encode()).unwrap(), None);
 	}
 
 	#[test]
@@ -586,8 +636,8 @@ mod tests {
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
 		assert_eq!(
-			ext.storage_changes_root(Default::default()).unwrap(),
-			Some(hex!("bb0c2ef6e1d36d5490f9766cfcc7dfe2a6ca804504c3bb206053890d6dd02376").into()),
+			ext.storage_changes_root(&H256::default().encode()).unwrap(),
+			Some(hex!("bb0c2ef6e1d36d5490f9766cfcc7dfe2a6ca804504c3bb206053890d6dd02376").to_vec()),
 		);
 	}
 
@@ -599,8 +649,75 @@ mod tests {
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
 		assert_eq!(
-			ext.storage_changes_root(Default::default()).unwrap(),
-			Some(hex!("96f5aae4690e7302737b6f9b7f8567d5bbb9eac1c315f80101235a92d9ec27f4").into()),
+			ext.storage_changes_root(&H256::default().encode()).unwrap(),
+			Some(hex!("96f5aae4690e7302737b6f9b7f8567d5bbb9eac1c315f80101235a92d9ec27f4").to_vec()),
 		);
+	}
+
+	#[test]
+	fn next_storage_key_works() {
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_storage(vec![20], None);
+		overlay.set_storage(vec![30], Some(vec![31]));
+		let backend = vec![
+			(None, vec![10], Some(vec![10])),
+			(None, vec![20], Some(vec![20])),
+			(None, vec![40], Some(vec![40])),
+		].into();
+
+		let ext = TestExt::new(&mut overlay, &backend, None, None);
+
+		// next_backend < next_overlay
+		assert_eq!(ext.next_storage_key(&[5]), Some(vec![10]));
+
+		// next_backend == next_overlay but next_overlay is a delete
+		assert_eq!(ext.next_storage_key(&[10]), Some(vec![30]));
+
+		// next_overlay < next_backend
+		assert_eq!(ext.next_storage_key(&[20]), Some(vec![30]));
+
+		// next_backend exist but next_overlay doesn't exist
+		assert_eq!(ext.next_storage_key(&[30]), Some(vec![40]));
+
+		drop(ext);
+		overlay.set_storage(vec![50], Some(vec![50]));
+		let ext = TestExt::new(&mut overlay, &backend, None, None);
+
+		// next_overlay exist but next_backend doesn't exist
+		assert_eq!(ext.next_storage_key(&[40]), Some(vec![50]));
+	}
+
+	#[test]
+	fn next_child_storage_key_works() {
+		let child = || ChildStorageKey::from_slice(b":child_storage:default:Child1").unwrap();
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_child_storage(child().as_ref().to_vec(), vec![20], None);
+		overlay.set_child_storage(child().as_ref().to_vec(), vec![30], Some(vec![31]));
+		let backend = vec![
+			(Some(child().as_ref().to_vec()), vec![10], Some(vec![10])),
+			(Some(child().as_ref().to_vec()), vec![20], Some(vec![20])),
+			(Some(child().as_ref().to_vec()), vec![40], Some(vec![40])),
+		].into();
+
+		let ext = TestExt::new(&mut overlay, &backend, None, None);
+
+		// next_backend < next_overlay
+		assert_eq!(ext.next_child_storage_key(child(), &[5]), Some(vec![10]));
+
+		// next_backend == next_overlay but next_overlay is a delete
+		assert_eq!(ext.next_child_storage_key(child(), &[10]), Some(vec![30]));
+
+		// next_overlay < next_backend
+		assert_eq!(ext.next_child_storage_key(child(), &[20]), Some(vec![30]));
+
+		// next_backend exist but next_overlay doesn't exist
+		assert_eq!(ext.next_child_storage_key(child(), &[30]), Some(vec![40]));
+
+		drop(ext);
+		overlay.set_child_storage(child().as_ref().to_vec(), vec![50], Some(vec![50]));
+		let ext = TestExt::new(&mut overlay, &backend, None, None);
+
+		// next_overlay exist but next_backend doesn't exist
+		assert_eq!(ext.next_child_storage_key(child(), &[40]), Some(vec![50]));
 	}
 }

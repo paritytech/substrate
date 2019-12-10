@@ -1,20 +1,21 @@
 [package]
-name = "substrate-service-test"
+name = "sc-service-test"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-tempdir = "0.3.7"
+tempfile = "3.1.0"
 tokio = "0.1.22"
 futures = "0.1.29"
 log = "0.4.8"
 env_logger = "0.7.0"
 fdlimit = "0.1.1"
 futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
-service = { package = "substrate-service", path = "../../service", default-features = false }
-network = { package = "substrate-network", path = "../../network" }
-consensus = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
-client = { package = "substrate-client", path = "../../" }
-sr-primitives = { path = "../../../primitives/sr-primitives" }
-primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+service = { package = "sc-service", path = "../../service", default-features = false }
+network = { package = "sc-network", path = "../../network" }
+consensus = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
+client = { package = "sc-client", path = "../../" }
+sp-runtime = { path = "../../../primitives/runtime" }
+primitives = { package = "sp-core", path = "../../../primitives/core" }
+txpool-api = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool" }

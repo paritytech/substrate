@@ -21,8 +21,8 @@
 //! # Example
 //!
 //! ```
-//! use substrate_consensus_common::import_queue::Link;
-//! # use substrate_consensus_common::import_queue::buffered_link::buffered_link;
+//! use sp_consensus::import_queue::Link;
+//! # use sp_consensus::import_queue::buffered_link::buffered_link;
 //! # use test_client::runtime::Block;
 //! # struct DummyLink; impl Link<Block> for DummyLink {}
 //! # let mut my_link = DummyLink;
@@ -38,7 +38,7 @@
 //!
 
 use futures::{prelude::*, channel::mpsc};
-use sr_primitives::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{pin::Pin, task::Context, task::Poll};
 use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 

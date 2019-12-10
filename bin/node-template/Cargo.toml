@@ -18,22 +18,24 @@ tokio = "0.1.22"
 parking_lot = "0.9.0"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 trie-root = "0.15.2"
-sr-io = { path = "../../primitives/sr-io" }
-substrate-cli = { path = "../../client/cli" }
-primitives = { package = "substrate-primitives", path = "../../primitives/core" }
-substrate-executor = { path = "../../client/executor" }
-substrate-service = { path = "../../client/service" }
-inherents = { package = "substrate-inherents", path = "../../primitives/inherents" }
-transaction-pool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
-network = { package = "substrate-network", path = "../../client/network" }
-aura = { package = "substrate-consensus-aura", path = "../../client/consensus/aura" }
-aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../primitives/consensus/aura" }
-grandpa = { package = "substrate-finality-grandpa", path = "../../client/finality-grandpa" }
-grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../../primitives/finality-grandpa" }
-substrate-client = {  path = "../../client/" }
+sp-io = { path = "../../primitives/sr-io" }
+sc-cli = { path = "../../client/cli" }
+primitives = { package = "sp-core", path = "../../primitives/core" }
+sc-executor = { path = "../../client/executor" }
+sc-service = { path = "../../client/service" }
+inherents = { package = "sp-inherents", path = "../../primitives/inherents" }
+txpool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
+network = { package = "sc-network", path = "../../client/network" }
+aura = { package = "sc-consensus-aura", path = "../../client/consensus/aura" }
+aura-primitives = { package = "sp-consensus-aura", path = "../../primitives/consensus/aura" }
+consensus-common = { package = "sp-consensus", path = "../../primitives/consensus/common" }
+grandpa = { package = "sc-finality-grandpa", path = "../../client/finality-grandpa" }
+grandpa-primitives = { package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
+sc-client = {  path = "../../client/" }
 runtime = { package = "node-template-runtime", path = "runtime" }
-sr-primitives = { path = "../../primitives/sr-primitives" }
-basic-authorship = { package = "substrate-basic-authorship", path  = "../../client/basic-authorship"}
+sp-runtime = { path = "../../primitives/runtime" }
+basic-authorship = { package = "sc-basic-authority", path  = "../../client/basic-authorship"}
 
 [build-dependencies]
 vergen = "3.0.4"

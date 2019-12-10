@@ -1,6 +1,6 @@
 [package]
 description = "Substrate offchain workers"
-name = "substrate-offchain"
+name = "sc-offchain"
 version = "2.0.0"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
@@ -8,8 +8,8 @@ edition = "2018"
 
 [dependencies]
 bytes = "0.4.12"
-client-api = { package = "substrate-client-api", path = "../api" }
-sr-api = { path = "../../primitives/sr-api" }
+client-api = { package = "sc-client-api", path = "../api" }
+sp-api = { path = "../../primitives/sr-api" }
 fnv = "1.0.6"
 futures01 = { package = "futures", version = "0.1" }
 futures = "0.3.1"
@@ -17,25 +17,26 @@ futures-timer = "2.0"
 log = "0.4.8"
 threadpool = "1.7"
 num_cpus = "1.10"
-offchain-primitives = { package = "substrate-offchain-primitives", path = "../../primitives/offchain" }
+offchain-primitives = { package = "sp-offchain", path = "../../primitives/offchain" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 parking_lot = "0.9.0"
-primitives = { package = "substrate-primitives", path = "../../primitives/core" }
+primitives = { package = "sp-core", path = "../../primitives/core" }
 rand = "0.7.2"
-sr-primitives = { path = "../../primitives/sr-primitives" }
-network = { package = "substrate-network", path = "../network" }
-keystore = { package = "substrate-keystore", path = "../keystore" }
+sp-runtime = { path = "../../primitives/runtime" }
+network = { package = "sc-network", path = "../network" }
+keystore = { package = "sc-keystore", path = "../keystore" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 hyper = "0.12.35"
 hyper-rustls = "0.17.1"
 
 [dev-dependencies]
-client-db = { package = "substrate-client-db", path = "../db/", default-features = true }
+client-db = { package = "sc-client-db", path = "../db/", default-features = true }
 env_logger = "0.7.0"
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 tokio = "0.1.22"
-transaction_pool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
+txpool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
 
 [features]
 default = []

@@ -20,7 +20,6 @@
 mod tests;
 
 use std::{sync::Arc, convert::TryInto};
-use futures::future::{FutureExt, TryFutureExt};
 use log::warn;
 
 use client::Client;
@@ -30,21 +29,17 @@ use rpc::futures::{
 	Sink, Future,
 	future::result,
 };
-use futures::{StreamExt as _, compat::Compat, future::ready};
+use futures::{StreamExt as _, compat::Compat};
+use futures::future::{ready, FutureExt, TryFutureExt};
 use api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use codec::{Encode, Decode};
 use primitives::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
-use sr_primitives::{generic, traits::{self, ProvideRuntimeApi}};
-use transaction_pool::{
-	txpool::{
-		ChainApi as PoolChainApi,
-		BlockHash,
-		ExHash,
-		IntoPoolError,
-		Pool,
-		watcher::Status,
-	},
+use sp_api::ConstructRuntimeApi;
+use sp_runtime::{generic, traits::{self, ProvideRuntimeApi}};
+use txpool_api::{
+	TransactionPool, InPoolTransaction, TransactionStatus,
+	BlockHash, TxHash, TransactionFor, error::IntoPoolError,
 };
 use session::SessionKeys;
 
@@ -53,22 +48,22 @@ pub use api::author::*;
 use self::error::{Error, FutureResult, Result};
 
 /// Authoring API
-pub struct Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
+pub struct Author<B, E, P, Block: traits::Block, RA> {
 	/// Substrate client
-	client: Arc<Client<B, E, <P as PoolChainApi>::Block, RA>>,
+	client: Arc<Client<B, E, Block, RA>>,
 	/// Transactions pool
-	pool: Arc<Pool<P>>,
+	pool: Arc<P>,
 	/// Subscriptions manager
 	subscriptions: Subscriptions,
 	/// The key store.
 	keystore: BareCryptoStorePtr,
 }
 
-impl<B, E, P, RA> Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
+impl<B, E, P, Block: traits::Block, RA> Author<B, E, P, Block, RA> {
 	/// Create new instance of Authoring API.
 	pub fn new(
-		client: Arc<Client<B, E, <P as PoolChainApi>::Block, RA>>,
-		pool: Arc<Pool<P>>,
+		client: Arc<Client<B, E, Block, RA>>,
+		pool: Arc<P>,
 		subscriptions: Subscriptions,
 		keystore: BareCryptoStorePtr,
 	) -> Self {
@@ -81,16 +76,15 @@ impl<B, E, P, RA> Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'sta
 	}
 }
 
-impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> where
-	B: client_api::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client_api::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
-	P: PoolChainApi + Sync + Send + 'static,
-	P::Block: traits::Block<Hash=H256>,
-	P::Error: 'static,
-	RA: Send + Sync + 'static,
-	Client<B, E, P::Block, RA>: ProvideRuntimeApi,
-	<Client<B, E, P::Block, RA> as ProvideRuntimeApi>::Api:
-		SessionKeys<P::Block, Error = ClientError>,
+impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P, Block, RA> where
+	Block: traits::Block<Hash=H256>,
+	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: client_api::CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
+	P: TransactionPool<Block=Block, Hash=Block::Hash> + Sync + Send + 'static,
+	RA: ConstructRuntimeApi<Block, Client<B, E, Block, RA>> + Send + Sync + 'static,
+	Client<B, E, Block, RA>: ProvideRuntimeApi,
+	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		SessionKeys<Block, Error = ClientError>,
 {
 	type Metadata = crate::metadata::Metadata;
 
@@ -115,7 +109,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		).map(Into::into).map_err(|e| Error::Client(Box::new(e)))
 	}
 
-	fn submit_extrinsic(&self, ext: Bytes) -> FutureResult<ExHash<P>> {
+	fn submit_extrinsic(&self, ext: Bytes) -> FutureResult<TxHash<P>> {
 		let xt = match Decode::decode(&mut &ext[..]) {
 			Ok(xt) => xt,
 			Err(err) => return Box::new(result(Err(err.into()))),
@@ -131,13 +125,13 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	}
 
 	fn pending_extrinsics(&self) -> Result<Vec<Bytes>> {
-		Ok(self.pool.ready().map(|tx| tx.data.encode().into()).collect())
+		Ok(self.pool.ready().map(|tx| tx.data().encode().into()).collect())
 	}
 
 	fn remove_extrinsic(
 		&self,
-		bytes_or_hash: Vec<hash::ExtrinsicOrHash<ExHash<P>>>,
-	) -> Result<Vec<ExHash<P>>> {
+		bytes_or_hash: Vec<hash::ExtrinsicOrHash<TxHash<P>>>,
+	) -> Result<Vec<TxHash<P>>> {
 		let hashes = bytes_or_hash.into_iter()
 			.map(|x| match x {
 				hash::ExtrinsicOrHash::Hash(h) => Ok(h),
@@ -149,21 +143,22 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 			.collect::<Result<Vec<_>>>()?;
 
 		Ok(
-			self.pool.remove_invalid(&hashes)
+			self.pool
+				.remove_invalid(&hashes)
 				.into_iter()
-				.map(|tx| tx.hash.clone())
+				.map(|tx| tx.hash().clone())
 				.collect()
 		)
 	}
 
 	fn watch_extrinsic(&self,
 		_metadata: Self::Metadata,
-		subscriber: Subscriber<Status<ExHash<P>, BlockHash<P>>>,
+		subscriber: Subscriber<TransactionStatus<TxHash<P>, BlockHash<P>>>,
 		xt: Bytes,
 	) {
 		let submit = || -> Result<_> {
 			let best_block_hash = self.client.info().chain.best_hash;
-			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..])
+			let dxt = TransactionFor::<P>::decode(&mut &xt[..])
 				.map_err(error::Error::from)?;
 			Ok(
 				self.pool
@@ -179,7 +174,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		let future = ready(submit())
 			.and_then(|res| res)
 			// convert the watcher into a `Stream`
-			.map(|res| res.map(|watcher| watcher.into_stream().map(|v| Ok::<_, ()>(Ok(v)))))
+			.map(|res| res.map(|stream| stream.map(|v| Ok::<_, ()>(Ok(v)))))
 			// now handle the import result,
 			// start a new subscrition
 			.map(move |result| match result {

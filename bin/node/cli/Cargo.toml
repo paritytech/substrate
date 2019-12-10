@@ -24,7 +24,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # third-party dependencies
 codec = { package = "parity-scale-codec", version = "1.0.6" }
-serde = { version = "1.0.102", features = [ "derive" ] }
+serde = { version = "1.0.102", features = ["derive"] }
 futures01 = { package = "futures", version = "0.1.29" }
 futures = { version = "0.3.1", features = ["compat"] }
 hex-literal = "0.2.1"
@@ -34,32 +34,34 @@ rand = "0.7.2"
 structopt = "0.3.3"
 
 # primitives
-authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../../primitives/authority-discovery"}
-babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe" }
-grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../../primitives/finality-grandpa" }
-primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
-sr-primitives = { path = "../../../primitives/sr-primitives" }
+authority-discovery-primitives = { package = "sp-authority-discovery", path = "../../../primitives/authority-discovery"}
+babe-primitives = { package = "sp-consensus-babe", path = "../../../primitives/consensus/babe" }
+grandpa-primitives = { package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
+primitives = { package = "sp-core", path = "../../../primitives/core" }
+sp-runtime = { path = "../../../primitives/runtime" }
 sp-timestamp = { path = "../../../primitives/timestamp", default-features = false }
 sp-finality-tracker = { path = "../../../primitives/finality-tracker", default-features = false }
-inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
-keyring = { package = "substrate-keyring", path = "../../../primitives/keyring" }
-runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
+inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
+keyring = { package = "sp-keyring", path = "../../../primitives/keyring" }
+runtime-io = { package = "sp-io", path = "../../../primitives/sr-io" }
+consensus-common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
 
 # client dependencies
-client-api = { package = "substrate-client-api", path = "../../../client/api" }
-client = { package = "substrate-client", path = "../../../client/" }
-chain-spec = { package = "substrate-chain-spec", path = "../../../client/chain-spec" }
-transaction_pool = { package = "sc-transaction-pool", path = "../../../client/transaction-pool" }
-network = { package = "substrate-network", path = "../../../client/network" }
-babe = { package = "substrate-consensus-babe", path = "../../../client/consensus/babe" }
-grandpa = { package = "substrate-finality-grandpa", path = "../../../client/finality-grandpa" }
-client_db = { package = "substrate-client-db", path = "../../../client/db", default-features = false }
-offchain = { package = "substrate-offchain", path = "../../../client/offchain" }
-substrate-rpc = { package = "substrate-rpc", path = "../../../client/rpc" }
-substrate-basic-authorship = { path = "../../../client/basic-authorship" }
-substrate-service = { path = "../../../client/service", default-features = false }
-substrate-telemetry = { package = "substrate-telemetry", path = "../../../client/telemetry" }
-authority-discovery = { package = "substrate-authority-discovery", path = "../../../client/authority-discovery"}
+client-api = { package = "sc-client-api", path = "../../../client/api" }
+client = { package = "sc-client", path = "../../../client/" }
+chain-spec = { package = "sc-chain-spec", path = "../../../client/chain-spec" }
+txpool = { package = "sc-transaction-pool", path = "../../../client/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool" }
+network = { package = "sc-network", path = "../../../client/network" }
+babe = { package = "sc-consensus-babe", path = "../../../client/consensus/babe" }
+grandpa = { package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
+client-db = { package = "sc-client-db", path = "../../../client/db", default-features = false }
+offchain = { package = "sc-offchain", path = "../../../client/offchain" }
+sc-rpc = { path = "../../../client/rpc" }
+sc-basic-authority = { path = "../../../client/basic-authorship" }
+sc-service = { path = "../../../client/service", default-features = false }
+sc-telemetry = { path = "../../../client/telemetry" }
+authority-discovery = { package = "sc-authority-discovery", path = "../../../client/authority-discovery"}
 
 # frame dependencies
 indices = { package = "pallet-indices", path = "../../../frame/indices" }
@@ -80,7 +82,7 @@ node-executor = { path = "../executor" }
 
 # CLI-specific dependencies
 tokio = { version = "0.1.22", optional = true }
-substrate-cli = { path = "../../../client/cli", optional = true }
+sc-cli = { path = "../../../client/cli", optional = true }
 transaction-factory = { path = "../../../test/utils/transaction-factory", optional = true }
 ctrlc = { version = "3.1.3", features = ["termination"], optional = true }
 
@@ -92,19 +94,18 @@ console_log = { version = "0.1.2", optional = true }
 js-sys = { version = "0.3.22", optional = true }
 wasm-bindgen = { version = "0.2.45", optional = true }
 wasm-bindgen-futures = { version = "0.3.22", optional = true }
-kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="03a2ba08f47f4af4219280e660a1ea92cb8896bd", optional = true }
+kvdb-memorydb = { version = "0.1.1", optional = true }
 rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"], optional = true }	# Imported just for the `wasm-bindgen` feature
 
 [dev-dependencies]
-keystore = { package = "substrate-keystore", path = "../../../client/keystore" }
-babe = { package = "substrate-consensus-babe", path = "../../../client/consensus/babe", features = ["test-helpers"] }
-consensus-common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
-service-test = { package = "substrate-service-test", path = "../../../client/service/test" }
+keystore = { package = "sc-keystore", path = "../../../client/keystore" }
+babe = { package = "sc-consensus-babe", path = "../../../client/consensus/babe", features = ["test-helpers"] }
+service-test = { package = "sc-service-test", path = "../../../client/service/test" }
 futures = "0.3.1"
 tempfile = "3.1.0"
 
 [build-dependencies]
-substrate-cli = { package = "substrate-cli", path = "../../../client/cli" }
+sc-cli = { package = "sc-cli", path = "../../../client/cli" }
 build-script-utils = { package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
 structopt = "0.3.3"
 vergen = "3.0.4"
@@ -124,16 +125,16 @@ browser = [
 	"rand6"
 ]
 cli = [
-	"substrate-cli",
+	"sc-cli",
 	"transaction-factory",
 	"tokio",
 	"ctrlc",
-	"substrate-service/rocksdb",
+	"sc-service/rocksdb",
 	"node-executor/wasmi-errno",
 ]
 wasmtime = [
 	"cli",
 	"node-executor/wasmtime",
-	"substrate-cli/wasmtime",
-	"substrate-service/wasmtime",
+	"sc-cli/wasmtime",
+	"sc-service/wasmtime",
 ]

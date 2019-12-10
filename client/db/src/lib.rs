@@ -53,11 +53,11 @@ use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash, traits::CodeExecutor};
 use primitives::storage::well_known_keys;
-use sr_primitives::{
+use sp_runtime::{
 	generic::{BlockId, DigestItem}, Justification, StorageOverlay, ChildrenStorageOverlay,
 	BuildStorage,
 };
-use sr_primitives::traits::{
+use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion
 };
 use executor::RuntimeInfo;
@@ -151,6 +151,14 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.exists_child_storage(storage_key, key)
 	}
 
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.next_storage_key(key)
+	}
+
+	fn next_child_storage_key(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.next_child_storage_key(storage_key, key)
+	}
+
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		self.state.for_keys_with_prefix(prefix, f)
 	}
@@ -174,7 +182,7 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (H256, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
@@ -193,7 +201,9 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.child_keys(child_key, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&state_machine::TrieBackend<Self::TrieBackendStorage, Blake2Hasher>> {
+	fn as_trie_backend(
+		&mut self,
+	) -> Option<&state_machine::TrieBackend<Self::TrieBackendStorage, Blake2Hasher>> {
 		self.state.as_trie_backend()
 	}
 }
@@ -1559,8 +1569,8 @@ mod tests {
 	use crate::columns;
 	use client_api::backend::{Backend as BTrait, BlockImportOperation as Op};
 	use client::blockchain::Backend as BLBTrait;
-	use sr_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
-	use sr_primitives::traits::{Hash, BlakeTwo256};
+	use sp_runtime::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::traits::{Hash, BlakeTwo256};
 	use state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};
 	use sp_blockchain::{lowest_common_ancestor, tree_route};
 
@@ -1591,7 +1601,7 @@ mod tests {
 		changes: Vec<(Vec<u8>, Vec<u8>)>,
 		extrinsics_root: H256,
 	) -> H256 {
-		use sr_primitives::testing::Digest;
+		use sp_runtime::testing::Digest;
 		let (changes_root, changes_trie_update) = prepare_changes(changes);
 		let digest = Digest {
 			logs: vec![

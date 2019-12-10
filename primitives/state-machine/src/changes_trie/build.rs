@@ -18,7 +18,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::collections::btree_map::Entry;
-use codec::Decode;
+use codec::{Decode, Encode};
 use hash_db::Hasher;
 use num_traits::One;
 use crate::backend::Backend;
@@ -47,6 +47,7 @@ pub(crate) fn prepare_input<'a, B, H, Number>(
 	where
 		B: Backend<H>,
 		H: Hasher + 'a,
+		H::Out: Encode,
 		Number: BlockNumber,
 {
 	let number = parent.number.clone() + One::one();
@@ -200,7 +201,7 @@ fn prepare_digest_input<'a, H, Number>(
 	), String>
 	where
 		H: Hasher,
-		H::Out: 'a,
+		H::Out: 'a + Encode,
 		Number: BlockNumber,
 {
 	let build_skewed_digest = config.end.as_ref() == Some(&block);
@@ -351,7 +352,7 @@ mod test {
 			(vec![103], vec![255]),
 			(vec![104], vec![255]),
 			(vec![105], vec![255]),
-		].into_iter().collect::<::std::collections::HashMap<_, _>>().into();
+		].into_iter().collect::<::std::collections::BTreeMap<_, _>>().into();
 		let child_trie_key1 = b"1".to_vec();
 		let child_trie_key2 = b"2".to_vec();
 		let storage = InMemoryStorage::with_inputs(vec![

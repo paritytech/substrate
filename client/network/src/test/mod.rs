@@ -55,9 +55,9 @@ use libp2p::PeerId;
 use parking_lot::Mutex;
 use primitives::H256;
 use crate::protocol::{Context, ProtocolConfig};
-use sr_primitives::generic::{BlockId, OpaqueDigestItemId};
-use sr_primitives::traits::{Block as BlockT, Header, NumberFor};
-use sr_primitives::Justification;
+use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
+use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
+use sp_runtime::Justification;
 use crate::service::TransactionPool;
 use crate::specialization::NetworkSpecialization;
 use test_client::{self, AccountKeyring};
@@ -99,6 +99,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		}, maybe_keys))
 	}
 }
@@ -400,8 +401,8 @@ impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 		&self,
 		_report_handle: ReportHandle,
 		_who: PeerId,
-		_rep_change_good: i32,
-		_rep_change_bad: i32,
+		_rep_change_good: crate::ReputationChange,
+		_rep_change_bad: crate::ReputationChange,
 		_transaction: Extrinsic
 	) {}
 

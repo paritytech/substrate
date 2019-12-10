@@ -27,8 +27,8 @@ use log::debug;
 
 use codec::Decode;
 use trie::DBValue;
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Zero,
 	UniqueSaturatedFrom, UniqueSaturatedInto,
 };
@@ -184,7 +184,7 @@ pub fn block_id_to_lookup_key<Block>(
 	id: BlockId<Block>
 ) -> Result<Option<Vec<u8>>, sp_blockchain::Error> where
 	Block: BlockT,
-	::sr_primitives::traits::NumberFor<Block>: UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64>,
+	::sp_runtime::traits::NumberFor<Block>: UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64>,
 {
 	let res = match id {
 		BlockId::Number(n) => db.get(
@@ -357,7 +357,7 @@ pub fn read_meta<Block>(db: &dyn KeyValueDB, col_meta: Option<u32>, col_header: 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sr_primitives::testing::{Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
 	#[test]

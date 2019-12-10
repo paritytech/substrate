@@ -43,7 +43,7 @@ use either::Either;
 use extra_requests::ExtraRequests;
 use libp2p::PeerId;
 use log::{debug, trace, warn, info, error};
-use sr_primitives::{
+use sp_runtime::{
 	Justification,
 	generic::BlockId,
 	traits::{Block as BlockT, Header, NumberFor, Zero, One, CheckedSub, SaturatedConversion}
@@ -72,29 +72,34 @@ const MAJOR_SYNC_BLOCKS: u8 = 5;
 /// Number of recently announced blocks to track for each peer.
 const ANNOUNCE_HISTORY_SIZE: usize = 64;
 
-/// Reputation change when a peer sent us a status message that led to a
-/// database read error.
-const BLOCKCHAIN_STATUS_READ_ERROR_REPUTATION_CHANGE: i32 = -(1 << 16);
+mod rep {
+	use peerset::ReputationChange as Rep;
+	/// Reputation change when a peer sent us a message that led to a
+	/// database read error.
+	pub const BLOCKCHAIN_READ_ERROR: Rep = Rep::new(-(1 << 16), "DB Error");
 
-/// Reputation change when a peer failed to answer our legitimate ancestry
-/// block search.
-const ANCESTRY_BLOCK_ERROR_REPUTATION_CHANGE: i32 = -(1 << 9);
+	/// Reputation change when a peer sent us a status message with a different
+	/// genesis than us.
+	pub const GENESIS_MISMATCH: Rep = Rep::new(i32::min_value(), "Genesis mismatch");
 
-/// Reputation change when a peer sent us a status message with a different
-/// genesis than us.
-const GENESIS_MISMATCH_REPUTATION_CHANGE: i32 = i32::min_value() + 1;
+	/// Reputation change for peers which send us a block with an incomplete header.
+	pub const INCOMPLETE_HEADER: Rep = Rep::new(-(1 << 20), "Incomplete header");
 
-/// Reputation change for peers which send us a block with an incomplete header.
-const INCOMPLETE_HEADER_REPUTATION_CHANGE: i32 = -(1 << 20);
+	/// Reputation change for peers which send us a block which we fail to verify.
+	pub const VERIFICATION_FAIL: Rep = Rep::new(-(1 << 20), "Block verification failed");
 
-/// Reputation change for peers which send us a block which we fail to verify.
-const VERIFICATION_FAIL_REPUTATION_CHANGE: i32 = -(1 << 20);
+	/// Reputation change for peers which send us a known bad block.
+	pub const BAD_BLOCK: Rep = Rep::new(-(1 << 29), "Bad block");
 
-/// Reputation change for peers which send us a bad block.
-const BAD_BLOCK_REPUTATION_CHANGE: i32 = -(1 << 29);
+	/// Reputation change for peers which send us a block with bad justifications.
+	pub const BAD_JUSTIFICATION: Rep = Rep::new(-(1 << 16), "Bad justification");
 
-/// Reputation change for peers which send us a block with bad justifications.
-const BAD_JUSTIFICATION_REPUTATION_CHANGE: i32 = -(1 << 16);
+	/// Reputation change for peers which send us a block with bad finality proof.
+	pub const BAD_FINALITY_PROOF: Rep = Rep::new(-(1 << 16), "Bad finality proof");
+
+	/// Reputation change when a peer sent us invlid ancestry result.
+	pub const UNKNOWN_ANCESTOR:Rep = Rep::new(-(1 << 16), "DB Error");
+}
 
 /// The main data structure which contains all the state for a chains
 /// active syncing strategy.
@@ -225,11 +230,11 @@ pub struct Status<B: BlockT> {
 
 /// A peer did not behave as expected and should be reported.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BadPeer(pub PeerId, pub i32);
+pub struct BadPeer(pub PeerId, pub peerset::ReputationChange);
 
 impl fmt::Display for BadPeer {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "bad peer {}; reputation change: {}", self.0, self.1)
+		write!(f, "Bad peer {}; Reputation change: {:?}", self.0, self.1)
 	}
 }
 
@@ -358,16 +363,16 @@ impl<B: BlockT> ChainSync<B> {
 		match self.block_status(&best_hash) {
 			Err(e) => {
 				debug!(target:"sync", "Error reading blockchain: {:?}", e);
-				Err(BadPeer(who, BLOCKCHAIN_STATUS_READ_ERROR_REPUTATION_CHANGE))
+				Err(BadPeer(who, rep::BLOCKCHAIN_READ_ERROR))
 			}
 			Ok(BlockStatus::KnownBad) => {
 				info!("New peer with known bad best block {} ({}).", best_hash, best_number);
-				Err(BadPeer(who, i32::min_value()))
+				Err(BadPeer(who, rep::BAD_BLOCK))
 			}
 			Ok(BlockStatus::Unknown) => {
 				if best_number.is_zero() {
 					info!("New peer with unknown genesis hash {} ({}).", best_hash, best_number);
-					return Err(BadPeer(who, i32::min_value()))
+					return Err(BadPeer(who, rep::GENESIS_MISMATCH));
 				}
 				// If there are more than `MAJOR_SYNC_BLOCKS` in the import queue then we have
 				// enough to do in the import queue that it's not worth kicking off
@@ -662,6 +667,7 @@ impl<B: BlockT> ChainSync<B> {
 									justification: block_data.block.justification,
 									origin: block_data.origin,
 									allow_missing_state: false,
+									import_existing: false,
 								}
 							}).collect()
 					}
@@ -675,6 +681,7 @@ impl<B: BlockT> ChainSync<B> {
 								justification: b.justification,
 								origin: Some(who.clone()),
 								allow_missing_state: true,
+								import_existing: false,
 							}
 						}).collect()
 					}
@@ -686,11 +693,11 @@ impl<B: BlockT> ChainSync<B> {
 							},
 							(None, _) => {
 								debug!(target: "sync", "Invalid response when searching for ancestor from {}", who);
-								return Err(BadPeer(who, i32::min_value()))
+								return Err(BadPeer(who, rep::UNKNOWN_ANCESTOR))
 							},
 							(_, Err(e)) => {
 								info!("Error answering legitimate blockchain query: {:?}", e);
-								return Err(BadPeer(who, ANCESTRY_BLOCK_ERROR_REPUTATION_CHANGE))
+								return Err(BadPeer(who, rep::BLOCKCHAIN_READ_ERROR))
 							}
 						};
 						if matching_hash.is_some() && peer.common_number < *num {
@@ -698,7 +705,7 @@ impl<B: BlockT> ChainSync<B> {
 						}
 						if matching_hash.is_none() && num.is_zero() {
 							trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", who);
-							return Err(BadPeer(who, GENESIS_MISMATCH_REPUTATION_CHANGE))
+							return Err(BadPeer(who, rep::GENESIS_MISMATCH))
 						}
 						if let Some((next_state, next_num)) = handle_ancestor_search_state(state, *num, matching_hash.is_some()) {
 							peer.state = PeerSyncState::AncestorSearch(next_num, next_state);
@@ -788,9 +795,10 @@ impl<B: BlockT> ChainSync<B> {
 			if let Some(block) = response.blocks.into_iter().next() {
 				if hash != block.hash {
 					info!(
+						target: "sync",
 						"Invalid block justification provided by {}: requested: {:?} got: {:?}", who, hash, block.hash
 					);
-					return Err(BadPeer(who, i32::min_value()))
+					return Err(BadPeer(who, rep::BAD_JUSTIFICATION));
 				}
 				if let Some((peer, hash, number, j)) = self.extra_justifications.on_response(who, block.justification) {
 					return Ok(OnBlockJustification::Import { peer, hash, number, justification: j })
@@ -823,8 +831,13 @@ impl<B: BlockT> ChainSync<B> {
 
 			// We only request one finality proof at a time.
 			if hash != resp.block {
-				info!("Invalid block finality proof provided: requested: {:?} got: {:?}", hash, resp.block);
-				return Err(BadPeer(who, i32::min_value()))
+				info!(
+					target: "sync",
+					"Invalid block finality proof provided: requested: {:?} got: {:?}",
+					hash,
+					resp.block
+				);
+				return Err(BadPeer(who, rep::BAD_FINALITY_PROOF));
 			}
 
 			if let Some((peer, hash, number, p)) = self.extra_finality_proofs.on_response(who, resp.proof) {
@@ -885,7 +898,7 @@ impl<B: BlockT> ChainSync<B> {
 					if aux.bad_justification {
 						if let Some(peer) = who {
 							info!("Sent block with bad justification to import");
-							output.push(Err(BadPeer(peer, BAD_JUSTIFICATION_REPUTATION_CHANGE)));
+							output.push(Err(BadPeer(peer, rep::BAD_JUSTIFICATION)));
 						}
 					}
 
@@ -901,21 +914,21 @@ impl<B: BlockT> ChainSync<B> {
 				Err(BlockImportError::IncompleteHeader(who)) => {
 					if let Some(peer) = who {
 						info!("Peer sent block with incomplete header to import");
-						output.push(Err(BadPeer(peer, INCOMPLETE_HEADER_REPUTATION_CHANGE)));
+						output.push(Err(BadPeer(peer, rep::INCOMPLETE_HEADER)));
 						output.extend(self.restart());
 					}
 				},
 				Err(BlockImportError::VerificationFailed(who, e)) => {
 					if let Some(peer) = who {
 						info!("Verification failed from peer: {}", e);
-						output.push(Err(BadPeer(peer, VERIFICATION_FAIL_REPUTATION_CHANGE)));
+						output.push(Err(BadPeer(peer, rep::VERIFICATION_FAIL)));
 						output.extend(self.restart());
 					}
 				},
 				Err(BlockImportError::BadBlock(who)) => {
 					if let Some(peer) = who {
 						info!("Bad block");
-						output.push(Err(BadPeer(peer, BAD_BLOCK_REPUTATION_CHANGE)));
+						output.push(Err(BadPeer(peer, rep::BAD_BLOCK)));
 						output.extend(self.restart());
 					}
 				},

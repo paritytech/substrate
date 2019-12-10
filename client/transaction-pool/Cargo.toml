@@ -7,15 +7,17 @@ edition = "2018"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 derive_more = "0.99.2"
-futures = { version = "0.3.1", features = ["thread-pool"] }
+futures = { version = "0.3.1", features = ["compat"] }
 log = "0.4.8"
 parking_lot = "0.9.0"
-primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
-sr-api = { path = "../../primitives/sr-api" }
-sr-primitives = { path = "../../primitives/sr-primitives" }
-tx-runtime-api = { package = "substrate-transaction-pool-runtime-api", path = "../../primitives/transaction-pool/runtime-api" }
+primitives = { package = "sp-core",  path = "../../primitives/core" }
+sp-api = { path = "../../primitives/sr-api" }
+sp-runtime = { path = "../../primitives/runtime" }
 txpool = { package = "sc-transaction-graph", path = "./graph" }
+txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
+client-api = { package = "sc-client-api", path = "../api" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 
 [dev-dependencies]
-keyring = { package = "substrate-keyring", path = "../../primitives/keyring" }
+keyring = { package = "sp-keyring", path = "../../primitives/keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }

@@ -20,22 +20,22 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use support::{
 	construct_runtime, parameter_types,
 	weights::Weight,
 	traits::{SplitTwoWays, Currency, Randomness},
 };
-use primitives::u32_trait::{_1, _2, _3, _4};
-use sr_primitives::{
-	create_runtime_str, impl_opaque_keys, generic,
-	ApplyExtrinsicResult, KeyTypeId, Perbill, Permill,
+use primitives::{
+	crypto::KeyTypeId,
+	u32_trait::{_1, _2, _3, _4},
 };
 use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Moment, Signature};
-use sr_api::impl_runtime_apis;
-use sr_primitives::curve::PiecewiseLinear;
-use sr_primitives::transaction_validity::TransactionValidity;
-use sr_primitives::traits::{
+use sp_api::impl_runtime_apis;
+use sp_runtime::{Permill, Perbill, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str};
+use sp_runtime::curve::PiecewiseLinear;
+use sp_runtime::transaction_validity::TransactionValidity;
+use sp_runtime::traits::{
 	self, BlakeTwo256, Block as BlockT, NumberFor, StaticLookup, SaturatedConversion,
 	OpaqueKeys,
 };
@@ -54,7 +54,7 @@ use system::offchain::TransactionSubmitter;
 use inherents::{InherentData, CheckInherentsResult};
 
 #[cfg(any(feature = "std", test))]
-pub use sr_primitives::BuildStorage;
+pub use sp_runtime::BuildStorage;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use contracts::Gas;
@@ -82,8 +82,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 196,
-	impl_version: 196,
+	spec_version: 198,
+	impl_version: 198,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -252,7 +252,7 @@ pallet_staking_reward_curve::build! {
 }
 
 parameter_types! {
-	pub const SessionsPerEra: sr_staking_primitives::SessionIndex = 6;
+	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
 	pub const BondingDuration: staking::EraIndex = 24 * 28;
 	pub const SlashDeferDuration: staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
@@ -282,6 +282,8 @@ parameter_types! {
 	pub const MinimumDeposit: Balance = 100 * DOLLARS;
 	pub const EnactmentPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
 	pub const CooloffPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
+	// One cent: $10,000 / MB
+	pub const PreimageByteDeposit: Balance = 1 * CENTS;
 }
 
 impl democracy::Trait for Runtime {
@@ -309,6 +311,8 @@ impl democracy::Trait for Runtime {
 	// only do it once and it lasts only for the cooloff period.
 	type VetoOrigin = collective::EnsureMember<AccountId, TechnicalCollective>;
 	type CooloffPeriod = CooloffPeriod;
+	type PreimageByteDeposit = PreimageByteDeposit;
+	type Slash = Treasury;
 }
 
 type CouncilCollective = collective::Instance1;
@@ -454,11 +458,11 @@ pub mod report {
 		pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"rprt");
 		app_crypto!(sr25519, KEY_TYPE);
 
-		impl sr_primitives::traits::IdentifyAccount for Public {
-			type AccountId = sr_primitives::AccountId32;
+		impl sp_runtime::traits::IdentifyAccount for Public {
+			type AccountId = sp_runtime::AccountId32;
 
 			fn into_account(self) -> Self::AccountId {
-				sr_primitives::MultiSigner::from(self.0).into_account()
+				sp_runtime::MultiSigner::from(self.0).into_account()
 			}
 		}
 	}
@@ -471,13 +475,13 @@ use report::ReporterId;
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
-	// type HandleEquivocation = ();
-	type HandleEquivocation = grandpa::EquivocationHandler<
-		Historical,
-		TransactionSubmitter<ReporterId, Runtime, UncheckedExtrinsic>,
-		Offences,
-		ReporterId,
-	>;
+	type HandleEquivocation = ();
+	// type HandleEquivocation = grandpa::EquivocationHandler<
+	// 	Historical,
+	// 	TransactionSubmitter<ReporterId, Runtime, UncheckedExtrinsic>,
+	// 	Offences,
+	// 	ReporterId,
+	// >;
 }
 
 parameter_types! {
@@ -602,7 +606,7 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExt
 pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Runtime, AllModules>;
 
 impl_runtime_apis! {
-	impl sr_api::Core<Block> for Runtime {
+	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			VERSION
 		}
@@ -616,7 +620,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl sr_api::Metadata<Block> for Runtime {
+	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
 			Runtime::metadata().into()
 		}
@@ -644,7 +648,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl tx_pool_api::TaggedTransactionQueue<Block> for Runtime {
+	impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
 		}
@@ -754,16 +758,16 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl substrate_session::SessionKeys<Block> for Runtime {
+	impl sp_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
 			SessionKeys::generate(seed)
 		}
 	}
 
-	impl substrate_session::SessionMembership<Block> for Runtime {
+	impl sp_session::SessionMembership<Block> for Runtime {
 		fn generate_session_membership_proof(
 			session_key: (KeyTypeId, Vec<u8>),
-		) -> Option<substrate_session::MembershipProof> {
+		) -> Option<sp_session::MembershipProof> {
 			use support::traits::KeyOwnerProofSystem;
 
 			Historical::prove(session_key)

@@ -1,5 +1,5 @@
 [package]
-name = "substrate-service"
+name = "sc-service"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -10,7 +10,7 @@ default = ["rocksdb"]
 # a path to a database, an error will be produced at runtime.
 rocksdb = ["client_db/kvdb-rocksdb"]
 wasmtime = [
-	"substrate-executor/wasmtime",
+	"sc-executor/wasmtime",
 ]
 
 [dependencies]
@@ -23,41 +23,41 @@ log = "0.4.8"
 slog = { version = "2.5.2", features = ["nested-values"] }
 tokio-executor = "0.1.8"
 tokio-timer = "0.2.11"
-exit-future = "0.1.4"
+exit-future = "0.2.0"
 serde = "1.0.101"
 serde_json = "1.0.41"
 sysinfo = "0.9.5"
 target_info = "0.1.0"
-keystore = { package = "substrate-keystore", path = "../keystore" }
-sr-io = { path = "../../primitives/sr-io" }
-sr-primitives = { path = "../../primitives/sr-primitives" }
+keystore = { package = "sc-keystore", path = "../keystore" }
+sp-io = { path = "../../primitives/sr-io" }
+sp-runtime = { path = "../../primitives/runtime" }
 sp-blockchain = { path = "../../primitives/blockchain" }
-primitives = { package = "substrate-primitives", path = "../../primitives/core" }
-session = { package = "substrate-session", path = "../../primitives/session" }
-app-crypto = { package = "substrate-application-crypto", path = "../../primitives/application-crypto" }
-consensus_common = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
-network = { package = "substrate-network", path = "../network" }
-chain-spec = { package = "substrate-chain-spec", path = "../chain-spec" }
-client-api = { package = "substrate-client-api", path = "../api" }
-client = { package = "substrate-client", path = "../" }
-sr-api = { path = "../../primitives/sr-api" }
-tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../primitives/transaction-pool/runtime-api" }
-client_db = { package = "substrate-client-db", path = "../db" }
+primitives = { package = "sp-core", path = "../../primitives/core" }
+session = { package = "sp-session", path = "../../primitives/session" }
+app-crypto = { package = "sc-application-crypto", path = "../../primitives/application-crypto" }
+consensus_common = { package = "sp-consensus", path = "../../primitives/consensus/common" }
+network = { package = "sc-network", path = "../network" }
+chain-spec = { package = "sc-chain-spec", path = "../chain-spec" }
+client-api = { package = "sc-client-api", path = "../api" }
+client = { package = "sc-client", path = "../" }
+sp-api = { path = "../../primitives/sr-api" }
+client_db = { package = "sc-client-db", path = "../db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-substrate-executor = { path = "../executor" }
-transaction_pool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
-rpc-servers = { package = "substrate-rpc-servers", path = "../rpc-servers" }
-rpc = { package = "substrate-rpc", path = "../rpc" }
-tel = { package = "substrate-telemetry", path = "../telemetry" }
-offchain = { package = "substrate-offchain", path = "../offchain" }
+sc-executor = { path = "../executor" }
+txpool = { package = "sc-transaction-pool", path = "../transaction-pool" }
+sp-transaction-pool = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
+rpc-servers = { package = "sc-rpc-server", path = "../rpc-servers" }
+rpc = { package = "sc-rpc", path = "../rpc" }
+tel = { package = "sc-telemetry", path = "../telemetry" }
+offchain = { package = "sc-offchain", path = "../offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
 grafana-data-source = { path = "../grafana-data-source" }
-substrate-tracing = { package = "substrate-tracing", path = "../tracing" }
+sc-tracing = { package = "sc-tracing", path = "../tracing" }
 tracing = "0.1.10"
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../../test/utils/runtime/client" }
-babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../primitives/consensus/babe" }
-grandpa = { package = "substrate-finality-grandpa", path = "../finality-grandpa" }
-grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../../primitives/finality-grandpa" }
+babe-primitives = { package = "sp-consensus-babe", path = "../../primitives/consensus/babe" }
+grandpa = { package = "sc-finality-grandpa", path = "../finality-grandpa" }
+grandpa-primitives = { package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 tokio = "0.1"

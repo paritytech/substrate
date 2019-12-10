@@ -51,8 +51,8 @@ use log::{trace, debug};
 use futures03::channel::mpsc;
 use lru::LruCache;
 use libp2p::PeerId;
-use sr_primitives::traits::{Block as BlockT, Hash, HashFor};
-use sr_primitives::ConsensusEngineId;
+use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
+use sp_runtime::ConsensusEngineId;
 pub use crate::message::generic::{Message, ConsensusMessage};
 use crate::protocol::Context;
 use crate::config::Roles;
@@ -61,15 +61,19 @@ use crate::config::Roles;
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
 
 const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_secs(30);
-/// Reputation change when a peer sends us a gossip message that we didn't know about.
-const GOSSIP_SUCCESS_REPUTATION_CHANGE: i32 = 1 << 4;
-/// Reputation change when a peer sends us a gossip message that we already knew about.
-const DUPLICATE_GOSSIP_REPUTATION_CHANGE: i32 = -(1 << 2);
-/// Reputation change when a peer sends us a gossip message for an unknown engine, whatever that
-/// means.
-const UNKNOWN_GOSSIP_REPUTATION_CHANGE: i32 = -(1 << 6);
-/// Reputation change when a peer sends a message from a topic it isn't registered on.
-const UNREGISTERED_TOPIC_REPUTATION_CHANGE: i32 = -(1 << 10);
+
+mod rep {
+	use peerset::ReputationChange as Rep;
+	/// Reputation change when a peer sends us a gossip message that we didn't know about.
+	pub const GOSSIP_SUCCESS: Rep = Rep::new(1 << 4, "Successfull gossip");
+	/// Reputation change when a peer sends us a gossip message that we already knew about.
+	pub const DUPLICATE_GOSSIP: Rep = Rep::new(-(1 << 2), "Duplicate gossip");
+	/// Reputation change when a peer sends us a gossip message for an unknown engine, whatever that
+	/// means.
+	pub const UNKNOWN_GOSSIP: Rep = Rep::new(-(1 << 6), "Unknown gossup message engine id");
+	/// Reputation change when a peer sends a message from a topic it isn't registered on.
+	pub const UNREGISTERED_TOPIC: Rep = Rep::new(-(1 << 10), "Unregistered gossip message topic");
+}
 
 struct PeerConsensus<H> {
 	known_messages: HashSet<H>,
@@ -470,7 +474,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 			if self.known_messages.contains(&message_hash) {
 				trace!(target:"gossip", "Ignored already known message from {}", who);
-				protocol.report_peer(who.clone(), DUPLICATE_GOSSIP_REPUTATION_CHANGE);
+				protocol.report_peer(who.clone(), rep::DUPLICATE_GOSSIP);
 				continue;
 			}
 
@@ -489,14 +493,14 @@ impl<B: BlockT> ConsensusGossip<B> {
 				Some(ValidationResult::Discard) => None,
 				None => {
 					trace!(target:"gossip", "Unknown message engine id {:?} from {}", engine_id, who);
-					protocol.report_peer(who.clone(), UNKNOWN_GOSSIP_REPUTATION_CHANGE);
+					protocol.report_peer(who.clone(), rep::UNKNOWN_GOSSIP);
 					protocol.disconnect_peer(who.clone());
 					continue;
 				}
 			};
 
 			if let Some((topic, keep)) = validation_result {
-				protocol.report_peer(who.clone(), GOSSIP_SUCCESS_REPUTATION_CHANGE);
+				protocol.report_peer(who.clone(), rep::GOSSIP_SUCCESS);
 				if let Some(ref mut peer) = self.peers.get_mut(&who) {
 					peer.known_messages.insert(message_hash);
 					if let Entry::Occupied(mut entry) = self.live_message_sinks.entry((engine_id, topic)) {
@@ -519,7 +523,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 					}
 				} else {
 					trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
-					protocol.report_peer(who.clone(), UNREGISTERED_TOPIC_REPUTATION_CHANGE);
+					protocol.report_peer(who.clone(), rep::UNREGISTERED_TOPIC);
 				}
 			} else {
 				trace!(target:"gossip", "Handled valid one hop message from peer {}", who);
@@ -632,7 +636,7 @@ impl<B: BlockT> Validator<B> for DiscardAll {
 #[cfg(test)]
 mod tests {
 	use std::sync::Arc;
-	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
 	use futures03::executor::block_on_stream;
 
 	use super::*;

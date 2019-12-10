@@ -23,14 +23,22 @@ pub mod trait_tests;
 mod block_builder_ext;
 
 use std::sync::Arc;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 pub use block_builder_ext::BlockBuilderExt;
 pub use generic_test_client::*;
 pub use runtime;
 
 use primitives::sr25519;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor};
+use client::{
+	light::fetcher::{
+		Fetcher,
+		RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
+		RemoteCallRequest, RemoteChangesRequest, RemoteBodyRequest,
+	},
+};
+
 
 /// A prelude to import in tests.
 pub mod prelude {
@@ -89,8 +97,8 @@ pub type LightExecutor = client::light::call_executor::GenesisCallExecutor<
 pub struct GenesisParameters {
 	support_changes_trie: bool,
 	heap_pages_override: Option<u64>,
-	extra_storage: HashMap<Vec<u8>, Vec<u8>>,
-	child_extra_storage: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	extra_storage: BTreeMap<Vec<u8>, Vec<u8>>,
+	child_extra_storage: HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>,
 }
 
 impl GenesisParameters {
@@ -247,6 +255,81 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	}
 }
 
+/// Type of optional fetch callback.
+type MaybeFetcherCallback<Req, Resp> = Option<Box<dyn Fn(Req) -> Result<Resp, sp_blockchain::Error> + Send + Sync>>;
+
+/// Type of fetcher future result.
+type FetcherFutureResult<Resp> = futures::future::Ready<Result<Resp, sp_blockchain::Error>>;
+
+/// Implementation of light client fetcher used in tests.
+#[derive(Default)]
+pub struct LightFetcher {
+	call: MaybeFetcherCallback<RemoteCallRequest<runtime::Header>, Vec<u8>>,
+	body: MaybeFetcherCallback<RemoteBodyRequest<runtime::Header>, Vec<runtime::Extrinsic>>,
+}
+
+impl LightFetcher {
+	/// Sets remote call callback.
+	pub fn with_remote_call(
+		self,
+		call: MaybeFetcherCallback<RemoteCallRequest<runtime::Header>, Vec<u8>>,
+	) -> Self {
+		LightFetcher {
+			call,
+			body: self.body,
+		}
+	}
+
+	/// Sets remote body callback.
+	pub fn with_remote_body(
+		self,
+		body: MaybeFetcherCallback<RemoteBodyRequest<runtime::Header>, Vec<runtime::Extrinsic>>,
+	) -> Self {
+		LightFetcher {
+			call: self.call,
+			body,
+		}
+	}
+}
+
+impl Fetcher<runtime::Block> for LightFetcher {
+	type RemoteHeaderResult = FetcherFutureResult<runtime::Header>;
+	type RemoteReadResult = FetcherFutureResult<HashMap<Vec<u8>, Option<Vec<u8>>>>;
+	type RemoteCallResult = FetcherFutureResult<Vec<u8>>;
+	type RemoteChangesResult = FetcherFutureResult<Vec<(NumberFor<runtime::Block>, u32)>>;
+	type RemoteBodyResult = FetcherFutureResult<Vec<runtime::Extrinsic>>;
+
+	fn remote_header(&self, _: RemoteHeaderRequest<runtime::Header>) -> Self::RemoteHeaderResult {
+		unimplemented!()
+	}
+
+	fn remote_read(&self, _: RemoteReadRequest<runtime::Header>) -> Self::RemoteReadResult {
+		unimplemented!()
+	}
+
+	fn remote_read_child(&self, _: RemoteReadChildRequest<runtime::Header>) -> Self::RemoteReadResult {
+		unimplemented!()
+	}
+
+	fn remote_call(&self, req: RemoteCallRequest<runtime::Header>) -> Self::RemoteCallResult {
+		match self.call {
+			Some(ref call) => futures::future::ready(call(req)),
+			None => unimplemented!(),
+		}
+	}
+
+	fn remote_changes(&self, _: RemoteChangesRequest<runtime::Header>) -> Self::RemoteChangesResult {
+		unimplemented!()
+	}
+
+	fn remote_body(&self, req: RemoteBodyRequest<runtime::Header>) -> Self::RemoteBodyResult {
+		match self.body {
+			Some(ref body) => futures::future::ready(body(req)),
+			None => unimplemented!(),
+		}
+	}
+}
+
 /// Creates new client instance used for tests.
 pub fn new() -> Client<Backend> {
 	TestClientBuilder::new().build()
@@ -274,4 +357,9 @@ pub fn new_light() -> (
 			.0,
 		backend,
 	)
+}
+
+/// Creates new light client fetcher used for tests.
+pub fn new_light_fetcher() -> LightFetcher {
+	LightFetcher::default()
 }

@@ -1,15 +1,14 @@
 [package]
-name = "substrate-block-builder"
+name = "sc-block-builder"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-state-machine = { package = "substrate-state-machine", path = "../../primitives/state-machine" }
-sr-primitives = { path = "../../primitives/sr-primitives" }
+state-machine = { package = "sp-state-machine", path = "../../primitives/state-machine" }
+sp-runtime = { path = "../../primitives/runtime" }
 sp-blockchain = { path = "../../primitives/blockchain" }
-primitives = { package = "substrate-primitives", path = "../../primitives/core" }
+primitives = { package = "sp-core", path = "../../primitives/core" }
 codec = { package = "parity-scale-codec", version = "1.0.6", features = ["derive"] }
-runtime_api = { package = "substrate-block-builder-runtime-api", path = "../../primitives/block-builder/runtime-api" }
-sr-api = { path = "../../primitives/sr-api" }
-
+runtime_api = { package = "sp-block-builder", path = "../../primitives/block-builder/runtime-api" }
+sp-api = { path = "../../primitives/sr-api" }

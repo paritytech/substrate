@@ -6,7 +6,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 #[cfg(not(feature = "std"))]
-use rstd::{vec::Vec, vec};
+use sp_std::{vec::Vec, vec};
 
 #[cfg(not(feature = "std"))]
 use runtime_io::{
@@ -14,7 +14,7 @@ use runtime_io::{
 	crypto::{ed25519_verify, sr25519_verify},
 };
 #[cfg(not(feature = "std"))]
-use sr_primitives::{print, traits::{BlakeTwo256, Hash}};
+use sp_runtime::{print, traits::{BlakeTwo256, Hash}};
 #[cfg(not(feature = "std"))]
 use primitives::{ed25519, sr25519};
 

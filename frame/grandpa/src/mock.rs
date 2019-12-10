@@ -18,13 +18,13 @@
 
 #![cfg(test)]
 
-use sr_primitives::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
+use sp_runtime::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
 use runtime_io;
-use support::{impl_outer_origin, impl_outer_event, parameter_types};
+use support::{impl_outer_origin, impl_outer_event, parameter_types, weights::Weight};
 use primitives::H256;
 use codec::{Encode, Decode};
 use crate::{AuthorityId, AuthorityList, GenesisConfig, Trait, Module, ConsensusLog};
-use substrate_finality_grandpa_primitives::GRANDPA_ENGINE_ID;
+use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -43,7 +43,7 @@ impl Trait for Test {
 }
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
@@ -53,7 +53,7 @@ impl system::Trait for Test {
 	type BlockNumber = u64;
 	type Call = ();
 	type Hash = H256;
-	type Hashing = sr_primitives::traits::BlakeTwo256;
+	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;

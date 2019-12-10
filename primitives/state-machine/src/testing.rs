@@ -16,7 +16,7 @@
 
 //! Test implementation for Externalities.
 
-use std::{collections::HashMap, any::{Any, TypeId}};
+use std::{collections::{HashMap, BTreeMap}, any::{Any, TypeId}};
 use hash_db::Hasher;
 use crate::{
 	backend::{InMemory, Backend}, OverlayedChanges,
@@ -35,7 +35,7 @@ use primitives::{
 use codec::Encode;
 use externalities::{Extensions, Extension};
 
-type StorageTuple = (HashMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>);
+type StorageTuple = (BTreeMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>);
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher<Out=H256>=Blake2Hasher, N: ChangesTrieBlockNumber=u64> {
@@ -178,7 +178,7 @@ mod tests {
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
 		const ROOT: [u8; 32] = hex!("2a340d3dfd52f5992c6b117e9e45f479e6da5afffafeb26ab619cf137a95aeb8");
-		assert_eq!(ext.storage_root(), H256::from(ROOT));
+		assert_eq!(&ext.storage_root()[..], &ROOT);
 	}
 
 	#[test]

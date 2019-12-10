@@ -8,18 +8,18 @@ edition = "2018"
 [dependencies]
 trie-root = "0.15.2"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
-state_machine = { package = "substrate-state-machine", path = "../../../primitives/state-machine" }
-substrate-executor = { path = "../../../client/executor" }
-primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
-trie = { package = "substrate-trie", path = "../../../primitives/trie" }
+runtime_io = { package = "sp-io", path = "../../../primitives/sr-io" }
+state_machine = { package = "sp-state-machine", path = "../../../primitives/state-machine" }
+sc-executor = { path = "../../../client/executor" }
+primitives = { package = "sp-core", path = "../../../primitives/core" }
+trie = { package = "sp-trie", path = "../../../primitives/trie" }
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 
 [dev-dependencies]
 node-testing = { path = "../testing" }
 test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
-sr-primitives = { path = "../../../primitives/sr-primitives" }
+sp-runtime = { path = "../../../primitives/runtime" }
 runtime_support = { package = "frame-support", path = "../../../frame/support" }
 balances = { package = "pallet-balances", path = "../../../frame/balances" }
 transaction-payment = { package = "pallet-transaction-payment", path = "../../../frame/transaction-payment" }
@@ -35,14 +35,13 @@ criterion = "0.3.0"
 
 [features]
 wasmtime = [
-    "substrate-executor/wasmtime",
+    "sc-executor/wasmtime",
 ]
 wasmi-errno = [
-	"substrate-executor/wasmi-errno",
+	"sc-executor/wasmi-errno",
 ]
 stress-test = []
 
 [[bench]]
 name = "bench"
 harness = false
-

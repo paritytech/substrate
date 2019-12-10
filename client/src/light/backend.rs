@@ -21,10 +21,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::RwLock;
 
-use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction};
+use state_machine::{
+	Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction
+};
 use primitives::offchain::storage::InMemOffchainStorage;
-use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
-use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
+use sp_runtime::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
 use sp_blockchain::{ Error as ClientError, Result as ClientResult };
 use client_api::{
@@ -341,7 +343,7 @@ impl<H: Hasher> std::fmt::Debug for GenesisOrUnavailableState<H> {
 
 impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	where
-		H::Out: Ord,
+		H::Out: Ord + codec::Codec,
 {
 	type Error = ClientError;
 	type Transaction = ();
@@ -359,6 +361,22 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
 				Ok(state.child_storage(storage_key, key).expect(IN_MEMORY_EXPECT_PROOF)),
+			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
+		}
+	}
+
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		match *self {
+			GenesisOrUnavailableState::Genesis(ref state) =>
+				Ok(state.next_storage_key(key).expect(IN_MEMORY_EXPECT_PROOF)),
+			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
+		}
+	}
+
+	fn next_child_storage_key(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		match *self {
+			GenesisOrUnavailableState::Genesis(ref state) =>
+				Ok(state.next_child_storage_key(storage_key, key).expect(IN_MEMORY_EXPECT_PROOF)),
 			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
@@ -409,7 +427,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn child_storage_root<I>(&self, key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, key: &[u8], delta: I) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
@@ -418,7 +436,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 				let (root, is_equal, _) = state.child_storage_root(key, delta);
 				(root, is_equal, ())
 			},
-			GenesisOrUnavailableState::Unavailable => (H::Out::default().as_ref().to_vec(), true, ()),
+			GenesisOrUnavailableState::Unavailable => (H::Out::default(), true, ()),
 		}
 	}
 
