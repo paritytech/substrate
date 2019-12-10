@@ -109,7 +109,7 @@ pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use primitives::crypto::UncheckedFrom;
-use rstd::{prelude::*, marker::PhantomData, fmt::Debug};
+use rstd::{prelude::*, marker::PhantomData, convert::TryFrom, fmt};
 use codec::{Codec, Encode, Decode};
 use runtime_io::hashing::blake2_256;
 use sp_runtime::{
@@ -121,7 +121,7 @@ use sp_runtime::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
 	},
 };
-use support::dispatch::{Result, Dispatchable};
+use support::dispatch::{self, Dispatchable};
 use support::{
 	Parameter, decl_module, decl_event, decl_storage, storage::child,
 	parameter_types, IsSubType,
@@ -236,7 +236,7 @@ pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
 
 impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
 where
-	H: Member + MaybeSerializeDeserialize+ Debug
+	H: Member + MaybeSerializeDeserialize + fmt::Debug
 		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default
 		+ rstd::hash::Hash + Codec,
 	Hasher: Hash<Output=H>,
@@ -525,7 +525,7 @@ decl_module! {
 		/// Updates the schedule for metering contracts.
 		///
 		/// The schedule must have a greater version than the stored schedule.
-		pub fn update_schedule(origin, schedule: Schedule) -> Result {
+		pub fn update_schedule(origin, schedule: Schedule) -> dispatch::Result {
 			ensure_root(origin)?;
 			if <Module<T>>::current_schedule().version >= schedule.version {
 				return Err("new schedule must have a greater version than current");
@@ -542,7 +542,7 @@ decl_module! {
 		pub fn put_code(
 			origin,
 			code: Vec<u8>
-		) -> Result {
+		) -> dispatch::Result {
 			let _origin = ensure_signed(origin)?;
 
 			let schedule = <Module<T>>::current_schedule();
@@ -567,7 +567,7 @@ decl_module! {
 			#[compact] value: BalanceOf<T>,
 			#[compact] gas_limit: Gas,
 			data: Vec<u8>
-		) -> Result {
+		) -> dispatch::Result {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 
@@ -592,7 +592,7 @@ decl_module! {
 			#[compact] gas_limit: Gas,
 			code_hash: CodeHash<T>,
 			data: Vec<u8>
-		) -> Result {
+		) -> dispatch::Result {
 			let origin = ensure_signed(origin)?;
 
 			Self::execute_wasm(origin, gas_limit, |ctx, gas_meter| {
@@ -670,7 +670,7 @@ impl<T: Trait> Module<T> {
 	pub fn get_storage(
 		address: T::AccountId,
 		key: [u8; 32],
-	) -> rstd::result::Result<Option<Vec<u8>>, GetStorageError> {
+	) -> Result<Option<Vec<u8>>, GetStorageError> {
 		let contract_info = <ContractInfoOf<T>>::get(&address)
 			.ok_or(GetStorageError::ContractDoesntExist)?
 			.get_alive()
@@ -761,7 +761,7 @@ impl<T: Trait> Module<T> {
 		code_hash: CodeHash<T>,
 		rent_allowance: BalanceOf<T>,
 		delta: Vec<exec::StorageKey>
-	) -> Result {
+	) -> dispatch::Result {
 		let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
 			.and_then(|c| c.get_alive())
 			.ok_or("Cannot restore from inexisting or tombstone contract")?;
@@ -1017,7 +1017,7 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 	fn perform_pre_dispatch_checks(
 		who: &T::AccountId,
 		call: &<T as Trait>::Call,
-	) -> rstd::result::Result<Option<DynamicWeightData<T::AccountId, NegativeImbalanceOf<T>>>, TransactionValidityError> {
+	) -> Result<Option<DynamicWeightData<T::AccountId, NegativeImbalanceOf<T>>>, TransactionValidityError> {
 		let call = match call.is_sub_type() {
 			Some(call) => call,
 			None => return Ok(None),
@@ -1028,7 +1028,8 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 			Call::call(_, _, gas_limit, _) | Call::instantiate(_, gas_limit, _, _) => {
 				// Compute how much block weight this transaction can take at its limit, i.e.
 				// if this transaction depleted all provided gas to zero.
-				let gas_weight_limit = Weight::from(gas_limit);
+				let gas_weight_limit = Weight::try_from(gas_limit)
+					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
 				let weight_available = <T as system::Trait>::MaximumBlockWeight::get()
 					.saturating_sub(<system::Module<T>>::all_extrinsics_weight()).into();
 				if gas_weight_limit > weight_available {
@@ -1083,9 +1084,9 @@ impl<T: Trait + Send + Sync> Default for CheckBlockGasLimit<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckBlockGasLimit<T> {
+impl<T: Trait + Send + Sync> fmt::Debug for CheckBlockGasLimit<T> {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "CheckBlockGasLimit")
 	}
 
