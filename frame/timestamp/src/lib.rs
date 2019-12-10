@@ -61,7 +61,7 @@
 //! ### Get current timestamp
 //!
 //! ```
-//! use support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch};
 //! # use pallet_timestamp as timestamp;
 //! use system::ensure_signed;
 //!
@@ -69,7 +69,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn get_time(origin) -> Result {
+//! 		pub fn get_time(origin) -> dispatch::Result {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _now = <timestamp::Module<T>>::get();
 //! 			Ok(())
@@ -90,7 +90,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{result, cmp};
+use sp_std::{result, cmp};
 use inherents::{ProvideInherent, InherentData, InherentIdentifier};
 use support::{Parameter, decl_storage, decl_module};
 use support::traits::{Time, Get};

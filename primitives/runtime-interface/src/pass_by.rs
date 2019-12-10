@@ -30,10 +30,10 @@ use crate::wasm::*;
 #[cfg(feature = "std")]
 use wasm_interface::{FunctionContext, Pointer, Result};
 
-use rstd::{marker::PhantomData, convert::TryFrom};
+use sp_std::{marker::PhantomData, convert::TryFrom};
 
 #[cfg(not(feature = "std"))]
-use rstd::{slice, vec::Vec};
+use sp_std::{slice, vec::Vec};
 
 pub use sp_runtime_interface_proc_macro::{PassByCodec, PassByInner, PassByEnum};
 

@@ -24,7 +24,7 @@
 mod mock;
 mod tests;
 
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 use support::{
 	decl_module, decl_event, decl_storage, Parameter,
 };

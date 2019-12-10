@@ -84,14 +84,14 @@
 //! ### Simple Code Snippet
 //!
 //! ```rust,ignore
-//! use support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch};
 //! use system::ensure_signed;
 //!
 //! pub trait Trait: assets::Trait { }
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn issue_token_airdrop(origin) -> Result {
+//! 		pub fn issue_token_airdrop(origin) -> dispatch::Result {
 //! 			const ACCOUNT_ALICE: u64 = 1;
 //! 			const ACCOUNT_BOB: u64 = 2;
 //! 			const COUNT_AIRDROP_RECIPIENTS = 2;

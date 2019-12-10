@@ -6,7 +6,7 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-rstd = { package = "sp-std", path = "../../../primitives/sr-std", default-features = false }
+sp-std = { path = "../../../primitives/std", default-features = false }
 runtime_io = { package = "sp-io", path = "../../../primitives/sr-io", default-features = false }
 sandbox = { package = "sp-sandbox", path = "../../../primitives/sr-sandbox", default-features = false }
 primitives = { package = "sp-core",  path = "../../../primitives/core", default-features = false }
@@ -17,4 +17,4 @@ wasm-builder-runner = { package = "substrate-wasm-builder-runner", path = "../..
 
 [features]
 default = [ "std" ]
-std = ["runtime_io/std", "sandbox/std", "rstd/std"]
+std = ["runtime_io/std", "sandbox/std", "sp-std/std"]

@@ -86,8 +86,8 @@
 //!	native::print!("My struct: {:?}", x);
 //! ```
 
-use rstd::vec::Vec;
-use rstd::fmt::{self, Debug};
+use sp_std::vec::Vec;
+use sp_std::fmt::{self, Debug};
 
 pub use log::{info, debug, error, trace, warn};
 pub use crate::runtime_print as print;

@@ -731,7 +731,7 @@ fn try_read_overlay_value<H, B>(
 
 #[cfg(test)]
 mod tests {
-	use std::collections::HashMap;
+	use std::collections::BTreeMap;
 	use codec::Encode;
 	use overlayed_changes::OverlayedValue;
 	use super::*;
@@ -921,7 +921,7 @@ mod tests {
 
 	#[test]
 	fn clear_prefix_in_ext_works() {
-		let initial: HashMap<_, _> = map![
+		let initial: BTreeMap<_, _> = map![
 			b"aaa".to_vec() => b"0".to_vec(),
 			b"abb".to_vec() => b"1".to_vec(),
 			b"abc".to_vec() => b"2".to_vec(),
