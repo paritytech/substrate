@@ -105,11 +105,6 @@ pub(crate) fn global_topic<B: BlockT>(set_id: SetIdNumber) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-GLOBAL", set_id).as_bytes())
 }
 
-/// Registers the notifications protocol towards the network.
-pub(crate) fn register_dummy_protocol<B: BlockT, N: Network<B>>(network: N) {
-	network.register_notifications_protocol(GRANDPA_ENGINE_ID);
-}
-
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
 pub(crate) struct NetworkBridge<B: BlockT> {
 	gossip_engine: GossipEngine<B>,
@@ -123,7 +118,7 @@ impl<B: BlockT> NetworkBridge<B> {
 	/// On creation it will register previous rounds' votes with the gossip
 	/// service taken from the VoterSetState.
 	pub(crate) fn new<N: Network<B> + Clone + Send + 'static>(
-		gossip_engine: N,
+		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		executor: &impl futures03::task::Spawn,
@@ -135,7 +130,7 @@ impl<B: BlockT> NetworkBridge<B> {
 		);
 
 		let validator = Arc::new(validator);
-		let gossip_engine = GossipEngine::new(gossip_engine, executor, GRANDPA_ENGINE_ID, validator.clone());
+		let gossip_engine = GossipEngine::new(service, executor, GRANDPA_ENGINE_ID, validator.clone());
 
 		{
 			// register all previous votes with the gossip service so that they're
