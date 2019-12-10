@@ -942,6 +942,7 @@ where
 	config.tracing_targets = cli.tracing_targets.into();
 	config.tracing_receiver = cli.tracing_receiver.into();
 	
+	// Override prometheus
 	match cli.prometheus_endpoint {
 		None => {config.prometheus_endpoint = None;},
 		Some(x) => {
