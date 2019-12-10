@@ -114,6 +114,7 @@ members = [
 	"primitives/runtime-interface",
 	"primitives/runtime-interface/proc-macro",
 	"primitives/runtime-interface/test-wasm",
+	"primitives/runtime-interface/test",
 	"primitives/serializer",
 	"primitives/session",
 	"primitives/api",
