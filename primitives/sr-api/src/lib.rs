@@ -77,7 +77,7 @@ use std::{panic::UnwindSafe, cell::RefCell};
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignore
 /// sp_api::decl_runtime_apis! {
 ///     /// Declare the api trait.
 ///     pub trait Balance {
@@ -154,41 +154,11 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignore
 /// use sp_version::create_runtime_str;
-/// #
-/// # use sp_runtime::traits::GetNodeBlockType;
-/// # use test_client::runtime::{Block, Header};
-/// #
-/// # /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
-/// # /// trait are done by the `construct_runtime!` macro in a real runtime.
-/// # pub struct Runtime {}
-/// # impl GetNodeBlockType for Runtime {
-/// #     type NodeBlock = Block;
-/// # }
-/// #
-/// # sp_api::decl_runtime_apis! {
-/// #     /// Declare the api trait.
-/// #     pub trait Balance {
-/// #         /// Get the balance.
-/// #         fn get_balance() -> u64;
-/// #         /// Set the balance.
-/// #         fn set_balance(val: u64);
-/// #     }
-/// #     pub trait BlockBuilder {
-/// #        fn build_block() -> Block;
-/// #    }
-/// # }
 ///
 /// /// All runtime api implementations need to be done in one call of the macro!
 /// sp_api::impl_runtime_apis! {
-/// #   impl sp_api::Core<Block> for Runtime {
-/// #       fn version() -> sp_version::RuntimeVersion {
-/// #           unimplemented!()
-/// #       }
-/// #       fn execute_block(_block: Block) {}
-/// #       fn initialize_block(_header: &Header) {}
-/// #   }
 ///
 ///     impl self::Balance<Block> for Runtime {
 ///         fn get_balance() -> u64 {

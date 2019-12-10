@@ -5968,7 +5968,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "sp-api"
 version = "2.0.0"
 dependencies = [
- "criterion 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api-proc-macro 2.0.0",
  "sp-core 2.0.0",
@@ -5976,7 +5975,6 @@ dependencies = [
  "sp-state-machine 2.0.0",
  "sp-std 2.0.0",
  "sp-version 2.0.0",
- "substrate-test-runtime-client 2.0.0",
 ]
 
 [[package]]
@@ -5994,6 +5992,7 @@ dependencies = [
 name = "sp-api-test"
 version = "2.0.0"
 dependencies = [
+ "criterion 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustversion 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
