@@ -82,10 +82,10 @@ use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use consensus_common::{
 	self, BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
+	SelectChain, SlotData,
 };
 use babe_primitives::inherents::BabeInherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
-use consensus_common::SelectChain;
 use consensus_common::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use client_api::{
 	backend::{AuxStore, Backend},
@@ -99,7 +99,7 @@ use block_builder_api::BlockBuilder as BlockBuilderApi;
 use slots::{CheckedHeader, check_equivocation};
 use futures::prelude::*;
 use log::{warn, debug, info, trace};
-use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
+use slots::{SlotWorker, SlotInfo, SlotCompatible};
 use epoch_changes::descendent_query;
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,

@@ -25,7 +25,7 @@
 //! This unique id management and generation responsability is delegated to pallet module.
 // NOTE: could replace unhashed by having only one kind of storage (root being null storage key (storage_key can become Option<&[u8]>).
 
-use crate::rstd::prelude::*;
+use crate::sp_std::prelude::*;
 use codec::{Codec, Encode, Decode};
 pub use primitives::storage::ChildInfo;
 

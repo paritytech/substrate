@@ -47,10 +47,10 @@
 //! assert_eq!(body.error(), &None);
 //! ```
 
-use rstd::str;
-use rstd::prelude::Vec;
+use sp_std::str;
+use sp_std::prelude::Vec;
 #[cfg(not(feature = "std"))]
-use rstd::prelude::vec;
+use sp_std::prelude::vec;
 use primitives::RuntimeDebug;
 use primitives::offchain::{
 	Timestamp,
@@ -111,7 +111,7 @@ mod header {
 		/// Returns the name of this header.
 		pub fn name(&self) -> &str {
 			// Header keys are always produced from `&str` so this is safe.
-			// we don't store them as `Strings` to avoid bringing `alloc::String` to rstd
+			// we don't store them as `Strings` to avoid bringing `alloc::String` to sp-std
 			// or here.
 			unsafe { str::from_utf8_unchecked(&self.name) }
 		}
@@ -119,7 +119,7 @@ mod header {
 		/// Returns the value of this header.
 		pub fn value(&self) -> &str {
 			// Header values are always produced from `&str` so this is safe.
-			// we don't store them as `Strings` to avoid bringing `alloc::String` to rstd
+			// we don't store them as `Strings` to avoid bringing `alloc::String` to sp-std
 			// or here.
 			unsafe { str::from_utf8_unchecked(&self.value) }
 		}

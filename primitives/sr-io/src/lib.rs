@@ -28,10 +28,10 @@
 #![cfg_attr(not(feature = "std"),
    doc = "Substrate's runtime standard library as compiled without Rust's standard library.")]
 
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 
 #[cfg(feature = "std")]
-use rstd::ops::Deref;
+use sp_std::ops::Deref;
 
 #[cfg(feature = "std")]
 use primitives::{
@@ -291,6 +291,25 @@ pub trait Storage {
 	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn changes_root(&mut self, parent_hash: &[u8]) -> Option<Vec<u8>> {
 		self.storage_changes_root(parent_hash).ok().and_then(|h| h)
+	}
+
+	/// Get the next key in storage after the given one in lexicographic order.
+	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
+		self.next_storage_key(&key)
+	}
+
+	/// Get the next key in storage after the given one in lexicographic order in child storage.
+	fn child_next_key(
+		&mut self,
+		child_storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		let storage_key = child_storage_key_or_panic(child_storage_key);
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.next_child_storage_key(storage_key, child_info, key)
 	}
 }
 
@@ -818,7 +837,7 @@ pub trait Sandbox {
 #[cfg(not(feature = "std"))]
 struct WasmAllocator;
 
-#[cfg(all(not(feature = "disable_global_allocator"), not(feature = "std")))]
+#[cfg(all(not(feature = "disable_allocator"), not(feature = "std")))]
 #[global_allocator]
 static ALLOCATOR: WasmAllocator = WasmAllocator;
 
@@ -843,7 +862,7 @@ mod allocator_impl {
 #[no_mangle]
 pub fn panic(info: &core::panic::PanicInfo) -> ! {
 	unsafe {
-		let message = rstd::alloc::format!("{}", info);
+		let message = sp_std::alloc::format!("{}", info);
 		logging::log(LogLevel::Error, "runtime", message.as_bytes());
 		core::intrinsics::abort()
 	}

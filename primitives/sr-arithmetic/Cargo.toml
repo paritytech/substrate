@@ -8,7 +8,7 @@ edition = "2018"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 integer-sqrt = "0.1.2"
 num-traits = { version = "0.2.8", default-features = false }
-rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-std = { path = "../std", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-debug-derive = { path = "../../primitives/core/debug-derive", default-features = false }
 
@@ -22,7 +22,7 @@ default = ["std"]
 std = [
 	"codec/std",
 	"num-traits/std",
-	"rstd/std",
+	"sp-std/std",
 	"serde",
 	"sp-debug-derive/std",
 ]

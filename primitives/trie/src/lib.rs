@@ -23,9 +23,9 @@ mod node_header;
 mod node_codec;
 mod trie_stream;
 
-use rstd::boxed::Box;
-use rstd::marker::PhantomData;
-use rstd::vec::Vec;
+use sp_std::boxed::Box;
+use sp_std::marker::PhantomData;
+use sp_std::vec::Vec;
 use hash_db::{Hasher, Prefix};
 /// Our `NodeCodec`-specific error.
 pub use error::Error;
@@ -45,7 +45,7 @@ pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
 
 #[derive(Default)]
 /// substrate trie layout
-pub struct Layout<H>(rstd::marker::PhantomData<H>);
+pub struct Layout<H>(sp_std::marker::PhantomData<H>);
 
 impl<H: Hasher> TrieLayout for Layout<H> {
 	const USE_EXTENSION: bool = false;
@@ -329,7 +329,7 @@ pub struct KeySpacedDBMut<'a, DB, H>(&'a mut DB, &'a [u8], PhantomData<H>);
 /// Utility function used to merge some byte data (keyspace) and `prefix` data
 /// before calling key value database primitives.
 fn keyspace_as_prefix_alloc(ks: &[u8], prefix: Prefix) -> (Vec<u8>, Option<u8>) {
-	let mut result = rstd::vec![0; ks.len() + prefix.0.len()];
+	let mut result = sp_std::vec![0; ks.len() + prefix.0.len()];
 	result[..ks.len()].copy_from_slice(ks);
 	result[ks.len()..].copy_from_slice(prefix.0);
 	(result, prefix.1)

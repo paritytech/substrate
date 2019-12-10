@@ -17,7 +17,7 @@
 //! Offchain workers types
 
 use codec::{Encode, Decode};
-use rstd::{prelude::{Vec, Box}, convert::TryFrom};
+use sp_std::{prelude::{Vec, Box}, convert::TryFrom};
 use crate::RuntimeDebug;
 use runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
 

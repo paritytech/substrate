@@ -301,7 +301,7 @@ fn new_test_ext() -> runtime_io::TestExternalities {
 #[test]
 fn storage_instance_independance() {
 	let mut storage = primitives::storage::Storage {
-		top: std::collections::HashMap::new(),
+		top: std::collections::BTreeMap::new(),
 		children: std::collections::HashMap::new()
 	};
 	state_machine::BasicExternalities::execute_with_storage(&mut storage, || {

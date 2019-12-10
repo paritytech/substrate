@@ -16,7 +16,7 @@
 
 //! Tool for creating the genesis block.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use runtime_io::hashing::{blake2_256, twox_128};
 use super::{AuthorityId, AccountId, WASM_BINARY, system};
 use codec::{Encode, KeyedVec, Joiner};
@@ -57,7 +57,7 @@ impl GenesisConfig {
 
 	pub fn genesis_map(&self) -> Storage {
 		let wasm_runtime = WASM_BINARY.to_vec();
-		let mut map: HashMap<Vec<u8>, Vec<u8>> = self.balances.iter()
+		let mut map: BTreeMap<Vec<u8>, Vec<u8>> = self.balances.iter()
 			.map(|&(ref account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
 			.map(|(k, v)| (blake2_256(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
@@ -105,7 +105,7 @@ pub fn insert_genesis_block(
 	genesis_hash
 }
 
-pub fn additional_storage_with_genesis(genesis_block: &crate::Block) -> HashMap<Vec<u8>, Vec<u8>> {
+pub fn additional_storage_with_genesis(genesis_block: &crate::Block) -> BTreeMap<Vec<u8>, Vec<u8>> {
 	map![
 		twox_128(&b"latest"[..]).to_vec() => genesis_block.hash().as_fixed_bytes().to_vec()
 	]

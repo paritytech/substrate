@@ -289,6 +289,19 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.0.for_keys_in_child_storage(storage_key, child_info, f)
 	}
 
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.0.next_storage_key(key)
+	}
+
+	fn next_child_storage_key(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.0.next_child_storage_key(storage_key, child_info, key)
+	}
+
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		self.0.for_keys_with_prefix(prefix, f)
 	}

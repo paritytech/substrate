@@ -28,7 +28,7 @@ consensus = { package = "sp-consensus", path = "../../primitives/consensus/commo
 client = { package = "sc-client", path = "../" }
 client-api = { package = "sc-client-api", path = "../api" }
 sp-blockchain = { path = "../../primitives/blockchain" }
-sp-runtime = { path = "../../primitives/sr-primitives" }
+sp-runtime = { path = "../../primitives/runtime" }
 sp-arithmetic = { path = "../../primitives/sr-arithmetic" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
 block-builder = { package = "sc-block-builder", path = "../block-builder" }

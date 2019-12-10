@@ -16,7 +16,9 @@
 
 //! Basic implementation for Externalities.
 
-use std::{collections::HashMap, any::{TypeId, Any}, iter::FromIterator};
+use std::{
+	collections::BTreeMap, any::{TypeId, Any}, iter::FromIterator, ops::Bound
+};
 use crate::backend::{Backend, InMemory};
 use hash_db::Hasher;
 use trie::{TrieConfiguration, default_child_trie_root};
@@ -31,7 +33,7 @@ use primitives::{
 use log::warn;
 use codec::Encode;
 
-/// Simple HashMap-based Externalities impl.
+/// Simple Map-based Externalities impl.
 #[derive(Debug)]
 pub struct BasicExternalities {
 	inner: Storage,
@@ -99,8 +101,8 @@ impl Default for BasicExternalities {
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl From<HashMap<Vec<u8>, Vec<u8>>> for BasicExternalities {
-	fn from(hashmap: HashMap<Vec<u8>, Vec<u8>>) -> Self {
+impl From<BTreeMap<Vec<u8>, Vec<u8>>> for BasicExternalities {
+	fn from(hashmap: BTreeMap<Vec<u8>, Vec<u8>>) -> Self {
 		BasicExternalities { inner: Storage {
 			top: hashmap,
 			children: Default::default(),
@@ -161,6 +163,22 @@ impl Externalities for BasicExternalities {
 		Externalities::child_storage(self, storage_key, child_info, key)
 	}
 
+	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
+		let range = (Bound::Excluded(key), Bound::Unbounded);
+		self.inner.top.range::<[u8], _>(range).next().map(|(k, _)| k).cloned()
+	}
+
+	fn next_child_storage_key(
+		&self,
+		storage_key: ChildStorageKey,
+		_child_info: ChildInfo,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		let range = (Bound::Excluded(key), Bound::Unbounded);
+		self.inner.children.get(storage_key.as_ref())
+			.and_then(|child| child.data.range::<[u8], _>(range).next().map(|(k, _)| k).cloned())
+	}
+
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
 		if is_child_storage_key(&key) {
 			warn!(target: "trie", "Refuse to set child storage key via main storage");
@@ -209,7 +227,15 @@ impl Externalities for BasicExternalities {
 			return;
 		}
 
-		self.inner.top.retain(|key, _| !key.starts_with(prefix));
+		let to_remove = self.inner.top.range::<[u8], _>((Bound::Included(prefix), Bound::Unbounded))
+			.map(|(k, _)| k)
+			.take_while(|k| k.starts_with(prefix))
+			.cloned()
+			.collect::<Vec<_>>();
+
+		for key in to_remove {
+			self.inner.top.remove(&key);
+		}
 	}
 
 	fn clear_child_prefix(
@@ -219,7 +245,15 @@ impl Externalities for BasicExternalities {
 		prefix: &[u8],
 	) {
 		if let Some(child) = self.inner.children.get_mut(storage_key.as_ref()) {
-			child.data.retain(|key, _| !key.starts_with(prefix));
+			let to_remove = child.data.range::<[u8], _>((Bound::Included(prefix), Bound::Unbounded))
+				.map(|(k, _)| k)
+				.take_while(|k| k.starts_with(prefix))
+				.cloned()
+				.collect::<Vec<_>>();
+
+			for key in to_remove {
+				child.data.remove(&key);
+			}
 		}
 	}
 

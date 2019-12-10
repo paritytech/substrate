@@ -17,7 +17,7 @@
 //! Common traits and types that are useful for describing offences for usage in environments
 //! that use staking.
 
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 
 use codec::{Encode, Decode};
 use sp_runtime::Perbill;

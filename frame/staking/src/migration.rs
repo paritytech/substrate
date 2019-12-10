@@ -26,7 +26,7 @@ pub const CURRENT_VERSION: VersionNumber = 1;
 mod inner {
 	use crate::{Store, Module, Trait};
 	use support::{StorageLinkedMap, StorageValue};
-	use rstd::vec::Vec;
+	use sp_std::vec::Vec;
 	use super::{CURRENT_VERSION, VersionNumber};
 
 	// the minimum supported version of the migration logic.
