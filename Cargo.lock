@@ -6325,7 +6325,6 @@ dependencies = [
  "environmental 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-executor 2.0.0",
  "sp-core 2.0.0",
  "sp-externalities 2.0.0",
  "sp-io 2.0.0",
