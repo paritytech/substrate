@@ -6090,8 +6090,8 @@ dependencies = [
  "sp-inherents 2.0.0",
  "sp-runtime 2.0.0",
  "sp-std 2.0.0",
+ "sp-test-primitives 2.0.0",
  "sp-version 2.0.0",
- "substrate-test-runtime-client 2.0.0",
 ]
 
 [[package]]
