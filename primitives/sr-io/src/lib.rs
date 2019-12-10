@@ -750,7 +750,7 @@ pub trait Sandbox {
 #[cfg(not(feature = "std"))]
 struct WasmAllocator;
 
-#[cfg(all(not(feature = "disable_global_allocator"), not(feature = "std")))]
+#[cfg(all(not(feature = "disable_allocator"), not(feature = "std")))]
 #[global_allocator]
 static ALLOCATOR: WasmAllocator = WasmAllocator;
 
