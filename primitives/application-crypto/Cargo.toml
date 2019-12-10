@@ -1,5 +1,5 @@
 [package]
-name = "sc-application-crypto"
+name = "sp-application-crypto"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"

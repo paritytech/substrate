@@ -35,7 +35,8 @@ TO_RENAME=(
     # OLD-CRATE-NAME NEW-CRATE-NAME
 
     # PRIMITIVES
-    "substrate-application-crypto sc-application-crypto"
+    "substrate-application-crypto sp-application-crypto"
+    "sc-application-crypto sp-application-crypto"
     "substrate-authority-discovery-primitives sp-authority-discovery"
     "substrate-block-builder-runtime-api sp-block-builder"
     "substrate-consensus-aura-primitives sp-consensus-aura"

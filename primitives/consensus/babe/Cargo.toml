@@ -6,7 +6,7 @@ description = "Primitives for BABE consensus"
 edition = "2018"
 
 [dependencies]
-app-crypto = { package = "sc-application-crypto", path = "../../application-crypto", default-features = false }
+app-crypto = { package = "sp-application-crypto", path = "../../application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 sp-std = { path = "../../std", default-features = false }
 schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"], optional = true }

@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-app-crypto = { package = "sc-application-crypto", path = "../../primitives/application-crypto", default-features = false }
+app-crypto = { package = "sp-application-crypto", path = "../../primitives/application-crypto", default-features = false }
 authorship = { package = "pallet-authorship", path = "../authorship", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package="sp-core", path = "../../primitives/core", default-features = false }
