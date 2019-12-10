@@ -17,7 +17,7 @@ derive_more = "0.99.2"
 futures = "0.3.1"
 futures-timer = "2.0"
 keystore = { package = "sc-keystore", path = "../keystore" }
-libp2p = { version = "0.13.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
+libp2p = { git = "https://github.com/expenses/rust-libp2p", branch = "rand-wasm", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 log = "0.4.8"
 network = { package = "sc-network", path = "../network" }
 primitives = { package = "sp-core", path = "../../primitives/core" }

@@ -23,7 +23,7 @@ linked_hash_set = "0.1.3"
 lru = "0.4.0"
 rustc-hex = "2.0.1"
 rand = "0.7.2"
-libp2p = { version = "0.13.0", default-features = false, features = ["libp2p-websocket"] }
+libp2p = { git = "https://github.com/expenses/rust-libp2p", branch = "rand-wasm", default-features = false, features = ["libp2p-websocket"] }
 fork-tree = { path = "../../utils/fork-tree" }
 consensus = { package = "sp-consensus", path = "../../primitives/consensus/common" }
 client = { package = "sc-client", path = "../" }
