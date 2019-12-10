@@ -28,7 +28,7 @@ use codec::{Encode, Decode};
 use system::ensure_none;
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
 use support::weights::SimpleDispatchInfo;
-use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
+use inherents::{InherentIdentifier, ProvideInherent, InherentData};
 use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
 const MAX_UNCLES: usize = 10;
