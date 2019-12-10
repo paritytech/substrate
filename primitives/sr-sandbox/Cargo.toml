@@ -8,7 +8,7 @@ edition = "2018"
 wasmi = { version = "0.6.2", optional = true }
 primitives = { package = "sp-core", path = "../core", default-features = false }
 sp-std = { path = "../std", default-features = false }
-runtime-io = { package = "sp-io", path = "../sr-io", default-features = false }
+sp-io = { path = "../io", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 
 [dev-dependencies]
@@ -22,6 +22,6 @@ std = [
 	"primitives/std",
 	"sp-std/std",
 	"codec/std",
-	"runtime-io/std",
+	"sp-io/std",
 ]
 strict = []

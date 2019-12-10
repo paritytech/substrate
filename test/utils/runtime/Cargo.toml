@@ -21,7 +21,7 @@ offchain-primitives = { package = "sp-offchain", path = "../../../primitives/off
 primitives = { package = "sp-core", path = "../../../primitives/core", default-features = false }
 sp-std = { path = "../../../primitives/std", default-features = false }
 runtime-interface = { package = "sp-runtime-interface", path = "../../../primitives/runtime-interface", default-features = false}
-runtime_io = { package = "sp-io", path = "../../../primitives/sr-io", default-features = false }
+sp-io = { path = "../../../primitives/io", default-features = false }
 runtime_support = { package = "frame-support", path = "../../../frame/support", default-features = false }
 runtime_version = { package = "sp-version", path = "../../../primitives/sr-version", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
@@ -65,7 +65,7 @@ std = [
 	"primitives/std",
 	"sp-std/std",
 	"runtime-interface/std",
-	"runtime_io/std",
+	"sp-io/std",
 	"runtime_support/std",
 	"runtime_version/std",
 	"serde",

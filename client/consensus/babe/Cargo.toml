@@ -14,7 +14,7 @@ num-bigint = "0.2.3"
 num-rational = "0.2.2"
 num-traits = "0.2.8"
 runtime-version = { package = "sp-version", path = "../../../primitives/sr-version" }
-runtime-io = { package = "sp-io", path = "../../../primitives/sr-io" }
+sp-io = { path = "../../../primitives/io" }
 inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
 sp-timestamp = { path = "../../../primitives/timestamp" }
 sc-telemetry = { path = "../../telemetry" }

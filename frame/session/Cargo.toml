@@ -15,7 +15,7 @@ support = { package = "frame-support", path = "../support", default-features = f
 system = { package = "frame-system", path = "../system", default-features = false }
 timestamp = { package = "pallet-timestamp", path = "../timestamp", default-features = false }
 sp-trie = { path = "../../primitives/trie", default-features = false, optional = true }
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+sp-io ={ path = "../../primitives/io", default-features = false }
 impl-trait-for-tuples = "0.1.3"
 
 [dev-dependencies]
@@ -36,5 +36,5 @@ std = [
 	"sp-staking/std",
 	"timestamp/std",
 	"sp-trie/std",
-	"runtime-io/std",
+	"sp-io/std",
 ]

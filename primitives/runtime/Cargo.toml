@@ -11,7 +11,7 @@ primitives = { package = "sp-core",  path = "../core", default-features = false 
 app-crypto = { package = "sc-application-crypto",  path = "../application-crypto", default-features = false }
 arithmetic = { package = "sp-arithmetic",  path = "../sr-arithmetic", default-features = false }
 sp-std = { path = "../std", default-features = false }
-runtime_io = { package = "sp-io", path = "../sr-io", default-features = false }
+sp-io = { path = "../io", default-features = false }
 log = { version = "0.4.8", optional = true }
 paste = "0.1.6"
 rand = { version = "0.7.2", optional = true }
@@ -33,7 +33,7 @@ std = [
 	"primitives/std",
 	"rand",
 	"sp-std/std",
-	"runtime_io/std",
+	"sp-io/std",
 	"serde",
 	"inherents/std",
 ]

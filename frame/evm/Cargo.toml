@@ -14,7 +14,7 @@ balances = { package = "pallet-balances", path = "../balances", default-features
 primitives = { package = "sp-core", path = "../../primitives/core", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 sp-std = { path = "../../primitives/std", default-features = false }
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+sp-io = { path = "../../primitives/io", default-features = false }
 primitive-types = { version = "0.6", default-features = false, features = ["rlp"] }
 rlp = { version = "0.4", default-features = false }
 evm = { version = "0.14", default-features = false }
@@ -30,7 +30,7 @@ std = [
 	"support/std",
 	"system/std",
 	"balances/std",
-	"runtime-io/std",
+	"sp-io/std",
 	"sp-std/std",
 	"sha3/std",
 	"rlp/std",
