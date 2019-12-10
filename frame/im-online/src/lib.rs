@@ -73,8 +73,8 @@ mod tests;
 use app_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
 use primitives::offchain::{OpaqueNetworkState, StorageKind};
-use rstd::prelude::*;
-use rstd::convert::TryInto;
+use sp_std::prelude::*;
+use sp_std::convert::TryInto;
 use session::historical::IdentificationTuple;
 use sp_runtime::{
 	RuntimeDebug,

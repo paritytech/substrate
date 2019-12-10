@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 wasm-interface = { package = "sp-wasm-interface", path = "../wasm-interface", optional = true }
-rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-std = { path = "../std", default-features = false }
 sp-runtime-interface-proc-macro = { path = "proc-macro" }
 externalities = { package = "sp-externalities", path = "../externalities", optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false }
@@ -25,7 +25,7 @@ runtime-io = { package = "sp-io", path = "../sr-io" }
 default = [ "std" ]
 std = [
 	"wasm-interface",
-	"rstd/std",
+	"sp-std/std",
 	"codec/std",
 	"externalities",
 	"environmental",

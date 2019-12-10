@@ -123,7 +123,7 @@ members = [
 	"primitives/runtime",
 	"primitives/sr-sandbox",
 	"primitives/sr-staking-primitives",
-	"primitives/sr-std",
+	"primitives/std",
 	"primitives/sr-version",
 	"primitives/state-machine",
 	"primitives/timestamp",

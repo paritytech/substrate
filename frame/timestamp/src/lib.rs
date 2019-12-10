@@ -90,7 +90,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{result, cmp};
+use sp_std::{result, cmp};
 use inherents::{ProvideInherent, InherentData, InherentIdentifier};
 use support::{Parameter, decl_storage, decl_module};
 use support::traits::{Time, Get};

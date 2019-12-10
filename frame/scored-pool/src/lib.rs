@@ -89,7 +89,7 @@ mod mock;
 mod tests;
 
 use codec::FullCodec;
-use rstd::{
+use sp_std::{
 	fmt::Debug,
 	prelude::*,
 };
@@ -175,7 +175,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
-		config(phantom): rstd::marker::PhantomData<I>;
+		config(phantom): sp_std::marker::PhantomData<I>;
 		build(|config| {
 			let mut pool = config.pool.clone();
 
@@ -218,7 +218,7 @@ decl_event!(
 		/// See the transaction for who.
 		CandidateScored,
 		/// Phantom member, never used.
-		Dummy(rstd::marker::PhantomData<(AccountId, I)>),
+		Dummy(sp_std::marker::PhantomData<(AccountId, I)>),
 	}
 );
 
@@ -453,4 +453,3 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		Ok(())
 	}
 }
-

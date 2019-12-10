@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-std = { path = "../std", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 
 [dev-dependencies]
@@ -18,6 +18,6 @@ rand = "0.7.2"
 default = ["std"]
 std = [
 	"serde",
-	"rstd/std",
+	"sp-std/std",
 	"sp-runtime/std",
 ]

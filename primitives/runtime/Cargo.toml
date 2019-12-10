@@ -10,7 +10,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 primitives = { package = "sp-core",  path = "../core", default-features = false }
 app-crypto = { package = "sc-application-crypto",  path = "../application-crypto", default-features = false }
 arithmetic = { package = "sp-arithmetic",  path = "../sr-arithmetic", default-features = false }
-rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-std = { path = "../std", default-features = false }
 runtime_io = { package = "sp-io", path = "../sr-io", default-features = false }
 log = { version = "0.4.8", optional = true }
 paste = "0.1.6"
@@ -32,7 +32,7 @@ std = [
 	"log",
 	"primitives/std",
 	"rand",
-	"rstd/std",
+	"sp-std/std",
 	"runtime_io/std",
 	"serde",
 	"inherents/std",

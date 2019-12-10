@@ -13,7 +13,7 @@ primitives = { package = "sp-core", path= "../../core" }
 inherents = { package = "sp-inherents", path = "../../inherents" }
 futures = { version = "0.3.1", features = ["thread-pool"] }
 futures-timer = "0.4.0"
-rstd = { package = "sp-std", path = "../../sr-std" }
+sp-std = { path = "../../std" }
 runtime_version = { package = "sp-version", path = "../../sr-version" }
 sp-runtime = {  path = "../../runtime" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }

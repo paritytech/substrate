@@ -29,7 +29,7 @@ pub extern crate tracing;
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]
-pub use rstd;
+pub use sp_std;
 #[doc(hidden)]
 pub use codec;
 #[cfg(feature = "std")]
@@ -204,7 +204,7 @@ mod tests {
 		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
 		StorageEntryModifier, DefaultByteGetter, StorageHasher,
 	};
-	use rstd::marker::PhantomData;
+	use sp_std::marker::PhantomData;
 
 	pub trait Trait {
 		type BlockNumber: Codec + EncodeLike + Default;

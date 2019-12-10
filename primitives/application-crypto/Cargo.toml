@@ -9,7 +9,7 @@ description = "Provides facilities for generating application specific crypto wr
 primitives = { package = "sp-core", path = "../core", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-std = { path = "../std", default-features = false }
 runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
 
 [dev-dependencies]
@@ -18,7 +18,7 @@ sp-runtime = { path = "../../primitives/runtime" }
 
 [features]
 default = [ "std" ]
-std = [ "full_crypto", "primitives/std", "codec/std", "serde", "rstd/std", "runtime-io/std" ]
+std = [ "full_crypto", "primitives/std", "codec/std", "serde", "sp-std/std", "runtime-io/std" ]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers
 # or Intel SGX.

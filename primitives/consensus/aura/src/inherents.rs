@@ -17,7 +17,7 @@
 /// Contains the inherents for the AURA module
 
 use inherents::{InherentIdentifier, InherentData, Error};
-use rstd::result::Result;
+use codec::Decode;
 
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};

@@ -9,7 +9,7 @@ app-crypto = { package = "sc-application-crypto", path = "../../primitives/appli
 authorship = { package = "pallet-authorship", path = "../authorship", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package="sp-core", path = "../../primitives/core", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-std = { path = "../../primitives/std", default-features = false }
 serde = { version = "1.0.101", optional = true }
 session = { package = "pallet-session", path = "../session", default-features = false }
 runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
@@ -25,7 +25,7 @@ std = [
 	"authorship/std",
 	"codec/std",
 	"primitives/std",
-	"rstd/std",
+	"sp-std/std",
 	"serde",
 	"session/std",
 	"runtime-io/std",

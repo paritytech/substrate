@@ -9,7 +9,7 @@ authority-discovery-primitives = { package = "sp-authority-discovery", path = ".
 app-crypto = { package = "sc-application-crypto", path = "../../primitives/application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-std = { path = "../../primitives/std", default-features = false }
 serde = { version = "1.0.101", optional = true }
 runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
 session = { package = "pallet-session", path = "../session", default-features = false, features = ["historical" ] }
@@ -27,7 +27,7 @@ std = [
 	"authority-discovery-primitives/std",
 	"codec/std",
 	"primitives/std",
-	"rstd/std",
+	"sp-std/std",
 	"runtime-io/std",
 	"serde",
 	"session/std",

@@ -47,7 +47,7 @@
 
 use pallet_timestamp;
 
-use rstd::{result, prelude::*};
+use sp_std::{result, prelude::*};
 use codec::{Encode, Decode};
 use support::{
 	decl_storage, decl_module, Parameter, traits::{Get, FindAuthor},

@@ -16,7 +16,7 @@
 
 //! Stuff to do with the runtime's storage.
 
-use rstd::{prelude::*, marker::PhantomData};
+use sp_std::{prelude::*, marker::PhantomData};
 use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
 use crate::{traits::Len, hash::{Twox128, StorageHasher}};
 

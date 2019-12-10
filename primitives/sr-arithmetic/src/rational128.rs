@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use rstd::{cmp::Ordering, prelude::*};
+use sp_std::{cmp::Ordering, prelude::*};
 use crate::helpers_128bit;
 use num_traits::Zero;
 use sp_debug_derive::RuntimeDebug;
