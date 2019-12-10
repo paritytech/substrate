@@ -181,7 +181,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::Transferred(id, origin, target.clone(), amount));
 			// we check above that this will not overflow
 			<Balances<T>>::insert(origin_account, origin_balance - amount);
-			// sum of all issuances cannot exceed u64, so this will not overflow WARN
+			// sum of all issuances will not exceed 2**96; `Balance` in Polkadot is `u128`
 			<Balances<T>>::mutate((id, target), |balance| *balance += amount);
 		}
 

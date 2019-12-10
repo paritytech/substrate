@@ -831,7 +831,7 @@ where
 	type NegativeImbalance = NegativeImbalance<T, I>;
 
 	fn total_balance(who: &T::AccountId) -> Self::Balance {
-		// WARN cannot overflow: total balance does not exceed u64
+		// Cannot overflow: total balance fits in a `Balance`
 		Self::free_balance(who) + Self::reserved_balance(who)
 	}
 
@@ -864,7 +864,6 @@ where
 	fn issue(mut amount: Self::Balance) -> Self::NegativeImbalance {
 		<TotalIssuance<T, I>>::mutate(|issued|
 			*issued = issued.checked_add(&amount).unwrap_or_else(|| {
-				// cannot overflow: max_value >= any Self::Balance
 				amount = Self::Balance::max_value() - *issued;
 				Self::Balance::max_value()
 			})
