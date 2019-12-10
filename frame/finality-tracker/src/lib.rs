@@ -20,7 +20,7 @@
 
 use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
 use sp_runtime::traits::{One, Zero, SaturatedConversion};
-use rstd::{prelude::*, result, cmp, vec};
+use sp_std::{prelude::*, result, cmp, vec};
 use support::{decl_module, decl_storage};
 use support::traits::Get;
 use frame_system::{ensure_none, Trait as SystemTrait};

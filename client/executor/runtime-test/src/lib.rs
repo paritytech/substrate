@@ -6,7 +6,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 #[cfg(not(feature = "std"))]
-use rstd::{vec::Vec, vec};
+use sp_std::{vec::Vec, vec};
 
 #[cfg(not(feature = "std"))]
 use runtime_io::{

@@ -115,15 +115,15 @@
 //!
 //! ```
 //! use support::{
+//! 	dispatch,
 //! 	traits::{Currency, ExistenceRequirement, WithdrawReason},
-//! 	dispatch::Result,
 //! };
 //! # pub trait Trait: system::Trait {
 //! # 	type Currency: Currency<Self::AccountId>;
 //! # }
 //! type AssetOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 //!
-//! fn charge_fee<T: Trait>(transactor: &T::AccountId, amount: AssetOf<T>) -> Result {
+//! fn charge_fee<T: Trait>(transactor: &T::AccountId, amount: AssetOf<T>) -> dispatch::Result {
 //! 	// ...
 //! 	T::Currency::withdraw(
 //! 		transactor,
@@ -135,7 +135,7 @@
 //! 	Ok(())
 //! }
 //!
-//! fn refund_fee<T: Trait>(transactor: &T::AccountId, amount: AssetOf<T>) -> Result {
+//! fn refund_fee<T: Trait>(transactor: &T::AccountId, amount: AssetOf<T>) -> dispatch::Result {
 //! 	// ...
 //! 	T::Currency::deposit_into_existing(transactor, amount)?;
 //! 	// ...
@@ -159,11 +159,10 @@ use sp_runtime::traits::{
 	Zero, Bounded,
 };
 
-use rstd::prelude::*;
-use rstd::{cmp, result, fmt::Debug};
-use support::dispatch::Result;
+use sp_std::prelude::*;
+use sp_std::{cmp, result, fmt::Debug};
 use support::{
-	decl_event, decl_module, decl_storage, ensure,
+	decl_event, decl_module, decl_storage, ensure, dispatch,
 	traits::{
 		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
 		SignedImbalance, UpdateBalanceOutcome, WithdrawReason, WithdrawReasons, TryDrop,
@@ -326,7 +325,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Create a new kind of asset.
-		fn create(origin, options: AssetOptions<T::Balance, T::AccountId>) -> Result {
+		fn create(origin, options: AssetOptions<T::Balance, T::AccountId>) -> dispatch::Result {
 			let origin = ensure_signed(origin)?;
 			let id = Self::next_asset_id();
 
@@ -359,7 +358,7 @@ decl_module! {
 			origin,
 			#[compact] asset_id: T::AssetId,
 			new_permission: PermissionLatest<T::AccountId>
-		) -> Result {
+		) -> dispatch::Result {
 			let origin = ensure_signed(origin)?;
 
 			let permissions: PermissionVersions<T::AccountId> = new_permission.into();
@@ -377,7 +376,9 @@ decl_module! {
 
 		/// Mints an asset, increases its total issuance.
 		/// The origin must have `mint` permissions.
-		fn mint(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance) -> Result {
+		fn mint(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance)
+			-> dispatch::Result
+		{
 			let origin = ensure_signed(origin)?;
 			if Self::check_permission(&asset_id, &origin, &PermissionType::Mint) {
 				let original_free_balance = Self::free_balance(&asset_id, &to);
@@ -401,7 +402,9 @@ decl_module! {
 		/// Burns an asset, decreases its total issuance.
 		///
 		/// The `origin` must have `burn` permissions.
-		fn burn(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance) -> Result {
+		fn burn(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance)
+			-> dispatch::Result
+		{
 			let origin = ensure_signed(origin)?;
 
 			if Self::check_permission(&asset_id, &origin, &PermissionType::Burn) {
@@ -427,7 +430,11 @@ decl_module! {
 
 		/// Can be used to create reserved tokens.
 		/// Requires Root call.
-		fn create_reserved(origin, asset_id: T::AssetId, options: AssetOptions<T::Balance, T::AccountId>) -> Result {
+		fn create_reserved(
+			origin,
+			asset_id: T::AssetId,
+			options: AssetOptions<T::Balance, T::AccountId>
+		) -> dispatch::Result {
 			ensure_root(origin)?;
 			Self::create_asset(Some(asset_id), None, options)
 		}
@@ -536,7 +543,7 @@ impl<T: Trait> Module<T> {
 		asset_id: Option<T::AssetId>,
 		from_account: Option<T::AccountId>,
 		options: AssetOptions<T::Balance, T::AccountId>,
-	) -> Result {
+	) -> dispatch::Result {
 		let asset_id = if let Some(asset_id) = asset_id {
 			ensure!(!<TotalIssuance<T>>::exists(&asset_id), "Asset id already taken.");
 			ensure!(asset_id < Self::next_asset_id(), "Asset id not available.");
@@ -569,7 +576,7 @@ impl<T: Trait> Module<T> {
 		from: &T::AccountId,
 		to: &T::AccountId,
 		amount: T::Balance
-	) -> Result {
+	) -> dispatch::Result {
 		let new_balance = Self::free_balance(asset_id, from)
 			.checked_sub(&amount)
 			.ok_or_else(|| "balance too low to send amount")?;
@@ -590,7 +597,7 @@ impl<T: Trait> Module<T> {
 		from: &T::AccountId,
 		to: &T::AccountId,
 		amount: T::Balance,
-	) -> Result {
+	) -> dispatch::Result {
 		Self::make_transfer(asset_id, from, to, amount)?;
 
 		if from != to {
@@ -604,7 +611,9 @@ impl<T: Trait> Module<T> {
 	///
 	/// If the free balance is lower than `amount`, then no funds will be moved and an `Err` will
 	/// be returned. This is different behavior than `unreserve`.
-	pub fn reserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Result {
+	pub fn reserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance)
+		-> dispatch::Result
+	{
 		// Do we need to consider that this is an atomic transaction?
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
 		let original_free_balance = Self::free_balance(asset_id, who);
@@ -625,7 +634,7 @@ impl<T: Trait> Module<T> {
 	/// NOTE: This is different behavior than `reserve`.
 	pub fn unreserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> T::Balance {
 		let b = Self::reserved_balance(asset_id, who);
-		let actual = rstd::cmp::min(b, amount);
+		let actual = sp_std::cmp::min(b, amount);
 		let original_free_balance = Self::free_balance(asset_id, who);
 		let new_free_balance = original_free_balance + actual;
 		Self::set_free_balance(asset_id, who, new_free_balance);
@@ -642,7 +651,7 @@ impl<T: Trait> Module<T> {
 	/// the caller will do this.
 	fn slash(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
 		let free_balance = Self::free_balance(asset_id, who);
-		let free_slash = rstd::cmp::min(free_balance, amount);
+		let free_slash = sp_std::cmp::min(free_balance, amount);
 		let new_free_balance = free_balance - free_slash;
 		Self::set_free_balance(asset_id, who, new_free_balance);
 		if free_slash < amount {
@@ -660,7 +669,7 @@ impl<T: Trait> Module<T> {
 	/// the caller will do this.
 	fn slash_reserved(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
-		let slash = rstd::cmp::min(original_reserve_balance, amount);
+		let slash = sp_std::cmp::min(original_reserve_balance, amount);
 		let new_reserve_balance = original_reserve_balance - slash;
 		Self::set_reserved_balance(asset_id, who, new_reserve_balance);
 		if amount == slash {
@@ -684,7 +693,7 @@ impl<T: Trait> Module<T> {
 		amount: T::Balance,
 	) -> T::Balance {
 		let b = Self::reserved_balance(asset_id, who);
-		let slash = rstd::cmp::min(b, amount);
+		let slash = sp_std::cmp::min(b, amount);
 
 		let original_free_balance = Self::free_balance(asset_id, beneficiary);
 		let new_free_balance = original_free_balance + slash;
@@ -742,7 +751,7 @@ impl<T: Trait> Module<T> {
 		_amount: T::Balance,
 		reasons: WithdrawReasons,
 		new_balance: T::Balance,
-	) -> Result {
+	) -> dispatch::Result {
 		if asset_id != &Self::staking_asset_id() {
 			return Ok(());
 		}
@@ -866,14 +875,14 @@ mod imbalances {
 	use super::{
 		result, AssetIdProvider, Imbalance, Saturating, StorageMap, Subtrait, Zero, TryDrop
 	};
-	use rstd::mem;
+	use sp_std::mem;
 
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
 	/// funds have been created without any equal and opposite accounting.
 	#[must_use]
 	pub struct PositiveImbalance<T: Subtrait, U: AssetIdProvider<AssetId = T::AssetId>>(
 		T::Balance,
-		rstd::marker::PhantomData<U>,
+		sp_std::marker::PhantomData<U>,
 	);
 	impl<T, U> PositiveImbalance<T, U>
 	where
@@ -890,7 +899,7 @@ mod imbalances {
 	#[must_use]
 	pub struct NegativeImbalance<T: Subtrait, U: AssetIdProvider<AssetId = T::AssetId>>(
 		T::Balance,
-		rstd::marker::PhantomData<U>,
+		sp_std::marker::PhantomData<U>,
 	);
 	impl<T, U> NegativeImbalance<T, U>
 	where
@@ -1091,7 +1100,7 @@ impl<T: Subtrait> Trait for ElevatedTrait<T> {
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct AssetCurrency<T, U>(rstd::marker::PhantomData<T>, rstd::marker::PhantomData<U>);
+pub struct AssetCurrency<T, U>(sp_std::marker::PhantomData<T>, sp_std::marker::PhantomData<U>);
 
 impl<T, U> Currency<T::AccountId> for AssetCurrency<T, U>
 where
@@ -1124,7 +1133,7 @@ where
 		dest: &T::AccountId,
 		value: Self::Balance,
 		_: ExistenceRequirement, // no existential deposit policy for generic asset
-	) -> Result {
+	) -> dispatch::Result {
 		<Module<T>>::make_transfer(&U::asset_id(), transactor, dest, value)
 	}
 
@@ -1133,7 +1142,7 @@ where
 		amount: Self::Balance,
 		reasons: WithdrawReasons,
 		new_balance: Self::Balance,
-	) -> Result {
+	) -> dispatch::Result {
 		<Module<T>>::ensure_can_withdraw(&U::asset_id(), who, amount, reasons, new_balance)
 	}
 
@@ -1264,7 +1273,7 @@ where
 	}
 }
 
-pub struct StakingAssetIdProvider<T>(rstd::marker::PhantomData<T>);
+pub struct StakingAssetIdProvider<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Trait> AssetIdProvider for StakingAssetIdProvider<T> {
 	type AssetId = T::AssetId;
@@ -1273,7 +1282,7 @@ impl<T: Trait> AssetIdProvider for StakingAssetIdProvider<T> {
 	}
 }
 
-pub struct SpendingAssetIdProvider<T>(rstd::marker::PhantomData<T>);
+pub struct SpendingAssetIdProvider<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Trait> AssetIdProvider for SpendingAssetIdProvider<T> {
 	type AssetId = T::AssetId;

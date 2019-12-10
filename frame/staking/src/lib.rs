@@ -138,7 +138,7 @@
 //! ### Example: Rewarding a validator by id.
 //!
 //! ```
-//! use support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch};
 //! use system::ensure_signed;
 //! use pallet_staking::{self as staking};
 //!
@@ -147,7 +147,7 @@
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //!			/// Reward a validator.
-//! 		pub fn reward_myself(origin) -> Result {
+//! 		pub fn reward_myself(origin) -> dispatch::Result {
 //! 			let reported = ensure_signed(origin)?;
 //! 			<staking::Module<T>>::reward_by_ids(vec![(reported, 10)]);
 //! 			Ok(())
@@ -255,7 +255,7 @@ mod slashing;
 
 pub mod inflation;
 
-use rstd::{prelude::*, result};
+use sp_std::{prelude::*, result};
 use codec::{HasCompact, Encode, Decode};
 use support::{
 	decl_module, decl_event, decl_storage, ensure,
@@ -445,7 +445,7 @@ impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
 				// don't leave a dust balance in the staking system.
 				if *target <= minimum_balance {
 					slash_from_target += *target;
-					*value += rstd::mem::replace(target, Zero::zero());
+					*value += sp_std::mem::replace(target, Zero::zero());
 				}
 
 				*total_remaining = total_remaining.saturating_sub(slash_from_target);
@@ -1305,7 +1305,7 @@ impl<T: Trait> Module<T> {
 		let points = CurrentEraPointsEarned::take();
 		let now = T::Time::now();
 		let previous_era_start = <CurrentEraStart<T>>::mutate(|v| {
-			rstd::mem::replace(v, now)
+			sp_std::mem::replace(v, now)
 		});
 
 		let era_duration = now - previous_era_start;
@@ -1700,7 +1700,7 @@ impl<T: Trait + authorship::Trait> authorship::EventHandler<T::AccountId, T::Blo
 
 /// A `Convert` implementation that finds the stash of the given controller account,
 /// if any.
-pub struct StashOf<T>(rstd::marker::PhantomData<T>);
+pub struct StashOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Trait> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 	fn convert(controller: T::AccountId) -> Option<T::AccountId> {
@@ -1710,7 +1710,7 @@ impl<T: Trait> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 
 /// A typed conversion from stash account ID to the current exposure of nominators
 /// on that account.
-pub struct ExposureOf<T>(rstd::marker::PhantomData<T>);
+pub struct ExposureOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>>>
 	for ExposureOf<T>
@@ -1829,7 +1829,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 
 /// Filter historical offences out and only allow those from the bonding period.
 pub struct FilterHistoricalOffences<T, R> {
-	_inner: rstd::marker::PhantomData<(T, R)>,
+	_inner: sp_std::marker::PhantomData<(T, R)>,
 }
 
 impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>

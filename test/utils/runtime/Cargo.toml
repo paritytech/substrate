@@ -19,7 +19,7 @@ log = { version = "0.4.8", optional = true }
 memory-db = { version = "0.15.2", default-features = false }
 offchain-primitives = { package = "sp-offchain", path = "../../../primitives/offchain", default-features = false}
 primitives = { package = "sp-core", path = "../../../primitives/core", default-features = false }
-rstd = { package = "sp-std", path = "../../../primitives/sr-std", default-features = false }
+sp-std = { path = "../../../primitives/std", default-features = false }
 runtime-interface = { package = "sp-runtime-interface", path = "../../../primitives/runtime-interface", default-features = false}
 runtime_io = { package = "sp-io", path = "../../../primitives/sr-io", default-features = false }
 runtime_support = { package = "frame-support", path = "../../../frame/support", default-features = false }
@@ -27,14 +27,14 @@ runtime_version = { package = "sp-version", path = "../../../primitives/sr-versi
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 session = { package = "sp-session", path = "../../../primitives/session", default-features = false }
 sp-api = { path = "../../../primitives/sr-api", default-features = false }
-sp-runtime = {  path = "../../../primitives/sr-primitives", default-features = false }
+sp-runtime = { path = "../../../primitives/runtime", default-features = false }
 pallet-babe = { path = "../../../frame/babe", default-features = false }
 frame-system = { path = "../../../frame/system", default-features = false }
 frame-system-rpc-runtime-api = { path = "../../../frame/system/rpc/runtime-api", default-features = false }
 pallet-timestamp = { path = "../../../frame/timestamp", default-features = false }
 sc-client = { path = "../../../client", optional = true }
 sp-trie = { path = "../../../primitives/trie", default-features = false }
-txpool-runtime-api = { package = "sp-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
+sp-transaction-pool = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool", default-features = false }
 trie-db = { version = "0.16.0", default-features = false }
 
 [dev-dependencies]
@@ -63,7 +63,7 @@ std = [
 	"offchain-primitives/std",
 	"primitives/std",
 	"primitives/std",
-	"rstd/std",
+	"sp-std/std",
 	"runtime-interface/std",
 	"runtime_io/std",
 	"runtime_support/std",
@@ -78,6 +78,6 @@ std = [
 	"pallet-timestamp/std",
 	"sc-client",
 	"sp-trie/std",
-	"txpool-runtime-api/std",
+	"sp-transaction-pool/std",
 	"trie-db/std",
 ]

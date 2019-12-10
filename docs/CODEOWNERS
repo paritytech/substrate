@@ -62,7 +62,7 @@
 /bin/node/executor/ @kianenigma
 
 # Transaction weight stuff
-/primitives/sr-primitives/src/weights.rs @kianenigma
+/primitives/runtime/src/weights.rs @kianenigma
 
 # Support crates
 /frame/support/ @thiolliere @kianenigma

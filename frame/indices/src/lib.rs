@@ -19,7 +19,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, marker::PhantomData, convert::TryInto};
+use sp_std::{prelude::*, marker::PhantomData, convert::TryInto};
 use codec::{Encode, Codec};
 use support::{Parameter, decl_module, decl_event, decl_storage};
 use sp_runtime::traits::{One, SimpleArithmetic, StaticLookup, Member, LookupError};

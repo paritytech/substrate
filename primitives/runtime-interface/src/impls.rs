@@ -30,13 +30,13 @@ use wasm_interface::{FunctionContext, Result};
 
 use codec::{Encode, Decode};
 
-use rstd::{any::TypeId, mem, vec::Vec};
+use sp_std::{any::TypeId, mem, vec::Vec};
 
 #[cfg(feature = "std")]
-use rstd::borrow::Cow;
+use sp_std::borrow::Cow;
 
 #[cfg(not(feature = "std"))]
-use rstd::{slice, boxed::Box};
+use sp_std::{slice, boxed::Box};
 
 // Make sure that our assumptions for storing a pointer + its size in `u64` is valid.
 #[cfg(all(not(feature = "std"), not(feature = "disable_target_static_assertions")))]
@@ -48,7 +48,7 @@ assert_eq_size!(*const u8, u32);
 pub fn pointer_and_len_to_u64(ptr: u32, len: u32) -> u64 {
 	// The static assertions from above are changed into a runtime check.
 	#[cfg(all(not(feature = "std"), feature = "disable_target_static_assertions"))]
-	assert_eq!(4, rstd::mem::size_of::<usize>());
+	assert_eq!(4, sp_std::mem::size_of::<usize>());
 
 	(u64::from(len) << 32) | u64::from(ptr)
 }
@@ -57,7 +57,7 @@ pub fn pointer_and_len_to_u64(ptr: u32, len: u32) -> u64 {
 pub fn pointer_and_len_from_u64(val: u64) -> (u32, u32) {
 	// The static assertions from above are changed into a runtime check.
 	#[cfg(all(not(feature = "std"), feature = "disable_target_static_assertions"))]
-	assert_eq!(4, rstd::mem::size_of::<usize>());
+	assert_eq!(4, sp_std::mem::size_of::<usize>());
 
 	let ptr = (val & (!0u32 as u64)) as u32;
 	let len = (val >> 32) as u32;
@@ -373,7 +373,7 @@ impl_traits_for_arrays! {
 	75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
 }
 
-impl<T: codec::Codec, E: codec::Codec> PassBy for rstd::result::Result<T, E> {
+impl<T: codec::Codec, E: codec::Codec> PassBy for sp_std::result::Result<T, E> {
 	type PassBy = Codec<Self>;
 }
 

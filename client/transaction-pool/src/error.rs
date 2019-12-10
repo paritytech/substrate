@@ -16,6 +16,8 @@
 
 //! Transaction pool error.
 
+use txpool_api::error::Error as TxPoolError;
+
 /// Transaction pool result.
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -23,7 +25,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Pool error.
-	Pool(txpool_api::error::Error),
+	Pool(TxPoolError),
 	/// Blockchain error.
 	Blockchain(sp_blockchain::Error),
 	/// Error while converting a `BlockId`.
@@ -45,8 +47,8 @@ impl std::error::Error for Error {
 	}
 }
 
-impl txpool_api::IntoPoolError for Error {
-	fn into_pool_error(self) -> std::result::Result<txpool_api::error::Error, Self> {
+impl txpool_api::error::IntoPoolError for Error {
+	fn into_pool_error(self) -> std::result::Result<TxPoolError, Self> {
 		match self {
 			Error::Pool(e) => Ok(e),
 			e => Err(e),

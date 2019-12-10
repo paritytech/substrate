@@ -56,7 +56,7 @@ pub use self::error::Error;
 pub use self::builder::{ServiceBuilder, ServiceBuilderCommand};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
-pub use txpool_api::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, IntoPoolError};
+pub use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, error::IntoPoolError};
 pub use txpool::txpool::Options as TransactionPoolOptions;
 pub use client::FinalityNotifications;
 pub use rpc::Metadata as RpcMetadata;
@@ -120,7 +120,8 @@ impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SpawnTaskHandle
 		&self,
 		future: Box<dyn Future<Item = (), Error = ()> + Send>,
 	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
-		let future = Box::new(future.select(self.on_exit.clone()).then(|_| Ok(())));
+		let exit = self.on_exit.clone().map(Ok).compat();
+		let future = Box::new(future.select(exit).then(|_| Ok(())));
 		if let Err(err) = self.sender.unbounded_send(future) {
 			let kind = futures::future::ExecuteErrorKind::Shutdown;
 			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
@@ -236,7 +237,8 @@ where
 	}
 
 	fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let task = task.select(self.on_exit()).then(|_| Ok(()));
+		let exit = self.on_exit().map(Ok).compat();
+		let task = task.select(exit).then(|_| Ok(()));
 		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
 	}
 
@@ -249,7 +251,8 @@ where
 				let _ = essential_failed.send(());
 				Ok(())
 			});
-		let task = essential_task.select(self.on_exit()).then(|_| Ok(()));
+		let exit = self.on_exit().map(Ok::<_, ()>).compat();
+		let task = essential_task.select(exit).then(|_| Ok(()));
 
 		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
 	}
@@ -503,7 +506,7 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
 		if let Some(signal) = self.signal.take() {
-			signal.fire();
+			let _ = signal.fire();
 		}
 	}
 }
@@ -596,7 +599,7 @@ where
 	Pool: TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
-	E: IntoPoolError + From<txpool_api::error::Error>,
+	E: IntoPoolError + From<sp_transaction_pool::error::Error>,
 {
 	pool.ready()
 		.filter(|t| t.is_propagateable())
@@ -615,7 +618,7 @@ where
 	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
-	E: 'static + IntoPoolError + From<txpool_api::error::Error>,
+	E: 'static + IntoPoolError + From<sp_transaction_pool::error::Error>,
 {
 	fn transactions(&self) -> Vec<(H, <B as BlockT>::Extrinsic)> {
 		transactions_to_propagate(&*self.pool)
@@ -648,7 +651,7 @@ where
 						match import_result {
 							Ok(_) => report_handle.report_peer(who, reputation_change_good),
 							Err(e) => match e.into_pool_error() {
-								Ok(txpool_api::error::Error::AlreadyImported(_)) => (),
+								Ok(sp_transaction_pool::error::Error::AlreadyImported(_)) => (),
 								Ok(e) => {
 									report_handle.report_peer(who, reputation_change_bad);
 									debug!("Error adding transaction to the pool: {:?}", e)

@@ -1,5 +1,5 @@
-use rstd::marker::PhantomData;
-use rstd::vec::Vec;
+use sp_std::marker::PhantomData;
+use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use codec::{Encode, Decode};

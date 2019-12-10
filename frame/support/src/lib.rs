@@ -29,7 +29,7 @@ pub extern crate tracing;
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]
-pub use rstd;
+pub use sp_std;
 #[doc(hidden)]
 pub use codec;
 #[cfg(feature = "std")]
@@ -67,7 +67,9 @@ pub mod traits;
 pub mod weights;
 
 pub use self::hash::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Hashable};
-pub use self::storage::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
+pub use self::storage::{
+	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap, StoragePrefixedMap
+};
 pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 
@@ -202,7 +204,7 @@ mod tests {
 		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
 		StorageEntryModifier, DefaultByteGetter, StorageHasher,
 	};
-	use rstd::marker::PhantomData;
+	use sp_std::marker::PhantomData;
 
 	pub trait Trait {
 		type BlockNumber: Codec + EncodeLike + Default;
