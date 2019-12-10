@@ -267,7 +267,7 @@ decl_module! {
 		}
 
 		/// Transfer the first matured payment and remove it from the records.
-		pub fn payout(origin) {
+		pub fn payout(origin) -> Result {
 			let who = ensure_signed(origin)?;
 
 			let mut payouts = <Payouts<T>>::get(&who);
@@ -280,8 +280,10 @@ decl_module! {
 					} else {
 						<Payouts<T>>::insert(&who, payouts);
 					}
+					return Ok(())
 				}
 			}
+			Err("nothing to payout")
 		}
 
 		/// Found the society. This is done as a discrete action in order to allow for the
@@ -485,22 +487,29 @@ impl<T: Trait> Module<T> {
 					total_payouts += value;
 					members.push(candidate.clone());
 
-					// only in the case that the bid is accepted do we unset the vouching status and
-					// transfer the tip over to the voucher.
-					let value = if let BidKind::Vouch(who, tip) = kind {
-						Self::bump_payout(&who, maturity, tip);
-						// really shouldn't fail given the conditional we're in.
-						let _ = Self::unset_vouching(&who);
-						value.saturating_sub(tip)
-					} else {
-						value
+					let value = match kind {
+						BidKind::Deposit(deposit) => {
+							// in the case that a normal deposit bid is accepted do we unreserve
+							// the deposit.
+							let _ = T::Currency::unreserve(&candidate, deposit);
+							value
+						}
+						BidKind::Vouch(who, tip) => {
+							// in the case that a vouched-for bid is accepted do we unset the
+							// vouching status and transfer the tip over to the voucher.
+
+							Self::bump_payout(&who, maturity, tip);
+							// really shouldn't fail given the conditional we're in.
+							let _ = Self::unset_vouching(&who);
+							value.saturating_sub(tip)
+						}
 					};
 
 					Self::bump_payout(&candidate, maturity, value);
 
 					Some((candidate, total_approvals))
 				} else {
-					Self::suspend_candidate(&candidate);
+					Self::suspend_candidate(&candidate, kind);
 					None
 				}
 			}).collect::<Vec<_>>();
@@ -601,7 +610,8 @@ impl<T: Trait> Module<T> {
 //		unimplemented!();
 	}
 
-	fn suspend_candidate(_who: &T::AccountId) {
+	/// `kind` lets you know whether there's either a deposit at stake or a member's vouching rights.
+	fn suspend_candidate(_who: &T::AccountId, _kind: BidKind<T::AccountId, BalanceOf<T>>) {
 //		unimplemented!();
 	}
 

@@ -36,11 +36,13 @@ fn founding_works() {
 fn basic_new_member_works() {
 	EnvBuilder::new().execute(|| {
 		assert_ok!(Society::bid(Origin::signed(20), 0));
+		assert_eq!(Balances::free_balance(20), 25);
 		run_to_block(4);
 		assert_eq!(Society::candidates(), vec![(0, 20, BidKind::Deposit(25))]);
 		assert_ok!(Society::vote(Origin::signed(10), 20, true));
 		run_to_block(8);
 		assert_eq!(Society::members(), vec![10, 20]);
+		assert_eq!(Balances::free_balance(20), 50);
 	});
 }
 
@@ -91,16 +93,32 @@ fn bidding_works() {
 #[test]
 fn unbidding_works() {
 	EnvBuilder::new().execute(|| {
-		assert_ok!(Society::bid(Origin::signed(10), 1000));
-		assert_ok!(Society::bid(Origin::signed(20), 0));
-		assert_eq!(Balances::free_balance(20), 25);
+		assert_ok!(Society::bid(Origin::signed(20), 1000));
+		assert_ok!(Society::bid(Origin::signed(30), 0));
+		assert_eq!(Balances::free_balance(30), 25);
 
-		assert_noop!(Society::unbid(Origin::signed(20), 1), "bad position");
-		assert_ok!(Society::unbid(Origin::signed(20), 0));
-		assert_eq!(Balances::free_balance(20), 50);
+		assert_noop!(Society::unbid(Origin::signed(30), 1), "bad position");
+		assert_ok!(Society::unbid(Origin::signed(30), 0));
+		assert_eq!(Balances::free_balance(30), 50);
 
 		run_to_block(4);
-		assert_eq!(Society::candidates(), vec![ (1000, 10, BidKind::Deposit(25)) ]);
+		assert_eq!(Society::candidates(), vec![ (1000, 20, BidKind::Deposit(25)) ]);
+	});
+}
+
+#[test]
+fn payout_works() {
+	EnvBuilder::new().execute(|| {
+		assert_ok!(Society::bid(Origin::signed(20), 1000));
+		run_to_block(4);
+		assert_ok!(Society::vote(Origin::signed(10), 20, true));
+		run_to_block(8);
+		// payout not ready
+		assert_noop!(Society::payout(Origin::signed(20)), "nothing to payout");
+		run_to_block(9);
+		// payout should be here
+		assert_ok!(Society::payout(Origin::signed(20)));
+		assert_eq!(Balances::free_balance(20), 1050);
 	});
 }
 
