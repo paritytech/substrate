@@ -20,7 +20,9 @@
 
 use codec::{Encode, Decode};
 use core::cmp::{Ord, Ordering};
-use fg::{Commit, Message}; // TODO: I can't import this stuff
+// TODO: Since I can't use types from `core/finality-grandpa`, wait until #3868
+// is merged as that'll move these into `primitives/finality-grandpa`.
+use fg::{Commit, Message};
 use fg_primitives::{AuthorityId, RoundNumber, SetId as SetIdNumber, AuthoritySignature};
 use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};

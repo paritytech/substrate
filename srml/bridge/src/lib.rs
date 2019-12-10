@@ -529,7 +529,6 @@ mod tests {
 		);
 	}
 
-
 	// Currently stealing this from `core/finality-grandpa/src/test.rs`
 	fn create_grandpa_justification(
 		authority: Ed25519Keyring,
