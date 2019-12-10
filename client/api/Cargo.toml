@@ -23,7 +23,7 @@ parking_lot = { version = "0.9.0" }
 primitives = { package = "sp-core", path = "../../primitives/core", default-features = false }
 sp-std = { path = "../../primitives/std", default-features = false }
 runtime-version = { package = "sp-version", path = "../../primitives/sr-version", default-features = false }
-sp-api = { path = "../../primitives/sr-api" }
+sp-api = { path = "../../primitives/api" }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 state-machine = { package = "sp-state-machine", path = "../../primitives/state-machine" }
 sc-telemetry = { path = "../telemetry" }
@@ -34,7 +34,7 @@ txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/tra
 env_logger = "0.7.0"
 tempfile = "3.1.0"
 client-db = { package = "sc-client-db", path = "../db", features = ["kvdb-rocksdb"] }
-test-primitives = { package = "substrate-test-primitives", path = "../../test/utils/primitives" }
+test-primitives = { package = "sp-test-primitives", path = "../../primitives/test-primitives" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 kvdb-memorydb = "0.1.2"
 panic-handler = { package = "sp-panic-handler", path = "../../primitives/panic-handler" }

@@ -10,7 +10,7 @@ derive_more = { version = "0.99.2", optional = true }
 futures = { version = "0.3.1", optional = true }
 log = { version = "0.4.8", optional = true }
 serde = { version = "1.0.101", features = ["derive"], optional = true}
-sp-api = { path = "../sr-api", default-features = false }
+sp-api = { path = "../api", default-features = false }
 sp-runtime = { path = "../runtime", default-features = false }
 
 [features]

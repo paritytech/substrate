@@ -21,7 +21,7 @@ sp-std = { path = "../../../primitives/std", default-features = false }
 sp-io = { path = "../../../primitives/io", default-features = false }
 safe-mix = { version = "1.0.0", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-api = { path = "../../../primitives/sr-api", default-features = false }
+sp-api = { path = "../../../primitives/api", default-features = false }
 sp-runtime = { path = "../../../primitives/runtime", default-features = false }
 sp-session = { path = "../../../primitives/session", default-features = false }
 sudo = { package = "pallet-sudo", path = "../../../frame/sudo", default-features = false }

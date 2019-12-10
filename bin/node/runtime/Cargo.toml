@@ -22,7 +22,7 @@ node-primitives = { path = "../primitives", default-features = false }
 offchain-primitives = { package = "sp-offchain", path = "../../../primitives/offchain", default-features = false }
 primitives = { package = "sp-core",  path = "../../../primitives/core", default-features = false }
 sp-std = { path = "../../../primitives/std", default-features = false }
-sp-api = { path = "../../../primitives/sr-api", default-features = false }
+sp-api = { path = "../../../primitives/api", default-features = false }
 sp-runtime = { path = "../../../primitives/runtime", default-features = false }
 sp-staking = { path = "../../../primitives/sr-staking-primitives", default-features = false }
 sp-keyring = { path = "../../../primitives/keyring", optional = true }

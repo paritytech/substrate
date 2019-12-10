@@ -40,7 +40,7 @@ network = { package = "sc-network", path = "../network" }
 chain-spec = { package = "sc-chain-spec", path = "../chain-spec" }
 client-api = { package = "sc-client-api", path = "../api" }
 client = { package = "sc-client", path = "../" }
-sp-api = { path = "../../primitives/sr-api" }
+sp-api = { path = "../../primitives/api" }
 client_db = { package = "sc-client-db", path = "../db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 sc-executor = { path = "../executor" }

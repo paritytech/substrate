@@ -9,7 +9,7 @@ edition = "2018"
 app-crypto = { package = "sc-application-crypto", path = "../application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
 sp-std = { path = "../std", default-features = false }
-sp-api = { path = "../sr-api", default-features = false }
+sp-api = { path = "../api", default-features = false }
 sp-runtime = { path = "../runtime", default-features = false }
 
 [features]
