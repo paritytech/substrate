@@ -90,6 +90,7 @@ members = [
 	"frame/treasury",
 	"frame/utility",
 	"primitives/application-crypto",
+	"primitives/application-crypto/test",
 	"primitives/authority-discovery",
 	"primitives/authorship",
 	"primitives/block-builder/runtime-api",
