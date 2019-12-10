@@ -11,7 +11,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
 sp-std = { path = "../../primitives/std", default-features = false }
 serde = { version = "1.0.101", optional = true }
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+sp-io = { path = "../../primitives/io", default-features = false }
 session = { package = "pallet-session", path = "../session", default-features = false, features = ["historical" ] }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
@@ -27,8 +27,8 @@ std = [
 	"authority-discovery-primitives/std",
 	"codec/std",
 	"primitives/std",
+	"sp-io/std",
 	"sp-std/std",
-	"runtime-io/std",
 	"serde",
 	"session/std",
 	"sp-runtime/std",

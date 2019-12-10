@@ -11,7 +11,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 sp-keyring = { path = "../../primitives/keyring", optional = true }
 sp-std = { path = "../../primitives/std", default-features = false }
 phragmen = { package = "sp-phragmen", path = "../../primitives/phragmen", default-features = false }
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+sp-io ={ path = "../../primitives/io", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 sp-staking = { path = "../../primitives/sr-staking-primitives", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
@@ -37,7 +37,7 @@ std = [
 	"codec/std",
 	"sp-std/std",
 	"phragmen/std",
-	"runtime-io/std",
+	"sp-io/std",
 	"support/std",
 	"sp-runtime/std",
 	"sp-staking/std",

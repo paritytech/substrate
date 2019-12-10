@@ -13,7 +13,7 @@ system = { package = "frame-system", path = "../system", default-features = fals
 transaction-payment-rpc-runtime-api = { package = "pallet-transaction-payment-rpc-runtime-api", path = "./rpc/runtime-api", default-features = false }
 
 [dev-dependencies]
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io" }
+sp-io = { path = "../../primitives/io" }
 primitives = { package = "sp-core",  path = "../../primitives/core" }
 balances = { package = "pallet-balances", path = "../balances" }
 

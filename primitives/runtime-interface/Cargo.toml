@@ -19,7 +19,7 @@ executor = { package = "sc-executor", path = "../../client/executor" }
 test-wasm = { package = "sp-runtime-interface-test-wasm", path = "test-wasm" }
 state_machine = { package = "sp-state-machine", path = "../../primitives/state-machine"  }
 primitives = { package = "sp-core", path = "../core" }
-runtime-io = { package = "sp-io", path = "../sr-io" }
+sp-io = { path = "../io" }
 
 [features]
 default = [ "std" ]

@@ -624,7 +624,7 @@ cfg_if! {
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
-					runtime_io::offchain::submit_transaction(ex.encode()).unwrap();
+					sp_io::offchain::submit_transaction(ex.encode()).unwrap();
 				}
 			}
 
@@ -840,7 +840,7 @@ cfg_if! {
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
-					runtime_io::offchain::submit_transaction(ex.encode()).unwrap()
+					sp_io::offchain::submit_transaction(ex.encode()).unwrap()
 				}
 			}
 
@@ -891,10 +891,10 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 
 fn test_read_storage() {
 	const KEY: &[u8] = b":read_storage";
-	runtime_io::storage::set(KEY, b"test");
+	sp_io::storage::set(KEY, b"test");
 
 	let mut v = [0u8; 4];
-	let r = runtime_io::storage::read(
+	let r = sp_io::storage::read(
 		KEY,
 		&mut v,
 		0
@@ -903,7 +903,7 @@ fn test_read_storage() {
 	assert_eq!(&v, b"test");
 
 	let mut v = [0u8; 4];
-	let r = runtime_io::storage::read(KEY, &mut v, 8);
+	let r = sp_io::storage::read(KEY, &mut v, 8);
 	assert_eq!(r, Some(4));
 	assert_eq!(&v, &[0, 0, 0, 0]);
 }
@@ -911,10 +911,10 @@ fn test_read_storage() {
 fn test_read_child_storage() {
 	const CHILD_KEY: &[u8] = b":child_storage:default:read_child_storage";
 	const KEY: &[u8] = b":read_child_storage";
-	runtime_io::storage::child_set(CHILD_KEY, KEY, b"test");
+	sp_io::storage::child_set(CHILD_KEY, KEY, b"test");
 
 	let mut v = [0u8; 4];
-	let r = runtime_io::storage::child_read(
+	let r = sp_io::storage::child_read(
 		CHILD_KEY,
 		KEY,
 		&mut v,
@@ -924,7 +924,7 @@ fn test_read_child_storage() {
 	assert_eq!(&v, b"test");
 
 	let mut v = [0u8; 4];
-	let r = runtime_io::storage::child_read(CHILD_KEY, KEY, &mut v, 8);
+	let r = sp_io::storage::child_read(CHILD_KEY, KEY, &mut v, 8);
 	assert_eq!(r, Some(4));
 	assert_eq!(&v, &[0, 0, 0, 0]);
 }

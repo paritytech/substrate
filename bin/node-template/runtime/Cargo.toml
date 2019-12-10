@@ -18,7 +18,7 @@ offchain-primitives = { package = "sp-offchain", path = "../../../primitives/off
 primitives = { package = "sp-core", path = "../../../primitives/core", default-features = false }
 randomness-collective-flip = { package = "pallet-randomness-collective-flip", path = "../../../frame/randomness-collective-flip", default-features = false }
 sp-std = { path = "../../../primitives/std", default-features = false }
-runtime-io = { package = "sp-io", path = "../../../primitives/sr-io", default-features = false }
+sp-io = { path = "../../../primitives/io", default-features = false }
 safe-mix = { version = "1.0.0", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-api = { path = "../../../primitives/sr-api", default-features = false }
@@ -51,7 +51,7 @@ std = [
 	"primitives/std",
 	"randomness-collective-flip/std",
 	"sp-std/std",
-	"runtime-io/std",
+	"sp-io/std",
 	"safe-mix/std",
 	"serde",
 	"sp-api/std",

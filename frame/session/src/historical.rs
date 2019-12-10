@@ -320,14 +320,14 @@ mod tests {
 
 	type Historical = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
+	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		crate::GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()
 			),
 		}.assimilate_storage(&mut t).unwrap();
-		runtime_io::TestExternalities::new(t)
+		sp_io::TestExternalities::new(t)
 	}
 
 	#[test]

@@ -20,7 +20,7 @@
 
 # Wasm execution and the wasm side of Substrate Runtime Interface
 /client/executor/ @pepyakin
-/primitives/sr-io/ @pepyakin
+/primitives/io/ @pepyakin
 
 # Sandboxing capability of Substrate Runtime
 /primitives/sr-sandbox/ @pepyakin
