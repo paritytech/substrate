@@ -10,10 +10,10 @@ app-crypto = { package = "sc-application-crypto", path = "../../application-cryp
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 rstd = { package = "sp-std", path = "../../sr-std", default-features = false }
 schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"], optional = true }
-slots = { package = "sc-consensus-slots", path = "../../../client/consensus/slots", optional = true }
 sp-api = { path = "../../sr-api", default-features = false }
-sp-runtime = {  path = "../../runtime", default-features = false }
+sp-consensus = { path = "../common", optional = true }
 sp-inherents = { package = "sp-inherents", path = "../../inherents", default-features = false }
+sp-runtime = {  path = "../../runtime", default-features = false }
 sp-timestamp = { path = "../../timestamp", default-features = false }
 
 [features]
@@ -23,9 +23,9 @@ std = [
 	"codec/std",
 	"rstd/std",
 	"schnorrkel",
-	"slots",
 	"sp-api/std",
-	"sp-runtime/std",
+	"sp-consensus",
 	"sp-inherents/std",
+	"sp-runtime/std",
 	"sp-timestamp/std",
 ]

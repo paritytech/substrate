@@ -22,7 +22,7 @@
 
 use rstd::{result, prelude::*};
 use rstd::collections::btree_set::BTreeSet;
-use support::{decl_module, decl_storage};
+use support::{decl_module, decl_storage, ensure};
 use support::traits::{FindAuthor, VerifySeal, Get};
 use support::dispatch::Result as DispatchResult;
 use codec::{Encode, Decode};
@@ -30,9 +30,9 @@ use system::ensure_none;
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
 use support::weights::SimpleDispatchInfo;
 use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
-use sp_authorship::{
-	INHERENT_IDENTIFIER, UnclesInherentData,
-};
+use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
+
+const MAX_UNCLES: usize = 10;
 
 pub trait Trait: system::Trait {
 	/// Find the author of a block.
@@ -187,6 +187,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> DispatchResult {
 			ensure_none(origin)?;
+			ensure!(new_uncles.len() <= MAX_UNCLES, "Too many uncles");
 
 			if <Self as Store>::DidSetUncles::get() {
 				return Err("Uncles already set in block.");
@@ -314,7 +315,7 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = Call<T>;
-	type Error = MakeFatalError<()>;
+	type Error = InherentError;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
@@ -338,6 +339,10 @@ impl<T: Trait> ProvideInherent for Module<T> {
 						let hash = uncle.hash();
 						set_uncles.push(uncle);
 						existing_hashes.push(hash);
+
+						if set_uncles.len() == MAX_UNCLES {
+							break
+						}
 					}
 					Err(_) => {
 						// skip this uncle
@@ -353,8 +358,15 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		}
 	}
 
-	fn check_inherent(_call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
-		Ok(())
+	fn check_inherent(call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
+		match call {
+			Call::set_uncles(ref uncles) if uncles.len() > MAX_UNCLES => {
+				Err(InherentError::Uncles("Too many uncles".into()))
+			},
+			_ => {
+				Ok(())
+			},
+		}
 	}
 }
 

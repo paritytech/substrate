@@ -352,7 +352,7 @@ mod test {
 			(vec![103], vec![255]),
 			(vec![104], vec![255]),
 			(vec![105], vec![255]),
-		].into_iter().collect::<::std::collections::HashMap<_, _>>().into();
+		].into_iter().collect::<::std::collections::BTreeMap<_, _>>().into();
 		let child_trie_key1 = b"1".to_vec();
 		let child_trie_key2 = b"2".to_vec();
 		let storage = InMemoryStorage::with_inputs(vec![
