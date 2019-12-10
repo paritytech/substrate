@@ -1,15 +1,15 @@
 [package]
-name = "substrate-test-primitives"
+name = "sp-test-primitives"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-app-crypto = { package = "sc-application-crypto", path = "../../../primitives/application-crypto", default-features = false }
+app-crypto = { package = "sc-application-crypto", path = "../application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-primitives = { package = "sp-core", path = "../../../primitives/core", default-features = false }
+primitives = { package = "sp-core", path = "../core", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-runtime = {  path = "../../../primitives/runtime", default-features = false }
+sp-runtime = {  path = "../runtime", default-features = false }
 
 [features]
 default = [
