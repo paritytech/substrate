@@ -8,8 +8,8 @@ edition = "2018"
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 enumflags2 = { version = "0.6.2" }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
 sp-io = { path = "../../primitives/io", default-features = false }
+sp-std = { path = "../../primitives/std", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }
@@ -23,8 +23,8 @@ default = ["std"]
 std = [
 	"serde",
 	"codec/std",
-	"rstd/std",
 	"sp-io/std",
+	"sp-std/std",
 	"sp-runtime/std",
 	"support/std",
 	"system/std",

@@ -20,7 +20,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use support::{decl_module, decl_event, Parameter, weights::SimpleDispatchInfo};
 use system::ensure_root;
 use sp_runtime::{traits::Dispatchable, DispatchError};

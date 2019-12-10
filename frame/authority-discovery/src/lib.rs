@@ -22,7 +22,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use support::{decl_module, decl_storage};
 use authority_discovery_primitives::AuthorityId;
 

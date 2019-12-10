@@ -29,7 +29,7 @@ pub use codec;
 #[doc(hidden)]
 pub use serde;
 #[doc(hidden)]
-pub use rstd;
+pub use sp_std;
 
 #[doc(hidden)]
 pub use paste;
@@ -40,8 +40,8 @@ pub use app_crypto;
 #[cfg(feature = "std")]
 pub use primitives::storage::{StorageOverlay, ChildrenStorageOverlay};
 
-use rstd::prelude::*;
-use rstd::convert::TryFrom;
+use sp_std::prelude::*;
+use sp_std::convert::TryFrom;
 use primitives::{crypto, ed25519, sr25519, ecdsa, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
@@ -613,14 +613,14 @@ macro_rules! assert_eq_error_rate {
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
 pub struct OpaqueExtrinsic(pub Vec<u8>);
 
-impl rstd::fmt::Debug for OpaqueExtrinsic {
+impl sp_std::fmt::Debug for OpaqueExtrinsic {
 	#[cfg(feature = "std")]
-	fn fmt(&self, fmt: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(fmt, "{}", primitives::hexdisplay::HexDisplay::from(&self.0))
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _fmt: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }

@@ -9,7 +9,7 @@ hex-literal = "0.2.1"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.101", optional = true }
 inherents = { package = "sp-inherents", path = "../../primitives/inherents", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-std = { path = "../../primitives/std", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 sp-staking = { path = "../../primitives/sr-staking-primitives", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
@@ -32,7 +32,7 @@ default = ["std"]
 std = [
 	"serde",
 	"codec/std",
-	"rstd/std",
+	"sp-std/std",
 	"support/std",
 	"sp-runtime/std",
 	"sp-staking/std",

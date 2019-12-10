@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-std = { path = "../../primitives/std", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 inherents = { package = "sp-inherents", path = "../../primitives/inherents", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
@@ -24,7 +24,7 @@ default = ["std"]
 std = [
 	"inherents/std",
 	"codec/std",
-	"rstd/std",
+	"sp-std/std",
 	"sp-runtime/std",
 	"support/std",
 	"serde",

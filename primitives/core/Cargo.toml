@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-std = { path = "../std", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 rustc-hex = { version = "2.0.1", default-features = false }
 log = { version = "0.4.8", default-features = false }
@@ -73,7 +73,7 @@ std = [
 	"codec/std",
 	"hash256-std-hasher/std",
 	"hash-db/std",
-	"rstd/std",
+	"sp-std/std",
 	"serde",
 	"rustc-hex/std",
 	"twox-hash/std",

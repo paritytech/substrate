@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use rstd::collections::btree_map::BTreeMap;
-use rstd::fmt;
+use sp_std::collections::btree_map::BTreeMap;
+use sp_std::fmt;
 
 use wasmi::{
 	Externals, FuncInstance, FuncRef, GlobalDescriptor, GlobalRef, ImportResolver,

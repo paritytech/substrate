@@ -65,8 +65,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
-use rstd::{fmt::Debug, ops::Add, iter::once};
+use sp_std::prelude::*;
+use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
 use sp_runtime::{traits::{StaticLookup, EnsureOrigin, Zero}, RuntimeDebug};
@@ -134,7 +134,7 @@ pub enum Data {
 }
 
 impl Decode for Data {
-	fn decode<I: codec::Input>(input: &mut I) -> rstd::result::Result<Self, codec::Error> {
+	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
 		let b = input.read_byte()?;
 		Ok(match b {
 			0 => Data::None,
@@ -256,7 +256,7 @@ impl Encode for IdentityFields {
 	}
 }
 impl Decode for IdentityFields {
-	fn decode<I: codec::Input>(input: &mut I) -> rstd::result::Result<Self, codec::Error> {
+	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
 		let field = u64::decode(input)?;
 		Ok(Self(<BitFlags<IdentityField>>::from_bits(field as u64).map_err(|_| "invalid value")?))
 	}

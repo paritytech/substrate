@@ -21,7 +21,7 @@ inherents = { package = "sp-inherents", path = "../../../primitives/inherents", 
 node-primitives = { path = "../primitives", default-features = false }
 offchain-primitives = { package = "sp-offchain", path = "../../../primitives/offchain", default-features = false }
 primitives = { package = "sp-core",  path = "../../../primitives/core", default-features = false }
-rstd = { package = "sp-std", path = "../../../primitives/sr-std", default-features = false }
+sp-std = { path = "../../../primitives/std", default-features = false }
 sp-api = { path = "../../../primitives/sr-api", default-features = false }
 sp-runtime = { path = "../../../primitives/runtime", default-features = false }
 sp-staking = { path = "../../../primitives/sr-staking-primitives", default-features = false }
@@ -97,7 +97,7 @@ std = [
 	"offences/std",
 	"primitives/std",
 	"randomness-collective-flip/std",
-	"rstd/std",
+	"sp-std/std",
 	"rustc-hex",
 	"safe-mix/std",
 	"serde",

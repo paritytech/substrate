@@ -17,8 +17,13 @@
 //! Hash utilities.
 
 use codec::Codec;
+<<<<<<< HEAD
 use rstd::prelude::Vec;
 use sp_io::hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
+=======
+use sp_std::prelude::Vec;
+use runtime_io::hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
+>>>>>>> f588aa53af54029c6b45f26342204482f2e946c5
 
 // This trait must be kept coherent with frame-support-procedural HasherKind usage
 pub trait Hashable: Sized {

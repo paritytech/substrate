@@ -8,7 +8,7 @@ edition =  "2018"
 serde = { version = "1.0.101", optional = true }
 safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-std = { path = "../../primitives/std", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 sp-staking = { path = "../../primitives/sr-staking-primitives", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
@@ -30,7 +30,7 @@ std = [
 	"serde",
 	"safe-mix/std",
 	"codec/std",
-	"rstd/std",
+	"sp-std/std",
 	"support/std",
 	"sp-runtime/std",
 	"sp-staking/std",

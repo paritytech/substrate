@@ -25,7 +25,7 @@
 //! These roots and proofs of inclusion can be generated at any time during the current session.
 //! Afterwards, the proofs can be fed to a consensus module when reporting misbehavior.
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_runtime::KeyTypeId;
 use sp_runtime::traits::{Convert, OpaqueKeys, Hash as HashT};
@@ -79,7 +79,7 @@ impl<T: Trait> Module<T> {
 				None => return, // nothing to prune.
 			};
 
-			let up_to = rstd::cmp::min(up_to, end);
+			let up_to = sp_std::cmp::min(up_to, end);
 
 			if up_to < start {
 				return // out of bounds. harmless.
@@ -108,7 +108,7 @@ pub trait OnSessionEnding<ValidatorId, FullIdentification>: crate::OnSessionEndi
 
 /// An `OnSessionEnding` implementation that wraps an inner `I` and also
 /// sets the historical trie root of the ending session.
-pub struct NoteHistoricalRoot<T, I>(rstd::marker::PhantomData<(T, I)>);
+pub struct NoteHistoricalRoot<T, I>(sp_std::marker::PhantomData<(T, I)>);
 
 impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<T, I>
 	where I: OnSessionEnding<T::ValidatorId, T::FullIdentification>

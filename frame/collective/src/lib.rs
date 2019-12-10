@@ -23,7 +23,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit="128"]
 
-use rstd::{prelude::*, result};
+use sp_std::{prelude::*, result};
 use primitives::u32_trait::Value as U32;
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::{Hash, EnsureOrigin};
@@ -63,7 +63,7 @@ pub enum RawOrigin<AccountId, I> {
 	/// It has been condoned by a single member of the collective.
 	Member(AccountId),
 	/// Dummy to manage the fact we have instancing.
-	_Phantom(rstd::marker::PhantomData<I>),
+	_Phantom(sp_std::marker::PhantomData<I>),
 }
 
 /// Origin for the collective module.
@@ -96,7 +96,7 @@ decl_storage! {
 		pub Members get(fn members): Vec<T::AccountId>;
 	}
 	add_extra_genesis {
-		config(phantom): rstd::marker::PhantomData<I>;
+		config(phantom): sp_std::marker::PhantomData<I>;
 		config(members): Vec<T::AccountId>;
 		build(|config| Module::<T, I>::initialize_members(&config.members))
 	}
@@ -306,7 +306,7 @@ where
 	}
 }
 
-pub struct EnsureMember<AccountId, I=DefaultInstance>(rstd::marker::PhantomData<(AccountId, I)>);
+pub struct EnsureMember<AccountId, I=DefaultInstance>(sp_std::marker::PhantomData<(AccountId, I)>);
 impl<
 	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
 	AccountId,
@@ -321,7 +321,7 @@ impl<
 	}
 }
 
-pub struct EnsureMembers<N: U32, AccountId, I=DefaultInstance>(rstd::marker::PhantomData<(N, AccountId, I)>);
+pub struct EnsureMembers<N: U32, AccountId, I=DefaultInstance>(sp_std::marker::PhantomData<(N, AccountId, I)>);
 impl<
 	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
 	N: U32,
@@ -338,7 +338,7 @@ impl<
 }
 
 pub struct EnsureProportionMoreThan<N: U32, D: U32, AccountId, I=DefaultInstance>(
-	rstd::marker::PhantomData<(N, D, AccountId, I)>
+	sp_std::marker::PhantomData<(N, D, AccountId, I)>
 );
 impl<
 	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
@@ -357,7 +357,7 @@ impl<
 }
 
 pub struct EnsureProportionAtLeast<N: U32, D: U32, AccountId, I=DefaultInstance>(
-	rstd::marker::PhantomData<(N, D, AccountId, I)>
+	sp_std::marker::PhantomData<(N, D, AccountId, I)>
 );
 impl<
 	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,

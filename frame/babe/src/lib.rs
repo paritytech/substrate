@@ -23,7 +23,7 @@
 pub use timestamp;
 use sp_timestamp;
 
-use rstd::{result, prelude::*};
+use sp_std::{result, prelude::*};
 use support::{decl_storage, decl_module, traits::FindAuthor, traits::Get};
 use sp_timestamp::OnTimestampSet;
 use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
@@ -445,7 +445,7 @@ impl<T: Trait> Module<T> {
 	/// randomness. Returns the new randomness.
 	fn randomness_change_epoch(next_epoch_index: u64) -> [u8; RANDOMNESS_LENGTH] {
 		let this_randomness = NextRandomness::get();
-		let segment_idx: u32 = <SegmentIndex>::mutate(|s| rstd::mem::replace(s, 0));
+		let segment_idx: u32 = <SegmentIndex>::mutate(|s| sp_std::mem::replace(s, 0));
 
 		// overestimate to the segment being full.
 		let rho_size = segment_idx.saturating_add(1) as usize * UNDER_CONSTRUCTION_SEGMENT_LENGTH;

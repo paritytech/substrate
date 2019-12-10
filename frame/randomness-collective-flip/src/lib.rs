@@ -52,7 +52,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, convert::TryInto};
+use sp_std::{prelude::*, convert::TryInto};
 use sp_runtime::traits::Hash;
 use support::{decl_module, decl_storage, traits::Randomness};
 use safe_mix::TripletMix;
