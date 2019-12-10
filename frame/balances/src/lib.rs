@@ -1019,7 +1019,6 @@ where
 			return Err("beneficiary account must pre-exist");
 		}
 		let free_balance = Self::free_balance(who);
-		// max_value - anything will never overflow
 		ensure!(Self::Balance::max_value() - value >= free_balance, "deposit would overflow");
 		// checked for overflow above
 		Self::set_free_balance(who, free_balance + value);
@@ -1031,7 +1030,6 @@ where
 		value: Self::Balance,
 	) -> Self::PositiveImbalance {
 		let free_balance = Self::free_balance(who);
-		// max_value - anything will never overflow
 		check_overflow!(Self::Balance::max_value() - value >= free_balance, "deposit would overflow");
 		// checked for overflow above
 		let (imbalance, _) = Self::make_free_balance_be(who, free_balance + value);
