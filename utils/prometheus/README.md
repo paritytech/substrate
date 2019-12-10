@@ -1,5 +1,5 @@
 # Substrate Prometheus Node Exporter
-
+![grants](./photo_2019-12-13_16-32-53.jpg)
 ## Introduction
 
 Prometheus is one of the most widely used monitoring tool for managing high availability services supported by [Cloud Native Computing Foundation](https://www.cncf.io/). By providing Prometheus exporter in substrate, node operators can easily adopt widely used display/alert tool such as Grafana without seting-up/operating external Prometheus agent through RPC connections. Easy access to such monitoring tools will benefit parachain develepers/operators and validators to have much higher availability quality of their services.
@@ -27,7 +27,7 @@ Start Grafana
 
 Here is the entry point of prometheus core module in Parity Substrate.
 
-client/prometheus/src/lib.rs
+utils/prometheus/src/lib.rs
 ```rust
 #[macro_use]
 extern crate lazy_static;
@@ -39,7 +39,7 @@ use hyper::service::service_fn_ok;
 use hyper::{Body, Request, Response, Server};
 pub use prometheus::{Encoder, HistogramOpts, Opts, TextEncoder};
 pub use prometheus::{Histogram, IntCounter, IntGauge, Result};
-pub use sr_primitives::traits::SaturatedConversion;
+pub use sp_runtime::traits::SaturatedConversion;
 use std::net::SocketAddr;
 
 pub mod metrics;
@@ -47,44 +47,44 @@ pub mod metrics;
 /// Initializes the metrics context, and starts an HTTP server
 /// to serve metrics.
 pub fn init_prometheus(prometheus_addr: SocketAddr) {
-    let addr = prometheus_addr;
-    let server = Server::bind(&addr)
-        .serve(|| {
-            // This is the `Service` that will handle the connection.
-            // `service_fn_ok` is a helper to convert a function that
-            // returns a Response into a `Service`.
-            service_fn_ok(move |req: Request<Body>| {
-                if req.uri().path() == "/metrics" {
-                    let metric_families = prometheus::gather();
-                    let mut buffer = vec![];
-                    let encoder = TextEncoder::new();
-                    encoder.encode(&metric_families, &mut buffer).unwrap();
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .header("Content-Type", encoder.format_type())
-                        .body(Body::from(buffer))
-                        .expect("Sends OK(200) response with one or more data metrics")
-                } else {
-                    Response::builder()
-                        .status(StatusCode::NOT_FOUND)
-                        .body(Body::from("Not found."))
-                        .expect("Sends NOT_FOUND(404) message with no data metric")
-                }
-            })
-        })
-        .map_err(|e| error!("server error: {}", e));
+  let addr = prometheus_addr;
+  let server = Server::bind(&addr)
+    .serve(|| {
+      // This is the `Service` that will handle the connection.
+      // `service_fn_ok` is a helper to convert a function that
+      // returns a Response into a `Service`.
+      service_fn_ok(move |req: Request<Body>| {
+        if req.uri().path() == "/metrics" {
+          let metric_families = prometheus::gather();
+          let mut buffer = vec![];
+          let encoder = TextEncoder::new();
+          encoder.encode(&metric_families, &mut buffer).unwrap();
+          Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", encoder.format_type())
+            .body(Body::from(buffer))
+            .expect("Sends OK(200) response with one or more data metrics")
+        } else {
+          Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::from("Not found."))
+            .expect("Sends NOT_FOUND(404) message with no data metric")
+        }
+      })
+    })
+    .map_err(|e| error!("server error: {}", e));
 
-    info!("Exporting metrics at http://{}/metrics", addr);
+  info!("Exporting metrics at http://{}/metrics", addr);
 
-    let mut rt = tokio::runtime::Builder::new()
-        .core_threads(1) // one thread is sufficient
-        .build()
-        .expect("Builds one thread of tokio runtime exporter for prometheus");
+  let mut rt = tokio::runtime::Builder::new()
+    .core_threads(1) // one thread is sufficient
+    .build()
+    .expect("Builds one thread of tokio runtime exporter for prometheus");
 
-    std::thread::spawn(move || {
-        rt.spawn(server);
-        rt.shutdown_on_idle().wait().unwrap();
-    });
+  std::thread::spawn(move || {
+    rt.spawn(server);
+    rt.shutdown_on_idle().wait().unwrap();
+  });
 }
 
 #[macro_export]
@@ -107,16 +107,6 @@ macro_rules! prometheus_histogram(
   }
 );
 
-#[macro_export]
-macro_rules! prometheus_counter(
-  ($($metric:expr => $value:expr),*) => {
-    use $crate::{metrics::*};
-    $(
-        metrics::set_counter(&$metric, $value);
-    )*
-  }
-);
-
 /*
 TODO: Make abstract type for all metrics(e.g. Gauge, Histogram, Counter) with generic traits so that all metrics can be set up with one function `set`
 #[macro_export]
@@ -135,7 +125,7 @@ Here is the dependancies of the module.
 client/prometheus/Cargo.toml
 ```toml
 [package]
-name = "substrate-prometheus"
+name = "sc-prometheus"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "prometheus utils"
@@ -147,6 +137,7 @@ lazy_static = "1.0"
 log = "0.4"
 prometheus = { version = "0.7", features = ["nightly", "process"]}
 tokio = "0.1"
+sp-runtime = { package = "sp-runtime",path = "../../primitives/runtime" }
 
 [dev-dependencies]
 reqwest = "0.9"
@@ -155,66 +146,137 @@ reqwest = "0.9"
 **Abbreviation of the package in service manager of parity substrate**	
 client/service/Cargo.toml
 ```toml
-....
-promet = { package = "substrate-prometheus", path="../../core/prometheus"}
-....
+[dependencies]
+sc-prometheus = { package = "sc-prometheus", path="../../utils/prometheus"}
 ```
 
 **Metrics builder as same as substrate-telemetry**	
-client/service/src/builder.rs
+client/service/src/builder.rsL1271 , L1112
 ```rust
+use sc_prometheus::prometheus_gauge;
+...
+			telemetry!(
+				SUBSTRATE_INFO;
+				"system.interval";
+				"peers" => num_peers,
+				"height" => best_number,
+				"best" => ?best_hash,
+				"txcount" => txpool_status.ready,
+				"cpu" => cpu_usage,
+				"memory" => memory,
+				"finalized_height" => finalized_number,
+				"finalized_hash" => ?info.chain.finalized_hash,
+				"bandwidth_download" => bandwidth_download,
+				"bandwidth_upload" => bandwidth_upload,
+				"used_state_cache_size" => used_state_cache_size,
+			);
+			prometheus_gauge!(
+				MEMPOOL_SIZE => used_state_cache_size as u64,
+				NODE_MEMORY => memory as u64,
+				NODE_CPU => cpu_usage as u64,
+				TX_COUNT => txpool_status.ready as u64,
+				FINALITY_HEIGHT => finalized_number as u64,
+				BEST_HEIGHT => best_number as u64,
+				P2P_PEERS_NUM => num_peers as u64,
+				P2P_NODE_DOWNLOAD => net_status.average_download_per_sec as u64,
+				P2P_NODE_UPLOAD => net_status.average_upload_per_sec as u64
+			  );
+			let _ = record_metrics!(
+				"peers" => num_peers,
+				"height" => best_number,
+				"txcount" => txpool_status.ready,
+				"cpu" => cpu_usage,
+				"memory" => memory,
+				"finalized_height" => finalized_number,
+				"bandwidth_download" => bandwidth_download,
+				"bandwidth_upload" => bandwidth_upload,
+				"used_state_cache_size" => used_state_cache_size,
+			  );
+			Ok(())
+		}).select(exit.clone().map(Ok).compat()).then(|_| Ok(()));
+		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
 
-				.....
-				let _ = to_spawn_tx.unbounded_send(Box::new(future
-				.select(exit.clone())
-				.then(|_| Ok(()))));
-			telemetry
-		});
-----------------
-match config.prometheus_endpoint {
-			None => (), 
-			Some(x) => {let _prometheus = promet::init_prometheus(x);}	
+...
+		// prometheus init
+		match config.prometheus_endpoint {
+			None => (),
+			Some(x) => {
+				let _prometheus = sc_prometheus::init_prometheus(x);
+			}
 		}
-		
--------------------		
-		Ok(NewService {
-			client,
-			network,
-				.....
+		// Grafana data source
+		if let Some(port) = config.grafana_port {
+			let future = select(
+				grafana_data_source::run_server(port).boxed(),
+				exit.clone()
+			).map(|either| match either {
+				Either::Left((result, _)) => result.map_err(|_| ()),
+				Either::Right(_) => Ok(())
+			}).compat();
+
+			let _ = to_spawn_tx.unbounded_send(Box::new(future));
+    }
+
+		// Instrumentation
+		if let Some(tracing_targets) = config.tracing_targets.as_ref() {
+			let subscriber = sc_tracing::ProfilingSubscriber::new(
+				config.tracing_receiver, tracing_targets
+			);
+			match tracing::subscriber::set_global_default(subscriber) {
+				Ok(_) => (),
+				Err(e) => error!(target: "tracing", "Unable to set global default subscriber {}", e),
+			}
+		}
+
+
 ```
 substrate/Cargo.toml
 ```toml
-        ....
 [workspace]
 members = [
-	"client/prometheus",
-        ....
+	"utils/prometheus",
 ```
 ### CLI Config
 client/cli/src/lib.rs
 ```rust
-fn crate_run_node_config
+fn crate_run_node_config{
 ...
-}
+	// Override telemetry
+	if cli.no_telemetry {
+		config.telemetry_endpoints = None;
+	} else if !cli.telemetry_endpoints.is_empty() {
+		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
+	}
 
+	config.tracing_targets = cli.tracing_targets.into();
+	config.tracing_receiver = cli.tracing_receiver.into();
+	
+	// Override prometheus
 	match cli.prometheus_endpoint {
 		None => {config.prometheus_endpoint = None;},
 		Some(x) => {
 			config.prometheus_endpoint = Some(parse_address(&format!("{}:{}", x, 33333), cli.prometheus_port)?);
 			}
 	}
-...
+	// Imply forced authoring on --dev
+	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
 
+	Ok(config)
+...
+}
 ```
 
 client/cli/src/params.rs
 ```rust
 pub struct RunCmd{
-/// Specify HTTP RPC server TCP port.
-#[structopt(long = "prometheus-port", value_name = "PORT")]
+...
+/// Prometheus exporter TCP port.
+	#[structopt(long = "prometheus-port", value_name = "PORT")]
 	pub prometheus_port: Option<u16>,
-#[structopt(long = "prometheus-addr", value_name = "Local IP address")]
+	/// Prometheus exporter IP addr.
+	#[structopt(long = "prometheus-addr", value_name = "Local IP address")]
 	pub prometheus_endpoint: Option<String>,
+...
 }
 ```
 client/service/src/config.rs
@@ -222,7 +284,8 @@ client/service/src/config.rs
 #[derive(Clone)]
 pub struct Configuration<C, G, E = NoExtension> {
     ...
-    pub prometheus_endpoint: Option<SocketAddr>,
+	/// Promteheus IP addr. `None` if disabled. and defult port 33333
+	pub prometheus_endpoint: Option<SocketAddr>,
     ...
 }
 impl<C, G, E> Configuration<C, G, E> where
@@ -250,11 +313,12 @@ impl<C, G, E> Configuration<C, G, E> where
 ### Metrics Add 
 ex) consensus_FINALITY_HEIGHT
 
-client/prometheus/src/metrics.rs
+utils/prometheus/src/metrics.rs
 
 ```rust
 pub use crate::*;
 
+/// Gauge type metrics generation function
 pub fn try_create_int_gauge(name: &str, help: &str) -> Result<IntGauge> {
     let opts = Opts::new(name, help);
     let gauge = IntGauge::with_opts(opts)?;
@@ -262,12 +326,14 @@ pub fn try_create_int_gauge(name: &str, help: &str) -> Result<IntGauge> {
     Ok(gauge)
 }
 
+///Gauge Metrics a value in injection.
 pub fn set_gauge(gauge: &Result<IntGauge>, value: u64) {
     if let Ok(gauge) = gauge {
         gauge.set(value as i64);
     }
 }
 
+///All of the metrics in the prometheus are managed by the lazy_static.
 lazy_static! {
     pub static ref FINALITY_HEIGHT: Result<IntGauge> = try_create_int_gauge(
         "consensus_finality_block_height_number",
@@ -279,13 +345,13 @@ lazy_static! {
 client/service/Cargo.toml
 ```rust
 ...
-promet = { package = "substrate-prometheus", path="../prometheus"}
+sc-prometheus = { package = "sc-prometheus", path="../../utils/prometheus"}
 ...
 ```
 client/service/src/builder.rs
 ```rust
 .....
-use promet::{prometheus_gauge};
+use sc-prometheus::{prometheus_gauge};
 .....
 		let tel_task = state_rx.for_each(move |(net_status, _)| {
 			let info = client_.info();
@@ -359,7 +425,6 @@ Consensus metrics, namespace: `substrate`
 | consensus_finality_block_height_number | IntGauge  |          | finality Height of the chain                                    |
 | consensus_best_block_height_number     | IntGauge  |          | best Height of the chain                                        |
 | consensus_target_syn_number            | IntGauge  |          | syning Height target number                                     |
-| consensus_block_interval_seconds       | Histogram |          | Time between this and last block (Block.Header.Time) in seconds |
 | consensus_num_txs                      | Gauge     |          | Number of transactions                                          |
 | consensus_node_memory                  | IntGauge  |          | Node's primary memory                                           |
 | consensus_node_cpu                     | IntGauge  |          | Node's cpu load                                                 |
@@ -367,6 +432,12 @@ Consensus metrics, namespace: `substrate`
 | p2p_peer_receive_bytes_per_sec         | IntGauge  |          | number of bytes received from a given peer                      |
 | p2p_peer_send_bytes_per_sec            | IntGauge  |          | number of bytes sent to a given peer                            |
 | mempool_size                           | IntGauge  |          | Number of uncommitted transactions                              |
+| Resource_receive_bytes_per_sec(Future) | IntGauge  |          | Operating System of bytes received                              |
+| Resource_send_bytes_per_sec(Future)    | IntGauge  |          | Operating System of bytes sent                                  |
+| Resource_cpu_use(Future)               | IntGauge  |          | Operating System cpu load                                       |
+| Resource_disk_use(Future)               | IntGauge  |          | Operating System disk use                                      |
+| validator_sign_prevote(Future)         | IntGauge  | validator addr | validator sign vote list                               	  |
+| validator_sign_precommit(Future)       | IntGauge  | validator addr | validator sign commit list                                |
 
 
 ## Start Prometheus

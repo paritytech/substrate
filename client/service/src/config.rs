@@ -75,7 +75,7 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub rpc_cors: Option<Vec<String>>,
 	/// Grafana data source http port. `None` if disabled.
 	pub grafana_port: Option<SocketAddr>,
-
+	/// Promteheus IP addr. `None` if disabled. and defult port 33333
 	pub prometheus_endpoint: Option<SocketAddr>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
