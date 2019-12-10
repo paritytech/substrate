@@ -18,7 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 
 mod app {
 	use app_crypto::{app_crypto, key_types::AUTHORITY_DISCOVERY, sr25519};

@@ -29,7 +29,7 @@ pub use codec;
 #[doc(hidden)]
 pub use serde;
 #[doc(hidden)]
-pub use rstd;
+pub use sp_std;
 
 #[doc(hidden)]
 pub use paste;
@@ -40,8 +40,8 @@ pub use app_crypto;
 #[cfg(feature = "std")]
 pub use primitives::storage::{StorageOverlay, ChildrenStorageOverlay};
 
-use rstd::prelude::*;
-use rstd::convert::TryFrom;
+use sp_std::prelude::*;
+use sp_std::convert::TryFrom;
 use primitives::{crypto, ed25519, sr25519, ecdsa, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
@@ -243,7 +243,7 @@ impl traits::IdentifyAccount for MultiSigner {
 		match self {
 			MultiSigner::Ed25519(who) => <[u8; 32]>::from(who).into(),
 			MultiSigner::Sr25519(who) => <[u8; 32]>::from(who).into(),
-			MultiSigner::Ecdsa(who) => runtime_io::hashing::blake2_256(who.as_ref()).into(),
+			MultiSigner::Ecdsa(who) => sp_io::hashing::blake2_256(who.as_ref()).into(),
 		}
 	}
 }
@@ -306,10 +306,10 @@ impl Verify for MultiSignature {
 			(MultiSignature::Ed25519(ref sig), who) => sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
 			(MultiSignature::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
 			(MultiSignature::Ecdsa(ref sig), who) => {
-				let m = runtime_io::hashing::blake2_256(msg.get());
-				match runtime_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
+				let m = sp_io::hashing::blake2_256(msg.get());
+				match sp_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
 					Ok(pubkey) =>
-						&runtime_io::hashing::blake2_256(pubkey.as_ref())
+						&sp_io::hashing::blake2_256(pubkey.as_ref())
 							== <dyn AsRef<[u8; 32]>>::as_ref(who),
 					_ => false,
 				}
@@ -613,14 +613,14 @@ macro_rules! assert_eq_error_rate {
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
 pub struct OpaqueExtrinsic(pub Vec<u8>);
 
-impl rstd::fmt::Debug for OpaqueExtrinsic {
+impl sp_std::fmt::Debug for OpaqueExtrinsic {
 	#[cfg(feature = "std")]
-	fn fmt(&self, fmt: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(fmt, "{}", primitives::hexdisplay::HexDisplay::from(&self.0))
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _fmt: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }

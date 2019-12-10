@@ -23,13 +23,14 @@ mod backend;
 
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
-use rstd::vec::Vec;
-use support::{dispatch::Result, decl_module, decl_storage, decl_event};
+use sp_std::{vec::Vec, marker::PhantomData};
+use support::{dispatch, decl_module, decl_storage, decl_event};
+use support::weights::{Weight, WeighData, ClassifyDispatch, DispatchClass, PaysFee};
 use support::traits::{Currency, WithdrawReason, ExistenceRequirement};
 use system::ensure_signed;
 use sp_runtime::ModuleId;
 use support::weights::SimpleDispatchInfo;
-use sp_runtime::traits::{UniqueSaturatedInto, AccountIdConversion};
+use sp_runtime::traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion};
 use primitives::{U256, H256, H160};
 use evm::{ExitReason, ExitSucceed, ExitError};
 use evm::executor::StackExecutor;
@@ -82,6 +83,38 @@ impl Precompiles for () {
 	}
 }
 
+struct WeightForCallCreate<F>(PhantomData<F>);
+
+impl<F> Default for WeightForCallCreate<F> {
+	fn default() -> Self {
+		Self(PhantomData)
+	}
+}
+
+impl<F: FeeCalculator> WeighData<(&H160, &Vec<u8>, &U256, &u32)> for WeightForCallCreate<F> {
+	fn weigh_data(&self, (_, _, _, gas_provided): (&H160, &Vec<u8>, &U256, &u32)) -> Weight {
+		F::gas_price().saturated_into::<Weight>().saturating_mul(*gas_provided)
+	}
+}
+
+impl<F: FeeCalculator> WeighData<(&Vec<u8>, &U256, &u32)> for WeightForCallCreate<F> {
+	fn weigh_data(&self, (_, _, gas_provided): (&Vec<u8>, &U256, &u32)) -> Weight {
+		F::gas_price().saturated_into::<Weight>().saturating_mul(*gas_provided)
+	}
+}
+
+impl<F: FeeCalculator, T> ClassifyDispatch<T> for WeightForCallCreate<F> {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+
+impl<F: FeeCalculator> PaysFee for WeightForCallCreate<F> {
+	fn pays_fee(&self) -> bool {
+		true
+	}
+}
+
 /// EVM module trait
 pub trait Trait: system::Trait + timestamp::Trait {
 	/// Calculator for current gas price.
@@ -117,7 +150,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn deposit_balance(origin, value: BalanceOf<T>) -> Result {
+		fn deposit_balance(origin, value: BalanceOf<T>) -> dispatch::Result {
 			let sender = ensure_signed(origin)?;
 
 			let imbalance = T::Currency::withdraw(
@@ -138,7 +171,7 @@ decl_module! {
 		}
 
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn withdraw_balance(origin, value: BalanceOf<T>) -> Result {
+		fn withdraw_balance(origin, value: BalanceOf<T>) -> dispatch::Result {
 			let sender = ensure_signed(origin)?;
 			let address = T::ConvertAccountId::convert_account_id(&sender);
 			let bvalue = U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(value));
@@ -161,8 +194,10 @@ decl_module! {
 			Ok(())
 		}
 
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn call(origin, target: H160, input: Vec<u8>, value: U256, gas_limit: u32) -> Result {
+		#[weight = WeightForCallCreate::<T::FeeCalculator>::default()]
+		fn call(origin, target: H160, input: Vec<u8>, value: U256, gas_limit: u32)
+			-> dispatch::Result
+		{
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 			let gas_price = T::FeeCalculator::gas_price();
@@ -212,8 +247,8 @@ decl_module! {
 			ret
 		}
 
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn create(origin, init: Vec<u8>, value: U256, gas_limit: u32) -> Result {
+		#[weight = WeightForCallCreate::<T::FeeCalculator>::default()]
+		fn create(origin, init: Vec<u8>, value: U256, gas_limit: u32) -> dispatch::Result {
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 			let gas_price = T::FeeCalculator::gas_price();

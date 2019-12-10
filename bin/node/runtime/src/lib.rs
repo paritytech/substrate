@@ -20,7 +20,7 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use support::{
 	construct_runtime, parameter_types,
 	weights::Weight,
@@ -614,7 +614,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl txpool_runtime_api::TaggedTransactionQueue<Block> for Runtime {
+	impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
 		}

@@ -159,8 +159,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
-use rstd::{cmp, result, mem, fmt::Debug};
+use sp_std::prelude::*;
+use sp_std::{cmp, result, mem, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module,
@@ -614,7 +614,7 @@ mod imbalances {
 		result, Subtrait, DefaultInstance, Imbalance, Trait, Zero, Instance, Saturating,
 		StorageValue, TryDrop,
 	};
-	use rstd::mem;
+	use sp_std::mem;
 
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
 	/// funds have been created without any equal and opposite accounting.
@@ -934,9 +934,14 @@ where
 			if !<FreeBalance<T, I>>::exists(dest) {
 				Self::new_account(dest, new_to_balance);
 			}
+
+			// Emit transfer event.
+			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
+
+			// Take action on the set_free_balance call.
+			// This will emit events that _resulted_ from the transfer.
 			Self::set_free_balance(dest, new_to_balance);
 			T::TransferPayment::on_unbalanced(NegativeImbalance::new(fee));
-			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
 		}
 
 		Ok(())

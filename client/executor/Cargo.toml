@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 derive_more = "0.99.2"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-runtime_io = { package = "sp-io", path = "../../primitives/sr-io" }
+sp-io = { path = "../../primitives/io" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
 trie = { package = "sp-trie", path = "../../primitives/trie" }
 serializer = { package = "sp-serializer", path = "../../primitives/serializer" }

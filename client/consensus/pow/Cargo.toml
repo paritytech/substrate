@@ -9,7 +9,7 @@ edition = "2018"
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 primitives = { package = "sp-core", path = "../../../primitives/core" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
-sp-runtime = { path = "../../../primitives/sr-primitives" }
+sp-runtime = { path = "../../../primitives/runtime" }
 client-api = { package = "sc-client-api", path = "../../api" }
 block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder/runtime-api" }
 inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }

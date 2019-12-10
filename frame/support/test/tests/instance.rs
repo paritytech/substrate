@@ -271,7 +271,7 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
-fn new_test_ext() -> runtime_io::TestExternalities {
+fn new_test_ext() -> sp_io::TestExternalities {
 	GenesisConfig{
 		module1_Instance1: Some(module1::GenesisConfig {
 			value: 3,
@@ -300,7 +300,7 @@ fn new_test_ext() -> runtime_io::TestExternalities {
 
 #[test]
 fn storage_instance_independance() {
-	let mut storage = (std::collections::HashMap::new(), std::collections::HashMap::new());
+	let mut storage = Default::default();
 	state_machine::BasicExternalities::execute_with_storage(&mut storage, || {
 		module2::Value::<Runtime>::put(0);
 		module2::Value::<Runtime, module2::Instance1>::put(0);

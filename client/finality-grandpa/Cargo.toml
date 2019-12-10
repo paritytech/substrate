@@ -14,7 +14,7 @@ tokio-executor = "0.1.8"
 tokio-timer = "0.2.11"
 rand = "0.7.2"
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-sp-runtime = {  path = "../../primitives/sr-primitives" }
+sp-runtime = {  path = "../../primitives/runtime" }
 consensus_common = { package = "sp-consensus", path = "../../primitives/consensus/common" }
 primitives = { package = "sp-core",  path = "../../primitives/core" }
 sc-telemetry = { path = "../telemetry" }
@@ -26,7 +26,7 @@ inherents = { package = "sp-inherents", path = "../../primitives/inherents" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 network = { package = "sc-network", path = "../network" }
 sp-finality-tracker = { path = "../../primitives/finality-tracker" }
-fg_primitives = { package = "sp-finality-granpda", path = "../../primitives/finality-grandpa" }
+fg_primitives = { package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 grandpa = { package = "finality-grandpa", version = "0.10.1", features = ["derive-codec"] }
 
 [dev-dependencies]

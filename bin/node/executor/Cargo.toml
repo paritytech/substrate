@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 trie-root = "0.15.2"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-runtime_io = { package = "sp-io", path = "../../../primitives/sr-io" }
+sp-io = { path = "../../../primitives/io" }
 state_machine = { package = "sp-state-machine", path = "../../../primitives/state-machine" }
 sc-executor = { path = "../../../client/executor" }
 primitives = { package = "sp-core", path = "../../../primitives/core" }
@@ -26,7 +26,7 @@ indices = { package = "pallet-indices", path = "../../../frame/indices" }
 node-testing = { path = "../testing" }
 runtime_support = { package = "frame-support", path = "../../../frame/support" }
 session = { package = "pallet-session", path = "../../../frame/session" }
-sp-runtime = { path = "../../../primitives/sr-primitives" }
+sp-runtime = { path = "../../../primitives/runtime" }
 system = { package = "frame-system", path = "../../../frame/system" }
 test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
 timestamp = { package = "pallet-timestamp", path = "../../../frame/timestamp" }
@@ -46,4 +46,3 @@ stress-test = []
 [[bench]]
 name = "bench"
 harness = false
-

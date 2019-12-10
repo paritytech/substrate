@@ -17,8 +17,8 @@
 //! Module helpers for offchain calls.
 
 use codec::Encode;
-use rstd::convert::TryInto;
-use rstd::prelude::Vec;
+use sp_std::convert::TryInto;
+use sp_std::prelude::Vec;
 use sp_runtime::app_crypto::{RuntimeAppPublic, AppPublic, AppSignature};
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount};
 use support::debug;
@@ -139,7 +139,7 @@ pub trait SignAndSubmitTransaction<T: crate::Trait, Call> {
 			::create_transaction::<Self::Signer>(call, public, id, expected)
 			.ok_or(())?;
 		let xt = Self::Extrinsic::new(call, Some(signature_data)).ok_or(())?;
-		runtime_io::offchain::submit_transaction(xt.encode())
+		sp_io::offchain::submit_transaction(xt.encode())
 	}
 }
 
@@ -158,7 +158,7 @@ pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 	/// and `Err` if transaction was rejected from the pool.
 	fn submit_unsigned(call: impl Into<Call>) -> Result<(), ()> {
 		let xt = Self::Extrinsic::new(call.into(), None).ok_or(())?;
-		runtime_io::offchain::submit_transaction(xt.encode())
+		sp_io::offchain::submit_transaction(xt.encode())
 	}
 }
 
@@ -246,7 +246,7 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 /// If you only need the ability to submit unsigned transactions,
 /// you may substitute both `Signer` and `CreateTransaction` with any type.
 pub struct TransactionSubmitter<Signer, CreateTransaction, Extrinsic> {
-	_signer: rstd::marker::PhantomData<(Signer, CreateTransaction, Extrinsic)>,
+	_signer: sp_std::marker::PhantomData<(Signer, CreateTransaction, Extrinsic)>,
 }
 
 impl<S, C, E> Default for TransactionSubmitter<S, C, E> {

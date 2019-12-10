@@ -268,7 +268,7 @@ impl ExtBuilder {
 		INSTANTIATION_FEE.with(|v| *v.borrow_mut() = self.instantiation_fee);
 		BLOCK_GAS_LIMIT.with(|v| *v.borrow_mut() = self.block_gas_limit);
 	}
-	pub fn build(self) -> runtime_io::TestExternalities {
+	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		balances::GenesisConfig::<Test> {
@@ -282,7 +282,7 @@ impl ExtBuilder {
 			},
 			gas_price: self.gas_price,
 		}.assimilate_storage(&mut t).unwrap();
-		runtime_io::TestExternalities::new(t)
+		sp_io::TestExternalities::new(t)
 	}
 }
 

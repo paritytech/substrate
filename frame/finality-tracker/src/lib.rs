@@ -20,7 +20,7 @@
 
 use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
 use sp_runtime::traits::{One, Zero, SaturatedConversion};
-use rstd::{prelude::*, result, cmp, vec};
+use sp_std::{prelude::*, result, cmp, vec};
 use support::{decl_module, decl_storage};
 use support::traits::Get;
 use frame_system::{ensure_none, Trait as SystemTrait};
@@ -193,7 +193,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 mod tests {
 	use super::*;
 
-	use runtime_io::TestExternalities;
+	use sp_io::TestExternalities;
 	use primitives::H256;
 	use sp_runtime::{
 		testing::Header, Perbill,
