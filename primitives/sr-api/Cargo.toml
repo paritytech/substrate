@@ -16,6 +16,8 @@ state-machine = { package = "sp-state-machine", path = "../../primitives/state-m
 [dev-dependencies]
 criterion = "0.3.0"
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
+sp-runtime = { path = "../runtime" }
+sp-version = { path = "../sr-version" }
 
 [[bench]]
 name = "bench"

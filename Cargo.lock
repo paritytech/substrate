@@ -5990,10 +5990,6 @@ dependencies = [
  "proc-macro-crate 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro2 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-api 2.0.0",
- "sp-runtime 2.0.0",
- "sp-version 2.0.0",
- "substrate-test-runtime-client 2.0.0",
  "syn 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
