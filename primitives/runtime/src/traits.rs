@@ -16,15 +16,9 @@
 
 //! Primitives for the runtime modules.
 
-<<<<<<< HEAD
-use rstd::prelude::*;
-use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
-use sp_io;
-=======
 use sp_std::prelude::*;
 use sp_std::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
-use runtime_io;
->>>>>>> f588aa53af54029c6b45f26342204482f2e946c5
+use sp_io;
 #[cfg(feature = "std")]
 use std::fmt::Display;
 #[cfg(feature = "std")]

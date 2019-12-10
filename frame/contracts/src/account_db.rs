@@ -21,17 +21,10 @@ use super::{
 	TrieIdGenerator,
 };
 use crate::exec::StorageKey;
-<<<<<<< HEAD
-use rstd::cell::RefCell;
-use rstd::collections::btree_map::{BTreeMap, Entry};
-use rstd::prelude::*;
-use sp_io::hashing::blake2_256;
-=======
 use sp_std::cell::RefCell;
 use sp_std::collections::btree_map::{BTreeMap, Entry};
 use sp_std::prelude::*;
-use runtime_io::hashing::blake2_256;
->>>>>>> f588aa53af54029c6b45f26342204482f2e946c5
+use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Zero};
 use support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
 use support::{storage::child, StorageMap};

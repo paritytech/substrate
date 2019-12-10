@@ -17,13 +17,8 @@
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
 
-<<<<<<< HEAD
-use rstd::prelude::*;
-use sp_io::{
-=======
 use sp_std::prelude::*;
-use runtime_io::{
->>>>>>> f588aa53af54029c6b45f26342204482f2e946c5
+use sp_io::{
 	storage::root as storage_root, storage::changes_root as storage_changes_root,
 	hashing::blake2_256,
 };
