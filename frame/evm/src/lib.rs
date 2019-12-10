@@ -23,7 +23,7 @@ mod backend;
 
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
-use rstd::{vec::Vec, marker::PhantomData};
+use sp_std::{vec::Vec, marker::PhantomData};
 use support::{dispatch::Result, decl_module, decl_storage, decl_event};
 use support::weights::{Weight, WeighData, ClassifyDispatch, DispatchClass, PaysFee};
 use support::traits::{Currency, WithdrawReason, ExistenceRequirement};

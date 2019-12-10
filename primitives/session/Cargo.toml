@@ -6,9 +6,9 @@ edition = "2018"
 
 [dependencies]
 sp-api = { path = "../sr-api", default-features = false }
-rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-std = { path = "../std", default-features = false }
 sp-runtime = { path = "../runtime", optional = true }
 
 [features]
 default = [ "std" ]
-std = [ "sp-api/std", "rstd/std", "sp-runtime" ]
+std = [ "sp-api/std", "sp-std/std", "sp-runtime" ]

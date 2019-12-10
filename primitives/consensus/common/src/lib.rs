@@ -181,3 +181,20 @@ impl<Block: BlockT> CanAuthorWith<Block> for AlwaysCanAuthor {
 		Ok(())
 	}
 }
+
+/// A type from which a slot duration can be obtained.
+pub trait SlotData {
+	/// Gets the slot duration.
+	fn slot_duration(&self) -> u64;
+
+	/// The static slot key
+	const SLOT_KEY: &'static [u8];
+}
+
+impl SlotData for u64 {
+	fn slot_duration(&self) -> u64 {
+		*self
+	}
+
+	const SLOT_KEY: &'static [u8] = b"aura_slot_duration";
+}

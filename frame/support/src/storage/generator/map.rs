@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[cfg(not(feature = "std"))]
-use rstd::prelude::*;
-use rstd::borrow::Borrow;
+use sp_std::prelude::*;
+use sp_std::borrow::Borrow;
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Ref, EncodeAppend};
 use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}, traits::Len};
 

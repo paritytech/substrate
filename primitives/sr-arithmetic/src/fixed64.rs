@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use rstd::{
+use sp_std::{
 	ops, prelude::*,
 	convert::{TryFrom, TryInto},
 };
@@ -179,14 +179,14 @@ impl CheckedDiv for Fixed64 {
 	}
 }
 
-impl rstd::fmt::Debug for Fixed64 {
+impl sp_std::fmt::Debug for Fixed64 {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "Fixed64({},{})", self.0 / DIV, (self.0 % DIV) / 1000)
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }

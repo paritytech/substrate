@@ -18,7 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 
 #[cfg(feature = "std")]
 use sp_runtime::{generic::BlockId, traits::{ProvideRuntimeApi, Block as BlockT}};

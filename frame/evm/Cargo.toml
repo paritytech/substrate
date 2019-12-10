@@ -13,7 +13,7 @@ timestamp = { package = "pallet-timestamp", path = "../timestamp", default-featu
 balances = { package = "pallet-balances", path = "../balances", default-features = false }
 primitives = { package = "sp-core", path = "../../primitives/core", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-std = { path = "../../primitives/std", default-features = false }
 runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
 primitive-types = { version = "0.6", default-features = false, features = ["rlp"] }
 rlp = { version = "0.4", default-features = false }
@@ -31,7 +31,7 @@ std = [
 	"system/std",
 	"balances/std",
 	"runtime-io/std",
-	"rstd/std",
+	"sp-std/std",
 	"sha3/std",
 	"rlp/std",
 	"primitive-types/std",

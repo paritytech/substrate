@@ -31,7 +31,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use support::{
 	decl_storage, decl_module,
@@ -179,13 +179,13 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for ChargeTransactionPayment<T> {
+impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "ChargeTransactionPayment<{:?}>", self.0)
 	}
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
@@ -198,7 +198,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 	type AdditionalSigned = ();
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
-	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
+	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn validate(
 		&self,
@@ -248,7 +248,7 @@ mod tests {
 		traits::{BlakeTwo256, IdentityLookup, Extrinsic},
 	};
 	use balances::Call as BalancesCall;
-	use rstd::cell::RefCell;
+	use sp_std::cell::RefCell;
 	use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
 	const CALL: &<Runtime as system::Trait>::Call = &Call::Balances(BalancesCall::transfer(2, 69));
@@ -543,4 +543,3 @@ mod tests {
 		});
 	}
 }
-

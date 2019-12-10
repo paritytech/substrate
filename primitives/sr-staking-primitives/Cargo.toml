@@ -7,12 +7,12 @@ edition = "2018"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 sp-runtime = { path = "../runtime", default-features = false }
-rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-std = { path = "../std", default-features = false }
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
 	"sp-runtime/std",
-	"rstd/std",
+	"sp-std/std",
 ]

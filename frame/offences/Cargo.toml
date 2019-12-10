@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 balances = { package = "pallet-balances", path = "../balances", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-std = { path = "../../primitives/std", default-features = false }
 serde = { version = "1.0.101", optional = true }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 sp-staking = { path = "../../primitives/sr-staking-primitives", default-features = false }
@@ -23,7 +23,7 @@ default = ["std"]
 std = [
 	"balances/std",
 	"codec/std",
-	"rstd/std",
+	"sp-std/std",
 	"serde",
 	"sp-runtime/std",
 	"sp-staking/std",

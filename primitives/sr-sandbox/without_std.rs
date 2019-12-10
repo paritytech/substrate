@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use rstd::{prelude::*, slice, marker, mem, vec, rc::Rc};
+use sp_std::{prelude::*, slice, marker, mem, vec, rc::Rc};
 use codec::{Decode, Encode};
 use primitives::sandbox as sandbox_primitives;
 use super::{Error, TypedValue, ReturnValue, HostFuncType};
 use runtime_io::sandbox;
 
 mod ffi {
-	use rstd::mem;
+	use sp_std::mem;
 	use super::HostFuncType;
 
 	/// Index into the default table that points to a `HostFuncType`.

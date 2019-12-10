@@ -64,6 +64,76 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		self.storage
 	}
 
+	/// Return the next key in the trie i.e. the minimum key that is strictly superior to `key` in
+	/// lexicographic order.
+	pub fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+		self.next_storage_key_from_root(&self.root, key)
+	}
+
+	/// Return the next key in the child trie i.e. the minimum key that is strictly superior to
+	/// `key` in lexicographic order.
+	pub fn next_child_storage_key(
+		&self,
+		storage_key: &[u8],
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, String> {
+		let child_root = match self.storage(storage_key)? {
+			Some(child_root) => child_root,
+			None => return Ok(None),
+		};
+
+		let mut hash = H::Out::default();
+
+		if child_root.len() != hash.as_ref().len() {
+			return Err(format!("Invalid child storage hash at {:?}", storage_key));
+		}
+		// note: child_root and hash must be same size, panics otherwise.
+		hash.as_mut().copy_from_slice(&child_root[..]);
+
+		self.next_storage_key_from_root(&hash, key)
+	}
+
+	/// Return next key from main trie or child trie by providing corresponding root.
+	fn next_storage_key_from_root(
+		&self,
+		root: &H::Out,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, String> {
+		let mut read_overlay = S::Overlay::default();
+		let eph = Ephemeral {
+			storage: &self.storage,
+			overlay: &mut read_overlay,
+		};
+
+		let trie = TrieDB::<H>::new(&eph, root)
+			.map_err(|e| format!("TrieDB creation error: {}", e))?;
+		let mut iter = trie.iter()
+			.map_err(|e| format!("TrieDB iteration error: {}", e))?;
+
+		// The key just after the one given in input, basically `key++0`.
+		// Note: We are sure this is the next key if:
+		// * size of key has no limit (i.e. we can always add 0 to the path),
+		// * and no keys can be inserted between `key` and `key++0` (this is ensured by sr-io).
+		let mut potential_next_key = Vec::with_capacity(key.len() + 1);
+		potential_next_key.extend_from_slice(key);
+		potential_next_key.push(0);
+
+		iter.seek(&potential_next_key)
+			.map_err(|e| format!("TrieDB iterator seek error: {}", e))?;
+
+		let next_element = iter.next();
+
+		let next_key = if let Some(next_element) = next_element {
+			let (next_key, _) = next_element
+				.map_err(|e| format!("TrieDB iterator next error: {}", e))?;
+			Some(next_key)
+		} else {
+			None
+		};
+
+		Ok(next_key)
+	}
+
 	/// Get the value of storage at given key.
 	pub fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let mut read_overlay = S::Overlay::default();
@@ -343,5 +413,49 @@ impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use primitives::{Blake2Hasher, H256};
+	use trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut};
+	use super::*;
+
+	#[test]
+	fn next_storage_key_and_next_child_storage_key_work() {
+		// Contains values
+		let mut root_1 = H256::default();
+		// Contains child trie
+		let mut root_2 = H256::default();
+
+		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
+		{
+			let mut trie = TrieDBMut::new(&mut mdb, &mut root_1);
+			trie.insert(b"3", &[1]).expect("insert failed");
+			trie.insert(b"4", &[1]).expect("insert failed");
+			trie.insert(b"6", &[1]).expect("insert failed");
+		}
+		{
+			let mut trie = TrieDBMut::new(&mut mdb, &mut root_2);
+			trie.insert(b"MyChild", root_1.as_ref()).expect("insert failed");
+		};
+
+		let essence_1 = TrieBackendEssence::new(mdb, root_1);
+
+		assert_eq!(essence_1.next_storage_key(b"2"), Ok(Some(b"3".to_vec())));
+		assert_eq!(essence_1.next_storage_key(b"3"), Ok(Some(b"4".to_vec())));
+		assert_eq!(essence_1.next_storage_key(b"4"), Ok(Some(b"6".to_vec())));
+		assert_eq!(essence_1.next_storage_key(b"5"), Ok(Some(b"6".to_vec())));
+		assert_eq!(essence_1.next_storage_key(b"6"), Ok(None));
+
+		let mdb = essence_1.into_storage();
+		let essence_2 = TrieBackendEssence::new(mdb, root_2);
+
+		assert_eq!(essence_2.next_child_storage_key(b"MyChild", b"2"), Ok(Some(b"3".to_vec())));
+		assert_eq!(essence_2.next_child_storage_key(b"MyChild", b"3"), Ok(Some(b"4".to_vec())));
+		assert_eq!(essence_2.next_child_storage_key(b"MyChild", b"4"), Ok(Some(b"6".to_vec())));
+		assert_eq!(essence_2.next_child_storage_key(b"MyChild", b"5"), Ok(Some(b"6".to_vec())));
+		assert_eq!(essence_2.next_child_storage_key(b"MyChild", b"6"), Ok(None));
 	}
 }

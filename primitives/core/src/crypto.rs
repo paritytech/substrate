@@ -18,10 +18,10 @@
 //! Cryptographic utilities.
 // end::description[]
 
-use rstd::{vec::Vec, hash::Hash};
+use sp_std::{vec::Vec, hash::Hash};
 #[cfg(feature = "std")]
-use rstd::convert::TryInto;
-use rstd::convert::TryFrom;
+use sp_std::convert::TryInto;
+use sp_std::convert::TryFrom;
 #[cfg(feature = "std")]
 use parking_lot::Mutex;
 #[cfg(feature = "std")]
@@ -34,7 +34,7 @@ use base58::{FromBase58, ToBase58};
 
 use zeroize::Zeroize;
 #[doc(hidden)]
-pub use rstd::ops::Deref;
+pub use sp_std::ops::Deref;
 use runtime_interface::pass_by::PassByInner;
 
 /// The root phrase for our publicly known keys.
@@ -86,7 +86,7 @@ impl<T: Zeroize> AsRef<T> for Protected<T> {
 	}
 }
 
-impl<T: Zeroize> rstd::ops::Deref for Protected<T> {
+impl<T: Zeroize> sp_std::ops::Deref for Protected<T> {
 	type Target = T;
 
 	fn deref(&self) -> &T {
@@ -552,7 +552,7 @@ impl From<[u8; 32]> for AccountId32 {
 	}
 }
 
-impl<'a> rstd::convert::TryFrom<&'a [u8]> for AccountId32 {
+impl<'a> sp_std::convert::TryFrom<&'a [u8]> for AccountId32 {
 	type Error = ();
 	fn try_from(x: &'a [u8]) -> Result<AccountId32, ()> {
 		if x.len() == 32 {
@@ -578,15 +578,15 @@ impl std::fmt::Display for AccountId32 {
 	}
 }
 
-impl rstd::fmt::Debug for AccountId32 {
+impl sp_std::fmt::Debug for AccountId32 {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
@@ -625,7 +625,7 @@ mod dummy {
 		fn as_mut(&mut self) -> &mut[u8] {
 			unsafe {
 				#[allow(mutable_transmutes)]
-				rstd::mem::transmute::<_, &'static mut [u8]>(&b""[..])
+				sp_std::mem::transmute::<_, &'static mut [u8]>(&b""[..])
 			}
 		}
 	}
@@ -772,8 +772,8 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	///
 	/// `None` is returned if no matches are found.
 	#[cfg(feature = "std")]
-	fn from_string_with_seed(s: &str, password_override: Option<&str>) 
-		-> Result<(Self, Option<Self::Seed>), SecretStringError> 
+	fn from_string_with_seed(s: &str, password_override: Option<&str>)
+		-> Result<(Self, Option<Self::Seed>), SecretStringError>
 	{
 		let re = Regex::new(r"^(?P<phrase>[\d\w ]+)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
 			.expect("constructed from known-good static value; qed");

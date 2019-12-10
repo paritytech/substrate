@@ -6,7 +6,7 @@ description = "Data associated with its history"
 edition = "2018"
 
 [dependencies]
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+rstd = { package = "sp-std", path = "../../primitives/std", default-features = false }
 smallvec = { version = "0.6", default-features = false }
 
 [features]

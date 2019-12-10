@@ -18,14 +18,15 @@
 
 #[cfg(test)]
 use std::iter::FromIterator;
-#[cfg(test)]
-use historical_data::synch_linear_transaction::State;
-use std::collections::{HashMap, BTreeSet};
+use std::collections::{HashMap, BTreeMap, BTreeSet};
 use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-use historical_data::synch_linear_transaction::{History, HistoricalValue, States};
+use historical_data::synch_linear_transaction::{
+	History, HistoricalValue, States,
+};
 use historical_data::CleaningResult;
+use std::ops;
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -63,14 +64,15 @@ pub struct OverlayedChangeSet {
 	/// Indexed state history.
 	pub(crate) states: States,
 	/// Top level storage changes.
-	pub(crate) top: HashMap<Vec<u8>, History<OverlayedValue>>,
+	pub(crate) top: BTreeMap<Vec<u8>, History<OverlayedValue>>,
 	/// Child storage changes.
-	pub(crate) children: HashMap<Vec<u8>, HashMap<Vec<u8>, History<OverlayedValue>>>,
+	pub(crate) children: HashMap<Vec<u8>, BTreeMap<Vec<u8>, History<OverlayedValue>>>,
 }
 
 #[cfg(test)]
 impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 	fn from_iter<T: IntoIterator<Item = (Vec<u8>, OverlayedValue)>>(iter: T) -> Self {
+		use historical_data::synch_linear_transaction::State;
 		let mut result = OverlayedChangeSet::default();
 		result.top = iter.into_iter().map(|(k, value)| (k, {
 			let mut history = History::default();
@@ -146,9 +148,9 @@ impl OverlayedChangeSet {
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
 		self.states.discard_prospective();
-		self.top.retain(|_, history| States::apply_discard_prospective(history) != CleaningResult::Cleared);
-		self.children.retain(|_, m| {
-			m.retain(|_, history| States::apply_discard_prospective(history) != CleaningResult::Cleared);
+		retain(&mut self.top, |_, history| States::apply_discard_prospective(history) != CleaningResult::Cleared);
+		self.children.retain(|_, mut m| {
+			retain(&mut m, |_, history| States::apply_discard_prospective(history) != CleaningResult::Cleared);
 			!m.is_empty()
 		});
 	}
@@ -156,9 +158,9 @@ impl OverlayedChangeSet {
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
 		self.states.commit_prospective();
-		self.top.retain(|_, history| States::apply_commit_prospective(history) != CleaningResult::Cleared);
-		self.children.retain(|_, m| {
-			m.retain(|_, history| States::apply_commit_prospective(history) != CleaningResult::Cleared);
+		retain(&mut self.top, |_, history| States::apply_commit_prospective(history) != CleaningResult::Cleared);
+		self.children.retain(|_, mut m| {
+			retain(&mut m, |_, history| States::apply_commit_prospective(history) != CleaningResult::Cleared);
 			!m.is_empty()
 		});
 	}
@@ -173,9 +175,9 @@ impl OverlayedChangeSet {
 	pub fn discard_transaction(&mut self) {
 		self.states.discard_transaction();
 		let states = &self.states;
-		self.top.retain(|_, history| states.apply_discard_transaction(history) != CleaningResult::Cleared);
-		self.children.retain(|_, m| {
-			m.retain(|_, history| states.apply_discard_transaction(history) != CleaningResult::Cleared);
+		retain(&mut self.top, |_, history| states.apply_discard_transaction(history) != CleaningResult::Cleared);
+		self.children.retain(|_, mut m| {
+			retain(&mut m, |_, history| states.apply_discard_transaction(history) != CleaningResult::Cleared);
 			!m.is_empty()
 		});
 		self.states.finalize_discard();
@@ -185,9 +187,9 @@ impl OverlayedChangeSet {
 	pub fn commit_transaction(&mut self) {
 		self.states.commit_transaction();
 		let states = &self.states;
-		self.top.retain(|_, history| states.apply_commit_transaction(history) != CleaningResult::Cleared);
-		self.children.retain(|_, m| {
-			m.retain(|_, history| states.apply_commit_transaction(history) != CleaningResult::Cleared);
+		retain(&mut self.top, |_, history| states.apply_commit_transaction(history) != CleaningResult::Cleared);
+		self.children.retain(|_, mut m| {
+			retain(&mut m, |_, history| states.apply_commit_transaction(history) != CleaningResult::Cleared);
 			!m.is_empty()
 		});
 	}
@@ -259,8 +261,8 @@ impl OverlayedChangeSet {
 	/// It is here to keep old test compatibility and should be
 	/// avoid for new tests.
 	#[cfg(test)]
-	pub(crate) fn top_prospective(&self) -> HashMap<Vec<u8>, OverlayedValue> {
-		let mut result = HashMap::new();
+	pub(crate) fn top_prospective(&self) -> BTreeMap<Vec<u8>, OverlayedValue> {
+		let mut result = BTreeMap::new();
 		for (k, v) in self.top.iter() {
 			if let Some(v) = v.get_prospective() {
 				result.insert(k.clone(), v.clone());
@@ -273,8 +275,8 @@ impl OverlayedChangeSet {
 	/// It is here to keep old test compatibility and should be
 	/// avoid for new tests.
 	#[cfg(test)]
-	pub(crate) fn top_committed(&self) -> HashMap<Vec<u8>, OverlayedValue> {
-		let mut result = HashMap::new();
+	pub(crate) fn top_committed(&self) -> BTreeMap<Vec<u8>, OverlayedValue> {
+		let mut result = BTreeMap::new();
 		for (k, v) in self.top.iter() {
 			if let Some(v) = v.get_committed() {
 				result.insert(k.clone(), v.clone());
@@ -516,6 +518,65 @@ impl OverlayedChanges {
 		}
 		result
 	}
+
+	/// Returns the next (in lexicographic order) storage key in the overlayed alongside its value.
+	/// If no value is next then `None` is returned.
+	pub fn next_storage_key_change(&self, key: &[u8]) -> Option<(&[u8], &OverlayedValue)> {
+		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
+
+		let mut next_keys = self.changes.top.range::<[u8], _>(range);
+		while let Some((key, historic_value)) = next_keys.next() {
+			if let Some(overlay_value) = historic_value.get() {
+				return Some((key, overlay_value));
+			}
+		}
+		None
+	}
+
+	/// Returns the next (in lexicographic order) child storage key in the overlayed alongside its
+	/// value.  If no value is next then `None` is returned.
+	pub fn next_child_storage_key_change(
+		&self,
+		storage_key: &[u8],
+		key: &[u8]
+	) -> Option<(&[u8], &OverlayedValue)> {
+		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
+
+		if let Some(child) = self.changes.children.get(storage_key) {
+			let mut next_keys = child.range::<[u8], _>(range);
+			while let Some((key, historic_value)) = next_keys.next() {
+				if let Some(overlay_value) = historic_value.get() {
+					return Some((key, overlay_value));
+				}
+			}
+		}
+		None
+	}
+}
+
+/// This is an implementation of retain for btreemap,
+/// this is used to keep a similar api with previous
+/// hashmap usage.
+/// This could also be easilly replace if btreemap gets
+/// an implementation for retain in the future.
+fn retain<K: Ord + Clone, V, F>(m: &mut BTreeMap<K, V>, mut f: F) where
+    F: FnMut(&K, &mut V) -> bool, {
+	// this is use to discard some historical values when
+	// their status is cleared.
+	// Regarding this use case we will only remove individually.
+	// Rebuilding trie from iterator may be better if there is
+	// more removal.
+	// Regarding this use case skipping removal can be a better
+	// choice.
+	let mut rem = Vec::new();
+	for (k, v) in m.iter_mut() {
+		if !f(k, v) {
+			rem.push(k.clone());
+		}
+	}
+	for k in rem {
+		m.remove(&k);
+	}
 }
 
 #[cfg(test)]
@@ -536,8 +597,9 @@ mod tests {
 	use crate::ext::Ext;
 	use super::*;
 
-	fn strip_extrinsic_index(mut map: HashMap<Vec<u8>, OverlayedValue>)
-		-> HashMap<Vec<u8>, OverlayedValue> {
+	fn strip_extrinsic_index(mut map: BTreeMap<Vec<u8>, OverlayedValue>)
+		-> BTreeMap<Vec<u8>, OverlayedValue>
+	{
 		map.remove(&EXTRINSIC_INDEX.to_vec());
 		map
 	}
@@ -572,7 +634,7 @@ mod tests {
 
 	#[test]
 	fn overlayed_storage_root_works() {
-		let initial: HashMap<_, _> = vec![
+		let initial: BTreeMap<_, _> = vec![
 			(b"doe".to_vec(), b"reindeer".to_vec()),
 			(b"dog".to_vec(), b"puppyXXX".to_vec()),
 			(b"dogglesworth".to_vec(), b"catXXX".to_vec()),
@@ -790,4 +852,78 @@ mod tests {
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
 	}
 
+	#[test]
+	fn next_storage_key_change_works() {
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_storage(vec![20], Some(vec![20]));
+		overlay.set_storage(vec![30], Some(vec![30]));
+		overlay.set_storage(vec![40], Some(vec![40]));
+		overlay.commit_prospective();
+		overlay.set_storage(vec![10], Some(vec![10]));
+		overlay.set_storage(vec![30], None);
+
+		// next_prospective < next_committed
+		let next_to_5 = overlay.next_storage_key_change(&[5]).unwrap();
+		assert_eq!(next_to_5.0.to_vec(), vec![10]);
+		assert_eq!(next_to_5.1.value, Some(vec![10]));
+
+		// next_committed < next_prospective
+		let next_to_10 = overlay.next_storage_key_change(&[10]).unwrap();
+		assert_eq!(next_to_10.0.to_vec(), vec![20]);
+		assert_eq!(next_to_10.1.value, Some(vec![20]));
+
+		// next_committed == next_prospective
+		let next_to_20 = overlay.next_storage_key_change(&[20]).unwrap();
+		assert_eq!(next_to_20.0.to_vec(), vec![30]);
+		assert_eq!(next_to_20.1.value, None);
+
+		// next_committed, no next_prospective
+		let next_to_30 = overlay.next_storage_key_change(&[30]).unwrap();
+		assert_eq!(next_to_30.0.to_vec(), vec![40]);
+		assert_eq!(next_to_30.1.value, Some(vec![40]));
+
+		overlay.set_storage(vec![50], Some(vec![50]));
+		// next_prospective, no next_committed
+		let next_to_40 = overlay.next_storage_key_change(&[40]).unwrap();
+		assert_eq!(next_to_40.0.to_vec(), vec![50]);
+		assert_eq!(next_to_40.1.value, Some(vec![50]));
+	}
+
+	#[test]
+	fn next_child_storage_key_change_works() {
+		let child = b"Child1".to_vec();
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_child_storage(child.clone(), vec![20], Some(vec![20]));
+		overlay.set_child_storage(child.clone(), vec![30], Some(vec![30]));
+		overlay.set_child_storage(child.clone(), vec![40], Some(vec![40]));
+		overlay.commit_prospective();
+		overlay.set_child_storage(child.clone(), vec![10], Some(vec![10]));
+		overlay.set_child_storage(child.clone(), vec![30], None);
+
+		// next_prospective < next_committed
+		let next_to_5 = overlay.next_child_storage_key_change(&child, &[5]).unwrap();
+		assert_eq!(next_to_5.0.to_vec(), vec![10]);
+		assert_eq!(next_to_5.1.value, Some(vec![10]));
+
+		// next_committed < next_prospective
+		let next_to_10 = overlay.next_child_storage_key_change(&child, &[10]).unwrap();
+		assert_eq!(next_to_10.0.to_vec(), vec![20]);
+		assert_eq!(next_to_10.1.value, Some(vec![20]));
+
+		// next_committed == next_prospective
+		let next_to_20 = overlay.next_child_storage_key_change(&child, &[20]).unwrap();
+		assert_eq!(next_to_20.0.to_vec(), vec![30]);
+		assert_eq!(next_to_20.1.value, None);
+
+		// next_committed, no next_prospective
+		let next_to_30 = overlay.next_child_storage_key_change(&child, &[30]).unwrap();
+		assert_eq!(next_to_30.0.to_vec(), vec![40]);
+		assert_eq!(next_to_30.1.value, Some(vec![40]));
+
+		overlay.set_child_storage(child.clone(), vec![50], Some(vec![50]));
+		// next_prospective, no next_committed
+		let next_to_40 = overlay.next_child_storage_key_change(&child, &[40]).unwrap();
+		assert_eq!(next_to_40.0.to_vec(), vec![50]);
+		assert_eq!(next_to_40.1.value, Some(vec![50]));
+	}
 }
