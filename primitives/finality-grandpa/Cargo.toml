@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 app-crypto = { package = "sc-application-crypto", path = "../application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-grandpa = { package = "finality-grandpa", version = "0.10.1", default-features = false, features = ["derive-codec"] }
+grandpa = { package = "finality-grandpa", version = "0.10.2", default-features = false, features = ["derive-codec"] }
 log = { version = "0.4.8", optional = true }
 sp-std = { path = "../std", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
