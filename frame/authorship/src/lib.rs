@@ -20,8 +20,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{result, prelude::*};
-use rstd::collections::btree_set::BTreeSet;
+use sp_std::{result, prelude::*};
+use sp_std::collections::btree_set::BTreeSet;
 use support::{decl_module, decl_storage, ensure};
 use support::traits::{FindAuthor, VerifySeal, Get};
 use support::dispatch::Result as DispatchResult;
@@ -98,7 +98,7 @@ impl<H, A> FilterUncle<H, A> for () {
 /// A filter on uncles which verifies seals and does no additional checks.
 /// This is well-suited to consensus modes such as PoW where the cost of
 /// equivocating is high.
-pub struct SealVerify<T>(rstd::marker::PhantomData<T>);
+pub struct SealVerify<T>(sp_std::marker::PhantomData<T>);
 
 impl<Header, Author, T: VerifySeal<Header, Author>> FilterUncle<Header, Author>
 	for SealVerify<T>
@@ -116,7 +116,7 @@ impl<Header, Author, T: VerifySeal<Header, Author>> FilterUncle<Header, Author>
 /// one uncle included per author per height.
 ///
 /// This does O(n log n) work in the number of uncles included.
-pub struct OnePerAuthorPerHeight<T, N>(rstd::marker::PhantomData<(T, N)>);
+pub struct OnePerAuthorPerHeight<T, N>(sp_std::marker::PhantomData<(T, N)>);
 
 impl<Header, Author, T> FilterUncle<Header, Author>
 	for OnePerAuthorPerHeight<T, Header::Number>

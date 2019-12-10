@@ -280,7 +280,7 @@ macro_rules! __decl_generic_event {
 			$(
 				#[doc(hidden)]
 				#[codec(skip)]
-				PhantomData($crate::rstd::marker::PhantomData<$instance>),
+				PhantomData($crate::sp_std::marker::PhantomData<$instance>),
 			)?
 		}
 		impl<$( $generic_param ),* $(, $instance)? > From<RawEvent<$( $generic_param ),* $(, $instance)?>> for () {
@@ -486,12 +486,12 @@ macro_rules! impl_outer_event {
 						$name::[< $module_name $(_ $generic_instance )? >](x)
 					}
 				}
-				impl $crate::rstd::convert::TryInto<
+				impl $crate::sp_std::convert::TryInto<
 					$module_name::Event < $( $generic_param, )? $( $module_name::$generic_instance )? >
 				> for $name {
 					type Error = ();
 
-					fn try_into(self) -> $crate::rstd::result::Result<
+					fn try_into(self) -> $crate::sp_std::result::Result<
 						$module_name::Event < $( $generic_param, )? $( $module_name::$generic_instance )? >, Self::Error
 					> {
 						match self {

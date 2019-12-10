@@ -22,7 +22,7 @@
 use serde::{Serialize, Deserialize};
 use sp_debug_derive::RuntimeDebug;
 
-use rstd::{vec::Vec, borrow::Cow};
+use sp_std::{vec::Vec, borrow::Cow};
 
 /// Storage key.
 #[derive(PartialEq, Eq, RuntimeDebug)]

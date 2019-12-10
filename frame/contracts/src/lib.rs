@@ -109,7 +109,7 @@ pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use primitives::crypto::UncheckedFrom;
-use rstd::{prelude::*, marker::PhantomData, fmt::Debug};
+use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use runtime_io::hashing::blake2_256;
 use sp_runtime::{
@@ -233,7 +233,7 @@ impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
 where
 	H: Member + MaybeSerializeDeserialize+ Debug
 		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default
-		+ rstd::hash::Hash + Codec,
+		+ sp_std::hash::Hash + Codec,
 	Hasher: Hash<Output=H>,
 {
 	fn new(storage_root: &[u8], code_hash: H) -> Self {
@@ -680,7 +680,7 @@ impl<T: Trait> Module<T> {
 	pub fn get_storage(
 		address: T::AccountId,
 		key: [u8; 32],
-	) -> rstd::result::Result<Option<Vec<u8>>, GetStorageError> {
+	) -> sp_std::result::Result<Option<Vec<u8>>, GetStorageError> {
 		let contract_info = <ContractInfoOf<T>>::get(&address)
 			.ok_or(GetStorageError::ContractDoesntExist)?
 			.get_alive()
@@ -1018,14 +1018,14 @@ impl<T: Trait + Send + Sync> Default for CheckBlockGasLimit<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckBlockGasLimit<T> {
+impl<T: Trait + Send + Sync> sp_std::fmt::Debug for CheckBlockGasLimit<T> {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckBlockGasLimit")
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
@@ -1037,7 +1037,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
-	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
+	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn validate(
 		&self,

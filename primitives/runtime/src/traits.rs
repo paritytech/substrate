@@ -16,8 +16,8 @@
 
 //! Primitives for the runtime modules.
 
-use rstd::prelude::*;
-use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
+use sp_std::prelude::*;
+use sp_std::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
 use runtime_io;
 #[cfg(feature = "std")]
 use std::fmt::Display;
@@ -316,15 +316,15 @@ impl<T: Default + Eq + PartialEq> Clear for T {
 /// A meta trait for all bit ops.
 pub trait SimpleBitOps:
 	Sized + Clear +
-	rstd::ops::BitOr<Self, Output = Self> +
-	rstd::ops::BitXor<Self, Output = Self> +
-	rstd::ops::BitAnd<Self, Output = Self>
+	sp_std::ops::BitOr<Self, Output = Self> +
+	sp_std::ops::BitXor<Self, Output = Self> +
+	sp_std::ops::BitAnd<Self, Output = Self>
 {}
 impl<T:
 	Sized + Clear +
-	rstd::ops::BitOr<Self, Output = Self> +
-	rstd::ops::BitXor<Self, Output = Self> +
-	rstd::ops::BitAnd<Self, Output = Self>
+	sp_std::ops::BitOr<Self, Output = Self> +
+	sp_std::ops::BitXor<Self, Output = Self> +
+	sp_std::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
 /// The block finalization trait. Implementing this lets you express what should happen
@@ -369,7 +369,7 @@ pub trait OffchainWorker<BlockNumber> {
 // traits must be fulfilled by all type parameters.
 pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq {
 	/// The hash type produced.
-	type Output: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+	type Output: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode;
 
 	/// The associated hash_db Hasher type.
@@ -481,7 +481,7 @@ impl_maybe_marker!(
 	MaybeDisplay: Display;
 
 	/// A type that implements Hash when in std environment.
-	MaybeHash: rstd::hash::Hash;
+	MaybeHash: sp_std::hash::Hash;
 
 	/// A type that implements Serialize when in std environment.
 	MaybeSerialize: Serialize;
@@ -523,10 +523,10 @@ pub trait IsMember<MemberId> {
 /// You can also create a `new` one from those fields.
 pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Header number.
-	type Number: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+	type Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ Copy + MaybeDisplay + SimpleArithmetic + Codec;
 	/// Header hash type
-	type Hash: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
@@ -581,7 +581,7 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 	/// Header type.
 	type Header: Header<Hash=Self::Hash>;
 	/// Block hash type.
-	type Hash: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// Returns a reference to the header.
@@ -865,7 +865,7 @@ impl SignedExtension for () {
 	type Call = ();
 	type Pre = ();
 	type DispatchInfo = ();
-	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
+	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
@@ -906,7 +906,7 @@ pub trait Applyable: Sized + Send + Sync {
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
-pub struct ApiRef<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
+pub struct ApiRef<'a, T>(T, sp_std::marker::PhantomData<&'a ()>);
 
 impl<'a, T> From<T> for ApiRef<'a, T> {
 	fn from(api: T) -> Self {
@@ -914,7 +914,7 @@ impl<'a, T> From<T> for ApiRef<'a, T> {
 	}
 }
 
-impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
+impl<'a, T> sp_std::ops::Deref for ApiRef<'a, T> {
 	type Target = T;
 
 	fn deref(&self) -> &Self::Target {
@@ -922,7 +922,7 @@ impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
 	}
 }
 
-impl<'a, T> rstd::ops::DerefMut for ApiRef<'a, T> {
+impl<'a, T> sp_std::ops::DerefMut for ApiRef<'a, T> {
 	fn deref_mut(&mut self) -> &mut T {
 		&mut self.0
 	}
@@ -1161,7 +1161,7 @@ macro_rules! impl_opaque_keys {
 			/// The generated key pairs are stored in the keystore.
 			///
 			/// Returns the concatenated SCALE encoded public keys.
-			pub fn generate(seed: Option<$crate::rstd::vec::Vec<u8>>) -> $crate::rstd::vec::Vec<u8> {
+			pub fn generate(seed: Option<$crate::sp_std::vec::Vec<u8>>) -> $crate::sp_std::vec::Vec<u8> {
 				let keys = Self{
 					$(
 						$field: <

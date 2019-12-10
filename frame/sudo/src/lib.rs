@@ -86,7 +86,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use sp_runtime::{
 	traits::{StaticLookup, Dispatchable}, DispatchError,
 };

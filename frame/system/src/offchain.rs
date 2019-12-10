@@ -41,7 +41,7 @@ impl<Public, Signature, AppPublic> Signer<Public, Signature> for AppPublic where
 	Signature: From<
 		<<AppPublic as RuntimeAppPublic>::Signature as app_crypto::AppSignature>::Generic
 	>,
-	Public: rstd::convert::TryInto<<AppPublic as app_crypto::AppPublic>::Generic>
+	Public: sp_std::convert::TryInto<<AppPublic as app_crypto::AppPublic>::Generic>
 {
 	fn sign<Payload: Encode>(public: Public, raw_payload: &Payload) -> Option<Signature> {
 		raw_payload.using_encoded(|payload| {
@@ -132,7 +132,7 @@ pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 
 /// A default type used to submit transactions to the pool.
 pub struct TransactionSubmitter<S, C, E> {
-	_signer: rstd::marker::PhantomData<(S, C, E)>,
+	_signer: sp_std::marker::PhantomData<(S, C, E)>,
 }
 
 impl<S, C, E> Default for TransactionSubmitter<S, C, E> {

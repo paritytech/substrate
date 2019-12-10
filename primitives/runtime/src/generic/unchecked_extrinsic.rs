@@ -16,7 +16,7 @@
 
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
-use rstd::{fmt, prelude::*};
+use sp_std::{fmt, prelude::*};
 use runtime_io::hashing::blake2_256;
 use codec::{Decode, Encode, EncodeLike, Input, Error};
 use crate::{
@@ -322,7 +322,7 @@ mod tests {
 		type DispatchInfo = ();
 		type Pre = ();
 
-		fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
+		fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 	}
 
 	type Ex = UncheckedExtrinsic<TestAccountId, TestCall, TestSig, TestExtra>;
