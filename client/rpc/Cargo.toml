@@ -8,7 +8,7 @@ edition = "2018"
 api = { package = "sc-rpc-api", path = "./api" }
 client-api = { package = "sc-client-api", path = "../api" }
 client = { package = "sc-client", path = "../" }
-sp-api = { path = "../../primitives/sr-api" }
+sp-api = { path = "../../primitives/api" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 futures = { version = "0.3.1", features = ["compat"] }
 jsonrpc-pubsub = "14.0.3"
