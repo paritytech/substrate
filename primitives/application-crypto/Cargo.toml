@@ -1,5 +1,5 @@
 [package]
-name = "sc-application-crypto"
+name = "sp-application-crypto"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -11,10 +11,6 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-std = { path = "../std", default-features = false }
 sp-io = { path = "../../primitives/io", default-features = false }
-
-[dev-dependencies]
-test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
-sp-runtime = { path = "../../primitives/runtime" }
 
 [features]
 default = [ "std" ]

@@ -3453,8 +3453,8 @@ dependencies = [
  "pallet-timestamp 2.0.0",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-application-crypto 2.0.0",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-application-crypto 2.0.0",
  "sp-consensus-aura 2.0.0",
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
@@ -3472,8 +3472,8 @@ dependencies = [
  "frame-system 2.0.0",
  "pallet-session 2.0.0",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-application-crypto 2.0.0",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-application-crypto 2.0.0",
  "sp-authority-discovery 2.0.0",
  "sp-core 2.0.0",
  "sp-io 2.0.0",
@@ -3767,8 +3767,8 @@ dependencies = [
  "pallet-authorship 0.1.0",
  "pallet-session 2.0.0",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-application-crypto 2.0.0",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-application-crypto 2.0.0",
  "sp-core 2.0.0",
  "sp-io 2.0.0",
  "sp-runtime 2.0.0",
@@ -3878,8 +3878,8 @@ dependencies = [
  "pallet-timestamp 2.0.0",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-application-crypto 2.0.0",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-application-crypto 2.0.0",
  "sp-core 2.0.0",
  "sp-io 2.0.0",
  "sp-runtime 2.0.0",
@@ -4880,19 +4880,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-application-crypto"
-version = "2.0.0"
-dependencies = [
- "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-core 2.0.0",
- "sp-io 2.0.0",
- "sp-runtime 2.0.0",
- "sp-std 2.0.0",
- "substrate-test-runtime-client 2.0.0",
-]
-
-[[package]]
 name = "sc-authority-discovery"
 version = "2.0.0"
 dependencies = [
@@ -5129,7 +5116,6 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-application-crypto 2.0.0",
  "sc-client 2.0.0",
  "sc-client-api 2.0.0",
  "sc-consensus-slots 2.0.0",
@@ -5139,6 +5125,7 @@ dependencies = [
  "sc-service 2.0.0",
  "sc-telemetry 2.0.0",
  "sp-api 2.0.0",
+ "sp-application-crypto 2.0.0",
  "sp-block-builder 2.0.0",
  "sp-blockchain 2.0.0",
  "sp-consensus 2.0.0",
@@ -5174,7 +5161,6 @@ dependencies = [
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pdqselect 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-application-crypto 2.0.0",
  "sc-block-builder 2.0.0",
  "sc-client 2.0.0",
  "sc-client-api 2.0.0",
@@ -5187,6 +5173,7 @@ dependencies = [
  "sc-telemetry 2.0.0",
  "schnorrkel 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
+ "sp-application-crypto 2.0.0",
  "sp-block-builder 2.0.0",
  "sp-blockchain 2.0.0",
  "sp-consensus 2.0.0",
@@ -5339,8 +5326,8 @@ dependencies = [
  "hex 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-application-crypto 2.0.0",
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-application-crypto 2.0.0",
  "sp-core 2.0.0",
  "subtle 2.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5538,7 +5525,6 @@ dependencies = [
  "parity-multiaddr 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-application-crypto 2.0.0",
  "sc-chain-spec 2.0.0",
  "sc-client 2.0.0",
  "sc-client-api 2.0.0",
@@ -5557,6 +5543,7 @@ dependencies = [
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
+ "sp-application-crypto 2.0.0",
  "sp-blockchain 2.0.0",
  "sp-consensus 2.0.0",
  "sp-consensus-babe 2.0.0",
@@ -6007,6 +5994,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-application-crypto"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-core 2.0.0",
+ "sp-io 2.0.0",
+ "sp-std 2.0.0",
+]
+
+[[package]]
+name = "sp-application-crypto-test"
+version = "2.0.0"
+dependencies = [
+ "sp-core 2.0.0",
+ "sp-runtime 2.0.0",
+ "substrate-test-runtime-client 2.0.0",
+]
+
+[[package]]
 name = "sp-arithmetic"
 version = "2.0.0"
 dependencies = [
@@ -6026,8 +6033,8 @@ name = "sp-authority-discovery"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-application-crypto 2.0.0",
  "sp-api 2.0.0",
+ "sp-application-crypto 2.0.0",
  "sp-runtime 2.0.0",
  "sp-std 2.0.0",
 ]
@@ -6092,8 +6099,8 @@ name = "sp-consensus-aura"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-application-crypto 2.0.0",
  "sp-api 2.0.0",
+ "sp-application-crypto 2.0.0",
  "sp-inherents 2.0.0",
  "sp-runtime 2.0.0",
  "sp-std 2.0.0",
@@ -6105,9 +6112,9 @@ name = "sp-consensus-babe"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-application-crypto 2.0.0",
  "schnorrkel 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
+ "sp-application-crypto 2.0.0",
  "sp-consensus 2.0.0",
  "sp-inherents 2.0.0",
  "sp-runtime 2.0.0",
@@ -6202,9 +6209,9 @@ name = "sp-finality-grandpa"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-application-crypto 2.0.0",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
+ "sp-application-crypto 2.0.0",
  "sp-runtime 2.0.0",
  "sp-std 2.0.0",
 ]
@@ -6301,9 +6308,9 @@ dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "paste 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-application-crypto 2.0.0",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-application-crypto 2.0.0",
  "sp-arithmetic 2.0.0",
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
@@ -6424,8 +6431,8 @@ name = "sp-test-primitives"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-application-crypto 2.0.0",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-application-crypto 2.0.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
 ]
@@ -6682,11 +6689,11 @@ dependencies = [
  "pallet-babe 2.0.0",
  "pallet-timestamp 2.0.0",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-application-crypto 2.0.0",
  "sc-client 2.0.0",
  "sc-executor 2.0.0",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
+ "sp-application-crypto 2.0.0",
  "sp-block-builder 2.0.0",
  "sp-consensus-aura 2.0.0",
  "sp-consensus-babe 2.0.0",
