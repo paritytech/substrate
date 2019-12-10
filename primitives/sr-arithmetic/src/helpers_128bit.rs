@@ -21,7 +21,7 @@
 
 use crate::biguint;
 use num_traits::Zero;
-use rstd::{cmp::{min, max}, convert::TryInto, mem};
+use sp_std::{cmp::{min, max}, convert::TryInto, mem};
 
 /// Helper gcd function used in Rational128 implementation.
 pub fn gcd(a: u128, b: u128) -> u128 {

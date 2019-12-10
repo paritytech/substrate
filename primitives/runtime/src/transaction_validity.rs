@@ -16,7 +16,7 @@
 
 //! Transaction validity interface.
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use crate::codec::{Encode, Decode};
 use crate::RuntimeDebug;
 

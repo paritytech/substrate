@@ -6,14 +6,14 @@ edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-std = { path = "../../primitives/std", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }
 transaction-payment-rpc-runtime-api = { package = "pallet-transaction-payment-rpc-runtime-api", path = "./rpc/runtime-api", default-features = false }
 
 [dev-dependencies]
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io" }
+sp-io = { path = "../../primitives/io" }
 primitives = { package = "sp-core",  path = "../../primitives/core" }
 balances = { package = "pallet-balances", path = "../balances" }
 
@@ -21,7 +21,7 @@ balances = { package = "pallet-balances", path = "../balances" }
 default = ["std"]
 std = [
 	"codec/std",
-	"rstd/std",
+	"sp-std/std",
 	"sp-runtime/std",
 	"support/std",
 	"system/std",

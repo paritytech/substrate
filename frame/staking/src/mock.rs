@@ -23,7 +23,7 @@ use sp_runtime::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, Satu
 use sp_runtime::testing::{Header, UintAuthorityId};
 use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
 use primitives::{H256, crypto::key_types};
-use runtime_io;
+use sp_io;
 use support::{
 	assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap, StorageValue,
 	traits::{Currency, Get, FindAuthor},
@@ -289,7 +289,7 @@ impl ExtBuilder {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		SLASH_DEFER_DURATION.with(|v| *v.borrow_mut() = self.slash_defer_duration);
 	}
-	pub fn build(self) -> runtime_io::TestExternalities {
+	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut storage = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
@@ -355,7 +355,7 @@ impl ExtBuilder {
 			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
 		}.assimilate_storage(&mut storage);
 
-		let mut ext = runtime_io::TestExternalities::from(storage);
+		let mut ext = sp_io::TestExternalities::from(storage);
 		ext.execute_with(|| {
 			let validators = Session::validators();
 			SESSION.with(|x|

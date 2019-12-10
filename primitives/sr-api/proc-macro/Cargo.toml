@@ -14,12 +14,6 @@ proc-macro2 = "1.0.6"
 blake2-rfc = "0.2.18"
 proc-macro-crate = "0.1.4"
 
-[dev-dependencies]
-sp-api = { path = ".." }
-sp-runtime = { path = "../../runtime" }
-sp-version = { path = "../../sr-version" }
-test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
-
 # Required for the doc tests
 [features]
 default = [ "std" ]

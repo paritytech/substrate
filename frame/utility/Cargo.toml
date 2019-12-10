@@ -10,8 +10,8 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+sp-std = { path = "../../primitives/std", default-features = false }
+sp-io = { path = "../../primitives/io", default-features = false }
 
 [dev-dependencies]
 primitives = { package = "sp-core",  path = "../../primitives/core" }
@@ -25,6 +25,6 @@ std = [
 	"sp-runtime/std",
 	"support/std",
 	"system/std",
-	"runtime-io/std",
-	"rstd/std"
+	"sp-io/std",
+	"sp-std/std"
 ]

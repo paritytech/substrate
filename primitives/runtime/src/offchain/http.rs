@@ -47,10 +47,10 @@
 //! assert_eq!(body.error(), &None);
 //! ```
 
-use rstd::str;
-use rstd::prelude::Vec;
+use sp_std::str;
+use sp_std::prelude::Vec;
 #[cfg(not(feature = "std"))]
-use rstd::prelude::vec;
+use sp_std::prelude::vec;
 use primitives::RuntimeDebug;
 use primitives::offchain::{
 	Timestamp,
@@ -111,7 +111,7 @@ mod header {
 		/// Returns the name of this header.
 		pub fn name(&self) -> &str {
 			// Header keys are always produced from `&str` so this is safe.
-			// we don't store them as `Strings` to avoid bringing `alloc::String` to rstd
+			// we don't store them as `Strings` to avoid bringing `alloc::String` to sp-std
 			// or here.
 			unsafe { str::from_utf8_unchecked(&self.name) }
 		}
@@ -119,7 +119,7 @@ mod header {
 		/// Returns the value of this header.
 		pub fn value(&self) -> &str {
 			// Header values are always produced from `&str` so this is safe.
-			// we don't store them as `Strings` to avoid bringing `alloc::String` to rstd
+			// we don't store them as `Strings` to avoid bringing `alloc::String` to sp-std
 			// or here.
 			unsafe { str::from_utf8_unchecked(&self.value) }
 		}
@@ -221,7 +221,7 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 		let meta = &[];
 
 		// start an http request.
-		let id = runtime_io::offchain::http_request_start(
+		let id = sp_io::offchain::http_request_start(
 			self.method.as_ref(),
 			self.url,
 			meta,
@@ -229,7 +229,7 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 
 		// add custom headers
 		for header in &self.headers {
-			runtime_io::offchain::http_request_add_header(
+			sp_io::offchain::http_request_add_header(
 				id,
 				header.name(),
 				header.value(),
@@ -238,11 +238,11 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 
 		// write body
 		for chunk in self.body {
-			runtime_io::offchain::http_request_write_body(id, chunk.as_ref(), self.deadline)?;
+			sp_io::offchain::http_request_write_body(id, chunk.as_ref(), self.deadline)?;
 		}
 
 		// finalise the request
-		runtime_io::offchain::http_request_write_body(id, &[], self.deadline)?;
+		sp_io::offchain::http_request_write_body(id, &[], self.deadline)?;
 
 		Ok(PendingRequest {
 			id,
@@ -307,7 +307,7 @@ impl PendingRequest {
 		deadline: impl Into<Option<Timestamp>>
 	) -> Vec<Result<HttpResult, PendingRequest>> {
 		let ids = requests.iter().map(|r| r.id).collect::<Vec<_>>();
-		let statuses = runtime_io::offchain::http_response_wait(&ids, deadline.into());
+		let statuses = sp_io::offchain::http_response_wait(&ids, deadline.into());
 
 		statuses
 			.into_iter()
@@ -346,7 +346,7 @@ impl Response {
 	pub fn headers(&mut self) -> &Headers {
 		if self.headers.is_none() {
 			self.headers = Some(
-				Headers { raw: runtime_io::offchain::http_response_headers(self.id) },
+				Headers { raw: sp_io::offchain::http_response_headers(self.id) },
 			);
 		}
 		self.headers.as_ref().expect("Headers were just set; qed")
@@ -426,7 +426,7 @@ impl Iterator for ResponseBody {
 		}
 
 		if self.filled_up_to.is_none() {
-			let result = runtime_io::offchain::http_response_read_body(
+			let result = sp_io::offchain::http_response_read_body(
 				self.id,
 				&mut self.buffer,
 				self.deadline);
@@ -515,7 +515,7 @@ impl<'a> HeadersIterator<'a> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::TestExternalities;
+	use sp_io::TestExternalities;
 	use primitives::offchain::{
 		OffchainExt,
 		testing,

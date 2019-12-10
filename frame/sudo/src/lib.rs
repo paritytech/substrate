@@ -51,14 +51,14 @@
 //! This is an example of a module that exposes a privileged function:
 //!
 //! ```
-//! use support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch};
 //! use system::ensure_root;
 //!
 //! pub trait Trait: system::Trait {}
 //!
 //! decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//!         pub fn privileged_function(origin) -> Result {
+//!         pub fn privileged_function(origin) -> dispatch::Result {
 //!             ensure_root(origin)?;
 //!
 //!             // do something...
@@ -86,7 +86,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use sp_runtime::{
 	traits::{StaticLookup, Dispatchable}, DispatchError,
 };

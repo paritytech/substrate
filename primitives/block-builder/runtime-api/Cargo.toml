@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 sp-runtime = { path = "../../runtime", default-features = false }
 sp-api = { path = "../../sr-api", default-features = false }
-rstd = { package = "sp-std", path = "../../sr-std", default-features = false }
+sp-std = { path = "../../std", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false }
 inherents = { package = "sp-inherents", path = "../../inherents", default-features = false }
 
@@ -18,5 +18,5 @@ std = [
 	"codec/std",
 	"inherents/std",
 	"sp-api/std",
-	"rstd/std",
+	"sp-std/std",
 ]
