@@ -14,13 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{Module, Trait, BalanceOf, NegativeImbalanceOf};
-use rstd::convert::TryFrom;
+use crate::{Trait, BalanceOf};
 use sp_runtime::traits::{
-	CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto,
-};
-use support::{
-	traits::{Currency, ExistenceRequirement, Imbalance, OnUnbalanced, WithdrawReason}, StorageValue,
+	Zero, SaturatedConversion, SimpleArithmetic,
 };
 
 #[cfg(test)]
