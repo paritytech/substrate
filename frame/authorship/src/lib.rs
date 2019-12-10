@@ -229,6 +229,11 @@ impl<T: Trait> Module<T> {
 		let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
 
 		for uncle in new_uncles {
+			let uncle_age = uncle.number().clone();
+			if uncle_age > now {
+				// A block cannot be older than its uncles, but be defensive.
+				continue
+			}
 			let prev_uncles = uncles.iter().filter_map(|entry|
 				match entry {
 					UncleEntryItem::InclusionHeight(_) => None,
@@ -239,7 +244,7 @@ impl<T: Trait> Module<T> {
 
 			T::EventHandler::note_uncle(
 				author.clone().unwrap_or_default(),
-				// WARN `uncle` cannot be after `now`
+				// `uncle` cannot be after `now` ― checked above
 				now - uncle.number().clone(),
 			);
 			uncles.push(UncleEntryItem::Uncle(hash, author));
