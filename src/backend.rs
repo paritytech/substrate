@@ -96,7 +96,7 @@ impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 	}
 
 	fn chain_id(&self) -> U256 {
-		U256::from(runtime_io::misc::chain_id())
+		U256::from(sp_io::misc::chain_id())
 	}
 
 	fn exists(&self, _address: H160) -> bool {
