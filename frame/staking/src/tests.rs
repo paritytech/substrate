@@ -89,12 +89,20 @@ fn basic_setup_works() {
 					ValidatorInfoForEra {
 						stash: 11,
 						prefs: ValidatorPrefs::default(),
-						exposure: Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 101, value: 250 }] },
+						exposure: Exposure {
+							total: 1250,
+							own: 1000,
+							others: vec![ IndividualExposure { who: 101, value: 250 }]
+						},
 					},
 					ValidatorInfoForEra {
 						stash: 21,
 						prefs: ValidatorPrefs::default(),
-						exposure: Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 101, value: 250 }] },
+						exposure: Exposure {
+							total: 1250,
+							own: 1000,
+							others: vec![ IndividualExposure { who: 101, value: 250 }]
+						},
 					},
 				]
 			);
@@ -107,12 +115,20 @@ fn basic_setup_works() {
 					ValidatorInfoForEra {
 						stash: 11,
 						prefs: ValidatorPrefs::default(),
-						exposure: Exposure { total: 1125, own: 1000, others: vec![ IndividualExposure { who: 101, value: 125 }] },
+						exposure: Exposure {
+							total: 1125,
+							own: 1000,
+							others: vec![ IndividualExposure { who: 101, value: 125 }]
+						},
 					},
 					ValidatorInfoForEra {
 						stash: 21,
 						prefs: ValidatorPrefs::default(),
-						exposure: Exposure { total: 1375, own: 1000, others: vec![ IndividualExposure { who: 101, value: 375 }] },
+						exposure: Exposure {
+							total: 1375,
+							own: 1000,
+							others: vec![ IndividualExposure { who: 101, value: 375 }]
+						},
 					},
 				]
 			);
