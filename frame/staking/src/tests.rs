@@ -987,14 +987,18 @@ fn validator_payment_prefs_work() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(3000);
+		let exposure_1 = mock::validator_current_info(11).exposure;
 		assert!(total_payout_1 > 100); // Test is meaningfull if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(2);
 
-		let shared_cut = total_payout_1 - commission * total_payout_1;
-		assert_eq_error_rate!(Balances::total_balance(&10), balance_era_1_10 + shared_cut*1000/1250 + total_payout_1 - shared_cut, 2);
-		assert_eq_error_rate!(Balances::total_balance(&100), balance_era_1_100 + shared_cut*250/1250, 2);
+		let taken_cut = commission * total_payout_1;
+		let shared_cut = total_payout_1 - taken_cut;
+		let reward_of_10 = shared_cut * exposure_1.own / exposure_1.total + taken_cut;
+		let reward_of_100 = shared_cut * exposure_1.others[0].value / exposure_1.total;
+		assert_eq_error_rate!(Balances::total_balance(&10), balance_era_1_10 + reward_of_10, 2);
+		assert_eq_error_rate!(Balances::total_balance(&100), balance_era_1_100 + reward_of_100, 2);
 
 		check_exposure_all(Staking::current_era());
 		check_nominator_all(Staking::current_era());
