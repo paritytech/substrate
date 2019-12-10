@@ -18,7 +18,7 @@ session = { package = "pallet-session", path = "../session", default-features = 
 finality-tracker = { package = "pallet-finality-tracker", path = "../finality-tracker", default-features = false }
 
 [dev-dependencies]
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io" }
+sp-io ={ path = "../../primitives/io" }
 
 [features]
 default = ["std"]

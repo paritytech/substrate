@@ -103,6 +103,7 @@ TO_RENAME=(
     "substrate-service-test sc-service-test"
     "substrate-state-db sc-state-db"
     "substrate-telemetry sc-telemetry"
+    "substrate-test-primitives sp-test-primitives"
     "substrate-tracing sc-tracing"
 
 );

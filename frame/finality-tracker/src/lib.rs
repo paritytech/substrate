@@ -193,7 +193,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 mod tests {
 	use super::*;
 
-	use runtime_io::TestExternalities;
+	use sp_io::TestExternalities;
 	use primitives::H256;
 	use sp_runtime::{
 		testing::Header, Perbill,

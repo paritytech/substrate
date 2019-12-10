@@ -10,7 +10,7 @@ serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
 frame-metadata = { path = "../metadata", default-features = false }
 sp-std = { path = "../../primitives/std", default-features = false }
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+sp-io ={ path = "../../primitives/io", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
 sp-arithmetic = { path = "../../primitives/sr-arithmetic", default-features = false }
@@ -34,7 +34,7 @@ std = [
 	"once_cell",
 	"bitmask/std",
 	"serde",
-	"runtime-io/std",
+	"sp-io/std",
 	"codec/std",
 	"sp-std/std",
 	"sp-runtime/std",

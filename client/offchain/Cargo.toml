@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 bytes = "0.4.12"
 client-api = { package = "sc-client-api", path = "../api" }
-sp-api = { path = "../../primitives/sr-api" }
+sp-api = { path = "../../primitives/api" }
 fnv = "1.0.6"
 futures01 = { package = "futures", version = "0.1" }
 futures = "0.3.1"

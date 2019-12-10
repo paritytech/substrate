@@ -17,7 +17,7 @@
 use support::storage::unhashed;
 use codec::Encode;
 use support::{StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue, StoragePrefixedMap};
-use runtime_io::{TestExternalities, hashing::{twox_128, blake2_128, blake2_256}};
+use sp_io::{TestExternalities, hashing::{twox_128, blake2_128, blake2_256}};
 
 mod no_instance {
 	use codec::{Encode, Decode, EncodeLike};

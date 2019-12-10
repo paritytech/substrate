@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sp-api = { path = "../sr-api", default-features = false }
+sp-api = { path = "../api", default-features = false }
 sp-std = { path = "../std", default-features = false }
 sp-runtime = { path = "../runtime", optional = true }
 

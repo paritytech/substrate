@@ -18,7 +18,7 @@
 //! and depositing logs.
 
 use sp_std::prelude::*;
-use runtime_io::{
+use sp_io::{
 	storage::root as storage_root, storage::changes_root as storage_changes_root,
 	hashing::blake2_256,
 };
@@ -335,12 +335,12 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 mod tests {
 	use super::*;
 
-	use runtime_io::TestExternalities;
+	use sp_io::TestExternalities;
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
 	use crate::{Header, Transfer, WASM_BINARY};
 	use primitives::{NeverNativeValue, map, traits::CodeExecutor};
 	use sc_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
-	use runtime_io::hashing::twox_128;
+	use sp_io::hashing::twox_128;
 
 	// Declare an instance of the native executor dispatch for the test runtime.
 	native_executor_instance!(

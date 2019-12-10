@@ -10,7 +10,7 @@ safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
 sp-std = { path = "../../primitives/std", default-features = false }
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+sp-io = { path = "../../primitives/io", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }
@@ -27,7 +27,7 @@ std = [
 	"primitives/std",
 	"sp-std/std",
 	"serde",
-	"runtime-io/std",
+	"sp-io/std",
 	"support/std",
 	"sp-runtime/std",
 	"system/std",

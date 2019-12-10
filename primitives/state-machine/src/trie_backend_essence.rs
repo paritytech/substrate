@@ -113,7 +113,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		// The key just after the one given in input, basically `key++0`.
 		// Note: We are sure this is the next key if:
 		// * size of key has no limit (i.e. we can always add 0 to the path),
-		// * and no keys can be inserted between `key` and `key++0` (this is ensured by sr-io).
+		// * and no keys can be inserted between `key` and `key++0` (this is ensured by sp-io).
 		let mut potential_next_key = Vec::with_capacity(key.len() + 1);
 		potential_next_key.extend_from_slice(key);
 		potential_next_key.push(0);
