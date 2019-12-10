@@ -634,6 +634,27 @@ cfg_if! {
 				}
 			}
 
+			impl session::SessionMembership<Block> for Runtime {
+				fn generate_session_membership_proof(
+					_session_key: (primitives::crypto::KeyTypeId, Vec<u8>),
+				) -> Option<session::MembershipProof> {
+					None
+				}
+			}
+
+			impl sp_finality_grandpa::GrandpaApi<Block> for Runtime {
+				fn grandpa_authorities() -> sp_finality_grandpa::AuthorityList {
+					Vec::new()
+				}
+
+				fn submit_report_equivocation_extrinsic(
+					_equivocation_report: sp_finality_grandpa::EquivocationReport<Hash, BlockNumber>,
+					_key_owner_proof: Vec<u8>,
+				) -> Option<()> {
+					None
+				}
+			}
+
 			impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 				fn account_nonce(_account: AccountId) -> Index {
 					0
@@ -847,6 +868,14 @@ cfg_if! {
 			impl session::SessionKeys<Block> for Runtime {
 				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
 					SessionKeys::generate(None)
+				}
+			}
+
+			impl session::SessionMembership<Block> for Runtime {
+				fn generate_session_membership_proof(
+					_session_key: (primitives::crypto::KeyTypeId, Vec<u8>),
+				) -> Option<session::MembershipProof> {
+					None
 				}
 			}
 

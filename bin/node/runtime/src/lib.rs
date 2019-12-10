@@ -792,7 +792,7 @@ mod tests {
 
 	#[test]
 	fn validate_bounds() {
-		let x = SubmitTransaction::default();
+		let x = SubmitImOnlineTransaction::default();
 		is_submit_signed_transaction(x);
 	}
 

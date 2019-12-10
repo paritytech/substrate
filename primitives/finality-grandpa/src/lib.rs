@@ -315,10 +315,21 @@ pub fn check_message_signature<H, N>(
 	H: Encode,
 	N: Encode,
 {
-	use app_crypto::RuntimeAppPublic;
-
 	let encoded_raw = localized_payload(round, set_id, message);
-	if id.verify(&encoded_raw, signature) {
+
+	#[cfg(not(feature = "std"))]
+	let verify = || {
+		use app_crypto::RuntimeAppPublic;
+		id.verify(&encoded_raw, signature)
+	};
+
+	#[cfg(feature = "std")]
+	let verify = || {
+		use app_crypto::Pair;
+		AuthorityPair::verify(signature, &encoded_raw, &id)
+	};
+
+	if verify() {
 		Ok(())
 	} else {
 		#[cfg(feature = "std")]

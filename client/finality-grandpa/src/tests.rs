@@ -53,6 +53,7 @@ type PeerData =
 				test_client::Executor,
 				Block,
 				test_client::runtime::RuntimeApi,
+				test_client::Client<test_client::Backend>,
 				LongestChain<test_client::Backend, Block>
 			>
 		>
@@ -119,6 +120,7 @@ impl TestNetFactory for GrandpaTestNet {
 		match client {
 			PeersClient::Full(ref client, ref backend) => {
 				let (import, link) = block_import(
+					client.clone(),
 					client.clone(),
 					&self.test_config,
 					LongestChain::new(backend.clone()),
@@ -273,6 +275,19 @@ impl GrandpaApi<Block> for RuntimeApi {
 		_: Vec<u8>,
 	) -> Result<NativeOrEncoded<AuthorityList>> {
 		Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
+	}
+
+	fn GrandpaApi_submit_report_equivocation_extrinsic_runtime_api_impl(
+		&self,
+		_: &BlockId<Block>,
+		_: ExecutionContext,
+		_: Option<(
+			fg_primitives::EquivocationReport<<Block as BlockT>::Hash, NumberFor<Block>>,
+			Vec<u8>,
+		)>,
+		_: Vec<u8>,
+	) -> Result<NativeOrEncoded<Option<()>>> {
+		Ok(NativeOrEncoded::Native(None))
 	}
 }
 
@@ -1593,6 +1608,7 @@ fn grandpa_environment_respects_voting_rules() {
 			config: config.clone(),
 			consensus_changes: consensus_changes.clone(),
 			client: link.client.clone(),
+			api: link.client.clone(),
 			select_chain: link.select_chain.clone(),
 			set_id: authority_set.set_id(),
 			voter_set_state: set_state.clone(),

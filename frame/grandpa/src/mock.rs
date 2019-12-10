@@ -23,7 +23,7 @@ use runtime_io;
 use support::{impl_outer_origin, impl_outer_event, parameter_types, weights::Weight};
 use primitives::H256;
 use codec::{Encode, Decode};
-use crate::{AuthorityId, AuthorityList, GenesisConfig, Trait, Module, ConsensusLog};
+use crate::{AuthorityId, AuthorityList, Call, GenesisConfig, Trait, Module, ConsensusLog};
 use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 
 impl_outer_origin!{
@@ -40,6 +40,8 @@ pub struct Test;
 
 impl Trait for Test {
 	type Event = TestEvent;
+	type Call = Call<Test>;
+	type HandleEquivocation = ();
 }
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;

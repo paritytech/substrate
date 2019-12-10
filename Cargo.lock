@@ -6703,6 +6703,7 @@ dependencies = [
  "sp-consensus-aura 2.0.0",
  "sp-consensus-babe 2.0.0",
  "sp-core 2.0.0",
+ "sp-finality-grandpa 2.0.0",
  "sp-inherents 2.0.0",
  "sp-io 2.0.0",
  "sp-keyring 2.0.0",
