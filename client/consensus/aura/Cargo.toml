@@ -26,7 +26,7 @@ sp-blockchain = { path = "../../../primitives/blockchain" }
 sp-io = { path = "../../../primitives/io" }
 runtime_version = { package = "sp-version", path = "../../../primitives/sr-version" }
 slots = { package = "sc-consensus-slots", path = "../slots" }
-sp-api = { path = "../../../primitives/sr-api" }
+sp-api = { path = "../../../primitives/api" }
 sp-runtime = {  path = "../../../primitives/runtime" }
 sp-timestamp = {  path = "../../../primitives/timestamp" }
 sc-telemetry = { path = "../../telemetry" }

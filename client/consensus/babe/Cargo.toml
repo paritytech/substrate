@@ -21,7 +21,7 @@ sc-telemetry = { path = "../../telemetry" }
 keystore = { package = "sc-keystore", path = "../../keystore" }
 client-api = { package = "sc-client-api", path = "../../api" }
 client = { package = "sc-client", path = "../../" }
-sp-api = { path = "../../../primitives/sr-api" }
+sp-api = { path = "../../../primitives/api" }
 block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder/runtime-api" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
 consensus-common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
