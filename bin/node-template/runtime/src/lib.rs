@@ -12,7 +12,7 @@ use sp_std::prelude::*;
 use primitives::OpaqueMetadata;
 use sp_runtime::{
 	ApplyExtrinsicResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	impl_opaque_keys, MultiSignature
+	impl_opaque_keys, MultiSignature, KeyTypeId,
 };
 use sp_runtime::traits::{
 	NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto, IdentifyAccount
@@ -165,6 +165,8 @@ impl aura::Trait for Runtime {
 
 impl grandpa::Trait for Runtime {
 	type Event = Event;
+	type Call = Call;
+	type HandleEquivocation = ();
 }
 
 impl indices::Trait for Runtime {
@@ -356,9 +358,24 @@ impl_runtime_apis! {
 		}
 	}
 
+	impl sp_session::SessionMembership<Block> for Runtime {
+		fn generate_session_membership_proof(
+			_session_key: (KeyTypeId, Vec<u8>),
+		) -> Option<sp_session::MembershipProof> {
+			None
+		}
+	}
+
 	impl fg_primitives::GrandpaApi<Block> for Runtime {
 		fn grandpa_authorities() -> GrandpaAuthorityList {
 			Grandpa::grandpa_authorities()
+		}
+
+		fn submit_report_equivocation_extrinsic(
+			_equivocation_report: fg_primitives::EquivocationReport<Hash, BlockNumber>,
+			_key_owner_proof: Vec<u8>,
+		) -> Option<()> {
+			None
 		}
 	}
 }
