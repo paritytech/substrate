@@ -33,7 +33,7 @@ use schnorrkel::{
 	SignatureError, errors::MultiSignatureStage,
 	vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}
 };
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 
 
 /// A BABE pre-runtime digest. This contains all data required to validate a

@@ -17,7 +17,7 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 
-use rstd::{ops, prelude::*, convert::TryInto};
+use sp_std::{ops, prelude::*, convert::TryInto};
 use codec::{Encode, Decode, CompactAs};
 use crate::traits::{SaturatedConversion, UniqueSaturatedInto, Saturating};
 use sp_debug_derive::RuntimeDebug;

@@ -19,7 +19,7 @@ log = { version = "0.4.8", optional = true }
 memory-db = { version = "0.15.2", default-features = false }
 offchain-primitives = { package = "sp-offchain", path = "../../../primitives/offchain", default-features = false}
 primitives = { package = "sp-core", path = "../../../primitives/core", default-features = false }
-rstd = { package = "sp-std", path = "../../../primitives/sr-std", default-features = false }
+sp-std = { path = "../../../primitives/std", default-features = false }
 runtime-interface = { package = "sp-runtime-interface", path = "../../../primitives/runtime-interface", default-features = false}
 runtime_io = { package = "sp-io", path = "../../../primitives/sr-io", default-features = false }
 runtime_support = { package = "frame-support", path = "../../../frame/support", default-features = false }
@@ -63,7 +63,7 @@ std = [
 	"offchain-primitives/std",
 	"primitives/std",
 	"primitives/std",
-	"rstd/std",
+	"sp-std/std",
 	"runtime-interface/std",
 	"runtime_io/std",
 	"runtime_support/std",

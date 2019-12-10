@@ -21,7 +21,7 @@
 use runtime_interface::runtime_interface;
 
 #[cfg(not(feature = "std"))]
-use rstd::{vec, vec::Vec, mem, convert::TryFrom};
+use sp_std::{vec, vec::Vec, mem, convert::TryFrom};
 
 use primitives::{sr25519::Public, wasm_export_functions};
 
@@ -95,8 +95,8 @@ extern "C" {
 /// Make sure the old runtime interface needs to be imported.
 #[no_mangle]
 pub fn force_old_runtime_interface_import() {
-	unsafe { ext_clear_storage(rstd::ptr::null(), 0); }
-	unsafe { ext_keccak_256(rstd::ptr::null(), 0, rstd::ptr::null_mut()); }
+	unsafe { ext_clear_storage(sp_std::ptr::null(), 0); }
+	unsafe { ext_keccak_256(sp_std::ptr::null(), 0, sp_std::ptr::null_mut()); }
 }
 
 /// This function is not used, but we require it for the compiler to include `runtime-io`.
@@ -173,7 +173,7 @@ wasm_export_functions! {
 	fn test_invalid_utf8_data_should_return_an_error() {
 		let data = vec![0, 159, 146, 150];
 		// I'm an evil hacker, trying to hack!
-		let data_str = unsafe { rstd::str::from_utf8_unchecked(&data) };
+		let data_str = unsafe { sp_std::str::from_utf8_unchecked(&data) };
 
 		test_api::invalid_utf8_data(data_str);
 	}

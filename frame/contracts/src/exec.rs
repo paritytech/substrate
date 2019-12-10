@@ -20,7 +20,7 @@ use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::gas::{Gas, GasMeter, Token, approx_gas_for_balance};
 use crate::rent;
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use sp_runtime::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
 use support::{
 	storage::unhashed,

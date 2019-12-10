@@ -76,7 +76,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, marker::PhantomData};
+use sp_std::{prelude::*, marker::PhantomData};
 use support::weights::{GetDispatchInfo, WeighBlock, DispatchInfo};
 use sp_runtime::{
 	generic::Digest, ApplyExtrinsicResult,

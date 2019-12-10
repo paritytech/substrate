@@ -10,7 +10,7 @@ primitives = { package = "sp-core",  path = "../../primitives/core", default-fea
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 inherents = { package = "sp-inherents", path = "../../primitives/inherents", default-features = false }
 sp-authorship = { path = "../../primitives/authorship", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-std = { path = "../../primitives/std", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }
@@ -24,7 +24,7 @@ std = [
 	"primitives/std",
 	"inherents/std",
 	"sp-runtime/std",
-	"rstd/std",
+	"sp-std/std",
 	"support/std",
 	"system/std",
 	"runtime-io/std",
