@@ -346,7 +346,7 @@ mod tests {
 				true,
 				None,
 			).0.expect("execution failed").into_encoded();
-			match ApplyResult::decode(&mut &r[..]).expect("apply result deserialization failed") {
+			match ApplyExtrinsicResult::decode(&mut &r[..]).expect("apply result deserialization failed") {
 				Ok(_) => {},
 				Err(e) => panic!("panic while applying extrinsic: {:?}", e),
 			}
