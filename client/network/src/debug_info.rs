@@ -24,6 +24,7 @@ use libp2p::identify::{Identify, IdentifyEvent, IdentifyInfo};
 use libp2p::ping::{Ping, PingConfig, PingEvent, PingSuccess};
 use log::{debug, trace, error};
 use std::collections::hash_map::Entry;
+use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use crate::utils::interval;
@@ -311,7 +312,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 			}
 		}
 
-		while let Poll::Ready(Some(Ok(_))) = self.garbage_collect.poll(cx) {
+		while let Poll::Ready(Some(Ok(_))) = self.garbage_collect.poll_next(cx) {
 			self.nodes_info.retain(|_, node| {
 				node.info_expire.as_ref().map(|exp| *exp >= Instant::now()).unwrap_or(true)
 			});

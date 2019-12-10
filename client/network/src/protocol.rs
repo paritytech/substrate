@@ -126,9 +126,9 @@ mod rep {
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Interval at which we call `tick`.
-	tick_timeout: Box<dyn Stream<Item = ()> + Send>,
+	tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Interval at which we call `propagate_extrinsics`.
-	propagate_timeout: Box<dyn Stream<Item = ()> + Send>,
+	propagate_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	config: ProtocolConfig,
 	/// Handler for light client requests.
 	light_dispatch: LightDispatch<B>,
@@ -461,8 +461,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let behaviour = LegacyProto::new(protocol_id, versions, peerset);
 
 		let protocol = Protocol {
-			tick_timeout: Box::new(interval(TICK_TIMEOUT).map(|v| Ok::<_, ()>(v))),
-			propagate_timeout: Box::new(interval(PROPAGATE_TIMEOUT).map(|v| Ok::<_, ()>(v))),
+			tick_timeout: Box::pin(interval(TICK_TIMEOUT)),
+			propagate_timeout: Box::pin(interval(PROPAGATE_TIMEOUT)),
 			config,
 			context_data: ContextData {
 				peers: HashMap::new(),
@@ -1834,11 +1834,11 @@ Protocol<B, S, H> {
 			Self::OutEvent
 		>
 	> {
-		while let Poll::Ready(Ok(_)) = self.tick_timeout.poll(cx) {
+		while let Poll::Ready(Some(Ok(_))) = self.tick_timeout.poll_next(cx) {
 			self.tick();
 		}
 
-		while let Poll::Ready(Ok(_)) = self.propagate_timeout.poll(cx) {
+		while let Poll::Ready(Some(Ok(_))) = self.propagate_timeout.poll_next(cx) {
 			self.propagate_extrinsics();
 		}
 
@@ -1869,7 +1869,7 @@ Protocol<B, S, H> {
 				GenericMessage::FinalityProofRequest(r))
 		}
 
-		let event = match self.behaviour.poll(params) {
+		let event = match self.behaviour.poll(cx, params) {
 			Poll::Pending => return Poll::Pending,
 			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
 			Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>

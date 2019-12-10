@@ -677,14 +677,14 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 
 		// Check for new incoming light client requests.
 		if let Some(light_client_rqs) = self.light_client_rqs.as_mut() {
-			while let Poll::Ready(Some(Ok(rq))) = light_client_rqs.poll(cx) {
+			while let Poll::Ready(Some(Ok(rq))) = light_client_rqs.poll_next(cx) {
 				self.network_service.user_protocol_mut().add_light_client_request(rq);
 			}
 		}
 
 		loop {
 			// Process the next message coming from the `NetworkService`.
-			let msg = match Pin::new(&mut self.from_worker).poll(cx) {
+			let msg = match Pin::new(&mut self.from_worker).poll_next(cx) {
 				Poll::Ready(Some(Ok(msg))) => msg,
 				Poll::Ready(None) | Err(_) => return Poll::Ready(None),
 				Poll::Pending => break,
@@ -726,14 +726,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 
 			let outcome = match poll_value {
 				Poll::Pending => break,
-				Poll::Ready(Some(Ok(BehaviourOut::SubstrateAction(outcome)))) => outcome,
-				Poll::Ready(Some(Ok(BehaviourOut::Dht(ev)))) =>
+				Poll::Ready(BehaviourOut::SubstrateAction(outcome)) => outcome,
+				Poll::Ready(BehaviourOut::Dht(ev)) =>
 					return Poll::Ready(Some(Ok(Event::Dht(ev)))),
-				Poll::Ready(None) => CustomMessageOutcome::None,
-				Poll::Ready(Some(Err(err))) => {
-					error!(target: "sync", "Error in the network: {:?}", err);
-					return Poll::Ready(Some(Err(err)))
-				}
 			};
 
 			match outcome {

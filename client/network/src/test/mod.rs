@@ -587,9 +587,9 @@ pub trait TestNetFactory: Sized {
 			}
 
 			let imported_blocks_stream = Box::new(client.import_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).fuse());
+				.fuse());
 			let finality_notification_stream = Box::new(client.finality_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).fuse());
+				.fuse());
 
 			peers.push(Peer {
 				data,
@@ -661,9 +661,9 @@ pub trait TestNetFactory: Sized {
 			}
 
 			let imported_blocks_stream = Box::new(client.import_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).fuse());
+				.fuse());
 			let finality_notification_stream = Box::new(client.finality_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).fuse());
+				.fuse());
 
 			peers.push(Peer {
 				data,

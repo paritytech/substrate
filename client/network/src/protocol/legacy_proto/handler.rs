@@ -30,7 +30,7 @@ use libp2p::swarm::{
 use log::{debug, error};
 use smallvec::{smallvec, SmallVec};
 use std::{borrow::Cow, error, fmt, io, marker::PhantomData, mem, time::Duration};
-use std::task::{Context, Poll};
+use std::{pin::Pin, task::{Context, Poll}};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
@@ -347,14 +347,14 @@ where
 			}
 
 			ProtocolState::Init { substreams, mut init_deadline } => {
-				match init_deadline.poll(cx) {
+				match Pin::new(&mut init_deadline).poll(cx) {
 					Poll::Ready(Ok(())) => {
 						init_deadline = Delay::new(Duration::from_secs(60));
 						error!(target: "sub-libp2p", "Handler initialization process is too long \
 							with {:?}", self.remote_peer_id)
 					},
 					Poll::Pending => {}
-					Err(_) => error!(target: "sub-libp2p", "Tokio timer has errored")
+					Poll::Ready(Err(_)) => error!(target: "sub-libp2p", "Tokio timer has errored")
 				}
 
 				self.state = ProtocolState::Init { substreams, init_deadline };
@@ -362,7 +362,7 @@ where
 			}
 
 			ProtocolState::Opening { mut deadline } => {
-				match deadline.poll(cx) {
+				match Pin::new(&mut deadline).poll(cx) {
 					Poll::Ready(Ok(())) => {
 						deadline = Delay::new(Duration::from_secs(60));
 						let event = CustomProtoHandlerOut::ProtocolError {
@@ -376,7 +376,7 @@ where
 						self.state = ProtocolState::Opening { deadline };
 						None
 					},
-					Err(_) => {
+					Poll::Ready(Err(_)) => {
 						error!(target: "sub-libp2p", "Tokio timer has errored");
 						deadline = Delay::new(Duration::from_secs(60));
 						self.state = ProtocolState::Opening { deadline };
@@ -388,7 +388,7 @@ where
 			ProtocolState::Normal { mut substreams, mut shutdown } => {
 				for n in (0..substreams.len()).rev() {
 					let mut substream = substreams.swap_remove(n);
-					match substream.poll(cx) {
+					match Pin::new(&mut substream).poll_next(cx) {
 						Poll::Pending => substreams.push(substream),
 						Poll::Ready(Some(Ok(RegisteredProtocolEvent::Message(message)))) => {
 							let event = CustomProtoHandlerOut::CustomMessage {
@@ -419,7 +419,7 @@ where
 								return Some(ProtocolsHandlerEvent::Custom(event));
 							}
 						}
-						Err(err) => {
+						Poll::Ready(Err(err)) => {
 							if substreams.is_empty() {
 								let event = CustomProtoHandlerOut::CustomProtocolClosed {
 									reason: format!("Error on the last substream: {:?}", err).into(),
@@ -627,7 +627,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin {
 	'outer: for n in (0..list.len()).rev() {
 		let mut substream = list.swap_remove(n);
 		loop {
-			match substream.poll(cx) {
+			match substream.poll_next(cx) {
 				Poll::Ready(Some(Ok(_))) => {}
 				Poll::Pending => break,
 				Err(_) | Poll::Ready(None) => continue 'outer,

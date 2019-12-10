@@ -961,20 +961,17 @@ where
 		// Poll for instructions from the peerset.
 		// Note that the peerset is a *best effort* crate, and we have to use defensive programming.
 		loop {
-			let mut peerset01 = futures::stream::poll_fn(|cx|
-				futures::Stream::poll_next(Pin::new(&mut self.peerset), cx)
-			).map(|v| Ok::<_, ()>(v));
-			match peerset01.poll(cx) {
-				Poll::Ready(Some(Ok(peerset::Message::Accept(index)))) => {
+			match futures::Stream::poll_next(Pin::new(&mut self.peerset), cx) {
+				Poll::Ready(Some(peerset::Message::Accept(index))) => {
 					self.peerset_report_accept(index);
 				}
-				Poll::Ready(Some(Ok(peerset::Message::Reject(index)))) => {
+				Poll::Ready(Some(peerset::Message::Reject(index))) => {
 					self.peerset_report_reject(index);
 				}
-				Poll::Ready(Some(Ok(peerset::Message::Connect(id)))) => {
+				Poll::Ready(Some(peerset::Message::Connect(id))) => {
 					self.peerset_report_connect(id);
 				}
-				Poll::Ready(Some(Ok(peerset::Message::Drop(id)))) => {
+				Poll::Ready(Some(peerset::Message::Drop(id))) => {
 					self.peerset_report_disconnect(id);
 				}
 				Poll::Ready(None) => {
@@ -982,17 +979,13 @@ where
 					break;
 				}
 				Poll::Pending => break,
-				Err(err) => {
-					error!(target: "sub-libp2p", "Peerset receiver stream has errored: {:?}", err);
-					break
-				}
 			}
 		}
 
 		for (peer_id, peer_state) in self.peers.iter_mut() {
 			match mem::replace(peer_state, PeerState::Poisoned) {
 				PeerState::PendingRequest { mut timer, timer_deadline } => {
-					if let Poll::Pending = timer.poll(cx) {
+					if let Poll::Pending = Pin::new(&mut timer).poll(cx) {
 						*peer_state = PeerState::PendingRequest { timer, timer_deadline };
 						continue;
 					}
@@ -1003,7 +996,7 @@ where
 				}
 
 				PeerState::DisabledPendingEnable { mut timer, connected_point, open, timer_deadline } => {
-					if let Poll::Pending = timer.poll(cx) {
+					if let Poll::Pending = Pin::new(&mut timer).poll(cx) {
 						*peer_state = PeerState::DisabledPendingEnable {
 							timer,
 							connected_point,

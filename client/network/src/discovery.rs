@@ -60,7 +60,7 @@ use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
-use std::{cmp, collections::VecDeque, time::Duration};
+use std::{cmp, collections::VecDeque, pin::Pin, time::Duration};
 use std::task::{Context, Poll};
 use primitives::hexdisplay::HexDisplay;
 
@@ -93,7 +93,7 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 	/// Builds a new `DiscoveryBehaviour`.
 	///
 	/// `user_defined` is a list of known address for nodes that never expire.
-	pub fn new(
+	pub async fn new(
 		local_public_key: PublicKey,
 		user_defined: Vec<(PeerId, Multiaddr)>,
 		enable_mdns: bool,
@@ -122,7 +122,7 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 			allow_private_ipv4,
 			#[cfg(not(target_os = "unknown"))]
 			mdns: if enable_mdns {
-				match Mdns::new() {
+				match Mdns::new().await {
 					Ok(mdns) => Some(mdns).into(),
 					Err(err) => {
 						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
@@ -302,25 +302,18 @@ where
 
 		// Poll the stream that fires when we need to start a random Kademlia query.
 		loop {
-			match self.next_kad_random_query.poll(cx) {
-				Poll::Pending => break,
-				Poll::Ready(Ok(_)) => {
-					let random_peer_id = PeerId::random();
-					debug!(target: "sub-libp2p", "Libp2p <= Starting random Kademlia request for \
-						{:?}", random_peer_id);
+			while let Poll::Ready(_) = Pin::new(&mut self.next_kad_random_query).poll(cx) {
+				let random_peer_id = PeerId::random();
+				debug!(target: "sub-libp2p", "Libp2p <= Starting random Kademlia request for \
+					{:?}", random_peer_id);
 
-					self.kademlia.get_closest_peers(random_peer_id);
+				self.kademlia.get_closest_peers(random_peer_id);
 
-					// Schedule the next random query with exponentially increasing delay,
-					// capped at 60 seconds.
-					self.next_kad_random_query = Delay::new(self.duration_to_next_kad);
-					self.duration_to_next_kad = cmp::min(self.duration_to_next_kad * 2,
-						Duration::from_secs(60));
-				},
-				Err(err) => {
-					warn!(target: "sub-libp2p", "Kademlia query timer errored: {:?}", err);
-					break
-				}
+				// Schedule the next random query with exponentially increasing delay,
+				// capped at 60 seconds.
+				self.next_kad_random_query = Delay::new(self.duration_to_next_kad);
+				self.duration_to_next_kad = cmp::min(self.duration_to_next_kad * 2,
+					Duration::from_secs(60));
 			}
 		}
 

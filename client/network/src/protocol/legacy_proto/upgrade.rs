@@ -80,7 +80,7 @@ pub struct RegisteredProtocolSubstream<TSubstream> {
 	/// Buffer of packets to send.
 	send_queue: VecDeque<Vec<u8>>,
 	/// If true, we should call `poll_complete` on the inner sink.
-	requires_poll_complete: bool,
+	requires_poll_flush: bool,
 	/// The underlying substream.
 	inner: stream::Fuse<Framed<Negotiated<TSubstream>, UviBytes<Vec<u8>>>>,
 	/// Version of the protocol that was negotiated.
@@ -152,7 +152,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin {
 
 			if let Some(packet) = self.send_queue.pop_front() {
 				self.inner.start_send(packet)?;
-				self.requires_poll_complete = true;
+				self.requires_poll_flush = true;
 			}
 		}
 
@@ -179,20 +179,20 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin {
 		}
 
 		// Flushing if necessary.
-		if self.requires_poll_complete {
-			if let Poll::Ready(()) = self.inner.poll_complete()? {
-				self.requires_poll_complete = false;
+		if self.requires_poll_flush {
+			if let Poll::Ready(()) = self.inner.poll_flush()? {
+				self.requires_poll_flush = false;
 			}
 		}
 
 		// Receiving incoming packets.
 		// Note that `inner` is wrapped in a `Fuse`, therefore we can poll it forever.
-		match Pin::new(&mut self.inner).poll(cx)? {
+		match Pin::new(&mut self.inner).poll_next(cx)? {
 			Poll::Ready(Some(data)) => {
 				Poll::Ready(Some(Ok(RegisteredProtocolEvent::Message(data))))
 			}
 			Poll::Ready(None) =>
-				if !self.requires_poll_complete && self.send_queue.is_empty() {
+				if !self.requires_poll_flush && self.send_queue.is_empty() {
 					Poll::Ready(None)
 				} else {
 					Poll::Pending
@@ -259,7 +259,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 			is_closing: false,
 			endpoint: Endpoint::Listener,
 			send_queue: VecDeque::new(),
-			requires_poll_complete: false,
+			requires_poll_flush: false,
 			inner: framed.fuse(),
 			protocol_version: info.version,
 			clogged_fuse: false,
@@ -285,7 +285,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 			is_closing: false,
 			endpoint: Endpoint::Dialer,
 			send_queue: VecDeque::new(),
-			requires_poll_complete: false,
+			requires_poll_flush: false,
 			inner: framed.fuse(),
 			protocol_version: info.version,
 			clogged_fuse: false,
