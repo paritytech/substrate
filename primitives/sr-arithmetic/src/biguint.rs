@@ -17,7 +17,7 @@
 //! Infinite precision unsigned integer for substrate runtime.
 
 use num_traits::Zero;
-use rstd::{cmp::Ordering, ops, prelude::*, cell::RefCell, convert::TryFrom};
+use sp_std::{cmp::Ordering, ops, prelude::*, cell::RefCell, convert::TryFrom};
 
 // A sensible value for this would be half of the dword size of the host machine. Since the
 // runtime is compiled to 32bit webassembly, using 32 and 64 for single and double respectively
@@ -427,9 +427,9 @@ impl BigUint {
 	}
 }
 
-impl rstd::fmt::Debug for BigUint {
+impl sp_std::fmt::Debug for BigUint {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter<'_>) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		write!(
 			f,
 			"BigUint {{ {:?} ({:?})}}",
@@ -439,7 +439,7 @@ impl rstd::fmt::Debug for BigUint {
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter<'_>) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		Ok(())
 	}
 
@@ -646,7 +646,7 @@ pub mod tests {
 
 	#[test]
 	fn can_try_build_numbers_from_types() {
-		use rstd::convert::TryFrom;
+		use sp_std::convert::TryFrom;
 		assert_eq!(u64::try_from(with_limbs(1)).unwrap(), 1);
 		assert_eq!(u64::try_from(with_limbs(2)).unwrap(), u32::max_value() as u64 + 2);
 		assert_eq!(

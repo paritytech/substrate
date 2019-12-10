@@ -18,7 +18,7 @@
 
 use sp_timestamp::TimestampInherentData;
 use inherents::{InherentIdentifier, InherentData, Error};
-use rstd::result::Result;
+use sp_std::result::Result;
 use codec::Decode;
 
 #[cfg(feature = "std")]

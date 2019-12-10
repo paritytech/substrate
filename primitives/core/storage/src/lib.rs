@@ -22,7 +22,7 @@
 use serde::{Serialize, Deserialize};
 use sp_debug_derive::RuntimeDebug;
 
-use rstd::{vec::Vec, borrow::Cow};
+use sp_std::{vec::Vec, borrow::Cow};
 
 /// Storage key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
@@ -42,7 +42,7 @@ pub struct StorageData(
 
 /// A set of key value pairs for storage.
 #[cfg(feature = "std")]
-pub type StorageOverlay = std::collections::HashMap<Vec<u8>, Vec<u8>>;
+pub type StorageOverlay = std::collections::BTreeMap<Vec<u8>, Vec<u8>>;
 
 /// A set of key value pairs for children storage;
 #[cfg(feature = "std")]

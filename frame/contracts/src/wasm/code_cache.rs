@@ -28,7 +28,7 @@
 
 use crate::wasm::{prepare, runtime::Env, PrefabWasmModule};
 use crate::{CodeHash, CodeStorage, PristineCode, Schedule, Trait};
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use sp_runtime::traits::Hash;
 use support::StorageMap;
 

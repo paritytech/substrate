@@ -59,7 +59,7 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use support::{decl_module, decl_storage, decl_event, ensure, print};
 use support::traits::{
 	Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced,

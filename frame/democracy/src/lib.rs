@@ -18,8 +18,8 @@
 #![recursion_limit="128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
-use rstd::{result, convert::TryFrom};
+use sp_std::prelude::*;
+use sp_std::{result, convert::TryFrom};
 use sp_runtime::{
 	RuntimeDebug,
 	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable, Saturating},

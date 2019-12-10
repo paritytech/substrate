@@ -25,7 +25,7 @@ use crate::traits::{
 };
 use crate::generic::Digest;
 use primitives::U256;
-use rstd::{
+use sp_std::{
 	convert::TryFrom,
 	fmt::Debug,
 };
@@ -104,10 +104,10 @@ impl<Number, Hash> codec::EncodeLike for Header<Number, Hash> where
 {}
 
 impl<Number, Hash> traits::Header for Header<Number, Hash> where
-	Number: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash + MaybeDisplay +
+	Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + MaybeDisplay +
 		SimpleArithmetic + Codec + Copy + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
-	Hash::Output: Default + rstd::hash::Hash + Copy + Member +
+	Hash::Output: Default + sp_std::hash::Hash + Copy + Member +
 		MaybeSerialize + Debug + MaybeDisplay + SimpleBitOps + Codec,
 {
 	type Number = Number;
@@ -152,9 +152,9 @@ impl<Number, Hash> traits::Header for Header<Number, Hash> where
 }
 
 impl<Number, Hash> Header<Number, Hash> where
-	Number: Member + rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + Into<U256> + TryFrom<U256>,
+	Number: Member + sp_std::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
-	Hash::Output: Default + rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
+	Hash::Output: Default + sp_std::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
  {
 	/// Convenience helper for computing the hash of the header without having
 	/// to import the trait.

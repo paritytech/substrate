@@ -219,6 +219,7 @@ pub fn testnet_genesis(
 			get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
 		]
 	});
+	let num_endowed_accounts = endowed_accounts.len();
 
 	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
 	const STASH: Balance = 100 * DOLLARS;
@@ -259,12 +260,12 @@ pub fn testnet_genesis(
 		democracy: Some(DemocracyConfig::default()),
 		collective_Instance1: Some(CouncilConfig {
 			members: endowed_accounts.iter().cloned()
-				.collect::<Vec<_>>()[..5].to_vec(),
+				.collect::<Vec<_>>()[..(num_endowed_accounts + 1) / 2].to_vec(),
 			phantom: Default::default(),
 		}),
 		collective_Instance2: Some(TechnicalCommitteeConfig {
 			members: endowed_accounts.iter().cloned()
-				.collect::<Vec<_>>()[..5].to_vec(),
+				.collect::<Vec<_>>()[..(num_endowed_accounts + 1) / 2].to_vec(),
 			phantom: Default::default(),
 		}),
 		contracts: Some(ContractsConfig {

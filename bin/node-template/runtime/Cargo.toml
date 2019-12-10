@@ -17,7 +17,7 @@ inherents = { package = "sp-inherents", path = "../../../primitives/inherents", 
 offchain-primitives = { package = "sp-offchain", path = "../../../primitives/offchain", default-features = false }
 primitives = { package = "sp-core", path = "../../../primitives/core", default-features = false }
 randomness-collective-flip = { package = "pallet-randomness-collective-flip", path = "../../../frame/randomness-collective-flip", default-features = false }
-rstd = { package = "sp-std", path = "../../../primitives/sr-std", default-features = false }
+sp-std = { path = "../../../primitives/std", default-features = false }
 runtime-io = { package = "sp-io", path = "../../../primitives/sr-io", default-features = false }
 safe-mix = { version = "1.0.0", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
@@ -50,7 +50,7 @@ std = [
 	"offchain-primitives/std",
 	"primitives/std",
 	"randomness-collective-flip/std",
-	"rstd/std",
+	"sp-std/std",
 	"runtime-io/std",
 	"safe-mix/std",
 	"serde",

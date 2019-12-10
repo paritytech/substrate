@@ -30,7 +30,7 @@
 // re-export since this is necessary for `impl_apis` in runtime.
 pub use sp_finality_grandpa as fg_primitives;
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use codec::{self as codec, Encode, Decode, Error};
 use support::{decl_event, decl_storage, decl_module, dispatch::Result, storage};
 use sp_runtime::{

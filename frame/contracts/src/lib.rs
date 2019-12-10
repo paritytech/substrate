@@ -109,7 +109,7 @@ pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use primitives::crypto::UncheckedFrom;
-use rstd::{prelude::*, marker::PhantomData, convert::TryFrom, fmt};
+use sp_std::{prelude::*, marker::PhantomData, convert::TryFrom, fmt};
 use codec::{Codec, Encode, Decode};
 use runtime_io::hashing::blake2_256;
 use sp_runtime::{
@@ -238,7 +238,7 @@ impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
 where
 	H: Member + MaybeSerializeDeserialize + fmt::Debug
 		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default
-		+ rstd::hash::Hash + Codec,
+		+ sp_std::hash::Hash + Codec,
 	Hasher: Hash<Output=H>,
 {
 	fn new(storage_root: &[u8], code_hash: H) -> Self {
@@ -1086,12 +1086,12 @@ impl<T: Trait + Send + Sync> Default for CheckBlockGasLimit<T> {
 
 impl<T: Trait + Send + Sync> fmt::Debug for CheckBlockGasLimit<T> {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "CheckBlockGasLimit")
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
@@ -1106,7 +1106,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 	/// It is present only for the contract calls that operate with gas.
 	type Pre = Option<DynamicWeightData<T::AccountId, NegativeImbalanceOf<T>>>;
 
-	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
+	fn additional_signed(&self) -> Result<(), TransactionValidityError> { Ok(()) }
 
 	fn pre_dispatch(
 		self,
@@ -1114,7 +1114,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 		call: &Self::Call,
 		_: DispatchInfo,
 		_: usize,
-	) -> rstd::result::Result<Self::Pre, TransactionValidityError> {
+	) -> Result<Self::Pre, TransactionValidityError> {
 		Self::perform_pre_dispatch_checks(who, call)
 			.map_err(Into::into)
 	}
