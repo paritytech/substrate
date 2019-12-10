@@ -149,7 +149,8 @@ mod tests {
 
 	#[test]
 	fn construct_genesis_should_work_with_native() {
-		let mut storage = GenesisConfig::new(false,
+		let mut storage = GenesisConfig::new(
+			false,
 			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,

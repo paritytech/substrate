@@ -23,8 +23,8 @@ mod node_header;
 mod node_codec;
 mod trie_stream;
 
-use rstd::boxed::Box;
-use rstd::vec::Vec;
+use sp_std::boxed::Box;
+use sp_std::vec::Vec;
 use hash_db::Hasher;
 /// Our `NodeCodec`-specific error.
 pub use error::Error;
@@ -44,7 +44,7 @@ pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
 
 #[derive(Default)]
 /// substrate trie layout
-pub struct Layout<H>(rstd::marker::PhantomData<H>);
+pub struct Layout<H>(sp_std::marker::PhantomData<H>);
 
 impl<H: Hasher> TrieLayout for Layout<H> {
 	const USE_EXTENSION: bool = false;

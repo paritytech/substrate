@@ -159,8 +159,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
-use rstd::{cmp, result, mem, fmt::Debug};
+use sp_std::prelude::*;
+use sp_std::{cmp, result, mem, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module,
@@ -614,7 +614,7 @@ mod imbalances {
 		result, Subtrait, DefaultInstance, Imbalance, Trait, Zero, Instance, Saturating,
 		StorageValue, TryDrop,
 	};
-	use rstd::mem;
+	use sp_std::mem;
 
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
 	/// funds have been created without any equal and opposite accounting.

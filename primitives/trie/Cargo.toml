@@ -13,7 +13,7 @@ harness = false
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
-rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-std = { path = "../std", default-features = false }
 hash-db = { version = "0.15.2", default-features = false }
 trie-db = { version = "0.16.0", default-features = false }
 trie-root = { version = "0.15.2", default-features = false }
@@ -29,7 +29,7 @@ hex-literal = "0.2.1"
 [features]
 default = ["std"]
 std = [
-	"rstd/std",
+	"sp-std/std",
 	"codec/std",
 	"hash-db/std",
 	"memory-db/std",

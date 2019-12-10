@@ -39,7 +39,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_runtime::{generic, traits};
 use txpool_api::{
 	TransactionPool, InPoolTransaction, TransactionStatus,
-	BlockHash, TxHash, TransactionFor, IntoPoolError,
+	BlockHash, TxHash, TransactionFor, error::IntoPoolError,
 };
 use session::SessionKeys;
 

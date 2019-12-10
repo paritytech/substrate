@@ -17,7 +17,7 @@
 //! Light client backend. Only stores headers and justifications of blocks.
 //! Everything else is requested from full nodes on demand.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use std::sync::Arc;
 use parking_lot::RwLock;
 
@@ -295,7 +295,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		check_genesis_storage(&top, &children)?;
 
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
-		let mut storage: HashMap<Option<Vec<u8>>, StorageOverlay> = HashMap::new();
+		let mut storage: BTreeMap<Option<Vec<u8>>, StorageOverlay> = Default::default();
 		storage.insert(None, top);
 
 		// create a list of children keys to re-compute roots for
@@ -372,6 +372,22 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
 				Ok(state.child_storage(storage_key, key).expect(IN_MEMORY_EXPECT_PROOF)),
+			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
+		}
+	}
+
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		match *self {
+			GenesisOrUnavailableState::Genesis(ref state) =>
+				Ok(state.next_storage_key(key).expect(IN_MEMORY_EXPECT_PROOF)),
+			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
+		}
+	}
+
+	fn next_child_storage_key(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		match *self {
+			GenesisOrUnavailableState::Genesis(ref state) =>
+				Ok(state.next_child_storage_key(storage_key, key).expect(IN_MEMORY_EXPECT_PROOF)),
 			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}

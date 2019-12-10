@@ -63,6 +63,16 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		Ok(self.child_storage(storage_key, key)?.is_some())
 	}
 
+	/// Return the next key in storage in lexicographic order or `None` if there is no value.
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+
+	/// Return the next key in child storage in lexicographic order or `None` if there is no value.
+	fn next_child_storage_key(
+		&self,
+		storage_key: &[u8],
+		key: &[u8]
+	) -> Result<Option<Vec<u8>>, Self::Error>;
+
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F);
 
@@ -165,6 +175,14 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		(*self).child_storage(storage_key, key)
+	}
+
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		(*self).next_storage_key(key)
+	}
+
+	fn next_child_storage_key(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		(*self).next_child_storage_key(storage_key, key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {

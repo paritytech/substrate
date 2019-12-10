@@ -36,14 +36,15 @@ structopt = "0.3.3"
 # primitives
 authority-discovery-primitives = { package = "sp-authority-discovery", path = "../../../primitives/authority-discovery"}
 babe-primitives = { package = "sp-consensus-babe", path = "../../../primitives/consensus/babe" }
-grandpa_primitives = { package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
+grandpa-primitives = { package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
 primitives = { package = "sp-core", path = "../../../primitives/core" }
-sp-runtime = { path = "../../../primitives/sr-primitives" }
+sp-runtime = { path = "../../../primitives/runtime" }
 sp-timestamp = { path = "../../../primitives/timestamp", default-features = false }
 sp-finality-tracker = { path = "../../../primitives/finality-tracker", default-features = false }
 inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
 keyring = { package = "sp-keyring", path = "../../../primitives/keyring" }
 runtime-io = { package = "sp-io", path = "../../../primitives/sr-io" }
+consensus-common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
 
 # client dependencies
 client-api = { package = "sc-client-api", path = "../../../client/api" }
@@ -54,14 +55,13 @@ txpool-api = { package = "sp-transaction-pool-api", path = "../../../primitives/
 network = { package = "sc-network", path = "../../../client/network" }
 babe = { package = "sc-consensus-babe", path = "../../../client/consensus/babe" }
 grandpa = { package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
-client_db = { package = "sc-client-db", path = "../../../client/db", default-features = false }
+client-db = { package = "sc-client-db", path = "../../../client/db", default-features = false }
 offchain = { package = "sc-offchain", path = "../../../client/offchain" }
-sc-rpc = { package = "sc-rpc", path = "../../../client/rpc" }
+sc-rpc = { path = "../../../client/rpc" }
 sc-basic-authority = { path = "../../../client/basic-authorship" }
 sc-service = { path = "../../../client/service", default-features = false }
-sc-telemetry = { package = "sc-telemetry", path = "../../../client/telemetry" }
+sc-telemetry = { path = "../../../client/telemetry" }
 authority-discovery = { package = "sc-authority-discovery", path = "../../../client/authority-discovery"}
-consensus-common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
 
 # frame dependencies
 indices = { package = "pallet-indices", path = "../../../frame/indices" }

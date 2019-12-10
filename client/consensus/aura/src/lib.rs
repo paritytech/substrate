@@ -35,7 +35,7 @@ use std::{
 use codec::{Encode, Decode, Codec};
 use consensus_common::{
 	self, BlockImport, Environment, Proposer, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
-	BlockOrigin, Error as ConsensusError, SelectChain,
+	BlockOrigin, Error as ConsensusError, SelectChain, SlotData,
 };
 use consensus_common::import_queue::{
 	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
@@ -68,8 +68,9 @@ use sp_timestamp::{
 
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
-use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible, StorageChanges};
-use slots::check_equivocation;
+use slots::{
+    CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
+};
 
 use keystore::KeyStorePtr;
 

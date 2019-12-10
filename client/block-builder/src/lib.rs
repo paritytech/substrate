@@ -39,7 +39,7 @@ use sp_consensus::RecordProof;
 
 pub use runtime_api::BlockBuilder as BlockBuilderApi;
 
-use client_api::backend;
+use sc_client_api::backend;
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {

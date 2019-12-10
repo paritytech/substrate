@@ -70,8 +70,8 @@ use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
 use sp_runtime::{
-    generic::{BlockId, OpaqueDigestItemId}, Justification,
-    traits::{Block as BlockT, Header, DigestItemFor, Zero},
+	generic::{BlockId, OpaqueDigestItemId}, Justification,
+	traits::{Block as BlockT, Header, DigestItemFor, Zero},
 };
 use sp_api::ProvideRuntimeApi;
 use keystore::KeyStorePtr;
@@ -82,10 +82,10 @@ use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use consensus_common::{
 	self, BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
+	SelectChain, SlotData,
 };
 use babe_primitives::inherents::BabeInherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
-use consensus_common::SelectChain;
 use consensus_common::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use client_api::{
 	backend::{AuxStore, Backend},
@@ -93,14 +93,13 @@ use client_api::{
 	BlockchainEvents, ProvideUncles,
 };
 use client::Client;
+use log::{debug, trace, info, warn};
 
 use block_builder_api::BlockBuilder as BlockBuilderApi;
 
 use futures::prelude::*;
-use log::{warn, debug, info, trace};
 use slots::{
-	CheckedHeader, check_equivocation, SlotWorker, SlotData, SlotInfo, SlotCompatible,
-	StorageChanges,
+	SlotWorker, SlotInfo, SlotCompatible, CheckedHeader, StorageChanges, check_equivocation,
 };
 use epoch_changes::descendent_query;
 use sp_blockchain::{

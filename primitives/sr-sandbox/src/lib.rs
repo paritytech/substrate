@@ -38,7 +38,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 
 pub use primitives::sandbox::{TypedValue, ReturnValue, HostError};
 

@@ -57,7 +57,7 @@ use support::{
 	StorageMap, StorageDoubleMap,
 	traits::{Currency, OnUnbalanced, Imbalance},
 };
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 use codec::{Encode, Decode};
 
 /// The proportion of the slashing reward to be paid out on the first slashing detection.
@@ -133,7 +133,7 @@ impl SlashingSpans {
 			SlashingSpan { index, start, length: Some(length) }
 		});
 
-		rstd::iter::once(last).chain(prior)
+		sp_std::iter::once(last).chain(prior)
 	}
 
 	/// Yields the era index where the last (current) slashing span started.
@@ -161,7 +161,7 @@ impl SlashingSpans {
 		};
 
 		// readjust the ongoing span, if it started before the beginning of the window.
-		self.last_start = rstd::cmp::max(self.last_start, window_start);
+		self.last_start = sp_std::cmp::max(self.last_start, window_start);
 		pruned
 	}
 }
@@ -419,7 +419,7 @@ struct InspectingSpans<'a, T: Trait + 'a> {
 	paid_out: &'a mut BalanceOf<T>,
 	slash_of: &'a mut BalanceOf<T>,
 	reward_proportion: Perbill,
-	_marker: rstd::marker::PhantomData<T>,
+	_marker: sp_std::marker::PhantomData<T>,
 }
 
 // fetches the slashing spans record for a stash account, initializing it if necessary.
@@ -444,7 +444,7 @@ fn fetch_spans<'a, T: Trait + 'a>(
 		slash_of,
 		paid_out,
 		reward_proportion,
-		_marker: rstd::marker::PhantomData,
+		_marker: sp_std::marker::PhantomData,
 	}
 }
 

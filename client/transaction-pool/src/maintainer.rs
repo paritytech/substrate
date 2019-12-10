@@ -37,8 +37,8 @@ use sp_runtime::{
 };
 use sp_blockchain::HeaderBackend;
 use txpool_api::TransactionPoolMaintainer;
-use txpool_runtime_api::TaggedTransactionQueue;
 use sp_api::ProvideRuntimeApi;
+use txpool_api::runtime_api::TaggedTransactionQueue;
 
 use txpool::{self, ChainApi};
 

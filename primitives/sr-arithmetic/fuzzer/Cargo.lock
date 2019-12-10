@@ -285,45 +285,45 @@ dependencies = [
 ]
 
 [[package]]
-name = "sr-arithmetic"
+name = "sp-arithmetic"
 version = "2.0.0"
 dependencies = [
  "integer-sqrt 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-std 2.0.0",
- "substrate-debug-derive 2.0.0",
+ "sp-debug-derive 2.0.0",
+ "sp-std 2.0.0",
 ]
 
 [[package]]
-name = "sr-arithmetic-fuzzer"
+name = "sp-arithmetic-fuzzer"
 version = "2.0.0"
 dependencies = [
  "honggfuzz 0.5.45 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-bigint 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-arithmetic 2.0.0",
+ "sp-arithmetic 2.0.0",
 ]
 
 [[package]]
-name = "sr-std"
-version = "2.0.0"
-
-[[package]]
-name = "static_assertions"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "substrate-debug-derive"
+name = "sp-debug-derive"
 version = "2.0.0"
 dependencies = [
  "proc-macro2 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "syn 1.0.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "sp-std"
+version = "2.0.0"
+
+[[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "syn"

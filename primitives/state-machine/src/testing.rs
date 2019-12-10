@@ -16,7 +16,7 @@
 
 //! Test implementation for Externalities.
 
-use std::{collections::HashMap, any::{Any, TypeId}};
+use std::{collections::{HashMap, BTreeMap}, any::{Any, TypeId}};
 use hash_db::Hasher;
 use crate::{
 	backend::Backend, OverlayedChanges, StorageTransactionCache, ext::Ext, InMemoryBackend,
@@ -34,7 +34,7 @@ use primitives::{
 use codec::Encode;
 use externalities::{Extensions, Extension};
 
-type StorageTuple = (HashMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>);
+type StorageTuple = (BTreeMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>);
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher = Blake2Hasher, N: ChangesTrieBlockNumber = u64>
@@ -86,7 +86,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		storage.0.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		storage.0.insert(CODE.to_vec(), code.to_vec());
 
-		let backend: HashMap<_, _> = storage.1.into_iter()
+		let backend: BTreeMap<_, _> = storage.1.into_iter()
 			.map(|(keyspace, map)| (Some(keyspace), map))
 			.chain(Some((None, storage.0)).into_iter())
 			.collect();

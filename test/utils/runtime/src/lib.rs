@@ -22,7 +22,7 @@
 pub mod genesismap;
 pub mod system;
 
-use rstd::{prelude::*, marker::PhantomData};
+use sp_std::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
 use primitives::{Blake2Hasher, OpaqueMetadata, RuntimeDebug};
@@ -415,7 +415,7 @@ fn code_using_trie() -> u64 {
 	].to_vec();
 
 	let mut mdb = PrefixedMemoryDB::default();
-	let mut root = rstd::default::Default::default();
+	let mut root = sp_std::default::Default::default();
 	let _ = {
 		let v = &pairs;
 		let mut t = TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
@@ -477,7 +477,7 @@ cfg_if! {
 				}
 			}
 
-			impl txpool_runtime_api::TaggedTransactionQueue<Block> for Runtime {
+			impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction {
@@ -662,7 +662,7 @@ cfg_if! {
 				}
 			}
 
-			impl txpool_runtime_api::TaggedTransactionQueue<Block> for Runtime {
+			impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction{

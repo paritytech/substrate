@@ -77,7 +77,7 @@
 pub use wasm_interface;
 
 #[doc(hidden)]
-pub use rstd;
+pub use sp_std;
 
 pub use sp_runtime_interface_proc_macro::runtime_interface;
 

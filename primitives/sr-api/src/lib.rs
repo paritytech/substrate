@@ -57,9 +57,9 @@ pub use primitives::{offchain, ExecutionContext};
 #[doc(hidden)]
 pub use sp_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
 #[doc(hidden)]
-pub use rstd::{slice, mem};
+pub use sp_std::{slice, mem};
 #[cfg(feature = "std")]
-use rstd::result;
+use sp_std::result;
 #[doc(hidden)]
 pub use codec::{Encode, Decode};
 use primitives::OpaqueMetadata;
@@ -249,7 +249,7 @@ pub trait CallApiAt<Block: BlockT> {
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
 #[cfg(feature = "std")]
-pub struct ApiRef<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
+pub struct ApiRef<'a, T>(T, std::marker::PhantomData<&'a ()>);
 
 #[cfg(feature = "std")]
 impl<'a, T> ApiRef<'a, T> {
@@ -272,7 +272,7 @@ impl<'a, T> From<T> for ApiRef<'a, T> {
 }
 
 #[cfg(feature = "std")]
-impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
+impl<'a, T> std::ops::Deref for ApiRef<'a, T> {
 	type Target = T;
 
 	fn deref(&self) -> &Self::Target {
@@ -281,7 +281,7 @@ impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
 }
 
 #[cfg(feature = "std")]
-impl<'a, T> rstd::ops::DerefMut for ApiRef<'a, T> {
+impl<'a, T> std::ops::DerefMut for ApiRef<'a, T> {
 	fn deref_mut(&mut self) -> &mut T {
 		&mut self.0
 	}

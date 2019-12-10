@@ -8,10 +8,10 @@ edition = "2018"
 log = "0.4.8"
 futures = "0.3.1"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sp-runtime = { path = "../../primitives/sr-primitives" }
 sp-api = { path = "../../primitives/sr-api" }
-sp-blockchain = { path = "../../primitives/blockchain" }
+sp-runtime = { path = "../../primitives/runtime" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 client = { package = "sc-client", path = "../" }
 client-api = { package = "sc-client-api", path = "../api" }
 consensus_common = { package = "sp-consensus", path = "../../primitives/consensus/common" }

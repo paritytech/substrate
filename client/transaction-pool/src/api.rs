@@ -25,10 +25,10 @@ use futures::{
 use client_api::{blockchain::HeaderBackend, light::{Fetcher, RemoteCallRequest}};
 use primitives::Hasher;
 use sp_runtime::{
-	generic::BlockId, traits::{self, Block as BlockT, Hash as HashT, Header as HeaderT},
-	transaction_validity::TransactionValidity
+	generic::BlockId, traits::{self, Header as HeaderT, Hash as HashT, Block as BlockT},
+	transaction_validity::TransactionValidity,
 };
-use txpool_runtime_api::TaggedTransactionQueue;
+use txpool_api::runtime_api::TaggedTransactionQueue;
 use sp_api::ProvideRuntimeApi;
 
 use crate::error::{self, Error};

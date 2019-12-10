@@ -18,7 +18,7 @@
 
 use crate::{RuntimePublic, KeyTypeId};
 
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 
 pub use primitives::sr25519::*;
 
