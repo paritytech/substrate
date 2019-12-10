@@ -6325,6 +6325,7 @@ dependencies = [
  "environmental 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustversion 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-executor 2.0.0",
  "sp-core 2.0.0",
  "sp-externalities 2.0.0",
@@ -6335,6 +6336,7 @@ dependencies = [
  "sp-std 2.0.0",
  "sp-wasm-interface 2.0.0",
  "static_assertions 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trybuild 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -6342,15 +6344,10 @@ name = "sp-runtime-interface-proc-macro"
 version = "2.0.0"
 dependencies = [
  "Inflector 0.11.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro-crate 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro2 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustversion 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-externalities 2.0.0",
- "sp-runtime-interface 2.0.0",
  "syn 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
- "trybuild 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
