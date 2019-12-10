@@ -5,7 +5,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-block-builder = { package = "sc-block-builder", path = "../block-builder" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 consensus = { package = "sp-consensus", path = "../../primitives/consensus/common" }
 derive_more = { version = "0.99.2" }
