@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::time::Duration;
-use futures03::{FutureExt, Stream, StreamExt, stream::unfold};
+use futures::{FutureExt, Stream, StreamExt, stream::unfold};
 use futures_timer::Delay;
 
 pub fn interval(duration: Duration) -> impl Stream<Item=()> + Unpin {

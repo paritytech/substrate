@@ -23,7 +23,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Instant, Duration};
 use log::{trace, info};
-use futures::sync::oneshot::{Sender as OneShotSender};
+use futures::channel::oneshot::{Sender as OneShotSender};
 use linked_hash_map::{Entry, LinkedHashMap};
 use sp_blockchain::Error as ClientError;
 use client_api::{FetchChecker, RemoteHeaderRequest,

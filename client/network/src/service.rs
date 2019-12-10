@@ -27,11 +27,13 @@
 
 use std::{collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
+use std::pin::Pin;
+use std::task::Poll;
 
 use consensus::import_queue::{ImportQueue, Link};
 use consensus::import_queue::{BlockImportResult, BlockImportError};
-use futures::{prelude::*, sync::mpsc};
-use futures03::TryFutureExt as _;
+use futures::{prelude::*, channel::mpsc};
+use futures::TryFutureExt as _;
 use log::{warn, error, info};
 use libp2p::{PeerId, Multiaddr, kad::record};
 use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
@@ -662,31 +664,30 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for NetworkWorker<B, S, H> {
-	type Item = Event;
-	type Error = io::Error;
+	type Item = Result<Event, io::Error>;
 
-	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+	fn poll_next(self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Option<Self::Item>> {
 		// Poll the import queue for actions to perform.
-		let _ = futures03::future::poll_fn(|cx| {
+		let _ = futures::future::poll_fn(|cx| {
 			self.import_queue.poll_actions(cx, &mut NetworkLink {
 				protocol: &mut self.network_service,
 			});
 			std::task::Poll::Pending::<Result<(), ()>>
-		}).compat().poll();
+		}).poll(cx);
 
 		// Check for new incoming light client requests.
 		if let Some(light_client_rqs) = self.light_client_rqs.as_mut() {
-			while let Ok(Async::Ready(Some(rq))) = light_client_rqs.poll() {
+			while let Poll::Ready(Some(Ok(rq))) = light_client_rqs.poll(cx) {
 				self.network_service.user_protocol_mut().add_light_client_request(rq);
 			}
 		}
 
 		loop {
 			// Process the next message coming from the `NetworkService`.
-			let msg = match self.from_worker.poll() {
-				Ok(Async::Ready(Some(msg))) => msg,
-				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(None)),
-				Ok(Async::NotReady) => break,
+			let msg = match Pin::new(&mut self.from_worker).poll(cx) {
+				Poll::Ready(Some(Ok(msg))) => msg,
+				Poll::Ready(None) | Err(_) => return Poll::Ready(None),
+				Poll::Pending => break,
 			};
 
 			match msg {
@@ -721,17 +722,17 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 
 		loop {
 			// Process the next action coming from the network.
-			let poll_value = self.network_service.poll();
+			let poll_value = self.network_service.poll(cx);
 
 			let outcome = match poll_value {
-				Ok(Async::NotReady) => break,
-				Ok(Async::Ready(Some(BehaviourOut::SubstrateAction(outcome)))) => outcome,
-				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) =>
-					return Ok(Async::Ready(Some(Event::Dht(ev)))),
-				Ok(Async::Ready(None)) => CustomMessageOutcome::None,
-				Err(err) => {
+				Poll::Pending => break,
+				Poll::Ready(Some(Ok(BehaviourOut::SubstrateAction(outcome)))) => outcome,
+				Poll::Ready(Some(Ok(BehaviourOut::Dht(ev)))) =>
+					return Poll::Ready(Some(Ok(Event::Dht(ev)))),
+				Poll::Ready(None) => CustomMessageOutcome::None,
+				Poll::Ready(Some(Err(err))) => {
 					error!(target: "sync", "Error in the network: {:?}", err);
-					return Err(err)
+					return Poll::Ready(Some(Err(err)))
 				}
 			};
 
@@ -757,7 +758,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 			SyncState::Downloading => true,
 		}, Ordering::Relaxed);
 
-		Ok(Async::NotReady)
+		Poll::Pending
 	}
 }
 

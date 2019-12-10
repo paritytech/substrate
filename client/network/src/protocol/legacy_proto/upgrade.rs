@@ -16,11 +16,11 @@
 
 use crate::config::ProtocolId;
 use bytes::{Bytes, BytesMut};
+use futures::prelude::*;
+use futures_codec::Framed;
 use libp2p::core::{Negotiated, Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
-use libp2p::tokio_codec::Framed;
-use std::{collections::VecDeque, io, vec::IntoIter as VecIntoIter};
-use futures::{prelude::*, future, stream};
-use tokio_io::{AsyncRead, AsyncWrite};
+use std::{collections::VecDeque, io, pin::Pin, vec::IntoIter as VecIntoIter};
+use std::task::{Context, Poll};
 use unsigned_varint::codec::UviBytes;
 
 /// Connection upgrade for a single protocol.
@@ -138,19 +138,21 @@ pub enum RegisteredProtocolEvent {
 }
 
 impl<TSubstream> Stream for RegisteredProtocolSubstream<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite {
-	type Item = RegisteredProtocolEvent;
-	type Error = io::Error;
+where TSubstream: AsyncRead + AsyncWrite + Unpin {
+	type Item = Result<RegisteredProtocolEvent, io::Error>;
 
-	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		// Flushing the local queue.
-		while let Some(packet) = self.send_queue.pop_front() {
-			match self.inner.start_send(packet)? {
-				AsyncSink::NotReady(packet) => {
-					self.send_queue.push_front(packet);
-					break
-				},
-				AsyncSink::Ready => self.requires_poll_complete = true,
+		while !self.send_queue.is_empty() {
+			match self.inner.poll_ready(cx) {
+				Poll::Ready(Ok(())) => {},
+				Poll::Ready(Err(err)) => return Poll::Ready(Some(Err(err))),
+				Poll::Pending => break,
+			}
+
+			if let Some(packet) = self.send_queue.pop_front() {
+				self.inner.start_send(packet)?;
+				self.requires_poll_complete = true;
 			}
 		}
 
@@ -166,7 +168,7 @@ where TSubstream: AsyncRead + AsyncWrite {
 				// 	if you remove the fuse, then we will always return early from this function and
 				//	thus never read any message from the network.
 				self.clogged_fuse = true;
-				return Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged {
+				return Poll::Ready(Some(Ok(RegisteredProtocolEvent::Clogged {
 					messages: self.send_queue.iter()
 						.map(|m| m.clone())
 						.collect(),
@@ -178,24 +180,24 @@ where TSubstream: AsyncRead + AsyncWrite {
 
 		// Flushing if necessary.
 		if self.requires_poll_complete {
-			if let Async::Ready(()) = self.inner.poll_complete()? {
+			if let Poll::Ready(()) = self.inner.poll_complete()? {
 				self.requires_poll_complete = false;
 			}
 		}
 
 		// Receiving incoming packets.
 		// Note that `inner` is wrapped in a `Fuse`, therefore we can poll it forever.
-		match self.inner.poll()? {
-			Async::Ready(Some(data)) => {
-				Ok(Async::Ready(Some(RegisteredProtocolEvent::Message(data))))
+		match Pin::new(&mut self.inner).poll(cx)? {
+			Poll::Ready(Some(data)) => {
+				Poll::Ready(Some(Ok(RegisteredProtocolEvent::Message(data))))
 			}
-			Async::Ready(None) =>
+			Poll::Ready(None) =>
 				if !self.requires_poll_complete && self.send_queue.is_empty() {
-					Ok(Async::Ready(None))
+					Poll::Ready(None)
 				} else {
-					Ok(Async::NotReady)
+					Poll::Pending
 				}
-			Async::NotReady => Ok(Async::NotReady),
+			Poll::Pending => Poll::Pending,
 		}
 	}
 }
@@ -236,10 +238,10 @@ impl ProtocolName for RegisteredProtocolName {
 }
 
 impl<TSubstream> InboundUpgrade<TSubstream> for RegisteredProtocol
-where TSubstream: AsyncRead + AsyncWrite,
+where TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
 	type Output = RegisteredProtocolSubstream<TSubstream>;
-	type Future = future::FutureResult<Self::Output, io::Error>;
+	type Future = future::Ready<Result<Self::Output, io::Error>>;
 	type Error = io::Error;
 
 	fn upgrade_inbound(
@@ -266,7 +268,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 }
 
 impl<TSubstream> OutboundUpgrade<TSubstream> for RegisteredProtocol
-where TSubstream: AsyncRead + AsyncWrite,
+where TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
 	type Output = <Self as InboundUpgrade<TSubstream>>::Output;
 	type Future = <Self as InboundUpgrade<TSubstream>>::Future;

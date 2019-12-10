@@ -48,7 +48,7 @@ use std::sync::Arc;
 use std::iter;
 use std::time;
 use log::{trace, debug};
-use futures03::channel::mpsc;
+use futures::channel::mpsc;
 use lru::LruCache;
 use libp2p::PeerId;
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
@@ -637,7 +637,7 @@ impl<B: BlockT> Validator<B> for DiscardAll {
 mod tests {
 	use std::sync::Arc;
 	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
-	use futures03::executor::block_on_stream;
+	use futures::executor::block_on_stream;
 
 	use super::*;
 

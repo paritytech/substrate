@@ -47,7 +47,6 @@
 
 use futures::prelude::*;
 use futures_timer::Delay;
-use futures03::{compat::Compat, TryFutureExt as _};
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId, PublicKey};
 use libp2p::swarm::{ProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::kad::{Kademlia, KademliaEvent, Quorum, Record};
@@ -62,7 +61,7 @@ use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
 use std::{cmp, collections::VecDeque, time::Duration};
-use tokio_io::{AsyncRead, AsyncWrite};
+use std::task::{Context, Poll};
 use primitives::hexdisplay::HexDisplay;
 
 /// Implementation of `NetworkBehaviour` that discovers the nodes on the network.
@@ -76,7 +75,7 @@ pub struct DiscoveryBehaviour<TSubstream> {
 	#[cfg(not(target_os = "unknown"))]
 	mdns: Toggle<Mdns<Substream<StreamMuxerBox>>>,
 	/// Stream that fires when we need to perform the next random Kademlia query.
-	next_kad_random_query: Compat<Delay>,
+	next_kad_random_query: Delay,
 	/// After `next_kad_random_query` triggers, the next one triggers after this duration.
 	duration_to_next_kad: Duration,
 	/// Discovered nodes to return.
@@ -115,7 +114,7 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 		DiscoveryBehaviour {
 			user_defined,
 			kademlia,
-			next_kad_random_query: Delay::new(Duration::new(0, 0)).compat(),
+			next_kad_random_query: Delay::new(Duration::new(0, 0)),
 			duration_to_next_kad: Duration::from_secs(1),
 			discoveries: VecDeque::new(),
 			local_peer_id: local_public_key.into_peer_id(),
@@ -206,7 +205,7 @@ pub enum DiscoveryOut {
 
 impl<TSubstream> NetworkBehaviour for DiscoveryBehaviour<TSubstream>
 where
-	TSubstream: AsyncRead + AsyncWrite,
+	TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
 	type ProtocolsHandler = <Kademlia<TSubstream, MemoryStore> as NetworkBehaviour>::ProtocolsHandler;
 	type OutEvent = DiscoveryOut;
@@ -287,8 +286,9 @@ where
 
 	fn poll(
 		&mut self,
+		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Async<
+	) -> Poll<
 		NetworkBehaviourAction<
 			<Self::ProtocolsHandler as ProtocolsHandler>::InEvent,
 			Self::OutEvent,
@@ -297,14 +297,14 @@ where
 		// Immediately process the content of `discovered`.
 		if let Some(peer_id) = self.discoveries.pop_front() {
 			let ev = DiscoveryOut::Discovered(peer_id);
-			return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 		}
 
 		// Poll the stream that fires when we need to start a random Kademlia query.
 		loop {
-			match self.next_kad_random_query.poll() {
-				Ok(Async::NotReady) => break,
-				Ok(Async::Ready(_)) => {
+			match self.next_kad_random_query.poll(cx) {
+				Poll::Pending => break,
+				Poll::Ready(Ok(_)) => {
 					let random_peer_id = PeerId::random();
 					debug!(target: "sub-libp2p", "Libp2p <= Starting random Kademlia request for \
 						{:?}", random_peer_id);
@@ -313,7 +313,7 @@ where
 
 					// Schedule the next random query with exponentially increasing delay,
 					// capped at 60 seconds.
-					self.next_kad_random_query = Delay::new(self.duration_to_next_kad).compat();
+					self.next_kad_random_query = Delay::new(self.duration_to_next_kad);
 					self.duration_to_next_kad = cmp::min(self.duration_to_next_kad * 2,
 						Duration::from_secs(60));
 				},
@@ -327,15 +327,15 @@ where
 		// Poll Kademlia.
 		loop {
 			match self.kademlia.poll(params) {
-				Async::NotReady => break,
-				Async::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => match ev {
+				Poll::Pending => break,
+				Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => match ev {
 					KademliaEvent::UnroutablePeer { peer, .. } => {
 						let ev = DiscoveryOut::UnroutablePeer(peer);
-						return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 					}
 					KademliaEvent::RoutingUpdated { peer, .. } => {
 						let ev = DiscoveryOut::Discovered(peer);
-						return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 					}
 					KademliaEvent::GetClosestPeersResult(res) => {
 						match res {
@@ -369,7 +369,7 @@ where
 								DiscoveryOut::ValueNotFound(e.into_key())
 							}
 						};
-						return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 					}
 					KademliaEvent::PutRecordResult(res) => {
 						let ev = match res {
@@ -378,7 +378,7 @@ where
 								DiscoveryOut::ValuePutFailed(e.into_key())
 							}
 						};
-						return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 					}
 					KademliaEvent::RepublishRecordResult(res) => {
 						match res {
@@ -398,14 +398,14 @@ where
 						warn!(target: "sub-libp2p", "Libp2p => Unhandled Kademlia event: {:?}", e)
 					}
 				},
-				Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
-					return Async::Ready(NetworkBehaviourAction::DialAddress { address }),
-				Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
-					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-				Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
-					return Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }),
-				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
-					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+				Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
+					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
+				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
+					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
+				Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
+					return Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }),
+				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
+					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 			}
 		}
 
@@ -413,31 +413,31 @@ where
 		#[cfg(not(target_os = "unknown"))]
 		loop {
 			match self.mdns.poll(params) {
-				Async::NotReady => break,
-				Async::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
+				Poll::Pending => break,
+				Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
 					match event {
 						MdnsEvent::Discovered(list) => {
 							self.discoveries.extend(list.into_iter().map(|(peer_id, _)| peer_id));
 							if let Some(peer_id) = self.discoveries.pop_front() {
 								let ev = DiscoveryOut::Discovered(peer_id);
-								return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+								return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 							}
 						},
 						MdnsEvent::Expired(_) => {}
 					}
 				},
-				Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
-					return Async::Ready(NetworkBehaviourAction::DialAddress { address }),
-				Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
-					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-				Async::Ready(NetworkBehaviourAction::SendEvent { event, .. }) =>
+				Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
+					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
+				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
+					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
+				Poll::Ready(NetworkBehaviourAction::SendEvent { event, .. }) =>
 					match event {},		// `event` is an enum with no variant
-				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
-					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
+					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 			}
 		}
 
-		Async::NotReady
+		Poll::Pending
 	}
 }
 
@@ -502,8 +502,8 @@ mod tests {
 		let fut = futures::future::poll_fn::<_, (), _>(move || {
 			'polling: loop {
 				for swarm_n in 0..swarms.len() {
-					match swarms[swarm_n].0.poll().unwrap() {
-						Async::Ready(Some(e)) => {
+					match swarms[swarm_n].0.poll(cx).unwrap() {
+						Poll::Ready(Some(e)) => {
 							match e {
 								DiscoveryOut::UnroutablePeer(other) => {
 									// Call `add_self_reported_address` to simulate identify happening.
@@ -530,9 +530,9 @@ mod tests {
 			}
 
 			if to_discover.iter().all(|l| l.is_empty()) {
-				Ok(Async::Ready(()))
+				Poll::Ready(Ok(()))
 			} else {
-				Ok(Async::NotReady)
+				Poll::Pending
 			}
 		});
 

@@ -171,7 +171,7 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 	fn poll(
 		&mut self,
 		params: &mut impl PollParameters
-	) -> Async<
+	) -> Poll<
 		NetworkBehaviourAction<
 			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
 			Self::OutEvent
@@ -218,7 +218,7 @@ fn two_nodes_transfer_lots_of_packets() {
 
 	let fut1 = future::poll_fn(move || -> io::Result<_> {
 		loop {
-			match try_ready!(service1.poll()) {
+			match try_ready!(service1.poll(cx)) {
 				Some(LegacyProtoOut::CustomProtocolOpen { peer_id, .. }) => {
 					for n in 0 .. NUM_PACKETS {
 						service1.send_packet(
@@ -235,7 +235,7 @@ fn two_nodes_transfer_lots_of_packets() {
 	let mut packet_counter = 0u32;
 	let fut2 = future::poll_fn(move || -> io::Result<_> {
 		loop {
-			match try_ready!(service2.poll()) {
+			match try_ready!(service2.poll(cx)) {
 				Some(LegacyProtoOut::CustomProtocolOpen { .. }) => {},
 				Some(LegacyProtoOut::CustomMessage { message, .. }) => {
 					match Message::<Block>::decode(&mut &message[..]).unwrap() {
@@ -243,7 +243,7 @@ fn two_nodes_transfer_lots_of_packets() {
 							assert_eq!(message.len(), 1);
 							packet_counter += 1;
 							if packet_counter == NUM_PACKETS {
-								return Ok(Async::Ready(()))
+								return Poll::Ready(Ok(()))
 							}
 						},
 						_ => panic!(),
@@ -279,7 +279,7 @@ fn basic_two_nodes_requests_in_parallel() {
 
 	let fut1 = future::poll_fn(move || -> io::Result<_> {
 		loop {
-			match try_ready!(service1.poll()) {
+			match try_ready!(service1.poll(cx)) {
 				Some(LegacyProtoOut::CustomProtocolOpen { peer_id, .. }) => {
 					for msg in to_send.drain(..) {
 						service1.send_packet(&peer_id, msg.encode());
@@ -292,13 +292,13 @@ fn basic_two_nodes_requests_in_parallel() {
 
 	let fut2 = future::poll_fn(move || -> io::Result<_> {
 		loop {
-			match try_ready!(service2.poll()) {
+			match try_ready!(service2.poll(cx)) {
 				Some(LegacyProtoOut::CustomProtocolOpen { .. }) => {},
 				Some(LegacyProtoOut::CustomMessage { message, .. }) => {
 					let pos = to_receive.iter().position(|m| m.encode() == message).unwrap();
 					to_receive.remove(pos);
 					if to_receive.is_empty() {
-						return Ok(Async::Ready(()))
+						return Poll::Ready(Ok(()))
 					}
 				}
 				_ => panic!(),
@@ -331,8 +331,8 @@ fn reconnect_after_disconnect() {
 		loop {
 			let mut service1_not_ready = false;
 
-			match service1.poll().unwrap() {
-				Async::Ready(Some(LegacyProtoOut::CustomProtocolOpen { .. })) => {
+			match service1.poll(cx).unwrap() {
+				Poll::Ready(Some(LegacyProtoOut::CustomProtocolOpen { .. })) => {
 					match service1_state {
 						ServiceState::NotConnected => {
 							service1_state = ServiceState::FirstConnec;
@@ -344,19 +344,19 @@ fn reconnect_after_disconnect() {
 						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
 					}
 				},
-				Async::Ready(Some(LegacyProtoOut::CustomProtocolClosed { .. })) => {
+				Poll::Ready(Some(LegacyProtoOut::CustomProtocolClosed { .. })) => {
 					match service1_state {
 						ServiceState::FirstConnec => service1_state = ServiceState::Disconnected,
 						ServiceState::ConnectedAgain| ServiceState::NotConnected |
 						ServiceState::Disconnected => panic!(),
 					}
 				},
-				Async::NotReady => service1_not_ready = true,
+				Poll::Pending => service1_not_ready = true,
 				_ => panic!()
 			}
 
-			match service2.poll().unwrap() {
-				Async::Ready(Some(LegacyProtoOut::CustomProtocolOpen { .. })) => {
+			match service2.poll(cx).unwrap() {
+				Poll::Ready(Some(LegacyProtoOut::CustomProtocolOpen { .. })) => {
 					match service2_state {
 						ServiceState::NotConnected => {
 							service2_state = ServiceState::FirstConnec;
@@ -368,43 +368,43 @@ fn reconnect_after_disconnect() {
 						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
 					}
 				},
-				Async::Ready(Some(LegacyProtoOut::CustomProtocolClosed { .. })) => {
+				Poll::Ready(Some(LegacyProtoOut::CustomProtocolClosed { .. })) => {
 					match service2_state {
 						ServiceState::FirstConnec => service2_state = ServiceState::Disconnected,
 						ServiceState::ConnectedAgain| ServiceState::NotConnected |
 						ServiceState::Disconnected => panic!(),
 					}
 				},
-				Async::NotReady if service1_not_ready => break,
-				Async::NotReady => {}
+				Poll::Pending if service1_not_ready => break,
+				Poll::Pending => {}
 				_ => panic!()
 			}
 		}
 
 		if service1_state == ServiceState::ConnectedAgain && service2_state == ServiceState::ConnectedAgain {
-			Ok(Async::Ready(()))
+			Poll::Ready(Ok(()))
 		} else {
-			Ok(Async::NotReady)
+			Poll::Pending
 		}
 	})).unwrap();
 
 	// Do a second 3-seconds run to make sure we don't get disconnected immediately again.
 	let mut delay = tokio::timer::Delay::new(Instant::now() + Duration::from_secs(3));
 	runtime.block_on(future::poll_fn(|| -> Result<_, io::Error> {
-		match service1.poll().unwrap() {
-			Async::NotReady => {},
+		match service1.poll(cx).unwrap() {
+			Poll::Pending => {},
 			_ => panic!()
 		}
 
-		match service2.poll().unwrap() {
-			Async::NotReady => {},
+		match service2.poll(cx).unwrap() {
+			Poll::Pending => {},
 			_ => panic!()
 		}
 
-		if let Async::Ready(()) = delay.poll().unwrap() {
-			Ok(Async::Ready(()))
+		if let Poll::Ready(()) = delay.poll(cx).unwrap() {
+			Poll::Ready(Ok(()))
 		} else {
-			Ok(Async::NotReady)
+			Poll::Pending
 		}
 	})).unwrap();
 }
