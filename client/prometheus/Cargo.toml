@@ -11,6 +11,7 @@ lazy_static = "1.0"
 log = "0.4"
 prometheus = { version = "0.7", features = ["nightly", "process"]}
 tokio = "0.1"
+sp-runtime = { package = "sp-runtime",path = "../../primitives/runtime" }
 
 [dev-dependencies]
 reqwest = "0.9"

@@ -1115,6 +1115,7 @@ ServiceBuilder<
 			telemetry
 		});
 <<<<<<< HEAD
+<<<<<<< HEAD
 		// prometheus init
 		match config.prometheus_endpoint {
 			None => (),
@@ -1126,6 +1127,13 @@ ServiceBuilder<
 			Some(x) => {
 				let _prometheus = promet::init_prometheus(x);
 >>>>>>> dea83cf58... Refactor rebase master prometheus_v0.3
+=======
+		// prometheus init
+		match config.prometheus_endpoint {
+			None => (),
+			Some(x) => {
+				let _prometheus = sc_prometheus::init_prometheus(x);
+>>>>>>> 78ef39454... Milestone1: Final Version of v0.3
 			}
 		}
 		// Grafana data source
