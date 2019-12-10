@@ -537,11 +537,11 @@ decl_module! {
 			);
 			ensure!(proposal_hash == e_proposal_hash, "invalid hash");
 
-			<NextExternal<T>>::kill();
 			let now = <system::Module<T>>::block_number();
 			// We don't consider it an error if `vote_period` is too low, like `emergency_propose`.
 			let period = voting_period.max(T::EmergencyVotingPeriod::get());
-			Self::inject_referendum(now + period, proposal_hash, threshold, delay).map(|_| ())?;
+			Self::inject_referendum(now + period, proposal_hash, threshold, delay)?;
+			<NextExternal<T>>::kill();
 		}
 
 		/// Veto and blacklist the external proposal hash.
@@ -778,7 +778,7 @@ impl<T: Trait> Module<T> {
 		let last = Self::referendum_count();
 		(next..last).into_iter()
 			.filter_map(|i| Self::referendum_info(i).map(|info| (i, info)))
-			.take_while(|&(_, ref info)| info.end == n)
+			.filter(|&(_, ref info)| info.end == n)
 			.collect()
 	}
 
@@ -902,14 +902,6 @@ impl<T: Trait> Module<T> {
 		delay: T::BlockNumber,
 	) -> result::Result<ReferendumIndex, &'static str> {
 		let ref_index = Self::referendum_count();
-		if ref_index.checked_sub(1)
-			.and_then(Self::referendum_info)
-			.map(|i| i.end > end)
-			.unwrap_or(false)
-		{
-			Err("Cannot inject a referendum that ends earlier than preceeding referendum")?
-		}
-
 		ReferendumCount::put(ref_index + 1);
 		let item = ReferendumInfo { end, proposal_hash, threshold, delay };
 		<ReferendumInfoOf<T>>::insert(ref_index, item);
