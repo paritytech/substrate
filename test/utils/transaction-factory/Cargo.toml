@@ -13,7 +13,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive
 consensus_common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
 log = "0.4.8"
 primitives = { package = "sp-core", path = "../../../primitives/core" }
-sp-api = { path = "../../../primitives/sr-api" }
+sp-api = { path = "../../../primitives/api" }
 sp-runtime = { path = "../../../primitives/runtime" }
 sc-service = { path = "../../../client/service" }
 sp-blockchain = { path = "../../../primitives/blockchain" }

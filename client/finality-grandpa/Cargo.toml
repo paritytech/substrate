@@ -39,4 +39,4 @@ state_machine = { package = "sp-state-machine", path = "../../primitives/state-m
 env_logger = "0.7.0"
 tokio = "0.1.22"
 tempfile = "3.1.0"
-sp-api = { path = "../../primitives/sr-api" }
+sp-api = { path = "../../primitives/api" }

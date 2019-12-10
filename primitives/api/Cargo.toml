@@ -14,14 +14,7 @@ sp-version = { path = "../sr-version", default-features = false }
 state-machine = { package = "sp-state-machine", path = "../../primitives/state-machine", optional = true }
 
 [dev-dependencies]
-criterion = "0.3.0"
-test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
-sp-runtime = { path = "../runtime" }
-sp-version = { path = "../sr-version" }
-
-[[bench]]
-name = "bench"
-harness = false
+sp-test-primitives = { path = "../test-primitives" }
 
 [features]
 default = [ "std" ]
