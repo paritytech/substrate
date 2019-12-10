@@ -43,6 +43,8 @@ use primitives::Blake2Hasher;
 use client::{CallExecutor, Client};
 #[cfg(test)]
 use client::backend::Backend;
+#[cfg(test)]
+use client::error::Error as ClientError;
 
 /// A GRANDPA justification for block finality, it includes a commit message and
 /// an ancestry proof including all headers routing all precommit target blocks
@@ -103,7 +105,6 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 
 		Ok(GrandpaJustification { round, commit, votes_ancestries })
 	}
-
 
 	/// Decode a GRANDPA justification and validate the commit and the votes'
 	/// ancestry proofs finalize the given block.
@@ -295,7 +296,19 @@ fn check_message_sig<Block: BlockT>(
 	}
 }
 
+#[cfg_attr(test, derive(Debug))]
 pub(crate) enum JustificationError {
 	BadJustification,
 	JustificationDecode,
+}
+
+#[cfg(test)]
+impl From<ClientError> for JustificationError {
+	fn from(e: ClientError) -> Self {
+		match e {
+			ClientError::BadJustification(_) => JustificationError::BadJustification,
+			ClientError::JustificationDecode  => JustificationError::JustificationDecode,
+			_ => unreachable!(),
+		}
+	}
 }

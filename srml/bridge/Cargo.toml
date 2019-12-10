@@ -24,6 +24,7 @@ system = { package = "srml-system", path = "../system", default-features = false
 trie = { package = "substrate-trie", path = "../../core/trie", default-features = false }
 
 [dev-dependencies]
+client = { package = "substrate-client", path = "../../core/client" }
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
 state-machine = { package = "substrate-state-machine",  path = "../../core/state-machine" }
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
