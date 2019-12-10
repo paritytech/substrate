@@ -8,6 +8,7 @@ use hyper::service::service_fn_ok;
 use hyper::{Body, Request, Response, Server};
 pub use prometheus::{Encoder, HistogramOpts, Opts, TextEncoder};
 pub use prometheus::{Histogram, IntCounter, IntGauge, Result};
+pub use sp_runtime::traits::SaturatedConversion;
 use std::net::SocketAddr;
 
 pub mod metrics;
