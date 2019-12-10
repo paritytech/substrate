@@ -35,13 +35,13 @@
 //! ### Example - Get random seed for the current block
 //!
 //! ```
-//! use support::{decl_module, dispatch::Result, traits::Randomness};
+//! use support::{decl_module, dispatch, traits::Randomness};
 //!
 //! pub trait Trait: system::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn random_module_example(origin) -> Result {
+//! 		pub fn random_module_example(origin) -> dispatch::Result {
 //! 			let _random_seed = <pallet_randomness_collective_flip::Module<T>>::random_seed();
 //! 			Ok(())
 //! 		}

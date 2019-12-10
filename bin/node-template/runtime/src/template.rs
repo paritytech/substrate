@@ -8,7 +8,7 @@
 /// For more guidance on Substrate modules, see the example module
 /// https://github.com/paritytech/substrate/blob/master/frame/example/src/lib.rs
 
-use support::{decl_module, decl_storage, decl_event, dispatch::Result};
+use support::{decl_module, decl_storage, decl_event, dispatch};
 use system::ensure_signed;
 
 /// The module's configuration trait.
@@ -40,7 +40,7 @@ decl_module! {
 		// Just a dummy entry point.
 		// function that can be called by the external world as an extrinsics call
 		// takes a parameter of the type `AccountId`, stores it and emits an event
-		pub fn do_something(origin, something: u32) -> Result {
+		pub fn do_something(origin, something: u32) -> dispatch::Result {
 			// TODO: You only need this if you want to check it was signed.
 			let who = ensure_signed(origin)?;
 

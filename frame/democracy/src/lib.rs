@@ -27,6 +27,7 @@ use sp_runtime::{
 use codec::{Ref, Encode, Decode, Input, Output, Error};
 use support::{
 	decl_module, decl_storage, decl_event, ensure,
+	dispatch,
 	Parameter,
 	weights::SimpleDispatchInfo,
 	traits::{
@@ -34,7 +35,6 @@ use support::{
 		OnFreeBalanceZero, OnUnbalanced
 	}
 };
-use support::dispatch::Result;
 use system::{ensure_signed, ensure_root};
 
 mod vote_threshold;
@@ -445,7 +445,7 @@ decl_module! {
 		fn vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: Vote
-		) -> Result {
+		) -> dispatch::Result {
 			let who = ensure_signed(origin)?;
 			Self::do_vote(who, ref_index, vote)
 		}
@@ -461,7 +461,7 @@ decl_module! {
 		fn proxy_vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: Vote
-		) -> Result {
+		) -> dispatch::Result {
 			let who = Self::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
 			Self::do_vote(who, ref_index, vote)
 		}
@@ -885,7 +885,7 @@ impl<T: Trait> Module<T> {
 	// private.
 
 	/// Actually enact a vote, if legit.
-	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> Result {
+	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> dispatch::Result {
 		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
 		if !<VoteOf<T>>::exists((ref_index, &who)) {
 			<VotersFor<T>>::append_or_insert(ref_index, &[&who][..]);
@@ -927,7 +927,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Enact a proposal from a referendum.
-	fn enact_proposal(proposal_hash: T::Hash, index: ReferendumIndex) -> Result {
+	fn enact_proposal(proposal_hash: T::Hash, index: ReferendumIndex) -> dispatch::Result {
 		if let Some((encoded_proposal, who, amount, _)) = <Preimages<T>>::take(&proposal_hash) {
 			if let Ok(proposal) = T::Proposal::decode(&mut &encoded_proposal[..]) {
 				let _ = T::Currency::unreserve(&who, amount);
@@ -949,7 +949,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Table the next waiting proposal for a vote.
-	fn launch_next(now: T::BlockNumber) -> Result {
+	fn launch_next(now: T::BlockNumber) -> dispatch::Result {
 		if LastTabledWasExternal::take() {
 			Self::launch_public(now).or_else(|_| Self::launch_external(now))
 		} else {
@@ -958,7 +958,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Table the waiting external proposal for a vote, if there is one.
-	fn launch_external(now: T::BlockNumber) -> Result {
+	fn launch_external(now: T::BlockNumber) -> dispatch::Result {
 		if let Some((proposal, threshold)) = <NextExternal<T>>::take() {
 			LastTabledWasExternal::put(true);
 			Self::deposit_event(RawEvent::ExternalTabled);
@@ -975,7 +975,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Table the waiting public proposal with the highest backing for a vote.
-	fn launch_public(now: T::BlockNumber) -> Result {
+	fn launch_public(now: T::BlockNumber) -> dispatch::Result {
 		let mut public_props = Self::public_props();
 		if let Some((winner_index, _)) = public_props.iter()
 			.enumerate()
@@ -1009,7 +1009,7 @@ impl<T: Trait> Module<T> {
 		now: T::BlockNumber,
 		index: ReferendumIndex,
 		info: ReferendumInfo<T::BlockNumber, T::Hash>
-	) -> Result {
+	) -> dispatch::Result {
 		let (approve, against, capital) = Self::tally(index);
 		let total_issuance = T::Currency::total_issuance();
 		let approved = info.threshold.approved(approve, against, capital, total_issuance);
@@ -1056,7 +1056,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Current era is ending; we should finish up any proposals.
-	fn begin_block(now: T::BlockNumber) -> Result {
+	fn begin_block(now: T::BlockNumber) -> dispatch::Result {
 		// pick out another public referendum if it's time.
 		if (now % T::LaunchPeriod::get()).is_zero() {
 			// Errors come from the queue being empty. we don't really care about that, and even if
@@ -1241,7 +1241,7 @@ mod tests {
 		h
 	}
 
-	fn propose_set_balance(who: u64, value: u64, delay: u64) -> super::Result {
+	fn propose_set_balance(who: u64, value: u64, delay: u64) -> dispatch::Result {
 		Democracy::propose(
 			Origin::signed(who),
 			set_balance_proposal_hash(value),
@@ -1249,7 +1249,7 @@ mod tests {
 		)
 	}
 
-	fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> super::Result {
+	fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> dispatch::Result {
 		Democracy::propose(
 			Origin::signed(who),
 			set_balance_proposal_hash_and_note(value),

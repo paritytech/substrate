@@ -22,14 +22,13 @@
 
 use sp_std::{result, prelude::*};
 use sp_std::collections::btree_set::BTreeSet;
-use support::{decl_module, decl_storage, ensure};
+use support::{decl_module, decl_storage, dispatch, ensure};
 use support::traits::{FindAuthor, VerifySeal, Get};
-use support::dispatch::Result as DispatchResult;
 use codec::{Encode, Decode};
 use system::ensure_none;
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
 use support::weights::SimpleDispatchInfo;
-use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
+use inherents::{InherentIdentifier, ProvideInherent, InherentData};
 use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
 const MAX_UNCLES: usize = 10;
@@ -185,7 +184,7 @@ decl_module! {
 
 		/// Provide a set of uncles.
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
-		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> DispatchResult {
+		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> dispatch::Result {
 			ensure_none(origin)?;
 			ensure!(new_uncles.len() <= MAX_UNCLES, "Too many uncles");
 
@@ -220,7 +219,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> DispatchResult {
+	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> dispatch::Result {
 		let now = <system::Module<T>>::block_number();
 
 		let mut uncles = <Self as Store>::Uncles::get();
