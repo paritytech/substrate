@@ -23,7 +23,7 @@ rpc-primitives = { package = "sp-rpc", path = "../../primitives/rpc" }
 state_machine = { package = "sp-state-machine", path = "../../primitives/state-machine" }
 sc-executor = { path = "../executor" }
 sc-keystore = { path = "../keystore" }
-txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool", path = "../../primitives/transaction-pool" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 hash-db = { version = "0.15.2", default-features = false }
 parking_lot = { version = "0.9.0" }

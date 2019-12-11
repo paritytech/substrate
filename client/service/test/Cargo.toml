@@ -18,4 +18,4 @@ consensus = { package = "sp-consensus", path = "../../../primitives/consensus/co
 client = { package = "sc-client", path = "../../" }
 sp-runtime = { path = "../../../primitives/runtime" }
 primitives = { package = "sp-core", path = "../../../primitives/core" }
-txpool-api = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool", path = "../../../primitives/transaction-pool" }
