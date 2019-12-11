@@ -66,7 +66,9 @@ impl network_gossip::Network<Block> for TestNetwork {
 	fn announce(&self, block: Hash, _associated_data: Vec<u8>) {
 		let _ = self.sender.unbounded_send(Event::Announce(block));
 	}
+}
 
+impl super::Network<Block> for TestNetwork {
 	fn set_sync_fork_request(
 		&self,
 		_peers: Vec<network::PeerId>,
@@ -93,7 +95,7 @@ impl network_gossip::ValidatorContext<Block> for TestNetwork {
 }
 
 struct Tester {
-	net_handle: super::NetworkBridge<Block>,
+	net_handle: super::NetworkBridge<Block, TestNetwork>,
 	gossip_validator: Arc<GossipValidator<Block>>,
 	events: mpsc::UnboundedReceiver<Event>,
 }
