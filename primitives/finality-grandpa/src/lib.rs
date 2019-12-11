@@ -435,6 +435,7 @@ sp_api::decl_runtime_apis! {
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> AuthorityList;
 
+		#[skip_initialize_block]
 		fn submit_report_equivocation_extrinsic(
 			equivocation_report: EquivocationReport<Block::Hash, NumberFor<Block>>,
 			key_owner_proof: Vec<u8>,
