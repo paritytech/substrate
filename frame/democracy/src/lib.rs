@@ -912,6 +912,14 @@ impl<T: Trait> Module<T> {
 	/// Remove all info on a referendum.
 	fn clear_referendum(ref_index: ReferendumIndex) {
 		<ReferendumInfoOf<T>>::remove(ref_index);
+
+		NextTally::mutate(|i| if *i == ref_index {
+			*i += 1;
+			let end = ReferendumCount::get();
+			while !Self::is_active_referendum(*i) && *i < end {
+				*i += 1;
+			}
+		});
 		<VotersFor<T>>::remove(ref_index);
 		for v in Self::voters_for(ref_index) {
 			<VoteOf<T>>::remove((ref_index, v));
@@ -1029,6 +1037,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		Self::clear_referendum(index);
+
 		if approved {
 			Self::deposit_event(RawEvent::Passed(index));
 			if info.delay.is_zero() {
@@ -1042,7 +1051,6 @@ impl<T: Trait> Module<T> {
 		} else {
 			Self::deposit_event(RawEvent::NotPassed(index));
 		}
-		NextTally::put(index + 1);
 
 		Ok(())
 	}
@@ -2002,6 +2010,41 @@ mod tests {
 			assert_ok!(Democracy::vote(Origin::signed(1), 1, AYE));
 			fast_forward_to(6);
 			assert_ok!(Democracy::vote(Origin::signed(1), 2, AYE));
+		});
+	}
+
+	#[test]
+	fn ooo_inject_referendums_should_work() {
+		new_test_ext().execute_with(|| {
+			System::set_block_number(1);
+			let r1 = Democracy::inject_referendum(
+				3,
+				set_balance_proposal_hash_and_note(3),
+				VoteThreshold::SuperMajorityApprove,
+				0
+			);
+			let r2 = Democracy::inject_referendum(
+				2,
+				set_balance_proposal_hash_and_note(2),
+				VoteThreshold::SuperMajorityApprove,
+				0
+			);
+
+			assert_ok!(Democracy::vote(Origin::signed(1), r2, AYE));
+			assert_eq!(Democracy::voters_for(r2), vec![1]);
+			assert_eq!(Democracy::vote_of((r2, 1)), AYE);
+			assert_eq!(Democracy::tally(r2), (1, 0, 1));
+
+			next_block();
+			assert_eq!(Balances::free_balance(&42), 2);
+
+			assert_ok!(Democracy::vote(Origin::signed(1), r1, AYE));
+			assert_eq!(Democracy::voters_for(r1), vec![1]);
+			assert_eq!(Democracy::vote_of((r1, 1)), AYE);
+			assert_eq!(Democracy::tally(r1), (1, 0, 1));
+
+			next_block();
+			assert_eq!(Balances::free_balance(&42), 3);
 		});
 	}
 
