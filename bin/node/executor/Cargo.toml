@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 trie-root = "0.15.2"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-runtime_io = { package = "sp-io", path = "../../../primitives/sr-io" }
+sp-io = { path = "../../../primitives/io" }
 state_machine = { package = "sp-state-machine", path = "../../../primitives/state-machine" }
 sc-executor = { path = "../../../client/executor" }
 primitives = { package = "sp-core", path = "../../../primitives/core" }
@@ -18,7 +18,7 @@ node-runtime = { path = "../runtime" }
 
 [dev-dependencies]
 node-testing = { path = "../testing" }
-test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
+test-client = { package = "substrate-test-client", path = "../../../test-utils/client" }
 sp-runtime = { path = "../../../primitives/runtime" }
 runtime_support = { package = "frame-support", path = "../../../frame/support" }
 balances = { package = "pallet-balances", path = "../../../frame/balances" }

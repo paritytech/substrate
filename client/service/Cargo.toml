@@ -29,34 +29,34 @@ serde_json = "1.0.41"
 sysinfo = "0.9.5"
 target_info = "0.1.0"
 keystore = { package = "sc-keystore", path = "../keystore" }
-sp-io = { path = "../../primitives/sr-io" }
+sp-io = { path = "../../primitives/io" }
 sp-runtime = { path = "../../primitives/runtime" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
 session = { package = "sp-session", path = "../../primitives/session" }
-app-crypto = { package = "sc-application-crypto", path = "../../primitives/application-crypto" }
+app-crypto = { package = "sp-application-crypto", path = "../../primitives/application-crypto" }
 consensus_common = { package = "sp-consensus", path = "../../primitives/consensus/common" }
 network = { package = "sc-network", path = "../network" }
 chain-spec = { package = "sc-chain-spec", path = "../chain-spec" }
 client-api = { package = "sc-client-api", path = "../api" }
 client = { package = "sc-client", path = "../" }
-sp-api = { path = "../../primitives/sr-api" }
+sp-api = { path = "../../primitives/api" }
 client_db = { package = "sc-client-db", path = "../db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 sc-executor = { path = "../executor" }
 txpool = { package = "sc-transaction-pool", path = "../transaction-pool" }
-sp-transaction-pool = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
+sp-transaction-pool = { package = "sp-transaction-pool", path = "../../primitives/transaction-pool" }
 rpc-servers = { package = "sc-rpc-server", path = "../rpc-servers" }
 rpc = { package = "sc-rpc", path = "../rpc" }
 tel = { package = "sc-telemetry", path = "../telemetry" }
 offchain = { package = "sc-offchain", path = "../offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
-grafana-data-source = { path = "../grafana-data-source" }
+grafana-data-source = { path = "../../utils/grafana-data-source" }
 sc-tracing = { package = "sc-tracing", path = "../tracing" }
 tracing = "0.1.10"
 
 [dev-dependencies]
-substrate-test-runtime-client = { path = "../../test/utils/runtime/client" }
+substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
 babe-primitives = { package = "sp-consensus-babe", path = "../../primitives/consensus/babe" }
 grandpa = { package = "sc-finality-grandpa", path = "../finality-grandpa" }
 grandpa-primitives = { package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }

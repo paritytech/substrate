@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sp-api = { path = "../../../../primitives/sr-api", default-features = false }
+sp-api = { path = "../../../../primitives/api", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false  }
 
 [features]

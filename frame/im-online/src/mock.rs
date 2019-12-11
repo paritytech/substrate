@@ -27,7 +27,7 @@ use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
 use primitives::H256;
 use support::{impl_outer_origin, impl_outer_dispatch, parameter_types, weights::Weight};
-use {runtime_io, system};
+use {sp_io, system};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
@@ -85,7 +85,7 @@ impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
 	}
 }
 
-pub fn new_test_ext() -> runtime_io::TestExternalities {
+pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	t.into()
 }

@@ -686,7 +686,7 @@ pub mod tests {
 	use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 	use libp2p::PeerId;
 	use super::{REQUEST_TIMEOUT, LightDispatch, LightDispatchNetwork, RequestData, StorageProof};
-	use test_client::runtime::{changes_trie_config, Block, Extrinsic, Header};
+	use sp_test_primitives::{changes_trie_config, Block, Extrinsic, Header};
 
 	struct DummyFetchChecker { ok: bool }
 

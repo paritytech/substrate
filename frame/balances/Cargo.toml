@@ -14,7 +14,7 @@ support = { package = "frame-support", path = "../support", default-features = f
 system = { package = "frame-system", path = "../system", default-features = false }
 
 [dev-dependencies]
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io" }
+sp-io = { path = "../../primitives/io" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
 transaction-payment = { package = "pallet-transaction-payment", path = "../transaction-payment" }
 

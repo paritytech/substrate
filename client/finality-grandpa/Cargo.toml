@@ -31,12 +31,13 @@ grandpa = { package = "finality-grandpa", version = "0.10.1", features = ["deriv
 
 [dev-dependencies]
 grandpa = { package = "finality-grandpa", version = "0.10.1", features = ["derive-codec", "test-helpers"] }
-network = { package = "sc-network", path = "../network", features = ["test-helpers"] }
+network = { package = "sc-network", path = "../network" }
+sc-network-test = { path = "../network/test" }
 keyring = { package = "sp-keyring", path = "../../primitives/keyring" }
-test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client"}
+test-client = { package = "substrate-test-runtime-client", path = "../../test-utils/runtime/client"}
 babe_primitives = { package = "sp-consensus-babe", path = "../../primitives/consensus/babe" }
 state_machine = { package = "sp-state-machine", path = "../../primitives/state-machine" }
 env_logger = "0.7.0"
 tokio = "0.1.22"
 tempfile = "3.1.0"
-sp-api = { path = "../../primitives/sr-api" }
+sp-api = { path = "../../primitives/api" }
