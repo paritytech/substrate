@@ -34,7 +34,6 @@ sc-telemetry = { path = "../../telemetry" }
 [dev-dependencies]
 keyring = { package = "sp-keyring", path = "../../../primitives/keyring" }
 sc-executor = { path = "../../executor" }
-sp-test-primitives = { path = "../../../primitives/test-primitives" }
 sc-network = { path = "../../network" }
 sc-network-test = { path = "../../network/test" }
 service = { package = "sc-service", path = "../../service" }
