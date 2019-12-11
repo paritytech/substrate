@@ -51,7 +51,7 @@ rpc = { package = "sc-rpc", path = "../rpc" }
 tel = { package = "sc-telemetry", path = "../telemetry" }
 offchain = { package = "sc-offchain", path = "../offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
-grafana-data-source = { path = "../grafana-data-source" }
+grafana-data-source = { path = "../../utils/grafana-data-source" }
 sc-tracing = { package = "sc-tracing", path = "../tracing" }
 tracing = "0.1.10"
 
