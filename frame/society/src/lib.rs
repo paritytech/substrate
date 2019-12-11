@@ -355,6 +355,8 @@ fn pick_usize<'a, R: RngCore>(rng: &mut R, max: usize) -> usize {
 }
 
 impl<T: Trait> Module<T> {
+	/// Puts a bid into storage ordered by smallest to largest value.
+	/// Allows a maximum of 1000 bids in queue, removing largest value people first.
 	fn put_bid(who: T::AccountId, value: BalanceOf<T>, bid_kind: BidKind<T::AccountId, BalanceOf<T>>) {
 		<Bids<T>>::mutate(|bids| {
 			match bids.binary_search_by(|x| x.0.cmp(&value)) {

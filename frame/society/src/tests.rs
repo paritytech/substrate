@@ -67,44 +67,60 @@ fn basic_new_member_works() {
 #[test]
 fn bidding_works() {
 	EnvBuilder::new().execute(|| {
+		// Users make bids of various amounts
 		assert_ok!(Society::bid(Origin::signed(60), 1900));
 		assert_ok!(Society::bid(Origin::signed(50), 500));
 		assert_ok!(Society::bid(Origin::signed(40), 400));
 		assert_ok!(Society::bid(Origin::signed(30), 300));
+		// Rotate period
 		run_to_block(4);
+		// Pot is 1000 after "PeriodSpend"
+		assert_eq!(Society::pot(), 1000);
+		assert_eq!(Balances::free_balance(Society::account_id()), 10_000);
+		// Choose smallest bidding users whose total is less than pot
 		assert_eq!(Society::candidates(), vec![
 			(300, 30, BidKind::Deposit(25)),
 			(400, 40, BidKind::Deposit(25)),
 		]);
-		assert_eq!(Balances::free_balance(Society::account_id()), 10_000);
-		assert_eq!(Society::pot(), 1_000);
-
+		// A member votes for these candidates to join the society
 		assert_ok!(Society::vote(Origin::signed(10), 30, true));
 		assert_ok!(Society::vote(Origin::signed(10), 40, true));
 		run_to_block(8);
+		// Candidates become members after a period rotation
 		assert_eq!(Society::members(), vec![10, 30, 40]);
-		assert_eq!(Society::candidates(), vec![ (500, 50, BidKind::Deposit(25)) ]);
+		// Pot is increased by 1000, but pays out 700 to the members
 		assert_eq!(Balances::free_balance(Society::account_id()), 9_300);
 		assert_eq!(Society::pot(), 1_300);
-
-		assert_ok!(Society::vote(Origin::signed(40), 50, true));  // the last is chosen as decider
+		// Left over from the original bids is 50 who satisfies the condition of bid less than pot.
+		assert_eq!(Society::candidates(), vec![ (500, 50, BidKind::Deposit(25)) ]);
+		// 40, now a member, can vote for 50
+		assert_ok!(Society::vote(Origin::signed(40), 50, true));
 		run_to_block(12);
+		// 50 is now a member
 		assert_eq!(Society::members(), vec![10, 30, 40, 50]);
-		assert_eq!(Society::candidates(), vec![]);
-		assert_eq!(Balances::free_balance(Society::account_id()), 8_800);
+		// Pot is increased by 1000, and 500 is paid out. Total payout so far is 1200.
 		assert_eq!(Society::pot(), 1_800);
-
-		run_to_block(16);
-		assert_eq!(Society::members(), vec![10, 30, 40, 50]);
-		assert_eq!(Society::candidates(), vec![ (1900, 60, BidKind::Deposit(25)) ]);
 		assert_eq!(Balances::free_balance(Society::account_id()), 8_800);
+		// No more candidates satisfy the requirements
+		assert_eq!(Society::candidates(), vec![]);
+		// Next period
+		run_to_block(16);
+		// Same members
+		assert_eq!(Society::members(), vec![10, 30, 40, 50]);
+		// Pot is increased by 1000 again
 		assert_eq!(Society::pot(), 2_800);
-
+		// No payouts
+		assert_eq!(Balances::free_balance(Society::account_id()), 8_800);
+		// Candidate 60 now qualifies based on the increased pot size.
+		assert_eq!(Society::candidates(), vec![ (1900, 60, BidKind::Deposit(25)) ]);
+		// Candidate 60 is voted in.
 		assert_ok!(Society::vote(Origin::signed(50), 60, true));
 		run_to_block(20);
+		// 60 joins as a member
 		assert_eq!(Society::members(), vec![10, 30, 40, 50, 60]);
-		assert_eq!(Balances::free_balance(Society::account_id()), 6_900);
+		// Pay them
 		assert_eq!(Society::pot(), 1_900);
+		assert_eq!(Balances::free_balance(Society::account_id()), 6_900);
 	});
 }
 
@@ -205,3 +221,5 @@ fn slash_payout_multi_works() {
 		assert_eq!(Payouts::<Test>::get(20), vec![(20, 100)]);
 	});
 }
+
+
