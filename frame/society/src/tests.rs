@@ -185,3 +185,23 @@ fn slash_payout_works() {
 		assert_eq!(Balances::free_balance(20), 550);
 	});
 }
+
+#[test]
+fn slash_payout_multi_works() {
+	EnvBuilder::new().execute(|| {
+		assert_eq!(Balances::free_balance(20), 50);
+		// create a few payouts
+		Society::bump_payout(&20, 5, 100);
+		Society::bump_payout(&20, 10, 100);
+		Society::bump_payout(&20, 15, 100);
+		Society::bump_payout(&20, 20, 100);
+		// payouts in queue
+		assert_eq!(Payouts::<Test>::get(20), vec![(5, 100), (10, 100), (15, 100), (20, 100)]);
+		// slash payout
+		assert_eq!(Society::slash_payout(&20, 250), (15, 250));
+		assert_eq!(Payouts::<Test>::get(20), vec![(15, 50), (20, 100)]);
+		// slash again
+		assert_eq!(Society::slash_payout(&20, 50), (20, 50));
+		assert_eq!(Payouts::<Test>::get(20), vec![(20, 100)]);
+	});
+}
