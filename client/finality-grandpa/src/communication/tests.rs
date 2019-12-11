@@ -19,7 +19,7 @@
 use futures::sync::mpsc;
 use futures::prelude::*;
 use network::consensus_gossip as network_gossip;
-use network::test::{Block, Hash};
+use sc_network_test::{Block, Hash};
 use network_gossip::Validator;
 use tokio::runtime::current_thread;
 use std::sync::Arc;
