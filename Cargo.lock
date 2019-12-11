@@ -5044,17 +5044,14 @@ name = "sc-client-api"
 version = "2.0.0"
 dependencies = [
  "derive_more 0.99.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "kvdb 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "kvdb-memorydb 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-client-db 2.0.0",
  "sc-executor 2.0.0",
  "sc-telemetry 2.0.0",
  "sp-api 2.0.0",
@@ -5064,7 +5061,6 @@ dependencies = [
  "sp-externalities 2.0.0",
  "sp-inherents 2.0.0",
  "sp-keyring 2.0.0",
- "sp-panic-handler 2.0.0",
  "sp-runtime 2.0.0",
  "sp-state-machine 2.0.0",
  "sp-std 2.0.0",
@@ -5072,8 +5068,6 @@ dependencies = [
  "sp-transaction-pool-api 2.0.0",
  "sp-trie 2.0.0",
  "sp-version 2.0.0",
- "substrate-test-runtime-client 2.0.0",
- "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
