@@ -439,7 +439,7 @@ mod tests {
 	use libp2p::core::transport::{Transport, MemoryTransport};
 	use libp2p::core::upgrade::{InboundUpgradeExt, OutboundUpgradeExt};
 	use libp2p::swarm::Swarm;
-	use std::collections::HashSet;
+	use std::{collections::HashSet, task::Poll};
 	use super::{DiscoveryBehaviour, DiscoveryOut};
 
 	#[test]
@@ -458,7 +458,7 @@ mod tests {
 						out,
 						secio,
 						endpoint,
-						libp2p::core::upgrade::Version::V1
+						upgrade::Version::V1
 					)
 				})
 				.and_then(move |(peer_id, stream), endpoint| {
@@ -466,10 +466,12 @@ mod tests {
 					let upgrade = libp2p::yamux::Config::default()
 						.map_inbound(move |muxer| (peer_id, muxer))
 						.map_outbound(move |muxer| (peer_id2, muxer));
-					upgrade::apply(stream, upgrade, endpoint, libp2p::core::upgrade::Version::V1)
+					upgrade::apply(stream.stream, upgrade, endpoint, upgrade::Version::V1)
 				});
 
-			let behaviour = DiscoveryBehaviour::new(keypair.public(), user_defined.clone(), false, true);
+			let behaviour = futures::executor::block_on(async move {
+				DiscoveryBehaviour::new(keypair.public(), user_defined.clone(), false, true).await
+			});
 			let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
 			let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
@@ -488,11 +490,11 @@ mod tests {
 				.collect::<HashSet<_>>()
 		}).collect::<Vec<_>>();
 
-		let fut = futures::future::poll_fn::<_, (), _>(move || {
+		let fut = futures::future::poll_fn(move |cx| {
 			'polling: loop {
 				for swarm_n in 0..swarms.len() {
-					match swarms[swarm_n].0.poll(cx).unwrap() {
-						Poll::Ready(Some(e)) => {
+					match swarms[swarm_n].0.poll_next_unpin(cx) {
+						Poll::Ready(Some(Ok(e))) => {
 							match e {
 								DiscoveryOut::UnroutablePeer(other) => {
 									// Call `add_self_reported_address` to simulate identify happening.
@@ -519,12 +521,12 @@ mod tests {
 			}
 
 			if to_discover.iter().all(|l| l.is_empty()) {
-				Poll::Ready(Ok(()))
+				Poll::Ready(())
 			} else {
 				Poll::Pending
 			}
 		});
 
-		tokio::runtime::Runtime::new().unwrap().block_on(fut).unwrap();
+		futures::executor::block_on(fut);
 	}
 }

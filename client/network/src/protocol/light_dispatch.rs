@@ -676,7 +676,7 @@ pub mod tests {
 	use std::collections::{HashMap, HashSet};
 	use std::sync::Arc;
 	use std::time::Instant;
-	use futures::{Future, sync::oneshot};
+	use futures::channel::oneshot;
 	use sp_runtime::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use sp_blockchain::{Error as ClientError, Result as ClientResult};
 	use client_api::{FetchChecker, RemoteHeaderRequest,
