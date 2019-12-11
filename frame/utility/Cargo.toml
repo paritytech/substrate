@@ -11,7 +11,7 @@ support = { package = "frame-support", path = "../support", default-features = f
 system = { package = "frame-system", path = "../system", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 sp-std = { path = "../../primitives/std", default-features = false }
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+sp-io = { path = "../../primitives/io", default-features = false }
 
 [dev-dependencies]
 primitives = { package = "sp-core",  path = "../../primitives/core" }
@@ -25,6 +25,6 @@ std = [
 	"sp-runtime/std",
 	"support/std",
 	"system/std",
-	"runtime-io/std",
+	"sp-io/std",
 	"sp-std/std"
 ]

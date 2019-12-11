@@ -19,7 +19,7 @@
 #[allow(dead_code)]
 mod tests {
 	use support::metadata::*;
-	use runtime_io::TestExternalities;
+	use sp_io::TestExternalities;
 	use std::marker::PhantomData;
 	use codec::{Encode, Decode, EncodeLike};
 
@@ -535,7 +535,7 @@ mod test3 {
 #[cfg(test)]
 #[allow(dead_code)]
 mod test_append_and_len {
-	use runtime_io::TestExternalities;
+	use sp_io::TestExternalities;
 	use codec::{Encode, Decode};
 
 	pub trait Trait {

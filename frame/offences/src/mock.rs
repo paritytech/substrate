@@ -33,7 +33,7 @@ use support::{
 	impl_outer_origin, impl_outer_event, parameter_types, StorageMap, StorageDoubleMap,
 	weights::Weight,
 };
-use {runtime_io, system};
+use {sp_io, system};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
@@ -106,7 +106,7 @@ impl_outer_event! {
 	}
 }
 
-pub fn new_test_ext() -> runtime_io::TestExternalities {
+pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	t.into()
 }

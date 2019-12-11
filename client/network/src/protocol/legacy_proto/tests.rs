@@ -27,7 +27,7 @@ use rand::seq::SliceRandom;
 use std::{io, time::Duration, time::Instant};
 use crate::message::Message;
 use crate::protocol::legacy_proto::{LegacyProto, LegacyProtoOut};
-use test_client::runtime::Block;
+use sp_test_primitives::Block;
 
 /// Builds two nodes that have each other as bootstrap nodes.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.

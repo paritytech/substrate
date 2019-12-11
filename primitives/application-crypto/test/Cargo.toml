@@ -1,0 +1,12 @@
+[package]
+name = "sp-application-crypto-test"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+description = "Integration tests for application-crypto"
+publish = false
+
+[dependencies]
+primitives = { package = "sp-core", path = "../../core", default-features = false }
+test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
+sp-runtime = { path = "../../runtime" }

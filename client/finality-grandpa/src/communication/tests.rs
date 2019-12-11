@@ -18,7 +18,8 @@
 
 use futures::sync::mpsc;
 use futures::prelude::*;
-use network::{Event as NetworkEvent, PeerId, config::Roles, test::{Block, Hash}};
+use network::{Event as NetworkEvent, PeerId, config::Roles};
+use sc_network_test::{Block, Hash};
 use network_gossip::Validator;
 use tokio::runtime::current_thread;
 use std::sync::Arc;
