@@ -8,5 +8,5 @@ publish = false
 
 [dependencies]
 primitives = { package = "sp-core", path = "../../core", default-features = false }
-test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../../test-utils/runtime/client" }
 sp-runtime = { path = "../../runtime" }
