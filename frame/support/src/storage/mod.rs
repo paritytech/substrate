@@ -31,12 +31,12 @@ pub mod generator;
 /// the transactional layer get reverted; otherwhise
 /// it is committed.
 pub fn with_transaction<R, E>(f: impl FnOnce() -> Result<R, E>) -> Result<R, E> {
-	runtime_io::storage::start_transaction();
+	sp_io::storage::start_transaction();
 	let r = f();
 	if r.is_ok() {
-		runtime_io::storage::commit_transaction();
+		sp_io::storage::commit_transaction();
 	} else {
-		runtime_io::storage::discard_transaction();
+		sp_io::storage::discard_transaction();
 	}
 	r
 }
