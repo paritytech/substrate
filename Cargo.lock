@@ -3051,7 +3051,7 @@ dependencies = [
  "sp-keyring 2.0.0",
  "sp-runtime 2.0.0",
  "sp-timestamp 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "structopt 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-build-script-utils 2.0.0",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3113,7 +3113,7 @@ dependencies = [
  "pallet-transaction-payment-rpc 2.0.0",
  "sc-client 2.0.0",
  "sp-runtime 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "substrate-frame-rpc-system 2.0.0",
 ]
 
@@ -3183,7 +3183,7 @@ dependencies = [
  "sp-session 2.0.0",
  "sp-staking 2.0.0",
  "sp-std 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "sp-version 2.0.0",
  "substrate-wasm-builder-runner 1.0.4",
 ]
@@ -3215,7 +3215,7 @@ dependencies = [
  "sp-inherents 2.0.0",
  "sp-io 2.0.0",
  "sp-runtime 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "substrate-build-script-utils 2.0.0",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-root 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3250,7 +3250,7 @@ dependencies = [
  "sp-runtime 2.0.0",
  "sp-session 2.0.0",
  "sp-std 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "sp-version 2.0.0",
  "substrate-wasm-builder-runner 1.0.4",
 ]
@@ -4925,7 +4925,7 @@ dependencies = [
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-runtime 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "tokio-executor 0.2.0-alpha.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -5065,7 +5065,7 @@ dependencies = [
  "sp-state-machine 2.0.0",
  "sp-std 2.0.0",
  "sp-test-primitives 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "sp-trie 2.0.0",
  "sp-version 2.0.0",
 ]
@@ -5433,7 +5433,7 @@ dependencies = [
  "sp-core 2.0.0",
  "sp-offchain 2.0.0",
  "sp-runtime 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "threadpool 1.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5480,7 +5480,7 @@ dependencies = [
  "sp-runtime 2.0.0",
  "sp-session 2.0.0",
  "sp-state-machine 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "sp-version 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5503,7 +5503,7 @@ dependencies = [
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-core 2.0.0",
  "sp-rpc 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "sp-version 2.0.0",
 ]
 
@@ -5574,7 +5574,7 @@ dependencies = [
  "sp-io 2.0.0",
  "sp-runtime 2.0.0",
  "sp-session 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "sysinfo 0.9.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "target_info 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5599,7 +5599,7 @@ dependencies = [
  "sp-consensus 2.0.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -5666,7 +5666,7 @@ dependencies = [
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "substrate-test-runtime 2.0.0",
 ]
 
@@ -5686,7 +5686,7 @@ dependencies = [
  "sp-core 2.0.0",
  "sp-keyring 2.0.0",
  "sp-runtime 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "substrate-test-runtime-client 2.0.0",
 ]
 
@@ -6480,7 +6480,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-transaction-pool-api"
+name = "sp-transaction-pool"
 version = "2.0.0"
 dependencies = [
  "derive_more 0.99.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6682,7 +6682,7 @@ dependencies = [
  "sp-blockchain 2.0.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "substrate-test-runtime-client 2.0.0",
 ]
 
@@ -6737,7 +6737,7 @@ dependencies = [
  "sp-session 2.0.0",
  "sp-state-machine 2.0.0",
  "sp-std 2.0.0",
- "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool 2.0.0",
  "sp-trie 2.0.0",
  "sp-version 2.0.0",
  "substrate-test-runtime-client 2.0.0",
