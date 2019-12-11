@@ -65,6 +65,7 @@ use parking_lot::Mutex;
 use serde::{Serialize, Deserialize};
 use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::{Duration, Instant}};
 
+pub use libp2p::wasm_ext::ExtTransport;
 pub use slog_scope::with_logger;
 pub use slog;
 

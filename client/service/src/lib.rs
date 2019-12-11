@@ -452,7 +452,9 @@ fn build_network_future<
 		});
 
 		// Main network polling.
-		while let Ok(Async::Ready(Some(Event::Dht(event)))) = network.poll().map_err(|err| {
+		let mut net_poll = futures03::future::poll_fn(|cx| network.poll_next_unpin(cx))
+			.map(|v| Ok::<_, ()>(v)).compat();
+		while let Ok(Async::Ready(Some(Ok(Event::Dht(event))))) = net_poll.poll().map_err(|err| {
 			warn!(target: "service", "Error in network: {:?}", err);
 		}) {
 			// Given that client/authority-discovery is the only upper stack consumer of Dht events at the moment, all Dht
