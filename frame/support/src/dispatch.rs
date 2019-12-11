@@ -61,21 +61,21 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// ```
 /// # #[macro_use]
 /// # extern crate frame_support;
-/// # use frame_support::dispatch::Result;
+/// # use frame_support::dispatch;
 /// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
 /// 		// Private functions are dispatchable, but not available to other
 /// 		// SRML modules.
-/// 		fn my_function(origin, var: u64) -> Result {
+/// 		fn my_function(origin, var: u64) -> dispatch::Result {
 ///				// Your implementation
 ///				Ok(())
 /// 		}
 ///
 ///			// Public functions are both dispatchable and available to other
 /// 		// SRML modules.
-///			pub fn my_public_function(origin) -> Result {
+///			pub fn my_public_function(origin) -> dispatch::Result {
 /// 			// Your implementation
 ///				Ok(())
 /// 		}
@@ -101,12 +101,12 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// ```
 /// # #[macro_use]
 /// # extern crate frame_support;
-/// # use frame_support::dispatch::Result;
+/// # use frame_support::dispatch;
 /// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
-/// 		fn my_long_function(origin) -> Result {
+/// 		fn my_long_function(origin) -> dispatch::Result {
 ///				// Your implementation
 /// 			Ok(())
 /// 		}
@@ -126,11 +126,11 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// ```
 /// # #[macro_use]
 /// # extern crate frame_support;
-/// # use frame_support::dispatch::Result;
+/// # use frame_support::dispatch;
 /// # use frame_system::{self as system, Trait, ensure_signed, ensure_root};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-///			fn my_privileged_function(origin) -> Result {
+///			fn my_privileged_function(origin) -> dispatch::Result {
 /// 			ensure_root(origin)?;
 ///				// Your implementation
 /// 			Ok(())
@@ -150,7 +150,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// ```
 /// # #[macro_use]
 /// # extern crate frame_support;
-/// # use frame_support::dispatch::Result;
+/// # use frame_support::dispatch;
 /// # use frame_system::{self as system, ensure_signed};
 /// # pub struct DefaultInstance;
 /// # pub trait Instance {}
@@ -178,7 +178,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// ```
 /// # #[macro_use]
 /// # extern crate frame_support;
-/// # use frame_support::dispatch::Result;
+/// # use frame_support::dispatch;
 /// # use frame_system::{self as system, ensure_signed};
 /// pub trait Trait: system::Trait where Self::AccountId: From<u32> {}
 ///

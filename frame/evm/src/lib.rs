@@ -24,7 +24,7 @@ mod backend;
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
 use sp_std::{vec::Vec, marker::PhantomData};
-use support::{dispatch::Result, decl_module, decl_storage, decl_event};
+use support::{dispatch, decl_module, decl_storage, decl_event};
 use support::weights::{Weight, WeighData, ClassifyDispatch, DispatchClass, PaysFee};
 use support::traits::{Currency, WithdrawReason, ExistenceRequirement};
 use system::ensure_signed;
@@ -150,7 +150,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn deposit_balance(origin, value: BalanceOf<T>) -> Result {
+		fn deposit_balance(origin, value: BalanceOf<T>) -> dispatch::Result {
 			let sender = ensure_signed(origin)?;
 
 			let imbalance = T::Currency::withdraw(
@@ -171,7 +171,7 @@ decl_module! {
 		}
 
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn withdraw_balance(origin, value: BalanceOf<T>) -> Result {
+		fn withdraw_balance(origin, value: BalanceOf<T>) -> dispatch::Result {
 			let sender = ensure_signed(origin)?;
 			let address = T::ConvertAccountId::convert_account_id(&sender);
 			let bvalue = U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(value));
@@ -195,7 +195,9 @@ decl_module! {
 		}
 
 		#[weight = WeightForCallCreate::<T::FeeCalculator>::default()]
-		fn call(origin, target: H160, input: Vec<u8>, value: U256, gas_limit: u32) -> Result {
+		fn call(origin, target: H160, input: Vec<u8>, value: U256, gas_limit: u32)
+			-> dispatch::Result
+		{
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 			let gas_price = T::FeeCalculator::gas_price();
@@ -246,7 +248,7 @@ decl_module! {
 		}
 
 		#[weight = WeightForCallCreate::<T::FeeCalculator>::default()]
-		fn create(origin, init: Vec<u8>, value: U256, gas_limit: u32) -> Result {
+		fn create(origin, init: Vec<u8>, value: U256, gas_limit: u32) -> dispatch::Result {
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 			let gas_price = T::FeeCalculator::gas_price();

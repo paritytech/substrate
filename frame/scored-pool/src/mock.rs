@@ -125,7 +125,7 @@ impl Trait for Test {
 
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
-pub fn new_test_ext() -> runtime_io::TestExternalities {
+pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	// We use default for brevity, but you can configure as desired if needed.
 	balances::GenesisConfig::<Test> {

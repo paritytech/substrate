@@ -111,7 +111,7 @@ use serde::{Serialize, Deserialize};
 use primitives::crypto::UncheckedFrom;
 use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
-use runtime_io::hashing::blake2_256;
+use sp_io::hashing::blake2_256;
 use sp_runtime::{
 	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension},
 	transaction_validity::{
@@ -803,7 +803,7 @@ impl<T: Trait> Module<T> {
 		let tombstone = <TombstoneContractInfo<T>>::new(
 			// This operation is cheap enough because last_write (delta not included)
 			// is not this block as it has been checked earlier.
-			&runtime_io::storage::child_root(&origin_contract.trie_id)[..],
+			&sp_io::storage::child_root(&origin_contract.trie_id)[..],
 			code_hash,
 		);
 

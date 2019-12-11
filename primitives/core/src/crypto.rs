@@ -18,7 +18,9 @@
 //! Cryptographic utilities.
 // end::description[]
 
-use sp_std::{vec::Vec, hash::Hash};
+use sp_std::hash::Hash;
+#[cfg(feature = "full_crypto")]
+use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use sp_std::convert::TryInto;
 use sp_std::convert::TryFrom;

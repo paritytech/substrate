@@ -17,7 +17,7 @@ node-executor = { path = "../executor" }
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 primitives = { package = "sp-core", path = "../../../primitives/core" }
-runtime-io = { package = "sp-io", path = "../../../primitives/sr-io" }
+sp-io = { path = "../../../primitives/io" }
 runtime_support = { package = "frame-support", path = "../../../frame/support" }
 session = { package = "pallet-session", path = "../../../frame/session" }
 sp-runtime = { path = "../../../primitives/runtime" }

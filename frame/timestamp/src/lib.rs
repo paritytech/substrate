@@ -61,7 +61,7 @@
 //! ### Get current timestamp
 //!
 //! ```
-//! use support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch};
 //! # use pallet_timestamp as timestamp;
 //! use system::ensure_signed;
 //!
@@ -69,7 +69,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn get_time(origin) -> Result {
+//! 		pub fn get_time(origin) -> dispatch::Result {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _now = <timestamp::Module<T>>::get();
 //! 			Ok(())
@@ -241,7 +241,7 @@ mod tests {
 	use super::*;
 
 	use support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
-	use runtime_io::TestExternalities;
+	use sp_io::TestExternalities;
 	use primitives::H256;
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
