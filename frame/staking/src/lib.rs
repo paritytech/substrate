@@ -1365,8 +1365,6 @@ impl<T: Trait> Module<T> {
 			era_start.remove(0)
 		});
 
-		Self::apply_unapplied_slashes(new_current_era);
-
 		let bonding_duration = T::BondingDuration::get();
 
 		BondedEras::mutate(|bonded| {
@@ -1391,6 +1389,7 @@ impl<T: Trait> Module<T> {
 			}
 		});
 
+		Self::apply_unapplied_slashes(new_current_era);
 	}
 
 	/// Provide the validator set for the next future session. If it's an era-end, along with the
