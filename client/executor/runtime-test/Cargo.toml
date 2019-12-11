@@ -8,12 +8,12 @@ build = "build.rs"
 [dependencies]
 sp-std = { path = "../../../primitives/std", default-features = false }
 sp-io = { path = "../../../primitives/io", default-features = false }
-sandbox = { package = "sp-sandbox", path = "../../../primitives/sr-sandbox", default-features = false }
+sandbox = { package = "sp-sandbox", path = "../../../primitives/sandbox", default-features = false }
 primitives = { package = "sp-core",  path = "../../../primitives/core", default-features = false }
 sp-runtime = { package = "sp-runtime",  path = "../../../primitives/runtime", default-features = false }
 
 [build-dependencies]
-wasm-builder-runner = { package = "substrate-wasm-builder-runner", path = "../../../client/utils/wasm-builder-runner", version = "1.0.4" }
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner", version = "1.0.4" }
 
 [features]
 default = [ "std" ]

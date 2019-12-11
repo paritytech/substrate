@@ -18,7 +18,7 @@ node-runtime = { path = "../runtime" }
 
 [dev-dependencies]
 node-testing = { path = "../testing" }
-test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
+test-client = { package = "substrate-test-client", path = "../../../test-utils/client" }
 sp-runtime = { path = "../../../primitives/runtime" }
 runtime_support = { package = "frame-support", path = "../../../frame/support" }
 balances = { package = "pallet-balances", path = "../../../frame/balances" }
