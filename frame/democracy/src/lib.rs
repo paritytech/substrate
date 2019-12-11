@@ -537,11 +537,11 @@ decl_module! {
 			);
 			ensure!(proposal_hash == e_proposal_hash, "invalid hash");
 
+			<NextExternal<T>>::kill();
 			let now = <system::Module<T>>::block_number();
 			// We don't consider it an error if `vote_period` is too low, like `emergency_propose`.
 			let period = voting_period.max(T::EmergencyVotingPeriod::get());
-			Self::inject_referendum(now + period, proposal_hash, threshold, delay)?;
-			<NextExternal<T>>::kill();
+			Self::inject_referendum(now + period, proposal_hash, threshold, delay);
 		}
 
 		/// Veto and blacklist the external proposal hash.
@@ -867,7 +867,7 @@ impl<T: Trait> Module<T> {
 		proposal_hash: T::Hash,
 		threshold: VoteThreshold,
 		delay: T::BlockNumber
-	) -> result::Result<ReferendumIndex, &'static str> {
+	) -> ReferendumIndex {
 		<Module<T>>::inject_referendum(
 			<system::Module<T>>::block_number() + T::VotingPeriod::get(),
 			proposal_hash,
@@ -900,13 +900,13 @@ impl<T: Trait> Module<T> {
 		proposal_hash: T::Hash,
 		threshold: VoteThreshold,
 		delay: T::BlockNumber,
-	) -> result::Result<ReferendumIndex, &'static str> {
+	) -> ReferendumIndex {
 		let ref_index = Self::referendum_count();
 		ReferendumCount::put(ref_index + 1);
 		let item = ReferendumInfo { end, proposal_hash, threshold, delay };
 		<ReferendumInfoOf<T>>::insert(ref_index, item);
 		Self::deposit_event(RawEvent::Started(ref_index, threshold));
-		Ok(ref_index)
+		ref_index
 	}
 
 	/// Remove all info on a referendum.
@@ -959,7 +959,7 @@ impl<T: Trait> Module<T> {
 				proposal,
 				threshold,
 				T::EnactmentPeriod::get(),
-			)?;
+			);
 			Ok(())
 		} else {
 			Err("No external proposal waiting")
@@ -988,7 +988,7 @@ impl<T: Trait> Module<T> {
 					proposal,
 					VoteThreshold::SuperMajorityApprove,
 					T::EnactmentPeriod::get(),
-				)?;
+				);
 			}
 			Ok(())
 		} else {
@@ -1269,7 +1269,7 @@ mod tests {
 				set_balance_proposal_hash(2),
 				VoteThreshold::SuperMajorityApprove,
 				0
-			).unwrap();
+			);
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
 			next_block();
@@ -1296,7 +1296,7 @@ mod tests {
 				set_balance_proposal_hash_and_note(2),
 				VoteThreshold::SuperMajorityApprove,
 				0
-			).unwrap();
+			);
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
 			assert_eq!(Balances::reserved_balance(6), 12);
@@ -1321,7 +1321,7 @@ mod tests {
 				set_balance_proposal_hash(2),
 				VoteThreshold::SuperMajorityApprove,
 				1
-			).unwrap();
+			);
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
 			assert_noop!(
@@ -1462,7 +1462,7 @@ mod tests {
 				set_balance_proposal_hash_and_note(2),
 				VoteThreshold::SuperMajorityApprove,
 				2
-			).unwrap();
+			);
 			assert!(Democracy::referendum_info(r).is_some());
 
 			assert_noop!(Democracy::emergency_cancel(Origin::signed(3), r), "Invalid origin");
@@ -1476,7 +1476,7 @@ mod tests {
 				set_balance_proposal_hash_and_note(2),
 				VoteThreshold::SuperMajorityApprove,
 				2
-			).unwrap();
+			);
 			assert!(Democracy::referendum_info(r).is_some());
 			assert_noop!(Democracy::emergency_cancel(Origin::signed(4), r), "cannot cancel the same proposal twice");
 		});
@@ -2014,7 +2014,7 @@ mod tests {
 				set_balance_proposal_hash_and_note(2),
 				VoteThreshold::SuperMajorityApprove,
 				0
-			).unwrap();
+			);
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
@@ -2037,7 +2037,7 @@ mod tests {
 				set_balance_proposal_hash_and_note(2),
 				VoteThreshold::SuperMajorityApprove,
 				0
-			).unwrap();
+			);
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 			assert_ok!(Democracy::cancel_referendum(Origin::ROOT, r.into()));
 
@@ -2057,7 +2057,7 @@ mod tests {
 				set_balance_proposal_hash_and_note(2),
 				VoteThreshold::SuperMajorityApprove,
 				0
-			).unwrap();
+			);
 			assert_ok!(Democracy::vote(Origin::signed(1), r, NAY));
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
@@ -2080,7 +2080,7 @@ mod tests {
 				set_balance_proposal_hash_and_note(2),
 				VoteThreshold::SuperMajorityApprove,
 				0
-			).unwrap();
+			);
 
 			assert_ok!(Democracy::vote(Origin::signed(1), r, BIG_AYE));
 			assert_ok!(Democracy::vote(Origin::signed(2), r, BIG_NAY));
@@ -2107,7 +2107,7 @@ mod tests {
 				set_balance_proposal_hash_and_note(2),
 				VoteThreshold::SuperMajorityApprove,
 				1
-			).unwrap();
+			);
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 			assert_ok!(Democracy::vote(Origin::signed(2), r, AYE));
 			assert_ok!(Democracy::vote(Origin::signed(3), r, AYE));
@@ -2135,7 +2135,7 @@ mod tests {
 				set_balance_proposal_hash_and_note(2),
 				VoteThreshold::SuperMajorityApprove,
 				0
-			).unwrap();
+			);
 			assert_ok!(Democracy::vote(Origin::signed(5), r, BIG_NAY));
 			assert_ok!(Democracy::vote(Origin::signed(6), r, BIG_AYE));
 
@@ -2160,7 +2160,7 @@ mod tests {
 				set_balance_proposal_hash_and_note(2),
 				VoteThreshold::SuperMajorityApprove,
 				0
-			).unwrap();
+			);
 			assert_ok!(Democracy::vote(Origin::signed(4), r, BIG_AYE));
 			assert_ok!(Democracy::vote(Origin::signed(5), r, BIG_NAY));
 			assert_ok!(Democracy::vote(Origin::signed(6), r, BIG_AYE));
@@ -2183,7 +2183,7 @@ mod tests {
 				set_balance_proposal_hash_and_note(2),
 				VoteThreshold::SuperMajorityApprove,
 				0
-			).unwrap();
+			);
 			assert_ok!(Democracy::vote(Origin::signed(1), r, Vote {
 				aye: false,
 				conviction: Conviction::Locked5x
@@ -2243,7 +2243,7 @@ mod tests {
 				set_balance_proposal_hash_and_note(2),
 				VoteThreshold::SuperMajorityApprove,
 				0
-			).unwrap();
+			);
 			assert_ok!(Democracy::vote(Origin::signed(1), r, Vote {
 				aye: false,
 				conviction: Conviction::Locked5x
