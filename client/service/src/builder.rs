@@ -103,10 +103,10 @@ pub type TFullClient<TBl, TRtApi, TExecDisp> = Client<
 >;
 
 /// Full client backend type.
-type TFullBackend<TBl> = client_db::Backend<TBl>;
+pub type TFullBackend<TBl> = client_db::Backend<TBl>;
 
 /// Full client call executor type.
-type TFullCallExecutor<TBl, TExecDisp> = client::LocalCallExecutor<
+pub type TFullCallExecutor<TBl, TExecDisp> = client::LocalCallExecutor<
 	client_db::Backend<TBl>,
 	NativeExecutor<TExecDisp>,
 >;
@@ -120,13 +120,13 @@ pub type TLightClient<TBl, TRtApi, TExecDisp> = Client<
 >;
 
 /// Light client backend type.
-type TLightBackend<TBl> = client::light::backend::Backend<
+pub type TLightBackend<TBl> = client::light::backend::Backend<
 	client_db::light::LightStorage<TBl>,
 	Blake2Hasher,
 >;
 
 /// Light call executor type.
-type TLightCallExecutor<TBl, TExecDisp> = client::light::call_executor::GenesisCallExecutor<
+pub type TLightCallExecutor<TBl, TExecDisp> = client::light::call_executor::GenesisCallExecutor<
 	client::light::backend::Backend<
 		client_db::light::LightStorage<TBl>,
 		Blake2Hasher

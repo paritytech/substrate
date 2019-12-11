@@ -53,7 +53,10 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
 
 pub use self::error::Error;
-pub use self::builder::{ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient};
+pub use self::builder::{
+	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
+	TFullCallExecutor, TLightCallExecutor,
+};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
 pub use txpool_api::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, IntoPoolError};
