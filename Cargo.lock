@@ -482,18 +482,6 @@ version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "chain-spec-builder"
-version = "2.0.0"
-dependencies = [
- "ansi_term 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "node-cli 2.0.0",
- "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-keystore 2.0.0",
- "sp-core 2.0.0",
- "structopt 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
