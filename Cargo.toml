@@ -124,7 +124,7 @@ members = [
 	"primitives/arithmetic",
 	"primitives/io",
 	"primitives/runtime",
-	"primitives/sr-sandbox",
+	"primitives/sandbox",
 	"primitives/sr-staking-primitives",
 	"primitives/std",
 	"primitives/sr-version",
