@@ -46,7 +46,7 @@ sc-executor = { path = "../../executor" }
 sc-network = { path = "../../network" }
 sc-network-test = { path = "../../network/test" }
 service = { package = "sc-service", path = "../../service" }
-test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../../test-utils/runtime/client" }
 block-builder = { package = "sc-block-builder", path = "../../block-builder" }
 tokio = "0.1.22"
 env_logger = "0.7.0"

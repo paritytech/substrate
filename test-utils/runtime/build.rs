@@ -20,7 +20,7 @@ fn main() {
 	build_current_project_with_rustflags(
 		"wasm_binary.rs",
 		WasmBuilderSource::CratesOrPath {
-			path: "../../../utils/wasm-builder",
+			path: "../../utils/wasm-builder",
 			version: "1.0.8",
 		},
 		// Note that we set the stack-size to 1MB explicitly even though it is set

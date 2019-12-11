@@ -10,7 +10,7 @@ sp-std = { path = "../std", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 
 [dev-dependencies]
-substrate-test-utils = { path = "../../test/utils" }
+substrate-test-utils = { path = "../../test-utils" }
 sp-io ={ path = "../../primitives/io" }
 rand = "0.7.2"
 

@@ -20,6 +20,6 @@ sp-blockchain = { path = "../../../../primitives/blockchain" }
 txpool-api = { package = "sp-transaction-pool", path = "../../../../primitives/transaction-pool" }
 
 [dev-dependencies]
-test-client = { package = "substrate-test-runtime-client", path = "../../../../test/utils/runtime/client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../../../test-utils/runtime/client" }
 env_logger = "0.7.0"
 txpool = { package = "sc-transaction-pool", path = "../../../../client/transaction-pool" }
