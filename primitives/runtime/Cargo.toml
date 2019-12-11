@@ -9,7 +9,7 @@ serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "sp-core",  path = "../core", default-features = false }
 app-crypto = { package = "sp-application-crypto",  path = "../application-crypto", default-features = false }
-arithmetic = { package = "sp-arithmetic",  path = "../sr-arithmetic", default-features = false }
+arithmetic = { package = "sp-arithmetic",  path = "../arithmetic", default-features = false }
 sp-std = { path = "../std", default-features = false }
 sp-io = { path = "../io", default-features = false }
 log = { version = "0.4.8", optional = true }

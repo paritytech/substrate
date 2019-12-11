@@ -121,7 +121,7 @@ members = [
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",
-	"primitives/sr-arithmetic",
+	"primitives/arithmetic",
 	"primitives/io",
 	"primitives/runtime",
 	"primitives/sr-sandbox",
