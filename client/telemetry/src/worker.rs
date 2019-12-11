@@ -28,7 +28,7 @@
 
 use bytes::BytesMut;
 use futures::{prelude::*, ready};
-use libp2p::{core::transport::OptionalTransport, core::ConnectedPoint, Multiaddr, Transport, wasm_ext};
+use libp2p::{core::transport::OptionalTransport, Multiaddr, Transport, wasm_ext};
 use log::{trace, warn, error};
 use slog::Drain;
 use std::{io, pin::Pin, task::Context, task::Poll, time};
@@ -54,23 +54,16 @@ pub struct TelemetryWorker {
 	nodes: Vec<(node::Node<WsTrans>, u8)>,
 }
 
-/// The pile of libp2p transports.
-#[cfg(not(target_os = "unknown"))]
-type WsTrans = libp2p::core::transport::timeout::TransportTimeout<
-	libp2p::core::transport::OrTransport<
-		libp2p::core::transport::map::Map<
-			OptionalTransport<wasm_ext::ExtTransport>,
-			fn(wasm_ext::Connection, ConnectedPoint) -> StreamSink<wasm_ext::Connection>
-		>,
-		libp2p::websocket::framed::WsConfig<libp2p::dns::DnsConfig<libp2p::tcp::TcpConfig>>
-	>
->;
-#[cfg(target_os = "unknown")]
-type WsTrans = libp2p::core::transport::timeout::TransportTimeout<
-	libp2p::core::transport::map::Map<
-		OptionalTransport<wasm_ext::ExtTransport>,
-		fn(wasm_ext::Connection, ConnectedPoint) -> StreamSink<wasm_ext::Connection>
-	>
+trait StreamAndSink<I>: Stream + Sink<I> {}
+impl<T: ?Sized + Stream + Sink<I>, I> StreamAndSink<I> for T {}
+
+type WsTrans = libp2p::core::transport::boxed::Boxed<
+	Pin<Box<dyn StreamAndSink<
+		BytesMut,
+		Item = Result<BytesMut, io::Error>,
+		Error = io::Error
+	> + Send>>,
+	io::Error
 >;
 
 impl TelemetryWorker {
@@ -95,10 +88,28 @@ impl TelemetryWorker {
 		let transport = transport.or_transport({
 			let inner = libp2p::dns::DnsConfig::new(libp2p::tcp::TcpConfig::new()).unwrap();		// TODO: don't unwrap
 			libp2p::websocket::framed::WsConfig::new(inner)
+				.and_then(|connec, _| {
+					let connec = connec
+						.with(|item| {
+							let item = libp2p::websocket::framed::OutgoingData::Binary(item);
+							future::ready(Ok::<_, io::Error>(item))
+						})
+						.try_filter(|item| future::ready(item.is_data()))
+						.map_ok(|data| BytesMut::from(data.as_ref()));
+					future::ready(Ok::<_, io::Error>(connec))
+				})
 		});
 
 		let transport = transport
-			.timeout(CONNECT_TIMEOUT);
+			.timeout(CONNECT_TIMEOUT)
+			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+			.map(|out, _| {
+				let out = out
+					.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+					.sink_map_err(|err| io::Error::new(io::ErrorKind::Other, err));
+				Box::pin(out) as Pin<Box<_>>
+			})
+			.boxed();
 
 		TelemetryWorker {
 			nodes: endpoints.into_iter().map(|(addr, verbosity)| {
