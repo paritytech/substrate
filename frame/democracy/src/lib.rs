@@ -1406,7 +1406,6 @@ mod tests {
 	fn reaping_imminent_preimage_should_fail() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
-//			assert_ok!(Democracy::note_preimage(Origin::signed(6), set_balance_proposal(2)));
 			let h = set_balance_proposal_hash_and_note(2);
 			let r = Democracy::inject_referendum(3, h, VoteThreshold::SuperMajorityApprove, 1);
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
