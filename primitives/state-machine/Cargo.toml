@@ -16,7 +16,7 @@ primitives = { package = "sp-core", path = "../core" }
 panic-handler = { package = "sp-panic-handler", path = "../panic-handler" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 num-traits = "0.2.8"
-rand = { version = "0.7.2", features = ["wasm-bindgen"] }
+rand = "0.7.2"
 externalities = { package = "sp-externalities", path = "../externalities" }
 
 [dev-dependencies]
