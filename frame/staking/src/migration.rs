@@ -20,13 +20,13 @@
 pub type VersionNumber = u32;
 
 // the current expected version of the storage
-pub const CURRENT_VERSION: VersionNumber = 1;
+pub const CURRENT_VERSION: VersionNumber = 2;
 
 #[cfg(any(test, feature = "migrate"))]
 mod inner {
-	use crate::{Store, Module, Trait};
-	use support::{StorageLinkedMap, StorageValue};
-	use sp_std::vec::Vec;
+	use crate::{Store, Module, Trait, ValidatorInfoForEra, SessionInterface};
+	use support::{StorageLinkedMap, StorageValue, StorageMap, StoragePrefixedMap};
+	use sp_std::{vec, vec::Vec};
 	use super::{CURRENT_VERSION, VersionNumber};
 
 	// the minimum supported version of the migration logic.
@@ -60,6 +60,42 @@ mod inner {
 		support::print("Finished migrating Staking storage to v1.");
 	}
 
+	// migrate storage from v1 to v2.
+	//
+	// * populate `EraStartSessionIndex` storage with only the current era start
+	// * populate `ValidatorForEra` storage with information from:
+	//   * `Trait::SessionInterface::validators` for validator set
+	//   * `Stakers` for exposure of validators
+	//   * `Validators` for prefs of validators
+	// * populate `SlotStakeForEra` storage with information from `SlotStake`
+	// * remove `CurrentEraStartSessionIndex` storage
+	// * remove `CurrentElected` storage
+	// * remove `SlotStake` storage
+	pub fn from_v1_to_v2<T: Trait>(version: &mut VersionNumber) {
+		if *version != 1 { return }
+		*version += 1;
+
+		let current_era = <Module<T>>::current_era();
+		let current_validator_infos = T::SessionInterface::validators().into_iter()
+			.map(|validator| ValidatorInfoForEra {
+				prefs: <Module<T>>::validators(&validator),
+				exposure: <Module<T> as Store>::Stakers::get(&validator),
+				stash: validator,
+			})
+			.collect::<Vec<_>>();
+		let current_slot_stake = <Module<T> as Store>::SlotStake::get();
+
+		<Module<T> as Store>::ValidatorForEra::insert(&current_era, current_validator_infos);
+		<Module<T> as Store>::SlotStakeForEra::insert(&current_era, current_slot_stake);
+		<Module<T> as Store>::EraStartSessionIndex::put(vec![current_era]);
+
+		<Module<T> as Store>::Stakers::remove_all();
+		<Module<T> as Store>::CurrentElected::kill();
+		<Module<T> as Store>::SlotStake::kill();
+
+		support::print("Finished migrating Staking storage to v2.");
+	}
+
 	pub(super) fn perform_migrations<T: Trait>() {
 		<Module<T> as Store>::StorageVersion::mutate(|version| {
 			if *version < MIN_SUPPORTED_VERSION {
@@ -72,6 +108,7 @@ mod inner {
 			if *version == CURRENT_VERSION { return }
 
 			to_v1::<T>(version);
+			from_v1_to_v2::<T>(version);
 		});
 	}
 }

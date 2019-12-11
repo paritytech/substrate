@@ -683,7 +683,7 @@ decl_storage! {
 		pub EraStartSessionIndex get(fn era_start_session_index) build(|_| vec![0]): Vec<SessionIndex>;
 
 		/// Rewards for the current era. Using indices of current elected set.
-		pub CurrentEraPointsEarned get(fn current_era_reward): EraPoints;
+		CurrentEraPointsEarned get(fn current_era_reward): EraPoints;
 
 		/// Mapping from era to its validator set with all information needed for rewarding.
 		///
@@ -744,6 +744,15 @@ decl_storage! {
 
 		/// The version of storage for upgrade.
 		StorageVersion: u32;
+
+		/// Deprecated: This storage is outdated. Information are not relevant anymore.
+		Stakers: map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
+
+		/// Deprecated: This storage is outdated. Information are not relevant anymore.
+		CurrentElected: Vec<T::AccountId>;
+
+		/// Deprecated: This storage is outdated. Information are not relevant anymore.
+		SlotStake: BalanceOf<T>;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -1350,21 +1359,21 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Increment current era.
-		let current_era = current_era + 1;
-		CurrentEra::put(current_era);
+		let new_current_era = current_era + 1;
+		CurrentEra::put(new_current_era);
 		EraStartSessionIndex::mutate(|era_start| {
 			era_start.remove(0)
 		});
 
-		Self::apply_unapplied_slashes(current_era);
+		Self::apply_unapplied_slashes(new_current_era);
 
 		let bonding_duration = T::BondingDuration::get();
 
 		BondedEras::mutate(|bonded| {
-			bonded.push((current_era, session_index + 1));
+			bonded.push((new_current_era, session_index + 1));
 
-			if current_era > bonding_duration {
-				let first_kept = current_era - bonding_duration;
+			if new_current_era > bonding_duration {
+				let first_kept = new_current_era - bonding_duration;
 
 				// prune out everything that's from before the first-kept index.
 				let n_to_prune = bonded.iter()
