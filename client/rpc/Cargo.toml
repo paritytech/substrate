@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-api = { package = "sc-rpc-api", path = "./api" }
+api = { package = "sc-rpc-api", path = "../rpc-api" }
 client-api = { package = "sc-client-api", path = "../api" }
 client = { package = "sc-client", path = "../" }
 sp-api = { path = "../../primitives/api" }
@@ -34,6 +34,6 @@ futures01 = { package = "futures", version = "0.1.29" }
 network = { package = "sc-network", path = "../network" }
 rustc-hex = "2.0.1"
 sp-io = { path = "../../primitives/io" }
-test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../test-utils/runtime/client" }
 tokio = "0.1.22"
 txpool = { package = "sc-transaction-pool", path = "../transaction-pool" }

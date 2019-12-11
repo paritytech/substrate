@@ -12,7 +12,7 @@ parity-scale-codec = "1"
 serde = "1"
 frame-support = { path = "../../../../frame/support" }
 sp-storage = { path = "../../../../primitives/storage" }
-sc-rpc-api = { path = "../../../../client/rpc/api" }
+sc-rpc-api = { path = "../../../../client/rpc-api" }
 
 [dev-dependencies]
 frame-system = { path = "../../../../frame/system" }

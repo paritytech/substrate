@@ -24,7 +24,7 @@ primitives = { package = "sp-core",  path = "../../primitives/core" }
 balances = { package = "pallet-balances", path = "../balances" }
 timestamp = { package = "pallet-timestamp", path = "../timestamp" }
 pallet-staking-reward-curve = { path = "../staking/reward-curve"}
-substrate-test-utils = { path = "../../test/utils" }
+substrate-test-utils = { path = "../../test-utils" }
 
 [features]
 equalize = []

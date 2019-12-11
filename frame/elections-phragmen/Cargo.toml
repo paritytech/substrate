@@ -17,7 +17,7 @@ sp-io = { path = "../../primitives/io" }
 hex-literal = "0.2.1"
 balances = { package = "pallet-balances", path = "../balances" }
 primitives = { package = "sp-core",  path = "../../primitives/core" }
-substrate-test-utils = { path = "../../test/utils" }
+substrate-test-utils = { path = "../../test-utils" }
 serde = { version = "1.0.101" }
 
 [features]

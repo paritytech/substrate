@@ -24,7 +24,7 @@ sp-runtime = { path = "../../../primitives/runtime" }
 staking = { package = "pallet-staking", path = "../../../frame/staking" }
 sc-executor = { path = "../../../client/executor" }
 system = { package = "frame-system", path = "../../../frame/system" }
-test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
+test-client = { package = "substrate-test-client", path = "../../../test-utils/client" }
 timestamp = { package = "pallet-timestamp", path = "../../../frame/timestamp" }
 transaction-payment = { package = "pallet-transaction-payment", path = "../../../frame/transaction-payment" }
 treasury = { package = "pallet-treasury", path = "../../../frame/treasury" }

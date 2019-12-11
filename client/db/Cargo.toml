@@ -26,7 +26,7 @@ sp-blockchain = { path = "../../primitives/blockchain" }
 
 [dev-dependencies]
 sp-keyring = { path = "../../primitives/keyring" }
-test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../test-utils/runtime/client" }
 env_logger = "0.7.0"
 quickcheck = "0.9"
 
