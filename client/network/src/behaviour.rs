@@ -20,7 +20,6 @@ use crate::{
 };
 use crate::{ExHashT, specialization::NetworkSpecialization};
 use crate::protocol::{CustomMessageOutcome, Protocol};
-use futures::prelude::*;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;

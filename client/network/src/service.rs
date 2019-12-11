@@ -33,7 +33,6 @@ use std::task::Poll;
 use consensus::import_queue::{ImportQueue, Link};
 use consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, channel::mpsc};
-use futures::TryFutureExt as _;
 use log::{warn, error, info};
 use libp2p::{PeerId, Multiaddr, kad::record};
 use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};

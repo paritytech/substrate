@@ -19,7 +19,6 @@ use legacy_proto::{LegacyProto, LegacyProtoOut};
 use crate::utils::interval;
 use bytes::BytesMut;
 use futures::prelude::*;
-use futures::{StreamExt as _, TryStreamExt as _};
 use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{ConnectedPoint, nodes::Substream, muxing::StreamMuxerBox};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
