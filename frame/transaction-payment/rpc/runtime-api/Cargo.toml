@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-api = { path = "../../../../primitives/sr-api", default-features = false }
+sp-api = { path = "../../../../primitives/api", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
 sp-std = { path = "../../../../primitives/std", default-features = false }
 sp-runtime = { path = "../../../../primitives/runtime", default-features = false }

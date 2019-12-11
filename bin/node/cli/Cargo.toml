@@ -43,7 +43,7 @@ sp-timestamp = { path = "../../../primitives/timestamp", default-features = fals
 sp-finality-tracker = { path = "../../../primitives/finality-tracker", default-features = false }
 inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
 keyring = { package = "sp-keyring", path = "../../../primitives/keyring" }
-runtime-io = { package = "sp-io", path = "../../../primitives/sr-io" }
+sp-io = { path = "../../../primitives/io" }
 consensus-common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
 
 # client dependencies

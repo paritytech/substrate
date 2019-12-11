@@ -158,7 +158,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// use sp_version::create_runtime_str;
 /// #
 /// # use sp_runtime::traits::GetNodeBlockType;
-/// # use test_client::runtime::{Block, Header};
+/// # use sp_test_primitives::{Block, Header};
 /// #
 /// # /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
 /// # /// trait are done by the `construct_runtime!` macro in a real runtime.

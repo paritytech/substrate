@@ -11,7 +11,7 @@ sp-runtime = { path = "../../primitives/runtime", default-features = false }
 
 [dev-dependencies]
 substrate-test-utils = { path = "../../test/utils" }
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io" }
+sp-io ={ path = "../../primitives/io" }
 rand = "0.7.2"
 
 [features]

@@ -17,7 +17,7 @@ system = { package = "frame-system", path = "../system", default-features = fals
 [dev-dependencies]
 primitives = { package = "sp-core",  path = "../../primitives/core" }
 sp-std = { path = "../../primitives/std" }
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io" }
+sp-io = { path = "../../primitives/io" }
 
 [features]
 default = ["std"]

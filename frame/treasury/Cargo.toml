@@ -14,7 +14,7 @@ system = { package = "frame-system", path = "../system", default-features = fals
 balances = { package = "pallet-balances", path = "../balances", default-features = false }
 
 [dev-dependencies]
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io" }
+sp-io ={ path = "../../primitives/io" }
 primitives = { package = "sp-core",  path = "../../primitives/core" }
 
 [features]

@@ -29,18 +29,18 @@ serde_json = "1.0.41"
 sysinfo = "0.9.5"
 target_info = "0.1.0"
 keystore = { package = "sc-keystore", path = "../keystore" }
-sp-io = { path = "../../primitives/sr-io" }
+sp-io = { path = "../../primitives/io" }
 sp-runtime = { path = "../../primitives/runtime" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
 session = { package = "sp-session", path = "../../primitives/session" }
-app-crypto = { package = "sc-application-crypto", path = "../../primitives/application-crypto" }
+app-crypto = { package = "sp-application-crypto", path = "../../primitives/application-crypto" }
 consensus_common = { package = "sp-consensus", path = "../../primitives/consensus/common" }
 network = { package = "sc-network", path = "../network" }
 chain-spec = { package = "sc-chain-spec", path = "../chain-spec" }
 client-api = { package = "sc-client-api", path = "../api" }
 client = { package = "sc-client", path = "../" }
-sp-api = { path = "../../primitives/sr-api" }
+sp-api = { path = "../../primitives/api" }
 client_db = { package = "sc-client-db", path = "../db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 sc-executor = { path = "../executor" }

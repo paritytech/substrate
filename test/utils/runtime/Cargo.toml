@@ -6,7 +6,7 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-app-crypto = { package = "sc-application-crypto", path = "../../../primitives/application-crypto", default-features = false }
+app-crypto = { package = "sp-application-crypto", path = "../../../primitives/application-crypto", default-features = false }
 aura-primitives = { package = "sp-consensus-aura", path = "../../../primitives/consensus/aura", default-features = false }
 babe-primitives = { package = "sp-consensus-babe", path = "../../../primitives/consensus/babe", default-features = false }
 block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder/runtime-api", default-features = false }
@@ -21,12 +21,12 @@ offchain-primitives = { package = "sp-offchain", path = "../../../primitives/off
 primitives = { package = "sp-core", path = "../../../primitives/core", default-features = false }
 sp-std = { path = "../../../primitives/std", default-features = false }
 runtime-interface = { package = "sp-runtime-interface", path = "../../../primitives/runtime-interface", default-features = false}
-runtime_io = { package = "sp-io", path = "../../../primitives/sr-io", default-features = false }
+sp-io = { path = "../../../primitives/io", default-features = false }
 runtime_support = { package = "frame-support", path = "../../../frame/support", default-features = false }
 runtime_version = { package = "sp-version", path = "../../../primitives/sr-version", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 session = { package = "sp-session", path = "../../../primitives/session", default-features = false }
-sp-api = { path = "../../../primitives/sr-api", default-features = false }
+sp-api = { path = "../../../primitives/api", default-features = false }
 sp-runtime = { path = "../../../primitives/runtime", default-features = false }
 pallet-babe = { path = "../../../frame/babe", default-features = false }
 frame-system = { path = "../../../frame/system", default-features = false }
@@ -65,7 +65,7 @@ std = [
 	"primitives/std",
 	"sp-std/std",
 	"runtime-interface/std",
-	"runtime_io/std",
+	"sp-io/std",
 	"runtime_support/std",
 	"runtime_version/std",
 	"serde",

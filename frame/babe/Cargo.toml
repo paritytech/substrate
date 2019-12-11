@@ -18,7 +18,7 @@ timestamp = { package = "pallet-timestamp", path = "../timestamp", default-featu
 sp-timestamp = { path = "../../primitives/timestamp", default-features = false }
 session = { package = "pallet-session", path = "../session", default-features = false }
 babe-primitives = { package = "sp-consensus-babe", path = "../../primitives/consensus/babe", default-features = false }
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+sp-io ={ path = "../../primitives/io", default-features = false }
 
 [dev-dependencies]
 lazy_static = "1.4.0"
@@ -42,5 +42,5 @@ std = [
 	"inherents/std",
 	"babe-primitives/std",
 	"session/std",
-	"runtime-io/std",
+	"sp-io/std",
 ]
