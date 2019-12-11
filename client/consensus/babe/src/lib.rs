@@ -931,6 +931,9 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		//
 		// also provides the total weight of the chain, including the imported block.
 		let (epoch, first_in_epoch, parent_weight) = {
+			let span = tracing::span!(tracing::Level::DEBUG, "import_block_epoch_check");
+			let _enter = span.enter();
+
 			let parent_weight = if *parent_header.number() == Zero::zero() {
 				0
 			} else {
@@ -1003,6 +1006,9 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			// used by pruning may not know about the block that is being
 			// imported.
 			let prune_and_import = || {
+				let span = tracing::span!(tracing::Level::DEBUG, "import_block_prune_and_import");
+				let _enter = span.enter();
+
 				prune_finalized(
 					&self.client,
 					&mut epoch_changes,
