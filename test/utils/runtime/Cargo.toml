@@ -6,7 +6,7 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-app-crypto = { package = "sc-application-crypto", path = "../../../primitives/application-crypto", default-features = false }
+app-crypto = { package = "sp-application-crypto", path = "../../../primitives/application-crypto", default-features = false }
 aura-primitives = { package = "sp-consensus-aura", path = "../../../primitives/consensus/aura", default-features = false }
 babe-primitives = { package = "sp-consensus-babe", path = "../../../primitives/consensus/babe", default-features = false }
 block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder/runtime-api", default-features = false }

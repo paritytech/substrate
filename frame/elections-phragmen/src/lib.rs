@@ -536,7 +536,7 @@ impl<T: Trait> Module<T> {
 		if Self::is_voter(who) {
 			Self::votes_of(who)
 				.iter()
-				.all(|v| !Self::is_member(v) && !Self::is_candidate(v).is_ok())
+				.all(|v| !Self::is_member(v) && !Self::is_runner(v) && !Self::is_candidate(v).is_ok())
 		} else {
 			false
 		}
@@ -1323,13 +1323,15 @@ mod tests {
 
 	#[test]
 	fn can_detect_defunct_voter() {
-		ExtBuilder::default().build().execute_with(|| {
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
+		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(6)));
 
 			assert_ok!(Elections::vote(Origin::signed(5), vec![5], 50));
 			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
 			assert_ok!(Elections::vote(Origin::signed(2), vec![4, 5], 20));
+			assert_ok!(Elections::vote(Origin::signed(6), vec![6], 30));
 			// will be soon a defunct voter.
 			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
 
@@ -1337,12 +1339,14 @@ mod tests {
 			assert_ok!(Elections::end_block(System::block_number()));
 
 			assert_eq!(Elections::members_ids(), vec![4, 5]);
+			assert_eq!(Elections::runners_up_ids(), vec![6]);
 			assert_eq!(Elections::candidates(), vec![]);
 
-			// all of them have a member that they voted for.
+			// all of them have a member or runner-up that they voted for.
 			assert_eq!(Elections::is_defunct_voter(&5), false);
 			assert_eq!(Elections::is_defunct_voter(&4), false);
 			assert_eq!(Elections::is_defunct_voter(&2), false);
+			assert_eq!(Elections::is_defunct_voter(&6), false);
 
 			// defunct
 			assert_eq!(Elections::is_defunct_voter(&3), true);

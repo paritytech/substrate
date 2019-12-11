@@ -34,7 +34,7 @@ sp-runtime = { path = "../../primitives/runtime" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
 session = { package = "sp-session", path = "../../primitives/session" }
-app-crypto = { package = "sc-application-crypto", path = "../../primitives/application-crypto" }
+app-crypto = { package = "sp-application-crypto", path = "../../primitives/application-crypto" }
 consensus_common = { package = "sp-consensus", path = "../../primitives/consensus/common" }
 network = { package = "sc-network", path = "../network" }
 chain-spec = { package = "sc-chain-spec", path = "../chain-spec" }
