@@ -18,5 +18,5 @@ primitives = { package = "sp-core", path = "../../../primitives/core" }
 runtime_version = { package = "sp-version", path = "../../../primitives/version" }
 serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.41"
-txpool-api = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool", path = "../../../primitives/transaction-pool" }
 rpc-primitives = { package = "sp-rpc", path = "../../../primitives/rpc" }

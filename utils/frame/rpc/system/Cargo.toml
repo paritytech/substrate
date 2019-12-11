@@ -17,7 +17,7 @@ sp-runtime = { path = "../../../../primitives/runtime" }
 frame-system-rpc-runtime-api = { path = "../../../../frame/system/rpc/runtime-api" }
 sp-core = { path = "../../../../primitives/core" }
 sp-blockchain = { path = "../../../../primitives/blockchain" }
-txpool-api = { package = "sp-transaction-pool-api", path = "../../../../primitives/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool", path = "../../../../primitives/transaction-pool" }
 
 [dev-dependencies]
 test-client = { package = "substrate-test-runtime-client", path = "../../../../test/utils/runtime/client" }
