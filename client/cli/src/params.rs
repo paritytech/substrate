@@ -16,30 +16,20 @@
 
 use crate::traits::{AugmentClap, GetLogFilter};
 
-use std::path::PathBuf;
+use std::{str::FromStr, path::PathBuf};
 use structopt::{StructOpt, clap::{arg_enum, App, AppSettings, SubCommand, Arg}};
 
 pub use crate::execution_strategy::ExecutionStrategy;
 
 /// Auxiliary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
 macro_rules! impl_get_log_filter {
-	// type with type parameters
-	($ty:ident < $( $N:ident $(: $b0:ident $(+$b:ident)* )? ),* >) => {
-
-		impl< $( $N $(: $b0 $(+$b)* )? ),* > $crate::GetLogFilter for $ty< $( $N ),* > {
-			fn get_log_filter(&self) -> Option<String> {
-				self.shared_params.get_log_filter()
-			}
-		}
-	};
-	// type without type parameters
 	( $type:ident ) => {
 		impl $crate::GetLogFilter for $type {
 			fn get_log_filter(&self) -> Option<String> {
 				self.shared_params.get_log_filter()
 			}
 		}
-	};
+	}
 }
 
 impl Into<client_api::ExecutionStrategy> for ExecutionStrategy {
@@ -744,9 +734,28 @@ pub struct BuildSpecCmd {
 
 impl_get_log_filter!(BuildSpecCmd);
 
+/// Wrapper type on top of `String` because `StructOpt` doesn't support type params
+#[derive(Debug, Clone)]
+pub struct BlockNumber(String);
+
+impl FromStr for BlockNumber {
+	type Err = String;
+
+	fn from_str(block_number: &str) -> Result<Self, Self::Err> {
+		Ok(Self(block_number.to_owned()))
+	}
+}
+
+impl BlockNumber {
+	/// Wrapper on top of `std::str::parse<N>`
+	pub fn parse<N: FromStr>(&self) -> Result<N, N::Err> {
+		self.0.parse()
+	}
+}
+
 /// The `export-blocks` command used to export blocks.
 #[derive(Debug, StructOpt, Clone)]
-pub struct ExportBlocksCmd<BlockNumber> {
+pub struct ExportBlocksCmd {
 	/// Output file name or stdout if unspecified.
 	#[structopt(parse(from_os_str))]
 	pub output: Option<PathBuf>,
@@ -772,7 +781,7 @@ pub struct ExportBlocksCmd<BlockNumber> {
 	pub shared_params: SharedParams,
 }
 
-// impl_get_log_filter!(ExportBlocksCmd<B>);
+impl_get_log_filter!(ExportBlocksCmd);
 
 /// The `import-blocks` command used to import blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -856,7 +865,7 @@ impl_get_log_filter!(PurgeChainCmd);
 /// the CLI user perspective, it is not visible that `Run` is a subcommand. So, all parameters of
 /// `Run` are exported as main executable parameters.
 #[derive(Debug, Clone)]
-pub enum CoreParams<CC, RP, BlockNumber> {
+pub enum CoreParams<CC, RP> {
 	/// Run a node.
 	Run(MergeParameters<RunCmd, RP>),
 
@@ -864,7 +873,7 @@ pub enum CoreParams<CC, RP, BlockNumber> {
 	BuildSpec(BuildSpecCmd),
 
 	/// Export blocks to a file.
-	ExportBlocks(ExportBlocksCmd<BlockNumber>),
+	ExportBlocks(ExportBlocksCmd),
 
 	/// Import blocks from file.
 	ImportBlocks(ImportBlocksCmd),
@@ -882,7 +891,7 @@ pub enum CoreParams<CC, RP, BlockNumber> {
 	Custom(CC),
 }
 
-impl<CC, RP, BlockNumber> StructOpt for CoreParams<CC, RP, BlockNumber> where
+impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 	CC: StructOpt + GetLogFilter,
 	RP: StructOpt + AugmentClap
 {
@@ -938,7 +947,7 @@ impl<CC, RP, BlockNumber> StructOpt for CoreParams<CC, RP, BlockNumber> where
 	}
 }
 
-impl<CC, RP, BlockNumber> GetLogFilter for CoreParams<CC, RP, BlockNumber> where CC: GetLogFilter {
+impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
 	fn get_log_filter(&self) -> Option<String> {
 		match self {
 			CoreParams::Run(c) => c.left.get_log_filter(),

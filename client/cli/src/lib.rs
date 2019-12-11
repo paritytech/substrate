@@ -189,11 +189,11 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 /// `RP` are custom parameters for the run command. This needs to be a `struct`! The custom
 /// parameters are visible to the user as if they were normal run command parameters. If no custom
 /// parameters are required, `NoCustom` can be used as type here.
-pub fn parse_and_prepare<'a, CC, RP, I, BlockNumber>(
+pub fn parse_and_prepare<'a, CC, RP, I>(
 	version: &'a VersionInfo,
 	impl_name: &'static str,
 	args: I,
-) -> ParseAndPrepare<'a, CC, RP, BlockNumber>
+) -> ParseAndPrepare<'a, CC, RP>
 where
 	CC: StructOpt + Clone + GetLogFilter,
 	RP: StructOpt + Clone + AugmentClap,
@@ -258,13 +258,13 @@ pub fn display_role<A, B, C>(config: &Configuration<A, B, C>) -> String {
 
 /// Output of calling `parse_and_prepare`.
 #[must_use]
-pub enum ParseAndPrepare<'a, CC, RP, BlockNumber> {
+pub enum ParseAndPrepare<'a, CC, RP> {
 	/// Command ready to run the main client.
 	Run(ParseAndPrepareRun<'a, RP>),
 	/// Command ready to build chain specs.
 	BuildSpec(ParseAndPrepareBuildSpec<'a>),
 	/// Command ready to export the chain.
-	ExportBlocks(ParseAndPrepareExport<'a, BlockNumber>),
+	ExportBlocks(ParseAndPrepareExport<'a>),
 	/// Command ready to import the chain.
 	ImportBlocks(ParseAndPrepareImport<'a>),
 	/// Command to check a block.
@@ -357,12 +357,12 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 }
 
 /// Command ready to export the chain.
-pub struct ParseAndPrepareExport<'a, T> {
-	params: ExportBlocksCmd<T>,
+pub struct ParseAndPrepareExport<'a> {
+	params: ExportBlocksCmd,
 	version: &'a VersionInfo,
 }
 
-impl<'a, T> ParseAndPrepareExport<'a, T> {
+impl<'a> ParseAndPrepareExport<'a> {
 	/// Runs the command and exports from the chain.
 	pub fn run_with_builder<C, G, E, F, B, S, Exit>(
 		self,
@@ -383,8 +383,9 @@ impl<'a, T> ParseAndPrepareExport<'a, T> {
 		if let DatabaseConfig::Path { ref path, .. } = &config.database {
 			info!("DB path: {}", path.display());
 		}
-		let from = self.params.from.unwrap_or(1);
-		let to = self.params.to;
+		let from = self.params.from.and_then(|f| f.parse().ok()).unwrap_or(1);
+		let to = self.params.to.and_then(|t| t.parse().ok());
+
 		let json = self.params.json;
 
 		let file: Box<dyn Write> = match self.params.output {
@@ -402,7 +403,7 @@ impl<'a, T> ParseAndPrepareExport<'a, T> {
 		});
 
 		let mut export_fut = builder(config)?
-			.export_blocks(file, from.into(), to.map(Into::into), json)
+			.export_blocks(file, from.into(), to, json)
 			.compat();
 		let fut = futures::future::poll_fn(|cx| {
 			if exit_recv.try_recv().is_ok() {
