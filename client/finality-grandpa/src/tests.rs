@@ -18,8 +18,8 @@
 
 use super::*;
 use environment::HasVoted;
-use network::test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
-use network::test::{PassThroughVerifier};
+use sc_network_test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
+use sc_network_test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
 use futures03::{StreamExt as _, TryStreamExt as _};
@@ -1553,7 +1553,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 #[test]
 fn grandpa_environment_respects_voting_rules() {
 	use grandpa::Chain;
-	use network::test::TestClient;
+	use sc_network_test::TestClient;
 
 	let peers = &[Ed25519Keyring::Alice];
 	let voters = make_ids(peers);

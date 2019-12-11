@@ -1,4 +1,4 @@
-use runtime_interface::pass_by::PassByInner;
+use sp_runtime_interface::pass_by::PassByInner;
 
 #[derive(PassByInner)]
 struct Test {

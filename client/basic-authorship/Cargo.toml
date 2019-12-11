@@ -16,7 +16,7 @@ client-api = { package = "sc-client-api", path = "../api" }
 consensus_common = { package = "sp-consensus", path = "../../primitives/consensus/common" }
 inherents = { package = "sp-inherents", path = "../../primitives/inherents" }
 sc-telemetry = { path = "../telemetry" }
-txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool", path = "../../primitives/transaction-pool" }
 block-builder = { package = "sc-block-builder", path = "../block-builder" }
 tokio-executor = { version = "0.2.0-alpha.6", features = ["blocking"] }
 

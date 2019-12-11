@@ -15,7 +15,7 @@ jsonrpc-pubsub = "14.0.3"
 log = "0.4.8"
 primitives = { package = "sp-core", path = "../../primitives/core" }
 rpc = { package = "jsonrpc-core", version = "14.0.3" }
-runtime_version = { package = "sp-version", path = "../../primitives/sr-version" }
+runtime_version = { package = "sp-version", path = "../../primitives/version" }
 serde_json = "1.0.41"
 session = { package = "sp-session", path = "../../primitives/session" }
 sp-runtime = { path = "../../primitives/runtime" }
@@ -23,7 +23,7 @@ rpc-primitives = { package = "sp-rpc", path = "../../primitives/rpc" }
 state_machine = { package = "sp-state-machine", path = "../../primitives/state-machine" }
 sc-executor = { path = "../executor" }
 sc-keystore = { path = "../keystore" }
-txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool", path = "../../primitives/transaction-pool" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 hash-db = { version = "0.15.2", default-features = false }
 parking_lot = { version = "0.9.0" }

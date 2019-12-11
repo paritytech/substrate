@@ -15,11 +15,12 @@ static_assertions = "1.0.0"
 primitive-types = { version = "0.6.1", default-features = false }
 
 [dev-dependencies]
-executor = { package = "sc-executor", path = "../../client/executor" }
 test-wasm = { package = "sp-runtime-interface-test-wasm", path = "test-wasm" }
 state_machine = { package = "sp-state-machine", path = "../../primitives/state-machine"  }
 primitives = { package = "sp-core", path = "../core" }
 sp-io = { path = "../io" }
+rustversion = "1.0.0"
+trybuild = "1.0.17"
 
 [features]
 default = [ "std" ]
