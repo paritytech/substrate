@@ -733,15 +733,16 @@ decl_module! {
 		fn reap_preimage(origin, proposal_hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 
-			if let Some((_, old, deposit, then)) = <Preimages<T>>::get(&proposal_hash) {
-				let now = <system::Module<T>>::block_number();
-				if now >= then + T::EnactmentPeriod::get() + T::VotingPeriod::get() {
-					// allowed to claim the deposit.
-					let _ = T::Currency::repatriate_reserved(&old, &who, deposit);
-					<Preimages<T>>::remove(&proposal_hash);
-					Self::deposit_event(RawEvent::PreimageReaped(proposal_hash, old, deposit, who));
-				}
-			}
+			let (_, old, deposit, then) = <Preimages<T>>::get(&proposal_hash).ok_or("not found")?;
+			let now = <system::Module<T>>::block_number();
+			let limit = then + T::EnactmentPeriod::get();
+			let additional = if who == old { Zero::zero() } else { T::VotingPeriod::get() };
+			ensure!(now >= limit + additional, "too early");
+
+			// allowed to claim the deposit.
+			let _ = T::Currency::repatriate_reserved(&old, &who, deposit);
+			<Preimages<T>>::remove(&proposal_hash);
+			Self::deposit_event(RawEvent::PreimageReaped(proposal_hash, old, deposit, who));
 		}
 	}
 }
@@ -1316,6 +1317,57 @@ mod tests {
 			assert_eq!(Balances::reserved_balance(6), 0);
 			assert_eq!(Balances::free_balance(6), 60);
 			assert_eq!(Balances::free_balance(42), 2);
+		});
+	}
+
+	#[test]
+	fn preimage_deposit_should_be_reapable_earlier_by_owner() {
+		new_test_ext().execute_with(|| {
+			System::set_block_number(1);
+			PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
+			assert_ok!(Democracy::note_preimage(Origin::signed(6), set_balance_proposal(2)));
+
+			assert_eq!(Balances::reserved_balance(6), 12);
+
+			next_block();
+			assert_noop!(
+				Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)),
+				"too early"
+			);
+			next_block();
+			assert_ok!(Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)));
+
+			assert_eq!(Balances::reserved_balance(6), 0);
+			assert_eq!(Balances::free_balance(6), 60);
+		});
+	}
+
+	#[test]
+	fn preimage_deposit_should_be_reapable() {
+		new_test_ext().execute_with(|| {
+			System::set_block_number(1);
+			assert_noop!(
+				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)),
+				"not found"
+			);
+
+			PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
+			assert_ok!(Democracy::note_preimage(Origin::signed(6), set_balance_proposal(2)));
+			assert_eq!(Balances::reserved_balance(6), 12);
+
+			next_block();
+			next_block();
+			next_block();
+			assert_noop!(
+				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)),
+				"too early"
+			);
+
+			next_block();
+			assert_ok!(Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)));
+			assert_eq!(Balances::reserved_balance(6), 0);
+			assert_eq!(Balances::free_balance(6), 48);
+			assert_eq!(Balances::free_balance(5), 62);
 		});
 	}
 
