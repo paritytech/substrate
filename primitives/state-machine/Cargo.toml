@@ -15,7 +15,7 @@ trie = { package = "sp-trie", path = "../trie" }
 primitives = { package = "sp-core", path = "../core" }
 panic-handler = { package = "sp-panic-handler", path = "../panic-handler" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-historical-data = { path = "../../utils/historical-data" }
+sp-historical-data = { path = "../historical-data" }
 num-traits = "0.2.8"
 rand = "0.7.2"
 externalities = { package = "sp-externalities", path = "../externalities" }
@@ -24,7 +24,7 @@ externalities = { package = "sp-externalities", path = "../externalities" }
 hex-literal = "0.2.1"
 criterion = "0.2"
 rand = { version = "0.7.1", features = ["small_rng"] }
-historical-data = { path = "../../utils/historical-data", features = [ "test-helpers" ] }
+sp-historical-data = { path = "../historical-data", features = [ "test-helpers" ] }
 
 [[bench]]
 name = "bench"
@@ -33,5 +33,5 @@ harness = false
 [features]
 default = []
 test-helpers = [
-				"historical-data/test-helpers",
+	"sp-historical-data/test-helpers",
 ]

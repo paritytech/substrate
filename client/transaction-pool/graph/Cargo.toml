@@ -17,7 +17,7 @@ txpool-api = { package = "sp-transaction-pool", path = "../../../primitives/tran
 [dev-dependencies]
 assert_matches = "1.3.0"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-test_runtime = { package = "substrate-test-runtime", path = "../../../test/utils/runtime" }
+test_runtime = { package = "substrate-test-runtime", path = "../../../test-utils/runtime" }
 criterion = "0.3"
 
 [[bench]]

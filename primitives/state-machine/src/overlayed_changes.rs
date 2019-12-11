@@ -22,10 +22,10 @@ use std::collections::{HashMap, BTreeMap, BTreeSet};
 use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-use historical_data::synch_linear_transaction::{
+use sp_historical_data::synch_linear_transaction::{
 	History, HistoricalValue, States,
 };
-use historical_data::CleaningResult;
+use sp_historical_data::CleaningResult;
 use std::ops;
 
 /// The overlayed changes to state to be queried on top of the backend.
@@ -72,7 +72,7 @@ pub struct OverlayedChangeSet {
 #[cfg(test)]
 impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 	fn from_iter<T: IntoIterator<Item = (Vec<u8>, OverlayedValue)>>(iter: T) -> Self {
-		use historical_data::synch_linear_transaction::State;
+		use sp_historical_data::synch_linear_transaction::State;
 		let mut result = OverlayedChangeSet::default();
 		result.top = iter.into_iter().map(|(k, value)| (k, {
 			let mut history = History::default();

@@ -33,7 +33,7 @@ hyper-rustls = "0.17.1"
 [dev-dependencies]
 client-db = { package = "sc-client-db", path = "../db/", default-features = true }
 env_logger = "0.7.0"
-test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../test-utils/runtime/client" }
 tokio = "0.1.22"
 txpool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
 txpool-api = { package = "sp-transaction-pool", path = "../../primitives/transaction-pool" }
