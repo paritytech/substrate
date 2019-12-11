@@ -1290,8 +1290,7 @@ impl<T: Trait> Module<T> {
 		imbalance
 	}
 
-	/// Reward the session, also prune the unecessary information for this session. Thus can only
-	/// be called once.
+	/// Call `on_era_end` if session is last of current era.
 	fn on_session_end(session_index: SessionIndex) {
 		let era_starts = Self::era_start_session_index();
 		if let Some(next_era_start) = era_starts.get(1) {
@@ -1301,6 +1300,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Reward the era, increment era index, also prune the unecessary information.
 	fn on_era_end(session_index: SessionIndex) {
 		let points = CurrentEraPointsEarned::take();
 		let now = T::Time::now();
@@ -1309,11 +1309,12 @@ impl<T: Trait> Module<T> {
 		});
 
 		let era_duration = now - previous_era_start;
+		let current_era = Self::current_era();
 		if !era_duration.is_zero() {
-			let validators_info = <ValidatorForEra<T>>::take(Self::current_era());
+			let validators_info = <ValidatorForEra<T>>::take(current_era);
 
 			let validator_len: BalanceOf<T> = (validators_info.len() as u32).into();
-			let total_rewarded_stake = <SlotStakeForEra<T>>::take(Self::current_era()) * validator_len;
+			let total_rewarded_stake = <SlotStakeForEra<T>>::take(current_era) * validator_len;
 
 			let (total_payout, max_payout) = inflation::compute_total_payout(
 				&T::RewardCurve::get(),
@@ -1349,14 +1350,15 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Increment current era.
-		let current_era = CurrentEra::mutate(|s| { *s += 1; *s });
-		Self::apply_unapplied_slashes(current_era);
-
-		let bonding_duration = T::BondingDuration::get();
-
+		let current_era = current_era + 1;
+		CurrentEra::put(current_era);
 		EraStartSessionIndex::mutate(|era_start| {
 			era_start.remove(0)
 		});
+
+		Self::apply_unapplied_slashes(current_era);
+
+		let bonding_duration = T::BondingDuration::get();
 
 		BondedEras::mutate(|bonded| {
 			bonded.push((current_era, session_index + 1));
