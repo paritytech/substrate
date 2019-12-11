@@ -75,7 +75,7 @@ impl TelemetryWorker {
 	pub fn new(
 		endpoints: impl IntoIterator<Item = (Multiaddr, u8)>,
 		wasm_external_transport: impl Into<Option<wasm_ext::ExtTransport>>
-	) -> Self {
+	) -> Result<Self, io::Error> {
 		let transport = match wasm_external_transport.into() {
 			Some(t) => OptionalTransport::some(t),
 			None => OptionalTransport::none()
@@ -86,7 +86,7 @@ impl TelemetryWorker {
 		// an external transport on desktop and the fallback is used all the time.
 		#[cfg(not(target_os = "unknown"))]
 		let transport = transport.or_transport({
-			let inner = libp2p::dns::DnsConfig::new(libp2p::tcp::TcpConfig::new()).unwrap();		// TODO: don't unwrap
+			let inner = libp2p::dns::DnsConfig::new(libp2p::tcp::TcpConfig::new())?;
 			libp2p::websocket::framed::WsConfig::new(inner)
 				.and_then(|connec, _| {
 					let connec = connec
@@ -111,12 +111,12 @@ impl TelemetryWorker {
 			})
 			.boxed();
 
-		TelemetryWorker {
+		Ok(TelemetryWorker {
 			nodes: endpoints.into_iter().map(|(addr, verbosity)| {
 				let node = node::Node::new(transport.clone(), addr);
 				(node, verbosity)
 			}).collect()
-		}
+		})
 	}
 
 	/// Polls the worker for events that happened.
