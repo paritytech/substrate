@@ -100,7 +100,9 @@ pub struct Proposal<Block: BlockT, Transaction> {
 /// full storage.
 #[derive(Copy, Clone, PartialEq)]
 pub enum RecordProof {
+	/// `Yes`, record a proof.
 	Yes,
+	/// `No`, don't record any proof.
 	No,
 }
 

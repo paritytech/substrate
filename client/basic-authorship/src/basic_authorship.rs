@@ -246,7 +246,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
-		let (block, storage_changes, proof) = block_builder.bake()?;
+		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
 
 		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
 			block.header().number(),

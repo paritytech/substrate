@@ -801,12 +801,12 @@ mod tests {
 			_: Duration,
 			_: RecordProof,
 		) -> Self::Proposal {
-			let r = self.1.new_block(digests).unwrap().bake().map_err(|e| e.into());
+			let r = self.1.new_block(digests).unwrap().build().map_err(|e| e.into());
 
 			future::ready(r.map(|b| Proposal {
-				block: b.0,
-				proof: b.2,
-				storage_changes: b.1,
+				block: b.block,
+				proof: b.proof,
+				storage_changes: b.storage_changes,
 			}))
 		}
 	}

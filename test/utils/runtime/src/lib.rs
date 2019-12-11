@@ -1010,7 +1010,7 @@ mod tests {
 		let (new_block_id, block) = {
 			let mut builder = client.new_block(Default::default()).unwrap();
 			builder.push_storage_change(HEAP_PAGES.to_vec(), Some(32u64.encode())).unwrap();
-			let block = builder.bake().unwrap().0;
+			let block = builder.build().unwrap().block;
 			let hash = block.header.hash();
 			(BlockId::Hash(hash), block)
 		};

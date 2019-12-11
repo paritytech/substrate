@@ -176,7 +176,7 @@ where
 		block.push(inherent).expect("Failed ...");
 	}
 
-	block.bake().expect("Failed to bake block").0
+	block.build().expect("Failed to bake block").block
 }
 
 fn import_block<Backend, Exec, Block, RtApi>(

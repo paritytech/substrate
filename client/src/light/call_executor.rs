@@ -429,7 +429,7 @@ mod tests {
 			digest.push(sp_runtime::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
 			remote_client.import_justified(
 				BlockOrigin::Own,
-				remote_client.new_block(digest).unwrap().bake().unwrap().0,
+				remote_client.new_block(digest).unwrap().build().unwrap().block,
 				Default::default(),
 			).unwrap();
 		}

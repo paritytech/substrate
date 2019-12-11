@@ -236,6 +236,8 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 	///
 	/// Note: changes to code will be in place if this call is made again. For running partial
 	/// blocks (e.g. a transaction at a time), ensure a different method is used.
+	///
+	/// Returns the SCALE encoded result of the executed function.
 	pub fn execute(&mut self, strategy: ExecutionStrategy) -> Result<Vec<u8>, Box<dyn Error>> {
 		// We are not giving a native call and thus we are sure that the result can never be a native
 		// value.
@@ -366,6 +368,9 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 	///
 	/// Note: changes to code will be in place if this call is made again. For running partial
 	/// blocks (e.g. a transaction at a time), ensure a different method is used.
+	///
+	/// Returns the result of the executed function either in native reprensentation `R` or
+	/// in SCALE encoded representation.
 	pub fn execute_using_consensus_failure_handler<Handler, R, NC>(
 		&mut self,
 		manager: ExecutionManager<Handler>,

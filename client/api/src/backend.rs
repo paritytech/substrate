@@ -133,7 +133,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// Inject storage data into the database.
 	fn update_db_storage(
 		&mut self,
-		update: <Self::State as StateBackend<HasherFor<Block>>>::Transaction,
+		update: TransactionForSB<Self::State, Block>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Inject storage data into the database replacing any existing data.

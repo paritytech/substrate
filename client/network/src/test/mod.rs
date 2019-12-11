@@ -345,14 +345,14 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 				};
 				builder.push(transfer.into_signed_tx()).unwrap();
 				nonce = nonce + 1;
-				builder.bake().unwrap().0
+				builder.build().unwrap().block
 			})
 		} else {
 			self.generate_blocks_at(
 				at,
 				count,
 				BlockOrigin::File,
-				|builder| builder.bake().unwrap().0,
+				|builder| builder.build().unwrap().block,
 			)
 		}
 	}
@@ -360,7 +360,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	pub fn push_authorities_change_block(&mut self, new_authorities: Vec<AuthorityId>) -> H256 {
 		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
 			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
-			builder.bake().unwrap().0
+			builder.build().unwrap().block
 		})
 	}
 
@@ -436,29 +436,19 @@ impl SpecializationFactory for DummySpecialization {
 /// full and light nodes.
 pub enum BlockImportAdapter<Transaction> {
 	Full(
-		Arc<
-			Mutex<
-				dyn BlockImport<
-					Block,
-					Transaction = TransactionFor<test_client::Backend, Block>,
-					Error = ConsensusError
-				>
-				+ Send
-			>
-		>,
+		Arc<Mutex<dyn BlockImport<
+			Block,
+			Transaction = TransactionFor<test_client::Backend, Block>,
+			Error = ConsensusError
+		> + Send>>,
 		PhantomData<Transaction>,
 	),
 	Light(
-		Arc<
-			Mutex<
-				dyn BlockImport<
-					Block,
-					Transaction = TransactionFor<test_client::LightBackend, Block>,
-					Error = ConsensusError
-				>
-				+ Send
-			>
-		>,
+		Arc<Mutex<dyn BlockImport<
+			Block,
+			Transaction = TransactionFor<test_client::LightBackend, Block>,
+			Error = ConsensusError
+		> + Send>>,
 		PhantomData<Transaction>,
 	),
 }

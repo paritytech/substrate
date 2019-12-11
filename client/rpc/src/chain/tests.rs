@@ -66,7 +66,7 @@ fn should_return_a_block() {
 	let mut client = Arc::new(test_client::new());
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
-	let block = client.new_block(Default::default()).unwrap().bake().unwrap().0;
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	let block_hash = block.hash();
 	client.import(BlockOrigin::Own, block).unwrap();
 
@@ -136,7 +136,7 @@ fn should_return_block_hash() {
 		Ok(ListOrValue::Value(None))
 	);
 
-	let block = client.new_block(Default::default()).unwrap().bake().unwrap().0;
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	client.import(BlockOrigin::Own, block.clone()).unwrap();
 
 	assert_matches!(
@@ -173,7 +173,7 @@ fn should_return_finalized_hash() {
 	);
 
 	// import new block
-	let block = client.new_block(Default::default()).unwrap().bake().unwrap().0;
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	client.import(BlockOrigin::Own, block).unwrap();
 	// no finalization yet
 	assert_matches!(
@@ -204,7 +204,7 @@ fn should_notify_about_latest_block() {
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
-		let block = client.new_block(Default::default()).unwrap().bake().unwrap().0;
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
 
@@ -233,7 +233,7 @@ fn should_notify_about_finalized_block() {
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
-		let block = client.new_block(Default::default()).unwrap().bake().unwrap().0;
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
 		client.finalize_block(BlockId::number(1), None).unwrap();
 	}
