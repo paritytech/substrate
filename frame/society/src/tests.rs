@@ -161,11 +161,13 @@ fn payout_works() {
 #[test]
 fn basic_new_member_skeptic_works() {
 	EnvBuilder::new().execute(|| {
+		assert_eq!(Strikes::<Test>::get(10), 0);
 		assert_ok!(Society::bid(Origin::signed(20), 0));
 		run_to_block(4);
 		assert_eq!(Society::candidates(), vec![(0, 20, BidKind::Deposit(25))]);
 		run_to_block(8);
 		assert_eq!(Society::members(), vec![10]);
+		assert_eq!(Strikes::<Test>::get(10), 1);
 	});
 }
 
