@@ -111,7 +111,7 @@ use serde::{Serialize, Deserialize};
 use primitives::crypto::UncheckedFrom;
 use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
-use runtime_io::hashing::blake2_256;
+use sp_io::hashing::blake2_256;
 use sp_runtime::{
 	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension},
 	transaction_validity::{
@@ -828,7 +828,7 @@ impl<T: Trait> Module<T> {
 			&child::child_root(
 				&origin_contract.trie_id,
 			)[..],
-				code_hash,
+			code_hash,
 		);
 
 		if tombstone != dest_tombstone {

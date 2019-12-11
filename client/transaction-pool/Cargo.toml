@@ -11,7 +11,7 @@ futures = { version = "0.3.1", features = ["compat"] }
 log = "0.4.8"
 parking_lot = "0.9.0"
 primitives = { package = "sp-core",  path = "../../primitives/core" }
-sp-api = { path = "../../primitives/sr-api" }
+sp-api = { path = "../../primitives/api" }
 sp-runtime = { path = "../../primitives/runtime" }
 txpool = { package = "sc-transaction-graph", path = "./graph" }
 txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }

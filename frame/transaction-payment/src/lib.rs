@@ -380,7 +380,7 @@ mod tests {
 			TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.byte_fee);
 			WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
 		}
-		pub fn build(self) -> runtime_io::TestExternalities {
+		pub fn build(self) -> sp_io::TestExternalities {
 			self.set_constants();
 			let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 			balances::GenesisConfig::<Runtime> {

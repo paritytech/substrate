@@ -493,7 +493,7 @@ mod tests {
 		}.assimilate_storage(&mut t).unwrap();
 		let xt = sp_runtime::testing::TestXt(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(2, 69)));
 		let weight = xt.get_dispatch_info().weight as u64;
-		let mut t = runtime_io::TestExternalities::new(t);
+		let mut t = sp_io::TestExternalities::new(t);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -509,7 +509,7 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext(balance_factor: u64) -> runtime_io::TestExternalities {
+	fn new_test_ext(balance_factor: u64) -> sp_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111 * balance_factor)],

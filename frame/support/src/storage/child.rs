@@ -36,7 +36,7 @@ pub fn get<T: Decode + Sized>(
 	key: &[u8],
 ) -> Option<T> {
 	let (data, child_type) = child_info.info();
-	runtime_io::storage::child_get(
+	sp_io::storage::child_get(
 		storage_key,
 		data,
 		child_type,
@@ -91,7 +91,7 @@ pub fn put<T: Encode>(
 ) {
 	let (data, child_type) = child_info.info();
 	value.using_encoded(|slice|
-		runtime_io::storage::child_set(
+		sp_io::storage::child_set(
 			storage_key,
 			data,
 			child_type,
@@ -153,7 +153,7 @@ pub fn exists(
 	key: &[u8],
 ) -> bool {
 	let (data, child_type) = child_info.info();
-	runtime_io::storage::child_read(
+	sp_io::storage::child_read(
 		storage_key, data, child_type,
 		key, &mut [0;0][..], 0,
 	).is_some()
@@ -165,7 +165,7 @@ pub fn kill_storage(
 	child_info: ChildInfo,
 ) {
 	let (data, child_type) = child_info.info();
-	runtime_io::storage::child_storage_kill(
+	sp_io::storage::child_storage_kill(
 		storage_key,
 		data,
 		child_type,
@@ -179,7 +179,7 @@ pub fn kill(
 	key: &[u8],
 ) {
 	let (data, child_type) = child_info.info();
-	runtime_io::storage::child_clear(
+	sp_io::storage::child_clear(
 		storage_key,
 		data,
 		child_type,
@@ -194,7 +194,7 @@ pub fn get_raw(
 	key: &[u8],
 ) -> Option<Vec<u8>> {
 	let (data, child_type) = child_info.info();
-	runtime_io::storage::child_get(
+	sp_io::storage::child_get(
 		storage_key,
 		data,
 		child_type,
@@ -210,7 +210,7 @@ pub fn put_raw(
 	value: &[u8],
 ) {
 	let (data, child_type) = child_info.info();
-	runtime_io::storage::child_set(
+	sp_io::storage::child_set(
 		storage_key,
 		data,
 		child_type,
@@ -223,7 +223,7 @@ pub fn put_raw(
 pub fn child_root(
 	storage_key: &[u8],
 ) -> Vec<u8> {
-	runtime_io::storage::child_root(
+	sp_io::storage::child_root(
 		storage_key,
 	)
 }

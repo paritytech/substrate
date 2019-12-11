@@ -18,7 +18,7 @@ use sp_std::{prelude::*, slice, marker, mem, vec, rc::Rc};
 use codec::{Decode, Encode};
 use primitives::sandbox as sandbox_primitives;
 use super::{Error, TypedValue, ReturnValue, HostFuncType};
-use runtime_io::sandbox;
+use sp_io::sandbox;
 
 mod ffi {
 	use sp_std::mem;

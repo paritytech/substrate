@@ -24,7 +24,7 @@ use crate::exec::StorageKey;
 use sp_std::cell::RefCell;
 use sp_std::collections::btree_map::{BTreeMap, Entry};
 use sp_std::prelude::*;
-use runtime_io::hashing::blake2_256;
+use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Zero};
 use support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
 use support::{storage::child, StorageMap};

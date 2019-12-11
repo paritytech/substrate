@@ -9,7 +9,7 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 use sp_std::{vec::Vec, vec};
 
 #[cfg(not(feature = "std"))]
-use runtime_io::{
+use sp_io::{
 	storage, hashing::{blake2_128, blake2_256, sha2_256, twox_128, twox_256},
 	crypto::{ed25519_verify, sr25519_verify},
 };
@@ -146,49 +146,49 @@ primitives::wasm_export_functions! {
 
 	fn test_offchain_local_storage() -> bool {
 		let kind = primitives::offchain::StorageKind::PERSISTENT;
-		assert_eq!(runtime_io::offchain::local_storage_get(kind, b"test"), None);
-		runtime_io::offchain::local_storage_set(kind, b"test", b"asd");
-		assert_eq!(runtime_io::offchain::local_storage_get(kind, b"test"), Some(b"asd".to_vec()));
+		assert_eq!(sp_io::offchain::local_storage_get(kind, b"test"), None);
+		sp_io::offchain::local_storage_set(kind, b"test", b"asd");
+		assert_eq!(sp_io::offchain::local_storage_get(kind, b"test"), Some(b"asd".to_vec()));
 
-		let res = runtime_io::offchain::local_storage_compare_and_set(
+		let res = sp_io::offchain::local_storage_compare_and_set(
 			kind,
 			b"test",
 			Some(b"asd".to_vec()),
 			b"",
 		);
-		assert_eq!(runtime_io::offchain::local_storage_get(kind, b"test"), Some(b"".to_vec()));
+		assert_eq!(sp_io::offchain::local_storage_get(kind, b"test"), Some(b"".to_vec()));
 		res
 	}
 
 	fn test_offchain_local_storage_with_none() {
 		let kind = primitives::offchain::StorageKind::PERSISTENT;
-		assert_eq!(runtime_io::offchain::local_storage_get(kind, b"test"), None);
+		assert_eq!(sp_io::offchain::local_storage_get(kind, b"test"), None);
 
-		let res = runtime_io::offchain::local_storage_compare_and_set(kind, b"test", None, b"value");
+		let res = sp_io::offchain::local_storage_compare_and_set(kind, b"test", None, b"value");
 		assert_eq!(res, true);
-		assert_eq!(runtime_io::offchain::local_storage_get(kind, b"test"), Some(b"value".to_vec()));
+		assert_eq!(sp_io::offchain::local_storage_get(kind, b"test"), Some(b"value".to_vec()));
 	}
 
 	fn test_offchain_http() -> bool {
 		use primitives::offchain::HttpRequestStatus;
 		let run = || -> Option<()> {
-			let id = runtime_io::offchain::http_request_start(
+			let id = sp_io::offchain::http_request_start(
 				"POST",
 				"http://localhost:12345",
 				&[],
 			).ok()?;
-			runtime_io::offchain::http_request_add_header(id, "X-Auth", "test").ok()?;
-			runtime_io::offchain::http_request_write_body(id, &[1, 2, 3, 4], None).ok()?;
-			runtime_io::offchain::http_request_write_body(id, &[], None).ok()?;
-			let status = runtime_io::offchain::http_response_wait(&[id], None);
+			sp_io::offchain::http_request_add_header(id, "X-Auth", "test").ok()?;
+			sp_io::offchain::http_request_write_body(id, &[1, 2, 3, 4], None).ok()?;
+			sp_io::offchain::http_request_write_body(id, &[], None).ok()?;
+			let status = sp_io::offchain::http_response_wait(&[id], None);
 			assert!(status == vec![HttpRequestStatus::Finished(200)], "Expected Finished(200) status.");
-			let headers = runtime_io::offchain::http_response_headers(id);
+			let headers = sp_io::offchain::http_response_headers(id);
 			assert_eq!(headers, vec![(b"X-Auth".to_vec(), b"hello".to_vec())]);
 			let mut buffer = vec![0; 64];
-			let read = runtime_io::offchain::http_response_read_body(id, &mut buffer, None).ok()?;
+			let read = sp_io::offchain::http_response_read_body(id, &mut buffer, None).ok()?;
 			assert_eq!(read, 3);
 			assert_eq!(&buffer[0..read as usize], &[1, 2, 3]);
-			let read = runtime_io::offchain::http_response_read_body(id, &mut buffer, None).ok()?;
+			let read = sp_io::offchain::http_response_read_body(id, &mut buffer, None).ok()?;
 			assert_eq!(read, 0);
 
 			Some(())

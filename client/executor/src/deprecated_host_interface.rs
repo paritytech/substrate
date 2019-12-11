@@ -168,20 +168,20 @@ impl_wasm_host_interface! {
 
 		ext_print_utf8(utf8_data: Pointer<u8>, utf8_len: WordSize) {
 			if let Ok(utf8) = context.read_memory(utf8_data, utf8_len) {
-				runtime_io::misc::print_utf8(&utf8);
+				sp_io::misc::print_utf8(&utf8);
 			}
 			Ok(())
 		}
 
 		ext_print_hex(data: Pointer<u8>, len: WordSize) {
 			if let Ok(hex) = context.read_memory(data, len) {
-				runtime_io::misc::print_hex(&hex);
+				sp_io::misc::print_hex(&hex);
 			}
 			Ok(())
 		}
 
 		ext_print_num(number: u64) {
-			runtime_io::misc::print_num(number);
+			sp_io::misc::print_num(number);
 			Ok(())
 		}
 
@@ -200,7 +200,7 @@ impl_wasm_host_interface! {
 			let target_str = std::str::from_utf8(&target)
 				.map_err(|_| "Target invalid utf8 in ext_log")?;
 
-			runtime_io::logging::log(level.into(), &target_str, &message);
+			sp_io::logging::log(level.into(), &target_str, &message);
 			Ok(())
 		}
 
@@ -214,25 +214,25 @@ impl_wasm_host_interface! {
 				.map_err(|_| "Invalid attempt to determine key in ext_set_storage")?;
 			let value = context.read_memory(value_data, value_len)
 				.map_err(|_| "Invalid attempt to determine value in ext_set_storage")?;
-			Ok(runtime_io::storage::set(&key, &value))
+			Ok(sp_io::storage::set(&key, &value))
 		}
 
 		ext_clear_storage(key_data: Pointer<u8>, key_len: WordSize) {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_clear_storage")?;
-			Ok(runtime_io::storage::clear(&key))
+			Ok(sp_io::storage::clear(&key))
 		}
 
 		ext_exists_storage(key_data: Pointer<u8>, key_len: WordSize) -> u32 {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_exists_storage")?;
-			Ok(if runtime_io::storage::exists(&key) { 1 } else { 0 })
+			Ok(if sp_io::storage::exists(&key) { 1 } else { 0 })
 		}
 
 		ext_clear_prefix(prefix_data: Pointer<u8>, prefix_len: WordSize) {
 			let prefix = context.read_memory(prefix_data, prefix_len)
 				.map_err(|_| "Invalid attempt to determine prefix in ext_clear_prefix")?;
-			Ok(runtime_io::storage::clear_prefix(&prefix))
+			Ok(sp_io::storage::clear_prefix(&prefix))
 		}
 
 		ext_get_allocated_storage(
@@ -243,7 +243,7 @@ impl_wasm_host_interface! {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_get_allocated_storage")?;
 
-			if let Some(value) = runtime_io::storage::get(&key) {
+			if let Some(value) = sp_io::storage::get(&key) {
 				let offset = context.allocate_memory(value.len() as u32)?;
 				context.write_memory(offset, &value)
 					.map_err(|_| "Invalid attempt to set memory in ext_get_allocated_storage")?;
@@ -267,7 +267,7 @@ impl_wasm_host_interface! {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to get key in ext_get_storage_into")?;
 
-			if let Some(value) = runtime_io::storage::get(&key) {
+			if let Some(value) = sp_io::storage::get(&key) {
 				let data = &value[value.len().min(value_offset as usize)..];
 				let written = std::cmp::min(value_len as usize, data.len());
 				context.write_memory(value_data, &data[..written])
@@ -279,7 +279,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_storage_root(result: Pointer<u8>) {
-			context.write_memory(result, runtime_io::storage::root().as_ref())
+			context.write_memory(result, sp_io::storage::root().as_ref())
 				.map_err(|_| "Invalid attempt to set memory in ext_storage_root".into())
 		}
 
@@ -292,7 +292,7 @@ impl_wasm_host_interface! {
 			context.read_memory_into(parent_hash_data, &mut parent_hash[..])
 				.map_err(|_| "Invalid attempt to get parent_hash in ext_storage_changes_root")?;
 
-			if let Some(r) = runtime_io::storage::changes_root(&parent_hash) {
+			if let Some(r) = sp_io::storage::changes_root(&parent_hash) {
 				context.write_memory(result, &r[..])
 					.map_err(|_| "Invalid attempt to set memory in ext_storage_changes_root")?;
 				Ok(1)
@@ -326,7 +326,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_chain_id() -> u64 {
-			Ok(runtime_io::misc::chain_id())
+			Ok(sp_io::misc::chain_id())
 		}
 
 		ext_twox_64(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
@@ -422,7 +422,7 @@ impl_wasm_host_interface! {
 				.map_err(|_| "Invalid attempt to get id in ext_ed25519_public_keys")?;
 			let key_type = KeyTypeId(id);
 
-			let keys = runtime_io::crypto::ed25519_public_keys(key_type).encode();
+			let keys = sp_io::crypto::ed25519_public_keys(key_type).encode();
 
 			let len = keys.len() as u32;
 			let offset = context.allocate_memory(len)?;
@@ -477,7 +477,7 @@ impl_wasm_host_interface! {
 				)
 			};
 
-			let pubkey = runtime_io::crypto::ed25519_generate(key_type, seed);
+			let pubkey = sp_io::crypto::ed25519_generate(key_type, seed);
 
 			context.write_memory(out, pubkey.as_ref())
 				.map_err(|_| "Invalid attempt to set out in ext_ed25519_generate".into())
@@ -505,7 +505,7 @@ impl_wasm_host_interface! {
 			let pub_key = ed25519::Public::try_from(pubkey.as_ref())
 				.map_err(|_| "Invalid `ed25519` public key")?;
 
-			let signature = runtime_io::crypto::ed25519_sign(key_type, &pub_key, &msg);
+			let signature = sp_io::crypto::ed25519_sign(key_type, &pub_key, &msg);
 
 			match signature {
 				Some(signature) => {
@@ -523,7 +523,7 @@ impl_wasm_host_interface! {
 				.map_err(|_| "Invalid attempt to get id in ext_sr25519_public_keys")?;
 			let key_type = KeyTypeId(id);
 
-			let keys = runtime_io::crypto::sr25519_public_keys(key_type).encode();
+			let keys = sp_io::crypto::sr25519_public_keys(key_type).encode();
 
 			let len = keys.len() as u32;
 			let offset = context.allocate_memory(len)?;
@@ -577,7 +577,7 @@ impl_wasm_host_interface! {
 				)
 			};
 
-			let pubkey = runtime_io::crypto::sr25519_generate(key_type, seed);
+			let pubkey = sp_io::crypto::sr25519_generate(key_type, seed);
 
 			context.write_memory(out, pubkey.as_ref())
 				.map_err(|_| "Invalid attempt to set out in ext_sr25519_generate".into())
@@ -605,7 +605,7 @@ impl_wasm_host_interface! {
 			let pub_key = sr25519::Public::try_from(pubkey.as_ref())
 				.map_err(|_| "Invalid `sr25519` public key")?;
 
-			let signature = runtime_io::crypto::sr25519_sign(key_type, &pub_key, &msg);
+			let signature = sp_io::crypto::sr25519_sign(key_type, &pub_key, &msg);
 
 			match signature {
 				Some(signature) => {
@@ -648,20 +648,20 @@ impl_wasm_host_interface! {
 		}
 
 		ext_is_validator() -> u32 {
-			if runtime_io::offchain::is_validator() { Ok(1) } else { Ok(0) }
+			if sp_io::offchain::is_validator() { Ok(1) } else { Ok(0) }
 		}
 
 		ext_submit_transaction(msg_data: Pointer<u8>, len: WordSize) -> u32 {
 			let extrinsic = context.read_memory(msg_data, len)
 				.map_err(|_| "OOB while ext_submit_transaction: wasm")?;
 
-			let res = runtime_io::offchain::submit_transaction(extrinsic);
+			let res = sp_io::offchain::submit_transaction(extrinsic);
 
 			Ok(if res.is_ok() { 0 } else { 1 })
 		}
 
 		ext_network_state(written_out: Pointer<u32>) -> Pointer<u8> {
-			let res = runtime_io::offchain::network_state();
+			let res = sp_io::offchain::network_state();
 
 			let encoded = res.encode();
 			let len = encoded.len() as u32;
@@ -676,17 +676,17 @@ impl_wasm_host_interface! {
 		}
 
 		ext_timestamp() -> u64 {
-			Ok(runtime_io::offchain::timestamp().unix_millis())
+			Ok(sp_io::offchain::timestamp().unix_millis())
 		}
 
 		ext_sleep_until(deadline: u64) {
-			runtime_io::offchain::sleep_until(offchain::Timestamp::from_unix_millis(deadline));
+			sp_io::offchain::sleep_until(offchain::Timestamp::from_unix_millis(deadline));
 			Ok(())
 		}
 
 		ext_random_seed(seed_data: Pointer<u8>) {
 			// NOTE the runtime as assumptions about seed size.
-			let seed = runtime_io::offchain::random_seed();
+			let seed = sp_io::offchain::random_seed();
 
 			context.write_memory(seed_data, &seed)
 				.map_err(|_| "Invalid attempt to set value in ext_random_seed")?;
@@ -707,7 +707,7 @@ impl_wasm_host_interface! {
 			let value = context.read_memory(value, value_len)
 				.map_err(|_| "OOB while ext_local_storage_set: wasm")?;
 
-			runtime_io::offchain::local_storage_set(kind, &key, &value);
+			sp_io::offchain::local_storage_set(kind, &key, &value);
 
 			Ok(())
 		}
@@ -723,7 +723,7 @@ impl_wasm_host_interface! {
 			let key = context.read_memory(key, key_len)
 				.map_err(|_| "OOB while ext_local_storage_get: wasm")?;
 
-			let maybe_value = runtime_io::offchain::local_storage_get(kind, &key);
+			let maybe_value = sp_io::offchain::local_storage_get(kind, &key);
 
 			let (offset, len) = if let Some(value) = maybe_value {
 				let offset = context.allocate_memory(value.len() as u32)?;
@@ -765,7 +765,7 @@ impl_wasm_host_interface! {
 				)
 			};
 
-			let res = runtime_io::offchain::local_storage_compare_and_set(
+			let res = sp_io::offchain::local_storage_compare_and_set(
 				kind,
 				&key,
 				old_value,
@@ -795,7 +795,7 @@ impl_wasm_host_interface! {
 			let url_str = str::from_utf8(&url)
 				.map_err(|_| "invalid str while ext_http_request_start: wasm")?;
 
-			let id = runtime_io::offchain::http_request_start(method_str, url_str, &meta);
+			let id = sp_io::offchain::http_request_start(method_str, url_str, &meta);
 
 			if let Ok(id) = id {
 				Ok(id.into())
@@ -821,7 +821,7 @@ impl_wasm_host_interface! {
 			let value_str = str::from_utf8(&value)
 				.map_err(|_| "Invalid str while ext_http_request_add_header: wasm")?;
 
-			let res = runtime_io::offchain::http_request_add_header(
+			let res = sp_io::offchain::http_request_add_header(
 				offchain::HttpRequestId(request_id as u16),
 				name_str,
 				value_str,
@@ -839,7 +839,7 @@ impl_wasm_host_interface! {
 			let chunk = context.read_memory(chunk, chunk_len)
 				.map_err(|_| "OOB while ext_http_request_write_body: wasm")?;
 
-			let res = runtime_io::offchain::http_request_write_body(
+			let res = sp_io::offchain::http_request_write_body(
 				offchain::HttpRequestId(request_id as u16),
 				&chunk,
 				deadline_to_timestamp(deadline),
@@ -865,7 +865,7 @@ impl_wasm_host_interface! {
 				)
 				.collect::<std::result::Result<Vec<_>, _>>()?;
 
-			let res = runtime_io::offchain::http_response_wait(&ids, deadline_to_timestamp(deadline))
+			let res = sp_io::offchain::http_response_wait(&ids, deadline_to_timestamp(deadline))
 				.into_iter()
 				.map(|status| u32::from(status))
 				.enumerate()
@@ -886,7 +886,7 @@ impl_wasm_host_interface! {
 		) -> Pointer<u8> {
 			use codec::Encode;
 
-			let headers = runtime_io::offchain::http_response_headers(
+			let headers = sp_io::offchain::http_response_headers(
 				offchain::HttpRequestId(request_id as u16),
 			);
 
@@ -911,7 +911,7 @@ impl_wasm_host_interface! {
 			let mut internal_buffer = Vec::with_capacity(buffer_len as usize);
 			internal_buffer.resize(buffer_len as usize, 0);
 
-			let res = runtime_io::offchain::http_response_read_body(
+			let res = sp_io::offchain::http_response_read_body(
 				offchain::HttpRequestId(request_id as u16),
 				&mut internal_buffer,
 				deadline_to_timestamp(deadline),
@@ -939,4 +939,3 @@ fn deadline_to_timestamp(deadline: u64) -> Option<offchain::Timestamp> {
 		Some(offchain::Timestamp::from_unix_millis(deadline))
 	}
 }
-

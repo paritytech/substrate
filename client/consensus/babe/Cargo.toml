@@ -9,19 +9,19 @@ edition = "2018"
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 babe_primitives = { package = "sp-consensus-babe", path = "../../../primitives/consensus/babe" }
 primitives = { package = "sp-core", path = "../../../primitives/core" }
-app-crypto = { package = "sc-application-crypto", path = "../../../primitives/application-crypto" }
+app-crypto = { package = "sp-application-crypto", path = "../../../primitives/application-crypto" }
 num-bigint = "0.2.3"
 num-rational = "0.2.2"
 num-traits = "0.2.8"
 runtime-version = { package = "sp-version", path = "../../../primitives/sr-version" }
-runtime-io = { package = "sp-io", path = "../../../primitives/sr-io" }
+sp-io = { path = "../../../primitives/io" }
 inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
 sp-timestamp = { path = "../../../primitives/timestamp" }
 sc-telemetry = { path = "../../telemetry" }
 keystore = { package = "sc-keystore", path = "../../keystore" }
 client-api = { package = "sc-client-api", path = "../../api" }
 client = { package = "sc-client", path = "../../" }
-sp-api = { path = "../../../primitives/sr-api" }
+sp-api = { path = "../../../primitives/api" }
 block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder/runtime-api" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
 consensus-common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }

@@ -53,7 +53,7 @@
 //! ## Usage
 //!
 //! ```
-//! use support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch};
 //! use system::ensure_signed;
 //! use pallet_scored_pool::{self as scored_pool};
 //!
@@ -61,7 +61,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn candidate(origin) -> Result {
+//! 		pub fn candidate(origin) -> dispatch::Result {
 //! 			let who = ensure_signed(origin)?;
 //!
 //! 			let _ = <scored_pool::Module<T>>::submit_candidacy(

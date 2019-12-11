@@ -24,7 +24,7 @@ use sp_runtime::testing::Header;
 use sp_runtime::Perbill;
 use primitives::H256;
 use support::{impl_outer_origin, parameter_types, weights::Weight};
-use {runtime_io, system};
+use {sp_io, system};
 use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
 
 impl_outer_origin!{
@@ -95,7 +95,7 @@ impl Trait for Runtime {
 	type Event = ();
 }
 
-pub fn new_test_ext() -> runtime_io::TestExternalities {
+pub fn new_test_ext() -> sp_io::TestExternalities {
 	{
 		let mut h = ALIVE.borrow_mut();
 		h.clear();

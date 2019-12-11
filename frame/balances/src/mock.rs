@@ -18,7 +18,7 @@
 
 use sp_runtime::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header};
 use primitives::H256;
-use runtime_io;
+use sp_io;
 use support::{impl_outer_origin, parameter_types};
 use support::traits::Get;
 use support::weights::{Weight, DispatchInfo};
@@ -148,7 +148,7 @@ impl ExtBuilder {
 		TRANSFER_FEE.with(|v| *v.borrow_mut() = self.transfer_fee);
 		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
 	}
-	pub fn build(self) -> runtime_io::TestExternalities {
+	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		GenesisConfig::<Runtime> {

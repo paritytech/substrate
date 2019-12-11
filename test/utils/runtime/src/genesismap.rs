@@ -17,7 +17,7 @@
 //! Tool for creating the genesis block.
 
 use std::collections::BTreeMap;
-use runtime_io::hashing::{blake2_256, twox_128};
+use sp_io::hashing::{blake2_256, twox_128};
 use super::{AuthorityId, AccountId, WASM_BINARY, system};
 use codec::{Encode, KeyedVec, Joiner};
 use primitives::{ChangesTrieConfiguration, map};
