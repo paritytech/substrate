@@ -30,5 +30,5 @@ sp-runtime = { path = "../../primitives/runtime" }
 env_logger = "0.7.0"
 parking_lot = "0.9.0"
 peerset = { package = "sc-peerset", path = "../peerset" }
-test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
+sp-test-primitives = { path = "../../primitives/test-primitives" }
 sp-api = { path = "../../primitives/api" }

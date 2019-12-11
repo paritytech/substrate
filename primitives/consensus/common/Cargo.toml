@@ -20,7 +20,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive
 parking_lot = "0.9.0"
 
 [dev-dependencies]
-test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
+sp-test-primitives = { path = "../../test-primitives" }
 
 [features]
 default = []

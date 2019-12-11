@@ -39,8 +39,6 @@ hex-literal = "0.2.1"
 runtime-test = { package = "sc-runtime-test", path = "runtime-test" }
 test-runtime = { package = "substrate-test-runtime", path = "../../test/utils/runtime" }
 runtime-interface = { package = "sp-runtime-interface", path = "../../primitives/runtime-interface" }
-client-api = { package = "sc-client-api", path = "../api" }
-sc-offchain = { path = "../offchain/" }
 state_machine = { package = "sp-state-machine", path = "../../primitives/state-machine"  }
 test-case = "0.3.3"
 

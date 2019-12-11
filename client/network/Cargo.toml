@@ -51,12 +51,11 @@ zeroize = "1.0.0"
 babe-primitives = { package = "sp-consensus-babe", path = "../../primitives/consensus/babe" }
 
 [dev-dependencies]
+sp-test-primitives = { path = "../../primitives/test-primitives" }
 env_logger = "0.7.0"
 keyring = { package = "sp-keyring", path = "../../primitives/keyring" }
 quickcheck = "0.9.0"
 rand = "0.7.2"
-test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
-test_runtime = { package = "substrate-test-runtime", path = "../../test/utils/runtime" }
 tempfile = "3.1.0"
 tokio = "0.1.22"
 
