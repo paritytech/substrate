@@ -88,7 +88,7 @@
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	traits::{StaticLookup, Dispatchable}, DispatchError,
+	traits::{StaticLookup, Dispatchable, ModuleDispatchError}, DispatchError,
 };
 use support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
@@ -124,7 +124,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn sudo(origin, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
-			let sender = ensure_signed(origin).map_err(|_| "origin must be signed")?;
+			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
 			ensure!(sender == Self::key(), Error::RequireSudo);
 
 			let res = match proposal.dispatch(system::RawOrigin::Root.into()) {
@@ -150,7 +150,7 @@ decl_module! {
 		/// # </weight>
 		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
 			// This is a public call, so we ensure that the origin is some signed account.
-			let sender = ensure_signed(origin).map_err(|_| "origin must be signed")?;
+			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
 			ensure!(sender == Self::key(), Error::RequireSudo);
 			let new = T::Lookup::lookup(new)?;
 
@@ -172,7 +172,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedOperational(0)]
 		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
-			let sender = ensure_signed(origin).map_err(|_| "origin must be signed")?;
+			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
 			ensure!(sender == Self::key(), Error::RequireSudo);
 
 			let who = T::Lookup::lookup(who)?;
