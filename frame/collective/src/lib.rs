@@ -437,7 +437,7 @@ mod tests {
 		}
 	);
 
-	fn make_ext() -> runtime_io::TestExternalities {
+	fn make_ext() -> sp_io::TestExternalities {
 		GenesisConfig {
 			collective_Instance1: Some(collective::GenesisConfig {
 				members: vec![1, 2, 3],

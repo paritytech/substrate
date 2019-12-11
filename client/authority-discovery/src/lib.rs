@@ -715,9 +715,7 @@ mod tests {
 	}
 
 	impl ApiExt<Block> for RuntimeApi {
-		type StateBackend = <
-			test_client::Backend as client_api::backend::Backend<Block>
-		>::State;
+		type StateBackend = client_api::StateBackendFor<test_client::Backend, Block>;
 
 		fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
 			&self,

@@ -1506,7 +1506,7 @@ mod tests {
 	use super::*;
 	use super::environment::SharedVoterSetState;
 	use network_gossip::Validator as GossipValidatorT;
-	use network::test::Block;
+	use sc_network_test::Block;
 	use primitives::{crypto::Public, H256};
 
 	// some random config (not really needed)

@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 bytes = "0.4.12"
 client-api = { package = "sc-client-api", path = "../api" }
-sp-api = { path = "../../primitives/sr-api" }
+sp-api = { path = "../../primitives/api" }
 fnv = "1.0.6"
 futures01 = { package = "futures", version = "0.1" }
 futures = "0.3.1"
@@ -33,10 +33,10 @@ hyper-rustls = "0.17.1"
 [dev-dependencies]
 client-db = { package = "sc-client-db", path = "../db/", default-features = true }
 env_logger = "0.7.0"
-test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../test-utils/runtime/client" }
 tokio = "0.1.22"
 txpool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
-txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool", path = "../../primitives/transaction-pool" }
 
 [features]
 default = []

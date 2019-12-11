@@ -28,11 +28,10 @@ use consensus_common::{
 	NoNetwork as DummyOracle, Proposal, RecordProof,
 	import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport},
 };
-use network::test::*;
-use network::test::Block as TestBlock;
-use network::config::BoxFinalityProofRequestBuilder;
+use sc_network_test::*;
+use sc_network_test::{Block as TestBlock, PeersClient};
+use sc_network::config::{BoxFinalityProofRequestBuilder, ProtocolConfig};
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
-use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
 use client_api::{BlockchainEvents, backend::TransactionFor};
 use test_client::TestClient;

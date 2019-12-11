@@ -10,9 +10,9 @@ codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive
 primitives = { package = "sp-core", path = "../../../primitives/core" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
 sp-runtime = { path = "../../../primitives/runtime" }
-sp-api = { path = "../../../primitives/sr-api" }
+sp-api = { path = "../../../primitives/api" }
 client-api = { package = "sc-client-api", path = "../../api" }
-block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder/runtime-api" }
+block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder" }
 inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
 pow-primitives = { package = "sp-consensus-pow", path = "../../../primitives/consensus/pow" }
 consensus-common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }

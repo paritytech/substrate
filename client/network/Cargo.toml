@@ -29,7 +29,7 @@ client = { package = "sc-client", path = "../" }
 client-api = { package = "sc-client-api", path = "../api" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 sp-runtime = { path = "../../primitives/runtime" }
-sp-arithmetic = { path = "../../primitives/sr-arithmetic" }
+sp-arithmetic = { path = "../../primitives/arithmetic" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
 block-builder = { package = "sc-block-builder", path = "../block-builder" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
@@ -43,20 +43,19 @@ tokio-io = "0.1.12"
 tokio = { version = "0.1.22", optional = true }
 unsigned-varint = { version = "0.2.2", features = ["codec"] }
 keyring = { package = "sp-keyring", path = "../../primitives/keyring", optional = true }
-test_client = { package = "substrate-test-client", path = "../../test/utils/client", optional = true }
-test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client", optional = true }
+test_client = { package = "substrate-test-client", path = "../../test-utils/client", optional = true }
+test-client = { package = "substrate-test-runtime-client", path = "../../test-utils/runtime/client", optional = true }
 erased-serde = "0.3.9"
 void = "1.0.2"
 zeroize = "1.0.0"
 babe-primitives = { package = "sp-consensus-babe", path = "../../primitives/consensus/babe" }
 
 [dev-dependencies]
+sp-test-primitives = { path = "../../primitives/test-primitives" }
 env_logger = "0.7.0"
 keyring = { package = "sp-keyring", path = "../../primitives/keyring" }
 quickcheck = "0.9.0"
 rand = "0.7.2"
-test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
-test_runtime = { package = "substrate-test-runtime", path = "../../test/utils/runtime" }
 tempfile = "3.1.0"
 tokio = "0.1.22"
 

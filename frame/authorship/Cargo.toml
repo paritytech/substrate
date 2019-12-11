@@ -14,7 +14,7 @@ sp-std = { path = "../../primitives/std", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+sp-io ={ path = "../../primitives/io", default-features = false }
 impl-trait-for-tuples = "0.1.3"
 
 [features]
@@ -27,6 +27,6 @@ std = [
 	"sp-std/std",
 	"support/std",
 	"system/std",
-	"runtime-io/std",
+	"sp-io/std",
 	"sp-authorship/std",
 ]

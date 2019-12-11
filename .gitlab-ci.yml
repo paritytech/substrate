@@ -122,7 +122,7 @@ cargo-check-subkey:
   except:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
-    - cd ./bin/subkey
+    - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
 
@@ -300,7 +300,7 @@ build-linux-subkey:
     variables:
       - $DEPLOY_TAG
   script:
-    - cd ./bin/subkey
+    - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
     - cd -
     - sccache -s
