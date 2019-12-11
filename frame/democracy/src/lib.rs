@@ -276,8 +276,9 @@ decl_storage! {
 
 		/// The next free referendum index, aka the number of referenda started so far.
 		pub ReferendumCount get(fn referendum_count) build(|_| 0 as ReferendumIndex): ReferendumIndex;
-		/// The next referendum index that should be tallied.
-		pub NextTally get(fn next_tally) build(|_| 0 as ReferendumIndex): ReferendumIndex;
+		/// The lowest referendum index representing an unbaked referendum. Equal to
+		/// `ReferendumCount` if there isn't a unbaked referendum.
+		pub LowestUnbaked get(fn lowest_unbaked) build(|_| 0 as ReferendumIndex): ReferendumIndex;
 		/// Information concerning any given referendum.
 		pub ReferendumInfoOf get(fn referendum_info):
 			map ReferendumIndex => Option<(ReferendumInfo<T::BlockNumber, T::Hash>)>;
@@ -763,7 +764,7 @@ impl<T: Trait> Module<T> {
 	pub fn active_referenda()
 		-> Vec<(ReferendumIndex, ReferendumInfo<T::BlockNumber, T::Hash>)>
 	{
-		let next = Self::next_tally();
+		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();
 		(next..last).into_iter()
 			.filter_map(|i| Self::referendum_info(i).map(|info| (i, info)))
@@ -774,7 +775,7 @@ impl<T: Trait> Module<T> {
 	pub fn maturing_referenda_at(
 		n: T::BlockNumber
 	) -> Vec<(ReferendumIndex, ReferendumInfo<T::BlockNumber, T::Hash>)> {
-		let next = Self::next_tally();
+		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();
 		(next..last).into_iter()
 			.filter_map(|i| Self::referendum_info(i).map(|info| (i, info)))
@@ -913,7 +914,7 @@ impl<T: Trait> Module<T> {
 	fn clear_referendum(ref_index: ReferendumIndex) {
 		<ReferendumInfoOf<T>>::remove(ref_index);
 
-		NextTally::mutate(|i| if *i == ref_index {
+		LowestUnbaked::mutate(|i| if *i == ref_index {
 			*i += 1;
 			let end = ReferendumCount::get();
 			while !Self::is_active_referendum(*i) && *i < end {
