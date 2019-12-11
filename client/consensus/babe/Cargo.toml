@@ -13,7 +13,7 @@ app-crypto = { package = "sp-application-crypto", path = "../../../primitives/ap
 num-bigint = "0.2.3"
 num-rational = "0.2.2"
 num-traits = "0.2.8"
-runtime-version = { package = "sp-version", path = "../../../primitives/sr-version" }
+runtime-version = { package = "sp-version", path = "../../../primitives/version" }
 sp-io = { path = "../../../primitives/io" }
 inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
 sp-timestamp = { path = "../../../primitives/timestamp" }

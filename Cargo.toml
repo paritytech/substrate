@@ -127,7 +127,7 @@ members = [
 	"primitives/sandbox",
 	"primitives/staking",
 	"primitives/std",
-	"primitives/sr-version",
+	"primitives/version",
 	"primitives/state-machine",
 	"primitives/timestamp",
 	"primitives/test-primitives",
