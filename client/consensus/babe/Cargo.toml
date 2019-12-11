@@ -13,7 +13,7 @@ app-crypto = { package = "sp-application-crypto", path = "../../../primitives/ap
 num-bigint = "0.2.3"
 num-rational = "0.2.2"
 num-traits = "0.2.8"
-runtime-version = { package = "sp-version", path = "../../../primitives/sr-version" }
+runtime-version = { package = "sp-version", path = "../../../primitives/version" }
 sp-io = { path = "../../../primitives/io" }
 inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
 sp-timestamp = { path = "../../../primitives/timestamp" }
@@ -22,7 +22,7 @@ keystore = { package = "sc-keystore", path = "../../keystore" }
 client-api = { package = "sc-client-api", path = "../../api" }
 client = { package = "sc-client", path = "../../" }
 sp-api = { path = "../../../primitives/api" }
-block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder/runtime-api" }
+block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
 consensus-common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
 uncles = { package = "sc-consensus-uncles", path = "../uncles" }
