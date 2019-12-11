@@ -34,7 +34,7 @@ frame-system-rpc-runtime-api = { path = "../../../frame/system/rpc/runtime-api",
 pallet-timestamp = { path = "../../../frame/timestamp", default-features = false }
 sc-client = { path = "../../../client", optional = true }
 sp-trie = { path = "../../../primitives/trie", default-features = false }
-sp-transaction-pool = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool", default-features = false }
+sp-transaction-pool = { package = "sp-transaction-pool", path = "../../../primitives/transaction-pool", default-features = false }
 trie-db = { version = "0.16.0", default-features = false }
 
 [dev-dependencies]
