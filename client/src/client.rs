@@ -834,6 +834,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> sp_blockchain::Result<ImportResult> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
+		let span = tracing::span!(tracing::Level::DEBUG, "execute_and_import_block");
+		let _enter = span.enter();
+
 		let parent_hash = import_headers.post().parent_hash().clone();
 		let status = self.backend.blockchain().status(BlockId::Hash(hash))?;
 		match (import_existing, status) {
@@ -861,6 +864,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		let storage_changes = match &body {
 			Some(body) if enact_state => {
+				let span = tracing::span!(tracing::Level::DEBUG, "enact_state");
+				let _enter = span.enter();
+
 				self.backend.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
 
 				// ensure parent block is finalized to maintain invariant that
@@ -907,6 +913,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		let retracted = if is_new_best {
+			let span = tracing::span!(tracing::Level::DEBUG, "is_new_best");
+			let _enter = span.enter();
+
 			let route_from_best = sp_blockchain::tree_route(
 				self.backend.blockchain(),
 				info.best_hash,

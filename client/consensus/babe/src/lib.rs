@@ -1074,7 +1074,11 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			})
 		};
 
-		let import_result = self.inner.import_block(block, new_cache);
+		let import_result = {
+			let span = tracing::span!(tracing::Level::DEBUG, "import_block_inner");
+			let _enter = span.enter();
+			self.inner.import_block(block, new_cache)
+		};
 
 		// revert to the original epoch changes in case there's an error
 		// importing the block

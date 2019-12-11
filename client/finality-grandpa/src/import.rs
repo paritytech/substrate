@@ -394,6 +394,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC> BlockImport<Block>
 		mut block: BlockImportParams<Block>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
+		let span = tracing::span!(tracing::Level::DEBUG, "import_block");
+		let _enter = span.enter();
+
 		let hash = block.post_header().hash();
 		let number = block.header.number().clone();
 
@@ -549,6 +552,9 @@ where
 		justification: Justification,
 		enacts_change: bool,
 	) -> Result<(), ConsensusError> {
+		let span = tracing::span!(tracing::Level::DEBUG, "import_justification");
+		let _enter = span.enter();
+
 		let justification = GrandpaJustification::decode_and_verify_finalizes(
 			&justification,
 			(hash, number),

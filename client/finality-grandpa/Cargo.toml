@@ -28,6 +28,7 @@ network = { package = "sc-network", path = "../network" }
 sp-finality-tracker = { path = "../../primitives/finality-tracker" }
 fg_primitives = { package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 grandpa = { package = "finality-grandpa", version = "0.10.1", features = ["derive-codec"] }
+tracing = "0.1.10"
 
 [dev-dependencies]
 grandpa = { package = "finality-grandpa", version = "0.10.1", features = ["derive-codec", "test-helpers"] }
