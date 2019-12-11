@@ -28,7 +28,7 @@ use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
 use log::{debug, warn};
 use sp_runtime::traits::Block as BlockT;
-use std::{iter, task::{Context, Poll}};
+use std::{iter, task::Poll};
 use void;
 
 /// General behaviour of the network. Combines all protocols together.
@@ -56,7 +56,7 @@ pub enum BehaviourOut<B: BlockT> {
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 	/// Builds a new `Behaviour`.
-	pub fn new(
+	pub async fn new(
 		substrate: Protocol<B, S, H>,
 		user_agent: String,
 		local_public_key: PublicKey,
@@ -72,7 +72,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 				known_addresses,
 				enable_mdns,
 				allow_private_ipv4
-			),
+			).await,
 			events: Vec::new(),
 		}
 	}

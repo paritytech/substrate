@@ -136,13 +136,11 @@ pub struct RemoteResponse<T> {
 impl<T> Future for RemoteResponse<T> {
 	type Output = Result<T, ClientError>;
 
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		self.receiver.poll(cx)
-			.map_err(|_| ClientError::RemoteFetchCancelled.into())
-			.and_then(|r| match r {
-				Poll::Ready(Ok(ready)) => Poll::Ready(Ok(ready)),
-				Poll::Ready(Err(error)) => Err(error),
-				Poll::Pending => Poll::Pending,
-			})
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		match self.receiver.poll_unpin(cx) {
+			Poll::Ready(Ok(res)) => Poll::Ready(res),
+			Poll::Ready(Err(_)) => Poll::Ready(Err(From::from(ClientError::RemoteFetchCancelled))),
+			Poll::Pending => Poll::Pending,
+		}
 	}
 }

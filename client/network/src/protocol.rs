@@ -48,7 +48,7 @@ use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use std::fmt::Write;
-use std::{cmp, num::NonZeroUsize, task::Poll, time};
+use std::{cmp, num::NonZeroUsize, pin::Pin, task::Poll, time};
 use log::{log, Level, trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
 use client_api::{FetchChecker, ChangesProof, StorageProof};
@@ -1834,11 +1834,11 @@ Protocol<B, S, H> {
 			Self::OutEvent
 		>
 	> {
-		while let Poll::Ready(Some(Ok(_))) = self.tick_timeout.poll_next(cx) {
+		while let Poll::Ready(Some(())) = self.tick_timeout.poll_next_unpin(cx) {
 			self.tick();
 		}
 
-		while let Poll::Ready(Some(Ok(_))) = self.propagate_timeout.poll_next(cx) {
+		while let Poll::Ready(Some(())) = self.propagate_timeout.poll_next_unpin(cx) {
 			self.propagate_extrinsics();
 		}
 

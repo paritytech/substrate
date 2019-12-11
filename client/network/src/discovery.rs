@@ -60,7 +60,7 @@ use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
-use std::{cmp, collections::VecDeque, pin::Pin, time::Duration};
+use std::{cmp, collections::VecDeque, time::Duration};
 use std::task::{Context, Poll};
 use primitives::hexdisplay::HexDisplay;
 
@@ -301,27 +301,24 @@ where
 		}
 
 		// Poll the stream that fires when we need to start a random Kademlia query.
-		loop {
-			while let Poll::Ready(_) = Pin::new(&mut self.next_kad_random_query).poll(cx) {
-				let random_peer_id = PeerId::random();
-				debug!(target: "sub-libp2p", "Libp2p <= Starting random Kademlia request for \
-					{:?}", random_peer_id);
+		while let Poll::Ready(_) = self.next_kad_random_query.poll_unpin(cx) {
+			let random_peer_id = PeerId::random();
+			debug!(target: "sub-libp2p", "Libp2p <= Starting random Kademlia request for \
+				{:?}", random_peer_id);
 
-				self.kademlia.get_closest_peers(random_peer_id);
+			self.kademlia.get_closest_peers(random_peer_id);
 
-				// Schedule the next random query with exponentially increasing delay,
-				// capped at 60 seconds.
-				self.next_kad_random_query = Delay::new(self.duration_to_next_kad);
-				self.duration_to_next_kad = cmp::min(self.duration_to_next_kad * 2,
-					Duration::from_secs(60));
-			}
+			// Schedule the next random query with exponentially increasing delay,
+			// capped at 60 seconds.
+			self.next_kad_random_query = Delay::new(self.duration_to_next_kad);
+			self.duration_to_next_kad = cmp::min(self.duration_to_next_kad * 2,
+				Duration::from_secs(60));
 		}
 
 		// Poll Kademlia.
-		loop {
-			match self.kademlia.poll(params) {
-				Poll::Pending => break,
-				Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => match ev {
+		while let Poll::Ready(ev) = self.kademlia.poll(cx, params) {
+			match ev {
+				NetworkBehaviourAction::GenerateEvent(ev) => match ev {
 					KademliaEvent::UnroutablePeer { peer, .. } => {
 						let ev = DiscoveryOut::UnroutablePeer(peer);
 						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
@@ -391,23 +388,22 @@ where
 						warn!(target: "sub-libp2p", "Libp2p => Unhandled Kademlia event: {:?}", e)
 					}
 				},
-				Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
+				NetworkBehaviourAction::DialAddress { address } =>
 					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
+				NetworkBehaviourAction::DialPeer { peer_id } =>
 					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-				Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
+				NetworkBehaviourAction::SendEvent { peer_id, event } =>
 					return Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }),
-				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
+				NetworkBehaviourAction::ReportObservedAddr { address } =>
 					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 			}
 		}
 
 		// Poll mDNS.
 		#[cfg(not(target_os = "unknown"))]
-		loop {
-			match self.mdns.poll(params) {
-				Poll::Pending => break,
-				Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
+		while let Poll::Ready(ev) = self.mdns.poll(cx, params) {
+			match ev {
+				NetworkBehaviourAction::GenerateEvent(event) => {
 					match event {
 						MdnsEvent::Discovered(list) => {
 							self.discoveries.extend(list.into_iter().map(|(peer_id, _)| peer_id));
@@ -419,13 +415,13 @@ where
 						MdnsEvent::Expired(_) => {}
 					}
 				},
-				Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
+				NetworkBehaviourAction::DialAddress { address } =>
 					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
+				NetworkBehaviourAction::DialPeer { peer_id } =>
 					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-				Poll::Ready(NetworkBehaviourAction::SendEvent { event, .. }) =>
+				NetworkBehaviourAction::SendEvent { event, .. } =>
 					match event {},		// `event` is an enum with no variant
-				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
+				NetworkBehaviourAction::ReportObservedAddr { address } =>
 					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 			}
 		}

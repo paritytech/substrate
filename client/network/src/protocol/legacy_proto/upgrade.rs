@@ -144,21 +144,25 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin {
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		// Flushing the local queue.
 		while !self.send_queue.is_empty() {
-			match self.inner.poll_ready(cx) {
+			match Pin::new(&mut self.inner).poll_ready(cx) {
 				Poll::Ready(Ok(())) => {},
 				Poll::Ready(Err(err)) => return Poll::Ready(Some(Err(err))),
 				Poll::Pending => break,
 			}
 
 			if let Some(packet) = self.send_queue.pop_front() {
-				self.inner.start_send(packet)?;
+				Pin::new(&mut self.inner).start_send(packet)?;
 				self.requires_poll_flush = true;
 			}
 		}
 
 		// If we are closing, close as soon as the Sink is closed.
 		if self.is_closing {
-			return Ok(self.inner.close()?.map(|()| None))
+			return match Pin::new(&mut self.inner).poll_close(cx) {
+				Poll::Pending => Poll::Pending,
+				Poll::Ready(Ok(_)) => Poll::Ready(None),
+				Poll::Ready(Err(err)) => Poll::Ready(Some(Err(err))),
+			}
 		}
 
 		// Indicating that the remote is clogged if that's the case.
@@ -180,7 +184,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin {
 
 		// Flushing if necessary.
 		if self.requires_poll_flush {
-			if let Poll::Ready(()) = self.inner.poll_flush()? {
+			if let Poll::Ready(()) = Pin::new(&mut self.inner).poll_flush(cx)? {
 				self.requires_poll_flush = false;
 			}
 		}

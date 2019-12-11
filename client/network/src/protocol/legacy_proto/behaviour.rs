@@ -19,7 +19,7 @@ use crate::protocol::legacy_proto::handler::{CustomProtoHandlerProto, CustomProt
 use crate::protocol::legacy_proto::upgrade::RegisteredProtocol;
 use bytes::BytesMut;
 use fnv::FnvHashMap;
-use futures::{prelude::*, compat::Compat};
+use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use log::{debug, error, trace, warn};

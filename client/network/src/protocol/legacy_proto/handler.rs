@@ -419,7 +419,7 @@ where
 								return Some(ProtocolsHandlerEvent::Custom(event));
 							}
 						}
-						Poll::Ready(Err(err)) => {
+						Poll::Ready(Some(Err(err))) => {
 							if substreams.is_empty() {
 								let event = CustomProtoHandlerOut::CustomProtocolClosed {
 									reason: format!("Error on the last substream: {:?}", err).into(),
@@ -627,10 +627,10 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin {
 	'outer: for n in (0..list.len()).rev() {
 		let mut substream = list.swap_remove(n);
 		loop {
-			match substream.poll_next(cx) {
+			match substream.poll_next_unpin(cx) {
 				Poll::Ready(Some(Ok(_))) => {}
 				Poll::Pending => break,
-				Err(_) | Poll::Ready(None) => continue 'outer,
+				Poll::Ready(Some(Err(_))) | Poll::Ready(None) => continue 'outer,
 			}
 		}
 		list.push(substream);

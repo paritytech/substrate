@@ -312,7 +312,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 			}
 		}
 
-		while let Poll::Ready(Some(Ok(_))) = self.garbage_collect.poll_next(cx) {
+		while let Poll::Ready(Some(())) = self.garbage_collect.poll_next_unpin(cx) {
 			self.nodes_info.retain(|_, node| {
 				node.info_expire.as_ref().map(|exp| *exp >= Instant::now()).unwrap_or(true)
 			});

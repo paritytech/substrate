@@ -219,7 +219,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 				params.network_config.client_version,
 				params.network_config.node_name
 			);
-			let behaviour = Behaviour::new(
+			let behaviour = futures::executor::block_on(Behaviour::new(
 				protocol,
 				user_agent,
 				local_public,
@@ -232,7 +232,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 					TransportConfig::MemoryOnly => false,
 					TransportConfig::Normal { allow_private_ipv4, .. } => allow_private_ipv4,
 				},
-			);
+			));
 			let (transport, bandwidth) = {
 				let (config_mem, config_wasm) = match params.network_config.transport {
 					TransportConfig::MemoryOnly => (true, None),
@@ -666,89 +666,92 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for NetworkWorker<B, S, H> {
 	type Item = Result<Event, io::Error>;
 
-	fn poll_next(self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Option<Self::Item>> {
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Option<Self::Item>> {
+		let this = &mut *self;
+
 		// Poll the import queue for actions to perform.
-		let _ = futures::future::poll_fn(|cx| {
-			self.import_queue.poll_actions(cx, &mut NetworkLink {
-				protocol: &mut self.network_service,
-			});
-			std::task::Poll::Pending::<Result<(), ()>>
-		}).poll(cx);
+		this.import_queue.poll_actions(cx, &mut NetworkLink {
+			protocol: &mut this.network_service,
+		});
 
 		// Check for new incoming light client requests.
-		if let Some(light_client_rqs) = self.light_client_rqs.as_mut() {
-			while let Poll::Ready(Some(Ok(rq))) = light_client_rqs.poll_next(cx) {
-				self.network_service.user_protocol_mut().add_light_client_request(rq);
+		if let Some(light_client_rqs) = this.light_client_rqs.as_mut() {
+			while let Poll::Ready(Some(rq)) = light_client_rqs.poll_next_unpin(cx) {
+				this.network_service.user_protocol_mut().add_light_client_request(rq);
 			}
 		}
 
 		loop {
 			// Process the next message coming from the `NetworkService`.
-			let msg = match Pin::new(&mut self.from_worker).poll_next(cx) {
-				Poll::Ready(Some(Ok(msg))) => msg,
-				Poll::Ready(None) | Err(_) => return Poll::Ready(None),
+			let msg = match this.from_worker.poll_next_unpin(cx) {
+				Poll::Ready(Some(msg)) => msg,
+				Poll::Ready(None) => return Poll::Ready(None),
 				Poll::Pending => break,
 			};
 
 			match msg {
 				ServerToWorkerMsg::ExecuteWithSpec(task) => {
-					let protocol = self.network_service.user_protocol_mut();
+					let protocol = this.network_service.user_protocol_mut();
 					let (mut context, spec) = protocol.specialization_lock();
 					task(spec, &mut context);
 				},
 				ServerToWorkerMsg::ExecuteWithGossip(task) => {
-					let protocol = self.network_service.user_protocol_mut();
+					let protocol = this.network_service.user_protocol_mut();
 					let (mut context, gossip) = protocol.consensus_gossip_lock();
 					task(gossip, &mut context);
 				}
 				ServerToWorkerMsg::GossipConsensusMessage(topic, engine_id, message, recipient) =>
-					self.network_service.user_protocol_mut().gossip_consensus_message(topic, engine_id, message, recipient),
+					this.network_service.user_protocol_mut().gossip_consensus_message(topic, engine_id, message, recipient),
 				ServerToWorkerMsg::AnnounceBlock(hash, data) =>
-					self.network_service.user_protocol_mut().announce_block(hash, data),
+					this.network_service.user_protocol_mut().announce_block(hash, data),
 				ServerToWorkerMsg::RequestJustification(hash, number) =>
-					self.network_service.user_protocol_mut().request_justification(&hash, number),
+					this.network_service.user_protocol_mut().request_justification(&hash, number),
 				ServerToWorkerMsg::PropagateExtrinsics =>
-					self.network_service.user_protocol_mut().propagate_extrinsics(),
+					this.network_service.user_protocol_mut().propagate_extrinsics(),
 				ServerToWorkerMsg::GetValue(key) =>
-					self.network_service.get_value(&key),
+					this.network_service.get_value(&key),
 				ServerToWorkerMsg::PutValue(key, value) =>
-					self.network_service.put_value(key, value),
+					this.network_service.put_value(key, value),
 				ServerToWorkerMsg::AddKnownAddress(peer_id, addr) =>
-					self.network_service.add_known_address(peer_id, addr),
+					this.network_service.add_known_address(peer_id, addr),
 				ServerToWorkerMsg::SyncFork(peer_ids, hash, number) =>
-					self.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
+					this.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
 			}
 		}
 
 		loop {
 			// Process the next action coming from the network.
-			let poll_value = self.network_service.poll(cx);
+			let poll_value = this.network_service.poll_next_unpin(cx);
 
 			let outcome = match poll_value {
-				Poll::Pending => break,
-				Poll::Ready(BehaviourOut::SubstrateAction(outcome)) => outcome,
-				Poll::Ready(BehaviourOut::Dht(ev)) =>
+				Poll::Pending | Poll::Ready(None) => break,
+				Poll::Ready(Some(Ok(BehaviourOut::SubstrateAction(outcome)))) => outcome,
+				Poll::Ready(Some(Ok(BehaviourOut::Dht(ev)))) =>
 					return Poll::Ready(Some(Ok(Event::Dht(ev)))),
+				Poll::Ready(Some(Err(err))) => {
+					error!(target: "sub-libp2p", "Network worker error: {:?}", err);
+					break;
+				}
 			};
 
 			match outcome {
 				CustomMessageOutcome::BlockImport(origin, blocks) =>
-					self.import_queue.import_blocks(origin, blocks),
+					this.import_queue.import_blocks(origin, blocks),
 				CustomMessageOutcome::JustificationImport(origin, hash, nb, justification) =>
-					self.import_queue.import_justification(origin, hash, nb, justification),
+					this.import_queue.import_justification(origin, hash, nb, justification),
 				CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
-					self.import_queue.import_finality_proof(origin, hash, nb, proof),
+					this.import_queue.import_finality_proof(origin, hash, nb, proof),
 				CustomMessageOutcome::None => {}
 			}
 		}
 
 		// Update the variables shared with the `NetworkService`.
-		self.num_connected.store(self.network_service.user_protocol_mut().num_connected_peers(), Ordering::Relaxed);
+		this.num_connected.store(this.network_service.user_protocol_mut().num_connected_peers(), Ordering::Relaxed);
 		{
-			let external_addresses = Swarm::<B, S, H>::external_addresses(&self.network_service).cloned().collect();
-			*self.external_addresses.lock() = external_addresses;
+			let external_addresses = Swarm::<B, S, H>::external_addresses(&this.network_service).cloned().collect();
+			*this.external_addresses.lock() = external_addresses;
 		}
-		self.is_major_syncing.store(match self.network_service.user_protocol_mut().sync_state() {
+		this.is_major_syncing.store(match this.network_service.user_protocol_mut().sync_state() {
 			SyncState::Idle => false,
 			SyncState::Downloading => true,
 		}, Ordering::Relaxed);
