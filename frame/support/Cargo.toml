@@ -13,7 +13,7 @@ sp-std = { path = "../../primitives/std", default-features = false }
 sp-io ={ path = "../../primitives/io", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
-sp-arithmetic = { path = "../../primitives/sr-arithmetic", default-features = false }
+sp-arithmetic = { path = "../../primitives/arithmetic", default-features = false }
 inherents = { package = "sp-inherents", path = "../../primitives/inherents", default-features = false }
 frame-support-procedural = { package = "frame-support-procedural", path = "./procedural" }
 paste = "0.1.6"
