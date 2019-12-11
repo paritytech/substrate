@@ -988,6 +988,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					self.backend.destroy_state(state)?;
 				}
 
+				// Make sure to consume the error, only after we have destroyed the state.                       
 				let gen_storage_changes = gen_storage_changes?;
 
 				if import_block.header.state_root()
