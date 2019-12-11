@@ -239,6 +239,9 @@ where
 	fn make_authorities_changes<'a>(&'a self, block: &mut BlockImportParams<Block>, hash: Block::Hash)
 		-> Result<PendingSetChanges<'a, Block>, ConsensusError>
 	{
+		let span = tracing::span!(tracing::Level::DEBUG, "make_authorities_changes");
+		let _enter = span.enter();
+
 		// when we update the authorities, we need to hold the lock
 		// until the block is written to prevent a race if we need to restore
 		// the old authority set on error or panic.
