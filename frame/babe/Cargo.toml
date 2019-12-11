@@ -9,8 +9,8 @@ hex-literal = "0.2.1"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.101", optional = true }
 inherents = { package = "sp-inherents", path = "../../primitives/inherents", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
-sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
+sp-std = { path = "../../primitives/std", default-features = false }
+sp-runtime = { path = "../../primitives/runtime", default-features = false }
 sp-staking = { path = "../../primitives/sr-staking-primitives", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }
@@ -18,7 +18,7 @@ timestamp = { package = "pallet-timestamp", path = "../timestamp", default-featu
 sp-timestamp = { path = "../../primitives/timestamp", default-features = false }
 session = { package = "pallet-session", path = "../session", default-features = false }
 babe-primitives = { package = "sp-consensus-babe", path = "../../primitives/consensus/babe", default-features = false }
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+sp-io ={ path = "../../primitives/io", default-features = false }
 
 [dev-dependencies]
 lazy_static = "1.4.0"
@@ -32,7 +32,7 @@ default = ["std"]
 std = [
 	"serde",
 	"codec/std",
-	"rstd/std",
+	"sp-std/std",
 	"support/std",
 	"sp-runtime/std",
 	"sp-staking/std",
@@ -42,5 +42,5 @@ std = [
 	"inherents/std",
 	"babe-primitives/std",
 	"session/std",
-	"runtime-io/std",
+	"sp-io/std",
 ]

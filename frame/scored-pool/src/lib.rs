@@ -53,7 +53,7 @@
 //! ## Usage
 //!
 //! ```
-//! use support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch};
 //! use system::ensure_signed;
 //! use pallet_scored_pool::{self as scored_pool};
 //!
@@ -61,7 +61,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn candidate(origin) -> Result {
+//! 		pub fn candidate(origin) -> dispatch::Result {
 //! 			let who = ensure_signed(origin)?;
 //!
 //! 			let _ = <scored_pool::Module<T>>::submit_candidacy(
@@ -89,7 +89,7 @@ mod mock;
 mod tests;
 
 use codec::FullCodec;
-use rstd::{
+use sp_std::{
 	fmt::Debug,
 	prelude::*,
 };
@@ -175,7 +175,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
-		config(phantom): rstd::marker::PhantomData<I>;
+		config(phantom): sp_std::marker::PhantomData<I>;
 		build(|config| {
 			let mut pool = config.pool.clone();
 
@@ -218,7 +218,7 @@ decl_event!(
 		/// See the transaction for who.
 		CandidateScored,
 		/// Phantom member, never used.
-		Dummy(rstd::marker::PhantomData<(AccountId, I)>),
+		Dummy(sp_std::marker::PhantomData<(AccountId, I)>),
 	}
 );
 
@@ -453,4 +453,3 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		Ok(())
 	}
 }
-

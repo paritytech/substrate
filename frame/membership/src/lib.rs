@@ -22,7 +22,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use support::{
 	decl_module, decl_storage, decl_event,
 	traits::{ChangeMembers, InitializeMembers},
@@ -63,7 +63,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
-		config(phantom): rstd::marker::PhantomData<I>;
+		config(phantom): sp_std::marker::PhantomData<I>;
 		build(|config: &Self| {
 			let mut members = config.members.clone();
 			members.sort();
@@ -89,7 +89,7 @@ decl_event!(
 		/// One of the members' keys changed.
 		KeyChanged,
 		/// Phantom member, never used.
-		Dummy(rstd::marker::PhantomData<(AccountId, Event)>),
+		Dummy(sp_std::marker::PhantomData<(AccountId, Event)>),
 	}
 );
 
@@ -306,7 +306,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> runtime_io::TestExternalities {
+	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		GenesisConfig::<Test>{

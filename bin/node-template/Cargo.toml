@@ -18,7 +18,7 @@ tokio = "0.1.22"
 parking_lot = "0.9.0"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 trie-root = "0.15.2"
-sp-io = { path = "../../primitives/sr-io" }
+sp-io = { path = "../../primitives/io" }
 sc-cli = { path = "../../client/cli" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
 sc-executor = { path = "../../client/executor" }
@@ -34,7 +34,7 @@ grandpa = { package = "sc-finality-grandpa", path = "../../client/finality-grand
 grandpa-primitives = { package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 sc-client = {  path = "../../client/" }
 runtime = { package = "node-template-runtime", path = "runtime" }
-sp-runtime = { path = "../../primitives/sr-primitives" }
+sp-runtime = { path = "../../primitives/runtime" }
 basic-authorship = { package = "sc-basic-authority", path  = "../../client/basic-authorship"}
 
 [build-dependencies]

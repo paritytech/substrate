@@ -23,9 +23,9 @@ use crate::exec::{
 use crate::gas::{Gas, GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use sandbox;
 use system;
-use rstd::prelude::*;
-use rstd::convert::TryInto;
-use rstd::mem;
+use sp_std::prelude::*;
+use sp_std::convert::TryInto;
+use sp_std::mem;
 use codec::{Decode, Encode};
 use sp_runtime::traits::{Bounded, SaturatedConversion};
 

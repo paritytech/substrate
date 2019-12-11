@@ -11,9 +11,9 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 parity-wasm = { version = "0.41.0", default-features = false }
 wasmi-validation = { version = "0.3.0", default-features = false }
 primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
-sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-runtime = { path = "../../primitives/runtime", default-features = false }
+sp-io = { path = "../../primitives/io", default-features = false }
+sp-std = { path = "../../primitives/std", default-features = false }
 sandbox = { package = "sp-sandbox", path = "../../primitives/sr-sandbox", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }
@@ -33,8 +33,8 @@ std = [
 	"codec/std",
 	"primitives/std",
 	"sp-runtime/std",
-	"runtime-io/std",
-	"rstd/std",
+	"sp-io/std",
+	"sp-std/std",
 	"sandbox/std",
 	"support/std",
 	"system/std",

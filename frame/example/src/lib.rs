@@ -253,7 +253,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::marker::PhantomData;
+use sp_std::marker::PhantomData;
 use support::{
 	dispatch::Result, decl_module, decl_storage, decl_event,
 	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
@@ -530,7 +530,7 @@ decl_module! {
 		fn offchain_worker(_n: T::BlockNumber) {
 			// We don't do anything here.
 			// but we could dispatch extrinsic (transaction/unsigned/inherent) using
-			// runtime_io::submit_extrinsic
+			// sp_io::submit_extrinsic
 		}
 	}
 }
@@ -596,8 +596,8 @@ impl<T: Trait> Module<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct WatchDummy<T: Trait + Send + Sync>(PhantomData<T>);
 
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for WatchDummy<T> {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+impl<T: Trait + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "WatchDummy")
 	}
 }
@@ -613,7 +613,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
-	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
+	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn validate(
 		&self,
@@ -709,7 +709,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> runtime_io::TestExternalities {
+	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();

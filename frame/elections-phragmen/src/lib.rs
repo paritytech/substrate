@@ -82,7 +82,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use sp_runtime::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
 use support::{
 	decl_storage, decl_event, ensure, decl_module, dispatch, weights::SimpleDispatchInfo,
@@ -929,7 +929,7 @@ mod tests {
 			self.term_duration = duration;
 			self
 		}
-		pub fn build(self) -> runtime_io::TestExternalities {
+		pub fn build(self) -> sp_io::TestExternalities {
 			VOTING_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
 			TERM_DURATION.with(|v| *v.borrow_mut() = self.term_duration);
 			DESIRED_RUNNERS_UP.with(|v| *v.borrow_mut() = self.desired_runners_up);

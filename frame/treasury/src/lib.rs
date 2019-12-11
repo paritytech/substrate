@@ -59,7 +59,7 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use support::{decl_module, decl_storage, decl_event, ensure, print};
 use support::traits::{
 	Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced,
@@ -422,7 +422,7 @@ mod tests {
 	type Balances = balances::Module<Test>;
 	type Treasury = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
+	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		balances::GenesisConfig::<Test>{
 			// Total issuance will be 200 with treasury account initialized at ED.
@@ -620,7 +620,7 @@ mod tests {
 			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		// Treasury genesis config is not build thus treasury account does not exist
-		let mut t: runtime_io::TestExternalities = t.into();
+		let mut t: sp_io::TestExternalities = t.into();
 
 		t.execute_with(|| {
 			assert_eq!(Balances::free_balance(&Treasury::account_id()), 0); // Account does not exist
