@@ -91,7 +91,7 @@ use sp_runtime::{
 	traits::{StaticLookup, Dispatchable}, DispatchError,
 };
 use support::{
-	Parameter, decl_module, decl_event, decl_storage, ensure,
+	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 	weights::SimpleDispatchInfo,
 };
 use system::ensure_signed;
@@ -107,6 +107,8 @@ pub trait Trait: system::Trait {
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error;
+
 		fn deposit_event() = default;
 
 		/// Authenticates the sudo key and dispatches a function call with `Root` origin.
@@ -122,8 +124,8 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn sudo(origin, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
-			let sender = ensure_signed(origin)?;
-			ensure!(sender == Self::key(), "only the current sudo key can sudo");
+			let sender = ensure_signed(origin).map_err(|_| "origin must be signed")?;
+			ensure!(sender == Self::key(), Error::RequireSudo);
 
 			let res = match proposal.dispatch(system::RawOrigin::Root.into()) {
 				Ok(_) => true,
@@ -148,8 +150,8 @@ decl_module! {
 		/// # </weight>
 		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
 			// This is a public call, so we ensure that the origin is some signed account.
-			let sender = ensure_signed(origin)?;
-			ensure!(sender == Self::key(), "only the current sudo key can change the sudo key");
+			let sender = ensure_signed(origin).map_err(|_| "origin must be signed")?;
+			ensure!(sender == Self::key(), Error::RequireSudo);
 			let new = T::Lookup::lookup(new)?;
 
 			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
@@ -170,8 +172,8 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedOperational(0)]
 		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
-			let sender = ensure_signed(origin)?;
-			ensure!(sender == Self::key(), "only the current sudo key can sudo");
+			let sender = ensure_signed(origin).map_err(|_| "origin must be signed")?;
+			ensure!(sender == Self::key(), Error::RequireSudo);
 
 			let who = T::Lookup::lookup(who)?;
 
@@ -204,5 +206,12 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Sudo {
 		/// The `AccountId` of the sudo key.
 		Key get(fn key) config(): T::AccountId;
+	}
+}
+
+decl_error! {
+	/// Error for the System module
+	pub enum Error {
+		RequireSudo,
 	}
 }
