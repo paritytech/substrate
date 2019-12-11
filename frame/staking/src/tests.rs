@@ -472,28 +472,24 @@ fn nominating_and_rewards_should_work() {
 					Staking::validator_for_era(Staking::current_era()),
 					// 30 and 40 are not chosen anymore
 					vec![
-						// total expo of 10, with 1200 coming from nominators (externals), according to phragmen.
 						ValidatorInfoForEra {
 							stash: 11,
 							prefs: ValidatorPrefs::default(),
 							exposure: Exposure {
 								total: 1000 + 1000,
 								own: 1000,
-								// 2 and 4 supported 10, each with stake 600, according to phragmen.
 								others: vec![
 									IndividualExposure { who: 3, value: 600 },
 									IndividualExposure { who: 1, value: 400 },
 								]
 							},
 						},
-						// total expo of 20, with 500 coming from nominators (externals), according to phragmen.
 						ValidatorInfoForEra {
 							stash: 21,
 							prefs: ValidatorPrefs::default(),
 							exposure: Exposure {
 								total: 1000 + 1000,
 								own: 1000,
-								// 2 and 4 supported 20, each with stake 250, according to phragmen.
 								others: vec![
 									IndividualExposure { who: 3, value: 400 },
 									IndividualExposure { who: 1, value: 600 },
@@ -507,28 +503,24 @@ fn nominating_and_rewards_should_work() {
 					Staking::validator_for_era(Staking::current_era()),
 					// 30 and 40 are not chosen anymore
 					vec![
-						// total expo of 10, with 1200 coming from nominators (externals), according to phragmen.
 						ValidatorInfoForEra {
 							stash: 11,
 							prefs: ValidatorPrefs::default(),
 							exposure: Exposure {
 								total: 1000 + 800,
 								own: 1000,
-								// 2 and 4 supported 10, each with stake 600, according to phragmen.
 								others: vec![
 									IndividualExposure { who: 3, value: 400 },
 									IndividualExposure { who: 1, value: 400 },
 								]
 							},
 						},
-						// total expo of 20, with 500 coming from nominators (externals), according to phragmen.
 						ValidatorInfoForEra {
 							stash: 21,
 							prefs: ValidatorPrefs::default(),
 							exposure: Exposure {
 								total: 1000 + 1200,
 								own: 1000,
-								// 2 and 4 supported 20, each with stake 250, according to phragmen.
 								others: vec![
 									IndividualExposure { who: 3, value: 600 },
 									IndividualExposure { who: 1, value: 600 },
