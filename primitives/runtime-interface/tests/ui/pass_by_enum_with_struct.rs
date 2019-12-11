@@ -1,4 +1,4 @@
-use runtime_interface::pass_by::PassByEnum;
+use sp_runtime_interface::pass_by::PassByEnum;
 
 #[derive(PassByEnum)]
 struct Test;
