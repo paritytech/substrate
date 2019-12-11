@@ -24,9 +24,9 @@ mod sync;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::config::build_multiaddr;
+use libp2p::build_multiaddr;
 use log::trace;
-use crate::chain::FinalityProofProvider;
+use sc_network::FinalityProofProvider;
 use sp_blockchain::{
 	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId},
 };
@@ -38,7 +38,7 @@ use client_api::{
 };
 use block_builder::BlockBuilder;
 use client::LongestChain;
-use crate::config::Roles;
+use sc_network::config::Roles;
 use consensus::block_validation::DefaultBlockAnnounceValidator;
 use consensus::import_queue::BasicQueue;
 use consensus::import_queue::{
@@ -49,17 +49,17 @@ use consensus::Error as ConsensusError;
 use consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};
-use crate::{NetworkWorker, NetworkService, ReportHandle, config::ProtocolId};
-use crate::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
+use sc_network::{NetworkWorker, NetworkService, ReportHandle, config::ProtocolId};
+use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use primitives::H256;
-use crate::protocol::{Context, ProtocolConfig};
+use sc_network::{Context, ProtocolConfig};
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use sp_runtime::Justification;
-use crate::service::TransactionPool;
-use crate::specialization::NetworkSpecialization;
+use sc_network::TransactionPool;
+use sc_network::specialization::NetworkSpecialization;
 use test_client::{self, AccountKeyring};
 
 pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
@@ -67,13 +67,11 @@ pub use test_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
 
 type AuthorityId = babe_primitives::AuthorityId;
 
-#[cfg(any(test, feature = "test-helpers"))]
 /// A Verifier that accepts all blocks and passes them on with the configured
 /// finality to be imported.
 #[derive(Clone)]
 pub struct PassThroughVerifier(pub bool);
 
-#[cfg(any(test, feature = "test-helpers"))]
 /// This `Verifier` accepts all data as valid.
 impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 	fn verify(
@@ -117,7 +115,7 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 		&mut self,
 		_ctx: &mut dyn Context<Block>,
 		_peer_id: PeerId,
-		_status: crate::message::Status<Block>
+		_status: sc_network::message::Status<Block>
 	) {}
 
 	fn on_disconnect(&mut self, _ctx: &mut dyn Context<Block>, _peer_id: PeerId) {}
@@ -401,8 +399,8 @@ impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 		&self,
 		_report_handle: ReportHandle,
 		_who: PeerId,
-		_rep_change_good: crate::ReputationChange,
-		_rep_change_bad: crate::ReputationChange,
+		_rep_change_good: sc_network::ReputationChange,
+		_rep_change_bad: sc_network::ReputationChange,
 		_transaction: Extrinsic
 	) {}
 
@@ -563,7 +561,7 @@ pub trait TestNetFactory: Sized {
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
 
-		let network = NetworkWorker::new(crate::config::Params {
+		let network = NetworkWorker::new(sc_network::config::Params {
 			roles: config.roles,
 			network_config: NetworkConfiguration {
 				listen_addresses: vec![listen_addr.clone()],
@@ -637,7 +635,7 @@ pub trait TestNetFactory: Sized {
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
 
-		let network = NetworkWorker::new(crate::config::Params {
+		let network = NetworkWorker::new(sc_network::config::Params {
 			roles: config.roles,
 			network_config: NetworkConfiguration {
 				listen_addresses: vec![listen_addr.clone()],

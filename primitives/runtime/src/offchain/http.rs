@@ -221,7 +221,7 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 		let meta = &[];
 
 		// start an http request.
-		let id = runtime_io::offchain::http_request_start(
+		let id = sp_io::offchain::http_request_start(
 			self.method.as_ref(),
 			self.url,
 			meta,
@@ -229,7 +229,7 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 
 		// add custom headers
 		for header in &self.headers {
-			runtime_io::offchain::http_request_add_header(
+			sp_io::offchain::http_request_add_header(
 				id,
 				header.name(),
 				header.value(),
@@ -238,11 +238,11 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 
 		// write body
 		for chunk in self.body {
-			runtime_io::offchain::http_request_write_body(id, chunk.as_ref(), self.deadline)?;
+			sp_io::offchain::http_request_write_body(id, chunk.as_ref(), self.deadline)?;
 		}
 
 		// finalise the request
-		runtime_io::offchain::http_request_write_body(id, &[], self.deadline)?;
+		sp_io::offchain::http_request_write_body(id, &[], self.deadline)?;
 
 		Ok(PendingRequest {
 			id,
@@ -307,7 +307,7 @@ impl PendingRequest {
 		deadline: impl Into<Option<Timestamp>>
 	) -> Vec<Result<HttpResult, PendingRequest>> {
 		let ids = requests.iter().map(|r| r.id).collect::<Vec<_>>();
-		let statuses = runtime_io::offchain::http_response_wait(&ids, deadline.into());
+		let statuses = sp_io::offchain::http_response_wait(&ids, deadline.into());
 
 		statuses
 			.into_iter()
@@ -346,7 +346,7 @@ impl Response {
 	pub fn headers(&mut self) -> &Headers {
 		if self.headers.is_none() {
 			self.headers = Some(
-				Headers { raw: runtime_io::offchain::http_response_headers(self.id) },
+				Headers { raw: sp_io::offchain::http_response_headers(self.id) },
 			);
 		}
 		self.headers.as_ref().expect("Headers were just set; qed")
@@ -426,7 +426,7 @@ impl Iterator for ResponseBody {
 		}
 
 		if self.filled_up_to.is_none() {
-			let result = runtime_io::offchain::http_response_read_body(
+			let result = sp_io::offchain::http_response_read_body(
 				self.id,
 				&mut self.buffer,
 				self.deadline);
@@ -515,7 +515,7 @@ impl<'a> HeadersIterator<'a> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::TestExternalities;
+	use sp_io::TestExternalities;
 	use primitives::offchain::{
 		OffchainExt,
 		testing,

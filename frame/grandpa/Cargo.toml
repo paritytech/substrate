@@ -5,21 +5,21 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-app-crypto = { package = "sc-application-crypto", path = "../../primitives/application-crypto", default-features = false }
+app-crypto = { package = "sp-application-crypto", path = "../../primitives/application-crypto", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
 sp-finality-grandpa = { path = "../../primitives/finality-grandpa", default-features = false }
 sp-std = { path = "../../primitives/std", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
-sp-staking = { path = "../../primitives/sr-staking-primitives", default-features = false }
+sp-staking = { path = "../../primitives/staking", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }
 session = { package = "pallet-session", path = "../session", default-features = false }
 finality-tracker = { package = "pallet-finality-tracker", path = "../finality-tracker", default-features = false }
 
 [dev-dependencies]
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io" }
+sp-io ={ path = "../../primitives/io" }
 
 [features]
 default = ["std"]

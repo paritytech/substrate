@@ -18,7 +18,7 @@
 
 use sp_std::prelude::*;
 use sp_std::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
-use runtime_io;
+use sp_io;
 #[cfg(feature = "std")]
 use std::fmt::Display;
 #[cfg(feature = "std")]
@@ -84,23 +84,23 @@ pub trait Verify {
 impl Verify for primitives::ed25519::Signature {
 	type Signer = primitives::ed25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ed25519::Public) -> bool {
-		runtime_io::crypto::ed25519_verify(self, msg.get(), signer)
+		sp_io::crypto::ed25519_verify(self, msg.get(), signer)
 	}
 }
 
 impl Verify for primitives::sr25519::Signature {
 	type Signer = primitives::sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::sr25519::Public) -> bool {
-		runtime_io::crypto::sr25519_verify(self, msg.get(), signer)
+		sp_io::crypto::sr25519_verify(self, msg.get(), signer)
 	}
 }
 
 impl Verify for primitives::ecdsa::Signature {
 	type Signer = primitives::ecdsa::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ecdsa::Public) -> bool {
-		match runtime_io::crypto::secp256k1_ecdsa_recover_compressed(
+		match sp_io::crypto::secp256k1_ecdsa_recover_compressed(
 			self.as_ref(),
-			&runtime_io::hashing::blake2_256(msg.get()),
+			&sp_io::hashing::blake2_256(msg.get()),
 		) {
 			Ok(pubkey) => <dyn AsRef<[u8]>>::as_ref(signer) == &pubkey[..],
 			_ => false,
@@ -399,15 +399,15 @@ impl Hash for BlakeTwo256 {
 	type Output = primitives::H256;
 	type Hasher = Blake2Hasher;
 	fn hash(s: &[u8]) -> Self::Output {
-		runtime_io::hashing::blake2_256(s).into()
+		sp_io::hashing::blake2_256(s).into()
 	}
 
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
-		runtime_io::trie::blake2_256_root(input)
+		sp_io::trie::blake2_256_root(input)
 	}
 
 	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output {
-		runtime_io::trie::blake2_256_ordered_root(input)
+		sp_io::trie::blake2_256_ordered_root(input)
 	}
 }
 
@@ -1233,19 +1233,19 @@ impl Printable for usize {
 
 impl Printable for u64 {
 	fn print(&self) {
-		runtime_io::misc::print_num(*self);
+		sp_io::misc::print_num(*self);
 	}
 }
 
 impl Printable for &[u8] {
 	fn print(&self) {
-		runtime_io::misc::print_hex(self);
+		sp_io::misc::print_hex(self);
 	}
 }
 
 impl Printable for &str {
 	fn print(&self) {
-		runtime_io::misc::print_utf8(self.as_bytes());
+		sp_io::misc::print_utf8(self.as_bytes());
 	}
 }
 

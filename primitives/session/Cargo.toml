@@ -6,10 +6,10 @@ edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
-sp-api = { path = "../sr-api", default-features = false }
+sp-api = { path = "../api", default-features = false }
 sp-std = { path = "../std", default-features = false }
 sp-runtime = { path = "../runtime", default-features = false }
-sp-staking = { path = "../sr-staking-primitives", default-features = false }
+sp-staking = { path = "../staking", default-features = false }
 
 [features]
 default = [ "std" ]

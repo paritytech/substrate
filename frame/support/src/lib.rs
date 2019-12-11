@@ -41,7 +41,7 @@ pub use paste;
 #[doc(hidden)]
 pub use state_machine::BasicExternalities;
 #[doc(hidden)]
-pub use runtime_io::storage::root as storage_root;
+pub use sp_io::storage::root as storage_root;
 #[doc(hidden)]
 pub use sp_runtime::RuntimeDebug;
 
@@ -249,7 +249,7 @@ mod tests {
 		type Origin = u32;
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
+	fn new_test_ext() -> sp_io::TestExternalities {
 		GenesisConfig::default().build_storage().unwrap().into()
 	}
 

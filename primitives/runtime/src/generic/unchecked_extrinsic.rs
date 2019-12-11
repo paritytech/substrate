@@ -17,7 +17,7 @@
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
 use sp_std::{fmt, prelude::*};
-use runtime_io::hashing::blake2_256;
+use sp_io::hashing::blake2_256;
 use codec::{Decode, Encode, EncodeLike, Input, Error};
 use crate::{
 	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, IdentifyAccount},
@@ -282,7 +282,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::hashing::blake2_256;
+	use sp_io::hashing::blake2_256;
 	use crate::codec::{Encode, Decode};
 	use crate::traits::{SignedExtension, IdentifyAccount, IdentityLookup};
 	use serde::{Serialize, Deserialize};

@@ -17,7 +17,7 @@ impl-trait-for-tuples = "0.1.3"
 
 [dev-dependencies]
 primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+sp-io = { path = "../../primitives/io", default-features = false }
 
 [features]
 default = ["std"]
