@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-api = { package = "sc-rpc-api", path = "./api" }
+api = { package = "sc-rpc-api", path = "../rpc-api" }
 client-api = { package = "sc-client-api", path = "../api" }
 client = { package = "sc-client", path = "../" }
 sp-api = { path = "../../primitives/api" }
