@@ -210,7 +210,7 @@ decl_storage! {
 }
 
 decl_error! {
-	/// Error for the System module
+	/// Error for the Sudo module
 	pub enum Error {
 		RequireSudo,
 	}
