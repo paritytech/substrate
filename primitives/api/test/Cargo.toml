@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 sp-api = { path = "../" }
-test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../../test-utils/runtime/client" }
 sp-version = { path = "../../version" }
 sp-runtime = { path = "../../runtime" }
 sp-blockchain = { path = "../../blockchain" }
@@ -18,7 +18,7 @@ rustversion = "1.0.0"
 
 [dev-dependencies]
 criterion = "0.3.0"
-test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../../test-utils/runtime/client" }
 
 [[bench]]
 name = "bench"

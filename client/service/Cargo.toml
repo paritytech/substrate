@@ -56,7 +56,7 @@ sc-tracing = { package = "sc-tracing", path = "../tracing" }
 tracing = "0.1.10"
 
 [dev-dependencies]
-substrate-test-runtime-client = { path = "../../test/utils/runtime/client" }
+substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
 babe-primitives = { package = "sp-consensus-babe", path = "../../primitives/consensus/babe" }
 grandpa = { package = "sc-finality-grandpa", path = "../finality-grandpa" }
 grandpa-primitives = { package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
