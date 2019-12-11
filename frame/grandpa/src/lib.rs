@@ -134,7 +134,7 @@ impl<P, S, R, K> Default for EquivocationHandler<P, S, R, K> {
 }
 
 impl<T, P, S, R, K> HandleEquivocation<T> for EquivocationHandler<P, S, R, K> where
-	T: Trait,
+	T: Trait<HandleEquivocation=Self>,
 	// A system for proving ownership of keys, i.e. that a given key was part
 	// of a validator set, needed for validating equivocation reports. The
 	// session index and validator count of the session are part of the proof
@@ -185,18 +185,21 @@ impl<T, P, S, R, K> HandleEquivocation<T> for EquivocationHandler<P, S, R, K> wh
 		equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
 		key_owner_proof: Self::KeyOwnerProof,
 	) -> Result {
-		// let call = Call::report_equivocation(
-		// 	equivocation_report.clone(),
-		// 	key_owner_proof.clone(),
-		// );
+		let call = Call::report_equivocation(
+			equivocation_report.clone(),
+			key_owner_proof,
+		);
 
-		// // FIXME: add key, depends on: https://github.com/paritytech/substrate/pull/4200
-		// let ext = T::SubmitTransaction::sign_and_submit(
-		// 	call,
-		// 	unimplemented!(),
-		// ).ok();
+		let res = S::submit_signed_from(
+			call,
+			K::all().into_iter().map(|k| k.into_account()),
+		);
 
-		Ok(())
+		if res.iter().any(|(_, r)| r.is_ok()) {
+			Ok(())
+		} else {
+			Err("Error submitting equivocation report.")
+		}
 	}
 }
 

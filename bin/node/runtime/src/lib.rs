@@ -475,13 +475,12 @@ use report::ReporterId;
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
-	type HandleEquivocation = ();
-	// type HandleEquivocation = grandpa::EquivocationHandler<
-	// 	Historical,
-	// 	TransactionSubmitter<ReporterId, Runtime, UncheckedExtrinsic>,
-	// 	Offences,
-	// 	ReporterId,
-	// >;
+	type HandleEquivocation = grandpa::EquivocationHandler<
+		Historical,
+		TransactionSubmitter<ReporterId, Runtime, UncheckedExtrinsic>,
+		Offences,
+		ReporterId,
+	>;
 }
 
 parameter_types! {
