@@ -100,22 +100,22 @@ impl<T: Trait> HandleEquivocation<T> for () {
 	type KeyOwnerIdentification = ();
 
 	fn check_proof(
-		equivocation_report: &EquivocationReport<T::Hash, T::BlockNumber>,
-		key_owner_proof: Self::KeyOwnerProof,
+		_equivocation_report: &EquivocationReport<T::Hash, T::BlockNumber>,
+		_key_owner_proof: Self::KeyOwnerProof,
 	) -> Option<(Self::KeyOwnerIdentification, SessionIndex, u32)> {
 		None
 	}
 
 	fn report_offence(
-		reporters: Vec<T::AccountId>,
-		offence: GrandpaEquivocationOffence<Self::KeyOwnerIdentification>,
+		_reporters: Vec<T::AccountId>,
+		_offence: GrandpaEquivocationOffence<Self::KeyOwnerIdentification>,
 	) {
 
 	}
 
 	fn submit_equivocation_report(
-		equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
-		key_owner_proof: Self::KeyOwnerProof,
+		_equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
+		_key_owner_proof: Self::KeyOwnerProof,
 	) -> Result {
 		Ok(())
 	}
