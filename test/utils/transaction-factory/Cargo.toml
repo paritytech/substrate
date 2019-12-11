@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder/runtime-api" }
+block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder" }
 cli = { package = "sc-cli", path = "../../../client/cli" }
 client-api = { package = "sc-client-api", path = "../../../client/api" }
 client = { package = "sc-client", path = "../../../client" }

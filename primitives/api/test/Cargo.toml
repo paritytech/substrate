@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 sp-api = { path = "../" }
 test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
-sp-version = { path = "../../sr-version" }
+sp-version = { path = "../../version" }
 sp-runtime = { path = "../../runtime" }
 sp-blockchain = { path = "../../blockchain" }
 consensus_common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }

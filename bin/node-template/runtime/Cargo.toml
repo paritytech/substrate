@@ -8,7 +8,7 @@ edition = "2018"
 aura = { package = "pallet-aura", path = "../../../frame/aura", default-features = false }
 aura-primitives = { package = "sp-consensus-aura", path = "../../../primitives/consensus/aura", default-features = false }
 balances = { package = "pallet-balances", path = "../../../frame/balances", default-features = false }
-block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder/runtime-api", default-features = false}
+block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder", default-features = false}
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 executive = { package = "frame-executive", path = "../../../frame/executive", default-features = false }
 grandpa = { package = "pallet-grandpa", path = "../../../frame/grandpa", default-features = false }
@@ -30,7 +30,7 @@ system = { package = "frame-system", path = "../../../frame/system", default-fea
 timestamp = { package = "pallet-timestamp", path = "../../../frame/timestamp", default-features = false }
 transaction-payment = { package = "pallet-transaction-payment", path = "../../../frame/transaction-payment", default-features = false }
 sp-transaction-pool = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool", default-features = false }
-version = { package = "sp-version", path = "../../../primitives/sr-version", default-features = false }
+version = { package = "sp-version", path = "../../../primitives/version", default-features = false }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", path = "../../../client/utils/wasm-builder-runner", version = "1.0.4" }
