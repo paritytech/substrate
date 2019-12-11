@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::config::Roles;
+use sc_network::config::Roles;
 use consensus::BlockOrigin;
 use futures03::TryFutureExt as _;
 use std::time::Duration;

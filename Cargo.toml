@@ -30,6 +30,7 @@ members = [
 	"client/tracing",
 	"client/keystore",
 	"client/network",
+	"client/network/test",
 	"client/offchain",
 	"client/peerset",
 	"client/rpc-servers",
