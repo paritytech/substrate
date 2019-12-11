@@ -36,7 +36,7 @@ env_logger = "0.7.0"
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 tokio = "0.1.22"
 txpool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
-txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool", path = "../../primitives/transaction-pool" }
 
 [features]
 default = []
