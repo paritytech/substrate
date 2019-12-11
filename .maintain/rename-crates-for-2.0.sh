@@ -38,7 +38,7 @@ TO_RENAME=(
     "sc-application-crypto sp-application-crypto"
     "sp-transaction-pool-api sp-transaction-pool"
     "sp-core-storage sp-storage"
-    "transaction-factory sc-transaction-factory"
+    "transaction-factory node-transaction-factory"
 
     # PRIMITIVES
     "substrate-application-crypto sp-application-crypto"

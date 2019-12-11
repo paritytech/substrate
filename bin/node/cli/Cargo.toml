@@ -83,8 +83,8 @@ node-executor = { path = "../executor" }
 # CLI-specific dependencies
 tokio = { version = "0.1.22", optional = true }
 sc-cli = { path = "../../../client/cli", optional = true }
-sc-transaction-factory = { path = "../../../client/transaction-factory", optional = true }
 ctrlc = { version = "3.1.3", features = ["termination"], optional = true }
+node-transaction-factory = { path = "../transaction-factory", optional = true }
 
 # WASM-specific dependencies
 libp2p = { version = "0.13.0", default-features = false, optional = true }
@@ -126,7 +126,7 @@ browser = [
 ]
 cli = [
 	"sc-cli",
-	"sc-transaction-factory",
+	"node-transaction-factory",
 	"tokio",
 	"ctrlc",
 	"sc-service/rocksdb",

@@ -3012,6 +3012,7 @@ dependencies = [
  "node-primitives 2.0.0",
  "node-rpc 2.0.0",
  "node-runtime 2.0.0",
+ "node-transaction-factory 0.0.1",
  "pallet-authority-discovery 0.1.0",
  "pallet-balances 2.0.0",
  "pallet-contracts 2.0.0",
@@ -3038,7 +3039,6 @@ dependencies = [
  "sc-service 2.0.0",
  "sc-service-test 2.0.0",
  "sc-telemetry 2.0.0",
- "sc-transaction-factory 0.0.1",
  "sc-transaction-pool 2.0.0",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-authority-discovery 2.0.0",
@@ -3282,6 +3282,24 @@ dependencies = [
  "sp-runtime 2.0.0",
  "substrate-test-client 2.0.0",
  "wabt 0.9.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "node-transaction-factory"
+version = "0.0.1"
+dependencies = [
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sc-cli 2.0.0",
+ "sc-client 2.0.0",
+ "sc-client-api 2.0.0",
+ "sc-service 2.0.0",
+ "sp-api 2.0.0",
+ "sp-block-builder 2.0.0",
+ "sp-blockchain 2.0.0",
+ "sp-consensus 2.0.0",
+ "sp-core 2.0.0",
+ "sp-runtime 2.0.0",
 ]
 
 [[package]]
@@ -5650,24 +5668,6 @@ dependencies = [
  "slog 2.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing-core 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "sc-transaction-factory"
-version = "0.0.1"
-dependencies = [
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-cli 2.0.0",
- "sc-client 2.0.0",
- "sc-client-api 2.0.0",
- "sc-service 2.0.0",
- "sp-api 2.0.0",
- "sp-block-builder 2.0.0",
- "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
- "sp-core 2.0.0",
- "sp-runtime 2.0.0",
 ]
 
 [[package]]
