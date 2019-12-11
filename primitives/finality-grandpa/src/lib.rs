@@ -296,7 +296,8 @@ pub fn check_equivocation_report<H, N>(
 	}
 }
 
-fn localized_payload<E: Encode>(
+// round message localized to a given round and set id.
+pub fn localized_payload<E: Encode>(
 	round: RoundNumber,
 	set_id: SetId,
 	message: &E,

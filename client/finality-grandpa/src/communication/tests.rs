@@ -230,7 +230,7 @@ fn good_commit_leads_to_relay() {
 		let target_number = 500;
 
 		let precommit = grandpa::Precommit { target_hash: target_hash.clone(), target_number };
-		let payload = super::localized_payload(
+		let payload = fg_primitives::localized_payload(
 			round, set_id, &grandpa::Message::Precommit(precommit.clone())
 		);
 
@@ -345,7 +345,7 @@ fn bad_commit_leads_to_report() {
 		let target_number = 500;
 
 		let precommit = grandpa::Precommit { target_hash: target_hash.clone(), target_number };
-		let payload = super::localized_payload(
+		let payload = fg_primitives::localized_payload(
 			round, set_id, &grandpa::Message::Precommit(precommit.clone())
 		);
 

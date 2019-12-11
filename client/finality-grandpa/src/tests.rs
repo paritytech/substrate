@@ -1723,7 +1723,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 		};
 
 		let msg = grandpa::Message::Precommit(precommit.clone());
-		let encoded = communication::localized_payload(round, set_id, &msg);
+		let encoded = fg_primitives::localized_payload(round, set_id, &msg);
 		let signature = peers[0].sign(&encoded[..]).into();
 
 		let precommit = grandpa::SignedPrecommit {
