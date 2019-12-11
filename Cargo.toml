@@ -42,7 +42,7 @@ members = [
 	"client/telemetry",
 	"client/transaction-pool",
 	"client/transaction-pool/graph",
-	"client/utils/wasm-builder-runner",
+	"utils/wasm-builder-runner",
 	"client/grafana-data-source",
 	"client/grafana-data-source/test",
 	"frame/assets",
