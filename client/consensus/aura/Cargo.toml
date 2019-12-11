@@ -34,7 +34,8 @@ sc-telemetry = { path = "../../telemetry" }
 [dev-dependencies]
 keyring = { package = "sp-keyring", path = "../../../primitives/keyring" }
 sc-executor = { path = "../../executor" }
-network = { package = "sc-network", path = "../../network", features = ["test-helpers"]}
+sc-network = { path = "../../network" }
+sc-network-test = { path = "../../network/test" }
 service = { package = "sc-service", path = "../../service" }
 test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
 tokio = "0.1.22"
