@@ -12,5 +12,5 @@ derive_more = "0.99.2"
 parity-scale-codec = {  version = "1.0.0", default-features = false, features = ["derive"] }
 sp_consensus = { package = "sp-consensus", path = "../consensus/common" }
 sp-runtime = { path = "../runtime" }
-sp-block-builder-runtime-api = { package = "sp-block-builder", path = "../block-builder/runtime-api" }
+sp-block-builder-runtime-api = { package = "sp-block-builder", path = "../block-builder" }
 sp-state-machine = { package = "sp-state-machine", path = "../state-machine" }

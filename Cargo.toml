@@ -94,7 +94,7 @@ members = [
 	"primitives/application-crypto/test",
 	"primitives/authority-discovery",
 	"primitives/authorship",
-	"primitives/block-builder/runtime-api",
+	"primitives/block-builder",
 	"primitives/blockchain",
 	"primitives/consensus/aura",
 	"primitives/consensus/babe",

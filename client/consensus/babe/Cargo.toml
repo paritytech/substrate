@@ -22,7 +22,7 @@ keystore = { package = "sc-keystore", path = "../../keystore" }
 client-api = { package = "sc-client-api", path = "../../api" }
 client = { package = "sc-client", path = "../../" }
 sp-api = { path = "../../../primitives/api" }
-block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder/runtime-api" }
+block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
 consensus-common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
 uncles = { package = "sc-consensus-uncles", path = "../uncles" }

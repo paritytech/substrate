@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 app-crypto = { package = "sp-application-crypto", path = "../../../primitives/application-crypto" }
 aura_primitives = { package = "sp-consensus-aura", path = "../../../primitives/consensus/aura" }
-block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder/runtime-api" }
+block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder" }
 client = { package = "sc-client", path = "../../" }
 client-api = { package = "sc-client-api", path = "../../api" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }

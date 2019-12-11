@@ -9,7 +9,7 @@ build = "build.rs"
 app-crypto = { package = "sp-application-crypto", path = "../../../primitives/application-crypto", default-features = false }
 aura-primitives = { package = "sp-consensus-aura", path = "../../../primitives/consensus/aura", default-features = false }
 babe-primitives = { package = "sp-consensus-babe", path = "../../../primitives/consensus/babe", default-features = false }
-block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder/runtime-api", default-features = false }
+block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder", default-features = false }
 cfg-if = "0.1.10"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 executive = { package = "frame-executive", path = "../../../frame/executive", default-features = false }

@@ -10,5 +10,5 @@ sp-runtime = { path = "../../primitives/runtime" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
 codec = { package = "parity-scale-codec", version = "1.0.6", features = ["derive"] }
-runtime_api = { package = "sp-block-builder", path = "../../primitives/block-builder/runtime-api" }
+runtime_api = { package = "sp-block-builder", path = "../../primitives/block-builder" }
 sp-api = { path = "../../primitives/api" }
