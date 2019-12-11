@@ -12,7 +12,7 @@ sp-io = { path = "../../io", default-features = false }
 primitives = { package = "sp-core", path = "../../core", default-features = false }
 
 [build-dependencies]
-wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.3", path = "../../../client/utils/wasm-builder-runner" }
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.3", path = "../../../utils/wasm-builder-runner" }
 
 [features]
 default = [ "std" ]
