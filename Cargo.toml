@@ -10,7 +10,7 @@ members = [
 	"bin/node/runtime",
 	"bin/node/testing",
 	"bin/node/transaction-factory",
-	"bin/subkey",
+	"bin/utils/subkey",
 	"bin/utils/chain-spec-builder",
 	"client",
 	"client/api",
