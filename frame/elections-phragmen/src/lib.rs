@@ -492,14 +492,14 @@ impl<T: Trait> Module<T> {
 	///
 	/// Limited number of members. Binary search. Constant time factor. O(1)
 	fn is_member(who: &T::AccountId) -> bool {
-		Self::members_ids().binary_search(who).is_ok()
+		Self::members().binary_search_by(|(a, _b)| a.cmp(who)).is_ok()
 	}
 
 	/// Check if `who` is currently an active runner.
 	///
 	/// Limited number of runners-up. Binary search. Constant time factor. O(1)
 	fn is_runner(who: &T::AccountId) -> bool {
-		Self::runners_up_ids().binary_search(who).is_ok()
+		Self::runners_up().binary_search_by(|(a, _b)| a.cmp(who)).is_ok()
 	}
 
 	/// Returns number of desired members.
