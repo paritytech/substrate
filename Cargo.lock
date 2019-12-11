@@ -3038,6 +3038,7 @@ dependencies = [
  "sc-service 2.0.0",
  "sc-service-test 2.0.0",
  "sc-telemetry 2.0.0",
+ "sc-transaction-factory 0.0.1",
  "sc-transaction-pool 2.0.0",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-authority-discovery 2.0.0",
@@ -3056,7 +3057,6 @@ dependencies = [
  "substrate-build-script-utils 2.0.0",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
- "transaction-factory 0.0.1",
  "vergen 3.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasm-bindgen 0.2.55 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasm-bindgen-futures 0.3.27 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5653,6 +5653,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-transaction-factory"
+version = "0.0.1"
+dependencies = [
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sc-cli 2.0.0",
+ "sc-client 2.0.0",
+ "sc-client-api 2.0.0",
+ "sc-service 2.0.0",
+ "sp-api 2.0.0",
+ "sp-block-builder 2.0.0",
+ "sp-blockchain 2.0.0",
+ "sp-consensus 2.0.0",
+ "sp-core 2.0.0",
+ "sp-runtime 2.0.0",
+]
+
+[[package]]
 name = "sc-transaction-graph"
 version = "2.0.0"
 dependencies = [
@@ -7296,24 +7314,6 @@ dependencies = [
 name = "traitobject"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "transaction-factory"
-version = "0.0.1"
-dependencies = [
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-cli 2.0.0",
- "sc-client 2.0.0",
- "sc-client-api 2.0.0",
- "sc-service 2.0.0",
- "sp-api 2.0.0",
- "sp-block-builder 2.0.0",
- "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
- "sp-core 2.0.0",
- "sp-runtime 2.0.0",
-]
 
 [[package]]
 name = "trie-bench"

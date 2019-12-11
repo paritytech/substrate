@@ -138,7 +138,7 @@ members = [
 	"test/utils/client",
 	"test/utils/runtime",
 	"test/utils/runtime/client",
-	"test/utils/transaction-factory",
+	"client/transaction-factory",
 	"utils/build-script-utils",
 	"utils/fork-tree",
 	"utils/frame/rpc/support",
