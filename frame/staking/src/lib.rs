@@ -1316,7 +1316,6 @@ impl<T: Trait> Module<T> {
 		let previous_era_start = <CurrentEraStart<T>>::mutate(|v| {
 			sp_std::mem::replace(v, now)
 		});
-
 		let era_duration = now - previous_era_start;
 		let current_era = Self::current_era();
 		if !era_duration.is_zero() {
@@ -1359,19 +1358,18 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Increment current era.
-		let new_current_era = current_era + 1;
-		CurrentEra::put(new_current_era);
+		let current_era = current_era + 1;
+		CurrentEra::put(current_era);
 		EraStartSessionIndex::mutate(|era_start| {
 			era_start.remove(0)
 		});
-
 		let bonding_duration = T::BondingDuration::get();
 
 		BondedEras::mutate(|bonded| {
-			bonded.push((new_current_era, session_index + 1));
+			bonded.push((current_era, session_index + 1));
 
-			if new_current_era > bonding_duration {
-				let first_kept = new_current_era - bonding_duration;
+			if current_era > bonding_duration {
+				let first_kept = current_era - bonding_duration;
 
 				// prune out everything that's from before the first-kept index.
 				let n_to_prune = bonded.iter()
@@ -1389,7 +1387,7 @@ impl<T: Trait> Module<T> {
 			}
 		});
 
-		Self::apply_unapplied_slashes(new_current_era);
+		Self::apply_unapplied_slashes(current_era);
 	}
 
 	/// Provide the validator set for the next future session. If it's an era-end, along with the
