@@ -187,7 +187,7 @@ impl<T, P, S, R, K> HandleEquivocation<T> for EquivocationHandler<P, S, R, K> wh
 	) -> Result {
 		let call = Call::report_equivocation(
 			equivocation_report.clone(),
-			key_owner_proof,
+			key_owner_proof.encode(),
 		);
 
 		let res = S::submit_signed_from(
@@ -336,9 +336,15 @@ decl_module! {
 		fn report_equivocation(
 			origin,
 			equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
-			key_owner_proof: <T::HandleEquivocation as HandleEquivocation<T>>::KeyOwnerProof,
+			// key_owner_proof: <T::HandleEquivocation as HandleEquivocation<T>>::KeyOwnerProof,
+			key_owner_proof: Vec<u8>,
 		) {
 			let reporter_id = ensure_signed(origin)?;
+
+			// FIXME: this is a hack needed because the typed argument version above fails to
+			// compile (due to missing codec implementation)
+			let key_owner_proof = Decode::decode(&mut &key_owner_proof[..])
+				.map_err(|_| "Key owner proof decoding failed.")?;
 
 			// validate the membership proof and extract session index and
 			// validator set count of the session that we're proving membership of
