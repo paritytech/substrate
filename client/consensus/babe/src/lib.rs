@@ -374,6 +374,9 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 	}
 
 	fn epoch_data(&self, parent: &B::Header, slot_number: u64) -> Result<Self::EpochData, consensus_common::Error> {
+		let span = tracing::span!(tracing::Level::DEBUG, "epoch_data");
+		let _enter = span.enter();
+
 		self.epoch_changes.lock().epoch_for_child_of(
 			descendent_query(&*self.client),
 			&parent.hash(),
@@ -880,6 +883,9 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		mut block: BlockImportParams<Block>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
+		let span = tracing::span!(tracing::Level::DEBUG, "import_block");
+		let _enter = span.enter();
+
 		let hash = block.post_header().hash();
 		let number = block.header.number().clone();
 

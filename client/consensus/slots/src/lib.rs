@@ -64,7 +64,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	type SyncOracle: SyncOracle;
 
 	/// The type of proposer to use to build blocks.
-	type Proposer: Proposer<B>;
+	type 
+	Proposer: Proposer<B>;
 
 	/// Data associated with a slot claim.
 	type Claim: Send + 'static;
@@ -138,6 +139,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		Self: Send + Sync,
 		<Self::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
 	{
+		let span = tracing::span!(tracing::Level::DEBUG, "on_slot");
+		let _enter = span.enter();
+
 		let (timestamp, slot_number, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
 

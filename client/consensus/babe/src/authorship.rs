@@ -146,6 +146,9 @@ pub(super) fn claim_slot(
 	config: &BabeConfiguration,
 	keystore: &KeyStorePtr,
 ) -> Option<(BabePreDigest, AuthorityPair)> {
+	let span = tracing::span!(tracing::Level::DEBUG, "claim_slot");
+	let _enter = span.enter();
+
 	claim_primary_slot(slot_number, epoch, config.c, keystore)
 		.or_else(|| {
 			if config.secondary_slots {

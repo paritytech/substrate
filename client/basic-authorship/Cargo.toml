@@ -19,6 +19,7 @@ sc-telemetry = { path = "../telemetry" }
 txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
 block-builder = { package = "sc-block-builder", path = "../block-builder" }
 tokio-executor = { version = "0.2.0-alpha.6", features = ["blocking"] }
+tracing = { version = "0.1.10" }
 
 [dev-dependencies]
 txpool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
