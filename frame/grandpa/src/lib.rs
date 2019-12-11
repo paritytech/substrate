@@ -28,15 +28,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // re-export since this is necessary for `impl_apis` in runtime.
-pub use substrate_finality_grandpa_primitives as fg_primitives;
+pub use sp_finality_grandpa as fg_primitives;
 
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use codec::{self as codec, Encode, Decode, Error};
-use support::{decl_event, decl_storage, decl_module, dispatch::Result, storage};
-use sr_primitives::{
+use support::{decl_event, decl_storage, decl_module, dispatch, storage};
+use sp_runtime::{
 	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
 };
-use sr_staking_primitives::{
+use sp_staking::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
@@ -264,7 +264,7 @@ impl<T: Trait> Module<T> {
 
 	/// Schedule GRANDPA to pause starting in the given number of blocks.
 	/// Cannot be done when already paused.
-	pub fn schedule_pause(in_blocks: T::BlockNumber) -> Result {
+	pub fn schedule_pause(in_blocks: T::BlockNumber) -> dispatch::Result {
 		if let StoredState::Live = <State<T>>::get() {
 			let scheduled_at = <system::Module<T>>::block_number();
 			<State<T>>::put(StoredState::PendingPause {
@@ -280,7 +280,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Schedule a resume of GRANDPA after pausing.
-	pub fn schedule_resume(in_blocks: T::BlockNumber) -> Result {
+	pub fn schedule_resume(in_blocks: T::BlockNumber) -> dispatch::Result {
 		if let StoredState::Paused = <State<T>>::get() {
 			let scheduled_at = <system::Module<T>>::block_number();
 			<State<T>>::put(StoredState::PendingResume {
@@ -313,7 +313,7 @@ impl<T: Trait> Module<T> {
 		next_authorities: AuthorityList,
 		in_blocks: T::BlockNumber,
 		forced: Option<T::BlockNumber>,
-	) -> Result {
+	) -> dispatch::Result {
 		if !<PendingChange<T>>::exists() {
 			let scheduled_at = <system::Module<T>>::block_number();
 
@@ -400,7 +400,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 

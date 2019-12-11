@@ -56,11 +56,11 @@ use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::RwLock;
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, traits::CodeExecutor};
 use primitives::storage::well_known_keys;
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay,
 	BuildStorage,
 };
-use sr_primitives::traits::{
+use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion
 };
 use executor::RuntimeInfo;
@@ -153,6 +153,14 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 
 	fn exists_child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<bool, Self::Error> {
 		self.state.exists_child_storage(storage_key, key)
+	}
+
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.next_storage_key(key)
+	}
+
+	fn next_child_storage_key(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.next_child_storage_key(storage_key, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -1446,9 +1454,9 @@ pub(crate) mod tests {
 	use crate::columns;
 	use client_api::backend::{Backend as BTrait, BlockImportOperation as Op};
 	use client::blockchain::Backend as BLBTrait;
-	use sr_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
-	use sr_primitives::traits::{Hash, BlakeTwo256};
-	use sr_primitives::generic::DigestItem;
+	use sp_runtime::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::traits::{Hash, BlakeTwo256};
+	use sp_runtime::generic::DigestItem;
 	use state_machine::{TrieMut, TrieDBMut};
 	use sp_blockchain::{lowest_common_ancestor, tree_route};
 
@@ -1479,7 +1487,7 @@ pub(crate) mod tests {
 		changes: Option<Vec<(Vec<u8>, Vec<u8>)>>,
 		extrinsics_root: H256,
 	) -> H256 {
-		use sr_primitives::testing::Digest;
+		use sp_runtime::testing::Digest;
 
 		let mut digest = Digest::default();
 		let mut changes_trie_update = Default::default();

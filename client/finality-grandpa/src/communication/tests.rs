@@ -25,8 +25,8 @@ use tokio::runtime::current_thread;
 use std::sync::Arc;
 use keyring::Ed25519Keyring;
 use codec::Encode;
-use sr_primitives::traits::NumberFor;
-
+use sp_runtime::traits::NumberFor;
+use std::{pin::Pin, task::{Context, Poll}};
 use crate::environment::SharedVoterSetState;
 use fg_primitives::AuthorityList;
 use super::gossip::{self, GossipValidator};
@@ -37,7 +37,7 @@ enum Event {
 	RegisterValidator(Arc<dyn network_gossip::Validator<Block>>),
 	GossipMessage(Hash, Vec<u8>, bool),
 	SendMessage(Vec<network::PeerId>, Vec<u8>),
-	Report(network::PeerId, i32),
+	Report(network::PeerId, network::ReputationChange),
 	Announce(Hash),
 }
 
@@ -85,7 +85,7 @@ impl super::Network<Block> for TestNetwork {
 	}
 
 	/// Report a peer's cost or benefit after some action.
-	fn report(&self, who: network::PeerId, cost_benefit: i32) {
+	fn report(&self, who: network::PeerId, cost_benefit: network::ReputationChange) {
 		let _ = self.sender.unbounded_send(Event::Report(who, cost_benefit));
 	}
 
@@ -175,12 +175,11 @@ fn make_test_network() -> (
 	#[derive(Clone)]
 	struct Exit;
 
-	impl Future for Exit {
-		type Item = ();
-		type Error = ();
+	impl futures03::Future for Exit {
+		type Output = ();
 
-		fn poll(&mut self) -> Poll<(), ()> {
-			Ok(Async::NotReady)
+		fn poll(self: Pin<&mut Self>, _: &mut Context) -> Poll<()> {
+			Poll::Pending
 		}
 	}
 

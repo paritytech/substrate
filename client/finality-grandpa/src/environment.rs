@@ -41,11 +41,11 @@ use grandpa::{
 	voter, voter_set::VoterSet,
 };
 use primitives::{Blake2Hasher, H256, Pair};
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 };
-use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
@@ -865,6 +865,7 @@ where
 					historical_votes.seen().iter().skip(n_existing_votes).cloned()
 				);
 				already_completed.state = state;
+				crate::aux_schema::write_concluded_round(&*self.client, &already_completed)?;
 			}
 
 			let set_state = VoterSetState::<Block>::Live {

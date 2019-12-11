@@ -25,7 +25,7 @@ use codec::Decode;
 use inherents::ProvideInherentData;
 use inherents::{InherentIdentifier, IsFatalError, InherentData};
 
-use sr_primitives::RuntimeString;
+use sp_runtime::RuntimeString;
 
 /// The identifier for the `timestamp` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
@@ -33,7 +33,7 @@ pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
 pub type InherentType = u64;
 
 /// Errors that can occur while checking the timestamp inherent.
-#[derive(Encode, sr_primitives::RuntimeDebug)]
+#[derive(Encode, sp_runtime::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode))]
 pub enum InherentError {
 	/// The timestamp is valid in the future.

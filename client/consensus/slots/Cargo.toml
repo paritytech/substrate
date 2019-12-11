@@ -1,5 +1,5 @@
 [package]
-name = "substrate-consensus-slots"
+name = "sc-consensus-slots"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic slots-based utilities for consensus"
@@ -8,13 +8,13 @@ build = "build.rs"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-client-api = { package = "substrate-client-api", path = "../../api" }
-primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+client-api = { package = "sc-client-api", path = "../../api" }
+primitives = { package = "sp-core", path = "../../../primitives/core" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
-sr-primitives = {  path = "../../../primitives/sr-primitives" }
-substrate-telemetry = { path = "../../telemetry" }
-consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
-inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
+sp-runtime = {  path = "../../../primitives/runtime" }
+sc-telemetry = { path = "../../telemetry" }
+consensus_common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
+inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
 futures = "0.3.1"
 futures-timer = "2.0"
 parking_lot = "0.9.0"

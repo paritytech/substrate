@@ -37,8 +37,8 @@
 //! ```no_run
 //! use futures::prelude::*;
 //!
-//! let telemetry = substrate_telemetry::init_telemetry(substrate_telemetry::TelemetryConfig {
-//! 	endpoints: substrate_telemetry::TelemetryEndpoints::new(vec![
+//! let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
+//! 	endpoints: sc_telemetry::TelemetryEndpoints::new(vec![
 //! 		// The `0` is the maximum verbosity level of messages to send to this endpoint.
 //! 		("wss://example.com".into(), 0)
 //! 	]),
@@ -52,7 +52,7 @@
 //! });
 //!
 //! // Sends a message on the telemetry.
-//! substrate_telemetry::telemetry!(substrate_telemetry::SUBSTRATE_INFO; "test";
+//! sc_telemetry::telemetry!(sc_telemetry::SUBSTRATE_INFO; "test";
 //! 	"foo" => "bar",
 //! )
 //! ```
@@ -68,6 +68,7 @@ use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::{Duration, Instant}}
 pub use slog_scope::with_logger;
 pub use slog;
 
+mod async_record;
 mod worker;
 
 /// Configuration for telemetry.
@@ -124,20 +125,20 @@ pub struct Telemetry {
 /// Behind the `Mutex` in `Telemetry`.
 ///
 /// Note that ideally we wouldn't have to make the `Telemetry` clonable, as that would remove the
-/// need for a `Mutex`. However there is currently a weird hack in place in `substrate-service`
+/// need for a `Mutex`. However there is currently a weird hack in place in `sc-service`
 /// where we extract the telemetry registration so that it continues running during the shutdown
 /// process.
 struct TelemetryInner {
 	/// Worker for the telemetry.
 	worker: worker::TelemetryWorker,
 	/// Receives log entries for them to be dispatched to the worker.
-	receiver: mpsc::Receiver<slog_async::AsyncRecord>,
+	receiver: mpsc::Receiver<async_record::AsyncRecord>,
 }
 
 /// Implements `slog::Drain`.
 struct TelemetryDrain {
 	/// Sends log entries.
-	sender: std::panic::AssertUnwindSafe<mpsc::Sender<slog_async::AsyncRecord>>,
+	sender: std::panic::AssertUnwindSafe<mpsc::Sender<async_record::AsyncRecord>>,
 }
 
 /// Initializes the telemetry. See the crate root documentation for more information.
@@ -241,7 +242,7 @@ impl slog::Drain for TelemetryDrain {
 	fn log(&self, record: &slog::Record, values: &slog::OwnedKVList) -> Result<Self::Ok, Self::Err> {
 		let before = Instant::now();
 
-		let serialized = slog_async::AsyncRecord::from(record, values);
+		let serialized = async_record::AsyncRecord::from(record, values);
 		// Note: interestingly, `try_send` requires a `&mut` because it modifies some internal value, while `clone()`
 		// is lock-free.
 		if let Err(err) = self.sender.clone().try_send(serialized) {

@@ -17,15 +17,18 @@
 //! Test utilities
 
 use std::{collections::HashSet, cell::RefCell};
-use sr_primitives::{Perbill, KeyTypeId};
-use sr_primitives::curve::PiecewiseLinear;
-use sr_primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion};
-use sr_primitives::testing::{Header, UintAuthorityId};
-use sr_staking_primitives::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
+use sp_runtime::{Perbill, KeyTypeId};
+use sp_runtime::curve::PiecewiseLinear;
+use sp_runtime::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion};
+use sp_runtime::testing::{Header, UintAuthorityId};
+use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
 use primitives::{H256, crypto::key_types};
-use runtime_io;
-use support::{assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap, StorageValue};
-use support::traits::{Currency, Get, FindAuthor};
+use sp_io;
+use support::{
+	assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap, StorageValue,
+	traits::{Currency, Get, FindAuthor},
+	weights::Weight,
+};
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
 	Nominators, inflation
@@ -114,7 +117,7 @@ impl FindAuthor<u64> for Author11 {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
@@ -124,7 +127,7 @@ impl system::Trait for Test {
 	type BlockNumber = BlockNumber;
 	type Call = ();
 	type Hash = H256;
-	type Hashing = ::sr_primitives::traits::BlakeTwo256;
+	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
@@ -286,7 +289,7 @@ impl ExtBuilder {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		SLASH_DEFER_DURATION.with(|v| *v.borrow_mut() = self.slash_defer_duration);
 	}
-	pub fn build(self) -> runtime_io::TestExternalities {
+	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut storage = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
@@ -352,7 +355,7 @@ impl ExtBuilder {
 			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
 		}.assimilate_storage(&mut storage);
 
-		let mut ext = runtime_io::TestExternalities::from(storage);
+		let mut ext = sp_io::TestExternalities::from(storage);
 		ext.execute_with(|| {
 			let validators = Session::validators();
 			SESSION.with(|x|

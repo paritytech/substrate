@@ -31,7 +31,7 @@ use log::{debug, warn};
 
 use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits::{self, SaturatedConversion},
 	transaction_validity::TransactionTag as Tag,
@@ -106,7 +106,12 @@ impl<B: ChainApi> ValidatedPool<B> {
 			.map(|validated_tx| self.submit_one(validated_tx))
 			.collect::<Vec<_>>();
 
-		let removed = self.enforce_limits();
+		// only enforce limits if there is at least one imported transaction
+		let removed = if results.iter().any(|res| res.is_ok()) {
+			self.enforce_limits()
+		} else {
+			Default::default()
+		};
 
 		results.into_iter().map(|res| match res {
 			Ok(ref hash) if removed.contains(hash) => Err(error::Error::ImmediatelyDropped.into()),
@@ -133,7 +138,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				Err(err.into())
 			},
 			ValidatedTransaction::Unknown(hash, err) => {
-				self.listener.write().invalid(&hash);
+				self.listener.write().invalid(&hash, false);
 				Err(err.into())
 			}
 		}
@@ -215,9 +220,9 @@ impl<B: ChainApi> ValidatedPool<B> {
 				let hash = updated_transactions.keys().next().cloned().expect("transactions is not empty; qed");
 
 				// note we are not considering tx with hash invalid here - we just want
-				// to remove it along with dependent transactions and `remove_invalid()`
+				// to remove it along with dependent transactions and `remove_subtree()`
 				// does exactly what we need
-				let removed = pool.remove_invalid(&[hash.clone()]);
+				let removed = pool.remove_subtree(&[hash.clone()]);
 				for removed_tx in removed {
 					let removed_hash = removed_tx.hash.clone();
 					let updated_transaction = updated_transactions.remove(&removed_hash);
@@ -236,6 +241,8 @@ impl<B: ChainApi> ValidatedPool<B> {
 					initial_statuses.insert(removed_hash.clone(), Status::Ready);
 					txs_to_resubmit.push((removed_hash, tx_to_resubmit));
 				}
+				// make sure to remove the hash even if it's not present in the pool any more.
+				updated_transactions.remove(&hash);
 			}
 
 			// if we're rejecting future transactions, then insertion order matters here:
@@ -304,8 +311,8 @@ impl<B: ChainApi> ValidatedPool<B> {
 				match final_status {
 					Status::Future => listener.future(&hash),
 					Status::Ready => listener.ready(&hash, None),
-					Status::Failed => listener.invalid(&hash),
 					Status::Dropped => listener.dropped(&hash, None),
+					Status::Failed => listener.invalid(&hash, initial_status.is_some()),
 				}
 			}
 		}
@@ -451,17 +458,27 @@ impl<B: ChainApi> ValidatedPool<B> {
 		}
 	}
 
-	/// Remove from the pool.
+	/// Remove a subtree of transactions from the pool and mark them invalid.
+	///
+	/// The transactions passed as an argument will be additionally banned
+	/// to prevent them from entering the pool right away.
+	/// Note this is not the case for the dependent transactions - those may
+	/// still be valid so we want to be able to re-import them.
 	pub fn remove_invalid(&self, hashes: &[ExHash<B>]) -> Vec<TransactionFor<B>> {
+		// early exit in case there is no invalid transactions.
+		if hashes.is_empty() {
+			return vec![]
+		}
+
 		// temporarily ban invalid transactions
 		debug!(target: "txpool", "Banning invalid transactions: {:?}", hashes);
 		self.rotator.ban(&time::Instant::now(), hashes.iter().cloned());
 
-		let invalid = self.pool.write().remove_invalid(hashes);
+		let invalid = self.pool.write().remove_subtree(hashes);
 
 		let mut listener = self.listener.write();
 		for tx in &invalid {
-			listener.invalid(&tx.hash);
+			listener.invalid(&tx.hash, true);
 		}
 
 		invalid
@@ -489,7 +506,7 @@ fn fire_events<H, H2, Ex>(
 		base::Imported::Ready { ref promoted, ref failed, ref removed, ref hash } => {
 			listener.ready(hash, None);
 			for f in failed {
-				listener.invalid(f);
+				listener.invalid(f, true);
 			}
 			for r in removed {
 				listener.dropped(&r.hash, Some(hash));

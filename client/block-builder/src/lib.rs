@@ -26,7 +26,7 @@
 
 use codec::Encode;
 
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits::{
 		Header as HeaderT, Hash, Block as BlockT, HashFor, ProvideRuntimeApi, ApiRef, DigestFor,
@@ -36,7 +36,7 @@ use sr_primitives::{
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use primitives::ExecutionContext;
 use state_machine::StorageProof;
-use sr_api::{Core, ApiExt, ApiErrorFor};
+use sp_api::{Core, ApiExt, ApiErrorFor};
 
 pub use runtime_api::BlockBuilder as BlockBuilderApi;
 

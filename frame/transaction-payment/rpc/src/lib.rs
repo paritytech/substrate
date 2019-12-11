@@ -21,12 +21,12 @@ use codec::{Codec, Decode};
 use sp_blockchain::HeaderBackend;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, ProvideRuntimeApi},
+	traits::{Block as BlockT, ProvideRuntimeApi, UniqueSaturatedInto},
 };
 use primitives::Bytes;
-use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+use pallet_transaction_payment_rpc_runtime_api::CappedDispatchInfo;
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 pub use self::gen_client::Client as TransactionPaymentClient;
 
@@ -37,7 +37,7 @@ pub trait TransactionPaymentApi<BlockHash, Balance> {
 		&self,
 		encoded_xt: Bytes,
 		at: Option<BlockHash>
-	) -> Result<RuntimeDispatchInfo<Balance>>;
+	) -> Result<CappedDispatchInfo>;
 }
 
 /// A struct that implements the [`TransactionPaymentApi`].
@@ -78,14 +78,14 @@ where
 	C: ProvideRuntimeApi,
 	C: HeaderBackend<Block>,
 	C::Api: TransactionPaymentRuntimeApi<Block, Balance, Extrinsic>,
-	Balance: Codec,
+	Balance: Codec + UniqueSaturatedInto<u64>,
 	Extrinsic: Codec + Send + Sync + 'static,
 {
 	fn query_info(
 		&self,
 		encoded_xt: Bytes,
 		at: Option<<Block as BlockT>::Hash>
-	) -> Result<RuntimeDispatchInfo<Balance>> {
+	) -> Result<CappedDispatchInfo> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
@@ -103,6 +103,6 @@ where
 			code: ErrorCode::ServerError(Error::RuntimeError.into()),
 			message: "Unable to query dispatch info.".into(),
 			data: Some(format!("{:?}", e).into()),
-		})
+		}).map(CappedDispatchInfo::new)
 	}
 }

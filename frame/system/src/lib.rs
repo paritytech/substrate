@@ -68,14 +68,14 @@
 //! ### Example - Get extrinsic count and parent hash for the current block
 //!
 //! ```
-//! use support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch};
 //! use frame_system::{self as system, ensure_signed};
 //!
 //! pub trait Trait: system::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn system_module_example(origin) -> Result {
+//! 		pub fn system_module_example(origin) -> dispatch::Result {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
 //! 			let _parent_hash = <system::Module<T>>::parent_hash();
@@ -90,13 +90,13 @@
 
 #[cfg(feature = "std")]
 use serde::Serialize;
-use rstd::prelude::*;
+use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
-use rstd::map;
-use rstd::marker::PhantomData;
-use rstd::fmt::Debug;
-use sr_version::RuntimeVersion;
-use sr_primitives::{
+use sp_std::map;
+use sp_std::marker::PhantomData;
+use sp_std::fmt::Debug;
+use sp_version::RuntimeVersion;
+use sp_runtime::{
 	RuntimeDebug,
 	generic::{self, Era}, Perbill, DispatchOutcome, DispatchError,
 	transaction_validity::{
@@ -119,7 +119,7 @@ use support::{
 use codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
-use runtime_io::TestExternalities;
+use sp_io::TestExternalities;
 
 pub mod offchain;
 
@@ -169,12 +169,12 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The block number type used by the runtime.
 	type BlockNumber:
 		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleArithmetic
-		+ Default + Bounded + Copy + rstd::hash::Hash;
+		+ Default + Bounded + Copy + sp_std::hash::Hash;
 
 	/// The output of the `Hashing` function.
 	type Hash:
 		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps
-		+ Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
+		+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;
@@ -436,11 +436,11 @@ decl_storage! {
 		build(|config: &GenesisConfig| {
 			use codec::Encode;
 
-			runtime_io::storage::set(well_known_keys::CODE, &config.code);
-			runtime_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
+			sp_io::storage::set(well_known_keys::CODE, &config.code);
+			sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
 
 			if let Some(ref changes_trie_config) = config.changes_trie_config {
-				runtime_io::storage::set(
+				sp_io::storage::set(
 					well_known_keys::CHANGES_TRIE_CONFIG,
 					&changes_trie_config.encode(),
 				);
@@ -449,7 +449,7 @@ decl_storage! {
 	}
 }
 
-pub struct EnsureRoot<AccountId>(rstd::marker::PhantomData<AccountId>);
+pub struct EnsureRoot<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	AccountId,
@@ -463,7 +463,7 @@ impl<
 	}
 }
 
-pub struct EnsureSigned<AccountId>(rstd::marker::PhantomData<AccountId>);
+pub struct EnsureSigned<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	AccountId,
@@ -477,7 +477,7 @@ impl<
 	}
 }
 
-pub struct EnsureSignedBy<Who, AccountId>(rstd::marker::PhantomData<(Who, AccountId)>);
+pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, AccountId)>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	Who: Contains<AccountId>,
@@ -492,7 +492,7 @@ impl<
 	}
 }
 
-pub struct EnsureNone<AccountId>(rstd::marker::PhantomData<AccountId>);
+pub struct EnsureNone<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	AccountId,
@@ -506,7 +506,7 @@ impl<
 	}
 }
 
-pub struct EnsureNever<T>(rstd::marker::PhantomData<T>);
+pub struct EnsureNever<T>(sp_std::marker::PhantomData<T>);
 impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	type Success = T;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
@@ -682,9 +682,9 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		let storage_root = T::Hash::decode(&mut &runtime_io::storage::root()[..])
+		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..])
 			.expect("Node is configured to use the same hash; qed");
-		let storage_changes_root = runtime_io::storage::changes_root(&parent_hash.encode());
+		let storage_changes_root = sp_io::storage::changes_root(&parent_hash.encode());
 
 		// we can't compute changes trie root earlier && put it to the Digest
 		// because it will include all currently existing temporaries.
@@ -873,7 +873,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
-	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
+	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn pre_dispatch(
 		self,
@@ -913,12 +913,12 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 
 impl<T: Trait + Send + Sync> Debug for CheckWeight<T> {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckWeight")
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
@@ -936,12 +936,12 @@ impl<T: Trait> CheckNonce<T> {
 
 impl<T: Trait> Debug for CheckNonce<T> {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		self.0.fmt(f)
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
@@ -953,7 +953,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
-	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
+	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn pre_dispatch(
 		self,
@@ -1009,23 +1009,23 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 
 /// Check for transaction mortality.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckEra<T: Trait + Send + Sync>((Era, rstd::marker::PhantomData<T>));
+pub struct CheckEra<T: Trait + Send + Sync>((Era, sp_std::marker::PhantomData<T>));
 
 impl<T: Trait + Send + Sync> CheckEra<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(era: Era) -> Self {
-		Self((era, rstd::marker::PhantomData))
+		Self((era, sp_std::marker::PhantomData))
 	}
 }
 
 impl<T: Trait + Send + Sync> Debug for CheckEra<T> {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		self.0.fmt(f)
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
@@ -1065,16 +1065,16 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 
 /// Nonce check and increment to give replay protection for transactions.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckGenesis<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
+pub struct CheckGenesis<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
 
 impl<T: Trait + Send + Sync> Debug for CheckGenesis<T> {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckGenesis")
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
@@ -1082,7 +1082,7 @@ impl<T: Trait + Send + Sync> Debug for CheckGenesis<T> {
 impl<T: Trait + Send + Sync> CheckGenesis<T> {
 	/// Creates new `SignedExtension` to check genesis hash.
 	pub fn new() -> Self {
-		Self(rstd::marker::PhantomData)
+		Self(sp_std::marker::PhantomData)
 	}
 }
 
@@ -1100,16 +1100,16 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 
 /// Ensure the runtime version registered in the transaction is the same as at present.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckVersion<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
+pub struct CheckVersion<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
 
 impl<T: Trait + Send + Sync> Debug for CheckVersion<T> {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckVersion")
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
@@ -1117,7 +1117,7 @@ impl<T: Trait + Send + Sync> Debug for CheckVersion<T> {
 impl<T: Trait + Send + Sync> CheckVersion<T> {
 	/// Create new `SignedExtension` to check runtime version.
 	pub fn new() -> Self {
-		Self(rstd::marker::PhantomData)
+		Self(sp_std::marker::PhantomData)
 	}
 }
 
@@ -1133,10 +1133,10 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
 	}
 }
 
-pub struct ChainContext<T>(rstd::marker::PhantomData<T>);
+pub struct ChainContext<T>(sp_std::marker::PhantomData<T>);
 impl<T> Default for ChainContext<T> {
 	fn default() -> Self {
-		ChainContext(rstd::marker::PhantomData)
+		ChainContext(sp_std::marker::PhantomData)
 	}
 }
 
@@ -1153,7 +1153,7 @@ impl<T: Trait> Lookup for ChainContext<T> {
 mod tests {
 	use super::*;
 	use primitives::H256;
-	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
+	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
 	use support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin! {
@@ -1201,7 +1201,7 @@ mod tests {
 
 	const CALL: &<Test as Trait>::Call = &();
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
+	fn new_test_ext() -> sp_io::TestExternalities {
 		GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 

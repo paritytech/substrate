@@ -59,13 +59,13 @@ use client_api::{BlockchainEvents, CallExecutor, backend::Backend, ExecutionStra
 use sp_blockchain::{HeaderBackend, Error as ClientError};
 use client::Client;
 use codec::{Decode, Encode};
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
 use keystore::KeyStorePtr;
 use inherents::InherentDataProviders;
 use consensus_common::SelectChain;
 use primitives::{H256, Blake2Hasher, Pair};
-use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
+use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
 
 use sp_finality_tracker;
@@ -555,7 +555,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
-	X: Future<Item=(),Error=()> + Clone + Send + 'static,
+	X: futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
 {
 	let GrandpaParams {
 		config,
@@ -634,7 +634,9 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	let telemetry_task = telemetry_task
 		.then(|_| futures::future::empty::<(), ()>());
 
-	Ok(voter_work.select(on_exit).select2(telemetry_task).then(|_| Ok(())))
+	use futures03::{FutureExt, TryFutureExt};
+
+	Ok(voter_work.select(on_exit.map(Ok).compat()).select2(telemetry_task).then(|_| Ok(())))
 }
 
 /// Future that powers the voter.
@@ -889,7 +891,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
-	X: Future<Item=(),Error=()> + Clone + Send + 'static,
+	X: futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
 {
 	run_grandpa_voter(grandpa_params)
 }

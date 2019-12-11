@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use support::sr_primitives::generic;
-use support::sr_primitives::traits::{BlakeTwo256, Block as _, Verify};
+use support::sp_runtime::generic;
+use support::sp_runtime::traits::{BlakeTwo256, Block as _, Verify};
 use support::codec::{Encode, Decode};
 use primitives::{H256, sr25519};
 use serde::{Serialize, Deserialize};

@@ -27,10 +27,10 @@ use trie::MemoryDB;
 use client_api::backend::{PrunableStateChangesTrieStorage, ChangesTrieConfigurationRange};
 use client::blockchain::{well_known_cache_keys, Cache as BlockchainCache};
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
-use sr_primitives::traits::{
+use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, CheckedSub,
 };
-use sr_primitives::generic::{BlockId, DigestItem, ChangesTrieSignal};
+use sp_runtime::generic::{BlockId, DigestItem, ChangesTrieSignal};
 use state_machine::{DBValue, ChangesTrieBuildCache, ChangesTrieCacheAction};
 use crate::utils::{self, Meta, meta_keys, db_err};
 use crate::cache::{
@@ -521,8 +521,8 @@ mod tests {
 		Backend as ClientBackend, NewBlockState, BlockImportOperation, PrunableStateChangesTrieStorage,
 	};
 	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
-	use sr_primitives::testing::{Digest, Header};
-	use sr_primitives::traits::{Hash, BlakeTwo256};
+	use sp_runtime::testing::{Digest, Header};
+	use sp_runtime::traits::{Hash, BlakeTwo256};
 	use state_machine::{ChangesTrieRootsStorage, ChangesTrieStorage};
 	use crate::Backend;
 	use crate::tests::{Block, insert_header, prepare_changes};

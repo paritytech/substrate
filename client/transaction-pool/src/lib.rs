@@ -33,7 +33,7 @@ pub use crate::maintainer::{FullBasicPoolMaintainer, LightBasicPoolMaintainer};
 use std::{collections::HashMap, sync::Arc};
 use futures::{Future, FutureExt};
 
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
 	traits::Block as BlockT,
 };

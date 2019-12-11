@@ -28,7 +28,7 @@ use chain_spec::{RuntimeGenesis, Extension};
 use consensus_common::import_queue::ImportQueue;
 use futures::{prelude::*, sync::mpsc};
 use futures03::{
-	compat::{Compat, Future01CompatExt},
+	compat::Compat,
 	FutureExt as _, TryFutureExt as _,
 	StreamExt as _, TryStreamExt as _,
 	future::{select, Either}
@@ -40,19 +40,19 @@ use network::{config::BoxFinalityProofRequestBuilder, specialization::NetworkSpe
 use parking_lot::{Mutex, RwLock};
 use primitives::{Blake2Hasher, H256, Hasher};
 use rpc;
-use sr_api::ConstructRuntimeApi;
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{
+use sp_api::ConstructRuntimeApi;
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{
 	Block as BlockT, ProvideRuntimeApi, NumberFor, Header, SaturatedConversion,
 };
-use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
+use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
 	io::{Read, Write, Seek},
 	marker::PhantomData, sync::Arc, time::SystemTime
 };
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
-use txpool_api::{TransactionPool, TransactionPoolMaintainer};
+use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer};
 use sp_blockchain;
 use grafana_data_source::{self, record_metrics};
 
@@ -712,11 +712,11 @@ ServiceBuilder<
 > where
 	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi,
 	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi>::Api:
-		sr_api::Metadata<TBl> +
+		sp_api::Metadata<TBl> +
 		offchain::OffchainWorkerApi<TBl> +
-		txpool_runtime_api::TaggedTransactionQueue<TBl> +
+		sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl> +
 		session::SessionKeys<TBl> +
-		sr_api::ApiExt<TBl, Error = sp_blockchain::Error>,
+		sp_api::ApiExt<TBl, Error = sp_blockchain::Error>,
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TRtApi: ConstructRuntimeApi<TBl, Client<TBackend, TExec, TBl, TRtApi>> + 'static + Send + Sync,
 	TCfg: Default,
@@ -880,7 +880,7 @@ ServiceBuilder<
 
 					Ok(())
 				})
-				.select(exit.clone())
+				.select(exit.clone().map(Ok).compat())
 				.then(|_| Ok(()));
 			let _ = to_spawn_tx.unbounded_send(Box::new(events));
 		}
@@ -902,7 +902,7 @@ ServiceBuilder<
 					);
 					Ok(())
 				})
-				.select(exit.clone())
+				.select(exit.clone().map(Ok).compat())
 				.then(|_| Ok(()));
 
 			let _ = to_spawn_tx.unbounded_send(Box::new(events));
@@ -954,20 +954,20 @@ ServiceBuilder<
 				"bandwidth_upload" => bandwidth_upload,
 				"used_state_cache_size" => used_state_cache_size,
 			);
-			record_metrics!(
-				"peers".to_owned() => num_peers,
-				"height".to_owned() => best_number,
-				"txcount".to_owned() => txpool_status.ready,
-				"cpu".to_owned() => cpu_usage,
-				"memory".to_owned() => memory,
-				"finalized_height".to_owned() => finalized_number,
-				"bandwidth_download".to_owned() => bandwidth_download,
-				"bandwidth_upload".to_owned() => bandwidth_upload,
-				"used_state_cache_size".to_owned() => used_state_cache_size
+			let _ = record_metrics!(
+				"peers" => num_peers,
+				"height" => best_number,
+				"txcount" => txpool_status.ready,
+				"cpu" => cpu_usage,
+				"memory" => memory,
+				"finalized_height" => finalized_number,
+				"bandwidth_download" => bandwidth_download,
+				"bandwidth_upload" => bandwidth_upload,
+				"used_state_cache_size" => used_state_cache_size,
 			);
 
 			Ok(())
-		}).select(exit.clone()).then(|_| Ok(()));
+		}).select(exit.clone().map(Ok).compat()).then(|_| Ok(()));
 		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
 
 		// Periodically send the network state to the telemetry.
@@ -980,7 +980,7 @@ ServiceBuilder<
 				"state" => network_state,
 			);
 			Ok(())
-		}).select(exit.clone()).then(|_| Ok(()));
+		}).select(exit.clone().map(Ok).compat()).then(|_| Ok(()));
 		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task_2));
 
 		// RPC
@@ -1054,7 +1054,7 @@ ServiceBuilder<
 			dht_event_tx,
 		)
 			.map_err(|_| ())
-			.select(exit.clone())
+			.select(exit.clone().map(Ok).compat())
 			.then(|_| Ok(()))));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
@@ -1099,7 +1099,7 @@ ServiceBuilder<
 					Ok(())
 				});
 			let _ = to_spawn_tx.unbounded_send(Box::new(future
-				.select(exit.clone())
+				.select(exit.clone().map(Ok).compat())
 				.then(|_| Ok(()))));
 			telemetry
 		});
@@ -1108,7 +1108,7 @@ ServiceBuilder<
 		if let Some(port) = config.grafana_port {
 			let future = select(
 				grafana_data_source::run_server(port).boxed(),
-				exit.clone().compat()
+				exit.clone()
 			).map(|either| match either {
 				Either::Left((result, _)) => result.map_err(|_| ()),
 				Either::Right(_) => Ok(())
@@ -1119,7 +1119,7 @@ ServiceBuilder<
 
 		// Instrumentation
 		if let Some(tracing_targets) = config.tracing_targets.as_ref() {
-			let subscriber = substrate_tracing::ProfilingSubscriber::new(
+			let subscriber = sc_tracing::ProfilingSubscriber::new(
 				config.tracing_receiver, tracing_targets
 			);
 			match tracing::subscriber::set_global_default(subscriber) {

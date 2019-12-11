@@ -17,7 +17,7 @@
 //! Implements tree backend, cached header metadata and algorithms
 //! to compute routes efficiently over the tree of headers.
 
-use sr_primitives::traits::{Block as BlockT, NumberFor, Header};
+use sp_runtime::traits::{Block as BlockT, NumberFor, Header};
 use parking_lot::RwLock;
 use lru::LruCache;
 

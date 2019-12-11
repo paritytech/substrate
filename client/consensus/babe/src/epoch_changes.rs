@@ -23,7 +23,7 @@ use std::sync::Arc;
 use babe_primitives::{Epoch, SlotNumber, NextEpochDescriptor};
 use fork_tree::ForkTree;
 use parking_lot::{Mutex, MutexGuard};
-use sr_primitives::traits::{Block as BlockT, NumberFor, One, Zero};
+use sp_runtime::traits::{Block as BlockT, NumberFor, One, Zero};
 use codec::{Encode, Decode};
 use client_api::utils::is_descendent_of;
 use sp_blockchain::{HeaderMetadata, HeaderBackend, Error as ClientError};

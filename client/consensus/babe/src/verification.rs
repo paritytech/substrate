@@ -16,7 +16,7 @@
 
 //! Verification for BABE headers.
 use schnorrkel::vrf::{VRFOutput, VRFProof};
-use sr_primitives::{traits::Header, traits::DigestItemFor};
+use sp_runtime::{traits::Header, traits::DigestItemFor};
 use primitives::{Pair, Public};
 use babe_primitives::{Epoch, BabePreDigest, CompatibleDigestItem, AuthorityId};
 use babe_primitives::{AuthoritySignature, SlotNumber, AuthorityIndex, AuthorityPair};

@@ -20,13 +20,13 @@
 
 #![cfg(test)]
 
-use sr_primitives::{
+use sp_runtime::{
 	Perbill,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
 use primitives::H256;
-use support::{parameter_types, impl_outer_event, impl_outer_origin};
+use support::{parameter_types, impl_outer_event, impl_outer_origin, weights::Weight};
 
 use super::*;
 
@@ -41,7 +41,7 @@ impl_outer_origin! {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
@@ -117,7 +117,7 @@ impl ExtBuilder {
 	}
 
 	// builds genesis config
-	pub fn build(self) -> runtime_io::TestExternalities {
+	pub fn build(self) -> sp_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 		GenesisConfig::<Test> {
@@ -136,7 +136,7 @@ impl ExtBuilder {
 
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
-pub fn new_test_ext() -> runtime_io::TestExternalities {
+pub fn new_test_ext() -> sp_io::TestExternalities {
 	system::GenesisConfig::default()
 		.build_storage::<Test>()
 		.unwrap()

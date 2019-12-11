@@ -98,7 +98,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	pub fn new(fallback_method: WasmExecutionMethod, default_heap_pages: Option<u64>) -> Self {
-		let mut host_functions = runtime_io::SubstrateHostFunctions::host_functions();
+		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions();
 		// Add the old and deprecated host functions as well, so that we support old wasm runtimes.
 		host_functions.extend(
 			crate::deprecated_host_interface::SubstrateExternals::host_functions(),
@@ -265,7 +265,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 /// # Example
 ///
 /// ```
-/// substrate_executor::native_executor_instance!(
+/// sc_executor::native_executor_instance!(
 ///     pub MyExecutor,
 ///     test_runtime::api::dispatch,
 ///     test_runtime::native_version,
@@ -287,7 +287,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 ///     }
 /// }
 ///
-/// substrate_executor::native_executor_instance!(
+/// sc_executor::native_executor_instance!(
 ///     pub MyExecutor,
 ///     test_runtime::api::dispatch,
 ///     test_runtime::native_version,

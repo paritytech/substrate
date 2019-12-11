@@ -20,7 +20,7 @@ use super::*;
 use mock::*;
 
 use support::{assert_ok, assert_noop};
-use sr_primitives::traits::OnInitialize;
+use sp_runtime::traits::OnInitialize;
 
 type ScoredPool = Module<Test>;
 type System = system::Module<Test>;

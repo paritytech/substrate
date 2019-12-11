@@ -18,7 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 
 mod app {
 	use app_crypto::{app_crypto, key_types::AUTHORITY_DISCOVERY, sr25519};
@@ -35,7 +35,7 @@ pub type AuthorityId = app::Public;
 /// An authority discovery authority signature.
 pub type AuthoritySignature = app::Signature;
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// The authority discovery api.
 	///
 	/// This api is used by the `core/authority-discovery` module to retrieve identifiers

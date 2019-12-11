@@ -27,7 +27,7 @@ use log::{debug, info, warn};
 use consensus_common::SelectChain;
 use client_api::{CallExecutor, backend::Backend};
 use client::Client;
-use sr_primitives::traits::{NumberFor, Block as BlockT};
+use sp_runtime::traits::{NumberFor, Block as BlockT};
 use primitives::{H256, Blake2Hasher};
 
 use crate::{
@@ -155,7 +155,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA, SC>,
 	network: N,
-	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
+	on_exit: impl futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
 ) -> ::sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -195,7 +195,9 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 
 	let observer_work = network_startup.and_then(move |()| observer_work);
 
-	Ok(observer_work.select(on_exit).map(|_| ()).map_err(|_| ()))
+	use futures03::{FutureExt, TryFutureExt};
+
+	Ok(observer_work.select(on_exit.map(Ok).compat()).map(|_| ()).map_err(|_| ()))
 }
 
 /// Future that powers the observer.

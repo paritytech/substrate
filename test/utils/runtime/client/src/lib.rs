@@ -23,7 +23,7 @@ pub mod trait_tests;
 mod block_builder_ext;
 
 use std::sync::Arc;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 pub use block_builder_ext::BlockBuilderExt;
 pub use generic_test_client::*;
 pub use runtime;
@@ -31,7 +31,7 @@ pub use runtime;
 use primitives::sr25519;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use primitives::ChangesTrieConfiguration;
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor};
 use client::{
 	light::fetcher::{
 		Fetcher,
@@ -97,8 +97,8 @@ pub type LightExecutor = client::light::call_executor::GenesisCallExecutor<
 pub struct GenesisParameters {
 	changes_trie_config: Option<ChangesTrieConfiguration>,
 	heap_pages_override: Option<u64>,
-	extra_storage: HashMap<Vec<u8>, Vec<u8>>,
-	child_extra_storage: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	extra_storage: BTreeMap<Vec<u8>, Vec<u8>>,
+	child_extra_storage: HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>,
 }
 
 impl GenesisParameters {

@@ -1,5 +1,5 @@
 [package]
-name = "substrate-consensus-pow"
+name = "sc-consensus-pow"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "PoW consensus algorithm for substrate"
@@ -7,14 +7,14 @@ edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+primitives = { package = "sp-core", path = "../../../primitives/core" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
-sr-primitives = { path = "../../../primitives/sr-primitives" }
-client-api = { package = "substrate-client-api", path = "../../api" }
-block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api" }
-inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
-pow-primitives = { package = "substrate-consensus-pow-primitives", path = "../../../primitives/consensus/pow" }
-consensus-common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
+sp-runtime = { path = "../../../primitives/runtime" }
+client-api = { package = "sc-client-api", path = "../../api" }
+block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder/runtime-api" }
+inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
+pow-primitives = { package = "sp-consensus-pow", path = "../../../primitives/consensus/pow" }
+consensus-common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
 log = "0.4.8"
 futures = { version = "0.3.1", features = ["compat"] }
 sp-timestamp = {  path = "../../../primitives/timestamp" }

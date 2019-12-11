@@ -18,7 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-/// Copied from `sr-primitives` and documented there.
+/// Copied from `sp-runtime` and documented there.
 #[cfg(test)]
 macro_rules! assert_eq_error_rate {
 	($x:expr, $y:expr, $error:expr $(,)?) => {

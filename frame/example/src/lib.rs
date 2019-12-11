@@ -253,14 +253,14 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::marker::PhantomData;
+use sp_std::marker::PhantomData;
 use support::{
 	dispatch::Result, decl_module, decl_storage, decl_event,
 	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
 };
 use system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
-use sr_primitives::{
+use sp_runtime::{
 	traits::{SignedExtension, Bounded, SaturatedConversion},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
@@ -287,7 +287,7 @@ impl<T: balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
 {
 	fn weigh_data(&self, target: (&BalanceOf<T>,)) -> Weight {
 		let multiplier = self.0;
-		(*target.0 * multiplier).saturated_into::<u32>()
+		(*target.0 * multiplier).saturated_into::<Weight>()
 	}
 }
 
@@ -530,7 +530,7 @@ decl_module! {
 		fn offchain_worker(_n: T::BlockNumber) {
 			// We don't do anything here.
 			// but we could dispatch extrinsic (transaction/unsigned/inherent) using
-			// runtime_io::submit_extrinsic
+			// sp_io::submit_extrinsic
 		}
 	}
 }
@@ -581,7 +581,7 @@ impl<T: Trait> Module<T> {
 // sender of the transaction (if signed) are also provided.
 //
 // The full list of hooks that can be added to a signed extension can be found
-// [here](https://crates.parity.io/sr_primitives/traits/trait.SignedExtension.html).
+// [here](https://crates.parity.io/sp_runtime/traits/trait.SignedExtension.html).
 //
 // The signed extensions are aggregated in the runtime file of a substrate chain. All extensions
 // should be aggregated in a tuple and passed to the `CheckedExtrinsic` and `UncheckedExtrinsic`
@@ -596,8 +596,8 @@ impl<T: Trait> Module<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct WatchDummy<T: Trait + Send + Sync>(PhantomData<T>);
 
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for WatchDummy<T> {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+impl<T: Trait + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "WatchDummy")
 	}
 }
@@ -613,7 +613,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
-	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
+	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn validate(
 		&self,
@@ -630,7 +630,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 		// check for `set_dummy`
 		match call {
 			Call::set_dummy(..) => {
-				sr_primitives::print("set_dummy was received.");
+				sp_runtime::print("set_dummy was received.");
 
 				let mut valid_tx = ValidTransaction::default();
 				valid_tx.priority = Bounded::max_value();
@@ -649,7 +649,7 @@ mod tests {
 	use primitives::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
-	use sr_primitives::{
+	use sp_runtime::{
 		Perbill, testing::Header,
 		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
 	};
@@ -665,7 +665,7 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
@@ -709,7 +709,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> runtime_io::TestExternalities {
+	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();

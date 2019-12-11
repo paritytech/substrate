@@ -22,10 +22,10 @@ use std::{
 };
 
 use serde::Serialize;
-use log::debug;
+use log::trace;
 use parking_lot::RwLock;
-use sr_primitives::traits::Member;
-use sr_primitives::transaction_validity::{
+use sp_runtime::traits::Member;
+use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };
 use txpool_api::error;
@@ -230,12 +230,12 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 		}).collect()
 	}
 
-	/// Removes invalid transactions from the ready pool.
+	/// Removes a subtree of transactions from the ready pool.
 	///
 	/// NOTE removing a transaction will also cause a removal of all transactions that depend on that one
 	/// (i.e. the entire subgraph that this transaction is a start of will be removed).
 	/// All removed transactions are returned.
-	pub fn remove_invalid(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex>>> {
+	pub fn remove_subtree(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex>>> {
 		let mut removed = vec![];
 		let mut to_remove = hashes.iter().cloned().collect::<Vec<_>>();
 
@@ -267,7 +267,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 				to_remove.append(&mut tx.unlocks);
 
 				// add to removed
-				debug!(target: "txpool", "[{:?}] Removed as invalid: ", hash);
+				trace!(target: "txpool", "[{:?}] Removed as part of the subtree.", hash);
 				removed.push(tx.transaction.transaction);
 			}
 		}

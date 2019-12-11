@@ -35,11 +35,11 @@ use api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use codec::{Encode, Decode};
 use primitives::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
-use sr_api::ConstructRuntimeApi;
-use sr_primitives::{generic, traits::{self, ProvideRuntimeApi}};
+use sp_api::ConstructRuntimeApi;
+use sp_runtime::{generic, traits::{self, ProvideRuntimeApi}};
 use txpool_api::{
 	TransactionPool, InPoolTransaction, TransactionStatus,
-	BlockHash, TxHash, TransactionFor, IntoPoolError,
+	BlockHash, TxHash, TransactionFor, error::IntoPoolError,
 };
 use session::SessionKeys;
 

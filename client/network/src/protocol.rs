@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
-use crate::legacy_proto::{LegacyProto, LegacyProtoOut};
+use legacy_proto::{LegacyProto, LegacyProtoOut};
 use crate::utils::interval;
 use bytes::BytesMut;
 use futures::prelude::*;
@@ -31,11 +31,11 @@ use consensus::{
 	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
 };
 use codec::{Decode, Encode};
-use sr_primitives::{generic::BlockId, ConsensusEngineId, Justification};
-use sr_primitives::traits::{
+use sp_runtime::{generic::BlockId, ConsensusEngineId, Justification};
+use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, CheckedSub
 };
-use sr_arithmetic::traits::SaturatedConversion;
+use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
 use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
@@ -55,7 +55,9 @@ use client_api::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
 use util::LruHashSet;
 
+mod legacy_proto;
 mod util;
+
 pub mod consensus_gossip;
 pub mod message;
 pub mod event;
@@ -88,23 +90,38 @@ const MAX_CONSENSUS_MESSAGES: usize = 256;
 /// and disconnect to free connection slot.
 const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
-/// Reputation change when a peer is "clogged", meaning that it's not fast enough to process our
-/// messages.
-const CLOGGED_PEER_REPUTATION_CHANGE: i32 = -(1 << 12);
-/// Reputation change when a peer doesn't respond in time to our messages.
-const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 10);
-/// Reputation change when a peer sends us a status message while we already received one.
-const UNEXPECTED_STATUS_REPUTATION_CHANGE: i32 = -(1 << 20);
-/// Reputation change when we are a light client and a peer is behind us.
-const PEER_BEHIND_US_LIGHT_REPUTATION_CHANGE: i32 = -(1 << 8);
-/// Reputation change when a peer sends us an extrinsic that we didn't know about.
-const GOOD_EXTRINSIC_REPUTATION_CHANGE: i32 = 1 << 7;
-/// Reputation change when a peer sends us a bad extrinsic.
-const BAD_EXTRINSIC_REPUTATION_CHANGE: i32 = -(1 << 12);
-/// We sent an RPC query to the given node, but it failed.
-const RPC_FAILED_REPUTATION_CHANGE: i32 = -(1 << 12);
-/// We received a message that failed to decode.
-const BAD_MESSAGE_REPUTATION_CHANGE: i32 = -(1 << 12);
+mod rep {
+	use peerset::ReputationChange as Rep;
+	/// Reputation change when a peer is "clogged", meaning that it's not fast enough to process our
+	/// messages.
+	pub const CLOGGED_PEER: Rep = Rep::new(-(1 << 12), "Clogged message queue");
+	/// Reputation change when a peer doesn't respond in time to our messages.
+	pub const TIMEOUT: Rep = Rep::new(-(1 << 10), "Request timeout");
+	/// Reputation change when a peer sends us a status message while we already received one.
+	pub const UNEXPECTED_STATUS: Rep = Rep::new(-(1 << 20), "Unexpected status message");
+	/// Reputation change when we are a light client and a peer is behind us.
+	pub const PEER_BEHIND_US_LIGHT: Rep = Rep::new(-(1 << 8), "Useless for a light peer");
+	/// Reputation change when a peer sends us an extrinsic that we didn't know about.
+	pub const GOOD_EXTRINSIC: Rep = Rep::new(1 << 7, "Good extrinsic");
+	/// Reputation change when a peer sends us a bad extrinsic.
+	pub const BAD_EXTRINSIC: Rep = Rep::new(-(1 << 12), "Bad extrinsic");
+	/// We sent an RPC query to the given node, but it failed.
+	pub const RPC_FAILED: Rep = Rep::new(-(1 << 12), "Remote call failed");
+	/// We received a message that failed to decode.
+	pub const BAD_MESSAGE: Rep = Rep::new(-(1 << 12), "Bad message");
+	/// We received an unexpected response.
+	pub const UNEXPECTED_RESPONSE: Rep = Rep::new_fatal("Unexpected response packet");
+	/// We received an unexpected extrinsic packet.
+	pub const UNEXPECTED_EXTRINSICS: Rep = Rep::new_fatal("Unexpected extrinsics packet");
+	/// We received an unexpected light node request.
+	pub const UNEXPECTED_REQUEST: Rep = Rep::new_fatal("Unexpected block request packet");
+	/// Peer has different genesis.
+	pub const GENESIS_MISMATCH: Rep = Rep::new_fatal("Genesis mismatch");
+	/// Peer is on unsupported protocol version.
+	pub const BAD_PROTOCOL: Rep = Rep::new_fatal("Unsupported protocol");
+	/// Peer role does not match (e.g. light peer connecting to another light peer).
+	pub const BAD_ROLE: Rep = Rep::new_fatal("Unsupported role");
+}
 
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
@@ -183,7 +200,7 @@ struct LightDispatchIn<'a> {
 }
 
 impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
-	fn report_peer(&mut self, who: &PeerId, reputation: i32) {
+	fn report_peer(&mut self, who: &PeerId, reputation: peerset::ReputationChange) {
 		self.peerset.report_peer(who.clone(), reputation)
 	}
 
@@ -303,7 +320,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 pub trait Context<B: BlockT> {
 	/// Adjusts the reputation of the peer. Use this to point out that a peer has been malign or
 	/// irresponsible or appeared lazy.
-	fn report_peer(&mut self, who: PeerId, reputation: i32);
+	fn report_peer(&mut self, who: PeerId, reputation: peerset::ReputationChange);
 
 	/// Force disconnecting from a peer. Use this when a peer misbehaved.
 	fn disconnect_peer(&mut self, who: PeerId);
@@ -333,7 +350,7 @@ impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 }
 
 impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, H> {
-	fn report_peer(&mut self, who: PeerId, reputation: i32) {
+	fn report_peer(&mut self, who: PeerId, reputation: peerset::ReputationChange) {
 		self.peerset_handle.report_peer(who, reputation)
 	}
 
@@ -557,7 +574,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				return request.map(|(_, r)| r)
 			}
 			trace!(target: "sync", "Unexpected response packet from {} ({})", who, response.id);
-			self.peerset_handle.report_peer(who.clone(), i32::min_value());
+			self.peerset_handle.report_peer(who.clone(), rep::UNEXPECTED_RESPONSE);
 			self.behaviour.disconnect_peer(&who);
 		}
 		None
@@ -587,7 +604,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			Ok(message) => message,
 			Err(err) => {
 				debug!(target: "sync", "Couldn't decode packet sent by {}: {:?}: {}", who, data, err.what());
-				self.peerset_handle.report_peer(who.clone(), BAD_MESSAGE_REPUTATION_CHANGE);
+				self.peerset_handle.report_peer(who.clone(), rep::BAD_MESSAGE);
 				return CustomMessageOutcome::None;
 			}
 		};
@@ -755,7 +772,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Called as a back-pressure mechanism if the networking detects that the peer cannot process
 	/// our messaging rate fast enough.
 	pub fn on_clogged_peer(&self, who: PeerId, _msg: Option<Message<B>>) {
-		self.peerset_handle.report_peer(who.clone(), CLOGGED_PEER_REPUTATION_CHANGE);
+		self.peerset_handle.report_peer(who.clone(), rep::CLOGGED_PEER);
 
 		// Print some diagnostics.
 		if let Some(peer) = self.context_data.peers.get(&who) {
@@ -784,7 +801,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		if !self.config.roles.is_full() {
 			trace!(target: "sync", "Peer {} is trying to sync from the light node", peer);
 			self.behaviour.disconnect_peer(&peer);
-			self.peerset_handle.report_peer(peer, i32::min_value());
+			self.peerset_handle.report_peer(peer, rep::UNEXPECTED_REQUEST);
 			return;
 		}
 
@@ -846,7 +863,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Adjusts the reputation of a node.
-	pub fn report_peer(&self, who: PeerId, reputation: i32) {
+	pub fn report_peer(&self, who: PeerId, reputation: peerset::ReputationChange) {
 		self.peerset_handle.report_peer(who, reputation)
 	}
 
@@ -953,7 +970,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 		for p in aborting {
 			self.behaviour.disconnect_peer(&p);
-			self.peerset_handle.report_peer(p, TIMEOUT_REPUTATION_CHANGE);
+			self.peerset_handle.report_peer(p, rep::TIMEOUT);
 		}
 	}
 
@@ -967,7 +984,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					if self.important_peers.contains(&who) { Level::Warn } else { Level::Debug },
 					"Unexpected status packet from {}", who
 				);
-				self.peerset_handle.report_peer(who, UNEXPECTED_STATUS_REPUTATION_CHANGE);
+				self.peerset_handle.report_peer(who, rep::UNEXPECTED_STATUS);
 				return;
 			}
 			if status.genesis_hash != self.genesis_hash {
@@ -977,7 +994,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					"Peer is on different chain (our genesis: {} theirs: {})",
 					self.genesis_hash, status.genesis_hash
 				);
-				self.peerset_handle.report_peer(who.clone(), i32::min_value());
+				self.peerset_handle.report_peer(who.clone(), rep::GENESIS_MISMATCH);
 				self.behaviour.disconnect_peer(&who);
 				return;
 			}
@@ -987,7 +1004,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					if self.important_peers.contains(&who) { Level::Warn } else { Level::Trace },
 					"Peer {:?} using unsupported protocol version {}", who, status.version
 				);
-				self.peerset_handle.report_peer(who.clone(), i32::min_value());
+				self.peerset_handle.report_peer(who.clone(), rep::BAD_PROTOCOL);
 				self.behaviour.disconnect_peer(&who);
 				return;
 			}
@@ -996,7 +1013,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				// we're not interested in light peers
 				if status.roles.is_light() {
 					debug!(target: "sync", "Peer {} is unable to serve light requests", who);
-					self.peerset_handle.report_peer(who.clone(), i32::min_value());
+					self.peerset_handle.report_peer(who.clone(), rep::BAD_ROLE);
 					self.behaviour.disconnect_peer(&who);
 					return;
 				}
@@ -1013,7 +1030,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					.saturated_into::<u64>();
 				if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
 					debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
-					self.peerset_handle.report_peer(who.clone(), PEER_BEHIND_US_LIGHT_REPUTATION_CHANGE);
+					self.peerset_handle.report_peer(who.clone(), rep::PEER_BEHIND_US_LIGHT);
 					self.behaviour.disconnect_peer(&who);
 					return;
 				}
@@ -1082,7 +1099,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		if !self.config.roles.is_full() {
 			trace!(target: "sync", "Peer {} is trying to send extrinsic to the light node", who);
 			self.behaviour.disconnect_peer(&who);
-			self.peerset_handle.report_peer(who, i32::min_value());
+			self.peerset_handle.report_peer(who, rep::UNEXPECTED_EXTRINSICS);
 			return;
 		}
 
@@ -1100,8 +1117,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.transaction_pool.import(
 					self.peerset_handle.clone().into(),
 					who.clone(),
-					GOOD_EXTRINSIC_REPUTATION_CHANGE,
-					BAD_EXTRINSIC_REPUTATION_CHANGE,
+					rep::GOOD_EXTRINSIC,
+					rep::BAD_EXTRINSIC,
 					t,
 				);
 			}
@@ -1351,7 +1368,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					request.block,
 					error
 				);
-				self.peerset_handle.report_peer(who.clone(), RPC_FAILED_REPUTATION_CHANGE);
+				self.peerset_handle.report_peer(who.clone(), rep::RPC_FAILED);
 				StorageProof::empty()
 			}
 		};
@@ -1679,7 +1696,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				None
 			},
 		};
- 		self.send_message(
+		self.send_message(
 			&who,
 			GenericMessage::FinalityProofResponse(message::FinalityProofResponse {
 				id: 0,

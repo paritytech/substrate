@@ -35,7 +35,7 @@ use service::{
 };
 use network::{multiaddr, Multiaddr};
 use network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
-use sr_primitives::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use txpool_api::TransactionPool;
 
 /// Maximum duration of single wait call.
@@ -155,6 +155,7 @@ fn node_config<G, E: Clone> (
 		out_peers: 450,
 		reserved_nodes: vec![],
 		non_reserved_mode: NonReservedPeerMode::Accept,
+		sentry_nodes: vec![],
 		client_version: "network/test/0.1".to_owned(),
 		node_name: "unknown".to_owned(),
 		transport: TransportConfig::Normal {

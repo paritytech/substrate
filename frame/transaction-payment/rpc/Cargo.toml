@@ -9,9 +9,9 @@ codec = { package = "parity-scale-codec", version = "1.0.0" }
 jsonrpc-core = "14.0.3"
 jsonrpc-core-client = "14.0.3"
 jsonrpc-derive = "14.0.3"
-primitives = { package = "substrate-primitives",  path = "../../../primitives/core" }
-rpc-primitives = { package = "substrate-rpc-primitives", path = "../../../primitives/rpc" }
+primitives = { package = "sp-core",  path = "../../../primitives/core" }
+rpc-primitives = { package = "sp-rpc", path = "../../../primitives/rpc" }
 serde = { version = "1.0.101", features = ["derive"] }
-sr-primitives = { path = "../../../primitives/sr-primitives" }
+sp-runtime = { path = "../../../primitives/runtime" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
 pallet-transaction-payment-rpc-runtime-api = { path = "./runtime-api" }

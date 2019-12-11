@@ -28,7 +28,7 @@ use log::info;
 
 use client::Client;
 use block_builder_api::BlockBuilder;
-use sr_api::ConstructRuntimeApi;
+use sp_api::ConstructRuntimeApi;
 use consensus_common::{
 	BlockOrigin, BlockImportParams, InherentData, ForkChoiceStrategy,
 	SelectChain
@@ -36,8 +36,8 @@ use consensus_common::{
 use consensus_common::block_import::BlockImport;
 use codec::{Decode, Encode};
 use primitives::{Blake2Hasher, Hasher};
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, ProvideRuntimeApi, SimpleArithmetic,
 	One, Zero,
 };

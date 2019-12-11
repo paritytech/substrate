@@ -21,13 +21,13 @@
 use std::cell::RefCell;
 
 use crate::{Module, Trait};
-use sr_primitives::Perbill;
-use sr_staking_primitives::{SessionIndex, offence::ReportOffence};
-use sr_primitives::testing::{Header, UintAuthorityId, TestXt};
-use sr_primitives::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
+use sp_runtime::Perbill;
+use sp_staking::{SessionIndex, offence::ReportOffence};
+use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
+use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
 use primitives::H256;
-use support::{impl_outer_origin, impl_outer_dispatch, parameter_types};
-use {runtime_io, system};
+use support::{impl_outer_origin, impl_outer_dispatch, parameter_types, weights::Weight};
+use {sp_io, system};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
@@ -85,7 +85,7 @@ impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
 	}
 }
 
-pub fn new_test_ext() -> runtime_io::TestExternalities {
+pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	t.into()
 }
@@ -96,7 +96,7 @@ pub struct Runtime;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }

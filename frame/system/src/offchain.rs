@@ -17,8 +17,8 @@
 //! Module helpers for offchain calls.
 
 use codec::Encode;
-use sr_primitives::app_crypto::{self, RuntimeAppPublic};
-use sr_primitives::traits::{Extrinsic as ExtrinsicT, IdentifyAccount};
+use sp_runtime::app_crypto::{self, RuntimeAppPublic};
+use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount};
 
 /// A trait responsible for signing a payload using given account.
 pub trait Signer<Public, Signature> {
@@ -41,7 +41,7 @@ impl<Public, Signature, AppPublic> Signer<Public, Signature> for AppPublic where
 	Signature: From<
 		<<AppPublic as RuntimeAppPublic>::Signature as app_crypto::AppSignature>::Generic
 	>,
-	Public: rstd::convert::TryInto<<AppPublic as app_crypto::AppPublic>::Generic>
+	Public: sp_std::convert::TryInto<<AppPublic as app_crypto::AppPublic>::Generic>
 {
 	fn sign<Payload: Encode>(public: Public, raw_payload: &Payload) -> Option<Signature> {
 		raw_payload.using_encoded(|payload| {
@@ -111,7 +111,7 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 			::create_transaction::<Self::Signer>(call, public, id, expected)
 			.ok_or(())?;
 		let xt = Self::Extrinsic::new(call, Some(signature_data)).ok_or(())?;
-		runtime_io::offchain::submit_transaction(xt.encode())
+		sp_io::offchain::submit_transaction(xt.encode())
 	}
 }
 
@@ -126,13 +126,13 @@ pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 	/// and `Err` if transaction was rejected from the pool.
 	fn submit_unsigned(call: impl Into<Call>) -> Result<(), ()> {
 		let xt = Self::Extrinsic::new(call.into(), None).ok_or(())?;
-		runtime_io::offchain::submit_transaction(xt.encode())
+		sp_io::offchain::submit_transaction(xt.encode())
 	}
 }
 
 /// A default type used to submit transactions to the pool.
 pub struct TransactionSubmitter<S, C, E> {
-	_signer: rstd::marker::PhantomData<(S, C, E)>,
+	_signer: sp_std::marker::PhantomData<(S, C, E)>,
 }
 
 impl<S, C, E> Default for TransactionSubmitter<S, C, E> {

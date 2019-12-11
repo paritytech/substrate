@@ -29,7 +29,9 @@ use rpc::{
 
 use api::Subscriptions;
 use client_api::backend::Backend;
-use sp_blockchain::Result as ClientResult;
+use sp_blockchain::{
+	Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata
+};
 use client::{
 	Client, CallExecutor, BlockchainEvents, 
 };
@@ -38,12 +40,12 @@ use primitives::{
 };
 use runtime_version::RuntimeVersion;
 use state_machine::ExecutionStrategy;
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header, NumberFor, ProvideRuntimeApi, SaturatedConversion},
+	traits::{Block as BlockT, NumberFor, ProvideRuntimeApi, SaturatedConversion},
 };
 
-use sr_api::Metadata;
+use sp_api::Metadata;
 
 use super::{StateBackend, error::{FutureResult, Error, Result}, client_err};
 
@@ -91,59 +93,49 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 		from: Block::Hash,
 		to: Option<Block::Hash>
 	) -> Result<QueryStorageRange<Block>> {
-		let to = self.block_or_best(to).map_err(client_err)?;
-		let from_hdr = self.client.header(&BlockId::hash(from)).map_err(client_err)?;
-		let to_hdr = self.client.header(&BlockId::hash(to)).map_err(client_err)?;
-		match (from_hdr, to_hdr) {
-			(Some(ref from), Some(ref to)) if from.number() <= to.number() => {
-				// check if we can get from `to` to `from` by going through parent_hashes.
-				let from_number = *from.number();
-				let blocks = {
-					let mut blocks = vec![to.hash()];
-					let mut last = to.clone();
-					while *last.number() > from_number {
-						let hdr = self.client
-							.header(&BlockId::hash(*last.parent_hash()))
-							.map_err(client_err)?;
-						if let Some(hdr) = hdr {
-							blocks.push(hdr.hash());
-							last = hdr;
-						} else {
-							return Err(invalid_block_range(
-								Some(from),
-								Some(to),
-								format!("Parent of {} ({}) not found", last.number(), last.hash()),
-							))
-						}
-					}
-					if last.hash() != from.hash() {
-						return Err(invalid_block_range(
-							Some(from),
-							Some(to),
-							format!("Expected to reach `from`, got {} ({})", last.number(), last.hash()),
-						))
-					}
-					blocks.reverse();
-					blocks
-				};
-				// check if we can filter blocks-with-changes from some (sub)range using changes tries
-				let changes_trie_range = self.client
-					.max_key_changes_range(from_number, BlockId::Hash(to.hash()))
-					.map_err(client_err)?;
-				let filtered_range_begin = changes_trie_range
-					.map(|(begin, _)| (begin - from_number).saturated_into::<usize>());
-				let (unfiltered_range, filtered_range) = split_range(blocks.len(), filtered_range_begin);
-				Ok(QueryStorageRange {
-					hashes: blocks,
-					first_number: from_number,
-					unfiltered_range,
-					filtered_range,
-				})
-			},
-			(from, to) => Err(
-				invalid_block_range(from.as_ref(), to.as_ref(), "Invalid range or unknown block".into())
-			),
+		let to = self.block_or_best(to).map_err(|e| invalid_block::<Block>(from, to, e.to_string()))?;
+
+		let invalid_block_err = |e: ClientError| invalid_block::<Block>(from, Some(to), e.to_string());
+		let from_meta = self.client.header_metadata(from).map_err(invalid_block_err)?;
+		let to_meta = self.client.header_metadata(to).map_err(invalid_block_err)?;
+
+		if from_meta.number >= to_meta.number {
+			return Err(invalid_block_range(&from_meta, &to_meta, "from number >= to number".to_owned()))
 		}
+
+		// check if we can get from `to` to `from` by going through parent_hashes.
+		let from_number = from_meta.number;
+		let hashes = {
+			let mut hashes = vec![to_meta.hash];
+			let mut last = to_meta.clone();
+			while last.number > from_number {
+				let header_metadata = self.client
+					.header_metadata(last.parent)
+					.map_err(|e| invalid_block_range::<Block>(&last, &to_meta, e.to_string()))?;
+				hashes.push(header_metadata.hash);
+				last = header_metadata;
+			}
+			if last.hash != from_meta.hash {
+				return Err(invalid_block_range(&from_meta, &to_meta, "from and to are on different forks".to_owned()))
+			}
+			hashes.reverse();
+			hashes
+		};
+
+		// check if we can filter blocks-with-changes from some (sub)range using changes tries
+		let changes_trie_range = self.client
+			.max_key_changes_range(from_number, BlockId::Hash(to_meta.hash))
+			.map_err(client_err)?;
+		let filtered_range_begin = changes_trie_range
+			.map(|(begin, _)| (begin - from_number).saturated_into::<usize>());
+		let (unfiltered_range, filtered_range) = split_range(hashes.len(), filtered_range_begin);
+
+		Ok(QueryStorageRange {
+			hashes,
+			first_number: from_number,
+			unfiltered_range,
+			filtered_range,
+		})
 	}
 
 	/// Iterates through range.unfiltered_range and check each block for changes of keys' values.
@@ -501,15 +493,28 @@ pub(crate) fn split_range(size: usize, middle: Option<usize>) -> (Range<usize>, 
 	(range1, range2)
 }
 
-fn invalid_block_range<H: Header>(from: Option<&H>, to: Option<&H>, reason: String) -> Error {
-	let to_string = |x: Option<&H>| match x {
-		None => "unknown hash".into(),
-		Some(h) => format!("{} ({})", h.number(), h.hash()),
-	};
+fn invalid_block_range<B: BlockT>(
+	from: &CachedHeaderMetadata<B>,
+	to: &CachedHeaderMetadata<B>,
+	details: String,
+) -> Error {
+	let to_string = |h: &CachedHeaderMetadata<B>| format!("{} ({:?})", h.number, h.hash);
 
 	Error::InvalidBlockRange {
 		from: to_string(from),
 		to: to_string(to),
-		details: reason,
+		details,
+	}
+}
+
+fn invalid_block<B: BlockT>(
+	from: B::Hash,
+	to: Option<B::Hash>,
+	details: String,
+) -> Error {
+	Error::InvalidBlockRange {
+		from: format!("{:?}", from),
+		to: format!("{:?}", to),
+		details,
 	}
 }

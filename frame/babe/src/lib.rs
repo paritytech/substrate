@@ -23,12 +23,12 @@
 pub use timestamp;
 use sp_timestamp;
 
-use rstd::{result, prelude::*};
+use sp_std::{result, prelude::*};
 use support::{decl_storage, decl_module, traits::FindAuthor, traits::Get};
 use sp_timestamp::OnTimestampSet;
-use sr_primitives::{generic::DigestItem, ConsensusEngineId, Perbill};
-use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
-use sr_staking_primitives::{
+use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
+use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
+use sp_staking::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
@@ -306,7 +306,7 @@ impl<T: Trait> Module<T> {
 		// epoch 0 as having started at the slot of block 1. We want to use
 		// the same randomness and validator set as signalled in the genesis,
 		// so we don't rotate the epoch.
-		now != sr_primitives::traits::One::one() && {
+		now != sp_runtime::traits::One::one() && {
 			let diff = CurrentSlot::get().saturating_sub(Self::current_epoch_start());
 			diff >= T::EpochDuration::get()
 		}
@@ -445,7 +445,7 @@ impl<T: Trait> Module<T> {
 	/// randomness. Returns the new randomness.
 	fn randomness_change_epoch(next_epoch_index: u64) -> [u8; RANDOMNESS_LENGTH] {
 		let this_randomness = NextRandomness::get();
-		let segment_idx: u32 = <SegmentIndex>::mutate(|s| rstd::mem::replace(s, 0));
+		let segment_idx: u32 = <SegmentIndex>::mutate(|s| sp_std::mem::replace(s, 0));
 
 		// overestimate to the segment being full.
 		let rho_size = segment_idx.saturating_add(1) as usize * UNDER_CONSTRUCTION_SEGMENT_LENGTH;
@@ -472,7 +472,7 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
-impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 
@@ -523,7 +523,7 @@ fn compute_randomness(
 		s.extend_from_slice(&vrf_output[..]);
 	}
 
-	runtime_io::hashing::blake2_256(&s)
+	sp_io::hashing::blake2_256(&s)
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {

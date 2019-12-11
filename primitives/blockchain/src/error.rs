@@ -18,7 +18,7 @@
 
 use std::{self, error, result};
 use sp_state_machine;
-use sr_primitives::transaction_validity::TransactionValidityError;
+use sp_runtime::transaction_validity::TransactionValidityError;
 #[allow(deprecated)]
 use sp_block_builder_runtime_api::compatability_v3;
 use sp_consensus;

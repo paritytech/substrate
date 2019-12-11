@@ -23,36 +23,69 @@
 //! [Grafana]: https://grafana.com/
 //! [`grafana-json-data-source`]: https://github.com/simPod/grafana-json-datasource
 
+#![warn(missing_docs)]
+
 use lazy_static::lazy_static;
-use std::collections::HashMap;
 use parking_lot::RwLock;
 
 mod types;
 mod server;
-mod util;
 #[cfg(not(target_os = "unknown"))]
 mod networking;
+mod database;
 
+use database::Database;
 pub use server::run_server;
-pub use util::now_millis;
-
-type Metrics = HashMap<String, Vec<(f32, i64)>>;
+use std::num::TryFromIntError;
 
 lazy_static! {
-	/// The `RwLock` wrapping the metrics. Not intended to be used directly.
-	#[doc(hidden)]
-	pub static ref METRICS: RwLock<Metrics> = RwLock::new(Metrics::new());
+	// The `RwLock` wrapping the metrics database.
+	static ref DATABASE: RwLock<Database> = RwLock::new(Database::new());
 }
 
 /// Write metrics to `METRICS`.
 #[macro_export]
 macro_rules! record_metrics(
-	($($key:expr => $value:expr),*) => {
-		use $crate::{METRICS, now_millis};
-		let mut metrics = METRICS.write();
-		let now = now_millis();
-		$(
-			metrics.entry($key).or_insert_with(Vec::new).push(($value as f32, now));
-		)*
+	($($key:expr => $value:expr,)*) => {
+		if cfg!(not(target_os = "unknown")) {
+			$crate::record_metrics_slice(&[
+				$( ($key, $value as f32), )*
+			])
+		} else {
+			Ok(())
+		}
 	}
 );
+
+/// Write metrics to `METRICS` as a slice. Intended to be only used via `record_metrics!`.
+pub fn record_metrics_slice(metrics: &[(&str, f32)]) -> Result<(), Error> {
+	let mut database = crate::DATABASE.write();
+
+	for &(key, value) in metrics.iter() {
+		database.push(key, value)?;
+	}
+
+	Ok(())
+}
+
+/// Error type that can be returned by either `record_metrics` or `run_server`.
+#[derive(Debug, derive_more::Display, derive_more::From)]
+pub enum Error {
+	Hyper(hyper::Error),
+	Serde(serde_json::Error),
+	Http(hyper::http::Error),
+	Timestamp(TryFromIntError),
+	Io(std::io::Error)
+}
+
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			Error::Hyper(error) => Some(error),
+			Error::Serde(error) => Some(error),
+			Error::Http(error) => Some(error),
+			Error::Timestamp(error) => Some(error),
+			Error::Io(error) => Some(error)
+		}
+	}
+}

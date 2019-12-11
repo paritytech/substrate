@@ -36,8 +36,8 @@ use sp_blockchain::{
 use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
 use primitives::Blake2Hasher;
-use sr_primitives::generic::{DigestItem, BlockId};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
+use sp_runtime::generic::{DigestItem, BlockId};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
 use crate::DatabaseSettings;
@@ -573,8 +573,8 @@ fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 pub(crate) mod tests {
 	use client::cht;
 	use primitives::ChangesTrieConfiguration;
-	use sr_primitives::generic::{BlockId, DigestItem, ChangesTrieSignal};
-	use sr_primitives::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::generic::{DigestItem, ChangesTrieSignal};
+	use sp_runtime::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
 	use sp_blockchain::{lowest_common_ancestor, tree_route};
 	use super::*;
 

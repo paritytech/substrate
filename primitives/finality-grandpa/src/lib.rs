@@ -24,9 +24,9 @@ extern crate alloc;
 #[cfg(feature = "std")]
 use serde::Serialize;
 use codec::{Encode, Decode, Input, Codec};
-use sr_primitives::{ConsensusEngineId, RuntimeDebug};
-use rstd::borrow::Cow;
-use rstd::vec::Vec;
+use sp_runtime::{ConsensusEngineId, RuntimeDebug};
+use sp_std::borrow::Cow;
+use sp_std::vec::Vec;
 
 mod app {
 	use app_crypto::{app_crypto, key_types::GRANDPA, ed25519};
@@ -210,7 +210,7 @@ impl<'a> Decode for VersionedAuthorityList<'a> {
 	}
 }
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// APIs for integrating the GRANDPA finality gadget into runtimes.
 	/// This should be implemented on the runtime side.
 	///

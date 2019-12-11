@@ -16,7 +16,7 @@
 
 use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
 };
 use state_machine::{
@@ -30,7 +30,7 @@ use primitives::{
 	H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue,
 	traits::CodeExecutor,
 };
-use sr_api::{ProofRecorder, InitializeBlock};
+use sp_api::{ProofRecorder, InitializeBlock};
 use client_api::{backend, call_executor::CallExecutor};
 
 /// Call executor that executes methods locally, querying all required

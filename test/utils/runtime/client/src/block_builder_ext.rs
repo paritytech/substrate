@@ -18,7 +18,7 @@
 
 use primitives::ChangesTrieConfiguration;
 use runtime;
-use sr_primitives::traits::ProvideRuntimeApi;
+use sp_runtime::traits::ProvideRuntimeApi;
 
 use block_builder::BlockBuilderApi;
 

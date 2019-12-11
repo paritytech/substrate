@@ -33,7 +33,7 @@ use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fm
 use codec::{Encode, Decode, Codec};
 use consensus_common::{
 	self, BlockImport, Environment, Proposer, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
-	BlockOrigin, Error as ConsensusError, SelectChain,
+	BlockOrigin, Error as ConsensusError, SelectChain, SlotData,
 };
 use consensus_common::import_queue::{
 	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
@@ -48,8 +48,8 @@ use sp_blockchain::{
 
 use block_builder_api::BlockBuilder as BlockBuilderApi;
 
-use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
-use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
+use sp_runtime::{generic::{BlockId, OpaqueDigestItemId}, Justification};
+use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
 
 use primitives::crypto::Pair;
 use inherents::{InherentDataProviders, InherentData};
@@ -63,14 +63,14 @@ use sp_timestamp::{
 	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
 };
 
-use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
-use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible};
+use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible};
 use slots::check_equivocation;
 
 use keystore::KeyStorePtr;
 
-use sr_api::ApiExt;
+use sp_api::ApiExt;
 
 pub use aura_primitives::{
 	ConsensusLog, AuraApi, AURA_ENGINE_ID,
@@ -256,7 +256,7 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 		})
 	}
 
-	fn pre_digest_data(&self, slot_number: u64, _claim: &Self::Claim) -> Vec<sr_primitives::DigestItem<B::Hash>> {
+	fn pre_digest_data(&self, slot_number: u64, _claim: &Self::Claim) -> Vec<sp_runtime::DigestItem<B::Hash>> {
 		vec![
 			<DigestItemFor<B> as CompatibleDigestItem<P>>::aura_pre_digest(slot_number),
 		]
@@ -301,6 +301,32 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 		self.env.init(block).map_err(|e| {
 			consensus_common::Error::ClientImport(format!("{:?}", e)).into()
 		})
+	}
+
+	fn proposing_remaining_duration(
+		&self,
+		head: &B::Header,
+		slot_info: &SlotInfo
+	) -> Option<std::time::Duration> {
+		// never give more than 20 times more lenience.
+		const BACKOFF_CAP: u64 = 20;
+
+		let slot_remaining = self.slot_remaining_duration(slot_info);
+		let parent_slot = match find_pre_digest::<B, P>(head) {
+			Err(_) => return Some(slot_remaining),
+			Ok(d) => d,
+		};
+
+		// we allow a lenience of the number of slots since the head of the
+		// chain was produced, minus 1 (since there is always a difference of at least 1)
+		//
+		// linear back-off.
+		// in normal cases we only attempt to issue blocks up to the end of the slot.
+		// when the chain has been stalled for a few slots, we give more lenience.
+		let slot_lenience = slot_info.number.saturating_sub(parent_slot + 1);
+		let slot_lenience = std::cmp::min(slot_lenience, BACKOFF_CAP);
+		let slot_lenience = Duration::from_secs(slot_lenience * slot_info.duration);
+		Some(slot_lenience + slot_remaining)
 	}
 }
 
@@ -357,6 +383,10 @@ fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, Error<
 		P::Signature: Decode,
 		P::Public: Encode + Decode + PartialEq + Clone,
 {
+	if header.number().is_zero() {
+		return Ok(0);
+	}
+
 	let mut pre_digest: Option<u64> = None;
 	for log in header.digest().logs() {
 		trace!(target: "aura", "Checking log {:?}", log);
@@ -722,7 +752,7 @@ mod tests {
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient, PeersFullClient};
-	use sr_primitives::traits::{Block as BlockT, DigestFor};
+	use sp_runtime::traits::{Block as BlockT, DigestFor};
 	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;

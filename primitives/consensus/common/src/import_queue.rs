@@ -26,7 +26,7 @@
 //! queues to be instantiated simply.
 
 use std::collections::HashMap;
-use sr_primitives::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
+use sp_runtime::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
 use crate::error::Error as ConsensusError;
 use crate::block_import::{
 	BlockImport, BlockOrigin, BlockImportParams, ImportedAux, JustificationImport, ImportResult,

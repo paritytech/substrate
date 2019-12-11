@@ -43,7 +43,7 @@ use primitives::H256;
 
 use std::{
 	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fs::{self, File},
-	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr,
+	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr, pin::Pin, task::Poll
 };
 
 use names::{Generator, Name};
@@ -61,11 +61,10 @@ pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
-use futures::{Future, FutureExt, TryFutureExt};
-use futures01::{Async, Future as _};
-use substrate_telemetry::TelemetryEndpoints;
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::Block as BlockT;
+use futures::{Future, compat::Future01CompatExt, executor::block_on};
+use sc_telemetry::TelemetryEndpoints;
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::Block as BlockT;
 
 /// default sub directory to store network config
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
@@ -396,23 +395,23 @@ impl<'a> ParseAndPrepareExport<'a> {
 		// Note: while we would like the user to handle the exit themselves, we handle it here
 		// for backwards compatibility reasons.
 		let (exit_send, exit_recv) = std::sync::mpsc::channel();
-		let exit = exit.into_exit()
-			.map(|_| Ok::<_, ()>(()))
-			.compat();
+		let exit = exit.into_exit();
 		std::thread::spawn(move || {
-			let _ = exit.wait();
+			block_on(exit);
 			let _ = exit_send.send(());
 		});
 
-		let mut export_fut = builder(config)?.export_blocks(file, from.into(), to.map(Into::into), json);
-		let fut = futures01::future::poll_fn(|| {
+		let mut export_fut = builder(config)?
+			.export_blocks(file, from.into(), to.map(Into::into), json)
+			.compat();
+		let fut = futures::future::poll_fn(|cx| {
 			if exit_recv.try_recv().is_ok() {
-				return Ok(Async::Ready(()));
+				return Poll::Ready(Ok(()));
 			}
-			export_fut.poll()
+			Pin::new(&mut export_fut).poll(cx)
 		});
 
-		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+		let mut runtime = tokio::runtime::Runtime::new().unwrap();
 		runtime.block_on(fut)?;
 		Ok(())
 	}
@@ -455,23 +454,23 @@ impl<'a> ParseAndPrepareImport<'a> {
 		// Note: while we would like the user to handle the exit themselves, we handle it here
 		// for backwards compatibility reasons.
 		let (exit_send, exit_recv) = std::sync::mpsc::channel();
-		let exit = exit.into_exit()
-			.map(|_| Ok::<_, ()>(()))
-			.compat();
+		let exit = exit.into_exit();
 		std::thread::spawn(move || {
-			let _ = exit.wait();
+			block_on(exit);
 			let _ = exit_send.send(());
 		});
 
-		let mut import_fut = builder(config)?.import_blocks(file, false);
-		let fut = futures01::future::poll_fn(|| {
+		let mut import_fut = builder(config)?
+			.import_blocks(file, false)
+			.compat();
+		let fut = futures::future::poll_fn(|cx| {
 			if exit_recv.try_recv().is_ok() {
-				return Ok(Async::Ready(()));
+				return Poll::Ready(Ok(()));
 			}
-			import_fut.poll()
+			Pin::new(&mut import_fut).poll(cx)
 		});
 
-		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+		let mut runtime = tokio::runtime::Runtime::new().unwrap();
 		runtime.block_on(fut)?;
 		Ok(())
 	}
@@ -513,8 +512,10 @@ impl<'a> CheckBlock<'a> {
 		};
 
 		let start = std::time::Instant::now();
-		let check = builder(config)?.check_block(block_id);
-		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+		let check = builder(config)?
+			.check_block(block_id)
+			.compat();
+		let mut runtime = tokio::runtime::Runtime::new().unwrap();
 		runtime.block_on(check)?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
 		Ok(())
@@ -674,11 +675,13 @@ fn fill_network_configuration(
 	config.boot_nodes.extend(cli.bootnodes.into_iter());
 	config.config_path = Some(config_path.to_string_lossy().into());
 	config.net_config_path = config.config_path.clone();
-	config.reserved_nodes.extend(cli.reserved_nodes.into_iter());
 
+	config.reserved_nodes.extend(cli.reserved_nodes.into_iter());
 	if cli.reserved_only {
 		config.non_reserved_mode = NonReservedPeerMode::Deny;
 	}
+
+	config.sentry_nodes.extend(cli.sentry_nodes.into_iter());
 
 	for addr in cli.listen_addr.iter() {
 		let addr = addr.parse().ok().ok_or(error::Error::InvalidListenMultiaddress)?;
@@ -717,6 +720,7 @@ fn fill_network_configuration(
 	Ok(())
 }
 
+#[cfg(not(target_os = "unknown"))]
 fn input_keystore_password() -> Result<String, String> {
 	rpassword::read_password_from_tty(Some("Keystore password: "))
 		.map_err(|e| format!("{:?}", e))
@@ -728,7 +732,12 @@ fn fill_config_keystore_password<C, G, E>(
 	cli: &RunCmd,
 ) -> Result<(), String> {
 	config.keystore_password = if cli.password_interactive {
-		Some(input_keystore_password()?.into())
+		#[cfg(not(target_os = "unknown"))]
+		{
+			Some(input_keystore_password()?.into())
+		}
+		#[cfg(target_os = "unknown")]
+		None
 	} else if let Some(ref file) = cli.password_filename {
 		Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
 	} else if let Some(ref password) = cli.password {
@@ -741,17 +750,22 @@ fn fill_config_keystore_password<C, G, E>(
 }
 
 /// Put block import CLI params into `config` object.
-pub fn fill_import_params<C, G, E>(config: &mut Configuration<C, G, E>, cli: &ImportParams, role: service::Roles)
-	-> error::Result<()>
-where
-	C: Default,
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
+pub fn fill_import_params<C, G, E>(
+	config: &mut Configuration<C, G, E>,
+	cli: &ImportParams,
+	role: service::Roles,
+) -> error::Result<()>
+	where
+		C: Default,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
 {
-	config.database = DatabaseConfig::Path {
-		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
-		cache_size: Some(cli.database_cache_size),
-	};
+	match config.database {
+		DatabaseConfig::Path { ref mut cache_size, .. } =>
+			*cache_size = Some(cli.database_cache_size),
+		DatabaseConfig::Custom(_) => {},
+	}
+
 	config.state_cache_size = cli.state_cache_size;
 
 	// by default we disable pruning if the node is an authority (i.e.
@@ -799,9 +813,7 @@ where
 	E: ChainSpecExtension,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 {
-	let spec = load_spec(&cli.shared_params, spec_factory)?;
-	let base_path = base_path(&cli.shared_params, &version);
-	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), Some(base_path));
+	let mut config = create_config_with_db_path(spec_factory, &cli.shared_params, &version)?;
 
 	fill_config_keystore_password(&mut config, &cli)?;
 
@@ -927,7 +939,16 @@ where
 	let spec = load_spec(cli, spec_factory)?;
 	let base_path = base_path(cli, version);
 
-	let config = service::Configuration::default_with_spec_and_base_path(spec.clone(), Some(base_path));
+	let mut config = service::Configuration::default_with_spec_and_base_path(
+		spec.clone(),
+		Some(base_path),
+	);
+
+	config.database = DatabaseConfig::Path {
+		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
+		cache_size: None,
+	};
+
 	Ok(config)
 }
 
@@ -958,8 +979,8 @@ fn init_logger(pattern: &str) {
 	builder.filter(Some("ws"), log::LevelFilter::Off);
 	builder.filter(Some("hyper"), log::LevelFilter::Warn);
 	builder.filter(Some("cranelift_wasm"), log::LevelFilter::Warn);
-	// Always log the special target `substrate_tracing`, overrides global level
-	builder.filter(Some("substrate_tracing"), log::LevelFilter::Info);
+	// Always log the special target `sc_tracing`, overrides global level
+	builder.filter(Some("sc_tracing"), log::LevelFilter::Info);
 	// Enable info for others.
 	builder.filter(None, log::LevelFilter::Info);
 
