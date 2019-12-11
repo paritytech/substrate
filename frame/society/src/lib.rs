@@ -18,7 +18,7 @@
 //!
 //! The Society module allows one or more initial accounts to create a membership society.
 //!
-//! An induction process can be customised for new members, allowing candidates to submit their
+//! An induction process can be customized for new members, allowing candidates to submit their
 //! intention to become members and allowing current members to vote on candidates. Maintenance
 //! or verification requirements on members can also be imposed.
 
@@ -84,7 +84,7 @@ pub trait Trait: system::Trait {
 	/// The maximum duration of the payout lock.
 	type MaxLockDuration: Get<Self::BlockNumber>;
 
-	/// The origin that is allowed to call `set_head`.
+	/// The origin that is allowed to call `found`.
 	type FounderOrigin: EnsureOrigin<Self::Origin>;
 }
 
@@ -581,15 +581,16 @@ impl<T: Trait> Module<T> {
 		let mut payouts = <Payouts<T>>::get(who);
 		if !payouts.is_empty() {
 			let mut dropped = 0;
-			for &mut (when, mut amount) in payouts.iter_mut() {
-				latest = when;
+			for (when, amount) in payouts.iter_mut() {
+				latest = *when;
 				if let Some(new_rest) = rest.checked_sub(&amount) {
 					// not yet totally slashed after this one; drop it completely.
 					rest = new_rest;
 					dropped += 1;
 				} else {
 					// whole slash is accounted for.
-					amount -= rest;
+					*amount -= rest;
+					rest = Zero::zero();
 					break;
 				}
 			}

@@ -24,10 +24,18 @@ use support::{assert_ok, assert_noop};
 #[test]
 fn founding_works() {
 	EnvBuilder::new().with_members(vec![]).execute(|| {
+		// Account 1 is set as the founder origin and can start a society
+		// This allows the module to bootstrap on an already running chain
+
+		// Account 5 cannot start a society
 		assert_noop!(Society::found(Origin::signed(5), 20), "Invalid origin");
+		// Account 1 can start a society, where 10 is the founding member
 		assert_ok!(Society::found(Origin::signed(1), 10));
+		// Society members only include 10
 		assert_eq!(Society::members(), vec![10]);
+		// 10 is the head of the society
 		assert_eq!(Society::head(), Some(10));
+		// Cannot start another society
 		assert_noop!(Society::found(Origin::signed(1), 20), "already founded");
 	});
 }
@@ -35,14 +43,24 @@ fn founding_works() {
 #[test]
 fn basic_new_member_works() {
 	EnvBuilder::new().execute(|| {
+		assert_eq!(Balances::free_balance(20), 50);
+		// Bid causes Candidate Deposit to be reserved.
 		assert_ok!(Society::bid(Origin::signed(20), 0));
 		assert_eq!(Balances::free_balance(20), 25);
+		assert_eq!(Balances::reserved_balance(20), 25);
+		// Rotate period every 4 blocks
 		run_to_block(4);
+		// 20 is now a candidate
 		assert_eq!(Society::candidates(), vec![(0, 20, BidKind::Deposit(25))]);
+		// 10 (a member) can vote for the candidate
 		assert_ok!(Society::vote(Origin::signed(10), 20, true));
+		// Rotate period every 4 blocks
 		run_to_block(8);
+		// 20 is now a member of the society
 		assert_eq!(Society::members(), vec![10, 20]);
+		// Reserved balance is returned
 		assert_eq!(Balances::free_balance(20), 50);
+		assert_eq!(Balances::reserved_balance(20), 0);
 	});
 }
 
@@ -109,6 +127,8 @@ fn unbidding_works() {
 #[test]
 fn payout_works() {
 	EnvBuilder::new().execute(|| {
+		// Original balance of 50
+		assert_eq!(Balances::free_balance(20), 50);
 		assert_ok!(Society::bid(Origin::signed(20), 1000));
 		run_to_block(4);
 		assert_ok!(Society::vote(Origin::signed(10), 20, true));
@@ -142,5 +162,26 @@ fn basic_new_member_reject_works() {
 		assert_ok!(Society::vote(Origin::signed(10), 20, false));
 		run_to_block(8);
 		assert_eq!(Society::members(), vec![10]);
+	});
+}
+
+#[test]
+fn slash_payout_works() {
+	EnvBuilder::new().execute(|| {
+		assert_eq!(Balances::free_balance(20), 50);
+		assert_ok!(Society::bid(Origin::signed(20), 1000));
+		run_to_block(4);
+		assert_ok!(Society::vote(Origin::signed(10), 20, true));
+		run_to_block(8);
+		// payout in queue
+		assert_eq!(Payouts::<Test>::get(20), vec![(9, 1000)]);
+		assert_noop!(Society::payout(Origin::signed(20)), "nothing to payout");
+		// slash payout
+		assert_eq!(Society::slash_payout(&20, 500), (9, 500));
+		assert_eq!(Payouts::<Test>::get(20), vec![(9, 500)]);
+		run_to_block(9);
+		// payout should be here, but 500 less
+		assert_ok!(Society::payout(Origin::signed(20)));
+		assert_eq!(Balances::free_balance(20), 550);
 	});
 }
