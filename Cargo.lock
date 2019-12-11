@@ -4946,6 +4946,7 @@ dependencies = [
  "sp-transaction-pool 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "tokio-executor 0.2.0-alpha.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -5202,6 +5203,7 @@ dependencies = [
  "substrate-test-runtime-client 2.0.0",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -5240,6 +5242,7 @@ dependencies = [
  "sp-inherents 2.0.0",
  "sp-runtime 2.0.0",
  "substrate-test-runtime-client 2.0.0",
+ "tracing 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

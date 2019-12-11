@@ -166,6 +166,9 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 		inherent_digests: DigestFor<Block>,
 		deadline: time::Instant,
 	) -> Result<Block, sp_blockchain::Error> {
+		let span = tracing::span!(tracing::Level::DEBUG, "propose_with");
+		let _enter = span.enter();
+
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
 		/// It allows us to increase block utilization.
