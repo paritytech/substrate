@@ -12,7 +12,7 @@ parking_lot = "0.9.0"
 serde = { version = "1.0.101", features = ["derive"] }
 primitives = { package = "sp-core",  path = "../../../primitives/core" }
 sp-runtime = { path = "../../../primitives/runtime" }
-txpool-api = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool", path = "../../../primitives/transaction-pool" }
 
 [dev-dependencies]
 assert_matches = "1.3.0"

@@ -105,6 +105,7 @@ TO_RENAME=(
     "substrate-telemetry sc-telemetry"
     "substrate-test-primitives sp-test-primitives"
     "substrate-tracing sc-tracing"
+    "sc-transaction-pool-api sp-transaction-pool"
 
 );
 
