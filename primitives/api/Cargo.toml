@@ -10,7 +10,7 @@ sp-api-proc-macro = { path = "proc-macro" }
 primitives = { package = "sp-core", path = "../core", default-features = false }
 sp-std = { path = "../std", default-features = false }
 sp-runtime = { path = "../runtime", default-features = false }
-sp-version = { path = "../sr-version", default-features = false }
+sp-version = { path = "../version", default-features = false }
 state-machine = { package = "sp-state-machine", path = "../../primitives/state-machine", optional = true }
 
 [dev-dependencies]

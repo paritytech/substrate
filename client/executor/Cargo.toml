@@ -11,7 +11,7 @@ sp-io = { path = "../../primitives/io" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
 trie = { package = "sp-trie", path = "../../primitives/trie" }
 serializer = { package = "sp-serializer", path = "../../primitives/serializer" }
-runtime_version = { package = "sp-version", path = "../../primitives/sr-version" }
+runtime_version = { package = "sp-version", path = "../../primitives/version" }
 panic-handler = { package = "sp-panic-handler", path = "../../primitives/panic-handler" }
 wasmi = "0.6.2"
 parity-wasm = "0.41.0"
