@@ -79,8 +79,8 @@ pub use sc_client_api::{
 use sp_blockchain::Error;
 
 use crate::{
-	call_sc_executor::LocalCallExecutor,
-	light::{call_sc_executor::prove_execution, fetcher::ChangesProof},
+	call_executor::LocalCallExecutor,
+	light::{call_executor::prove_execution, fetcher::ChangesProof},
 	in_mem, genesis, cht,
 };
 

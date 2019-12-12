@@ -27,7 +27,7 @@ use node_runtime::{
 	Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, BalancesCall, ExistentialDeposit,
 	MinimumPeriod
 };
-use node_sp_core::Signature;
+use node_primitives::Signature;
 use sp_core::{sr25519, crypto::Pair};
 use sp_runtime::{
 	generic::Era, traits::{Block as BlockT, Header as HeaderT, SignedExtension, Verify, IdentifyAccount}
@@ -51,10 +51,10 @@ pub struct FactoryState<N> {
 	num: u32,
 }
 
-type Number = <<node_sp_core::Block as BlockT>::Header as HeaderT>::Number;
+type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
 
 impl<Number> FactoryState<Number> {
-	fn build_extra(index: node_sp_core::Index, phase: u64) -> node_runtime::SignedExtra {
+	fn build_extra(index: node_primitives::Index, phase: u64) -> node_runtime::SignedExtra {
 		(
 			frame_system::CheckVersion::new(),
 			frame_system::CheckGenesis::new(),
@@ -68,12 +68,12 @@ impl<Number> FactoryState<Number> {
 }
 
 impl RuntimeAdapter for FactoryState<Number> {
-	type AccountId = node_sp_core::AccountId;
-	type Balance = node_sp_core::Balance;
-	type Block = node_sp_core::Block;
+	type AccountId = node_primitives::AccountId;
+	type Balance = node_primitives::Balance;
+	type Block = node_primitives::Block;
 	type Phase = sp_runtime::generic::Phase;
 	type Secret = sr25519::Pair;
-	type Index = node_sp_core::Index;
+	type Index = node_primitives::Index;
 
 	type Number = Number;
 

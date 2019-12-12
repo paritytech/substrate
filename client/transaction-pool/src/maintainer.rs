@@ -36,8 +36,8 @@ use sp_runtime::{
 	traits::{Block as BlockT, Extrinsic, Header, NumberFor, ProvideRuntimeApi, SimpleArithmetic},
 };
 use sp_blockchain::HeaderBackend;
-use sc_transaction_graph_api::TransactionPoolMaintainer;
-use sc_transaction_graph_api::runtime_api::TaggedTransactionQueue;
+use sp_transaction_pool::TransactionPoolMaintainer;
+use sp_transaction_poll::runtime_api::TaggedTransactionQueue;
 
 use sc_transaction_graph::{self, ChainApi};
 
@@ -356,7 +356,7 @@ mod tests {
 	use futures::executor::block_on;
 	use codec::Encode;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Block, Transfer}, consensus::{BlockOrigin, SelectChain}};
-	use sc_transaction_graph_api::PoolStatus;
+	use sc_transaction_graph::PoolStatus;
 	use crate::api::{FullChainApi, LightChainApi};
 
 	#[test]

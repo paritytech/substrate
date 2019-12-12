@@ -27,7 +27,7 @@ use frame_support::{
 	traits::{SplitTwoWays, Currency, Randomness},
 };
 use sp_core::u32_trait::{_1, _2, _3, _4};
-use node_sp_core::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Moment, Signature};
+use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Moment, Signature};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{Permill, Perbill, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str};
 use sp_runtime::curve::PiecewiseLinear;
@@ -510,7 +510,7 @@ impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for 
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
-		NodeBlock = node_sp_core::Block,
+		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: frame_system::{Module, Call, Storage, Config, Event},

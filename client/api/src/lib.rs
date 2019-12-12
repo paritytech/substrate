@@ -27,7 +27,7 @@ pub mod notifications;
 pub use sp_blockchain as blockchain;
 pub use backend::*;
 pub use notifications::*;
-pub use call_sc_executor::*;
+pub use call_executor::*;
 pub use client::*;
 pub use light::*;
 pub use notifications::*;

@@ -21,7 +21,7 @@ use test_sc_client::{
 	consensus::BlockOrigin,
 	runtime::{H256, Block, Header},
 };
-use rpc_sp_core::list::ListOrValue;
+use rpc_primitives::list::ListOrValue;
 
 #[test]
 fn should_return_header() {

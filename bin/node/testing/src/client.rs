@@ -25,13 +25,13 @@ pub use test_sc_client::*;
 pub type Executor = sc_executor::NativeExecutor<node_executor::Executor>;
 
 /// Default backend type.
-pub type Backend = client_db::Backend<node_sp_core::Block>;
+pub type Backend = client_db::Backend<node_primitives::Block>;
 
 /// Test client type.
 pub type Client = sc_client::Client<
 	Backend,
 	sc_client::LocalCallExecutor<Backend, Executor>,
-	node_sp_core::Block,
+	node_primitives::Block,
 	node_runtime::RuntimeApi,
 >;
 

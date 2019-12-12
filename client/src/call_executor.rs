@@ -31,7 +31,7 @@ use sp_core::{
 	traits::CodeExecutor,
 };
 use sp_api::{ProofRecorder, InitializeBlock};
-use sc_client_api::{backend, call_sc_executor::CallExecutor};
+use sc_client_api::{backend, call_executor::CallExecutor};
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.

@@ -37,7 +37,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::Block as BlockT,
 };
-use sc_transaction_graph_api::{
+use sc_transaction_graph::{
 	TransactionPool, PoolStatus, ImportNotificationStream,
 	TxHash, TransactionFor, TransactionStatusStreamFor,
 };

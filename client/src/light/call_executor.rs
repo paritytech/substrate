@@ -43,7 +43,7 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sc_client_api::{
 	backend::RemoteBackend,
 	light::RemoteCallRequest,
-	call_sc_executor::CallExecutor
+	call_executor::CallExecutor
 };
 use sc_executor::{RuntimeVersion, NativeVersion};
 

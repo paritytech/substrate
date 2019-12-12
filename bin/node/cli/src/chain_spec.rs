@@ -35,7 +35,7 @@ use pallet_im_online::sr25519::{AuthorityId as ImOnlineId};
 use sc_sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_runtime::{Perbill, traits::{Verify, IdentifyAccount}};
 
-pub use node_sp_core::{AccountId, Balance, Signature};
+pub use node_primitives::{AccountId, Balance, Signature};
 pub use node_runtime::GenesisConfig;
 
 type AccountPublic = <Signature as Verify>::Signer;

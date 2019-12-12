@@ -29,14 +29,14 @@ use sp_runtime::BuildStorage;
 use sp_runtime::traits::Block as BlockT;
 use sp_blockchain::Result as ClientResult;
 
-use crate::call_sc_executor::LocalCallExecutor;
+use crate::call_executor::LocalCallExecutor;
 use crate::client::Client;
 use sc_client_api::{
 	light::Storage as BlockchainStorage,
 };
 use crate::light::backend::Backend;
 use crate::light::blockchain::Blockchain;
-use crate::light::call_sc_executor::GenesisCallExecutor;
+use crate::light::call_executor::GenesisCallExecutor;
 use crate::light::fetcher::LightDataChecker;
 
 /// Create an instance of light client blockchain backend.

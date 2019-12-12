@@ -17,7 +17,7 @@
 //! Test accounts.
 
 use sp_keyring::{AccountKeyring, Sr25519Keyring, Ed25519Keyring};
-use node_sp_core::{AccountId, Balance, Index};
+use node_primitives::{AccountId, Balance, Index};
 use node_runtime::{CheckedExtrinsic, UncheckedExtrinsic, SessionKeys, SignedExtra};
 use sp_runtime::generic::Era;
 use codec::Encode;

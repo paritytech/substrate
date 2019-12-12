@@ -33,9 +33,9 @@
 //! The latter typically requires passing one of:
 //!
 //! - A [`LocalCallExecutor`] running the runtime locally.
-//! - A [`RemoteCallExecutor`](light::call_sc_executor::RemoteCallExecutor) that will ask a
+//! - A [`RemoteCallExecutor`](light::call_executor::RemoteCallExecutor) that will ask a
 //! third-party to perform the executions.
-//! - A [`RemoteOrLocalCallExecutor`](light::call_sc_executor::RemoteOrLocalCallExecutor), combination
+//! - A [`RemoteOrLocalCallExecutor`](light::call_executor::RemoteOrLocalCallExecutor), combination
 //! of the two.
 //!
 //! Additionally, the fourth generic parameter of the `Client` is a marker type representing
@@ -88,11 +88,11 @@ pub use sc_client_api::{
 	blockchain::well_known_cache_keys,
 	blockchain::Info as ChainInfo,
 	notifications::{StorageEventStream, StorageChangeSet},
-	call_sc_executor::CallExecutor,
+	call_executor::CallExecutor,
 	utils,
 };
 pub use crate::{
-	call_sc_executor::LocalCallExecutor,
+	call_executor::LocalCallExecutor,
 	client::{
 		new_with_backend,
 		new_in_mem,

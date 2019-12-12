@@ -24,7 +24,7 @@ use sc_consensus_babe;
 use sc_client::{self, LongestChain};
 use sc_finality_grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
-use node_sp_core::Block;
+use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
 use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
@@ -57,7 +57,7 @@ macro_rules! new_full_start {
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
 		let builder = sc_service::ServiceBuilder::new_full::<
-			node_sp_core::Block, node_runtime::RuntimeApi, node_executor::Executor
+			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
 		>($config)?
 			.with_select_chain(|_config, backend| {
 				Ok(sc_client::LongestChain::new(backend.clone()))
@@ -265,7 +265,7 @@ macro_rules! new_full {
 }
 
 #[allow(dead_code)]
-type ConcreteBlock = node_sp_core::Block;
+type ConcreteBlock = node_primitives::Block;
 #[allow(dead_code)]
 type ConcreteClient =
 	Client<
@@ -392,7 +392,7 @@ mod tests {
 	use sp_consensus::{
 		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy, BlockImport,
 	};
-	use node_sp_core::{Block, DigestItem, Signature};
+	use node_primitives::{Block, DigestItem, Signature};
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
 	use codec::{Encode, Decode};

@@ -18,7 +18,7 @@
 
 /// Money matters.
 pub mod currency {
-	use node_sp_core::Balance;
+	use node_primitives::Balance;
 
 	pub const MILLICENTS: Balance = 1_000_000_000;
 	pub const CENTS: Balance = 1_000 * MILLICENTS;    // assume this is worth about a cent.
@@ -27,7 +27,7 @@ pub mod currency {
 
 /// Time.
 pub mod time {
-	use node_sp_core::{Moment, BlockNumber};
+	use node_primitives::{Moment, BlockNumber};
 
 	/// Since BABE is probabilistic this is the average expected block time that
 	/// we are targetting. Blocks will be produced at a minimum duration defined

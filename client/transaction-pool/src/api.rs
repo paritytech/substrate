@@ -26,7 +26,7 @@ use sc_client_api::{
 };
 use sp_core::{H256, Blake2Hasher, Hasher};
 use sp_runtime::{generic::BlockId, traits::{self, Block as BlockT}, transaction_validity::TransactionValidity};
-use sc_transaction_graph_api::runtime_api::TaggedTransactionQueue;
+use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 
 use crate::error::{self, Error};
 

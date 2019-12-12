@@ -57,7 +57,7 @@ mod tests {
 		WeightFeeCoefficient, constants::currency::*,
 	};
 	use node_runtime::impls::LinearWeightToFee;
-	use node_sp_core::{Balance, Hash, BlockNumber};
+	use node_primitives::{Balance, Hash, BlockNumber};
 	use node_testing::keyring::*;
 	use wabt;
 
@@ -939,7 +939,7 @@ mod tests {
 		let client = TestClientBuilder::new().build();
 		let block1 = changes_trie_block();
 		let block_data = block1.0;
-		let block = node_sp_core::Block::decode(&mut &block_data[..]).unwrap();
+		let block = node_primitives::Block::decode(&mut &block_data[..]).unwrap();
 
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
@@ -1109,7 +1109,7 @@ mod tests {
 	fn block_weight_capacity_report() {
 		// Just report how many transfer calls you could fit into a block. The number should at least
 		// be a few hundred (250 at the time of writing but can change over time). Runs until panic.
-		use node_sp_core::Index;
+		use node_primitives::Index;
 
 		// execution ext.
 		let mut t = new_test_ext(COMPACT_CODE, false);
@@ -1176,7 +1176,7 @@ mod tests {
 		// Just report how big a block can get. Executes until panic. Should be ignored unless if
 		// manually inspected. The number should at least be a few megabytes (5 at the time of
 		// writing but can change over time).
-		use node_sp_core::Index;
+		use node_primitives::Index;
 
 		// execution ext.
 		let mut t = new_test_ext(COMPACT_CODE, false);

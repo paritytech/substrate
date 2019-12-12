@@ -44,7 +44,7 @@ pub use sc_client_api::{
 	},
 };
 use crate::light::blockchain::{Blockchain};
-use crate::light::call_sc_executor::check_execution_proof;
+use crate::light::call_executor::check_execution_proof;
 
 /// Remote data checker.
 pub struct LightDataChecker<E, H, B: BlockT, S: BlockchainStorage<B>> {

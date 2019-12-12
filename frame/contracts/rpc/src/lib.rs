@@ -23,7 +23,7 @@ use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use sp_core::{H256, Bytes};
-use rpc_sp_core::number;
+use rpc_primitives::number;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	generic::BlockId,
