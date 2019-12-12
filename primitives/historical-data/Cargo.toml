@@ -1,0 +1,18 @@
+[package]
+name = "sp-historical-data"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Data associated with its history"
+edition = "2018"
+
+[dependencies]
+rstd = { package = "sp-std", path = "../std", default-features = false }
+smallvec = { version = "0.6", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+  "rstd/std",
+  "smallvec/std",
+]
+test-helpers = []

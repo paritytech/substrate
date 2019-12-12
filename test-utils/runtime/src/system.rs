@@ -94,6 +94,35 @@ pub fn take_block_number() -> Option<BlockNumber> {
 	Number::take()
 }
 
+/// Return 1 if test successfull, 0 otherwhise.
+pub fn test_transactions() -> u64 {
+	let origin_value: Option<u32> = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX);
+	let result: Result<(), _> = storage::with_transaction(|| {
+		if let Ok(val) = storage::with_transaction(|| {
+			storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &99u32);
+			if storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX) == Some(99u32) {
+				Ok(99u32)
+			} else {
+				Err("Error setting value will revert")
+			}
+		}) {
+			if storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX) == Some(val) {
+				Err("expected revert for test")
+			} else {
+				Err("Unexpected revert")
+			}
+		} else {
+			Err("Unexpected revert")
+		}
+	});
+	if result == Err("expected revert for test") {
+		if storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX) == origin_value {
+			return 1;
+		}
+	}
+	0
+}
+
 #[derive(Copy, Clone)]
 enum Mode {
 	Verify,

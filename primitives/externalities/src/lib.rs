@@ -156,6 +156,16 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Returns the SCALE encoded hash.
 	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()>;
+
+	/// Create a new transactional layer.
+	fn storage_start_transaction(&mut self);
+
+	/// Discard a transactional layer, pending changes of every transaction behind this layer are
+	/// dropped (including committed changes) .
+	fn storage_discard_transaction(&mut self);
+
+	/// Commit a transactional layer. The changes stay attached to parent transaction layer.
+	fn storage_commit_transaction(&mut self);
 }
 
 /// Extension for the [`Externalities`] trait.

@@ -16,7 +16,7 @@
 
 //! Structures and functions required to build changes trie for given block.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use codec::{Decode, Encode};
 use hash_db::Hasher;
@@ -101,19 +101,14 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 		Number: BlockNumber,
 {
 
-	let mut children_keys = BTreeSet::<Vec<u8>>::new();
 	let mut children_result = BTreeMap::new();
-	for (storage_key, _) in changes.prospective.children.iter()
-		.chain(changes.committed.children.iter()) {
-		children_keys.insert(storage_key.clone());
-	}
-	for storage_key in children_keys {
+	for (storage_key, _) in changes.changes.children_iter() {
 		let child_index = ChildIndex::<Number> {
 			block: block.clone(),
-			storage_key: storage_key.clone(),
+			storage_key: storage_key.to_vec(),
 		};
 
-		let iter = prepare_extrinsics_input_inner(backend, block, changes, Some(storage_key))?;
+		let iter = prepare_extrinsics_input_inner(backend, block, changes, Some(storage_key.to_vec()))?;
 		children_result.insert(child_index, iter);
 	}
 
@@ -133,13 +128,8 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 		H: Hasher,
 		Number: BlockNumber,
 {
-	let (committed, prospective) = if let Some(sk) = storage_key.as_ref() {
-		(changes.committed.children.get(sk), changes.prospective.children.get(sk))
-	} else {
-		(Some(&changes.committed.top), Some(&changes.prospective.top))
-	};
-	committed.iter().flat_map(|c| c.iter())
-		.chain(prospective.iter().flat_map(|c| c.iter()))
+
+	changes.changes.iter_overlay(storage_key.as_ref().map(|r| r.as_slice()))
 		.filter(|( _, v)| v.extrinsics.is_some())
 		.try_fold(BTreeMap::new(), |mut map: BTreeMap<&[u8], (ExtrinsicIndex<Number>, Vec<u32>)>, (k, v)| {
 			match map.entry(k) {
@@ -336,6 +326,7 @@ mod test {
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
+	use sp_historical_data::synch_linear_transaction::{States, State, History, HistoricalValue};
 	use super::*;
 
 	fn prepare_for_build(zero: u64) -> (
@@ -405,51 +396,58 @@ mod test {
 			]),
 		]);
 		let changes = OverlayedChanges {
-			prospective: OverlayedChangeSet { top: vec![
-				(vec![100], OverlayedValue {
-					value: Some(vec![200]),
-					extrinsics: Some(vec![0, 2].into_iter().collect())
-				}),
-				(vec![103], OverlayedValue {
-					value: None,
-					extrinsics: Some(vec![0, 1].into_iter().collect())
-				}),
-			].into_iter().collect(),
-				children: vec![
-					(child_trie_key1.clone(), vec![
-						(vec![100], OverlayedValue {
-							value: Some(vec![200]),
-							extrinsics: Some(vec![0, 2].into_iter().collect())
-						})
-					].into_iter().collect()),
-					(child_trie_key2, vec![
-						(vec![100], OverlayedValue {
-							value: Some(vec![200]),
-							extrinsics: Some(vec![0, 2].into_iter().collect())
-						})
-					].into_iter().collect()),
-				].into_iter().collect()
-			},
-			committed: OverlayedChangeSet { top: vec![
-				(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
-					value: Some(3u32.encode()),
-					extrinsics: None,
-				}),
-				(vec![100], OverlayedValue {
-					value: Some(vec![202]),
-					extrinsics: Some(vec![3].into_iter().collect())
-				}),
-				(vec![101], OverlayedValue {
-					value: Some(vec![203]),
-					extrinsics: Some(vec![1].into_iter().collect())
-				}),
-			].into_iter().collect(),
-				children: vec![
-					(child_trie_key1, vec![
-						(vec![100], OverlayedValue {
+			changes: OverlayedChangeSet {
+				states: States::test_state(0),
+				top: vec![
+					(EXTRINSIC_INDEX.to_vec(), History::from_iter(vec![
+						(OverlayedValue {
+							value: Some(3u32.encode()),
+							extrinsics: None,
+						}, State::Committed),
+					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
+					(vec![100], History::from_iter(vec![
+						(OverlayedValue {
 							value: Some(vec![202]),
 							extrinsics: Some(vec![3].into_iter().collect())
-						})
+						}, State::Committed),
+						(OverlayedValue {
+							value: Some(vec![200]),
+							extrinsics: Some(vec![3, 0, 2].into_iter().collect())
+						}, State::Transaction(0)),
+					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
+					(vec![101], History::from_iter(vec![
+						(OverlayedValue {
+						value: Some(vec![203]),
+						extrinsics: Some(vec![1].into_iter().collect())
+						}, State::Committed),
+					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
+					(vec![103], History::from_iter(vec![
+						(OverlayedValue {
+						value: None,
+						extrinsics: Some(vec![0, 1].into_iter().collect())
+						}, State::Transaction(0)),
+					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
+				].into_iter().collect(),
+				children: vec![
+					(child_trie_key1, vec![
+						(vec![100], History::from_iter(vec![
+							(OverlayedValue {
+								value: Some(vec![202]),
+								extrinsics: Some(vec![3].into_iter().collect())
+							}, State::Committed),
+							(OverlayedValue {
+								value: Some(vec![200]),
+								extrinsics: Some(vec![3, 0, 2].into_iter().collect())
+							}, State::Transaction(0)),
+						].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
+					].into_iter().collect()),
+					(child_trie_key2, vec![
+						(vec![100], History::from_iter(vec![
+							(OverlayedValue {
+								value: Some(vec![200]),
+								extrinsics: Some(vec![0, 2].into_iter().collect())
+							}, State::Transaction(0)),
+						].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 					].into_iter().collect()),
 				].into_iter().collect(),
 			},
@@ -645,10 +643,12 @@ mod test {
 			let (backend, storage, mut changes, config) = prepare_for_build(zero);
 
 			// 110: missing from backend, set to None in overlay
-			changes.prospective.top.insert(vec![110], OverlayedValue {
-				value: None,
-				extrinsics: Some(vec![1].into_iter().collect())
-			});
+			changes.changes.top.insert(vec![110], History::from_iter(vec![
+				(OverlayedValue {
+					value: None,
+					extrinsics: Some(vec![1].into_iter().collect()),
+				}, State::Transaction(0)),
+			].into_iter().map(|(value, index)| HistoricalValue { value, index })));
 
 			let parent = AnchorBlockId { hash: Default::default(), number: zero + 3 };
 			let changes_trie_nodes = prepare_input(

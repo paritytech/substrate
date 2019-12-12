@@ -214,6 +214,21 @@ pub trait Storage {
 		self.storage_changes_root(parent_hash).ok().and_then(|h| h)
 	}
 
+	/// Start a new transaction.
+	fn start_transaction(&mut self) {
+		self.storage_start_transaction();
+	}
+
+	/// Discard a transactional layer.
+	fn discard_transaction(&mut self) {
+		self.storage_discard_transaction();
+	}
+
+	/// Commit a transactional layer.
+	fn commit_transaction(&mut self) {
+		self.storage_commit_transaction();
+	}
+
 	/// Get the next key in storage after the given one in lexicographic order.
 	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		self.next_storage_key(&key)

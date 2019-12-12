@@ -36,6 +36,7 @@ sc-client = { path = "../../client", optional = true }
 sp-trie = { path = "../../primitives/trie", default-features = false }
 sp-transaction-pool = { package = "sp-transaction-pool", path = "../../primitives/transaction-pool", default-features = false }
 trie-db = { version = "0.16.0", default-features = false }
+sp-historical-data = { path = "../../primitives/historical-data", default-features = false }
 
 [dev-dependencies]
 sc-executor = { path = "../../client/executor" }
@@ -79,5 +80,6 @@ std = [
 	"sc-client",
 	"sp-trie/std",
 	"sp-transaction-pool/std",
+	"sp-historical-data/std",
 	"trie-db/std",
 ]

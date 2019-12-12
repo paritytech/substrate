@@ -107,17 +107,14 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 
 	/// Return a new backend with all pending value.
 	pub fn commit_all(&self) -> InMemory<H> {
-		let top = self.overlay.committed.top.clone().into_iter()
-			.chain(self.overlay.prospective.top.clone().into_iter())
-			.map(|(k, v)| (None, k, v.value));
+		let top = self.overlay.changes.iter_overlay(None)
+			.map(|(k, v)| (None, k.to_vec(), v.value.clone()));
 
-		let children = self.overlay.committed.children.clone().into_iter()
-			.chain(self.overlay.prospective.children.clone().into_iter())
-			.flat_map(|(keyspace, map)| {
-				map.into_iter()
-					.map(|(k, v)| (Some(keyspace.clone()), k, v.value))
-					.collect::<Vec<_>>()
-			});
+		let children = self.overlay.changes.children_iter_overlay()
+			.flat_map(|(keyspace, map)| map
+				.map(|(k, v)| (Some(keyspace.to_vec()), k.to_vec(), v.value.clone()))
+				.collect::<Vec<_>>()
+			);
 
 		self.backend.update(top.chain(children).collect())
 	}

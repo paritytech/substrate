@@ -1,0 +1,29 @@
+
+[package]
+name = "sp-state-machine-fuzz"
+version = "0.0.1"
+authors = []
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies.sp-state-machine]
+path = ".."
+features = ["test-helpers"]
+
+[dependencies.libfuzzer-sys]
+git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_transactions_no_compactness"
+path = "fuzz_targets/fuzz_transactions.rs"
+
+[[bin]]
+name = "fuzz_transactions_with_compactness"
+path = "fuzz_targets/fuzz_transactions_with_compactness.rs"

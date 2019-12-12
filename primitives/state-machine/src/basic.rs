@@ -265,6 +265,19 @@ impl Externalities for BasicExternalities {
 	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		Ok(None)
 	}
+
+	fn storage_start_transaction(&mut self) {
+		warn!("No support for storage transaction");
+	}
+
+	fn storage_discard_transaction(&mut self) {
+		panic!("No support for storage transaction");
+	}
+
+	fn storage_commit_transaction(&mut self) {
+		// no need to fail in this case
+	}
+
 }
 
 impl externalities::ExtensionStore for BasicExternalities {

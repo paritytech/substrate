@@ -124,6 +124,7 @@ members = [
 	"primitives/api/proc-macro",
 	"primitives/api/test",
 	"primitives/arithmetic",
+	"primitives/historical-data",
 	"primitives/io",
 	"primitives/runtime",
 	"primitives/sandbox",
