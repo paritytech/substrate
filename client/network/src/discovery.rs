@@ -459,18 +459,22 @@ mod tests {
 						secio,
 						endpoint,
 						upgrade::Version::V1
-					)
+					).map_ok(|(id, stream)| ((stream, id)))
 				})
-				.and_then(move |(peer_id, stream), endpoint| {
+				.and_then(move |(stream, peer_id), endpoint| {
 					let peer_id2 = peer_id.clone();
-					let upgrade = libp2p::yamux::Config::default()
+					let upgrade = libp2p::mplex::MplexConfig::default()
 						.map_inbound(move |muxer| (peer_id, muxer))
 						.map_outbound(move |muxer| (peer_id2, muxer));
-					upgrade::apply(stream.stream, upgrade, endpoint, upgrade::Version::V1)
+					upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
 				});
 
-			let behaviour = futures::executor::block_on(async move {
-				DiscoveryBehaviour::new(keypair.public(), user_defined.clone(), false, true).await
+			let behaviour = futures::executor::block_on({
+				let user_defined = user_defined.clone();
+				let keypair_public = keypair.public();
+				async move {
+					DiscoveryBehaviour::new(keypair_public, user_defined, false, true).await
+				}
 			});
 			let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
 			let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();

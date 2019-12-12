@@ -994,7 +994,7 @@ pub mod tests {
 		}, tx));
 
 		receive_call_response(&mut network_interface, &mut light_dispatch, peer0.clone(), 0);
-		assert_eq!(response.wait().unwrap().unwrap(), vec![42]);
+		assert_eq!(futures::executor::block_on(response).unwrap().unwrap(), vec![42]);
 	}
 
 	#[test]
@@ -1016,7 +1016,10 @@ pub mod tests {
 			id: 0,
 			proof: StorageProof::empty(),
 		});
-		assert_eq!(response.wait().unwrap().unwrap().remove(b":key".as_ref()).unwrap(), Some(vec![42]));
+		assert_eq!(
+			futures::executor::block_on(response).unwrap().unwrap().remove(b":key".as_ref()).unwrap(),
+			Some(vec![42])
+		);
 	}
 
 	#[test]
@@ -1040,7 +1043,7 @@ pub mod tests {
 				id: 0,
 				proof: StorageProof::empty(),
 		});
-		assert_eq!(response.wait().unwrap().unwrap().remove(b":key".as_ref()).unwrap(), Some(vec![42]));
+		assert_eq!(futures::executor::block_on(response).unwrap().unwrap().remove(b":key".as_ref()).unwrap(), Some(vec![42]));
 	}
 
 	#[test]
@@ -1069,7 +1072,7 @@ pub mod tests {
 			proof: StorageProof::empty(),
 		});
 		assert_eq!(
-			response.wait().unwrap().unwrap().hash(),
+			futures::executor::block_on(response).unwrap().unwrap().hash(),
 			"6443a0b46e0412e626363028115a9f2cf963eeed526b8b33e5316f08b50d0dc3".parse().unwrap(),
 		);
 	}
@@ -1100,7 +1103,7 @@ pub mod tests {
 			roots: vec![],
 			roots_proof: StorageProof::empty(),
 		});
-		assert_eq!(response.wait().unwrap().unwrap(), vec![(100, 2)]);
+		assert_eq!(futures::executor::block_on(response).unwrap().unwrap(), vec![(100, 2)]);
 	}
 
 	#[test]

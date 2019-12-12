@@ -24,7 +24,7 @@ use libp2p::swarm::{Swarm, ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{PollParameters, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::{PeerId, Multiaddr, Transport};
 use rand::seq::SliceRandom;
-use std::{io, task::Context, task::Poll, time::Duration, time::Instant};
+use std::{io, task::Context, task::Poll, time::Duration};
 use crate::message::Message;
 use crate::protocol::legacy_proto::{LegacyProto, LegacyProtoOut};
 use sp_test_primitives::Block;
@@ -62,7 +62,7 @@ fn build_nodes()
 					endpoint,
 					libp2p::core::upgrade::Version::V1
 				)
-					.map(|muxer| (peer_id, libp2p::core::muxing::StreamMuxerBox::new(muxer)))
+					.map_ok(|muxer| (peer_id, libp2p::core::muxing::StreamMuxerBox::new(muxer)))
 			})
 			.timeout(Duration::from_secs(20))
 			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
@@ -178,7 +178,7 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 			Self::OutEvent
 		>
 	> {
-		self.inner.poll(params)
+		self.inner.poll(cx, params)
 	}
 
 	fn inject_replaced(&mut self, peer_id: PeerId, closed_endpoint: ConnectedPoint, new_endpoint: ConnectedPoint) {
@@ -217,10 +217,10 @@ fn two_nodes_transfer_lots_of_packets() {
 
 	let (mut service1, mut service2) = build_nodes();
 
-	let fut1 = future::poll_fn(move |cx| -> Poll<io::Result<_>> {
+	let fut1 = future::poll_fn(move |cx| -> Poll<()> {
 		loop {
-			match ready!(service1.poll(cx)) {
-				Some(LegacyProtoOut::CustomProtocolOpen { peer_id, .. }) => {
+			match ready!(service1.poll_next_unpin(cx)) {
+				Some(Ok(LegacyProtoOut::CustomProtocolOpen { peer_id, .. })) => {
 					for n in 0 .. NUM_PACKETS {
 						service1.send_packet(
 							&peer_id,
@@ -234,17 +234,17 @@ fn two_nodes_transfer_lots_of_packets() {
 	});
 
 	let mut packet_counter = 0u32;
-	let fut2 = future::poll_fn(move |cx| -> Poll<io::Result<_>> {
+	let fut2 = future::poll_fn(move |cx| {
 		loop {
-			match ready!(service2.poll(cx)) {
-				Some(LegacyProtoOut::CustomProtocolOpen { .. }) => {},
-				Some(LegacyProtoOut::CustomMessage { message, .. }) => {
+			match ready!(service2.poll_next_unpin(cx)) {
+				Some(Ok(LegacyProtoOut::CustomProtocolOpen { .. })) => {},
+				Some(Ok(LegacyProtoOut::CustomMessage { message, .. })) => {
 					match Message::<Block>::decode(&mut &message[..]).unwrap() {
 						Message::<Block>::ChainSpecific(message) => {
 							assert_eq!(message.len(), 1);
 							packet_counter += 1;
 							if packet_counter == NUM_PACKETS {
-								return Poll::Ready(Ok(()))
+								return Poll::Ready(())
 							}
 						},
 						_ => panic!(),
@@ -255,8 +255,9 @@ fn two_nodes_transfer_lots_of_packets() {
 		}
 	});
 
-	let combined = fut1.select(fut2).map_err(|(err, _)| err);
-	let _ = tokio::runtime::Runtime::new().unwrap().block_on(combined).unwrap();
+	futures::executor::block_on(async move {
+		future::select(fut1, fut2).await;
+	});
 }
 
 #[test]
@@ -278,10 +279,10 @@ fn basic_two_nodes_requests_in_parallel() {
 	let mut to_receive = to_send.clone();
 	to_send.shuffle(&mut rand::thread_rng());
 
-	let fut1 = future::poll_fn(move |cx| -> Poll<io::Result<_>> {
+	let fut1 = future::poll_fn(move |cx| -> Poll<()> {
 		loop {
-			match ready!(service1.poll(cx)) {
-				Some(LegacyProtoOut::CustomProtocolOpen { peer_id, .. }) => {
+			match ready!(service1.poll_next_unpin(cx)) {
+				Some(Ok(LegacyProtoOut::CustomProtocolOpen { peer_id, .. })) => {
 					for msg in to_send.drain(..) {
 						service1.send_packet(&peer_id, msg.encode());
 					}
@@ -291,15 +292,15 @@ fn basic_two_nodes_requests_in_parallel() {
 		}
 	});
 
-	let fut2 = future::poll_fn(move |cx| -> Poll<io::Result<_>> {
+	let fut2 = future::poll_fn(move |cx| {
 		loop {
-			match ready!(service2.poll(cx)) {
-				Some(LegacyProtoOut::CustomProtocolOpen { .. }) => {},
-				Some(LegacyProtoOut::CustomMessage { message, .. }) => {
+			match ready!(service2.poll_next_unpin(cx)) {
+				Some(Ok(LegacyProtoOut::CustomProtocolOpen { .. })) => {},
+				Some(Ok(LegacyProtoOut::CustomMessage { message, .. })) => {
 					let pos = to_receive.iter().position(|m| m.encode() == message).unwrap();
 					to_receive.remove(pos);
 					if to_receive.is_empty() {
-						return Poll::Ready(Ok(()))
+						return Poll::Ready(())
 					}
 				}
 				_ => panic!(),
@@ -307,8 +308,9 @@ fn basic_two_nodes_requests_in_parallel() {
 		}
 	});
 
-	let combined = fut1.select(fut2).map_err(|(err, _)| err);
-	let _ = tokio::runtime::Runtime::new().unwrap().block_on_all(combined).unwrap();
+	futures::executor::block_on(async move {
+		future::select(fut1, fut2).await;
+	});
 }
 
 #[test]
@@ -318,9 +320,6 @@ fn reconnect_after_disconnect() {
 
 	let (mut service1, mut service2) = build_nodes();
 
-	// We use the `current_thread` runtime because it doesn't require us to have `'static` futures.
-	let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
-
 	// For this test, the services can be in the following states.
 	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 	enum ServiceState { NotConnected, FirstConnec, Disconnected, ConnectedAgain }
@@ -328,12 +327,12 @@ fn reconnect_after_disconnect() {
 	let mut service2_state = ServiceState::NotConnected;
 
 	// Run the events loops.
-	runtime.block_on(future::poll_fn(|cx| -> Poll<Result<_, io::Error>> {
+	futures::executor::block_on(future::poll_fn(|cx| -> Poll<Result<_, io::Error>> {
 		loop {
 			let mut service1_not_ready = false;
 
-			match service1.poll(cx) {
-				Poll::Ready(Some(LegacyProtoOut::CustomProtocolOpen { .. })) => {
+			match service1.poll_next_unpin(cx) {
+				Poll::Ready(Some(Ok(LegacyProtoOut::CustomProtocolOpen { .. }))) => {
 					match service1_state {
 						ServiceState::NotConnected => {
 							service1_state = ServiceState::FirstConnec;
@@ -345,7 +344,7 @@ fn reconnect_after_disconnect() {
 						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
 					}
 				},
-				Poll::Ready(Some(LegacyProtoOut::CustomProtocolClosed { .. })) => {
+				Poll::Ready(Some(Ok(LegacyProtoOut::CustomProtocolClosed { .. }))) => {
 					match service1_state {
 						ServiceState::FirstConnec => service1_state = ServiceState::Disconnected,
 						ServiceState::ConnectedAgain| ServiceState::NotConnected |
@@ -356,8 +355,8 @@ fn reconnect_after_disconnect() {
 				_ => panic!()
 			}
 
-			match service2.poll(cx) {
-				Poll::Ready(Some(LegacyProtoOut::CustomProtocolOpen { .. })) => {
+			match service2.poll_next_unpin(cx) {
+				Poll::Ready(Some(Ok(LegacyProtoOut::CustomProtocolOpen { .. }))) => {
 					match service2_state {
 						ServiceState::NotConnected => {
 							service2_state = ServiceState::FirstConnec;
@@ -369,7 +368,7 @@ fn reconnect_after_disconnect() {
 						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
 					}
 				},
-				Poll::Ready(Some(LegacyProtoOut::CustomProtocolClosed { .. })) => {
+				Poll::Ready(Some(Ok(LegacyProtoOut::CustomProtocolClosed { .. }))) => {
 					match service2_state {
 						ServiceState::FirstConnec => service2_state = ServiceState::Disconnected,
 						ServiceState::ConnectedAgain| ServiceState::NotConnected |
@@ -390,19 +389,19 @@ fn reconnect_after_disconnect() {
 	})).unwrap();
 
 	// Do a second 3-seconds run to make sure we don't get disconnected immediately again.
-	let mut delay = tokio::timer::Delay::new(Instant::now() + Duration::from_secs(3));
-	runtime.block_on(future::poll_fn(|cx| -> Poll<Result<_, io::Error>> {
-		match service1.poll(cx) {
+	let mut delay = futures_timer::Delay::new(Duration::from_secs(3));
+	futures::executor::block_on(future::poll_fn(|cx| -> Poll<Result<_, io::Error>> {
+		match service1.poll_next_unpin(cx) {
 			Poll::Pending => {},
 			_ => panic!()
 		}
 
-		match service2.poll(cx) {
+		match service2.poll_next_unpin(cx) {
 			Poll::Pending => {},
 			_ => panic!()
 		}
 
-		if let Poll::Ready(()) = delay.poll(cx) {
+		if let Poll::Ready(Ok(_)) = delay.poll_unpin(cx) {
 			Poll::Ready(Ok(()))
 		} else {
 			Poll::Pending

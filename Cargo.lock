@@ -5883,7 +5883,6 @@ dependencies = [
  "substrate-test-client 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsigned-varint 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "void 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "zeroize 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
