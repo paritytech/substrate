@@ -2,7 +2,7 @@ use sp_std::marker::PhantomData;
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_core::{U256, H256, H160};
 use sp_runtime::traits::UniqueSaturatedInto;
 use frame_support::storage::{StorageMap, StorageDoubleMap};

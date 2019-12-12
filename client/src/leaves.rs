@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use std::cmp::Reverse;
 use kvdb::{KeyValueDB, DBTransaction};
 use sp_runtime::traits::SimpleArithmetic;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_blockchain::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

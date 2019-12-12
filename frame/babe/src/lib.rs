@@ -33,7 +33,7 @@ use sp_staking::{
 	offence::{Offence, Kind},
 };
 
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 use sp_consensus_babe::{
 	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, NextEpochDescriptor, RawBabePreDigest,

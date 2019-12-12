@@ -17,7 +17,7 @@
 //! A method call executor interface.
 
 use std::{cmp::Ord, panic::UnwindSafe, result, cell::RefCell};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_runtime::{
 	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
 };

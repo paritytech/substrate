@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use parity_scale_codec::{self, Codec, Decode, Encode};
+use codec::{self, Codec, Decode, Encode};
 use sc_client::{
 	light::blockchain::{future_header, RemoteBlockchain},
 	light::fetcher::{Fetcher, RemoteCallRequest},

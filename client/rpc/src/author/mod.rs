@@ -33,7 +33,7 @@ use futures::{StreamExt as _, compat::Compat};
 use futures::future::{ready, FutureExt, TryFutureExt};
 use sc_rpc_api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_core::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
 use sp_sc_rpc_api::ConstructRuntimeApi;
 use sp_runtime::{generic, traits::{self, ProvideRuntimeApi}};

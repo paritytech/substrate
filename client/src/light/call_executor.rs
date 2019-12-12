@@ -20,7 +20,7 @@ use std::{
 	sync::Arc, panic::UnwindSafe, result, cell::RefCell,
 };
 
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_core::{
 	H256, Blake2Hasher, convert_hash, NativeOrEncoded,
 	traits::CodeExecutor,

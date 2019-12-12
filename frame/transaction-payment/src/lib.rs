@@ -32,7 +32,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use frame_support::{
 	decl_storage, decl_module,
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason},
@@ -236,7 +236,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use parity_scale_codec::Encode;
+	use codec::Encode;
 	use frame_support::{
 		parameter_types, impl_outer_origin, impl_outer_dispatch,
 		weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},

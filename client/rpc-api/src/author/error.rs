@@ -41,7 +41,7 @@ pub enum Error {
 	Verification(Box<dyn std::error::Error + Send>),
 	/// Incorrect extrinsic format.
 	#[display(fmt="Invalid extrinsic format: {}", _0)]
-	BadFormat(parity_scale_codec::Error),
+	BadFormat(codec::Error),
 	/// Incorrect seed phrase.
 	#[display(fmt="Invalid seed phrase/SURI")]
 	BadSeedPhrase,

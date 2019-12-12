@@ -18,7 +18,7 @@
 
 use bitflags::bitflags;
 use sp_runtime::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
-use parity_scale_codec::{Encode, Decode, Input, Output, Error};
+use codec::{Encode, Decode, Input, Output, Error};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
@@ -91,7 +91,7 @@ impl Encode for BlockAttributes {
 	}
 }
 
-impl parity_scale_codec::EncodeLike for BlockAttributes {}
+impl codec::EncodeLike for BlockAttributes {}
 
 impl Decode for BlockAttributes {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
@@ -137,7 +137,7 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
-	use parity_scale_codec::{Encode, Decode, Input, Output};
+	use codec::{Encode, Decode, Input, Output};
 	use sp_runtime::Justification;
 	use crate::config::Roles;
 	use super::{
@@ -323,7 +323,7 @@ pub mod generic {
 	}
 
 	impl<H: Decode> Decode for BlockAnnounce<H> {
-		fn decode<I: Input>(input: &mut I) -> Result<Self, parity_scale_codec::Error> {
+		fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
 			let header = H::decode(input)?;
 			let state = BlockState::decode(input).ok();
 			let data = Vec::decode(input).ok();

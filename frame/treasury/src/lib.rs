@@ -70,7 +70,7 @@ use sp_runtime::traits::{
 	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating
 };
 use frame_support::weights::SimpleDispatchInfo;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use frame_system::ensure_signed;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;

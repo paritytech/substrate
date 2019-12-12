@@ -28,7 +28,7 @@ use static_assertions::assert_eq_size;
 #[cfg(feature = "std")]
 use sp_wasm_interface::{FunctionContext, Result};
 
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 use sp_std::{any::TypeId, mem, vec::Vec};
 
@@ -373,11 +373,11 @@ impl_traits_for_arrays! {
 	75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
 }
 
-impl<T: parity_scale_codec::Codec, E: parity_scale_codec::Codec> PassBy for sp_std::result::Result<T, E> {
+impl<T: codec::Codec, E: codec::Codec> PassBy for sp_std::result::Result<T, E> {
 	type PassBy = Codec<Self>;
 }
 
-impl<T: parity_scale_codec::Codec> PassBy for Option<T> {
+impl<T: codec::Codec> PassBy for Option<T> {
 	type PassBy = Codec<Self>;
 }
 

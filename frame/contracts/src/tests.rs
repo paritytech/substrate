@@ -26,7 +26,7 @@ use crate::{
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
-use parity_scale_codec::{Decode, Encode, KeyedVec};
+use codec::{Decode, Encode, KeyedVec};
 use sp_runtime::{
 	Perbill, BuildStorage, transaction_validity::{InvalidTransaction, ValidTransaction},
 	traits::{BlakeTwo256, Hash, IdentityLookup, SignedExtension},

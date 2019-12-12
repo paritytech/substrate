@@ -16,7 +16,7 @@
 
 //! Module helpers for offchain calls.
 
-use parity_scale_codec::Encode;
+use codec::Encode;
 use sp_runtime::app_crypto::{self, RuntimeAppPublic};
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount};
 
@@ -87,7 +87,7 @@ type PublicOf<T, Call, X> = <
 /// A trait to sign and submit transactions in offchain calls.
 pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 	/// Unchecked extrinsic type.
-	type Extrinsic: ExtrinsicT<Call=Call> + parity_scale_codec::Encode;
+	type Extrinsic: ExtrinsicT<Call=Call> + codec::Encode;
 
 	/// A runtime-specific type to produce signed data for the extrinsic.
 	type CreateTransaction: CreateTransaction<T, Self::Extrinsic>;
@@ -118,7 +118,7 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 /// A trait to submit unsigned transactions in offchain calls.
 pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 	/// Unchecked extrinsic type.
-	type Extrinsic: ExtrinsicT<Call=Call> + parity_scale_codec::Encode;
+	type Extrinsic: ExtrinsicT<Call=Call> + codec::Encode;
 
 	/// Submit given call to the transaction pool as unsigned transaction.
 	///
@@ -148,7 +148,7 @@ impl<T, E, S, C, Call> SubmitSignedTransaction<T, Call> for TransactionSubmitter
 	T: crate::Trait,
 	C: CreateTransaction<T, E>,
 	S: Signer<<C as CreateTransaction<T, E>>::Public, <C as CreateTransaction<T, E>>::Signature>,
-	E: ExtrinsicT<Call=Call> + parity_scale_codec::Encode,
+	E: ExtrinsicT<Call=Call> + codec::Encode,
 {
 	type Extrinsic = E;
 	type CreateTransaction = C;
@@ -158,7 +158,7 @@ impl<T, E, S, C, Call> SubmitSignedTransaction<T, Call> for TransactionSubmitter
 /// A blanket impl to use the same submitter for usigned transactions as well.
 impl<T, E, S, C, Call> SubmitUnsignedTransaction<T, Call> for TransactionSubmitter<S, C, E> where
 	T: crate::Trait,
-	E: ExtrinsicT<Call=Call> + parity_scale_codec::Encode,
+	E: ExtrinsicT<Call=Call> + codec::Encode,
 {
 	type Extrinsic = E;
 }

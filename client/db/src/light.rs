@@ -34,7 +34,7 @@ use sp_blockchain::{
 	well_known_cache_keys,
 };
 use sc_client::light::blockchain::Storage as LightBlockchainStorage;
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use sp_core::Blake2Hasher;
 use sp_runtime::generic::{DigestItem, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};

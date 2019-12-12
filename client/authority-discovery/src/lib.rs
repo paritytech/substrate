@@ -59,7 +59,7 @@ use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair
 };
 use sc_client_api::blockchain::HeaderBackend;
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use error::{Error, Result};
 use log::{debug, error, log_enabled, warn};
 use libp2p::Multiaddr;

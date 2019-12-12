@@ -20,7 +20,7 @@ use std::{
 	sync::Arc,
 	collections::{HashSet, HashMap, hash_map::Entry},
 };
-use parity_scale_codec::Decode;
+use codec::Decode;
 use futures::{
 	future::{ready, Either},
 	channel::oneshot::{channel, Sender},

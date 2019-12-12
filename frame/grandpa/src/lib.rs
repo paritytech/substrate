@@ -31,7 +31,7 @@
 pub use sp_finality_grandpa as fg_primitives;
 
 use sp_std::prelude::*;
-use parity_scale_codec::{self as codec, Encode, Decode, Error};
+use codec::{self as codec, Encode, Decode, Error};
 use frame_support::{decl_event, decl_storage, decl_module, dispatch, storage};
 use sp_runtime::{
 	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
@@ -82,7 +82,7 @@ pub struct StoredPendingChange<N> {
 }
 
 impl<N: Decode> Decode for StoredPendingChange<N> {
-	fn decode<I: parity_scale_codec::Input>(value: &mut I) -> core::result::Result<Self, Error> {
+	fn decode<I: codec::Input>(value: &mut I) -> core::result::Result<Self, Error> {
 		let old = OldStoredPendingChange::decode(value)?;
 		let forced = <Option<N>>::decode(value).unwrap_or(None);
 

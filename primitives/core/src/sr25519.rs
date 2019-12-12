@@ -41,7 +41,7 @@ use crate::crypto::Ss58Codec;
 
 use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
 use crate::hash::{H256, H512};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_std::ops::Deref;
 
 #[cfg(feature = "std")]

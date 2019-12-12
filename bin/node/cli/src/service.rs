@@ -395,7 +395,7 @@ mod tests {
 	use node_sp_core::{Block, DigestItem, Signature};
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
-	use parity_scale_codec::{Encode, Decode};
+	use codec::{Encode, Decode};
 	use sp_core::{crypto::Pair as CryptoPair, H256};
 	use sp_runtime::{
 		generic::{BlockId, Era, Digest, SignedPayload},

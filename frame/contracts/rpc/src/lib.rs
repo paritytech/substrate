@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 use sp_blockchain::HeaderBackend;
-use parity_scale_codec::Codec;
+use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use sp_core::{H256, Bytes};

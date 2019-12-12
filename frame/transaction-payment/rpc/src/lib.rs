@@ -17,7 +17,7 @@
 //! RPC interface for the transaction payment module.
 
 use std::sync::Arc;
-use parity_scale_codec::{Codec, Decode};
+use codec::{Codec, Decode};
 use sp_blockchain::HeaderBackend;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;

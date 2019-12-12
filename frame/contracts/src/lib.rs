@@ -110,7 +110,7 @@ pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
 use serde::{Serialize, Deserialize};
 use sp_core::crypto::UncheckedFrom;
 use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
-use parity_scale_codec::{Codec, Encode, Decode};
+use codec::{Codec, Encode, Decode};
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
 	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension},

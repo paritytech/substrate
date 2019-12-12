@@ -21,7 +21,7 @@
 use std::{fmt, result, collections::HashMap, panic::UnwindSafe, marker::PhantomData};
 use log::{warn, trace};
 use hash_db::Hasher;
-use parity_scale_codec::{Decode, Encode, Codec};
+use codec::{Decode, Encode, Codec};
 use sp_core::{
 	storage::well_known_keys, NativeOrEncoded, NeverNativeValue,
 	traits::CodeExecutor, hexdisplay::HexDisplay, hash::H256,
@@ -732,7 +732,7 @@ fn try_read_overlay_value<H, B>(
 #[cfg(test)]
 mod tests {
 	use std::collections::BTreeMap;
-	use parity_scale_codec::Encode;
+	use codec::Encode;
 	use overlayed_changes::OverlayedValue;
 	use super::*;
 	use super::backend::InMemory;

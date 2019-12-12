@@ -26,7 +26,7 @@ use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
 	for_keys_in_child_trie};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::backend::Consolidate;
-use parity_scale_codec::Encode;
+use codec::Encode;
 
 /// Patricia trie-based storage trait.
 pub trait Storage<H: Hasher>: Send + Sync {

@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 use parking_lot::RwLock;
-use parity_scale_codec::{Decode, Encode, Codec};
+use codec::{Decode, Encode, Codec};
 use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{

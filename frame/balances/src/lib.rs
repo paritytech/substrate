@@ -161,7 +161,7 @@
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug};
-use parity_scale_codec::{Codec, Encode, Decode};
+use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module,
 	traits::{

@@ -29,7 +29,7 @@ use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::{Hash, EnsureOrigin};
 use frame_support::weights::SimpleDispatchInfo;
 use frame_support::{
-	dispatch::{Dispatchable, Parameter}, parity_scale_codec::{Encode, Decode},
+	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
 	traits::{ChangeMembers, InitializeMembers}, decl_module, decl_event,
 	decl_storage, ensure,
 };

@@ -24,7 +24,7 @@
 #[cfg(feature = "bench")] extern crate test;
 
 #[doc(hidden)]
-pub use parity_scale_codec;
+pub use codec;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde;
@@ -43,7 +43,7 @@ pub use sp_core::storage::{StorageOverlay, ChildrenStorageOverlay};
 use sp_std::prelude::*;
 use sp_std::convert::TryFrom;
 use sp_core::{crypto, ed25519, sr25519, ecdsa, hash::{H256, H512}};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 pub mod curve;
 pub mod generic;
@@ -441,7 +441,7 @@ pub type ApplyExtrinsicResult = Result<DispatchOutcome, transaction_validity::Tr
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
-pub fn verify_encoded_lazy<V: Verify, T: parity_scale_codec::Encode>(
+pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 	sig: &V,
 	item: &T,
 	signer: &<V::Signer as IdentifyAccount>::AccountId
@@ -629,7 +629,7 @@ impl sp_std::fmt::Debug for OpaqueExtrinsic {
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
-		parity_scale_codec::Encode::using_encoded(&self.0, |bytes| ::sp_core::bytes::serialize(bytes, seq))
+		codec::Encode::using_encoded(&self.0, |bytes| ::sp_core::bytes::serialize(bytes, seq))
 	}
 }
 
@@ -655,7 +655,7 @@ pub fn print(print: impl traits::Printable) {
 #[cfg(test)]
 mod tests {
 	use crate::DispatchError;
-	use parity_scale_codec::{Encode, Decode};
+	use codec::{Encode, Decode};
 
 	#[test]
 	fn opaque_extrinsic_serialization() {

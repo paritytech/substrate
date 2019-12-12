@@ -21,7 +21,7 @@ use crate::{
 
 use sp_version::{NativeVersion, RuntimeVersion};
 
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 
 use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
 

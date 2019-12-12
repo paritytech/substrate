@@ -19,7 +19,7 @@
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use parity_scale_codec::{Decode, Encode, Codec};
+use codec::{Decode, Encode, Codec};
 use hash_db::Hasher;
 use num_traits::Zero;
 use sp_trie::Recorder;

@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use sp_std::prelude::*;
 
 use crate::ConsensusEngineId;
-use crate::parity_scale_codec::{Decode, Encode, Input, Error};
+use crate::codec::{Decode, Encode, Input, Error};
 use sp_core::RuntimeDebug;
 
 /// Generic header digest.
@@ -231,7 +231,7 @@ impl<Hash: Encode> Encode for DigestItem<Hash> {
 	}
 }
 
-impl<Hash: Encode> parity_scale_codec::EncodeLike for DigestItem<Hash> {}
+impl<Hash: Encode> codec::EncodeLike for DigestItem<Hash> {}
 
 impl<Hash: Decode> Decode for DigestItem<Hash> {
 	#[allow(deprecated)]
@@ -352,7 +352,7 @@ impl<'a, Hash: Encode> Encode for DigestItemRef<'a, Hash> {
 	}
 }
 
-impl<'a, Hash: Encode> parity_scale_codec::EncodeLike for DigestItemRef<'a, Hash> {}
+impl<'a, Hash: Encode> codec::EncodeLike for DigestItemRef<'a, Hash> {}
 
 #[cfg(test)]
 mod tests {

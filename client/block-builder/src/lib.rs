@@ -24,7 +24,7 @@
 
 #![warn(missing_docs)]
 
-use parity_scale_codec::Encode;
+use codec::Encode;
 
 use sp_runtime::{
 	generic::BlockId,

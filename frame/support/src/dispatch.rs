@@ -18,7 +18,7 @@
 //! generating values representing lazy module function calls.
 
 pub use crate::sp_std::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq}, marker};
-pub use crate::parity_scale_codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
+pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use frame_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter, ModuleErrorMetadata, ErrorMetadata
@@ -1186,7 +1186,7 @@ macro_rules! decl_module {
 		{ $( $generated_variants:tt )* }
 		{}
 	) => {
-		#[derive($crate::parity_scale_codec::Encode, $crate::parity_scale_codec::Decode)]
+		#[derive($crate::codec::Encode, $crate::codec::Decode)]
 		$( #[$attr] )*
 		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?>
 			where $( $other_where_bounds )*
@@ -1495,8 +1495,8 @@ macro_rules! impl_outer_dispatch {
 		$(#[$attr])*
 		#[derive(
 			Clone, PartialEq, Eq,
-			$crate::parity_scale_codec::Encode,
-			$crate::parity_scale_codec::Decode,
+			$crate::codec::Encode,
+			$crate::codec::Decode,
 			$crate::RuntimeDebug,
 		)]
 		pub enum $call_type {

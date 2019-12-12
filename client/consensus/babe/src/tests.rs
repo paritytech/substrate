@@ -97,7 +97,7 @@ impl DummyProposer {
 	fn propose_with(&mut self, pre_digests: DigestFor<TestBlock>)
 		-> future::Ready<Result<TestBlock, Error>>
 	{
-		use parity_scale_codec::Encode;
+		use codec::Encode;
 		let block_builder = self.factory.client.new_block_at(
 			&BlockId::Hash(self.parent_hash),
 			pre_digests,

@@ -31,7 +31,7 @@ use sp_core::{
 	traits::Externalities, Blake2Hasher,
 };
 use log::warn;
-use parity_scale_codec::Encode;
+use codec::Encode;
 
 /// Simple HashMap-based Externalities impl.
 #[derive(Debug)]

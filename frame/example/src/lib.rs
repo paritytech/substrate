@@ -259,7 +259,7 @@ use frame_support::{
 	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
 };
 use frame_system::{ensure_signed, ensure_root};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_runtime::{
 	traits::{SignedExtension, Bounded, SaturatedConversion},
 	transaction_validity::{

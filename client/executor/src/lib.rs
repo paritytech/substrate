@@ -47,7 +47,7 @@ pub mod error;
 pub use wasmi;
 pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
 pub use sp_version::{RuntimeVersion, NativeVersion};
-pub use parity_scale_codec::Codec;
+pub use codec::Codec;
 #[doc(hidden)]
 pub use sp_core::traits::Externalities;
 #[doc(hidden)]

@@ -43,7 +43,7 @@ mod module1 {
 		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 		type Origin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
-		type GenericType: Default + Clone + parity_scale_codec::Codec + parity_scale_codec::EncodeLike;
+		type GenericType: Default + Clone + codec::Codec + codec::EncodeLike;
 	}
 
 	frame_support::decl_module! {

@@ -46,7 +46,7 @@ use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
 	well_known_cache_keys, HeaderBackend,
 };
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
 use kvdb::{KeyValueDB, DBTransaction};
 use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};

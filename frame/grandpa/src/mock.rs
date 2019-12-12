@@ -22,7 +22,7 @@ use sp_runtime::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, 
 use sp_io;
 use frame_support::{impl_outer_origin, impl_outer_event, parameter_types, weights::Weight};
 use sp_core::H256;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use crate::{AuthorityId, AuthorityList, GenesisConfig, Trait, Module, ConsensusLog};
 use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 

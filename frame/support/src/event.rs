@@ -123,8 +123,8 @@ macro_rules! decl_event {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(
 			Clone, PartialEq, Eq,
-			$crate::parity_scale_codec::Encode,
-			$crate::parity_scale_codec::Decode,
+			$crate::codec::Encode,
+			$crate::codec::Decode,
 			$crate::RuntimeDebug,
 		)]
 		/// Events for this module.
@@ -266,8 +266,8 @@ macro_rules! __decl_generic_event {
 
 		#[derive(
 			Clone, PartialEq, Eq,
-			$crate::parity_scale_codec::Encode,
-			$crate::parity_scale_codec::Decode,
+			$crate::codec::Encode,
+			$crate::codec::Decode,
 			$crate::RuntimeDebug,
 		)]
 		/// Events for this module.
@@ -461,8 +461,8 @@ macro_rules! impl_outer_event {
 		$crate::paste::item! {
 			#[derive(
 				Clone, PartialEq, Eq,
-				$crate::parity_scale_codec::Encode,
-				$crate::parity_scale_codec::Decode,
+				$crate::codec::Encode,
+				$crate::codec::Decode,
 				$crate::RuntimeDebug,
 			)]
 			$(#[$attr])*
@@ -566,7 +566,7 @@ macro_rules! __impl_outer_event_json_metadata {
 mod tests {
 	use super::*;
 	use serde::Serialize;
-	use parity_scale_codec::{Encode, Decode};
+	use codec::{Encode, Decode};
 
 	mod system {
 		pub trait Trait {

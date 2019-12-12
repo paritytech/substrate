@@ -70,7 +70,7 @@ use std::convert::TryInto;
 use hash_db::{Hasher, Prefix};
 use crate::backend::Backend;
 use num_traits::{One, Zero};
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use sp_core;
 use crate::changes_sp_trie::build::prepare_input;
 use crate::changes_sp_trie::build_cache::{IncompleteCachedBuildData, IncompleteCacheAction};

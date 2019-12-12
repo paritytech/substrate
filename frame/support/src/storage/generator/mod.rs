@@ -36,7 +36,7 @@ pub use value::StorageValue;
 #[allow(dead_code)]
 mod tests {
 	use sp_io::TestExternalities;
-	use parity_scale_codec::{Encode, Decode};
+	use codec::{Encode, Decode};
 	use crate::storage::{unhashed, generator::{StorageValue, StorageLinkedMap}};
 
 	struct Runtime {}

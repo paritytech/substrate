@@ -48,7 +48,7 @@
 use pallet_timestamp;
 
 use sp_std::{result, prelude::*};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use frame_support::{
 	decl_storage, decl_module, Parameter, traits::{Get, FindAuthor},
 	ConsensusEngineId,

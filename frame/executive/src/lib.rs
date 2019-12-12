@@ -88,7 +88,7 @@ use sp_runtime::{
 };
 #[allow(deprecated)]
 use sp_runtime::traits::ValidateUnsigned;
-use parity_scale_codec::{Codec, Encode};
+use codec::{Codec, Encode};
 use frame_system::{extrinsics_root, DigestOf};
 
 /// Trait that can be used to execute a block.

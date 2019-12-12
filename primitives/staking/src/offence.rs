@@ -19,7 +19,7 @@
 
 use sp_std::vec::Vec;
 
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_runtime::Perbill;
 
 use crate::SessionIndex;
@@ -51,7 +51,7 @@ pub trait Offence<Offender> {
 	///
 	/// See `Offence::time_slot` for details. The only requirement is that such timescale could be
 	/// represented by a single `u128` value.
-	type TimeSlot: Clone + parity_scale_codec::Codec + Ord;
+	type TimeSlot: Clone + codec::Codec + Ord;
 
 	/// The list of all offenders involved in this incident.
 	///

@@ -88,7 +88,7 @@ pub trait CodeExecutor: Sized + Send + Sync {
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
 	fn call<
 		E: Externalities,
-		R: parity_scale_codec::Codec + PartialEq,
+		R: codec::Codec + PartialEq,
 		NC: FnOnce() -> Result<R, String> + UnwindSafe,
 	>(
 		&self,

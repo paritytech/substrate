@@ -24,7 +24,7 @@ use sp_std::{result, prelude::*};
 use sp_std::collections::btree_set::BTreeSet;
 use frame_support::{decl_module, decl_storage, dispatch, ensure};
 use frame_support::traits::{FindAuthor, VerifySeal, Get};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use frame_system::ensure_none;
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
 use frame_support::weights::SimpleDispatchInfo;

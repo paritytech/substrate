@@ -37,7 +37,7 @@ use frame_support::{
 		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers
 	}
 };
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use frame_system::{self, ensure_signed, ensure_root};
 
 mod mock;

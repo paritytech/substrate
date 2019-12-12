@@ -33,7 +33,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 use sp_std::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
 
@@ -99,7 +99,7 @@ impl InherentData {
 	/// identifier existed, otherwise an error is returned.
 	///
 	/// Inherent identifiers need to be unique, otherwise decoding of these values will not work!
-	pub fn put_data<I: parity_scale_codec::Encode>(
+	pub fn put_data<I: codec::Encode>(
 		&mut self,
 		identifier: InherentIdentifier,
 		inherent: &I,
@@ -118,7 +118,7 @@ impl InherentData {
 	/// Replace the data for an inherent.
 	///
 	/// If it does not exist, the data is just inserted.
-	pub fn replace_data<I: parity_scale_codec::Encode>(
+	pub fn replace_data<I: codec::Encode>(
 		&mut self,
 		identifier: InherentIdentifier,
 		inherent: &I,
@@ -133,7 +133,7 @@ impl InherentData {
 	/// - `Ok(Some(I))` if the data could be found and deserialized.
 	/// - `Ok(None)` if the data could not be found.
 	/// - `Err(_)` if the data could be found, but deserialization did not work.
-	pub fn get_data<I: parity_scale_codec::Decode>(
+	pub fn get_data<I: codec::Decode>(
 		&self,
 		identifier: &InherentIdentifier,
 	) -> Result<Option<I>, Error> {
@@ -189,7 +189,7 @@ impl CheckInherentsResult {
 	///
 	/// - identifier - The identifier of the inherent that generated the error.
 	/// - error - The error that will be encoded.
-	pub fn put_error<E: parity_scale_codec::Encode + IsFatalError>(
+	pub fn put_error<E: codec::Encode + IsFatalError>(
 		&mut self,
 		identifier: InherentIdentifier,
 		error: &E,
@@ -218,7 +218,7 @@ impl CheckInherentsResult {
 	/// - `Ok(Some(I))` if the error could be found and deserialized.
 	/// - `Ok(None)` if the error could not be found.
 	/// - `Err(_)` if the error could be found, but deserialization did not work.
-	pub fn get_error<E: parity_scale_codec::Decode>(
+	pub fn get_error<E: codec::Decode>(
 		&self,
 		identifier: &InherentIdentifier,
 	) -> Result<Option<E>, Error> {
@@ -377,15 +377,15 @@ pub trait IsFatalError {
 
 /// Auxiliary to make any given error resolve to `is_fatal_error() == true`.
 #[derive(Encode)]
-pub struct MakeFatalError<E: parity_scale_codec::Encode>(E);
+pub struct MakeFatalError<E: codec::Encode>(E);
 
-impl<E: parity_scale_codec::Encode> From<E> for MakeFatalError<E> {
+impl<E: codec::Encode> From<E> for MakeFatalError<E> {
 	fn from(err: E) -> Self {
 		MakeFatalError(err)
 	}
 }
 
-impl<E: parity_scale_codec::Encode> IsFatalError for MakeFatalError<E> {
+impl<E: codec::Encode> IsFatalError for MakeFatalError<E> {
 	fn is_fatal_error(&self) -> bool {
 		true
 	}
@@ -396,7 +396,7 @@ pub trait ProvideInherent {
 	/// The call type of the module.
 	type Call;
 	/// The error returned by `check_inherent`.
-	type Error: parity_scale_codec::Encode + IsFatalError;
+	type Error: codec::Encode + IsFatalError;
 	/// The inherent identifier used by this inherent.
 	const INHERENT_IDENTIFIER: self::InherentIdentifier;
 
@@ -413,14 +413,14 @@ pub trait ProvideInherent {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use parity_scale_codec::{Encode, Decode};
+	use codec::{Encode, Decode};
 
 	const TEST_INHERENT_0: InherentIdentifier = *b"testinh0";
 	const TEST_INHERENT_1: InherentIdentifier = *b"testinh1";
 
 	#[derive(Encode)]
-	struct NoFatalError<E: parity_scale_codec::Encode>(E);
-	impl<E: parity_scale_codec::Encode> IsFatalError for NoFatalError<E> {
+	struct NoFatalError<E: codec::Encode>(E);
+	impl<E: codec::Encode> IsFatalError for NoFatalError<E> {
 		fn is_fatal_error(&self) -> bool {
 			false
 		}

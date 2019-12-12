@@ -71,7 +71,7 @@ mod mock;
 mod tests;
 
 use sp_application_crypto::RuntimeAppPublic;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_core::offchain::{OpaqueNetworkState, StorageKind};
 use sp_std::prelude::*;
 use sp_std::convert::TryInto;

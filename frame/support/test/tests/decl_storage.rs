@@ -21,7 +21,7 @@ mod tests {
 	use frame_support::metadata::*;
 	use sp_io::TestExternalities;
 	use std::marker::PhantomData;
-	use parity_scale_codec::{Encode, Decode, EncodeLike};
+	use codec::{Encode, Decode, EncodeLike};
 
 	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
@@ -536,7 +536,7 @@ mod test3 {
 #[allow(dead_code)]
 mod test_append_and_len {
 	use sp_io::TestExternalities;
-	use parity_scale_codec::{Encode, Decode};
+	use codec::{Encode, Decode};
 
 	pub trait Trait {
 		type Origin;

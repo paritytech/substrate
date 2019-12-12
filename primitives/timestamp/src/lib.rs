@@ -18,9 +18,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_scale_codec::Encode;
+use codec::Encode;
 #[cfg(feature = "std")]
-use parity_scale_codec::Decode;
+use codec::Decode;
 #[cfg(feature = "std")]
 use sp_inherents::ProvideInherentData;
 use sp_inherents::{InherentIdentifier, IsFatalError, InherentData};
@@ -57,7 +57,7 @@ impl InherentError {
 	#[cfg(feature = "std")]
 	pub fn try_from(id: &InherentIdentifier, data: &[u8]) -> Option<Self> {
 		if id == &INHERENT_IDENTIFIER {
-			<InherentError as parity_scale_codec::Decode>::decode(&mut &data[..]).ok()
+			<InherentError as codec::Decode>::decode(&mut &data[..]).ok()
 		} else {
 			None
 		}

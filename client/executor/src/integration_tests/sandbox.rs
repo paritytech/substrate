@@ -17,7 +17,7 @@
 use super::{TestExternalities, call_in_wasm};
 use crate::WasmExecutionMethod;
 
-use parity_scale_codec::Encode;
+use codec::Encode;
 use sc_runtime_test::WASM_BINARY;
 use test_case::test_case;
 use wabt;

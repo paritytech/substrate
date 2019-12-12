@@ -234,7 +234,7 @@ mod tests {
 		ModuleMetadata, RuntimeMetadataPrefixed, DefaultByte, ModuleConstantMetadata, DefaultByteGetter,
 		ErrorMetadata,
 	};
-	use parity_scale_codec::{Encode, Decode};
+	use codec::{Encode, Decode};
 	use crate::traits::Get;
 
 	mod system {

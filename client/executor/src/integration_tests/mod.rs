@@ -16,7 +16,7 @@
 
 mod sandbox;
 
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use hex_literal::hex;
 use sp_core::{
 	Blake2Hasher, blake2_128, blake2_256, ed25519, sr25519, map, Pair,

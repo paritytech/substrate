@@ -16,7 +16,7 @@
 
 //! Schema for slots in the aux-db.
 
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use sp_runtime::traits::Header;

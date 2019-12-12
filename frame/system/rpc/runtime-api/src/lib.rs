@@ -25,8 +25,8 @@
 sp_api::decl_runtime_apis! {
 	/// The API to query account nonce (aka transaction index).
 	pub trait AccountNonceApi<AccountId, Index> where
-		AccountId: parity_scale_codec::Codec,
-		Index: parity_scale_codec::Codec,
+		AccountId: codec::Codec,
+		Index: codec::Codec,
 	{
 		/// Get current account nonce of given `AccountId`.
 		fn account_nonce(account: AccountId) -> Index;

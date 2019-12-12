@@ -21,7 +21,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
 
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use sp_core::{convert_hash, traits::CodeExecutor, H256};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
@@ -70,7 +70,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 	) -> ClientResult<Vec<(NumberFor<B>, u32)>>
 		where
 			H: Hasher,
-			H::Out: Ord + parity_scale_codec::Codec,
+			H::Out: Ord + codec::Codec,
 	{
 		// since we need roots of all changes tries for the range begin..max
 		// => remote node can't use max block greater that one that we have passed
@@ -148,7 +148,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 	) -> ClientResult<()>
 		where
 			H: Hasher,
-			H::Out: Ord + parity_scale_codec::Codec,
+			H::Out: Ord + codec::Codec,
 	{
 		// all the checks are sharing the same storage
 		let storage = create_proof_check_backend_storage(remote_roots_proof);
@@ -324,7 +324,7 @@ impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a
 
 #[cfg(test)]
 pub mod tests {
-	use parity_scale_codec::Decode;
+	use codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
 	use sc_executor::{NativeExecutor, WasmExecutionMethod};
 	use sp_blockchain::Error as ClientError;

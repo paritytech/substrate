@@ -18,7 +18,7 @@
 
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
 use std::{fmt::Debug, ops::Deref, fmt, cell::RefCell};
-use crate::parity_scale_codec::{Codec, Encode, Decode};
+use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
 	SignedExtension, Dispatchable,

@@ -26,7 +26,7 @@ use frame_system;
 use sp_std::prelude::*;
 use sp_std::convert::TryInto;
 use sp_std::mem;
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use sp_runtime::traits::{Bounded, SaturatedConversion};
 
 /// The value returned from ext_call and ext_instantiate contract external functions if the call or

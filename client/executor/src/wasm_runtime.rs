@@ -24,7 +24,7 @@ use crate::{wasmi_execution, error::{Error, WasmError}};
 use crate::wasmtime;
 use log::{trace, warn};
 
-use parity_scale_codec::Decode;
+use codec::Decode;
 
 use sp_core::{storage::well_known_keys, traits::Externalities};
 

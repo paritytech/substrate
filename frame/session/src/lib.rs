@@ -120,7 +120,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
-use parity_scale_codec::Decode;
+use codec::Decode;
 use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
 use frame_support::weights::SimpleDispatchInfo;
 use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};

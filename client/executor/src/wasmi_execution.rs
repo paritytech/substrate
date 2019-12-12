@@ -22,7 +22,7 @@ use wasmi::{
 	memory_units::Pages, RuntimeValue::{I32, I64, self},
 };
 use crate::error::{Error, WasmError};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_core::{sandbox as sandbox_primitives, traits::Externalities};
 use crate::sandbox;
 use crate::allocator;

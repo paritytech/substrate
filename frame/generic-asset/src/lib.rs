@@ -151,7 +151,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_scale_codec::{Decode, Encode, HasCompact, Input, Output, Error};
+use codec::{Decode, Encode, HasCompact, Input, Output, Error};
 
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::{
@@ -282,7 +282,7 @@ impl<AccountId: Encode> Encode for PermissionVersions<AccountId> {
 	}
 }
 
-impl<AccountId: Encode> parity_scale_codec::EncodeLike for PermissionVersions<AccountId> {}
+impl<AccountId: Encode> codec::EncodeLike for PermissionVersions<AccountId> {}
 
 impl<AccountId: Decode> Decode for PermissionVersions<AccountId> {
 	fn decode<I: Input>(input: &mut I) -> core::result::Result<Self, Error> {

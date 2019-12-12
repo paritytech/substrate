@@ -16,7 +16,7 @@
 
 pub trait Trait {
 	type Origin;
-	type BlockNumber: parity_scale_codec::Codec + parity_scale_codec::EncodeLike + Default + Clone;
+	type BlockNumber: codec::Codec + codec::EncodeLike + Default + Clone;
 }
 
 frame_support::decl_module! {

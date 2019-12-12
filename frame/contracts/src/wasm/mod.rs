@@ -23,7 +23,7 @@ use crate::exec::{Ext, ExecResult};
 use crate::gas::GasMeter;
 
 use sp_std::prelude::*;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_sandbox;
 
 #[macro_use]

@@ -21,7 +21,7 @@
 //! extensions to support APIs for particular execution context & capabilities.
 
 use std::sync::{Weak, Arc};
-use parity_scale_codec::Decode;
+use codec::Decode;
 use sp_core::{
 	ExecutionContext,
 	offchain::{self, OffchainExt, TransactionPoolExt},
@@ -112,7 +112,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	///
 	/// Based on the execution context and capabilities it produces
 	/// the right manager and extensions object to support desired set of APIs.
-	pub fn manager_and_extensions<E: std::fmt::Debug, R: parity_scale_codec::Codec>(
+	pub fn manager_and_extensions<E: std::fmt::Debug, R: codec::Codec>(
 		&self,
 		at: &BlockId<Block>,
 		context: ExecutionContext,

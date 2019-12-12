@@ -20,7 +20,7 @@ use merlin::Transcript;
 use sp_consensus_babe::{AuthorityId, BabeAuthorityWeight, BABE_ENGINE_ID, BABE_VRF_PREFIX};
 use sp_consensus_babe::{Epoch, SlotNumber, AuthorityPair, BabePreDigest, BabeConfiguration};
 use sp_core::{U256, blake2_256};
-use parity_scale_codec::Encode;
+use codec::Encode;
 use schnorrkel::vrf::VRFInOut;
 use sp_core::Pair;
 use sc_keystore::KeyStorePtr;

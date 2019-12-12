@@ -88,7 +88,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use parity_scale_codec::FullCodec;
+use codec::FullCodec;
 use sp_std::{
 	fmt::Debug,
 	prelude::*,

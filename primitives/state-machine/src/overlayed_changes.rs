@@ -19,7 +19,7 @@
 #[cfg(test)]
 use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeMap, BTreeSet};
-use parity_scale_codec::Decode;
+use codec::Decode;
 use crate::changes_sp_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use sp_core::storage::well_known_keys::EXTRINSIC_INDEX;
 use std::{mem, ops};
@@ -319,7 +319,7 @@ impl OverlayedChanges {
 	/// Inserts storage entry responsible for current extrinsic index.
 	#[cfg(test)]
 	pub(crate) fn set_extrinsic_index(&mut self, extrinsic_index: u32) {
-		use parity_scale_codec::Encode;
+		use codec::Encode;
 		self.prospective.top.insert(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
 			value: Some(extrinsic_index.encode()),
 			extrinsics: None,

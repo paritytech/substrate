@@ -1,4 +1,4 @@
-use frame_support::parity_scale_codec::{Encode, Decode, EncodeLike};
+use frame_support::codec::{Encode, Decode, EncodeLike};
 
 pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>

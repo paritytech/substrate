@@ -232,7 +232,7 @@ pub use sp_externalities::{
 };
 
 #[doc(hidden)]
-pub use parity_scale_codec;
+pub use codec;
 
 pub(crate) mod impls;
 #[cfg(feature = "std")]

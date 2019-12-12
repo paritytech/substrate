@@ -468,7 +468,7 @@ mod tests {
 	use super::*;
 	use sp_transaction_pool::TransactionStatus;
 	use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction};
-	use parity_scale_codec::Encode;
+	use codec::Encode;
 	use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 	use assert_matches::assert_matches;
 	use crate::base_pool::Limit;

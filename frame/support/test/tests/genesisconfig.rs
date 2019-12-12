@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub trait Trait {
-	type BlockNumber: parity_scale_codec::Codec + parity_scale_codec::EncodeLike + Default;
+	type BlockNumber: codec::Codec + codec::EncodeLike + Default;
 	type Origin;
 }
 

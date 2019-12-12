@@ -17,7 +17,7 @@
 #![cfg(test)]
 
 use futures::{future, prelude::*, try_ready};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use libp2p::core::nodes::Substream;
 use libp2p::core::{ConnectedPoint, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::swarm::{Swarm, ProtocolsHandler, IntoProtocolsHandler};

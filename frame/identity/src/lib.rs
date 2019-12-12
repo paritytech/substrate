@@ -68,7 +68,7 @@
 use sp_std::prelude::*;
 use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_runtime::{traits::{StaticLookup, EnsureOrigin, Zero}, RuntimeDebug};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, dispatch::Result,
@@ -134,7 +134,7 @@ pub enum Data {
 }
 
 impl Decode for Data {
-	fn decode<I: parity_scale_codec::Input>(input: &mut I) -> sp_std::result::Result<Self, parity_scale_codec::Error> {
+	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
 		let b = input.read_byte()?;
 		Ok(match b {
 			0 => Data::None,
@@ -147,7 +147,7 @@ impl Decode for Data {
 			35 => Data::Sha256(<[u8; 32]>::decode(input)?),
 			36 => Data::Keccak256(<[u8; 32]>::decode(input)?),
 			37 => Data::ShaThree256(<[u8; 32]>::decode(input)?),
-			_ => return Err(parity_scale_codec::Error::from("invalid leading byte")),
+			_ => return Err(codec::Error::from("invalid leading byte")),
 		})
 	}
 }
@@ -169,7 +169,7 @@ impl Encode for Data {
 		}
 	}
 }
-impl parity_scale_codec::EncodeLike for Data {}
+impl codec::EncodeLike for Data {}
 
 impl Default for Data {
 	fn default() -> Self {
@@ -257,7 +257,7 @@ impl Encode for IdentityFields {
 	}
 }
 impl Decode for IdentityFields {
-	fn decode<I: parity_scale_codec::Input>(input: &mut I) -> sp_std::result::Result<Self, parity_scale_codec::Error> {
+	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
 		let field = u64::decode(input)?;
 		Ok(Self(<BitFlags<IdentityField>>::from_bits(field as u64).map_err(|_| "invalid value")?))
 	}

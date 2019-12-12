@@ -22,7 +22,7 @@ use std::{time, sync::Arc};
 use sc_sc_client_api::CallExecutor;
 use sp_blockchain;
 use sc_client::Client as SubstrateClient;
-use parity_scale_codec::Decode;
+use codec::Decode;
 use sp_consensus::{evaluation};
 use sp_inherents::InherentData;
 use log::{error, info, debug, trace};

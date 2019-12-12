@@ -29,7 +29,7 @@ use sp_state_machine::{
 };
 
 use sp_consensus::SelectChain;
-use parity_scale_codec::Encode;
+use codec::Encode;
 
 fn calling_function_with_strat(strat: ExecutionStrategy) {
 	let client = TestClientBuilder::new().set_execution_strategy(strat).build();

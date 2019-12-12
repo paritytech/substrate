@@ -17,7 +17,7 @@
 //! Primitives for the runtime modules.
 
 use sp_std::{self, convert::{TryFrom, TryInto}};
-use parity_scale_codec::HasCompact;
+use codec::HasCompact;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,

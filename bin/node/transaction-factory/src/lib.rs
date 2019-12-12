@@ -34,7 +34,7 @@ use sp_consensus::{
 	SelectChain
 };
 use sp_consensus::block_import::BlockImport;
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use sp_core::{Blake2Hasher, Hasher};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{

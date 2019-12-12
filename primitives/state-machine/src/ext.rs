@@ -30,7 +30,7 @@ use sp_core::{
 };
 use sp_trie::{trie_types::Layout, MemoryDB, default_child_trie_root};
 use sp_externalities::Extensions;
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 
 use std::{error, fmt, any::{Any, TypeId}};
 use log::{warn, trace};
@@ -578,7 +578,7 @@ where
 mod tests {
 	use super::*;
 	use hex_literal::hex;
-	use parity_scale_codec::Encode;
+	use codec::Encode;
 	use sp_core::{Blake2Hasher, storage::well_known_keys::EXTRINSIC_INDEX};
 	use crate::{
 		changes_sp_trie::{

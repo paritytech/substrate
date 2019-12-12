@@ -115,17 +115,17 @@ impl Roles {
 	}
 }
 
-impl parity_scale_codec::Encode for Roles {
-	fn encode_to<T: parity_scale_codec::Output>(&self, dest: &mut T) {
+impl codec::Encode for Roles {
+	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
 		dest.push_byte(self.bits())
 	}
 }
 
-impl parity_scale_codec::EncodeLike for Roles {}
+impl codec::EncodeLike for Roles {}
 
-impl parity_scale_codec::Decode for Roles {
-	fn decode<I: parity_scale_codec::Input>(input: &mut I) -> Result<Self, parity_scale_codec::Error> {
-		Self::from_bits(input.read_byte()?).ok_or_else(|| parity_scale_codec::Error::from("Invalid bytes"))
+impl codec::Decode for Roles {
+	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
+		Self::from_bits(input.read_byte()?).ok_or_else(|| codec::Error::from("Invalid bytes"))
 	}
 }
 

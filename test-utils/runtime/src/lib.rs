@@ -23,7 +23,7 @@ pub mod genesismap;
 pub mod system;
 
 use sp_std::{prelude::*, marker::PhantomData};
-use parity_scale_codec::{Encode, Decode, Input, Error};
+use codec::{Encode, Decode, Input, Error};
 
 use sp_core::{Blake2Hasher, OpaqueMetadata, RuntimeDebug};
 use sp_application_crypto::{ed25519, sr25519, RuntimeAppPublic};
@@ -213,7 +213,7 @@ impl<B: BlockT> Encode for DecodeFails<B> {
 	}
 }
 
-impl<B: BlockT> parity_scale_codec::EncodeLike for DecodeFails<B> {}
+impl<B: BlockT> codec::EncodeLike for DecodeFails<B> {}
 
 impl<B: BlockT> DecodeFails<B> {
 	/// Create a new instance.
@@ -943,7 +943,7 @@ mod tests {
 	};
 	use sp_core::storage::well_known_keys::HEAP_PAGES;
 	use sp_state_machine::ExecutionStrategy;
-	use parity_scale_codec::Encode;
+	use codec::Encode;
 
 	#[test]
 	fn returns_mutable_static() {

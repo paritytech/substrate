@@ -19,7 +19,7 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 
-use crate::parity_scale_codec::{Decode, Encode, Input, Output, Error};
+use crate::codec::{Decode, Encode, Input, Output, Error};
 
 /// Era period
 pub type Period = u64;
@@ -111,7 +111,7 @@ impl Encode for Era {
 	}
 }
 
-impl parity_scale_codec::EncodeLike for Era {}
+impl codec::EncodeLike for Era {}
 
 impl Decode for Era {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {

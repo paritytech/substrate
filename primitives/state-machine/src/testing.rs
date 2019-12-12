@@ -32,7 +32,7 @@ use sp_core::{
 	},
 	hash::H256, Blake2Hasher,
 };
-use parity_scale_codec::Encode;
+use codec::Encode;
 use sp_externalities::{Extensions, Extension};
 
 type StorageTuple = (BTreeMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>);

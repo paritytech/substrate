@@ -30,7 +30,7 @@
 #![forbid(missing_docs, unsafe_code)]
 use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin};
 
-use parity_scale_codec::{Encode, Decode, Codec};
+use codec::{Encode, Decode, Codec};
 use sp_consensus::{
 	self, BlockImport, Environment, Proposer, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
 	BlockOrigin, Error as ConsensusError, SelectChain, SlotData,

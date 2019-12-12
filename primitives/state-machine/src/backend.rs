@@ -25,7 +25,7 @@ use sp_trie::{
 	TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration,
 	trie_types::{TrieDBMut, Layout},
 };
-use parity_scale_codec::{Encode, Codec};
+use codec::{Encode, Codec};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.

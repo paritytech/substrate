@@ -23,7 +23,7 @@ use std::{
 use log::{info, trace, warn};
 use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use hash_db::{Hasher, Prefix};
 use sp_core::{
 	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash,

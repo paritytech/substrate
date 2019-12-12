@@ -58,7 +58,7 @@ use frame_support::{
 	traits::{Currency, OnUnbalanced, Imbalance},
 };
 use sp_std::vec::Vec;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 /// The proportion of the slashing reward to be paid out on the first slashing detection.
 /// This is f_1 in the paper.

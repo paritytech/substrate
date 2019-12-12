@@ -24,7 +24,7 @@ use sp_consensus_babe::{Epoch, SlotNumber, NextEpochDescriptor};
 use fork_tree::ForkTree;
 use parking_lot::{Mutex, MutexGuard};
 use sp_runtime::traits::{Block as BlockT, NumberFor, One, Zero};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sc_sc_client_api::utils::is_descendent_of;
 use sp_blockchain::{HeaderMetadata, HeaderBackend, Error as ClientError};
 use sp_core::H256;

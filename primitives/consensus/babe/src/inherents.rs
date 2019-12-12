@@ -22,7 +22,7 @@ use sp_inherents::{InherentDataProviders, ProvideInherentData};
 use sp_timestamp::TimestampInherentData;
 
 #[cfg(feature = "std")]
-use parity_scale_codec::Decode;
+use codec::Decode;
 use sp_std::result::Result;
 
 /// The BABE inherent identifier.

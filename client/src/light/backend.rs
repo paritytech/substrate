@@ -343,7 +343,7 @@ impl<H: Hasher> std::fmt::Debug for GenesisOrUnavailableState<H> {
 
 impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	where
-		H::Out: Ord + parity_scale_codec::Codec,
+		H::Out: Ord + codec::Codec,
 {
 	type Error = ClientError;
 	type Transaction = ();

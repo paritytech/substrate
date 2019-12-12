@@ -125,7 +125,7 @@ impl GenesisParameters {
 
 impl generic_test_sc_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
-		use parity_scale_codec::Encode;
+		use codec::Encode;
 		let mut storage = self.genesis_config().genesis_map();
 
 		let child_roots = storage.1.iter().map(|(sk, child_map)| {

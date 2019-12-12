@@ -21,7 +21,7 @@ use crate::wasmtime::util::{
 	checked_range, cranelift_ir_signature, read_memory_into, write_memory_from,
 };
 
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use cranelift_codegen::ir;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use log::trace;

@@ -256,7 +256,7 @@ mod slashing;
 pub mod inflation;
 
 use sp_std::{prelude::*, result};
-use parity_scale_codec::{HasCompact, Encode, Decode};
+use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure,
 	weights::SimpleDispatchInfo,

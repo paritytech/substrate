@@ -20,7 +20,7 @@
 
 use sp_std::prelude::*;
 use frame_support::weights::{Weight, DispatchClass};
-use parity_scale_codec::{Encode, Codec, Decode};
+use codec::{Encode, Codec, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use sp_runtime::traits::{UniqueSaturatedInto, SaturatedConversion};

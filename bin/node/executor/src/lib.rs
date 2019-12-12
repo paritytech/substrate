@@ -33,7 +33,7 @@ mod tests {
 	use sc_executor::error::Result;
 	use super::Executor;
 	use {balances, contracts, indices, system, timestamp};
-	use parity_scale_codec::{Encode, Decode, Joiner};
+	use codec::{Encode, Decode, Joiner};
 	use frame_support::{
 		Hashable, StorageValue, StorageMap,
 		traits::Currency,

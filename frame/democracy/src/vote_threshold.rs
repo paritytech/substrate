@@ -18,7 +18,7 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_runtime::traits::{Zero, IntegerSquareRoot};
 use sp_std::ops::{Add, Mul, Div, Rem};
 

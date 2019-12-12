@@ -20,7 +20,7 @@
 
 use std::cell::RefCell;
 use crate::{Module, Trait};
-use parity_scale_codec::Encode;
+use codec::Encode;
 use sp_runtime::Perbill;
 use sp_staking::{
 	SessionIndex,

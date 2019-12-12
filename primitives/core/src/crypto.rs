@@ -28,7 +28,7 @@ use sp_std::convert::TryFrom;
 use parking_lot::Mutex;
 #[cfg(feature = "std")]
 use rand::{RngCore, rngs::OsRng};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use regex::Regex;
 #[cfg(feature = "std")]

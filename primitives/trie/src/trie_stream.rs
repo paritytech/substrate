@@ -18,11 +18,11 @@
 
 use hash_db::Hasher;
 use trie_root;
-use parity_scale_codec::Encode;
+use codec::Encode;
 use sp_std::vec::Vec;
 use crate::trie_constants;
 use crate::node_header::{NodeKind, size_and_prefix_iterator};
-use crate::node_parity_scale_codec::Bitmap;
+use crate::node_codec::Bitmap;
 
 const BRANCH_NODE_NO_VALUE: u8 = 254;
 const BRANCH_NODE_WITH_VALUE: u8 = 255;

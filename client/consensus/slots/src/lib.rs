@@ -30,7 +30,7 @@ pub use slots::{SignedDuration, SlotInfo};
 use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData};
 use futures::{prelude::*, future::{self, Either}};
 use futures_timer::Delay;
@@ -423,7 +423,7 @@ impl<T: Clone> SlotDuration<T> {
 		T: SlotData + Encode + Decode + Debug,
 	{
 		match client.get_aux(T::SLOT_KEY)? {
-			Some(v) => <T as parity_scale_codec::Decode>::decode(&mut &v[..])
+			Some(v) => <T as codec::Decode>::decode(&mut &v[..])
 				.map(SlotDuration)
 				.map_err(|_| {
 					sp_blockchain::Error::Backend({

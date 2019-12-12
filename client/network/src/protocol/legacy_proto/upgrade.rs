@@ -17,11 +17,11 @@
 use crate::config::ProtocolId;
 use bytes::{Bytes, BytesMut};
 use libp2p::core::{Negotiated, Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
-use libp2p::tokio_parity_scale_codec::Framed;
+use libp2p::tokio_codec::Framed;
 use std::{collections::VecDeque, io, vec::IntoIter as VecIntoIter};
 use futures::{prelude::*, future, stream};
 use tokio_io::{AsyncRead, AsyncWrite};
-use unsigned_varint::parity_scale_codec::UviBytes;
+use unsigned_varint::codec::UviBytes;
 
 /// Connection upgrade for a single protocol.
 ///

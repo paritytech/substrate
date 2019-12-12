@@ -21,7 +21,7 @@
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_keyring::sr25519::Keyring;
 use node_runtime::{
 	Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, BalancesCall, ExistentialDeposit,

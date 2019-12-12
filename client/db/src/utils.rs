@@ -25,7 +25,7 @@ use kvdb::{KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use log::debug;
 
-use parity_scale_codec::Decode;
+use codec::Decode;
 use sp_trie::DBValue;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{

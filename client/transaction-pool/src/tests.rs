@@ -17,7 +17,7 @@
 
 use super::*;
 
-use parity_scale_codec::Encode;
+use codec::Encode;
 use futures::executor::block_on;
 use sc_transaction_graph::{self, Pool};
 use substrate_test_runtime_client::{runtime::{AccountId, Block, Hash, Index, Extrinsic, Transfer}, AccountKeyring::{self, *}};

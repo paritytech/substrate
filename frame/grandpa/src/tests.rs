@@ -21,7 +21,7 @@
 use sp_runtime::{testing::Digest, traits::{Header, OnFinalize}};
 use crate::mock::*;
 use frame_system::{EventRecord, Phase};
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use fg_sp_core::ScheduledChange;
 use super::*;
 

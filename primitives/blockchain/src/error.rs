@@ -23,7 +23,7 @@ use sp_runtime::transaction_validity::TransactionValidityError;
 use sp_block_builder::compatability_v3;
 use sp_consensus;
 use derive_more::{Display, From};
-use parity_scale_codec::Error as CodecError;
+use codec::Error as CodecError;
 
 /// Client Result type alias
 pub type Result<T> = result::Result<T, Error>;

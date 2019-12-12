@@ -22,7 +22,7 @@
 use sp_core::Pair;
 use sp_consensus_aura::AURA_ENGINE_ID;
 use sp_runtime::generic::{DigestItem, OpaqueDigestItemId};
-use parity_scale_codec::{Encode, Codec};
+use codec::{Encode, Codec};
 use std::fmt::Debug;
 
 type Signature<P> = <P as Pair>::Signature;

@@ -24,7 +24,7 @@ use sp_runtime::{
 	RuntimeDebug,
 	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable, Saturating},
 };
-use parity_scale_codec::{Ref, Encode, Decode, Input, Output, Error};
+use codec::{Ref, Encode, Decode, Input, Output, Error};
 use frame_support::{
 	decl_module, decl_storage, decl_event, ensure,
 	dispatch,
@@ -160,7 +160,7 @@ impl Encode for Vote {
 	}
 }
 
-impl parity_scale_codec::EncodeLike for Vote {}
+impl codec::EncodeLike for Vote {}
 
 impl Decode for Vote {
 	fn decode<I: Input>(input: &mut I) -> core::result::Result<Self, Error> {

@@ -18,7 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_scale_codec::{Encode, Decode, Codec};
+use codec::{Encode, Decode, Codec};
 use sp_std::vec::Vec;
 use sp_runtime::ConsensusEngineId;
 

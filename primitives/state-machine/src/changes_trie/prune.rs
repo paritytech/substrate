@@ -25,7 +25,7 @@ use crate::trie_backend_essence::TrieBackendEssence;
 use crate::changes_sp_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
 use crate::changes_sp_trie::storage::TrieBackendAdapter;
 use crate::changes_sp_trie::input::{ChildIndex, InputKey};
-use parity_scale_codec::{Decode, Codec};
+use codec::{Decode, Codec};
 
 /// Get number of oldest block for which changes trie is not pruned
 /// given changes trie configuration, pruning parameter and number of
@@ -206,7 +206,7 @@ mod tests {
 	use sp_core::Blake2Hasher;
 	use crate::backend::insert_into_memory_db;
 	use crate::changes_sp_trie::storage::InMemoryStorage;
-	use parity_scale_codec::Encode;
+	use codec::Encode;
 	use super::*;
 
 	fn config(interval: u32, levels: u32) -> Configuration {

@@ -28,7 +28,7 @@ use sp_inherents::{InherentData, CheckInherentsResult};
 #[deprecated(note = "These definitions here are only for compatibility reasons")]
 pub mod compatability_v3 {
 	use sp_runtime::{DispatchOutcome, transaction_validity};
-	use parity_scale_codec::{Encode, Decode};
+	use codec::{Encode, Decode};
 
 	#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode, Debug)]
 	pub enum ApplyError {

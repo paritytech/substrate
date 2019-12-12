@@ -24,7 +24,7 @@ use std::fmt::Display;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use sp_core::{self, Hasher, Blake2Hasher, TypeId};
-use crate::parity_scale_codec::{Codec, Encode, Decode};
+use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
@@ -1025,12 +1025,12 @@ impl<'a> TrailingZeroInput<'a> {
 	}
 }
 
-impl<'a> parity_scale_codec::Input for TrailingZeroInput<'a> {
-	fn remaining_len(&mut self) -> Result<Option<usize>, parity_scale_codec::Error> {
+impl<'a> codec::Input for TrailingZeroInput<'a> {
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
 		Ok(None)
 	}
 
-	fn read(&mut self, into: &mut [u8]) -> Result<(), parity_scale_codec::Error> {
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
 		let len_from_inner = into.len().min(self.0.len());
 		into[..len_from_inner].copy_from_slice(&self.0[..len_from_inner]);
 		for i in &mut into[len_from_inner..] {
@@ -1144,8 +1144,8 @@ macro_rules! impl_opaque_keys {
 	) => {
 		#[derive(
 			Default, Clone, PartialEq, Eq,
-			$crate::parity_scale_codec::Encode,
-			$crate::parity_scale_codec::Decode,
+			$crate::codec::Encode,
+			$crate::codec::Decode,
 			$crate::RuntimeDebug,
 		)]
 		#[cfg_attr(feature = "std", derive($crate::serde::Serialize, $crate::serde::Deserialize))]
@@ -1171,7 +1171,7 @@ macro_rules! impl_opaque_keys {
 						>::generate_pair(seed.clone()),
 					)*
 				};
-				$crate::parity_scale_codec::Encode::encode(&keys)
+				$crate::codec::Encode::encode(&keys)
 			}
 		}
 
@@ -1278,7 +1278,7 @@ pub trait BlockIdTo<Block: self::Block> {
 #[cfg(test)]
 mod tests {
 	use super::AccountIdConversion;
-	use crate::parity_scale_codec::{Encode, Decode, Input};
+	use crate::codec::{Encode, Decode, Input};
 
 	mod t {
 		use sp_core::crypto::KeyTypeId;

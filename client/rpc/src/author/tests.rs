@@ -18,7 +18,7 @@ use super::*;
 
 use std::sync::Arc;
 use assert_matches::assert_matches;
-use parity_scale_codec::Encode;
+use codec::Encode;
 use sp_core::{
 	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore}, traits::BareCryptoStorePtr, ed25519,
 	crypto::Pair,

@@ -27,7 +27,7 @@ use sp_runtime::Justification;
 use sp_runtime::traits::{Block as BlockT};
 use sp_runtime::generic::BlockId;
 use sp_core::Blake2Hasher;
-use parity_scale_codec::alloc::collections::hash_map::HashMap;
+use codec::alloc::collections::hash_map::HashMap;
 
 /// Extension trait for a test client.
 pub trait ClientExt<Block: BlockT>: Sized {

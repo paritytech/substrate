@@ -354,7 +354,7 @@ impl<N: Clone + Copy + SimpleArithmetic> TxPoolRevalidationStatus<N> {
 mod tests {
 	use super::*;
 	use futures::executor::block_on;
-	use parity_scale_codec::Encode;
+	use codec::Encode;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Block, Transfer}, consensus::{BlockOrigin, SelectChain}};
 	use sc_transaction_graph_api::PoolStatus;
 	use crate::api::{FullChainApi, LightChainApi};

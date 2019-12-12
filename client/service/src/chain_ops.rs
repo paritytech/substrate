@@ -30,7 +30,7 @@ use sp_runtime::traits::{
 	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
 };
 use sp_runtime::generic::{BlockId, SignedBlock};
-use parity_scale_codec::{Decode, Encode, IoReader};
+use codec::{Decode, Encode, IoReader};
 use sc_client::Client;
 use sp_consensus::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};
 use sp_consensus::BlockOrigin;

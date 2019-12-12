@@ -32,7 +32,7 @@ use sp_runtime::traits::Hash;
 use sp_staking::{
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails},
 };
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 /// A binary blob which represents a SCALE codec-encoded `O::TimeSlot`.
 type OpaqueTimeSlot = Vec<u8>;

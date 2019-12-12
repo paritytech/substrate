@@ -31,7 +31,7 @@ pub use serde;
 #[doc(hidden)]
 pub use sp_std;
 #[doc(hidden)]
-pub use parity_scale_codec;
+pub use codec;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use once_cell;
@@ -199,7 +199,7 @@ pub use serde::{Serialize, Deserialize};
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use parity_scale_codec::{Codec, EncodeLike};
+	use codec::{Codec, EncodeLike};
 	use frame_metadata::{
 		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
 		StorageEntryModifier, DefaultByteGetter, StorageHasher,

@@ -18,7 +18,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::collections::btree_map::Entry;
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use hash_db::Hasher;
 use num_traits::One;
 use crate::backend::Backend;
@@ -329,7 +329,7 @@ fn prepare_digest_input<'a, H, Number>(
 
 #[cfg(test)]
 mod test {
-	use parity_scale_codec::Encode;
+	use codec::Encode;
 	use sp_core::Blake2Hasher;
 	use sp_core::storage::well_known_keys::{EXTRINSIC_INDEX};
 	use crate::backend::InMemory;

@@ -18,7 +18,7 @@
 
 use sp_blockchain::Result as ClientResult;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 use crate::cache::{CacheItemT, ComplexBlockId};
 use crate::cache::list_storage::{Storage};

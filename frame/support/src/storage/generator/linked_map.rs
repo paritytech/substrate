@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use parity_scale_codec::{FullCodec, Encode, Decode, EncodeLike, Ref};
+use codec::{FullCodec, Encode, Decode, EncodeLike, Ref};
 use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}, traits::Len};
 use sp_std::{prelude::*, marker::PhantomData};
 
@@ -419,11 +419,11 @@ where
 	}
 
 	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: parity_scale_codec::DecodeLength + Len
+		where V: codec::DecodeLength + Len
 	{
 		let key = Self::storage_linked_map_final_key(key);
 		if let Some(v) = unhashed::get_raw(key.as_ref()) {
-			<V as parity_scale_codec::DecodeLength>::len(&v).map_err(|e| e.what())
+			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
 		} else {
 			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
 				.map(|v| v.len())

@@ -20,7 +20,7 @@ use sp_keyring::{AccountKeyring, Sr25519Keyring, Ed25519Keyring};
 use node_sp_core::{AccountId, Balance, Index};
 use node_runtime::{CheckedExtrinsic, UncheckedExtrinsic, SessionKeys, SignedExtra};
 use sp_runtime::generic::Era;
-use parity_scale_codec::Encode;
+use codec::Encode;
 
 /// Alice's account id.
 pub fn alice() -> AccountId { AccountKeyring::Alice.into() }

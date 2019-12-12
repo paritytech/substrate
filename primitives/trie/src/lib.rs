@@ -31,7 +31,7 @@ pub use error::Error;
 /// The Substrate format implementation of `TrieStream`.
 pub use trie_stream::TrieStream;
 /// The Substrate format implementation of `NodeCodec`.
-pub use node_parity_scale_codec::NodeCodec;
+pub use node_codec::NodeCodec;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration, nibble_ops,
@@ -70,7 +70,7 @@ impl<H: Hasher> TrieConfiguration for Layout<H> {
 	}
 
 	fn encode_index(input: u32) -> Vec<u8> {
-		parity_scale_codec::Encode::encode(&parity_scale_codec::Compact(input))
+		codec::Encode::encode(&codec::Compact(input))
 	}
 }
 
@@ -319,7 +319,7 @@ mod trie_constants {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use parity_scale_codec::{Encode, Compact};
+	use codec::{Encode, Compact};
 	use sp_core::Blake2Hasher;
 	use hash_db::{HashDB, Hasher};
 	use trie_db::{DBValue, TrieMut, Trie, NodeCodec as NodeCodecT};

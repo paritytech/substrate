@@ -20,7 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, marker::PhantomData, convert::TryInto};
-use parity_scale_codec::{Encode, Codec};
+use codec::{Encode, Codec};
 use frame_support::{Parameter, decl_module, decl_event, decl_storage};
 use sp_runtime::traits::{One, SimpleArithmetic, StaticLookup, Member, LookupError};
 use frame_system::{IsDeadAccount, OnNewAccount};

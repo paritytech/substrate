@@ -26,7 +26,7 @@
 //! Afterwards, the proofs can be fed to a consensus module when reporting misbehavior.
 
 use sp_std::prelude::*;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_runtime::KeyTypeId;
 use sp_runtime::traits::{Convert, OpaqueKeys, Hash as HashT};
 use frame_support::{decl_module, decl_storage};

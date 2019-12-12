@@ -17,11 +17,11 @@ pub enum Error {
 	/// Bad format.
 	BadFormat,
 	/// Decoding error.
-	Decode(parity_scale_codec::Error)
+	Decode(codec::Error)
 }
 
-impl From<parity_scale_codec::Error> for Error {
-	fn from(x: parity_scale_codec::Error) -> Self {
+impl From<codec::Error> for Error {
+	fn from(x: codec::Error) -> Self {
 		Error::Decode(x)
 	}
 }

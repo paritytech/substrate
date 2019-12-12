@@ -20,7 +20,7 @@
 use std::fmt;
 use sp_std::convert::TryInto;
 use crate::Member;
-use parity_scale_codec::{Encode, Decode, Input, Output, Error};
+use codec::{Encode, Decode, Input, Output, Error};
 
 /// An indices-aware address, which can be either a direct `AccountId` or
 /// an index.
@@ -115,7 +115,7 @@ impl<AccountId, AccountIndex> Encode for Address<AccountId, AccountIndex> where
 	}
 }
 
-impl<AccountId, AccountIndex> parity_scale_codec::EncodeLike for Address<AccountId, AccountIndex> where
+impl<AccountId, AccountIndex> codec::EncodeLike for Address<AccountId, AccountIndex> where
 	AccountId: Member + Encode,
 	AccountIndex: Member + Encode + PartialOrd<AccountIndex> + Ord + Copy + From<u32> + TryInto<u32>,
 {}
@@ -131,7 +131,7 @@ impl<AccountId, AccountIndex> Default for Address<AccountId, AccountIndex> where
 
 #[cfg(test)]
 mod tests {
-	use parity_scale_codec::{Encode, Decode};
+	use codec::{Encode, Decode};
 
 	type Address = super::Address<[u8; 8], u32>;
 	fn index(i: u32) -> Address { super::Address::Index(i) }

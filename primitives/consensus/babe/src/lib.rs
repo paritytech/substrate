@@ -22,7 +22,7 @@
 mod digest;
 pub mod inherents;
 
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_std::vec::Vec;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 

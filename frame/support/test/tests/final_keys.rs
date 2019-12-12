@@ -15,12 +15,12 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use frame_support::storage::unhashed;
-use parity_scale_codec::Encode;
+use codec::Encode;
 use frame_support::{StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue, StoragePrefixedMap};
 use sp_io::{TestExternalities, hashing::{twox_128, blake2_128, blake2_256}};
 
 mod no_instance {
-	use parity_scale_codec::{Encode, Decode, EncodeLike};
+	use codec::{Encode, Decode, EncodeLike};
 
 	pub trait Trait {
 		type Origin;

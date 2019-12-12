@@ -16,7 +16,7 @@
 
 //! Definition and implementation of the old and deprecated Substrate runtime interface for the host.
 
-use parity_scale_codec::Encode;
+use codec::Encode;
 use std::{convert::TryFrom, str};
 use sp_core::{
 	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, keccak_256, Blake2Hasher, Pair,
@@ -1017,7 +1017,7 @@ impl_wasm_host_interface! {
 			request_id: u32,
 			written_out: Pointer<u32>,
 		) -> Pointer<u8> {
-			use parity_scale_codec::Encode;
+			use codec::Encode;
 
 			let headers = sp_io::offchain::http_response_headers(
 				offchain::HttpRequestId(request_id as u16),

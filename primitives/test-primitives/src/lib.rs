@@ -18,7 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 use sp_application_crypto::sr25519;
 pub use sp_application_crypto;

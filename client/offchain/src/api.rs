@@ -25,7 +25,7 @@ use sp_core::offchain::OffchainStorage;
 use futures::Future;
 use log::error;
 use sc_network::{PeerId, Multiaddr, NetworkStateInfo};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_core::offchain::{
 	Externalities as OffchainExt, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,

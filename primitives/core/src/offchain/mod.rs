@@ -16,7 +16,7 @@
 
 //! Offchain workers types
 
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_std::{prelude::{Vec, Box}, convert::TryFrom};
 use crate::RuntimeDebug;
 use sp_runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};

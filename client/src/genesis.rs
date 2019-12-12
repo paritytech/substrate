@@ -42,7 +42,7 @@ pub fn construct_genesis_block<
 
 #[cfg(test)]
 mod tests {
-	use parity_scale_codec::{Encode, Decode, Joiner};
+	use codec::{Encode, Decode, Joiner};
 	use sc_executor::native_executor_instance;
 	use sp_state_machine::{
 		StateMachine, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage,

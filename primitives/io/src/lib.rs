@@ -54,7 +54,7 @@ use ::sp_trie::{TrieConfiguration, trie_types::Layout};
 
 use sp_runtime_interface::{runtime_interface, Pointer};
 
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use sp_externalities::{ExternalitiesExt, Externalities};

@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 
 use sp_std::prelude::*;
 use sp_core::RuntimeDebug;
-use crate::parity_scale_codec::{Codec, Encode, Decode};
+use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize};
 use crate::Justification;
 

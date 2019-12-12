@@ -56,7 +56,7 @@ use sp_std::{prelude::*, convert::TryInto};
 use sp_runtime::traits::Hash;
 use frame_support::{decl_module, decl_storage, traits::Randomness};
 use safe_mix::TripletMix;
-use parity_scale_codec::Encode;
+use codec::Encode;
 use frame_system::Trait;
 
 const RANDOM_MATERIAL_LEN: u32 = 81;

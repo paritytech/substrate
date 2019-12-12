@@ -24,7 +24,7 @@
 //! we discarded.
 
 use hash_db;
-use parity_scale_codec::Encode;
+use codec::Encode;
 use sp_trie;
 
 use sp_core::{H256, convert_hash};
@@ -92,7 +92,7 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
-		Hasher::Out: Ord + parity_scale_codec::Codec,
+		Hasher::Out: Ord + codec::Codec,
 		BlocksI: IntoIterator<Item=Header::Number>,
 		HashesI: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
 {
@@ -119,7 +119,7 @@ pub fn check_proof<Header, Hasher>(
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
-		Hasher::Out: Ord + parity_scale_codec::Codec,
+		Hasher::Out: Ord + codec::Codec,
 {
 	do_check_proof::<Header, Hasher, _>(
 		local_root,
@@ -148,7 +148,7 @@ pub fn check_proof_on_proving_backend<Header, Hasher>(
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
-		Hasher::Out: Ord + parity_scale_codec::Codec,
+		Hasher::Out: Ord + codec::Codec,
 {
 	do_check_proof::<Header, Hasher, _>(
 		local_root,

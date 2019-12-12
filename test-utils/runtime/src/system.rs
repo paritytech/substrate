@@ -30,7 +30,7 @@ use sp_runtime::{
 		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionValidityError,
 	},
 };
-use parity_scale_codec::{KeyedVec, Encode, Decode};
+use codec::{KeyedVec, Encode, Decode};
 use frame_system::Trait;
 use crate::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId

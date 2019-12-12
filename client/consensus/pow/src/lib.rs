@@ -47,7 +47,7 @@ use sp_consensus::{
 	SelectChain, Error as ConsensusError, CanAuthorWith,
 };
 use sp_consensus::import_queue::{BoxBlockImport, BasicQueue, Verifier};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sc_client_api;
 use log::*;
 
@@ -78,7 +78,7 @@ pub enum Error<B: BlockT> {
 	#[display(fmt = "Checking inherents failed: {}", _0)]
 	CheckInherents(String),
 	Client(sp_blockchain::Error),
-	Codec(parity_scale_codec::Error),
+	Codec(codec::Error),
 	Environment(String),
 	Runtime(RuntimeString)
 }

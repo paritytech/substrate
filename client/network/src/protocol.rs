@@ -30,7 +30,7 @@ use sp_consensus::{
 	block_validation::BlockAnnounceValidator,
 	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
 };
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use sp_runtime::{generic::BlockId, ConsensusEngineId, Justification};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, CheckedSub

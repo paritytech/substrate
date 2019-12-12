@@ -22,7 +22,7 @@
 use sp_std::vec::Vec;
 
 use crate::{hash::H256, hash::H512};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 #[cfg(feature = "full_crypto")]
 use blake2_rfc;

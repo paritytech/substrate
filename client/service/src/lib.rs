@@ -47,7 +47,7 @@ use sc_network::{
 	Event, DhtEvent, PeerId, ReportHandle,
 };
 use log::{log, warn, debug, error, Level};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sp_core::{Blake2Hasher, H256};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT};

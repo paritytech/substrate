@@ -19,7 +19,7 @@
 use std::collections::{BTreeMap, HashMap};
 use sp_io::hashing::{blake2_256, twox_128};
 use super::{AuthorityId, AccountId, WASM_BINARY, system};
-use parity_scale_codec::{Encode, KeyedVec, Joiner};
+use codec::{Encode, KeyedVec, Joiner};
 use sp_core::{ChangesTrieConfiguration, map, storage::well_known_keys};
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 

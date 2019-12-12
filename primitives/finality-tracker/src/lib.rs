@@ -19,10 +19,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_inherents::{InherentIdentifier, InherentData, Error};
-use parity_scale_codec::Decode;
+use codec::Decode;
 
 #[cfg(feature = "std")]
-use parity_scale_codec::Encode;
+use codec::Encode;
 
 /// The identifier for the `finalnum` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"finalnum";

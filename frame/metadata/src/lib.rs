@@ -25,8 +25,8 @@
 #[cfg(feature = "std")]
 use serde::Serialize;
 #[cfg(feature = "std")]
-use parity_scale_codec::{Decode, Input, Error};
-use parity_scale_codec::{Encode, Output};
+use codec::{Decode, Input, Error};
+use codec::{Encode, Output};
 use sp_std::vec::Vec;
 use sp_core::RuntimeDebug;
 
@@ -60,7 +60,7 @@ impl<B, O> Encode for DecodeDifferent<B, O> where B: Encode + 'static, O: Encode
 	}
 }
 
-impl<B, O> parity_scale_codec::EncodeLike for DecodeDifferent<B, O> where B: Encode + 'static, O: Encode + 'static {}
+impl<B, O> codec::EncodeLike for DecodeDifferent<B, O> where B: Encode + 'static, O: Encode + 'static {}
 
 #[cfg(feature = "std")]
 impl<B, O> Decode for DecodeDifferent<B, O> where B: 'static, O: Decode + 'static {
@@ -143,7 +143,7 @@ impl<E: Encode> Encode for FnEncode<E> {
 	}
 }
 
-impl<E: Encode> parity_scale_codec::EncodeLike for FnEncode<E> {}
+impl<E: Encode> codec::EncodeLike for FnEncode<E> {}
 
 impl<E: Encode + PartialEq> PartialEq for FnEncode<E> {
 	fn eq(&self, other: &Self) -> bool {
@@ -242,7 +242,7 @@ impl Encode for DefaultByteGetter {
 	}
 }
 
-impl parity_scale_codec::EncodeLike for DefaultByteGetter {}
+impl codec::EncodeLike for DefaultByteGetter {}
 
 impl PartialEq<DefaultByteGetter> for DefaultByteGetter {
 	fn eq(&self, other: &DefaultByteGetter) -> bool {
@@ -357,7 +357,7 @@ impl Encode for RuntimeMetadataDeprecated {
 	fn encode_to<W: Output>(&self, _dest: &mut W) {}
 }
 
-impl parity_scale_codec::EncodeLike for RuntimeMetadataDeprecated {}
+impl codec::EncodeLike for RuntimeMetadataDeprecated {}
 
 #[cfg(feature = "std")]
 impl Decode for RuntimeMetadataDeprecated {

@@ -39,7 +39,7 @@ pub enum Error {
 	/// Failed to decode a protobuf payload.
 	DecodingProto(prost::DecodeError),
 	/// Failed to encode or decode scale payload
-	EncodingDecodingScale(parity_scale_codec::Error),
+	EncodingDecodingScale(codec::Error),
 	/// Failed to parse a libp2p multi address.
 	ParsingMultiaddress(libp2p::core::multiaddr::Error),
 }
