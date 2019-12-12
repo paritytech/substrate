@@ -17,6 +17,7 @@ members = [
 	"client/authority-discovery",
 	"client/basic-authorship",
 	"client/block-builder",
+	"client/browser",
 	"client/chain-spec",
 	"client/chain-spec/derive",
 	"client/cli",
