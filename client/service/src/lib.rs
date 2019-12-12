@@ -682,7 +682,7 @@ mod tests {
 	use futures03::executor::block_on;
 	use sp_consensus::SelectChain;
 	use sp_runtime::traits::BlindCheckable;
-	use substrate_test_runtime_sc_client::{prelude::*, runtime::{Extrinsic, Transfer}};
+	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 
 	#[test]

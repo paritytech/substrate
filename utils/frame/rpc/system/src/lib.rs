@@ -234,7 +234,7 @@ mod tests {
 	fn should_return_next_nonce_for_some_account() {
 		// given
 		let _ = env_logger::try_init();
-		let client = Arc::new(substrate_test_client::new());
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 
 		let new_transaction = |nonce: u64| {

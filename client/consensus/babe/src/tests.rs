@@ -34,7 +34,6 @@ use sc_network::config::{BoxFinalityProofRequestBuilder, ProtocolConfig};
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use tokio::runtime::current_thread;
 use sc_client_api::BlockchainEvents;
-use substrate_test_runtime_client;
 use log::debug;
 use std::{time::Duration, cell::RefCell};
 
@@ -43,10 +42,10 @@ type Item = DigestItem<Hash>;
 type Error = sp_blockchain::Error;
 
 type TestClient = sc_client::Client<
-	substrate_test_client::Backend,
-	substrate_test_client::Executor,
+	substrate_test_runtime_client::Backend,
+	substrate_test_runtime_client::Executor,
 	TestBlock,
-	substrate_test_client::runtime::RuntimeApi,
+	substrate_test_runtime_client::runtime::RuntimeApi,
 >;
 
 #[derive(Copy, Clone, PartialEq)]
@@ -196,10 +195,10 @@ type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 pub struct TestVerifier {
 	inner: BabeVerifier<
-		substrate_test_client::Backend,
-		substrate_test_client::Executor,
+		substrate_test_runtime_client::Backend,
+		substrate_test_runtime_client::Executor,
 		TestBlock,
-		substrate_test_client::runtime::RuntimeApi,
+		substrate_test_runtime_client::runtime::RuntimeApi,
 		PeersFullClient,
 	>,
 	mutator: Mutator,

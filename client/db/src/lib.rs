@@ -1574,8 +1574,6 @@ mod tests {
 	use sp_state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};
 	use sp_blockchain::{lowest_common_ancestor, tree_route};
 
-	use substrate_test_runtime_client;
-
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
 	fn prepare_changes(changes: Vec<(Vec<u8>, Vec<u8>)>) -> (H256, MemoryDB<Blake2Hasher>) {
@@ -2305,20 +2303,20 @@ mod tests {
 
 	#[test]
 	fn test_leaves_with_complex_block_tree() {
-		let backend: Arc<Backend<substrate_test_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
-		substrate_test_client::trait_tests::test_leaves_for_backend(backend);
+		let backend: Arc<Backend<substrate_test_runtime_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
+		substrate_test_runtime_client::trait_tests::test_leaves_for_backend(backend);
 	}
 
 	#[test]
 	fn test_children_with_complex_block_tree() {
-		let backend: Arc<Backend<substrate_test_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
-		substrate_test_client::trait_tests::test_children_for_backend(backend);
+		let backend: Arc<Backend<substrate_test_runtime_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
+		substrate_test_runtime_client::trait_tests::test_children_for_backend(backend);
 	}
 
 	#[test]
 	fn test_blockchain_query_by_number_gets_canonical() {
-		let backend: Arc<Backend<substrate_test_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
-		substrate_test_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
+		let backend: Arc<Backend<substrate_test_runtime_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
+		substrate_test_runtime_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
 	}
 
 	#[test]
@@ -2347,7 +2345,7 @@ mod tests {
 
 	#[test]
 	fn test_aux() {
-		let backend: Backend<substrate_test_client::runtime::Block> = Backend::new_test(0, 0);
+		let backend: Backend<substrate_test_runtime_client::runtime::Block> = Backend::new_test(0, 0);
 		assert!(backend.get_aux(b"test").unwrap().is_none());
 		backend.insert_aux(&[(&b"test"[..], &b"hello"[..])], &[]).unwrap();
 		assert_eq!(b"hello", &backend.get_aux(b"test").unwrap().unwrap()[..]);

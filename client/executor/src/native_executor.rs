@@ -278,7 +278,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 /// executor aware of the host functions for these interfaces.
 ///
 /// ```
-/// # use sp_sp_runtime_interface::runtime_interface;
+/// # use sp_runtime_interface::runtime_interface;
 ///
 /// #[runtime_interface]
 /// trait MyInterface {
@@ -337,7 +337,7 @@ macro_rules! native_executor_instance {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_sp_runtime_interface::runtime_interface;
+	use sp_runtime_interface::runtime_interface;
 
 	#[runtime_interface]
 	trait MyInterface {

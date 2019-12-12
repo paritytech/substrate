@@ -815,7 +815,7 @@ mod tests {
 	use substrate_test_runtime_client;
 	use sp_core::Blake2Hasher;
 
-	type TestBackend = substrate_test_runtime_client::client::in_mem::Backend<substrate_test_runtime_client::runtime::Block, Blake2Hasher>;
+	type TestBackend = substrate_test_runtime_client::sc_client::in_mem::Backend<substrate_test_runtime_client::runtime::Block, Blake2Hasher>;
 
 	#[test]
 	fn test_leaves_with_complex_block_tree() {

@@ -1773,7 +1773,7 @@ pub(crate) mod tests {
 	use substrate_test_runtime_client::{
 		prelude::*,
 		client_ext::ClientExt,
-		client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode},
+		sc_client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode},
 		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
 	};
 
@@ -1782,7 +1782,7 @@ pub(crate) mod tests {
 	/// 2) roots of changes tries for these blocks
 	/// 3) test cases in form (begin, end, key, vec![(block, extrinsic)]) that are required to pass
 	pub fn prepare_client_with_key_changes() -> (
-		substrate_test_runtime_client::client::Client<substrate_test_runtime_client::Backend, substrate_test_runtime_client::Executor, Block, RuntimeApi>,
+		substrate_test_runtime_client::sc_client::Client<substrate_test_runtime_client::Backend, substrate_test_runtime_client::Executor, Block, RuntimeApi>,
 		Vec<H256>,
 		Vec<(u64, u64, Vec<u8>, Vec<(u64, u32)>)>,
 	) {

@@ -703,7 +703,7 @@ fn ignore_error<F, T>(future: F) -> impl std::future::Future<Output=Result<Optio
 #[cfg(test)]
 mod tests {
 	use rpc::futures::stream::futures_ordered;
-	use substrate_test_client::runtime::Block;
+	use substrate_test_runtime_client::runtime::Block;
 	use super::*;
 
 	#[test]
