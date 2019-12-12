@@ -18,7 +18,7 @@
 
 use sc_client::Client as SubstrateClient;
 use sp_blockchain::Error;
-use sc_sc_client_api::{ChangesProof, StorageProof, ClientInfo, CallExecutor};
+use sc_client_api::{ChangesProof, StorageProof, ClientInfo, CallExecutor};
 use sp_consensus::{BlockImport, BlockStatus, Error as ConsensusError};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_runtime::generic::{BlockId};

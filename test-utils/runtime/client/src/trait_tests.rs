@@ -21,9 +21,9 @@
 
 use std::sync::Arc;
 
-use sc_sc_client_api::backend::LocalBackend;
+use sc_client_api::backend::LocalBackend;
 use crate::block_builder_ext::BlockBuilderExt;
-use sc_sc_client_api::blockchain::{Backend as BlockChainBackendT, HeaderBackend};
+use sc_client_api::blockchain::{Backend as BlockChainBackendT, HeaderBackend};
 use crate::{AccountKeyring, ClientExt, TestClientBuilder, TestClientBuilderExt};
 use generic_test_sc_client::consensus::BlockOrigin;
 use sp_core::Blake2Hasher;

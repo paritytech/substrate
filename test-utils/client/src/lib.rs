@@ -21,8 +21,8 @@
 pub mod client_ext;
 
 pub use sc_client::{blockchain, self};
-pub use sc_sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionExtensions};
-pub use sc_sc_client_db::{Backend, self};
+pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionExtensions};
+pub use sc_client_db::{Backend, self};
 pub use sc_client_ext::ClientExt;
 pub use sp_consensus;
 pub use sc_executor::{NativeExecutor, WasmExecutionMethod, self};

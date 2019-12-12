@@ -17,7 +17,7 @@
 //! Client extension for tests.
 
 use sc_client::{self, Client};
-use sc_sc_client_api::backend::Finalizer;
+use sc_client_api::backend::Finalizer;
 use sp_consensus::{
 	BlockImportParams, BlockImport, BlockOrigin, Error as ConsensusError,
 	ForkChoiceStrategy,

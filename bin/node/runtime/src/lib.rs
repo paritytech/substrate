@@ -43,7 +43,7 @@ use sp_core::OpaqueMetadata;
 use pallet_grandpa::AuthorityList as GrandpaAuthorityList;
 use pallet_grandpa::fg_primitives;
 use pallet_im_online::sr25519::{AuthorityId as ImOnlineId};
-use pallet_sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
+use pallet_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 use pallet_contracts_rpc_runtime_api::ContractExecResult;
 use frame_system::offchain::TransactionSubmitter;
@@ -518,7 +518,7 @@ construct_runtime!(
 		Babe: pallet_babe::{Module, Call, Storage, Config, Inherent(Timestamp)},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
-		Indices: indices,
+		Indices: pallet_indices,
 		Balances: pallet_balances::{default, Error},
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
 		Staking: pallet_staking::{default, OfflineWorker},
@@ -531,8 +531,8 @@ construct_runtime!(
 		FinalityTracker: pallet_finality_tracker::{Module, Call, Inherent},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Treasury: pallet_treasury::{Module, Call, Storage, Config, Event<T>},
-		Contracts: contracts,
-		Sudo: sudo,
+		Contracts: pallet_contracts,
+		Sudo: pallet_sudo,
 		ImOnline: pallet_im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
 		AuthorityDiscovery: pallet_authority_discovery::{Module, Call, Config},
 		Offences: pallet_offences::{Module, Call, Storage, Event},

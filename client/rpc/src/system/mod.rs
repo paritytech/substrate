@@ -26,7 +26,7 @@ use self::error::Result;
 
 pub use sc_rpc_api::system::*;
 pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo, NodeRole};
-pub use self::gen_sc_client::Client as SystemClient;
+pub use self::gen_client::Client as SystemClient;
 
 /// System API implementation
 pub struct System<B: traits::Block> {

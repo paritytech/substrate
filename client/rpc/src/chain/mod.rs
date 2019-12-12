@@ -37,7 +37,7 @@ use sc_client::{
 };
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use sp_core::{H256, Blake2Hasher};
-use rpc_primitives::{number::NumberOrHex, list::ListOrValue};
+use sp_rpc::{number::NumberOrHex, list::ListOrValue};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT, Header, NumberFor},

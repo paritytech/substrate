@@ -28,7 +28,7 @@
 //!
 
 use blocks::BlockCollection;
-use sc_sc_client_api::ClientInfo;
+use sc_client_api::ClientInfo;
 use sp_blockchain::Error as ClientError;
 use sp_consensus::{BlockOrigin, BlockStatus,
 	block_validation::{BlockAnnounceValidator, Validation},

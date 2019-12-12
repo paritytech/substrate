@@ -41,7 +41,7 @@ use sp_core::hexdisplay::HexDisplay;
 use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
-pub use self::gen_sc_client::Client as SystemClient;
+pub use self::gen_client::Client as SystemClient;
 
 /// Future that resolves to account nonce.
 pub type FutureResult<T> = Box<dyn Future<Item = T, Error = Error> + Send>;

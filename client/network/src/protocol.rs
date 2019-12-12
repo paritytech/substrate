@@ -38,7 +38,7 @@ use sp_runtime::traits::{
 use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
-use sp_consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
+use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
 use specialization::NetworkSpecialization;
 use sync::{ChainSync, SyncState};
@@ -51,7 +51,7 @@ use std::fmt::Write;
 use std::{cmp, num::NonZeroUsize, time};
 use log::{log, Level, trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
-use sc_sc_client_api::{FetchChecker, ChangesProof, StorageProof};
+use sc_client_api::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
 use util::LruHashSet;
 

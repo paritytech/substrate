@@ -18,7 +18,7 @@ use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
 use crate::config::{Configuration, DatabaseConfig};
-use sc_sc_client_api::{
+use sc_client_api::{
 	self,
 	BlockchainEvents,
 	backend::RemoteBackend, light::RemoteBlockchain,

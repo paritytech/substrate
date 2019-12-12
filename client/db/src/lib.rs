@@ -39,9 +39,9 @@ use std::path::PathBuf;
 use std::io;
 use std::collections::{HashMap, HashSet};
 
-use sc_sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks};
-use sc_sc_client_api::backend::NewBlockState;
-use sc_sc_client_api::backend::{StorageCollection, ChildStorageCollection};
+use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks};
+use sc_client_api::backend::NewBlockState;
+use sc_client_api::backend::{StorageCollection, ChildStorageCollection};
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
 	well_known_cache_keys, HeaderBackend,
@@ -868,7 +868,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	/// Returns in-memory blockchain that contains the same set of blocks that the self.
 	#[cfg(feature = "test-helpers")]
 	pub fn as_in_memory(&self) -> InMemoryBackend<Block, Blake2Hasher> {
-		use sc_sc_client_api::backend::{Backend as ClientBackend, BlockImportOperation};
+		use sc_client_api::backend::{Backend as ClientBackend, BlockImportOperation};
 		use sc_client::blockchain::Backend as BlockchainBackend;
 
 		let inmem = InMemoryBackend::<Block, Blake2Hasher>::new();
@@ -928,7 +928,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		match cached_changes_trie_config.clone() {
 			Some(cached_changes_trie_config) => Ok(cached_changes_trie_config),
 			None => {
-				use sc_sc_client_api::backend::Backend;
+				use sc_client_api::backend::Backend;
 				let changes_trie_config = self
 					.state_at(BlockId::Hash(block))?
 					.storage(well_known_keys::CHANGES_TRIE_CONFIG)?
@@ -1567,7 +1567,7 @@ mod tests {
 	use hash_db::{HashDB, EMPTY_PREFIX};
 	use super::*;
 	use crate::columns;
-	use sc_sc_client_api::backend::{Backend as BTrait, BlockImportOperation as Op};
+	use sc_client_api::backend::{Backend as BTrait, BlockImportOperation as Op};
 	use sc_client::blockchain::Backend as BLBTrait;
 	use sp_runtime::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use sp_runtime::traits::{Hash, BlakeTwo256};

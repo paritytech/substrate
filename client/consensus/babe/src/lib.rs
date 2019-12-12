@@ -87,7 +87,7 @@ use sp_consensus::{
 use sp_consensus_babe::sp_inherents::BabeInherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
 use sp_consensus::import_queue::{Verifier, BasicQueue, CacheKeyId};
-use sc_sc_client_api::{
+use sc_client_api::{
 	backend::{AuxStore, Backend},
 	call_executor::CallExecutor,
 	BlockchainEvents, ProvideUncles,

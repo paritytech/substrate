@@ -26,7 +26,7 @@ use std::fmt::Display;
 
 use log::info;
 
-use sc_sc_client::Client;
+use sc_client::Client;
 use sp_block_builder::BlockBuilder;
 use sp_api::ConstructRuntimeApi;
 use sp_consensus::{

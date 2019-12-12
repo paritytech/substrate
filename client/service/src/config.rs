@@ -17,7 +17,7 @@
 //! Service configuration.
 
 pub use sc_client::ExecutionStrategies;
-pub use sc_sc_client_db::{kvdb::KeyValueDB, PruningMode};
+pub use sc_client_db::{kvdb::KeyValueDB, PruningMode};
 pub use sc_network::config::{ExtTransport, NetworkConfiguration, Roles};
 pub use sc_executor::WasmExecutionMethod;
 

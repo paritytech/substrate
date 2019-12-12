@@ -25,7 +25,7 @@ use sp_runtime::traits::{Block as BlockT, Header};
 use sp_core::hexdisplay::HexDisplay;
 use sp_state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
-use sc_sc_client_api::backend::{StorageCollection, ChildStorageCollection};
+use sc_client_api::backend::{StorageCollection, ChildStorageCollection};
 use std::hash::Hash as StdHash;
 
 const STATE_CACHE_BLOCKS: usize = 12;

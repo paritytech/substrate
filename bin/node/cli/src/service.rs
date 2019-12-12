@@ -34,7 +34,7 @@ use sc_network::construct_simple_protocol;
 
 use sc_service::{Service, NetworkStatus};
 use sc_client::{Client, LocalCallExecutor};
-use sc_sc_client_db::Backend;
+use sc_client_db::Backend;
 use sp_runtime::traits::Block as BlockT;
 use node_executor::NativeExecutor;
 use sc_network::NetworkService;

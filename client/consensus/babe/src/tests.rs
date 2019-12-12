@@ -33,7 +33,7 @@ use sc_network_test::{Block as TestBlock, PeersClient};
 use sc_network::config::{BoxFinalityProofRequestBuilder, ProtocolConfig};
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use tokio::runtime::current_thread;
-use sc_sc_client_api::BlockchainEvents;
+use sc_client_api::BlockchainEvents;
 use substrate_test_runtime_client;
 use log::debug;
 use std::{time::Duration, cell::RefCell};
@@ -634,7 +634,7 @@ fn importing_block_one_sets_genesis_epoch() {
 
 #[test]
 fn importing_epoch_change_block_prunes_tree() {
-	use sc_sc_client_api::Finalizer;
+	use sc_client_api::Finalizer;
 
 	let mut net = BabeTestNet::new(1);
 

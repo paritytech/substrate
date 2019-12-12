@@ -38,7 +38,7 @@ use sp_consensus::{
 use sp_consensus::import_queue::{
 	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
 };
-use sc_sc_client_api::backend::AuxStore;
+use sc_client_api::backend::AuxStore;
 use sc_client::{
 	blockchain::ProvideCache, BlockOf
 };

@@ -22,7 +22,7 @@ use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
-use sc_sc_client_api::backend::{AuxStore, NewBlockState};
+use sc_client_api::backend::{AuxStore, NewBlockState};
 use sc_client::blockchain::{
 	BlockStatus, Cache as BlockchainCache,Info as BlockchainInfo,
 };

@@ -26,7 +26,7 @@ use log::{trace, info};
 use futures::sync::oneshot::{Sender as OneShotSender};
 use linked_hash_map::{Entry, LinkedHashMap};
 use sp_blockchain::Error as ClientError;
-use sc_sc_client_api::{FetchChecker, RemoteHeaderRequest,
+use sc_client_api::{FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof,
 	RemoteReadChildRequest, RemoteBodyRequest, StorageProof};
 use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
@@ -679,7 +679,7 @@ pub mod tests {
 	use futures::{Future, sync::oneshot};
 	use sp_runtime::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use sp_blockchain::{Error as ClientError, Result as ClientResult};
-	use sc_sc_client_api::{FetchChecker, RemoteHeaderRequest,
+	use sc_client_api::{FetchChecker, RemoteHeaderRequest,
 		ChangesProof, RemoteCallRequest, RemoteReadRequest,
 		RemoteReadChildRequest, RemoteChangesRequest, RemoteBodyRequest};
 	use crate::config::Roles;

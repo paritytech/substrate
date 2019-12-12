@@ -30,7 +30,7 @@ use sc_network::FinalityProofProvider;
 use sp_blockchain::{
 	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId},
 };
-use sc_sc_client_api::{
+use sc_client_api::{
 	ClientInfo, BlockchainEvents, BlockImportNotification,
 	FinalityNotifications, ImportNotifications,
 	FinalityNotification,

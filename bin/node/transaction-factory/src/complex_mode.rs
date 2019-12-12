@@ -41,7 +41,7 @@
 use std::sync::Arc;
 
 use log::info;
-use sc_sc_client::Client;
+use sc_client::Client;
 use sp_block_builder::BlockBuilder;
 use sp_api::ConstructRuntimeApi;
 use sp_core::{Blake2Hasher, Hasher};

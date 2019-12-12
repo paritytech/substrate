@@ -19,7 +19,7 @@
 // FIXME #1021 move this into sp-consensus
 
 use std::{time, sync::Arc};
-use sc_sc_client_api::CallExecutor;
+use sc_client_api::CallExecutor;
 use sp_blockchain;
 use sc_client::Client as SubstrateClient;
 use codec::Decode;
