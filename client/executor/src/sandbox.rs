@@ -223,7 +223,7 @@ fn trap(msg: &'static str) -> Trap {
 }
 
 fn deserialize_result(serialized_result: &[u8]) -> std::result::Result<Option<RuntimeValue>, Trap> {
-	use self::sandbox_sp_core::{HostError, ReturnValue};
+	use self::sandbox_primitives::{HostError, ReturnValue};
 	let result_val = std::result::Result::<ReturnValue, HostError>::decode(&mut &serialized_result[..])
 		.map_err(|_| trap("Decoding Result<ReturnValue, HostError> failed!"))?;
 
@@ -259,7 +259,7 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 		let invoke_args_data: Vec<u8> = args.as_ref()
 			.iter()
 			.cloned()
-			.map(sandbox_sp_core::TypedValue::from)
+			.map(sandbox_primitives::TypedValue::from)
 			.collect::<Vec<_>>()
 			.encode();
 
@@ -382,7 +382,7 @@ fn decode_environment_definition(
 	raw_env_def: &[u8],
 	memories: &[Option<MemoryRef>],
 ) -> std::result::Result<(Imports, GuestToSupervisorFunctionMapping), InstantiationError> {
-	let env_def = sandbox_sp_core::EnvironmentDefinition::decode(&mut &raw_env_def[..])
+	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..])
 		.map_err(|_| InstantiationError::EnvironmentDefinitionCorrupted)?;
 
 	let mut func_map = HashMap::new();
@@ -394,12 +394,12 @@ fn decode_environment_definition(
 		let field = entry.field_name.clone();
 
 		match entry.entity {
-			sandbox_sp_core::ExternEntity::Function(func_idx) => {
+			sandbox_primitives::ExternEntity::Function(func_idx) => {
 				let externals_idx =
 					guest_to_supervisor_mapping.define(SupervisorFuncIndex(func_idx as usize));
 				func_map.insert((module, field), externals_idx);
 			}
-			sandbox_sp_core::ExternEntity::Memory(memory_idx) => {
+			sandbox_primitives::ExternEntity::Memory(memory_idx) => {
 				let memory_ref = memories
 					.get(memory_idx as usize)
 					.cloned()
@@ -499,7 +499,7 @@ impl<FR> Store<FR> {
 	/// Typically happens if `initial` is more than `maximum`.
 	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Result<u32> {
 		let maximum = match maximum {
-			sandbox_sp_core::MEM_UNLIMITED => None,
+			sandbox_primitives::MEM_UNLIMITED => None,
 			specified_limit => Some(Pages(specified_limit as usize)),
 		};
 

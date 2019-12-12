@@ -159,8 +159,8 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			buf_ptr.into(),
 			buf_len as usize,
 		) {
-			Ok(()) => Ok(sandbox_sp_core::ERR_OK),
-			Err(_) => Ok(sandbox_sp_core::ERR_OUT_OF_BOUNDS),
+			Ok(()) => Ok(sandbox_primitives::ERR_OK),
+			Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 		}
 	}
 
@@ -180,8 +180,8 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			offset as usize,
 			val_len as usize,
 		) {
-			Ok(()) => Ok(sandbox_sp_core::ERR_OK),
-			Err(_) => Ok(sandbox_sp_core::ERR_OUT_OF_BOUNDS),
+			Ok(()) => Ok(sandbox_primitives::ERR_OK),
+			Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 		}
 	}
 
@@ -209,7 +209,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		trace!(target: "sp-sandbox", "invoke, instance_idx={}", instance_id);
 
 		// Deserialize arguments and convert them into wasmi types.
-		let args = Vec::<sandbox_sp_core::TypedValue>::decode(&mut &args[..])
+		let args = Vec::<sandbox_primitives::TypedValue>::decode(&mut &args[..])
 			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
 			.map(Into::into)
@@ -219,18 +219,18 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		let result = instance.invoke(export_name, &args, self, state);
 
 		match result {
-			Ok(None) => Ok(sandbox_sp_core::ERR_OK),
+			Ok(None) => Ok(sandbox_primitives::ERR_OK),
 			Ok(Some(val)) => {
 				// Serialize return value and write it back into the memory.
-				sandbox_sp_core::ReturnValue::Value(val.into()).using_encoded(|val| {
+				sandbox_primitives::ReturnValue::Value(val.into()).using_encoded(|val| {
 					if val.len() > return_val_len as usize {
 						Err("Return value buffer is too small")?;
 					}
 					self.write_memory(return_val, val).map_err(|_| "Return value buffer is OOB")?;
-					Ok(sandbox_sp_core::ERR_OK)
+					Ok(sandbox_primitives::ERR_OK)
 				})
 			}
-			Err(_) => Ok(sandbox_sp_core::ERR_EXECUTION),
+			Err(_) => Ok(sandbox_primitives::ERR_EXECUTION),
 		}
 	}
 
@@ -259,8 +259,8 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			match sandbox::instantiate(self, dispatch_thunk, wasm, raw_env_def, state) {
 				Ok(instance_idx) => instance_idx,
 				Err(sandbox::InstantiationError::StartTrapped) =>
-					sandbox_sp_core::ERR_EXECUTION,
-				Err(_) => sandbox_sp_core::ERR_MODULE,
+					sandbox_primitives::ERR_EXECUTION,
+				Err(_) => sandbox_primitives::ERR_MODULE,
 			};
 
 		Ok(instance_idx_or_err_code as u32)

@@ -160,7 +160,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 		let timestamp = (self.block_no as u64 + 1) * MinimumPeriod::get();
 
 		let mut inherent = InherentData::new();
-		inherent.put_data(sp_pallet_timestamp::INHERENT_IDENTIFIER, &timestamp)
+		inherent.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
 			.expect("Failed putting timestamp inherent");
 		inherent.put_data(sp_finality_tracker::INHERENT_IDENTIFIER, &self.block_no)
 			.expect("Failed putting finalized number inherent");

@@ -157,7 +157,7 @@ decl_storage! {
 
 		/// The number of changes (both in terms of keys and underlying economic responsibilities)
 		/// in the "set" of Grandpa validators from genesis.
-		CurrentSetId get(fn current_set_id) build(|_| fg_sp_core::SetId::default()): SetId;
+		CurrentSetId get(fn current_set_id) build(|_| fg_primitives::SetId::default()): SetId;
 
 		/// A mapping from grandpa set ID to the index of the *most recent* session for which its members were responsible.
 		SetIdSession get(fn session_for_set): map SetId => Option<SessionIndex>;

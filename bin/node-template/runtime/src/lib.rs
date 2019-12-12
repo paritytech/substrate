@@ -18,7 +18,7 @@ use sp_runtime::traits::{
 	NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto, IdentifyAccount
 };
 use sp_api::impl_runtime_apis;
-use pallet_consensus_aura::sr25519::AuthorityId as AuraId;
+use pallet_aura::sr25519::AuthorityId as AuraId;
 use pallet_grandpa::AuthorityList as GrandpaAuthorityList;
 use pallet_grandpa::fg_primitives;
 use sp_version::RuntimeVersion;
@@ -356,7 +356,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl fg_sp_core::GrandpaApi<Block> for Runtime {
+	impl fg_primitives::GrandpaApi<Block> for Runtime {
 		fn grandpa_authorities() -> GrandpaAuthorityList {
 			Grandpa::grandpa_authorities()
 		}

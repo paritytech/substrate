@@ -809,7 +809,7 @@ pub type SubstrateHostFunctions = (
 	allocator::HostFunctions,
 	logging::HostFunctions,
 	sandbox::HostFunctions,
-	crate::sp_trie::HostFunctions,
+	crate::trie::HostFunctions,
 );
 
 #[cfg(test)]

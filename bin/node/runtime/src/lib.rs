@@ -44,8 +44,8 @@ use pallet_grandpa::AuthorityList as GrandpaAuthorityList;
 use pallet_grandpa::fg_primitives;
 use pallet_im_online::sr25519::{AuthorityId as ImOnlineId};
 use pallet_sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
-use pallet_pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
-use pallet_pallet_contracts_rpc_runtime_api::ContractExecResult;
+use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+use pallet_contracts_rpc_runtime_api::ContractExecResult;
 use frame_system::offchain::TransactionSubmitter;
 use sp_inherents::{InherentData, CheckInherentsResult};
 
@@ -248,7 +248,7 @@ pallet_staking_reward_curve::build! {
 }
 
 parameter_types! {
-	pub const SessionsPerEra: sp_pallet_staking::SessionIndex = 6;
+	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
 	pub const BondingDuration: pallet_staking::EraIndex = 24 * 28;
 	pub const SlashDeferDuration: pallet_staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
@@ -625,7 +625,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl fg_sp_core::GrandpaApi<Block> for Runtime {
+	impl fg_primitives::GrandpaApi<Block> for Runtime {
 		fn grandpa_authorities() -> GrandpaAuthorityList {
 			Grandpa::grandpa_authorities()
 		}
@@ -691,7 +691,7 @@ impl_runtime_apis! {
 		) -> pallet_contracts_rpc_runtime_api::GetStorageResult {
 			Contracts::get_storage(address, key).map_err(|rpc_err| {
 				use pallet_contracts::GetStorageError;
-				use pallet_pallet_contracts_rpc_runtime_api::{GetStorageError as RpcGetStorageError};
+				use pallet_contracts_rpc_runtime_api::{GetStorageError as RpcGetStorageError};
 				/// Map the contract error into the RPC layer error.
 				match rpc_err {
 					GetStorageError::ContractDoesntExist => RpcGetStorageError::ContractDoesntExist,
@@ -711,7 +711,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl sp_pallet_session::SessionKeys<Block> for Runtime {
+	impl sp_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
 			SessionKeys::generate(seed)
 		}
