@@ -402,7 +402,7 @@ impl<T: Trait> Module<T> {
 		)
 	}
 
-	/// Remove a member from the members list.
+	/// Remove a member from the vouching set.
 	fn unset_vouching(v: &T::AccountId) -> Result {
 		<Vouching<T>>::mutate(|vouchers|
 			match vouchers.binary_search(&v) {
@@ -453,16 +453,22 @@ impl<T: Trait> Module<T> {
 
 			let accepted = candidates.into_iter().filter_map(|(value, candidate, kind)| {
 				let mut approval_count = 0;
+
+				// Creates a vector of (vote, member) for the given candidate
+				// and tallies total number of approve votes for that candidate.
 				let votes = members.iter()
 					.filter_map(|m| <Votes<T>>::get(&candidate, m).map(|v| (v, m)))
 					.inspect(|&(v, _)| if v == Vote::Approve { approval_count += 1 })
 					.collect::<Vec<_>>();
-				let accepted = pick_item(&mut rng, &votes).map(|x| x.0) == Some(Vote::Approve);
+				
+				// Select one of the votes at random.
+				// Note that `Vote::Skeptical` and `Vote::Reject` both reject the candidate.
+				let is_accepted = pick_item(&mut rng, &votes).map(|x| x.0) == Some(Vote::Approve);
 
-				// collect together voters who voted the right way
-				let matching_vote = if accepted { Vote::Approve } else { Vote::Reject };
+				let matching_vote = if is_accepted { Vote::Approve } else { Vote::Reject };
+
 				let bad_vote = |m: &T::AccountId| {
-					// voter voted wrong way (or was just a lazy skeptic) then reduce their payout
+					// Voter voted wrong way (or was just a lazy skeptic) then reduce their payout
 					// and increase their strikes. after MaxStrikes then they go into suspension.
 					let (_when, amount) = Self::slash_payout(m, T::WrongSideDeduction::get());
 
@@ -475,6 +481,8 @@ impl<T: Trait> Module<T> {
 					}
 					amount
 				};
+
+				// Collect the voters who had a matching vote.
 				rewardees.extend(votes.into_iter()
 					.filter_map(|(v, m)|
 						if v == matching_vote { Some(m) } else {
@@ -484,24 +492,23 @@ impl<T: Trait> Module<T> {
 					).cloned()
 				);
 
-				if accepted {
+				if is_accepted {
 					total_approvals += approval_count;
 					total_payouts += value;
 					members.push(candidate.clone());
 
 					let value = match kind {
 						BidKind::Deposit(deposit) => {
-							// in the case that a normal deposit bid is accepted do we unreserve
+							// In the case that a normal deposit bid is accepted we unreserve
 							// the deposit.
 							let _ = T::Currency::unreserve(&candidate, deposit);
 							value
 						}
 						BidKind::Vouch(who, tip) => {
-							// in the case that a vouched-for bid is accepted do we unset the
+							// In the case that a vouched-for bid is accepted we unset the
 							// vouching status and transfer the tip over to the voucher.
-
 							Self::bump_payout(&who, maturity, tip);
-							// really shouldn't fail given the conditional we're in.
+							// Really shouldn't fail given the conditional we're in.
 							let _ = Self::unset_vouching(&who);
 							value.saturating_sub(tip)
 						}
@@ -509,6 +516,9 @@ impl<T: Trait> Module<T> {
 
 					Self::bump_payout(&candidate, maturity, value);
 
+					// We track here the total_approvals so that every user has a unique range
+					// of numbers from 0 to `total_approvals` with length `approval_count`.
+					// This will be used to select a "primary" below.
 					Some((candidate, total_approvals))
 				} else {
 					Self::suspend_candidate(&candidate, kind);
@@ -519,13 +529,15 @@ impl<T: Trait> Module<T> {
 			// Reward one of the voters who voted the right way.
 			if !total_slash.is_zero() {
 				if let Some(winner) = pick_item(&mut rng, &rewardees) {
-					// if we can't reward them, not much that can be done.
+					// If we can't reward them, not much that can be done.
 					Self::bump_payout(winner, maturity, total_slash);
 				} else {
 					// Move the slashed amount back from payouts account to local treasury.
 					let _ = T::Currency::transfer(&Self::payouts(), &Self::account_id(), total_slash, AllowDeath);
 				}
 			}
+
+			// Fund the total payouts from the local treasury.
 			if !total_payouts.is_zero() {
 				// remove payout from pot and shift needed funds to the payout account.
 				pot = pot.saturating_sub(total_payouts);
@@ -537,15 +549,17 @@ impl<T: Trait> Module<T> {
 
 			// if at least one candidate was accepted...
 			if !accepted.is_empty() {
-				// select one as primary, randomly chosen from the accepted, weighted by approvals.
+				// Choose a random number between 0 and `total_approvals`
 				let primary_point = pick_usize(&mut rng, total_approvals - 1);
+				// Find the user who falls on that point
 				let primary = accepted.iter().find(|e| e.1 > primary_point)
 					.expect("e.1 of final item == total_approvals; \
 						worst case find will always return that item; qed")
 					.0.clone();
+				
 				let accounts = accepted.into_iter().map(|x| x.0).collect::<Vec<_>>();
 
-				// then write everything back out, signal the changed membership and leave an event.
+				// Then write everything back out, signal the changed membership and leave an event.
 				members.sort();
 				<Members<T>>::put(&members);
 				<Head<T>>::put(&primary);
@@ -562,11 +576,11 @@ impl<T: Trait> Module<T> {
 			<Pot<T>>::put(&pot);
 		}
 
-		// setup the candidates for the new intake
+		// Setup the candidates for the new intake
 		let candidates = Self::take_selected(pot);
 		<Candidates<T>>::put(&candidates);
 
-		// initialise skeptics
+		// Select sqrt(n) random members from the society and make them skeptics.
 		let pick_member = |_| pick_item(&mut rng, &members[..]).expect("exited if members empty; qed");
 		for skeptic in (0..members.len().integer_sqrt()).map(pick_member) {
 			for (_, c, _) in candidates.iter() {
