@@ -17,7 +17,7 @@
 //! Block Builder extensions for tests.
 
 use substrate_test_runtime;
-use sp_substrate_test_runtime::traits::ProvideRuntimeApi;
+use sp_runtime::traits::ProvideRuntimeApi;
 
 use sc_block_builder::BlockBuilderApi;
 

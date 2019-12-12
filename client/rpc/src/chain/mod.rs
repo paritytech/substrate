@@ -51,7 +51,7 @@ pub use sc_rpc_api::chain::*;
 trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 	where
 		Block: BlockT<Hash=H256> + 'static,
-		B: client_sc_rpc_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 		E: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 {
 	/// Get client reference.
@@ -156,7 +156,7 @@ pub fn new_full<B, E, Block: BlockT, RA>(
 ) -> Chain<B, E, Block, RA>
 	where
 		Block: BlockT<Hash=H256> + 'static,
-		B: client_sc_rpc_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 		E: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 {
@@ -174,7 +174,7 @@ pub fn new_light<B, E, Block: BlockT, RA, F: Fetcher<Block>>(
 ) -> Chain<B, E, Block, RA>
 	where
 		Block: BlockT<Hash=H256> + 'static,
-		B: client_sc_rpc_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 		E: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		F: Send + Sync + 'static,
@@ -196,7 +196,7 @@ pub struct Chain<B, E, Block: BlockT, RA> {
 
 impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>> for Chain<B, E, Block, RA> where
 	Block: BlockT<Hash=H256> + 'static,
-	B: client_sc_rpc_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	RA: Send + Sync + 'static
 {
@@ -256,7 +256,7 @@ fn subscribe_headers<B, E, Block, RA, F, G, S, ERR>(
 	stream: F,
 ) where
 	Block: BlockT<Hash=H256> + 'static,
-	B: client_sc_rpc_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	F: FnOnce() -> S,
 	G: FnOnce() -> Block::Hash,

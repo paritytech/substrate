@@ -57,7 +57,7 @@ pub use self::builder::{ServiceBuilder, ServiceBuilderCommand};
 pub use config::{Configuration, Roles, PruningMode};
 pub use sc_chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
 pub use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, error::IntoPoolError};
-pub use sc_transaction_pool::sc_transaction_pool::Options as TransactionPoolOptions;
+pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 pub use sc_client::FinalityNotifications;
 pub use sc_rpc::Metadata as RpcMetadata;
 #[doc(hidden)]

@@ -25,11 +25,11 @@ use sc_client_api::backend::LocalBackend;
 use crate::block_builder_ext::BlockBuilderExt;
 use sc_client_api::blockchain::{Backend as BlockChainBackendT, HeaderBackend};
 use crate::{AccountKeyring, ClientExt, TestClientBuilder, TestClientBuilderExt};
-use generic_test_sc_client::consensus::BlockOrigin;
+use substrate_test_client::consensus::BlockOrigin;
 use sp_core::Blake2Hasher;
 use substrate_test_runtime::{self, Transfer};
-use sp_substrate_test_runtime::generic::BlockId;
-use sp_substrate_test_runtime::traits::Block as BlockT;
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::Block as BlockT;
 
 /// helper to test the `leaves` implementation for various backends
 pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where

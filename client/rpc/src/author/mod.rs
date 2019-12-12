@@ -35,9 +35,9 @@ use sc_rpc_api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use codec::{Encode, Decode};
 use sp_core::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
-use sp_sc_rpc_api::ConstructRuntimeApi;
+use sp_api::ConstructRuntimeApi;
 use sp_runtime::{generic, traits::{self, ProvideRuntimeApi}};
-use sc_transaction_pool_sc_rpc_api::{
+use sp_transaction_pool::{
 	TransactionPool, InPoolTransaction, TransactionStatus,
 	BlockHash, TxHash, TransactionFor, error::IntoPoolError,
 };
@@ -78,8 +78,8 @@ impl<B, E, P, Block: traits::Block, RA> Author<B, E, P, Block, RA> {
 
 impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P, Block, RA> where
 	Block: traits::Block<Hash=H256>,
-	B: client_sc_rpc_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client_sc_rpc_api::CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
+	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: sc_client_api::CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
 	P: TransactionPool<Block=Block, Hash=Block::Hash> + Sync + Send + 'static,
 	RA: ConstructRuntimeApi<Block, Client<B, E, Block, RA>> + Send + Sync + 'static,
 	Client<B, E, Block, RA>: ProvideRuntimeApi,

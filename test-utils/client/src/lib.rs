@@ -23,7 +23,6 @@ pub mod client_ext;
 pub use sc_client::{blockchain, self};
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionExtensions};
 pub use sc_client_db::{Backend, self};
-pub use sc_client_ext::ClientExt;
 pub use sp_consensus;
 pub use sc_executor::{NativeExecutor, WasmExecutionMethod, self};
 pub use sp_keyring::{
@@ -34,6 +33,8 @@ pub use sp_keyring::{
 pub use sp_core::{Blake2Hasher, traits::BareCryptoStorePtr};
 pub use sp_runtime::{StorageOverlay, ChildrenStorageOverlay};
 pub use sp_state_machine::ExecutionStrategy;
+
+pub use self::client_ext::ClientExt;
 
 use std::sync::Arc;
 use std::collections::HashMap;

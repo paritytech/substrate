@@ -18,7 +18,7 @@
 
 use sp_runtime_interface::*;
 use sp_runtime_interface_test_wasm::{WASM_BINARY, test_api::HostFunctions};
-use wasm_interface::HostFunctions as HostFunctionsT;
+use sp_wasm_interface::HostFunctions as HostFunctionsT;
 
 type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher, u64>;
 

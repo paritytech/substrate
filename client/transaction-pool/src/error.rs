@@ -16,7 +16,7 @@
 
 //! Transaction pool error.
 
-use sc_transaction_graph_api::error::Error as TxPoolError;
+use sp_transaction_pool::error::Error as TxPoolError;
 
 /// Transaction pool result.
 pub type Result<T> = std::result::Result<T, Error>;

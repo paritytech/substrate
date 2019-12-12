@@ -22,7 +22,7 @@ pub use sc_network::config::{ExtTransport, NetworkConfiguration, Roles};
 pub use sc_executor::WasmExecutionMethod;
 
 use std::{path::PathBuf, net::SocketAddr, sync::Arc};
-pub use sc_transaction_pool::sc_transaction_pool::Options as TransactionPoolOptions;
+pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension, NoExtension};
 use sp_core::crypto::Protected;
 use target_info::Target;

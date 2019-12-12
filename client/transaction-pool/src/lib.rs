@@ -26,7 +26,7 @@ pub mod error;
 #[cfg(test)]
 mod tests;
 
-pub use sc_transaction_graph;
+pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 pub use crate::maintainer::{FullBasicPoolMaintainer, LightBasicPoolMaintainer};
 
@@ -37,7 +37,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::Block as BlockT,
 };
-use sc_transaction_graph::{
+use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream,
 	TxHash, TransactionFor, TransactionStatusStreamFor,
 };

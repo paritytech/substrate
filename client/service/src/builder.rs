@@ -559,7 +559,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 	pub fn with_transaction_pool<UExPool>(
 		self,
 		transaction_pool_builder: impl FnOnce(
-			sc_transaction_pool::sc_transaction_pool::Options,
+			sc_transaction_pool::txpool::Options,
 			Arc<TCl>,
 			Option<TFchr>,
 		) -> Result<UExPool, Error>

@@ -28,12 +28,12 @@ use rpc::{
 };
 
 use sc_rpc_api::Subscriptions;
-use sc_client_sc_rpc_api::backend::Backend;
+use sc_client_api::backend::Backend;
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata
 };
 use sc_client::{
-	Client, CallExecutor, BlockchainEvents, 
+	Client, CallExecutor, BlockchainEvents,
 };
 use sp_core::{
 	H256, Blake2Hasher, Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet},
@@ -45,7 +45,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor, ProvideRuntimeApi, SaturatedConversion},
 };
 
-use sp_sc_rpc_api::Metadata;
+use sp_api::Metadata;
 
 use super::{StateBackend, error::{FutureResult, Error, Result}, client_err};
 

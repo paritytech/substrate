@@ -37,7 +37,7 @@ use sp_runtime::{
 };
 use sp_blockchain::HeaderBackend;
 use sp_transaction_pool::TransactionPoolMaintainer;
-use sp_transaction_poll::runtime_api::TaggedTransactionQueue;
+use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 
 use sc_transaction_graph::{self, ChainApi};
 

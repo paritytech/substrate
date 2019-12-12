@@ -74,7 +74,7 @@ use sp_api::ApiExt;
 
 pub use sp_consensus_aura::{
 	ConsensusLog, AuraApi, AURA_ENGINE_ID,
-	sp_inherents::{
+	inherents::{
 		InherentType as AuraInherent,
 		AuraInherentData, INHERENT_IDENTIFIER, InherentDataProvider,
 	},

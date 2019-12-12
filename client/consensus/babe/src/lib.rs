@@ -84,7 +84,7 @@ use sp_consensus::{
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
 	SelectChain, SlotData,
 };
-use sp_consensus_babe::sp_inherents::BabeInherentData;
+use sp_consensus_babe::inherents::BabeInherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
 use sp_consensus::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use sc_client_api::{
@@ -94,7 +94,7 @@ use sc_client_api::{
 };
 use sc_client::Client;
 
-use sp_sc_block_builder::BlockBuilder as BlockBuilderApi;
+use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
 use sc_consensus_slots::{CheckedHeader, check_equivocation};
 use futures::prelude::*;
@@ -807,9 +807,9 @@ fn register_babe_inherent_data_provider(
 	slot_duration: u64,
 ) -> Result<(), sp_consensus::Error> {
 	debug!(target: "babe", "Registering");
-	if !inherent_data_providers.has_provider(&sp_consensus_babe::sp_inherents::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(&sp_consensus_babe::inherents::INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(sp_consensus_babe::sp_inherents::InherentDataProvider::new(slot_duration))
+			.register_provider(sp_consensus_babe::inherents::InherentDataProvider::new(slot_duration))
 			.map_err(Into::into)
 			.map_err(sp_consensus::Error::InherentData)
 	} else {

@@ -39,7 +39,7 @@ use rpc::{
 };
 
 use sc_rpc_api::Subscriptions;
-use sc_client_sc_rpc_api::backend::Backend;
+use sc_client_api::backend::Backend;
 use sp_blockchain::Error as ClientError;
 use sc_client::{
 	BlockchainEvents, Client, CallExecutor,

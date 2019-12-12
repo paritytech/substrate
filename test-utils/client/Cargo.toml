@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 sc-client-api = { path = "../../client/api" }
 sc-client = { path = "../../client/" }
-sc-client-db = { path = "../../client//db", features = ["test-helpers"] }
+sc-client-db = { path = "../../client/db", features = ["test-helpers"] }
 sp-consensus = { path = "../../primitives/consensus/common" }
 sc-executor = { path = "../../client/executor" }
 futures = "0.3.1"

@@ -25,12 +25,12 @@ mod block_builder_ext;
 use std::sync::Arc;
 use std::collections::{HashMap, BTreeMap};
 pub use sc_block_builder_ext::BlockBuilderExt;
-pub use generic_test_sc_client::*;
+pub use substrate_test_client::*;
 pub use substrate_test_runtime;
 
 use sp_core::sr25519;
 use substrate_test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use sp_substrate_test_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor};
 use sc_client::{
 	light::fetcher::{
 		Fetcher,
@@ -69,7 +69,7 @@ mod local_executor {
 pub use local_executor::LocalExecutor;
 
 /// Test client database backend.
-pub type Backend = generic_test_sc_client::Backend<substrate_test_runtime::Block>;
+pub type Backend = substrate_test_client::Backend<substrate_test_runtime::Block>;
 
 /// Test client executor.
 pub type Executor = sc_client::LocalCallExecutor<
@@ -78,7 +78,7 @@ pub type Executor = sc_client::LocalCallExecutor<
 >;
 
 /// Test client light database backend.
-pub type LightBackend = generic_test_sc_client::LightBackend<substrate_test_runtime::Block>;
+pub type LightBackend = substrate_test_client::LightBackend<substrate_test_runtime::Block>;
 
 /// Test client light executor.
 pub type LightExecutor = sc_client::light::call_executor::GenesisCallExecutor<
@@ -123,7 +123,7 @@ impl GenesisParameters {
 	}
 }
 
-impl generic_test_sc_client::GenesisInit for GenesisParameters {
+impl substrate_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
 		use codec::Encode;
 		let mut storage = self.genesis_config().genesis_map();
@@ -145,7 +145,7 @@ impl generic_test_sc_client::GenesisInit for GenesisParameters {
 }
 
 /// A `TestClient` with `test-runtime` builder.
-pub type TestClientBuilder<E, B> = generic_test_sc_client::TestClientBuilder<E, B, GenesisParameters>;
+pub type TestClientBuilder<E, B> = substrate_test_client::TestClientBuilder<E, B, GenesisParameters>;
 
 /// Test client type with `LocalExecutor` and generic Backend.
 pub type Client<B> = sc_client::Client<
