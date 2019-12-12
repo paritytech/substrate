@@ -463,7 +463,7 @@ mod tests {
 				})
 				.and_then(move |(stream, peer_id), endpoint| {
 					let peer_id2 = peer_id.clone();
-					let upgrade = libp2p::mplex::MplexConfig::default()
+					let upgrade = libp2p::yamux::Config::default()
 						.map_inbound(move |muxer| (peer_id, muxer))
 						.map_outbound(move |muxer| (peer_id2, muxer));
 					upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)

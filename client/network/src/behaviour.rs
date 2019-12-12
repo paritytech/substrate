@@ -27,7 +27,7 @@ use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
 use log::{debug, warn};
 use sp_runtime::traits::Block as BlockT;
-use std::{iter, task::Poll};
+use std::{iter, task::Context, task::Poll};
 use void;
 
 /// General behaviour of the network. Combines all protocols together.
@@ -181,7 +181,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventPr
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
-	fn poll<TEv>(&mut self) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
+	fn poll<TEv>(&mut self, _: &mut Context) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
 		if !self.events.is_empty() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(self.events.remove(0)))
 		}
