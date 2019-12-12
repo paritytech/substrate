@@ -18,6 +18,7 @@ support = { package = "frame-support", path = "../support", default-features = f
 system = { package = "frame-system", path = "../system", default-features = false }
 session = { package = "pallet-session", path = "../session", default-features = false, features = ["historical"] }
 authorship = { package = "pallet-authorship", path = "../authorship", default-features = false }
+tracing = "0.1.10"
 
 [dev-dependencies]
 primitives = { package = "sp-core",  path = "../../primitives/core" }

@@ -12,6 +12,7 @@ runtime-io ={ package = "sp-io", path = "../../primitives/sr-io", default-featur
 sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }
+tracing = { version = "0.1.10", optional = true }
 
 [dev-dependencies]
 hex-literal = "0.2.1"
@@ -30,4 +31,5 @@ std = [
 	"sp-runtime/std",
 	"runtime-io/std",
 	"system/std",
+	"tracing",
 ]

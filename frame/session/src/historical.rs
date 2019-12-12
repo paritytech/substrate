@@ -122,6 +122,9 @@ impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<
 		// so that we have e.g. correct exposures from the _current_.
 
 		let count = <SessionModule<T>>::validators().len() as u32;
+		#[cfg(feature = "std")]
+		println!("historical::on_session_ending validators={}", count);
+
 		match ProvingTrie::<T>::generate_for(ending) {
 			Ok(trie) => <HistoricalSessions<T>>::insert(ending, &(trie.root, count)),
 			Err(reason) => {

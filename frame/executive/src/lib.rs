@@ -154,6 +154,11 @@ where
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
+		rstd::if_std!{
+			let span = tracing::span!(tracing::Level::DEBUG, "executive_initialize_block");
+			let _enter = span.enter();
+		}
+
 		let mut digests = <DigestOf<System>>::default();
 		header.digest().logs().iter().for_each(|d| if d.as_pre_runtime().is_some() { digests.push(d.clone()) });
 		Self::initialize_block_impl(header.number(), header.parent_hash(), header.extrinsics_root(), &digests);
@@ -165,6 +170,11 @@ where
 		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
 	) {
+		rstd::if_std!{
+			let span = tracing::span!(tracing::Level::DEBUG, "executive_initialize_block_impl");
+			let _enter = span.enter();
+		}
+
 		<system::Module<System>>::initialize(block_number, parent_hash, extrinsics_root, digest);
 		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 		<system::Module<System>>::register_extra_weight_unchecked(

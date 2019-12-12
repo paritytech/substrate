@@ -255,7 +255,7 @@ mod slashing;
 
 pub mod inflation;
 
-use rstd::{prelude::*, result};
+use rstd::{prelude::*, result, if_std};
 use codec::{HasCompact, Encode, Decode};
 use support::{
 	decl_module, decl_event, decl_storage, ensure,
@@ -1222,6 +1222,8 @@ impl<T: Trait> Module<T> {
 
 	/// Ensures storage is upgraded to most recent necessary state.
 	fn ensure_storage_upgraded() {
+		#[cfg(feature = "std")]
+		println!("ENSURE_STORAGE_UPGRADED");
 		migration::perform_migrations::<T>();
 	}
 
@@ -1280,6 +1282,9 @@ impl<T: Trait> Module<T> {
 	fn new_session(session_index: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
+		#[cfg(feature = "std")]
+		println!("NEW SESSION");
+				
 		let era_length = session_index.checked_sub(Self::current_era_start_session_index()).unwrap_or(0);
 		match ForceEra::get() {
 			Forcing::ForceNew => ForceEra::kill(),
@@ -1300,6 +1305,12 @@ impl<T: Trait> Module<T> {
 	/// NOTE: This always happens immediately before a session change to ensure that new validators
 	/// get a chance to set their session keys.
 	fn new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+		if_std!{
+			let span = tracing::span!(tracing::Level::DEBUG, "new_era");
+			let _enter = span.enter();
+			println!("println! new era!");
+		}
+		sp_runtime::print("print new era!");
 		// Payout
 		let points = CurrentEraPointsEarned::take();
 		let now = T::Time::now();

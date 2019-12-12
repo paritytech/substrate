@@ -496,6 +496,8 @@ decl_module! {
 		/// block of the current session.
 		fn on_initialize(n: T::BlockNumber) {
 			if T::ShouldEndSession::should_end_session(n) {
+				#[cfg(feature = "std")]
+				println!("ROTATING SESSION");
 				Self::rotate_session();
 			}
 		}

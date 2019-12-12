@@ -622,6 +622,10 @@ impl<T: Trait> Module<T> {
 	///
 	/// If no previous weight exists, the function initializes the weight to zero.
 	pub fn register_extra_weight_unchecked(weight: Weight) {
+		rstd::if_std!{
+			let span = tracing::span!(tracing::Level::DEBUG, "system_register_extra_weight_unchecked");
+			let _enter = span.enter();
+		}
 		let current_weight = AllExtrinsicsWeight::get().unwrap_or_default();
 		let next_weight = current_weight.saturating_add(weight).min(T::MaximumBlockWeight::get());
 		AllExtrinsicsWeight::put(next_weight);
@@ -634,6 +638,11 @@ impl<T: Trait> Module<T> {
 		txs_root: &T::Hash,
 		digest: &DigestOf<T>,
 	) {
+		rstd::if_std!{
+			let span = tracing::span!(tracing::Level::DEBUG, "system_initialize");
+			let _enter = span.enter();
+		}
+
 		// populate environment
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 		<Number<T>>::put(number);

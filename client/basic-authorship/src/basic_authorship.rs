@@ -176,89 +176,117 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 
 		let mut block_builder = self.client.new_block_at(&self.parent_id, inherent_digests)?;
 
-		// We don't check the API versions any further here since the dispatch compatibility
-		// check should be enough.
-		for extrinsic in self.client.runtime_api()
-			.inherent_extrinsics_with_context(
-				&self.parent_id,
-				ExecutionContext::BlockConstruction,
-				inherent_data
-			)?
+
 		{
-			block_builder.push(extrinsic)?;
+			let span = tracing::span!(tracing::Level::DEBUG, "propose_with_inherent_extrinsics_with_context");
+			let _enter = span.enter();
+
+			// We don't check the API versions any further here since the dispatch compatibility
+			// check should be enough.
+			for extrinsic in self.client.runtime_api()
+				.inherent_extrinsics_with_context(
+					&self.parent_id,
+					ExecutionContext::BlockConstruction,
+					inherent_data
+				)?
+			{
+				block_builder.push(extrinsic)?;
+			}
 		}
 
 		// proceed with transactions
 		let mut is_first = true;
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
-		let pending_iterator = self.transaction_pool.ready();
 
-		debug!("Attempting to push transactions from the pool.");
-		for pending_tx in pending_iterator {
-			if (self.now)() > deadline {
-				debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
-				break;
-			}
+		{
+			let span = tracing::span!(tracing::Level::DEBUG, "propose_with_pushing_transactions_from_pool");
+			let _enter = span.enter();
 
-			let pending_tx_data = pending_tx.data().clone();
-			let pending_tx_hash = pending_tx.hash().clone();
-			trace!("[{:?}] Pushing to the block.", pending_tx_hash);
-			match block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
-				Ok(()) => {
-					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
+			let pending_iterator = self.transaction_pool.ready();
+
+			debug!("Attempting to push transactions from the pool.");
+			for pending_tx in pending_iterator {
+				if (self.now)() > deadline {
+					debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
+					break;
 				}
-				Err(sp_blockchain::Error::ApplyExtrinsicFailed(sp_blockchain::ApplyExtrinsicFailed::Validity(e)))
-						if e.exhausted_resources() => {
-					if is_first {
-						debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending_tx_hash);
+
+				let pending_tx_data = pending_tx.data().clone();
+				let pending_tx_hash = pending_tx.hash().clone();
+				trace!("[{:?}] Pushing to the block.", pending_tx_hash);
+				match block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
+					Ok(()) => {
+						debug!("[{:?}] Pushed to the block.", pending_tx_hash);
+					}
+					Err(sp_blockchain::Error::ApplyExtrinsicFailed(sp_blockchain::ApplyExtrinsicFailed::Validity(e)))
+							if e.exhausted_resources() => {
+						if is_first {
+							debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending_tx_hash);
+							unqueue_invalid.push(pending_tx_hash);
+						} else if skipped < MAX_SKIPPED_TRANSACTIONS {
+							skipped += 1;
+							debug!(
+								"Block seems full, but will try {} more transactions before quitting.",
+								MAX_SKIPPED_TRANSACTIONS - skipped,
+							);
+						} else {
+							debug!("Block is full, proceed with proposing.");
+							break;
+						}
+					}
+					Err(e) => {
+						debug!("[{:?}] Invalid transaction: {}", pending_tx_hash, e);
 						unqueue_invalid.push(pending_tx_hash);
-					} else if skipped < MAX_SKIPPED_TRANSACTIONS {
-						skipped += 1;
-						debug!(
-							"Block seems full, but will try {} more transactions before quitting.",
-							MAX_SKIPPED_TRANSACTIONS - skipped,
-						);
-					} else {
-						debug!("Block is full, proceed with proposing.");
-						break;
 					}
 				}
-				Err(e) => {
-					debug!("[{:?}] Invalid transaction: {}", pending_tx_hash, e);
-					unqueue_invalid.push(pending_tx_hash);
-				}
+
+				is_first = false;
+			}
+		}
+
+		{
+			let span = tracing::span!(tracing::Level::DEBUG, "propose_with_remove_invalid");
+			let _enter = span.enter();
+			self.transaction_pool.remove_invalid(&unqueue_invalid);
+		}
+
+		let block = {
+			let span = tracing::span!(tracing::Level::DEBUG, "propose_with_bake");
+			let _enter = span.enter();
+
+			block_builder.bake()?
+		};
+
+		{
+			let span = tracing::span!(tracing::Level::DEBUG, "propose_telemetry_logs");
+			let _enter = span.enter();
+
+			info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
+				block.header().number(),
+				<Block as BlockT>::Hash::from(block.header().hash()),
+				block.header().parent_hash(),
+				block.extrinsics()
+					.iter()
+					.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
+					.collect::<Vec<_>>()
+					.join(", ")
+			);
+
+			telemetry!(CONSENSUS_INFO; "prepared_block_for_proposing";
+				"number" => ?block.header().number(),
+				"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
+			);
+
+			if Decode::decode(&mut block.encode().as_slice()).as_ref() != Ok(&block) {
+				error!("Failed to verify block encoding/decoding");
 			}
 
-			is_first = false;
+			if let Err(err) = evaluation::evaluate_initial(&block, &self.parent_hash, self.parent_number) {
+				error!("Failed to evaluate authored block: {:?}", err);
+			}
 		}
 
-		self.transaction_pool.remove_invalid(&unqueue_invalid);
-
-		let block = block_builder.bake()?;
-
-		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
-			block.header().number(),
-			<Block as BlockT>::Hash::from(block.header().hash()),
-			block.header().parent_hash(),
-			block.extrinsics()
-				.iter()
-				.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
-				.collect::<Vec<_>>()
-				.join(", ")
-		);
-		telemetry!(CONSENSUS_INFO; "prepared_block_for_proposing";
-			"number" => ?block.header().number(),
-			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
-		);
-
-		if Decode::decode(&mut block.encode().as_slice()).as_ref() != Ok(&block) {
-			error!("Failed to verify block encoding/decoding");
-		}
-
-		if let Err(err) = evaluation::evaluate_initial(&block, &self.parent_hash, self.parent_number) {
-			error!("Failed to evaluate authored block: {:?}", err);
-		}
 
 		Ok(block)
 	}

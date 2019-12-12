@@ -670,6 +670,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Self: ProvideRuntimeApi,
 		<Self as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, Error = Error>
 	{
+		let span = tracing::span!(tracing::Level::DEBUG, "propose_with_new_block_at");
+		let _enter = span.enter();
+
 		block_builder::BlockBuilder::new(
 			self,
 			self.expect_block_hash_from_id(parent)?,
@@ -867,34 +870,48 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				let span = tracing::span!(tracing::Level::DEBUG, "enact_state");
 				let _enter = span.enter();
 
-				self.backend.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
+				{
+					let span = tracing::span!(tracing::Level::DEBUG, "begin_state_operation");
+					let _enter = span.enter();
+					self.backend.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
+				}
 
 				// ensure parent block is finalized to maintain invariant that
 				// finality is called sequentially.
 				if finalized {
+					let span = tracing::span!(tracing::Level::DEBUG, "apply_finality_with_block_hash");
+					let _enter = span.enter();
 					self.apply_finality_with_block_hash(operation, parent_hash, None, info.best_hash, make_notifications)?;
 				}
-
-				// FIXME #1232: correct path logic for when to execute this function
-				let (storage_update, changes_update, storage_changes) = self.block_execution(
-					&operation.op,
-					&import_headers,
-					origin,
-					hash,
-					&body,
-				)?;
-
-				operation.op.update_cache(new_cache);
-				if let Some(storage_update) = storage_update {
-					operation.op.update_db_storage(storage_update)?;
+				{
+					let span = tracing::span!(tracing::Level::DEBUG, "block_execution");
+					let _enter = span.enter();
+					
+					// FIXME #1232: correct path logic for when to execute this function
+					let (storage_update, changes_update, storage_changes) = self.block_execution(
+						&operation.op,
+						&import_headers,
+						origin,
+						hash,
+						&body,
+					)?;
+					{
+						let span = tracing::span!(tracing::Level::DEBUG, "cache_updates");
+						let _enter = span.enter();
+					
+						operation.op.update_cache(new_cache);
+						if let Some(storage_update) = storage_update {
+							operation.op.update_db_storage(storage_update)?;
+						}
+						if let Some(storage_changes) = storage_changes.clone() {
+							operation.op.update_storage(storage_changes.0, storage_changes.1)?;
+						}
+						if let Some(Some(changes_update)) = changes_update {
+							operation.op.update_changes_trie(changes_update)?;
+						}
+						storage_changes
+					}
 				}
-				if let Some(storage_changes) = storage_changes.clone() {
-					operation.op.update_storage(storage_changes.0, storage_changes.1)?;
-				}
-				if let Some(Some(changes_update)) = changes_update {
-					operation.op.update_changes_trie(changes_update)?;
-				}
-				storage_changes
 			},
 			_ => None,
 		};

@@ -68,25 +68,40 @@ where
 		proof_recording: bool,
 		inherent_digests: DigestFor<Block>,
 	) -> Result<Self, ApiErrorFor<A, Block>> {
-		let header = <<Block as BlockT>::Header as HeaderT>::new(
-			parent_number + One::one(),
-			Default::default(),
-			Default::default(),
-			parent_hash,
-			inherent_digests,
-		);
+		let span = tracing::span!(tracing::Level::DEBUG, "block_builder_new");
+		let _enter = span.enter();
+
+		let header = {
+			let span = tracing::span!(tracing::Level::DEBUG, "block_builder_new_header");
+			let _enter = span.enter();
+
+			<<Block as BlockT>::Header as HeaderT>::new(
+				parent_number + One::one(),
+				Default::default(),
+				Default::default(),
+				parent_hash,
+				inherent_digests,
+			)
+		};
 
 		let mut api = api.runtime_api();
 
 		if proof_recording {
+			let span = tracing::span!(tracing::Level::DEBUG, "block_builder_new_proof_recording");
+			let _enter = span.enter();
+
 			api.record_proof();
 		}
 
 		let block_id = BlockId::Hash(parent_hash);
+		{
+			let span = tracing::span!(tracing::Level::DEBUG, "block_builder_new_initialize_block");
+			let _enter = span.enter();
 
-		api.initialize_block_with_context(
-			&block_id, ExecutionContext::BlockConstruction, &header,
-		)?;
+			api.initialize_block_with_context(
+				&block_id, ExecutionContext::BlockConstruction, &header,
+			)?;
+		}
 
 		Ok(Self {
 			header,
