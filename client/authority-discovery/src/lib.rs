@@ -555,7 +555,7 @@ mod tests {
 	use sp_runtime::traits::Zero;
 	use sp_runtime::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
 	use std::sync::{Arc, Mutex};
-	use test_client::runtime::Block;
+	use sp_test_primitives::Block;
 
 	#[test]
 	fn interval_at_with_start_now() {
