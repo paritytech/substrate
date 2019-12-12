@@ -1,5 +1,5 @@
 [package]
-name = "srml-bridge"
+name = "pallet-bridge"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -8,19 +8,19 @@ edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
-fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../core/finality-grandpa/primitives" }
+fg_primitives = { package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 hash-db = { version = "0.15.2", default-features = false }
-primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
-session = { package = "srml-session", path = "../session", default-features = false, features = ["historical"] }
+primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
+session = { package = "pallet-session", path = "../session", default-features = false }
 serde = { version = "1.0", optional = true }
-sr-primitives = { path = "../../core/sr-primitives", default-features = false }
-state-machine = { package = "substrate-state-machine",  path = "../../core/state-machine" }
-support = { package = "srml-support", path = "../support", default-features = false }
-system = { package = "srml-system", path = "../system", default-features = false }
-trie = { package = "substrate-trie", path = "../../core/trie", default-features = false }
+sp-runtime = { path = "../../primitives/runtime", default-features = false }
+state-machine = { package = "sp-state-machine", path = "../../primitives/state-machine" }
+support = { package = "frame-support", path = "../support", default-features = false }
+system = { package = "frame-system", path = "../system", default-features = false }
+sp-trie = { path = "../../primitives/trie", default-features = false }
 
 [dev-dependencies]
-runtime-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
+sp-io = { path = "../../primitives/io", default-features = false }
 
 [features]
 default = ["std"]
@@ -28,9 +28,10 @@ std = [
 	"serde",
 	"codec/std",
 	"session/std",
-	"sr-primitives/std",
+	"primitives/std",
 	"support/std",
 	"system/std",
-	"trie/std",
-	"runtime-io/std",
+	"sp-runtime/std",
+	"sp-trie/std",
+	"sp-io/std",
 ]

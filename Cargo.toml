@@ -53,6 +53,7 @@ members = [
 	"frame/authorship",
 	"frame/babe",
 	"frame/balances",
+	"frame/bridge",
 	"frame/collective",
 	"frame/contracts",
 	"frame/contracts/rpc",

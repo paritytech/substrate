@@ -359,20 +359,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bridge"
-version = "0.1.0"
-dependencies = [
- "parity-scale-codec 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 2.0.0",
- "sr-primitives 2.0.0",
- "srml-session 2.0.0",
- "srml-support 2.0.0",
- "srml-system 2.0.0",
- "substrate-primitives 2.0.0",
-]
-
-[[package]]
 name = "bs58"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3572,6 +3558,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-bridge"
+version = "0.1.0"
+dependencies = [
+ "frame-support 2.0.0",
+ "frame-system 2.0.0",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pallet-session 2.0.0",
+ "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-core 2.0.0",
+ "sp-finality-grandpa 2.0.0",
+ "sp-io 2.0.0",
+ "sp-runtime 2.0.0",
+ "sp-state-machine 2.0.0",
+ "sp-trie 2.0.0",
+]
+
+[[package]]
 name = "pallet-collective"
 version = "2.0.0"
 dependencies = [
@@ -5437,24 +5441,6 @@ dependencies = [
  "substrate-test-runtime-client 2.0.0",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "srml-bridge"
-version = "0.1.0"
-dependencies = [
- "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 2.0.0",
- "sr-primitives 2.0.0",
- "srml-session 2.0.0",
- "srml-support 2.0.0",
- "srml-system 2.0.0",
- "substrate-finality-grandpa-primitives 2.0.0",
- "substrate-primitives 2.0.0",
- "substrate-state-machine 2.0.0",
- "substrate-trie 2.0.0",
 ]
 
 [[package]]
