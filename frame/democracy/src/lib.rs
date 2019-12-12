@@ -715,16 +715,16 @@ decl_module! {
 		}
 
 		/// Remove an expired proposal preimage and collect the deposit.
+		///
+		/// This will only work after `VotingPeriod` blocks from the time that the preimage was
+		/// noted, if it's the same account doing it. If it's a different account, then it'll only
+		/// work an additional `EnactmentPeriod` later.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn reap_preimage(origin, proposal_hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 
 			let (_, old, deposit, then) = <Preimages<T>>::get(&proposal_hash).ok_or("not found")?;
 			let now = <system::Module<T>>::block_number();
-			// we always for a wait of at least (voting + enactment) to minimise the chance of a
-			// last minute preimage pre-enactment snatch. if a vote begins with no preimage
-			// registered, then you can be sure that the owner cannot yank it prior to enactment.
-			// if it is already registered, then
 			let (voting, enactment) = (T::VotingPeriod::get(), T::EnactmentPeriod::get());
 			let additional = if who == old { Zero::zero() } else { enactment };
 			ensure!(now >= then + voting + additional, "too early");
@@ -732,7 +732,6 @@ decl_module! {
 			let queue = <DispatchQueue<T>>::get();
 			ensure!(queue.iter().all(|item| &item.1 != &proposal_hash), "imminent");
 
-			// allowed to claim the deposit.
 			let _ = T::Currency::repatriate_reserved(&old, &who, deposit);
 			<Preimages<T>>::remove(&proposal_hash);
 			Self::deposit_event(RawEvent::PreimageReaped(proposal_hash, old, deposit, who));
