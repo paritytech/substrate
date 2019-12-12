@@ -21,11 +21,10 @@
 #![forbid(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
 #![deny(unused_imports)]
 pub use pallet_timestamp;
-use sp_timestamp;
 
 use sp_std::{result, prelude::*};
 use frame_support::{decl_storage, decl_module, traits::FindAuthor, traits::Get};
-use sp_pallet_timestamp::OnTimestampSet;
+use sp_timestamp::OnTimestampSet;
 use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
 use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
 use sp_staking::{
@@ -37,7 +36,7 @@ use codec::{Encode, Decode};
 use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 use sp_consensus_babe::{
 	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, NextEpochDescriptor, RawBabePreDigest,
-	SlotNumber, sp_inherents::{INHERENT_IDENTIFIER, BabeInherentData}
+	SlotNumber, inherents::{INHERENT_IDENTIFIER, BabeInherentData}
 };
 pub use sp_consensus_babe::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 

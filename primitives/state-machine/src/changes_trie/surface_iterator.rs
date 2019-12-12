@@ -21,7 +21,7 @@
 //! search for gems.
 
 use num_traits::One;
-use crate::changes_sp_trie::{ConfigurationRange, BlockNumber};
+use crate::changes_trie::{ConfigurationRange, BlockNumber};
 
 /// Returns surface iterator for given range of blocks.
 ///
@@ -195,7 +195,7 @@ fn lower_bound_max_digest<'a, Number: BlockNumber>(
 
 #[cfg(test)]
 mod tests {
-	use crate::changes_sp_trie::{Configuration};
+	use crate::changes_trie::{Configuration};
 	use super::*;
 
 	fn configuration_range<'a>(config: &'a Configuration, zero: u64) -> ConfigurationRange<'a, u64> {

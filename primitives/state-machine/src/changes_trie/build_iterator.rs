@@ -18,7 +18,7 @@
 //! in given block's changes trie.
 
 use num_traits::Zero;
-use crate::changes_sp_trie::{ConfigurationRange, BlockNumber};
+use crate::changes_trie::{ConfigurationRange, BlockNumber};
 
 /// Returns iterator of OTHER blocks that are required for inclusion into
 /// changes trie of given block. Blocks are guaranteed to be returned in
@@ -166,7 +166,7 @@ impl<Number: BlockNumber> Iterator for BlocksRange<Number> {
 
 #[cfg(test)]
 mod tests {
-	use crate::changes_sp_trie::Configuration;
+	use crate::changes_trie::Configuration;
 	use super::*;
 
 	fn digest_build_iterator(

@@ -20,7 +20,7 @@ use std::{collections::{HashMap, BTreeMap}, any::{Any, TypeId}};
 use hash_db::Hasher;
 use crate::{
 	backend::{InMemory, Backend}, OverlayedChanges,
-	changes_sp_trie::{
+	changes_trie::{
 		InMemoryStorage as ChangesTrieInMemoryStorage,
 		BlockNumber as ChangesTrieBlockNumber,
 	},

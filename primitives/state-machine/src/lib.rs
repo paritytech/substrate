@@ -45,7 +45,7 @@ pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use ext::Ext;
 pub use backend::Backend;
-pub use changes_sp_trie::{
+pub use changes_trie::{
 	AnchorBlockId as ChangesTrieAnchorBlockId,
 	Storage as ChangesTrieStorage,
 	RootsStorage as ChangesTrieRootsStorage,
@@ -62,8 +62,8 @@ pub use proving_backend::{
 	create_proof_check_backend, create_proof_check_backend_storage, merge_storage_proofs,
 	ProofRecorder, ProvingBackend, ProvingBackendRecorder, StorageProof,
 };
-pub use sp_trie_backend_essence::{TrieBackendStorage, Storage};
-pub use sp_trie_backend::TrieBackend;
+pub use trie_backend_essence::{TrieBackendStorage, Storage};
+pub use trie_backend::TrieBackend;
 pub use error::{Error, ExecutionError};
 
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
@@ -180,7 +180,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 	Exec: CodeExecutor,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H, N>,
-	N: crate::changes_sp_trie::BlockNumber,
+	N: crate::changes_trie::BlockNumber,
 {
 	/// Creates new substrate state machine.
 	pub fn new(
@@ -737,7 +737,7 @@ mod tests {
 	use super::*;
 	use super::backend::InMemory;
 	use super::ext::Ext;
-	use super::changes_sp_trie::{
+	use super::changes_trie::{
 		InMemoryStorage as InMemoryChangesTrieStorage,
 		Configuration as ChangesTrieConfig,
 	};

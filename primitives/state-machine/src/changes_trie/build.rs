@@ -24,10 +24,10 @@ use num_traits::One;
 use crate::backend::Backend;
 use crate::overlayed_changes::OverlayedChanges;
 use crate::trie_backend_essence::TrieBackendEssence;
-use crate::changes_sp_trie::build_iterator::digest_build_iterator;
-use crate::changes_sp_trie::input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex};
-use crate::changes_sp_trie::{AnchorBlockId, ConfigurationRange, Storage, BlockNumber};
-use crate::changes_sp_trie::input::ChildIndex;
+use crate::changes_trie::build_iterator::digest_build_iterator;
+use crate::changes_trie::input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex};
+use crate::changes_trie::{AnchorBlockId, ConfigurationRange, Storage, BlockNumber};
+use crate::changes_trie::input::ChildIndex;
 
 /// Prepare input pairs for building a changes trie of given block.
 ///
@@ -272,7 +272,7 @@ fn prepare_digest_input<'a, H, Number>(
 			let mut children_roots = BTreeMap::<Vec<u8>, _>::new();
 			{
 				let trie_storage = TrieBackendEssence::<_, H>::new(
-					crate::changes_sp_trie::TrieBackendStorageAdapter(storage),
+					crate::changes_trie::TrieBackendStorageAdapter(storage),
 					trie_root,
 				);
 
@@ -304,7 +304,7 @@ fn prepare_digest_input<'a, H, Number>(
 
 				let mut map = child_map.entry(child_index).or_default();
 				let trie_storage = TrieBackendEssence::<_, H>::new(
-					crate::changes_sp_trie::TrieBackendStorageAdapter(storage),
+					crate::changes_trie::TrieBackendStorageAdapter(storage),
 					trie_root,
 				);
 				trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
@@ -333,8 +333,8 @@ mod test {
 	use sp_core::Blake2Hasher;
 	use sp_core::storage::well_known_keys::{EXTRINSIC_INDEX};
 	use crate::backend::InMemory;
-	use crate::changes_sp_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
-	use crate::changes_sp_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
+	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
+	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
 	use super::*;
 

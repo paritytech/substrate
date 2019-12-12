@@ -179,7 +179,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			overlay: &mut read_overlay,
 		};
 
-		if let Err(e) = for_keys_in_child_sp_trie::<Layout<H>, _, Ephemeral<S, H>>(
+		if let Err(e) = for_keys_in_child_trie::<Layout<H>, _, Ephemeral<S, H>>(
 			storage_key,
 			&eph,
 			&root,

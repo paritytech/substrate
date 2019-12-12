@@ -281,7 +281,7 @@ decl_storage! {
 		pub LowestUnbaked get(fn lowest_unbaked) build(|_| 0 as ReferendumIndex): ReferendumIndex;
 		/// Information concerning any given referendum.
 		pub ReferendumInfoOf get(fn referendum_info):
-			map ReferendumIndex => Option<(ReferendumInfo<T::BlockNumber, T::Hash>)>;
+			map ReferendumIndex => Option<ReferendumInfo<T::BlockNumber, T::Hash>>;
 		/// Queue of successful referenda to be dispatched. Stored ordered by block number.
 		pub DispatchQueue get(fn dispatch_queue): Vec<(T::BlockNumber, T::Hash, ReferendumIndex)>;
 

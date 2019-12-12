@@ -20,7 +20,7 @@
 use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeMap, BTreeSet};
 use codec::Decode;
-use crate::changes_sp_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
+use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use sp_core::storage::well_known_keys::EXTRINSIC_INDEX;
 use std::{mem, ops};
 
@@ -407,7 +407,7 @@ mod tests {
 		Blake2Hasher, traits::Externalities, storage::well_known_keys::EXTRINSIC_INDEX,
 	};
 	use crate::backend::InMemory;
-	use crate::changes_sp_trie::InMemoryStorage as InMemoryChangesTrieStorage;
+	use crate::changes_trie::InMemoryStorage as InMemoryChangesTrieStorage;
 	use crate::ext::Ext;
 	use super::*;
 

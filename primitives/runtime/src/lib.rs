@@ -35,7 +35,7 @@ pub use sp_std;
 pub use paste;
 
 #[doc(hidden)]
-pub use sp_application_crypto;
+pub use sp_application_crypto as app_crypto;
 
 #[cfg(feature = "std")]
 pub use sp_core::storage::{StorageOverlay, ChildrenStorageOverlay};

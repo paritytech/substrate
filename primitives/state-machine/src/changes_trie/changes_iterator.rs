@@ -23,11 +23,11 @@ use codec::{Decode, Encode, Codec};
 use hash_db::Hasher;
 use num_traits::Zero;
 use sp_trie::Recorder;
-use crate::changes_sp_trie::{AnchorBlockId, ConfigurationRange, RootsStorage, Storage, BlockNumber};
-use crate::changes_sp_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, ExtrinsicIndexValue};
-use crate::changes_sp_trie::storage::{TrieBackendAdapter, InMemoryStorage};
-use crate::changes_sp_trie::input::ChildIndex;
-use crate::changes_sp_trie::surface_iterator::{surface_iterator, SurfaceIterator};
+use crate::changes_trie::{AnchorBlockId, ConfigurationRange, RootsStorage, Storage, BlockNumber};
+use crate::changes_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, ExtrinsicIndexValue};
+use crate::changes_trie::storage::{TrieBackendAdapter, InMemoryStorage};
+use crate::changes_trie::input::ChildIndex;
+use crate::changes_trie::surface_iterator::{surface_iterator, SurfaceIterator};
 use crate::proving_backend::ProvingBackendRecorder;
 use crate::trie_backend_essence::{TrieBackendEssence};
 
@@ -377,9 +377,9 @@ impl<'a, H, Number> Iterator for ProvingDrilldownIterator<'a, H, Number>
 mod tests {
 	use std::iter::FromIterator;
 	use sp_core::Blake2Hasher;
-	use crate::changes_sp_trie::Configuration;
-	use crate::changes_sp_trie::input::InputPair;
-	use crate::changes_sp_trie::storage::InMemoryStorage;
+	use crate::changes_trie::Configuration;
+	use crate::changes_trie::input::InputPair;
+	use crate::changes_trie::storage::InMemoryStorage;
 	use super::*;
 
 	fn prepare_for_drilldown() -> (Configuration, InMemoryStorage<Blake2Hasher, u64>) {

@@ -17,7 +17,7 @@
 //! Different types of changes trie input pairs.
 
 use codec::{Decode, Encode, Input, Output, Error};
-use crate::changes_sp_trie::BlockNumber;
+use crate::changes_trie::BlockNumber;
 
 /// Key of { changed key => set of extrinsic indices } mapping.
 #[derive(Clone, Debug, PartialEq, Eq)]

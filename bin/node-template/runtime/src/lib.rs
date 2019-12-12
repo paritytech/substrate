@@ -18,7 +18,7 @@ use sp_runtime::traits::{
 	NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto, IdentifyAccount
 };
 use sp_api::impl_runtime_apis;
-use pallet_sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use pallet_consensus_aura::sr25519::AuthorityId as AuraId;
 use pallet_grandpa::AuthorityList as GrandpaAuthorityList;
 use pallet_grandpa::fg_primitives;
 use sp_version::RuntimeVersion;
@@ -246,10 +246,10 @@ construct_runtime!(
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Aura: pallet_aura::{Module, Config<T>, Inherent(Timestamp)},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
-		Indices: indices,
+		Indices: pallet_indices,
 		Balances: pallet_balances::{default, Error},
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
-		Sudo: sudo,
+		Sudo: pallet_sudo,
 		// Used for the module template in `./template.rs`
 		TemplateModule: template::{Module, Call, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},

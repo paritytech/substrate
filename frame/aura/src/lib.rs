@@ -61,7 +61,7 @@ use sp_timestamp::OnTimestampSet;
 use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 use sp_consensus_aura::{
 	AURA_ENGINE_ID, ConsensusLog, AuthorityIndex,
-	sp_inherents::{INHERENT_IDENTIFIER, AuraInherentData},
+	inherents::{INHERENT_IDENTIFIER, AuraInherentData},
 };
 
 mod mock;

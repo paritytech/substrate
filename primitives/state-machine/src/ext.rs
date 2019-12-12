@@ -18,7 +18,7 @@
 
 use crate::{
 	backend::Backend, OverlayedChanges,
-	changes_sp_trie::{
+	changes_trie::{
 		Storage as ChangesTrieStorage, CacheAction as ChangesTrieCacheAction, build_changes_trie,
 	},
 };
@@ -97,7 +97,7 @@ where
 	H: Hasher<Out=H256>,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H, N>,
-	N: crate::changes_sp_trie::BlockNumber,
+	N: crate::changes_trie::BlockNumber,
 {
 
 	/// Create a new `Ext` from overlayed changes and read-only backend
@@ -155,7 +155,7 @@ where
 	H: Hasher<Out=H256>,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H, N>,
-	N: crate::changes_sp_trie::BlockNumber,
+	N: crate::changes_trie::BlockNumber,
 {
 	pub fn storage_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		use std::collections::HashMap;
@@ -176,7 +176,7 @@ where
 	H: Hasher<Out=H256>,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H, N>,
-	N: crate::changes_sp_trie::BlockNumber,
+	N: crate::changes_trie::BlockNumber,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
@@ -537,7 +537,7 @@ where
 	fn storage_changes_root(&mut self, parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 
-		self.changes_trie_transaction = build_changes_sp_trie::<_, T, H, N>(
+		self.changes_trie_transaction = build_changes_trie::<_, T, H, N>(
 			self.backend,
 			self.changes_trie_storage.clone(),
 			self.overlay,
@@ -567,7 +567,7 @@ where
 	H: Hasher<Out=H256>,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H, N>,
-	N: crate::changes_sp_trie::BlockNumber,
+	N: crate::changes_trie::BlockNumber,
 {
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
 		self.extensions.as_mut().and_then(|exts| exts.get_mut(type_id))
@@ -581,7 +581,7 @@ mod tests {
 	use codec::Encode;
 	use sp_core::{Blake2Hasher, storage::well_known_keys::EXTRINSIC_INDEX};
 	use crate::{
-		changes_sp_trie::{
+		changes_trie::{
 			Configuration as ChangesTrieConfiguration,
 			InMemoryStorage as InMemoryChangesTrieStorage,
 		}, backend::InMemory, overlayed_changes::OverlayedValue,

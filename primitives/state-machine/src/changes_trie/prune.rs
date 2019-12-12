@@ -22,9 +22,9 @@ use log::warn;
 use num_traits::{One, Zero};
 use crate::proving_backend::ProvingBackendRecorder;
 use crate::trie_backend_essence::TrieBackendEssence;
-use crate::changes_sp_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
-use crate::changes_sp_trie::storage::TrieBackendAdapter;
-use crate::changes_sp_trie::input::{ChildIndex, InputKey};
+use crate::changes_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
+use crate::changes_trie::storage::TrieBackendAdapter;
+use crate::changes_trie::input::{ChildIndex, InputKey};
 use codec::{Decode, Codec};
 
 /// Get number of oldest block for which changes trie is not pruned
@@ -86,7 +86,7 @@ pub fn prune<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H::
 		};
 		let children_roots = {
 			let trie_storage = TrieBackendEssence::<_, H>::new(
-				crate::changes_sp_trie::TrieBackendStorageAdapter(storage),
+				crate::changes_trie::TrieBackendStorageAdapter(storage),
 				root,
 			);
 			let child_prefix = ChildIndex::key_neutral_prefix(block.clone());
@@ -205,7 +205,7 @@ mod tests {
 	use sp_trie::MemoryDB;
 	use sp_core::Blake2Hasher;
 	use crate::backend::insert_into_memory_db;
-	use crate::changes_sp_trie::storage::InMemoryStorage;
+	use crate::changes_trie::storage::InMemoryStorage;
 	use codec::Encode;
 	use super::*;
 

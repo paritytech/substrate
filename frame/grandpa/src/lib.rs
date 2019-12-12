@@ -40,10 +40,10 @@ use sp_staking::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
-use fg_sp_core::{
+use fg_primitives::{
 	GRANDPA_AUTHORITIES_KEY, GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog, SetId, RoundNumber,
 };
-pub use fg_sp_core::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
+pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
 use frame_system::{ensure_signed, DigestOf};
 
 mod mock;

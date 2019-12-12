@@ -32,7 +32,7 @@ macro_rules! impl_outer_origin {
 	) => {
 		$crate::impl_outer_origin! {
 			$(#[$attr])*
-			pub enum $name for $runtime where system = system {
+			pub enum $name for $runtime where system = frame_system {
 				$( $rest_without_system )*
 			}
 		}
@@ -281,14 +281,14 @@ mod tests {
 	);
 
 	impl_outer_origin!(
-		pub enum OriginWithSystem for TestRuntime where system = system {
+		pub enum OriginWithSystem for TestRuntime where system = frame_system {
 			origin_without_generic,
 			origin_with_generic<T>
 		}
 	);
 
 	impl_outer_origin!(
-		pub enum OriginWithSystem2 for TestRuntime where system = system {
+		pub enum OriginWithSystem2 for TestRuntime where system = frame_system {
 			origin_with_generic<T>,
 			origin_without_generic,
 		}
