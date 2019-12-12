@@ -459,9 +459,9 @@ mod tests {
 						secio,
 						endpoint,
 						upgrade::Version::V1
-					).map_ok(|(id, stream)| ((stream, id)))
+					)
 				})
-				.and_then(move |(stream, peer_id), endpoint| {
+				.and_then(move |(peer_id, stream), endpoint| {
 					let peer_id2 = peer_id.clone();
 					let upgrade = libp2p::yamux::Config::default()
 						.map_inbound(move |muxer| (peer_id, muxer))
