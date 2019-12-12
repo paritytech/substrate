@@ -212,6 +212,7 @@ decl_storage! {
 decl_error! {
 	/// Error for the Sudo module
 	pub enum Error {
+		/// Sender must be the Sudo account
 		RequireSudo,
 	}
 }
