@@ -46,6 +46,7 @@ mod module1 {
 		type GenericType: Default + Clone + codec::Codec + codec::EncodeLike;
 	}
 
+	use self::system as frame_system;
 	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: InstantiableThing> for enum Call where
 			origin: <T as system::Trait>::Origin,
@@ -125,6 +126,7 @@ mod module2 {
 
 	impl<T: Trait<I>, I: Instance> Currency for Module<T, I> {}
 
+	use self::system as frame_system;
 	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where
 			origin: <T as system::Trait>::Origin

@@ -27,7 +27,6 @@ use codec::{Encode, Decode, Input, Error};
 
 use sp_core::{Blake2Hasher, OpaqueMetadata, RuntimeDebug};
 use sp_application_crypto::{ed25519, sr25519, RuntimeAppPublic};
-pub use sp_application_crypto;
 use trie_db::{TrieMut, Trie};
 use sp_trie::PrefixedMemoryDB;
 use sp_trie::trie_types::{TrieDB, TrieDBMut};

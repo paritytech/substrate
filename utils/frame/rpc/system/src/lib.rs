@@ -224,7 +224,7 @@ mod tests {
 	use super::*;
 
 	use futures::executor::block_on;
-	use substrate_test_client::{
+	use substrate_test_runtime_client::{
 		runtime::Transfer,
 		AccountKeyring,
 	};

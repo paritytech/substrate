@@ -246,7 +246,7 @@ mod tests {
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]

@@ -39,7 +39,7 @@ impl From<UintAuthorityId> for MockSessionKeys {
 }
 
 impl_outer_origin! {
-	pub enum Origin for Test {}
+	pub enum Origin for Test  where system = frame_system {}
 }
 
 thread_local! {

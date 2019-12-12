@@ -1104,7 +1104,7 @@ mod tests {
 	const BIG_NAY: Vote = Vote{ aye: false, conviction: Conviction::Locked1x };
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	impl_outer_dispatch! {

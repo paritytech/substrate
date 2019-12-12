@@ -25,6 +25,7 @@ use frame_support::weights::{Weight, DispatchInfo};
 use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait};
 
+use frame_system as system;
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
 }

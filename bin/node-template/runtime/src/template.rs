@@ -71,6 +71,7 @@ mod tests {
 
 	use sp_core::H256;
 	use frame_support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
+	use frame_system as system;
 	use sp_runtime::{
 		traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill,
 	};

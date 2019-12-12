@@ -263,6 +263,7 @@ mod tests {
 	#[derive(Clone, PartialEq, Eq, Debug)]
 	pub struct Runtime;
 
+	use frame_system as system;
 	impl_outer_origin!{
 		pub enum Origin for Runtime {}
 	}

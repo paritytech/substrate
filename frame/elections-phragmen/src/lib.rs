@@ -92,7 +92,7 @@ use frame_support::{
 	}
 };
 use sp_phragmen::ExtendedBalance;
-use frame_system::{self, ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 
 const MODULE_ID: LockIdentifier = *b"phrelect";
 
@@ -743,6 +743,7 @@ mod tests {
 		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 	};
 	use crate as elections;
+	use frame_system as system;
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
@@ -892,7 +893,7 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
-			System: frame_system::{Module, Call, Event},
+			System: system::{Module, Call, Event},
 			Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
 			Elections: elections::{Module, Call, Event<T>},
 		}
@@ -934,7 +935,7 @@ mod tests {
 			TERM_DURATION.with(|v| *v.borrow_mut() = self.term_duration);
 			DESIRED_RUNNERS_UP.with(|v| *v.borrow_mut() = self.desired_runners_up);
 			GenesisConfig {
-				balances: Some(pallet_balances::GenesisConfig::<Test>{
+				pallet_balances: Some(pallet_balances::GenesisConfig::<Test>{
 					balances: vec![
 						(1, 10 * self.balance_factor),
 						(2, 20 * self.balance_factor),

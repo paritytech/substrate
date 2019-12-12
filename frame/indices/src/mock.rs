@@ -24,11 +24,10 @@ use sp_runtime::testing::Header;
 use sp_runtime::Perbill;
 use sp_core::H256;
 use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
-use {sp_io, system};
 use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
 
 impl_outer_origin!{
-	pub enum Origin for Runtime {}
+	pub enum Origin for Runtime where system = frame_system {}
 }
 
 ref_thread_local! {

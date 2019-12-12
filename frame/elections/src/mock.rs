@@ -145,13 +145,14 @@ impl elections::Trait for Test {
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
+use frame_system as system;
 frame_support::construct_runtime!(
 	pub enum Test where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Module, Call, Event},
+		System: system::{Module, Call, Event},
 		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>, Error},
 		Elections: elections::{Module, Call, Event<T>, Config<T>},
 	}
@@ -210,7 +211,7 @@ impl ExtBuilder {
 		PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow_mut() = self.bad_presentation_punishment);
 		DECAY_RATIO.with(|v| *v.borrow_mut() = self.decay_ratio);
 		GenesisConfig {
-			balances: Some(pallet_balances::GenesisConfig::<Test>{
+			pallet_balances: Some(pallet_balances::GenesisConfig::<Test>{
 				balances: vec![
 					(1, 10 * self.balance_factor),
 					(2, 20 * self.balance_factor),

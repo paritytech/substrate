@@ -33,7 +33,7 @@ use frame_support::{
 	impl_outer_origin, impl_outer_event, parameter_types, StorageMap, StorageDoubleMap,
 	weights::Weight,
 };
-use {sp_io, system};
+use frame_system as system;
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}

@@ -425,13 +425,15 @@ mod tests {
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
+	use frame_system as system;
+
 	frame_support::construct_runtime!(
 		pub enum Test where
 			Block = Block,
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
-			System: frame_system::{Module, Call, Event},
+			System: system::{Module, Call, Event},
 			Collective: collective::<Instance1>::{Module, Call, Event<T>, Origin<T>, Config<T>},
 			DefaultCollective: collective::{Module, Call, Event<T>, Origin<T>, Config<T>},
 		}

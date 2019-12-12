@@ -32,7 +32,6 @@ native_executor_instance!(
 mod tests {
 	use sc_executor::error::Result;
 	use super::Executor;
-	use {balances, contracts, indices, system, timestamp};
 	use codec::{Encode, Decode, Joiner};
 	use frame_support::{
 		Hashable, StorageValue, StorageMap,
@@ -473,12 +472,12 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::treasury(pallet_treasury::RawEvent::Deposit(1984800000000)),
+					event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984800000000)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::balances(pallet_balances::RawEvent::Transfer(
+					event: Event::pallet_balances(pallet_balances::RawEvent::Transfer(
 						alice().into(),
 						bob().into(),
 						69 * DOLLARS,
@@ -526,12 +525,12 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::treasury(pallet_treasury::RawEvent::Deposit(1984780231392)),
+					event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984780231392)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::balances(
+					event: Event::pallet_balances(
 						pallet_balances::RawEvent::Transfer(
 							bob().into(),
 							alice().into(),
@@ -550,12 +549,12 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
-					event: Event::treasury(pallet_treasury::RawEvent::Deposit(1984780231392)),
+					event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984780231392)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
-					event: Event::balances(
+					event: Event::pallet_balances(
 						pallet_balances::RawEvent::Transfer(
 							alice().into(),
 							bob().into(),
@@ -934,7 +933,9 @@ mod tests {
 
 	#[test]
 	fn should_import_block_with_test_client() {
-		use node_testing::client::{ClientExt, TestClientBuilderExt, TestClientBuilder, consensus::BlockOrigin};
+		use node_testing::client::{
+			ClientExt, TestClientBuilderExt, TestClientBuilder, sp_consensus::BlockOrigin
+		};
 
 		let client = TestClientBuilder::new().build();
 		let block1 = changes_trie_block();

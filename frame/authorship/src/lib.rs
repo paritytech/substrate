@@ -379,7 +379,7 @@ mod tests {
 	use frame_support::{parameter_types, impl_outer_origin, ConsensusEngineId, weights::Weight};
 
 	impl_outer_origin!{
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]

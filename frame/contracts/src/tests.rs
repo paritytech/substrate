@@ -48,17 +48,21 @@ mod contract {
 	pub use super::super::*;
 	use frame_support::impl_outer_event;
 }
+
+use frame_system as system;
+use pallet_balances as balances;
+
 impl_outer_event! {
 	pub enum MetaEvent for Test {
 		balances<T>, contract<T>,
 	}
 }
 impl_outer_origin! {
-	pub enum Origin for Test { }
+	pub enum Origin for Test  where system = frame_system { }
 }
 impl_outer_dispatch! {
 	pub enum Call for Test where origin: Origin {
-		pallet_balances::Balances,
+		balances::Balances,
 		contract::Contract,
 	}
 }

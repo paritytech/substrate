@@ -373,6 +373,9 @@ mod tests {
 	type Balances = pallet_balances::Module<Runtime>;
 	type Custom = custom::Module<Runtime>;
 
+	use frame_system as system;
+	use pallet_balances as balances;
+
 	impl_outer_origin! {
 		pub enum Origin for Runtime { }
 	}

@@ -149,7 +149,7 @@ mod tests {
 	use sc_network::{Multiaddr, PeerId};
 	use substrate_test_runtime_client::runtime::Block;
 	use sc_transaction_pool::{BasicPool, FullChainApi};
-	use sc_transaction_pool_api::{TransactionPool, InPoolTransaction};
+	use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 
 	struct MockNetworkStateInfo();
 

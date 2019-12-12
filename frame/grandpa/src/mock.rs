@@ -26,8 +26,9 @@ use codec::{Encode, Decode};
 use crate::{AuthorityId, AuthorityList, GenesisConfig, Trait, Module, ConsensusLog};
 use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 
+use frame_system as system;
 impl_outer_origin!{
-	pub enum Origin for Test {}
+	pub enum Origin for Test  where system = frame_system {}
 }
 
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {

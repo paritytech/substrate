@@ -299,7 +299,7 @@ pub mod tests {
 	use futures::future::Ready;
 	use parking_lot::Mutex;
     use sp_blockchain::Error as ClientError;
-    use test_sp_core::{Block, Header, Extrinsic};
+    use sp_test_primitives::{Block, Header, Extrinsic};
 	use super::*;
 
 	pub type OkCallFetcher = Mutex<Vec<u8>>;

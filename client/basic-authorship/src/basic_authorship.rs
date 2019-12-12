@@ -267,7 +267,7 @@ mod tests {
 
 	use parking_lot::Mutex;
 	use sp_consensus::Proposer;
-	use substrate_test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
+	use substrate_test_runtime_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
@@ -282,7 +282,7 @@ mod tests {
 	#[test]
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
-		let client = Arc::new(substrate_test_client::new());
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 
 		futures::executor::block_on(

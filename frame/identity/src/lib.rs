@@ -783,7 +783,7 @@ mod tests {
 	};
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	// For testing the module, we construct most of a mock runtime. This means

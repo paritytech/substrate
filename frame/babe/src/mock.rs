@@ -28,7 +28,7 @@ use sp_io;
 use sp_core::{H256, Blake2Hasher};
 
 impl_outer_origin!{
-	pub enum Origin for Test {}
+	pub enum Origin for Test  where system = frame_system {}
 }
 
 type DummyValidatorId = u64;

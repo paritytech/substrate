@@ -350,6 +350,8 @@ mod tests {
 	type EventModule = event_module::Module<TestRuntime>;
 	type EventModule2 = event_module2::Module<TestRuntime>;
 
+	use system as frame_system;
+
 	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 	pub struct TestRuntime;
 
