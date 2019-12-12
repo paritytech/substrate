@@ -16,7 +16,7 @@
 
 use super::*;
 use assert_matches::assert_matches;
-use test_sc_client::{
+use substrate_test_client::{
 	prelude::*,
 	consensus::BlockOrigin,
 	runtime::{H256, Block, Header},
@@ -28,7 +28,7 @@ fn should_return_header() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let client = Arc::new(test_sc_client::new());
+	let client = Arc::new(substrate_test_client::new());
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 	assert_matches!(
@@ -64,7 +64,7 @@ fn should_return_a_block() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let client = Arc::new(test_sc_client::new());
+	let client = Arc::new(substrate_test_client::new());
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 	let block = client.new_block(Default::default()).unwrap().bake().unwrap();
@@ -116,7 +116,7 @@ fn should_return_block_hash() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let client = Arc::new(test_sc_client::new());
+	let client = Arc::new(substrate_test_client::new());
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 	assert_matches!(
@@ -163,7 +163,7 @@ fn should_return_finalized_hash() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let client = Arc::new(test_sc_client::new());
+	let client = Arc::new(substrate_test_client::new());
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 	assert_matches!(
@@ -195,7 +195,7 @@ fn should_notify_about_latest_block() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let client = Arc::new(test_sc_client::new());
+		let client = Arc::new(substrate_test_client::new());
 		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		api.subscribe_new_heads(Default::default(), subscriber);
@@ -224,7 +224,7 @@ fn should_notify_about_finalized_block() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let client = Arc::new(test_sc_client::new());
+		let client = Arc::new(substrate_test_client::new());
 		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		api.subscribe_finalized_heads(Default::default(), subscriber);

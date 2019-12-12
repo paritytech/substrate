@@ -62,7 +62,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{Trait, ensure_signed};
+/// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
@@ -102,7 +102,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{Trait, ensure_signed};
+/// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
@@ -127,7 +127,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{Trait, ensure_signed, ensure_root};
+/// # use frame_system::{self as system, Trait, ensure_signed, ensure_root};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///			fn my_privileged_function(origin) -> dispatch::Result {
@@ -151,7 +151,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::ensure_signed;
+/// # use frame_system::{self as system, ensure_signed};
 /// # pub struct DefaultInstance;
 /// # pub trait Instance {}
 /// # impl Instance for DefaultInstance {}
@@ -179,7 +179,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::ensure_signed;
+/// # use frame_system::{self as system, ensure_signed};
 /// pub trait Trait: system::Trait where Self::AccountId: From<u32> {}
 ///
 /// decl_module! {

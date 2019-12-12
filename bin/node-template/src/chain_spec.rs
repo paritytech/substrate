@@ -3,10 +3,10 @@ use node_template_runtime::{
 	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
 	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, Signature
 };
-use sc_consensus_sp_consensus_aura::sr25519::{AuthorityId as AuraId};
-use sc_finality_sp_finality_grandpa::{AuthorityId as GrandpaId};
+use sp_consensus_aura::sr25519::{AuthorityId as AuraId};
+use grandpa_primitives::{AuthorityId as GrandpaId};
 use sc_service;
-use sp_node_template_runtime::traits::{Verify, IdentifyAccount};
+use sp_runtime::traits::{Verify, IdentifyAccount};
 
 // Note this is the URL for the telemetry server
 //const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -123,20 +123,20 @@ fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>,
 			code: WASM_BINARY.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
-		indices: Some(IndicesConfig {
+		pallet_indices: Some(IndicesConfig {
 			ids: endowed_accounts.clone(),
 		}),
-		balances: Some(BalancesConfig {
+		pallet_balances: Some(BalancesConfig {
 			balances: endowed_accounts.iter().cloned().map(|k|(k, 1 << 60)).collect(),
 			vesting: vec![],
 		}),
-		sudo: Some(SudoConfig {
+		pallet_sudo: Some(SudoConfig {
 			key: root_key,
 		}),
-		aura: Some(AuraConfig {
+		pallet_aura: Some(AuraConfig {
 			authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
 		}),
-		grandpa: Some(GrandpaConfig {
+		pallet_grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),
 		}),
 	}

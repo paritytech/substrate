@@ -25,7 +25,7 @@ use sc_client_api::backend::LocalBackend;
 use crate::block_builder_ext::BlockBuilderExt;
 use sc_client_api::blockchain::{Backend as BlockChainBackendT, HeaderBackend};
 use crate::{AccountKeyring, ClientExt, TestClientBuilder, TestClientBuilderExt};
-use substrate_test_client::consensus::BlockOrigin;
+use substrate_test_client::sp_consensus::BlockOrigin;
 use sp_core::Blake2Hasher;
 use substrate_test_runtime::{self, Transfer};
 use sp_runtime::generic::BlockId;

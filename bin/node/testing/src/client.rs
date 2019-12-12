@@ -19,13 +19,13 @@
 use sp_runtime::BuildStorage;
 
 /// Re-export test-client utilities.
-pub use test_sc_client::*;
+pub use substrate_test_client::*;
 
 /// Call executor for `node-runtime` `TestClient`.
 pub type Executor = sc_executor::NativeExecutor<node_executor::Executor>;
 
 /// Default backend type.
-pub type Backend = client_db::Backend<node_primitives::Block>;
+pub type Backend = sc_client_db::Backend<node_primitives::Block>;
 
 /// Test client type.
 pub type Client = sc_client::Client<
@@ -41,7 +41,7 @@ pub struct GenesisParameters {
 	support_changes_trie: bool,
 }
 
-impl test_sc_client::GenesisInit for GenesisParameters {
+impl substrate_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
 		crate::genesis::config(self.support_changes_trie, None).build_storage().unwrap()
 	}
@@ -56,7 +56,7 @@ pub trait TestClientBuilderExt: Sized {
 	fn build(self) -> Client;
 }
 
-impl TestClientBuilderExt for test_sc_client::TestClientBuilder<
+impl TestClientBuilderExt for substrate_test_client::TestClientBuilder<
 	sc_client::LocalCallExecutor<Backend, Executor>,
 	Backend,
 	GenesisParameters,

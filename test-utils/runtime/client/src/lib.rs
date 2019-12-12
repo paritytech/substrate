@@ -24,9 +24,10 @@ mod block_builder_ext;
 
 use std::sync::Arc;
 use std::collections::{HashMap, BTreeMap};
-pub use sc_block_builder_ext::BlockBuilderExt;
 pub use substrate_test_client::*;
-pub use substrate_test_runtime;
+pub use substrate_test_runtime as runtime;
+
+pub use self::block_builder_ext::BlockBuilderExt;
 
 use sp_core::sr25519;
 use substrate_test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
@@ -56,7 +57,7 @@ pub mod prelude {
 mod local_executor {
 	#![allow(missing_docs)]
 	use substrate_test_runtime;
-	use crate::executor::native_executor_instance;
+	use crate::sc_executor::native_executor_instance;
 	// FIXME #1576 change the macro and pass in the `BlakeHasher` that dispatch needs from here instead
 	native_executor_instance!(
 		pub LocalExecutor,
@@ -66,7 +67,7 @@ mod local_executor {
 }
 
 /// Native executor used for tests.
-pub use local_executor::LocalExecutor;
+pub use self::local_executor::LocalExecutor;
 
 /// Test client database backend.
 pub type Backend = substrate_test_client::Backend<substrate_test_runtime::Block>;
@@ -85,7 +86,7 @@ pub type LightExecutor = sc_client::light::call_executor::GenesisCallExecutor<
 	LightBackend,
 	sc_client::LocalCallExecutor<
 		sc_client::light::backend::Backend<
-			client_db::light::LightStorage<substrate_test_runtime::Block>,
+			sc_client_db::light::LightStorage<substrate_test_runtime::Block>,
 			Blake2Hasher,
 		>,
 		NativeExecutor<LocalExecutor>
@@ -150,7 +151,7 @@ pub type TestClientBuilder<E, B> = substrate_test_client::TestClientBuilder<E, B
 /// Test client type with `LocalExecutor` and generic Backend.
 pub type Client<B> = sc_client::Client<
 	B,
-	sc_client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>,
+	sc_client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
 	substrate_test_runtime::Block,
 	substrate_test_runtime::RuntimeApi,
 >;
@@ -210,7 +211,7 @@ pub trait TestClientBuilderExt<B>: Sized {
 }
 
 impl<B> TestClientBuilderExt<B> for TestClientBuilder<
-	sc_client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>,
+	sc_client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
 	B
 > where
 	B: sc_client_api::backend::Backend<substrate_test_runtime::Block, Blake2Hasher>,
@@ -341,7 +342,7 @@ pub fn new_light() -> (
 	Arc<LightBackend>,
 ) {
 
-	let storage = client_db::light::LightStorage::new_test();
+	let storage = sc_client_db::light::LightStorage::new_test();
 	let blockchain = Arc::new(sc_client::light::blockchain::Blockchain::new(storage));
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));
 	let executor = NativeExecutor::new(WasmExecutionMethod::Interpreted, None);

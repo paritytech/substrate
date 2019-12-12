@@ -9,8 +9,8 @@ use sp_inherents::InherentDataProviders;
 use sc_network::{construct_simple_protocol};
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
-use sc_consensus_sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
-use sc_finality_grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
+use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
+use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use sc_basic_authority;
 
 // Our native executor instance.
@@ -52,7 +52,7 @@ macro_rules! new_full_start {
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 
 				let (grandpa_block_import, grandpa_link) =
-					sc_finality_grandpa::block_import::<_, _, _, node_template_runtime::RuntimeApi, _>(
+					grandpa::block_import::<_, _, _, node_template_runtime::RuntimeApi, _>(
 						client.clone(), &*client, select_chain
 					)?;
 
@@ -114,7 +114,7 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 		let can_author_with =
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
-		let aura = sc_consensus_aura::start_sc_consensus_aura::<_, _, _, _, _, AuraPair, _, _, _, _>(
+		let aura = sc_consensus_aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _, _>(
 			sc_consensus_aura::SlotDuration::get_or_compute(&*client)?,
 			client,
 			select_chain,
@@ -140,7 +140,7 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 		None
 	};
 
-	let grandpa_config = sc_finality_grandpa::Config {
+	let grandpa_config = grandpa::Config {
 		// FIXME #1578 make this available through chainspec
 		gossip_duration: Duration::from_millis(333),
 		justification_period: 512,
@@ -153,7 +153,7 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 	match (is_authority, disable_grandpa) {
 		(false, false) => {
 			// start the lightweight GRANDPA observer
-			service.spawn_task(sc_finality_grandpa::run_grandpa_observer(
+			service.spawn_task(grandpa::run_grandpa_observer(
 				grandpa_config,
 				grandpa_link,
 				service.network(),
@@ -162,22 +162,22 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 		},
 		(true, false) => {
 			// start the full GRANDPA voter
-			let voter_config = sc_finality_grandpa::GrandpaParams {
+			let voter_config = grandpa::GrandpaParams {
 				config: grandpa_config,
 				link: grandpa_link,
 				network: service.network(),
 				inherent_data_providers: inherent_data_providers.clone(),
 				on_exit: service.on_exit(),
 				telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
-				voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
+				voting_rule: grandpa::VotingRulesBuilder::default().build(),
 			};
 
 			// the GRANDPA voter task is considered infallible, i.e.
 			// if it fails we take down the service with it.
-			service.spawn_essential_task(sc_finality_grandpa::run_grandpa_voter(voter_config)?);
+			service.spawn_essential_task(grandpa::run_grandpa_voter(voter_config)?);
 		},
 		(_, true) => {
-			sc_finality_grandpa::setup_disabled_grandpa(
+			grandpa::setup_disabled_grandpa(
 				service.client(),
 				&inherent_data_providers,
 				service.network(),
@@ -211,7 +211,7 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
-			let grandpa_block_import = sc_finality_grandpa::light_block_import::<_, _, _, RuntimeApi>(
+			let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi>(
 				client.clone(), backend, &*client.clone(), Arc::new(fetch_checker),
 			)?;
 			let finality_proof_import = grandpa_block_import.clone();

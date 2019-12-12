@@ -43,10 +43,10 @@ type Item = DigestItem<Hash>;
 type Error = sp_blockchain::Error;
 
 type TestClient = sc_client::Client<
-	test_sc_client::Backend,
-	test_sc_client::Executor,
+	substrate_test_client::Backend,
+	substrate_test_client::Executor,
 	TestBlock,
-	test_sc_client::runtime::RuntimeApi,
+	substrate_test_client::runtime::RuntimeApi,
 >;
 
 #[derive(Copy, Clone, PartialEq)]
@@ -196,10 +196,10 @@ type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 pub struct TestVerifier {
 	inner: BabeVerifier<
-		test_sc_client::Backend,
-		test_sc_client::Executor,
+		substrate_test_client::Backend,
+		substrate_test_client::Executor,
 		TestBlock,
-		test_sc_client::runtime::RuntimeApi,
+		substrate_test_client::runtime::RuntimeApi,
 		PeersFullClient,
 	>,
 	mutator: Mutator,

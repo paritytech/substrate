@@ -23,9 +23,9 @@
 //! # use sp_consensus::{Environment, Proposer};
 //! # use sp_runtime::generic::BlockId;
 //! # use std::{sync::Arc, time::Duration};
-//! # use test_sc_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
+//! # use substrate_test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
 //! # use sc_transaction_pool::{BasicPool, FullChainApi};
-//! # let client = Arc::new(test_sc_client::new());
+//! # let client = Arc::new(substrate_test_client::new());
 //! # let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 //! // The first step is to create a `ProposerFactory`.
 //! let mut proposer_factory = ProposerFactory {

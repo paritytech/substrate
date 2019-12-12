@@ -60,12 +60,12 @@ pub enum ChainSpec {
 
 /// Get a chain config from a spec setting.
 impl ChainSpec {
-	pub(crate) fn load(self) -> Result<sc_chain_spec::ChainSpec, String> {
+	pub(crate) fn load(self) -> Result<chain_spec::ChainSpec, String> {
 		Ok(match self {
-			ChainSpec::FlamingFir => sc_chain_spec::flaming_fir_config()?,
-			ChainSpec::Development => sc_chain_spec::development_config(),
-			ChainSpec::LocalTestnet => sc_chain_spec::local_testnet_config(),
-			ChainSpec::StagingTestnet => sc_chain_spec::staging_testnet_config(),
+			ChainSpec::FlamingFir => chain_spec::flaming_fir_config()?,
+			ChainSpec::Development => chain_spec::development_config(),
+			ChainSpec::LocalTestnet => chain_spec::local_testnet_config(),
+			ChainSpec::StagingTestnet => chain_spec::staging_testnet_config(),
 		})
 	}
 
@@ -80,7 +80,7 @@ impl ChainSpec {
 	}
 }
 
-fn load_spec(id: &str) -> Result<Option<sc_chain_spec::ChainSpec>, String> {
+fn load_spec(id: &str) -> Result<Option<chain_spec::ChainSpec>, String> {
 	Ok(match ChainSpec::from(id) {
 		Some(spec) => Some(spec.load()?),
 		None => None,

@@ -16,7 +16,7 @@
 
 //! Genesis Configuration.
 
-use crate::sp_keyring::*;
+use crate::keyring::*;
 use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use node_runtime::{
 	GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, SystemConfig,
@@ -37,10 +37,10 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 			}) } else { None },
 			code: code.map(|x| x.to_vec()).unwrap_or_else(|| WASM_BINARY.to_vec()),
 		}),
-		indices: Some(IndicesConfig {
+		pallet_indices: Some(IndicesConfig {
 			ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
 		}),
-		balances: Some(BalancesConfig {
+		pallet_balances: Some(BalancesConfig {
 			balances: vec![
 				(alice(), 111 * DOLLARS),
 				(bob(), 100 * DOLLARS),
@@ -51,7 +51,7 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 			],
 			vesting: vec![],
 		}),
-		session: Some(SessionConfig {
+		pallet_session: Some(SessionConfig {
 			keys: vec![
 				(alice(), to_session_keys(
 					&Ed25519Keyring::Alice,
@@ -67,7 +67,7 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 				)),
 			]
 		}),
-		staking: Some(StakingConfig {
+		pallet_staking: Some(StakingConfig {
 			current_era: 0,
 			stakers: vec![
 				(dave(), alice(), 111 * DOLLARS, pallet_staking::StakerStatus::Validator),
@@ -80,21 +80,21 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 			invulnerables: vec![alice(), bob(), charlie()],
 			.. Default::default()
 		}),
-		contracts: Some(ContractsConfig {
+		pallet_contracts: Some(ContractsConfig {
 			current_schedule: Default::default(),
 			gas_price: 1 * MILLICENTS,
 		}),
-		babe: Some(Default::default()),
-		grandpa: Some(GrandpaConfig {
+		pallet_babe: Some(Default::default()),
+		pallet_grandpa: Some(GrandpaConfig {
 			authorities: vec![],
 		}),
-		im_online: Some(Default::default()),
-		authority_discovery: Some(Default::default()),
-		democracy: Some(Default::default()),
-		collective_Instance1: Some(Default::default()),
-		collective_Instance2: Some(Default::default()),
-		membership_Instance1: Some(Default::default()),
-		sudo: Some(Default::default()),
-		treasury: Some(Default::default()),
+		pallet_im_online: Some(Default::default()),
+		pallet_authority_discovery: Some(Default::default()),
+		pallet_democracy: Some(Default::default()),
+		pallet_collective_Instance1: Some(Default::default()),
+		pallet_collective_Instance2: Some(Default::default()),
+		pallet_membership_Instance1: Some(Default::default()),
+		pallet_sudo: Some(Default::default()),
+		pallet_treasury: Some(Default::default()),
 	}
 }

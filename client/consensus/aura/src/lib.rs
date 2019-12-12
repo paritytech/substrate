@@ -761,10 +761,10 @@ mod tests {
 	type Error = sp_blockchain::Error;
 
 	type TestClient = sc_client::Client<
-		test_sc_client::Backend,
-		test_sc_client::Executor,
+		substrate_test_client::Backend,
+		substrate_test_client::Executor,
 		TestBlock,
-		test_sc_client::runtime::RuntimeApi
+		substrate_test_client::runtime::RuntimeApi
 	>;
 
 	struct DummyFactory(Arc<TestClient>);
@@ -923,7 +923,7 @@ mod tests {
 
 	#[test]
 	fn authorities_call_works() {
-		let client = test_sc_client::new();
+		let client = substrate_test_client::new();
 
 		assert_eq!(client.info().chain.best_number, 0);
 		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap(), vec![

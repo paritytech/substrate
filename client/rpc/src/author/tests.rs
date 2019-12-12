@@ -24,7 +24,7 @@ use sp_core::{
 	crypto::Pair,
 };
 use rpc::futures::Stream as _;
-use test_sc_client::{
+use substrate_test_client::{
 	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys, RuntimeApi, Block},
 	DefaultTestClientBuilderExt, TestClientBuilderExt, Backend, Client, Executor,
 };
@@ -56,7 +56,7 @@ struct TestSetup {
 impl Default for TestSetup {
 	fn default() -> Self {
 		let keystore = KeyStore::new();
-		let client = Arc::new(test_sc_client::TestClientBuilder::new().set_keystore(keystore.clone()).build());
+		let client = Arc::new(substrate_test_client::TestClientBuilder::new().set_keystore(keystore.clone()).build());
 		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 		TestSetup {
 			runtime: runtime::Runtime::new().expect("Failed to create runtime in test setup"),

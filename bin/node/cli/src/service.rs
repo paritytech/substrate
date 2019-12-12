@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use sc_consensus_babe;
 use sc_client::{self, LongestChain};
-use sc_finality_grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
+use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
 use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
@@ -72,21 +72,21 @@ macro_rules! new_full_start {
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
-				let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
+				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
 					client.clone(),
 					&*client,
 					select_chain,
 				)?;
 				let justification_import = grandpa_block_import.clone();
 
-				let (block_import, babe_link) = sc_consensus_sc_consensus_babe::block_import(
-					sc_consensus_sc_consensus_babe::Config::get_or_compute(&*client)?,
+				let (block_import, babe_link) = sc_consensus_babe::block_import(
+					sc_consensus_babe::Config::get_or_compute(&*client)?,
 					grandpa_block_import,
 					client.clone(),
 					client.clone(),
 				)?;
 
-				let import_queue = sc_consensus_sc_consensus_babe::import_queue(
+				let import_queue = sc_consensus_babe::import_queue(
 					babe_link.clone(),
 					block_import.clone(),
 					Some(Box::new(justification_import)),
@@ -151,7 +151,7 @@ macro_rules! new_full {
 
 		let service = builder.with_network_protocol(|_| Ok(crate::service::NodeProtocol::new()))?
 			.with_finality_proof_provider(|client, backend|
-				Ok(Arc::new(sc_finality_grandpa::FinalityProofProvider::new(backend, client)) as _)
+				Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, client)) as _)
 			)?
 			.with_dht_event_tx(dht_event_tx)?
 			.build()?;
@@ -174,7 +174,7 @@ macro_rules! new_full {
 			let can_author_with =
 				sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
-			let babe_config = sc_consensus_sc_consensus_babe::BabeParams {
+			let babe_config = sc_consensus_babe::BabeParams {
 				keystore: service.keystore(),
 				client,
 				select_chain,
@@ -187,7 +187,7 @@ macro_rules! new_full {
 				can_author_with,
 			};
 
-			let babe = sc_consensus_sc_consensus_babe::start_babe(babe_config)?;
+			let babe = sc_consensus_babe::start_babe(babe_config)?;
 			service.spawn_essential_task(babe);
 
 			let future03_dht_event_rx = dht_event_rx.compat()
@@ -213,7 +213,7 @@ macro_rules! new_full {
 			None
 		};
 
-		let config = sc_finality_grandpa::Config {
+		let config = grandpa::Config {
 			// FIXME #1578 make this available through chainspec
 			gossip_duration: std::time::Duration::from_millis(333),
 			justification_period: 512,
@@ -226,7 +226,7 @@ macro_rules! new_full {
 		match (is_authority, disable_grandpa) {
 			(false, false) => {
 				// start the lightweight GRANDPA observer
-				service.spawn_task(sc_finality_grandpa::run_grandpa_observer(
+				service.spawn_task(grandpa::run_grandpa_observer(
 					config,
 					grandpa_link,
 					service.network(),
@@ -235,21 +235,21 @@ macro_rules! new_full {
 			},
 			(true, false) => {
 				// start the full GRANDPA voter
-				let grandpa_config = sc_finality_grandpa::GrandpaParams {
+				let grandpa_config = grandpa::GrandpaParams {
 					config: config,
 					link: grandpa_link,
 					network: service.network(),
 					inherent_data_providers: inherent_data_providers.clone(),
 					on_exit: service.on_exit(),
 					telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
-					voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
+					voting_rule: grandpa::VotingRulesBuilder::default().build(),
 				};
 				// the GRANDPA voter task is considered infallible, i.e.
 				// if it fails we take down the service with it.
-				service.spawn_essential_task(sc_finality_grandpa::run_grandpa_voter(grandpa_config)?);
+				service.spawn_essential_task(grandpa::run_grandpa_voter(grandpa_config)?);
 			},
 			(_, true) => {
-				sc_finality_grandpa::setup_disabled_grandpa(
+				grandpa::setup_disabled_grandpa(
 					service.client(),
 					&inherent_data_providers,
 					service.network(),
@@ -290,7 +290,7 @@ type ConcreteTransactionPool = sp_transaction_pool::MaintainableTransactionPool<
 >;
 
 /// A specialized configuration object for setting up the node..
-pub type NodeConfiguration<C> = Configuration<C, GenesisConfig, crate::sc_chain_spec::Extensions>;
+pub type NodeConfiguration<C> = Configuration<C, GenesisConfig, crate::chain_spec::Extensions>;
 
 /// Builds a new service for a full client.
 pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
@@ -337,7 +337,7 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
-			let grandpa_block_import = sc_finality_grandpa::light_block_import::<_, _, _, RuntimeApi>(
+			let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi>(
 				client.clone(),
 				backend,
 				&*client,
@@ -348,14 +348,14 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 			let finality_proof_request_builder =
 				finality_proof_import.create_finality_proof_request_builder();
 
-			let (babe_block_import, babe_link) = sc_consensus_sc_consensus_babe::block_import(
-				sc_consensus_sc_consensus_babe::Config::get_or_compute(&*client)?,
+			let (babe_block_import, babe_link) = sc_consensus_babe::block_import(
+				sc_consensus_babe::Config::get_or_compute(&*client)?,
 				grandpa_block_import,
 				client.clone(),
 				client.clone(),
 			)?;
 
-			let import_queue = sc_consensus_sc_consensus_babe::import_queue(
+			let import_queue = sc_consensus_babe::import_queue(
 				babe_link,
 				babe_block_import,
 				None,
@@ -388,7 +388,7 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 #[cfg(test)]
 mod tests {
 	use std::sync::Arc;
-	use sc_consensus_sc_consensus_babe::CompatibleDigestItem;
+	use sc_consensus_babe::CompatibleDigestItem;
 	use sp_consensus::{
 		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy, BlockImport,
 	};
@@ -484,10 +484,10 @@ mod tests {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = sc_keystore::Store::open(keystore_path.path(), None)
 			.expect("Creates keystore");
-		let alice = keystore.write().insert_ephemeral_from_seed::<sc_consensus_sc_consensus_babe::AuthorityPair>("//Alice")
+		let alice = keystore.write().insert_ephemeral_from_seed::<sc_consensus_babe::AuthorityPair>("//Alice")
 			.expect("Creates authority pair");
 
-		let chain_spec = crate::sc_chain_spec::tests::integration_test_config_with_single_authority();
+		let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();
 
 		// For the block factory
 		let mut slot_num = 1u64;
@@ -502,8 +502,8 @@ mod tests {
 			|config| {
 				let mut setup_handles = None;
 				new_full!(config, |
-					block_import: &sc_consensus_sc_consensus_babe::BabeBlockImport<_, _, Block, _, _, _>,
-					babe_link: &sc_consensus_sc_consensus_babe::BabeLink<Block>,
+					block_import: &sc_consensus_babe::BabeBlockImport<_, _, Block, _, _, _>,
+					babe_link: &sc_consensus_babe::BabeLink<Block>,
 				| {
 					setup_handles = Some((block_import.clone(), babe_link.clone()));
 				}).map(move |(node, x)| (node, (x, setup_handles.unwrap())))
@@ -532,7 +532,7 @@ mod tests {
 				// so we must keep trying the next slots until we can claim one.
 				let babe_pre_digest = loop {
 					inherent_data.replace_data(sp_timestamp::INHERENT_IDENTIFIER, &(slot_num * SLOT_DURATION));
-					if let Some(babe_pre_digest) = sc_consensus_sc_consensus_babe::test_helpers::claim_slot(
+					if let Some(babe_pre_digest) = sc_consensus_babe::test_helpers::claim_slot(
 						slot_num,
 						&parent_header,
 						&*service.client(),
@@ -634,7 +634,7 @@ mod tests {
 	#[ignore]
 	fn test_consensus() {
 		sc_service_test::consensus(
-			crate::sc_chain_spec::tests::integration_test_config_with_two_authorities(),
+			crate::chain_spec::tests::integration_test_config_with_two_authorities(),
 			|config| new_full(config),
 			|mut config| {
 				// light nodes are unsupported

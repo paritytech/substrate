@@ -236,13 +236,14 @@ impl template::Trait for Runtime {
 	type Event = Event;
 }
 
+use frame_system as system;
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = opaque::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Module, Call, Storage, Config, Event},
+		System: system::{Module, Call, Storage, Config, Event},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Aura: pallet_aura::{Module, Config<T>, Inherent(Timestamp)},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
