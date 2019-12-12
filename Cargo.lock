@@ -1361,6 +1361,7 @@ name = "frame-support-test"
 version = "2.0.0"
 dependencies = [
  "frame-support 2.0.0",
+ "frame-system 2.0.0",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_assertions 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",

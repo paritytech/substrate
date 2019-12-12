@@ -13,6 +13,7 @@ support = { package = "frame-support", version = "2", path = "../", default-feat
 inherents = { package = "sp-inherents", path = "../../../primitives/inherents", default-features = false }
 sp-runtime = { package = "sp-runtime", path = "../../../primitives/runtime", default-features = false }
 primitives = { package = "sp-core", path = "../../../primitives/core", default-features = false }
+frame-system = { path = "../../system", default-features = false }
 trybuild = "1.0.17"
 pretty_assertions = "0.6.1"
 
@@ -26,5 +27,6 @@ std = [
 	"inherents/std",
 	"primitives/std",
 	"sp-runtime/std",
+	"frame-system/std",
 	"state-machine",
 ]

@@ -28,6 +28,12 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 /// error type implements `From<&'static str>` and `From<LookupError>` to make them usable with the
 /// try operator.
 ///
+/// Optionally the macro can generate variants for system errors through the optional line:
+/// `impl_from_frame_system($FrameSystemCrate)`.
+/// This will generate three more variants `SystemRequiresSignedOrigin`,
+/// `SystemRequiresRootOrigin`, `SystemRequiresNoOrigin` and implement
+/// `From<frame_system::Error>`.
+///
 /// `decl_error!` supports only variants that do not hold any data.
 ///
 /// # Usage
@@ -42,6 +48,7 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 ///         /// You are just not cool enough for my module!
 ///         YouAreNotCoolEnough,
 ///     }
+///     impl_from_frame_system(frame_system)
 /// }
 ///
 /// # use frame_system::{self as system, Trait, ensure_signed};
@@ -71,6 +78,54 @@ macro_rules! decl_error {
 			),*
 			$(,)?
 		}
+		impl_from_frame_system($system:ident)
+	) => {
+		$crate::decl_error! {@impl
+			$(#[$attr])*
+			pub enum $error {
+				/// Frame system requires a signed origin,
+				SystemRequiresSignedOrigin,
+				/// Frame system requires a root origin,
+				SystemRequiresRootOrigin,
+				/// Frame system requires no origin,
+				SystemRequiresNoOrigin,
+				$(
+					$( #[doc = $doc_attr] )*
+					$name
+				),*
+			}
+			impl_from_frame_system($system)
+		}
+	};
+	(
+		$(#[$attr:meta])*
+		pub enum $error:ident {
+			$(
+				$( #[doc = $doc_attr:tt] )*
+				$name:ident
+			),*
+			$(,)?
+		}
+	) => {
+		$crate::decl_error! {@impl
+			$(#[$attr])*
+			pub enum $error {
+				$(
+					$( #[doc = $doc_attr] )*
+					$name
+				),*
+			}
+		}
+	};
+	(@impl
+		$(#[$attr:meta])*
+		pub enum $error:ident {
+			$(
+				$( #[doc = $doc_attr:tt] )*
+				$name:ident
+			),*
+		}
+		$(impl_from_frame_system($system:ident))?
 	) => {
 		#[derive(Clone, PartialEq, Eq, $crate::RuntimeDebug)]
 		$(#[$attr])*
@@ -105,6 +160,21 @@ macro_rules! decl_error {
 				}
 			}
 		}
+
+		$(
+			impl From<$system::Error> for $error {
+				fn from(val: $system::Error) -> $error {
+					match val {
+						$system::Error::CannotLookup => $error::CannotLookup,
+						$system::Error::RequireSignedOrigin => $error::SystemRequiresSignedOrigin,
+						$system::Error::RequireSignedOrigin => $error::SystemRequiresSignedOrigin,
+						$system::Error::RequireRootOrigin => $error::SystemRequiresRootOrigin,
+						$system::Error::RequireNoOrigin => $error::SystemRequiresNoOrigin,
+						$system::Error::Other(e) => $error::Other(e),
+					}
+				}
+			}
+		)?
 
 		impl From<&'static str> for $error {
 			fn from(val: &'static str) -> $error {
