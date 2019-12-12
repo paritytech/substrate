@@ -71,7 +71,11 @@ pub fn build_transport(
 		let desktop_trans = tcp::TcpConfig::new();
 		let desktop_trans = websocket::WsConfig::new(desktop_trans.clone())
 			.or_transport(desktop_trans);
-		OptionalTransport::some(dns::DnsConfig::new(desktop_trans).unwrap())		// TODO: don't unwrap
+		OptionalTransport::some(if let Ok(dns) = dns::DnsConfig::new(desktop_trans.clone()) {
+			dns.boxed()
+		} else {
+			desktop_trans.map_err(dns::DnsErr::Underlying).boxed()
+		})
 	} else {
 		OptionalTransport::none()
 	});
