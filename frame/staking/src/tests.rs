@@ -35,7 +35,7 @@ fn force_unstake_works() {
 			"account liquidity restrictions prevent withdrawal"
 		);
 		// Force unstake requires root.
-		assert_noop!(Staking::force_unstake(Origin::signed(11), 11), "RequireRootOrigin");
+		assert_noop!(Staking::force_unstake(Origin::signed(11), 11), "RequireRootOrigin".into());
 		// We now force them to unstake
 		assert_ok!(Staking::force_unstake(Origin::ROOT, 11));
 		// No longer bonded.
@@ -142,7 +142,7 @@ fn change_controller_works() {
 
 		assert_noop!(
 			Staking::validate(Origin::signed(10), ValidatorPrefs::default()),
-			"not a controller"
+			Error::NotController,
 		);
 		assert_ok!(Staking::validate(Origin::signed(5), ValidatorPrefs::default()));
 	})
@@ -680,10 +680,10 @@ fn double_staking_should_fail() {
 		// 4 = not used so far, 1 stashed => not allowed.
 		assert_noop!(
 			Staking::bond(Origin::signed(1), 4, arbitrary_value,
-			RewardDestination::default()), "stash already bonded"
+			RewardDestination::default()), Error::AlreadyBonded,
 		);
 		// 1 = stashed => attempting to nominate should fail.
-		assert_noop!(Staking::nominate(Origin::signed(1), vec![1]), "not a controller");
+		assert_noop!(Staking::nominate(Origin::signed(1), vec![1]), Error::NotController);
 		// 2 = controller  => nominating should work.
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![1]));
 	});
@@ -705,7 +705,7 @@ fn double_controlling_should_fail() {
 		// 2 = controller, 3 stashed (Note that 2 is reused.) => no-op
 		assert_noop!(
 			Staking::bond(Origin::signed(3), 2, arbitrary_value, RewardDestination::default()),
-			"controller already paired",
+			Error::AlreadyPaired,
 		);
 	});
 }
@@ -1152,11 +1152,11 @@ fn too_many_unbond_calls_should_not_work() {
 		// locked at era 1 until 4
 		assert_ok!(Staking::unbond(Origin::signed(10), 1));
 		// can't do more.
-		assert_noop!(Staking::unbond(Origin::signed(10), 1), "can not schedule more unlock chunks");
+		assert_noop!(Staking::unbond(Origin::signed(10), 1), Error::NoMoreChunks);
 
 		start_era(3);
 
-		assert_noop!(Staking::unbond(Origin::signed(10), 1), "can not schedule more unlock chunks");
+		assert_noop!(Staking::unbond(Origin::signed(10), 1), Error::NoMoreChunks);
 		// free up.
 		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10)));
 
@@ -1422,7 +1422,7 @@ fn bond_with_no_staked_value() {
 			// Can't bond with 1
 			assert_noop!(
 				Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller),
-				"can not bond with value less than minimum balance",
+				Error::InsufficientValue,
 			);
 			// bonded with absolute minimum value possible.
 			assert_ok!(Staking::bond(Origin::signed(1), 2, 5, RewardDestination::Controller));
