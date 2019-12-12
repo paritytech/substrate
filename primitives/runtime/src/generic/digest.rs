@@ -22,8 +22,8 @@ use serde::{Deserialize, Serialize};
 use sp_std::prelude::*;
 
 use crate::ConsensusEngineId;
-use crate::codec::{Decode, Encode, Input, Error};
-use primitives::RuntimeDebug;
+use crate::parity_scale_codec::{Decode, Encode, Input, Error};
+use sp_core::RuntimeDebug;
 
 /// Generic header digest.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -105,7 +105,7 @@ pub enum DigestItem<Hash> {
 impl<Hash: Encode> serde::Serialize for DigestItem<Hash> {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
 		self.using_encoded(|bytes| {
-			primitives::bytes::serialize(bytes, seq)
+			sp_core::bytes::serialize(bytes, seq)
 		})
 	}
 }
@@ -115,7 +115,7 @@ impl<'a, Hash: Decode> serde::Deserialize<'a> for DigestItem<Hash> {
 	fn deserialize<D>(de: D) -> Result<Self, D::Error> where
 		D: serde::Deserializer<'a>,
 	{
-		let r = primitives::bytes::deserialize(de)?;
+		let r = sp_core::bytes::deserialize(de)?;
 		Decode::decode(&mut &r[..])
 			.map_err(|e| serde::de::Error::custom(format!("Decode error: {}", e)))
 	}
@@ -231,7 +231,7 @@ impl<Hash: Encode> Encode for DigestItem<Hash> {
 	}
 }
 
-impl<Hash: Encode> codec::EncodeLike for DigestItem<Hash> {}
+impl<Hash: Encode> parity_scale_codec::EncodeLike for DigestItem<Hash> {}
 
 impl<Hash: Decode> Decode for DigestItem<Hash> {
 	#[allow(deprecated)]
@@ -352,7 +352,7 @@ impl<'a, Hash: Encode> Encode for DigestItemRef<'a, Hash> {
 	}
 }
 
-impl<'a, Hash: Encode> codec::EncodeLike for DigestItemRef<'a, Hash> {}
+impl<'a, Hash: Encode> parity_scale_codec::EncodeLike for DigestItemRef<'a, Hash> {}
 
 #[cfg(test)]
 mod tests {

@@ -23,7 +23,7 @@
 use std::fmt;
 use std::collections::{HashMap, VecDeque, hash_map::Entry};
 use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key};
-use codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 use log::trace;
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
@@ -436,7 +436,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 #[cfg(test)]
 mod tests {
 	use std::io;
-	use primitives::H256;
+	use sp_core::H256;
 	use super::{NonCanonicalOverlay, to_journal_key};
 	use crate::{ChangeSet, CommitSet};
 	use crate::test::{make_db, make_changeset};

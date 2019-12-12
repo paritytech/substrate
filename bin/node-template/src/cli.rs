@@ -1,11 +1,11 @@
 use crate::service;
 use futures::{future::{select, Map}, FutureExt, TryFutureExt, channel::oneshot, compat::Future01CompatExt};
 use std::cell::RefCell;
-use tokio::runtime::Runtime;
+use tokio::node_template_runtime::Runtime;
 pub use sc_cli::{VersionInfo, IntoExit, error};
 use sc_cli::{display_role, informant, parse_and_prepare, ParseAndPrepare, NoCustom};
 use sc_service::{AbstractService, Roles as ServiceRoles, Configuration};
-use aura_primitives::sr25519::{AuthorityPair as AuraPair};
+use sc_consensus_sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use crate::chain_spec;
 use log::info;
 

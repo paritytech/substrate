@@ -21,11 +21,11 @@ use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
-use trie::{
+use sp_trie::{
 	TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration,
 	trie_types::{TrieDBMut, Layout},
 };
-use codec::{Encode, Codec};
+use parity_scale_codec::{Encode, Codec};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -244,9 +244,9 @@ impl Consolidate for Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)> {
 	}
 }
 
-impl<H: Hasher, KF: trie::KeyFunction<H>> Consolidate for trie::GenericMemoryDB<H, KF> {
+impl<H: Hasher, KF: sp_trie::KeyFunction<H>> Consolidate for sp_trie::GenericMemoryDB<H, KF> {
 	fn consolidate(&mut self, other: Self) {
-		trie::GenericMemoryDB::consolidate(self, other)
+		sp_trie::GenericMemoryDB::consolidate(self, other)
 	}
 }
 
@@ -555,7 +555,7 @@ mod tests {
 	/// Assert in memory backend with only child trie keys works as trie backend.
 	#[test]
 	fn in_memory_with_child_trie_only() {
-		let storage = InMemory::<primitives::Blake2Hasher>::default();
+		let storage = InMemory::<sp_core::Blake2Hasher>::default();
 		let mut storage = storage.update(
 			vec![(Some(b"1".to_vec()), b"2".to_vec(), Some(b"3".to_vec()))]
 		);

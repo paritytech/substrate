@@ -26,9 +26,9 @@ use crate::wasm::*;
 use static_assertions::assert_eq_size;
 
 #[cfg(feature = "std")]
-use wasm_interface::{FunctionContext, Result};
+use sp_wasm_interface::{FunctionContext, Result};
 
-use codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 
 use sp_std::{any::TypeId, mem, vec::Vec};
 
@@ -373,11 +373,11 @@ impl_traits_for_arrays! {
 	75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
 }
 
-impl<T: codec::Codec, E: codec::Codec> PassBy for sp_std::result::Result<T, E> {
+impl<T: parity_scale_codec::Codec, E: parity_scale_codec::Codec> PassBy for sp_std::result::Result<T, E> {
 	type PassBy = Codec<Self>;
 }
 
-impl<T: codec::Codec> PassBy for Option<T> {
+impl<T: parity_scale_codec::Codec> PassBy for Option<T> {
 	type PassBy = Codec<Self>;
 }
 
@@ -448,7 +448,7 @@ impl IntoFFIValue for str {
 }
 
 #[cfg(feature = "std")]
-impl<T: wasm_interface::PointerType> RIType for Pointer<T> {
+impl<T: sp_wasm_interface::PointerType> RIType for Pointer<T> {
 	type FFIType = u32;
 }
 
@@ -475,7 +475,7 @@ impl<T> FromFFIValue for Pointer<T> {
 }
 
 #[cfg(feature = "std")]
-impl<T: wasm_interface::PointerType> FromFFIValue for Pointer<T> {
+impl<T: sp_wasm_interface::PointerType> FromFFIValue for Pointer<T> {
 	type SelfInstance = Self;
 
 	fn from_ffi_value(_: &mut dyn FunctionContext, arg: u32) -> Result<Self> {
@@ -484,7 +484,7 @@ impl<T: wasm_interface::PointerType> FromFFIValue for Pointer<T> {
 }
 
 #[cfg(feature = "std")]
-impl<T: wasm_interface::PointerType> IntoFFIValue for Pointer<T> {
+impl<T: sp_wasm_interface::PointerType> IntoFFIValue for Pointer<T> {
 	fn into_ffi_value(self, _: &mut dyn FunctionContext) -> Result<u32> {
 		Ok(self.into())
 	}

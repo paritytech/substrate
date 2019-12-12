@@ -17,7 +17,7 @@
 //! A simple pseudo random number generator that allows a stream of random numbers to be efficiently
 //! created from a single initial seed hash.
 
-use codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 use crate::traits::{Hash, TrailingZeroInput};
 
 /// Pseudo-random number streamer. This retains the state of the random number stream. It's as

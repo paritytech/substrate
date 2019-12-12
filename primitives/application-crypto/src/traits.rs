@@ -15,10 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[cfg(feature = "full_crypto")]
-use primitives::crypto::Pair;
+use sp_core::crypto::Pair;
 
-use codec::Codec;
-use primitives::crypto::{KeyTypeId, CryptoType, IsWrappedBy, Public};
+use parity_scale_codec::Codec;
+use sp_core::crypto::{KeyTypeId, CryptoType, IsWrappedBy, Public};
 use sp_std::{fmt::Debug, vec::Vec};
 
 /// An application-specific key.
@@ -60,11 +60,11 @@ impl<T: sp_std::hash::Hash> MaybeDebugHash for T {}
 
 /// A application's public key.
 pub trait AppPublic:
-	AppKey + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + codec::Codec
+	AppKey + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + parity_scale_codec::Codec
 {
 	/// The wrapped type which is just a plain instance of `Public`.
 	type Generic:
-		IsWrappedBy<Self> + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + codec::Codec;
+		IsWrappedBy<Self> + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + parity_scale_codec::Codec;
 }
 
 /// A application's key pair.

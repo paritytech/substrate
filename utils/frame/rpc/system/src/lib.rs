@@ -18,8 +18,8 @@
 
 use std::sync::Arc;
 
-use codec::{self, Codec, Decode, Encode};
-use client::{
+use parity_scale_codec::{self, Codec, Decode, Encode};
+use sc_client::{
 	light::blockchain::{future_header, RemoteBlockchain},
 	light::fetcher::{Fetcher, RemoteCallRequest},
 };
@@ -38,10 +38,10 @@ use sp_runtime::{
 	traits,
 };
 use sp_core::hexdisplay::HexDisplay;
-use txpool_api::{TransactionPool, InPoolTransaction};
+use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
-pub use self::gen_client::Client as SystemClient;
+pub use self::gen_sc_client::Client as SystemClient;
 
 /// Future that resolves to account nonce.
 pub type FutureResult<T> = Box<dyn Future<Item = T, Error = Error> + Send>;
@@ -224,17 +224,17 @@ mod tests {
 	use super::*;
 
 	use futures::executor::block_on;
-	use test_client::{
+	use test_sc_client::{
 		runtime::Transfer,
 		AccountKeyring,
 	};
-	use txpool::{BasicPool, FullChainApi};
+	use sc_transaction_pool::{BasicPool, FullChainApi};
 
 	#[test]
 	fn should_return_next_nonce_for_some_account() {
 		// given
 		let _ = env_logger::try_init();
-		let client = Arc::new(test_client::new());
+		let client = Arc::new(test_sc_client::new());
 		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 
 		let new_transaction = |nonce: u64| {

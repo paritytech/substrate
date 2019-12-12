@@ -18,8 +18,8 @@
 
 
 use sp_runtime::{generic::BlockId, traits::ProvideRuntimeApi};
-use primitives::{testing::{KeyStore, SR25519}, crypto::Pair};
-use test_client::{
+use sp_core::{testing::{KeyStore, SR25519}, crypto::Pair};
+use substrate_test_runtime_client::{
 	TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
 	runtime::{TestAPI, app_crypto::sr25519::{AppPair, AppPublic}},
 };

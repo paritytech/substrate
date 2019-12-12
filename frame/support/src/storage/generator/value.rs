@@ -16,7 +16,7 @@
 
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
-use codec::{FullCodec, Encode, EncodeAppend, EncodeLike, Decode};
+use parity_scale_codec::{FullCodec, Encode, EncodeAppend, EncodeLike, Decode};
 use crate::{storage::{self, unhashed}, hash::{Twox128, StorageHasher}, traits::Len};
 
 /// Generator for `StorageValue` used by `decl_storage`.
@@ -113,7 +113,7 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 
 	/// Append the given items to the value in the storage.
 	///
-	/// `T` is required to implement `codec::EncodeAppend`.
+	/// `T` is required to implement `parity_scale_codec::EncodeAppend`.
 	fn append<Items, Item, EncodeLikeItem>(items: Items) -> Result<(), &'static str>
 	where
 		Item: Encode,
@@ -142,7 +142,7 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
 	/// old (presumably corrupt) value is replaced with the given `items`.
 	///
-	/// `T` is required to implement `codec::EncodeAppend`.
+	/// `T` is required to implement `parity_scale_codec::EncodeAppend`.
 	fn append_or_put<Items, Item, EncodeLikeItem>(items: Items) where
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
@@ -160,12 +160,12 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
 	/// function for this purpose.
-	fn decode_len() -> Result<usize, &'static str> where T: codec::DecodeLength, T: Len {
+	fn decode_len() -> Result<usize, &'static str> where T: parity_scale_codec::DecodeLength, T: Len {
 		let key = Self::storage_value_final_key();
 
 		// attempt to get the length directly.
 		if let Some(k) = unhashed::get_raw(&key) {
-			<T as codec::DecodeLength>::len(&k).map_err(|e| e.what())
+			<T as parity_scale_codec::DecodeLength>::len(&k).map_err(|e| e.what())
 		} else {
 			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
 				.map(|v| v.len())

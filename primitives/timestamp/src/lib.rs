@@ -18,12 +18,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::Encode;
+use parity_scale_codec::Encode;
 #[cfg(feature = "std")]
-use codec::Decode;
+use parity_scale_codec::Decode;
 #[cfg(feature = "std")]
-use inherents::ProvideInherentData;
-use inherents::{InherentIdentifier, IsFatalError, InherentData};
+use sp_inherents::ProvideInherentData;
+use sp_inherents::{InherentIdentifier, IsFatalError, InherentData};
 
 use sp_runtime::RuntimeString;
 
@@ -57,7 +57,7 @@ impl InherentError {
 	#[cfg(feature = "std")]
 	pub fn try_from(id: &InherentIdentifier, data: &[u8]) -> Option<Self> {
 		if id == &INHERENT_IDENTIFIER {
-			<InherentError as codec::Decode>::decode(&mut &data[..]).ok()
+			<InherentError as parity_scale_codec::Decode>::decode(&mut &data[..]).ok()
 		} else {
 			None
 		}
@@ -67,11 +67,11 @@ impl InherentError {
 /// Auxiliary trait to extract timestamp inherent data.
 pub trait TimestampInherentData {
 	/// Get timestamp inherent data.
-	fn timestamp_inherent_data(&self) -> Result<InherentType, inherents::Error>;
+	fn timestamp_inherent_data(&self) -> Result<InherentType, sp_inherents::Error>;
 }
 
 impl TimestampInherentData for InherentData {
-	fn timestamp_inherent_data(&self) -> Result<InherentType, inherents::Error> {
+	fn timestamp_inherent_data(&self) -> Result<InherentType, sp_inherents::Error> {
 		self.get_data(&INHERENT_IDENTIFIER)
 			.and_then(|r| r.ok_or_else(|| "Timestamp inherent data not found".into()))
 	}
@@ -89,7 +89,7 @@ impl ProvideInherentData for InherentDataProvider {
 	fn provide_inherent_data(
 		&self,
 		inherent_data: &mut InherentData,
-	) -> Result<(), inherents::Error> {
+	) -> Result<(), sp_inherents::Error> {
 		use std::time::SystemTime;
 
 		let now = SystemTime::now();

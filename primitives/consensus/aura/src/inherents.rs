@@ -16,10 +16,10 @@
 
 /// Contains the inherents for the AURA module
 
-use inherents::{InherentIdentifier, InherentData, Error};
+use sp_inherents::{InherentIdentifier, InherentData, Error};
 
 #[cfg(feature = "std")]
-use inherents::{InherentDataProviders, ProvideInherentData};
+use sp_inherents::{InherentDataProviders, ProvideInherentData};
 
 /// The Aura inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
@@ -91,8 +91,8 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		use codec::Decode;
+		use parity_scale_codec::Decode;
 
-		inherents::Error::decode(&mut &error[..]).map(|e| e.into_string()).ok()
+		sp_inherents::Error::decode(&mut &error[..]).map(|e| e.into_string()).ok()
 	}
 }

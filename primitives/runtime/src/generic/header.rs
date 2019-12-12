@@ -18,20 +18,20 @@
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef, Error};
+use crate::parity_scale_codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef, Error};
 use crate::traits::{
 	self, Member, SimpleArithmetic, SimpleBitOps, Hash as HashT,
 	MaybeSerializeDeserialize, MaybeSerialize, MaybeDisplay,
 };
 use crate::generic::Digest;
-use primitives::U256;
+use sp_core::U256;
 use sp_std::{
 	convert::TryFrom,
 	fmt::Debug,
 };
 
 /// Abstraction over a block header for a substrate chain.
-#[derive(PartialEq, Eq, Clone, primitives::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, sp_core::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
@@ -97,7 +97,7 @@ impl<Number, Hash> Encode for Header<Number, Hash> where
 	}
 }
 
-impl<Number, Hash> codec::EncodeLike for Header<Number, Hash> where
+impl<Number, Hash> parity_scale_codec::EncodeLike for Header<Number, Hash> where
 	Number: HasCompact + Copy + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
 	Hash::Output: Encode,

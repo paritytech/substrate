@@ -16,7 +16,7 @@
 
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
-use codec::{Ref, FullCodec, FullEncode, Encode, EncodeLike, EncodeAppend};
+use parity_scale_codec::{Ref, FullCodec, FullEncode, Encode, EncodeLike, EncodeAppend};
 use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}, traits::Len};
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
@@ -252,11 +252,11 @@ where
 	fn decode_len<KArg1, KArg2>(key1: KArg1, key2: KArg2) -> Result<usize, &'static str>
 		where KArg1: EncodeLike<K1>,
 		      KArg2: EncodeLike<K2>,
-		      V: codec::DecodeLength + Len,
+		      V: parity_scale_codec::DecodeLength + Len,
 	{
 		let final_key = Self::storage_double_map_final_key(key1, key2);
 		if let Some(v) = unhashed::get_raw(&final_key) {
-			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
+			<V as parity_scale_codec::DecodeLength>::len(&v).map_err(|e| e.what())
 		} else {
 			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
 				.map(|v| v.len())

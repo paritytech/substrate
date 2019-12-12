@@ -21,7 +21,7 @@ pub use primitive_types::U256;
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::{Encode, Decode};
+	use parity_scale_codec::{Encode, Decode};
 	use sp_serializer as ser;
 
 	macro_rules! test {

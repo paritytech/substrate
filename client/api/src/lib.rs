@@ -27,18 +27,18 @@ pub mod notifications;
 pub use sp_blockchain as blockchain;
 pub use backend::*;
 pub use notifications::*;
-pub use call_executor::*;
+pub use call_sc_executor::*;
 pub use client::*;
 pub use light::*;
 pub use notifications::*;
 
-pub use state_machine::{StorageProof, ExecutionStrategy};
+pub use sp_state_machine::{StorageProof, ExecutionStrategy};
 
 
 /// Utility methods for the client.
 pub mod utils {
     use sp_blockchain::{HeaderBackend, HeaderMetadata, Error};
-    use primitives::H256;
+    use sp_core::H256;
 	use sp_runtime::traits::{Block as BlockT};
 	use std::borrow::Borrow;
 

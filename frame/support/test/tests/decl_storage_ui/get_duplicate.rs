@@ -16,14 +16,14 @@
 
 pub trait Trait {
 	type Origin;
-	type BlockNumber: codec::Codec + codec::EncodeLike + Default + Clone;
+	type BlockNumber: parity_scale_codec::Codec + parity_scale_codec::EncodeLike + Default + Clone;
 }
 
-support::decl_module! {
+frame_support::decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
-support::decl_storage!{
+frame_support::decl_storage!{
 	trait Store for Module<T: Trait> as FinalKeysNone {
 		pub Value get(fn value) config(): u32;
 		pub Value2 get(fn value) config(): u32;

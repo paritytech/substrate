@@ -28,7 +28,7 @@ use sp_std::convert::TryFrom;
 use parking_lot::Mutex;
 #[cfg(feature = "std")]
 use rand::{RngCore, rngs::OsRng};
-use codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use regex::Regex;
 #[cfg(feature = "std")]
@@ -37,7 +37,7 @@ use base58::{FromBase58, ToBase58};
 use zeroize::Zeroize;
 #[doc(hidden)]
 pub use sp_std::ops::Deref;
-use runtime_interface::pass_by::PassByInner;
+use sp_runtime_interface::pass_by::PassByInner;
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";

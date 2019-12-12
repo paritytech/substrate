@@ -26,14 +26,14 @@ use log::{trace, info};
 use futures::sync::oneshot::{Sender as OneShotSender};
 use linked_hash_map::{Entry, LinkedHashMap};
 use sp_blockchain::Error as ClientError;
-use client_api::{FetchChecker, RemoteHeaderRequest,
+use sc_sc_client_api::{FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof,
 	RemoteReadChildRequest, RemoteBodyRequest, StorageProof};
 use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 use libp2p::PeerId;
 use crate::config::Roles;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use peerset::ReputationChange;
+use sc_peerset::ReputationChange;
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -679,14 +679,14 @@ pub mod tests {
 	use futures::{Future, sync::oneshot};
 	use sp_runtime::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use sp_blockchain::{Error as ClientError, Result as ClientResult};
-	use client_api::{FetchChecker, RemoteHeaderRequest,
+	use sc_sc_client_api::{FetchChecker, RemoteHeaderRequest,
 		ChangesProof, RemoteCallRequest, RemoteReadRequest,
 		RemoteReadChildRequest, RemoteChangesRequest, RemoteBodyRequest};
 	use crate::config::Roles;
 	use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 	use libp2p::PeerId;
 	use super::{REQUEST_TIMEOUT, LightDispatch, LightDispatchNetwork, RequestData, StorageProof};
-	use sp_test_primitives::{changes_trie_config, Block, Extrinsic, Header};
+	use sp_test_sp_core::{changes_trie_config, Block, Extrinsic, Header};
 
 	struct DummyFetchChecker { ok: bool }
 
@@ -1224,7 +1224,7 @@ pub mod tests {
 		assert_eq!(light_dispatch.active_peers.len(), 1);
 
 		let block = message::BlockData::<Block> {
-			hash: primitives::H256::random(),
+			hash: sp_core::H256::random(),
 			header: None,
 			body: Some(Vec::new()),
 			message_queue: None,
@@ -1262,7 +1262,7 @@ pub mod tests {
 
 		let response = {
 			let blocks: Vec<_> = (0..3).map(|_| message::BlockData::<Block> {
-				hash: primitives::H256::random(),
+				hash: sp_core::H256::random(),
 				header: None,
 				body: Some(Vec::new()),
 				message_queue: None,

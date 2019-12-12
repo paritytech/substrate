@@ -63,7 +63,7 @@ const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
 const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_secs(30);
 
 mod rep {
-	use peerset::ReputationChange as Rep;
+	use sc_peerset::ReputationChange as Rep;
 	/// Reputation change when a peer sends us a gossip message that we didn't know about.
 	pub const GOSSIP_SUCCESS: Rep = Rep::new(1 << 4, "Successfull gossip");
 	/// Reputation change when a peer sends us a gossip message that we already knew about.

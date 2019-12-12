@@ -19,7 +19,7 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 
-use crate::codec::{Decode, Encode, Input, Output, Error};
+use crate::parity_scale_codec::{Decode, Encode, Input, Output, Error};
 
 /// Era period
 pub type Period = u64;
@@ -28,7 +28,7 @@ pub type Period = u64;
 pub type Phase = u64;
 
 /// An era to describe the longevity of a transaction.
-#[derive(PartialEq, Eq, Clone, Copy, primitives::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Copy, sp_core::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum Era {
 	/// The transaction is valid forever. The genesis hash must be present in the signed content.
@@ -111,7 +111,7 @@ impl Encode for Era {
 	}
 }
 
-impl codec::EncodeLike for Era {}
+impl parity_scale_codec::EncodeLike for Era {}
 
 impl Decode for Era {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {

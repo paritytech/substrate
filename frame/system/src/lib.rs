@@ -68,7 +68,7 @@
 //! ### Example - Get extrinsic count and parent hash for the current block
 //!
 //! ```
-//! use support::{decl_module, dispatch};
+//! use frame_support::{decl_module, dispatch};
 //! use frame_system::{self as system, ensure_signed};
 //!
 //! pub trait Trait: system::Trait {}
@@ -110,19 +110,19 @@ use sp_runtime::{
 	},
 };
 
-use primitives::storage::well_known_keys;
-use support::{
+use sp_core::storage::well_known_keys;
+use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
 	traits::{Contains, Get},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
 };
-use codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
 use sp_io::TestExternalities;
 
 #[cfg(any(feature = "std", test))]
-use primitives::ChangesTrieConfiguration;
+use sp_core::ChangesTrieConfiguration;
 
 pub mod offchain;
 
@@ -146,8 +146,8 @@ impl<AccountId> IsDeadAccount<AccountId> for () {
 }
 
 /// Compute the trie root of a list of extrinsics.
-pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
-	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Encode::encode).collect())
+pub fn extrinsics_root<H: Hash, E: parity_scale_codec::Encode>(extrinsics: &[E]) -> H::Output {
+	extrinsics_data_root::<H>(extrinsics.iter().map(parity_scale_codec::Encode::encode).collect())
 }
 
 /// Compute the trie root of a list of extrinsics.
@@ -416,11 +416,11 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
-		#[serde(with = "primitives::bytes")]
+		#[serde(with = "sp_core::bytes")]
 		config(code): Vec<u8>;
 
 		build(|config: &GenesisConfig| {
-			use codec::Encode;
+			use parity_scale_codec::Encode;
 
 			sp_io::storage::set(well_known_keys::CODE, &config.code);
 			sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
@@ -1138,9 +1138,9 @@ impl<T: Trait> Lookup for ChainContext<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::H256;
+	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
-	use support::{impl_outer_origin, parameter_types};
+	use frame_support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin! {
 		pub enum Origin for Test where system = super {}

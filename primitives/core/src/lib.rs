@@ -40,7 +40,7 @@ use serde::{Serialize, Deserialize};
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]
-pub use codec::{Encode, Decode};
+pub use parity_scale_codec::{Encode, Decode};
 
 pub use sp_debug_derive::RuntimeDebug;
 
@@ -84,7 +84,7 @@ pub use hash_db::Hasher;
 // pub use self::hasher::blake::BlakeHasher;
 pub use self::hasher::blake2::Blake2Hasher;
 
-pub use primitives_storage as storage;
+pub use sp_storage as storage;
 
 #[doc(hidden)]
 pub use sp_std;
@@ -165,14 +165,14 @@ pub enum NativeOrEncoded<R> {
 }
 
 #[cfg(feature = "std")]
-impl<R: codec::Encode> sp_std::fmt::Debug for NativeOrEncoded<R> {
+impl<R: parity_scale_codec::Encode> sp_std::fmt::Debug for NativeOrEncoded<R> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		hexdisplay::HexDisplay::from(&self.as_encoded().as_ref()).fmt(f)
 	}
 }
 
 #[cfg(feature = "std")]
-impl<R: codec::Encode> NativeOrEncoded<R> {
+impl<R: parity_scale_codec::Encode> NativeOrEncoded<R> {
 	/// Return the value as the encoded format.
 	pub fn as_encoded(&self) -> Cow<'_, [u8]> {
 		match self {
@@ -191,13 +191,13 @@ impl<R: codec::Encode> NativeOrEncoded<R> {
 }
 
 #[cfg(feature = "std")]
-impl<R: PartialEq + codec::Decode> PartialEq for NativeOrEncoded<R> {
+impl<R: PartialEq + parity_scale_codec::Decode> PartialEq for NativeOrEncoded<R> {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
 			(NativeOrEncoded::Native(l), NativeOrEncoded::Native(r)) => l == r,
 			(NativeOrEncoded::Native(n), NativeOrEncoded::Encoded(e)) |
 			(NativeOrEncoded::Encoded(e), NativeOrEncoded::Native(n)) =>
-				Some(n) == codec::Decode::decode(&mut &e[..]).ok().as_ref(),
+				Some(n) == parity_scale_codec::Decode::decode(&mut &e[..]).ok().as_ref(),
 			(NativeOrEncoded::Encoded(l), NativeOrEncoded::Encoded(r)) => l == r,
 		}
 	}
@@ -210,7 +210,7 @@ impl<R: PartialEq + codec::Decode> PartialEq for NativeOrEncoded<R> {
 pub enum NeverNativeValue {}
 
 #[cfg(feature = "std")]
-impl codec::Encode for NeverNativeValue {
+impl parity_scale_codec::Encode for NeverNativeValue {
 	fn encode(&self) -> Vec<u8> {
 		// The enum is not constructable, so this function should never be callable!
 		unreachable!()
@@ -218,11 +218,11 @@ impl codec::Encode for NeverNativeValue {
 }
 
 #[cfg(feature = "std")]
-impl codec::EncodeLike for NeverNativeValue {}
+impl parity_scale_codec::EncodeLike for NeverNativeValue {}
 
 #[cfg(feature = "std")]
-impl codec::Decode for NeverNativeValue {
-	fn decode<I: codec::Input>(_: &mut I) -> Result<Self, codec::Error> {
+impl parity_scale_codec::Decode for NeverNativeValue {
+	fn decode<I: parity_scale_codec::Input>(_: &mut I) -> Result<Self, parity_scale_codec::Error> {
 		Err("`NeverNativeValue` should never be decoded".into())
 	}
 }
@@ -236,7 +236,7 @@ pub trait TypeId {
 /// A log level matching the one from `log` crate.
 ///
 /// Used internally by `sp_io::log` method.
-#[derive(Encode, Decode, runtime_interface::pass_by::PassByEnum, Copy, Clone)]
+#[derive(Encode, Decode, sp_runtime_interface::pass_by::PassByEnum, Copy, Clone)]
 pub enum LogLevel {
 	/// `Error` log level.
 	Error = 1,

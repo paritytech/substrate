@@ -27,9 +27,9 @@ use std::collections::HashSet;
 #[cfg(feature = "std")]
 use sp_runtime::traits::RuntimeApiInfo;
 
-use codec::Encode;
+use parity_scale_codec::Encode;
 #[cfg(feature = "std")]
-use codec::Decode;
+use parity_scale_codec::Decode;
 use sp_runtime::RuntimeString;
 pub use sp_runtime::create_runtime_str;
 

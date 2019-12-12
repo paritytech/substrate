@@ -12,9 +12,9 @@ sp-keyring = { path = "../../primitives/keyring", optional = true }
 sp-std = { path = "../../primitives/std", default-features = false }
 sp-io = { path = "../../primitives/io", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
-primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
+sp-core = { path = "../../primitives/core", default-features = false }
+frame-support = { path = "../support", default-features = false }
+frame-system = { path = "../system", default-features = false }
 
 [dev-dependencies]
 ref_thread_local = "0.0.0"
@@ -26,10 +26,10 @@ std = [
 	"safe-mix/std",
 	"sp-keyring",
 	"codec/std",
-	"primitives/std",
+	"sp-core/std",
 	"sp-std/std",
 	"sp-io/std",
-	"support/std",
+	"frame-support/std",
 	"sp-runtime/std",
-	"system/std",
+	"frame-system/std",
 ]

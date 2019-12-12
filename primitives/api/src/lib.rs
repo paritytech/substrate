@@ -35,13 +35,13 @@ extern crate self as sp_api;
 
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use state_machine::{OverlayedChanges, StorageProof};
+pub use sp_state_machine::{OverlayedChanges, StorageProof};
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use primitives::NativeOrEncoded;
+pub use sp_core::NativeOrEncoded;
 #[doc(hidden)]
 #[cfg(not(feature = "std"))]
-pub use primitives::to_substrate_wasm_fn_return_value;
+pub use sp_core::to_substrate_wasm_fn_return_value;
 #[doc(hidden)]
 pub use sp_runtime::{
 	traits::{
@@ -51,7 +51,7 @@ pub use sp_runtime::{
 	generic::BlockId, transaction_validity::TransactionValidity,
 };
 #[doc(hidden)]
-pub use primitives::{offchain, ExecutionContext};
+pub use sp_core::{offchain, ExecutionContext};
 #[doc(hidden)]
 pub use sp_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
 #[doc(hidden)]
@@ -59,8 +59,8 @@ pub use sp_std::{slice, mem};
 #[cfg(feature = "std")]
 use sp_std::result;
 #[doc(hidden)]
-pub use codec::{Encode, Decode};
-use primitives::OpaqueMetadata;
+pub use parity_scale_codec::{Encode, Decode};
+use sp_core::OpaqueMetadata;
 #[cfg(feature = "std")]
 use std::{panic::UnwindSafe, cell::RefCell};
 
@@ -158,7 +158,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// use sp_version::create_runtime_str;
 /// #
 /// # use sp_runtime::traits::GetNodeBlockType;
-/// # use sp_test_primitives::{Block, Header};
+/// # use sp_test_sp_core::{Block, Header};
 /// #
 /// # /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
 /// # /// trait are done by the `construct_runtime!` macro in a real runtime.
@@ -223,7 +223,7 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 
 #[cfg(feature = "std")]
 /// A type that records all accessed trie nodes and generates a proof out of it.
-pub type ProofRecorder<B> = state_machine::ProofRecorder<
+pub type ProofRecorder<B> = sp_state_machine::ProofRecorder<
 	<<<B as BlockT>::Header as HeaderT>::Hashing as HashT>::Hasher
 >;
 

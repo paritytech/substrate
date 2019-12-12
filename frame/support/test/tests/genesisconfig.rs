@@ -15,15 +15,15 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub trait Trait {
-	type BlockNumber: codec::Codec + codec::EncodeLike + Default;
+	type BlockNumber: parity_scale_codec::Codec + parity_scale_codec::EncodeLike + Default;
 	type Origin;
 }
 
-support::decl_module! {
+frame_support::decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
-support::decl_storage! {
+frame_support::decl_storage! {
 	trait Store for Module<T: Trait> as Example {
 		pub AppendableDM config(t): double_map u32, blake2_256(T::BlockNumber) => Vec<u32>;
 	}

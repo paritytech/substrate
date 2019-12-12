@@ -21,14 +21,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[doc(hidden)]
-pub use primitives::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wraps}, RuntimeDebug};
+pub use sp_core::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wraps}, RuntimeDebug};
 #[doc(hidden)]
 #[cfg(feature = "full_crypto")]
-pub use primitives::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
-pub use primitives::{crypto::{KeyTypeId, key_types}};
+pub use sp_core::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
+pub use sp_core::{crypto::{KeyTypeId, key_types}};
 
 #[doc(hidden)]
-pub use codec;
+pub use parity_scale_codec;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use serde;
@@ -169,8 +169,8 @@ macro_rules! app_crypto_public_full_crypto {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(
 				Clone, Default, Eq, PartialEq, Ord, PartialOrd,
-				$crate::codec::Encode,
-				$crate::codec::Decode,
+				$crate::parity_scale_codec::Encode,
+				$crate::parity_scale_codec::Decode,
 				$crate::RuntimeDebug,
 			)]
 			#[derive(Hash)]
@@ -202,8 +202,8 @@ macro_rules! app_crypto_public_not_full_crypto {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(
 				Clone, Default, Eq, PartialEq, Ord, PartialOrd,
-				$crate::codec::Encode,
-				$crate::codec::Decode,
+				$crate::parity_scale_codec::Encode,
+				$crate::parity_scale_codec::Decode,
 				$crate::RuntimeDebug,
 			)]
 			pub struct Public($public);
@@ -315,8 +315,8 @@ macro_rules! app_crypto_signature_full_crypto {
 		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(Clone, Default, Eq, PartialEq,
-				$crate::codec::Encode,
-				$crate::codec::Decode,
+				$crate::parity_scale_codec::Encode,
+				$crate::parity_scale_codec::Decode,
 				$crate::RuntimeDebug,
 			)]
 			#[derive(Hash)]
@@ -347,8 +347,8 @@ macro_rules! app_crypto_signature_not_full_crypto {
 		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(Clone, Default, Eq, PartialEq,
-				$crate::codec::Encode,
-				$crate::codec::Decode,
+				$crate::parity_scale_codec::Encode,
+				$crate::parity_scale_codec::Decode,
 				$crate::RuntimeDebug,
 			)]
 			pub struct Signature($sig);

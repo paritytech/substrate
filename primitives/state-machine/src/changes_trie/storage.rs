@@ -18,16 +18,16 @@
 
 use std::collections::{BTreeMap, HashSet, HashMap};
 use hash_db::{Hasher, Prefix, EMPTY_PREFIX};
-use trie::DBValue;
-use trie::MemoryDB;
+use sp_trie::DBValue;
+use sp_trie::MemoryDB;
 use parking_lot::RwLock;
-use crate::changes_trie::{BuildCache, RootsStorage, Storage, AnchorBlockId, BlockNumber};
+use crate::changes_sp_trie::{BuildCache, RootsStorage, Storage, AnchorBlockId, BlockNumber};
 use crate::trie_backend_essence::TrieBackendStorage;
 
 #[cfg(test)]
 use crate::backend::insert_into_memory_db;
 #[cfg(test)]
-use crate::changes_trie::input::{InputPair, ChildIndex};
+use crate::changes_sp_trie::input::{InputPair, ChildIndex};
 
 /// In-memory implementation of changes trie storage.
 pub struct InMemoryStorage<H: Hasher, Number: BlockNumber> {

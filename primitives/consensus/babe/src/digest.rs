@@ -25,9 +25,9 @@ use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight};
 use sp_runtime::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
 use std::fmt::Debug;
-use codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode};
 #[cfg(feature = "std")]
-use codec::{Codec, Input, Error};
+use parity_scale_codec::{Codec, Input, Error};
 #[cfg(feature = "std")]
 use schnorrkel::{
 	SignatureError, errors::MultiSignatureStage,
@@ -161,12 +161,12 @@ impl Encode for BabePreDigest {
 			},
 		};
 
-		codec::Encode::encode(&raw)
+		parity_scale_codec::Encode::encode(&raw)
 	}
 }
 
 #[cfg(feature = "std")]
-impl codec::EncodeLike for BabePreDigest {}
+impl parity_scale_codec::EncodeLike for BabePreDigest {}
 
 #[cfg(feature = "std")]
 impl Decode for BabePreDigest {
@@ -253,7 +253,7 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 }
 
 #[cfg(feature = "std")]
-fn convert_error(e: SignatureError) -> codec::Error {
+fn convert_error(e: SignatureError) -> parity_scale_codec::Error {
 	use SignatureError::*;
 	use MultiSignatureStage::*;
 	match e {

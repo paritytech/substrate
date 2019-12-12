@@ -35,7 +35,7 @@ mod pruning;
 
 use std::fmt;
 use parking_lot::RwLock;
-use codec::Codec;
+use parity_scale_codec::Codec;
 use std::collections::{HashMap, hash_map::Entry};
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
@@ -75,7 +75,7 @@ pub enum Error<E: fmt::Debug> {
 	/// Database backend error.
 	Db(E),
 	/// `Codec` decoding error.
-	Decoding(codec::Error),
+	Decoding(parity_scale_codec::Error),
 	/// Trying to canonicalize invalid block.
 	InvalidBlock,
 	/// Trying to insert block with invalid number.
@@ -92,8 +92,8 @@ pub enum PinError {
 	InvalidBlock,
 }
 
-impl<E: fmt::Debug> From<codec::Error> for Error<E> {
-	fn from(x: codec::Error) -> Self {
+impl<E: fmt::Debug> From<parity_scale_codec::Error> for Error<E> {
+	fn from(x: parity_scale_codec::Error) -> Self {
 		Error::Decoding(x)
 	}
 }
@@ -471,7 +471,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 #[cfg(test)]
 mod tests {
 	use std::io;
-	use primitives::H256;
+	use sp_core::H256;
 	use crate::{StateDb, PruningMode, Constraints};
 	use crate::test::{make_db, make_changeset, TestDb};
 

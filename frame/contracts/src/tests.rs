@@ -26,27 +26,27 @@ use crate::{
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
-use codec::{Decode, Encode, KeyedVec};
+use parity_scale_codec::{Decode, Encode, KeyedVec};
 use sp_runtime::{
 	Perbill, BuildStorage, transaction_validity::{InvalidTransaction, ValidTransaction},
 	traits::{BlakeTwo256, Hash, IdentityLookup, SignedExtension},
 	testing::{Digest, DigestItem, Header, UintAuthorityId, H256},
 };
-use support::{
+use frame_support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
 	storage::child, StorageMap, StorageValue, traits::{Currency, Get},
 	weights::{DispatchInfo, DispatchClass, Weight},
 };
 use std::{cell::RefCell, sync::atomic::{AtomicUsize, Ordering}};
-use primitives::storage::well_known_keys;
-use system::{self, EventRecord, Phase};
+use sp_core::storage::well_known_keys;
+use frame_system::{self, EventRecord, Phase};
 
 mod contract {
 	// Re-export contents of the root. This basically
 	// needs to give a name for the current crate.
 	// This hack is required for `impl_outer_event!`.
 	pub use super::super::*;
-	use support::impl_outer_event;
+	use frame_support::impl_outer_event;
 }
 impl_outer_event! {
 	pub enum MetaEvent for Test {
@@ -58,7 +58,7 @@ impl_outer_origin! {
 }
 impl_outer_dispatch! {
 	pub enum Call for Test where origin: Origin {
-		balances::Balances,
+		pallet_balances::Balances,
 		contract::Contract,
 	}
 }
@@ -98,7 +98,7 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl system::Trait for Test {
+impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -115,7 +115,7 @@ impl system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
 }
-impl balances::Trait for Test {
+impl pallet_balances::Trait for Test {
 	type Balance = u64;
 	type OnFreeBalanceZero = Contract;
 	type OnNewAccount = ();
@@ -129,7 +129,7 @@ impl balances::Trait for Test {
 parameter_types! {
 	pub const MinimumPeriod: u64 = 1;
 }
-impl timestamp::Trait for Test {
+impl pallet_timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
@@ -178,11 +178,11 @@ impl Trait for Test {
 	type BlockGasLimit = BlockGasLimit;
 }
 
-type Balances = balances::Module<Test>;
-type Timestamp = timestamp::Module<Test>;
+type Balances = pallet_balances::Module<Test>;
+type Timestamp = pallet_timestamp::Module<Test>;
 type Contract = Module<Test>;
-type System = system::Module<Test>;
-type Randomness = randomness_collective_flip::Module<Test>;
+type System = frame_system::Module<Test>;
+type Randomness = pallet_randomness_collective_flip::Module<Test>;
 
 pub struct DummyContractAddressFor;
 impl ContractAddressFor<H256, u64> for DummyContractAddressFor {
@@ -194,7 +194,7 @@ impl ContractAddressFor<H256, u64> for DummyContractAddressFor {
 pub struct DummyTrieIdGenerator;
 impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
 	fn trie_id(account_id: &u64) -> TrieId {
-		use primitives::storage::well_known_keys;
+		use sp_core::storage::well_known_keys;
 
 		let new_seed = super::AccountCounter::mutate(|v| {
 			*v = v.wrapping_add(1);
@@ -270,8 +270,8 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		balances::GenesisConfig::<Test> {
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![],
 			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
@@ -289,7 +289,7 @@ impl ExtBuilder {
 /// Generate Wasm binary and code hash from wabt source.
 fn compile_module<T>(wabt_module: &str)
 	-> Result<(Vec<u8>, <T::Hashing as Hash>::Output), wabt::Error>
-	where T: system::Trait
+	where T: frame_system::Trait
 {
 	let wasm = wabt::wat2wasm(wabt_module)?;
 	let code_hash = T::Hashing::hash(&wasm);
@@ -426,7 +426,7 @@ fn instantiate_and_call_and_deposit_event() {
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -437,7 +437,7 @@ fn instantiate_and_call_and_deposit_event() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::balances(
-					balances::RawEvent::NewAccount(BOB, 100)
+					pallet_balances::RawEvent::NewAccount(BOB, 100)
 				),
 				topics: vec![],
 			},
@@ -484,7 +484,7 @@ const CODE_DISPATCH_CALL: &str = r#"
 fn dispatch_call() {
 	// This test can fail due to the encoding changes. In case it becomes too annoying
 	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
-	let encoded = Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50)));
+	let encoded = Encode::encode(&Call::Balances(pallet_balances::Call::transfer(CHARLIE, 50)));
 	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
 
 	let (wasm, code_hash) = compile_module::<Test>(CODE_DISPATCH_CALL).unwrap();
@@ -499,7 +499,7 @@ fn dispatch_call() {
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -528,7 +528,7 @@ fn dispatch_call() {
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -539,7 +539,7 @@ fn dispatch_call() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::balances(
-					balances::RawEvent::NewAccount(BOB, 100)
+					pallet_balances::RawEvent::NewAccount(BOB, 100)
 				),
 				topics: vec![],
 			},
@@ -558,14 +558,14 @@ fn dispatch_call() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::balances(
-					balances::RawEvent::NewAccount(CHARLIE, 50)
+					pallet_balances::RawEvent::NewAccount(CHARLIE, 50)
 				),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::balances(
-					balances::RawEvent::Transfer(BOB, CHARLIE, 50, 0)
+					pallet_balances::RawEvent::Transfer(BOB, CHARLIE, 50, 0)
 				),
 				topics: vec![],
 			},
@@ -602,7 +602,7 @@ const CODE_DISPATCH_CALL_THEN_TRAP: &str = r#"
 fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 	// This test can fail due to the encoding changes. In case it becomes too annoying
 	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
-	let encoded = Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50)));
+	let encoded = Encode::encode(&Call::Balances(pallet_balances::Call::transfer(CHARLIE, 50)));
 	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
 
 	let (wasm, code_hash) = compile_module::<Test>(CODE_DISPATCH_CALL_THEN_TRAP).unwrap();
@@ -617,7 +617,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -650,7 +650,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -661,7 +661,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::balances(
-					balances::RawEvent::NewAccount(BOB, 100)
+					pallet_balances::RawEvent::NewAccount(BOB, 100)
 				),
 				topics: vec![],
 			},
@@ -802,7 +802,7 @@ mod call {
 fn test_set_rent_code_and_hash() {
 	// This test can fail due to the encoding changes. In case it becomes too annoying
 	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
-	let encoded = Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50)));
+	let encoded = Encode::encode(&Call::Balances(pallet_balances::Call::transfer(CHARLIE, 50)));
 	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
 
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
@@ -816,7 +816,7 @@ fn test_set_rent_code_and_hash() {
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -841,7 +841,7 @@ fn storage_size() {
 			Origin::signed(ALICE),
 			30_000,
 			100_000, code_hash.into(),
-			<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
+			<Test as pallet_balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 		));
 		let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 		assert_eq!(bob_contract.storage_size, <Test as Trait>::StorageSizeOffset::get() + 4);
@@ -868,7 +868,7 @@ fn deduct_blocks() {
 			Origin::signed(ALICE),
 			30_000,
 			100_000, code_hash.into(),
-			<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
+			<Test as pallet_balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 		));
 
 		// Check creation
@@ -962,7 +962,7 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) 
 			Origin::signed(ALICE),
 			100,
 			100_000, code_hash.into(),
-			<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
+			<Test as pallet_balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 		));
 
 		// Advance blocks
@@ -995,7 +995,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			Origin::signed(ALICE),
 			100,
 			100_000, code_hash.into(),
-			<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
+			<Test as pallet_balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 		));
 
 		let subsistence_threshold = 50 /*existential_deposit*/ + 16 /*tombstone_deposit*/;
@@ -1031,7 +1031,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			Origin::signed(ALICE),
 			1_000,
 			100_000, code_hash.into(),
-			<Test as balances::Trait>::Balance::from(100u32).encode() // rent allowance
+			<Test as pallet_balances::Trait>::Balance::from(100u32).encode() // rent allowance
 		));
 
 		// Trigger rent must have no effect
@@ -1066,7 +1066,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			Origin::signed(ALICE),
 			50+Balances::minimum_balance(),
 			100_000, code_hash.into(),
-			<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
+			<Test as pallet_balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 		));
 
 		// Trigger rent must have no effect
@@ -1110,7 +1110,7 @@ fn call_removed_contract() {
 			Origin::signed(ALICE),
 			100,
 			100_000, code_hash.into(),
-			<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
+			<Test as pallet_balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 		));
 
 		// Calling contract should succeed.
@@ -1311,7 +1311,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -1333,7 +1333,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			30_000,
 			100_000,
 			set_rent_code_hash.into(),
-			<Test as balances::Trait>::Balance::from(0u32).encode()
+			<Test as pallet_balances::Trait>::Balance::from(0u32).encode()
 		));
 
 		// Check if `BOB` was created successfully and that the rent allowance is
@@ -1370,7 +1370,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			30_000,
 			100_000,
 			restoration_code_hash.into(),
-			<Test as balances::Trait>::Balance::from(0u32).encode()
+			<Test as pallet_balances::Trait>::Balance::from(0u32).encode()
 		));
 
 		// Before performing a call to `DJANGO` save its original trie id.
@@ -2425,7 +2425,7 @@ fn get_runtime_storage() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
 
-		support::storage::unhashed::put_raw(
+		frame_support::storage::unhashed::put_raw(
 			&[1, 2, 3, 4],
 			0x14144020u32.to_le_bytes().to_vec().as_ref()
 		);

@@ -18,7 +18,7 @@
 use serde::{Serialize, Deserialize};
 
 use sp_std::{ops, prelude::*, convert::TryInto};
-use codec::{Encode, Decode, CompactAs};
+use parity_scale_codec::{Encode, Decode, CompactAs};
 use crate::traits::{SaturatedConversion, UniqueSaturatedInto, Saturating};
 use sp_debug_derive::RuntimeDebug;
 
@@ -189,7 +189,7 @@ macro_rules! implement_per_thing {
 
 		#[cfg(test)]
 		mod $test_mod {
-			use codec::{Encode, Decode};
+			use parity_scale_codec::{Encode, Decode};
 			use super::{$name, Saturating, RuntimeDebug};
 			use crate::traits::Zero;
 
@@ -210,7 +210,7 @@ macro_rules! implement_per_thing {
 			}
 
 			#[derive(Encode, Decode, PartialEq, Eq, RuntimeDebug)]
-			struct WithCompact<T: codec::HasCompact> {
+			struct WithCompact<T: parity_scale_codec::HasCompact> {
 				data: T,
 			}
 
@@ -233,10 +233,10 @@ macro_rules! implement_per_thing {
 					(<$type>::max_value(), <$type>::max_value().encode().len() + 1)
 				];
 				for &(n, l) in &tests {
-					let compact: codec::Compact<$name> = $name(n).into();
+					let compact: parity_scale_codec::Compact<$name> = $name(n).into();
 					let encoded = compact.encode();
 					assert_eq!(encoded.len(), l);
-					let decoded = <codec::Compact<$name>>::decode(&mut & encoded[..])
+					let decoded = <parity_scale_codec::Compact<$name>>::decode(&mut & encoded[..])
 						.unwrap();
 					let per_thingy: $name = decoded.into();
 					assert_eq!(per_thingy, $name(n));

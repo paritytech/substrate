@@ -36,7 +36,7 @@ pub use self::digest::{
 	Digest, DigestItem, DigestItemRef, OpaqueDigestItemId
 };
 
-use crate::codec::Encode;
+use crate::parity_scale_codec::Encode;
 use sp_std::prelude::*;
 
 fn encode_with_vec_prefix<T: Encode, F: Fn(&mut Vec<u8>)>(encoder: F) -> Vec<u8> {

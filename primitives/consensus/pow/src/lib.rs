@@ -20,7 +20,7 @@
 
 use sp_std::vec::Vec;
 use sp_runtime::ConsensusEngineId;
-use codec::Decode;
+use parity_scale_codec::Decode;
 
 /// The `ConsensusEngineId` of PoW.
 pub const POW_ENGINE_ID: ConsensusEngineId = [b'p', b'o', b'w', b'_'];
@@ -33,7 +33,7 @@ pub trait TotalDifficulty {
 	fn increment(&mut self, other: Self);
 }
 
-impl TotalDifficulty for primitives::U256 {
+impl TotalDifficulty for sp_core::U256 {
 	fn increment(&mut self, other: Self) {
 		let ret = self.saturating_add(other);
 		*self = ret;

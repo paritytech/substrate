@@ -16,8 +16,8 @@
 
 //! Substrate chain configurations.
 
-use chain_spec::ChainSpecExtension;
-use primitives::{Pair, Public, crypto::UncheckedInto, sr25519};
+use sc_chain_spec::ChainSpecExtension;
+use sp_core::{Pair, Public, crypto::UncheckedInto, sr25519};
 use serde::{Serialize, Deserialize};
 use node_runtime::{
 	AuthorityDiscoveryConfig, BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
@@ -29,13 +29,13 @@ use node_runtime::constants::currency::*;
 use sc_service;
 use hex_literal::hex;
 use sc_telemetry::TelemetryEndpoints;
-use grandpa_primitives::{AuthorityId as GrandpaId};
-use babe_primitives::{AuthorityId as BabeId};
-use im_online::sr25519::{AuthorityId as ImOnlineId};
-use authority_discovery_primitives::AuthorityId as AuthorityDiscoveryId;
+use sc_finality_sp_finality_grandpa::{AuthorityId as GrandpaId};
+use sc_consensus_sp_consensus_sc_consensus_babe::{AuthorityId as BabeId};
+use pallet_im_online::sr25519::{AuthorityId as ImOnlineId};
+use sc_sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_runtime::{Perbill, traits::{Verify, IdentifyAccount}};
 
-pub use node_primitives::{AccountId, Balance, Signature};
+pub use node_sp_core::{AccountId, Balance, Signature};
 pub use node_runtime::GenesisConfig;
 
 type AccountPublic = <Signature as Verify>::Signer;
@@ -49,7 +49,7 @@ const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 #[derive(Default, Clone, Serialize, Deserialize, ChainSpecExtension)]
 pub struct Extensions {
 	/// Block numbers with known hashes.
-	pub fork_blocks: client::ForkBlocks<Block>,
+	pub fork_blocks: sc_client::ForkBlocks<Block>,
 }
 
 /// Specialized `ChainSpec`.
@@ -269,7 +269,7 @@ pub fn testnet_genesis(
 			phantom: Default::default(),
 		}),
 		contracts: Some(ContractsConfig {
-			current_schedule: contracts::Schedule {
+			current_schedule: pallet_contracts::Schedule {
 				enable_println, // this should only be enabled on development chains
 				..Default::default()
 			},
@@ -351,7 +351,7 @@ pub(crate) mod tests {
 	use super::*;
 	use crate::service::new_full;
 	use sc_service::Roles;
-	use service_test;
+	use sc_service_test;
 
 	fn local_testnet_genesis_instant_single() -> GenesisConfig {
 		testnet_genesis(
@@ -395,7 +395,7 @@ pub(crate) mod tests {
 	#[test]
 	#[ignore]
 	fn test_connectivity() {
-		service_test::connectivity(
+		sc_service_test::connectivity(
 			integration_test_config_with_two_authorities(),
 			|config| new_full(config),
 			|mut config| {

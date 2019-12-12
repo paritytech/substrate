@@ -18,7 +18,7 @@ use sp_std::{
 	ops, prelude::*,
 	convert::{TryFrom, TryInto},
 };
-use codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 use crate::{
 	Perbill,
 	traits::{

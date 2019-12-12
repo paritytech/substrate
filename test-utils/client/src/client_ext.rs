@@ -16,9 +16,9 @@
 
 //! Client extension for tests.
 
-use client::{self, Client};
-use client_api::backend::Finalizer;
-use consensus::{
+use sc_client::{self, Client};
+use sc_sc_client_api::backend::Finalizer;
+use sp_consensus::{
 	BlockImportParams, BlockImport, BlockOrigin, Error as ConsensusError,
 	ForkChoiceStrategy,
 };
@@ -26,8 +26,8 @@ use hash_db::Hasher;
 use sp_runtime::Justification;
 use sp_runtime::traits::{Block as BlockT};
 use sp_runtime::generic::BlockId;
-use primitives::Blake2Hasher;
-use codec::alloc::collections::hash_map::HashMap;
+use sp_core::Blake2Hasher;
+use parity_scale_codec::alloc::collections::hash_map::HashMap;
 
 /// Extension trait for a test client.
 pub trait ClientExt<Block: BlockT>: Sized {
@@ -64,8 +64,8 @@ pub trait ClientExt<Block: BlockT>: Sized {
 
 impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 	where
-		B: client_api::backend::Backend<Block, Blake2Hasher>,
-		E: client::CallExecutor<Block, Blake2Hasher>,
+		B: sc_client_api::backend::Backend<Block, Blake2Hasher>,
+		E: sc_client::CallExecutor<Block, Blake2Hasher>,
 		for<'r> &'r Self: BlockImport<Block, Error=ConsensusError>,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 {

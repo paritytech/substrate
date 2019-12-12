@@ -24,13 +24,13 @@ use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{ConnectedPoint, nodes::Substream, muxing::StreamMuxerBox};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use primitives::storage::StorageKey;
-use consensus::{
+use sp_core::storage::StorageKey;
+use sp_consensus::{
 	BlockOrigin,
 	block_validation::BlockAnnounceValidator,
 	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
 };
-use codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode};
 use sp_runtime::{generic::BlockId, ConsensusEngineId, Justification};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, CheckedSub
@@ -38,7 +38,7 @@ use sp_runtime::traits::{
 use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
-use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
+use sp_consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
 use specialization::NetworkSpecialization;
 use sync::{ChainSync, SyncState};
@@ -51,7 +51,7 @@ use std::fmt::Write;
 use std::{cmp, num::NonZeroUsize, time};
 use log::{log, Level, trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
-use client_api::{FetchChecker, ChangesProof, StorageProof};
+use sc_sc_client_api::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
 use util::LruHashSet;
 
@@ -91,7 +91,7 @@ const MAX_CONSENSUS_MESSAGES: usize = 256;
 const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
 mod rep {
-	use peerset::ReputationChange as Rep;
+	use sc_peerset::ReputationChange as Rep;
 	/// Reputation change when a peer is "clogged", meaning that it's not fast enough to process our
 	/// messages.
 	pub const CLOGGED_PEER: Rep = Rep::new(-(1 << 12), "Clogged message queue");
@@ -143,7 +143,7 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	// Connected peers pending Status message.
 	handshaking_peers: HashMap<PeerId, HandshakingPeer>,
 	/// Used to report reputation changes.
-	peerset_handle: peerset::PeersetHandle,
+	peerset_handle: sc_peerset::PeersetHandle,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	/// When asked for a proof of finality, we use this struct to build one.
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
@@ -196,11 +196,11 @@ pub struct PeerInfo<B: BlockT> {
 
 struct LightDispatchIn<'a> {
 	behaviour: &'a mut LegacyProto<Substream<StreamMuxerBox>>,
-	peerset: peerset::PeersetHandle,
+	peerset: sc_peerset::PeersetHandle,
 }
 
 impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
-	fn report_peer(&mut self, who: &PeerId, reputation: peerset::ReputationChange) {
+	fn report_peer(&mut self, who: &PeerId, reputation: sc_peerset::ReputationChange) {
 		self.peerset.report_peer(who.clone(), reputation)
 	}
 
@@ -320,7 +320,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 pub trait Context<B: BlockT> {
 	/// Adjusts the reputation of the peer. Use this to point out that a peer has been malign or
 	/// irresponsible or appeared lazy.
-	fn report_peer(&mut self, who: PeerId, reputation: peerset::ReputationChange);
+	fn report_peer(&mut self, who: PeerId, reputation: sc_peerset::ReputationChange);
 
 	/// Force disconnecting from a peer. Use this when a peer misbehaved.
 	fn disconnect_peer(&mut self, who: PeerId);
@@ -336,21 +336,21 @@ pub trait Context<B: BlockT> {
 struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
 	behaviour: &'a mut LegacyProto<Substream<StreamMuxerBox>>,
 	context_data: &'a mut ContextData<B, H>,
-	peerset_handle: &'a peerset::PeersetHandle,
+	peerset_handle: &'a sc_peerset::PeersetHandle,
 }
 
 impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 	fn new(
 		context_data: &'a mut ContextData<B, H>,
 		behaviour: &'a mut LegacyProto<Substream<StreamMuxerBox>>,
-		peerset_handle: &'a peerset::PeersetHandle,
+		peerset_handle: &'a sc_peerset::PeersetHandle,
 	) -> Self {
 		ProtocolContext { context_data, peerset_handle, behaviour }
 	}
 }
 
 impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, H> {
-	fn report_peer(&mut self, who: PeerId, reputation: peerset::ReputationChange) {
+	fn report_peer(&mut self, who: PeerId, reputation: sc_peerset::ReputationChange) {
 		self.peerset_handle.report_peer(who, reputation)
 	}
 
@@ -434,9 +434,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 		finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 		protocol_id: ProtocolId,
-		peerset_config: peerset::PeersetConfig,
+		peerset_config: sc_peerset::PeersetConfig,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
-	) -> error::Result<(Protocol<B, S, H>, peerset::PeersetHandle)> {
+	) -> error::Result<(Protocol<B, S, H>, sc_peerset::PeersetHandle)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
 			config.roles,
@@ -456,7 +456,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			imp_p
 		};
 
-		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset_config);
+		let (peerset, peerset_handle) = sc_peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
 		let behaviour = LegacyProto::new(protocol_id, versions, peerset);
 
@@ -863,7 +863,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Adjusts the reputation of a node.
-	pub fn report_peer(&self, who: PeerId, reputation: peerset::ReputationChange) {
+	pub fn report_peer(&self, who: PeerId, reputation: sc_peerset::ReputationChange) {
 		self.peerset_handle.report_peer(who, reputation)
 	}
 

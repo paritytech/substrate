@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use test_client::{
+use substrate_test_runtime_client::{
 	prelude::*,
 	DefaultTestClientBuilderExt, TestClientBuilder,
 	runtime::{TestAPI, DecodeFails, Transfer, Header},
@@ -23,13 +23,13 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{ProvideRuntimeApi, Header as HeaderT, Hash as HashT},
 };
-use state_machine::{
+use sp_state_machine::{
 	ExecutionStrategy, create_proof_check_backend,
 	execution_proof_check_on_trie_backend,
 };
 
-use consensus_common::SelectChain;
-use codec::Encode;
+use sp_consensus::SelectChain;
+use parity_scale_codec::Encode;
 
 fn calling_function_with_strat(strat: ExecutionStrategy) {
 	let client = TestClientBuilder::new().set_execution_strategy(strat).build();

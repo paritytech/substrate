@@ -23,7 +23,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::vec::Vec;
-use codec::{Encode, Decode, Codec};
+use parity_scale_codec::{Encode, Decode, Codec};
 use sp_runtime::RuntimeDebug;
 
 /// A result of execution of a contract.

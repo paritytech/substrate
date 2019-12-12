@@ -23,18 +23,18 @@ use sp_io;
 use std::fmt::Display;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use primitives::{self, Hasher, Blake2Hasher, TypeId};
-use crate::codec::{Codec, Encode, Decode};
+use sp_core::{self, Hasher, Blake2Hasher, TypeId};
+use crate::parity_scale_codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
 use crate::generic::{Digest, DigestItem};
-pub use arithmetic::traits::{
+pub use sp_arithmetic::traits::{
 	SimpleArithmetic, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
 	CheckedShl, CheckedShr, IntegerSquareRoot
 };
-use app_crypto::AppKey;
+use sp_application_crypto::AppKey;
 use impl_trait_for_tuples::impl_for_tuples;
 
 /// A lazy value.
@@ -58,17 +58,17 @@ pub trait IdentifyAccount {
 	fn into_account(self) -> Self::AccountId;
 }
 
-impl IdentifyAccount for primitives::ed25519::Public {
+impl IdentifyAccount for sp_core::ed25519::Public {
 	type AccountId = Self;
 	fn into_account(self) -> Self { self }
 }
 
-impl IdentifyAccount for primitives::sr25519::Public {
+impl IdentifyAccount for sp_core::sr25519::Public {
 	type AccountId = Self;
 	fn into_account(self) -> Self { self }
 }
 
-impl IdentifyAccount for primitives::ecdsa::Public {
+impl IdentifyAccount for sp_core::ecdsa::Public {
 	type AccountId = Self;
 	fn into_account(self) -> Self { self }
 }
@@ -81,23 +81,23 @@ pub trait Verify {
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool;
 }
 
-impl Verify for primitives::ed25519::Signature {
-	type Signer = primitives::ed25519::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ed25519::Public) -> bool {
+impl Verify for sp_core::ed25519::Signature {
+	type Signer = sp_core::ed25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::ed25519::Public) -> bool {
 		sp_io::crypto::ed25519_verify(self, msg.get(), signer)
 	}
 }
 
-impl Verify for primitives::sr25519::Signature {
-	type Signer = primitives::sr25519::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::sr25519::Public) -> bool {
+impl Verify for sp_core::sr25519::Signature {
+	type Signer = sp_core::sr25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::sr25519::Public) -> bool {
 		sp_io::crypto::sr25519_verify(self, msg.get(), signer)
 	}
 }
 
-impl Verify for primitives::ecdsa::Signature {
-	type Signer = primitives::ecdsa::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ecdsa::Public) -> bool {
+impl Verify for sp_core::ecdsa::Signature {
+	type Signer = sp_core::ecdsa::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::ecdsa::Public) -> bool {
 		match sp_io::crypto::secp256k1_ecdsa_recover_compressed(
 			self.as_ref(),
 			&sp_io::hashing::blake2_256(msg.get()),
@@ -117,19 +117,19 @@ pub trait AppVerify {
 }
 
 impl<
-	S: Verify<Signer=<<T as AppKey>::Public as app_crypto::AppPublic>::Generic> + From<T>,
-	T: app_crypto::Wraps<Inner=S> + app_crypto::AppKey + app_crypto::AppSignature +
+	S: Verify<Signer=<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic> + From<T>,
+	T: sp_application_crypto::Wraps<Inner=S> + sp_application_crypto::AppKey + sp_application_crypto::AppSignature +
 		AsRef<S> + AsMut<S> + From<S>,
 > AppVerify for T where
 	<S as Verify>::Signer: IdentifyAccount<AccountId = <S as Verify>::Signer>,
-	<<T as AppKey>::Public as app_crypto::AppPublic>::Generic:
-		IdentifyAccount<AccountId = <<T as AppKey>::Public as app_crypto::AppPublic>::Generic>,
+	<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic:
+		IdentifyAccount<AccountId = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic>,
 {
 	type AccountId = <T as AppKey>::Public;
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<T as AppKey>::Public) -> bool {
-		use app_crypto::IsWrappedBy;
+		use sp_application_crypto::IsWrappedBy;
 		let inner: &S = self.as_ref();
-		let inner_pubkey = <<T as AppKey>::Public as app_crypto::AppPublic>::Generic::from_ref(&signer);
+		let inner_pubkey = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic::from_ref(&signer);
 		Verify::verify(inner, msg, inner_pubkey)
 	}
 }
@@ -391,12 +391,12 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 }
 
 /// Blake2-256 Hash implementation.
-#[derive(PartialEq, Eq, Clone, primitives::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, sp_core::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
-	type Output = primitives::H256;
+	type Output = sp_core::H256;
 	type Hasher = Blake2Hasher;
 	fn hash(s: &[u8]) -> Self::Output {
 		sp_io::hashing::blake2_256(s).into()
@@ -417,10 +417,10 @@ pub trait CheckEqual {
 	fn check_equal(&self, other: &Self);
 }
 
-impl CheckEqual for primitives::H256 {
+impl CheckEqual for sp_core::H256 {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
-		use primitives::hexdisplay::HexDisplay;
+		use sp_core::hexdisplay::HexDisplay;
 		if self != other {
 			println!(
 				"Hash: given={}, expected={}",
@@ -1025,12 +1025,12 @@ impl<'a> TrailingZeroInput<'a> {
 	}
 }
 
-impl<'a> codec::Input for TrailingZeroInput<'a> {
-	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+impl<'a> parity_scale_codec::Input for TrailingZeroInput<'a> {
+	fn remaining_len(&mut self) -> Result<Option<usize>, parity_scale_codec::Error> {
 		Ok(None)
 	}
 
-	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+	fn read(&mut self, into: &mut [u8]) -> Result<(), parity_scale_codec::Error> {
 		let len_from_inner = into.len().min(self.0.len());
 		into[..len_from_inner].copy_from_slice(&self.0[..len_from_inner]);
 		for i in &mut into[len_from_inner..] {
@@ -1117,7 +1117,7 @@ macro_rules! count {
 ///
 /// ```rust
 /// use sp_runtime::{
-/// 	impl_opaque_keys, KeyTypeId, BoundToRuntimeAppPublic, app_crypto::{sr25519, ed25519}
+/// 	impl_opaque_keys, KeyTypeId, BoundToRuntimeAppPublic, sp_application_crypto::{sr25519, ed25519}
 /// };
 ///
 /// pub struct KeyModule;
@@ -1144,8 +1144,8 @@ macro_rules! impl_opaque_keys {
 	) => {
 		#[derive(
 			Default, Clone, PartialEq, Eq,
-			$crate::codec::Encode,
-			$crate::codec::Decode,
+			$crate::parity_scale_codec::Encode,
+			$crate::parity_scale_codec::Decode,
 			$crate::RuntimeDebug,
 		)]
 		#[cfg_attr(feature = "std", derive($crate::serde::Serialize, $crate::serde::Deserialize))]
@@ -1171,7 +1171,7 @@ macro_rules! impl_opaque_keys {
 						>::generate_pair(seed.clone()),
 					)*
 				};
-				$crate::codec::Encode::encode(&keys)
+				$crate::parity_scale_codec::Encode::encode(&keys)
 			}
 		}
 
@@ -1278,11 +1278,11 @@ pub trait BlockIdTo<Block: self::Block> {
 #[cfg(test)]
 mod tests {
 	use super::AccountIdConversion;
-	use crate::codec::{Encode, Decode, Input};
+	use crate::parity_scale_codec::{Encode, Decode, Input};
 
 	mod t {
-		use primitives::crypto::KeyTypeId;
-		use app_crypto::{app_crypto, sr25519};
+		use sp_core::crypto::KeyTypeId;
+		use sp_application_crypto::{app_crypto, sr25519};
 		app_crypto!(sr25519, KeyTypeId(*b"test"));
 	}
 

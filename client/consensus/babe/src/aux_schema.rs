@@ -17,12 +17,12 @@
 //! Schema for BABE epoch changes in the aux-db.
 
 use log::info;
-use codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode};
 
-use client_api::backend::AuxStore;
+use sc_sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use sp_runtime::traits::Block as BlockT;
-use babe_primitives::BabeBlockWeight;
+use sp_consensus_babe::BabeBlockWeight;
 
 use super::{epoch_changes::EpochChangesFor, SharedEpochChanges};
 
@@ -37,7 +37,7 @@ fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 		B: AuxStore,
 		T: Decode,
 {
-	let corrupt = |e: codec::Error| {
+	let corrupt = |e: parity_scale_codec::Error| {
 		ClientError::Backend(format!("BABE DB is corrupted. Decode error: {}", e.what()))
 	};
 	match backend.get_aux(key)? {

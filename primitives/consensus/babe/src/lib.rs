@@ -22,7 +22,7 @@
 mod digest;
 pub mod inherents;
 
-use codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 use sp_std::vec::Vec;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 
@@ -31,7 +31,7 @@ pub use digest::{BabePreDigest, CompatibleDigestItem};
 pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest, NextEpochDescriptor};
 
 mod app {
-	use app_crypto::{app_crypto, key_types::BABE, sr25519};
+	use sp_application_crypto::{app_crypto, key_types::BABE, sr25519};
 	app_crypto!(sr25519, BABE);
 }
 

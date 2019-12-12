@@ -21,20 +21,20 @@
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
-use codec::{Encode, Decode};
-use keyring::sr25519::Keyring;
+use parity_scale_codec::{Encode, Decode};
+use sp_keyring::sr25519::Keyring;
 use node_runtime::{
 	Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, BalancesCall, ExistentialDeposit,
 	MinimumPeriod
 };
-use node_primitives::Signature;
-use primitives::{sr25519, crypto::Pair};
+use node_sp_core::Signature;
+use sp_core::{sr25519, crypto::Pair};
 use sp_runtime::{
 	generic::Era, traits::{Block as BlockT, Header as HeaderT, SignedExtension, Verify, IdentifyAccount}
 };
 use node_transaction_factory::RuntimeAdapter;
 use node_transaction_factory::modes::Mode;
-use inherents::InherentData;
+use sp_inherents::InherentData;
 use sp_timestamp;
 use sp_finality_tracker;
 
@@ -51,29 +51,29 @@ pub struct FactoryState<N> {
 	num: u32,
 }
 
-type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
+type Number = <<node_sp_core::Block as BlockT>::Header as HeaderT>::Number;
 
 impl<Number> FactoryState<Number> {
-	fn build_extra(index: node_primitives::Index, phase: u64) -> node_runtime::SignedExtra {
+	fn build_extra(index: node_sp_core::Index, phase: u64) -> node_runtime::SignedExtra {
 		(
-			system::CheckVersion::new(),
-			system::CheckGenesis::new(),
-			system::CheckEra::from(Era::mortal(256, phase)),
-			system::CheckNonce::from(index),
-			system::CheckWeight::new(),
-			transaction_payment::ChargeTransactionPayment::from(0),
+			frame_system::CheckVersion::new(),
+			frame_system::CheckGenesis::new(),
+			frame_system::CheckEra::from(Era::mortal(256, phase)),
+			frame_system::CheckNonce::from(index),
+			frame_system::CheckWeight::new(),
+			pallet_transaction_payment::ChargeTransactionPayment::from(0),
 			Default::default(),
 		)
 	}
 }
 
 impl RuntimeAdapter for FactoryState<Number> {
-	type AccountId = node_primitives::AccountId;
-	type Balance = node_primitives::Balance;
-	type Block = node_primitives::Block;
+	type AccountId = node_sp_core::AccountId;
+	type Balance = node_sp_core::Balance;
+	type Block = node_sp_core::Block;
 	type Phase = sp_runtime::generic::Phase;
 	type Secret = sr25519::Pair;
-	type Index = node_primitives::Index;
+	type Index = node_sp_core::Index;
 
 	type Number = Number;
 
@@ -149,7 +149,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 			signed: Some((sender.clone(), Self::build_extra(index, phase))),
 			function: Call::Balances(
 				BalancesCall::transfer(
-					indices::address::Address::Id(destination.clone().into()),
+					pallet_indices::address::Address::Id(destination.clone().into()),
 					(*amount).into()
 				)
 			)
@@ -160,7 +160,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 		let timestamp = (self.block_no as u64 + 1) * MinimumPeriod::get();
 
 		let mut inherent = InherentData::new();
-		inherent.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
+		inherent.put_data(sp_pallet_timestamp::INHERENT_IDENTIFIER, &timestamp)
 			.expect("Failed putting timestamp inherent");
 		inherent.put_data(sp_finality_tracker::INHERENT_IDENTIFIER, &self.block_no)
 			.expect("Failed putting finalized number inherent");
@@ -253,7 +253,7 @@ fn sign<RA: RuntimeAdapter>(
 				}
 			}).into();
 			UncheckedExtrinsic {
-				signature: Some((indices::address::Address::Id(signed), signature, extra)),
+				signature: Some((pallet_indices::address::Address::Id(signed), signature, extra)),
 				function: payload.0,
 			}
 		}

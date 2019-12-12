@@ -19,8 +19,8 @@
 use std::collections::{BTreeMap, HashMap};
 use sp_io::hashing::{blake2_256, twox_128};
 use super::{AuthorityId, AccountId, WASM_BINARY, system};
-use codec::{Encode, KeyedVec, Joiner};
-use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
+use parity_scale_codec::{Encode, KeyedVec, Joiner};
+use sp_core::{ChangesTrieConfiguration, map, storage::well_known_keys};
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 
 /// Configuration of a general Substrate test genesis block.
@@ -95,7 +95,7 @@ pub fn insert_genesis_block(
 		BTreeMap<Vec<u8>, Vec<u8>>,
 		HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>,
 	)
-) -> primitives::hash::H256 {
+) -> sp_core::hash::H256 {
 	let child_roots = storage.1.iter().map(|(sk, child_map)| {
 		let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 			child_map.clone().into_iter().collect(),

@@ -22,10 +22,10 @@
 use super::*;
 use authorship::claim_slot;
 
-use babe_primitives::{AuthorityPair, SlotNumber};
-use block_builder::BlockBuilder;
-use consensus_common::NoNetwork as DummyOracle;
-use consensus_common::import_queue::{
+use sp_consensus_babe::{AuthorityPair, SlotNumber};
+use sc_block_builder::BlockBuilder;
+use sp_consensus::NoNetwork as DummyOracle;
+use sp_consensus::import_queue::{
 	BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
 };
 use sc_network_test::*;
@@ -33,8 +33,8 @@ use sc_network_test::{Block as TestBlock, PeersClient};
 use sc_network::config::{BoxFinalityProofRequestBuilder, ProtocolConfig};
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use tokio::runtime::current_thread;
-use client_api::BlockchainEvents;
-use test_client;
+use sc_sc_client_api::BlockchainEvents;
+use substrate_test_runtime_client;
 use log::debug;
 use std::{time::Duration, cell::RefCell};
 
@@ -42,11 +42,11 @@ type Item = DigestItem<Hash>;
 
 type Error = sp_blockchain::Error;
 
-type TestClient = client::Client<
-	test_client::Backend,
-	test_client::Executor,
+type TestClient = sc_client::Client<
+	test_sc_client::Backend,
+	test_sc_client::Executor,
 	TestBlock,
-	test_client::runtime::RuntimeApi,
+	test_sc_client::runtime::RuntimeApi,
 >;
 
 #[derive(Copy, Clone, PartialEq)]
@@ -97,7 +97,7 @@ impl DummyProposer {
 	fn propose_with(&mut self, pre_digests: DigestFor<TestBlock>)
 		-> future::Ready<Result<TestBlock, Error>>
 	{
-		use codec::Encode;
+		use parity_scale_codec::Encode;
 		let block_builder = self.factory.client.new_block_at(
 			&BlockId::Hash(self.parent_hash),
 			pre_digests,
@@ -196,10 +196,10 @@ type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 pub struct TestVerifier {
 	inner: BabeVerifier<
-		test_client::Backend,
-		test_client::Executor,
+		test_sc_client::Backend,
+		test_sc_client::Executor,
 		TestBlock,
-		test_client::runtime::RuntimeApi,
+		test_sc_client::runtime::RuntimeApi,
 		PeersFullClient,
 	>,
 	mutator: Mutator,
@@ -358,7 +358,7 @@ fn run_one_test(
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+		let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
 		keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(seed).expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
@@ -403,7 +403,7 @@ fn run_one_test(
 			force_authoring: false,
 			babe_link: data.link.clone(),
 			keystore,
-			can_author_with: consensus_common::AlwaysCanAuthor,
+			can_author_with: sp_consensus::AlwaysCanAuthor,
 		}).expect("Starts babe"));
 	}
 
@@ -483,7 +483,7 @@ fn sig_is_not_pre_digest() {
 fn can_author_block() {
 	let _ = env_logger::try_init();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+	let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
 	let pair = keystore.write().insert_ephemeral_from_seed::<AuthorityPair>("//Alice")
 		.expect("Generates authority pair");
 
@@ -634,7 +634,7 @@ fn importing_block_one_sets_genesis_epoch() {
 
 #[test]
 fn importing_epoch_change_block_prunes_tree() {
-	use client_api::Finalizer;
+	use sc_sc_client_api::Finalizer;
 
 	let mut net = BabeTestNet::new(1);
 

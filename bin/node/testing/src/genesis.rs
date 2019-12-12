@@ -16,14 +16,14 @@
 
 //! Genesis Configuration.
 
-use crate::keyring::*;
-use keyring::{Ed25519Keyring, Sr25519Keyring};
+use crate::sp_keyring::*;
+use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use node_runtime::{
 	GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, SystemConfig,
 	GrandpaConfig, IndicesConfig, ContractsConfig, WASM_BINARY,
 };
 use node_runtime::constants::currency::*;
-use primitives::ChangesTrieConfiguration;
+use sp_core::ChangesTrieConfiguration;
 use sp_runtime::Perbill;
 
 
@@ -70,9 +70,9 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 		staking: Some(StakingConfig {
 			current_era: 0,
 			stakers: vec![
-				(dave(), alice(), 111 * DOLLARS, staking::StakerStatus::Validator),
-				(eve(), bob(), 100 * DOLLARS, staking::StakerStatus::Validator),
-				(ferdie(), charlie(), 100 * DOLLARS, staking::StakerStatus::Validator)
+				(dave(), alice(), 111 * DOLLARS, pallet_staking::StakerStatus::Validator),
+				(eve(), bob(), 100 * DOLLARS, pallet_staking::StakerStatus::Validator),
+				(ferdie(), charlie(), 100 * DOLLARS, pallet_staking::StakerStatus::Validator)
 			],
 			validator_count: 3,
 			minimum_validator_count: 0,

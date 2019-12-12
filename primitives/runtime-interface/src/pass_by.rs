@@ -28,7 +28,7 @@ use crate::host::*;
 use crate::wasm::*;
 
 #[cfg(feature = "std")]
-use wasm_interface::{FunctionContext, Pointer, Result};
+use sp_wasm_interface::{FunctionContext, Pointer, Result};
 
 use sp_std::{marker::PhantomData, convert::TryFrom};
 
@@ -37,14 +37,14 @@ use sp_std::{slice, vec::Vec};
 
 /// Derive macro for implementing [`PassBy`] with the [`Codec`] strategy.
 ///
-/// This requires that the type implements [`Encode`](codec::Encode) and [`Decode`](codec::Decode)
+/// This requires that the type implements [`Encode`](parity_scale_codec::Encode) and [`Decode`](parity_scale_codec::Decode)
 /// from `parity-scale-codec`.
 ///
 /// # Example
 ///
 /// ```
 /// # use sp_runtime_interface::pass_by::PassByCodec;
-/// # use codec::{Encode, Decode};
+/// # use parity_scale_codec::{Encode, Decode};
 /// #[derive(PassByCodec, Encode, Decode)]
 /// struct EncodableType {
 ///     name: Vec<u8>,
@@ -209,17 +209,17 @@ impl<T: PassBy> FromFFIValue for T {
 /// # Example
 /// ```
 /// # use sp_runtime_interface::pass_by::{PassBy, Codec};
-/// #[derive(codec::Encode, codec::Decode)]
+/// #[derive(parity_scale_codec::Encode, parity_scale_codec::Decode)]
 /// struct Test;
 ///
 /// impl PassBy for Test {
 ///     type PassBy = Codec<Self>;
 /// }
 /// ```
-pub struct Codec<T: codec::Codec>(PhantomData<T>);
+pub struct Codec<T: parity_scale_codec::Codec>(PhantomData<T>);
 
 #[cfg(feature = "std")]
-impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
+impl<T: parity_scale_codec::Codec> PassByImpl<T> for Codec<T> {
 	fn into_ffi_value(
 		instance: T,
 		context: &mut dyn FunctionContext,
@@ -243,7 +243,7 @@ impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
 }
 
 #[cfg(not(feature = "std"))]
-impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
+impl<T: parity_scale_codec::Codec> PassByImpl<T> for Codec<T> {
 	type Owned = Vec<u8>;
 
 	fn into_ffi_value(instance: &T) -> WrappedFFIValue<Self::FFIType, Self::Owned> {
@@ -266,7 +266,7 @@ impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
 /// The `u64` value is build by `length 32bit << 32 | pointer 32bit`
 ///
 /// `Self` is encoded and the length and the pointer are taken from the encoded vector.
-impl<T: codec::Codec> RIType for Codec<T> {
+impl<T: parity_scale_codec::Codec> RIType for Codec<T> {
 	type FFIType = u64;
 }
 

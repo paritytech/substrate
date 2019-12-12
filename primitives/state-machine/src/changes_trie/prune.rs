@@ -17,15 +17,15 @@
 //! Changes trie pruning-related functions.
 
 use hash_db::Hasher;
-use trie::Recorder;
+use sp_trie::Recorder;
 use log::warn;
 use num_traits::{One, Zero};
 use crate::proving_backend::ProvingBackendRecorder;
 use crate::trie_backend_essence::TrieBackendEssence;
-use crate::changes_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
-use crate::changes_trie::storage::TrieBackendAdapter;
-use crate::changes_trie::input::{ChildIndex, InputKey};
-use codec::{Decode, Codec};
+use crate::changes_sp_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
+use crate::changes_sp_trie::storage::TrieBackendAdapter;
+use crate::changes_sp_trie::input::{ChildIndex, InputKey};
+use parity_scale_codec::{Decode, Codec};
 
 /// Get number of oldest block for which changes trie is not pruned
 /// given changes trie configuration, pruning parameter and number of
@@ -86,7 +86,7 @@ pub fn prune<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H::
 		};
 		let children_roots = {
 			let trie_storage = TrieBackendEssence::<_, H>::new(
-				crate::changes_trie::TrieBackendStorageAdapter(storage),
+				crate::changes_sp_trie::TrieBackendStorageAdapter(storage),
 				root,
 			);
 			let child_prefix = ChildIndex::key_neutral_prefix(block.clone());
@@ -202,11 +202,11 @@ fn max_digest_intervals_to_keep<Number: BlockNumber>(
 #[cfg(test)]
 mod tests {
 	use std::collections::HashSet;
-	use trie::MemoryDB;
-	use primitives::Blake2Hasher;
+	use sp_trie::MemoryDB;
+	use sp_core::Blake2Hasher;
 	use crate::backend::insert_into_memory_db;
-	use crate::changes_trie::storage::InMemoryStorage;
-	use codec::Encode;
+	use crate::changes_sp_trie::storage::InMemoryStorage;
+	use parity_scale_codec::Encode;
 	use super::*;
 
 	fn config(interval: u32, levels: u32) -> Configuration {

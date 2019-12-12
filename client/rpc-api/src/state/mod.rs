@@ -22,9 +22,9 @@ use jsonrpc_core::Result as RpcResult;
 use jsonrpc_core::futures::Future;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use primitives::Bytes;
-use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
-use runtime_version::RuntimeVersion;
+use sp_core::Bytes;
+use sp_core::storage::{StorageKey, StorageData, StorageChangeSet};
+use sp_version::RuntimeVersion;
 use self::error::FutureResult;
 
 pub use self::gen_client::Client as StateClient;

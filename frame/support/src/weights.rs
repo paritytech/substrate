@@ -38,7 +38,7 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use impl_trait_for_tuples::impl_for_tuples;
-use codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 use sp_arithmetic::traits::{Bounded, Zero};
 use sp_runtime::{
 	RuntimeDebug,

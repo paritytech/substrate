@@ -22,7 +22,7 @@
 use sp_std::vec::Vec;
 
 use crate::{hash::H256, hash::H512};
-use codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 
 #[cfg(feature = "full_crypto")]
 use blake2_rfc;
@@ -39,7 +39,7 @@ use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
-use runtime_interface::pass_by::PassByInner;
+use sp_runtime_interface::pass_by::PassByInner;
 use sp_std::ops::Deref;
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys

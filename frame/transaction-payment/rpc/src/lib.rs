@@ -17,7 +17,7 @@
 //! RPC interface for the transaction payment module.
 
 use std::sync::Arc;
-use codec::{Codec, Decode};
+use parity_scale_codec::{Codec, Decode};
 use sp_blockchain::HeaderBackend;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
@@ -25,7 +25,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, ProvideRuntimeApi, UniqueSaturatedInto},
 };
-use primitives::Bytes;
+use sp_core::Bytes;
 use pallet_transaction_payment_rpc_runtime_api::CappedDispatchInfo;
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 pub use self::gen_client::Client as TransactionPaymentClient;

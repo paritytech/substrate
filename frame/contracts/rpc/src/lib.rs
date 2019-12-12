@@ -19,11 +19,11 @@
 use std::sync::Arc;
 
 use sp_blockchain::HeaderBackend;
-use codec::Codec;
+use parity_scale_codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use primitives::{H256, Bytes};
-use rpc_primitives::number;
+use sp_core::{H256, Bytes};
+use rpc_sp_core::number;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	generic::BlockId,

@@ -16,8 +16,8 @@
 
 //! Different types of changes trie input pairs.
 
-use codec::{Decode, Encode, Input, Output, Error};
-use crate::changes_trie::BlockNumber;
+use parity_scale_codec::{Decode, Encode, Input, Output, Error};
+use crate::changes_sp_trie::BlockNumber;
 
 /// Key of { changed key => set of extrinsic indices } mapping.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -125,7 +125,7 @@ impl<Number: BlockNumber> Encode for ExtrinsicIndex<Number> {
 	}
 }
 
-impl<Number: BlockNumber> codec::EncodeLike for ExtrinsicIndex<Number> {}
+impl<Number: BlockNumber> parity_scale_codec::EncodeLike for ExtrinsicIndex<Number> {}
 
 impl<Number: BlockNumber> DigestIndex<Number> {
 	pub fn key_neutral_prefix(block: Number) -> Vec<u8> {
@@ -160,7 +160,7 @@ impl<Number: BlockNumber> Encode for ChildIndex<Number> {
 	}
 }
 
-impl<Number: BlockNumber> codec::EncodeLike for DigestIndex<Number> {}
+impl<Number: BlockNumber> parity_scale_codec::EncodeLike for DigestIndex<Number> {}
 
 impl<Number: BlockNumber> Decode for InputKey<Number> {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {

@@ -21,10 +21,10 @@ use self::error::Error;
 use std::sync::Arc;
 use assert_matches::assert_matches;
 use futures01::stream::Stream;
-use primitives::storage::well_known_keys;
-use primitives::hash::H256;
+use sp_core::storage::well_known_keys;
+use sp_core::hash::H256;
 use sp_io::hashing::blake2_256;
-use test_client::{
+use test_sc_client::{
 	prelude::*,
 	consensus::BlockOrigin,
 	runtime,
@@ -74,7 +74,7 @@ fn should_return_storage() {
 #[test]
 fn should_return_child_storage() {
 	let core = tokio::runtime::Runtime::new().unwrap();
-	let client = Arc::new(test_client::TestClientBuilder::new()
+	let client = Arc::new(test_sc_client::TestClientBuilder::new()
 		.add_child_storage("test", "key", vec![42_u8])
 		.build());
 	let genesis_hash = client.genesis_hash();
@@ -101,7 +101,7 @@ fn should_return_child_storage() {
 #[test]
 fn should_call_contract() {
 	let core = tokio::runtime::Runtime::new().unwrap();
-	let client = Arc::new(test_client::new());
+	let client = Arc::new(test_sc_client::new());
 	let genesis_hash = client.genesis_hash();
 	let client = new_full(client, Subscriptions::new(Arc::new(core.executor())));
 
@@ -118,7 +118,7 @@ fn should_notify_about_storage_changes() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let client = Arc::new(test_client::new());
+		let client = Arc::new(test_sc_client::new());
 		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		api.subscribe_storage(Default::default(), subscriber, None.into());
@@ -150,7 +150,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let client = Arc::new(test_client::new());
+		let client = Arc::new(test_sc_client::new());
 		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
@@ -350,7 +350,7 @@ fn should_query_storage() {
 		);
 	}
 
-	run_tests(Arc::new(test_client::new()));
+	run_tests(Arc::new(test_sc_client::new()));
 	run_tests(Arc::new(TestClientBuilder::new().set_support_changes_trie(true).build()));
 }
 
@@ -368,7 +368,7 @@ fn should_split_ranges() {
 fn should_return_runtime_version() {
 	let core = tokio::runtime::Runtime::new().unwrap();
 
-	let client = Arc::new(test_client::new());
+	let client = Arc::new(test_sc_client::new());
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
@@ -391,7 +391,7 @@ fn should_notify_on_runtime_version_initially() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let client = Arc::new(test_client::new());
+		let client = Arc::new(test_sc_client::new());
 		let api = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
 		api.subscribe_runtime_version(Default::default(), subscriber);

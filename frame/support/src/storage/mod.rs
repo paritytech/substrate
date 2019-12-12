@@ -17,7 +17,7 @@
 //! Stuff to do with the runtime's storage.
 
 use sp_std::{prelude::*, marker::PhantomData};
-use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
+use parity_scale_codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
 use crate::{traits::Len, hash::{Twox128, StorageHasher}};
 
 pub mod unhashed;
@@ -78,7 +78,7 @@ pub trait StorageValue<T: FullCodec> {
 
 	/// Append the given item to the value in the storage.
 	///
-	/// `T` is required to implement `codec::EncodeAppend`.
+	/// `T` is required to implement `parity_scale_codec::EncodeAppend`.
 	fn append<Items, Item, EncodeLikeItem>(items: Items) -> Result<(), &'static str>
 	where
 		Item: Encode,
@@ -110,7 +110,7 @@ pub trait StorageValue<T: FullCodec> {
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
 	fn decode_len() -> Result<usize, &'static str>
-		where T: codec::DecodeLength + Len;
+		where T: parity_scale_codec::DecodeLength + Len;
 }
 
 /// A strongly-typed map in storage.
@@ -147,7 +147,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 
 	/// Append the given items to the value in the storage.
 	///
-	/// `V` is required to implement `codec::EncodeAppend`.
+	/// `V` is required to implement `parity_scale_codec::EncodeAppend`.
 	fn append<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) -> Result<(), &'static str>
 	where
 		KeyArg: EncodeLike<K>,
@@ -160,7 +160,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
 	/// old (presumably corrupt) value is replaced with the given `items`.
 	///
-	/// `V` is required to implement `codec::EncodeAppend`.
+	/// `V` is required to implement `parity_scale_codec::EncodeAppend`.
 	fn append_or_insert<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items)
 	where
 		KeyArg: EncodeLike<K>,
@@ -178,7 +178,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
 	/// function for this purpose.
 	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength + Len;
+		where V: parity_scale_codec::DecodeLength + Len;
 }
 
 /// A strongly-typed linked map in storage.
@@ -229,7 +229,7 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
 	/// function for this purpose.
 	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength + Len;
+		where V: parity_scale_codec::DecodeLength + Len;
 
 	/// Translate the keys and values from some previous `(K2, V2)` to the current type.
 	///
@@ -350,7 +350,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		where
 			KArg1: EncodeLike<K1>,
 			KArg2: EncodeLike<K2>,
-			V: codec::DecodeLength + Len;
+			V: parity_scale_codec::DecodeLength + Len;
 }
 
 /// Iterator for prefixed map.
@@ -421,7 +421,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 
 #[cfg(test)]
 mod test {
-	use primitives::hashing::twox_128;
+	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
 	use crate::storage::{unhashed, StoragePrefixedMap};
 

@@ -16,7 +16,7 @@
 
 //! Hash utilities.
 
-use codec::Codec;
+use parity_scale_codec::Codec;
 use sp_std::prelude::Vec;
 use sp_io::hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
 

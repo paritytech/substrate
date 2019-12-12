@@ -17,7 +17,7 @@
 //! Transaction validity interface.
 
 use sp_std::prelude::*;
-use crate::codec::{Encode, Decode};
+use crate::parity_scale_codec::{Encode, Decode};
 use crate::RuntimeDebug;
 
 /// Priority for a transaction. Additive. Higher is better.

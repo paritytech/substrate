@@ -23,20 +23,20 @@ pub mod fetcher;
 
 use std::sync::Arc;
 
-use executor::RuntimeInfo;
-use primitives::{H256, Blake2Hasher, traits::CodeExecutor};
+use sc_executor::RuntimeInfo;
+use sp_core::{H256, Blake2Hasher, traits::CodeExecutor};
 use sp_runtime::BuildStorage;
 use sp_runtime::traits::Block as BlockT;
 use sp_blockchain::Result as ClientResult;
 
-use crate::call_executor::LocalCallExecutor;
+use crate::call_sc_executor::LocalCallExecutor;
 use crate::client::Client;
-use client_api::{
+use sc_client_api::{
 	light::Storage as BlockchainStorage,
 };
 use crate::light::backend::Backend;
 use crate::light::blockchain::Blockchain;
-use crate::light::call_executor::GenesisCallExecutor;
+use crate::light::call_sc_executor::GenesisCallExecutor;
 use crate::light::fetcher::LightDataChecker;
 
 /// Create an instance of light client blockchain backend.

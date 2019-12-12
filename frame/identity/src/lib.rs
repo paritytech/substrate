@@ -68,21 +68,21 @@
 use sp_std::prelude::*;
 use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
-use codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 use sp_runtime::{traits::{StaticLookup, EnsureOrigin, Zero}, RuntimeDebug};
-use support::{
+use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, dispatch::Result,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
 	weights::SimpleDispatchInfo,
 };
-use system::{ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The currency trait.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -134,7 +134,7 @@ pub enum Data {
 }
 
 impl Decode for Data {
-	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
+	fn decode<I: parity_scale_codec::Input>(input: &mut I) -> sp_std::result::Result<Self, parity_scale_codec::Error> {
 		let b = input.read_byte()?;
 		Ok(match b {
 			0 => Data::None,
@@ -147,7 +147,7 @@ impl Decode for Data {
 			35 => Data::Sha256(<[u8; 32]>::decode(input)?),
 			36 => Data::Keccak256(<[u8; 32]>::decode(input)?),
 			37 => Data::ShaThree256(<[u8; 32]>::decode(input)?),
-			_ => return Err(codec::Error::from("invalid leading byte")),
+			_ => return Err(parity_scale_codec::Error::from("invalid leading byte")),
 		})
 	}
 }
@@ -169,7 +169,7 @@ impl Encode for Data {
 		}
 	}
 }
-impl codec::EncodeLike for Data {}
+impl parity_scale_codec::EncodeLike for Data {}
 
 impl Default for Data {
 	fn default() -> Self {
@@ -257,7 +257,7 @@ impl Encode for IdentityFields {
 	}
 }
 impl Decode for IdentityFields {
-	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
+	fn decode<I: parity_scale_codec::Input>(input: &mut I) -> sp_std::result::Result<Self, parity_scale_codec::Error> {
 		let field = u64::decode(input)?;
 		Ok(Self(<BitFlags<IdentityField>>::from_bits(field as u64).map_err(|_| "invalid value")?))
 	}
@@ -378,7 +378,7 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId, Balance = BalanceOf<T> {
+	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
 		/// A name was set or reset (which will remove all judgements).
 		IdentitySet(AccountId),
 		/// A name was cleared, and the given balance returned.
@@ -773,9 +773,9 @@ decl_module! {
 mod tests {
 	use super::*;
 
-	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
-	use primitives::H256;
-	use system::EnsureSignedBy;
+	use frame_support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
+	use sp_core::H256;
+	use frame_system::EnsureSignedBy;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
@@ -797,7 +797,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -819,7 +819,7 @@ mod tests {
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
-	impl balances::Trait for Test {
+	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
@@ -849,15 +849,15 @@ mod tests {
 		type RegistrarOrigin = EnsureSignedBy<One, u64>;
 		type ForceOrigin = EnsureSignedBy<Two, u64>;
 	}
-	type Balances = balances::Module<Test>;
+	type Balances = pallet_balances::Module<Test>;
 	type Identity = Module<Test>;
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
-		balances::GenesisConfig::<Test> {
+		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![
 				(1, 10),
 				(2, 10),

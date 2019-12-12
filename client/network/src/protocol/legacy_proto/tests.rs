@@ -17,7 +17,7 @@
 #![cfg(test)]
 
 use futures::{future, prelude::*, try_ready};
-use codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 use libp2p::core::nodes::Substream;
 use libp2p::core::{ConnectedPoint, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::swarm::{Swarm, ProtocolsHandler, IntoProtocolsHandler};
@@ -27,7 +27,7 @@ use rand::seq::SliceRandom;
 use std::{io, time::Duration, time::Instant};
 use crate::message::Message;
 use crate::protocol::legacy_proto::{LegacyProto, LegacyProtoOut};
-use sp_test_primitives::Block;
+use sp_test_sp_core::Block;
 
 /// Builds two nodes that have each other as bootstrap nodes.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
@@ -68,7 +68,7 @@ fn build_nodes()
 			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 			.boxed();
 
-		let (peerset, _) = peerset::Peerset::from_config(peerset::PeersetConfig {
+		let (peerset, _) = sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig {
 			in_peers: 25,
 			out_peers: 25,
 			bootnodes: if index == 0 {

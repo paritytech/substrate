@@ -1,12 +1,12 @@
-use primitives::{Pair, Public, sr25519};
-use runtime::{
+use sp_core::{Pair, Public, sr25519};
+use node_template_runtime::{
 	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
 	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, Signature
 };
-use aura_primitives::sr25519::{AuthorityId as AuraId};
-use grandpa_primitives::{AuthorityId as GrandpaId};
+use sc_consensus_sp_consensus_aura::sr25519::{AuthorityId as AuraId};
+use sc_finality_sp_finality_grandpa::{AuthorityId as GrandpaId};
 use sc_service;
-use sp_runtime::traits::{Verify, IdentifyAccount};
+use sp_node_template_runtime::traits::{Verify, IdentifyAccount};
 
 // Note this is the URL for the telemetry server
 //const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";

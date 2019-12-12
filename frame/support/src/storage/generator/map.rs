@@ -17,7 +17,7 @@
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
-use codec::{FullCodec, FullEncode, Encode, EncodeLike, Ref, EncodeAppend};
+use parity_scale_codec::{FullCodec, FullEncode, Encode, EncodeLike, Ref, EncodeAppend};
 use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}, traits::Len};
 
 /// Generator for `StorageMap` used by `decl_storage`.
@@ -169,11 +169,11 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 	}
 
 	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength + Len
+		where V: parity_scale_codec::DecodeLength + Len
 	{
 		let key = Self::storage_map_final_key(key);
 		if let Some(v) = unhashed::get_raw(key.as_ref()) {
-			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
+			<V as parity_scale_codec::DecodeLength>::len(&v).map_err(|e| e.what())
 		} else {
 			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
 				.map(|v| v.len())

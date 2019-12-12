@@ -20,7 +20,7 @@
 
 use sp_runtime::{traits::Block as BlockT, ApplyExtrinsicResult};
 
-use inherents::{InherentData, CheckInherentsResult};
+use sp_inherents::{InherentData, CheckInherentsResult};
 
 /// Definitions for supporting the older version of API: v3
 ///
@@ -28,7 +28,7 @@ use inherents::{InherentData, CheckInherentsResult};
 #[deprecated(note = "These definitions here are only for compatibility reasons")]
 pub mod compatability_v3 {
 	use sp_runtime::{DispatchOutcome, transaction_validity};
-	use codec::{Encode, Decode};
+	use parity_scale_codec::{Encode, Decode};
 
 	#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode, Debug)]
 	pub enum ApplyError {

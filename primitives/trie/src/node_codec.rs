@@ -20,7 +20,7 @@ use sp_std::marker::PhantomData;
 use sp_std::ops::Range;
 use sp_std::vec::Vec;
 use sp_std::borrow::Borrow;
-use codec::{Encode, Decode, Input, Compact};
+use parity_scale_codec::{Encode, Decode, Input, Compact};
 use hash_db::Hasher;
 use trie_db::{self, node::{NibbleSlicePlan, NodePlan, NodeHandlePlan}, ChildReference,
 	nibble_ops, Partial, NodeCodec as NodeCodecT};
@@ -28,7 +28,7 @@ use crate::error::Error;
 use crate::trie_constants;
 use super::{node_header::{NodeHeader, NodeKind}};
 
-/// Helper struct for trie node decoder. This implements `codec::Input` on a byte slice, while
+/// Helper struct for trie node decoder. This implements `parity_scale_codec::Input` on a byte slice, while
 /// tracking the absolute position. This is similar to `std::io::Cursor` but does not implement
 /// `Read` and `io` is not in `sp-std`.
 struct ByteSliceInput<'a> {
@@ -44,7 +44,7 @@ impl<'a> ByteSliceInput<'a> {
 		}
 	}
 
-	fn take(&mut self, count: usize) -> Result<Range<usize>, codec::Error> {
+	fn take(&mut self, count: usize) -> Result<Range<usize>, parity_scale_codec::Error> {
 		if self.offset + count > self.data.len() {
 			return Err("out of data".into());
 		}
@@ -56,7 +56,7 @@ impl<'a> ByteSliceInput<'a> {
 }
 
 impl<'a> Input for ByteSliceInput<'a> {
-	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+	fn remaining_len(&mut self) -> Result<Option<usize>, parity_scale_codec::Error> {
 		let remaining = if self.offset <= self.data.len() {
 			Some(self.data.len() - self.offset)
 		} else {
@@ -65,13 +65,13 @@ impl<'a> Input for ByteSliceInput<'a> {
 		Ok(remaining)
 	}
 
-	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+	fn read(&mut self, into: &mut [u8]) -> Result<(), parity_scale_codec::Error> {
 		let range = self.take(into.len())?;
 		into.copy_from_slice(&self.data[range]);
 		Ok(())
 	}
 
-	fn read_byte(&mut self) -> Result<u8, codec::Error> {
+	fn read_byte(&mut self) -> Result<u8, parity_scale_codec::Error> {
 		if self.offset + 1 > self.data.len() {
 			return Err("out of data".into());
 		}

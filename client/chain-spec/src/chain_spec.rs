@@ -22,12 +22,12 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::rc::Rc;
 use serde::{Serialize, Deserialize};
-use primitives::storage::{StorageKey, StorageData};
+use sp_core::storage::{StorageKey, StorageData};
 use sp_runtime::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
 use serde_json as json;
 use crate::RuntimeGenesis;
-use network::Multiaddr;
-use tel::TelemetryEndpoints;
+use sc_network::Multiaddr;
+use sc_telemetry::TelemetryEndpoints;
 
 enum GenesisSource<G> {
 	File(PathBuf),

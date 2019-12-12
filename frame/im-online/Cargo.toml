@@ -5,32 +5,32 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-app-crypto = { package = "sp-application-crypto", path = "../../primitives/application-crypto", default-features = false }
-authorship = { package = "pallet-authorship", path = "../authorship", default-features = false }
+sp-application-crypto = { path = "../../primitives/application-crypto", default-features = false }
+pallet-authorship = { path = "../authorship", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-primitives = { package="sp-core", path = "../../primitives/core", default-features = false }
+sp-core = { path = "../../primitives/core", default-features = false }
 sp-std = { path = "../../primitives/std", default-features = false }
 serde = { version = "1.0.101", optional = true }
-session = { package = "pallet-session", path = "../session", default-features = false }
+pallet-session = { path = "../session", default-features = false }
 sp-io = { path = "../../primitives/io", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 sp-staking = { path = "../../primitives/staking", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
+frame-support = { path = "../support", default-features = false }
+frame-system = { path = "../system", default-features = false }
 
 [features]
-default = ["std", "session/historical"]
+default = ["std", "pallet-session/historical"]
 std = [
-	"app-crypto/std",
-	"authorship/std",
+	"sp-application-crypto/std",
+	"pallet-authorship/std",
 	"codec/std",
-	"primitives/std",
+	"sp-core/std",
 	"sp-std/std",
 	"serde",
-	"session/std",
+	"pallet-session/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-staking/std",
-	"support/std",
-	"system/std",
+	"frame-support/std",
+	"frame-system/std",
 ]

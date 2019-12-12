@@ -17,12 +17,12 @@
 //! The node header.
 
 use crate::trie_constants;
-use codec::{Encode, Decode, Input, Output};
+use parity_scale_codec::{Encode, Decode, Input, Output};
 use sp_std::iter::once;
 
 /// A node header
 #[derive(Copy, Clone, PartialEq, Eq)]
-#[derive(primitives::RuntimeDebug)]
+#[derive(sp_core::RuntimeDebug)]
 pub(crate) enum NodeHeader {
 	Null,
 	Branch(bool, usize),
@@ -50,10 +50,10 @@ impl Encode for NodeHeader {
 	}
 }
 
-impl codec::EncodeLike for NodeHeader {}
+impl parity_scale_codec::EncodeLike for NodeHeader {}
 
 impl Decode for NodeHeader {
-	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, parity_scale_codec::Error> {
 		let i = input.read_byte()?;
 		if i == trie_constants::EMPTY_TRIE {
 			return Ok(NodeHeader::Null);
@@ -105,7 +105,7 @@ fn encode_size_and_prefix(size: usize, prefix: u8, out: &mut impl Output) {
 }
 
 /// Decode size only from stream input and header byte.
-fn decode_size(first: u8, input: &mut impl Input) -> Result<usize, codec::Error> {
+fn decode_size(first: u8, input: &mut impl Input) -> Result<usize, parity_scale_codec::Error> {
 	let mut result = (first & 255u8 >> 2) as usize;
 	if result < 63 {
 		return Ok(result);

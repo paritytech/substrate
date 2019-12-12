@@ -23,7 +23,7 @@
 //! The changes are journaled in the DB.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 use crate::{CommitSet, Error, MetaDb, to_meta_key, Hash};
 use log::{trace, warn};
 
@@ -201,7 +201,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 #[cfg(test)]
 mod tests {
 	use super::RefWindow;
-	use primitives::H256;
+	use sp_core::H256;
 	use crate::CommitSet;
 	use crate::test::{make_db, make_commit, TestDb};
 

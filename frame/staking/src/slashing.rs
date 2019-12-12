@@ -53,12 +53,12 @@ use super::{
 	NegativeImbalanceOf, UnappliedSlash,
 };
 use sp_runtime::traits::{Zero, Saturating};
-use support::{
+use frame_support::{
 	StorageMap, StorageDoubleMap,
 	traits::{Currency, OnUnbalanced, Imbalance},
 };
 use sp_std::vec::Vec;
-use codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 
 /// The proportion of the slashing reward to be paid out on the first slashing detection.
 /// This is f_1 in the paper.

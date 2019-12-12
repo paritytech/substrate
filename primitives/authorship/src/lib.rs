@@ -20,7 +20,7 @@
 
 use sp_std::{result::Result, prelude::*};
 
-use codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 use sp_inherents::{Error, InherentIdentifier, InherentData, IsFatalError};
 use sp_runtime::RuntimeString;
 

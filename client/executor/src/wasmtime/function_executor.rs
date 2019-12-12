@@ -21,16 +21,16 @@ use crate::wasmtime::util::{
 	checked_range, cranelift_ir_signature, read_memory_into, write_memory_from,
 };
 
-use codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode};
 use cranelift_codegen::ir;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use log::trace;
-use primitives::sandbox as sandbox_primitives;
+use sp_core::sandbox as sandbox_primitives;
 use std::{cmp, mem, ptr};
 use wasmtime_environ::translate_signature;
 use wasmtime_jit::{ActionError, Compiler};
 use wasmtime_runtime::{Export, VMCallerCheckedAnyfunc, VMContext, wasmtime_call_trampoline};
-use wasm_interface::{
+use sp_wasm_interface::{
 	FunctionContext, MemoryId, Pointer, Result as WResult, Sandbox, Signature, Value, ValueType,
 	WordSize,
 };
@@ -228,14 +228,14 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			let len = buf_len as usize;
 			let src_range = match checked_range(offset as usize, len, memory.len()) {
 				Some(range) => range,
-				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+				None => return Ok(sandbox_sp_core::ERR_OUT_OF_BOUNDS),
 			};
 			let dst_range = match checked_range(buf_ptr.into(), len, self.memory.len()) {
 				Some(range) => range,
-				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+				None => return Ok(sandbox_sp_core::ERR_OUT_OF_BOUNDS),
 			};
 			&mut self.memory[dst_range].copy_from_slice(&memory[src_range]);
-			Ok(sandbox_primitives::ERR_OK)
+			Ok(sandbox_sp_core::ERR_OK)
 		})
 	}
 
@@ -253,14 +253,14 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			let len = val_len as usize;
 			let src_range = match checked_range(val_ptr.into(), len, self.memory.len()) {
 				Some(range) => range,
-				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+				None => return Ok(sandbox_sp_core::ERR_OUT_OF_BOUNDS),
 			};
 			let dst_range = match checked_range(offset as usize, len, memory.len()) {
 				Some(range) => range,
-				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+				None => return Ok(sandbox_sp_core::ERR_OUT_OF_BOUNDS),
 			};
 			&mut memory[dst_range].copy_from_slice(&self.memory[src_range]);
-			Ok(sandbox_primitives::ERR_OK)
+			Ok(sandbox_sp_core::ERR_OK)
 		})
 	}
 
@@ -286,7 +286,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		trace!(target: "sp-sandbox", "invoke, instance_idx={}", instance_id);
 
 		// Deserialize arguments and convert them into wasmi types.
-		let args = Vec::<sandbox_primitives::TypedValue>::decode(&mut &args[..])
+		let args = Vec::<sandbox_sp_core::TypedValue>::decode(&mut &args[..])
 			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
 			.map(Into::into)
@@ -296,18 +296,18 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		let result = instance.invoke(export_name, &args, self, state);
 
 		match result {
-			Ok(None) => Ok(sandbox_primitives::ERR_OK),
+			Ok(None) => Ok(sandbox_sp_core::ERR_OK),
 			Ok(Some(val)) => {
 				// Serialize return value and write it back into the memory.
-				sandbox_primitives::ReturnValue::Value(val.into()).using_encoded(|val| {
+				sandbox_sp_core::ReturnValue::Value(val.into()).using_encoded(|val| {
 					if val.len() > return_val_len as usize {
 						Err("Return value buffer is too small")?;
 					}
 					FunctionContext::write_memory(self, return_val, val)?;
-					Ok(sandbox_primitives::ERR_OK)
+					Ok(sandbox_sp_core::ERR_OK)
 				})
 			}
-			Err(_) => Ok(sandbox_primitives::ERR_EXECUTION),
+			Err(_) => Ok(sandbox_sp_core::ERR_EXECUTION),
 		}
 	}
 
@@ -331,8 +331,8 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			match sandbox::instantiate(self, dispatch_thunk, wasm, raw_env_def, state) {
 				Ok(instance_idx) => instance_idx,
 				Err(sandbox::InstantiationError::StartTrapped) =>
-					sandbox_primitives::ERR_EXECUTION,
-				Err(_) => sandbox_primitives::ERR_MODULE,
+					sandbox_sp_core::ERR_EXECUTION,
+				Err(_) => sandbox_sp_core::ERR_MODULE,
 			};
 
 		Ok(instance_idx_or_err_code as u32)

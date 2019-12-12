@@ -6,7 +6,7 @@ description = "Authority discovery primitives"
 edition = "2018"
 
 [dependencies]
-app-crypto = { package = "sp-application-crypto", path = "../application-crypto", default-features = false }
+sp-application-crypto = { path = "../application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
 sp-std = { path = "../std", default-features = false }
 sp-api = { path = "../api", default-features = false }
@@ -15,7 +15,7 @@ sp-runtime = { path = "../runtime", default-features = false }
 [features]
 default = ["std"]
 std = [
-	"app-crypto/std",
+	"sp-application-crypto/std",
 	"codec/std",
 	"sp-std/std",
 	"sp-api/std",
