@@ -730,7 +730,7 @@ decl_module! {
 			ensure!(now >= then + voting + additional, "too early");
 
 			let queue = <DispatchQueue<T>>::get();
-			ensure!(queue.iter().all(|item| &item.1 != &proposal_hash), "imminent");
+			ensure!(!queue.iter().any(|item| &item.1 == &proposal_hash), "imminent");
 
 			// allowed to claim the deposit.
 			let _ = T::Currency::repatriate_reserved(&old, &who, deposit);
