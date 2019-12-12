@@ -15,7 +15,7 @@ slog = { version = "2.5.2", features = ["nested-values"] }
 tracing-core = "0.1.7"
 
 sc-telemetry = { path = "../telemetry" }
-grafana-data-source = { path = "../grafana-data-source" }
+grafana-data-source = { path = "../../utils/grafana-data-source" }
 
 [dev-dependencies]
 tracing = "0.1.10"

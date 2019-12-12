@@ -32,8 +32,8 @@ use primitives::{sr25519, crypto::Pair};
 use sp_runtime::{
 	generic::Era, traits::{Block as BlockT, Header as HeaderT, SignedExtension, Verify, IdentifyAccount}
 };
-use transaction_factory::RuntimeAdapter;
-use transaction_factory::modes::Mode;
+use node_transaction_factory::RuntimeAdapter;
+use node_transaction_factory::modes::Mode;
 use inherents::InherentData;
 use sp_timestamp;
 use sp_finality_tracker;

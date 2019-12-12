@@ -25,7 +25,7 @@ lazy_static = "1.4.0"
 parking_lot = "0.9.0"
 sp-version = { path = "../../primitives/version", default-features = false }
 primitives = { package = "sp-core",  path = "../../primitives/core" }
-test-runtime = { package = "substrate-test-runtime", path = "../../test/utils/runtime" }
+test-runtime = { package = "substrate-test-runtime", path = "../../test-utils/runtime" }
 
 [features]
 default = ["std"]

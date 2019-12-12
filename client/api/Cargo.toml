@@ -28,7 +28,7 @@ sp-runtime = { path = "../../primitives/runtime", default-features = false }
 state-machine = { package = "sp-state-machine", path = "../../primitives/state-machine" }
 sc-telemetry = { path = "../telemetry" }
 trie = { package = "sp-trie", path = "../../primitives/trie" }
-txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool", path = "../../primitives/transaction-pool" }
 
 [dev-dependencies]
 test-primitives = { package = "sp-test-primitives", path = "../../primitives/test-primitives" }

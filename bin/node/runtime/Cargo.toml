@@ -28,7 +28,7 @@ sp-runtime = { path = "../../../primitives/runtime", default-features = false }
 sp-session = { path = "../../../primitives/session", default-features = false }
 sp-staking = { path = "../../../primitives/staking", default-features = false }
 sp-keyring = { path = "../../../primitives/keyring", optional = true }
-sp-transaction-pool = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool", default-features = false }
+sp-transaction-pool = { package = "sp-transaction-pool", path = "../../../primitives/transaction-pool", default-features = false }
 version = { package = "sp-version", path = "../../../primitives/version", default-features = false }
 
 # frame dependencies
@@ -64,7 +64,7 @@ transaction-payment = { package = "pallet-transaction-payment", path = "../../..
 transaction-payment-rpc-runtime-api = { package = "pallet-transaction-payment-rpc-runtime-api", path = "../../../frame/transaction-payment/rpc/runtime-api/", default-features = false }
 
 [build-dependencies]
-wasm-builder-runner = { package = "substrate-wasm-builder-runner", path = "../../../client/utils/wasm-builder-runner", version = "1.0.4" }
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner", version = "1.0.4" }
 
 [dev-dependencies]
 sp-io = { path = "../../../primitives/io" }
