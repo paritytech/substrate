@@ -406,8 +406,8 @@ mod tests {
 	use sp_timestamp;
 	use sp_finality_tracker;
 	use keyring::AccountKeyring;
-	use sc_service::{AbstractService, Roles};
-	use crate::service::new_full;
+	use sc_service::AbstractService;
+	use crate::service::{new_full, new_light};
 	use sp_runtime::traits::IdentifyAccount;
 
 	type AccountPublic = <Signature as Verify>::Signer;
@@ -468,11 +468,7 @@ mod tests {
 		service_test::sync(
 			chain_spec::integration_test_config(),
 			|config| new_full(config),
-			|mut config| {
-				// light nodes are unsupported
-				config.roles = Roles::FULL;
-				new_full(config)
-			},
+			|mut config| new_light(config),
 			block_factory,
 			extrinsic_factory,
 		);
@@ -508,11 +504,7 @@ mod tests {
 					setup_handles = Some((block_import.clone(), babe_link.clone()));
 				}).map(move |(node, x)| (node, (x, setup_handles.unwrap())))
 			},
-			|mut config| {
-				// light nodes are unsupported
-				config.roles = Roles::FULL;
-				new_full(config)
-			},
+			|config| new_light(config),
 			|service, &mut (ref inherent_data_providers, (ref mut block_import, ref babe_link))| {
 				let mut inherent_data = inherent_data_providers
 					.create_inherent_data()
@@ -636,11 +628,7 @@ mod tests {
 		service_test::consensus(
 			crate::chain_spec::tests::integration_test_config_with_two_authorities(),
 			|config| new_full(config),
-			|mut config| {
-				// light nodes are unsupported
-				config.roles = Roles::FULL;
-				new_full(config)
-			},
+			|config| new_light(config),
 			vec![
 				"//Alice".into(),
 				"//Bob".into(),
