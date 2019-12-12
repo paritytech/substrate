@@ -884,6 +884,16 @@ decl_module! {
 			}
 		}
 
+		/// Rebond a portion of the stash scheduled to be unlocked.
+		///
+		/// # <weight>
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		fn rebond(origin, #[compact] value: BalanceOf<T>) {
+			let stash = ensure_signed(origin)?;
+			// TODO
+		}
+
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
 		/// period ends. If this leaves an amount actively bonded less than
 		/// T::Currency::minimum_balance(), then it is increased to the full amount.
