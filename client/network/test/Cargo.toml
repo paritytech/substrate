@@ -14,7 +14,7 @@ futures = "0.1.29"
 futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
 futures-timer = "0.4.0"
 rand = "0.7.2"
-libp2p = { version = "0.13.0", default-features = false, features = ["libp2p-websocket"] }
+libp2p = { git = "https://github.com/libp2p/rust-libp2p", branch = "stable-futures", default-features = false, features = ["libp2p-websocket"] }
 consensus = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
 client = { package = "sc-client", path = "../../" }
 client-api = { package = "sc-client-api", path = "../../api" }

@@ -22,6 +22,7 @@ mod block_import;
 mod sync;
 
 use std::collections::HashMap;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use libp2p::build_multiaddr;
@@ -48,6 +49,7 @@ use consensus::block_import::{BlockImport, ImportResult};
 use consensus::Error as ConsensusError;
 use consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
+use futures03::{Stream as _, StreamExt as _, TryStreamExt as _};
 use sc_network::{NetworkWorker, NetworkService, ReportHandle, config::ProtocolId};
 use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
@@ -584,9 +586,9 @@ pub trait TestNetFactory: Sized {
 			}
 
 			let imported_blocks_stream = Box::new(client.import_notification_stream()
-				.fuse());
+				.map(|v| Ok::<_, ()>(v)).compat().fuse());
 			let finality_notification_stream = Box::new(client.finality_notification_stream()
-				.fuse());
+				.map(|v| Ok::<_, ()>(v)).compat().fuse());
 
 			peers.push(Peer {
 				data,
@@ -658,9 +660,9 @@ pub trait TestNetFactory: Sized {
 			}
 
 			let imported_blocks_stream = Box::new(client.import_notification_stream()
-				.fuse());
+				.map(|v| Ok::<_, ()>(v)).compat().fuse());
 			let finality_notification_stream = Box::new(client.finality_notification_stream()
-				.fuse());
+				.map(|v| Ok::<_, ()>(v)).compat().fuse());
 
 			peers.push(Peer {
 				data,
@@ -679,22 +681,22 @@ pub trait TestNetFactory: Sized {
 	/// Polls the testnet until all nodes are in sync.
 	///
 	/// Must be executed in a task context.
-	fn poll_until_sync(&mut self) -> Poll<()> {
-		self.poll(cx);
+	fn poll_until_sync(&mut self) -> Async<()> {
+		self.poll();
 
 		// Return `NotReady` if there's a mismatch in the highest block number.
 		let mut highest = None;
 		for peer in self.peers().iter() {
 			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
-				return Poll::Pending
+				return Async::NotReady
 			}
 			match (highest, peer.client.info().chain.best_hash) {
 				(None, b) => highest = Some(b),
 				(Some(ref a), ref b) if a == b => {},
-				(Some(_), _) => return Poll::Pending,
+				(Some(_), _) => return Async::NotReady,
 			}
 		}
-		Poll::Ready(())
+		Async::Ready(())
 	}
 
 	/// Blocks the current thread until we are sync'ed.
@@ -709,17 +711,19 @@ pub trait TestNetFactory: Sized {
 		self.mut_peers(|peers| {
 			for peer in peers {
 				trace!(target: "sync", "-- Polling {}", peer.id());
-				peer.network.poll(cx).unwrap();
+				futures03::stream::poll_fn(|cx| Pin::new(&mut peer.network).poll_next(cx))
+					.map(|item| Ok::<_, ()>(item))
+					.compat().poll().unwrap();
 				trace!(target: "sync", "-- Polling complete {}", peer.id());
 
 				// We poll `imported_blocks_stream`.
-				while let Poll::Ready(Some(Ok(notification))) = peer.imported_blocks_stream.poll(cx) {
+				while let Ok(Async::Ready(Some(notification))) = peer.imported_blocks_stream.poll() {
 					peer.network.on_block_imported(notification.hash, notification.header, Vec::new(), true);
 				}
 
 				// We poll `finality_notification_stream`, but we only take the last event.
 				let mut last = None;
-				while let Poll::Ready(Some(Ok(item))) = peer.finality_notification_stream.poll(cx) {
+				while let Ok(Async::Ready(Some(item))) = peer.finality_notification_stream.poll() {
 					last = Some(item);
 				}
 				if let Some(notification) = last {

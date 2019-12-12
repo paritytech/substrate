@@ -759,6 +759,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 	}
 }
 
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Unpin for NetworkWorker<B, S, H> {
+}
+
 /// The libp2p swarm, customized for our needs.
 type Swarm<B, S, H> = libp2p::swarm::Swarm<
 	Boxed<(PeerId, StreamMuxerBox), io::Error>,

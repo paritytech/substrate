@@ -16,7 +16,7 @@
 
 use sc_network::config::Roles;
 use consensus::BlockOrigin;
-use futures::TryFutureExt as _;
+use futures03::TryFutureExt as _;
 use std::time::Duration;
 use tokio::runtime::current_thread;
 use super::*;
@@ -46,13 +46,13 @@ fn sync_peers_works() {
 	let mut net = TestNet::new(3);
 
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
-		net.poll(cx);
+		net.poll();
 		for peer in 0..3 {
 			if net.peer(peer).num_peers() != 2 {
-				return Poll::Pending
+				return Ok(Async::NotReady)
 			}
 		}
-		Poll::Ready(Ok(()))
+		Ok(Async::Ready(()))
 	})).unwrap();
 }
 
@@ -72,42 +72,42 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 
 	// Block until all nodes are online and nodes 0 and 1 and major syncing.
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
-		net.poll(cx);
+		net.poll();
 		for peer in 0..3 {
 			// Online
 			if net.peer(peer).is_offline() {
-				return Poll::Pending
+				return Ok(Async::NotReady)
 			}
 			if peer < 2 {
 				// Major syncing.
 				if !net.peer(peer).is_major_syncing() {
-					return Poll::Pending
+					return Ok(Async::NotReady)
 				}
 			}
 		}
-		Poll::Ready(Ok(()))
+		Ok(Async::Ready(()))
 	})).unwrap();
 
 	// Block until all nodes are done syncing.
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
-		net.poll(cx);
+		net.poll();
 		for peer in 0..3 {
 			if net.peer(peer).is_major_syncing() {
-				return Poll::Pending
+				return Ok(Async::NotReady)
 			}
 		}
-		Poll::Ready(Ok(()))
+		Ok(Async::Ready(()))
 	})).unwrap();
 
 	// Now drop nodes 1 and 2, and check that node 0 is offline.
 	net.peers.remove(2);
 	net.peers.remove(1);
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
-		net.poll(cx);
+		net.poll();
 		if !net.peer(0).is_offline() {
-			Poll::Pending
+			Ok(Async::NotReady)
 		} else {
-			Poll::Ready(Ok(()))
+			Ok(Async::Ready(()))
 		}
 	})).unwrap();
 }
@@ -126,11 +126,11 @@ fn syncing_node_not_major_syncing_when_disconnected() {
 
 	// Check that we switch to major syncing.
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
-		net.poll(cx);
+		net.poll();
 		if !net.peer(1).is_major_syncing() {
-			Poll::Pending
+			Ok(Async::NotReady)
 		} else {
-			Poll::Ready(Ok(()))
+			Ok(Async::Ready(()))
 		}
 	})).unwrap();
 
@@ -138,11 +138,11 @@ fn syncing_node_not_major_syncing_when_disconnected() {
 	net.peers.remove(2);
 	net.peers.remove(0);
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
-		net.poll(cx);
+		net.poll();
 		if net.peer(0).is_major_syncing() {
-			Poll::Pending
+			Ok(Async::NotReady)
 		} else {
-			Poll::Ready(Ok(()))
+			Ok(Async::Ready(()))
 		}
 	})).unwrap();
 }
@@ -237,11 +237,11 @@ fn sync_no_common_longer_chain_fails() {
 	net.peer(0).push_blocks(20, true);
 	net.peer(1).push_blocks(20, false);
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
-		net.poll(cx);
+		net.poll();
 		if net.peer(0).is_major_syncing() {
-			Poll::Pending
+			Ok(Async::NotReady)
 		} else {
-			Poll::Ready(Ok(()))
+			Ok(Async::Ready(()))
 		}
 	})).unwrap();
 	let peer1 = &net.peers()[1];
@@ -275,18 +275,18 @@ fn sync_justifications() {
 	net.peer(1).request_justification(&h3.hash().into(), 20);
 
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| {
-		net.poll(cx);
+		net.poll();
 
 		for height in (10..21).step_by(5) {
 			if net.peer(0).client().justification(&BlockId::Number(height)).unwrap() != Some(Vec::new()) {
-				return Poll::Pending;
+				return Ok(Async::NotReady);
 			}
 			if net.peer(1).client().justification(&BlockId::Number(height)).unwrap() != Some(Vec::new()) {
-				return Poll::Pending;
+				return Ok(Async::NotReady);
 			}
 		}
 
-		Poll::Ready(Ok(()))
+		Ok(Async::Ready(()))
 	})).unwrap();
 }
 
@@ -311,14 +311,14 @@ fn sync_justifications_across_forks() {
 	net.peer(1).request_justification(&f2_best, 11);
 
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| {
-		net.poll(cx);
+		net.poll();
 
 		if net.peer(0).client().justification(&BlockId::Number(10)).unwrap() == Some(Vec::new()) &&
 			net.peer(1).client().justification(&BlockId::Number(10)).unwrap() == Some(Vec::new())
 		{
-			Poll::Ready(Ok(()))
+			Ok(Async::Ready(()))
 		} else {
-			Poll::Pending
+			Ok(Async::NotReady)
 		}
 	})).unwrap();
 }
@@ -405,10 +405,10 @@ fn blocks_are_not_announced_by_light_nodes() {
 	net.peers.remove(0);
 
 	// Poll for a few seconds and make sure 1 and 2 (now 0 and 1) don't sync together.
-	let mut delay = futures_timer::Delay::new(Duration::from_secs(5));
+	let mut delay = futures_timer::Delay::new(Duration::from_secs(5)).compat();
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| {
-		net.poll(cx);
-		delay.poll(cx).map_err(|_| ())
+		net.poll();
+		delay.poll().map_err(|_| ())
 	})).unwrap();
 	assert_eq!(net.peer(1).client.info().chain.best_number, 0);
 }
@@ -436,11 +436,11 @@ fn can_sync_small_non_best_forks() {
 
 	// poll until the two nodes connect, otherwise announcing the block will not work
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
-		net.poll(cx);
+		net.poll();
 		if net.peer(0).num_peers() == 0 {
-			Poll::Pending
+			Ok(Async::NotReady)
 		} else {
-			Poll::Ready(Ok(()))
+			Ok(Async::Ready(()))
 		}
 	})).unwrap();
 
@@ -456,24 +456,24 @@ fn can_sync_small_non_best_forks() {
 	// after announcing, peer 1 downloads the block.
 
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
-		net.poll(cx);
+		net.poll();
 
 		assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 		if net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none() {
-			return Poll::Pending
+			return Ok(Async::NotReady)
 		}
-		Poll::Ready(Ok(()))
+		Ok(Async::Ready(()))
 	})).unwrap();
 	net.block_until_sync(&mut runtime);
 
 	let another_fork = net.peer(0).push_blocks_at(BlockId::Number(35), 2, true);
 	net.peer(0).announce_block(another_fork, Vec::new());
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
-		net.poll(cx);
+		net.poll();
 		if net.peer(1).client().header(&BlockId::Hash(another_fork)).unwrap().is_none() {
-			return Poll::Pending
+			return Ok(Async::NotReady)
 		}
-		Poll::Ready(Ok(()))
+		Ok(Async::Ready(()))
 	})).unwrap();
 }
 
@@ -504,10 +504,10 @@ fn can_not_sync_from_light_peer() {
 	net.peers.remove(0);
 
 	// ensure that the #2 (now #1) fails to sync block #1 even after 5 seconds
-	let mut test_finished = futures_timer::Delay::new(Duration::from_secs(5));
+	let mut test_finished = futures_timer::Delay::new(Duration::from_secs(5)).compat();
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
-		net.poll(cx);
-		test_finished.poll(cx).map_err(|_| ())
+		net.poll();
+		test_finished.poll().map_err(|_| ())
 	})).unwrap();
 }
 
@@ -520,11 +520,11 @@ fn light_peer_imports_header_from_announce() {
 		net.peer(0).announce_block(hash, Vec::new());
 
 		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| {
-			net.poll(cx);
+			net.poll();
 			if net.peer(1).client().header(&BlockId::Hash(hash)).unwrap().is_some() {
-				Poll::Ready(Ok(()))
+				Ok(Async::Ready(()))
 			} else {
-				Poll::Pending
+				Ok(Async::NotReady)
 			}
 		})).unwrap();
 	}
@@ -569,11 +569,11 @@ fn can_sync_explicit_forks() {
 
 	// poll until the two nodes connect, otherwise announcing the block will not work
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
-		net.poll(cx);
+		net.poll();
 		if net.peer(0).num_peers() == 0  || net.peer(1).num_peers() == 0 {
-			Poll::Pending
+			Ok(Async::NotReady)
 		} else {
-			Poll::Ready(Ok(()))
+			Ok(Async::Ready(()))
 		}
 	})).unwrap();
 
@@ -590,13 +590,13 @@ fn can_sync_explicit_forks() {
 
 	// peer 1 downloads the block.
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
-		net.poll(cx);
+		net.poll();
 
 		assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 		if net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none() {
-			return Poll::Pending
+			return Ok(Async::NotReady)
 		}
-		Poll::Ready(Ok(()))
+		Ok(Async::Ready(()))
 	})).unwrap();
 }
 
@@ -625,11 +625,11 @@ fn syncs_header_only_forks() {
 	let first_peer_id = net.peer(0).id();
 	net.peer(1).set_sync_fork_request(vec![first_peer_id], small_hash, small_number);
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
-		net.poll(cx);
+		net.poll();
 		if net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none() {
-			return Poll::Pending
+			return Ok(Async::NotReady)
 		}
-		Poll::Ready(Ok(()))
+		Ok(Async::Ready(()))
 	})).unwrap();
 }
 
@@ -647,16 +647,16 @@ fn does_not_sync_announced_old_best_block() {
 	net.peer(0).announce_block(old_hash, Vec::new());
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
 		// poll once to import announcement
-		net.poll(cx);
-		Poll::Ready(Ok(()))
+		net.poll();
+		Ok(Async::Ready(()))
 	})).unwrap();
 	assert!(!net.peer(1).is_major_syncing());
 
 	net.peer(0).announce_block(old_hash_with_parent, Vec::new());
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
 		// poll once to import announcement
-		net.poll(cx);
-		Poll::Ready(Ok(()))
+		net.poll();
+		Ok(Async::Ready(()))
 	})).unwrap();
 	assert!(!net.peer(1).is_major_syncing());
 }
