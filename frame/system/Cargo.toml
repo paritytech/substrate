@@ -12,7 +12,7 @@ primitives = { package = "sp-core",  path = "../../primitives/core", default-fea
 sp-std = { path = "../../primitives/std", default-features = false }
 sp-io ={ path = "../../primitives/io", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
-sp-version = { path = "../../primitives/sr-version", default-features = false }
+sp-version = { path = "../../primitives/version", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 impl-trait-for-tuples = "0.1.3"
 

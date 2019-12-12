@@ -14,7 +14,7 @@ primitives = { package = "sp-core",  path = "../../primitives/core", default-fea
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 sp-io = { path = "../../primitives/io", default-features = false }
 sp-std = { path = "../../primitives/std", default-features = false }
-sandbox = { package = "sp-sandbox", path = "../../primitives/sr-sandbox", default-features = false }
+sandbox = { package = "sp-sandbox", path = "../../primitives/sandbox", default-features = false }
 support = { package = "frame-support", path = "../support", default-features = false }
 system = { package = "frame-system", path = "../system", default-features = false }
 

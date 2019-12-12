@@ -76,3 +76,12 @@ pub type Digest = sp_runtime::generic::Digest<H256>;
 pub type Block = sp_runtime::generic::Block<Header, Extrinsic>;
 /// A test block's header.
 pub type Header = sp_runtime::generic::Header<BlockNumber, BlakeTwo256>;
+
+
+/// Changes trie configuration (optionally) used in tests.
+pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
+	primitives::ChangesTrieConfiguration {
+		digest_interval: 4,
+		digest_levels: 2,
+	}
+}

@@ -748,10 +748,9 @@ pub fn import_queue<B, C, P, T>(
 mod tests {
 	use super::*;
 	use consensus_common::NoNetwork as DummyOracle;
-	use network::test::*;
-	use network::test::{Block as TestBlock, PeersClient, PeersFullClient};
+	use sc_network_test::{Block as TestBlock, *};
 	use sp_runtime::traits::{Block as BlockT, DigestFor};
-	use network::config::ProtocolConfig;
+	use sc_network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
 	use keyring::sr25519::Keyring;
