@@ -263,7 +263,7 @@ decl_event!(
 		/// A new account was created.
 		NewAccount(AccountId, Balance),
 		/// An account was reaped.
-		ReapedAccount(AccountId),
+		ReapedAccount(AccountId, Balance),
 		/// Transfer succeeded (from, to, value, fees).
 		Transfer(AccountId, AccountId, Balance, Balance),
 	}
@@ -564,9 +564,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Unregister an account.
 	///
 	/// This just removes the nonce and leaves an event.
-	fn reap_account(who: &T::AccountId) {
+	fn reap_account(who: &T::AccountId, dust: T::Balance) {
 		<system::AccountNonce<T>>::remove(who);
-		Self::deposit_event(RawEvent::ReapedAccount(who.clone()));
+		Self::deposit_event(RawEvent::ReapedAccount(who.clone(), dust));
 	}
 
 	/// Account's free balance has dropped below existential deposit. Kill its
@@ -593,7 +593,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 
 		if reserved_balance.is_zero() {
-			Self::reap_account(who);
+			Self::reap_account(who, dust);
 		}
 	}
 
@@ -618,7 +618,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 
 		if free_balance.is_zero() {
-			Self::reap_account(who);
+			Self::reap_account(who, dust);
 		}
 	}
 }
