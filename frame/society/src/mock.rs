@@ -141,22 +141,22 @@ impl EnvBuilder {
 		let mut ext: runtime_io::TestExternalities = t.into();
 		ext.execute_with(f)
 	}
-
+	#[allow(dead_code)]
 	pub fn with_members(mut self, m: Vec<u128>) -> Self {
 		self.members = m;
 		self
 	}
-
+	#[allow(dead_code)]
 	pub fn with_balances(mut self, b: Vec<(u128, u64)>) -> Self {
 		self.balances = b;
 		self
 	}
-
+	#[allow(dead_code)]
 	pub fn with_pot(mut self, p: u64) -> Self {
 		self.pot = p;
 		self
 	}
-
+	#[allow(dead_code)]
 	pub fn with_balance(mut self, b: u64) -> Self {
 		self.balance = b;
 		self

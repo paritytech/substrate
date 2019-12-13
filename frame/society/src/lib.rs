@@ -160,6 +160,9 @@ decl_storage! {
 			m
 		}): Vec<T::AccountId>;
 
+		/// The set of suspended members.
+		pub SuspendedMembers get(fn suspended_member): map T::AccountId => Option<T::BlockNumber>;
+
 		/// The current bids.
 		Bids: Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>;
 
@@ -270,6 +273,8 @@ decl_module! {
 		pub fn payout(origin) -> Result {
 			let who = ensure_signed(origin)?;
 
+			ensure!(<SuspendedMembers<T>>::get(&who).is_none(), "account is suspended");
+
 			let mut payouts = <Payouts<T>>::get(&who);
 			if let Some((when, amount)) = payouts.first() {
 				if when <= &<system::Module<T>>::block_number() {
@@ -295,6 +300,18 @@ decl_module! {
 			<Head<T>>::put(&founder);
 			<Members<T>>::put(&[founder.clone()][..]);
 			Self::deposit_event(RawEvent::Founded(founder));
+		}
+
+		/// Allow founder origin to make judgement on a suspended member.
+		fn judge_suspended_member(origin, who: T::AccountId, forgive: bool) {
+			T::FounderOrigin::ensure_origin(origin)?;
+			ensure!(<SuspendedMembers<T>>::exists(&who), "user is not suspended member");
+			
+			if forgive {
+				Self::unsuspend_member(&who);
+			} else {
+				Self::remove_user(&who);
+			}
 		}
 
 		fn on_initialize(n: T::BlockNumber) {
@@ -375,20 +392,6 @@ impl<T: Trait> Module<T> {
 		});
 	}
 
-	/// Remove a member from the members list.
-	pub fn remove_member(m: &T::AccountId) -> Result {
-		<Members<T>>::mutate(|members|
-			match members.binary_search(&m) {
-				Err(_) => Err("not a member"),
-				Ok(i) => {
-					members.remove(i);
-					T::MembershipChanged::change_members_sorted(&[], &[m.clone()], members);
-					Ok(())
-				}
-			}
-		)
-	}
-
 	/// Add a member to the vouching set.
 	fn set_vouching(v: T::AccountId) -> Result {
 		<Vouching<T>>::mutate(|vouchers|
@@ -415,12 +418,36 @@ impl<T: Trait> Module<T> {
 		)
 	}
 
-	/// Remove a member from the members list.
+	/// Check a user is a members.
 	fn ensure_member(m: &T::AccountId) -> Result {
 		<Members<T>>::get()
 			.binary_search(m)
 			.map_err(|_| "not a member")
 			.map(|_| ())
+	}
+
+	/// Add a member to the sorted members list. Will not add a duplicate member.
+	fn add_member(m: &T::AccountId) {
+		<Members<T>>::mutate(|members| {
+			match members.binary_search(m) {
+				Ok(_) => {} // User is already a member. 
+				Err(pos) => members.insert(pos, m.clone()),
+			}
+		});
+	}
+
+	/// Remove a member from the members list.
+	pub fn remove_member(m: &T::AccountId) -> Result {
+		<Members<T>>::mutate(|members|
+			match members.binary_search(&m) {
+				Err(_) => Err("not a member"),
+				Ok(i) => {
+					members.remove(i);
+					T::MembershipChanged::change_members_sorted(&[], &[m.clone()], members);
+					Ok(())
+				}
+			}
+		)
 	}
 
 	/// End the current period and begin a new one.
@@ -623,8 +650,35 @@ impl<T: Trait> Module<T> {
 		});
 	}
 
-	fn suspend_member(_who: &T::AccountId) {
-//		unimplemented!();
+	/// Suspend a user, removing them from the member list.
+	fn suspend_member(who: &T::AccountId) {
+		if Self::remove_member(&who).is_ok() {
+			<SuspendedMembers<T>>::insert(who, <system::Module<T>>::block_number());
+			<Strikes<T>>::remove(who);
+		}
+	}
+
+	/// Unsuspend a user, adding them back to the member list and increasing their payout schedule.
+	fn unsuspend_member(who: &T::AccountId) {
+		if let Some(suspended_block) = <SuspendedMembers<T>>::get(who) {
+			Self::add_member(&who);
+			let now = <system::Module<T>>::block_number();
+			let suspended_period = now - suspended_block;
+			// Increase payout time of existing payouts by the suspension time.
+			<Payouts<T>>::mutate(&who, |payouts| {
+				payouts.iter_mut().map(|v| v.0 += suspended_period).collect::<Vec<_>>()
+			});
+			<SuspendedMembers<T>>::remove(who);
+		}
+	}
+
+	/// Remove all information about this user from this module.
+	fn remove_user(who: &T::AccountId) {
+		let _ = Self::remove_member(who);
+		<Payouts<T>>::remove(who);
+		<Strikes<T>>::remove(who);
+		<SuspendedMembers<T>>::remove(who);
+		// TODO: Clean up vouching
 	}
 
 	/// `kind` lets you know whether there's either a deposit at stake or a member's vouching rights.

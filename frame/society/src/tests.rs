@@ -224,4 +224,49 @@ fn slash_payout_multi_works() {
 	});
 }
 
+#[test]
+fn suspended_member_lifecycle_works() {
+	EnvBuilder::new().execute(|| {
+		assert_eq!(Strikes::<Test>::get(10), 0);
+		assert_eq!(<SuspendedMembers<Test>>::get(10), None);
 
+		// Let's suspend account 10 by giving them 2 strikes by not voting
+		assert_ok!(Society::bid(Origin::signed(20), 0));
+		run_to_block(8);
+		assert_eq!(Strikes::<Test>::get(10), 1);
+		assert_ok!(Society::bid(Origin::signed(20), 0));
+		run_to_block(16);
+
+		// Strike 2 is accumulated, and 10 is suspended :(
+		assert_eq!(<SuspendedMembers<Test>>::get(10), Some(16));
+		assert_eq!(<Members<Test>>::get(), vec![]);
+
+		// Suspended members cannot get payout
+		Society::bump_payout(&10, 10, 100);
+		assert_noop!(Society::payout(Origin::signed(10)), "account is suspended");
+
+		// Move 10 blocks to the future
+		run_to_block(26);
+		
+		// Normal people cannot make judgement
+		assert_noop!(Society::judge_suspended_member(Origin::signed(10), 10, true), "Invalid origin");
+
+		// Founder origin can judge thee
+		// Founder forgives the suspended member
+		assert_ok!(Society::judge_suspended_member(Origin::signed(1), 10, true));
+		assert_eq!(<SuspendedMembers<Test>>::get(10), None);
+		assert_eq!(<Members<Test>>::get(), vec![10]);
+		// Suspended member has increased payout time due to suspension period
+		assert_eq!(<Payouts<Test>>::get(10), vec![(20, 100)]);
+
+		// Let's suspend them again, directly
+		Society::suspend_member(&10);
+		assert_eq!(<SuspendedMembers<Test>>::get(10), Some(26));
+		// Founder does not forgive the suspended member
+		assert_ok!(Society::judge_suspended_member(Origin::signed(1), 10, false));
+		// Cleaned up
+		assert_eq!(<SuspendedMembers<Test>>::get(10), None);
+		assert_eq!(<Members<Test>>::get(), vec![]);
+		assert_eq!(<Payouts<Test>>::get(10), vec![]);
+	});
+}
