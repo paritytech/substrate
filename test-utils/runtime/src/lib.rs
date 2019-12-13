@@ -932,7 +932,7 @@ fn test_read_child_storage() {
 mod tests {
 	use substrate_test_runtime_client::{
 		prelude::*,
-		consensus::BlockOrigin,
+		sp_consensus::BlockOrigin,
 		DefaultTestClientBuilderExt, TestClientBuilder,
 		runtime::TestAPI,
 	};

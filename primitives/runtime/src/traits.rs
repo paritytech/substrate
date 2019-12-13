@@ -1117,7 +1117,7 @@ macro_rules! count {
 ///
 /// ```rust
 /// use sp_runtime::{
-/// 	impl_opaque_keys, KeyTypeId, BoundToRuntimeAppPublic, sp_application_crypto::{sr25519, ed25519}
+/// 	impl_opaque_keys, KeyTypeId, BoundToRuntimeAppPublic, app_crypto::{sr25519, ed25519}
 /// };
 ///
 /// pub struct KeyModule;

@@ -543,7 +543,7 @@ pub mod tests {
 	use consensus_common::ForkChoiceStrategy;
 	use fg_primitives::AuthorityId;
 	use primitives::{H256, crypto::Public};
-	use test_client::client::in_mem::Blockchain as InMemoryAuxStore;
+	use test_client::sc_client::in_mem::Blockchain as InMemoryAuxStore;
 	use test_client::runtime::{Block, Header};
 	use crate::tests::TestApi;
 	use crate::finality_proof::tests::TestJustification;

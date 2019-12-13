@@ -355,7 +355,7 @@ mod tests {
 	use super::*;
 	use futures::executor::block_on;
 	use codec::Encode;
-	use substrate_test_runtime_client::{prelude::*, runtime::{Block, Transfer}, sc_consensus::{BlockOrigin, SelectChain}};
+	use substrate_test_runtime_client::{prelude::*, runtime::{Block, Transfer}, sp_consensus::{BlockOrigin, SelectChain}};
 	use sp_transaction_pool::PoolStatus;
 	use crate::api::{FullChainApi, LightChainApi};
 

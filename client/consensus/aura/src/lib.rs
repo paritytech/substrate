@@ -755,16 +755,15 @@ mod tests {
 	use tokio::runtime::current_thread;
 	use sp_keyring::sr25519::Keyring;
 	use sc_client::BlockchainEvents;
-	use substrate_test_runtime_client;
 	use sp_consensus_aura::sr25519::AuthorityPair;
 
 	type Error = sp_blockchain::Error;
 
 	type TestClient = sc_client::Client<
-		substrate_test_client::Backend,
-		substrate_test_client::Executor,
+		substrate_test_runtime_client::Backend,
+		substrate_test_runtime_client::Executor,
 		TestBlock,
-		substrate_test_client::runtime::RuntimeApi
+		substrate_test_runtime_client::runtime::RuntimeApi
 	>;
 
 	struct DummyFactory(Arc<TestClient>);
@@ -923,7 +922,7 @@ mod tests {
 
 	#[test]
 	fn authorities_call_works() {
-		let client = substrate_test_client::new();
+		let client = substrate_test_runtime_client::new();
 
 		assert_eq!(client.info().chain.best_number, 0);
 		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap(), vec![

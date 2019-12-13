@@ -582,7 +582,7 @@ impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJ
 pub(crate) mod tests {
 	use test_client::runtime::{Block, Header, H256};
 	use client_api::NewBlockState;
-	use test_client::client::in_mem::Blockchain as InMemoryBlockchain;
+	use test_client::sc_client::in_mem::Blockchain as InMemoryBlockchain;
 	use super::*;
 	use primitives::crypto::Public;
 

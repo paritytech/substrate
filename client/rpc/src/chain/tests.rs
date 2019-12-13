@@ -18,7 +18,7 @@ use super::*;
 use assert_matches::assert_matches;
 use substrate_test_runtime_client::{
 	prelude::*,
-	sc_consensus::BlockOrigin,
+	sp_consensus::BlockOrigin,
 	runtime::{H256, Block, Header},
 };
 use sp_rpc::list::ListOrValue;

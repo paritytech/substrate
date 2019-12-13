@@ -26,7 +26,7 @@ use sp_core::hash::H256;
 use sp_io::hashing::blake2_256;
 use substrate_test_runtime_client::{
 	prelude::*,
-	sc_consensus::BlockOrigin,
+	sp_consensus::BlockOrigin,
 	runtime,
 };
 
