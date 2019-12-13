@@ -14,48 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Utility for gossip of network messages between nodes.
-//! Handles chain-specific and standard BFT messages.
-//!
-//! Gossip messages are separated by two categories: "topics" and consensus engine ID.
-//! The consensus engine ID is sent over the wire with the message, while the topic is not,
-//! with the expectation that the topic can be derived implicitly from the content of the
-//! message, assuming it is valid.
-//!
-//! Topics are a single 32-byte tag associated with a message, used to group those messages
-//! in an opaque way. Consensus code can invoke `broadcast_topic` to attempt to send all messages
-//! under a single topic to all peers who don't have them yet, and `send_topic` to
-//! send all messages under a single topic to a specific peer.
-//!
-//! Each consensus engine ID must have an associated,
-//! registered `Validator` for all gossip messages. The primary role of this `Validator` is
-//! to process incoming messages from peers, and decide whether to discard them or process
-//! them. It also decides whether to re-broadcast the message.
-//!
-//! The secondary role of the `Validator` is to check if a message is allowed to be sent to a given
-//! peer. All messages, before being sent, will be checked against this filter.
-//! This enables the validator to use information it's aware of about connected peers to decide
-//! whether to send messages to them at any given moment in time - In particular, to wait until
-//! peers can accept and process the message before sending it.
-//!
-//! Lastly, the fact that gossip validators can decide not to rebroadcast messages
-//! opens the door for neighbor status packets to be baked into the gossip protocol.
-//! These status packets will typically contain light pieces of information
-//! used to inform peers of a current view of protocol state.
-
 use std::collections::{HashMap, HashSet, hash_map::Entry};
 use std::sync::Arc;
 use std::iter;
 use std::time;
 use log::{trace, debug};
-use futures03::channel::mpsc;
+use futures::channel::mpsc;
 use lru::LruCache;
 use libp2p::PeerId;
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
 use sp_runtime::ConsensusEngineId;
-pub use crate::message::generic::{Message, ConsensusMessage};
-use crate::protocol::Context;
-use crate::config::Roles;
+pub use network::message::generic::{Message, ConsensusMessage};
+use network::Context;
+use network::config::Roles;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
@@ -63,7 +34,7 @@ const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
 const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_secs(30);
 
 mod rep {
-	use peerset::ReputationChange as Rep;
+	use network::ReputationChange as Rep;
 	/// Reputation change when a peer sends us a gossip message that we didn't know about.
 	pub const GOSSIP_SUCCESS: Rep = Rep::new(1 << 4, "Successfull gossip");
 	/// Reputation change when a peer sends us a gossip message that we already knew about.
@@ -94,16 +65,6 @@ struct MessageEntry<B: BlockT> {
 	topic: B::Hash,
 	message: ConsensusMessage,
 	sender: Option<PeerId>,
-}
-
-/// Consensus message destination.
-pub enum MessageRecipient {
-	/// Send to all peers.
-	BroadcastToAll,
-	/// Send to peers that don't have that message already.
-	BroadcastNew,
-	/// Send to specific peer.
-	Peer(PeerId),
 }
 
 /// The reason for sending out the message.
@@ -190,7 +151,7 @@ fn propagate<'a, B: BlockT, I>(
 	validators: &HashMap<ConsensusEngineId, Arc<dyn Validator<B>>>,
 )
 	// (msg_hash, topic, message)
-	where I: Clone + IntoIterator<Item=(&'a B::Hash, &'a B::Hash, &'a ConsensusMessage)>,  
+	where I: Clone + IntoIterator<Item=(&'a B::Hash, &'a B::Hash, &'a ConsensusMessage)>,
 {
 	let mut check_fns = HashMap::new();
 	let mut message_allowed = move |who: &PeerId, intent: MessageIntent, topic: &B::Hash, message: &ConsensusMessage| {
@@ -637,7 +598,7 @@ impl<B: BlockT> Validator<B> for DiscardAll {
 mod tests {
 	use std::sync::Arc;
 	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
-	use futures03::executor::block_on_stream;
+	use futures::executor::block_on_stream;
 
 	use super::*;
 
