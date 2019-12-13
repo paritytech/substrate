@@ -59,7 +59,7 @@ pub use self::state_machine::{TopicNotification, MessageIntent};
 pub use self::state_machine::{Validator, ValidatorContext, ValidationResult};
 pub use self::state_machine::DiscardAll;
 
-use network::{specialization::NetworkSpecialization, Event, ExHashT, NetworkService, PeerId, ReputationChange};
+use sc_network::{specialization::NetworkSpecialization, Event, ExHashT, NetworkService, PeerId, ReputationChange};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 use std::sync::Arc;
 
@@ -134,7 +134,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network<B> for Arc<Netw
 		NetworkService::announce_block(self, block, associated_data)
 	}
 
-	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
+	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
 		NetworkService::set_sync_fork_request(self, peers, hash, number)
 	}
 }
