@@ -16,7 +16,7 @@
 
 //! # Authority discovery module.
 //!
-//! This module is used by the `core/authority-discovery` to retrieve the
+//! This module is used by the `client/authority-discovery` to retrieve the
 //! current set of authorities.
 
 // Ensure we're `no_std` when compiling for Wasm.
