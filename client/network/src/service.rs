@@ -45,8 +45,7 @@ use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NonReservedPeerMode, ReputationChange};
 use crate::config::{Params, TransportConfig};
 use crate::error::Error;
-use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, PeerInfo};
-use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
+use crate::protocol::{self, Protocol, Context, PeerInfo};
 use crate::protocol::{event::Event, light_dispatch::{AlwaysBadChecker, RequestData}};
 use crate::protocol::specialization::NetworkSpecialization;
 use crate::protocol::sync::SyncState;
@@ -276,6 +275,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			import_queue: params.import_queue,
 			from_worker,
 			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
+			event_streams: Vec::new(),
 		})
 	}
 
@@ -416,6 +416,55 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		self.local_peer_id.clone()
 	}
 
+	/// Writes a message on an open notifications channel. Has no effect if the notifications
+	/// channel with this protocol name is closed.
+	///
+	/// > **Note**: The reason why this is a no-op in the situation where we have no channel is
+	/// >			that we don't guarantee message delivery anyway. Networking issues can cause
+	/// >			connections to drop at any time, and higher-level logic shouldn't differentiate
+	/// >			between the remote voluntarily closing a substream or a network error
+	/// >			preventing the message from being delivered.
+	///
+	/// The protocol must have been registered with `register_notifications_protocol`.
+	///
+	pub fn write_notification(&self, target: PeerId, engine_id: ConsensusEngineId, message: Vec<u8>) {
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::WriteNotification {
+			target,
+			engine_id,
+			message,
+		});
+	}
+
+	/// Returns a stream containing the events that happen on the network.
+	///
+	/// If this method is called multiple times, the events are duplicated.
+	///
+	/// The stream never ends (unless the `NetworkWorker` gets shut down).
+	pub fn event_stream(&self) -> impl Stream<Item = Event, Error = ()> {
+		// Note: when transitioning to stable futures, remove the `Error` entirely
+		let (tx, rx) = mpsc::unbounded();
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::EventStream(tx));
+		rx
+	}
+
+	/// Registers a new notifications protocol.
+	///
+	/// After that, you can call `write_notifications`.
+	///
+	/// Please call `event_stream` before registering a protocol, otherwise you may miss events
+	/// about the protocol that you have registered.
+	///
+	/// You are very strongly encouraged to call this method very early on. Any connection open
+	/// will retain the protocols that were registered then, and not any new one.
+	pub fn register_notifications_protocol(
+		&self,
+		engine_id: ConsensusEngineId,
+	) {
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::RegisterNotifProtocol {
+			engine_id,
+		});
+	}
+
 	/// You must call this when new transactons are imported by the transaction pool.
 	///
 	/// The latest transactions will be fetched from the `TransactionPool` that was passed at
@@ -432,25 +481,17 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::AnnounceBlock(hash, data));
 	}
 
-	/// Send a consensus message through the gossip
-	pub fn gossip_consensus_message(
-		&self,
-		topic: B::Hash,
-		engine_id: ConsensusEngineId,
-		message: Vec<u8>,
-		recipient: GossipMessageRecipient,
-	) {
-		let _ = self
-			.to_worker
-			.unbounded_send(ServerToWorkerMsg::GossipConsensusMessage(
-				topic, engine_id, message, recipient,
-			));
-	}
-
 	/// Report a given peer as either beneficial (+) or costly (-) according to the
 	/// given scalar.
 	pub fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
 		self.peerset.report_peer(who, cost_benefit);
+	}
+
+	/// Disconnect from a node as soon as possible.
+	///
+	/// This triggers the same effects as if the connection had closed itself spontaneously.
+	pub fn disconnect_peer(&self, who: PeerId) {
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::DisconnectPeer(who));
 	}
 
 	/// Request a justification for the given block from the network.
@@ -470,15 +511,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::ExecuteWithSpec(Box::new(f)));
-	}
-
-	/// Execute a closure with the consensus gossip.
-	pub fn with_gossip<F>(&self, f: F)
-		where F: FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>) + Send + 'static
-	{
-		let _ = self
-			.to_worker
-			.unbounded_send(ServerToWorkerMsg::ExecuteWithGossip(Box::new(f)));
 	}
 
 	/// Are we in the process of downloading the chain?
@@ -630,12 +662,20 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	RequestJustification(B::Hash, NumberFor<B>),
 	AnnounceBlock(B::Hash, Vec<u8>),
 	ExecuteWithSpec(Box<dyn FnOnce(&mut S, &mut dyn Context<B>) + Send>),
-	ExecuteWithGossip(Box<dyn FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>) + Send>),
-	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
 	GetValue(record::Key),
 	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
+	EventStream(mpsc::UnboundedSender<Event>),
+	WriteNotification {
+		message: Vec<u8>,
+		engine_id: ConsensusEngineId,
+		target: PeerId,
+	},
+	RegisterNotifProtocol {
+		engine_id: ConsensusEngineId,
+	},
+	DisconnectPeer(PeerId),
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -659,13 +699,15 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	from_worker: mpsc::UnboundedReceiver<ServerToWorkerMsg<B, S>>,
 	/// Receiver for queries from the light client that must be processed.
 	light_client_rqs: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
+	/// Senders for events that happen on the network.
+	event_streams: Vec<mpsc::UnboundedSender<Event>>,
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for NetworkWorker<B, S, H> {
-	type Item = Event;
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for NetworkWorker<B, S, H> {
+	type Item = ();
 	type Error = io::Error;
 
-	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		// Poll the import queue for actions to perform.
 		let _ = futures03::future::poll_fn(|cx| {
 			self.import_queue.poll_actions(cx, &mut NetworkLink {
@@ -685,7 +727,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 			// Process the next message coming from the `NetworkService`.
 			let msg = match self.from_worker.poll() {
 				Ok(Async::Ready(Some(msg))) => msg,
-				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(None)),
+				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
 				Ok(Async::NotReady) => break,
 			};
 
@@ -695,13 +737,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 					let (mut context, spec) = protocol.specialization_lock();
 					task(spec, &mut context);
 				},
-				ServerToWorkerMsg::ExecuteWithGossip(task) => {
-					let protocol = self.network_service.user_protocol_mut();
-					let (mut context, gossip) = protocol.consensus_gossip_lock();
-					task(gossip, &mut context);
-				}
-				ServerToWorkerMsg::GossipConsensusMessage(topic, engine_id, message, recipient) =>
-					self.network_service.user_protocol_mut().gossip_consensus_message(topic, engine_id, message, recipient),
 				ServerToWorkerMsg::AnnounceBlock(hash, data) =>
 					self.network_service.user_protocol_mut().announce_block(hash, data),
 				ServerToWorkerMsg::RequestJustification(hash, number) =>
@@ -716,6 +751,18 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 					self.network_service.add_known_address(peer_id, addr),
 				ServerToWorkerMsg::SyncFork(peer_ids, hash, number) =>
 					self.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
+				ServerToWorkerMsg::EventStream(sender) =>
+					self.event_streams.push(sender),
+				ServerToWorkerMsg::WriteNotification { message, engine_id, target } =>
+					self.network_service.user_protocol_mut().write_notification(target, engine_id, message),
+				ServerToWorkerMsg::RegisterNotifProtocol { engine_id } => {
+					let events = self.network_service.user_protocol_mut().register_notifications_protocol(engine_id);
+					for event in events {
+						self.event_streams.retain(|sender| sender.unbounded_send(event.clone()).is_ok());
+					}
+				},
+				ServerToWorkerMsg::DisconnectPeer(who) =>
+					self.network_service.user_protocol_mut().disconnect_peer(&who),
 			}
 		}
 
@@ -723,27 +770,23 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 			// Process the next action coming from the network.
 			let poll_value = self.network_service.poll();
 
-			let outcome = match poll_value {
+			match poll_value {
 				Ok(Async::NotReady) => break,
-				Ok(Async::Ready(Some(BehaviourOut::SubstrateAction(outcome)))) => outcome,
-				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) =>
-					return Ok(Async::Ready(Some(Event::Dht(ev)))),
-				Ok(Async::Ready(None)) => CustomMessageOutcome::None,
+				Ok(Async::Ready(Some(BehaviourOut::BlockImport(origin, blocks)))) =>
+					self.import_queue.import_blocks(origin, blocks),
+				Ok(Async::Ready(Some(BehaviourOut::JustificationImport(origin, hash, nb, justification)))) =>
+					self.import_queue.import_justification(origin, hash, nb, justification),
+				Ok(Async::Ready(Some(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)))) =>
+					self.import_queue.import_finality_proof(origin, hash, nb, proof),
+				Ok(Async::Ready(Some(BehaviourOut::Event(ev)))) => {
+					self.event_streams.retain(|sender| sender.unbounded_send(ev.clone()).is_ok());
+				},
+				Ok(Async::Ready(None)) => {},
 				Err(err) => {
 					error!(target: "sync", "Error in the network: {:?}", err);
 					return Err(err)
 				}
 			};
-
-			match outcome {
-				CustomMessageOutcome::BlockImport(origin, blocks) =>
-					self.import_queue.import_blocks(origin, blocks),
-				CustomMessageOutcome::JustificationImport(origin, hash, nb, justification) =>
-					self.import_queue.import_justification(origin, hash, nb, justification),
-				CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
-					self.import_queue.import_finality_proof(origin, hash, nb, proof),
-				CustomMessageOutcome::None => {}
-			}
 		}
 
 		// Update the variables shared with the `NetworkService`.

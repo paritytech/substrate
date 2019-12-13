@@ -8,10 +8,9 @@ edition = "2018"
 fork-tree = { path = "../../utils/fork-tree" }
 futures = "0.1.29"
 futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
+futures-timer = "2.0.2"
 log = "0.4.8"
 parking_lot = "0.9.0"
-tokio-executor = "0.1.8"
-tokio-timer = "0.2.11"
 rand = "0.7.2"
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 sp-runtime = {  path = "../../primitives/runtime" }
@@ -25,6 +24,7 @@ client = { package = "sc-client", path = "../" }
 inherents = { package = "sp-inherents", path = "../../primitives/inherents" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 network = { package = "sc-network", path = "../network" }
+network-gossip = { package = "sc-network-gossip", path = "../network-gossip" }
 sp-finality-tracker = { path = "../../primitives/finality-tracker" }
 fg_primitives = { package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 grandpa = { package = "finality-grandpa", version = "0.10.1", features = ["derive-codec"] }
