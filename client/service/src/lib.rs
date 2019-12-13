@@ -131,6 +131,14 @@ impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SpawnTaskHandle
 	}
 }
 
+impl futures03::task::Spawn for SpawnTaskHandle {
+	fn spawn_obj(&self, future: futures03::task::FutureObj<'static, ()>)
+	-> Result<(), futures03::task::SpawnError> {
+		self.execute(Box::new(futures03::compat::Compat::new(future.unit_error())))
+			.map_err(|_| futures03::task::SpawnError::shutdown())
+	}
+}
+
 /// Abstraction over a Substrate service.
 pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send {
@@ -375,6 +383,9 @@ fn build_network_future<
 	let mut finality_notification_stream = client.finality_notification_stream().fuse()
 		.map(|v| Ok::<_, ()>(v)).compat();
 
+	// Initializing a stream in order to obtain DHT events from the network.
+	let mut event_stream = network.service().event_stream();
+
 	futures::future::poll_fn(move || {
 		let before_polling = Instant::now();
 
@@ -451,22 +462,32 @@ fn build_network_future<
 			(status, state)
 		});
 
+		// Processing DHT events.
+		while let Ok(Async::Ready(Some(event))) = event_stream.poll() {
+			match event {
+				Event::Dht(event) => {
+					// Given that client/authority-discovery is the only upper stack consumer of Dht events at the moment, all Dht
+					// events are being passed on to the authority-discovery module. In the future there might be multiple
+					// consumers of these events. In that case this would need to be refactored to properly dispatch the events,
+					// e.g. via a subscriber model.
+					if let Some(Err(e)) = dht_event_tx.as_ref().map(|c| c.clone().try_send(event)) {
+						if e.is_full() {
+							warn!(target: "service", "Dht event channel to authority discovery is full, dropping event.");
+						} else if e.is_disconnected() {
+							warn!(target: "service", "Dht event channel to authority discovery is disconnected, dropping event.");
+						}
+					}
+				}
+				_ => {}
+			}
+		}
+
 		// Main network polling.
-		while let Ok(Async::Ready(Some(Event::Dht(event)))) = network.poll().map_err(|err| {
+		if let Ok(Async::Ready(())) = network.poll().map_err(|err| {
 			warn!(target: "service", "Error in network: {:?}", err);
 		}) {
-			// Given that client/authority-discovery is the only upper stack consumer of Dht events at the moment, all Dht
-			// events are being passed on to the authority-discovery module. In the future there might be multiple
-			// consumers of these events. In that case this would need to be refactored to properly dispatch the events,
-			// e.g. via a subscriber model.
-			if let Some(Err(e)) = dht_event_tx.as_ref().map(|c| c.clone().try_send(event)) {
-				if e.is_full() {
-					warn!(target: "service", "Dht event channel to authority discovery is full, dropping event.");
-				} else if e.is_disconnected() {
-					warn!(target: "service", "Dht event channel to authority discovery is disconnected, dropping event.");
-				}
-			}
-		};
+			return Ok(Async::Ready(()));
+		}
 
 		// Now some diagnostic for performances.
 		let polling_dur = before_polling.elapsed();
