@@ -28,8 +28,8 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 /// error type implements `From<&'static str>` and `From<LookupError>` to make them usable with the
 /// try operator.
 ///
-/// Optionally the macro can generate variants for system errors through the optional line:
-/// `impl_from_frame_system($FrameSystemCrate)`.
+/// Optionally the macro can generate variants for system errors through the attribute:
+/// `#[substrate(impl_from_frame_system($FrameSystemCrate))]`.
 /// This will generate three more variants `SystemRequiresSignedOrigin`,
 /// `SystemRequiresRootOrigin`, `SystemRequiresNoOrigin` and implement
 /// `From<frame_system::Error>`.
@@ -42,13 +42,13 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 /// # use frame_support::{decl_error, decl_module};
 /// decl_error! {
 ///     /// Errors that can occur in my module.
+///     #[substrate(impl_from_frame_system(frame_system))]
 ///     pub enum MyError {
 ///         /// Hey this is an error message that indicates bla.
 ///         MyCoolErrorMessage,
 ///         /// You are just not cool enough for my module!
 ///         YouAreNotCoolEnough,
 ///     }
-///     impl_from_frame_system(frame_system)
 /// }
 ///
 /// # use frame_system::{self as system, Trait, ensure_signed};
@@ -70,7 +70,7 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 #[macro_export]
 macro_rules! decl_error {
 	(
-		$(#[$attr:meta])*
+		$( #[ $( $attr:tt )* ] )*
 		pub enum $error:ident {
 			$(
 				$( #[doc = $doc_attr:tt] )*
@@ -78,10 +78,36 @@ macro_rules! decl_error {
 			),*
 			$(,)?
 		}
-		impl_from_frame_system($system:ident)
 	) => {
-		$crate::decl_error! {@impl
-			$(#[$attr])*
+		$crate::decl_error! {@parse_top_attr
+			top_attr_parsed {}
+			impl_from_frame_system {}
+			$( #[ $( $attr )* ] )*
+			pub enum $error {
+				$(
+					$( #[doc = $doc_attr] )*
+					$name
+				),*
+			}
+		}
+	};
+	// Parse top attr: impl_from_frame_system
+	(@parse_top_attr
+		top_attr_parsed { $( $top_attr_parsed:tt )*}
+		impl_from_frame_system {}
+		#[substrate(impl_from_frame_system($frame_system:ident))]
+		$( #[ $( $attr:tt )* ] )*
+		pub enum $error:ident {
+			$(
+				$( #[doc = $doc_attr:tt] )*
+				$name:ident
+			),*
+		}
+	) => {
+		$crate::decl_error! {@parse_top_attr
+			top_attr_parsed { $( $top_attr_parsed )* }
+			impl_from_frame_system { $frame_system }
+			$( #[ $( $attr )* ] )*
 			pub enum $error {
 				/// Frame system requires a signed origin,
 				SystemRequiresSignedOrigin,
@@ -94,21 +120,46 @@ macro_rules! decl_error {
 					$name
 				),*
 			}
-			impl_from_frame_system($system)
 		}
 	};
-	(
-		$(#[$attr:meta])*
+	// Parse top attr: invalid substrate attribute
+	(@parse_top_attr
+		top_attr_parsed { $( $top_attr_parsed:tt )*}
+		impl_from_frame_system {}
+		#[substrate($($invalid:tt)*)]
+		$( #[ $( $attr:tt )* ] )*
 		pub enum $error:ident {
 			$(
 				$( #[doc = $doc_attr:tt] )*
 				$name:ident
 			),*
-			$(,)?
 		}
 	) => {
-		$crate::decl_error! {@impl
-			$(#[$attr])*
+		compile_error!(
+			concat!(
+				"Invalid substrate attribute: `#[substrate(",
+				$( stringify!($invalid), )*
+				")]`",
+			)
+		);
+	};
+	// Parse top attr: other meta attribute
+	(@parse_top_attr
+		top_attr_parsed { $( $top_attr_parsed:tt )* }
+		impl_from_frame_system { $( $frame_system:ident )?}
+		#[$first_attr:meta]
+		$( #[ $( $attr:tt )* ] )*
+		pub enum $error:ident {
+			$(
+				$( #[doc = $doc_attr:tt] )*
+				$name:ident
+			),*
+		}
+	) => {
+		$crate::decl_error! {@parse_top_attr
+			top_attr_parsed { $( $top_attr_parsed )* #[$first_attr] }
+			impl_from_frame_system { $( $frame_system )? }
+			$( #[ $( $attr )* ] )*
 			pub enum $error {
 				$(
 					$( #[doc = $doc_attr] )*
@@ -117,15 +168,16 @@ macro_rules! decl_error {
 			}
 		}
 	};
-	(@impl
-		$(#[$attr:meta])*
+	// All parsed: implementation
+	(@parse_top_attr
+		top_attr_parsed { $( #[$attr:meta] )* }
+		impl_from_frame_system { $( $system:ident )?}
 		pub enum $error:ident {
 			$(
 				$( #[doc = $doc_attr:tt] )*
 				$name:ident
 			),*
 		}
-		$(impl_from_frame_system($system:ident))?
 	) => {
 		#[derive(Clone, PartialEq, Eq, $crate::RuntimeDebug)]
 		$(#[$attr])*

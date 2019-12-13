@@ -17,17 +17,45 @@
 // Test decl_error using impl_from_frame_system works
 #[cfg(test)]
 mod tests {
+	// No doc but impl_from_frame_system
 	support::decl_error!(
-		pub enum Error {
+		#[substrate(impl_from_frame_system(frame_system))]
+		pub enum Error1 {
 			MyError,
 		}
-		impl_from_frame_system(frame_system)
 	);
+
+	// Doc and impl_from_frame_system
+	support::decl_error!(
+		/// Doc
+		#[substrate(impl_from_frame_system(frame_system))]
+		/// Doc
+		pub enum Error2 {
+			MyError,
+		}
+	);
+
+	// No doc no impl_from_frame_system
+	support::decl_error!(
+		pub enum Error3 {
+			MyError,
+		}
+	);
+
+	// Doc but no impl_from_frame_system
+	support::decl_error!(
+		/// Doc
+		pub enum Error4 {
+			MyError,
+		}
+	);
+
 
 	#[test]
 	fn works() {
 		fn assert_impl_from_frame_system<T: From<frame_system::Error>>() {};
 
-		assert_impl_from_frame_system::<Error>();
+		assert_impl_from_frame_system::<Error1>();
+		assert_impl_from_frame_system::<Error2>();
 	}
 }
