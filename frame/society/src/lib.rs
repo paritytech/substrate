@@ -161,7 +161,7 @@ decl_storage! {
 		}): Vec<T::AccountId>;
 
 		/// The set of suspended members.
-		pub SuspendedMembers get(fn suspended_member): map T::AccountId => Option<T::BlockNumber>;
+		pub SuspendedMembers get(fn suspended_member): linked_map T::AccountId => Option<T::BlockNumber>;
 
 		/// The current bids.
 		Bids: Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>;
