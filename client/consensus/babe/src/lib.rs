@@ -883,36 +883,57 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		mut block: BlockImportParams<Block>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
+		println!(">>>>>>>> START IMPORT BLOCK");
 		let span = tracing::span!(tracing::Level::DEBUG, "import_block");
 		let _enter = span.enter();
 
 		let hash = block.post_header().hash();
 		let number = block.header.number().clone();
 
-		// early exit if block already in chain, otherwise the check for
-		// epoch changes will error when trying to re-import an epoch change
-		match self.client.status(BlockId::Hash(hash)) {
-			Ok(sp_blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
-			Ok(sp_blockchain::BlockStatus::Unknown) => {},
-			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
+		{
+			let span = tracing::span!(tracing::Level::DEBUG, "import_block_status");
+			let _enter = span.enter();
+
+			// early exit if block already in chain, otherwise the check for
+			// epoch changes will error when trying to re-import an epoch change
+			match self.client.status(BlockId::Hash(hash)) {
+				Ok(sp_blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
+				Ok(sp_blockchain::BlockStatus::Unknown) => {},
+				Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
+			}
 		}
 
-		let pre_digest = find_pre_digest::<Block>(&block.header)
+		let pre_digest = {
+			let span = tracing::span!(tracing::Level::DEBUG, "import_block_pre_digest");
+			let _enter = span.enter();
+
+			find_pre_digest::<Block>(&block.header)
 			.expect("valid babe headers must contain a predigest; \
-					 header has been already verified; qed");
+					 header has been already verified; qed")
+		};
 		let slot_number = pre_digest.slot_number();
 
 		let parent_hash = *block.header.parent_hash();
-		let parent_header = self.client.header(&BlockId::Hash(parent_hash))
+		let parent_header = {
+			let span = tracing::span!(tracing::Level::DEBUG, "import_block_parent_header");
+			let _enter = span.enter();
+
+			self.client.header(&BlockId::Hash(parent_hash))
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 			.ok_or_else(|| ConsensusError::ChainLookup(babe_err(
 				Error::<Block>::ParentUnavailable(parent_hash, hash)
-			).into()))?;
+			).into()))?
+		};
 
-		let parent_slot = find_pre_digest::<Block>(&parent_header)
+		let parent_slot = {
+			let span = tracing::span!(tracing::Level::DEBUG, "import_block_parent_slot");
+			let _enter = span.enter();
+
+			find_pre_digest::<Block>(&parent_header)
 			.map(|d| d.slot_number())
 			.expect("parent is non-genesis; valid BABE headers contain a pre-digest; \
-					header has already been verified; qed");
+					header has already been verified; qed")
+		};
 
 		// make sure that slot number is strictly increasing
 		if slot_number <= parent_slot {
@@ -923,7 +944,12 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			);
 		}
 
-		let mut epoch_changes = self.epoch_changes.lock();
+		let mut epoch_changes = {
+			let span = tracing::span!(tracing::Level::DEBUG, "import_block_lock");
+			let _enter = span.enter();
+
+			self.epoch_changes.lock()
+		};
 
 		// check if there's any epoch change expected to happen at this slot.
 		// `epoch` is the epoch to verify the block under, and `first_in_epoch` is true
@@ -965,8 +991,13 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		let total_weight = parent_weight + pre_digest.added_weight();
 
 		// search for this all the time so we can reject unexpected announcements.
-		let next_epoch_digest = find_next_epoch_digest::<Block>(&block.header)
-			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
+		let next_epoch_digest = {
+			let span = tracing::span!(tracing::Level::DEBUG, "import_block_find_next_epoch_digest");
+			let _enter = span.enter();
+
+			find_next_epoch_digest::<Block>(&block.header)
+				.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
+		};
 
 		match (first_in_epoch, next_epoch_digest.is_some()) {
 			(true, true) => {},
@@ -987,9 +1018,17 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
 
-		let info = self.client.info().chain;
+		let info = {
+			let span = tracing::span!(tracing::Level::DEBUG, "import_block_info");
+			let _enter = span.enter();
+
+			self.client.info().chain
+		};
 
 		if let Some(next_epoch_descriptor) = next_epoch_digest {
+			let span = tracing::span!(tracing::Level::DEBUG, "import_block_new_epoch_digest");
+			let _enter = span.enter();
+
 			let next_epoch = epoch.increment(next_epoch_descriptor);
 
 			old_epoch_changes = Some(epoch_changes.clone());
@@ -1039,18 +1078,27 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			);
 		}
 
-		aux_schema::write_block_weight(
-			hash,
-			&total_weight,
-			|values| block.auxiliary.extend(
-				values.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
-			),
-		);
+		{
+			let span = tracing::span!(tracing::Level::DEBUG, "import_block_write_block_weight");
+			let _enter = span.enter();
+
+			aux_schema::write_block_weight(
+				hash,
+				&total_weight,
+				|values| block.auxiliary.extend(
+					values.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+				),
+			);
+		}
+
 
 		// The fork choice rule is that we pick the heaviest chain (i.e.
 		// more primary blocks), if there's a tie we go with the longest
 		// chain.
 		block.fork_choice = {
+			let span = tracing::span!(tracing::Level::DEBUG, "import_block_fork_choice");
+			let _enter = span.enter();
+			
 			let (last_best, last_best_number) = (info.best_hash, info.best_number);
 
 			let last_best_weight = if &last_best == block.header.parent_hash() {
@@ -1087,6 +1135,8 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				*epoch_changes = old_epoch_changes;
 			}
 		}
+
+		println!(">>>>>>>> END IMPORT BLOCK");
 
 		import_result.map_err(Into::into)
 	}
