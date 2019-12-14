@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use sp_runtime::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
-use runtime_io;
+use sp_io;
 use support::{impl_outer_origin, impl_outer_event, parameter_types, weights::Weight};
 use primitives::H256;
 use codec::{Encode, Decode};
@@ -81,7 +81,7 @@ pub fn to_authorities(vec: Vec<(u64, u64)>) -> AuthorityList {
 		.collect()
 }
 
-pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternalities {
+pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> sp_io::TestExternalities {
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig {
 		authorities: to_authorities(authorities),

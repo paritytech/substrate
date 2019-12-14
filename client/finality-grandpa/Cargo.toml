@@ -14,7 +14,7 @@ tokio-executor = "0.1.8"
 tokio-timer = "0.2.11"
 rand = "0.7.2"
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-sp-runtime = {  path = "../../primitives/sr-primitives" }
+sp-runtime = {  path = "../../primitives/runtime" }
 consensus_common = { package = "sp-consensus", path = "../../primitives/consensus/common" }
 primitives = { package = "sp-core",  path = "../../primitives/core" }
 sc-telemetry = { path = "../telemetry" }
@@ -32,12 +32,13 @@ tracing = "0.1.10"
 
 [dev-dependencies]
 grandpa = { package = "finality-grandpa", version = "0.10.1", features = ["derive-codec", "test-helpers"] }
-network = { package = "sc-network", path = "../network", features = ["test-helpers"] }
+network = { package = "sc-network", path = "../network" }
+sc-network-test = { path = "../network/test" }
 keyring = { package = "sp-keyring", path = "../../primitives/keyring" }
-test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client"}
+test-client = { package = "substrate-test-runtime-client", path = "../../test-utils/runtime/client"}
 babe_primitives = { package = "sp-consensus-babe", path = "../../primitives/consensus/babe" }
 state_machine = { package = "sp-state-machine", path = "../../primitives/state-machine" }
 env_logger = "0.7.0"
 tokio = "0.1.22"
 tempfile = "3.1.0"
-sp-api = { path = "../../primitives/sr-api" }
+sp-api = { path = "../../primitives/api" }

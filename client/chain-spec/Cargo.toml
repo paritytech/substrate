@@ -11,5 +11,5 @@ network = { package = "sc-network", path = "../network" }
 primitives = { package = "sp-core", path = "../../primitives/core" }
 serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.41"
-sp-runtime = { path = "../../primitives/sr-primitives" }
+sp-runtime = { path = "../../primitives/runtime" }
 tel = { package = "sc-telemetry", path = "../telemetry" }

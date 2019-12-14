@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 wasm-interface = { package = "sp-wasm-interface", path = "../wasm-interface", optional = true }
-rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-std = { path = "../std", default-features = false }
 sp-runtime-interface-proc-macro = { path = "proc-macro" }
 externalities = { package = "sp-externalities", path = "../externalities", optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false }
@@ -15,17 +15,18 @@ static_assertions = "1.0.0"
 primitive-types = { version = "0.6.1", default-features = false }
 
 [dev-dependencies]
-executor = { package = "sc-executor", path = "../../client/executor" }
 test-wasm = { package = "sp-runtime-interface-test-wasm", path = "test-wasm" }
 state_machine = { package = "sp-state-machine", path = "../../primitives/state-machine"  }
 primitives = { package = "sp-core", path = "../core" }
-runtime-io = { package = "sp-io", path = "../sr-io" }
+sp-io = { path = "../io" }
+rustversion = "1.0.0"
+trybuild = "1.0.17"
 
 [features]
 default = [ "std" ]
 std = [
 	"wasm-interface",
-	"rstd/std",
+	"sp-std/std",
 	"codec/std",
 	"externalities",
 	"environmental",

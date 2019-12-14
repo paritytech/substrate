@@ -9,11 +9,11 @@ log = "0.4"
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
 frame-metadata = { path = "../metadata", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io", default-features = false }
-sp-runtime = { path = "../../primitives/sr-primitives", default-features = false }
+sp-std = { path = "../../primitives/std", default-features = false }
+sp-io ={ path = "../../primitives/io", default-features = false }
+sp-runtime = { path = "../../primitives/runtime", default-features = false }
 primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
-sp-arithmetic = { path = "../../primitives/sr-arithmetic", default-features = false }
+sp-arithmetic = { path = "../../primitives/arithmetic", default-features = false }
 inherents = { package = "sp-inherents", path = "../../primitives/inherents", default-features = false }
 frame-support-procedural = { package = "frame-support-procedural", path = "./procedural" }
 paste = "0.1.6"
@@ -34,9 +34,9 @@ std = [
 	"once_cell",
 	"bitmask/std",
 	"serde",
-	"runtime-io/std",
+	"sp-io/std",
 	"codec/std",
-	"rstd/std",
+	"sp-std/std",
 	"sp-runtime/std",
 	"sp-arithmetic/std",
 	"frame-metadata/std",

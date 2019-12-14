@@ -24,7 +24,7 @@ use sp_runtime::{
 };
 use sp_version::RuntimeVersion;
 use support::{impl_outer_origin, parameter_types, weights::Weight};
-use runtime_io;
+use sp_io;
 use primitives::{H256, Blake2Hasher};
 
 impl_outer_origin!{
@@ -97,7 +97,7 @@ impl Trait for Test {
 	type EpochChangeTrigger = crate::ExternalTrigger;
 }
 
-pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> runtime_io::TestExternalities {
+pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> sp_io::TestExternalities {
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig {
 		authorities: authorities.into_iter().map(|a| (UintAuthorityId(a).to_public_key(), 1)).collect(),
