@@ -339,10 +339,12 @@ pub mod tests {
 	use crate::light::fetcher::{FetchChecker, LightDataChecker, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use primitives::{blake2_256, Blake2Hasher, H256};
-	use primitives::storage::{well_known_keys, StorageKey};
+	use primitives::storage::{well_known_keys, StorageKey, ChildInfo};
 	use sp_runtime::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
+
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 
 	type TestChecker = LightDataChecker<
 		NativeExecutor<test_client::LocalExecutor>,
@@ -394,8 +396,12 @@ pub mod tests {
 		use test_client::TestClientBuilderExt;
 		// prepare remote client
 		let remote_client = test_client::TestClientBuilder::new()
-			.add_extra_child_storage(b":child_storage:default:child1".to_vec(), b"key1".to_vec(), b"value1".to_vec())
-			.build();
+			.add_extra_child_storage(
+				b":child_storage:default:child1".to_vec(),
+				CHILD_INFO_1,
+				b"key1".to_vec(),
+				b"value1".to_vec(),
+			).build();
 		let remote_block_id = BlockId::Number(0);
 		let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
 		let mut remote_block_header = remote_client.header(&remote_block_id).unwrap().unwrap();
@@ -406,12 +412,14 @@ pub mod tests {
 		let child_value = remote_client.child_storage(
 			&remote_block_id,
 			&StorageKey(b":child_storage:default:child1".to_vec()),
+			CHILD_INFO_1,
 			&StorageKey(b"key1".to_vec()),
 		).unwrap().unwrap().0;
 		assert_eq!(b"value1"[..], child_value[..]);
 		let remote_read_proof = remote_client.read_child_proof(
 			&remote_block_id,
 			b":child_storage:default:child1",
+			CHILD_INFO_1,
 			&[b"key1"],
 		).unwrap();
 
@@ -487,11 +495,14 @@ pub mod tests {
 			remote_read_proof,
 			result,
 		) = prepare_for_read_child_proof_check();
+		let child_infos = CHILD_INFO_1.info();
 		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_child_proof(
 			&RemoteReadChildRequest::<Header> {
 				block: remote_block_header.hash(),
 				header: remote_block_header,
 				storage_key: b":child_storage:default:child1".to_vec(),
+				child_info: child_infos.0.to_vec(),
+				child_type: child_infos.1,
 				keys: vec![b"key1".to_vec()],
 				retry_count: None,
 			},

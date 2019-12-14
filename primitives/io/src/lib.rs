@@ -39,7 +39,7 @@ use primitives::{
 	traits::KeystoreExt,
 	offchain::{OffchainExt, TransactionPoolExt},
 	hexdisplay::HexDisplay,
-	storage::ChildStorageKey,
+	storage::{ChildStorageKey, ChildInfo},
 };
 
 use primitives::{
@@ -91,10 +91,28 @@ pub trait Storage {
 		self.storage(key).map(|s| s.to_vec())
 	}
 
-	/// Returns the data for `key` in the child storage or `None` if the key can not be found.
-	fn child_get(&self, child_storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+	/// All Child api uses :
+	/// - A `child_storage_key` to define the anchor point for the child proof
+	/// (commonly the location where the child root is stored in its parent trie).
+	/// - A `child_storage_types` to identify the kind of the child type and how its
+	/// `child definition` parameter is encoded.
+	/// - A `child_definition_parameter` which is the additional information required
+	/// to use the child trie. For instance defaults child tries requires this to
+	/// contain a collision free unique id.
+	///
+	/// This function specifically returns the data for `key` in the child storage or `None`
+	/// if the key can not be found.
+	fn child_get(
+		&self,
+		child_storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.child_storage(storage_key, key).map(|s| s.to_vec())
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.child_storage(storage_key, child_info, key).map(|s| s.to_vec())
 	}
 
 	/// Get `key` from storage, placing the value into `value_out` and return the number of
@@ -117,15 +135,21 @@ pub trait Storage {
 	/// doesn't exist at all.
 	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
 	/// are copied into `value_out`.
+	///
+	/// See `child_get` for common child api parameters.
 	fn child_read(
 		&self,
 		child_storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
 		key: &[u8],
 		value_out: &mut [u8],
 		value_offset: u32,
 	) -> Option<u32> {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.child_storage(storage_key, key)
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.child_storage(storage_key, child_info, key)
 			.map(|value| {
 				let value_offset = value_offset as usize;
 				let data = &value[value_offset.min(value.len())..];
@@ -141,9 +165,20 @@ pub trait Storage {
 	}
 
 	/// Set `key` to `value` in the child storage denoted by `child_storage_key`.
-	fn child_set(&mut self, child_storage_key: &[u8], key: &[u8], value: &[u8]) {
+	///
+	/// See `child_get` for common child api parameters.
+	fn child_set(
+		&mut self,
+		child_storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+		value: &[u8],
+	) {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.set_child_storage(storage_key, key.to_vec(), value.to_vec());
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.set_child_storage(storage_key, child_info, key.to_vec(), value.to_vec());
 	}
 
 	/// Clear the storage of the given `key` and its value.
@@ -152,15 +187,34 @@ pub trait Storage {
 	}
 
 	/// Clear the given child storage of the given `key` and its value.
-	fn child_clear(&mut self, child_storage_key: &[u8], key: &[u8]) {
+	///
+	/// See `child_get` for common child api parameters.
+	fn child_clear(
+		&mut self,
+		child_storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+	) {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.clear_child_storage(storage_key, key);
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.clear_child_storage(storage_key, child_info, key);
 	}
 
 	/// Clear an entire child storage.
-	fn child_storage_kill(&mut self, child_storage_key: &[u8]) {
+	///
+	/// See `child_get` for common child api parameters.
+	fn child_storage_kill(
+		&mut self,
+		child_storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+	) {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.kill_child_storage(storage_key);
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.kill_child_storage(storage_key, child_info);
 	}
 
 	/// Check whether the given `key` exists in storage.
@@ -169,9 +223,19 @@ pub trait Storage {
 	}
 
 	/// Check whether the given `key` exists in storage.
-	fn child_exists(&self, child_storage_key: &[u8], key: &[u8]) -> bool {
+	///
+	/// See `child_get` for common child api parameters.
+	fn child_exists(
+		&self,
+		child_storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+	) -> bool {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.exists_child_storage(storage_key, key)
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.exists_child_storage(storage_key, child_info, key)
 	}
 
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
@@ -180,9 +244,19 @@ pub trait Storage {
 	}
 
 	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
-	fn child_clear_prefix(&mut self, child_storage_key: &[u8], prefix: &[u8]) {
+	///
+	/// See `child_get` for common child api parameters.
+	fn child_clear_prefix(
+		&mut self,
+		child_storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		prefix: &[u8],
+	) {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.clear_child_prefix(storage_key, prefix);
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.clear_child_prefix(storage_key, child_info, prefix);
 	}
 
 	/// "Commit" all existing operations and compute the resulting storage root.
@@ -199,7 +273,12 @@ pub trait Storage {
 	/// The hashing algorithm is defined by the `Block`.
 	///
 	/// Returns the SCALE encoded hash.
-	fn child_root(&mut self, child_storage_key: &[u8]) -> Vec<u8> {
+	///
+	/// See `child_get` for common child api parameters.
+	fn child_root(
+		&mut self,
+		child_storage_key: &[u8],
+	) -> Vec<u8> {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
 		self.child_storage_root(storage_key)
 	}
@@ -220,9 +299,17 @@ pub trait Storage {
 	}
 
 	/// Get the next key in storage after the given one in lexicographic order in child storage.
-	fn child_next_key(&mut self, child_storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+	fn child_next_key(
+		&mut self,
+		child_storage_key: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.next_child_storage_key(storage_key, key)
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.next_child_storage_key(storage_key, child_info, key)
 	}
 }
 
@@ -817,6 +904,7 @@ mod tests {
 	use super::*;
 	use primitives::map;
 	use sp_state_machine::BasicExternalities;
+	use primitives::storage::Storage;
 
 	#[test]
 	fn storage_works() {
@@ -829,7 +917,10 @@ mod tests {
 			storage::set(b"foo", &[1, 2, 3][..]);
 		});
 
-		t = BasicExternalities::new(map![b"foo".to_vec() => b"bar".to_vec()], map![]);
+		t = BasicExternalities::new(Storage {
+			top: map![b"foo".to_vec() => b"bar".to_vec()],
+			children: map![],
+		});
 
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
@@ -839,10 +930,10 @@ mod tests {
 
 	#[test]
 	fn read_storage_works() {
-		let mut t = BasicExternalities::new(
-			map![b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()],
-			map![],
-		);
+		let mut t = BasicExternalities::new(Storage {
+			top: map![b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()],
+			children: map![],
+		});
 
 		t.execute_with(|| {
 			let mut v = [0u8; 4];
@@ -856,15 +947,15 @@ mod tests {
 
 	#[test]
 	fn clear_prefix_works() {
-		let mut t = BasicExternalities::new(
-			map![
+		let mut t = BasicExternalities::new(Storage {
+			top: map![
 				b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 				b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 				b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 				b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 			],
-			map![],
-		);
+			children: map![],
+		});
 
 		t.execute_with(|| {
 			storage::clear_prefix(b":abc");

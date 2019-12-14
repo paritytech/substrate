@@ -50,6 +50,7 @@ use runtime_version::NativeVersion;
 use runtime_support::{impl_outer_origin, parameter_types, weights::Weight};
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
+use primitives::storage::ChildType;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use babe_primitives::AuthorityId;
@@ -910,21 +911,37 @@ fn test_read_storage() {
 
 fn test_read_child_storage() {
 	const CHILD_KEY: &[u8] = b":child_storage:default:read_child_storage";
+	const UNIQUE_ID: &[u8] = b":unique_id";
 	const KEY: &[u8] = b":read_child_storage";
-	sp_io::storage::child_set(CHILD_KEY, KEY, b"test");
+	sp_io::storage::child_set(
+		CHILD_KEY,
+		UNIQUE_ID,
+		ChildType::CryptoUniqueId as u32,
+		KEY,
+		b"test",
+	);
 
 	let mut v = [0u8; 4];
 	let r = sp_io::storage::child_read(
 		CHILD_KEY,
+		UNIQUE_ID,
+		ChildType::CryptoUniqueId as u32,
 		KEY,
 		&mut v,
-		0
+		0,
 	);
 	assert_eq!(r, Some(4));
 	assert_eq!(&v, b"test");
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::child_read(CHILD_KEY, KEY, &mut v, 8);
+	let r = sp_io::storage::child_read(
+		CHILD_KEY,
+		UNIQUE_ID,
+		ChildType::CryptoUniqueId as u32,
+		KEY,
+		&mut v,
+		8,
+	);
 	assert_eq!(r, Some(4));
 	assert_eq!(&v, &[0, 0, 0, 0]);
 }

@@ -22,8 +22,8 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::rc::Rc;
 use serde::{Serialize, Deserialize};
-use primitives::storage::{StorageKey, StorageData};
-use sp_runtime::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
+use primitives::storage::{StorageKey, StorageData, ChildInfo, Storage, StorageChild};
+use sp_runtime::BuildStorage;
 use serde_json as json;
 use crate::RuntimeGenesis;
 use network::Multiaddr;
@@ -71,25 +71,54 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 }
 
 impl<'a, G: RuntimeGenesis, E> BuildStorage for &'a ChainSpec<G, E> {
-	fn build_storage(&self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
+	fn build_storage(&self) -> Result<Storage, String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
-			Genesis::Raw(map, children_map) => Ok((
-				map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
-				children_map.into_iter().map(|(sk, map)| (
-					sk.0,
-					map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
-				)).collect(),
-			)),
+			Genesis::Raw(RawGenesis { top: map, children: children_map }) => Ok(Storage {
+				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
+				children: children_map.into_iter().map(|(sk, child_content)| {
+					let child_info = ChildInfo::resolve_child_info( 
+						child_content.child_type,
+						child_content.child_info.as_slice(),
+					).expect("chainspec contains correct content").to_owned();
+					(
+						sk.0,
+						StorageChild {
+							data: child_content.data.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
+							child_info,
+						},
+					)
+				}).collect(),
+			}),
 		}
 	}
 
 	fn assimilate_storage(
 		&self,
-		_: &mut (StorageOverlay, ChildrenStorageOverlay)
+		_: &mut Storage,
 	) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
 	}
+}
+
+type GenesisStorage = HashMap<StorageKey, StorageData>;
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+struct ChildRawStorage {
+	data: GenesisStorage,
+	child_info: Vec<u8>,
+	child_type: u32,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+/// Storage content for genesis block.
+struct RawGenesis {
+	pub top: GenesisStorage,
+	pub children: HashMap<StorageKey, ChildRawStorage>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -97,10 +126,7 @@ impl<'a, G: RuntimeGenesis, E> BuildStorage for &'a ChainSpec<G, E> {
 #[serde(deny_unknown_fields)]
 enum Genesis<G> {
 	Runtime(G),
-	Raw(
-		HashMap<StorageKey, StorageData>,
-		HashMap<StorageKey, HashMap<StorageKey, StorageData>>,
-	),
+	Raw(RawGenesis),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -255,19 +281,26 @@ impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
 		let genesis = match (raw, self.genesis.resolve()?) {
 			(true, Genesis::Runtime(g)) => {
 				let storage = g.build_storage()?;
-				let top = storage.0.into_iter()
+				let top = storage.top.into_iter()
 					.map(|(k, v)| (StorageKey(k), StorageData(v)))
 					.collect();
-				let children = storage.1.into_iter()
-					.map(|(sk, child)| (
+				let children = storage.children.into_iter()
+					.map(|(sk, child)| {
+						let info = child.child_info.as_ref();
+						let (info, ci_type) = info.info();
+						(
 							StorageKey(sk),
-							child.into_iter()
-								.map(|(k, v)| (StorageKey(k), StorageData(v)))
-								.collect(),
-					))
+							ChildRawStorage {
+								data: child.data.into_iter()
+									.map(|(k, v)| (StorageKey(k), StorageData(v))) 
+									.collect(),
+								child_info: info.to_vec(),
+								child_type: ci_type,
+							},
+					)})
 					.collect();
 
-				Genesis::Raw(top, children)
+				Genesis::Raw(RawGenesis { top, children })
 			},
 			(_, genesis) => genesis,
 		};
@@ -290,9 +323,9 @@ mod tests {
 	impl BuildStorage for Genesis {
 		fn assimilate_storage(
 			&self,
-			storage: &mut (StorageOverlay, ChildrenStorageOverlay),
+			storage: &mut Storage,
 		) -> Result<(), String> {
-			storage.0.extend(
+			storage.top.extend(
 				self.0.iter().map(|(a, b)| (a.clone().into_bytes(), b.clone().into_bytes()))
 			);
 			Ok(())

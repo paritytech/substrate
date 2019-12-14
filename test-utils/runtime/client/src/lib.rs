@@ -23,12 +23,13 @@ pub mod trait_tests;
 mod block_builder_ext;
 
 use std::sync::Arc;
-use std::collections::{HashMap, BTreeMap};
+use std::collections::HashMap;
 pub use block_builder_ext::BlockBuilderExt;
 pub use generic_test_client::*;
 pub use runtime;
 
 use primitives::sr25519;
+use primitives::storage::{ChildInfo, Storage, StorageChild};
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor};
 use client::{
@@ -97,8 +98,7 @@ pub type LightExecutor = client::light::call_executor::GenesisCallExecutor<
 pub struct GenesisParameters {
 	support_changes_trie: bool,
 	heap_pages_override: Option<u64>,
-	extra_storage: BTreeMap<Vec<u8>, Vec<u8>>,
-	child_extra_storage: HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>,
+	extra_storage: Storage,
 }
 
 impl GenesisParameters {
@@ -118,27 +118,26 @@ impl GenesisParameters {
 			1000,
 			self.heap_pages_override,
 			self.extra_storage.clone(),
-			self.child_extra_storage.clone(),
 		)
 	}
 }
 
 impl generic_test_client::GenesisInit for GenesisParameters {
-	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
+	fn genesis_storage(&self) -> Storage {
 		use codec::Encode;
 		let mut storage = self.genesis_config().genesis_map();
 
-		let child_roots = storage.1.iter().map(|(sk, child_map)| {
+		let child_roots = storage.children.iter().map(|(sk, child_content)| {
 			let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-				child_map.clone().into_iter().collect()
+				child_content.data.clone().into_iter().collect()
 			);
 			(sk.clone(), state_root.encode())
 		});
 		let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-			storage.0.clone().into_iter().chain(child_roots).collect()
+			storage.top.clone().into_iter().chain(child_roots).collect()
 		);
 		let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
-		storage.0.extend(additional_storage_with_genesis(&block));
+		storage.top.extend(additional_storage_with_genesis(&block));
 
 		storage
 	}
@@ -189,6 +188,7 @@ pub trait TestClientBuilderExt<B>: Sized {
 	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
 		self,
 		storage_key: SK,
+		child_info: ChildInfo,
 		key: K,
 		value: V,
 	) -> Self;
@@ -228,13 +228,14 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	fn add_extra_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(mut self, key: K, value: V) -> Self {
 		let key = key.into();
 		assert!(!key.is_empty());
-		self.genesis_init_mut().extra_storage.insert(key, value.into());
+		self.genesis_init_mut().extra_storage.top.insert(key, value.into());
 		self
 	}
 
 	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
 		mut self,
 		storage_key: SK,
+		child_info: ChildInfo,
 		key: K,
 		value: V,
 	) -> Self {
@@ -242,10 +243,12 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 		let key = key.into();
 		assert!(!storage_key.is_empty());
 		assert!(!key.is_empty());
-		self.genesis_init_mut().child_extra_storage
+		self.genesis_init_mut().extra_storage.children
 			.entry(storage_key)
-			.or_insert_with(Default::default)
-			.insert(key, value.into());
+			.or_insert_with(|| StorageChild {
+				data: Default::default(),
+				child_info: child_info.to_owned(),
+			}).data.insert(key, value.into());
 		self
 	}
 

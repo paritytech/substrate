@@ -26,7 +26,7 @@ use sp_runtime::{
     },
     generic::BlockId
 };
-use primitives::{ChangesTrieConfiguration};
+use primitives::ChangesTrieConfiguration;
 use state_machine::StorageProof;
 use sp_blockchain::{
 	HeaderMetadata, well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
@@ -81,6 +81,11 @@ pub struct RemoteReadChildRequest<Header: HeaderT> {
 	pub header: Header,
 	/// Storage key for child.
 	pub storage_key: Vec<u8>,
+	/// Child trie source information.
+	pub child_info: Vec<u8>,
+	/// Child type, its required to resolve `child_info`
+	/// content and choose child implementation.
+	pub child_type: u32,
 	/// Child storage key to read.
 	pub keys: Vec<Vec<u8>>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
