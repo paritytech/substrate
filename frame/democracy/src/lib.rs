@@ -282,9 +282,8 @@ decl_storage! {
 		/// Information concerning any given referendum.
 		pub ReferendumInfoOf get(fn referendum_info):
 			map ReferendumIndex => Option<(ReferendumInfo<T::BlockNumber, T::Hash>)>;
-		/// Queue of successful referenda to be dispatched.
-		pub DispatchQueue get(fn dispatch_queue):
-			map hasher(twox_64_concat) T::BlockNumber => Vec<Option<(T::Hash, ReferendumIndex)>>;
+		/// Queue of successful referenda to be dispatched. Stored ordered by block number.
+		pub DispatchQueue get(fn dispatch_queue): Vec<(T::BlockNumber, T::Hash, ReferendumIndex)>;
 
 		/// Get the voters for the current proposal.
 		pub VotersFor get(fn voters_for): map ReferendumIndex => Vec<T::AccountId>;
@@ -579,21 +578,13 @@ decl_module! {
 
 		/// Cancel a proposal queued for enactment.
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
-		fn cancel_queued(
-			origin,
-			#[compact] when: T::BlockNumber,
-			#[compact] which: u32,
-			#[compact] what: ReferendumIndex
-		) {
+		fn cancel_queued(origin, which: ReferendumIndex) {
 			ensure_root(origin)?;
-			let which = which as usize;
-			let mut items = <DispatchQueue<T>>::get(when);
-			if items.get(which).and_then(Option::as_ref).map_or(false, |x| x.1 == what) {
-				items[which] = None;
-				<DispatchQueue<T>>::insert(when, items);
-			} else {
-				Err("proposal not found")?
-			}
+			let mut items = <DispatchQueue<T>>::get();
+			let original_len = items.len();
+			items.retain(|i| i.2 != which);
+			ensure!(items.len() < original_len, "proposal not found");
+			<DispatchQueue<T>>::put(items);
 		}
 
 		fn on_initialize(n: T::BlockNumber) {
@@ -709,39 +700,41 @@ decl_module! {
 		/// Register the preimage for an upcoming proposal. This requires the proposal to be
 		/// in the dispatch queue. No deposit is needed.
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
-		fn note_imminent_preimage(origin,
-			encoded_proposal: Vec<u8>,
-			when: T::BlockNumber,
-			which: u32
-		) {
+		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 			ensure!(!<Preimages<T>>::exists(&proposal_hash), "preimage already noted");
-			let queue = <DispatchQueue<T>>::get(when);
-			let item = queue.get(which as usize).and_then(|x| x.as_ref())
-				.ok_or("dispatch queue entry not found")?;
-			ensure!(item.0 == proposal_hash, "dispatch queue entry invalid");
+			let queue = <DispatchQueue<T>>::get();
+			ensure!(queue.iter().any(|item| &item.1 == &proposal_hash), "not imminent");
 
 			let now = <system::Module<T>>::block_number();
-			<Preimages<T>>::insert(proposal_hash, (encoded_proposal, who.clone(), <BalanceOf<T>>::zero(), now));
+			let free = <BalanceOf<T>>::zero();
+			<Preimages<T>>::insert(proposal_hash, (encoded_proposal, who.clone(), free, now));
 
-			Self::deposit_event(RawEvent::PreimageNoted(proposal_hash, who, Zero::zero()));
+			Self::deposit_event(RawEvent::PreimageNoted(proposal_hash, who, free));
 		}
 
 		/// Remove an expired proposal preimage and collect the deposit.
+		///
+		/// This will only work after `VotingPeriod` blocks from the time that the preimage was
+		/// noted, if it's the same account doing it. If it's a different account, then it'll only
+		/// work an additional `EnactmentPeriod` later.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn reap_preimage(origin, proposal_hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 
-			if let Some((_, old, deposit, then)) = <Preimages<T>>::get(&proposal_hash) {
-				let now = <system::Module<T>>::block_number();
-				if now >= then + T::EnactmentPeriod::get() + T::VotingPeriod::get() {
-					// allowed to claim the deposit.
-					let _ = T::Currency::repatriate_reserved(&old, &who, deposit);
-					<Preimages<T>>::remove(&proposal_hash);
-					Self::deposit_event(RawEvent::PreimageReaped(proposal_hash, old, deposit, who));
-				}
-			}
+			let (_, old, deposit, then) = <Preimages<T>>::get(&proposal_hash).ok_or("not found")?;
+			let now = <system::Module<T>>::block_number();
+			let (voting, enactment) = (T::VotingPeriod::get(), T::EnactmentPeriod::get());
+			let additional = if who == old { Zero::zero() } else { enactment };
+			ensure!(now >= then + voting + additional, "too early");
+
+			let queue = <DispatchQueue<T>>::get();
+			ensure!(!queue.iter().any(|item| &item.1 == &proposal_hash), "imminent");
+
+			let _ = T::Currency::repatriate_reserved(&old, &who, deposit);
+			<Preimages<T>>::remove(&proposal_hash);
+			Self::deposit_event(RawEvent::PreimageReaped(proposal_hash, old, deposit, who));
 		}
 	}
 }
@@ -1022,7 +1015,7 @@ impl<T: Trait> Module<T> {
 			.map(|a| (a.clone(), Self::vote_of((index, a))))
 			// ^^^ defensive only: all items come from `voters`; for an item to be in `voters`
 			// there must be a vote registered; qed
-			.filter(|&(_, vote)| vote.aye == approved)	// Just the winning coins
+			.filter(|&(_, vote)| vote.aye == approved)  // Just the winning coins
 		{
 			// now plus: the base lock period multiplied by the number of periods this voter
 			// offered to lock should they win...
@@ -1044,10 +1037,11 @@ impl<T: Trait> Module<T> {
 			if info.delay.is_zero() {
 				let _ = Self::enact_proposal(info.proposal_hash, index);
 			} else {
-				<DispatchQueue<T>>::append_or_insert(
-					now + info.delay,
-					&[Some((info.proposal_hash, index))][..]
-				);
+				let item = (now + info.delay,info.proposal_hash, index);
+				<DispatchQueue<T>>::mutate(|queue| {
+					let pos = queue.binary_search_by_key(&item.0, |x| x.0).unwrap_or_else(|e| e);
+					queue.insert(pos, item);
+				});
 			}
 		} else {
 			Self::deposit_event(RawEvent::NotPassed(index));
@@ -1070,8 +1064,15 @@ impl<T: Trait> Module<T> {
 			Self::bake_referendum(now, index, info)?;
 		}
 
-		for (proposal_hash, index) in <DispatchQueue<T>>::take(now).into_iter().filter_map(|x| x) {
-			let _ = Self::enact_proposal(proposal_hash, index);
+		let queue = <DispatchQueue<T>>::get();
+		let mut used = 0;
+		// It's stored in order, so the earliest will always be at the start.
+		for &(_, proposal_hash, index) in queue.iter().take_while(|x| x.0 == now) {
+			let _ = Self::enact_proposal(proposal_hash.clone(), index);
+			used += 1;
+		}
+		if used != 0 {
+			<DispatchQueue<T>>::put(&queue[used..]);
 		}
 		Ok(())
 	}
@@ -1320,6 +1321,57 @@ mod tests {
 	}
 
 	#[test]
+	fn preimage_deposit_should_be_reapable_earlier_by_owner() {
+		new_test_ext().execute_with(|| {
+			System::set_block_number(1);
+			PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
+			assert_ok!(Democracy::note_preimage(Origin::signed(6), set_balance_proposal(2)));
+
+			assert_eq!(Balances::reserved_balance(6), 12);
+
+			next_block();
+			assert_noop!(
+				Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)),
+				"too early"
+			);
+			next_block();
+			assert_ok!(Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)));
+
+			assert_eq!(Balances::reserved_balance(6), 0);
+			assert_eq!(Balances::free_balance(6), 60);
+		});
+	}
+
+	#[test]
+	fn preimage_deposit_should_be_reapable() {
+		new_test_ext().execute_with(|| {
+			System::set_block_number(1);
+			assert_noop!(
+				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)),
+				"not found"
+			);
+
+			PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
+			assert_ok!(Democracy::note_preimage(Origin::signed(6), set_balance_proposal(2)));
+			assert_eq!(Balances::reserved_balance(6), 12);
+
+			next_block();
+			next_block();
+			next_block();
+			assert_noop!(
+				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)),
+				"too early"
+			);
+
+			next_block();
+			assert_ok!(Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)));
+			assert_eq!(Balances::reserved_balance(6), 0);
+			assert_eq!(Balances::free_balance(6), 48);
+			assert_eq!(Balances::free_balance(5), 62);
+		});
+	}
+
+	#[test]
 	fn noting_imminent_preimage_for_free_should_work() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
@@ -1334,18 +1386,32 @@ mod tests {
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
 			assert_noop!(
-				Democracy::note_imminent_preimage(Origin::signed(7), set_balance_proposal(2), 3, 0),
-				"dispatch queue entry not found"
+				Democracy::note_imminent_preimage(Origin::signed(7), set_balance_proposal(2)),
+				"not imminent"
 			);
 
 			next_block();
 
 			// Now we're in the dispatch queue it's all good.
-			assert_ok!(Democracy::note_imminent_preimage(Origin::signed(7), set_balance_proposal(2), 3, 0));
+			assert_ok!(Democracy::note_imminent_preimage(Origin::signed(7), set_balance_proposal(2)));
 
 			next_block();
 
 			assert_eq!(Balances::free_balance(42), 2);
+		});
+	}
+
+	#[test]
+	fn reaping_imminent_preimage_should_fail() {
+		new_test_ext().execute_with(|| {
+			System::set_block_number(1);
+			let h = set_balance_proposal_hash_and_note(2);
+			let r = Democracy::inject_referendum(3, h, VoteThreshold::SuperMajorityApprove, 1);
+			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
+			next_block();
+			next_block();
+			// now imminent.
+			assert_noop!(Democracy::reap_preimage(Origin::signed(6), h), "imminent");
 		});
 	}
 
@@ -1719,8 +1785,8 @@ mod tests {
 			fast_forward_to(4);
 
 			assert!(Democracy::referendum_info(0).is_none());
-			assert_eq!(Democracy::dispatch_queue(6), vec![
-				Some((set_balance_proposal_hash_and_note(2), 0))
+			assert_eq!(Democracy::dispatch_queue(), vec![
+				(6, set_balance_proposal_hash_and_note(2), 0)
 			]);
 
 			// referendum passes and wait another two blocks for enactment.
@@ -1743,14 +1809,13 @@ mod tests {
 
 			fast_forward_to(4);
 
-			assert_eq!(Democracy::dispatch_queue(6), vec![
-				Some((set_balance_proposal_hash_and_note(2), 0))
+			assert_eq!(Democracy::dispatch_queue(), vec![
+				(6, set_balance_proposal_hash_and_note(2), 0)
 			]);
 
-			assert_noop!(Democracy::cancel_queued(Origin::ROOT, 5, 0, 0), "proposal not found");
-			assert_noop!(Democracy::cancel_queued(Origin::ROOT, 6, 1, 0), "proposal not found");
-			assert_ok!(Democracy::cancel_queued(Origin::ROOT, 6, 0, 0));
-			assert_eq!(Democracy::dispatch_queue(6), vec![None]);
+			assert_noop!(Democracy::cancel_queued(Origin::ROOT, 1), "proposal not found");
+			assert_ok!(Democracy::cancel_queued(Origin::ROOT, 0));
+			assert_eq!(Democracy::dispatch_queue(), vec![]);
 		});
 	}
 
