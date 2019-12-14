@@ -723,7 +723,7 @@ mod tests {
 	#[test]
 	fn storage_changes_root_is_some_when_extrinsic_changes_are_empty() {
 		let mut overlay = prepare_overlay_with_changes();
-		let conf = overlay.remove_changes_trie_config().unwrap();
+		let conf = overlay.changes_trie_config.take().unwrap();
 		overlay.set_storage(vec![1], None);
 		overlay.set_changes_trie_config(conf);
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);

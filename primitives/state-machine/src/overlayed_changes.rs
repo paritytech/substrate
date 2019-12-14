@@ -54,12 +54,9 @@ pub struct OverlayedValue {
 
 type TreeChangeSet = BTreeMap<Vec<u8>, History<OverlayedValue>>;
 
-/// Overlayed change set, keep history of values.
+/// Overlayed change set, content is keeping trace of its history.
 ///
-/// It stores hashmap containing a linear history of value.
-/// Update on commit and discard operation (prospective or
-/// overlay), are done in a synchronous manner by updating
-/// all keys of the hashmap.
+/// It uses a map containing a linear history of each values.
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct OverlayedChangeSet {
@@ -68,6 +65,9 @@ pub struct OverlayedChangeSet {
 	/// Top level storage changes.
 	pub(crate) top: TreeChangeSet,
 	/// Child storage changes.
+	/// OwnedChildInfo is currently an absolute value, for some child trie
+	/// operations (eg full deletion) it will need to change
+	/// to `History<OwnedChildInfo>`.
 	pub(crate) children: HashMap<Vec<u8>, (TreeChangeSet, OwnedChildInfo)>,
 }
 
@@ -85,8 +85,9 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 	}
 }
 
-/// Variant of `set` value that update extrinsics.
-/// It does remove latest dropped values.
+/// Variant of historical data `set` value that also update extrinsics.
+/// It avoid accessing two time the historical value item.
+/// It does remove latest historical dropped items.
 fn set_with_extrinsic_overlayed_value(
 	history: &mut History<OverlayedValue>,
 	states: &States,
@@ -147,7 +148,7 @@ impl OverlayedChangeSet {
 		self.top.is_empty() && self.children.is_empty()
 	}
 
-	/// Discard prospective changes to state.
+	/// Discard prospective changes from the change set.
 	pub fn discard_prospective(&mut self) {
 		self.states.discard_prospective();
 		retain(&mut self.top, |_, history| States::apply_discard_prospective(history) != CleaningResult::Cleared);
@@ -157,7 +158,7 @@ impl OverlayedChangeSet {
 		});
 	}
 
-	/// Commit prospective changes to state.
+	/// Commit prospective changes into the change set.
 	pub fn commit_prospective(&mut self) {
 		self.states.commit_prospective();
 		retain(&mut self.top, |_, history| States::apply_commit_prospective(history) != CleaningResult::Cleared);
@@ -173,7 +174,8 @@ impl OverlayedChangeSet {
 	}
 
 	/// Discard a transactional layer.
-	/// A transaction is always running (states always end with pending).
+	/// There is always a transactional layer running
+	/// (discarding the last trasactional layer open a new one).
 	pub fn discard_transaction(&mut self) {
 		self.states.discard_transaction();
 		let states = &self.states;
@@ -185,7 +187,7 @@ impl OverlayedChangeSet {
 		self.states.finalize_discard();
 	}
 
-	/// Commit a transactional layer.
+	/// Commit a transactional layer into previous transaction layer.
 	pub fn commit_transaction(&mut self) {
 		self.states.commit_transaction();
 		let states = &self.states;
@@ -196,7 +198,7 @@ impl OverlayedChangeSet {
 		});
 	}
 
-	/// Iterator over current state of a given overlay, including change trie information.
+	/// Iterator over current values of a given overlay, including change trie information.
 	pub fn iter_overlay(
 		&self,
 		storage_key: Option<&[u8]>,
@@ -219,7 +221,7 @@ impl OverlayedChangeSet {
 
 	}
 
-	/// Iterator over current state of a given overlay, values only.
+	/// Iterator over current values of a given overlay.
 	pub fn iter_values(
 		&self,
 		storage_key: Option<&[u8]>,
@@ -228,7 +230,7 @@ impl OverlayedChangeSet {
 			.map(|(k, v)| (k, v.value.as_ref().map(|v| v.as_slice())))
 	}
 
-	/// Iterator over current state of all children overlays, values only.
+	/// Iterator over current values of all children overlays.
 	pub fn children_iter(
 		&self,
 	) -> impl Iterator<Item=(
@@ -249,8 +251,8 @@ impl OverlayedChangeSet {
 			))
 	}
 
-	/// Iterator over current state of all children overlays, values only.
-	/// Similar to `children_iter` but with key and value as `Vec<u8>`.
+	/// Iterator over current values of all children overlays.
+	/// Variant of `children_iter` with owned `Vec<u8>` keys and values.
 	pub fn owned_children_iter<'a>(
 		&'a self,
 	) -> impl Iterator<Item=(
@@ -269,7 +271,7 @@ impl OverlayedChangeSet {
 			))
 	}
 
-	/// Iterator over current state of all children overlays, including change trie information.
+	/// Iterator over current values of all children overlays, including change trie information.
 	pub fn children_iter_overlay(
 		&self,
 	) -> impl Iterator<Item=(
@@ -287,9 +289,9 @@ impl OverlayedChangeSet {
 			))
 	}
 
-	/// Test only method to access current prospective changes.
-	/// It is here to keep old test compatibility and should be
-	/// avoid for new tests.
+	/// Test only method for accessing current prospective values.
+	/// This method is only here to keep compatibility with previous tests,
+	/// please do not use for new tests.
 	#[cfg(test)]
 	pub(crate) fn top_prospective(&self) -> BTreeMap<Vec<u8>, OverlayedValue> {
 		let mut result = BTreeMap::new();
@@ -302,8 +304,8 @@ impl OverlayedChangeSet {
 	}
 
 	/// Test only method to access current commited changes.
-	/// It is here to keep old test compatibility and should be
-	/// avoid for new tests.
+	/// This method is only here to keep compatibility with previous tests,
+	/// please do not use for new tests.
 	#[cfg(test)]
 	pub(crate) fn top_committed(&self) -> BTreeMap<Vec<u8>, OverlayedValue> {
 		let mut result = BTreeMap::new();
@@ -314,7 +316,6 @@ impl OverlayedChangeSet {
 		}
 		result
 	}
-
 }
 
 impl OverlayedChanges {
@@ -337,12 +338,6 @@ impl OverlayedChanges {
 
 		self.changes_trie_config = Some(config);
 		true
-	}
-
-	#[cfg(test)]
-	/// To allow value without extrinsic this can be use in test to disable change trie.
-	pub(crate) fn remove_changes_trie_config(&mut self) -> Option<ChangesTrieConfig> {
-		self.changes_trie_config.take()
 	}
 
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
@@ -516,8 +511,8 @@ impl OverlayedChanges {
 		self.set_storage(EXTRINSIC_INDEX.to_vec(), Some(extrinsic_index.encode()));
 	}
 
-	/// Test only method to build from committed info and prospective.
-	/// Create an history of two states.
+	/// Test only method to create a change set from committed
+	/// and prospective content.
 	#[cfg(test)]
 	pub(crate) fn new_from_top(
 		committed: Vec<(Vec<u8>, Option<Vec<u8>>)>,
@@ -552,7 +547,7 @@ impl OverlayedChanges {
 	}
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	/// Iterator over current state of the overlay.
+	/// Iterator over current values of the overlay.
 	pub fn iter_values(
 		&self,
 		storage_key: Option<&[u8]>,
@@ -561,8 +556,9 @@ impl OverlayedChanges {
 	}
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	/// Count (slow) the number of key value, history included.
-	/// Only for debugging or testing usage.
+	/// Count the number of key value pairs, at every history states.
+	/// Should only be use for debugging or testing, this is slow
+	/// and technical.
 	pub fn top_count_keyvalue_pair(&self) -> usize {
 		let mut result = 0;
 		for (_, v) in self.changes.top.iter() {
