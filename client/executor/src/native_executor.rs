@@ -206,7 +206,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 		let result = self.with_runtime(ext, |mut runtime, onchain_version, mut ext| {
 			match (
 				use_native,
-				onchain_version.can_call_with(&self.native_version.runtime_version),
+				true,
 				native_call,
 			) {
 				(_, false, _) => {
