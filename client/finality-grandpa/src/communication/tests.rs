@@ -133,7 +133,7 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 	use crate::authorities::AuthoritySet;
 	use crate::environment::VoterSetState;
 	use grandpa::round::State as RoundState;
-	use primitives::H256;
+	use sp_core::H256;
 
 	let state = RoundState::genesis((H256::zero(), 0));
 	let base = state.prevote_ghost.unwrap();

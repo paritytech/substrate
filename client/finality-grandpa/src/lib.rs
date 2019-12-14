@@ -64,7 +64,7 @@ use sp_runtime::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
 use keystore::KeyStorePtr;
 use inherents::InherentDataProviders;
 use consensus_common::SelectChain;
-use primitives::{H256, Blake2Hasher, Pair};
+use sp_core::{H256, Blake2Hasher, Pair};
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
 

@@ -37,7 +37,7 @@ use std::result;
 use codec::Decode;
 use sp_runtime::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use sp_runtime::generic::{BlockId, DigestItem};
-use primitives::{NativeOrEncoded, ExecutionContext, crypto::Public};
+use sp_core::{NativeOrEncoded, ExecutionContext, crypto::Public};
 use fg_primitives::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
 use state_machine::{backend::InMemory, prove_read, read_proof_check};
 use std::{pin::Pin, task};

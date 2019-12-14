@@ -22,7 +22,7 @@ use sp_trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_r
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use crate::Backend;
-use primitives::storage::ChildInfo;
+use sp_core::storage::ChildInfo;
 use codec::{Codec, Decode};
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.

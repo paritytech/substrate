@@ -662,7 +662,7 @@ mod tests {
 			InMemoryStorage as InMemoryChangesTrieStorage,
 		}, backend::InMemory, overlayed_changes::OverlayedValue,
 	};
-	use primitives::storage::{Storage, StorageChild};
+	use sp_core::storage::{Storage, StorageChild};
 
 	type TestBackend = InMemory<Blake2Hasher>;
 	type TestChangesTrieStorage = InMemoryChangesTrieStorage<Blake2Hasher, u64>;

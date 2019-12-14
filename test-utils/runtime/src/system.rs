@@ -361,7 +361,7 @@ mod tests {
 		];
 		TestExternalities::new_with_code(
 			WASM_BINARY,
-			primitives::storage::Storage {
+			sp_core::storage::Storage {
 				top: map![
 					twox_128(b"latest").to_vec() => vec![69u8; 32],
 					twox_128(b"sys:auth").to_vec() => authorities.encode(),

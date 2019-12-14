@@ -15,7 +15,7 @@ rand = "0.7.2"
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 sp-runtime = {  path = "../../primitives/runtime" }
 consensus_common = { package = "sp-consensus", path = "../../primitives/consensus/common" }
-primitives = { package = "sp-core",  path = "../../primitives/core" }
+sp-core = { path = "../../primitives/core" }
 sc-telemetry = { path = "../telemetry" }
 keystore = { package = "sc-keystore", path = "../keystore" }
 serde_json = "1.0.41"

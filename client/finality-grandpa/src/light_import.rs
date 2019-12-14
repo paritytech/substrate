@@ -32,7 +32,7 @@ use sp_runtime::Justification;
 use sp_runtime::traits::{NumberFor, Block as BlockT, Header as HeaderT, DigestFor};
 use fg_primitives::{self, AuthorityList};
 use sp_runtime::generic::BlockId;
-use primitives::{H256, Blake2Hasher};
+use sp_core::{H256, Blake2Hasher};
 
 use crate::GenesisAuthoritySetProvider;
 use crate::aux_schema::load_decode;
@@ -542,7 +542,7 @@ pub mod tests {
 	use super::*;
 	use consensus_common::ForkChoiceStrategy;
 	use fg_primitives::AuthorityId;
-	use primitives::{H256, crypto::Public};
+	use sp_core::{H256, crypto::Public};
 	use test_client::sc_client::in_mem::Blockchain as InMemoryAuxStore;
 	use test_client::runtime::{Block, Header};
 	use crate::tests::TestApi;

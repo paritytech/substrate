@@ -49,7 +49,7 @@ use sp_version::NativeVersion;
 use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
-use primitives::storage::ChildType;
+use sp_core::storage::ChildType;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::AuthorityId;

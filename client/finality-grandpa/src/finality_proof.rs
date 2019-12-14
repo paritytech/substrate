@@ -50,7 +50,7 @@ use sp_runtime::{
 	Justification, generic::BlockId,
 	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
 };
-use primitives::{H256, Blake2Hasher, storage::StorageKey};
+use sp_core::{H256, Blake2Hasher, storage::StorageKey};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use fg_primitives::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
 
@@ -584,7 +584,7 @@ pub(crate) mod tests {
 	use client_api::NewBlockState;
 	use test_client::sc_client::in_mem::Blockchain as InMemoryBlockchain;
 	use super::*;
-	use primitives::crypto::Public;
+	use sp_core::crypto::Public;
 
 	type FinalityProof = super::FinalityProof<Header>;
 

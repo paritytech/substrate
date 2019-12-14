@@ -126,7 +126,6 @@ impl GenesisParameters {
 impl substrate_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> Storage {
 		use codec::Encode;
-		use substrate_test_runtime as runtime;
 
 		let mut storage = self.genesis_config().genesis_map();
 

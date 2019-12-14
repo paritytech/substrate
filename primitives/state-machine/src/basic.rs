@@ -59,7 +59,7 @@ impl BasicExternalities {
 	///
 	/// Returns the result of the closure and updates `storage` with all changes.
 	pub fn execute_with_storage<R>(
-		storage: &mut primitives::storage::Storage,
+		storage: &mut sp_core::storage::Storage,
 		f: impl FnOnce() -> R,
 	) -> R {
 		let mut ext = Self { inner: Storage {

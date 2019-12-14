@@ -37,7 +37,7 @@ use log::{debug, trace};
 use network::ReputationChange;
 use network_gossip::{GossipEngine, Network};
 use codec::{Encode, Decode};
-use primitives::Pair;
+use sp_core::Pair;
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 

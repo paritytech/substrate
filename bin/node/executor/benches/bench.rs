@@ -23,9 +23,9 @@ use node_runtime::{
 };
 use node_runtime::constants::currency::*;
 use node_testing::keyring::*;
-use primitives::{Blake2Hasher, NativeOrEncoded, NeverNativeValue};
-use primitives::storage::well_known_keys;
-use primitives::traits::CodeExecutor;
+use sp_core::{Blake2Hasher, NativeOrEncoded, NeverNativeValue};
+use sp_core::storage::well_known_keys;
+use sp_core::traits::CodeExecutor;
 use runtime_support::Hashable;
 use state_machine::TestExternalities as CoreTestExternalities;
 use sc_executor::{NativeExecutor, RuntimeInfo, WasmExecutionMethod, Externalities};

@@ -35,7 +35,7 @@ use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{
 	Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero,
 };
-use primitives::{H256, Blake2Hasher};
+use sp_core::{H256, Blake2Hasher};
 
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};

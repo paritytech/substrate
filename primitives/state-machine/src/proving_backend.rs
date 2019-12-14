@@ -32,7 +32,7 @@ use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStor
 use crate::{Error, ExecutionError, Backend};
 use std::collections::{HashMap, HashSet};
 use crate::DBValue;
-use primitives::storage::ChildInfo;
+use sp_core::storage::ChildInfo;
 
 /// Patricia trie-based backend specialized in get value proofs.
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {

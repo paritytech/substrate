@@ -24,7 +24,7 @@ use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT, Header as HeaderT};
-use primitives::{H256, Blake2Hasher};
+use sp_core::{H256, Blake2Hasher};
 use fg_primitives::AuthorityId;
 
 use crate::{Commit, Error};

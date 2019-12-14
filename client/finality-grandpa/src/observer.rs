@@ -28,7 +28,7 @@ use consensus_common::SelectChain;
 use client_api::{CallExecutor, backend::Backend};
 use client::Client;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
-use primitives::{H256, Blake2Hasher};
+use sp_core::{H256, Blake2Hasher};
 
 use crate::{
 	global_communication, CommandOrError, CommunicationIn, Config, environment,

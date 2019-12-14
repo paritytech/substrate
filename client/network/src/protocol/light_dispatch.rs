@@ -681,7 +681,7 @@ pub mod tests {
 	use std::sync::Arc;
 	use std::time::Instant;
 	use futures::{Future, sync::oneshot};
-	use primitives::storage::ChildInfo;
+	use sp_core::storage::ChildInfo;
 	use sp_runtime::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use sp_blockchain::{Error as ClientError, Result as ClientResult};
 	use sc_client_api::{FetchChecker, RemoteHeaderRequest,

@@ -121,7 +121,7 @@ use crate::traits::IdentifyAccount;
 #[cfg(feature = "std")]
 pub trait BuildStorage: Sized {
 	/// Build the storage out of this builder.
-	fn build_storage(&self) -> Result<primitives::storage::Storage, String> {
+	fn build_storage(&self) -> Result<sp_core::storage::Storage, String> {
 		let mut storage = Default::default();
 		self.assimilate_storage(&mut storage)?;
 		Ok(storage)
@@ -129,7 +129,7 @@ pub trait BuildStorage: Sized {
 	/// Assimilate the storage for this module into pre-existing overlays.
 	fn assimilate_storage(
 		&self,
-		storage: &mut primitives::storage::Storage,
+		storage: &mut sp_core::storage::Storage,
 	) -> Result<(), String>;
 }
 
@@ -139,15 +139,15 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.
 	fn build_module_genesis_storage(
 		&self,
-		storage: &mut primitives::storage::Storage,
+		storage: &mut sp_core::storage::Storage,
 	) -> Result<(), String>;
 }
 
 #[cfg(feature = "std")]
-impl BuildStorage for primitives::storage::Storage {
+impl BuildStorage for sp_core::storage::Storage {
 	fn assimilate_storage(
 		&self,
-		storage: &mut primitives::storage::Storage,
+		storage: &mut sp_core::storage::Storage,
 	)-> Result<(), String> {
 		storage.top.extend(self.top.iter().map(|(k, v)| (k.clone(), v.clone())));
 		for (k, other_map) in self.children.iter() {

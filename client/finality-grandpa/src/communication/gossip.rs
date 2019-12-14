@@ -1504,7 +1504,7 @@ mod tests {
 	use super::environment::SharedVoterSetState;
 	use network_gossip::Validator as GossipValidatorT;
 	use sc_network_test::Block;
-	use primitives::{crypto::Public, H256};
+	use sp_core::{crypto::Public, H256};
 
 	// some random config (not really needed)
 	fn config() -> crate::Config {

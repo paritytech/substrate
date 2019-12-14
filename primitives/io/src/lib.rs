@@ -904,7 +904,7 @@ mod tests {
 	use super::*;
 	use sp_core::map;
 	use sp_state_machine::BasicExternalities;
-	use primitives::storage::Storage;
+	use sp_core::storage::Storage;
 
 	#[test]
 	fn storage_works() {

@@ -25,7 +25,7 @@ use sp_runtime::{
 	generic::BlockId,
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
-use primitives::blake2_256;
+use sp_core::blake2_256;
 
 #[derive(Clone, Debug, Default)]
 struct TestApi {
