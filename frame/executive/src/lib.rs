@@ -154,7 +154,7 @@ where
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
-		rstd::if_std!{
+		sp_std::if_std!{
 			let span = tracing::span!(tracing::Level::DEBUG, "executive_initialize_block");
 			let _enter = span.enter();
 		}
@@ -170,7 +170,7 @@ where
 		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
 	) {
-		rstd::if_std!{
+		sp_std::if_std!{
 			let span = tracing::span!(tracing::Level::DEBUG, "executive_initialize_block_impl");
 			let _enter = span.enter();
 		}

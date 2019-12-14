@@ -622,7 +622,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// If no previous weight exists, the function initializes the weight to zero.
 	pub fn register_extra_weight_unchecked(weight: Weight) {
-		rstd::if_std!{
+		sp_std::if_std!{
 			let span = tracing::span!(tracing::Level::DEBUG, "system_register_extra_weight_unchecked");
 			let _enter = span.enter();
 		}
@@ -638,7 +638,7 @@ impl<T: Trait> Module<T> {
 		txs_root: &T::Hash,
 		digest: &DigestOf<T>,
 	) {
-		rstd::if_std!{
+		sp_std::if_std!{
 			let span = tracing::span!(tracing::Level::DEBUG, "system_initialize");
 			let _enter = span.enter();
 		}
