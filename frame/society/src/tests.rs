@@ -234,7 +234,7 @@ fn suspended_member_lifecycle_works() {
 		assert_ok!(Society::bid(Origin::signed(20), 0));
 		run_to_block(8);
 		assert_eq!(Strikes::<Test>::get(10), 1);
-		assert_ok!(Society::bid(Origin::signed(20), 0));
+		assert_ok!(Society::bid(Origin::signed(30), 0));
 		run_to_block(16);
 
 		// Strike 2 is accumulated, and 10 is suspended :(

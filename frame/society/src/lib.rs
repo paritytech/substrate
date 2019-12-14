@@ -146,6 +146,10 @@ decl_storage! {
 		pub Candidates get(candidates):
 			Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>;
 
+		/// The set of suspended candidates.
+		pub SuspendedCandidates get(suspended_candidates):
+			linked_map T::AccountId => Option<(BalanceOf<T>, BidKind<T::AccountId, BalanceOf<T>>)>;
+
 		/// Amount of our account balance that is specifically for the next round's bid(s).
 		pub Pot get(fn pot) config(): BalanceOf<T>;
 
@@ -199,6 +203,9 @@ decl_module! {
 		/// Alters Bids (O(N) decode+encode, O(logN) search, <=2*O(N) write).
 		pub fn bid(origin, value: BalanceOf<T>) -> Result {
 			let who = ensure_signed(origin)?;
+			ensure!(!<SuspendedCandidates<T>>::exists(&who), "candidate is suspended");
+			ensure!(!Self::is_member(&who), "candidate is already a member");
+
 			let deposit = T::CandidateDeposit::get();
 			T::Currency::reserve(&who, deposit)?;
 
@@ -235,7 +242,7 @@ decl_module! {
 		/// Vouch for someone else.
 		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T>, tip: BalanceOf<T>) -> Result {
 			let voucher = ensure_signed(origin)?;
-			Self::ensure_member(&voucher)?;
+			ensure!(Self::is_member(&voucher), "not a member");
 			Self::set_vouching(voucher.clone())?;
 
 			Self::put_bid(who.clone(), value.clone(), BidKind::Vouch(voucher.clone(), tip));
@@ -311,6 +318,35 @@ decl_module! {
 				Self::unsuspend_member(&who);
 			} else {
 				Self::remove_user(&who);
+			}
+		}
+
+		/// Allow founder origin to make judgement on a suspended candidate.
+		fn judge_suspended_candidate(origin, who: T::AccountId, approve: Option<bool>) {
+			T::FounderOrigin::ensure_origin(origin)?;
+			if let Some((value, kind)) = <SuspendedCandidates<T>>::get(&who) {
+				if let Some(approved) = approve {
+					if approved {
+						// Founder origin has approved this candidate
+						// Make sure we can pay them
+						let pot = Self::pot();
+						ensure!(pot > value, "not enough in pot to accept candidate");
+						// Reduce next pot by payout
+						<Pot<T>>::put(pot - value);
+						// Add payout for new candidate
+						Self::pay_accepted_candidate(&who, value, kind);
+						// Add user as a member!
+						Self::add_member(&who);
+						
+					} else {
+						// Founder has denied this candidate
+					}
+				} else {
+					// Founder has taken no judgement, and candidate is placed back into the pool.
+					Self::put_bid(who.clone(), value, kind);
+				}
+			} else {
+				return Err("user is not suspended candidate");
 			}
 		}
 
@@ -419,11 +455,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Check a user is a members.
-	fn ensure_member(m: &T::AccountId) -> Result {
+	fn is_member(m: &T::AccountId) -> bool {
 		<Members<T>>::get()
 			.binary_search(m)
-			.map_err(|_| "not a member")
-			.map(|_| ())
+			.is_ok()
 	}
 
 	/// Add a member to the sorted members list. Will not add a duplicate member.
@@ -470,8 +505,7 @@ impl<T: Trait> Module<T> {
 			let candidates = <Candidates<T>>::take();
 			members.reserve(candidates.len());
 
-			let maturity = <system::Module<T>>::block_number()
-				+ Self::lock_duration(members.len() as u32);
+			let maturity = Self::maturity();
 
 			let mut rewardees = Vec::new();
 			let mut total_approvals = 0;
@@ -524,31 +558,15 @@ impl<T: Trait> Module<T> {
 					total_payouts += value;
 					members.push(candidate.clone());
 
-					let value = match kind {
-						BidKind::Deposit(deposit) => {
-							// In the case that a normal deposit bid is accepted we unreserve
-							// the deposit.
-							let _ = T::Currency::unreserve(&candidate, deposit);
-							value
-						}
-						BidKind::Vouch(who, tip) => {
-							// In the case that a vouched-for bid is accepted we unset the
-							// vouching status and transfer the tip over to the voucher.
-							Self::bump_payout(&who, maturity, tip);
-							// Really shouldn't fail given the conditional we're in.
-							let _ = Self::unset_vouching(&who);
-							value.saturating_sub(tip)
-						}
-					};
-
-					Self::bump_payout(&candidate, maturity, value);
+					Self::pay_accepted_candidate(&candidate, value, kind);
 
 					// We track here the total_approvals so that every user has a unique range
 					// of numbers from 0 to `total_approvals` with length `approval_count`.
 					// This will be used to select a "primary" below.
 					Some((candidate, total_approvals))
 				} else {
-					Self::suspend_candidate(&candidate, kind);
+					// Suspend Candidate
+					<SuspendedCandidates<T>>::insert(candidate, (value, kind));
 					None
 				}
 			}).collect::<Vec<_>>();
@@ -666,7 +684,7 @@ impl<T: Trait> Module<T> {
 			let suspended_period = now - suspended_block;
 			// Increase payout time of existing payouts by the suspension time.
 			<Payouts<T>>::mutate(&who, |payouts| {
-				payouts.iter_mut().map(|v| v.0 += suspended_period).collect::<Vec<_>>()
+				payouts.iter_mut().for_each(|v| v.0 += suspended_period);
 			});
 			<SuspendedMembers<T>>::remove(who);
 		}
@@ -681,9 +699,40 @@ impl<T: Trait> Module<T> {
 		// TODO: Clean up vouching
 	}
 
-	/// `kind` lets you know whether there's either a deposit at stake or a member's vouching rights.
-	fn suspend_candidate(_who: &T::AccountId, _kind: BidKind<T::AccountId, BalanceOf<T>>) {
-//		unimplemented!();
+	/// Pay an accepted candidate their bid value.
+	fn pay_accepted_candidate(
+		candidate: &T::AccountId,
+		value: BalanceOf<T>,
+		kind: BidKind<T::AccountId, BalanceOf<T>>
+	) {
+		let maturity = Self::maturity();
+
+		let value = match kind {
+			BidKind::Deposit(deposit) => {
+				// In the case that a normal deposit bid is accepted we unreserve
+				// the deposit.
+				let _ = T::Currency::unreserve(candidate, deposit);
+				value
+			}
+			BidKind::Vouch(who, tip) => {
+				// In the case that a vouched-for bid is accepted we unset the
+				// vouching status and transfer the tip over to the voucher.
+				Self::bump_payout(&who, maturity, tip);
+				// Really shouldn't fail given the conditional we're in.
+				let _ = Self::unset_vouching(&who);
+				value.saturating_sub(tip)
+			}
+		};
+
+		Self::bump_payout(candidate, maturity, value);
+	}
+
+	/// Default maturity of a payout.
+	fn maturity() -> T::BlockNumber {
+		let members = Self::members();
+		let maturity = <system::Module<T>>::block_number()
+				+ Self::lock_duration(members.len() as u32);
+		maturity
 	}
 
 	/// The account ID of the treasury pot.
