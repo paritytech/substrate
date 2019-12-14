@@ -94,7 +94,7 @@ pub fn take_block_number() -> Option<BlockNumber> {
 	Number::take()
 }
 
-/// Return 1 if test successfull, 0 otherwhise.
+/// Return 1 if test successfull, 0 otherwise.
 pub fn test_transactions() -> u64 {
 	let origin_value: Option<u32> = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX);
 	let result: Result<(), _> = storage::with_transaction(|| {

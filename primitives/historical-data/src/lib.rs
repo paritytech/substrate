@@ -43,16 +43,27 @@ impl<V, I: Clone> HistoricalValue<V, I> {
 }
 
 #[derive(Debug, PartialEq)]
-/// Results from cleaning a data with history.
-/// It should be used to update from the calling context,
-/// for instance remove this data from a map if it was cleared.
+/// The results from cleaning a historical value.
+/// It should be used to update the calling context,
+/// for instance if the historical value was stored
+/// into a hashmap then it should be removed for
+/// a `Cleared` result.
 pub enum CleaningResult {
+	/// No inner data was changed, even technical
+	/// data, therefore no update is needed.
 	Unchanged,
+	/// Any data got modified, therefore an
+	/// update may be needed.
 	Changed,
+	/// No data is stored anymore in this historical
+	/// value, it can be dropped.
 	Cleared,
 }
 
-/// History of value and their state.
+/// History of value, this is used to keep trace of all changes
+/// that occures on a value.
+/// The different states for this value, are ordered by change time
+/// in a simple stack.
 #[derive(Debug, Clone, PartialEq)]
 pub struct History<V, I>(pub(crate) smallvec::SmallVec<[HistoricalValue<V, I>; ALLOCATED_HISTORY]>);
 
@@ -63,8 +74,8 @@ impl<V, I> Default for History<V, I> {
 }
 
 /// Size of preallocated history per element.
-/// Currently at two for committed and prospective only.
-/// It means that using transaction in a module got a direct allocation cost.
+/// Current size is set to two, it is related to a use case
+/// where value got two initial state by default (committed and prospective).
 const ALLOCATED_HISTORY: usize = 2;
 
 impl<V, I> History<V, I> {
@@ -75,7 +86,7 @@ impl<V, I> History<V, I> {
 	}
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	/// Create an history from an existing history.
+	/// Create an history from a sequence of historical values.
 	pub fn from_iter(input: impl IntoIterator<Item = HistoricalValue<V, I>>) -> Self {
 		let mut history = History::default();
 		for v in input {
@@ -86,6 +97,9 @@ impl<V, I> History<V, I> {
 
 	/// Push a value without checking if it can overwrite the current
 	/// state.
+	/// This should only use after checking the state is correct
+	/// (last item of historical value got a smaller index than
+	/// the new one).
 	pub fn push_unchecked(&mut self, item: HistoricalValue<V, I>) {
 		self.0.push(item);
 	}

@@ -4,14 +4,11 @@ Crate with functionality to manage data that stores its own history.
 
 This covers:
 - linear history driven data, eg. transactional layers for overlay.
-- long term storage with multiple branch, eg. offchain storage.
 
-General design is container where query and update requires global
-history context.
+Design for this crate is to store history of each item in its own container.
+Query and update actions can requires requires a global historical state.
 
-History is serialize as a per item basis.
-
-This crates is `no_std` compatible as long as the `std` feature is not enabled.
+This crate is `no_std` compatible as long as the `std` feature is not enabled.
 
 For more information see <https://crates.io/historical-data>
 

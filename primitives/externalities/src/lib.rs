@@ -161,7 +161,7 @@ pub trait Externalities: ExtensionStore {
 	fn storage_start_transaction(&mut self);
 
 	/// Discard a transactional layer, pending changes of every transaction behind this layer are
-	/// dropped (including committed changes) .
+	/// Dropped (including committed changes).
 	fn storage_discard_transaction(&mut self);
 
 	/// Commit a transactional layer. The changes stay attached to parent transaction layer.

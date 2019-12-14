@@ -28,17 +28,16 @@ pub mod generator;
 /// Execute under a transactional layer.
 ///
 /// If the result of execution is an error,
-/// the transactional layer get reverted; otherwhise
+/// the transactional layer get reverted; otherwise
 /// it is committed.
 pub fn with_transaction<R, E>(f: impl FnOnce() -> Result<R, E>) -> Result<R, E> {
 	sp_io::storage::start_transaction();
-	let r = f();
-	if r.is_ok() {
-		sp_io::storage::commit_transaction();
-	} else {
-		sp_io::storage::discard_transaction();
+	let result = f();
+	match result {
+		Ok(_r) => sp_io::storage::commit_transaction(),
+		Err(_e) => {sp_io::storage::discard_transaction(),
 	}
-	r
+	result
 }
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
