@@ -21,12 +21,14 @@ use std::time::{Instant, Duration};
 use codec::Encode;
 use futures::prelude::*;
 use futures::sync::mpsc;
+use futures_timer::Delay;
+use futures03::future::{FutureExt as _, TryFutureExt as _};
 use log::{debug, warn};
-use tokio_timer::Delay;
 
 use network::PeerId;
+use network_gossip::GossipEngine;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
-use super::{gossip::{NeighborPacket, GossipMessage}, Network};
+use super::gossip::{NeighborPacket, GossipMessage};
 
 // how often to rebroadcast, if no other
 const REBROADCAST_AFTER: Duration = Duration::from_secs(2 * 60);
@@ -58,16 +60,15 @@ impl<B: BlockT> NeighborPacketSender<B> {
 ///
 /// It may rebroadcast the last neighbor packet periodically when no
 /// progress is made.
-pub(super) fn neighbor_packet_worker<B, N>(net: N) -> (
+pub(super) fn neighbor_packet_worker<B>(net: GossipEngine<B>) -> (
 	impl Future<Item = (), Error = ()> + Send + 'static,
 	NeighborPacketSender<B>,
 ) where
 	B: BlockT,
-	N: Network<B>,
 {
 	let mut last = None;
 	let (tx, mut rx) = mpsc::unbounded::<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>();
-	let mut delay = Delay::new(rebroadcast_instant());
+	let mut delay = Delay::new(REBROADCAST_AFTER);
 
 	let work = futures::future::poll_fn(move || {
 		loop {
@@ -88,7 +89,7 @@ pub(super) fn neighbor_packet_worker<B, N>(net: N) -> (
 		// has to be done in a loop because it needs to be polled after
 		// re-scheduling.
 		loop {
-			match delay.poll() {
+			match (&mut delay).unit_error().compat().poll() {
 				Err(e) => {
 					warn!(target: "afg", "Could not rebroadcast neighbor packets: {:?}", e);
 					delay.reset(rebroadcast_instant());

@@ -60,6 +60,8 @@ pub trait StateApi<Hash> {
 	fn child_storage_keys(
 		&self,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		prefix: StorageKey,
 		hash: Option<Hash>
 	) -> FutureResult<Vec<StorageKey>>;
@@ -69,6 +71,8 @@ pub trait StateApi<Hash> {
 	fn child_storage(
 		&self,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 		hash: Option<Hash>
 	) -> FutureResult<Option<StorageData>>;
@@ -78,6 +82,8 @@ pub trait StateApi<Hash> {
 	fn child_storage_hash(
 		&self,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 		hash: Option<Hash>
 	) -> FutureResult<Option<Hash>>;
@@ -87,6 +93,8 @@ pub trait StateApi<Hash> {
 	fn child_storage_size(
 		&self,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 		hash: Option<Hash>
 	) -> FutureResult<Option<u64>>;

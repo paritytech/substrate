@@ -18,25 +18,23 @@
 
 use futures::sync::mpsc;
 use futures::prelude::*;
-use network::consensus_gossip as network_gossip;
+use network::{Event as NetworkEvent, PeerId, config::Roles};
 use sc_network_test::{Block, Hash};
 use network_gossip::Validator;
 use tokio::runtime::current_thread;
 use std::sync::Arc;
 use keyring::Ed25519Keyring;
 use codec::Encode;
-use sp_runtime::traits::NumberFor;
+use sp_runtime::{ConsensusEngineId, traits::NumberFor};
 use std::{pin::Pin, task::{Context, Poll}};
 use crate::environment::SharedVoterSetState;
-use fg_primitives::AuthorityList;
+use fg_primitives::{AuthorityList, GRANDPA_ENGINE_ID};
 use super::gossip::{self, GossipValidator};
 use super::{AuthorityId, VoterSet, Round, SetId};
 
 enum Event {
-	MessagesFor(Hash, mpsc::UnboundedSender<network_gossip::TopicNotification>),
-	RegisterValidator(Arc<dyn network_gossip::Validator<Block>>),
-	GossipMessage(Hash, Vec<u8>, bool),
-	SendMessage(Vec<network::PeerId>, Vec<u8>),
+	EventStream(mpsc::UnboundedSender<NetworkEvent>),
+	WriteNotification(network::PeerId, Vec<u8>),
 	Report(network::PeerId, network::ReputationChange),
 	Announce(Hash),
 }
@@ -46,56 +44,36 @@ struct TestNetwork {
 	sender: mpsc::UnboundedSender<Event>,
 }
 
-impl super::Network<Block> for TestNetwork {
-	type In = mpsc::UnboundedReceiver<network_gossip::TopicNotification>;
-
-	/// Get a stream of messages for a specific gossip topic.
-	fn messages_for(&self, topic: Hash) -> Self::In {
+impl network_gossip::Network<Block> for TestNetwork {
+	fn event_stream(&self)
+	-> Box<dyn futures::Stream<Item = NetworkEvent, Error = ()> + Send> {
 		let (tx, rx) = mpsc::unbounded();
-		let _ = self.sender.unbounded_send(Event::MessagesFor(topic, tx));
-
-		rx
+		let _ = self.sender.unbounded_send(Event::EventStream(tx));
+		Box::new(rx)
 	}
 
-	/// Register a gossip validator.
-	fn register_validator(&self, validator: Arc<dyn network_gossip::Validator<Block>>) {
-		let _ = self.sender.unbounded_send(Event::RegisterValidator(validator));
-	}
-
-	/// Gossip a message out to all connected peers.
-	///
-	/// Force causes it to be sent to all peers, even if they've seen it already.
-	/// Only should be used in case of consensus stall.
-	fn gossip_message(&self, topic: Hash, data: Vec<u8>, force: bool) {
-		let _ = self.sender.unbounded_send(Event::GossipMessage(topic, data, force));
-	}
-
-	/// Send a message to a bunch of specific peers, even if they've seen it already.
-	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
-		let _ = self.sender.unbounded_send(Event::SendMessage(who, data));
-	}
-
-	/// Register a message with the gossip service, it isn't broadcast right
-	/// away to any peers, but may be sent to new peers joining or when asked to
-	/// broadcast the topic. Useful to register previous messages on node
-	/// startup.
-	fn register_gossip_message(&self, _topic: Hash, _data: Vec<u8>) {
-		// NOTE: only required to restore previous state on startup
-		//       not required for tests currently
-	}
-
-	/// Report a peer's cost or benefit after some action.
-	fn report(&self, who: network::PeerId, cost_benefit: network::ReputationChange) {
+	fn report_peer(&self, who: network::PeerId, cost_benefit: network::ReputationChange) {
 		let _ = self.sender.unbounded_send(Event::Report(who, cost_benefit));
 	}
 
-	/// Inform peers that a block with given hash should be downloaded.
+	fn disconnect_peer(&self, _: PeerId) {}
+
+	fn write_notification(&self, who: PeerId, _: ConsensusEngineId, message: Vec<u8>) {
+		let _ = self.sender.unbounded_send(Event::WriteNotification(who, message));
+	}
+
+	fn register_notifications_protocol(&self, _: ConsensusEngineId) {}
+
 	fn announce(&self, block: Hash, _associated_data: Vec<u8>) {
 		let _ = self.sender.unbounded_send(Event::Announce(block));
 	}
 
-	/// Notify the sync service to try syncing the given chain.
-	fn set_sync_fork_request(&self, _peers: Vec<network::PeerId>, _hash: Hash, _number: NumberFor<Block>) {}
+	fn set_sync_fork_request(
+		&self,
+		_peers: Vec<network::PeerId>,
+		_hash: Hash,
+		_number: NumberFor<Block>,
+	) {}
 }
 
 impl network_gossip::ValidatorContext<Block> for TestNetwork {
@@ -104,14 +82,19 @@ impl network_gossip::ValidatorContext<Block> for TestNetwork {
 	fn broadcast_message(&mut self, _: Hash, _: Vec<u8>, _: bool) {	}
 
 	fn send_message(&mut self, who: &network::PeerId, data: Vec<u8>) {
-		<Self as super::Network<Block>>::send_message(self, vec![who.clone()], data);
+		<Self as network_gossip::Network<Block>>::write_notification(
+			self,
+			who.clone(),
+			GRANDPA_ENGINE_ID,
+			data,
+		);
 	}
 
 	fn send_topic(&mut self, _: &network::PeerId, _: Hash, _: bool) { }
 }
 
 struct Tester {
-	net_handle: super::NetworkBridge<Block, TestNetwork>,
+	net_handle: super::NetworkBridge<Block>,
 	gossip_validator: Arc<GossipValidator<Block>>,
 	events: mpsc::UnboundedReceiver<Event>,
 }
@@ -165,7 +148,7 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 }
 
 // needs to run in a tokio runtime.
-fn make_test_network() -> (
+fn make_test_network(executor: &impl futures03::task::Spawn) -> (
 	impl Future<Item=Tester,Error=()>,
 	TestNetwork,
 ) {
@@ -183,15 +166,16 @@ fn make_test_network() -> (
 		}
 	}
 
-	let (bridge, startup_work) = super::NetworkBridge::new(
+	let bridge = super::NetworkBridge::new(
 		net.clone(),
 		config(),
 		voter_set_state(),
+		executor,
 		Exit,
 	);
 
 	(
-		startup_work.map(move |()| Tester {
+		futures::future::ok(Tester {
 			gossip_validator: bridge.validator.clone(),
 			net_handle: bridge,
 			events: rx,
@@ -261,7 +245,8 @@ fn good_commit_leads_to_relay() {
 	let id = network::PeerId::random();
 	let global_topic = super::global_topic::<Block>(set_id);
 
-	let test = make_test_network().0
+	let threads_pool = futures03::executor::ThreadPool::new().unwrap();
+	let test = make_test_network(&threads_pool).0
 		.and_then(move |tester| {
 			// register a peer.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::FULL);
@@ -286,11 +271,15 @@ fn good_commit_leads_to_relay() {
 			// send a message.
 			let sender_id = id.clone();
 			let send_message = tester.filter_network_events(move |event| match event {
-				Event::MessagesFor(topic, sender) => {
-					if topic != global_topic { return false }
-					let _ = sender.unbounded_send(network_gossip::TopicNotification {
-						message: commit_to_send.clone(),
-						sender: Some(sender_id.clone()),
+				Event::EventStream(sender) => {
+					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
+						remote: sender_id.clone(),
+						engine_id: GRANDPA_ENGINE_ID,
+						roles: Roles::FULL,
+					});
+					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
+						remote: sender_id.clone(),
+						messages: vec![(GRANDPA_ENGINE_ID, commit_to_send.clone().into())],
 					});
 
 					true
@@ -314,12 +303,8 @@ fn good_commit_leads_to_relay() {
 			// a repropagation event coming from the network.
 			send_message.join(handle_commit).and_then(move |(tester, ())| {
 				tester.filter_network_events(move |event| match event {
-					Event::GossipMessage(topic, data, false) => {
-						if topic == global_topic && data == encoded_commit {
-							true
-						} else {
-							panic!("Trying to gossip something strange")
-						}
+					Event::WriteNotification(_, data) => {
+						data == encoded_commit
 					}
 					_ => false,
 				})
@@ -328,11 +313,12 @@ fn good_commit_leads_to_relay() {
 				.map(|_| ())
 		});
 
-	current_thread::block_on_all(test).unwrap();
+	current_thread::Runtime::new().unwrap().block_on(test).unwrap();
 }
 
 #[test]
 fn bad_commit_leads_to_report() {
+	env_logger::init();
 	let private = [Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let public = make_ids(&private[..]);
 	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
@@ -376,7 +362,8 @@ fn bad_commit_leads_to_report() {
 	let id = network::PeerId::random();
 	let global_topic = super::global_topic::<Block>(set_id);
 
-	let test = make_test_network().0
+	let threads_pool = futures03::executor::ThreadPool::new().unwrap();
+	let test = make_test_network(&threads_pool).0
 		.and_then(move |tester| {
 			// register a peer.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::FULL);
@@ -401,11 +388,15 @@ fn bad_commit_leads_to_report() {
 			// send a message.
 			let sender_id = id.clone();
 			let send_message = tester.filter_network_events(move |event| match event {
-				Event::MessagesFor(topic, sender) => {
-					if topic != global_topic { return false }
-					let _ = sender.unbounded_send(network_gossip::TopicNotification {
-						message: commit_to_send.clone(),
-						sender: Some(sender_id.clone()),
+				Event::EventStream(sender) => {
+					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
+						remote: sender_id.clone(),
+						engine_id: GRANDPA_ENGINE_ID,
+						roles: Roles::FULL,
+					});
+					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
+						remote: sender_id.clone(),
+						messages: vec![(GRANDPA_ENGINE_ID, commit_to_send.clone().into())],
 					});
 
 					true
@@ -430,11 +421,7 @@ fn bad_commit_leads_to_report() {
 			send_message.join(handle_commit).and_then(move |(tester, ())| {
 				tester.filter_network_events(move |event| match event {
 					Event::Report(who, cost_benefit) => {
-						if who == id && cost_benefit == super::cost::INVALID_COMMIT {
-							true
-						} else {
-							panic!("reported unknown peer or unexpected cost");
-						}
+						who == id && cost_benefit == super::cost::INVALID_COMMIT
 					}
 					_ => false,
 				})
@@ -443,14 +430,15 @@ fn bad_commit_leads_to_report() {
 				.map(|_| ())
 		});
 
-	current_thread::block_on_all(test).unwrap();
+	current_thread::Runtime::new().unwrap().block_on(test).unwrap();
 }
 
 #[test]
 fn peer_with_higher_view_leads_to_catch_up_request() {
 	let id = network::PeerId::random();
 
-	let (tester, mut net) = make_test_network();
+	let threads_pool = futures03::executor::ThreadPool::new().unwrap();
+	let (tester, mut net) = make_test_network(&threads_pool);
 	let test = tester
 		.and_then(move |tester| {
 			// register a peer with authority role.
@@ -477,10 +465,10 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 
 			// a catch up request should be sent to the peer for round - 1
 			tester.filter_network_events(move |event| match event {
-				Event::SendMessage(peers, message) => {
+				Event::WriteNotification(peer, message) => {
 					assert_eq!(
-						peers,
-						vec![id.clone()],
+						peer,
+						id,
 					);
 
 					assert_eq!(
@@ -501,5 +489,5 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 				.map(|_| ())
 		});
 
-	current_thread::block_on_all(test).unwrap();
+	current_thread::Runtime::new().unwrap().block_on(test).unwrap();
 }

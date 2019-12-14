@@ -83,7 +83,7 @@
 //! We only send polite messages to peers,
 
 use sp_runtime::traits::{NumberFor, Block as BlockT, Zero};
-use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
+use network_gossip::{GossipEngine, MessageIntent, ValidatorContext};
 use network::{config::Roles, PeerId, ReputationChange};
 use codec::{Encode, Decode};
 use fg_primitives::AuthorityId;
@@ -1459,29 +1459,26 @@ pub(super) struct ReportStream {
 impl ReportStream {
 	/// Consume the report stream, converting it into a future that
 	/// handles all reports.
-	pub(super) fn consume<B, N>(self, net: N)
+	pub(super) fn consume<B>(self, net: GossipEngine<B>)
 		-> impl Future<Item=(),Error=()> + Send + 'static
 	where
 		B: BlockT,
-		N: super::Network<B> + Send + 'static,
 	{
 		ReportingTask {
 			reports: self.reports,
 			net,
-			_marker: Default::default(),
 		}
 	}
 }
 
 /// A future for reporting peers.
 #[must_use = "Futures do nothing unless polled"]
-struct ReportingTask<B, N> {
+struct ReportingTask<B: BlockT> {
 	reports: mpsc::UnboundedReceiver<PeerReport>,
-	net: N,
-	_marker: std::marker::PhantomData<B>,
+	net: GossipEngine<B>,
 }
 
-impl<B: BlockT, N: super::Network<B>> Future for ReportingTask<B, N> {
+impl<B: BlockT> Future for ReportingTask<B> {
 	type Item = ();
 	type Error = ();
 

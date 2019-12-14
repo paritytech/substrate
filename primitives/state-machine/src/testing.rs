@@ -16,7 +16,7 @@
 
 //! Test implementation for Externalities.
 
-use std::{collections::{HashMap, BTreeMap}, any::{Any, TypeId}};
+use std::any::{Any, TypeId};
 use hash_db::Hasher;
 use crate::{
 	backend::{InMemory, Backend}, OverlayedChanges,
@@ -28,14 +28,13 @@ use crate::{
 };
 use primitives::{
 	storage::{
-		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key}
+		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
+		Storage,
 	},
 	hash::H256, Blake2Hasher,
 };
 use codec::Encode;
 use externalities::{Extensions, Extension};
-
-type StorageTuple = (BTreeMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>);
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher<Out=H256>=Blake2Hasher, N: ChangesTrieBlockNumber=u64> {
@@ -57,42 +56,37 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	}
 
 	/// Create a new instance of `TestExternalities` with storage.
-	pub fn new(storage: StorageTuple) -> Self {
+	pub fn new(storage: Storage) -> Self {
 		Self::new_with_code(&[], storage)
 	}
 
 	/// Create a new instance of `TestExternalities` with code and storage.
-	pub fn new_with_code(code: &[u8], mut storage: StorageTuple) -> Self {
+	pub fn new_with_code(code: &[u8], mut storage: Storage) -> Self {
 		let mut overlay = OverlayedChanges::default();
 
-		assert!(storage.0.keys().all(|key| !is_child_storage_key(key)));
-		assert!(storage.1.keys().all(|key| is_child_storage_key(key)));
+		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
+		assert!(storage.children.keys().all(|key| is_child_storage_key(key)));
 
 		super::set_changes_trie_config(
 			&mut overlay,
-			storage.0.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned(),
+			storage.top.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned(),
 			false,
 		).expect("changes trie configuration is correct in test env; qed");
 
-		storage.0.insert(HEAP_PAGES.to_vec(), 8u64.encode());
-		storage.0.insert(CODE.to_vec(), code.to_vec());
-
-		let backend: HashMap<_, _> = storage.1.into_iter()
-			.map(|(keyspace, map)| (Some(keyspace), map))
-			.chain(Some((None, storage.0)).into_iter())
-			.collect();
+		storage.top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
+		storage.top.insert(CODE.to_vec(), code.to_vec());
 
 		TestExternalities {
 			overlay,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
-			backend: backend.into(),
+			backend: storage.into(),
 			extensions: Default::default(),
 		}
 	}
 
 	/// Insert key/value into backend
 	pub fn insert(&mut self, k: Vec<u8>, v: Vec<u8>) {
-		self.backend = self.backend.update(vec![(None, k, Some(v))]);
+		self.backend = self.backend.update(vec![(None, vec![(k, Some(v))])]);
 	}
 
 	/// Registers the given extension for this instance.
@@ -107,16 +101,20 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 
 	/// Return a new backend with all pending value.
 	pub fn commit_all(&self) -> InMemory<H> {
-		let top = self.overlay.changes.iter_overlay(None)
-			.map(|(k, v)| (None, k.to_vec(), v.value.clone()));
+		let top: Vec<_> = self.overlay.changes.iter_overlay(None).0
+			.map(|(k, v)| (k.to_vec(), v.value.clone())).collect();
+		let mut transaction = vec![(None, top)];
 
-		let children = self.overlay.changes.children_iter_overlay()
-			.flat_map(|(keyspace, map)| map
-				.map(|(k, v)| (Some(keyspace.to_vec()), k.to_vec(), v.value.clone()))
-				.collect::<Vec<_>>()
-			);
+		self.overlay.changes.children_iter_overlay()
+			.for_each(|(storage_key, map, child_info)| {
+				transaction.push((
+					Some((storage_key.to_vec(), child_info.to_owned())),
+					map.map(|(k, v)| (k.to_vec(), v.value.clone()))
+						.collect::<Vec<_>>(),
+				))
+			});
 
-		self.backend.update(top.chain(children).collect())
+		self.backend.update(transaction)
 	}
 
 	/// Execute the given closure while `self` is set as externalities.
@@ -146,8 +144,8 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> Default for TestExternaliti
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> From<StorageTuple> for TestExternalities<H, N> {
-	fn from(storage: StorageTuple) -> Self {
+impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> From<Storage> for TestExternalities<H, N> {
+	fn from(storage: Storage) -> Self {
 		Self::new(storage)
 	}
 }

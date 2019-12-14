@@ -102,7 +102,7 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 {
 
 	let mut children_result = BTreeMap::new();
-	for (storage_key, _) in changes.changes.children_iter() {
+	for (storage_key, _, _) in changes.changes.children_iter() {
 		let child_index = ChildIndex::<Number> {
 			block: block.clone(),
 			storage_key: storage_key.to_vec(),
@@ -128,9 +128,8 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 		H: Hasher,
 		Number: BlockNumber,
 {
-
-	changes.changes.iter_overlay(storage_key.as_ref().map(|r| r.as_slice()))
-		.filter(|( _, v)| v.extrinsics.is_some())
+	let (iter, child_info) = changes.changes.iter_overlay(storage_key.as_ref().map(|r| r.as_slice()));
+	iter.filter(|( _, v)| v.extrinsics.is_some())
 		.try_fold(BTreeMap::new(), |mut map: BTreeMap<&[u8], (ExtrinsicIndex<Number>, Vec<u32>)>, (k, v)| {
 			match map.entry(k) {
 				Entry::Vacant(entry) => {
@@ -138,8 +137,11 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 					// AND are not in storage at the beginning of operation
 					if let Some(sk) = storage_key.as_ref() {
 						if !changes.child_storage(sk, k).map(|v| v.is_some()).unwrap_or_default() {
-							if !backend.exists_child_storage(sk, k).map_err(|e| format!("{}", e))? {
-								return Ok(map);
+							if let Some(child_info) = child_info { 
+								if !backend.exists_child_storage(sk, child_info, k)
+									.map_err(|e| format!("{}", e))? {
+									return Ok(map);
+								}
 							}
 						}
 					} else {
@@ -322,12 +324,16 @@ mod test {
 	use codec::Encode;
 	use primitives::Blake2Hasher;
 	use primitives::storage::well_known_keys::{EXTRINSIC_INDEX};
+	use primitives::storage::ChildInfo;
 	use crate::backend::InMemory;
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
 	use sp_historical_data::synch_linear_transaction::{States, State, History, HistoricalValue};
 	use super::*;
+
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
+	const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2");
 
 	fn prepare_for_build(zero: u64) -> (
 		InMemory<Blake2Hasher>,
@@ -429,7 +435,7 @@ mod test {
 					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 				].into_iter().collect(),
 				children: vec![
-					(child_trie_key1, vec![
+					(child_trie_key1, (vec![
 						(vec![100], History::from_iter(vec![
 							(OverlayedValue {
 								value: Some(vec![202]),
@@ -440,15 +446,15 @@ mod test {
 								extrinsics: Some(vec![3, 0, 2].into_iter().collect())
 							}, State::Transaction(0)),
 						].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
-					].into_iter().collect()),
-					(child_trie_key2, vec![
+					].into_iter().collect(), CHILD_INFO_1.to_owned())),
+					(child_trie_key2, (vec![
 						(vec![100], History::from_iter(vec![
 							(OverlayedValue {
 								value: Some(vec![200]),
 								extrinsics: Some(vec![0, 2].into_iter().collect())
 							}, State::Transaction(0)),
 						].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
-					].into_iter().collect()),
+					].into_iter().collect(), CHILD_INFO_2.to_owned())),
 				].into_iter().collect(),
 			},
 			changes_trie_config: Some(config.clone()),

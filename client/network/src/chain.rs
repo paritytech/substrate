@@ -23,7 +23,8 @@ use consensus::{BlockImport, BlockStatus, Error as ConsensusError};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_runtime::generic::{BlockId};
 use sp_runtime::Justification;
-use primitives::{H256, Blake2Hasher, storage::StorageKey};
+use primitives::{H256, Blake2Hasher};
+use primitives::storage::{StorageKey, ChildInfo};
 
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
@@ -57,6 +58,7 @@ pub trait Client<Block: BlockT>: Send + Sync {
 		&self,
 		block: &Block::Hash,
 		storage_key: &[u8],
+		child_info: ChildInfo,
 		keys: &[Vec<u8>],
 	) -> Result<StorageProof, Error>;
 
@@ -135,10 +137,11 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		&self,
 		block: &Block::Hash,
 		storage_key: &[u8],
+		child_info: ChildInfo,
 		keys: &[Vec<u8>],
 	) -> Result<StorageProof, Error> {
 		(self as &SubstrateClient<B, E, Block, RA>)
-			.read_child_proof(&BlockId::Hash(block.clone()), storage_key, keys)
+			.read_child_proof(&BlockId::Hash(block.clone()), storage_key, child_info, keys)
 	}
 
 	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, StorageProof), Error> {

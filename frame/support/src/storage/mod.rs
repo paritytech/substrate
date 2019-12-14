@@ -34,8 +34,8 @@ pub fn with_transaction<R, E>(f: impl FnOnce() -> Result<R, E>) -> Result<R, E> 
 	sp_io::storage::start_transaction();
 	let result = f();
 	match result {
-		Ok(_r) => sp_io::storage::commit_transaction(),
-		Err(_e) => {sp_io::storage::discard_transaction(),
+		Ok(_) => sp_io::storage::commit_transaction(),
+		Err(_) => sp_io::storage::discard_transaction(),
 	}
 	result
 }

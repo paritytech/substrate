@@ -95,6 +95,8 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		&self,
 		block: Option<Block::Hash>,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>>;
 
@@ -103,6 +105,8 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		&self,
 		block: Option<Block::Hash>,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>>;
 
@@ -111,6 +115,8 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		&self,
 		block: Option<Block::Hash>,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>>;
 
@@ -119,9 +125,11 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		&self,
 		block: Option<Block::Hash>,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<u64>> {
-		Box::new(self.child_storage(block, child_storage_key, key)
+		Box::new(self.child_storage(block, child_storage_key, child_info, child_type, key)
 			.map(|x| x.map(|x| x.0.len() as u64)))
 	}
 
@@ -256,37 +264,45 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 	fn child_storage(
 		&self,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 		block: Option<Block::Hash>
 	) -> FutureResult<Option<StorageData>> {
-		self.backend.child_storage(block, child_storage_key, key)
+		self.backend.child_storage(block, child_storage_key, child_info, child_type, key)
 	}
 
 	fn child_storage_keys(
 		&self,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key_prefix: StorageKey,
 		block: Option<Block::Hash>
 	) -> FutureResult<Vec<StorageKey>> {
-		self.backend.child_storage_keys(block, child_storage_key, key_prefix)
+		self.backend.child_storage_keys(block, child_storage_key, child_info, child_type, key_prefix)
 	}
 
 	fn child_storage_hash(
 		&self,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 		block: Option<Block::Hash>
 	) -> FutureResult<Option<Block::Hash>> {
-		self.backend.child_storage_hash(block, child_storage_key, key)
+		self.backend.child_storage_hash(block, child_storage_key, child_info, child_type, key)
 	}
 
 	fn child_storage_size(
 		&self,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 		block: Option<Block::Hash>
 	) -> FutureResult<Option<u64>> {
-		self.backend.child_storage_size(block, child_storage_key, key)
+		self.backend.child_storage_size(block, child_storage_key, child_info, child_type, key)
 	}
 
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes> {
@@ -334,4 +350,10 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 
 fn client_err(err: sp_blockchain::Error) -> Error {
 	Error::Client(Box::new(err))
+}
+
+const CHILD_RESOLUTION_ERROR: &str = "Unexpected child info and type";
+
+fn child_resolution_error() -> sp_blockchain::Error {
+	sp_blockchain::Error::Msg(CHILD_RESOLUTION_ERROR.to_string())
 }

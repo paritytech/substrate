@@ -223,6 +223,19 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	pub last_write: Option<BlockNumber>,
 }
 
+impl<CodeHash, Balance, BlockNumber> RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
+	/// Associated child trie unique id is built from the hash part of the trie id.
+	pub fn child_trie_unique_id(&self) -> child::ChildInfo {
+		trie_unique_id(&self.trie_id[..])
+	}
+}
+
+/// Associated child trie unique id is built from the hash part of the trie id.
+pub(crate) fn trie_unique_id(trie_id: &[u8]) -> child::ChildInfo {
+	let start = CHILD_STORAGE_KEY_PREFIX.len() + b"default:".len();
+	child::ChildInfo::new_default(&trie_id[start ..])
+}
+
 pub type TombstoneContractInfo<T> =
 	RawTombstoneContractInfo<<T as system::Trait>::Hash, <T as system::Trait>::Hashing>;
 
@@ -793,8 +806,17 @@ impl<T: Trait> Module<T> {
 
 		let key_values_taken = delta.iter()
 			.filter_map(|key| {
-				child::get_raw(&origin_contract.trie_id, &blake2_256(key)).map(|value| {
-					child::kill(&origin_contract.trie_id, &blake2_256(key));
+				child::get_raw(
+					&origin_contract.trie_id,
+					origin_contract.child_trie_unique_id(),
+					&blake2_256(key),
+				).map(|value| {
+					child::kill(
+						&origin_contract.trie_id,
+						origin_contract.child_trie_unique_id(),
+						&blake2_256(key),
+					);
+					
 					(key, value)
 				})
 			})
@@ -803,13 +825,20 @@ impl<T: Trait> Module<T> {
 		let tombstone = <TombstoneContractInfo<T>>::new(
 			// This operation is cheap enough because last_write (delta not included)
 			// is not this block as it has been checked earlier.
-			&sp_io::storage::child_root(&origin_contract.trie_id)[..],
+			&child::child_root(
+				&origin_contract.trie_id,
+			)[..],
 			code_hash,
 		);
 
 		if tombstone != dest_tombstone {
 			for (key, value) in key_values_taken {
-				child::put_raw(&origin_contract.trie_id, &blake2_256(key), &value);
+				child::put_raw(
+					&origin_contract.trie_id,
+					origin_contract.child_trie_unique_id(),
+					&blake2_256(key),
+					&value,
+				);
 			}
 
 			return Err("Tombstones don't match");
@@ -887,7 +916,7 @@ decl_storage! {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::take(who) {
-			child::kill_storage(&info.trie_id);
+			child::kill_storage(&info.trie_id, info.child_trie_unique_id());
 		}
 	}
 }
