@@ -1397,9 +1397,9 @@ impl<T: Trait> Module<T> {
 			// Reassign all Stakers.
 			let (_slot_stake, maybe_new_validators) = Self::select_validators();
 			Self::apply_unapplied_slashes(current_era);
-		}
 
-		maybe_new_validators
+			maybe_new_validators
+		}
 	}
 
 	/// Apply previously-unapplied slashes on the beginning of a new era, after a delay.
