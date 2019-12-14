@@ -274,6 +274,7 @@ decl_module! {
 		/// As a member, vote on an candidate.
 		pub fn vote(origin, candidate: <T::Lookup as StaticLookup>::Source, approve: bool) {
 			let voter = ensure_signed(origin)?;
+			ensure!(Self::is_member(&voter), "not a member");
 			let candidate = T::Lookup::lookup(candidate)?;
 			let vote = if approve { Vote::Approve } else { Vote::Reject };
 			<Votes<T>>::insert(candidate, voter, vote);
@@ -318,8 +319,8 @@ decl_module! {
 			ensure!(<SuspendedMembers<T>>::exists(&who), "user is not suspended member");
 			
 			if forgive {
-				// Add member back to society
-				Self::add_member(&who);
+				// Add member back to society.
+				let _ = Self::add_member(&who);
 			} else {
 				// Cancel a suspended member's membership, remove their payouts.
 				<Payouts<T>>::remove(&who);
@@ -346,10 +347,27 @@ decl_module! {
 							+ Self::lock_duration(Self::members().len() as u32);
 						Self::pay_accepted_candidate(&who, value, kind, maturity);
 						// Add user as a member!
-						Self::add_member(&who);
+						let _ = Self::add_member(&who);
 					} else {
 						// Founder has denied this candidate
-						Self::slash_suspended_candidate(&who);
+						match kind {
+							BidKind::Deposit(deposit) => {
+								// Slash deposit and move it to the society account
+								let _ = T::Currency::repatriate_reserved(&who, &Self::account_id(), deposit);
+							}
+							BidKind::Vouch(voucher, _) => {
+								// Give voucher a strike
+								let strikes = <Strikes<T>>::mutate(&voucher, |s| {
+									*s += 1;
+									*s
+								});
+								if strikes >= T::MaxStrikes::get() {
+									Self::suspend_member(&voucher);
+								}
+							}
+						}
+						// Remove suspended candidate
+						<SuspendedCandidates<T>>::remove(who);
 					}
 				} else {
 					// Founder has taken no judgement, and candidate is placed back into the pool.
@@ -472,13 +490,16 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Add a member to the sorted members list. Will not add a duplicate member.
-	fn add_member(m: &T::AccountId) {
+	fn add_member(m: &T::AccountId) -> Result {
 		<Members<T>>::mutate(|members| {
 			match members.binary_search(m) {
-				Ok(_) => {} // User is already a member. 
-				Err(pos) => members.insert(pos, m.clone()),
+				Ok(_) => Err("already a member"),
+				Err(i) => {
+					members.insert(i, m.clone());
+					Ok(())
+				}
 			}
-		});
+		})
 	}
 
 	/// Remove a member from the members list.
@@ -713,28 +734,6 @@ impl<T: Trait> Module<T> {
 		};
 
 		Self::bump_payout(candidate, maturity, value);
-	}
-
-	/// Remove a suspended candidate. Slash their deposit or give strike to their voucher.
-	fn slash_suspended_candidate(who: &T::AccountId) {
-		if let Some((_, kind)) = <SuspendedCandidates<T>>::take(who) {
-			match kind {
-				BidKind::Deposit(deposit) => {
-					// Slash deposit and move it to the society account
-					let _ = T::Currency::repatriate_reserved(&who, &Self::account_id(), deposit);
-				}
-				BidKind::Vouch(voucher, _) => {
-					// Give voucher a strike
-					let strikes = <Strikes<T>>::mutate(&voucher, |s| {
-						*s += 1;
-						*s
-					});
-					if strikes >= T::MaxStrikes::get() {
-						Self::suspend_member(&voucher);
-					}
-				}
-			}
-		}
 	}
 
 	/// The account ID of the treasury pot.
