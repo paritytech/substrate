@@ -25,7 +25,7 @@ use primitives::offchain::storage::{
 };
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor};
-use sp_runtime::{Justification, StorageOverlay, ChildrenStorageOverlay};
+use sp_runtime::{Justification, Storage};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId, ChangesTrieTransaction};
 use hash_db::{Hasher, Prefix};
@@ -505,15 +505,15 @@ where
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> sp_blockchain::Result<H::Out> {
-		check_genesis_storage(&top, &children)?;
+	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<H::Out> {
+		check_genesis_storage(&storage)?;
 
-		let child_delta = children.into_iter()
-			.map(|(storage_key, child_overlay)|
-				(storage_key, child_overlay.into_iter().map(|(k, v)| (k, Some(v)))));
+		let child_delta = storage.children.into_iter()
+			.map(|(storage_key, child_content)|
+				(storage_key, child_content.data.into_iter().map(|(k, v)| (k, Some(v))), child_content.child_info));
 
 		let (root, transaction) = self.old_state.full_storage_root(
-			top.into_iter().map(|(k, v)| (k, Some(v))),
+			storage.top.into_iter().map(|(k, v)| (k, Some(v))),
 			child_delta
 		);
 
@@ -796,12 +796,12 @@ impl<Block, H> state_machine::ChangesTrieStorage<H, NumberFor<Block>> for Change
 }
 
 /// Check that genesis storage is valid.
-pub fn check_genesis_storage(top: &StorageOverlay, children: &ChildrenStorageOverlay) -> sp_blockchain::Result<()> {
-	if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
+pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {
+	if storage.top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
 		return Err(sp_blockchain::Error::GenesisInvalid.into());
 	}
 
-	if children.keys().any(|child_key| !well_known_keys::is_child_storage_key(&child_key)) {
+	if storage.children.keys().any(|child_key| !well_known_keys::is_child_storage_key(&child_key)) {
 		return Err(sp_blockchain::Error::GenesisInvalid.into());
 	}
 

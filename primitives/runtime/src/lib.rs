@@ -38,7 +38,7 @@ pub use paste;
 pub use app_crypto;
 
 #[cfg(feature = "std")]
-pub use primitives::storage::{StorageOverlay, ChildrenStorageOverlay};
+pub use primitives::storage::{Storage, StorageChild};
 
 use sp_std::prelude::*;
 use sp_std::convert::TryFrom;
@@ -121,15 +121,15 @@ use crate::traits::IdentifyAccount;
 #[cfg(feature = "std")]
 pub trait BuildStorage: Sized {
 	/// Build the storage out of this builder.
-	fn build_storage(&self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
-		let mut storage = (Default::default(), Default::default());
+	fn build_storage(&self) -> Result<primitives::storage::Storage, String> {
+		let mut storage = Default::default();
 		self.assimilate_storage(&mut storage)?;
 		Ok(storage)
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
 	fn assimilate_storage(
 		&self,
-		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
+		storage: &mut primitives::storage::Storage,
 	) -> Result<(), String>;
 }
 
@@ -139,23 +139,26 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.
 	fn build_module_genesis_storage(
 		&self,
-		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
+		storage: &mut primitives::storage::Storage,
 	) -> Result<(), String>;
 }
 
 #[cfg(feature = "std")]
-impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
+impl BuildStorage for primitives::storage::Storage {
 	fn assimilate_storage(
 		&self,
-		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
+		storage: &mut primitives::storage::Storage,
 	)-> Result<(), String> {
-		storage.0.extend(self.0.iter().map(|(k, v)| (k.clone(), v.clone())));
-		for (k, other_map) in self.1.iter() {
+		storage.top.extend(self.top.iter().map(|(k, v)| (k.clone(), v.clone())));
+		for (k, other_map) in self.children.iter() {
 			let k = k.clone();
-			if let Some(map) = storage.1.get_mut(&k) {
-				map.extend(other_map.iter().map(|(k, v)| (k.clone(), v.clone())));
+			if let Some(map) = storage.children.get_mut(&k) {
+				map.data.extend(other_map.data.iter().map(|(k, v)| (k.clone(), v.clone())));
+				if !map.child_info.try_update(other_map.child_info.as_ref()) {
+					return Err("Incompatible child info update".to_string());
+				}
 			} else {
-				storage.1.insert(k, other_map.clone());
+				storage.children.insert(k, other_map.clone());
 			}
 		}
 		Ok(())
@@ -532,7 +535,7 @@ macro_rules! impl_outer_config {
 			impl $crate::BuildStorage for $main {
 				fn assimilate_storage(
 					&self,
-					storage: &mut ($crate::StorageOverlay, $crate::ChildrenStorageOverlay),
+					storage: &mut $crate::Storage,
 				) -> std::result::Result<(), String> {
 					$(
 						if let Some(ref extra) = self.[< $snake $(_ $instance )? >] {

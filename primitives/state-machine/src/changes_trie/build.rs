@@ -133,10 +133,15 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 		H: Hasher,
 		Number: BlockNumber,
 {
-	let (committed, prospective) = if let Some(sk) = storage_key.as_ref() {
-		(changes.committed.children.get(sk), changes.prospective.children.get(sk))
+	let (committed, prospective, child_info) = if let Some(sk) = storage_key.as_ref() {
+		let child_info = changes.child_info(sk).cloned();
+		(
+			changes.committed.children.get(sk).map(|c| &c.0),
+			changes.prospective.children.get(sk).map(|c| &c.0),
+			child_info,
+		)
 	} else {
-		(Some(&changes.committed.top), Some(&changes.prospective.top))
+		(Some(&changes.committed.top), Some(&changes.prospective.top), None)
 	};
 	committed.iter().flat_map(|c| c.iter())
 		.chain(prospective.iter().flat_map(|c| c.iter()))
@@ -148,8 +153,11 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 					// AND are not in storage at the beginning of operation
 					if let Some(sk) = storage_key.as_ref() {
 						if !changes.child_storage(sk, k).map(|v| v.is_some()).unwrap_or_default() {
-							if !backend.exists_child_storage(sk, k).map_err(|e| format!("{}", e))? {
-								return Ok(map);
+							if let Some(child_info) = child_info.as_ref() { 
+								if !backend.exists_child_storage(sk, child_info.as_ref(), k)
+									.map_err(|e| format!("{}", e))? {
+									return Ok(map);
+								}
 							}
 						}
 					} else {
@@ -332,11 +340,15 @@ mod test {
 	use codec::Encode;
 	use primitives::Blake2Hasher;
 	use primitives::storage::well_known_keys::{EXTRINSIC_INDEX};
+	use primitives::storage::ChildInfo;
 	use crate::backend::InMemory;
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
 	use super::*;
+
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
+	const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2");
 
 	fn prepare_for_build(zero: u64) -> (
 		InMemory<Blake2Hasher>,
@@ -416,18 +428,18 @@ mod test {
 				}),
 			].into_iter().collect(),
 				children: vec![
-					(child_trie_key1.clone(), vec![
+					(child_trie_key1.clone(), (vec![
 						(vec![100], OverlayedValue {
 							value: Some(vec![200]),
 							extrinsics: Some(vec![0, 2].into_iter().collect())
 						})
-					].into_iter().collect()),
-					(child_trie_key2, vec![
+					].into_iter().collect(), CHILD_INFO_1.to_owned())),
+					(child_trie_key2, (vec![
 						(vec![100], OverlayedValue {
 							value: Some(vec![200]),
 							extrinsics: Some(vec![0, 2].into_iter().collect())
 						})
-					].into_iter().collect()),
+					].into_iter().collect(), CHILD_INFO_2.to_owned())),
 				].into_iter().collect()
 			},
 			committed: OverlayedChangeSet { top: vec![
@@ -445,12 +457,12 @@ mod test {
 				}),
 			].into_iter().collect(),
 				children: vec![
-					(child_trie_key1, vec![
+					(child_trie_key1, (vec![
 						(vec![100], OverlayedValue {
 							value: Some(vec![202]),
 							extrinsics: Some(vec![3].into_iter().collect())
 						})
-					].into_iter().collect()),
+					].into_iter().collect(), CHILD_INFO_1.to_owned())),
 				].into_iter().collect(),
 			},
 			changes_trie_config: Some(config.clone()),
