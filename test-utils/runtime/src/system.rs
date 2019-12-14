@@ -361,16 +361,16 @@ mod tests {
 		];
 		TestExternalities::new_with_code(
 			WASM_BINARY,
-			(
-				map![
+			primitives::storage::Storage {
+				top: map![
 					twox_128(b"latest").to_vec() => vec![69u8; 32],
 					twox_128(b"sys:auth").to_vec() => authorities.encode(),
 					blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
 						vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 					}
 				],
-				map![],
-			)
+				children: map![],
+			},
 		)
 	}
 
