@@ -251,7 +251,7 @@ fn suspended_member_lifecycle_works() {
 		run_to_block(16);
 
 		// Strike 2 is accumulated, and 10 is suspended :(
-		assert_eq!(<SuspendedMembers<Test>>::get(10), Some(16));
+		assert_eq!(<SuspendedMembers<Test>>::get(10), Some(()));
 		assert_eq!(<Members<Test>>::get(), vec![]);
 
 		// Suspended members cannot get payout
@@ -269,12 +269,10 @@ fn suspended_member_lifecycle_works() {
 		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 10, true));
 		assert_eq!(<SuspendedMembers<Test>>::get(10), None);
 		assert_eq!(<Members<Test>>::get(), vec![10]);
-		// Suspended member has increased payout time due to suspension period
-		assert_eq!(<Payouts<Test>>::get(10), vec![(20, 100)]);
 
 		// Let's suspend them again, directly
 		Society::suspend_member(&10);
-		assert_eq!(<SuspendedMembers<Test>>::get(10), Some(26));
+		assert_eq!(<SuspendedMembers<Test>>::get(10), Some(()));
 		// Suspension judgement origin does not forgive the suspended member
 		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 10, false));
 		// Cleaned up

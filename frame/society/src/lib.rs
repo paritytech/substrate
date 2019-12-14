@@ -168,7 +168,7 @@ decl_storage! {
 		}): Vec<T::AccountId>;
 
 		/// The set of suspended members.
-		pub SuspendedMembers get(fn suspended_member): map T::AccountId => Option<T::BlockNumber>;
+		pub SuspendedMembers get(fn suspended_member): map T::AccountId => Option<()>;
 
 		/// The current bids.
 		Bids: Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>;
@@ -318,14 +318,15 @@ decl_module! {
 			ensure!(<SuspendedMembers<T>>::exists(&who), "user is not suspended member");
 			
 			if forgive {
-				Self::unsuspend_member(&who);
+				// Add member back to society
+				Self::add_member(&who);
 			} else {
-				// Cancel a suspended member's membership
-				<SuspendedMembers<T>>::remove(&who);
+				// Cancel a suspended member's membership, remove their payouts.
 				<Payouts<T>>::remove(&who);
 				<Strikes<T>>::remove(&who);
-				// TODO: Handle vouch storage items
 			}
+
+			<SuspendedMembers<T>>::remove(who);
 		}
 
 		/// Allow founder origin to make judgement on a suspended candidate.
@@ -682,22 +683,8 @@ impl<T: Trait> Module<T> {
 	/// Suspend a user, removing them from the member list.
 	fn suspend_member(who: &T::AccountId) {
 		if Self::remove_member(&who).is_ok() {
-			<SuspendedMembers<T>>::insert(who, <system::Module<T>>::block_number());
+			<SuspendedMembers<T>>::insert(who, ());
 			<Strikes<T>>::remove(who);
-		}
-	}
-
-	/// Unsuspend a user, adding them back to the member list and increasing their payout schedule.
-	fn unsuspend_member(who: &T::AccountId) {
-		if let Some(suspended_block) = <SuspendedMembers<T>>::get(who) {
-			Self::add_member(&who);
-			let now = <system::Module<T>>::block_number();
-			let suspended_period = now - suspended_block;
-			// Increase payout time of existing payouts by the suspension time.
-			<Payouts<T>>::mutate(&who, |payouts| {
-				payouts.iter_mut().for_each(|v| v.0 += suspended_period);
-			});
-			<SuspendedMembers<T>>::remove(who);
 		}
 	}
 
