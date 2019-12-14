@@ -130,10 +130,12 @@ fn unbidding_works() {
 		assert_ok!(Society::bid(Origin::signed(20), 1000));
 		assert_ok!(Society::bid(Origin::signed(30), 0));
 		assert_eq!(Balances::free_balance(30), 25);
+		assert_eq!(Balances::reserved_balance(30), 25);
 
 		assert_noop!(Society::unbid(Origin::signed(30), 1), "bad position");
 		assert_ok!(Society::unbid(Origin::signed(30), 0));
 		assert_eq!(Balances::free_balance(30), 50);
+		assert_eq!(Balances::reserved_balance(30), 0);
 
 		run_to_block(4);
 		assert_eq!(Society::candidates(), vec![ (1000, 20, BidKind::Deposit(25)) ]);
@@ -174,12 +176,23 @@ fn basic_new_member_skeptic_works() {
 #[test]
 fn basic_new_member_reject_works() {
 	EnvBuilder::new().execute(|| {
+		// Starting Balance
+		assert_eq!(Balances::free_balance(20), 50);
+		// 20 makes a bid
 		assert_ok!(Society::bid(Origin::signed(20), 0));
+		assert_eq!(Balances::free_balance(20), 25);
+		assert_eq!(Balances::reserved_balance(20), 25);
+		// Rotation Period
 		run_to_block(4);
 		assert_eq!(Society::candidates(), vec![(0, 20, BidKind::Deposit(25))]);
+		// We say no
 		assert_ok!(Society::vote(Origin::signed(10), 20, false));
 		run_to_block(8);
+		// User is not added as member
 		assert_eq!(Society::members(), vec![10]);
+		// User is suspended
+		assert_eq!(Society::candidates(), vec![]);
+		assert_eq!(Society::suspended_candidates(20).is_some(), true);
 	});
 }
 

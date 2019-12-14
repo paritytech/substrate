@@ -337,9 +337,9 @@ decl_module! {
 						Self::pay_accepted_candidate(&who, value, kind);
 						// Add user as a member!
 						Self::add_member(&who);
-						
 					} else {
 						// Founder has denied this candidate
+						Self::slash_suspended_candidate(&who);
 					}
 				} else {
 					// Founder has taken no judgement, and candidate is placed back into the pool.
@@ -725,6 +725,28 @@ impl<T: Trait> Module<T> {
 		};
 
 		Self::bump_payout(candidate, maturity, value);
+	}
+
+	/// Remove a suspended candidate. Slash their deposit or give strike to their voucher.
+	fn slash_suspended_candidate(who: &T::AccountId) {
+		if let Some((_, kind)) = <SuspendedCandidates<T>>::take(who) {
+			match kind {
+				BidKind::Deposit(deposit) => {
+					// Slash deposit and move it to the society account
+					let _ = T::Currency::repatriate_reserved(&who, &Self::account_id(), deposit);
+				}
+				BidKind::Vouch(voucher, _) => {
+					// Give voucher a strike
+					let strikes = <Strikes<T>>::mutate(&voucher, |s| {
+						*s += 1;
+						*s
+					});
+					if strikes >= T::MaxStrikes::get() {
+						Self::suspend_member(&voucher);
+					}
+				}
+			}
+		}
 	}
 
 	/// Default maturity of a payout.
