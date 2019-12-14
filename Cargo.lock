@@ -6222,6 +6222,7 @@ dependencies = [
  "sp-runtime 2.0.0",
  "sp-std 2.0.0",
  "substrate-test-utils 2.0.0",
+ "tracing 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

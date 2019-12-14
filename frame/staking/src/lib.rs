@@ -1308,9 +1308,7 @@ impl<T: Trait> Module<T> {
 		if_std!{
 			let span = tracing::span!(tracing::Level::DEBUG, "new_era");
 			let _enter = span.enter();
-			println!("println! new era!");
 		}
-		sp_runtime::print("print new era!");
 		// Payout
 		let points = CurrentEraPointsEarned::take();
 		let now = T::Time::now();
@@ -1359,31 +1357,47 @@ impl<T: Trait> Module<T> {
 		});
 		let bonding_duration = T::BondingDuration::get();
 
-		BondedEras::mutate(|bonded| {
-			bonded.push((current_era, start_session_index));
+		{
+			if_std!{
+				let span = tracing::span!(tracing::Level::DEBUG, "new_era_bonded");
+				let _enter = span.enter();
 
-			if current_era > bonding_duration {
-				let first_kept = current_era - bonding_duration;
-
-				// prune out everything that's from before the first-kept index.
-				let n_to_prune = bonded.iter()
-					.take_while(|&&(era_idx, _)| era_idx < first_kept)
-					.count();
-
-				// kill slashing metadata.
-				for (pruned_era, _) in bonded.drain(..n_to_prune) {
-					slashing::clear_era_metadata::<T>(pruned_era);
-				}
-
-				if let Some(&(_, first_session)) = bonded.first() {
-					T::SessionInterface::prune_historical_up_to(first_session);
-				}
+				println!("BondedEras.len = {}", bonded.len());
 			}
-		});
 
-		// Reassign all Stakers.
-		let (_slot_stake, maybe_new_validators) = Self::select_validators();
-		Self::apply_unapplied_slashes(current_era);
+			BondedEras::mutate(|bonded| {
+				bonded.push((current_era, start_session_index));
+
+				if current_era > bonding_duration {
+					let first_kept = current_era - bonding_duration;
+
+					// prune out everything that's from before the first-kept index.
+					let n_to_prune = bonded.iter()
+						.take_while(|&&(era_idx, _)| era_idx < first_kept)
+						.count();
+
+					// kill slashing metadata.
+					for (pruned_era, _) in bonded.drain(..n_to_prune) {
+						slashing::clear_era_metadata::<T>(pruned_era);
+					}
+
+					if let Some(&(_, first_session)) = bonded.first() {
+						T::SessionInterface::prune_historical_up_to(first_session);
+					}
+				}
+			});
+		}
+
+		{
+			if_std!{
+				let span = tracing::span!(tracing::Level::DEBUG, "select_validators");
+				let _enter = span.enter();
+			}
+
+			// Reassign all Stakers.
+			let (_slot_stake, maybe_new_validators) = Self::select_validators();
+			Self::apply_unapplied_slashes(current_era);
+		}
 
 		maybe_new_validators
 	}
@@ -1410,6 +1424,11 @@ impl<T: Trait> Module<T> {
 	///
 	/// Assumes storage is coherent with the declaration.
 	fn select_validators() -> (BalanceOf<T>, Option<Vec<T::AccountId>>) {
+		if_std!{
+			let span = tracing::span!(tracing::Level::DEBUG, "select_validators");
+			let _enter = span.enter();
+		}
+
 		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
 		let all_validator_candidates_iter = <Validators<T>>::enumerate();
 		let all_validators = all_validator_candidates_iter.map(|(who, _pref)| {
@@ -1434,6 +1453,11 @@ impl<T: Trait> Module<T> {
 		});
 		all_nominators.extend(nominator_votes);
 
+		if_std!{
+			println!("nominators len = {:?}", all_nominators.len());
+			println!("validators len = {:?}", all_validators.len());
+		}
+
 		let maybe_phragmen_result = phragmen::elect::<_, _, _, T::CurrencyToVote>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
@@ -1443,6 +1467,11 @@ impl<T: Trait> Module<T> {
 		);
 
 		if let Some(phragmen_result) = maybe_phragmen_result {
+			if_std!{
+				let span = tracing::span!(tracing::Level::DEBUG, "maybe_phragmen_result");
+				let _enter = span.enter();
+			}
+
 			let elected_stashes = phragmen_result.winners.iter()
 				.map(|(s, _)| s.clone())
 				.collect::<Vec<T::AccountId>>();

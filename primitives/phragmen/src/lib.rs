@@ -33,7 +33,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, collections::btree_map::BTreeMap};
+use rstd::{prelude::*, collections::btree_map::BTreeMap, if_std};
 use sp_runtime::RuntimeDebug;
 use sp_runtime::{helpers_128bit::multiply_by_rational, Perbill, Rational128};
 use sp_runtime::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating, Bounded};
@@ -159,6 +159,14 @@ pub fn elect<AccountId, Balance, FS, C>(
 	for<'r> FS: Fn(&'r AccountId) -> Balance,
 	C: Convert<Balance, u64> + Convert<u128, Balance>,
 {
+	if_std!{
+		let span = tracing::span!(tracing::Level::DEBUG, "phragmen_elect");
+		let _enter = span.enter();
+		println!("candidate_count {}, minimum_candidate_count {}, initial_candidates {}, initial_voters {}", 
+			candidate_count, minimum_candidate_count, initial_candidates.len(), initial_voters.len()
+		);
+	}
+
 	let to_votes = |b: Balance| <C as Convert<Balance, u64>>::convert(b) as ExtendedBalance;
 
 	// return structures
