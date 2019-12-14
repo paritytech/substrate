@@ -1317,6 +1317,11 @@ impl<T: Trait> Module<T> {
 		});
 		let era_duration = now - previous_era_start;
 		if !era_duration.is_zero() {
+			if_std!{
+				let span = tracing::span!(tracing::Level::DEBUG, "new_era_reward_validator");
+				let _enter = span.enter();
+			}
+
 			let validators = Self::current_elected();
 
 			let validator_len: BalanceOf<T> = (validators.len() as u32).into();
@@ -1384,6 +1389,11 @@ impl<T: Trait> Module<T> {
 					}
 
 					if let Some(&(_, first_session)) = bonded.first() {
+						if_std!{
+							let span = tracing::span!(tracing::Level::DEBUG, "new_era_prune_historical");
+							let _enter = span.enter();
+						}
+
 						T::SessionInterface::prune_historical_up_to(first_session);
 					}
 				}
