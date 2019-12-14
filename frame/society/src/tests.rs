@@ -264,9 +264,9 @@ fn suspended_member_lifecycle_works() {
 		// Normal people cannot make judgement
 		assert_noop!(Society::judge_suspended_member(Origin::signed(10), 10, true), "Invalid origin");
 
-		// Founder origin can judge thee
-		// Founder forgives the suspended member
-		assert_ok!(Society::judge_suspended_member(Origin::signed(1), 10, true));
+		// Suspension judgment origin can judge thee
+		// Suspension judgement origin forgives the suspended member
+		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 10, true));
 		assert_eq!(<SuspendedMembers<Test>>::get(10), None);
 		assert_eq!(<Members<Test>>::get(), vec![10]);
 		// Suspended member has increased payout time due to suspension period
@@ -275,11 +275,64 @@ fn suspended_member_lifecycle_works() {
 		// Let's suspend them again, directly
 		Society::suspend_member(&10);
 		assert_eq!(<SuspendedMembers<Test>>::get(10), Some(26));
-		// Founder does not forgive the suspended member
-		assert_ok!(Society::judge_suspended_member(Origin::signed(1), 10, false));
+		// Suspension judgement origin does not forgive the suspended member
+		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 10, false));
 		// Cleaned up
 		assert_eq!(<SuspendedMembers<Test>>::get(10), None);
 		assert_eq!(<Members<Test>>::get(), vec![]);
 		assert_eq!(<Payouts<Test>>::get(10), vec![]);
+	});
+}
+
+#[test]
+fn suspended_candidate_rejected_works() {
+	EnvBuilder::new().execute(|| {
+		// Starting Balance
+		assert_eq!(Balances::free_balance(20), 50);
+		assert_eq!(Balances::free_balance(Society::account_id()), 10000);
+		// 20 makes a bid
+		assert_ok!(Society::bid(Origin::signed(20), 0));
+		assert_eq!(Balances::free_balance(20), 25);
+		assert_eq!(Balances::reserved_balance(20), 25);
+		// Rotation Period
+		run_to_block(4);
+		assert_eq!(Society::candidates(), vec![(0, 20, BidKind::Deposit(25))]);
+		// We say no
+		assert_ok!(Society::vote(Origin::signed(10), 20, false));
+		run_to_block(8);
+		// User is not added as member
+		assert_eq!(Society::members(), vec![10]);
+		// User is suspended
+		assert_eq!(Society::candidates(), vec![]);
+		assert_eq!(Society::suspended_candidates(20).is_some(), true);
+
+		// Normal user cannot make judgement on suspended candidate
+		assert_noop!(Society::judge_suspended_candidate(Origin::signed(20), 20, Some(true)), "Invalid origin");
+
+		// Suspension judgement origin makes no direct judgement
+		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, None));
+		// They are placed back in bid pool, repeat suspension process
+		// Rotation Period
+		run_to_block(12);
+		assert_eq!(Society::candidates(), vec![(0, 20, BidKind::Deposit(25))]);
+		// We say no
+		assert_ok!(Society::vote(Origin::signed(10), 20, false));
+		run_to_block(16);
+		// User is not added as member
+		assert_eq!(Society::members(), vec![10]);
+		// User is suspended
+		assert_eq!(Society::candidates(), vec![]);
+		assert_eq!(Society::suspended_candidates(20).is_some(), true);
+
+		// Suspension judgement origin says not accepted
+		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Some(false)));
+		// User is slashed
+		assert_eq!(Balances::free_balance(20), 25);
+		assert_eq!(Balances::reserved_balance(20), 0);
+		// Funds are deposited to society account
+		assert_eq!(Balances::free_balance(Society::account_id()), 10025);
+		// Cleaned up
+		assert_eq!(Society::candidates(), vec![]);
+		assert_eq!(<SuspendedCandidates<Test>>::get(20), None);
 	});
 }

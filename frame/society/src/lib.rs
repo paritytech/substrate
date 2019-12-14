@@ -86,6 +86,9 @@ pub trait Trait: system::Trait {
 
 	/// The origin that is allowed to call `found`.
 	type FounderOrigin: EnsureOrigin<Self::Origin>;
+
+	/// The origin that is allowed to make suspension judgements.
+	type SuspensionJudgementOrigin: EnsureOrigin<Self::Origin>; 
 }
 
 /// A vote by a member on a candidate application.
@@ -148,7 +151,7 @@ decl_storage! {
 
 		/// The set of suspended candidates.
 		pub SuspendedCandidates get(suspended_candidates):
-			linked_map T::AccountId => Option<(BalanceOf<T>, BidKind<T::AccountId, BalanceOf<T>>)>;
+			map T::AccountId => Option<(BalanceOf<T>, BidKind<T::AccountId, BalanceOf<T>>)>;
 
 		/// Amount of our account balance that is specifically for the next round's bid(s).
 		pub Pot get(fn pot) config(): BalanceOf<T>;
@@ -165,7 +168,7 @@ decl_storage! {
 		}): Vec<T::AccountId>;
 
 		/// The set of suspended members.
-		pub SuspendedMembers get(fn suspended_member): linked_map T::AccountId => Option<T::BlockNumber>;
+		pub SuspendedMembers get(fn suspended_member): map T::AccountId => Option<T::BlockNumber>;
 
 		/// The current bids.
 		Bids: Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>;
@@ -311,19 +314,23 @@ decl_module! {
 
 		/// Allow founder origin to make judgement on a suspended member.
 		fn judge_suspended_member(origin, who: T::AccountId, forgive: bool) {
-			T::FounderOrigin::ensure_origin(origin)?;
+			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			ensure!(<SuspendedMembers<T>>::exists(&who), "user is not suspended member");
 			
 			if forgive {
 				Self::unsuspend_member(&who);
 			} else {
-				Self::remove_user(&who);
+				// Cancel a suspended member's membership
+				<SuspendedMembers<T>>::remove(&who);
+				<Payouts<T>>::remove(&who);
+				<Strikes<T>>::remove(&who);
+				// TODO: Handle vouch storage items
 			}
 		}
 
 		/// Allow founder origin to make judgement on a suspended candidate.
 		fn judge_suspended_candidate(origin, who: T::AccountId, approve: Option<bool>) {
-			T::FounderOrigin::ensure_origin(origin)?;
+			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			if let Some((value, kind)) = <SuspendedCandidates<T>>::get(&who) {
 				if let Some(approved) = approve {
 					if approved {
@@ -334,7 +341,9 @@ decl_module! {
 						// Reduce next pot by payout
 						<Pot<T>>::put(pot - value);
 						// Add payout for new candidate
-						Self::pay_accepted_candidate(&who, value, kind);
+						let maturity = <system::Module<T>>::block_number()
+							+ Self::lock_duration(Self::members().len() as u32);
+						Self::pay_accepted_candidate(&who, value, kind, maturity);
 						// Add user as a member!
 						Self::add_member(&who);
 					} else {
@@ -454,7 +463,7 @@ impl<T: Trait> Module<T> {
 		)
 	}
 
-	/// Check a user is a members.
+	/// Check a user is a member.
 	fn is_member(m: &T::AccountId) -> bool {
 		<Members<T>>::get()
 			.binary_search(m)
@@ -505,7 +514,8 @@ impl<T: Trait> Module<T> {
 			let candidates = <Candidates<T>>::take();
 			members.reserve(candidates.len());
 
-			let maturity = Self::maturity();
+			let maturity = <system::Module<T>>::block_number()
+				+ Self::lock_duration(members.len() as u32);
 
 			let mut rewardees = Vec::new();
 			let mut total_approvals = 0;
@@ -558,11 +568,11 @@ impl<T: Trait> Module<T> {
 					total_payouts += value;
 					members.push(candidate.clone());
 
-					Self::pay_accepted_candidate(&candidate, value, kind);
+					Self::pay_accepted_candidate(&candidate, value, kind, maturity);
 
-					// We track here the total_approvals so that every user has a unique range
-					// of numbers from 0 to `total_approvals` with length `approval_count`.
-					// This will be used to select a "primary" below.
+					// We track here the total_approvals so that every candidate has a unique range
+					// of numbers from 0 to `total_approvals` with length `approval_count` so each
+					// candidate is proportionally represented when selecting a "primary" below.
 					Some((candidate, total_approvals))
 				} else {
 					// Suspend Candidate
@@ -594,6 +604,7 @@ impl<T: Trait> Module<T> {
 
 			// if at least one candidate was accepted...
 			if !accepted.is_empty() {
+				// select one as primary, randomly chosen from the accepted, weighted by approvals. 
 				// Choose a random number between 0 and `total_approvals`
 				let primary_point = pick_usize(&mut rng, total_approvals - 1);
 				// Find the user who falls on that point
@@ -690,23 +701,13 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Remove all information about this user from this module.
-	fn remove_user(who: &T::AccountId) {
-		let _ = Self::remove_member(who);
-		<Payouts<T>>::remove(who);
-		<Strikes<T>>::remove(who);
-		<SuspendedMembers<T>>::remove(who);
-		// TODO: Clean up vouching
-	}
-
 	/// Pay an accepted candidate their bid value.
 	fn pay_accepted_candidate(
 		candidate: &T::AccountId,
 		value: BalanceOf<T>,
-		kind: BidKind<T::AccountId, BalanceOf<T>>
+		kind: BidKind<T::AccountId, BalanceOf<T>>,
+		maturity: T::BlockNumber,
 	) {
-		let maturity = Self::maturity();
-
 		let value = match kind {
 			BidKind::Deposit(deposit) => {
 				// In the case that a normal deposit bid is accepted we unreserve
@@ -747,14 +748,6 @@ impl<T: Trait> Module<T> {
 				}
 			}
 		}
-	}
-
-	/// Default maturity of a payout.
-	fn maturity() -> T::BlockNumber {
-		let members = Self::members();
-		let maturity = <system::Module<T>>::block_number()
-				+ Self::lock_duration(members.len() as u32);
-		maturity
 	}
 
 	/// The account ID of the treasury pot.
