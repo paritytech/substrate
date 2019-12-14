@@ -1361,11 +1361,13 @@ impl<T: Trait> Module<T> {
 			if_std!{
 				let span = tracing::span!(tracing::Level::DEBUG, "new_era_bonded");
 				let _enter = span.enter();
-
-				println!("BondedEras.len = {}", bonded.len());
 			}
 
 			BondedEras::mutate(|bonded| {
+				if_std!{
+					println!("BondedEras.len = {}", bonded.len());
+				}
+
 				bonded.push((current_era, start_session_index));
 
 				if current_era > bonding_duration {
