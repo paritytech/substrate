@@ -334,3 +334,54 @@ fn suspended_candidate_rejected_works() {
 		assert_eq!(<SuspendedCandidates<Test>>::get(20), None);
 	});
 }
+
+#[test]
+fn vouch_works() {
+	EnvBuilder::new().execute(|| {
+		// 10 is the only member
+		assert_eq!(Society::members(), vec![10]);
+		// A non-member cannot vouch
+		assert_noop!(Society::vouch(Origin::signed(1), 20, 1000, 100), "not a member");
+		// A member can though
+		assert_ok!(Society::vouch(Origin::signed(10), 20, 1000, 100));
+		// Vouching creates the right kind of bid
+		assert_eq!(<Bids<Test>>::get(), vec![(1000, 20, BidKind::Vouch(10, 100))]);
+		// Vouched user can become candidate
+		run_to_block(4);
+		assert_eq!(Society::candidates(), vec![(1000, 20, BidKind::Vouch(10, 100))]);
+		// Vote yes
+		assert_ok!(Society::vote(Origin::signed(10), 20, true));
+		// Vouched user can win
+		run_to_block(8);
+		assert_eq!(Society::members(), vec![10, 20]);
+		// Voucher wins a portion of the payment
+		assert_eq!(<Payouts<Test>>::get(10), vec![(9, 100)]);
+		// Vouched user wins the rest
+		assert_eq!(<Payouts<Test>>::get(20), vec![(9, 900)]);
+	});
+}
+
+#[test]
+fn voucher_cannot_win_more_than_bid() {
+	EnvBuilder::new().execute(|| {
+		// 10 is the only member
+		assert_eq!(Society::members(), vec![10]);
+		// 10 vouches, but asks for more than the bid
+		assert_ok!(Society::vouch(Origin::signed(10), 20, 100, 1000));
+		// Vouching creates the right kind of bid
+		assert_eq!(<Bids<Test>>::get(), vec![(100, 20, BidKind::Vouch(10, 1000))]);
+		// Vouched user can become candidate
+		run_to_block(4);
+		assert_eq!(Society::candidates(), vec![(100, 20, BidKind::Vouch(10, 1000))]);
+		// Vote yes
+		assert_ok!(Society::vote(Origin::signed(10), 20, true));
+		// Vouched user can win
+		run_to_block(8);
+		assert_eq!(Society::members(), vec![10, 20]);
+		// Voucher wins as much as the bid
+		assert_eq!(<Payouts<Test>>::get(10), vec![(9, 100)]);
+		// Vouched user gets nothing
+		assert_eq!(<Payouts<Test>>::get(20), vec![]);
+	});
+}
+

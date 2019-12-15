@@ -695,10 +695,12 @@ impl<T: Trait> Module<T> {
 
 	/// Bump the payout amount of `who`, to be unlocked at the given block number.
 	fn bump_payout(who: &T::AccountId, when: T::BlockNumber, value: BalanceOf<T>) {
-		<Payouts<T>>::mutate(who, |payouts| match payouts.binary_search_by_key(&when, |x| x.0) {
-			Ok(index) => payouts[index].1 += value,
-			Err(index) => payouts.insert(index, (when, value)),
-		});
+		if !value.is_zero(){
+			<Payouts<T>>::mutate(who, |payouts| match payouts.binary_search_by_key(&when, |x| x.0) {
+				Ok(index) => payouts[index].1 += value,
+				Err(index) => payouts.insert(index, (when, value)),
+			});
+		}
 	}
 
 	/// Suspend a user, removing them from the member list.
@@ -726,7 +728,7 @@ impl<T: Trait> Module<T> {
 			BidKind::Vouch(who, tip) => {
 				// In the case that a vouched-for bid is accepted we unset the
 				// vouching status and transfer the tip over to the voucher.
-				Self::bump_payout(&who, maturity, tip);
+				Self::bump_payout(&who, maturity, tip.min(value));
 				// Really shouldn't fail given the conditional we're in.
 				let _ = Self::unset_vouching(&who);
 				value.saturating_sub(tip)
