@@ -127,16 +127,20 @@ fn bidding_works() {
 #[test]
 fn unbidding_works() {
 	EnvBuilder::new().execute(|| {
+		// 20 and 30 make bids
 		assert_ok!(Society::bid(Origin::signed(20), 1000));
 		assert_ok!(Society::bid(Origin::signed(30), 0));
+		// Balances are reserved
 		assert_eq!(Balances::free_balance(30), 25);
 		assert_eq!(Balances::reserved_balance(30), 25);
-
+		// Must know right position to unbid + cannot unbid someone else
 		assert_noop!(Society::unbid(Origin::signed(30), 1), "bad position");
+		// Can unbid themselves with the right position
 		assert_ok!(Society::unbid(Origin::signed(30), 0));
+		// Balance is returned
 		assert_eq!(Balances::free_balance(30), 50);
 		assert_eq!(Balances::reserved_balance(30), 0);
-
+		// 20 wins candidacy
 		run_to_block(4);
 		assert_eq!(Society::candidates(), vec![ (1000, 20, BidKind::Deposit(25)) ]);
 	});
@@ -427,5 +431,24 @@ fn unvouch_works() {
 		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Some(false)));
 		// 10 is finally unvouched
 		assert_eq!(<Vouching<Test>>::get(), vec![]);
+	});
+}
+
+#[test]
+fn unbid_vouch_works() {
+	EnvBuilder::new().execute(|| {
+		// 10 is the only member
+		assert_eq!(Society::members(), vec![10]);
+		// 10 vouches for 20
+		assert_ok!(Society::vouch(Origin::signed(10), 20, 100, 0));
+		// 20 has a bid
+		assert_eq!(<Bids<Test>>::get(), vec![(100, 20, BidKind::Vouch(10, 0))]);
+		// 10 is vouched
+		assert_eq!(<Vouching<Test>>::get(), vec![10]);
+		// 20 doesn't want to be a member and can unbid themselves.
+		assert_ok!(Society::unbid(Origin::signed(20), 0));
+		// Everything is cleaned up
+		assert_eq!(<Vouching<Test>>::get(), vec![]);
+		assert_eq!(<Bids<Test>>::get(), vec![]);
 	});
 }
