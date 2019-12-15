@@ -1,0 +1,31 @@
+[package]
+name = "frame-bet"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+hex-literal = "0.1.0"
+serde = { version = "1.0.101", optional = true }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+sp-std = { path = "../../primitives/std", default-features = false }
+sp-runtime = { path = "../../primitives/runtime", default-features = false }
+support = { package = "frame-support", path = "../support", default-features = false }
+system = { package = "frame-system", path = "../system", default-features = false }
+
+[dev-dependencies]
+lazy_static = "1.0"
+
+[features]
+default = ["std"]
+std = [
+	"serde/std",
+	"parity-codec/std",
+	"parity-codec-derive/std",
+	"sr-std/std",
+	"sr-io/std",
+	"sr-primitives/std",
+	"substrate-primitives/std",
+	"srml-support/std",
+	"srml-system/std",
+	"srml-balances/std",
+]
