@@ -1263,6 +1263,10 @@ impl<T: Trait> Module<T> {
 			let exposure = Self::stakers(stash);
 			let total = exposure.total.max(One::one());
 
+			if_std!{
+				println!("exposure.others.len() {}", exposure.others.len());
+			}
+
 			for i in &exposure.others {
 				let per_u64 = Perbill::from_rational_approximation(i.value, total);
 				imbalance.maybe_subsume(Self::make_payout(&i.who, per_u64 * reward));
@@ -1337,12 +1341,19 @@ impl<T: Trait> Module<T> {
 
 			let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
 
-			for (v, p) in validators.iter().zip(points.individual.into_iter()) {
-				if p != 0 {
-					let reward = Perbill::from_rational_approximation(p, points.total) * total_payout;
-					total_imbalance.subsume(Self::reward_validator(v, reward));
+			if_std!{
+				println!("current elected validators len {}", validators.len());
+				let span = tracing::span!(tracing::Level::DEBUG, "new_era_reward_validator_loop");
+				let _enter = span.enter();
+
+				for (v, p) in validators.iter().zip(points.individual.into_iter()) {
+					if p != 0 {
+						let reward = Perbill::from_rational_approximation(p, points.total) * total_payout;
+						total_imbalance.subsume(Self::reward_validator(v, reward));
+					}
 				}
 			}
+
 
 			// assert!(total_imbalance.peek() == total_payout)
 			let total_payout = total_imbalance.peek();
