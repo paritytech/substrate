@@ -91,6 +91,7 @@ pub struct Edge<AccountId> {
 	load: Rational128,
 	/// Index of the candidate stored in the 'candidates' vector.
 	candidate_index: usize,
+	elected: bool,
 }
 
 /// Means a particular `AccountId` was backed by `Perbill`th of a nominator's stake.
@@ -204,7 +205,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 				// This candidate is valid + already cached.
 				candidates[*idx].approval_stake = candidates[*idx].approval_stake
 					.saturating_add(to_votes(voter_stake));
-				edges.push(Edge { who: v.clone(), candidate_index: *idx, ..Default::default() });
+				edges.push(Edge { who: v, candidate_index: *idx, ..Default::default() });
 			} // else {} would be wrong votes. We don't really care about it.
 		}
 		Voter {
@@ -267,6 +268,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 					if e.who == winner.who {
 						e.load = winner.score.lazy_saturating_sub(n.load);
 						n.load = winner.score;
+						e.elected = true;
 					}
 				}
 			}
@@ -281,7 +283,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 	for n in &mut voters {
 		let mut assignment = (n.who.clone(), vec![]);
 		for e in &mut n.edges {
-			if elected_candidates.iter().position(|(ref c, _)| *c == e.who).is_some() {
+			if e.elected {
 				let per_bill_parts =
 				{
 					if n.load == e.load {
