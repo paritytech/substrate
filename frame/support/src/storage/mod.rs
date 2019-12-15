@@ -364,8 +364,10 @@ impl<Value: Decode> Iterator for PrefixIterator<Value> {
 	type Item = Value;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		match sp_io::storage::next_key(&self.previous_key) {
-			Some(next_key) if next_key.starts_with(&self.prefix[..]) => {
+		match sp_io::storage::next_key(&self.previous_key)
+			.filter(|n| n.starts_with(&self.prefix[..]))
+		{
+			Some(next_key) => {
 				let value = unhashed::get(&next_key);
 
 				if value.is_none() {
