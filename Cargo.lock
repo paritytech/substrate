@@ -5037,28 +5037,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-browser"
-version = "2.0.0"
-dependencies = [
- "clear_on_drop 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "console_error_panic_hook 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "console_log 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "js-sys 0.3.32 (registry+https://github.com/rust-lang/crates.io-index)",
- "kvdb-web 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "libp2p 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-chain-spec 2.0.0",
- "sc-network 2.0.0",
- "sc-service 2.0.0",
- "wasm-bindgen 0.2.55 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasm-bindgen-futures 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "sc-chain-spec"
 version = "2.0.0"
 dependencies = [

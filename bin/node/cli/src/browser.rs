@@ -29,7 +29,7 @@ pub async fn start_client(wasm_ext: Transport) -> Result<Client, JsValue> {
 }
 
 async fn start_inner(wasm_ext: Transport) -> Result<Client, Box<dyn std::error::Error>> {
-	set_hooks(log::Level::Debug);
+	set_hooks(log::Level::Info);
 
 	let chain_spec = ChainSpec::FlamingFir.load()
 		.map_err(|e| format!("{:?}", e))?;
