@@ -165,7 +165,7 @@ fn get_app<'a, 'b>() -> App<'a, 'b> {
 			-k, --secp256k1 'Use SECP256k1/ECDSA/BIP39 cryptography'
 			-s, --sr25519 'Use Schnorr/Ristretto x25519/BIP39 cryptography'
 			[network] -n, --network <network> 'Specify a network. One of substrate \
-									 (default), polkadot, kusama, or dothereum.'
+									 (default), polkadot, kusama, dothereum, or kulupu'
 			[password] -p, --password <password> 'The password for the key'
 		")
 		.subcommands(vec![
