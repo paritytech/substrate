@@ -300,7 +300,10 @@ fn new_test_ext() -> sp_io::TestExternalities {
 
 #[test]
 fn storage_instance_independance() {
-	let mut storage = Default::default();
+	let mut storage = primitives::storage::Storage {
+		top: std::collections::BTreeMap::new(),
+		children: std::collections::HashMap::new()
+	};
 	state_machine::BasicExternalities::execute_with_storage(&mut storage, || {
 		module2::Value::<Runtime>::put(0);
 		module2::Value::<Runtime, module2::Instance1>::put(0);
@@ -320,7 +323,7 @@ fn storage_instance_independance() {
 		module2::DoubleMap::<module2::Instance3>::insert(&0, &0, &0);
 	});
 	// 16 storage values + 4 linked_map head.
-	assert_eq!(storage.0.len(), 16 + 4);
+	assert_eq!(storage.top.len(), 16 + 4);
 }
 
 #[test]

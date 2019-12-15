@@ -23,7 +23,7 @@ use log::{warn, trace};
 use hash_db::Hasher;
 use codec::{Decode, Encode, Codec};
 use primitives::{
-	storage::well_known_keys, NativeOrEncoded, NeverNativeValue,
+	storage::{well_known_keys, ChildInfo}, NativeOrEncoded, NeverNativeValue,
 	traits::CodeExecutor, hexdisplay::HexDisplay, hash::H256,
 };
 use overlayed_changes::OverlayedChangeSet;
@@ -562,6 +562,7 @@ where
 pub fn prove_child_read<B, H, I>(
 	mut backend: B,
 	storage_key: &[u8],
+	child_info: ChildInfo,
 	keys: I,
 ) -> Result<StorageProof, Box<dyn Error>>
 where
@@ -573,7 +574,7 @@ where
 {
 	let trie_backend = backend.as_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
-	prove_child_read_on_trie_backend(trie_backend, storage_key, keys)
+	prove_child_read_on_trie_backend(trie_backend, storage_key, child_info, keys)
 }
 
 /// Generate storage read proof on pre-created trie backend.
@@ -601,6 +602,7 @@ where
 pub fn prove_child_read_on_trie_backend<S, H, I>(
 	trie_backend: &TrieBackend<S, H>,
 	storage_key: &[u8],
+	child_info: ChildInfo,
 	keys: I,
 ) -> Result<StorageProof, Box<dyn Error>>
 where
@@ -613,7 +615,7 @@ where
 	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
 	for key in keys.into_iter() {
 		proving_backend
-			.child_storage(storage_key, key.as_ref())
+			.child_storage(storage_key, child_info.clone(), key.as_ref())
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	}
 	Ok(proving_backend.extract_proof())
@@ -688,7 +690,9 @@ where
 	H: Hasher,
 	H::Out: Ord + Codec,
 {
-	proving_backend.child_storage(storage_key, key).map_err(|e| Box::new(e) as Box<dyn Error>)
+	// Not a prefixed memory db, using empty unique id and include root resolution.
+	proving_backend.child_storage(storage_key, ChildInfo::new_default(&[]), key)
+		.map_err(|e| Box::new(e) as Box<dyn Error>)
 }
 
 /// Sets overlayed changes' changes trie configuration. Returns error if configuration
@@ -749,6 +753,8 @@ mod tests {
 		native_succeeds: bool,
 		fallback_succeeds: bool,
 	}
+
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 
 	impl CodeExecutor for DummyCodeExecutor {
 		type Error = u8;
@@ -982,22 +988,26 @@ mod tests {
 
 		ext.set_child_storage(
 			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+			CHILD_INFO_1,
 			b"abc".to_vec(),
 			b"def".to_vec()
 		);
 		assert_eq!(
 			ext.child_storage(
 				ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+				CHILD_INFO_1,
 				b"abc"
 			),
 			Some(b"def".to_vec())
 		);
 		ext.kill_child_storage(
-			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap()
+			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+			CHILD_INFO_1,
 		);
 		assert_eq!(
 			ext.child_storage(
 				ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+				CHILD_INFO_1,
 				b"abc"
 			),
 			None
@@ -1033,6 +1043,7 @@ mod tests {
 		let remote_proof = prove_child_read(
 			remote_backend,
 			b":child_storage:default:sub1",
+			CHILD_INFO_1,
 			&[b"value3"],
 		).unwrap();
 		let local_result1 = read_child_proof_check::<Blake2Hasher, _>(
@@ -1079,6 +1090,40 @@ mod tests {
 		);
 
 		assert!(state_machine.execute(ExecutionStrategy::NativeWhenPossible).is_err());
+	}
+
+	#[test]
+	fn child_storage_uuid() {
+		const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
+		const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2");
+		use crate::trie_backend::tests::test_trie;
+		let mut overlay = OverlayedChanges::default();
+
+		let subtrie1 = ChildStorageKey::from_slice(b":child_storage:default:sub_test1").unwrap();
+		let subtrie2 = ChildStorageKey::from_slice(b":child_storage:default:sub_test2").unwrap();
+		let mut transaction = {
+			let backend = test_trie();
+			let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
+			let mut ext = Ext::new(
+				&mut overlay,
+				&backend,
+				Some(&changes_trie_storage),
+				None,
+			);
+			ext.set_child_storage(subtrie1, CHILD_INFO_1, b"abc".to_vec(), b"def".to_vec());
+			ext.set_child_storage(subtrie2, CHILD_INFO_2, b"abc".to_vec(), b"def".to_vec());
+			ext.storage_root();
+			(ext.transaction().0).0
+		};
+		let mut duplicate = false;
+		for (k, (value, rc)) in transaction.drain().iter() {
+			// look for a key inserted twice: transaction rc is 2
+			if *rc == 2 {
+				duplicate = true;
+				println!("test duplicate for {:?} {:?}", k, value);
+			}
+		}
+		assert!(!duplicate);
 	}
 
 	#[test]

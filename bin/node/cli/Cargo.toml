@@ -89,7 +89,7 @@ node-transaction-factory = { path = "../transaction-factory", optional = true }
 # WASM-specific dependencies
 wasm-bindgen = { version = "0.2.55", optional = true }
 wasm-bindgen-futures = { version = "0.4.5", optional = true }
-sc-browser = { package = "sc-browser", path = "../../../client/browser", optional = true }
+browser-utils = { path = "../../../utils/browser", optional = true }
 
 [dev-dependencies]
 keystore = { package = "sc-keystore", path = "../../../client/keystore" }
@@ -107,7 +107,7 @@ vergen = "3.0.4"
 [features]
 default = ["cli"]
 browser = [
-	"sc-browser",
+	"browser-utils",
 	"wasm-bindgen",
 	"wasm-bindgen-futures",
 ]

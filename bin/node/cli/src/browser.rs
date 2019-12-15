@@ -18,22 +18,23 @@ use crate::ChainSpec;
 use log::info;
 use wasm_bindgen::prelude::*;
 use sc_service::Configuration;
+use browser_utils::{Transport, browser_configuration, set_hooks, Client};
 
 /// Starts the client.
 #[wasm_bindgen]
-pub async fn start_client(wasm_ext: sc_browser::Transport) -> Result<sc_browser::Client, JsValue> {
+pub async fn start_client(wasm_ext: Transport) -> Result<Client, JsValue> {
 	start_inner(wasm_ext)
 		.await
 		.map_err(|err| JsValue::from_str(&err.to_string()))
 }
 
-async fn start_inner(wasm_ext: sc_browser::Transport) -> Result<sc_browser::Client, Box<dyn std::error::Error>> {
-	sc_browser::set_hooks(log::Level::Debug);
+async fn start_inner(wasm_ext: Transport) -> Result<Client, Box<dyn std::error::Error>> {
+	set_hooks(log::Level::Debug);
 
 	let chain_spec = ChainSpec::FlamingFir.load()
 		.map_err(|e| format!("{:?}", e))?;
 
-	let config: Configuration<(), _, _> = sc_browser::browser_configuration(wasm_ext, chain_spec)
+	let config: Configuration<(), _, _> = browser_configuration(wasm_ext, chain_spec)
 		.await?;
 
 	info!("Substrate browser node");
@@ -47,5 +48,5 @@ async fn start_inner(wasm_ext: sc_browser::Transport) -> Result<sc_browser::Clie
 	let service = crate::service::new_light(config)
 		.map_err(|e| format!("{:?}", e))?;
 
-	Ok(sc_browser::start_client(service))
+	Ok(browser_utils::start_client(service))
 }
