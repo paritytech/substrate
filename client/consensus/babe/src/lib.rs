@@ -466,8 +466,11 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		head: &B::Header,
 		slot_info: &SlotInfo
 	) -> Option<std::time::Duration> {
-		// never give more than 20 times more lenience.
-		const BACKOFF_CAP: u64 = 20;
+		// never give more than 2^this times the lenience.
+		const BACKOFF_CAP: u64 = 8;
+
+		// how many slots it takes before we double the lenience.
+		const BACKOFF_STEP: u64 = 2;
 
 		let slot_remaining = self.slot_remaining_duration(slot_info);
 		let parent_slot = match find_pre_digest::<B>(head) {
@@ -478,12 +481,22 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		// we allow a lenience of the number of slots since the head of the
 		// chain was produced, minus 1 (since there is always a difference of at least 1)
 		//
-		// linear back-off.
+		// exponential back-off.
 		// in normal cases we only attempt to issue blocks up to the end of the slot.
 		// when the chain has been stalled for a few slots, we give more lenience.
 		let slot_lenience = slot_info.number.saturating_sub(parent_slot + 1);
+
 		let slot_lenience = std::cmp::min(slot_lenience, BACKOFF_CAP);
-		let slot_lenience = Duration::from_secs(slot_lenience * slot_info.duration);
+		let slot_duration = slot_info.duration << (slot_lenience / BACKOFF_STEP);
+
+		if slot_lenience >= 1 {
+			debug!(target: "babe", "No block for {} slots. Applying 2^({}/{}) lenience",
+				slot_lenience, slot_lenience, BACKOFF_STEP);
+		}
+
+		let slot_duration = slot_info.duration << (slot_lenience / BACKOFF_STEP);
+
+		let slot_lenience = Duration::from_secs(slot_duration);
 		Some(slot_lenience + slot_remaining)
 	}
 }
