@@ -408,6 +408,7 @@ macro_rules! ss58_address_format {
 			}
 		}
 
+		#[cfg(feature = "std")]
 		impl From<Ss58AddressFormat> for String {
 			fn from(x: Ss58AddressFormat) -> String {
 				match x {
