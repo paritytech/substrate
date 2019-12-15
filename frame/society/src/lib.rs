@@ -150,7 +150,7 @@ decl_storage! {
 			Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>;
 
 		/// The set of suspended candidates.
-		pub SuspendedCandidates get(suspended_candidates):
+		pub SuspendedCandidates get(suspended_candidate):
 			map T::AccountId => Option<(BalanceOf<T>, BidKind<T::AccountId, BalanceOf<T>>)>;
 
 		/// Amount of our account balance that is specifically for the next round's bid(s).
@@ -253,7 +253,7 @@ decl_module! {
 			Ok(())
 		}
 
-		/// Only works until the candidate is accepted.
+		/// Only works while candidate is still a bid.
 		pub fn unvouch(origin, pos: u32) -> Result {
 			let voucher = ensure_signed(origin)?;
 
@@ -356,6 +356,8 @@ decl_module! {
 								let _ = T::Currency::repatriate_reserved(&who, &Self::account_id(), deposit);
 							}
 							BidKind::Vouch(voucher, _) => {
+								// Really shouldn't fail given the conditional we're in.
+								let _ = Self::unset_vouching(&voucher);
 								// Give voucher a strike
 								let strikes = <Strikes<T>>::mutate(&voucher, |s| {
 									*s += 1;

@@ -192,7 +192,7 @@ fn basic_new_member_reject_works() {
 		assert_eq!(Society::members(), vec![10]);
 		// User is suspended
 		assert_eq!(Society::candidates(), vec![]);
-		assert_eq!(Society::suspended_candidates(20).is_some(), true);
+		assert_eq!(Society::suspended_candidate(20).is_some(), true);
 	});
 }
 
@@ -302,7 +302,7 @@ fn suspended_candidate_rejected_works() {
 		assert_eq!(Society::members(), vec![10]);
 		// User is suspended
 		assert_eq!(Society::candidates(), vec![]);
-		assert_eq!(Society::suspended_candidates(20).is_some(), true);
+		assert_eq!(Society::suspended_candidate(20).is_some(), true);
 
 		// Normal user cannot make judgement on suspended candidate
 		assert_noop!(Society::judge_suspended_candidate(Origin::signed(20), 20, Some(true)), "Invalid origin");
@@ -320,7 +320,7 @@ fn suspended_candidate_rejected_works() {
 		assert_eq!(Society::members(), vec![10]);
 		// User is suspended
 		assert_eq!(Society::candidates(), vec![]);
-		assert_eq!(Society::suspended_candidates(20).is_some(), true);
+		assert_eq!(Society::suspended_candidate(20).is_some(), true);
 
 		// Suspension judgement origin says not accepted
 		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Some(false)));
@@ -344,6 +344,9 @@ fn vouch_works() {
 		assert_noop!(Society::vouch(Origin::signed(1), 20, 1000, 100), "not a member");
 		// A member can though
 		assert_ok!(Society::vouch(Origin::signed(10), 20, 1000, 100));
+		assert_eq!(<Vouching<Test>>::get(), vec![10]);
+		// A member cannot vouch twice at the same time
+		assert_noop!(Society::vouch(Origin::signed(10), 30, 100, 0), "already vouching");
 		// Vouching creates the right kind of bid
 		assert_eq!(<Bids<Test>>::get(), vec![(1000, 20, BidKind::Vouch(10, 100))]);
 		// Vouched user can become candidate
@@ -358,6 +361,8 @@ fn vouch_works() {
 		assert_eq!(<Payouts<Test>>::get(10), vec![(9, 100)]);
 		// Vouched user wins the rest
 		assert_eq!(<Payouts<Test>>::get(20), vec![(9, 900)]);
+		// 10 is no longer vouching
+		assert_eq!(<Vouching<Test>>::get(), vec![]);
 	});
 }
 
@@ -385,3 +390,42 @@ fn voucher_cannot_win_more_than_bid() {
 	});
 }
 
+#[test]
+fn unvouch_works() {
+	EnvBuilder::new().execute(|| {
+		// 10 is the only member
+		assert_eq!(Society::members(), vec![10]);
+		// 10 vouches for 20
+		assert_ok!(Society::vouch(Origin::signed(10), 20, 100, 0));
+		// 20 has a bid
+		assert_eq!(<Bids<Test>>::get(), vec![(100, 20, BidKind::Vouch(10, 0))]);
+		// 10 is vouched
+		assert_eq!(<Vouching<Test>>::get(), vec![10]);
+		// To unvouch, you must know the right bid position
+		assert_noop!(Society::unvouch(Origin::signed(10), 2), "bad position");
+		// 10 can unvouch with the right position
+		assert_ok!(Society::unvouch(Origin::signed(10), 0));
+		// 20 no longer has a bid
+		assert_eq!(<Bids<Test>>::get(), vec![]);
+		// 10 is no longer vouching
+		assert_eq!(<Vouching<Test>>::get(), vec![]);
+
+		// Cannot unvouch after they become candidate
+		assert_ok!(Society::vouch(Origin::signed(10), 20, 100, 0));
+		run_to_block(4);
+		assert_eq!(Society::candidates(), vec![(100, 20, BidKind::Vouch(10, 0))]);
+		assert_noop!(Society::unvouch(Origin::signed(10), 0), "bad position");
+		// 10 is still vouching until candidate is accepted or denied
+		assert_eq!(<Vouching<Test>>::get(), vec![10]);
+		run_to_block(8);
+		// In this case member is denied and suspended
+		assert!(Society::suspended_candidate(&20).is_some());
+		assert_eq!(Society::members(), vec![10]);
+		// User is stuck vouching until judgement origin resolves suspended candidate
+		assert_eq!(<Vouching<Test>>::get(), vec![10]);
+		// Judge denies candidate
+		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Some(false)));
+		// 10 is finally unvouched
+		assert_eq!(<Vouching<Test>>::get(), vec![]);
+	});
+}
