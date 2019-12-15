@@ -1443,27 +1443,41 @@ impl<T: Trait> Module<T> {
 
 		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
 		let all_validator_candidates_iter = <Validators<T>>::enumerate();
-		let all_validators = all_validator_candidates_iter.map(|(who, _pref)| {
-			let self_vote = (who.clone(), vec![who.clone()]);
-			all_nominators.push(self_vote);
-			who
-		}).collect::<Vec<T::AccountId>>();
+		let all_validators = {
+			if_std!{
+				let span = tracing::span!(tracing::Level::DEBUG, "get_all_validators");
+				let _enter = span.enter();
+			}
 
-		let nominator_votes = <Nominators<T>>::enumerate().map(|(nominator, nominations)| {
-			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
+			all_validator_candidates_iter.map(|(who, _pref)| {
+				let self_vote = (who.clone(), vec![who.clone()]);
+				all_nominators.push(self_vote);
+				who
+			}).collect::<Vec<T::AccountId>>()
+		};
 
-			// Filter out nomination targets which were nominated before the most recent
-			// slashing span.
-			targets.retain(|stash| {
-				<Self as Store>::SlashingSpans::get(&stash).map_or(
-					true,
-					|spans| submitted_in >= spans.last_start(),
-				)
+		{
+			if_std!{
+				let span = tracing::span!(tracing::Level::DEBUG, "get_all_nominators");
+				let _enter = span.enter();
+			}
+
+			let nominator_votes = <Nominators<T>>::enumerate().map(|(nominator, nominations)| {
+				let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
+
+				// Filter out nomination targets which were nominated before the most recent
+				// slashing span.
+				targets.retain(|stash| {
+					<Self as Store>::SlashingSpans::get(&stash).map_or(
+						true,
+						|spans| submitted_in >= spans.last_start(),
+					)
+				});
+
+				(nominator, targets)
 			});
-
-			(nominator, targets)
-		});
-		all_nominators.extend(nominator_votes);
+			all_nominators.extend(nominator_votes);
+		}
 
 		if_std!{
 			println!("nominators len = {:?}", all_nominators.len());
