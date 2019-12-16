@@ -242,6 +242,7 @@ decl_module! {
 					}
 				} else {
 					// disapproved
+					<ProposalOf<T, I>>::remove(&proposal) {
 					Self::deposit_event(RawEvent::Disapproved(proposal));
 				}
 
