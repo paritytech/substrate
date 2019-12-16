@@ -40,7 +40,7 @@ pub struct InformantDisplay<B: BlockT> {
 	/// `None` if `display` has never been called.
 	last_number: Option<NumberFor<B>>,
 	/// The last time `display` or `new` has been called.
-	last_update: wasm_timer::Instant,
+	last_update: time::Instant,
 }
 
 impl<B: BlockT> InformantDisplay<B> {
@@ -48,7 +48,7 @@ impl<B: BlockT> InformantDisplay<B> {
 	pub fn new() -> InformantDisplay<B> {
 		InformantDisplay {
 			last_number: None,
-			last_update: wasm_timer::Instant::now(),
+			last_update: time::Instant::now(),
 		}
 	}
 
@@ -57,7 +57,7 @@ impl<B: BlockT> InformantDisplay<B> {
 		let best_number = info.chain.best_number;
 		let best_hash = info.chain.best_hash;
 		let speed = speed::<B>(best_number, self.last_number, self.last_update);
-		self.last_update = wasm_timer::Instant::now();
+		self.last_update = time::Instant::now();
 		self.last_number = Some(best_number);
 
 		let (status, target) = match (net_status.sync_state, net_status.best_seen_block) {
@@ -87,7 +87,7 @@ impl<B: BlockT> InformantDisplay<B> {
 fn speed<B: BlockT>(
 	best_number: NumberFor<B>,
 	last_number: Option<NumberFor<B>>,
-	last_update: wasm_timer::Instant
+	last_update: time::Instant
 ) -> String {
 	// Number of milliseconds elapsed since last time.
 	let elapsed_ms = {
