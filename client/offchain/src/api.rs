@@ -281,10 +281,9 @@ impl AsyncApi {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::convert::{TryFrom, TryInto};
+	use std::{convert::{TryFrom, TryInto}, time::SystemTime};
 	use sc_client_db::offchain::LocalStorage;
 	use sc_network::PeerId;
-	use wasm_timer::SystemTime;
 
 	struct MockNetworkStateInfo();
 

@@ -18,8 +18,7 @@
 
 use sp_core::offchain::Timestamp;
 use std::convert::TryInto;
-use std::time::Duration;
-use wasm_timer::SystemTime;
+use std::time::{SystemTime, Duration};
 
 /// Returns the current time as a `Timestamp`.
 pub fn now() -> Timestamp {
@@ -56,7 +55,7 @@ pub fn deadline_to_future(
 
 	future::maybe_done(match deadline {
 		Some(deadline) => future::Either::Left(
-			wasm_timer::Delay::new(timestamp_from_now(deadline))
+			futures_timer::Delay::new(timestamp_from_now(deadline))
 		),
 		None => future::Either::Right(future::pending())
 	})
