@@ -24,9 +24,7 @@ use support::{assert_ok, assert_noop};
 #[test]
 fn founding_works() {
 	EnvBuilder::new().with_members(vec![]).execute(|| {
-		// Account 1 is set as the founder origin and can start a society
-		// This allows the module to bootstrap on an already running chain
-
+		// Account 1 is set as the founder origin
 		// Account 5 cannot start a society
 		assert_noop!(Society::found(Origin::signed(5), 20), "Invalid origin");
 		// Account 1 can start a society, where 10 is the founding member
