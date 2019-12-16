@@ -1,5 +1,5 @@
 [package]
-name = "frame-bet"
+name = "pallet-bet"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
@@ -19,13 +19,10 @@ lazy_static = "1.0"
 default = ["std"]
 std = [
 	"serde/std",
-	"parity-codec/std",
-	"parity-codec-derive/std",
-	"sr-std/std",
-	"sr-io/std",
-	"sr-primitives/std",
+	"parity-scale-codec/std",
+	"sp-std/std",
+	"sp-runtime/std",
 	"substrate-primitives/std",
-	"srml-support/std",
-	"srml-system/std",
-	"srml-balances/std",
+	"frame-support/std",
+	"frame-system/std",
 ]
