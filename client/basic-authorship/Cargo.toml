@@ -19,7 +19,6 @@ sc-telemetry = { path = "../telemetry" }
 sp-transaction-pool = { path = "../../primitives/transaction-pool" }
 sc-block-builder = { path = "../block-builder" }
 tokio-executor = { version = "0.2.0-alpha.6", features = ["blocking"] }
-wasm-timer = "0.2"
 
 [dev-dependencies]
 sc-transaction-pool = { path = "../../client/transaction-pool" }
