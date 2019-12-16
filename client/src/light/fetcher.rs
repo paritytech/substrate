@@ -22,21 +22,21 @@ use std::marker::PhantomData;
 
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use codec::{Decode, Encode};
-use primitives::{convert_hash, traits::CodeExecutor, H256};
+use sp_core::{convert_hash, traits::CodeExecutor, H256};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	SimpleArithmetic, CheckedConversion, Zero,
 };
-use state_machine::{
+use sp_state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
 	TrieBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage,
 	read_child_proof_check,
 };
-pub use state_machine::StorageProof;
+pub use sp_state_machine::StorageProof;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
 use crate::cht;
-pub use client_api::{
+pub use sc_client_api::{
 	light::{
 		RemoteCallRequest, RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
 		RemoteChangesRequest, ChangesProof, RemoteBodyRequest, Fetcher, FetchChecker,
@@ -294,7 +294,7 @@ impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a
 	fn build_anchor(
 		&self,
 		_hash: H::Out,
-	) -> Result<state_machine::ChangesTrieAnchorBlockId<H::Out, Number>, String> {
+	) -> Result<sp_state_machine::ChangesTrieAnchorBlockId<H::Out, Number>, String> {
 		Err("build_anchor is only called when building block".into())
 	}
 
@@ -326,40 +326,40 @@ impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a
 pub mod tests {
 	use codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
-	use executor::{NativeExecutor, WasmExecutionMethod};
+	use sc_executor::{NativeExecutor, WasmExecutionMethod};
 	use sp_blockchain::Error as ClientError;
-	use client_api::backend::NewBlockState;
-	use test_client::{
+	use sc_client_api::backend::NewBlockState;
+	use substrate_test_runtime_client::{
 		self, ClientExt, blockchain::HeaderBackend, AccountKeyring,
 		runtime::{self, Hash, Block, Header, Extrinsic}
 	};
-	use consensus::BlockOrigin;
+	use sp_consensus::BlockOrigin;
 
 	use crate::in_mem::{Blockchain as InMemoryBlockchain};
 	use crate::light::fetcher::{FetchChecker, LightDataChecker, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
-	use primitives::{blake2_256, Blake2Hasher, H256};
-	use primitives::storage::{well_known_keys, StorageKey, ChildInfo};
+	use sp_core::{blake2_256, Blake2Hasher, H256};
+	use sp_core::storage::{well_known_keys, StorageKey, ChildInfo};
 	use sp_runtime::generic::BlockId;
-	use state_machine::Backend;
+	use sp_state_machine::Backend;
 	use super::*;
 
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 
 	type TestChecker = LightDataChecker<
-		NativeExecutor<test_client::LocalExecutor>,
+		NativeExecutor<substrate_test_runtime_client::LocalExecutor>,
 		Blake2Hasher,
 		Block,
 		DummyStorage,
 	>;
 
-	fn local_executor() -> NativeExecutor<test_client::LocalExecutor> {
+	fn local_executor() -> NativeExecutor<substrate_test_runtime_client::LocalExecutor> {
 		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
 	}
 
 	fn prepare_for_read_proof_check() -> (TestChecker, Header, StorageProof, u32) {
 		// prepare remote client
-		let remote_client = test_client::new();
+		let remote_client = substrate_test_runtime_client::new();
 		let remote_block_id = BlockId::Number(0);
 		let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
 		let mut remote_block_header = remote_client.header(&remote_block_id).unwrap().unwrap();
@@ -392,10 +392,10 @@ pub mod tests {
 	}
 
 	fn prepare_for_read_child_proof_check() -> (TestChecker, Header, StorageProof, Vec<u8>) {
-		use test_client::DefaultTestClientBuilderExt;
-		use test_client::TestClientBuilderExt;
+		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
+		use substrate_test_runtime_client::TestClientBuilderExt;
 		// prepare remote client
-		let remote_client = test_client::TestClientBuilder::new()
+		let remote_client = substrate_test_runtime_client::TestClientBuilder::new()
 			.add_extra_child_storage(
 				b":child_storage:default:child1".to_vec(),
 				CHILD_INFO_1,
@@ -441,7 +441,7 @@ pub mod tests {
 
 	fn prepare_for_header_proof_check(insert_cht: bool) -> (TestChecker, Hash, Header, StorageProof) {
 		// prepare remote client
-		let remote_client = test_client::new();
+		let remote_client = substrate_test_runtime_client::new();
 		let mut local_headers_hashes = Vec::new();
 		for i in 0..4 {
 			let builder = remote_client.new_block(Default::default()).unwrap();
@@ -468,7 +468,7 @@ pub mod tests {
 	}
 
 	fn header_with_computed_extrinsics_root(extrinsics: Vec<Extrinsic>) -> Header {
-		use trie::{TrieConfiguration, trie_types::Layout};
+		use sp_trie::{TrieConfiguration, trie_types::Layout};
 		let iter = extrinsics.iter().map(Encode::encode);
 		let extrinsics_root = Layout::<Blake2Hasher>::ordered_trie_root(iter);
 

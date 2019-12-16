@@ -423,7 +423,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 
 #[cfg(test)]
 mod test {
-	use primitives::hashing::twox_128;
+	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
 	use crate::storage::{unhashed, StoragePrefixedMap};
 

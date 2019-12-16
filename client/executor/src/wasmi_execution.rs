@@ -23,14 +23,14 @@ use wasmi::{
 };
 use crate::error::{Error, WasmError};
 use codec::{Encode, Decode};
-use primitives::{sandbox as sandbox_primitives, traits::Externalities};
+use sp_core::{sandbox as sandbox_primitives, traits::Externalities};
 use crate::sandbox;
 use crate::allocator;
 use crate::wasm_utils::interpret_runtime_api_result;
 use crate::wasm_runtime::WasmRuntime;
 use log::{error, trace};
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
-use wasm_interface::{
+use sp_wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
 
@@ -273,7 +273,7 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 	fn resolve_func(&self, name: &str, signature: &wasmi::Signature)
 		-> std::result::Result<wasmi::FuncRef, wasmi::Error>
 	{
-		let signature = wasm_interface::Signature::from(signature);
+		let signature = sp_wasm_interface::Signature::from(signature);
 		for (function_index, function) in self.0.iter().enumerate() {
 			if name == function.name() {
 				if signature == function.signature() {
@@ -364,7 +364,7 @@ fn call_in_wasm_module(
 	let offset = fec.allocate_memory(data.len() as u32)?;
 	fec.write_memory(offset, data)?;
 
-	let result = externalities::set_and_run_with_externalities(
+	let result = sp_externalities::set_and_run_with_externalities(
 		ext,
 		|| module_instance.invoke_export(
 			method,

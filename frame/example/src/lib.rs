@@ -254,11 +254,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::marker::PhantomData;
-use support::{
+use frame_support::{
 	dispatch::Result, decl_module, decl_storage, decl_event,
 	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
 };
-use system::{ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sp_runtime::{
 	traits::{SignedExtension, Bounded, SaturatedConversion},
@@ -281,9 +281,9 @@ use sp_runtime::{
 // - The final weight of each dispatch is calculated as the argument of the call multiplied by the
 //   parameter given to the `WeightForSetDummy`'s constructor.
 // - assigns a dispatch class `operational` if the argument of the call is more than 1000.
-struct WeightForSetDummy<T: balances::Trait>(BalanceOf<T>);
+struct WeightForSetDummy<T: pallet_balances::Trait>(BalanceOf<T>);
 
-impl<T: balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
+impl<T: pallet_balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
 {
 	fn weigh_data(&self, target: (&BalanceOf<T>,)) -> Weight {
 		let multiplier = self.0;
@@ -291,7 +291,7 @@ impl<T: balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
 	}
 }
 
-impl<T: balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
+impl<T: pallet_balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
 	fn classify_dispatch(&self, target: (&BalanceOf<T>,)) -> DispatchClass {
 		if *target.0 > <BalanceOf<T>>::from(1000u32) {
 			DispatchClass::Operational
@@ -301,23 +301,23 @@ impl<T: balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightForSetDumm
 	}
 }
 
-impl<T: balances::Trait> PaysFee for WeightForSetDummy<T> {
+impl<T: pallet_balances::Trait> PaysFee for WeightForSetDummy<T> {
 	fn pays_fee(&self) -> bool {
 		true
 	}
 }
 
 /// A type alias for the balance type from this module's point of view.
-type BalanceOf<T> = <T as balances::Trait>::Balance;
+type BalanceOf<T> = <T as pallet_balances::Trait>::Balance;
 
 /// Our module's configuration trait. All our types and constants go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
 /// should be added to our implied traits list.
 ///
-/// `system::Trait` should always be included in our implied traits.
-pub trait Trait: balances::Trait {
+/// `frame_system::Trait` should always be included in our implied traits.
+pub trait Trait: pallet_balances::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
 decl_storage! {
@@ -342,8 +342,8 @@ decl_storage! {
 		// e.g. pub Bar get(fn bar): map T::AccountId => Vec<(T::Balance, u64)>;
 		//
 		// For basic value items, you'll get a type which implements
-		// `support::StorageValue`. For map items, you'll get a type which
-		// implements `support::StorageMap`.
+		// `frame_support::StorageValue`. For map items, you'll get a type which
+		// implements `frame_support::StorageMap`.
 		//
 		// If they have a getter (`get(getter_name)`), then your module will come
 		// equipped with `fn getter_name() -> Type` for basic value items or
@@ -362,7 +362,7 @@ decl_event!(
 	/// Events are a simple means of reporting specific conditions and
 	/// circumstances that have happened that users, Dapps and/or chain explorers would find
 	/// interesting and otherwise difficult to detect.
-	pub enum Event<T> where B = <T as balances::Trait>::Balance {
+	pub enum Event<T> where B = <T as pallet_balances::Trait>::Balance {
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.
 		/// Dummy event, just here so there's a generic type that's used.
 		Dummy(B),
@@ -398,7 +398,7 @@ decl_event!(
 //
 // `fn foo(origin: T::Origin, bar: Bar, baz: Baz) { ... }`
 //
-// There are three entries in the `system::Origin` enum that correspond
+// There are three entries in the `frame_system::Origin` enum that correspond
 // to the above bullets: `::Signed(AccountId)`, `::Root` and `::None`. You should always match
 // against them as the first thing you do in your function. There are three convenience calls
 // in system that do the matching for you and return a convenient result: `ensure_signed`,
@@ -605,7 +605,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
 impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	type AccountId = T::AccountId;
 	// Note that this could also be assigned to the top-level call enum. It is passed into the
-	// balances module directly and since `Trait: balances::Trait`, you could also use `T::Call`.
+	// balances module directly and since `Trait: pallet_balances::Trait`, you could also use `T::Call`.
 	// In that case, you would have had access to all call variants and could match on variants from
 	// other modules.
 	type Call = Call<T>;
@@ -645,8 +645,8 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 mod tests {
 	use super::*;
 
-	use support::{assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo};
-	use primitives::H256;
+	use frame_support::{assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo};
+	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
@@ -655,7 +655,7 @@ mod tests {
 	};
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	// For testing the module, we construct most of a mock runtime. This means
@@ -669,7 +669,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -691,7 +691,7 @@ mod tests {
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
-	impl balances::Trait for Test {
+	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
@@ -710,9 +710,9 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
-		balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
+		pallet_balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
 		GenesisConfig::<Test>{
 			dummy: 42,
 			// we configure the map with (key, value) pairs.

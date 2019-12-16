@@ -6076,6 +6076,7 @@ dependencies = [
 name = "sp-application-crypto-test"
 version = "2.0.0"
 dependencies = [
+ "sp-application-crypto 2.0.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
  "substrate-test-runtime-client 2.0.0",

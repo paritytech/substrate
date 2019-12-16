@@ -5,7 +5,7 @@ use tokio::runtime::Runtime;
 pub use sc_cli::{VersionInfo, IntoExit, error};
 use sc_cli::{display_role, informant, parse_and_prepare, ParseAndPrepare, NoCustom};
 use sc_service::{AbstractService, Roles as ServiceRoles, Configuration};
-use aura_primitives::sr25519::{AuthorityPair as AuraPair};
+use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use crate::chain_spec;
 use log::info;
 

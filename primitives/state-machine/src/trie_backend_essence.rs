@@ -21,12 +21,12 @@ use std::ops::Deref;
 use std::sync::Arc;
 use log::{debug, warn};
 use hash_db::{self, Hasher, EMPTY_PREFIX, Prefix};
-use trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
+use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
 	default_child_trie_root, read_trie_value, read_child_trie_value,
 	for_keys_in_child_trie, KeySpacedDB};
-use trie::trie_types::{TrieDB, TrieError, Layout};
+use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::backend::Consolidate;
-use primitives::storage::ChildInfo;
+use sp_core::storage::ChildInfo;
 use codec::Encode;
 
 /// Patricia trie-based storage trait.
@@ -250,7 +250,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			storage: &self.storage,
 			overlay: &mut read_overlay,
 		};
-	
+
 		let mut iter = move |db| -> Result<(), Box<TrieError<H::Out>>> {
 			let trie = TrieDB::<H>::new(db, root)?;
 			let mut iter = trie.iter()?;
@@ -448,8 +448,8 @@ impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
 
 #[cfg(test)]
 mod test {
-	use primitives::{Blake2Hasher, H256};
-	use trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut};
+	use sp_core::{Blake2Hasher, H256};
+	use sp_trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut};
 	use super::*;
 
 	#[test]
