@@ -307,9 +307,8 @@ decl_module! {
 		fn found(origin, founder: T::AccountId) {
 			T::FounderOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T>>::exists(), "already founded");
-
+			Self::add_member(&founder)?;
 			<Head<T>>::put(&founder);
-			<Members<T>>::put(&[founder.clone()][..]);
 			Self::deposit_event(RawEvent::Founded(founder));
 		}
 
