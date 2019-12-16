@@ -88,7 +88,10 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	type FounderOrigin: EnsureOrigin<Self::Origin>;
 
 	/// The origin that is allowed to make suspension judgements.
-	type SuspensionJudgementOrigin: EnsureOrigin<Self::Origin>; 
+	type SuspensionJudgementOrigin: EnsureOrigin<Self::Origin>;
+
+	/// The number of blocks between membership challenges.
+	type ChallengePeriod: Get<Self::BlockNumber>;
 }
 
 /// A vote by a member on a candidate application.
@@ -199,6 +202,12 @@ decl_storage! {
 			hasher(twox_64_concat) T::AccountId,
 			twox_64_concat(T::AccountId)
 		=> Option<Vote>;
+
+		/// The defending member currently being challenged.
+		Defender get(fn defender): Option<T::AccountId>;
+		
+		/// Votes for the defender.
+		DefenderVotes: map hasher(twox_64_concat) T::AccountId => Option<Vote>;
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
@@ -290,6 +299,14 @@ decl_module! {
 			let candidate = T::Lookup::lookup(candidate)?;
 			let vote = if approve { Vote::Approve } else { Vote::Reject };
 			<Votes<T, I>>::insert(candidate, voter, vote);
+		}
+
+		/// As a member, vote on the defender.
+		pub fn defender_vote(origin, approve: bool) {
+			let voter = ensure_signed(origin)?;
+			ensure!(Self::is_member(&voter), "not a member");
+			let vote = if approve { Vote::Approve } else { Vote::Reject };
+			<DefenderVotes<T, I>>::insert(voter, vote);
 		}
 
 		/// Transfer the first matured payment and remove it from the records.
@@ -395,8 +412,22 @@ decl_module! {
 		}
 
 		fn on_initialize(n: T::BlockNumber) {
+
+			let mut members = vec![];
+
+			// Run a candidate/membership rotation
 			if (n % T::Period::get()).is_zero() {
-				Self::rotate_period();
+				members = <Members<T, I>>::get();
+				Self::rotate_period(&mut members);
+			}
+
+			// Run a challenge rotation
+			if (n % T::ChallengePeriod::get()).is_zero() {
+				// Only read members if not already read.
+				if members.is_empty() {
+					members = <Members<T, I>>::get();
+				}
+				Self::rotate_challenge(&mut members);
 			}
 		}
 	}
@@ -439,6 +470,8 @@ decl_event! {
 		CandidateSuspended(AccountId),
 		/// A member has been suspended
 		MemberSuspended(AccountId),
+		/// A member has been challenged
+		Challenged(AccountId),
 	}
 }
 
@@ -545,10 +578,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// End the current period and begin a new one.
-	fn rotate_period() {
+	fn rotate_period(members: &mut Vec<T::AccountId>) {
 		let phrase = b"society_rotation";
-
-		let mut members = <Members<T, I>>::get();
 
 		let mut pot = <Pot<T, I>>::get();
 
@@ -668,7 +699,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 				// Then write everything back out, signal the changed membership and leave an event.
 				members.sort();
-				<Members<T, I>>::put(&members);
+				<Members<T, I>>::put(members.clone());
 				<Head<T, I>>::put(&primary);
 
 				T::MembershipChanged::change_members_sorted(&accounts, &[], &members);
@@ -766,6 +797,46 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		};
 
 		Self::bump_payout(candidate, maturity, value);
+	}
+
+	/// End the current challenge period and start a new one.
+	fn rotate_challenge(members: &mut Vec<T::AccountId>) {
+		// Assume there are members, else don't run this logic.
+		if !members.is_empty() {
+			// End current defender rotation
+			if let Some(defender) = Self::defender() {
+				let mut approval_count = 0;
+				let mut rejection_count = 0;
+				// Tallies total number of approve and reject votes for the defender.
+				members.iter()
+				.filter_map(|m| <DefenderVotes<T, I>>::get(m))
+				.for_each(|v|{
+					match v {
+						Vote::Approve => { approval_count += 1 }
+						_ => {rejection_count += 1}
+					}
+				});
+
+				if approval_count < rejection_count {
+					// User has failed the challenge
+					Self::suspend_member(&defender);
+					*members = Self::members();
+				}
+			}
+
+			// Start a new defender rotation
+			let phrase = b"society_challenge";
+			// we'll need a random seed here.
+			let seed = T::Randomness::random(phrase);
+			// seed needs to be guaranteed to be 32 bytes.
+			let seed = <[u8; 32]>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
+				.expect("input is padded with zeroes; qed");
+			let mut rng = ChaChaRng::from_seed(seed);
+			let chosen = pick_item(&mut rng, &members).expect("exited if members empty; qed");
+
+			<Defender<T, I>>::put(&chosen);
+			Self::deposit_event(RawEvent::Challenged(chosen.clone()));
+		}
 	}
 
 	/// The account ID of the treasury pot.

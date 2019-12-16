@@ -488,3 +488,47 @@ fn head_cannot_be_removed() {
 		assert_eq!(Society::members(), vec![50]);
 	});
 }
+
+#[test]
+fn challenges_work() {
+	EnvBuilder::new().execute(|| {
+		// Add some members
+		assert_ok!(Society::add_member(&20));
+		assert_ok!(Society::add_member(&30));
+		assert_ok!(Society::add_member(&40));
+		// Check starting point
+		assert_eq!(Society::members(), vec![10, 20, 30, 40]);
+		assert_eq!(Society::defender(), None);
+		// 20 will be challenged during the challenge rotation
+		run_to_block(8);
+		assert_eq!(Society::defender(), Some(20));
+		// If no one votes, nothing happens
+		run_to_block(16);
+		assert_eq!(Society::members(), vec![10, 20, 30, 40]);
+		// New challenge period
+		assert_eq!(Society::defender(), Some(20));
+		// Non-member cannot challenge
+		assert_noop!(Society::defender_vote(Origin::signed(1), true), "not a member");
+		// 2 people say accept, 2 reject
+		assert_ok!(Society::defender_vote(Origin::signed(10), true));
+		assert_ok!(Society::defender_vote(Origin::signed(20), true));
+		assert_ok!(Society::defender_vote(Origin::signed(30), false));
+		assert_ok!(Society::defender_vote(Origin::signed(40), false));
+		run_to_block(24);
+		// 20 survives
+		assert_eq!(Society::members(), vec![10, 20, 30, 40]);
+		// One more time
+		assert_eq!(Society::defender(), Some(20));
+		// 3 people reject
+		assert_ok!(Society::defender_vote(Origin::signed(10), false));
+		assert_ok!(Society::defender_vote(Origin::signed(20), true));
+		assert_ok!(Society::defender_vote(Origin::signed(30), false));
+		assert_ok!(Society::defender_vote(Origin::signed(40), false));
+		run_to_block(32);
+		// 20 is suspended
+		assert_eq!(Society::members(), vec![10, 30, 40]);
+		assert_eq!(Society::suspended_member(20), Some(()));
+		// New defender is chosen
+		assert_eq!(Society::defender(), Some(40));
+	});
+}
