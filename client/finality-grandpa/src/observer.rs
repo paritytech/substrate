@@ -150,19 +150,20 @@ fn grandpa_observer<B, E, Block: BlockT, RA, S, F>(
 /// listening for and validating GRANDPA commits instead of following the full
 /// protocol. Provide configuration and a link to a block import worker that has
 /// already been instantiated with `block_import`.
-pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC>(
+pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA, SC>,
 	network: N,
 	on_exit: impl futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
-) -> sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+	executor: Sp,
+) -> sp_blockchain::Result<impl Future<Item=(), Error=()> + Send + 'static> where
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
-	N: Network<Block> + Send + Sync + 'static,
-	N::In: Send + 'static,
+	N: Network<Block> + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: Send + Sync + 'static,
+	Sp: futures03::task::Spawn + 'static,
 	Client<B, E, Block, RA>: AuxStore,
 {
 	let LinkHalf {
@@ -172,10 +173,11 @@ pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC>(
 		voter_commands_rx,
 	} = link;
 
-	let (network, network_startup) = NetworkBridge::new(
+	let network = NetworkBridge::new(
 		network,
 		config.clone(),
 		persistent_data.set_state.clone(),
+		&executor,
 		on_exit.clone(),
 	);
 
@@ -193,8 +195,6 @@ pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC>(
 			warn!("GRANDPA Observer failed: {:?}", e);
 		});
 
-	let observer_work = network_startup.and_then(move |()| observer_work);
-
 	use futures03::{FutureExt, TryFutureExt};
 
 	Ok(observer_work.select(on_exit.map(Ok).compat()).map(|_| ()).map_err(|_| ()))
@@ -202,20 +202,18 @@ pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC>(
 
 /// Future that powers the observer.
 #[must_use]
-struct ObserverWork<B: BlockT, N: Network<B>, E, Backend, RA> {
+struct ObserverWork<B: BlockT, E, Backend, RA> {
 	observer: Box<dyn Future<Item = (), Error = CommandOrError<B::Hash, NumberFor<B>>> + Send>,
 	client: Arc<Client<Backend, E, B, RA>>,
-	network: NetworkBridge<B, N>,
+	network: NetworkBridge<B>,
 	persistent_data: PersistentData<B>,
 	keystore: Option<keystore::KeyStorePtr>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 }
 
-impl<B, N, E, Bk, RA> ObserverWork<B, N, E, Bk, RA>
+impl<B, E, Bk, RA> ObserverWork<B, E, Bk, RA>
 where
 	B: BlockT,
-	N: Network<B>,
-	N::In: Send + 'static,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<B> + Send + Sync + 'static,
@@ -224,7 +222,7 @@ where
 {
 	fn new(
 		client: Arc<Client<Bk, E, B, RA>>,
-		network: NetworkBridge<B, N>,
+		network: NetworkBridge<B>,
 		persistent_data: PersistentData<B>,
 		keystore: Option<keystore::KeyStorePtr>,
 		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
@@ -328,11 +326,9 @@ where
 	}
 }
 
-impl<B, N, E, Bk, RA> Future for ObserverWork<B, N, E, Bk, RA>
+impl<B, E, Bk, RA> Future for ObserverWork<B, E, Bk, RA>
 where
 	B: BlockT,
-	N: Network<B>,
-	N::In: Send + 'static,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<B> + Send + Sync + 'static,

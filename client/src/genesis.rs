@@ -53,7 +53,7 @@ mod tests {
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
 		AccountKeyring, Sr25519Keyring,
 	};
-	use primitives::{Blake2Hasher, map};
+	use primitives::Blake2Hasher;
 	use hex_literal::*;
 
 	native_executor_instance!(
@@ -155,8 +155,7 @@ mod tests {
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
 			None,
-			map![],
-			map![],
+			Default::default(),
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
@@ -184,8 +183,7 @@ mod tests {
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
 			None,
-			map![],
-			map![],
+			Default::default(),
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
@@ -213,8 +211,7 @@ mod tests {
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			68,
 			None,
-			map![],
-			map![],
+			Default::default(),
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 

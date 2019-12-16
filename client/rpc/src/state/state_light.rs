@@ -230,6 +230,8 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		&self,
 		_block: Option<Block::Hash>,
 		_child_storage_key: StorageKey,
+		_child_info: StorageKey,
+		_child_type: u32,
 		_prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
@@ -239,6 +241,8 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		&self,
 		block: Option<Block::Hash>,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
 		let block = self.block_or_best(block);
@@ -249,6 +253,8 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 					block,
 					header,
 					storage_key: child_storage_key.0,
+					child_info: child_info.0,
+					child_type,
 					keys: vec![key.0.clone()],
 					retry_count: Default::default(),
 				}).then(move |result| ready(result
@@ -269,10 +275,12 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		&self,
 		block: Option<Block::Hash>,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
 		Box::new(self
-			.child_storage(block, child_storage_key, key)
+			.child_storage(block, child_storage_key, child_info, child_type, key)
 			.and_then(|maybe_storage|
 				result(Ok(maybe_storage.map(|storage| HasherFor::<Block>::hash(&storage.0))))
 			)

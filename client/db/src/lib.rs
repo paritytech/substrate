@@ -52,9 +52,9 @@ use kvdb::{KeyValueDB, DBTransaction};
 use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::{Mutex, RwLock};
 use primitives::{ChangesTrieConfiguration, convert_hash, traits::CodeExecutor};
-use primitives::storage::well_known_keys;
+use primitives::storage::{well_known_keys, ChildInfo};
 use sp_runtime::{
-	generic::{BlockId, DigestItem}, Justification, StorageOverlay, ChildrenStorageOverlay,
+	generic::{BlockId, DigestItem}, Justification, Storage,
 	BuildStorage,
 };
 use sp_runtime::traits::{
@@ -137,24 +137,39 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 		self.state.storage_hash(key)
 	}
 
-	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.child_storage(storage_key, key)
+	fn child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.child_storage(storage_key, child_info, key)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		self.state.exists_storage(key)
 	}
 
-	fn exists_child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<bool, Self::Error> {
-		self.state.exists_child_storage(storage_key, key)
+	fn exists_child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<bool, Self::Error> {
+		self.state.exists_child_storage(storage_key, child_info, key)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.next_storage_key(key)
 	}
 
-	fn next_child_storage_key(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.next_child_storage_key(storage_key, key)
+	fn next_child_storage_key(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.next_child_storage_key(storage_key, child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -165,12 +180,23 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 		self.state.for_key_values_with_prefix(prefix, f)
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
-		self.state.for_keys_in_child_storage(storage_key, f)
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		f: F,
+	) {
+		self.state.for_keys_in_child_storage(storage_key, child_info, f)
 	}
 
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
-		self.state.for_child_keys_with_prefix(storage_key, prefix, f)
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+		f: F,
+	) {
+		self.state.for_child_keys_with_prefix(storage_key, child_info, prefix, f)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (B::Hash, Self::Transaction)
@@ -180,11 +206,16 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 		self.state.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (B::Hash, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		delta: I,
+	) -> (B::Hash, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
-		self.state.child_storage_root(storage_key, delta)
+		self.state.child_storage_root(storage_key, child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -195,8 +226,13 @@ impl<B: BlockT> StateBackend<HasherFor<B>> for RefTrackingState<B> {
 		self.state.keys(prefix)
 	}
 
-	fn child_keys(&self, child_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.state.child_keys(child_key, prefix)
+	fn child_keys(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+	) -> Vec<Vec<u8>> {
+		self.state.child_keys(storage_key, child_info, prefix)
 	}
 
 	fn as_trie_backend(&mut self)
@@ -525,25 +561,26 @@ impl<Block: BlockT> client_api::backend::BlockImportOperation<Block> for BlockIm
 
 	fn reset_storage(
 		&mut self,
-		top: StorageOverlay,
-		children: ChildrenStorageOverlay
+		storage: Storage,
 	) -> ClientResult<Block::Hash> {
-		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
+
+		if storage.top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
 			return Err(sp_blockchain::Error::GenesisInvalid.into());
 		}
 
-		for child_key in children.keys() {
+		for child_key in storage.children.keys() {
 			if !well_known_keys::is_child_storage_key(&child_key) {
 				return Err(sp_blockchain::Error::GenesisInvalid.into());
 			}
 		}
 
-		let child_delta = children.into_iter()
-			.map(|(storage_key, child_overlay)|
-				(storage_key, child_overlay.into_iter().map(|(k, v)| (k, Some(v)))));
+		let child_delta = storage.children.into_iter().map(|(storage_key, child_content)|	(
+			storage_key,
+			child_content.data.into_iter().map(|(k, v)| (k, Some(v))), child_content.child_info),
+		);
 
 		let (root, transaction) = self.old_state.full_storage_root(
-			top.into_iter().map(|(k, v)| (k, Some(v))),
+			storage.top.into_iter().map(|(k, v)| (k, Some(v))),
 			child_delta
 		);
 
@@ -923,7 +960,8 @@ impl<Block: BlockT> Backend<Block> {
 			};
 			let mut op = inmem.begin_operation().unwrap();
 			op.set_block_data(header, body, justification, new_block_state).unwrap();
-			op.update_db_storage(state.into_iter().map(|(k, v)| (None, k, Some(v))).collect::<Vec<_>>().into()).unwrap();
+			op.update_db_storage(vec![(None, state.into_iter().map(|(k, v)| (k, Some(v))).collect())])
+				.unwrap();
 			inmem.commit_operation(op).unwrap();
 		}
 
@@ -1758,7 +1796,10 @@ mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.reset_storage(storage.iter().cloned().collect(), Default::default()).unwrap();
+			op.reset_storage(Storage {
+				top: storage.iter().cloned().collect(),
+				children: Default::default(),
+			}).unwrap();
 			op.set_block_data(
 				header.clone(),
 				Some(vec![]),
@@ -1840,7 +1881,10 @@ mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.reset_storage(storage.iter().cloned().collect(), Default::default()).unwrap();
+			op.reset_storage(Storage {
+				top: storage.iter().cloned().collect(),
+				children: Default::default(),
+			}).unwrap();
 
 			key = op.db_updates.insert(EMPTY_PREFIX, b"hello");
 			op.set_block_data(

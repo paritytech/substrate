@@ -217,38 +217,6 @@ impl_wasm_host_interface! {
 			Ok(sp_io::storage::set(&key, &value))
 		}
 
-		ext_set_child_storage(
-			storage_key_data: Pointer<u8>,
-			storage_key_len: WordSize,
-			key_data: Pointer<u8>,
-			key_len: WordSize,
-			value_data: Pointer<u8>,
-			value_len: WordSize,
-		) {
-			let storage_key = context.read_memory(storage_key_data, storage_key_len)
-				.map_err(|_| "Invalid attempt to determine storage_key in ext_set_child_storage")?;
-			let key = context.read_memory(key_data, key_len)
-				.map_err(|_| "Invalid attempt to determine key in ext_set_child_storage")?;
-			let value = context.read_memory(value_data, value_len)
-				.map_err(|_| "Invalid attempt to determine value in ext_set_child_storage")?;
-
-			Ok(sp_io::storage::child_set(&storage_key, &key, &value))
-		}
-
-		ext_clear_child_storage(
-			storage_key_data: Pointer<u8>,
-			storage_key_len: WordSize,
-			key_data: Pointer<u8>,
-			key_len: WordSize,
-		) {
-			let storage_key = context.read_memory(storage_key_data, storage_key_len)
-				.map_err(|_| "Invalid attempt to determine storage_key in ext_clear_child_storage")?;
-			let key = context.read_memory(key_data, key_len)
-				.map_err(|_| "Invalid attempt to determine key in ext_clear_child_storage")?;
-
-			Ok(sp_io::storage::child_clear(&storage_key, &key))
-		}
-
 		ext_clear_storage(key_data: Pointer<u8>, key_len: WordSize) {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_clear_storage")?;
@@ -261,43 +229,10 @@ impl_wasm_host_interface! {
 			Ok(if sp_io::storage::exists(&key) { 1 } else { 0 })
 		}
 
-		ext_exists_child_storage(
-			storage_key_data: Pointer<u8>,
-			storage_key_len: WordSize,
-			key_data: Pointer<u8>,
-			key_len: WordSize,
-		) -> u32 {
-			let storage_key = context.read_memory(storage_key_data, storage_key_len)
-				.map_err(|_| "Invalid attempt to determine storage_key in ext_exists_child_storage")?;
-			let key = context.read_memory(key_data, key_len)
-				.map_err(|_| "Invalid attempt to determine key in ext_exists_child_storage")?;
-
-			Ok(if sp_io::storage::child_exists(&storage_key, &key) { 1 } else { 0 })
-		}
-
 		ext_clear_prefix(prefix_data: Pointer<u8>, prefix_len: WordSize) {
 			let prefix = context.read_memory(prefix_data, prefix_len)
 				.map_err(|_| "Invalid attempt to determine prefix in ext_clear_prefix")?;
 			Ok(sp_io::storage::clear_prefix(&prefix))
-		}
-
-		ext_clear_child_prefix(
-			storage_key_data: Pointer<u8>,
-			storage_key_len: WordSize,
-			prefix_data: Pointer<u8>,
-			prefix_len: WordSize,
-		) {
-			let storage_key = context.read_memory(storage_key_data, storage_key_len)
-				.map_err(|_| "Invalid attempt to determine storage_key in ext_clear_child_prefix")?;
-			let prefix = context.read_memory(prefix_data, prefix_len)
-				.map_err(|_| "Invalid attempt to determine prefix in ext_clear_child_prefix")?;
-			Ok(sp_io::storage::child_clear_prefix(&storage_key, &prefix))
-		}
-
-		ext_kill_child_storage(storage_key_data: Pointer<u8>, storage_key_len: WordSize) {
-			let storage_key = context.read_memory(storage_key_data, storage_key_len)
-				.map_err(|_| "Invalid attempt to determine storage_key in ext_kill_child_storage")?;
-			Ok(sp_io::storage::child_storage_kill(&storage_key))
 		}
 
 		ext_get_allocated_storage(
@@ -318,32 +253,6 @@ impl_wasm_host_interface! {
 			} else {
 				context.write_primitive(written_out, u32::max_value())
 					.map_err(|_| "Invalid attempt to write failed written_out in ext_get_allocated_storage")?;
-				Ok(Pointer::null())
-			}
-		}
-
-		ext_get_allocated_child_storage(
-			storage_key_data: Pointer<u8>,
-			storage_key_len: WordSize,
-			key_data: Pointer<u8>,
-			key_len: WordSize,
-			written_out: Pointer<u32>,
-		) -> Pointer<u8> {
-			let storage_key = context.read_memory(storage_key_data, storage_key_len)
-				.map_err(|_| "Invalid attempt to determine storage_key in ext_get_allocated_child_storage")?;
-			let key = context.read_memory(key_data, key_len)
-				.map_err(|_| "Invalid attempt to determine key in ext_get_allocated_child_storage")?;
-
-			if let Some(value) = sp_io::storage::child_get(&storage_key, &key) {
-				let offset = context.allocate_memory(value.len() as u32)?;
-				context.write_memory(offset, &value)
-					.map_err(|_| "Invalid attempt to set memory in ext_get_allocated_child_storage")?;
-				context.write_primitive(written_out, value.len() as u32)
-					.map_err(|_| "Invalid attempt to write written_out in ext_get_allocated_child_storage")?;
-				Ok(offset)
-			} else {
-				context.write_primitive(written_out, u32::max_value())
-					.map_err(|_| "Invalid attempt to write failed written_out in ext_get_allocated_child_storage")?;
 				Ok(Pointer::null())
 			}
 		}
@@ -369,51 +278,9 @@ impl_wasm_host_interface! {
 			}
 		}
 
-		ext_get_child_storage_into(
-			storage_key_data: Pointer<u8>,
-			storage_key_len: WordSize,
-			key_data: Pointer<u8>,
-			key_len: WordSize,
-			value_data: Pointer<u8>,
-			value_len: WordSize,
-			value_offset: WordSize,
-		) -> WordSize {
-			let storage_key = context.read_memory(storage_key_data, storage_key_len)
-				.map_err(|_| "Invalid attempt to determine storage_key in ext_get_child_storage_into")?;
-			let key = context.read_memory(key_data, key_len)
-				.map_err(|_| "Invalid attempt to get key in ext_get_child_storage_into")?;
-
-			if let Some(value) = sp_io::storage::child_get(&storage_key, &key) {
-				let data = &value[value.len().min(value_offset as usize)..];
-				let written = std::cmp::min(value_len as usize, data.len());
-				context.write_memory(value_data, &data[..written])
-					.map_err(|_| "Invalid attempt to get value in ext_get_child_storage_into")?;
-				Ok(value.len() as u32)
-			} else {
-				Ok(u32::max_value())
-			}
-		}
-
 		ext_storage_root(result: Pointer<u8>) {
 			context.write_memory(result, sp_io::storage::root().as_ref())
 				.map_err(|_| "Invalid attempt to set memory in ext_storage_root".into())
-		}
-
-		ext_child_storage_root(
-			storage_key_data: Pointer<u8>,
-			storage_key_len: WordSize,
-			written_out: Pointer<u32>,
-		) -> Pointer<u8> {
-			let storage_key = context.read_memory(storage_key_data, storage_key_len)
-				.map_err(|_| "Invalid attempt to determine storage_key in ext_child_storage_root")?;
-			let value = sp_io::storage::child_root(&storage_key);
-
-			let offset = context.allocate_memory(value.len() as u32)?;
-			context.write_memory(offset, &value)
-				.map_err(|_| "Invalid attempt to set memory in ext_child_storage_root")?;
-			context.write_primitive(written_out, value.len() as u32)
-				.map_err(|_| "Invalid attempt to write written_out in ext_child_storage_root")?;
-			Ok(offset)
 		}
 
 		ext_storage_changes_root(

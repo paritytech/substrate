@@ -17,12 +17,13 @@
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use log::{debug, warn, info};
 use codec::{Decode, Encode};
 use futures::prelude::*;
-use tokio_timer::Delay;
+use futures03::future::{FutureExt as _, TryFutureExt as _};
+use futures_timer::Delay;
 use parking_lot::RwLock;
 use sp_blockchain::{HeaderBackend, Error as ClientError};
 
@@ -43,7 +44,7 @@ use sp_runtime::traits::{
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
-	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
+	CommandOrError, Commit, Config, Error, Precommit, Prevote,
 	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
 };
 
@@ -370,20 +371,20 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> {
+pub(crate) struct Environment<B, E, Block: BlockT,  RA, SC, VR> {
 	pub(crate) client: Arc<Client<B, E, Block, RA>>,
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
+	pub(crate) network: crate::communication::NetworkBridge<Block>,
 	pub(crate) set_id: SetId,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) voting_rule: VR,
 }
 
-impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> Environment<B, E, Block, N, RA, SC, VR> {
+impl<B, E, Block: BlockT, RA, SC, VR> Environment<B, E, Block, RA, SC, VR> {
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
@@ -399,18 +400,17 @@ impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> Environment<B, E, Block
 	}
 }
 
-impl<Block: BlockT, B, E, N, RA, SC, VR> grandpa::Chain<Block::Hash, NumberFor<Block>>
-	for Environment<B, E, Block, N, RA, SC, VR>
-		where
-			Block: 'static,
-			B: Backend<Block> + 'static,
-			E: CallExecutor<Block> + Send + Sync + 'static,
-			N: Network<Block> + 'static,
-			N::In: 'static,
-			SC: SelectChain<Block> + 'static,
-			VR: VotingRule<Block, Client<B, E, Block, RA>>,
-			RA: Send + Sync,
-			NumberFor<Block>: BlockNumberOps,
+impl<Block: BlockT, B, E, RA, SC, VR>
+	grandpa::Chain<Block::Hash, NumberFor<Block>>
+for Environment<B, E, Block, RA, SC, VR>
+where
+	Block: 'static,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
+	SC: SelectChain<Block> + 'static,
+	VR: VotingRule<Block, Client<B, E, Block, RA>>,
+	RA: Send + Sync,
+	NumberFor<Block>: BlockNumberOps,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
 		ancestry(&self.client, base, block)
@@ -549,15 +549,12 @@ pub(crate) fn ancestry<B, Block: BlockT, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, E, Block: BlockT, N, RA, SC, VR>
-	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC, VR>
+impl<B, E, Block: BlockT, RA, SC, VR> voter::Environment<Block::Hash, NumberFor<Block>>
+for Environment<B, E, Block, RA, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + 'static + Send + Sync,
-	N: Network<Block> + 'static + Send,
-	N::In: 'static + Send,
 	RA: 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
@@ -584,9 +581,8 @@ where
 		&self,
 		round: RoundNumber,
 	) -> voter::RoundData<Self::Id, Self::Timer, Self::In, Self::Out> {
-		let now = Instant::now();
-		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
-		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
+		let prevote_timer = Delay::new(self.config.gossip_duration * 2);
+		let precommit_timer = Delay::new(self.config.gossip_duration * 4);
 
 		let local_key = crate::is_voter(&self.voters, &self.config.keystore);
 
@@ -624,8 +620,8 @@ where
 
 		voter::RoundData {
 			voter_id: local_key.map(|pair| pair.public()),
-			prevote_timer: Box::new(prevote_timer.map_err(|e| Error::Timer(e).into())),
-			precommit_timer: Box::new(precommit_timer.map_err(|e| Error::Timer(e).into())),
+			prevote_timer: Box::new(prevote_timer.map(Ok).compat()),
+			precommit_timer: Box::new(precommit_timer.map(Ok).compat()),
 			incoming,
 			outgoing,
 		}
@@ -899,9 +895,7 @@ where
 
 		//random between 0-1 seconds.
 		let delay: u64 = thread_rng().gen_range(0, 1000);
-		Box::new(Delay::new(
-			Instant::now() + Duration::from_millis(delay)
-		).map_err(|e| Error::Timer(e).into()))
+		Box::new(Delay::new(Duration::from_millis(delay)).map(Ok).compat())
 	}
 
 	fn prevote_equivocation(

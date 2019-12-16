@@ -73,7 +73,7 @@ use sp_finality_tracker;
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
 
-use std::fmt;
+use std::{fmt, io};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -90,7 +90,7 @@ mod observer;
 mod until_imported;
 mod voting_rule;
 
-pub use communication::Network;
+pub use network_gossip::Network;
 pub use finality_proof::FinalityProofProvider;
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
@@ -230,7 +230,7 @@ pub enum Error {
 	/// An invariant has been violated (e.g. not finalizing pending change blocks in-order)
 	Safety(String),
 	/// A timer failed to fire.
-	Timer(tokio_timer::Error),
+	Timer(io::Error),
 }
 
 impl From<GrandpaError> for Error {
@@ -276,9 +276,8 @@ pub(crate) trait BlockSyncRequester<Block: BlockT> {
 	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
 }
 
-impl<Block, N> BlockSyncRequester<Block> for NetworkBridge<Block, N> where
+impl<Block> BlockSyncRequester<Block> for NetworkBridge<Block> where
 	Block: BlockT,
-	N: communication::Network<Block>,
 {
 	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>) {
 		NetworkBridge::set_sync_fork_request(self, peers, hash, number)
@@ -448,11 +447,11 @@ where
 	))
 }
 
-fn global_communication<Block: BlockT, B, E, N, RA>(
+fn global_communication<Block: BlockT, B, E, RA>(
 	set_id: SetId,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
-	network: &NetworkBridge<Block, N>,
+	network: &NetworkBridge<Block>,
 	keystore: &Option<KeyStorePtr>,
 ) -> (
 	impl Stream<
@@ -466,7 +465,6 @@ fn global_communication<Block: BlockT, B, E, N, RA>(
 ) where
 	B: Backend<Block>,
 	E: CallExecutor<Block> + Send + Sync,
-	N: Network<Block>,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
@@ -524,7 +522,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT, RA>(
 }
 
 /// Parameters used to run Grandpa.
-pub struct GrandpaParams<B, E, Block: BlockT, N, RA, SC, VR, X> {
+pub struct GrandpaParams<B, E, Block: BlockT, N, RA, SC, VR, X, Sp> {
 	/// Configuration for the GRANDPA service.
 	pub config: Config,
 	/// A link to the block import worker.
@@ -539,18 +537,19 @@ pub struct GrandpaParams<B, E, Block: BlockT, N, RA, SC, VR, X> {
 	pub telemetry_on_connect: Option<mpsc::UnboundedReceiver<()>>,
 	/// A voting rule used to potentially restrict target votes.
 	pub voting_rule: VR,
+	/// How to spawn background tasks.
+	pub executor: Sp,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X>(
-	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
+pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
+	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X, Sp>,
 ) -> sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
-	N: Network<Block> + Send + Sync + 'static,
-	N::In: Send + 'static,
+	N: Network<Block> + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 	NumberFor<Block>: BlockNumberOps,
@@ -558,6 +557,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X>(
 	RA: Send + Sync + 'static,
 	X: futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
 	Client<B, E, Block, RA>: AuxStore,
+	Sp: futures03::task::Spawn + 'static,
 {
 	let GrandpaParams {
 		config,
@@ -567,6 +567,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X>(
 		on_exit,
 		telemetry_on_connect,
 		voting_rule,
+		executor,
 	} = grandpa_params;
 
 	let LinkHalf {
@@ -576,10 +577,11 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X>(
 		voter_commands_rx,
 	} = link;
 
-	let (network, network_startup) = NetworkBridge::new(
+	let network = NetworkBridge::new(
 		network,
 		config.clone(),
 		persistent_data.set_state.clone(),
+		&executor,
 		on_exit.clone(),
 	);
 
@@ -630,8 +632,6 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X>(
 			telemetry!(CONSENSUS_WARN; "afg.voter_failed"; "e" => ?e);
 		});
 
-	let voter_work = network_startup.and_then(move |()| voter_work);
-
 	// Make sure that `telemetry_task` doesn't accidentally finish and kill grandpa.
 	let telemetry_task = telemetry_task
 		.then(|_| futures::future::empty::<(), ()>());
@@ -643,17 +643,15 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X>(
 
 /// Future that powers the voter.
 #[must_use]
-struct VoterWork<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> {
+struct VoterWork<B, E, Block: BlockT, RA, SC, VR> {
 	voter: Box<dyn Future<Item = (), Error = CommandOrError<Block::Hash, NumberFor<Block>>> + Send>,
-	env: Arc<Environment<B, E, Block, N, RA, SC, VR>>,
+	env: Arc<Environment<B, E, Block, RA, SC, VR>>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
 
-impl<B, E, Block, N, RA, SC, VR> VoterWork<B, E, Block, N, RA, SC, VR>
+impl<B, E, Block, RA, SC, VR> VoterWork<B, E, Block, RA, SC, VR>
 where
 	Block: BlockT,
-	N: Network<Block> + Sync,
-	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block> + Send + Sync + 'static,
@@ -665,7 +663,7 @@ where
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
 		config: Config,
-		network: NetworkBridge<Block, N>,
+		network: NetworkBridge<Block>,
 		select_chain: SC,
 		voting_rule: VR,
 		persistent_data: PersistentData<Block>,
@@ -826,11 +824,9 @@ where
 	}
 }
 
-impl<B, E, Block, N, RA, SC, VR> Future for VoterWork<B, E, Block, N, RA, SC, VR>
+impl<B, E, Block, RA, SC, VR> Future for VoterWork<B, E, Block, RA, SC, VR>
 where
 	Block: BlockT,
-	N: Network<Block> + Sync,
-	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block> + Send + Sync + 'static,
@@ -882,14 +878,13 @@ where
 }
 
 #[deprecated(since = "1.1.0", note = "Please switch to run_grandpa_voter.")]
-pub fn run_grandpa<B, E, Block: BlockT, N, RA, SC, VR, X>(
-	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
-) -> ::sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+pub fn run_grandpa<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
+	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X, Sp>,
+) -> sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
-	N: Network<Block> + Send + Sync + 'static,
-	N::In: Send + 'static,
+	N: Network<Block> + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
@@ -897,6 +892,7 @@ pub fn run_grandpa<B, E, Block: BlockT, N, RA, SC, VR, X>(
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 	X: futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
 	Client<B, E, Block, RA>: AuxStore,
+	Sp: futures03::task::Spawn + 'static,
 {
 	run_grandpa_voter(grandpa_params)
 }
@@ -915,15 +911,17 @@ pub fn setup_disabled_grandpa<B, E, Block: BlockT, RA, N>(
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
-	N: Network<Block> + Send + Sync + 'static,
-	N::In: Send + 'static,
+	N: Network<Block> + Send + Clone + 'static,
 {
 	register_finality_tracker_inherent_data_provider(
 		client,
 		inherent_data_providers,
 	)?;
 
-	network.register_validator(Arc::new(network::consensus_gossip::DiscardAll));
+	// We register the GRANDPA protocol so that we don't consider it an anomaly
+	// to receive GRANDPA messages on the network. We don't process the
+	// messages.
+	network.register_notifications_protocol(communication::GRANDPA_ENGINE_ID);
 
 	Ok(())
 }

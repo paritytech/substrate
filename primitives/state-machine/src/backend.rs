@@ -22,6 +22,7 @@ use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
 use trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
 use codec::Encode;
+use primitives::storage::{ChildInfo, OwnedChildInfo};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -46,11 +47,21 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Get keyed child storage or None if there is nothing associated.
-	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+	fn child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error>;
 
 	/// Get child keyed storage value hash or None if there is nothing associated.
-	fn child_storage_hash(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
-		self.child_storage(storage_key, key).map(|v| v.map(|v| H::hash(&v)))
+	fn child_storage_hash(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<H::Out>, Self::Error> {
+		self.child_storage(storage_key, child_info, key).map(|v| v.map(|v| H::hash(&v)))
 	}
 
 	/// true if a key exists in storage.
@@ -59,8 +70,13 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// true if a key exists in child storage.
-	fn exists_child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<bool, Self::Error> {
-		Ok(self.child_storage(storage_key, key)?.is_some())
+	fn exists_child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<bool, Self::Error> {
+		Ok(self.child_storage(storage_key, child_info, key)?.is_some())
 	}
 
 	/// Return the next key in storage in lexicographic order or `None` if there is no value.
@@ -70,11 +86,17 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn next_child_storage_key(
 		&self,
 		storage_key: &[u8],
+		child_info: ChildInfo,
 		key: &[u8]
 	) -> Result<Option<Vec<u8>>, Self::Error>;
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F);
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		f: F,
+	);
 
 	/// Retrieve all entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
@@ -89,7 +111,13 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 
 	/// Retrieve all child entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F);
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+		f: F,
+	);
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
@@ -102,7 +130,12 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Calculate the child storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit. The second argument
 	/// is true if child storage root equals default storage root.
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (H::Out, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		delta: I,
+	) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord;
@@ -118,9 +151,14 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Get all keys of child storage with given prefix
-	fn child_keys(&self, child_storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
+	fn child_keys(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+	) -> Vec<Vec<u8>> {
 		let mut all = Vec::new();
-		self.for_child_keys_with_prefix(child_storage_key, prefix, |k| all.push(k.to_vec()));
+		self.for_child_keys_with_prefix(storage_key, child_info, prefix, |k| all.push(k.to_vec()));
 		all
 	}
 
@@ -140,15 +178,15 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	where
 		I1: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		I2i: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		I2: IntoIterator<Item=(Vec<u8>, I2i)>,
+		I2: IntoIterator<Item=(Vec<u8>, I2i, OwnedChildInfo)>,
 		H::Out: Ord + Encode,
 	{
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
-		for (storage_key, child_delta) in child_deltas {
+		for (storage_key, child_delta, child_info) in child_deltas {
 			let (child_root, empty, child_txs) =
-				self.child_storage_root(&storage_key[..], child_delta);
+				self.child_storage_root(&storage_key[..], child_info.as_ref(), child_delta);
 			txs.consolidate(child_txs);
 			if empty {
 				child_roots.push((storage_key, None));
@@ -173,28 +211,49 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).storage(key)
 	}
 
-	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		(*self).child_storage(storage_key, key)
+	fn child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		(*self).child_storage(storage_key, child_info, key)
+	}
+
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		f: F,
+	) {
+		(*self).for_keys_in_child_storage(storage_key, child_info, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		(*self).next_storage_key(key)
 	}
 
-	fn next_child_storage_key(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		(*self).next_child_storage_key(storage_key, key)
-	}
-
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
-		(*self).for_keys_in_child_storage(storage_key, f)
+	fn next_child_storage_key(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		(*self).next_child_storage_key(storage_key, child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		(*self).for_keys_with_prefix(prefix, f)
 	}
 
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
-		(*self).for_child_keys_with_prefix(storage_key, prefix, f)
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+		f: F,
+	) {
+		(*self).for_child_keys_with_prefix(storage_key, child_info, prefix, f)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
@@ -205,12 +264,17 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (H::Out, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		delta: I,
+	) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord,
 	{
-		(*self).child_storage_root(storage_key, delta)
+		(*self).child_storage_root(storage_key, child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -234,7 +298,10 @@ impl Consolidate for () {
 	}
 }
 
-impl Consolidate for Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)> {
+impl Consolidate for Vec<(
+		Option<(Vec<u8>, OwnedChildInfo)>,
+		Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	)> {
 	fn consolidate(&mut self, mut other: Self) {
 		self.append(&mut other);
 	}

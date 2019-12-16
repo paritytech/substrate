@@ -18,9 +18,8 @@
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use primitives::ChangesTrieConfiguration;
-use primitives::offchain::OffchainStorage;
-use sp_runtime::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
+use primitives::{ChangesTrieConfiguration, offchain::OffchainStorage};
+use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, HasherFor};
 pub use state_machine::backend::Backend as StateBackend;
 use state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction};
@@ -137,11 +136,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 	) -> sp_blockchain::Result<()>;
 
 	/// Inject storage data into the database replacing any existing data.
-	fn reset_storage(
-		&mut self,
-		top: StorageOverlay,
-		children: ChildrenStorageOverlay,
-	) -> sp_blockchain::Result<Block::Hash>;
+	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash>;
 
 	/// Set storage changes.
 	fn update_storage(

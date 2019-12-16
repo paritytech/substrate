@@ -23,6 +23,7 @@ use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
 use sp_runtime::traits::{Block as BlockT, Header, HasherFor, NumberFor};
 use primitives::hexdisplay::HexDisplay;
+use primitives::storage::ChildInfo;
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
 use client_api::backend::{StorageCollection, ChildStorageCollection};
@@ -528,7 +529,12 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		Ok(hash)
 	}
 
-	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
 		let key = (storage_key.to_vec(), key.to_vec());
 		let local_cache = self.cache.local_cache.upgradable_read();
 		if let Some(entry) = local_cache.child_storage.get(&key).cloned() {
@@ -543,7 +549,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 			}
 		}
 		trace!("Cache miss: {:?}", key);
-		let value = self.state.child_storage(storage_key, &key.1[..])?;
+		let value = self.state.child_storage(storage_key, child_info, &key.1[..])?;
 		RwLockUpgradableReadGuard::upgrade(local_cache).child_storage.insert(key, value.clone());
 		Ok(value)
 	}
@@ -552,20 +558,35 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		Ok(self.storage(key)?.is_some())
 	}
 
-	fn exists_child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<bool, Self::Error> {
-		self.state.exists_child_storage(storage_key, key)
+	fn exists_child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<bool, Self::Error> {
+		self.state.exists_child_storage(storage_key, child_info, key)
+	}
+
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		f: F,
+	) {
+		self.state.for_keys_in_child_storage(storage_key, child_info, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.next_storage_key(key)
 	}
 
-	fn next_child_storage_key(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.next_child_storage_key(storage_key, key)
-	}
-
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
-		self.state.for_keys_in_child_storage(storage_key, f)
+	fn next_child_storage_key(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.next_child_storage_key(storage_key, child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -576,8 +597,14 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		self.state.for_key_values_with_prefix(prefix, f)
 	}
 
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
-		self.state.for_child_keys_with_prefix(storage_key, prefix, f)
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+		f: F,
+	) {
+		self.state.for_child_keys_with_prefix(storage_key, child_info, prefix, f)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (B::Hash, Self::Transaction)
@@ -587,11 +614,16 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		self.state.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (B::Hash, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		delta: I,
+	) -> (B::Hash, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
-		self.state.child_storage_root(storage_key, delta)
+		self.state.child_storage_root(storage_key, child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -602,8 +634,13 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		self.state.keys(prefix)
 	}
 
-	fn child_keys(&self, child_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.state.child_keys(child_key, prefix)
+	fn child_keys(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+	) -> Vec<Vec<u8>> {
+		self.state.child_keys(storage_key, child_info, prefix)
 	}
 
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HasherFor<B>>> {

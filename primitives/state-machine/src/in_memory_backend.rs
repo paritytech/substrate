@@ -23,6 +23,7 @@ use trie::{
 	MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration, trie_types::Layout,
 };
 use codec::Codec;
+use primitives::storage::{ChildInfo, OwnedChildInfo, Storage};
 
 /// Error impossible.
 // FIXME: use `!` type when stabilized. https://github.com/rust-lang/rust/issues/35121
@@ -42,7 +43,7 @@ impl error::Error for Void {
 /// In-memory backend. Fully recomputes tries each time `as_trie_backend` is called but useful for
 /// tests and proof checking.
 pub struct InMemory<H: Hasher> {
-	inner: BTreeMap<Option<Vec<u8>>, BTreeMap<Vec<u8>, Vec<u8>>>,
+	inner: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, BTreeMap<Vec<u8>, Vec<u8>>>,
 	// This field is only needed for returning reference in `as_trie_backend`.
 	trie: Option<TrieBackend<MemoryDB<H>, H>>,
 	_hasher: PhantomData<H>,
@@ -82,24 +83,30 @@ impl<H: Hasher> PartialEq for InMemory<H> {
 
 impl<H: Hasher> InMemory<H> {
 	/// Copy the state, with applied updates
-	pub fn update<T: IntoIterator<Item = (Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>>(
+	pub fn update<
+		T: IntoIterator<Item = (Option<(Vec<u8>, OwnedChildInfo)>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>
+	>(
 		&self,
 		changes: T,
 	) -> Self {
-		let mut inner: BTreeMap<_, _> = self.inner.clone();
-		for (storage_key, key, val) in changes.into_iter() {
-			match val {
-				Some(v) => { inner.entry(storage_key).or_default().insert(key, v); },
-				None => { inner.entry(storage_key).or_default().remove(&key); },
+		let mut inner = self.inner.clone();
+		for (child_info, key_values) in changes.into_iter() {
+			let entry = inner.entry(child_info).or_default();
+			for (key, val) in key_values {
+				match val {
+					Some(v) => { entry.insert(key, v); },
+					None => { entry.remove(&key); },
+				}
 			}
 		}
-
 		inner.into()
 	}
 }
 
-impl<H: Hasher> From<BTreeMap<Option<Vec<u8>>, BTreeMap<Vec<u8>, Vec<u8>>>> for InMemory<H> {
-	fn from(inner: BTreeMap<Option<Vec<u8>>, BTreeMap<Vec<u8>, Vec<u8>>>) -> Self {
+impl<H: Hasher> From<HashMap<Option<(Vec<u8>, OwnedChildInfo)>, BTreeMap<Vec<u8>, Vec<u8>>>>
+	for InMemory<H>
+{
+	fn from(inner: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, BTreeMap<Vec<u8>, Vec<u8>>>) -> Self {
 		InMemory {
 			inner,
 			trie: None,
@@ -108,17 +115,11 @@ impl<H: Hasher> From<BTreeMap<Option<Vec<u8>>, BTreeMap<Vec<u8>, Vec<u8>>>> for 
 	}
 }
 
-impl<H: Hasher> From<(
-		BTreeMap<Vec<u8>, Vec<u8>>,
-		HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>,
-)> for InMemory<H> {
-	fn from(inners: (
-		BTreeMap<Vec<u8>, Vec<u8>>,
-		HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>,
-	)) -> Self {
-		let mut inner: BTreeMap<Option<Vec<u8>>, BTreeMap<Vec<u8>, Vec<u8>>>
-			= inners.1.into_iter().map(|(k, v)| (Some(k), v)).collect();
-		inner.insert(None, inners.0);
+impl<H: Hasher> From<Storage> for InMemory<H> {
+	fn from(inners: Storage) -> Self {
+		let mut inner: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, BTreeMap<Vec<u8>, Vec<u8>>>
+			= inners.children.into_iter().map(|(k, c)| (Some((k, c.child_info)), c.data)).collect();
+		inner.insert(None, inners.top);
 		InMemory {
 			inner,
 			trie: None,
@@ -129,7 +130,7 @@ impl<H: Hasher> From<(
 
 impl<H: Hasher> From<BTreeMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 	fn from(inner: BTreeMap<Vec<u8>, Vec<u8>>) -> Self {
-		let mut expanded = BTreeMap::new();
+		let mut expanded = HashMap::new();
 		expanded.insert(None, inner);
 		InMemory {
 			inner: expanded,
@@ -139,12 +140,19 @@ impl<H: Hasher> From<BTreeMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 	}
 }
 
-impl<H: Hasher> From<Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>> for InMemory<H> {
-	fn from(inner: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>) -> Self {
-		let mut expanded: BTreeMap<Option<Vec<u8>>, BTreeMap<Vec<u8>, Vec<u8>>> = BTreeMap::new();
-		for (child_key, key, value) in inner {
-			if let Some(value) = value {
-				expanded.entry(child_key).or_default().insert(key, value);
+impl<H: Hasher> From<Vec<(Option<(Vec<u8>, OwnedChildInfo)>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>>
+	for InMemory<H> {
+	fn from(
+		inner: Vec<(Option<(Vec<u8>, OwnedChildInfo)>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
+	) -> Self {
+		let mut expanded: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, BTreeMap<Vec<u8>, Vec<u8>>>
+			= HashMap::new();
+		for (child_info, key_values) in inner {
+			let entry = expanded.entry(child_info).or_default();
+			for (key, value) in key_values {
+				if let Some(value) = value {
+					entry.insert(key, value);
+				}
 			}
 		}
 		expanded.into()
@@ -153,14 +161,19 @@ impl<H: Hasher> From<Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>> for InMem
 
 impl<H: Hasher> InMemory<H> {
 	/// child storage key iterator
-	pub fn child_storage_keys(&self) -> impl Iterator<Item=&[u8]> {
-		self.inner.iter().filter_map(|item| item.0.as_ref().map(|v|&v[..]))
+	pub fn child_storage_keys(&self) -> impl Iterator<Item=(&[u8], ChildInfo)> {
+		self.inner.iter().filter_map(|item|
+			item.0.as_ref().map(|v|(&v.0[..], v.1.as_ref()))
+		)
 	}
 }
 
 impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	type Error = Void;
-	type Transaction = Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>;
+	type Transaction = Vec<(
+		Option<(Vec<u8>, OwnedChildInfo)>,
+		Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	)>;
 	type TrieBackendStorage = MemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -170,13 +183,11 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	fn child_storage(
 		&self,
 		storage_key: &[u8],
+		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		Ok(
-			self.inner
-				.get(&Some(storage_key.to_vec()))
-				.and_then(|map| map.get(key).map(Clone::clone))
-		)
+		Ok(self.inner.get(&Some((storage_key.to_vec(), child_info.to_owned())))
+			.and_then(|map| map.get(key).map(Clone::clone)))
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -193,12 +204,24 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 			.for_each(|(k, v)| f(k, v)));
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], mut f: F) {
-		self.inner.get(&Some(storage_key.to_vec())).map(|map| map.keys().for_each(|k| f(&k)));
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		mut f: F,
+	) {
+		self.inner.get(&Some((storage_key.to_vec(), child_info.to_owned())))
+			.map(|map| map.keys().for_each(|k| f(&k)));
 	}
 
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
-		self.inner.get(&Some(storage_key.to_vec()))
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+		f: F,
+	) {
+		self.inner.get(&Some((storage_key.to_vec(), child_info.to_owned())))
 			.map(|map| map.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
 	}
 
@@ -213,24 +236,30 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 
 		let transaction: Vec<_> = delta.into_iter().collect();
 		let root = Layout::<H>::trie_root(existing_pairs.chain(transaction.iter().cloned())
-			.collect::<BTreeMap<_, _>>()
+			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 		);
 
-		let transaction = transaction.into_iter().map(|(k, v)| (None, k, v)).collect();
+		let full_transaction = transaction.into_iter().collect();
 
-		(root, transaction)
+		(root, vec![(None, full_transaction)])
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (H::Out, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		delta: I,
+	) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
 		let storage_key = storage_key.to_vec();
+		let child_info = Some((storage_key.clone(), child_info.to_owned()));
 
-		let existing_pairs = self.inner.get(&Some(storage_key.clone()))
+		let existing_pairs = self.inner.get(&child_info)
 			.into_iter()
 			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
@@ -238,18 +267,16 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		let root = child_trie_root::<Layout<H>, _, _, _>(
 			&storage_key,
 			existing_pairs.chain(transaction.iter().cloned())
-				.collect::<BTreeMap<_, _>>()
+				.collect::<HashMap<_, _>>()
 				.into_iter()
 				.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 		);
 
-		let transaction = transaction.into_iter()
-			.map(|(k, v)| (Some(storage_key.clone()), k, v))
-			.collect();
+		let full_transaction = transaction.into_iter().collect();
 
 		let is_default = root == default_child_trie_root::<Layout<H>>(&storage_key);
 
-		(root, is_default, transaction)
+		(root, is_default, vec![(child_info, full_transaction)])
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -260,9 +287,14 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		Ok(next_key)
 	}
 
-	fn next_child_storage_key(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn next_child_storage_key(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
 		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
-		let next_key = self.inner.get(&Some(storage_key.to_vec()))
+		let next_key = self.inner.get(&Some((storage_key.to_vec(), child_info.to_owned())))
 			.and_then(|map| map.range::<[u8], _>(range).next().map(|(k, _)| k).cloned());
 
 		Ok(next_key)
@@ -282,8 +314,13 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 			.collect()
 	}
 
-	fn child_keys(&self, storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.inner.get(&Some(storage_key.to_vec()))
+	fn child_keys(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+	) -> Vec<Vec<u8>> {
+		self.inner.get(&Some((storage_key.to_vec(), child_info.to_owned())))
 			.into_iter()
 			.flat_map(|map| map.keys().filter(|k| k.starts_with(prefix)).cloned())
 			.collect()
@@ -293,8 +330,10 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		let mut mdb = MemoryDB::default();
 		let mut new_child_roots = Vec::new();
 		let mut root_map = None;
-		for (storage_key, map) in &self.inner {
-			if let Some(storage_key) = storage_key.as_ref() {
+		for (child_info, map) in &self.inner {
+			if let Some((storage_key, _child_info)) = child_info.as_ref() {
+				// no need to use child_info at this point because we use a MemoryDB for
+				// proof (with PrefixedMemoryDB it would be needed).
 				let ch = insert_into_memory_db::<H, _>(&mut mdb, map.clone().into_iter())?;
 				new_child_roots.push((storage_key.clone(), ch.as_ref().into()));
 			} else {
@@ -311,7 +350,6 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 				new_child_roots.into_iter(),
 			)?,
 		};
-
 		self.trie = Some(TrieBackend::new(mdb, root));
 		self.trie.as_ref()
 	}
@@ -325,11 +363,16 @@ mod tests {
 	#[test]
 	fn in_memory_with_child_trie_only() {
 		let storage = InMemory::<primitives::Blake2Hasher>::default();
+		let child_info = OwnedChildInfo::new_default(b"unique_id_1".to_vec());
 		let mut storage = storage.update(
-			vec![(Some(b"1".to_vec()), b"2".to_vec(), Some(b"3".to_vec()))]
+			vec![(
+				Some((b"1".to_vec(), child_info.clone())),
+				vec![(b"2".to_vec(), Some(b"3".to_vec()))]
+			)]
 		);
 		let trie_backend = storage.as_trie_backend().unwrap();
-		assert_eq!(trie_backend.child_storage(b"1", b"2").unwrap(), Some(b"3".to_vec()));
+		assert_eq!(trie_backend.child_storage(b"1", child_info.as_ref(), b"2").unwrap(),
+			Some(b"3".to_vec()));
 		assert!(trie_backend.storage(b"1").unwrap().is_some());
 	}
 }
