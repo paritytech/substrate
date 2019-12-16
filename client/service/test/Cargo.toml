@@ -13,7 +13,7 @@ env_logger = "0.7.0"
 fdlimit = "0.1.1"
 futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
 sc-service = { version = "2.0.0", default-features = false, path = "../../service" }
-sc-network = { version = "2.0.0", path = "../../network" }
+sc-network = { version = "0.8", path = "../../network" }
 sp-consensus = { version = "2.0.0", path = "../../../primitives/consensus/common" }
 sc-client = { version = "2.0.0", path = "../../" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }

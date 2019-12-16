@@ -43,7 +43,7 @@ derive_more = "0.99.2"
 [dev-dependencies]
 sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }
 sc-executor = { version = "2.0.0", path = "../../executor" }
-sc-network = { version = "2.0.0", path = "../../network" }
+sc-network = { version = "0.8", path = "../../network" }
 sc-network-test = { version = "2.0.0", path = "../../network/test" }
 sc-service = { version = "2.0.0", path = "../../service" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

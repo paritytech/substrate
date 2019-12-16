@@ -52,7 +52,7 @@ sc-client = { version = "2.0.0", path = "../../../client/" }
 sc-chain-spec = { version = "2.0.0", path = "../../../client/chain-spec" }
 sc-transaction-pool = { version = "2.0.0", path = "../../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
-sc-network = { version = "2.0.0", path = "../../../client/network" }
+sc-network = { version = "0.8", path = "../../../client/network" }
 sc-consensus-babe = { version = "2.0.0", path = "../../../client/consensus/babe" }
 grandpa = { version = "2.0.0", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
 sc-client-db = { version = "2.0.0", default-features = false, path = "../../../client/db" }

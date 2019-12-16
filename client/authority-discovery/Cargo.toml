@@ -19,7 +19,7 @@ futures-timer = "2.0"
 sc-keystore = { version = "2.0.0", path = "../keystore" }
 libp2p = { version = "0.13.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 log = "0.4.8"
-sc-network = { version = "2.0.0", path = "../network" }
+sc-network = { version = "0.8", path = "../network" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 prost = "0.5.0"
