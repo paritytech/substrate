@@ -244,45 +244,45 @@ fn slash_payout_multi_works() {
 #[test]
 fn suspended_member_lifecycle_works() {
 	EnvBuilder::new().execute(|| {
-		assert_eq!(Strikes::<Test>::get(10), 0);
-		assert_eq!(<SuspendedMembers<Test>>::get(10), None);
+		// Add 20 to members, who is not the head and can be suspended/removed.
+		assert_ok!(Society::add_member(&20));
+		assert_eq!(<Members<Test>>::get(), vec![10, 20]);
+		assert_eq!(Strikes::<Test>::get(20), 0);
+		assert_eq!(<SuspendedMembers<Test>>::get(20), None);
 
-		// Let's suspend account 10 by giving them 2 strikes by not voting
-		assert_ok!(Society::bid(Origin::signed(20), 0));
-		run_to_block(8);
-		assert_eq!(Strikes::<Test>::get(10), 1);
+		// Let's suspend account 20 by giving them 2 strikes by not voting
 		assert_ok!(Society::bid(Origin::signed(30), 0));
+		run_to_block(8);
+		assert_eq!(Strikes::<Test>::get(20), 1);
+		assert_ok!(Society::bid(Origin::signed(40), 0));
 		run_to_block(16);
 
-		// Strike 2 is accumulated, and 10 is suspended :(
-		assert_eq!(<SuspendedMembers<Test>>::get(10), Some(()));
-		assert_eq!(<Members<Test>>::get(), vec![]);
+		// Strike 2 is accumulated, and 20 is suspended :(
+		assert_eq!(<SuspendedMembers<Test>>::get(20), Some(()));
+		assert_eq!(<Members<Test>>::get(), vec![10]);
 
 		// Suspended members cannot get payout
-		Society::bump_payout(&10, 10, 100);
-		assert_noop!(Society::payout(Origin::signed(10)), "account is suspended");
-
-		// Move 10 blocks to the future
-		run_to_block(26);
+		Society::bump_payout(&20, 10, 100);
+		assert_noop!(Society::payout(Origin::signed(20)), "account is suspended");
 		
 		// Normal people cannot make judgement
-		assert_noop!(Society::judge_suspended_member(Origin::signed(10), 10, true), "Invalid origin");
+		assert_noop!(Society::judge_suspended_member(Origin::signed(20), 20, true), "Invalid origin");
 
 		// Suspension judgment origin can judge thee
 		// Suspension judgement origin forgives the suspended member
-		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 10, true));
-		assert_eq!(<SuspendedMembers<Test>>::get(10), None);
-		assert_eq!(<Members<Test>>::get(), vec![10]);
+		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 20, true));
+		assert_eq!(<SuspendedMembers<Test>>::get(20), None);
+		assert_eq!(<Members<Test>>::get(), vec![10, 20]);
 
 		// Let's suspend them again, directly
-		Society::suspend_member(&10);
-		assert_eq!(<SuspendedMembers<Test>>::get(10), Some(()));
+		Society::suspend_member(&20);
+		assert_eq!(<SuspendedMembers<Test>>::get(20), Some(()));
 		// Suspension judgement origin does not forgive the suspended member
-		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 10, false));
+		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 20, false));
 		// Cleaned up
-		assert_eq!(<SuspendedMembers<Test>>::get(10), None);
-		assert_eq!(<Members<Test>>::get(), vec![]);
-		assert_eq!(<Payouts<Test>>::get(10), vec![]);
+		assert_eq!(<SuspendedMembers<Test>>::get(20), None);
+		assert_eq!(<Members<Test>>::get(), vec![10]);
+		assert_eq!(<Payouts<Test>>::get(20), vec![]);
 	});
 }
 
@@ -431,6 +431,7 @@ fn unvouch_works() {
 		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Some(false)));
 		// 10 is finally unvouched
 		assert_eq!(<Vouching<Test>>::get(), vec![]);
+		assert_eq!(Society::members(), vec![10]);
 	});
 }
 
@@ -450,5 +451,40 @@ fn unbid_vouch_works() {
 		// Everything is cleaned up
 		assert_eq!(<Vouching<Test>>::get(), vec![]);
 		assert_eq!(<Bids<Test>>::get(), vec![]);
+	});
+}
+
+#[test]
+fn head_cannot_be_removed() {
+	EnvBuilder::new().execute(|| {
+		// 10 is the only member and head
+		assert_eq!(Society::members(), vec![10]);
+		assert_eq!(Society::head(), Some(10));
+		// 10 can still accumulate strikes
+		assert_ok!(Society::bid(Origin::signed(20), 0));
+		run_to_block(8);
+		assert_eq!(Strikes::<Test>::get(10), 1);
+		assert_ok!(Society::bid(Origin::signed(30), 0));
+		run_to_block(16);
+		assert_eq!(Strikes::<Test>::get(10), 2);
+		// Awkwardly they can obtain more than MAX_STRIKES...
+		// TODO: Check if this is okay behavior
+		assert_ok!(Society::vouch(Origin::signed(10), 40, 0, 0));
+		run_to_block(24);
+		assert_eq!(Strikes::<Test>::get(10), 3);
+
+		// Replace the head
+		assert_ok!(Society::bid(Origin::signed(50), 0));
+		run_to_block(28);
+		assert_ok!(Society::vote(Origin::signed(10), 50, true));
+		run_to_block(32);
+		assert_eq!(Society::members(), vec![10, 50]);
+		assert_eq!(Society::head(), Some(50));
+
+		// 10 can now be suspended for strikes
+		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 40, Some(false)));
+		assert_eq!(Strikes::<Test>::get(10), 0);
+		assert_eq!(<SuspendedMembers<Test>>::get(10), Some(()));
+		assert_eq!(Society::members(), vec![50]);
 	});
 }

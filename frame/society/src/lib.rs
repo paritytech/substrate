@@ -512,11 +512,13 @@ impl<T: Trait> Module<T> {
 		})
 	}
 
-	/// Remove a member from the members list.
+	/// Remove a member from the members list, except the Head.
 	///
 	/// NOTE: This does not correctly clean up a member from storage. It simply
 	/// removes them from the Members storage item.
 	pub fn remove_member(m: &T::AccountId) -> Result {
+		ensure!(Self::head() != Some(m.clone()), "cannot remove head");
+
 		<Members<T>>::mutate(|members|
 			match members.binary_search(&m) {
 				Err(_) => Err("not a member"),
