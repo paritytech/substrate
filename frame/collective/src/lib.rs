@@ -242,6 +242,7 @@ decl_module! {
 					}
 				} else {
 					// disapproved
+					<ProposalOf<T, I>>::remove(&proposal);
 					Self::deposit_event(RawEvent::Disapproved(proposal));
 				}
 
@@ -645,6 +646,20 @@ mod tests {
 					topics: vec![],
 				}
 			]);
+		});
+	}
+
+	#[test]
+	fn motions_reproposing_disapproved_works() {
+		make_ext().execute_with(|| {
+			System::set_block_number(1);
+			let proposal = make_proposal(42);
+			let hash: H256 = proposal.blake2_256().into();
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
+			assert_eq!(Collective::proposals(), vec![]);
+			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
+			assert_eq!(Collective::proposals(), vec![hash]);
 		});
 	}
 
