@@ -94,7 +94,7 @@ use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, ensure,
 	weights::SimpleDispatchInfo,
 };
-use frame_system::ensure_signed;
+use frame_system::{self as system, ensure_signed};
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.

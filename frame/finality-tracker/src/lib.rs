@@ -23,7 +23,7 @@ use sp_runtime::traits::{One, Zero, SaturatedConversion};
 use sp_std::{prelude::*, result, cmp, vec};
 use frame_support::{decl_module, decl_storage};
 use frame_support::traits::Get;
-use frame_system::{ensure_none, Trait as SystemTrait};
+use frame_system::{self as system, ensure_none, Trait as SystemTrait};
 use sp_finality_tracker::{INHERENT_IDENTIFIER, FinalizedInherentData};
 
 pub const DEFAULT_WINDOW_SIZE: u32 = 101;

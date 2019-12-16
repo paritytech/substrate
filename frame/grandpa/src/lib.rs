@@ -44,7 +44,7 @@ use fg_primitives::{
 	GRANDPA_AUTHORITIES_KEY, GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog, SetId, RoundNumber,
 };
 pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
-use frame_system::{ensure_signed, DigestOf};
+use frame_system::{self as system, ensure_signed, DigestOf};
 
 mod mock;
 mod tests;

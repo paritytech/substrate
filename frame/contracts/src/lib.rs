@@ -126,7 +126,7 @@ use frame_support::{
 	weights::DispatchInfo,
 };
 use frame_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get, Time, Randomness};
-use frame_system::{ensure_signed, RawOrigin, ensure_root};
+use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
 use sp_core::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 
 pub type CodeHash<T> = <T as frame_system::Trait>::Hash;

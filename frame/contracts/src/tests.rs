@@ -39,7 +39,7 @@ use frame_support::{
 };
 use std::{cell::RefCell, sync::atomic::{AtomicUsize, Ordering}};
 use sp_core::storage::well_known_keys;
-use frame_system::{self, EventRecord, Phase};
+use frame_system::{self as system, EventRecord, Phase};
 
 mod contract {
 	// Re-export contents of the root. This basically

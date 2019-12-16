@@ -35,7 +35,7 @@ use frame_support::{
 		OnFreeBalanceZero, OnUnbalanced
 	}
 };
-use frame_system::{ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root};
 
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};

@@ -281,7 +281,7 @@ use sp_staking::{
 };
 #[cfg(feature = "std")]
 use sp_runtime::{Serialize, Deserialize};
-use frame_system::{ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root};
 
 use sp_phragmen::{ExtendedBalance, PhragmenStakedAssignment};
 

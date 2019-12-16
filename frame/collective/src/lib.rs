@@ -33,7 +33,7 @@ use frame_support::{
 	traits::{ChangeMembers, InitializeMembers}, decl_module, decl_event,
 	decl_storage, ensure,
 };
-use frame_system::{self, ensure_signed, ensure_root};
+use frame_system::{self as system, self as system, ensure_signed, ensure_root};
 
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
@@ -379,7 +379,7 @@ impl<
 mod tests {
 	use super::*;
 	use frame_support::{Hashable, assert_ok, assert_noop, parameter_types, weights::Weight};
-	use frame_system::{EventRecord, Phase};
+	use frame_system::{self as system, EventRecord, Phase};
 	use hex_literal::hex;
 	use sp_core::H256;
 	use sp_runtime::{

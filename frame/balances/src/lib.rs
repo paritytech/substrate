@@ -179,7 +179,7 @@ use sp_runtime::{
 		Saturating, Bounded,
 	},
 };
-use frame_system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
+use frame_system::{self as system, IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 #[cfg(test)]
 mod mock;

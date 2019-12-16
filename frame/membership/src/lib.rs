@@ -28,7 +28,7 @@ use frame_support::{
 	traits::{ChangeMembers, InitializeMembers},
 	weights::SimpleDispatchInfo,
 };
-use frame_system::{ensure_root, ensure_signed};
+use frame_system::{self as system, ensure_root, ensure_signed};
 use sp_runtime::traits::EnsureOrigin;
 
 pub trait Trait<I=DefaultInstance>: frame_system::Trait {

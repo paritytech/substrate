@@ -23,7 +23,7 @@ use sp_std::{prelude::*, marker::PhantomData, convert::TryInto};
 use codec::{Encode, Codec};
 use frame_support::{Parameter, decl_module, decl_event, decl_storage};
 use sp_runtime::traits::{One, SimpleArithmetic, StaticLookup, Member, LookupError};
-use frame_system::{IsDeadAccount, OnNewAccount};
+use frame_system::{self as system, IsDeadAccount, OnNewAccount};
 
 use self::address::Address as RawAddress;
 
@@ -72,7 +72,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = frame_system {
 		fn deposit_event() = default;
 	}
 }

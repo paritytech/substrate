@@ -226,7 +226,7 @@ macro_rules! decl_module {
 			pub struct $mod_type<
 				$trait_instance: $trait_name $(<I>, I: $instantiable $(= $module_default_instance)?)?
 			>
-			for enum $call_type where origin: $origin_type, system = frame_system
+			for enum $call_type where origin: $origin_type, system = system
 			{ $( $where_ty: $where_bound ),* }
 			{}
 			{}
