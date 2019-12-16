@@ -22,7 +22,7 @@ use std::collections::VecDeque;
 use codec::{Decode, Encode, Codec};
 use hash_db::Hasher;
 use num_traits::Zero;
-use trie::Recorder;
+use sp_trie::Recorder;
 use crate::changes_trie::{AnchorBlockId, ConfigurationRange, RootsStorage, Storage, BlockNumber};
 use crate::changes_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, ExtrinsicIndexValue};
 use crate::changes_trie::storage::{TrieBackendAdapter, InMemoryStorage};
@@ -376,7 +376,7 @@ impl<'a, H, Number> Iterator for ProvingDrilldownIterator<'a, H, Number>
 #[cfg(test)]
 mod tests {
 	use std::iter::FromIterator;
-	use primitives::Blake2Hasher;
+	use sp_core::Blake2Hasher;
 	use crate::changes_trie::Configuration;
 	use crate::changes_trie::input::InputPair;
 	use crate::changes_trie::storage::InMemoryStorage;

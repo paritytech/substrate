@@ -16,7 +16,7 @@
 
 //! Rust executor possible errors.
 
-use serializer;
+use sp_serializer;
 use wasmi;
 #[cfg(feature = "wasmtime")]
 use wasmtime_jit::{ActionError, SetupError};
@@ -28,7 +28,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Unserializable Data
-	InvalidData(serializer::Error),
+	InvalidData(sp_serializer::Error),
 	/// Trap occured during execution
 	Trap(wasmi::Trap),
 	/// Wasmi loading/instantiating error

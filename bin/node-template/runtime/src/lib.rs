@@ -9,7 +9,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use sp_std::prelude::*;
-use primitives::OpaqueMetadata;
+use sp_core::OpaqueMetadata;
 use sp_runtime::{
 	ApplyExtrinsicResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
 	impl_opaque_keys, MultiSignature
@@ -18,12 +18,12 @@ use sp_runtime::traits::{
 	NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto, IdentifyAccount
 };
 use sp_api::impl_runtime_apis;
-use aura_primitives::sr25519::AuthorityId as AuraId;
+use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use grandpa::AuthorityList as GrandpaAuthorityList;
 use grandpa::fg_primitives;
-use version::RuntimeVersion;
+use sp_version::RuntimeVersion;
 #[cfg(feature = "std")]
-use version::NativeVersion;
+use sp_version::NativeVersion;
 
 // A few exports that help ease life for downstream crates.
 #[cfg(any(feature = "std", test))]
@@ -31,7 +31,7 @@ pub use sp_runtime::BuildStorage;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use sp_runtime::{Permill, Perbill};
-pub use support::{
+pub use frame_support::{
 	StorageValue, construct_runtime, parameter_types,
 	traits::Randomness,
 	weights::Weight,
@@ -58,7 +58,7 @@ pub type Balance = u128;
 pub type Index = u32;
 
 /// A hash of some data used by the chain.
-pub type Hash = primitives::H256;
+pub type Hash = sp_core::H256;
 
 /// Digest item type.
 pub type DigestItem = generic::DigestItem<Hash>;
@@ -280,7 +280,7 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signatu
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Runtime, AllModules>;
+pub type Executive = frame_executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Runtime, AllModules>;
 
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
@@ -303,7 +303,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl block_builder_api::BlockBuilder<Block> for Runtime {
+	impl sp_block_builder::BlockBuilder<Block> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 			Executive::apply_extrinsic(extrinsic)
 		}
@@ -312,14 +312,14 @@ impl_runtime_apis! {
 			Executive::finalize_block()
 		}
 
-		fn inherent_extrinsics(data: inherents::InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
+		fn inherent_extrinsics(data: sp_inherents::InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
 			data.create_extrinsics()
 		}
 
 		fn check_inherents(
 			block: Block,
-			data: inherents::InherentData,
-		) -> inherents::CheckInherentsResult {
+			data: sp_inherents::InherentData,
+		) -> sp_inherents::CheckInherentsResult {
 			data.check_extrinsics(&block)
 		}
 
@@ -334,13 +334,13 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
+	impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
 		fn offchain_worker(number: NumberFor<Block>) {
 			Executive::offchain_worker(number)
 		}
 	}
 
-	impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
+	impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
 		}

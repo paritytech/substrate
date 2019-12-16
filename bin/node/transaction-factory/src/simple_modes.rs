@@ -36,10 +36,10 @@
 use std::sync::Arc;
 
 use log::info;
-use client::Client;
-use block_builder_api::BlockBuilder;
+use sc_client::Client;
+use sp_block_builder::BlockBuilder;
 use sp_api::ConstructRuntimeApi;
-use primitives::{Blake2Hasher, Hasher};
+use sp_core::{Blake2Hasher, Hasher};
 use sp_runtime::traits::{Block as BlockT, ProvideRuntimeApi, One};
 use sp_runtime::generic::BlockId;
 
@@ -55,8 +55,8 @@ pub fn next<RA, Backend, Exec, Block, RtApi>(
 ) -> Option<Block>
 where
 	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	Exec: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	Backend: client_api::backend::Backend<Block, Blake2Hasher> + Send,
+	Exec: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	Backend: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
 		BlockBuilder<Block, Error = sp_blockchain::Error>,

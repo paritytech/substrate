@@ -23,17 +23,17 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use support::{
+use frame_support::{
 	decl_module, decl_storage, decl_event,
 	traits::{ChangeMembers, InitializeMembers},
 	weights::SimpleDispatchInfo,
 };
-use system::{ensure_root, ensure_signed};
+use frame_system::{self as system, ensure_root, ensure_signed};
 use sp_runtime::traits::EnsureOrigin;
 
-pub trait Trait<I=DefaultInstance>: system::Trait {
+pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// Required origin for adding a member (though can always be Root).
 	type AddOrigin: EnsureOrigin<Self::Origin>;
@@ -75,7 +75,7 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T, I=DefaultInstance> where
-		<T as system::Trait>::AccountId,
+		<T as frame_system::Trait>::AccountId,
 		<T as Trait<I>>::Event,
 	{
 		/// The given member was added; see the transaction for who.
@@ -221,15 +221,15 @@ mod tests {
 	use super::*;
 
 	use std::cell::RefCell;
-	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
-	use primitives::H256;
+	use frame_support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
+	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-	use system::EnsureSignedBy;
+	use frame_system::EnsureSignedBy;
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	// For testing the module, we construct most of a mock runtime. This means
@@ -243,7 +243,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -307,7 +307,7 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		GenesisConfig::<Test>{
 			members: vec![10, 20, 30],

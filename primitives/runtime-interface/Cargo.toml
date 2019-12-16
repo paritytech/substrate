@@ -5,19 +5,19 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-wasm-interface = { package = "sp-wasm-interface", path = "../wasm-interface", optional = true }
+sp-wasm-interface = { path = "../wasm-interface", optional = true }
 sp-std = { path = "../std", default-features = false }
 sp-runtime-interface-proc-macro = { path = "proc-macro" }
-externalities = { package = "sp-externalities", path = "../externalities", optional = true }
+sp-externalities = { path = "../externalities", optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false }
 environmental = { version = "1.0.2", optional = true }
 static_assertions = "1.0.0"
 primitive-types = { version = "0.6.1", default-features = false }
 
 [dev-dependencies]
-test-wasm = { package = "sp-runtime-interface-test-wasm", path = "test-wasm" }
-state_machine = { package = "sp-state-machine", path = "../../primitives/state-machine"  }
-primitives = { package = "sp-core", path = "../core" }
+sp-runtime-interface-test-wasm = { path = "test-wasm" }
+sp-state-machine = { path = "../../primitives/state-machine"  }
+sp-core = { path = "../core" }
 sp-io = { path = "../io" }
 rustversion = "1.0.0"
 trybuild = "1.0.17"
@@ -25,10 +25,10 @@ trybuild = "1.0.17"
 [features]
 default = [ "std" ]
 std = [
-	"wasm-interface",
+	"sp-wasm-interface",
 	"sp-std/std",
 	"codec/std",
-	"externalities",
+	"sp-externalities",
 	"environmental",
 	"primitive-types/std",
 ]

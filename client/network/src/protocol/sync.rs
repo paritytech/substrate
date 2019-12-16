@@ -28,9 +28,9 @@
 //!
 
 use blocks::BlockCollection;
-use client_api::ClientInfo;
+use sc_client_api::ClientInfo;
 use sp_blockchain::Error as ClientError;
-use consensus::{BlockOrigin, BlockStatus,
+use sp_consensus::{BlockOrigin, BlockStatus,
 	block_validation::{BlockAnnounceValidator, Validation},
 	import_queue::{IncomingBlock, BlockImportResult, BlockImportError}
 };
@@ -73,7 +73,7 @@ const MAJOR_SYNC_BLOCKS: u8 = 5;
 const ANNOUNCE_HISTORY_SIZE: usize = 64;
 
 mod rep {
-	use peerset::ReputationChange as Rep;
+	use sc_peerset::ReputationChange as Rep;
 	/// Reputation change when a peer sent us a message that led to a
 	/// database read error.
 	pub const BLOCKCHAIN_READ_ERROR: Rep = Rep::new(-(1 << 16), "DB Error");
@@ -230,7 +230,7 @@ pub struct Status<B: BlockT> {
 
 /// A peer did not behave as expected and should be reported.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BadPeer(pub PeerId, pub peerset::ReputationChange);
+pub struct BadPeer(pub PeerId, pub sc_peerset::ReputationChange);
 
 impl fmt::Display for BadPeer {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
