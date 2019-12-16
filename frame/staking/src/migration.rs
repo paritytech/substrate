@@ -26,7 +26,7 @@ pub const CURRENT_VERSION: VersionNumber = 2;
 mod inner {
 	use crate::{Store, Module, Trait, ValidatorInfoForEra, SessionInterface};
 	use frame_support::{StorageLinkedMap, StorageValue, StorageMap, StoragePrefixedMap};
-	use sp_std::vec::{self, Vec};
+	use sp_std::vec::Vec;
 	use super::{CURRENT_VERSION, VersionNumber};
 
 	// the minimum supported version of the migration logic.
@@ -87,13 +87,13 @@ mod inner {
 
 		<Module<T> as Store>::ValidatorForEra::insert(&current_era, current_validator_infos);
 		<Module<T> as Store>::SlotStakeForEra::insert(&current_era, current_slot_stake);
-		<Module<T> as Store>::EraStartSessionIndex::put(vec![current_era]);
+		<Module<T> as Store>::EraStartSessionIndex::put(sp_std::vec![current_era]);
 
 		<Module<T> as Store>::Stakers::remove_all();
 		<Module<T> as Store>::CurrentElected::kill();
 		<Module<T> as Store>::SlotStake::kill();
 
-		support::print("Finished migrating Staking storage to v2.");
+		frame_support::print("Finished migrating Staking storage to v2.");
 	}
 
 	pub(super) fn perform_migrations<T: Trait>() {
