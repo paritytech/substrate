@@ -530,3 +530,42 @@ fn challenges_work() {
 		assert_eq!(Society::defender(), Some(40));
 	});
 }
+
+#[test]
+fn bad_vote_slash_works() {
+	EnvBuilder::new().execute(|| {
+		// Add some members
+		assert_ok!(Society::add_member(&20));
+		assert_ok!(Society::add_member(&30));
+		assert_ok!(Society::add_member(&40));
+		// Create some payouts
+		Society::bump_payout(&10, 5, 100);
+		Society::bump_payout(&20, 5, 100);
+		Society::bump_payout(&30, 5, 100);
+		Society::bump_payout(&40, 5, 100);
+		// Check starting point
+		assert_eq!(Society::members(), vec![10, 20, 30, 40]);
+		assert_eq!(<Payouts<Test>>::get(10), vec![(5, 100)]);
+		assert_eq!(<Payouts<Test>>::get(20), vec![(5, 100)]);
+		assert_eq!(<Payouts<Test>>::get(30), vec![(5, 100)]);
+		assert_eq!(<Payouts<Test>>::get(40), vec![(5, 100)]);
+		// Create a new bid
+		assert_ok!(Society::bid(Origin::signed(50), 1000));
+		run_to_block(4);
+		assert_ok!(Society::vote(Origin::signed(10), 50, false));
+		assert_ok!(Society::vote(Origin::signed(20), 50, true));
+		assert_ok!(Society::vote(Origin::signed(30), 50, false));
+		assert_ok!(Society::vote(Origin::signed(40), 50, false));
+		run_to_block(8);
+		// Wrong voter gained a strike
+		assert_eq!(<Strikes<Test>>::get(10), 0);
+		assert_eq!(<Strikes<Test>>::get(20), 1);
+		assert_eq!(<Strikes<Test>>::get(30), 0);
+		assert_eq!(<Strikes<Test>>::get(40), 0);
+		// Their payout is slashed, a random person is rewarded
+		assert_eq!(<Payouts<Test>>::get(10), vec![(5, 100), (9,2)]);
+		assert_eq!(<Payouts<Test>>::get(20), vec![(5, 98)]);
+		assert_eq!(<Payouts<Test>>::get(30), vec![(5, 100)]);
+		assert_eq!(<Payouts<Test>>::get(40), vec![(5, 100)]);
+	});
+}

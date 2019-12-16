@@ -727,8 +727,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 	}
 
-	/// Attempt to slash the payout of some member. Return the payout block number most in the
-	/// future along with the total amount deducted.
+	/// Attempt to slash the payout of some member. Return the total amount that was deducted.
 	fn slash_payout(who: &T::AccountId, value: BalanceOf<T, I>) -> BalanceOf<T, I> {
 		let mut rest = value;
 		let mut payouts = <Payouts<T, I>>::get(who);
