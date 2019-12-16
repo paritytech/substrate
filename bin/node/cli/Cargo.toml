@@ -97,6 +97,7 @@ sc-consensus-babe = { path = "../../../client/consensus/babe", features = ["test
 sc-service-test = { path = "../../../client/service/test" }
 futures = "0.3.1"
 tempfile = "3.1.0"
+wasm-bindgen-test = "0.3.5"
 
 [build-dependencies]
 sc-cli = { package = "sc-cli", path = "../../../client/cli" }
