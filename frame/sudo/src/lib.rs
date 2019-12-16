@@ -92,7 +92,7 @@ use sp_runtime::{
 };
 
 use frame_support::{
-	Parameter, decl_module, decl_event, decl_storage, ensure,
+	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 	weights::SimpleDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed};
