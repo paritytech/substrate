@@ -105,6 +105,7 @@ use crate::wasm::{WasmLoader, WasmVm};
 
 pub use crate::gas::{Gas, GasMeter};
 pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
+use core::u32;
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};

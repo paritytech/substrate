@@ -740,7 +740,7 @@ impl<T: Trait> Module<T> {
 		let (set_index, vec_index) = Self::split_index(index, VOTER_SET_SIZE);
 		let mut set = Self::voters(set_index);
 		let r = &mut set[vec_index];
-		ensure!(r.is_some(), "cannot remove nonexistent votor");
+		debug_assert!(r.is_some(), "cannot remove nonexistent votor");
 		set[vec_index] = None;
 		<Voters<T>>::insert(set_index, set);
 		// cannot overflow: votor count will not exceed u32::MAX

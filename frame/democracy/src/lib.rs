@@ -22,7 +22,7 @@ use sp_std::prelude::*;
 use sp_std::{result, convert::TryFrom};
 use sp_runtime::{
 	RuntimeDebug,
-	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable, Saturating},
+	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable, Saturating, CheckedAdd},
 };
 use codec::{Ref, Encode, Decode, Input, Output, Error};
 use frame_support::{
@@ -732,7 +732,7 @@ decl_module! {
 			let now = <frame_system::Module<T>>::block_number();
 			let (voting, enactment) = (T::VotingPeriod::get(), T::EnactmentPeriod::get());
 			let additional = if who == old { Zero::zero() } else { enactment };
-			ensure!(now >= then.checked_add(voting + additional).ok_or("overflow")?, "too early");
+			ensure!(now >= then.checked_add(&(voting + additional)).ok_or("overflow")?, "too early");
 
 			let queue = <DispatchQueue<T>>::get();
 			ensure!(!queue.iter().any(|item| &item.1 == &proposal_hash), "imminent");
@@ -751,7 +751,7 @@ impl<T: Trait> Module<T> {
 	/// index.
 	pub fn locked_for(proposal: PropIndex) -> Option<BalanceOf<T>> {
 		// ERROR what is the best solution here?
-		Self::deposit_of(proposal).map(|(d, l)| d.saturating_mul(l.len() as u32).into())
+		Self::deposit_of(proposal).map(|(d, l)| d * (l.len() as u32).into())
 	}
 
 	/// Return true if `ref_index` is an on-going referendum.

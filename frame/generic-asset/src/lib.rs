@@ -705,11 +705,7 @@ impl<T: Trait> Module<T> {
 		let slash = sp_std::cmp::min(b, amount);
 
 		let original_free_balance = Self::free_balance(asset_id, beneficiary);
-
-		if T::Balance::max_value() - slash > original_free_balance {
-			return Err("overflow")
-		}
-		let new_free_balance = original_free_balance + slash;
+		let new_free_balance = original_free_balance.saturating_add(slash);
 		Self::set_free_balance(asset_id, beneficiary, new_free_balance);
 
 		let new_reserve_balance = b - slash;

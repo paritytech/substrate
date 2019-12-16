@@ -169,6 +169,7 @@ use frame_support::{
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, VestingCurrency,
 	},
+	ensure,
 	weights::SimpleDispatchInfo,
 	dispatch::Result,
 };
@@ -253,6 +254,12 @@ impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type TransferFee = T::TransferFee;
 	type CreationFee = T::CreationFee;
+}
+
+macro_rules! check_overflow {
+	($s:ty, $v1:expr, $v2:expr) => {
+		ensure!(<$s>::Balance::max_value() - $v1 >= $v2, "new amount would overflow")
+	}
 }
 
 decl_event!(
@@ -1030,9 +1037,8 @@ where
 		value: Self::Balance,
 	) -> Self::PositiveImbalance {
 		let free_balance = Self::free_balance(who);
-		check_overflow!(Self::Balance::max_value() - value >= free_balance, "deposit would overflow");
 		// checked for overflow above
-		let (imbalance, _) = Self::make_free_balance_be(who, free_balance + value);
+		let (imbalance, _) = Self::make_free_balance_be(who, free_balance.saturating_add(value));
 		if let SignedImbalance::Positive(p) = imbalance {
 			p
 		} else {
@@ -1085,12 +1091,6 @@ where
 			UpdateBalanceOutcome::Updated
 		};
 		(imbalance, outcome)
-	}
-}
-
-macro_rules! check_overflow {
-	(s: $ty, v1: $expr, v2: $expr) => {
-		ensure!($s::Balance::max_value() - $v1 >= $v2, "new amount would overflow")
 	}
 }
 

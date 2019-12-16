@@ -29,6 +29,7 @@ use sp_runtime::traits::{Bounded, Zero};
 use frame_support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
 use frame_support::{storage::child, StorageMap};
 use frame_system;
+use core::u32;
 
 // Note: we don't provide Option<Contract> because we can't create
 // the trie_id in the overlay, thus we provide an overlay on the fields
@@ -225,7 +226,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 						new_info.storage_size -= value.len() as u32;
 					}
 					if let Some(value) = v {
-						assert!(u32::MAX >= value.len());
+						assert!(u32::MAX as usize >= value.len());
 						assert!(u32::MAX - new_info.storage_size >= value.len() as u32);
 						new_info.storage_size += value.len() as u32;
 						child::put_raw(&new_info.trie_id[..], new_info.child_trie_unique_id(), &blake2_256(&k), &value[..]);
