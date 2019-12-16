@@ -38,7 +38,7 @@ wabt = "0.9.2"
 hex-literal = "0.2.1"
 sc-runtime-test = { path = "runtime-test" }
 substrate-test-runtime = { path = "../../test-utils/runtime" }
-sp-state-machine = { path = "../../primitives/state-machine"  }
+sp-state-machine = {  path = "../../primitives/state-machine" }
 test-case = "0.3.3"
 
 [features]

@@ -12,7 +12,7 @@ log = "0.4.8"
 env_logger = "0.7.0"
 fdlimit = "0.1.1"
 futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
-sc-service = { path = "../../service", default-features = false }
+sc-service = { default-features = false,  path = "../../service" }
 sc-network = { path = "../../network" }
 sp-consensus = { path = "../../../primitives/consensus/common" }
 sc-client = { path = "../../" }

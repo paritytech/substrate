@@ -6,10 +6,10 @@ description = "Primitives for Aura consensus"
 edition = "2018"
 
 [dependencies]
-sp-api = { path = "../../api", default-features = false }
-sp-std = { path = "../../std", default-features = false }
-sp-runtime = { path = "../../runtime", default-features = false }
-sp-core = { path = "../../core", default-features = false }
+sp-api = { default-features = false,  path = "../../api" }
+sp-std = { default-features = false,  path = "../../std" }
+sp-runtime = { default-features = false,  path = "../../runtime" }
+sp-core = { default-features = false,  path = "../../core" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 
 [features]

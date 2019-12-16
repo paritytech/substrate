@@ -26,7 +26,7 @@ sp-blockchain = { path = "../../primitives/blockchain" }
 sc-network = { path = "../network" }
 sp-runtime = { path = "../../primitives/runtime" }
 sp-core = { path = "../../primitives/core" }
-sc-service = { path = "../service", default-features = false }
+sc-service = { default-features = false,  path = "../service" }
 sp-state-machine = { path = "../../primitives/state-machine" }
 sc-telemetry = { path = "../telemetry" }
 sp-keyring = { path = "../../primitives/keyring" }

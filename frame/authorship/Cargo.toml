@@ -6,14 +6,14 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sp-core = { path = "../../primitives/core", default-features = false }
+sp-core = { default-features = false,  path = "../../primitives/core" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-inherents = { path = "../../primitives/inherents", default-features = false }
-sp-authorship = { path = "../../primitives/authorship", default-features = false }
-sp-std = { path = "../../primitives/std", default-features = false }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
-frame-support = { path = "../support", default-features = false }
-frame-system = { path = "../system", default-features = false }
+sp-inherents = { default-features = false,  path = "../../primitives/inherents" }
+sp-authorship = { default-features = false,  path = "../../primitives/authorship" }
+sp-std = { default-features = false,  path = "../../primitives/std" }
+sp-runtime = { default-features = false,  path = "../../primitives/runtime" }
+frame-support = { default-features = false,  path = "../support" }
+frame-system = { default-features = false,  path = "../system" }
 sp-io ={ path = "../../primitives/io", default-features = false }
 impl-trait-for-tuples = "0.1.3"
 

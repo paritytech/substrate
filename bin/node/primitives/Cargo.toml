@@ -5,8 +5,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sp-core = { path = "../../../primitives/core", default-features = false }
-sp-runtime = { path = "../../../primitives/runtime", default-features = false }
+sp-core = { default-features = false,  path = "../../../primitives/core" }
+sp-runtime = { default-features = false,  path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 sp-serializer = { path = "../../../primitives/serializer" }

@@ -42,9 +42,9 @@ smallvec = "0.6.10"
 tokio-io = "0.1.12"
 tokio = { version = "0.1.22", optional = true }
 unsigned-varint = { version = "0.2.2", features = ["codec"] }
-sp-keyring = { path = "../../primitives/keyring", optional = true }
-substrate-test-client = { path = "../../test-utils/client", optional = true }
-substrate-test-runtime-client = { path = "../../test-utils/runtime/client", optional = true }
+sp-keyring = { optional = true,  path = "../../primitives/keyring" }
+substrate-test-client = { optional = true,  path = "../../test-utils/client" }
+substrate-test-runtime-client = { optional = true,  path = "../../test-utils/runtime/client" }
 erased-serde = "0.3.9"
 void = "1.0.2"
 zeroize = "1.0.0"
