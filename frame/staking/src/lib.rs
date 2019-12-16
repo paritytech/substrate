@@ -1661,7 +1661,9 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> pallet_session::OnSessionEnding<T::AccountId> for Module<T> {
-	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex) -> Option<Vec<T::AccountId>> {
+	fn on_session_ending(session_ending: SessionIndex, will_apply_at: SessionIndex)
+		-> Option<Vec<T::AccountId>>
+	{
 		<Self as OnSessionEnding<_, _>>::on_session_ending(session_ending, will_apply_at)
 			.map(|(new, _old)| new)
 	}

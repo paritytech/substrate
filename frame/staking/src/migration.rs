@@ -26,7 +26,7 @@ pub const CURRENT_VERSION: VersionNumber = 2;
 mod inner {
 	use crate::{Store, Module, Trait, ValidatorInfoForEra, SessionInterface};
 	use frame_support::{StorageLinkedMap, StorageValue, StorageMap, StoragePrefixedMap};
-	use sp_std::vec::Vec;
+	use sp_std::vec::{self, Vec};
 	use super::{CURRENT_VERSION, VersionNumber};
 
 	// the minimum supported version of the migration logic.
