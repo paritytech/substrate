@@ -22,20 +22,20 @@ use crate::rent;
 
 use sp_std::prelude::*;
 use sp_runtime::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
-use support::{
+use frame_support::{
 	storage::unhashed,
 	traits::{WithdrawReason, Currency, Time, Randomness},
 };
 
-pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
+pub type AccountIdOf<T> = <T as frame_system::Trait>::AccountId;
 pub type CallOf<T> = <T as Trait>::Call;
 pub type MomentOf<T> = <<T as Trait>::Time as Time>::Moment;
-pub type SeedOf<T> = <T as system::Trait>::Hash;
-pub type BlockNumberOf<T> = <T as system::Trait>::BlockNumber;
+pub type SeedOf<T> = <T as frame_system::Trait>::Hash;
+pub type BlockNumberOf<T> = <T as frame_system::Trait>::BlockNumber;
 pub type StorageKey = [u8; 32];
 
 /// A type that represents a topic of an event. At the moment a hash is used.
-pub type TopicOf<T> = <T as system::Trait>::Hash;
+pub type TopicOf<T> = <T as frame_system::Trait>::Hash;
 
 /// A status code return to the source of a contract call or instantiation indicating success or
 /// failure. A code of 0 indicates success and that changes are applied. All other codes indicate
@@ -304,7 +304,7 @@ where
 			vm: &vm,
 			loader: &loader,
 			timestamp: T::Time::now(),
-			block_number: <system::Module<T>>::block_number(),
+			block_number: <frame_system::Module<T>>::block_number(),
 		}
 	}
 
@@ -871,7 +871,7 @@ mod tests {
 
 		fn insert(&mut self, f: impl Fn(MockCtx) -> ExecResult + 'a) -> CodeHash<Test> {
 			// Generate code hashes as monotonically increasing values.
-			let code_hash = <Test as system::Trait>::Hash::from_low_u64_be(self.counter);
+			let code_hash = <Test as frame_system::Trait>::Hash::from_low_u64_be(self.counter);
 
 			self.counter += 1;
 			self.map.insert(code_hash, MockExecutable::new(f));

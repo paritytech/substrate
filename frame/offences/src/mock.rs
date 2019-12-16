@@ -29,11 +29,11 @@ use sp_staking::{
 use sp_runtime::testing::Header;
 use sp_runtime::traits::{IdentityLookup, BlakeTwo256};
 use sp_core::H256;
-use support::{
+use frame_support::{
 	impl_outer_origin, impl_outer_event, parameter_types, StorageMap, StorageDoubleMap,
 	weights::Weight,
 };
-use {sp_io, system};
+use frame_system as system;
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
@@ -72,7 +72,7 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl system::Trait for Runtime {
+impl frame_system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -107,13 +107,13 @@ impl_outer_event! {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	t.into()
 }
 
 /// Offences module.
 pub type Offences = Module<Runtime>;
-pub type System = system::Module<Runtime>;
+pub type System = frame_system::Module<Runtime>;
 
 pub const KIND: [u8; 16] = *b"test_report_1234";
 

@@ -5,17 +5,17 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-authority-discovery-primitives = { package = "sp-authority-discovery", path = "../../primitives/authority-discovery", default-features = false }
-app-crypto = { package = "sp-application-crypto", path = "../../primitives/application-crypto", default-features = false }
+sp-authority-discovery = { path = "../../primitives/authority-discovery", default-features = false }
+sp-application-crypto = { path = "../../primitives/application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
+sp-core = { path = "../../primitives/core", default-features = false }
 sp-std = { path = "../../primitives/std", default-features = false }
 serde = { version = "1.0.101", optional = true }
 sp-io = { path = "../../primitives/io", default-features = false }
-session = { package = "pallet-session", path = "../session", default-features = false, features = ["historical" ] }
+pallet-session = { path = "../session", default-features = false, features = ["historical" ] }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
+frame-support = { path = "../support", default-features = false }
+frame-system = { path = "../system", default-features = false }
 
 [dev-dependencies]
 sp-staking = { path = "../../primitives/staking", default-features = false }
@@ -23,15 +23,15 @@ sp-staking = { path = "../../primitives/staking", default-features = false }
 [features]
 default = ["std"]
 std = [
-	"app-crypto/std",
-	"authority-discovery-primitives/std",
+	"sp-application-crypto/std",
+	"sp-authority-discovery/std",
 	"codec/std",
-	"primitives/std",
+	"sp-core/std",
 	"sp-io/std",
 	"sp-std/std",
 	"serde",
-	"session/std",
+	"pallet-session/std",
 	"sp-runtime/std",
-	"support/std",
-	"system/std",
+	"frame-support/std",
+	"frame-system/std",
 ]

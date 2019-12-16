@@ -16,16 +16,16 @@
 
 use std::collections::{HashMap, HashSet};
 
-use client::Client;
-use client_api::{CallExecutor, backend::Backend};
+use sc_client::Client;
+use sc_client_api::{CallExecutor, backend::Backend};
 use sp_blockchain::Error as ClientError;
-use codec::{Encode, Decode};
-use grandpa::voter_set::VoterSet;
-use grandpa::{Error as GrandpaError};
+use parity_scale_codec::{Encode, Decode};
+use finality_grandpa::voter_set::VoterSet;
+use finality_grandpa::{Error as GrandpaError};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT, Header as HeaderT};
-use primitives::{H256, Blake2Hasher};
-use fg_primitives::{check_message_signature, AuthorityId};
+use sp_core::{H256, Blake2Hasher};
+use sp_finality_grandpa::{check_message_signature, AuthorityId};
 
 use crate::{Commit, Error};
 
@@ -97,7 +97,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		set_id: u64,
 		voters: &VoterSet<AuthorityId>,
 	) -> Result<GrandpaJustification<Block>, ClientError> where
-		NumberFor<Block>: grandpa::BlockNumberOps,
+		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 	{
 
 		let justification = GrandpaJustification::<Block>::decode(&mut &*encoded)
@@ -114,13 +114,13 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	/// Validate the commit and the votes' ancestry proofs.
 	pub(crate) fn verify(&self, set_id: u64, voters: &VoterSet<AuthorityId>) -> Result<(), ClientError>
 	where
-		NumberFor<Block>: grandpa::BlockNumberOps,
+		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 	{
-		use grandpa::Chain;
+		use finality_grandpa::Chain;
 
 		let ancestry_chain = AncestryChain::<Block>::new(&self.votes_ancestries);
 
-		match grandpa::validate_commit(
+		match finality_grandpa::validate_commit(
 			&self.commit,
 			voters,
 			&ancestry_chain,
@@ -135,7 +135,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		let mut visited_hashes = HashSet::new();
 		for signed in self.commit.precommits.iter() {
 			if let Err(_) = check_message_signature(
-				&grandpa::Message::Precommit(signed.precommit.clone()),
+				&finality_grandpa::Message::Precommit(signed.precommit.clone()),
 				&signed.id,
 				&signed.signature,
 				self.round,
@@ -178,7 +178,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	}
 }
 
-/// A utility trait implementing `grandpa::Chain` using a given set of headers.
+/// A utility trait implementing `finality_grandpa::Chain` using a given set of headers.
 /// This is useful when validating commits, using the given set of headers to
 /// verify a valid ancestry route to the target commit block.
 struct AncestryChain<Block: BlockT> {
@@ -197,8 +197,8 @@ impl<Block: BlockT> AncestryChain<Block> {
 	}
 }
 
-impl<Block: BlockT> grandpa::Chain<Block::Hash, NumberFor<Block>> for AncestryChain<Block> where
-	NumberFor<Block>: grandpa::BlockNumberOps
+impl<Block: BlockT> finality_grandpa::Chain<Block::Hash, NumberFor<Block>> for AncestryChain<Block> where
+	NumberFor<Block>: finality_grandpa::BlockNumberOps
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
 		let mut route = Vec::new();

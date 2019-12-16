@@ -19,19 +19,19 @@ use codec::{Encode, Decode};
 use sp_runtime::{
 	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
 };
-use state_machine::{
+use sp_state_machine::{
 	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
 	backend::Backend as _, ChangesTrieTransaction, StorageProof,
 };
-use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
-use externalities::Extensions;
+use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
+use sp_externalities::Extensions;
 use hash_db::Hasher;
-use primitives::{
+use sp_core::{
 	H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue,
 	traits::CodeExecutor,
 };
 use sp_api::{ProofRecorder, InitializeBlock};
-use client_api::{backend, call_executor::CallExecutor};
+use sc_client_api::{backend, call_executor::CallExecutor};
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
@@ -138,11 +138,11 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 			Some(recorder) => {
 				let trie_state = state.as_trie_backend()
 					.ok_or_else(||
-						Box::new(state_machine::ExecutionError::UnableToGenerateProof)
-							as Box<dyn state_machine::Error>
+						Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
+							as Box<dyn sp_state_machine::Error>
 					)?;
 
-				let backend = state_machine::ProvingBackend::new_with_recorder(
+				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
 					trie_state,
 					recorder.clone()
 				);
@@ -206,7 +206,7 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 	}
 
 	fn call_at_state<
-		S: state_machine::Backend<Blake2Hasher>,
+		S: sp_state_machine::Backend<Blake2Hasher>,
 		F: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -247,14 +247,14 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 		.map_err(Into::into)
 	}
 
-	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<Blake2Hasher>>(
+	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<Blake2Hasher>>(
 		&self,
-		trie_state: &state_machine::TrieBackend<S, Blake2Hasher>,
+		trie_state: &sp_state_machine::TrieBackend<S, Blake2Hasher>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
-		state_machine::prove_execution_on_trie_backend(
+		sp_state_machine::prove_execution_on_trie_backend(
 			trie_state,
 			overlay,
 			&self.executor,
@@ -269,20 +269,20 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 	}
 }
 
-impl<B, E, Block> runtime_version::GetRuntimeVersion<Block> for LocalCallExecutor<B, E>
+impl<B, E, Block> sp_version::GetRuntimeVersion<Block> for LocalCallExecutor<B, E>
 	where
 		B: backend::Backend<Block, Blake2Hasher>,
 		E: CodeExecutor + RuntimeInfo,
 		Block: BlockT<Hash=H256>,
 {
-	fn native_version(&self) -> &runtime_version::NativeVersion {
+	fn native_version(&self) -> &sp_version::NativeVersion {
 		self.executor.native_version()
 	}
 
 	fn runtime_version(
 		&self,
 		at: &BlockId<Block>,
-	) -> Result<runtime_version::RuntimeVersion, String> {
+	) -> Result<sp_version::RuntimeVersion, String> {
 		CallExecutor::runtime_version(self, at).map_err(|e| format!("{:?}", e))
 	}
 }

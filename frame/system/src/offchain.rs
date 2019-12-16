@@ -21,7 +21,7 @@ use sp_std::convert::TryInto;
 use sp_std::prelude::Vec;
 use sp_runtime::app_crypto::{RuntimeAppPublic, AppPublic, AppSignature};
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount};
-use support::debug;
+use frame_support::debug;
 
 /// Creates runtime-specific signed transaction.
 ///

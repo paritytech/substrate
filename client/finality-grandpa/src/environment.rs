@@ -17,31 +17,32 @@
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use log::{debug, warn, info};
-use codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode};
 use futures::prelude::*;
-use tokio_timer::Delay;
+use futures03::future::{FutureExt as _, TryFutureExt as _};
+use futures_timer::Delay;
 use parking_lot::RwLock;
 use sp_blockchain::{HeaderBackend, Error as ClientError};
 
-use client_api::{
+use sc_client_api::{
 	BlockchainEvents,
 	backend::{Backend},
 	Finalizer,
 	call_executor::CallExecutor,
 	utils::is_descendent_of,
 };
-use client::{
+use sc_client::{
 	apply_aux, Client,
 };
-use grandpa::{
+use finality_grandpa::{
 	BlockNumberOps, Error as GrandpaError, round::State as RoundState,
-	self, voter, voter_set::VoterSet,
+	voter, voter_set::VoterSet,
 };
 use sp_blockchain::HeaderMetadata;
-use primitives::{Blake2Hasher, H256, Pair};
+use sp_core::{Blake2Hasher, H256, Pair};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, ProvideRuntimeApi, Zero,
@@ -50,23 +51,23 @@ use sp_session::SessionMembership;
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
-	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
+	CommandOrError, Commit, Config, Error, Precommit, Prevote,
 	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
 };
 
-use consensus_common::SelectChain;
+use sp_consensus::SelectChain;
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
-use fg_primitives::{
+use sp_finality_grandpa::{
 	AuthorityId, AuthoritySignature, Equivocation, EquivocationReport,
 	GrandpaApi, RoundNumber, SetId,
 };
 
-type HistoricalVotes<Block> = grandpa::HistoricalVotes<
+type HistoricalVotes<Block> = finality_grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
@@ -109,10 +110,10 @@ impl<Block: BlockT> Encode for CompletedRounds<Block> {
 	}
 }
 
-impl<Block: BlockT> codec::EncodeLike for CompletedRounds<Block> {}
+impl<Block: BlockT> parity_scale_codec::EncodeLike for CompletedRounds<Block> {}
 
 impl<Block: BlockT> Decode for CompletedRounds<Block> {
-	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
+	fn decode<I: parity_scale_codec::Input>(value: &mut I) -> Result<Self, parity_scale_codec::Error> {
 		<(Vec<CompletedRound<Block>>, SetId, Vec<AuthorityId>)>::decode(value)
 			.map(|(rounds, set_id, voters)| CompletedRounds {
 				rounds: rounds.into(),
@@ -380,7 +381,7 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, PRA, SC, VR> {
+pub(crate) struct Environment<B, E, Block: BlockT, RA, PRA, SC, VR> {
 	pub(crate) client: Arc<Client<B, E, Block, RA>>,
 	pub(crate) api: Arc<PRA>,
 	pub(crate) select_chain: SC,
@@ -388,13 +389,13 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, PRA, S
 	pub(crate) config: Config,
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
+	pub(crate) network: crate::communication::NetworkBridge<Block>,
 	pub(crate) set_id: SetId,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) voting_rule: VR,
 }
 
-impl<B, E, Block: BlockT, N: Network<Block>, PRA, RA, SC, VR> Environment<B, E, Block, N, RA, PRA, SC, VR> {
+impl<B, E, Block: BlockT, PRA, RA, SC, VR> Environment<B, E, Block, RA, PRA, SC, VR> {
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
@@ -410,15 +411,13 @@ impl<B, E, Block: BlockT, N: Network<Block>, PRA, RA, SC, VR> Environment<B, E, 
 	}
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA, PRA, SC, VR>
-	grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, PRA, SC, VR>
+impl<Block: BlockT<Hash=H256>, B, E, RA, PRA, SC, VR>
+	finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
+for Environment<B, E, Block, RA, PRA, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network<Block> + 'static,
-	N::In: 'static,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
 	RA: Send + Sync,
@@ -561,15 +560,13 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, N, RA, PRA, SC, VR>
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, VR>
 	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, PRA, SC, VR>
+for Environment<B, E, Block, RA, PRA, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
-	N: Network<Block> + 'static + Send,
-	N::In: 'static + Send,
 	RA: 'static + Send + Sync,
 	PRA: ProvideRuntimeApi,
 	PRA::Api: GrandpaApi<Block> + SessionMembership<Block>,
@@ -583,11 +580,11 @@ where
 
 	// regular round message streams
 	type In = Box<dyn Stream<
-		Item = grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
+		Item = ::finality_grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
 		Error = Self::Error,
 	> + Send>;
 	type Out = Box<dyn Sink<
-		SinkItem = grandpa::Message<Block::Hash, NumberFor<Block>>,
+		SinkItem = ::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
 		SinkError = Self::Error,
 	> + Send>;
 
@@ -597,9 +594,8 @@ where
 		&self,
 		round: RoundNumber,
 	) -> voter::RoundData<Self::Id, Self::Timer, Self::In, Self::Out> {
-		let now = Instant::now();
-		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
-		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
+		let prevote_timer = Delay::new(self.config.gossip_duration * 2);
+		let precommit_timer = Delay::new(self.config.gossip_duration * 4);
 
 		let local_key = crate::is_voter(&self.voters, &self.config.keystore);
 
@@ -637,8 +633,8 @@ where
 
 		voter::RoundData {
 			voter_id: local_key.map(|pair| pair.public()),
-			prevote_timer: Box::new(prevote_timer.map_err(|e| Error::Timer(e).into())),
-			precommit_timer: Box::new(precommit_timer.map_err(|e| Error::Timer(e).into())),
+			prevote_timer: Box::new(prevote_timer.map(Ok).compat()),
+			precommit_timer: Box::new(precommit_timer.map(Ok).compat()),
 			incoming,
 			outgoing,
 		}
@@ -912,15 +908,13 @@ where
 
 		//random between 0-1 seconds.
 		let delay: u64 = thread_rng().gen_range(0, 1000);
-		Box::new(Delay::new(
-			Instant::now() + Duration::from_millis(delay)
-		).map_err(|e| Error::Timer(e).into()))
+		Box::new(Delay::new(Duration::from_millis(delay)).map(Ok).compat())
 	}
 
 	fn prevote_equivocation(
 		&self,
 		_round: RoundNumber,
-		equivocation: grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
+		equivocation: finality_grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		report_equivocation(
@@ -935,7 +929,7 @@ where
 	fn precommit_equivocation(
 		&self,
 		_round: RoundNumber,
-		equivocation: grandpa::Equivocation<Self::Id, Precommit<Block>, Self::Signature>
+		equivocation: finality_grandpa::Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
 		report_equivocation(
@@ -1012,7 +1006,7 @@ fn report_equivocation<Block, B, PRA, SC>(
 	let membership_proof = api.runtime_api()
 		.generate_session_membership_proof(
 			&BlockId::Hash(current_set_latest_header.hash()),
-			(fg_primitives::KEY_TYPE, equivocation.offender().encode()),
+			(sp_finality_grandpa::KEY_TYPE, equivocation.offender().encode()),
 		)
 		.unwrap()
 		.unwrap();

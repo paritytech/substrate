@@ -28,7 +28,7 @@ use crate::host::*;
 use crate::wasm::*;
 
 #[cfg(feature = "std")]
-use wasm_interface::{FunctionContext, Pointer, Result};
+use sp_wasm_interface::{FunctionContext, Pointer, Result};
 
 use sp_std::{marker::PhantomData, convert::TryFrom};
 

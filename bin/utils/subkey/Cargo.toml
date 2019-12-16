@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-primitives = { package = "sp-core",  version = "*", path = "../../../primitives/core" }
+sp-core = { version = "*", path = "../../../primitives/core" }
 node-runtime = { version = "*", path = "../../node/runtime" }
 node-primitives = { version = "*", path = "../../node/primitives" }
 sp-runtime = { version = "*", path = "../../../primitives/runtime" }
@@ -17,9 +17,9 @@ substrate-bip39 = "0.3.1"
 hex = "0.4.0"
 hex-literal = "0.2.1"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-system = { package = "frame-system", path = "../../../frame/system" }
-balances = { package = "pallet-balances", path = "../../../frame/balances" }
-transaction-payment = { package = "pallet-transaction-payment", path = "../../../frame/transaction-payment" }
+frame-system = { path = "../../../frame/system" }
+pallet-balances = { path = "../../../frame/balances" }
+pallet-transaction-payment = { path = "../../../frame/transaction-payment" }
 
 [features]
 bench = []
