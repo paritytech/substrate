@@ -31,6 +31,8 @@ pub trait FetchPrice<Balance> {
 	fn fetch_price() -> Balance;
 }
 
+const MODULE_ID: LockIdentifier = *b"py/fun__";
+
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
@@ -52,6 +54,7 @@ pub trait Trait: balances::Trait {
 // Period
 // 0 0 0 1 1 1 2 2 2 3
 //
+
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -252,8 +255,16 @@ decl_module! {
 			// We've been wiped out: kill entry.
 			if balance_at_stake_is_zero {
 				<Bets<T>>::remove(&sender)
+				T::Currency::remove_lock(MODULE_ID, who);
+			} else {
+				T::Currency::set_lock(
+					MODULE_ID,
+					&sender,
+					<BalanceOf<T>>::max_value(),
+					T::BlockNumber::max_value(),
+					WithdrawReasons::except(WithdrawReason::TransactionPayment),
+				);
 			}
-
 //			println!("{:?}", <Bets<T>>::get(&sender));
 		}
 
@@ -300,6 +311,7 @@ decl_module! {
 			// We've been wiped out: kill entry.
 			if balance_at_stake_is_zero {
 				<Bets<T>>::remove(&sender)
+				T::Currency::remove_lock(MODULE_ID, who);
 			}
 		}
 
@@ -315,6 +327,7 @@ decl_module! {
 
 			if is_unlocked {
 				<Bets<T>>::remove(&sender);
+				T::Currency::remove_lock(MODULE_ID, who);
 			}
 		}
 
