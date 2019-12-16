@@ -550,7 +550,7 @@ decl_module! {
 			let (subs_deposit, sub_ids) = <SubsOf<T>>::take(&sender);
 			let deposit = <IdentityOf<T>>::take(&sender).ok_or("not named")?.total_deposit()
 				+ subs_deposit;
-			for sub in subs_ids.iter() {
+			for sub in sub_ids.iter() {
 				<SuperOf<T>>::remove(sub);
 			}
 
@@ -806,10 +806,10 @@ decl_module! {
 			// Figure out who we're meant to be clearing.
 			let target = T::Lookup::lookup(target)?;
 			// Grab their deposit (and check that they have one).
-			let (subs_deposit, sub_ids) = <SubsOf<T>>::take(&sender);
+			let (subs_deposit, sub_ids) = <SubsOf<T>>::take(&target);
 			let deposit = <IdentityOf<T>>::take(&target).ok_or("not named")?.total_deposit()
 				+ subs_deposit;
-			for sub in subs_ids.iter() {
+			for sub in sub_ids.iter() {
 				<SuperOf<T>>::remove(sub);
 			}
 			// Slash their deposit from them.
@@ -1019,36 +1019,56 @@ mod tests {
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 			assert_eq!(Balances::free_balance(10), 80);
 			assert_eq!(Identity::subs(10), (10, vec![20]));
-			assert_eq!(Identity::super_of(10), Some((10, Data::Raw(vec![40; 1]))));
+			assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1]))));
 
+			// push another item and re-set it.
+			subs.push((30, Data::Raw(vec![50; 1])));
+			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
+			assert_eq!(Balances::free_balance(10), 70);
+			assert_eq!(Identity::subs(10), (20, vec![20, 30]));
+			assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1]))));
+			assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1]))));
+
+			// switch out one of the items and re-set.
+			subs[0] = (40, Data::Raw(vec![60; 1]));
+			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
+			assert_eq!(Balances::free_balance(10), 70); // no change in the balance
+			assert_eq!(Identity::subs(10), (20, vec![40, 30]));
+			assert_eq!(Identity::super_of(20), None);
+			assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1]))));
+			assert_eq!(Identity::super_of(40), Some((10, Data::Raw(vec![60; 1]))));
+
+			// clear
 			assert_ok!(Identity::set_subs(Origin::signed(10), vec![]));
 			assert_eq!(Balances::free_balance(10), 90);
 			assert_eq!(Identity::subs(10), (0, vec![]));
+			assert_eq!(Identity::super_of(30), None);
+			assert_eq!(Identity::super_of(40), None);
 
-			subs.push((30, Data::Raw(vec![41; 1])));
-			subs.push((40, Data::Raw(vec![42; 1])));
+			subs.push((20, Data::Raw(vec![40; 1])));
 			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone()), "too many subs");
 		});
 	}
 
 	#[test]
-	fn setting_subaccounts_should_work() {
+	fn clearing_account_should_remove_subaccounts_and_refund() {
 		new_test_ext().execute_with(|| {
-			let mut subs = vec![(20, Data::Raw(vec![40; 1]))];
-			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone()), "not found");
-
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
+			assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1]))]));
+			assert_ok!(Identity::clear_identity(Origin::signed(10)));
+			assert_eq!(Balances::free_balance(10), 100);
+			assert!(Identity::super_of(20).is_none());
+		});
+	}
+
+	#[test]
+	fn killing_account_should_remove_subaccounts_and_not_refund() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+			assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1]))]));
+			assert_ok!(Identity::kill_identity(Origin::ROOT, 10));
 			assert_eq!(Balances::free_balance(10), 80);
-			assert_eq!(Identity::subs(10), (10, subs.clone()));
-
-			assert_ok!(Identity::set_subs(Origin::signed(10), vec![]));
-			assert_eq!(Balances::free_balance(10), 90);
-			assert_eq!(Identity::subs(10), (0, vec![]));
-
-			subs.push((30, Data::Raw(vec![41; 1])));
-			subs.push((40, Data::Raw(vec![42; 1])));
-			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone()), "too many subs");
+			assert!(Identity::super_of(20).is_none());
 		});
 	}
 
