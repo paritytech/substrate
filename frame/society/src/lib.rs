@@ -699,7 +699,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 				// Then write everything back out, signal the changed membership and leave an event.
 				members.sort();
-				<Members<T, I>>::put(members.clone());
+				<Members<T, I>>::put(&members[..]);
 				<Head<T, I>>::put(&primary);
 
 				T::MembershipChanged::change_members_sorted(&accounts, &[], &members);
