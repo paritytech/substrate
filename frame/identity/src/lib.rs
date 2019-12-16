@@ -687,7 +687,7 @@ decl_module! {
 		/// - One storage mutation `O(R)`.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn set_account(origin,
+		fn set_account_id(origin,
 			#[compact] index: RegistrarIndex,
 			new: T::AccountId,
 		) -> Result {
@@ -1131,6 +1131,19 @@ mod tests {
 				], .. Default::default()
 			}));
 			assert_eq!(Balances::free_balance(10), 70);
+		});
+	}
+
+	#[test]
+	fn setting_account_id_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			// account 4 cannot change the first registrar's identity since it's owned by 3.
+			assert_noop!(Identity::set_account_id(Origin::signed(4), 0, 3), "invalid index");
+			// account 3 can, because that's the registrar's current account.
+			assert_ok!(Identity::set_account_id(Origin::signed(3), 0, 4));
+			// account 4 can now, because that's their new ID.
+			assert_ok!(Identity::set_account_id(Origin::signed(4), 0, 3));
 		});
 	}
 }
