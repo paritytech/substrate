@@ -20,7 +20,7 @@
 
 use sp_runtime::{traits::Block as BlockT, ApplyExtrinsicResult};
 
-use inherents::{InherentData, CheckInherentsResult};
+use sp_inherents::{InherentData, CheckInherentsResult};
 
 /// Definitions for supporting the older version of API: v3
 ///

@@ -19,17 +19,17 @@ use crate::{
 	wasm_runtime::{RuntimesCache, WasmExecutionMethod, WasmRuntime},
 };
 
-use runtime_version::{NativeVersion, RuntimeVersion};
+use sp_version::{NativeVersion, RuntimeVersion};
 
 use codec::{Decode, Encode};
 
-use primitives::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
+use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
 
 use log::trace;
 
 use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}};
 
-use wasm_interface::{HostFunctions, Function};
+use sp_wasm_interface::{HostFunctions, Function};
 
 thread_local! {
 	static RUNTIMES_CACHE: RefCell<RuntimesCache> = RefCell::new(RuntimesCache::new());
@@ -43,7 +43,7 @@ pub(crate) fn safe_call<F, U>(f: F) -> Result<U>
 {
 	// Substrate uses custom panic hook that terminates process on panic. Disable
 	// termination for the native call.
-	let _guard = panic_handler::AbortGuard::force_unwind();
+	let _guard = sp_panic_handler::AbortGuard::force_unwind();
 	std::panic::catch_unwind(f).map_err(|_| Error::Runtime)
 }
 
@@ -53,7 +53,7 @@ pub(crate) fn safe_call<F, U>(f: F) -> Result<U>
 pub fn with_native_environment<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	externalities::set_and_run_with_externalities(ext, move || safe_call(f))
+	sp_externalities::set_and_run_with_externalities(ext, move || safe_call(f))
 }
 
 /// Delegate for dispatching a CodeExecutor call.
@@ -267,8 +267,8 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 /// ```
 /// sc_executor::native_executor_instance!(
 ///     pub MyExecutor,
-///     test_runtime::api::dispatch,
-///     test_runtime::native_version,
+///     substrate_test_runtime::api::dispatch,
+///     substrate_test_runtime::native_version,
 /// );
 /// ```
 ///
@@ -278,7 +278,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 /// executor aware of the host functions for these interfaces.
 ///
 /// ```
-/// # use runtime_interface::runtime_interface;
+/// # use sp_runtime_interface::runtime_interface;
 ///
 /// #[runtime_interface]
 /// trait MyInterface {
@@ -289,8 +289,8 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 ///
 /// sc_executor::native_executor_instance!(
 ///     pub MyExecutor,
-///     test_runtime::api::dispatch,
-///     test_runtime::native_version,
+///     substrate_test_runtime::api::dispatch,
+///     substrate_test_runtime::native_version,
 ///     my_interface::HostFunctions,
 /// );
 /// ```
@@ -337,7 +337,7 @@ macro_rules! native_executor_instance {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_interface::runtime_interface;
+	use sp_runtime_interface::runtime_interface;
 
 	#[runtime_interface]
 	trait MyInterface {
@@ -348,8 +348,8 @@ mod tests {
 
 	native_executor_instance!(
 		pub MyExecutor,
-		test_runtime::api::dispatch,
-		test_runtime::native_version,
+		substrate_test_runtime::api::dispatch,
+		substrate_test_runtime::native_version,
 		(my_interface::HostFunctions, my_interface::HostFunctions),
 	);
 

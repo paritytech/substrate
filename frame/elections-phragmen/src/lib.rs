@@ -76,7 +76,7 @@
 //!
 //! ### Module Information
 //!
-//! - [`election_phragmen::Trait`](./trait.Trait.html)
+//! - [`election_sp_phragmen::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 
@@ -84,28 +84,28 @@
 
 use sp_std::prelude::*;
 use sp_runtime::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
-use support::{
+use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, dispatch, weights::SimpleDispatchInfo,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason
 	}
 };
-use phragmen::ExtendedBalance;
-use system::{self, ensure_signed, ensure_root};
+use sp_phragmen::ExtendedBalance;
+use frame_system::{self as system, ensure_signed, ensure_root};
 
 const MODULE_ID: LockIdentifier = *b"phrelect";
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// The overarching event type.c
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The currency that people are electing with.
 	type Currency:
@@ -418,7 +418,7 @@ decl_module! {
 decl_event!(
 	pub enum Event<T> where
 		Balance = BalanceOf<T>,
-		<T as system::Trait>::AccountId,
+		<T as frame_system::Trait>::AccountId,
 	{
 		/// A new term with new members. This indicates that enough candidates existed, not that
 		/// enough have has been elected. The inner value must be examined for this purpose.
@@ -602,7 +602,7 @@ impl<T: Trait> Module<T> {
 		let voters_and_votes = <VotesOf<T>>::enumerate()
 			.map(|(v, i)| (v, i))
 			.collect::<Vec<(T::AccountId, Vec<T::AccountId>)>>();
-		let maybe_phragmen_result = phragmen::elect::<_, _, _, T::CurrencyToVote>(
+		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote>(
 			num_to_elect,
 			0,
 			candidates,
@@ -629,7 +629,7 @@ impl<T: Trait> Module<T> {
 				.filter_map(|(m, a)| if a.is_zero() { None } else { Some(m) } )
 				.collect::<Vec<T::AccountId>>();
 
-			let support_map = phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
+			let support_map = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
 				&new_set,
 				&phragmen_result.assignments,
 				Self::locked_stake_of,
@@ -735,14 +735,15 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 	use std::cell::RefCell;
-	use support::{assert_ok, assert_noop, parameter_types, weights::Weight};
+	use frame_support::{assert_ok, assert_noop, parameter_types, weights::Weight};
 	use substrate_test_utils::assert_eq_uvec;
-	use primitives::H256;
+	use sp_core::H256;
 	use sp_runtime::{
 		Perbill, testing::Header, BuildStorage,
 		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 	};
 	use crate as elections;
+	use frame_system as system;
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
@@ -751,7 +752,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -775,7 +776,7 @@ mod tests {
 		pub const CreationFee: u64 = 0;
 	}
 
-	impl balances::Trait for Test {
+	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnNewAccount = ();
 		type OnFreeBalanceZero = ();
@@ -886,14 +887,14 @@ mod tests {
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
-	support::construct_runtime!(
+	frame_support::construct_runtime!(
 		pub enum Test where
 			Block = Block,
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
 			System: system::{Module, Call, Event},
-			Balances: balances::{Module, Call, Event<T>, Config<T>},
+			Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
 			Elections: elections::{Module, Call, Event<T>},
 		}
 	);
@@ -934,7 +935,7 @@ mod tests {
 			TERM_DURATION.with(|v| *v.borrow_mut() = self.term_duration);
 			DESIRED_RUNNERS_UP.with(|v| *v.borrow_mut() = self.desired_runners_up);
 			GenesisConfig {
-				balances: Some(balances::GenesisConfig::<Test>{
+				pallet_balances: Some(pallet_balances::GenesisConfig::<Test>{
 					balances: vec![
 						(1, 10 * self.balance_factor),
 						(2, 20 * self.balance_factor),
