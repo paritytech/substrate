@@ -26,20 +26,20 @@ mod execution_strategy;
 pub mod error;
 pub mod informant;
 
-use client_api::execution_extensions::ExecutionStrategies;
-use service::{
+use sc_client_api::execution_extensions::ExecutionStrategies;
+use sc_service::{
 	config::{Configuration, DatabaseConfig},
 	ServiceBuilderCommand,
 	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
 };
-use network::{
+use sc_network::{
 	self,
 	multiaddr::Protocol,
 	config::{
 		NetworkConfiguration, TransportConfig, NonReservedPeerMode, NodeKeyConfig, build_multiaddr
 	},
 };
-use primitives::H256;
+use sp_core::H256;
 
 use std::{
 	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fs::{self, File},
@@ -200,12 +200,12 @@ where
 	I: IntoIterator,
 	<I as IntoIterator>::Item: Into<std::ffi::OsString> + Clone,
 {
-	let full_version = service::config::full_version_from_strs(
+	let full_version = sc_service::config::full_version_from_strs(
 		version.version,
 		version.commit
 	);
 
-	panic_handler::set(version.support_url, &full_version);
+	sp_panic_handler::set(version.support_url, &full_version);
 	let matches = CoreParams::<CC, RP>::clap()
 		.name(version.executable_name)
 		.author(version.author)
@@ -333,7 +333,7 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 
 		if spec.boot_nodes().is_empty() && !self.params.disable_default_bootnode {
 			let base_path = base_path(&self.params.shared_params, self.version);
-			let cfg = service::Configuration::<C,_,_>::default_with_spec_and_base_path(spec.clone(), Some(base_path));
+			let cfg = sc_service::Configuration::<C,_,_>::default_with_spec_and_base_path(spec.clone(), Some(base_path));
 			let node_key = node_key_config(
 				self.params.node_key_params,
 				&Some(cfg.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a base_path"))
@@ -348,7 +348,7 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 			spec.add_boot_node(addr)
 		}
 
-		let json = service::chain_ops::build_spec(spec, raw_output)?;
+		let json = sc_service::chain_ops::build_spec(spec, raw_output)?;
 
 		print!("{}", json);
 
@@ -440,7 +440,7 @@ impl<'a> ParseAndPrepareImport<'a> {
 		Exit: IntoExit
 	{
 		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
-		fill_import_params(&mut config, &self.params.import_params, service::Roles::FULL)?;
+		fill_import_params(&mut config, &self.params.import_params, sc_service::Roles::FULL)?;
 
 		let file: Box<dyn ReadPlusSeek + Send> = match self.params.input {
 			Some(filename) => Box::new(File::open(filename)?),
@@ -500,7 +500,7 @@ impl<'a> CheckBlock<'a> {
 			Exit: IntoExit
 	{
 		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
-		fill_import_params(&mut config, &self.params.import_params, service::Roles::FULL)?;
+		fill_import_params(&mut config, &self.params.import_params, sc_service::Roles::FULL)?;
 
 		let input = if self.params.input.starts_with("0x") { &self.params.input[2..] } else { &self.params.input[..] };
 		let block_id = match FromStr::from_str(input) {
@@ -621,8 +621,8 @@ where
 			params.node_key.as_ref().map(parse_ed25519_secret).unwrap_or_else(||
 				Ok(params.node_key_file
 					.or_else(|| net_config_file(net_config_dir, NODE_KEY_ED25519_FILE))
-					.map(network::config::Secret::File)
-					.unwrap_or(network::config::Secret::New)))
+					.map(sc_network::config::Secret::File)
+					.unwrap_or(sc_network::config::Secret::New)))
 				.map(NodeKeyConfig::Ed25519)
 	}
 }
@@ -639,11 +639,11 @@ fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
 	error::Error::Input(format!("Invalid node key: {}", e))
 }
 
-/// Parse a Ed25519 secret key from a hex string into a `network::Secret`.
-fn parse_ed25519_secret(hex: &String) -> error::Result<network::config::Ed25519Secret> {
+/// Parse a Ed25519 secret key from a hex string into a `sc_network::Secret`.
+fn parse_ed25519_secret(hex: &String) -> error::Result<sc_network::config::Ed25519Secret> {
 	H256::from_str(&hex).map_err(invalid_node_key).and_then(|bytes|
-		network::config::identity::ed25519::SecretKey::from_bytes(bytes)
-			.map(network::config::Secret::Input)
+		sc_network::config::identity::ed25519::SecretKey::from_bytes(bytes)
+			.map(sc_network::config::Secret::Input)
 			.map_err(invalid_node_key))
 }
 
@@ -728,7 +728,7 @@ fn input_keystore_password() -> Result<String, String> {
 
 /// Fill the password field of the given config instance.
 fn fill_config_keystore_password<C, G, E>(
-	config: &mut service::Configuration<C, G, E>,
+	config: &mut sc_service::Configuration<C, G, E>,
 	cli: &RunCmd,
 ) -> Result<(), String> {
 	config.keystore_password = if cli.password_interactive {
@@ -753,7 +753,7 @@ fn fill_config_keystore_password<C, G, E>(
 pub fn fill_import_params<C, G, E>(
 	config: &mut Configuration<C, G, E>,
 	cli: &ImportParams,
-	role: service::Roles,
+	role: sc_service::Roles,
 ) -> error::Result<()>
 	where
 		C: Default,
@@ -774,10 +774,10 @@ pub fn fill_import_params<C, G, E>(
 	// unless `unsafe_pruning` is set.
 	config.pruning = match &cli.pruning {
 		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
-		None if role == service::Roles::AUTHORITY => PruningMode::ArchiveAll,
+		None if role == sc_service::Roles::AUTHORITY => PruningMode::ArchiveAll,
 		None => PruningMode::default(),
 		Some(s) => {
-			if role == service::Roles::AUTHORITY && !cli.unsafe_pruning {
+			if role == sc_service::Roles::AUTHORITY && !cli.unsafe_pruning {
 				return Err(error::Error::Input(
 					"Validators should run with state pruning disabled (i.e. archive). \
 					You can ignore this check with `--unsafe-pruning`.".to_string()
@@ -821,11 +821,11 @@ where
 	let is_authority = cli.validator || cli.sentry || is_dev || cli.keyring.account.is_some();
 	let role =
 		if cli.light {
-			service::Roles::LIGHT
+			sc_service::Roles::LIGHT
 		} else if is_authority {
-			service::Roles::AUTHORITY
+			sc_service::Roles::AUTHORITY
 		} else {
-			service::Roles::FULL
+			sc_service::Roles::FULL
 		};
 
 	fill_import_params(&mut config, &cli.import_params, role)?;
@@ -856,7 +856,7 @@ where
 	config.sentry_mode = cli.sentry;
 
 	config.offchain_worker = match (cli.offchain_worker, role) {
-		(params::OffchainWorkerEnabled::WhenValidating, service::Roles::AUTHORITY) => true,
+		(params::OffchainWorkerEnabled::WhenValidating, sc_service::Roles::AUTHORITY) => true,
 		(params::OffchainWorkerEnabled::Always, _) => true,
 		(params::OffchainWorkerEnabled::Never, _) => false,
 		(params::OffchainWorkerEnabled::WhenValidating, _) => false,
@@ -939,7 +939,7 @@ where
 	let spec = load_spec(cli, spec_factory)?;
 	let base_path = base_path(cli, version);
 
-	let mut config = service::Configuration::default_with_spec_and_base_path(
+	let mut config = sc_service::Configuration::default_with_spec_and_base_path(
 		spec.clone(),
 		Some(base_path),
 	);
@@ -1043,7 +1043,7 @@ fn kill_color(s: &str) -> String {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use network::config::identity::ed25519;
+	use sc_network::config::identity::ed25519;
 
 	#[test]
 	fn tests_node_name_good() {
@@ -1074,7 +1074,7 @@ mod tests {
 					node_key_file: None
 				};
 				node_key_config(params, &net_config_dir).and_then(|c| match c {
-					NodeKeyConfig::Ed25519(network::config::Secret::Input(ref ski))
+					NodeKeyConfig::Ed25519(sc_network::config::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Ed25519 &&
 							&sk[..] == ski.as_ref() => Ok(()),
 					_ => Err(error::Error::Input("Unexpected node key config".into()))
@@ -1099,7 +1099,7 @@ mod tests {
 					node_key_file: Some(file.clone())
 				};
 				node_key_config(params, &net_config_dir).and_then(|c| match c {
-					NodeKeyConfig::Ed25519(network::config::Secret::File(ref f))
+					NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
 						if node_key_type == NodeKeyType::Ed25519 && f == &file => Ok(()),
 					_ => Err(error::Error::Input("Unexpected node key config".into()))
 				})
@@ -1131,7 +1131,7 @@ mod tests {
 				let typ = params.node_key_type;
 				node_key_config::<String>(params, &None)
 					.and_then(|c| match c {
-						NodeKeyConfig::Ed25519(network::config::Secret::New)
+						NodeKeyConfig::Ed25519(sc_network::config::Secret::New)
 							if typ == NodeKeyType::Ed25519 => Ok(()),
 						_ => Err(error::Error::Input("Unexpected node key config".into()))
 					})
@@ -1144,7 +1144,7 @@ mod tests {
 				let typ = params.node_key_type;
 				node_key_config(params, &Some(net_config_dir.clone()))
 					.and_then(move |c| match c {
-						NodeKeyConfig::Ed25519(network::config::Secret::File(ref f))
+						NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
 							if typ == NodeKeyType::Ed25519 &&
 								f == &dir.join(NODE_KEY_ED25519_FILE) => Ok(()),
 						_ => Err(error::Error::Input("Unexpected node key config".into()))

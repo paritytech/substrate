@@ -22,7 +22,7 @@ use sp_std::iter::once;
 
 /// A node header
 #[derive(Copy, Clone, PartialEq, Eq)]
-#[derive(primitives::RuntimeDebug)]
+#[derive(sp_core::RuntimeDebug)]
 pub(crate) enum NodeHeader {
 	Null,
 	Branch(bool, usize),

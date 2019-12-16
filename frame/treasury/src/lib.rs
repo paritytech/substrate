@@ -60,8 +60,8 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use sp_std::prelude::*;
-use support::{decl_module, decl_storage, decl_event, ensure, print};
-use support::traits::{
+use frame_support::{decl_module, decl_storage, decl_event, ensure, print};
+use frame_support::traits::{
 	Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced,
 	ReservableCurrency, WithdrawReason
 };
@@ -69,17 +69,17 @@ use sp_runtime::{Permill, ModuleId};
 use sp_runtime::traits::{
 	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating
 };
-use support::weights::SimpleDispatchInfo;
+use frame_support::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode};
-use system::ensure_signed;
+use frame_system::{self as system, ensure_signed};
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
+type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
 
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// The staking balance.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
@@ -90,7 +90,7 @@ pub trait Trait: system::Trait {
 	type RejectOrigin: EnsureOrigin<Self::Origin>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// Handler for the unbalanced decrease when slashing for a rejected proposal.
 	type ProposalRejection: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -235,7 +235,7 @@ decl_event!(
 	pub enum Event<T>
 	where
 		Balance = BalanceOf<T>,
-		<T as system::Trait>::AccountId
+		<T as frame_system::Trait>::AccountId
 	{
 		/// New proposal.
 		Proposed(ProposalIndex),
@@ -351,14 +351,14 @@ impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
 mod tests {
 	use super::*;
 
-	use support::{assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight};
-	use primitives::H256;
+	use frame_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight};
+	use sp_core::H256;
 	use sp_runtime::{
 		traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header, Perbill
 	};
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -369,7 +369,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -391,7 +391,7 @@ mod tests {
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
-	impl balances::Trait for Test {
+	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnNewAccount = ();
 		type OnFreeBalanceZero = ();
@@ -409,9 +409,9 @@ mod tests {
 		pub const Burn: Permill = Permill::from_percent(50);
 	}
 	impl Trait for Test {
-		type Currency = balances::Module<Test>;
-		type ApproveOrigin = system::EnsureRoot<u64>;
-		type RejectOrigin = system::EnsureRoot<u64>;
+		type Currency = pallet_balances::Module<Test>;
+		type ApproveOrigin = frame_system::EnsureRoot<u64>;
+		type RejectOrigin = frame_system::EnsureRoot<u64>;
 		type Event = ();
 		type ProposalRejection = ();
 		type ProposalBond = ProposalBond;
@@ -419,12 +419,12 @@ mod tests {
 		type SpendPeriod = SpendPeriod;
 		type Burn = Burn;
 	}
-	type Balances = balances::Module<Test>;
+	type Balances = pallet_balances::Module<Test>;
 	type Treasury = Module<Test>;
 
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		balances::GenesisConfig::<Test>{
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		pallet_balances::GenesisConfig::<Test>{
 			// Total issuance will be 200 with treasury account initialized at ED.
 			balances: vec![(0, 100), (1, 98), (2, 1)],
 			vesting: vec![],
@@ -614,8 +614,8 @@ mod tests {
 	// This is usefull for chain that will just update runtime.
 	#[test]
 	fn inexisting_account_works() {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		balances::GenesisConfig::<Test>{
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		pallet_balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
 			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();

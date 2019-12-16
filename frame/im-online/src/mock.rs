@@ -25,10 +25,10 @@ use sp_runtime::Perbill;
 use sp_staking::{SessionIndex, offence::ReportOffence};
 use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
-use primitives::H256;
-use support::{impl_outer_origin, impl_outer_dispatch, parameter_types, weights::Weight};
-use {sp_io, system};
+use sp_core::H256;
+use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types, weights::Weight};
 
+use frame_system as system;
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
 }
@@ -44,7 +44,7 @@ thread_local! {
 }
 
 pub struct TestOnSessionEnding;
-impl session::OnSessionEnding<u64> for TestOnSessionEnding {
+impl pallet_session::OnSessionEnding<u64> for TestOnSessionEnding {
 	fn on_session_ending(_ending_index: SessionIndex, _will_apply_at: SessionIndex)
 		-> Option<Vec<u64>>
 	{
@@ -52,7 +52,7 @@ impl session::OnSessionEnding<u64> for TestOnSessionEnding {
 	}
 }
 
-impl session::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
+impl pallet_session::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
 	fn on_session_ending(_ending_index: SessionIndex, _will_apply_at: SessionIndex)
 		-> Option<(Vec<u64>, Vec<(u64, u64)>)>
 	{
@@ -69,7 +69,7 @@ impl session::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
 
 /// An extrinsic type used for tests.
 pub type Extrinsic = TestXt<Call, ()>;
-type SubmitTransaction = system::offchain::TransactionSubmitter<(), Call, Extrinsic>;
+type SubmitTransaction = frame_system::offchain::TransactionSubmitter<(), Call, Extrinsic>;
 type IdentificationTuple = (u64, u64);
 type Offence = crate::UnresponsivenessOffence<IdentificationTuple>;
 
@@ -86,7 +86,7 @@ impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	t.into()
 }
 
@@ -101,7 +101,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
-impl system::Trait for Runtime {
+impl frame_system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -128,9 +128,9 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 }
 
-impl session::Trait for Runtime {
-	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
-	type OnSessionEnding = session::historical::NoteHistoricalRoot<Runtime, TestOnSessionEnding>;
+impl pallet_session::Trait for Runtime {
+	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
+	type OnSessionEnding = pallet_session::historical::NoteHistoricalRoot<Runtime, TestOnSessionEnding>;
 	type SessionHandler = (ImOnline, );
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
@@ -140,7 +140,7 @@ impl session::Trait for Runtime {
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }
 
-impl session::historical::Trait for Runtime {
+impl pallet_session::historical::Trait for Runtime {
 	type FullIdentification = u64;
 	type FullIdentificationOf = ConvertInto;
 }
@@ -149,7 +149,7 @@ parameter_types! {
 	pub const UncleGenerations: u32 = 5;
 }
 
-impl authorship::Trait for Runtime {
+impl pallet_authorship::Trait for Runtime {
 	type FindAuthor = ();
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
@@ -167,8 +167,8 @@ impl Trait for Runtime {
 
 /// Im Online module.
 pub type ImOnline = Module<Runtime>;
-pub type System = system::Module<Runtime>;
-pub type Session = session::Module<Runtime>;
+pub type System = frame_system::Module<Runtime>;
+pub type Session = pallet_session::Module<Runtime>;
 
 pub fn advance_session() {
 	let now = System::block_number();

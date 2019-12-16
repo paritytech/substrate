@@ -7,26 +7,26 @@ edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-babe_primitives = { package = "sp-consensus-babe", path = "../../../primitives/consensus/babe" }
-primitives = { package = "sp-core", path = "../../../primitives/core" }
-app-crypto = { package = "sp-application-crypto", path = "../../../primitives/application-crypto" }
+sp-consensus-babe = { path = "../../../primitives/consensus/babe" }
+sp-core = { path = "../../../primitives/core" }
+sp-application-crypto = { path = "../../../primitives/application-crypto" }
 num-bigint = "0.2.3"
 num-rational = "0.2.2"
 num-traits = "0.2.8"
-runtime-version = { package = "sp-version", path = "../../../primitives/version" }
+sp-version = { path = "../../../primitives/version" }
 sp-io = { path = "../../../primitives/io" }
-inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
+sp-inherents = { path = "../../../primitives/inherents" }
 sp-timestamp = { path = "../../../primitives/timestamp" }
 sc-telemetry = { path = "../../telemetry" }
-keystore = { package = "sc-keystore", path = "../../keystore" }
-client-api = { package = "sc-client-api", path = "../../api" }
-client = { package = "sc-client", path = "../../" }
+sc-keystore = { path = "../../keystore" }
+sc-client-api = { path = "../../api" }
+sc-client = { path = "../../" }
 sp-api = { path = "../../../primitives/api" }
-block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder" }
+sp-block-builder = { path = "../../../primitives/block-builder" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
-consensus-common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
-uncles = { package = "sc-consensus-uncles", path = "../uncles" }
-slots = { package = "sc-consensus-slots", path = "../slots"  }
+sp-consensus = { path = "../../../primitives/consensus/common" }
+sc-consensus-uncles = { path = "../uncles" }
+sc-consensus-slots = { path = "../slots"  }
 sp-runtime = {  path = "../../../primitives/runtime" }
 fork-tree = { path = "../../../utils/fork-tree" }
 futures = { version = "0.3.1", features = ["compat"] }
@@ -41,13 +41,13 @@ pdqselect = "0.1.0"
 derive_more = "0.99.2"
 
 [dev-dependencies]
-keyring = { package = "sp-keyring", path = "../../../primitives/keyring" }
+sp-keyring = { path = "../../../primitives/keyring" }
 sc-executor = { path = "../../executor" }
 sc-network = { path = "../../network" }
 sc-network-test = { path = "../../network/test" }
-service = { package = "sc-service", path = "../../service" }
-test-client = { package = "substrate-test-runtime-client", path = "../../../test-utils/runtime/client" }
-block-builder = { package = "sc-block-builder", path = "../../block-builder" }
+sc-service = { path = "../../service" }
+substrate-test-runtime-client = { path = "../../../test-utils/runtime/client" }
+sc-block-builder = { path = "../../block-builder" }
 tokio = "0.1.22"
 env_logger = "0.7.0"
 tempfile = "3.1.0"
