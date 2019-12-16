@@ -17,7 +17,7 @@
 #![recursion_limit="128"]
 
 use sp_runtime::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};
-use support::{
+use frame_support::{
 	Parameter, traits::Get, parameter_types,
 	metadata::{
 		DecodeDifferent, StorageMetadata, StorageEntryModifier, StorageEntryType, DefaultByteGetter,
@@ -25,8 +25,8 @@ use support::{
 	},
 	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap,
 };
-use inherents::{ProvideInherent, InherentData, InherentIdentifier, MakeFatalError};
-use primitives::{H256, sr25519};
+use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier, MakeFatalError};
+use sp_core::{H256, sr25519};
 
 mod system;
 
@@ -46,7 +46,7 @@ mod module1 {
 		type GenericType: Default + Clone + codec::Codec + codec::EncodeLike;
 	}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: InstantiableThing> for enum Call where
 			origin: <T as system::Trait>::Origin,
 			T::BlockNumber: From<u32>
@@ -62,7 +62,7 @@ mod module1 {
 		}
 	}
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait<I>, I: InstantiableThing> as Module1 where
 			T::BlockNumber: From<u32> + std::fmt::Display
 		{
@@ -79,7 +79,7 @@ mod module1 {
 		}
 	}
 
-	support::decl_event! {
+	frame_support::decl_event! {
 		pub enum Event<T, I> where Phantom = std::marker::PhantomData<T> {
 			_Phantom(Phantom),
 			AnotherVariant(u32),
@@ -98,7 +98,7 @@ mod module1 {
 		T::BlockNumber: From<u32>
 	{
 		type Call = Call<T, I>;
-		type Error = MakeFatalError<inherents::Error>;
+		type Error = MakeFatalError<sp_inherents::Error>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
@@ -125,7 +125,7 @@ mod module2 {
 
 	impl<T: Trait<I>, I: Instance> Currency for Module<T, I> {}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where
 			origin: <T as system::Trait>::Origin
 		{
@@ -133,7 +133,7 @@ mod module2 {
 		}
 	}
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Module2 {
 			pub Value config(value): T::Amount;
 			pub Map config(map): map u64 => u64;
@@ -142,7 +142,7 @@ mod module2 {
 		}
 	}
 
-	support::decl_event! {
+	frame_support::decl_event! {
 		pub enum Event<T, I=DefaultInstance> where Amount = <T as Trait<I>>::Amount {
 			Variant(Amount),
 		}
@@ -158,7 +158,7 @@ mod module2 {
 
 	impl<T: Trait<I>, I: Instance> ProvideInherent for Module<T, I> {
 		type Call = Call<T, I>;
-		type Error = MakeFatalError<inherents::Error>;
+		type Error = MakeFatalError<sp_inherents::Error>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
@@ -181,7 +181,7 @@ mod module3 {
 		type Currency2: Currency;
 	}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {}
 	}
 }
@@ -240,7 +240,7 @@ impl system::Trait for Runtime {
 	type Event = Event;
 }
 
-support::construct_runtime!(
+frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
@@ -300,11 +300,11 @@ fn new_test_ext() -> sp_io::TestExternalities {
 
 #[test]
 fn storage_instance_independance() {
-	let mut storage = primitives::storage::Storage {
+	let mut storage = sp_core::storage::Storage {
 		top: std::collections::BTreeMap::new(),
 		children: std::collections::HashMap::new()
 	};
-	state_machine::BasicExternalities::execute_with_storage(&mut storage, || {
+	sp_state_machine::BasicExternalities::execute_with_storage(&mut storage, || {
 		module2::Value::<Runtime>::put(0);
 		module2::Value::<Runtime, module2::Instance1>::put(0);
 		module2::Value::<Runtime, module2::Instance2>::put(0);

@@ -20,8 +20,8 @@ use std::collections::BTreeMap;
 use sp_io::hashing::{blake2_256, twox_128};
 use super::{AuthorityId, AccountId, WASM_BINARY, system};
 use codec::{Encode, KeyedVec, Joiner};
-use primitives::{ChangesTrieConfiguration, map};
-use primitives::storage::{well_known_keys, Storage};
+use sp_core::{ChangesTrieConfiguration, map};
+use sp_core::storage::{well_known_keys, Storage};
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 
 /// Configuration of a general Substrate test genesis block.
@@ -41,7 +41,7 @@ impl GenesisConfig {
 		endowed_accounts: Vec<AccountId>,
 		balance: u64,
 		heap_pages_override: Option<u64>,
-		extra_storage: Storage, 
+		extra_storage: Storage,
 	) -> Self {
 		GenesisConfig {
 			changes_trie_config: match support_changes_trie {
@@ -87,7 +87,7 @@ impl GenesisConfig {
 
 pub fn insert_genesis_block(
 	storage: &mut Storage,
-) -> primitives::hash::H256 {
+) -> sp_core::hash::H256 {
 	let child_roots = storage.children.iter().map(|(sk, child_content)| {
 		let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 			child_content.data.clone().into_iter().collect(),

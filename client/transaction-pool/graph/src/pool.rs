@@ -34,7 +34,7 @@ use sp_runtime::{
 	traits::{self, SaturatedConversion},
 	transaction_validity::{TransactionValidity, TransactionTag as Tag, TransactionValidityError},
 };
-use txpool_api::{error, PoolStatus};
+use sp_transaction_pool::{error, PoolStatus};
 
 use crate::validated_pool::{ValidatedPool, ValidatedTransaction};
 
@@ -466,10 +466,10 @@ mod tests {
 	use parking_lot::Mutex;
 	use futures::executor::block_on;
 	use super::*;
-	use txpool_api::TransactionStatus;
+	use sp_transaction_pool::TransactionStatus;
 	use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction};
 	use codec::Encode;
-	use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
+	use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 	use assert_matches::assert_matches;
 	use crate::base_pool::Limit;
 

@@ -61,9 +61,9 @@
 //! ### Get current timestamp
 //!
 //! ```
-//! use support::{decl_module, dispatch};
+//! use frame_support::{decl_module, dispatch};
 //! # use pallet_timestamp as timestamp;
-//! use system::ensure_signed;
+//! use frame_system::{self as system, ensure_signed};
 //!
 //! pub trait Trait: timestamp::Trait {}
 //!
@@ -91,24 +91,24 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{result, cmp};
-use inherents::{ProvideInherent, InherentData, InherentIdentifier};
-use support::{Parameter, decl_storage, decl_module};
-use support::traits::{Time, Get};
+use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier};
+use frame_support::{Parameter, decl_storage, decl_module};
+use frame_support::traits::{Time, Get};
 use sp_runtime::{
 	RuntimeString,
 	traits::{
 		SimpleArithmetic, Zero, SaturatedConversion, Scale
 	}
 };
-use support::weights::SimpleDispatchInfo;
-use system::ensure_none;
+use frame_support::weights::SimpleDispatchInfo;
+use frame_system::ensure_none;
 use sp_timestamp::{
 	InherentError, INHERENT_IDENTIFIER, InherentType,
 	OnTimestampSet,
 };
 
 /// The module configuration trait
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// Type used for expressing timestamp.
 	type Moment: Parameter + Default + SimpleArithmetic
 		+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy;
@@ -240,13 +240,13 @@ impl<T: Trait> Time for Module<T> {
 mod tests {
 	use super::*;
 
-	use support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
+	use frame_support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
 	use sp_io::TestExternalities;
-	use primitives::H256;
+	use sp_core::H256;
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -257,7 +257,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -286,7 +286,7 @@ mod tests {
 
 	#[test]
 	fn timestamp_works() {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
@@ -297,7 +297,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
@@ -308,7 +308,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
 	fn block_period_minimum_enforced() {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);

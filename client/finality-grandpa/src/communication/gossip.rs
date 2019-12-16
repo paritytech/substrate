@@ -83,10 +83,10 @@
 //! We only send polite messages to peers,
 
 use sp_runtime::traits::{NumberFor, Block as BlockT, Zero};
-use network_gossip::{GossipEngine, MessageIntent, ValidatorContext};
-use network::{config::Roles, PeerId, ReputationChange};
-use codec::{Encode, Decode};
-use fg_primitives::AuthorityId;
+use sc_network_gossip::{GossipEngine, MessageIntent, ValidatorContext};
+use sc_network::{config::Roles, PeerId, ReputationChange};
+use parity_scale_codec::{Encode, Decode};
+use sp_finality_grandpa::AuthorityId;
 
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug, warn};
@@ -908,15 +908,15 @@ impl<Block: BlockT> Inner<Block> {
 		// too many equivocations (we exceed the fault-tolerance bound).
 		for vote in last_completed_round.votes {
 			match vote.message {
-				grandpa::Message::Prevote(prevote) => {
-					prevotes.push(grandpa::SignedPrevote {
+				finality_grandpa::Message::Prevote(prevote) => {
+					prevotes.push(finality_grandpa::SignedPrevote {
 						prevote,
 						signature: vote.signature,
 						id: vote.id,
 					});
 				},
-				grandpa::Message::Precommit(precommit) => {
-					precommits.push(grandpa::SignedPrecommit {
+				finality_grandpa::Message::Precommit(precommit) => {
+					precommits.push(finality_grandpa::SignedPrecommit {
 						precommit,
 						signature: vote.signature,
 						id: vote.id,
@@ -1280,7 +1280,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 }
 
-impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
+impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Block> {
 	fn new_peer(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, roles: Roles) {
 		let packet = {
 			let mut inner = self.inner.write();
@@ -1306,7 +1306,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	}
 
 	fn validate(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, data: &[u8])
-		-> network_gossip::ValidationResult<Block::Hash>
+		-> sc_network_gossip::ValidationResult<Block::Hash>
 	{
 		let (action, broadcast_topics, peer_reply) = self.do_validate(who, data);
 
@@ -1323,15 +1323,15 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			Action::Keep(topic, cb) => {
 				self.report(who.clone(), cb);
 				context.broadcast_message(topic, data.to_vec(), false);
-				network_gossip::ValidationResult::ProcessAndKeep(topic)
+				sc_network_gossip::ValidationResult::ProcessAndKeep(topic)
 			}
 			Action::ProcessAndDiscard(topic, cb) => {
 				self.report(who.clone(), cb);
-				network_gossip::ValidationResult::ProcessAndDiscard(topic)
+				sc_network_gossip::ValidationResult::ProcessAndDiscard(topic)
 			}
 			Action::Discard(cb) => {
 				self.report(who.clone(), cb);
-				network_gossip::ValidationResult::Discard
+				sc_network_gossip::ValidationResult::Discard
 			}
 		}
 	}
@@ -1502,9 +1502,9 @@ impl<B: BlockT> Future for ReportingTask<B> {
 mod tests {
 	use super::*;
 	use super::environment::SharedVoterSetState;
-	use network_gossip::Validator as GossipValidatorT;
+	use sc_network_gossip::Validator as GossipValidatorT;
 	use sc_network_test::Block;
-	use primitives::{crypto::Public, H256};
+	use sp_core::{crypto::Public, H256};
 
 	// some random config (not really needed)
 	fn config() -> crate::Config {
@@ -1726,7 +1726,7 @@ mod tests {
 			round: Round(1),
 			set_id: SetId(set_id),
 			message: SignedMessage::<Block> {
-				message: grandpa::Message::Prevote(grandpa::Prevote {
+				message: finality_grandpa::Message::Prevote(finality_grandpa::Prevote {
 					target_hash: Default::default(),
 					target_number: 10,
 				}),
@@ -1739,7 +1739,7 @@ mod tests {
 			round: Round(1),
 			set_id: SetId(set_id),
 			message: SignedMessage::<Block> {
-				message: grandpa::Message::Prevote(grandpa::Prevote {
+				message: finality_grandpa::Message::Prevote(finality_grandpa::Prevote {
 					target_hash: Default::default(),
 					target_number: 10,
 				}),
@@ -1770,7 +1770,7 @@ mod tests {
 			let mut inner = val.inner.write();
 			inner.validate_catch_up_message(&peer, &FullCatchUpMessage {
 				set_id: SetId(set_id),
-				message: grandpa::CatchUp {
+				message: finality_grandpa::CatchUp {
 					round_number: 10,
 					prevotes: Default::default(),
 					precommits: Default::default(),
@@ -1806,7 +1806,7 @@ mod tests {
 
 			completed_rounds.push(environment::CompletedRound {
 				number: 2,
-				state: grandpa::round::State::genesis(Default::default()),
+				state: finality_grandpa::round::State::genesis(Default::default()),
 				base: Default::default(),
 				votes: Default::default(),
 			});

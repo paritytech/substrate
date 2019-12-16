@@ -66,7 +66,7 @@ pub struct LegacyProto< TSubstream> {
 	protocol: RegisteredProtocol,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
-	peerset: peerset::Peerset,
+	peerset: sc_peerset::Peerset,
 
 	/// List of peers in our state.
 	peers: FnvHashMap<PeerId, PeerState>,
@@ -77,7 +77,7 @@ pub struct LegacyProto< TSubstream> {
 
 	/// We generate indices to identify incoming connections. This is the next value for the index
 	/// to use when a connection is incoming.
-	next_incoming_index: peerset::IncomingIndex,
+	next_incoming_index: sc_peerset::IncomingIndex,
 
 	/// Events to produce from `poll()`.
 	events: SmallVec<[NetworkBehaviourAction<CustomProtoHandlerIn, LegacyProtoOut>; 4]>,
@@ -184,7 +184,7 @@ struct IncomingPeer {
 	/// connection corresponding to it has been closed or replaced already.
 	alive: bool,
 	/// Id that the we sent to the peerset.
-	incoming_id: peerset::IncomingIndex,
+	incoming_id: sc_peerset::IncomingIndex,
 }
 
 /// Event that can be emitted by the `LegacyProto`.
@@ -231,7 +231,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 	pub fn new(
 		protocol: impl Into<ProtocolId>,
 		versions: &[u8],
-		peerset: peerset::Peerset,
+		peerset: sc_peerset::Peerset,
 	) -> Self {
 		let protocol = RegisteredProtocol::new(protocol, versions);
 
@@ -240,7 +240,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 			peerset,
 			peers: FnvHashMap::default(),
 			incoming: SmallVec::new(),
-			next_incoming_index: peerset::IncomingIndex(0),
+			next_incoming_index: sc_peerset::IncomingIndex(0),
 			events: SmallVec::new(),
 			marker: PhantomData,
 		}
@@ -521,7 +521,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 	}
 
 	/// Function that is called when the peerset wants us to accept an incoming node.
-	fn peerset_report_accept(&mut self, index: peerset::IncomingIndex) {
+	fn peerset_report_accept(&mut self, index: sc_peerset::IncomingIndex) {
 		let incoming = if let Some(pos) = self.incoming.iter().position(|i| i.incoming_id == index) {
 			self.incoming.remove(pos)
 		} else {
@@ -565,7 +565,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 	}
 
 	/// Function that is called when the peerset wants us to reject an incoming node.
-	fn peerset_report_reject(&mut self, index: peerset::IncomingIndex) {
+	fn peerset_report_reject(&mut self, index: sc_peerset::IncomingIndex) {
 		let incoming = if let Some(pos) = self.incoming.iter().position(|i| i.incoming_id == index) {
 			self.incoming.remove(pos)
 		} else {
@@ -943,7 +943,7 @@ where
 				// again in the short term.
 				self.peerset.report_peer(
 					source.clone(),
-					peerset::ReputationChange::new(i32::min_value(), "Protocol error")
+					sc_peerset::ReputationChange::new(i32::min_value(), "Protocol error")
 				);
 				self.disconnect_peer_inner(&source, Some(Duration::from_secs(5)));
 			}
@@ -966,16 +966,16 @@ where
 				futures03::Stream::poll_next(Pin::new(&mut self.peerset), cx)
 			).map(|v| Ok::<_, ()>(v)).compat();
 			match peerset01.poll() {
-				Ok(Async::Ready(Some(peerset::Message::Accept(index)))) => {
+				Ok(Async::Ready(Some(sc_peerset::Message::Accept(index)))) => {
 					self.peerset_report_accept(index);
 				}
-				Ok(Async::Ready(Some(peerset::Message::Reject(index)))) => {
+				Ok(Async::Ready(Some(sc_peerset::Message::Reject(index)))) => {
 					self.peerset_report_reject(index);
 				}
-				Ok(Async::Ready(Some(peerset::Message::Connect(id)))) => {
+				Ok(Async::Ready(Some(sc_peerset::Message::Connect(id)))) => {
 					self.peerset_report_connect(id);
 				}
-				Ok(Async::Ready(Some(peerset::Message::Drop(id)))) => {
+				Ok(Async::Ready(Some(sc_peerset::Message::Drop(id)))) => {
 					self.peerset_report_disconnect(id);
 				}
 				Ok(Async::Ready(None)) => {

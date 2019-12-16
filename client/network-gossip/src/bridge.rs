@@ -17,9 +17,9 @@
 use crate::Network;
 use crate::state_machine::{ConsensusGossip, Validator, TopicNotification};
 
-use network::Context;
-use network::message::generic::ConsensusMessage;
-use network::{Event, ReputationChange};
+use sc_network::Context;
+use sc_network::message::generic::ConsensusMessage;
+use sc_network::{Event, ReputationChange};
 
 use futures::{prelude::*, channel::mpsc, compat::Compat01As03, task::SpawnExt as _};
 use libp2p::PeerId;
@@ -215,7 +215,7 @@ impl<B: BlockT> GossipEngine<B> {
 
 	/// Send addressed message to the given peers. The message is not kept or multicast
 	/// later on.
-	pub fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
+	pub fn send_message(&self, who: Vec<sc_network::PeerId>, data: Vec<u8>) {
 		let mut inner = self.inner.lock();
 		let inner = &mut *inner;
 
@@ -244,7 +244,7 @@ impl<B: BlockT> GossipEngine<B> {
 	///
 	/// Note: this method isn't strictly related to gossiping and should eventually be moved
 	/// somewhere else.
-	pub fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
+	pub fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
 		self.inner.lock().context_ext.set_sync_fork_request(peers, hash, number);
 	}
 }
@@ -287,7 +287,7 @@ impl<B: BlockT, N: Network<B>> Context<B> for ContextOverService<N> {
 
 trait ContextExt<B: BlockT> {
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>);
-	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>);
+	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: B::Hash, number: NumberFor<B>);
 }
 
 impl<B: BlockT, N: Network<B>> ContextExt<B> for ContextOverService<N> {
@@ -295,7 +295,7 @@ impl<B: BlockT, N: Network<B>> ContextExt<B> for ContextOverService<N> {
 		Network::announce(&self.network, block, associated_data)
 	}
 
-	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
+	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
 		Network::set_sync_fork_request(&self.network, peers, hash, number)
 	}
 }

@@ -33,7 +33,7 @@ use std::time::Duration;
 
 use sp_runtime::{traits::{Block as BlockT, DigestFor}, generic::BlockId};
 use futures::prelude::*;
-pub use inherents::InherentData;
+pub use sp_inherents::InherentData;
 
 pub mod block_validation;
 pub mod offline_tracker;
@@ -146,7 +146,7 @@ pub trait CanAuthorWith<Block: BlockT> {
 }
 
 /// Checks if the node can author blocks by using
-/// [`NativeVersion::can_author_with`](runtime_version::NativeVersion::can_author_with).
+/// [`NativeVersion::can_author_with`](sp_version::NativeVersion::can_author_with).
 pub struct CanAuthorWithNativeVersion<T>(T);
 
 impl<T> CanAuthorWithNativeVersion<T> {
@@ -156,7 +156,7 @@ impl<T> CanAuthorWithNativeVersion<T> {
 	}
 }
 
-impl<T: runtime_version::GetRuntimeVersion<Block>, Block: BlockT> CanAuthorWith<Block>
+impl<T: sp_version::GetRuntimeVersion<Block>, Block: BlockT> CanAuthorWith<Block>
 	for CanAuthorWithNativeVersion<T>
 {
 	fn can_author_with(&self, at: &BlockId<Block>) -> Result<(), String> {

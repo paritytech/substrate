@@ -47,15 +47,15 @@
 //! ```
 //! use std::sync::Arc;
 //! use sc_client::{Client, in_mem::Backend, LocalCallExecutor};
-//! use primitives::Blake2Hasher;
+//! use sp_core::Blake2Hasher;
 //! use sp_runtime::Storage;
-//! use executor::{NativeExecutor, WasmExecutionMethod};
+//! use sc_executor::{NativeExecutor, WasmExecutionMethod};
 //!
 //! // In this example, we're using the `Block` and `RuntimeApi` types from the
 //! // `substrate-test-runtime-client` crate. These types are automatically generated when
 //! // compiling a runtime. In a typical use-case, these types would have been to be generated
 //! // from your runtime.
-//! use test_client::{LocalExecutor, runtime::Block, runtime::RuntimeApi};
+//! use substrate_test_runtime_client::{LocalExecutor, runtime::Block, runtime::RuntimeApi};
 //!
 //! let backend = Arc::new(Backend::<Block, Blake2Hasher>::new());
 //! let client = Client::<_, _, _, RuntimeApi>::new(
@@ -83,7 +83,7 @@ pub mod leaves;
 mod call_executor;
 mod client;
 
-pub use client_api::{
+pub use sc_client_api::{
 	blockchain,
 	blockchain::well_known_cache_keys,
 	blockchain::Info as ChainInfo,
@@ -102,4 +102,4 @@ pub use crate::{
 	},
 	leaves::LeafSet,
 };
-pub use state_machine::{ExecutionStrategy, StorageProof};
+pub use sp_state_machine::{ExecutionStrategy, StorageProof};

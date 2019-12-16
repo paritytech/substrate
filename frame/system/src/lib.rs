@@ -68,7 +68,7 @@
 //! ### Example - Get extrinsic count and parent hash for the current block
 //!
 //! ```
-//! use support::{decl_module, dispatch};
+//! use frame_support::{decl_module, dispatch};
 //! use frame_system::{self as system, ensure_signed};
 //!
 //! pub trait Trait: system::Trait {}
@@ -110,8 +110,8 @@ use sp_runtime::{
 	},
 };
 
-use primitives::storage::well_known_keys;
-use support::{
+use sp_core::storage::well_known_keys;
+use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
 	traits::{Contains, Get},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
@@ -122,7 +122,7 @@ use codec::{Encode, Decode};
 use sp_io::TestExternalities;
 
 #[cfg(any(feature = "std", test))]
-use primitives::ChangesTrieConfiguration;
+use sp_core::ChangesTrieConfiguration;
 
 pub mod offchain;
 
@@ -416,7 +416,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
-		#[serde(with = "primitives::bytes")]
+		#[serde(with = "sp_core::bytes")]
 		config(code): Vec<u8>;
 
 		build(|config: &GenesisConfig| {
@@ -703,7 +703,7 @@ impl<T: Trait> Module<T> {
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities {
-		TestExternalities::new(primitives::storage::Storage {
+		TestExternalities::new(sp_core::storage::Storage {
 			top: map![
 				<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
 				<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
@@ -1141,9 +1141,9 @@ impl<T: Trait> Lookup for ChainContext<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::H256;
+	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
-	use support::{impl_outer_origin, parameter_types};
+	use frame_support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin! {
 		pub enum Origin for Test where system = super {}

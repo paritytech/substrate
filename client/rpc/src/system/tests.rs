@@ -16,9 +16,9 @@
 
 use super::*;
 
-use network::{self, PeerId};
-use network::config::Roles;
-use test_client::runtime::Block;
+use sc_network::{self, PeerId};
+use sc_network::config::Roles;
+use substrate_test_runtime_client::runtime::Block;
 use assert_matches::assert_matches;
 use futures::{prelude::*, channel::mpsc};
 use std::thread;
@@ -69,7 +69,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 					let _ = sender.send(peers);
 				}
 				Request::NetworkState(sender) => {
-					let _ = sender.send(serde_json::to_value(&network::NetworkState {
+					let _ = sender.send(serde_json::to_value(&sc_network::NetworkState {
 						peer_id: String::new(),
 						listened_addresses: Default::default(),
 						external_addresses: Default::default(),
@@ -211,8 +211,8 @@ fn system_peers() {
 fn system_network_state() {
 	let res = wait_receiver(api(None).system_network_state());
 	assert_eq!(
-		serde_json::from_value::<network::NetworkState>(res).unwrap(),
-		network::NetworkState {
+		serde_json::from_value::<sc_network::NetworkState>(res).unwrap(),
+		sc_network::NetworkState {
 			peer_id: String::new(),
 			listened_addresses: Default::default(),
 			external_addresses: Default::default(),

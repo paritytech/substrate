@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 wasmi = { version = "0.6.2", optional = true }
-primitives = { package = "sp-core", path = "../core", default-features = false }
+sp-core = { path = "../core", default-features = false }
 sp-std = { path = "../std", default-features = false }
 sp-io = { path = "../io", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
@@ -19,7 +19,7 @@ assert_matches = "1.3.0"
 default = ["std"]
 std = [
 	"wasmi",
-	"primitives/std",
+	"sp-core/std",
 	"sp-std/std",
 	"codec/std",
 	"sp-io/std",

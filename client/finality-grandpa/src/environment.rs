@@ -20,28 +20,28 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use log::{debug, warn, info};
-use codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode};
 use futures::prelude::*;
 use futures03::future::{FutureExt as _, TryFutureExt as _};
 use futures_timer::Delay;
 use parking_lot::RwLock;
 use sp_blockchain::{HeaderBackend, Error as ClientError};
 
-use client_api::{
+use sc_client_api::{
 	BlockchainEvents,
 	backend::{Backend},
 	Finalizer,
 	call_executor::CallExecutor,
 	utils::is_descendent_of,
 };
-use client::{
+use sc_client::{
 	apply_aux, Client,
 };
-use grandpa::{
+use finality_grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
 	voter, voter_set::VoterSet,
 };
-use primitives::{Blake2Hasher, H256, Pair};
+use sp_core::{Blake2Hasher, H256, Pair};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
@@ -53,16 +53,16 @@ use crate::{
 	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
 };
 
-use consensus_common::SelectChain;
+use sp_consensus::SelectChain;
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
-use fg_primitives::{AuthorityId, AuthoritySignature, SetId, RoundNumber};
+use sp_finality_grandpa::{AuthorityId, AuthoritySignature, SetId, RoundNumber};
 
-type HistoricalVotes<Block> = grandpa::HistoricalVotes<
+type HistoricalVotes<Block> = finality_grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
@@ -105,10 +105,10 @@ impl<Block: BlockT> Encode for CompletedRounds<Block> {
 	}
 }
 
-impl<Block: BlockT> codec::EncodeLike for CompletedRounds<Block> {}
+impl<Block: BlockT> parity_scale_codec::EncodeLike for CompletedRounds<Block> {}
 
 impl<Block: BlockT> Decode for CompletedRounds<Block> {
-	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
+	fn decode<I: parity_scale_codec::Input>(value: &mut I) -> Result<Self, parity_scale_codec::Error> {
 		<(Vec<CompletedRound<Block>>, SetId, Vec<AuthorityId>)>::decode(value)
 			.map(|(rounds, set_id, voters)| CompletedRounds {
 				rounds: rounds.into(),
@@ -406,7 +406,7 @@ impl<B, E, Block: BlockT, RA, SC, VR> Environment<B, E, Block, RA, SC, VR> {
 }
 
 impl<Block: BlockT<Hash=H256>, B, E, RA, SC, VR>
-	grandpa::Chain<Block::Hash, NumberFor<Block>>
+	finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
 for Environment<B, E, Block, RA, SC, VR>
 where
 	Block: 'static,
@@ -572,11 +572,11 @@ where
 
 	// regular round message streams
 	type In = Box<dyn Stream<
-		Item = ::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
+		Item = ::finality_grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
 		Error = Self::Error,
 	> + Send>;
 	type Out = Box<dyn Sink<
-		SinkItem = ::grandpa::Message<Block::Hash, NumberFor<Block>>,
+		SinkItem = ::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
 		SinkError = Self::Error,
 	> + Send>;
 
@@ -906,7 +906,7 @@ where
 	fn prevote_equivocation(
 		&self,
 		_round: RoundNumber,
-		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
+		equivocation: ::finality_grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		// nothing yet; this could craft misbehavior reports of some kind.

@@ -28,8 +28,8 @@
 use std::{collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
-use consensus::import_queue::{ImportQueue, Link};
-use consensus::import_queue::{BlockImportResult, BlockImportError};
+use sp_consensus::import_queue::{ImportQueue, Link};
+use sp_consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, sync::mpsc};
 use futures03::TryFutureExt as _;
 use log::{warn, error, info};
@@ -37,7 +37,7 @@ use libp2p::{PeerId, Multiaddr, kad::record};
 use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::swarm::NetworkBehaviour;
 use parking_lot::Mutex;
-use peerset::PeersetHandle;
+use sc_peerset::PeersetHandle;
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
 use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse_addr}};
@@ -176,7 +176,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			}
 		}
 
-		let peerset_config = peerset::PeersetConfig {
+		let peerset_config = sc_peerset::PeersetConfig {
 			in_peers: params.network_config.in_peers,
 			out_peers: params.network_config.out_peers,
 			bootnodes,
@@ -604,7 +604,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	}
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::SyncOracle
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> sp_consensus::SyncOracle
 	for NetworkService<B, S, H>
 {
 	fn is_major_syncing(&mut self) -> bool {
@@ -616,7 +616,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::Sy
 	}
 }
 
-impl<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::SyncOracle
+impl<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> sp_consensus::SyncOracle
 	for &'a NetworkService<B, S, H>
 {
 	fn is_major_syncing(&mut self) -> bool {
