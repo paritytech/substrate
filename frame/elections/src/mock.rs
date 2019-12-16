@@ -19,12 +19,12 @@
 #![cfg(test)]
 
 use std::cell::RefCell;
-use support::{
+use frame_support::{
 	StorageValue, StorageMap, parameter_types, assert_ok,
 	traits::{Get, ChangeMembers, Currency},
 	weights::Weight,
 };
-use primitives::H256;
+use sp_core::H256;
 use sp_runtime::{
 	Perbill, BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 };
@@ -37,7 +37,7 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl system::Trait for Test {
+impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -60,7 +60,7 @@ parameter_types! {
 	pub const TransferFee: u64 = 0;
 	pub const CreationFee: u64 = 0;
 }
-impl balances::Trait for Test {
+impl pallet_balances::Trait for Test {
 	type Balance = u64;
 	type OnNewAccount = ();
 	type OnFreeBalanceZero = ();
@@ -145,14 +145,15 @@ impl elections::Trait for Test {
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
-support::construct_runtime!(
+use frame_system as system;
+frame_support::construct_runtime!(
 	pub enum Test where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Event},
-		Balances: balances::{Module, Call, Event<T>, Config<T>, Error},
+		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>, Error},
 		Elections: elections::{Module, Call, Event<T>, Config<T>},
 	}
 );
@@ -210,7 +211,7 @@ impl ExtBuilder {
 		PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow_mut() = self.bad_presentation_punishment);
 		DECAY_RATIO.with(|v| *v.borrow_mut() = self.decay_ratio);
 		GenesisConfig {
-			balances: Some(balances::GenesisConfig::<Test>{
+			pallet_balances: Some(pallet_balances::GenesisConfig::<Test>{
 				balances: vec![
 					(1, 10 * self.balance_factor),
 					(2, 20 * self.balance_factor),

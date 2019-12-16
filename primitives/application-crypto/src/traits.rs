@@ -15,10 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[cfg(feature = "full_crypto")]
-use primitives::crypto::Pair;
+use sp_core::crypto::Pair;
 
 use codec::Codec;
-use primitives::crypto::{KeyTypeId, CryptoType, IsWrappedBy, Public};
+use sp_core::crypto::{KeyTypeId, CryptoType, IsWrappedBy, Public};
 use sp_std::{fmt::Debug, vec::Vec};
 
 /// An application-specific key.

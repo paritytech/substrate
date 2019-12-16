@@ -33,7 +33,7 @@
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use support::{
+use frame_support::{
 	decl_storage, decl_module,
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason},
 	weights::{Weight, DispatchInfo, GetDispatchInfo},
@@ -46,15 +46,15 @@ use sp_runtime::{
 	},
 	traits::{Zero, Saturating, SignedExtension, SaturatedConversion, Convert},
 };
-use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
 type Multiplier = Fixed64;
 type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// The currency type in which fees will be paid.
 	type Currency: Currency<Self::AccountId> + Send + Sync;
 
@@ -163,7 +163,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			let weight_fee = {
 				// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
 				// maximum of its data type, which is not desired.
-				let capped_weight = info.weight.min(<T as system::Trait>::MaximumBlockWeight::get());
+				let capped_weight = info.weight.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
 				T::WeightToFee::convert(capped_weight)
 			};
 
@@ -237,32 +237,33 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 mod tests {
 	use super::*;
 	use codec::Encode;
-	use support::{
+	use frame_support::{
 		parameter_types, impl_outer_origin, impl_outer_dispatch,
 		weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
 	};
-	use primitives::H256;
+	use sp_core::H256;
 	use sp_runtime::{
 		Perbill,
 		testing::{Header, TestXt},
 		traits::{BlakeTwo256, IdentityLookup, Extrinsic},
 	};
-	use balances::Call as BalancesCall;
+	use pallet_balances::Call as BalancesCall;
 	use sp_std::cell::RefCell;
-	use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+	use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
-	const CALL: &<Runtime as system::Trait>::Call = &Call::Balances(BalancesCall::transfer(2, 69));
+	const CALL: &<Runtime as frame_system::Trait>::Call = &Call::Balances(BalancesCall::transfer(2, 69));
 
 	impl_outer_dispatch! {
 		pub enum Call for Runtime where origin: Origin {
-			balances::Balances,
-			system::System,
+			pallet_balances::Balances,
+			frame_system::System,
 		}
 	}
 
 	#[derive(Clone, PartialEq, Eq, Debug)]
 	pub struct Runtime;
 
+	use frame_system as system;
 	impl_outer_origin!{
 		pub enum Origin for Runtime {}
 	}
@@ -274,7 +275,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 
-	impl system::Trait for Runtime {
+	impl frame_system::Trait for Runtime {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -298,7 +299,7 @@ mod tests {
 		pub const ExistentialDeposit: u64 = 0;
 	}
 
-	impl balances::Trait for Runtime {
+	impl pallet_balances::Trait for Runtime {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
@@ -334,7 +335,7 @@ mod tests {
 	}
 
 	impl Trait for Runtime {
-		type Currency = balances::Module<Runtime>;
+		type Currency = pallet_balances::Module<Runtime>;
 		type OnTransactionPayment = ();
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
@@ -342,8 +343,8 @@ mod tests {
 		type FeeMultiplierUpdate = ();
 	}
 
-	type Balances = balances::Module<Runtime>;
-	type System = system::Module<Runtime>;
+	type Balances = pallet_balances::Module<Runtime>;
+	type System = frame_system::Module<Runtime>;
 	type TransactionPayment = Module<Runtime>;
 
 	pub struct ExtBuilder {
@@ -382,8 +383,8 @@ mod tests {
 		}
 		pub fn build(self) -> sp_io::TestExternalities {
 			self.set_constants();
-			let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-			balances::GenesisConfig::<Runtime> {
+			let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+			pallet_balances::GenesisConfig::<Runtime> {
 				balances: vec![
 					(1, 10 * self.balance_factor),
 					(2, 20 * self.balance_factor),
@@ -445,7 +446,7 @@ mod tests {
 			// fee will be proportional to what is the actual maximum weight in the runtime.
 			assert_eq!(
 				Balances::free_balance(&1),
-				(10000 - <Runtime as system::Trait>::MaximumBlockWeight::get()) as u64
+				(10000 - <Runtime as frame_system::Trait>::MaximumBlockWeight::get()) as u64
 			);
 		});
 	}

@@ -27,7 +27,7 @@ pub enum Error {
 	/// Cli error
 	Cli(clap::Error),
 	/// Service error
-	Service(service::Error),
+	Service(sc_service::Error),
 	/// Client error
 	Client(sp_blockchain::Error),
 	/// Input error

@@ -17,8 +17,9 @@
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo, Trait, AliveContractInfo};
 use sp_runtime::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
 	SaturatedConversion};
-use support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason, OnUnbalanced};
-use support::StorageMap;
+use frame_support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason, OnUnbalanced};
+use frame_support::StorageMap;
+use frame_support::storage::child;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 #[must_use]
@@ -57,7 +58,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		Some(ContractInfo::Alive(contract)) => contract,
 	};
 
-	let current_block_number = <system::Module<T>>::block_number();
+	let current_block_number = <frame_system::Module<T>>::block_number();
 
 	// How much block has passed since the last deduction for the contract.
 	let blocks_passed = {
@@ -99,7 +100,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	if balance < subsistence_threshold {
 		// The contract cannot afford to leave a tombstone, so remove the contract info altogether.
 		<ContractInfoOf<T>>::remove(account);
-		sp_io::storage::child_storage_kill(&contract.trie_id);
+		child::kill_storage(&contract.trie_id, contract.child_trie_unique_id());
 		return (RentOutcome::Evicted, None);
 	}
 
@@ -146,7 +147,9 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		// threshold, so it leaves a tombstone.
 
 		// Note: this operation is heavy.
-		let child_storage_root = sp_io::storage::child_root(&contract.trie_id);
+		let child_storage_root = child::child_root(
+			&contract.trie_id,
+		);
 
 		let tombstone = <TombstoneContractInfo<T>>::new(
 			&child_storage_root[..],
@@ -155,7 +158,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		let tombstone_info = ContractInfo::Tombstone(tombstone);
 		<ContractInfoOf<T>>::insert(account, &tombstone_info);
 
-		sp_io::storage::child_storage_kill(&contract.trie_id);
+		child::kill_storage(&contract.trie_id, contract.child_trie_unique_id());
 
 		return (RentOutcome::Evicted, Some(tombstone_info));
 	}

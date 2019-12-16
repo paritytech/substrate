@@ -17,26 +17,26 @@
 //! Integration tests for runtime interface primitives
 
 use sp_runtime_interface::*;
-use test_wasm::{WASM_BINARY, test_api::HostFunctions};
-use wasm_interface::HostFunctions as HostFunctionsT;
+use sp_runtime_interface_test_wasm::{WASM_BINARY, test_api::HostFunctions};
+use sp_wasm_interface::HostFunctions as HostFunctionsT;
 
-type TestExternalities = state_machine::TestExternalities<primitives::Blake2Hasher, u64>;
+type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher, u64>;
 
 fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
     let mut ext = TestExternalities::default();
     let mut ext_ext = ext.ext();
 
-    executor::call_in_wasm::<
+    sc_executor::call_in_wasm::<
         _,
         (
             HF,
             sp_io::SubstrateHostFunctions,
-            executor::deprecated_host_interface::SubstrateExternals
+            sc_executor::deprecated_host_interface::SubstrateExternals
         )
     >(
         method,
         &[],
-        executor::WasmExecutionMethod::Interpreted,
+        sc_executor::WasmExecutionMethod::Interpreted,
         &mut ext_ext,
         &WASM_BINARY[..],
         8,
