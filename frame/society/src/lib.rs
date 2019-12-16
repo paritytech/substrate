@@ -45,15 +45,15 @@ use support::traits::{
 };
 use system::ensure_signed;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 const MODULE_ID: ModuleId = ModuleId(*b"py/socie");
 const MAX_BID_COUNT: usize = 1000;
 
 /// The module's configuration trait.
-pub trait Trait: system::Trait {
+pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 
 	/// The currency type used for bidding.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -62,18 +62,18 @@ pub trait Trait: system::Trait {
 	type Randomness: Randomness<Self::Hash>;
 
 	/// The minimum amount of a deposit required for a bid to be made.
-	type CandidateDeposit: Get<BalanceOf<Self>>;
+	type CandidateDeposit: Get<BalanceOf<Self, I>>;
 
 	/// The proportion of the unpaid reward that gets deducted in the case that either a skeptic
 	/// doesn't vote or someone votes in the wrong way.
-	type WrongSideDeduction: Get<BalanceOf<Self>>;
+	type WrongSideDeduction: Get<BalanceOf<Self, I>>;
 
 	/// The number of times a member may vote the wrong way (or not at all, when they are a skeptic)
 	/// before they become suspended.
 	type MaxStrikes: Get<u32>;
 
 	/// The amount of incentive paid within each period. Doesn't include VoterTip.
-	type PeriodSpend: Get<BalanceOf<Self>>;
+	type PeriodSpend: Get<BalanceOf<Self, I>>;
 
 	/// The receiver of the signal for when the members have changed.
 	type MembershipChanged: ChangeMembers<Self::AccountId>;
@@ -156,24 +156,24 @@ impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
 
 // This module's storage items.
 decl_storage! {
-	trait Store for Module<T: Trait> as Fratority {
+	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Society {
 		/// The current set of candidates; bidders that are attempting to become members.
 		pub Candidates get(candidates):
-			Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>;
+			Vec<(BalanceOf<T, I>, T::AccountId, BidKind<T::AccountId, BalanceOf<T, I>>)>;
 
 		/// The set of suspended candidates.
 		pub SuspendedCandidates get(suspended_candidate):
-			map T::AccountId => Option<(BalanceOf<T>, BidKind<T::AccountId, BalanceOf<T>>)>;
+			map T::AccountId => Option<(BalanceOf<T, I>, BidKind<T::AccountId, BalanceOf<T, I>>)>;
 
 		/// Amount of our account balance that is specifically for the next round's bid(s).
-		pub Pot get(fn pot) config(): BalanceOf<T>;
+		pub Pot get(fn pot) config(): BalanceOf<T, I>;
 
 		/// The most primary from the most recently approved members.
-		pub Head get(head) build(|config: &GenesisConfig<T>| config.members.first().cloned()):
+		pub Head get(head) build(|config: &GenesisConfig<T, I>| config.members.first().cloned()):
 			Option<T::AccountId>;
 
 		/// The current set of members, ordered.
-		pub Members get(fn members) build(|config: &GenesisConfig<T>| {
+		pub Members get(fn members) build(|config: &GenesisConfig<T, I>| {
 			let mut m = config.members.clone();
 			m.sort();
 			m
@@ -183,13 +183,13 @@ decl_storage! {
 		pub SuspendedMembers get(fn suspended_member): map T::AccountId => Option<()>;
 
 		/// The current bids.
-		Bids: Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>;
+		Bids: Vec<(BalanceOf<T, I>, T::AccountId, BidKind<T::AccountId, BalanceOf<T, I>>)>;
 
 		/// Members currently vouching, stored ordered
 		Vouching: Vec<T::AccountId>;
 
 		/// Pending payouts; ordered by block number, with the amount that should be paid out.
-		Payouts: map T::AccountId => Vec<(T::BlockNumber, BalanceOf<T>)>;
+		Payouts: map T::AccountId => Vec<(T::BlockNumber, BalanceOf<T, I>)>;
 
 		/// The ongoing number of losing votes cast by the member.
 		Strikes: map T::AccountId => StrikeCount;
@@ -208,7 +208,7 @@ decl_storage! {
 // The module's dispatchable functions.
 decl_module! {
 	/// The module declaration.
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: T::Origin {
 		// Initializing events
 		// this is needed only if you are using events in your module
 		fn deposit_event() = default;
@@ -216,9 +216,9 @@ decl_module! {
 		/// Make a bid for entry.
 		///
 		/// Alters Bids (O(N) decode+encode, O(logN) search, <=2*O(N) write).
-		pub fn bid(origin, value: BalanceOf<T>) -> Result {
+		pub fn bid(origin, value: BalanceOf<T, I>) -> Result {
 			let who = ensure_signed(origin)?;
-			ensure!(!<SuspendedCandidates<T>>::exists(&who), "candidate is suspended");
+			ensure!(!<SuspendedCandidates<T, I>>::exists(&who), "candidate is suspended");
 			ensure!(!Self::is_member(&who), "candidate is already a member");
 
 			let deposit = T::CandidateDeposit::get();
@@ -233,7 +233,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 
 			let pos = pos as usize;
-			<Bids<T>>::mutate(|b|
+			<Bids<T, I>>::mutate(|b|
 				if pos < b.len() && b[pos].1 == who {
 					// Either unreserve the deposit or free up the vouching member.
 					// In neither case can we do much if the action isn't completable, but there's
@@ -255,7 +255,7 @@ decl_module! {
 		}
 
 		/// Vouch for someone else.
-		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T>, tip: BalanceOf<T>) -> Result {
+		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> Result {
 			let voucher = ensure_signed(origin)?;
 			ensure!(Self::is_member(&voucher), "not a member");
 			Self::set_vouching(voucher.clone())?;
@@ -270,7 +270,7 @@ decl_module! {
 			let voucher = ensure_signed(origin)?;
 
 			let pos = pos as usize;
-			<Bids<T>>::mutate(|b|
+			<Bids<T, I>>::mutate(|b|
 				if pos < b.len() {
 					b[pos].2.check_voucher(&voucher)?;
 					Self::unset_vouching(&voucher)?;
@@ -289,24 +289,24 @@ decl_module! {
 			ensure!(Self::is_member(&voter), "not a member");
 			let candidate = T::Lookup::lookup(candidate)?;
 			let vote = if approve { Vote::Approve } else { Vote::Reject };
-			<Votes<T>>::insert(candidate, voter, vote);
+			<Votes<T, I>>::insert(candidate, voter, vote);
 		}
 
 		/// Transfer the first matured payment and remove it from the records.
 		pub fn payout(origin) -> Result {
 			let who = ensure_signed(origin)?;
 
-			ensure!(<SuspendedMembers<T>>::get(&who).is_none(), "account is suspended");
+			ensure!(<SuspendedMembers<T, I>>::get(&who).is_none(), "account is suspended");
 
-			let mut payouts = <Payouts<T>>::get(&who);
+			let mut payouts = <Payouts<T, I>>::get(&who);
 			if let Some((when, amount)) = payouts.first() {
 				if when <= &<system::Module<T>>::block_number() {
 					T::Currency::transfer(&Self::payouts(), &who, *amount, KeepAlive)?;
 					payouts.remove(0);
 					if payouts.is_empty() {
-						<Payouts<T>>::remove(&who);
+						<Payouts<T, I>>::remove(&who);
 					} else {
-						<Payouts<T>>::insert(&who, payouts);
+						<Payouts<T, I>>::insert(&who, payouts);
 					}
 					return Ok(())
 				}
@@ -318,34 +318,34 @@ decl_module! {
 		/// module to be included into a running chain.
 		fn found(origin, founder: T::AccountId) {
 			T::FounderOrigin::ensure_origin(origin)?;
-			ensure!(!<Head<T>>::exists(), "already founded");
+			ensure!(!<Head<T, I>>::exists(), "already founded");
 			Self::add_member(&founder)?;
-			<Head<T>>::put(&founder);
+			<Head<T, I>>::put(&founder);
 			Self::deposit_event(RawEvent::Founded(founder));
 		}
 
 		/// Allow founder origin to make judgement on a suspended member.
 		fn judge_suspended_member(origin, who: T::AccountId, forgive: bool) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
-			ensure!(<SuspendedMembers<T>>::exists(&who), "user is not suspended member");
+			ensure!(<SuspendedMembers<T, I>>::exists(&who), "user is not suspended member");
 			
 			if forgive {
 				// Add member back to society.
 				let _ = Self::add_member(&who);
 			} else {
 				// Cancel a suspended member's membership, remove their payouts.
-				<Payouts<T>>::remove(&who);
-				<Strikes<T>>::remove(&who);
+				<Payouts<T, I>>::remove(&who);
+				<Strikes<T, I>>::remove(&who);
 			}
 
-			<SuspendedMembers<T>>::remove(&who);
+			<SuspendedMembers<T, I>>::remove(&who);
 			Self::deposit_event(RawEvent::Removed(who));
 		}
 
 		/// Allow founder origin to make judgement on a suspended candidate.
 		fn judge_suspended_candidate(origin, who: T::AccountId, judgement: Judgement) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
-			if let Some((value, kind)) = <SuspendedCandidates<T>>::get(&who) {
+			if let Some((value, kind)) = <SuspendedCandidates<T, I>>::get(&who) {
 				match judgement {
 					Judgement::Approve => {
 						// Founder origin has approved this candidate
@@ -353,7 +353,7 @@ decl_module! {
 						let pot = Self::pot();
 						ensure!(pot > value, "not enough in pot to accept candidate");
 						// Reduce next pot by payout
-						<Pot<T>>::put(pot - value);
+						<Pot<T, I>>::put(pot - value);
 						// Add payout for new candidate
 						let maturity = <system::Module<T>>::block_number()
 							+ Self::lock_duration(Self::members().len() as u32);
@@ -372,7 +372,7 @@ decl_module! {
 								// Really shouldn't fail given the conditional we're in.
 								let _ = Self::unset_vouching(&voucher);
 								// Give voucher a strike
-								let strikes = <Strikes<T>>::mutate(&voucher, |s| {
+								let strikes = <Strikes<T, I>>::mutate(&voucher, |s| {
 									*s += 1;
 									*s
 								});
@@ -382,7 +382,7 @@ decl_module! {
 							}
 						}
 						// Remove suspended candidate
-						<SuspendedCandidates<T>>::remove(who);
+						<SuspendedCandidates<T, I>>::remove(who);
 					}
 					Judgement::Rebid => {
 						// Founder has taken no judgement, and candidate is placed back into the pool.
@@ -412,9 +412,9 @@ decl_error! {
 
 decl_event! {
 	/// Events for this module.
-	pub enum Event<T> where
+	pub enum Event<T, I=DefaultInstance> where
 		AccountId = <T as system::Trait>::AccountId,
-		Balance = BalanceOf<T>
+		Balance = BalanceOf<T, I>
 	{
 		/// The society is founded by the given identity.
 		Founded(AccountId),
@@ -457,11 +457,11 @@ fn pick_usize<'a, R: RngCore>(rng: &mut R, max: usize) -> usize {
 	(rng.next_u32() % (max as u32 + 1)) as usize
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Puts a bid into storage ordered by smallest to largest value.
 	/// Allows a maximum of 1000 bids in queue, removing largest value people first.
-	fn put_bid(who: T::AccountId, value: BalanceOf<T>, bid_kind: BidKind<T::AccountId, BalanceOf<T>>) {
-		<Bids<T>>::mutate(|bids| {
+	fn put_bid(who: T::AccountId, value: BalanceOf<T, I>, bid_kind: BidKind<T::AccountId, BalanceOf<T, I>>) {
+		<Bids<T, I>>::mutate(|bids| {
 			match bids.binary_search_by(|x| x.0.cmp(&value)) {
 				Ok(pos) | Err(pos) => bids.insert(pos, (value, who, bid_kind)),
 			}
@@ -480,7 +480,7 @@ impl<T: Trait> Module<T> {
 
 	/// Add a member to the vouching set.
 	fn set_vouching(v: T::AccountId) -> Result {
-		<Vouching<T>>::mutate(|vouchers|
+		<Vouching<T, I>>::mutate(|vouchers|
 			match vouchers.binary_search(&v) {
 				Err(i) => {
 					vouchers.insert(i, v);
@@ -493,7 +493,7 @@ impl<T: Trait> Module<T> {
 
 	/// Remove a member from the vouching set.
 	fn unset_vouching(v: &T::AccountId) -> Result {
-		<Vouching<T>>::mutate(|vouchers|
+		<Vouching<T, I>>::mutate(|vouchers|
 			match vouchers.binary_search(&v) {
 				Err(_) => Err("not vouching"),
 				Ok(i) => {
@@ -506,14 +506,14 @@ impl<T: Trait> Module<T> {
 
 	/// Check a user is a member.
 	fn is_member(m: &T::AccountId) -> bool {
-		<Members<T>>::get()
+		<Members<T, I>>::get()
 			.binary_search(m)
 			.is_ok()
 	}
 
 	/// Add a member to the sorted members list. Will not add a duplicate member.
 	fn add_member(m: &T::AccountId) -> Result {
-		<Members<T>>::mutate(|members| {
+		<Members<T, I>>::mutate(|members| {
 			match members.binary_search(m) {
 				Ok(_) => Err("already a member"),
 				Err(i) => {
@@ -532,7 +532,7 @@ impl<T: Trait> Module<T> {
 	pub fn remove_member(m: &T::AccountId) -> Result {
 		ensure!(Self::head() != Some(m.clone()), "cannot remove head");
 
-		<Members<T>>::mutate(|members|
+		<Members<T, I>>::mutate(|members|
 			match members.binary_search(&m) {
 				Err(_) => Err("not a member"),
 				Ok(i) => {
@@ -546,11 +546,11 @@ impl<T: Trait> Module<T> {
 
 	/// End the current period and begin a new one.
 	fn rotate_period() {
-		let phrase = b"fratority_rotation";
+		let phrase = b"society_rotation";
 
-		let mut members = <Members<T>>::get();
+		let mut members = <Members<T, I>>::get();
 
-		let mut pot = <Pot<T>>::get();
+		let mut pot = <Pot<T, I>>::get();
 
 		// we'll need a random seed here.
 		let seed = T::Randomness::random(phrase);
@@ -561,7 +561,7 @@ impl<T: Trait> Module<T> {
 
 		// we assume there's at least one member or this logic won't work.
 		if !members.is_empty() {
-			let candidates = <Candidates<T>>::take();
+			let candidates = <Candidates<T, I>>::take();
 			members.reserve(candidates.len());
 
 			let maturity = <system::Module<T>>::block_number()
@@ -569,8 +569,8 @@ impl<T: Trait> Module<T> {
 
 			let mut rewardees = Vec::new();
 			let mut total_approvals = 0;
-			let mut total_slash = <BalanceOf<T>>::zero();
-			let mut total_payouts = <BalanceOf<T>>::zero();
+			let mut total_slash = <BalanceOf<T, I>>::zero();
+			let mut total_payouts = <BalanceOf<T, I>>::zero();
 
 			let accepted = candidates.into_iter().filter_map(|(value, candidate, kind)| {
 				let mut approval_count = 0;
@@ -578,7 +578,7 @@ impl<T: Trait> Module<T> {
 				// Creates a vector of (vote, member) for the given candidate
 				// and tallies total number of approve votes for that candidate.
 				let votes = members.iter()
-					.filter_map(|m| <Votes<T>>::get(&candidate, m).map(|v| (v, m)))
+					.filter_map(|m| <Votes<T, I>>::get(&candidate, m).map(|v| (v, m)))
 					.inspect(|&(v, _)| if v == Vote::Approve { approval_count += 1 })
 					.collect::<Vec<_>>();
 				
@@ -593,7 +593,7 @@ impl<T: Trait> Module<T> {
 					// and increase their strikes. after MaxStrikes then they go into suspension.
 					let (_when, amount) = Self::slash_payout(m, T::WrongSideDeduction::get());
 
-					let strikes = <Strikes<T>>::mutate(m, |s| {
+					let strikes = <Strikes<T, I>>::mutate(m, |s| {
 						*s += 1;
 						*s
 					});
@@ -626,7 +626,7 @@ impl<T: Trait> Module<T> {
 					Some((candidate, total_approvals))
 				} else {
 					// Suspend Candidate
-					<SuspendedCandidates<T>>::insert(&candidate, (value, kind));
+					<SuspendedCandidates<T, I>>::insert(&candidate, (value, kind));
 					Self::deposit_event(RawEvent::CandidateSuspended(candidate));
 					None
 				}
@@ -668,8 +668,8 @@ impl<T: Trait> Module<T> {
 
 				// Then write everything back out, signal the changed membership and leave an event.
 				members.sort();
-				<Members<T>>::put(&members);
-				<Head<T>>::put(&primary);
+				<Members<T, I>>::put(&members);
+				<Head<T, I>>::put(&primary);
 
 				T::MembershipChanged::change_members_sorted(&accounts, &[], &members);
 				Self::deposit_event(RawEvent::Inducted(primary, accounts));
@@ -680,28 +680,28 @@ impl<T: Trait> Module<T> {
 			let unaccounted = T::Currency::free_balance(&Self::account_id()).saturating_sub(pot);
 			pot += T::PeriodSpend::get().min(unaccounted / 2u8.into());
 
-			<Pot<T>>::put(&pot);
+			<Pot<T, I>>::put(&pot);
 		}
 
 		// Setup the candidates for the new intake
 		let candidates = Self::take_selected(pot);
-		<Candidates<T>>::put(&candidates);
+		<Candidates<T, I>>::put(&candidates);
 
 		// Select sqrt(n) random members from the society and make them skeptics.
 		let pick_member = |_| pick_item(&mut rng, &members[..]).expect("exited if members empty; qed");
 		for skeptic in (0..members.len().integer_sqrt()).map(pick_member) {
 			for (_, c, _) in candidates.iter() {
-				<Votes<T>>::insert(c, skeptic, Vote::Skeptic);
+				<Votes<T, I>>::insert(c, skeptic, Vote::Skeptic);
 			}
 		}
 	}
 
 	/// Attempt to slash the payout of some member. Return the payout block number most in the
 	/// future along with the total amount deducted.
-	fn slash_payout(who: &T::AccountId, value: BalanceOf<T>) -> (T::BlockNumber, BalanceOf<T>) {
+	fn slash_payout(who: &T::AccountId, value: BalanceOf<T, I>) -> (T::BlockNumber, BalanceOf<T, I>) {
 		let mut latest = T::BlockNumber::zero();
 		let mut rest = value;
-		let mut payouts = <Payouts<T>>::get(who);
+		let mut payouts = <Payouts<T, I>>::get(who);
 		if !payouts.is_empty() {
 			let mut dropped = 0;
 			for (when, amount) in payouts.iter_mut() {
@@ -717,15 +717,15 @@ impl<T: Trait> Module<T> {
 					break;
 				}
 			}
-			<Payouts<T>>::insert(who, &payouts[dropped..]);
+			<Payouts<T, I>>::insert(who, &payouts[dropped..]);
 		}
 		(latest, value - rest)
 	}
 
 	/// Bump the payout amount of `who`, to be unlocked at the given block number.
-	fn bump_payout(who: &T::AccountId, when: T::BlockNumber, value: BalanceOf<T>) {
+	fn bump_payout(who: &T::AccountId, when: T::BlockNumber, value: BalanceOf<T, I>) {
 		if !value.is_zero(){
-			<Payouts<T>>::mutate(who, |payouts| match payouts.binary_search_by_key(&when, |x| x.0) {
+			<Payouts<T, I>>::mutate(who, |payouts| match payouts.binary_search_by_key(&when, |x| x.0) {
 				Ok(index) => payouts[index].1 += value,
 				Err(index) => payouts.insert(index, (when, value)),
 			});
@@ -735,8 +735,8 @@ impl<T: Trait> Module<T> {
 	/// Suspend a user, removing them from the member list.
 	fn suspend_member(who: &T::AccountId) {
 		if Self::remove_member(&who).is_ok() {
-			<SuspendedMembers<T>>::insert(who, ());
-			<Strikes<T>>::remove(who);
+			<SuspendedMembers<T, I>>::insert(who, ());
+			<Strikes<T, I>>::remove(who);
 			Self::deposit_event(RawEvent::MemberSuspended(who.clone()));
 		}
 	}
@@ -744,8 +744,8 @@ impl<T: Trait> Module<T> {
 	/// Pay an accepted candidate their bid value.
 	fn pay_accepted_candidate(
 		candidate: &T::AccountId,
-		value: BalanceOf<T>,
-		kind: BidKind<T::AccountId, BalanceOf<T>>,
+		value: BalanceOf<T, I>,
+		kind: BidKind<T::AccountId, BalanceOf<T, I>>,
 		maturity: T::BlockNumber,
 	) {
 		let value = match kind {
@@ -796,16 +796,16 @@ impl<T: Trait> Module<T> {
 	/// Get a selection of bidding accounts such that the total bids is no greater than `Pot`.
 	///
 	/// May be empty.
-	pub fn take_selected(pot: BalanceOf<T>)
-		-> Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>
+	pub fn take_selected(pot: BalanceOf<T, I>)
+		-> Vec<(BalanceOf<T, I>, T::AccountId, BidKind<T::AccountId, BalanceOf<T, I>>)>
 	{
 		// No more than 10 will be returned.
 		const MAX_SELECTIONS: usize = 10;
 
 		// Get the number of left-most bidders whose bids add up to less than `pot`.
-		let mut bids = <Bids<T>>::get();
+		let mut bids = <Bids<T, I>>::get();
 		let taken = bids.iter()
-			.scan(<BalanceOf<T>>::zero(), |total, &(bid, ref who, ref kind)| {
+			.scan(<BalanceOf<T, I>>::zero(), |total, &(bid, ref who, ref kind)| {
 				*total = total.saturating_add(bid);
 				Some((*total, who.clone(), kind.clone()))
 			})
@@ -815,7 +815,7 @@ impl<T: Trait> Module<T> {
 
 		// No need to reset Bids if we're not taking anything.
 		if taken > 0 {
-			<Bids<T>>::put(&bids[taken..]);
+			<Bids<T, I>>::put(&bids[taken..]);
 		}
 		bids.truncate(taken);
 		bids
