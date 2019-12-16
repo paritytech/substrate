@@ -364,8 +364,10 @@ impl<Value: Decode> Iterator for PrefixIterator<Value> {
 	type Item = Value;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		match sp_io::storage::next_key(&self.previous_key) {
-			Some(next_key) if next_key.starts_with(&self.prefix[..]) => {
+		match sp_io::storage::next_key(&self.previous_key)
+			.filter(|n| n.starts_with(&self.prefix[..]))
+		{
+			Some(next_key) => {
 				let value = unhashed::get(&next_key);
 
 				if value.is_none() {
@@ -421,7 +423,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 
 #[cfg(test)]
 mod test {
-	use primitives::hashing::twox_128;
+	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
 	use crate::storage::{unhashed, StoragePrefixedMap};
 

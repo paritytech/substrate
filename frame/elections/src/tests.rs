@@ -21,7 +21,7 @@
 use crate::mock::*;
 use crate::*;
 
-use support::{assert_ok, assert_err, assert_noop};
+use frame_support::{assert_ok, assert_err, assert_noop};
 
 #[test]
 fn params_should_work() {

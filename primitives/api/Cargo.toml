@@ -7,11 +7,11 @@ edition = "2018"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 sp-api-proc-macro = { path = "proc-macro" }
-primitives = { package = "sp-core", path = "../core", default-features = false }
+sp-core = { path = "../core", default-features = false }
 sp-std = { path = "../std", default-features = false }
 sp-runtime = { path = "../runtime", default-features = false }
 sp-version = { path = "../version", default-features = false }
-state-machine = { package = "sp-state-machine", path = "../../primitives/state-machine", optional = true }
+sp-state-machine = { path = "../../primitives/state-machine", optional = true }
 
 [dev-dependencies]
 sp-test-primitives = { path = "../test-primitives" }
@@ -20,9 +20,9 @@ sp-test-primitives = { path = "../test-primitives" }
 default = [ "std" ]
 std = [
 	"codec/std",
-	"primitives/std",
+	"sp-core/std",
 	"sp-std/std",
 	"sp-runtime/std",
-	"state-machine",
+	"sp-state-machine",
 	"sp-version/std",
 ]

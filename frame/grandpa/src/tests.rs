@@ -20,7 +20,7 @@
 
 use sp_runtime::{testing::Digest, traits::{Header, OnFinalize}};
 use crate::mock::*;
-use system::{EventRecord, Phase};
+use frame_system::{EventRecord, Phase};
 use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;
 use super::*;

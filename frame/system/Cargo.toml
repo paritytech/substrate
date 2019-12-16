@@ -8,12 +8,12 @@ edition = "2018"
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
+sp-core = { path = "../../primitives/core", default-features = false }
 sp-std = { path = "../../primitives/std", default-features = false }
 sp-io ={ path = "../../primitives/io", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 sp-version = { path = "../../primitives/version", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
+frame-support = { path = "../support", default-features = false }
 impl-trait-for-tuples = "0.1.3"
 
 [dev-dependencies]
@@ -25,10 +25,10 @@ std = [
 	"serde",
 	"safe-mix/std",
 	"codec/std",
-	"primitives/std",
+	"sp-core/std",
 	"sp-std/std",
 	"sp-io/std",
-	"support/std",
+	"frame-support/std",
 	"sp-runtime/std",
 	"sp-version/std",
 ]

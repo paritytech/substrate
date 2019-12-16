@@ -51,10 +51,10 @@
 //! This is an example of a module that exposes a privileged function:
 //!
 //! ```
-//! use support::{decl_module, dispatch};
-//! use system::ensure_root;
+//! use frame_support::{decl_module, dispatch};
+//! use frame_system::{self as system, ensure_root};
 //!
-//! pub trait Trait: system::Trait {}
+//! pub trait Trait: frame_system::Trait {}
 //!
 //! decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -90,15 +90,15 @@ use sp_std::prelude::*;
 use sp_runtime::{
 	traits::{StaticLookup, Dispatchable}, DispatchError,
 };
-use support::{
+use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, ensure,
 	weights::SimpleDispatchInfo,
 };
-use system::ensure_signed;
+use frame_system::{self as system, ensure_signed};
 
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// A sudo-able call.
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
@@ -125,7 +125,7 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), "only the current sudo key can sudo");
 
-			let res = match proposal.dispatch(system::RawOrigin::Root.into()) {
+			let res = match proposal.dispatch(frame_system::RawOrigin::Root.into()) {
 				Ok(_) => true,
 				Err(e) => {
 					let e: DispatchError = e.into();
@@ -175,7 +175,7 @@ decl_module! {
 
 			let who = T::Lookup::lookup(who)?;
 
-			let res = match proposal.dispatch(system::RawOrigin::Signed(who).into()) {
+			let res = match proposal.dispatch(frame_system::RawOrigin::Signed(who).into()) {
 				Ok(_) => true,
 				Err(e) => {
 					let e: DispatchError = e.into();
@@ -190,7 +190,7 @@ decl_module! {
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
+	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
 		/// A sudo just took place.
 		Sudid(bool),
 		/// The sudoer just switched identity; the old key is supplied.
