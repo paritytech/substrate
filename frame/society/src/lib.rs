@@ -78,8 +78,8 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The receiver of the signal for when the members have changed.
 	type MembershipChanged: ChangeMembers<Self::AccountId>;
 
-	/// The number of blocks between periods.
-	type Period: Get<Self::BlockNumber>;
+	/// The number of blocks between candidate/membership rotation periods.
+	type RotationPeriod: Get<Self::BlockNumber>;
 
 	/// The maximum duration of the payout lock.
 	type MaxLockDuration: Get<Self::BlockNumber>;
@@ -218,8 +218,27 @@ decl_storage! {
 decl_module! {
 	/// The module declaration.
 	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: T::Origin {
-		// Initializing events
-		// this is needed only if you are using events in your module
+		/// The minimum amount of a deposit required for a bid to be made.
+		const CandidateDeposit: BalanceOf<T, I> = T::CandidateDeposit::get();
+
+		/// The proportion of the unpaid reward that gets deducted in the case that either a skeptic
+		/// doesn't vote or someone votes in the wrong way.
+		const WrongSideDeduction: BalanceOf<T, I> = T::WrongSideDeduction::get();
+
+		/// The number of times a member may vote the wrong way (or not at all, when they are a skeptic)
+		/// before they become suspended.
+		const MaxStrikes: u32 = T::MaxStrikes::get();
+
+		/// The amount of incentive paid within each period. Doesn't include VoterTip.
+		const PeriodSpend: BalanceOf<T, I> = T::PeriodSpend::get();
+
+		/// The number of blocks between candidate/membership rotation periods.
+		const RotationPeriod: T::BlockNumber = T::RotationPeriod::get();
+
+		/// The number of blocks between membership challenges.
+		const ChallengePeriod: T::BlockNumber = T::ChallengePeriod::get();
+
+		// Used for handling module events.
 		fn deposit_event() = default;
 
 		/// Make a bid for entry.
@@ -416,7 +435,7 @@ decl_module! {
 			let mut members = vec![];
 
 			// Run a candidate/membership rotation
-			if (n % T::Period::get()).is_zero() {
+			if (n % T::RotationPeriod::get()).is_zero() {
 				members = <Members<T, I>>::get();
 				Self::rotate_period(&mut members);
 			}

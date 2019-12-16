@@ -40,7 +40,7 @@ parameter_types! {
 	pub const CandidateDeposit: u64 = 25;
 	pub const WrongSideDeduction: u64 = 2;
 	pub const MaxStrikes: u32 = 2;
-	pub const Period: u64 = 4;
+	pub const RotationPeriod: u64 = 4;
 	pub const PeriodSpend: u64 = 1000;
 	pub const MaxLockDuration: u64 = 100;
 	pub const FounderSetAccount: u64 = 1;
@@ -96,7 +96,7 @@ impl Trait for Test {
 	type MaxStrikes = MaxStrikes;
 	type PeriodSpend = PeriodSpend;
 	type MembershipChanged = ();
-	type Period = Period;
+	type RotationPeriod = RotationPeriod;
 	type MaxLockDuration = MaxLockDuration;
 	type FounderOrigin = EnsureSignedBy<FounderSetAccount, u128>;
 	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
