@@ -33,7 +33,7 @@ sp-version = { version = "2.0.0", default-features = false, path = "../../../pri
 # frame dependencies
 pallet-authority-discovery = { version = "2.0.0", default-features = false, path = "../../../frame/authority-discovery" }
 pallet-authorship = { version = "2.0.0", default-features = false, path = "../../../frame/authorship" }
-pallet-babe = { version = "2.0.0", default-features = false, path = "../../../frame/babe" }
+pallet-babe = { version = "0.8", default-features = false, path = "../../../frame/babe" }
 pallet-balances = { version = "2.0.0", default-features = false, path = "../../../frame/balances" }
 pallet-collective = { version = "2.0.0", default-features = false, path = "../../../frame/collective" }
 pallet-contracts = { version = "2.0.0", default-features = false, path = "../../../frame/contracts" }
