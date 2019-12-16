@@ -327,7 +327,8 @@ decl_module! {
 				<Strikes<T>>::remove(&who);
 			}
 
-			<SuspendedMembers<T>>::remove(who);
+			<SuspendedMembers<T>>::remove(&who);
+			Self::deposit_event(RawEvent::Removed(who));
 		}
 
 		/// Allow founder origin to make judgement on a suspended candidate.
@@ -419,6 +420,12 @@ decl_event! {
 		/// A group of candidates have been inducted. The batch's primary is the first value, the
 		/// batch in full is the second.
 		Inducted(AccountId, Vec<AccountId>),
+		/// A member has been removed from Society
+		Removed(AccountId),
+		/// A candidate has been suspended
+		CandidateSuspended(AccountId),
+		/// A member has been suspended
+		MemberSuspended(AccountId),
 	}
 }
 
@@ -498,6 +505,7 @@ impl<T: Trait> Module<T> {
 				Ok(_) => Err("already a member"),
 				Err(i) => {
 					members.insert(i, m.clone());
+					T::MembershipChanged::change_members_sorted(&[m.clone()], &[], members);
 					Ok(())
 				}
 			}
@@ -505,6 +513,9 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Remove a member from the members list.
+	///
+	/// NOTE: This does not correctly clean up a member from storage. It simply
+	/// removes them from the Members storage item.
 	pub fn remove_member(m: &T::AccountId) -> Result {
 		<Members<T>>::mutate(|members|
 			match members.binary_search(&m) {
@@ -600,7 +611,8 @@ impl<T: Trait> Module<T> {
 					Some((candidate, total_approvals))
 				} else {
 					// Suspend Candidate
-					<SuspendedCandidates<T>>::insert(candidate, (value, kind));
+					<SuspendedCandidates<T>>::insert(&candidate, (value, kind));
+					Self::deposit_event(RawEvent::CandidateSuspended(candidate));
 					None
 				}
 			}).collect::<Vec<_>>();
@@ -710,6 +722,7 @@ impl<T: Trait> Module<T> {
 		if Self::remove_member(&who).is_ok() {
 			<SuspendedMembers<T>>::insert(who, ());
 			<Strikes<T>>::remove(who);
+			Self::deposit_event(RawEvent::MemberSuspended(who.clone()));
 		}
 	}
 
