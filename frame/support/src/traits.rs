@@ -18,9 +18,9 @@
 //!
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
-use rstd::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
+use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode};
-use primitives::u32_trait::Value as U32;
+use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	ConsensusEngineId,
 	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
@@ -777,4 +777,3 @@ pub trait ValidatorRegistration<ValidatorId> {
 	/// module
 	fn is_registered(id: &ValidatorId) -> bool;
 }
-

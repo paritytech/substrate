@@ -16,25 +16,25 @@
 
 //! Primitives for the runtime modules.
 
-use rstd::prelude::*;
-use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
-use runtime_io;
+use sp_std::prelude::*;
+use sp_std::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
+use sp_io;
 #[cfg(feature = "std")]
 use std::fmt::Display;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use primitives::{self, Hasher, Blake2Hasher, TypeId};
+use sp_core::{self, Hasher, Blake2Hasher, TypeId};
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
 use crate::generic::{Digest, DigestItem};
-pub use arithmetic::traits::{
+pub use sp_arithmetic::traits::{
 	SimpleArithmetic, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
 	CheckedShl, CheckedShr, IntegerSquareRoot
 };
-use app_crypto::AppKey;
+use sp_application_crypto::AppKey;
 use impl_trait_for_tuples::impl_for_tuples;
 
 /// A lazy value.
@@ -58,17 +58,17 @@ pub trait IdentifyAccount {
 	fn into_account(self) -> Self::AccountId;
 }
 
-impl IdentifyAccount for primitives::ed25519::Public {
+impl IdentifyAccount for sp_core::ed25519::Public {
 	type AccountId = Self;
 	fn into_account(self) -> Self { self }
 }
 
-impl IdentifyAccount for primitives::sr25519::Public {
+impl IdentifyAccount for sp_core::sr25519::Public {
 	type AccountId = Self;
 	fn into_account(self) -> Self { self }
 }
 
-impl IdentifyAccount for primitives::ecdsa::Public {
+impl IdentifyAccount for sp_core::ecdsa::Public {
 	type AccountId = Self;
 	fn into_account(self) -> Self { self }
 }
@@ -81,26 +81,26 @@ pub trait Verify {
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool;
 }
 
-impl Verify for primitives::ed25519::Signature {
-	type Signer = primitives::ed25519::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ed25519::Public) -> bool {
-		runtime_io::crypto::ed25519_verify(self, msg.get(), signer)
+impl Verify for sp_core::ed25519::Signature {
+	type Signer = sp_core::ed25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::ed25519::Public) -> bool {
+		sp_io::crypto::ed25519_verify(self, msg.get(), signer)
 	}
 }
 
-impl Verify for primitives::sr25519::Signature {
-	type Signer = primitives::sr25519::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::sr25519::Public) -> bool {
-		runtime_io::crypto::sr25519_verify(self, msg.get(), signer)
+impl Verify for sp_core::sr25519::Signature {
+	type Signer = sp_core::sr25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::sr25519::Public) -> bool {
+		sp_io::crypto::sr25519_verify(self, msg.get(), signer)
 	}
 }
 
-impl Verify for primitives::ecdsa::Signature {
-	type Signer = primitives::ecdsa::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ecdsa::Public) -> bool {
-		match runtime_io::crypto::secp256k1_ecdsa_recover_compressed(
+impl Verify for sp_core::ecdsa::Signature {
+	type Signer = sp_core::ecdsa::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::ecdsa::Public) -> bool {
+		match sp_io::crypto::secp256k1_ecdsa_recover_compressed(
 			self.as_ref(),
-			&runtime_io::hashing::blake2_256(msg.get()),
+			&sp_io::hashing::blake2_256(msg.get()),
 		) {
 			Ok(pubkey) => <dyn AsRef<[u8]>>::as_ref(signer) == &pubkey[..],
 			_ => false,
@@ -117,19 +117,19 @@ pub trait AppVerify {
 }
 
 impl<
-	S: Verify<Signer=<<T as AppKey>::Public as app_crypto::AppPublic>::Generic> + From<T>,
-	T: app_crypto::Wraps<Inner=S> + app_crypto::AppKey + app_crypto::AppSignature +
+	S: Verify<Signer=<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic> + From<T>,
+	T: sp_application_crypto::Wraps<Inner=S> + sp_application_crypto::AppKey + sp_application_crypto::AppSignature +
 		AsRef<S> + AsMut<S> + From<S>,
 > AppVerify for T where
 	<S as Verify>::Signer: IdentifyAccount<AccountId = <S as Verify>::Signer>,
-	<<T as AppKey>::Public as app_crypto::AppPublic>::Generic:
-		IdentifyAccount<AccountId = <<T as AppKey>::Public as app_crypto::AppPublic>::Generic>,
+	<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic:
+		IdentifyAccount<AccountId = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic>,
 {
 	type AccountId = <T as AppKey>::Public;
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<T as AppKey>::Public) -> bool {
-		use app_crypto::IsWrappedBy;
+		use sp_application_crypto::IsWrappedBy;
 		let inner: &S = self.as_ref();
-		let inner_pubkey = <<T as AppKey>::Public as app_crypto::AppPublic>::Generic::from_ref(&signer);
+		let inner_pubkey = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic::from_ref(&signer);
 		Verify::verify(inner, msg, inner_pubkey)
 	}
 }
@@ -316,15 +316,15 @@ impl<T: Default + Eq + PartialEq> Clear for T {
 /// A meta trait for all bit ops.
 pub trait SimpleBitOps:
 	Sized + Clear +
-	rstd::ops::BitOr<Self, Output = Self> +
-	rstd::ops::BitXor<Self, Output = Self> +
-	rstd::ops::BitAnd<Self, Output = Self>
+	sp_std::ops::BitOr<Self, Output = Self> +
+	sp_std::ops::BitXor<Self, Output = Self> +
+	sp_std::ops::BitAnd<Self, Output = Self>
 {}
 impl<T:
 	Sized + Clear +
-	rstd::ops::BitOr<Self, Output = Self> +
-	rstd::ops::BitXor<Self, Output = Self> +
-	rstd::ops::BitAnd<Self, Output = Self>
+	sp_std::ops::BitOr<Self, Output = Self> +
+	sp_std::ops::BitXor<Self, Output = Self> +
+	sp_std::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
 /// The block finalization trait. Implementing this lets you express what should happen
@@ -369,7 +369,7 @@ pub trait OffchainWorker<BlockNumber> {
 // traits must be fulfilled by all type parameters.
 pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq {
 	/// The hash type produced.
-	type Output: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+	type Output: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode;
 
 	/// The associated hash_db Hasher type.
@@ -391,23 +391,23 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 }
 
 /// Blake2-256 Hash implementation.
-#[derive(PartialEq, Eq, Clone, primitives::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, sp_core::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
-	type Output = primitives::H256;
+	type Output = sp_core::H256;
 	type Hasher = Blake2Hasher;
 	fn hash(s: &[u8]) -> Self::Output {
-		runtime_io::hashing::blake2_256(s).into()
+		sp_io::hashing::blake2_256(s).into()
 	}
 
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
-		runtime_io::trie::blake2_256_root(input)
+		sp_io::trie::blake2_256_root(input)
 	}
 
 	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output {
-		runtime_io::trie::blake2_256_ordered_root(input)
+		sp_io::trie::blake2_256_ordered_root(input)
 	}
 }
 
@@ -417,10 +417,10 @@ pub trait CheckEqual {
 	fn check_equal(&self, other: &Self);
 }
 
-impl CheckEqual for primitives::H256 {
+impl CheckEqual for sp_core::H256 {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
-		use primitives::hexdisplay::HexDisplay;
+		use sp_core::hexdisplay::HexDisplay;
 		if self != other {
 			println!(
 				"Hash: given={}, expected={}",
@@ -481,7 +481,7 @@ impl_maybe_marker!(
 	MaybeDisplay: Display;
 
 	/// A type that implements Hash when in std environment.
-	MaybeHash: rstd::hash::Hash;
+	MaybeHash: sp_std::hash::Hash;
 
 	/// A type that implements Serialize when in std environment.
 	MaybeSerialize: Serialize;
@@ -523,10 +523,10 @@ pub trait IsMember<MemberId> {
 /// You can also create a `new` one from those fields.
 pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Header number.
-	type Number: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+	type Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ Copy + MaybeDisplay + SimpleArithmetic + Codec;
 	/// Header hash type
-	type Hash: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
@@ -581,7 +581,7 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 	/// Header type.
 	type Header: Header<Hash=Self::Hash>;
 	/// Block hash type.
-	type Hash: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// Returns a reference to the header.
@@ -865,7 +865,7 @@ impl SignedExtension for () {
 	type Call = ();
 	type Pre = ();
 	type DispatchInfo = ();
-	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
+	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
@@ -906,7 +906,7 @@ pub trait Applyable: Sized + Send + Sync {
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
-pub struct ApiRef<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
+pub struct ApiRef<'a, T>(T, sp_std::marker::PhantomData<&'a ()>);
 
 impl<'a, T> From<T> for ApiRef<'a, T> {
 	fn from(api: T) -> Self {
@@ -914,7 +914,7 @@ impl<'a, T> From<T> for ApiRef<'a, T> {
 	}
 }
 
-impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
+impl<'a, T> sp_std::ops::Deref for ApiRef<'a, T> {
 	type Target = T;
 
 	fn deref(&self) -> &Self::Target {
@@ -922,7 +922,7 @@ impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
 	}
 }
 
-impl<'a, T> rstd::ops::DerefMut for ApiRef<'a, T> {
+impl<'a, T> sp_std::ops::DerefMut for ApiRef<'a, T> {
 	fn deref_mut(&mut self) -> &mut T {
 		&mut self.0
 	}
@@ -1161,7 +1161,7 @@ macro_rules! impl_opaque_keys {
 			/// The generated key pairs are stored in the keystore.
 			///
 			/// Returns the concatenated SCALE encoded public keys.
-			pub fn generate(seed: Option<$crate::rstd::vec::Vec<u8>>) -> $crate::rstd::vec::Vec<u8> {
+			pub fn generate(seed: Option<$crate::sp_std::vec::Vec<u8>>) -> $crate::sp_std::vec::Vec<u8> {
 				let keys = Self{
 					$(
 						$field: <
@@ -1233,19 +1233,19 @@ impl Printable for usize {
 
 impl Printable for u64 {
 	fn print(&self) {
-		runtime_io::misc::print_num(*self);
+		sp_io::misc::print_num(*self);
 	}
 }
 
 impl Printable for &[u8] {
 	fn print(&self) {
-		runtime_io::misc::print_hex(self);
+		sp_io::misc::print_hex(self);
 	}
 }
 
 impl Printable for &str {
 	fn print(&self) {
-		runtime_io::misc::print_utf8(self.as_bytes());
+		sp_io::misc::print_utf8(self.as_bytes());
 	}
 }
 
@@ -1281,8 +1281,8 @@ mod tests {
 	use crate::codec::{Encode, Decode, Input};
 
 	mod t {
-		use primitives::crypto::KeyTypeId;
-		use app_crypto::{app_crypto, sr25519};
+		use sp_core::crypto::KeyTypeId;
+		use sp_application_crypto::{app_crypto, sr25519};
 		app_crypto!(sr25519, KeyTypeId(*b"test"));
 	}
 

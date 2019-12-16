@@ -1,0 +1,17 @@
+[package]
+name = "substrate-test-runtime-client"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+sc-block-builder = { path = "../../../client/block-builder" }
+substrate-test-client = { path = "../../client" }
+sp-core = { path = "../../../primitives/core" }
+substrate-test-runtime = { path = "../../runtime" }
+sp-runtime = { path = "../../../primitives/runtime" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+sc-client-api = { path = "../../../client/api" }
+sc-client = { path = "../../../client/" }
+futures = "0.3.1"

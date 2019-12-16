@@ -18,8 +18,8 @@
 
 use std::collections::{BTreeMap, HashSet, HashMap};
 use hash_db::{Hasher, Prefix, EMPTY_PREFIX};
-use trie::DBValue;
-use trie::MemoryDB;
+use sp_trie::DBValue;
+use sp_trie::MemoryDB;
 use parking_lot::RwLock;
 use crate::changes_trie::{BuildCache, RootsStorage, Storage, AnchorBlockId, BlockNumber};
 use crate::trie_backend_essence::TrieBackendStorage;

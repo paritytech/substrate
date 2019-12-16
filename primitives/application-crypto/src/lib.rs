@@ -21,11 +21,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[doc(hidden)]
-pub use primitives::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wraps}, RuntimeDebug};
+pub use sp_core::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wraps}, RuntimeDebug};
 #[doc(hidden)]
 #[cfg(feature = "full_crypto")]
-pub use primitives::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
-pub use primitives::{crypto::{KeyTypeId, key_types}};
+pub use sp_core::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
+pub use sp_core::{crypto::{KeyTypeId, key_types}};
 
 #[doc(hidden)]
 pub use codec;
@@ -33,7 +33,7 @@ pub use codec;
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]
-pub use rstd::{ops::Deref, vec::Vec};
+pub use sp_std::{ops::Deref, vec::Vec};
 
 pub mod ed25519;
 pub mod sr25519;
@@ -45,7 +45,7 @@ pub use traits::*;
 /// Application-specific types whose identifier is `$key_type`.
 ///
 /// ```rust
-///# use sc_application_crypto::{app_crypto, wrap, ed25519, KeyTypeId};
+///# use sp_application_crypto::{app_crypto, wrap, ed25519, KeyTypeId};
 /// // Declare a new set of crypto types using Ed25519 logic that identifies as `KeyTypeId`
 /// // of value `b"fuba"`.
 /// app_crypto!(ed25519, KeyTypeId(*b"_uba"));
@@ -66,7 +66,7 @@ macro_rules! app_crypto {
 /// Application-specific types whose identifier is `$key_type`.
 ///
 /// ```rust
-///# use sc_application_crypto::{app_crypto, wrap, ed25519, KeyTypeId};
+///# use sp_application_crypto::{app_crypto, wrap, ed25519, KeyTypeId};
 /// // Declare a new set of crypto types using Ed25519 logic that identifies as `KeyTypeId`
 /// // of value `b"fuba"`.
 /// app_crypto!(ed25519, KeyTypeId(*b"_uba"));
@@ -102,7 +102,7 @@ macro_rules! app_crypto_pair {
 			type Seed = <$pair as $crate::Pair>::Seed;
 			type Signature = Signature;
 			type DeriveError = <$pair as $crate::Pair>::DeriveError;
-			
+
 			#[cfg(feature = "std")]
 			fn generate_with_phrase(password: Option<&str>) -> (Self, String, Self::Seed) {
 				let r = <$pair>::generate_with_phrase(password);
@@ -353,7 +353,7 @@ macro_rules! app_crypto_signature_not_full_crypto {
 			)]
 			pub struct Signature($sig);
 		}
-		
+
 		impl $crate::CryptoType for Signature {}
 
 		impl $crate::AppKey for Signature {
@@ -390,7 +390,7 @@ macro_rules! app_crypto_signature_common {
 /// Implement bidirectional `From` and on-way `AsRef`/`AsMut` for two types, `$inner` and `$outer`.
 ///
 /// ```rust
-/// sc_application_crypto::wrap! {
+/// sp_application_crypto::wrap! {
 ///     pub struct Wrapper(u32);
 /// }
 /// ```

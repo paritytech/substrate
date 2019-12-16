@@ -20,21 +20,20 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{result, prelude::*};
-use rstd::collections::btree_set::BTreeSet;
-use support::{decl_module, decl_storage, ensure};
-use support::traits::{FindAuthor, VerifySeal, Get};
-use support::dispatch::Result as DispatchResult;
+use sp_std::{result, prelude::*};
+use sp_std::collections::btree_set::BTreeSet;
+use frame_support::{decl_module, decl_storage, dispatch, ensure};
+use frame_support::traits::{FindAuthor, VerifySeal, Get};
 use codec::{Encode, Decode};
-use system::ensure_none;
+use frame_system::ensure_none;
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
-use support::weights::SimpleDispatchInfo;
-use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
+use frame_support::weights::SimpleDispatchInfo;
+use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData};
 use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
 const MAX_UNCLES: usize = 10;
 
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// Find the author of a block.
 	type FindAuthor: FindAuthor<Self::AccountId>;
 	/// The number of blocks back we should accept uncles.
@@ -98,7 +97,7 @@ impl<H, A> FilterUncle<H, A> for () {
 /// A filter on uncles which verifies seals and does no additional checks.
 /// This is well-suited to consensus modes such as PoW where the cost of
 /// equivocating is high.
-pub struct SealVerify<T>(rstd::marker::PhantomData<T>);
+pub struct SealVerify<T>(sp_std::marker::PhantomData<T>);
 
 impl<Header, Author, T: VerifySeal<Header, Author>> FilterUncle<Header, Author>
 	for SealVerify<T>
@@ -116,7 +115,7 @@ impl<Header, Author, T: VerifySeal<Header, Author>> FilterUncle<Header, Author>
 /// one uncle included per author per height.
 ///
 /// This does O(n log n) work in the number of uncles included.
-pub struct OnePerAuthorPerHeight<T, N>(rstd::marker::PhantomData<(T, N)>);
+pub struct OnePerAuthorPerHeight<T, N>(sp_std::marker::PhantomData<(T, N)>);
 
 impl<Header, Author, T> FilterUncle<Header, Author>
 	for OnePerAuthorPerHeight<T, Header::Number>
@@ -185,7 +184,7 @@ decl_module! {
 
 		/// Provide a set of uncles.
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
-		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> DispatchResult {
+		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> dispatch::Result {
 			ensure_none(origin)?;
 			ensure!(new_uncles.len() <= MAX_UNCLES, "Too many uncles");
 
@@ -210,7 +209,7 @@ impl<T: Trait> Module<T> {
 			return author;
 		}
 
-		let digest = <system::Module<T>>::digest();
+		let digest = <frame_system::Module<T>>::digest();
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
 		if let Some(author) = T::FindAuthor::find_author(pre_runtime_digests) {
 			<Self as Store>::Author::put(&author);
@@ -220,8 +219,8 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> DispatchResult {
-		let now = <system::Module<T>>::block_number();
+	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> dispatch::Result {
+		let now = <frame_system::Module<T>>::block_number();
 
 		let mut uncles = <Self as Store>::Uncles::get();
 		uncles.push(UncleEntryItem::InclusionHeight(now));
@@ -260,7 +259,7 @@ impl<T: Trait> Module<T> {
 		accumulator: &mut <T::FilterUncle as FilterUncle<T::Header, T::AccountId>>::Accumulator,
 	) -> Result<Option<T::AccountId>, &'static str>
 	{
-		let now = <system::Module<T>>::block_number();
+		let now = <frame_system::Module<T>>::block_number();
 
 		let (minimum_height, maximum_height) = {
 			let uncle_generations = T::UncleGenerations::get();
@@ -285,7 +284,7 @@ impl<T: Trait> Module<T> {
 
 		{
 			let parent_number = uncle.number().clone() - One::one();
-			let parent_hash = <system::Module<T>>::block_hash(&parent_number);
+			let parent_hash = <frame_system::Module<T>>::block_hash(&parent_number);
 			if &parent_hash != uncle.parent_hash() {
 				return Err("uncle parent not in chain");
 			}
@@ -296,7 +295,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		let duplicate = existing_uncles.into_iter().find(|h| **h == hash).is_some();
-		let in_chain = <system::Module<T>>::block_hash(uncle.number()) == hash;
+		let in_chain = <frame_system::Module<T>>::block_hash(uncle.number()) == hash;
 
 		if duplicate || in_chain {
 			return Err("uncle already included")
@@ -379,14 +378,14 @@ impl<T: Trait> ProvideInherent for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::H256;
+	use sp_core::H256;
 	use sp_runtime::{
 		traits::{BlakeTwo256, IdentityLookup}, testing::Header, generic::DigestItem, Perbill,
 	};
-	use support::{parameter_types, impl_outer_origin, ConsensusEngineId, weights::Weight};
+	use frame_support::{parameter_types, impl_outer_origin, ConsensusEngineId, weights::Weight};
 
 	impl_outer_origin!{
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -399,7 +398,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -428,7 +427,7 @@ mod tests {
 		type EventHandler = ();
 	}
 
-	type System = system::Module<Test>;
+	type System = frame_system::Module<Test>;
 	type Authorship = Module<Test>;
 
 	const TEST_ID: ConsensusEngineId = [1, 2, 3, 4];
@@ -499,8 +498,8 @@ mod tests {
 		)
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	fn new_test_ext() -> sp_io::TestExternalities {
+		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		t.into()
 	}
 

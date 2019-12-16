@@ -1,0 +1,14 @@
+[package]
+name = "sp-runtime-interface-test"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+sp-runtime-interface = { path = "../" }
+sc-executor = { path = "../../../client/executor" }
+sp-runtime-interface-test-wasm = { path = "../test-wasm" }
+sp-state-machine = { path = "../../../primitives/state-machine"  }
+sp-core = { path = "../../core" }
+sp-io = { path = "../../io" }
