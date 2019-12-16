@@ -18,7 +18,7 @@
 #[cfg(test)]
 mod tests {
 	// No doc but impl_from_frame_system
-	support::decl_error!(
+	frame_support::decl_error!(
 		#[substrate(impl_from_frame_system(frame_system))]
 		pub enum Error1 {
 			MyError,
@@ -26,7 +26,7 @@ mod tests {
 	);
 
 	// Doc and impl_from_frame_system
-	support::decl_error!(
+	frame_support::decl_error!(
 		/// Doc
 		#[substrate(impl_from_frame_system(frame_system))]
 		/// Doc
@@ -36,14 +36,14 @@ mod tests {
 	);
 
 	// No doc no impl_from_frame_system
-	support::decl_error!(
+	frame_support::decl_error!(
 		pub enum Error3 {
 			MyError,
 		}
 	);
 
 	// Doc but no impl_from_frame_system
-	support::decl_error!(
+	frame_support::decl_error!(
 		/// Doc
 		pub enum Error4 {
 			MyError,

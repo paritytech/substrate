@@ -21,8 +21,8 @@ use crate::exec::{
 	Ext, ExecResult, ExecError, ExecReturnValue, StorageKey, TopicOf, STATUS_SUCCESS,
 };
 use crate::gas::{Gas, GasMeter, Token, GasMeterResult, approx_gas_for_balance};
-use sandbox;
-use system;
+use sp_sandbox;
+use frame_system;
 use sp_std::prelude::*;
 use sp_std::convert::TryInto;
 use sp_std::mem;
@@ -48,7 +48,7 @@ pub(crate) struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
 	scratch_buf: Vec<u8>,
 	schedule: &'a Schedule,
-	memory: sandbox::Memory,
+	memory: sp_sandbox::Memory,
 	gas_meter: &'a mut GasMeter<E::T>,
 	special_trap: Option<SpecialTrap>,
 }
@@ -57,7 +57,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		ext: &'a mut E,
 		input_data: Vec<u8>,
 		schedule: &'a Schedule,
-		memory: sandbox::Memory,
+		memory: sp_sandbox::Memory,
 		gas_meter: &'a mut GasMeter<E::T>,
 	) -> Self {
 		Runtime {
@@ -74,7 +74,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 
 pub(crate) fn to_execution_result<E: Ext>(
 	runtime: Runtime<E>,
-	sandbox_result: Result<sandbox::ReturnValue, sandbox::Error>,
+	sandbox_result: Result<sp_sandbox::ReturnValue, sp_sandbox::Error>,
 ) -> ExecResult {
 	// Special case. The trap was the result of the execution `return` host function.
 	if let Some(SpecialTrap::Return(data)) = runtime.special_trap {
@@ -84,12 +84,12 @@ pub(crate) fn to_execution_result<E: Ext>(
 	// Check the exact type of the error.
 	match sandbox_result {
 		// No traps were generated. Proceed normally.
-		Ok(sandbox::ReturnValue::Unit) => {
+		Ok(sp_sandbox::ReturnValue::Unit) => {
 			let mut buffer = runtime.scratch_buf;
 			buffer.clear();
 			Ok(ExecReturnValue { status: STATUS_SUCCESS, data: buffer })
 		}
-		Ok(sandbox::ReturnValue::Value(sandbox::TypedValue::I32(exit_code))) => {
+		Ok(sp_sandbox::ReturnValue::Value(sp_sandbox::TypedValue::I32(exit_code))) => {
 			let status = (exit_code & 0xFF).try_into()
 				.expect("exit_code is masked into the range of a u8; qed");
 			Ok(ExecReturnValue { status, data: runtime.scratch_buf })
@@ -105,10 +105,10 @@ pub(crate) fn to_execution_result<E: Ext>(
 		//
 		// Because panics are really undesirable in the runtime code, we treat this as
 		// a trap for now. Eventually, we might want to revisit this.
-		Err(sandbox::Error::Module) =>
+		Err(sp_sandbox::Error::Module) =>
 			Err(ExecError { reason: "validation error", buffer: runtime.scratch_buf }),
 		// Any other kind of a trap should result in a failure.
-		Err(sandbox::Error::Execution) | Err(sandbox::Error::OutOfBounds) =>
+		Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
 			Err(ExecError { reason: "during execution", buffer: runtime.scratch_buf }),
 	}
 }
@@ -182,10 +182,10 @@ fn charge_gas<T: Trait, Tok: Token<T>>(
 	gas_meter: &mut GasMeter<T>,
 	metadata: &Tok::Metadata,
 	token: Tok,
-) -> Result<(), sandbox::HostError> {
+) -> Result<(), sp_sandbox::HostError> {
 	match gas_meter.charge(metadata, token) {
 		GasMeterResult::Proceed => Ok(()),
-		GasMeterResult::OutOfGas => Err(sandbox::HostError),
+		GasMeterResult::OutOfGas => Err(sp_sandbox::HostError),
 	}
 }
 
@@ -201,11 +201,11 @@ fn read_sandbox_memory<E: Ext>(
 	ctx: &mut Runtime<E>,
 	ptr: u32,
 	len: u32,
-) -> Result<Vec<u8>, sandbox::HostError> {
+) -> Result<Vec<u8>, sp_sandbox::HostError> {
 	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(len))?;
 
 	let mut buf = vec![0u8; len as usize];
-	ctx.memory.get(ptr, buf.as_mut_slice()).map_err(|_| sandbox::HostError)?;
+	ctx.memory.get(ptr, buf.as_mut_slice()).map_err(|_| sp_sandbox::HostError)?;
 	Ok(buf)
 }
 
@@ -221,11 +221,11 @@ fn read_sandbox_memory_into_scratch<E: Ext>(
 	ctx: &mut Runtime<E>,
 	ptr: u32,
 	len: u32,
-) -> Result<(), sandbox::HostError> {
+) -> Result<(), sp_sandbox::HostError> {
 	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(len))?;
 
 	ctx.scratch_buf.resize(len as usize, 0);
-	ctx.memory.get(ptr, ctx.scratch_buf.as_mut_slice()).map_err(|_| sandbox::HostError)?;
+	ctx.memory.get(ptr, ctx.scratch_buf.as_mut_slice()).map_err(|_| sp_sandbox::HostError)?;
 	Ok(())
 }
 
@@ -241,7 +241,7 @@ fn read_sandbox_memory_into_buf<E: Ext>(
 	ctx: &mut Runtime<E>,
 	ptr: u32,
 	buf: &mut [u8],
-) -> Result<(), sandbox::HostError> {
+) -> Result<(), sp_sandbox::HostError> {
 	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(buf.len() as u32))?;
 
 	ctx.memory.get(ptr, buf).map_err(Into::into)
@@ -260,9 +260,9 @@ fn read_sandbox_memory_as<E: Ext, D: Decode>(
 	ctx: &mut Runtime<E>,
 	ptr: u32,
 	len: u32,
-) -> Result<D, sandbox::HostError> {
+) -> Result<D, sp_sandbox::HostError> {
 	let buf = read_sandbox_memory(ctx, ptr, len)?;
-	D::decode(&mut &buf[..]).map_err(|_| sandbox::HostError)
+	D::decode(&mut &buf[..]).map_err(|_| sp_sandbox::HostError)
 }
 
 /// Write the given buffer to the designated location in the sandbox memory, consuming
@@ -276,10 +276,10 @@ fn read_sandbox_memory_as<E: Ext, D: Decode>(
 fn write_sandbox_memory<T: Trait>(
 	schedule: &Schedule,
 	gas_meter: &mut GasMeter<T>,
-	memory: &sandbox::Memory,
+	memory: &sp_sandbox::Memory,
 	ptr: u32,
 	buf: &[u8],
-) -> Result<(), sandbox::HostError> {
+) -> Result<(), sp_sandbox::HostError> {
 	charge_gas(gas_meter, schedule, RuntimeToken::WriteMemory(buf.len() as u32))?;
 
 	memory.set(ptr, buf)?;
@@ -318,7 +318,7 @@ define_env!(Env, <E: Ext>,
 	// - value_len: the length of the value. If `value_non_null` is set to 0, then this parameter is ignored.
 	ext_set_storage(ctx, key_ptr: u32, value_non_null: u32, value_ptr: u32, value_len: u32) => {
 		if value_non_null != 0 && ctx.ext.max_value_size() < value_len {
-			return Err(sandbox::HostError);
+			return Err(sp_sandbox::HostError);
 		}
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
@@ -328,7 +328,7 @@ define_env!(Env, <E: Ext>,
 			} else {
 				None
 			};
-		ctx.ext.set_storage(key, value).map_err(|_| sandbox::HostError)?;
+		ctx.ext.set_storage(key, value).map_err(|_| sp_sandbox::HostError)?;
 
 		Ok(())
 	},
@@ -382,7 +382,7 @@ define_env!(Env, <E: Ext>,
 		input_data_ptr: u32,
 		input_data_len: u32
 	) -> u32 => {
-		let callee: <<E as Ext>::T as system::Trait>::AccountId =
+		let callee: <<E as Ext>::T as frame_system::Trait>::AccountId =
 			read_sandbox_memory_as(ctx, callee_ptr, callee_len)?;
 		let value: BalanceOf<<E as Ext>::T> =
 			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
@@ -532,7 +532,7 @@ define_env!(Env, <E: Ext>,
 		// The trap mechanism is used to immediately terminate the execution.
 		// This trap should be handled appropriately before returning the result
 		// to the user of this crate.
-		Err(sandbox::HostError)
+		Err(sp_sandbox::HostError)
 	},
 
 	// Stores the address of the caller into the scratch buffer.
@@ -597,7 +597,7 @@ define_env!(Env, <E: Ext>,
 	ext_random(ctx, subject_ptr: u32, subject_len: u32) => {
 		// The length of a subject can't exceed `max_subject_len`.
 		if subject_len > ctx.schedule.max_subject_len {
-			return Err(sandbox::HostError);
+			return Err(sp_sandbox::HostError);
 		}
 
 		let subject_buf = read_sandbox_memory(ctx, subject_ptr, subject_len)?;
@@ -675,7 +675,7 @@ define_env!(Env, <E: Ext>,
 		delta_ptr: u32,
 		delta_count: u32
 	) => {
-		let dest: <<E as Ext>::T as system::Trait>::AccountId =
+		let dest: <<E as Ext>::T as frame_system::Trait>::AccountId =
 			read_sandbox_memory_as(ctx, dest_ptr, dest_len)?;
 		let code_hash: CodeHash<<E as Ext>::T> =
 			read_sandbox_memory_as(ctx, code_hash_ptr, code_hash_len)?;
@@ -696,7 +696,7 @@ define_env!(Env, <E: Ext>,
 				delta.push(delta_key);
 
 				// Offset key_ptr to the next element.
-				key_ptr = key_ptr.checked_add(KEY_SIZE as u32).ok_or_else(|| sandbox::HostError)?;
+				key_ptr = key_ptr.checked_add(KEY_SIZE as u32).ok_or_else(|| sp_sandbox::HostError)?;
 			}
 
 			delta
@@ -729,13 +729,13 @@ define_env!(Env, <E: Ext>,
 		let offset = offset as usize;
 		if offset > ctx.scratch_buf.len() {
 			// Offset can't be larger than scratch buffer length.
-			return Err(sandbox::HostError);
+			return Err(sp_sandbox::HostError);
 		}
 
 		// This can't panic since `offset <= ctx.scratch_buf.len()`.
 		let src = &ctx.scratch_buf[offset..];
 		if src.len() != len as usize {
-			return Err(sandbox::HostError);
+			return Err(sp_sandbox::HostError);
 		}
 
 		// Finally, perform the write.
@@ -775,12 +775,12 @@ define_env!(Env, <E: Ext>,
 
 		// If there are more than `max_event_topics`, then trap.
 		if topics.len() > ctx.schedule.max_event_topics as usize {
-			return Err(sandbox::HostError);
+			return Err(sp_sandbox::HostError);
 		}
 
 		// Check for duplicate topics. If there are any, then trap.
 		if has_duplicates(&mut topics) {
-			return Err(sandbox::HostError);
+			return Err(sp_sandbox::HostError);
 		}
 
 		let event_data = read_sandbox_memory(ctx, data_ptr, data_len)?;

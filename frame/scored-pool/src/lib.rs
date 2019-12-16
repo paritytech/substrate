@@ -53,8 +53,8 @@
 //! ## Usage
 //!
 //! ```
-//! use support::{decl_module, dispatch};
-//! use system::ensure_signed;
+//! use frame_support::{decl_module, dispatch};
+//! use frame_system::{self as system, ensure_signed};
 //! use pallet_scored_pool::{self as scored_pool};
 //!
 //! pub trait Trait: scored_pool::Trait {}
@@ -93,17 +93,17 @@ use sp_std::{
 	fmt::Debug,
 	prelude::*,
 };
-use support::{
+use frame_support::{
 	decl_module, decl_storage, decl_event, ensure,
 	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
 };
-use system::{self, ensure_root, ensure_signed};
+use frame_system::{self as system, ensure_root, ensure_signed};
 use sp_runtime::{
 	traits::{EnsureOrigin, SimpleArithmetic, MaybeSerializeDeserialize, Zero, StaticLookup},
 };
 
-type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type PoolT<T, I> = Vec<(<T as system::Trait>::AccountId, Option<<T as Trait<I>>::Score>)>;
+type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type PoolT<T, I> = Vec<(<T as frame_system::Trait>::AccountId, Option<<T as Trait<I>>::Score>)>;
 
 /// The enum is supplied when refreshing the members set.
 /// Depending on the enum variant the corresponding associated
@@ -115,7 +115,7 @@ enum ChangeReceiver {
 	MembershipChanged,
 }
 
-pub trait Trait<I=DefaultInstance>: system::Trait {
+pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	/// The currency used for deposits.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
@@ -124,7 +124,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 		SimpleArithmetic + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug;
 
 	/// The overarching event type.
-	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
 
 	// The deposit which is reserved from candidates if they want to
 	// start a candidacy. The deposit gets returned when the candidacy is
@@ -203,7 +203,7 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T, I=DefaultInstance> where
-		<T as system::Trait>::AccountId,
+		<T as frame_system::Trait>::AccountId,
 	{
 		/// The given member was removed. See the transaction for who.
 		MemberRemoved,

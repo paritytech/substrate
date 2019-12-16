@@ -84,8 +84,8 @@
 //! ### Simple Code Snippet
 //!
 //! ```rust,ignore
-//! use support::{decl_module, dispatch};
-//! use system::ensure_signed;
+//! use frame_support::{decl_module, dispatch};
+//! use frame_system::{self as system, ensure_signed};
 //!
 //! pub trait Trait: assets::Trait { }
 //!
@@ -130,15 +130,15 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use support::{Parameter, decl_module, decl_event, decl_storage, ensure};
+use frame_support::{Parameter, decl_module, decl_event, decl_storage, ensure};
 use sp_runtime::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
-use system::ensure_signed;
+use frame_system::{self as system, ensure_signed};
 use sp_runtime::traits::One;
 
 /// The module configuration trait.
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The units in which we record balances.
 	type Balance: Member + Parameter + SimpleArithmetic + Default + Copy;
@@ -197,7 +197,7 @@ decl_module! {
 
 decl_event!(
 	pub enum Event<T> where
-		<T as system::Trait>::AccountId,
+		<T as frame_system::Trait>::AccountId,
 		<T as Trait>::Balance,
 		<T as Trait>::AssetId,
 	{
@@ -240,14 +240,14 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 
-	use support::{impl_outer_origin, assert_ok, assert_noop, parameter_types, weights::Weight};
-	use primitives::H256;
+	use frame_support::{impl_outer_origin, assert_ok, assert_noop, parameter_types, weights::Weight};
+	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	// For testing the module, we construct most of a mock runtime. This means
@@ -261,7 +261,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type Call = ();
@@ -288,7 +288,7 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> sp_io::TestExternalities {
-		system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 
 	#[test]

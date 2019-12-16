@@ -19,13 +19,13 @@
 use super::*;
 use mock::{Balances, ExtBuilder, Runtime, System, info_from_weight, CALL};
 use sp_runtime::traits::SignedExtension;
-use support::{
+use frame_support::{
 	assert_noop, assert_ok, assert_err,
 	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
 	Currency, ReservableCurrency, ExistenceRequirement::AllowDeath}
 };
-use transaction_payment::ChargeTransactionPayment;
-use system::RawOrigin;
+use pallet_transaction_payment::ChargeTransactionPayment;
+use frame_system::RawOrigin;
 
 const ID_1: LockIdentifier = *b"1       ";
 const ID_2: LockIdentifier = *b"2       ";
@@ -763,7 +763,7 @@ fn transfer_keep_alive_works() {
 #[should_panic="the balance of any account should always be more than existential deposit."]
 fn cannot_set_genesis_value_below_ed() {
 	mock::EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = 11);
-	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	let _ = GenesisConfig::<Runtime> {
 		balances: vec![(1, 10)],
 		vesting: vec![],

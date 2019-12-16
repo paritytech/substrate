@@ -10,12 +10,12 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 # Needed for various traits. In our case, `OnFinalize`.
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 # Needed for type-safe access to storage DB.
-support = { package = "frame-support", path = "../support", default-features = false }
+frame-support = { path = "../support", default-features = false }
 # `system` module provides us with all sorts of useful stuff and macros depend on it being around.
-system = { package = "frame-system", path = "../system", default-features = false }
+frame-system = { path = "../system", default-features = false }
 
 [dev-dependencies]
-primitives = { package = "sp-core",  path = "../../primitives/core" }
+sp-core = { path = "../../primitives/core" }
 sp-std = { path = "../../primitives/std" }
 sp-io = { path = "../../primitives/io" }
 
@@ -25,6 +25,6 @@ std = [
 	"serde",
 	"codec/std",
 	"sp-runtime/std",
-	"support/std",
-	"system/std",
+	"frame-support/std",
+	"frame-system/std",
 ]

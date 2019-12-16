@@ -76,7 +76,7 @@ extern crate self as sp_runtime_interface;
 
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use wasm_interface;
+pub use sp_wasm_interface;
 
 #[doc(hidden)]
 pub use sp_std;
@@ -130,7 +130,7 @@ pub use sp_std;
 ///         fn set_or_clear(&mut self, optional: Option<Vec<u8>>);
 ///     }
 ///
-///     impl Interface for &mut dyn externalities::Externalities {
+///     impl Interface for &mut dyn sp_externalities::Externalities {
 ///         fn call_some_complex_code(data: &[u8]) -> Vec<u8> { Vec::new() }
 ///         fn set_or_clear(&mut self, optional: Option<Vec<u8>>) {
 ///             match optional {
@@ -141,11 +141,11 @@ pub use sp_std;
 ///     }
 ///
 ///     pub fn call_some_complex_code(data: &[u8]) -> Vec<u8> {
-///         <&mut dyn externalities::Externalities as Interface>::call_some_complex_code(data)
+///         <&mut dyn sp_externalities::Externalities as Interface>::call_some_complex_code(data)
 ///     }
 ///
 ///     pub fn set_or_clear(optional: Option<Vec<u8>>) {
-///         externalities::with_externalities(|mut ext| Interface::set_or_clear(&mut ext, optional))
+///         sp_externalities::with_externalities(|mut ext| Interface::set_or_clear(&mut ext, optional))
 ///             .expect("`set_or_clear` called outside of an Externalities-provided environment.")
 ///     }
 ///
@@ -227,7 +227,7 @@ pub use sp_runtime_interface_proc_macro::runtime_interface;
 
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use externalities::{
+pub use sp_externalities::{
 	set_and_run_with_externalities, with_externalities, Externalities, ExternalitiesExt, ExtensionStore,
 };
 
@@ -249,7 +249,7 @@ pub mod pass_by;
 pub trait RIType {
 	/// The ffi type that is used to represent `Self`.
 	#[cfg(feature = "std")]
-	type FFIType: wasm_interface::IntoValue + wasm_interface::TryFromValue;
+	type FFIType: sp_wasm_interface::IntoValue + sp_wasm_interface::TryFromValue;
 	#[cfg(not(feature = "std"))]
 	type FFIType;
 }
@@ -260,4 +260,4 @@ pub type Pointer<T> = *mut T;
 
 /// A pointer that can be used in a runtime interface function signature.
 #[cfg(feature = "std")]
-pub type Pointer<T> = wasm_interface::Pointer<T>;
+pub type Pointer<T> = sp_wasm_interface::Pointer<T>;

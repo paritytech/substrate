@@ -32,13 +32,13 @@ macro_rules! impl_get_log_filter {
 	}
 }
 
-impl Into<client_api::ExecutionStrategy> for ExecutionStrategy {
-	fn into(self) -> client_api::ExecutionStrategy {
+impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
+	fn into(self) -> sc_client_api::ExecutionStrategy {
 		match self {
-			ExecutionStrategy::Native => client_api::ExecutionStrategy::NativeWhenPossible,
-			ExecutionStrategy::Wasm => client_api::ExecutionStrategy::AlwaysWasm,
-			ExecutionStrategy::Both => client_api::ExecutionStrategy::Both,
-			ExecutionStrategy::NativeElseWasm => client_api::ExecutionStrategy::NativeElseWasm,
+			ExecutionStrategy::Native => sc_client_api::ExecutionStrategy::NativeWhenPossible,
+			ExecutionStrategy::Wasm => sc_client_api::ExecutionStrategy::AlwaysWasm,
+			ExecutionStrategy::Both => sc_client_api::ExecutionStrategy::Both,
+			ExecutionStrategy::NativeElseWasm => sc_client_api::ExecutionStrategy::NativeElseWasm,
 		}
 	}
 }
@@ -66,12 +66,12 @@ impl WasmExecutionMethod {
 	}
 }
 
-impl Into<service::config::WasmExecutionMethod> for WasmExecutionMethod {
-	fn into(self) -> service::config::WasmExecutionMethod {
+impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
+	fn into(self) -> sc_service::config::WasmExecutionMethod {
 		match self {
-			WasmExecutionMethod::Interpreted => service::config::WasmExecutionMethod::Interpreted,
+			WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
 			#[cfg(feature = "wasmtime")]
-			WasmExecutionMethod::Compiled => service::config::WasmExecutionMethod::Compiled,
+			WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled,
 			#[cfg(not(feature = "wasmtime"))]
 			WasmExecutionMethod::Compiled => panic!(
 				"Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
@@ -584,19 +584,19 @@ struct KeyringTestAccountCliValues {
 	help: String,
 	conflicts_with: Vec<String>,
 	name: String,
-	variant: keyring::Sr25519Keyring,
+	variant: sp_keyring::Sr25519Keyring,
 }
 
 lazy_static::lazy_static! {
 	/// The Cli values for all test accounts.
 	static ref TEST_ACCOUNTS_CLI_VALUES: Vec<KeyringTestAccountCliValues> = {
-		keyring::Sr25519Keyring::iter().map(|a| {
+		sp_keyring::Sr25519Keyring::iter().map(|a| {
 			let help = format!(
 				"Shortcut for `--name {} --validator` with session keys for `{}` added to keystore.",
 				a,
 				a,
 			);
-			let conflicts_with = keyring::Sr25519Keyring::iter()
+			let conflicts_with = sp_keyring::Sr25519Keyring::iter()
 				.filter(|b| a != *b)
 				.map(|b| b.to_string().to_lowercase())
 				.chain(std::iter::once("name".to_string()))
@@ -616,7 +616,7 @@ lazy_static::lazy_static! {
 /// Wrapper for exposing the keyring test accounts into the Cli.
 #[derive(Debug, Clone)]
 pub struct Keyring {
-	pub account: Option<keyring::Sr25519Keyring>,
+	pub account: Option<sp_keyring::Sr25519Keyring>,
 }
 
 impl StructOpt for Keyring {

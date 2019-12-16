@@ -40,7 +40,7 @@
 
 use sp_std::prelude::*;
 
-pub use primitives::sandbox::{TypedValue, ReturnValue, HostError};
+pub use sp_core::sandbox::{TypedValue, ReturnValue, HostError};
 
 mod imp {
 	#[cfg(feature = "std")]
@@ -51,7 +51,7 @@ mod imp {
 }
 
 /// Error that can occur while using this crate.
-#[derive(primitives::RuntimeDebug)]
+#[derive(sp_core::RuntimeDebug)]
 pub enum Error {
 	/// Module is not valid, couldn't be instantiated.
 	Module,
