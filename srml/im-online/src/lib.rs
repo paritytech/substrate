@@ -181,10 +181,10 @@ pub type AuthIndex = u32;
 pub struct Heartbeat<BlockNumber>
 	where BlockNumber: PartialEq + Eq + Decode + Encode,
 {
-	block_number: BlockNumber,
-	network_state: OpaqueNetworkState,
-	session_index: SessionIndex,
-	authority_index: AuthIndex,
+	pub block_number: BlockNumber,
+	pub network_state: OpaqueNetworkState,
+	pub session_index: SessionIndex,
+	pub authority_index: AuthIndex,
 }
 
 pub trait Trait: system::Trait + session::historical::Trait {

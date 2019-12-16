@@ -36,7 +36,8 @@ use primitives::{
 };
 use trie::TrieConfiguration;
 use trie::trie_types::Layout;
-use log::trace;
+use log::{info,trace};
+use memory_units;
 use wasm_interface::{
 	FunctionContext, HostFunctions, Pointer, WordSize, Sandbox, MemoryId, PointerType,
 	Result as WResult,
@@ -146,6 +147,12 @@ impl FunctionContext for FunctionExecutor {
 		self.memory.with_direct_access_mut(|mem| {
 			heap.deallocate(mem, ptr).map_err(|e| format!("{:?}", e))
 		})
+	}
+
+	fn current_size(&mut self) -> u64 {
+		let num_pages = self.memory.current_size();
+		let used_mem_in_bytes: memory_units::Bytes = num_pages.into();
+		used_mem_in_bytes.0 as u64 + u64::from(self.heap.total_size)
 	}
 
 	fn sandbox(&mut self) -> &mut dyn Sandbox {
@@ -367,12 +374,17 @@ struct SubstrateExternals;
 impl_wasm_host_interface! {
 	impl SubstrateExternals where context {
 		ext_malloc(size: WordSize) -> Pointer<u8> {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Memory ext_malloc", file!(), line!());
 			let r = context.allocate_memory(size)?;
 			debug_trace!(target: "sr-io", "malloc {} bytes at {:?}", size, r);
+			let used_mem = context.current_size();  
+			info!("DEBUG_CS_INSTRUMENTATION_USED_MEM {}:{} used_mem = {:?}", file!(), line!(), used_mem);
+
 			Ok(r)
 		}
 
 		ext_free(addr: Pointer<u8>) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Memory ext_free", file!(), line!());
 			context.deallocate_memory(addr)?;
 			debug_trace!(target: "sr-io", "free {:?}", addr);
 			Ok(())
@@ -386,6 +398,7 @@ impl_wasm_host_interface! {
 			imports_len: WordSize,
 			state: u32,
 		) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Sandbox ext_sandbox_instantiate", file!(), line!());
 			let wasm = context.read_memory(wasm_ptr, wasm_len)
 				.map_err(|_| "OOB while ext_sandbox_instantiate: wasm")?;
 			let raw_env_def = context.read_memory(imports_ptr, imports_len)
@@ -395,6 +408,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_sandbox_instance_teardown(instance_idx: u32) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Sandbox ext_sandbox_instance_teardown", file!(), line!());
 			context.sandbox().instance_teardown(instance_idx)
 		}
 
@@ -408,6 +422,7 @@ impl_wasm_host_interface! {
 			return_val_len: WordSize,
 			state: u32,
 		) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Sandbox ext_sandbox_invoke", file!(), line!());
 			let export = context.read_memory(export_ptr, export_len)
 				.map_err(|_| "OOB while ext_sandbox_invoke: export")
 				.and_then(|b|
@@ -430,6 +445,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_sandbox_memory_new(initial: WordSize, maximum: WordSize) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Sandbox ext_sandbox_memory_new", file!(), line!());
 			context.sandbox().memory_new(initial, maximum)
 		}
 
@@ -439,6 +455,7 @@ impl_wasm_host_interface! {
 			buf_ptr: Pointer<u8>,
 			buf_len: WordSize,
 		) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Sandbox ext_sandbox_memory_get", file!(), line!());
 			context.sandbox().memory_get(memory_idx, offset, buf_ptr, buf_len)
 		}
 
@@ -448,14 +465,17 @@ impl_wasm_host_interface! {
 			val_ptr: Pointer<u8>,
 			val_len: WordSize,
 		) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Sandbox ext_sandbox_memory_set", file!(), line!());
 			context.sandbox().memory_set(memory_idx, offset, val_ptr, val_len)
 		}
 
 		ext_sandbox_memory_teardown(memory_idx: u32) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Sandbox ext_sandbox_memory_teardown", file!(), line!());
 			context.sandbox().memory_teardown(memory_idx)
 		}
 
 		ext_print_utf8(utf8_data: Pointer<u8>, utf8_len: WordSize) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Other ext_print_utf8", file!(), line!());
 			if let Ok(utf8) = context.read_memory(utf8_data, utf8_len) {
 				runtime_io::print_utf8(&utf8);
 			}
@@ -463,6 +483,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_print_hex(data: Pointer<u8>, len: WordSize) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Other ext_print_hex", file!(), line!());
 			if let Ok(hex) = context.read_memory(data, len) {
 				runtime_io::print_hex(&hex);
 			}
@@ -470,6 +491,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_print_num(number: u64) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Other ext_print_num", file!(), line!());
 			runtime_io::print_num(number);
 			Ok(())
 		}
@@ -480,6 +502,7 @@ impl_wasm_host_interface! {
 			value_data: Pointer<u8>,
 			value_len: WordSize,
 		) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_set_storage", file!(), line!());
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_set_storage")?;
 			let value = context.read_memory(value_data, value_len)
@@ -498,6 +521,7 @@ impl_wasm_host_interface! {
 			value_data: Pointer<u8>,
 			value_len: WordSize,
 		) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_set_child_storage", file!(), line!());
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_set_child_storage")?;
 			let key = context.read_memory(key_data, key_len)
@@ -517,6 +541,7 @@ impl_wasm_host_interface! {
 			key_data: Pointer<u8>,
 			key_len: WordSize,
 		) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_clear_child_storage", file!(), line!());
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_clear_child_storage")?;
 			let key = context.read_memory(key_data, key_len)
@@ -529,6 +554,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_clear_storage(key_data: Pointer<u8>, key_len: WordSize) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_clear_storage", file!(), line!());
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_clear_storage")?;
 			with_external_storage(move ||
@@ -538,6 +564,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_exists_storage(key_data: Pointer<u8>, key_len: WordSize) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_exists_storage", file!(), line!());
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_exists_storage")?;
 			with_external_storage(move ||
@@ -551,6 +578,7 @@ impl_wasm_host_interface! {
 			key_data: Pointer<u8>,
 			key_len: WordSize,
 		) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_exists_child_storage", file!(), line!());
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_exists_child_storage")?;
 			let key = context.read_memory(key_data, key_len)
@@ -562,6 +590,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_clear_prefix(prefix_data: Pointer<u8>, prefix_len: WordSize) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_clear_prefix", file!(), line!());
 			let prefix = context.read_memory(prefix_data, prefix_len)
 				.map_err(|_| "Invalid attempt to determine prefix in ext_clear_prefix")?;
 			with_external_storage(move ||
@@ -576,6 +605,7 @@ impl_wasm_host_interface! {
 			prefix_data: Pointer<u8>,
 			prefix_len: WordSize,
 		) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_clear_child_prefix", file!(), line!());
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_clear_child_prefix")?;
 			let prefix = context.read_memory(prefix_data, prefix_len)
@@ -588,6 +618,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_kill_child_storage(storage_key_data: Pointer<u8>, storage_key_len: WordSize) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_kill_child_storage", file!(), line!());
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_kill_child_storage")?;
 			with_external_storage(move ||
@@ -602,6 +633,7 @@ impl_wasm_host_interface! {
 			key_len: WordSize,
 			written_out: Pointer<u32>,
 		) -> Pointer<u8> {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_get_allocated_storage", file!(), line!());
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_get_allocated_storage")?;
 			let maybe_value = with_external_storage(move ||
@@ -629,6 +661,7 @@ impl_wasm_host_interface! {
 			key_len: WordSize,
 			written_out: Pointer<u32>,
 		) -> Pointer<u8> {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_get_allocated_child_storage", file!(), line!());
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_get_allocated_child_storage")?;
 			let key = context.read_memory(key_data, key_len)
@@ -659,6 +692,7 @@ impl_wasm_host_interface! {
 			value_len: WordSize,
 			value_offset: WordSize,
 		) -> WordSize {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_get_storage_into", file!(), line!());
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to get key in ext_get_storage_into")?;
 			let maybe_value = with_external_storage(move ||
@@ -685,6 +719,7 @@ impl_wasm_host_interface! {
 			value_len: WordSize,
 			value_offset: WordSize,
 		) -> WordSize {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_get_child_storage_into", file!(), line!());
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_get_child_storage_into")?;
 			let key = context.read_memory(key_data, key_len)
@@ -706,6 +741,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_storage_root(result: Pointer<u8>) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_storage_root", file!(), line!());
 			let r = with_external_storage(move ||
 				Ok(runtime_io::storage_root())
 			)?;
@@ -719,6 +755,7 @@ impl_wasm_host_interface! {
 			storage_key_len: WordSize,
 			written_out: Pointer<u32>,
 		) -> Pointer<u8> {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_child_storage_root", file!(), line!());
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_child_storage_root")?;
 			let value = with_external_storage(move ||
@@ -738,6 +775,7 @@ impl_wasm_host_interface! {
 			_len: WordSize,
 			result: Pointer<u8>,
 		) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_storage_changes_root", file!(), line!());
 			let mut parent_hash = [0u8; 32];
 			context.read_memory_into(parent_hash_data, &mut parent_hash[..])
 				.map_err(|_| "Invalid attempt to get parent_hash in ext_storage_changes_root")?;
@@ -760,6 +798,7 @@ impl_wasm_host_interface! {
 			lens_len: WordSize,
 			result: Pointer<u8>,
 		) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Storage ext_blake2_256_enumerated_trie_root", file!(), line!());
 			let values = (0..lens_len)
 				.map(|i| context.read_primitive(lens_data.offset(i).ok_or("Pointer overflow")?))
 				.collect::<std::result::Result<Vec<u32>, _>>()?
@@ -779,10 +818,12 @@ impl_wasm_host_interface! {
 		}
 
 		ext_chain_id() -> u64 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Other ext_chain_id", file!(), line!());
 			Ok(runtime_io::chain_id())
 		}
 
 		ext_twox_64(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Hash ext_twox_64", file!(), line!());
 			let result: [u8; 8] = if len == 0 {
 				let hashed = twox_64(&[0u8; 0]);
 				hashed
@@ -799,6 +840,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_twox_128(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Hash ext_twox_128", file!(), line!());
 			let result: [u8; 16] = if len == 0 {
 				let hashed = twox_128(&[0u8; 0]);
 				hashed
@@ -815,6 +857,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_twox_256(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Hash ext_twox_256", file!(), line!());
 			let result: [u8; 32] = if len == 0 {
 				twox_256(&[0u8; 0])
 			} else {
@@ -828,6 +871,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_blake2_128(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Hash ext_blake2_128", file!(), line!());
 			let result: [u8; 16] = if len == 0 {
 				let hashed = blake2_128(&[0u8; 0]);
 				hashed
@@ -844,6 +888,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_blake2_256(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Hash ext_blake2_256", file!(), line!());
 			let result: [u8; 32] = if len == 0 {
 				blake2_256(&[0u8; 0])
 			} else {
@@ -857,6 +902,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_keccak_256(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Hash ext_keccak_256", file!(), line!());
 			let result: [u8; 32] = if len == 0 {
 				tiny_keccak::keccak256(&[0u8; 0])
 			} else {
@@ -870,6 +916,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_ed25519_public_keys(id_data: Pointer<u8>, result_len: Pointer<u32>) -> Pointer<u8> {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Crypto ext_ed25519_public_keys", file!(), line!());
 			let mut id = [0u8; 4];
 			context.read_memory_into(id_data, &mut id[..])
 				.map_err(|_| "Invalid attempt to get id in ext_ed25519_public_keys")?;
@@ -894,6 +941,7 @@ impl_wasm_host_interface! {
 			sig_data: Pointer<u8>,
 			pubkey_data: Pointer<u8>,
 		) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Crypto ext_ed25519_verify", file!(), line!());
 			let mut sig = [0u8; 64];
 			context.read_memory_into(sig_data, &mut sig[..])
 				.map_err(|_| "Invalid attempt to get signature in ext_ed25519_verify")?;
@@ -916,6 +964,7 @@ impl_wasm_host_interface! {
 			seed_len: WordSize,
 			out: Pointer<u8>,
 		) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Crypto ext_ed25519_generate", file!(), line!());
 			let mut id = [0u8; 4];
 			context.read_memory_into(id_data, &mut id[..])
 				.map_err(|_| "Invalid attempt to get id in ext_ed25519_generate")?;
@@ -949,6 +998,7 @@ impl_wasm_host_interface! {
 			msg_len: WordSize,
 			out: Pointer<u8>,
 		) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Crypto ext_ed25519_sign", file!(), line!());
 			let mut id = [0u8; 4];
 			context.read_memory_into(id_data, &mut id[..])
 				.map_err(|_| "Invalid attempt to get id in ext_ed25519_sign")?;
@@ -977,6 +1027,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_sr25519_public_keys(id_data: Pointer<u8>, result_len: Pointer<u32>) -> Pointer<u8> {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Crypto ext_ed25519_public_keys", file!(), line!());
 			let mut id = [0u8; 4];
 			context.read_memory_into(id_data, &mut id[..])
 				.map_err(|_| "Invalid attempt to get id in ext_sr25519_public_keys")?;
@@ -1001,6 +1052,7 @@ impl_wasm_host_interface! {
 			sig_data: Pointer<u8>,
 			pubkey_data: Pointer<u8>,
 		) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Crypto ext_ed25519_verify", file!(), line!());
 			let mut sig = [0u8; 64];
 			context.read_memory_into(sig_data, &mut sig[..])
 				.map_err(|_| "Invalid attempt to get signature in ext_sr25519_verify")?;
@@ -1023,6 +1075,7 @@ impl_wasm_host_interface! {
 			seed_len: WordSize,
 			out: Pointer<u8>,
 		) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Crypto ext_ed25519_generate", file!(), line!());
 			let mut id = [0u8; 4];
 			context.read_memory_into(id_data, &mut id[..])
 				.map_err(|_| "Invalid attempt to get id in ext_sr25519_generate")?;
@@ -1056,6 +1109,7 @@ impl_wasm_host_interface! {
 			msg_len: WordSize,
 			out: Pointer<u8>,
 		) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Crypto ext_ed25519_sign", file!(), line!());
 			let mut id = [0u8; 4];
 			context.read_memory_into(id_data, &mut id[..])
 				.map_err(|_| "Invalid attempt to get id in ext_sr25519_sign")?;
@@ -1088,6 +1142,7 @@ impl_wasm_host_interface! {
 			sig_data: Pointer<u8>,
 			pubkey_data: Pointer<u8>,
 		) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Crypto ext_secp256k1_ecdsa_recover", file!(), line!());
 			let mut sig = [0u8; 65];
 			context.read_memory_into(sig_data, &mut sig[..])
 				.map_err(|_| "Invalid attempt to get signature in ext_secp256k1_ecdsa_recover")?;
@@ -1118,10 +1173,12 @@ impl_wasm_host_interface! {
 		}
 
 		ext_is_validator() -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Offchain ext_is_validator", file!(), line!());
 			if runtime_io::is_validator() { Ok(1) } else { Ok(0) }
 		}
 
 		ext_submit_transaction(msg_data: Pointer<u8>, len: WordSize) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Offchain ext_submit_transaction", file!(), line!());
 			let extrinsic = context.read_memory(msg_data, len)
 				.map_err(|_| "OOB while ext_submit_transaction: wasm")?;
 
@@ -1131,6 +1188,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_network_state(written_out: Pointer<u32>) -> Pointer<u8> {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Offchain ext_network_state", file!(), line!());
 			let res = runtime_io::network_state();
 
 			let encoded = res.encode();
@@ -1146,15 +1204,18 @@ impl_wasm_host_interface! {
 		}
 
 		ext_timestamp() -> u64 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Offchain ext_timestamp", file!(), line!());
 			Ok(runtime_io::timestamp().unix_millis())
 		}
 
 		ext_sleep_until(deadline: u64) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Offchain ext_sleep_until", file!(), line!());
 			runtime_io::sleep_until(offchain::Timestamp::from_unix_millis(deadline));
 			Ok(())
 		}
 
 		ext_random_seed(seed_data: Pointer<u8>) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Offchain ext_random_seed", file!(), line!());
 			// NOTE the runtime as assumptions about seed size.
 			let seed = runtime_io::random_seed();
 
@@ -1170,6 +1231,7 @@ impl_wasm_host_interface! {
 			value: Pointer<u8>,
 			value_len: WordSize,
 		) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Offchain ext_local_storage_set", file!(), line!());
 			let kind = offchain::StorageKind::try_from(kind)
 					.map_err(|_| "storage kind OOB while ext_local_storage_set: wasm")?;
 			let key = context.read_memory(key, key_len)
@@ -1188,6 +1250,7 @@ impl_wasm_host_interface! {
 			key_len: WordSize,
 			value_len: Pointer<u32>,
 		) -> Pointer<u8> {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Offchain ext_local_storage_get", file!(), line!());
 			let kind = offchain::StorageKind::try_from(kind)
 					.map_err(|_| "storage kind OOB while ext_local_storage_get: wasm")?;
 			let key = context.read_memory(key, key_len)
@@ -1219,6 +1282,7 @@ impl_wasm_host_interface! {
 			new_value: Pointer<u8>,
 			new_value_len: WordSize,
 		) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Offchain ext_local_storage_compare_and_set", file!(), line!());
 			let kind = offchain::StorageKind::try_from(kind)
 					.map_err(|_| "storage kind OOB while ext_local_storage_compare_and_set: wasm")?;
 			let key = context.read_memory(key, key_len)
@@ -1253,6 +1317,7 @@ impl_wasm_host_interface! {
 			meta: Pointer<u8>,
 			meta_len: WordSize,
 		) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Offchain ext_http_request_start", file!(), line!());
 			let method = context.read_memory(method, method_len)
 				.map_err(|_| "OOB while ext_http_request_start: wasm")?;
 			let url = context.read_memory(url, url_len)
@@ -1281,6 +1346,7 @@ impl_wasm_host_interface! {
 			value: Pointer<u8>,
 			value_len: WordSize,
 		) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Offchain ext_http_request_add_header", file!(), line!());
 			let name = context.read_memory(name, name_len)
 				.map_err(|_| "OOB while ext_http_request_add_header: wasm")?;
 			let value = context.read_memory(value, value_len)
@@ -1306,6 +1372,7 @@ impl_wasm_host_interface! {
 			chunk_len: WordSize,
 			deadline: u64,
 		) -> u32 {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Offchain ext_http_request_write_body", file!(), line!());
 			let chunk = context.read_memory(chunk, chunk_len)
 				.map_err(|_| "OOB while ext_http_request_write_body: wasm")?;
 
@@ -1327,6 +1394,7 @@ impl_wasm_host_interface! {
 			statuses: Pointer<u32>,
 			deadline: u64,
 		) {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Offchain ext_http_response_wait", file!(), line!());
 			let ids = (0..ids_len)
 				.map(|i|
 					 context.read_primitive(ids.offset(i).ok_or("Point overflow")?)
@@ -1354,6 +1422,7 @@ impl_wasm_host_interface! {
 			request_id: u32,
 			written_out: Pointer<u32>,
 		) -> Pointer<u8> {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Offchain ext_http_response_headers", file!(), line!());
 			use codec::Encode;
 
 			let headers = runtime_io::http_response_headers(offchain::HttpRequestId(request_id as u16));
@@ -1376,6 +1445,7 @@ impl_wasm_host_interface! {
 			buffer_len: WordSize,
 			deadline: u64,
 		) -> WordSize {
+			info!("DEBUG_CS_INSTRUMENTATION {}:{} TAG_Offchain ext_http_response_read_body", file!(), line!());
 			let mut internal_buffer = Vec::with_capacity(buffer_len as usize);
 			internal_buffer.resize(buffer_len as usize, 0);
 
@@ -1552,6 +1622,7 @@ impl WasmExecutor {
 		let table: Option<TableRef> = module_instance
 			.export_by_name("__indirect_function_table")
 			.and_then(|e| e.as_table().cloned());
+
 		let heap_base = Self::get_heap_base(module_instance)?;
 
 		let mut fec = FunctionExecutor::new(
@@ -1564,6 +1635,11 @@ impl WasmExecutor {
 			let offset = fec.allocate_memory(data.len() as u32)?;
 			fec.write_memory(offset, data).map(|_| offset.into()).map_err(Into::into)
 		})?;
+
+		// Print initial memory consumption
+		let used_mem = memory.current_size();  
+		let used_mem_in_bytes: memory_units::Bytes = used_mem.into();
+		info!("DEBUG_CS_INSTRUMENTATION_USED_MEM {}:{} used_mem = {:?}", file!(), line!(), used_mem_in_bytes.0);
 
 		let result = runtime_io::with_externalities(
 			ext,

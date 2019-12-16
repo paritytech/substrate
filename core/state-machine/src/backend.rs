@@ -72,6 +72,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Retrieve all entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
+		info!("DEBUG_CS_INSTRUMENTATION {}:{}", file!(), line!());
 		self.for_key_values_with_prefix(prefix, |k, _v| f(k))
 	}
 
@@ -105,6 +106,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 
 	/// Get all keys with given prefix
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
+		info!("DEBUG_CS_INSTRUMENTATION {}:{}", file!(), line!());
 		let mut all = Vec::new();
 		self.for_keys_with_prefix(prefix, |k| all.push(k.to_vec()));
 		all
@@ -112,6 +114,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 
 	/// Get all keys of child storage with given prefix
 	fn child_keys(&self, child_storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
+		info!("DEBUG_CS_INSTRUMENTATION {}:{}", file!(), line!());
 		let mut all = Vec::new();
 		self.for_child_keys_with_prefix(child_storage_key, prefix, |k| all.push(k.to_vec()));
 		all
@@ -119,6 +122,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 
 	/// Try convert into trie backend.
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
+		info!("DEBUG_CS_INSTRUMENTATION {}:{}", file!(), line!());
 		None
 	}
 
@@ -175,10 +179,12 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
+		info!("DEBUG_CS_INSTRUMENTATION {}:{}", file!(), line!());
 		(*self).for_keys_with_prefix(prefix, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
+		info!("DEBUG_CS_INSTRUMENTATION {}:{}", file!(), line!());
 		(*self).for_child_keys_with_prefix(storage_key, prefix, f)
 	}
 
@@ -199,10 +205,12 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		info!("DEBUG_CS_INSTRUMENTATION {}:{}", file!(), line!());
 		(*self).pairs()
 	}
 
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
+		info!("DEBUG_CS_INSTRUMENTATION {}:{}", file!(), line!());
 		(*self).for_key_values_with_prefix(prefix, f);
 	}
 }

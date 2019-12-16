@@ -73,7 +73,7 @@ pub struct FreeingBumpHeapAllocator {
 	bumper: u32,
 	heads: [u32; N],
 	ptr_offset: u32,
-	total_size: u32,
+	pub total_size: u32,
 }
 
 /// Create an allocator error.

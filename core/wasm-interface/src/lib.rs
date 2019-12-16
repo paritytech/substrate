@@ -201,6 +201,8 @@ pub trait FunctionContext {
 	fn allocate_memory(&mut self, size: WordSize) -> Result<Pointer<u8>>;
 	/// Deallocate a given memory instance.
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> Result<()>;
+	/// Get current size of memory. 
+	fn current_size(&mut self) -> u64;
 	/// Provides access to the sandbox.
 	fn sandbox(&mut self) -> &mut dyn Sandbox;
 }
