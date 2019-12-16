@@ -8,7 +8,7 @@ edition = "2018"
 proc-macro = true
 
 [dependencies]
-frame-support-procedural-tools = { package = "frame-support-procedural-tools", path = "./tools" }
+frame-support-procedural-tools = { path = "./tools" }
 
 proc-macro2 = "1.0.6"
 quote = "1.0.2"

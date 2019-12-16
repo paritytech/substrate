@@ -20,31 +20,32 @@
 
 pub mod client_ext;
 
-pub use client::{blockchain, self};
-pub use client_api::execution_extensions::{ExecutionStrategies, ExecutionExtensions};
-pub use client_db::{Backend, self};
-pub use client_ext::ClientExt;
-pub use consensus;
-pub use executor::{NativeExecutor, WasmExecutionMethod, self};
-pub use keyring::{
+pub use sc_client::{blockchain, self};
+pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionExtensions};
+pub use sc_client_db::{Backend, self};
+pub use sp_consensus;
+pub use sc_executor::{NativeExecutor, WasmExecutionMethod, self};
+pub use sp_keyring::{
 	AccountKeyring,
 	ed25519::Keyring as Ed25519Keyring,
 	sr25519::Keyring as Sr25519Keyring,
 };
-pub use primitives::{Blake2Hasher, traits::BareCryptoStorePtr};
+pub use sp_core::{Blake2Hasher, traits::BareCryptoStorePtr};
 pub use sp_runtime::{Storage, StorageChild};
-pub use state_machine::ExecutionStrategy;
+pub use sp_state_machine::ExecutionStrategy;
+
+pub use self::client_ext::ClientExt;
 
 use std::sync::Arc;
 use std::collections::HashMap;
 use hash_db::Hasher;
-use primitives::storage::{well_known_keys, ChildInfo};
+use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_runtime::traits::Block as BlockT;
-use client::LocalCallExecutor;
+use sc_client::LocalCallExecutor;
 
 /// Test client light database backend.
-pub type LightBackend<Block> = client::light::backend::Backend<
-	client_db::light::LightStorage<Block>,
+pub type LightBackend<Block> = sc_client::light::backend::Backend<
+	sc_client_db::light::LightStorage<Block>,
 	Blake2Hasher,
 >;
 
@@ -168,16 +169,16 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		self,
 		executor: Executor,
 	) -> (
-		client::Client<
+		sc_client::Client<
 			Backend,
 			Executor,
 			Block,
 			RuntimeApi,
 		>,
-		client::LongestChain<Backend, Block>,
+		sc_client::LongestChain<Backend, Block>,
 	) where
-		Executor: client::CallExecutor<Block, Blake2Hasher>,
-		Backend: client_api::backend::Backend<Block, Blake2Hasher>,
+		Executor: sc_client::CallExecutor<Block, Blake2Hasher>,
+		Backend: sc_client_api::backend::Backend<Block, Blake2Hasher>,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 	{
 
@@ -198,7 +199,7 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 			storage
 		};
 
-		let client = client::Client::new(
+		let client = sc_client::Client::new(
 			self.backend.clone(),
 			executor,
 			storage,
@@ -209,14 +210,14 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 			)
 		).expect("Creates new client");
 
-		let longest_chain = client::LongestChain::new(self.backend);
+		let longest_chain = sc_client::LongestChain::new(self.backend);
 
 		(client, longest_chain)
 	}
 }
 
 impl<E, Backend, G: GenesisInit> TestClientBuilder<
-	client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+	sc_client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 	Backend,
 	G,
 > {
@@ -225,17 +226,17 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 		self,
 		executor: I,
 	) -> (
-		client::Client<
+		sc_client::Client<
 			Backend,
-			client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+			sc_client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 			Block,
 			RuntimeApi
 		>,
-		client::LongestChain<Backend, Block>,
+		sc_client::LongestChain<Backend, Block>,
 	) where
 		I: Into<Option<NativeExecutor<E>>>,
-		E: executor::NativeExecutionDispatch,
-		Backend: client_api::backend::Backend<Block, Blake2Hasher>,
+		E: sc_executor::NativeExecutionDispatch,
+		Backend: sc_client_api::backend::Backend<Block, Blake2Hasher>,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 	{
 		let executor = executor.into().unwrap_or_else(||

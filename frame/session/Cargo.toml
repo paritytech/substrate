@@ -11,16 +11,16 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 sp-std = { path = "../../primitives/std", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 sp-staking = { path = "../../primitives/staking", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
-timestamp = { package = "pallet-timestamp", path = "../timestamp", default-features = false }
+frame-support = { path = "../support", default-features = false }
+frame-system = { path = "../system", default-features = false }
+pallet-timestamp = { path = "../timestamp", default-features = false }
 sp-trie = { path = "../../primitives/trie", default-features = false, optional = true }
 sp-io ={ path = "../../primitives/io", default-features = false }
 impl-trait-for-tuples = "0.1.3"
 
 [dev-dependencies]
-primitives = { package = "sp-core",  path = "../../primitives/core" }
-app-crypto = { package = "sp-application-crypto",  path = "../../primitives/application-crypto" }
+sp-core = { path = "../../primitives/core" }
+sp-application-crypto = { path = "../../primitives/application-crypto" }
 lazy_static = "1.4.0"
 
 [features]
@@ -31,10 +31,10 @@ std = [
 	"safe-mix/std",
 	"codec/std",
 	"sp-std/std",
-	"support/std",
+	"frame-support/std",
 	"sp-runtime/std",
 	"sp-staking/std",
-	"timestamp/std",
+	"pallet-timestamp/std",
 	"sp-trie/std",
 	"sp-io/std",
 ]

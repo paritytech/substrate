@@ -12,21 +12,21 @@ kvdb-rocksdb = { version = "0.2", optional = true }
 kvdb-memorydb = "0.1.2"
 linked-hash-map = "0.5.2"
 hash-db = "0.15.2"
-client-api = { package = "sc-client-api", path = "../api" }
-primitives = { package = "sp-core", path = "../../primitives/core" }
+sc-client-api = { path = "../api" }
+sp-core = { path = "../../primitives/core" }
 sp-runtime = {  path = "../../primitives/runtime" }
-client = { package = "sc-client", path = "../" }
-state-machine = { package = "sp-state-machine", path = "../../primitives/state-machine" }
+sc-client = { path = "../" }
+sp-state-machine = { path = "../../primitives/state-machine" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-executor = { package = "sc-executor", path = "../executor" }
-state_db = { package = "sc-state-db", path = "../state-db" }
-trie = { package = "sp-trie", path = "../../primitives/trie" }
-consensus_common = { package = "sp-consensus", path = "../../primitives/consensus/common" }
+sc-executor = { path = "../executor" }
+sc-state-db = { path = "../state-db" }
+sp-trie = { path = "../../primitives/trie" }
+sp-consensus = { path = "../../primitives/consensus/common" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 
 [dev-dependencies]
 sp-keyring = { path = "../../primitives/keyring" }
-test-client = { package = "substrate-test-runtime-client", path = "../../test-utils/runtime/client" }
+substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
 env_logger = "0.7.0"
 quickcheck = "0.9"
 

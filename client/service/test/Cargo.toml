@@ -12,10 +12,10 @@ log = "0.4.8"
 env_logger = "0.7.0"
 fdlimit = "0.1.1"
 futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
-service = { package = "sc-service", path = "../../service", default-features = false }
-network = { package = "sc-network", path = "../../network" }
-consensus = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
-client = { package = "sc-client", path = "../../" }
+sc-service = { path = "../../service", default-features = false }
+sc-network = { path = "../../network" }
+sp-consensus = { path = "../../../primitives/consensus/common" }
+sc-client = { path = "../../" }
 sp-runtime = { path = "../../../primitives/runtime" }
-primitives = { package = "sp-core", path = "../../../primitives/core" }
-txpool-api = { package = "sp-transaction-pool", path = "../../../primitives/transaction-pool" }
+sp-core = { path = "../../../primitives/core" }
+sp-transaction-pool = { path = "../../../primitives/transaction-pool" }

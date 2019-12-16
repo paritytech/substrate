@@ -24,7 +24,7 @@
 
 use std::any::{Any, TypeId};
 
-use primitives_storage::{ChildStorageKey, ChildInfo};
+use sp_storage::{ChildStorageKey, ChildInfo};
 
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
 pub use extensions::{Extension, Extensions, ExtensionStore};

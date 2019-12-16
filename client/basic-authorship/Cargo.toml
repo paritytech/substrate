@@ -9,18 +9,18 @@ log = "0.4.8"
 futures = "0.3.1"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 sp-runtime = { path = "../../primitives/runtime" }
-primitives = { package = "sp-core", path = "../../primitives/core" }
+sp-core = { path = "../../primitives/core" }
 sp-blockchain = { path = "../../primitives/blockchain" }
-client = { package = "sc-client", path = "../" }
-client-api = { package = "sc-client-api", path = "../api" }
-consensus_common = { package = "sp-consensus", path = "../../primitives/consensus/common" }
-inherents = { package = "sp-inherents", path = "../../primitives/inherents" }
+sc-client = { path = "../" }
+sc-client-api = { path = "../api" }
+sp-consensus = { path = "../../primitives/consensus/common" }
+sp-inherents = { path = "../../primitives/inherents" }
 sc-telemetry = { path = "../telemetry" }
-txpool-api = { package = "sp-transaction-pool", path = "../../primitives/transaction-pool" }
-block-builder = { package = "sc-block-builder", path = "../block-builder" }
+sp-transaction-pool = { path = "../../primitives/transaction-pool" }
+sc-block-builder = { path = "../block-builder" }
 tokio-executor = { version = "0.2.0-alpha.6", features = ["blocking"] }
 
 [dev-dependencies]
-txpool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
-test-client = { package = "substrate-test-runtime-client", path = "../../test-utils/runtime/client" }
+sc-transaction-pool = { path = "../../client/transaction-pool" }
+substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
 parking_lot = "0.9"

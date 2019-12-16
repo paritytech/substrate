@@ -19,7 +19,7 @@ pub use crate::sp_std::vec::Vec;
 #[doc(hidden)]
 pub use crate::sp_runtime::traits::{Block as BlockT, Extrinsic};
 #[doc(hidden)]
-pub use inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatalError};
+pub use sp_inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatalError};
 
 
 /// Implement the outer inherent.

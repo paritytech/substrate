@@ -24,7 +24,7 @@ use codec::{Decode, Encode};
 use hex_literal::hex;
 use node_primitives::{Balance, Hash, Index, AccountId, Signature};
 use node_runtime::{BalancesCall, Call, Runtime, SignedPayload, UncheckedExtrinsic, VERSION};
-use primitives::{
+use sp_core::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, Ss58Codec},
 	ed25519, sr25519, ecdsa, Pair, Public, H256, hexdisplay::HexDisplay,
 };
@@ -197,7 +197,7 @@ fn get_app<'a, 'b>() -> App<'a, 'b> {
 					-s, --suri <suri> 'The secret key URI.'
 				"),
 			SubCommand::with_name("transfer")
-				.about("Author and sign a Node balances::Transfer transaction with a given (secret) key")
+				.about("Author and sign a Node pallet_balances::Transfer transaction with a given (secret) key")
 				.args_from_usage("
 					<genesis> -g, --genesis <genesis> 'The genesis hash or a recognised \
 											chain identifier (dev, elm, alex).'
@@ -484,12 +484,12 @@ fn create_extrinsic<C: Crypto>(
 {
 	let extra = |i: Index, f: Balance| {
 		(
-			system::CheckVersion::<Runtime>::new(),
-			system::CheckGenesis::<Runtime>::new(),
-			system::CheckEra::<Runtime>::from(Era::Immortal),
-			system::CheckNonce::<Runtime>::from(i),
-			system::CheckWeight::<Runtime>::new(),
-			transaction_payment::ChargeTransactionPayment::<Runtime>::from(f),
+			frame_system::CheckVersion::<Runtime>::new(),
+			frame_system::CheckGenesis::<Runtime>::new(),
+			frame_system::CheckEra::<Runtime>::from(Era::Immortal),
+			frame_system::CheckNonce::<Runtime>::from(i),
+			frame_system::CheckWeight::<Runtime>::new(),
+			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(f),
 			Default::default(),
 		)
 	};

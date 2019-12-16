@@ -17,9 +17,9 @@
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo, Trait, AliveContractInfo};
 use sp_runtime::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
 	SaturatedConversion};
-use support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason, OnUnbalanced};
-use support::StorageMap;
-use support::storage::child;
+use frame_support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason, OnUnbalanced};
+use frame_support::StorageMap;
+use frame_support::storage::child;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 #[must_use]
@@ -58,7 +58,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		Some(ContractInfo::Alive(contract)) => contract,
 	};
 
-	let current_block_number = <system::Module<T>>::block_number();
+	let current_block_number = <frame_system::Module<T>>::block_number();
 
 	// How much block has passed since the last deduction for the contract.
 	let blocks_passed = {

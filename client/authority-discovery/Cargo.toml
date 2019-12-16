@@ -9,18 +9,18 @@ build = "build.rs"
 prost-build = "0.5.0"
 
 [dependencies]
-authority-discovery-primitives = { package = "sp-authority-discovery", path = "../../primitives/authority-discovery" }
+sp-authority-discovery = { path = "../../primitives/authority-discovery" }
 bytes = "0.4.12"
-client-api = { package = "sc-client-api", path = "../api" }
+sc-client-api = { path = "../api" }
 codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
 derive_more = "0.99.2"
 futures = "0.3.1"
 futures-timer = "2.0"
-keystore = { package = "sc-keystore", path = "../keystore" }
+sc-keystore = { path = "../keystore" }
 libp2p = { version = "0.13.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 log = "0.4.8"
-network = { package = "sc-network", path = "../network" }
-primitives = { package = "sp-core", path = "../../primitives/core" }
+sc-network = { path = "../network" }
+sp-core = { path = "../../primitives/core" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 prost = "0.5.0"
 serde_json = "1.0.41"
@@ -29,6 +29,6 @@ sp-runtime = { path = "../../primitives/runtime" }
 [dev-dependencies]
 env_logger = "0.7.0"
 parking_lot = "0.9.0"
-peerset = { package = "sc-peerset", path = "../peerset" }
+sc-peerset = { path = "../peerset" }
 sp-test-primitives = { path = "../../primitives/test-primitives" }
 sp-api = { path = "../../primitives/api" }

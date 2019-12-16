@@ -18,15 +18,15 @@
 
 use std::time::{Instant, Duration};
 
-use codec::Encode;
+use parity_scale_codec::Encode;
 use futures::prelude::*;
 use futures::sync::mpsc;
 use futures_timer::Delay;
 use futures03::future::{FutureExt as _, TryFutureExt as _};
 use log::{debug, warn};
 
-use network::PeerId;
-use network_gossip::GossipEngine;
+use sc_network::PeerId;
+use sc_network_gossip::GossipEngine;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
 use super::gossip::{NeighborPacket, GossipMessage};
 
@@ -47,7 +47,7 @@ impl<B: BlockT> NeighborPacketSender<B> {
 	/// Send a neighbor packet for the background worker to gossip to peers.
 	pub fn send(
 		&self,
-		who: Vec<network::PeerId>,
+		who: Vec<sc_network::PeerId>,
 		neighbor_packet: NeighborPacket<NumberFor<B>>,
 	) {
 		if let Err(err) = self.0.unbounded_send((who, neighbor_packet)) {

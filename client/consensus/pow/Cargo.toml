@@ -7,14 +7,14 @@ edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-primitives = { package = "sp-core", path = "../../../primitives/core" }
+sp-core = { path = "../../../primitives/core" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
 sp-runtime = { path = "../../../primitives/runtime" }
-client-api = { package = "sc-client-api", path = "../../api" }
-block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder" }
-inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
-pow-primitives = { package = "sp-consensus-pow", path = "../../../primitives/consensus/pow" }
-consensus-common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
+sc-client-api = { path = "../../api" }
+sp-block-builder = { path = "../../../primitives/block-builder" }
+sp-inherents = { path = "../../../primitives/inherents" }
+sp-consensus-pow = { path = "../../../primitives/consensus/pow" }
+sp-consensus = { path = "../../../primitives/consensus/common" }
 log = "0.4.8"
 futures = { version = "0.3.1", features = ["compat"] }
 sp-timestamp = {  path = "../../../primitives/timestamp" }

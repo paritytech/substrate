@@ -84,7 +84,7 @@ pub use hash_db::Hasher;
 // pub use self::hasher::blake::BlakeHasher;
 pub use self::hasher::blake2::Blake2Hasher;
 
-pub use primitives_storage as storage;
+pub use sp_storage as storage;
 
 #[doc(hidden)]
 pub use sp_std;
@@ -236,7 +236,7 @@ pub trait TypeId {
 /// A log level matching the one from `log` crate.
 ///
 /// Used internally by `sp_io::log` method.
-#[derive(Encode, Decode, runtime_interface::pass_by::PassByEnum, Copy, Clone)]
+#[derive(Encode, Decode, sp_runtime_interface::pass_by::PassByEnum, Copy, Clone)]
 pub enum LogLevel {
 	/// `Error` log level.
 	Error = 1,

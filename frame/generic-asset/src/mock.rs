@@ -25,13 +25,13 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use primitives::H256;
-use support::{parameter_types, impl_outer_event, impl_outer_origin, weights::Weight};
+use sp_core::H256;
+use frame_support::{parameter_types, impl_outer_event, impl_outer_origin, weights::Weight};
 
 use super::*;
 
 impl_outer_origin! {
-	pub enum Origin for Test {}
+	pub enum Origin for Test  where system = frame_system {}
 }
 
 // For testing the module, we construct most of a mock runtime. This means
@@ -45,7 +45,7 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl system::Trait for Test {
+impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -73,6 +73,7 @@ mod generic_asset {
 	pub use crate::Event;
 }
 
+use frame_system as system;
 impl_outer_event! {
 	pub enum TestEvent for Test {
 		generic_asset<T>,
@@ -81,7 +82,7 @@ impl_outer_event! {
 
 pub type GenericAsset = Module<Test>;
 
-pub type System = system::Module<Test>;
+pub type System = frame_system::Module<Test>;
 
 pub struct ExtBuilder {
 	asset_id: u32,
@@ -118,7 +119,7 @@ impl ExtBuilder {
 
 	// builds genesis config
 	pub fn build(self) -> sp_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 		GenesisConfig::<Test> {
 				assets: vec![self.asset_id],
@@ -137,7 +138,7 @@ impl ExtBuilder {
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	system::GenesisConfig::default()
+	frame_system::GenesisConfig::default()
 		.build_storage::<Test>()
 		.unwrap()
 		.into()

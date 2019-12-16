@@ -25,12 +25,12 @@ use codec::{Decode, Encode};
 use cranelift_codegen::ir;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use log::trace;
-use primitives::sandbox as sandbox_primitives;
+use sp_core::sandbox as sandbox_primitives;
 use std::{cmp, mem, ptr};
 use wasmtime_environ::translate_signature;
 use wasmtime_jit::{ActionError, Compiler};
 use wasmtime_runtime::{Export, VMCallerCheckedAnyfunc, VMContext, wasmtime_call_trampoline};
-use wasm_interface::{
+use sp_wasm_interface::{
 	FunctionContext, MemoryId, Pointer, Result as WResult, Sandbox, Signature, Value, ValueType,
 	WordSize,
 };

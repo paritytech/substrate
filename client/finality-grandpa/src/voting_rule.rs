@@ -22,7 +22,7 @@
 
 use std::sync::Arc;
 
-use client_api::blockchain::HeaderBackend;
+use sc_client_api::blockchain::HeaderBackend;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor, One, Zero};
 

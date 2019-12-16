@@ -18,7 +18,7 @@ hash-db = { version = "0.15.2", default-features = false }
 trie-db = { version = "0.16.0", default-features = false }
 trie-root = { version = "0.15.2", default-features = false }
 memory-db = { version = "0.15.2", default-features = false }
-primitives = { package = "sp-core",  path = "../core", default-features = false }
+sp-core = { path = "../core", default-features = false }
 
 [dev-dependencies]
 trie-bench = "0.17.0"
@@ -35,5 +35,5 @@ std = [
 	"memory-db/std",
 	"trie-db/std",
 	"trie-root/std",
-	"primitives/std",
+	"sp-core/std",
 ]
