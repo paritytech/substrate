@@ -51,7 +51,7 @@ pallet-offences = { version = "2.0.0", default-features = false, path = "../../.
 pallet-randomness-collective-flip = { version = "2.0.0", default-features = false, path = "../../../frame/randomness-collective-flip" }
 pallet-session = { features = ["historical"], path = "../../../frame/session", default-features = false }
 pallet-staking = { features = ["migrate"], path = "../../../frame/staking", default-features = false }
-pallet-staking-reward-curve = { path = "../../../frame/staking/reward-curve"}
+pallet-staking-reward-curve = { version = "2.0.0",  path = "../../../frame/staking/reward-curve" }
 pallet-sudo = { version = "2.0.0", default-features = false, path = "../../../frame/sudo" }
 frame-support = { version = "2.0.0", default-features = false, path = "../../../frame/support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../../../frame/system" }
@@ -63,7 +63,7 @@ pallet-transaction-payment = { version = "2.0.0", default-features = false, path
 pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
 
 [build-dependencies]
-wasm-builder-runner = { version = "1.0.4", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner"  }
+wasm-builder-runner = { version = "1.0.4", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
 
 [dev-dependencies]
 sp-io = { version = "2.0.0", path = "../../../primitives/io" }

@@ -13,7 +13,7 @@ schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"], optional =
 sp-api = { version = "2.0.0", default-features = false, path = "../../api" }
 sp-consensus = { version = "0.8", optional = true, path = "../common" }
 sp-inherents = { version = "2.0.0", default-features = false, path = "../../inherents" }
-sp-runtime = { version = "2.0.0", default-features = false,  path = "../../runtime" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../runtime" }
 sp-timestamp = { version = "2.0.0", default-features = false, path = "../../timestamp" }
 
 [features]

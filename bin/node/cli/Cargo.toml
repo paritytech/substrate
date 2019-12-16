@@ -34,7 +34,7 @@ rand = "0.7.2"
 structopt = "0.3.3"
 
 # primitives
-sp-authority-discovery = { path = "../../../primitives/authority-discovery"}
+sp-authority-discovery = { version = "2.0.0",  path = "../../../primitives/authority-discovery" }
 sp-consensus-babe = { version = "0.8", path = "../../../primitives/consensus/babe" }
 grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
@@ -61,7 +61,7 @@ sc-rpc = { version = "2.0.0", path = "../../../client/rpc" }
 sc-basic-authority = { version = "2.0.0", path = "../../../client/basic-authorship" }
 sc-service = { version = "2.0.0", default-features = false, path = "../../../client/service" }
 sc-telemetry = { version = "2.0.0", path = "../../../client/telemetry" }
-sc-authority-discovery = { path = "../../../client/authority-discovery"}
+sc-authority-discovery = { version = "2.0.0",  path = "../../../client/authority-discovery" }
 
 # frame dependencies
 pallet-indices = { version = "2.0.0", path = "../../../frame/indices" }
@@ -72,7 +72,7 @@ pallet-balances = { version = "2.0.0", path = "../../../frame/balances" }
 pallet-transaction-payment = { version = "2.0.0", path = "../../../frame/transaction-payment" }
 frame-support = { version = "2.0.0", default-features = false, path = "../../../frame/support" }
 pallet-im-online = { version = "2.0.0", default-features = false, path = "../../../frame/im-online" }
-pallet-authority-discovery = { path = "../../../frame/authority-discovery"}
+pallet-authority-discovery = { version = "2.0.0",  path = "../../../frame/authority-discovery" }
 
 # node-specific dependencies
 node-runtime = { version = "2.0.0", path = "../runtime" }

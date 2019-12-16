@@ -16,7 +16,7 @@ sp-timestamp = { version = "2.0.0", default-features = false, path = "../../prim
 impl-trait-for-tuples = "0.1.3"
 
 [dev-dependencies]
-sp-io ={ path = "../../primitives/io" }
+sp-io ={ version = "2.0.0", path = "../../primitives/io" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 
 [features]

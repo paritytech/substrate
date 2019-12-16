@@ -23,7 +23,7 @@ pallet-authorship = { version = "2.0.0", default-features = false, path = "../au
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 pallet-balances = { version = "2.0.0", path = "../balances" }
 pallet-timestamp = { version = "2.0.0", path = "../timestamp" }
-pallet-staking-reward-curve = { path = "../staking/reward-curve"}
+pallet-staking-reward-curve = { version = "2.0.0",  path = "../staking/reward-curve" }
 substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
 
 [features]

@@ -11,4 +11,4 @@ hyper = "0.12.35"
 jsonrpc-core-client = { version = "14.0.3", features = ["http", "ws"] }
 log = "0.4.8"
 node-primitives = { version = "2.0.0", path = "../primitives" }
-sc-rpc = { version = "2.0.0", path = "../../../client/rpc"  }
+sc-rpc = { version = "2.0.0", path = "../../../client/rpc" }
