@@ -89,7 +89,7 @@ use sp_runtime::{
 #[allow(deprecated)]
 use sp_runtime::traits::ValidateUnsigned;
 use codec::{Codec, Encode};
-use frame_system::{self as system, extrinsics_root, DigestOf};
+use frame_system::{extrinsics_root, DigestOf};
 
 /// Trait that can be used to execute a block.
 pub trait ExecuteBlock<Block: BlockT> {
@@ -373,7 +373,6 @@ mod tests {
 	type Balances = pallet_balances::Module<Runtime>;
 	type Custom = custom::Module<Runtime>;
 
-	use frame_system as system;
 	use pallet_balances as balances;
 
 	impl_outer_origin! {

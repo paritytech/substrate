@@ -22,7 +22,7 @@
 
 use sp_std::prelude::*;
 use frame_support::{decl_module, decl_event, Parameter, weights::SimpleDispatchInfo};
-use frame_system::ensure_root;
+use frame_system::{self as system, ensure_root};
 use sp_runtime::{traits::Dispatchable, DispatchError};
 
 /// Configuration trait.

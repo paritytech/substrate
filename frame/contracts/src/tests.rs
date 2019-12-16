@@ -49,7 +49,6 @@ mod contract {
 	use frame_support::impl_outer_event;
 }
 
-use frame_system as system;
 use pallet_balances as balances;
 
 impl_outer_event! {

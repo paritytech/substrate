@@ -33,7 +33,7 @@ use frame_support::{
 	traits::{ChangeMembers, InitializeMembers}, decl_module, decl_event,
 	decl_storage, ensure,
 };
-use frame_system::{self as system, self as system, ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root};
 
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
@@ -424,8 +424,6 @@ mod tests {
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
-
-	use frame_system as system;
 
 	frame_support::construct_runtime!(
 		pub enum Test where

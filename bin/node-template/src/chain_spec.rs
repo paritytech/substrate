@@ -123,20 +123,20 @@ fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>,
 			code: WASM_BINARY.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
-		pallet_indices: Some(IndicesConfig {
+		indices: Some(IndicesConfig {
 			ids: endowed_accounts.clone(),
 		}),
-		pallet_balances: Some(BalancesConfig {
+		balances: Some(BalancesConfig {
 			balances: endowed_accounts.iter().cloned().map(|k|(k, 1 << 60)).collect(),
 			vesting: vec![],
 		}),
-		pallet_sudo: Some(SudoConfig {
+		sudo: Some(SudoConfig {
 			key: root_key,
 		}),
-		pallet_aura: Some(AuraConfig {
+		aura: Some(AuraConfig {
 			authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
 		}),
-		pallet_grandpa: Some(GrandpaConfig {
+		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),
 		}),
 	}

@@ -85,7 +85,7 @@
 //!
 //! ```rust,ignore
 //! use frame_support::{decl_module, dispatch};
-//! use frame_system::ensure_signed;
+//! use frame_system::{self as system, ensure_signed};
 //!
 //! pub trait Trait: assets::Trait { }
 //!
@@ -132,7 +132,7 @@
 
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, ensure};
 use sp_runtime::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
-use frame_system::ensure_signed;
+use frame_system::{self as system, ensure_signed};
 use sp_runtime::traits::One;
 
 /// The module configuration trait.

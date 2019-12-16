@@ -23,7 +23,7 @@ use sp_std::{prelude::*, marker::PhantomData, convert::TryInto};
 use codec::{Encode, Codec};
 use frame_support::{Parameter, decl_module, decl_event, decl_storage};
 use sp_runtime::traits::{One, SimpleArithmetic, StaticLookup, Member, LookupError};
-use frame_system::{self as system, IsDeadAccount, OnNewAccount};
+use frame_system::{IsDeadAccount, OnNewAccount};
 
 use self::address::Address as RawAddress;
 

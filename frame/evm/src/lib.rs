@@ -27,7 +27,7 @@ use sp_std::{vec::Vec, marker::PhantomData};
 use frame_support::{dispatch, decl_module, decl_storage, decl_event};
 use frame_support::weights::{Weight, WeighData, ClassifyDispatch, DispatchClass, PaysFee};
 use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement};
-use frame_system::ensure_signed;
+use frame_system::{self as system, ensure_signed};
 use sp_runtime::ModuleId;
 use frame_support::weights::SimpleDispatchInfo;
 use sp_runtime::traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion};

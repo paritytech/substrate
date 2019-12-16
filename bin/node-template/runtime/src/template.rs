@@ -9,14 +9,14 @@
 /// https://github.com/paritytech/substrate/blob/master/frame/example/src/lib.rs
 
 use frame_support::{decl_module, decl_storage, decl_event, dispatch};
-use frame_system::ensure_signed;
+use system::ensure_signed;
 
 /// The module's configuration trait.
-pub trait Trait: frame_system::Trait {
+pub trait Trait: system::Trait {
 	// TODO: Add other types and constants required configure this module.
 
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
 // This module's storage items.
@@ -56,7 +56,7 @@ decl_module! {
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
+	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
 		// Just a dummy event.
 		// Event `Something` is declared with a parameter of the type `u32` and `AccountId`
 		// To emit this event, we call the deposit funtion, from our runtime funtions
@@ -71,7 +71,6 @@ mod tests {
 
 	use sp_core::H256;
 	use frame_support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
-	use frame_system as system;
 	use sp_runtime::{
 		traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill,
 	};
@@ -91,7 +90,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	}
-	impl frame_system::Trait for Test {
+	impl system::Trait for Test {
 		type Origin = Origin;
 		type Call = ();
 		type Index = u64;
@@ -116,7 +115,7 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> sp_io::TestExternalities {
-		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+		system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 
 	#[test]
