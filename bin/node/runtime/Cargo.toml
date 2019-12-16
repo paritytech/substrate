@@ -15,7 +15,7 @@ serde = { version = "1.0.102", optional = true }
 
 # primitives
 sp-authority-discovery = { version = "2.0.0", default-features = false, path = "../../../primitives/authority-discovery" }
-sp-consensus-babe = { version = "2.0.0", default-features = false, path = "../../../primitives/consensus/babe" }
+sp-consensus-babe = { version = "0.8", default-features = false, path = "../../../primitives/consensus/babe" }
 sp-block-builder = { path = "../../../primitives/block-builder", default-features = false}
 sp-inherents = { version = "2.0.0", default-features = false, path = "../../../primitives/inherents" }
 node-primitives = { version = "2.0.0", default-features = false, path = "../primitives" }

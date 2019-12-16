@@ -21,7 +21,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive
 sc-executor = { version = "2.0.0", path = "../executor" }
 sc-state-db = { version = "2.0.0", path = "../state-db" }
 sp-trie = { version = "2.0.0", path = "../../primitives/trie" }
-sp-consensus = { version = "2.0.0", path = "../../primitives/consensus/common" }
+sp-consensus = { version = "0.8", path = "../../primitives/consensus/common" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 
 [dev-dependencies]

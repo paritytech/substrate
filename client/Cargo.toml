@@ -8,7 +8,7 @@ edition = "2018"
 sc-block-builder = { version = "2.0.0", path = "block-builder" }
 sc-client-api = { version = "2.0.0", path = "api" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-sp-consensus = { version = "2.0.0", path = "../primitives/consensus/common" }
+sp-consensus = { version = "0.8", path = "../primitives/consensus/common" }
 derive_more = { version = "0.99.2" }
 sc-executor = { version = "2.0.0", path = "executor" }
 sp-externalities = { version = "2.0.0", path = "../primitives/externalities" }

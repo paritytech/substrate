@@ -27,9 +27,9 @@ sp-inherents = { version = "2.0.0", path = "../../primitives/inherents" }
 sc-transaction-pool = { version = "2.0.0", path = "../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
 sc-network = { version = "0.8", path = "../../client/network" }
-sc-consensus-aura = { version = "2.0.0", path = "../../client/consensus/aura" }
-sp-consensus-aura = { version = "2.0.0", path = "../../primitives/consensus/aura" }
-sp-consensus = { version = "2.0.0", path = "../../primitives/consensus/common" }
+sc-consensus-aura = { version = "0.8", path = "../../client/consensus/aura" }
+sp-consensus-aura = { version = "0.8", path = "../../primitives/consensus/aura" }
+sp-consensus = { version = "0.8", path = "../../primitives/consensus/common" }
 grandpa = { version = "2.0.0", package = "sc-finality-grandpa", path = "../../client/finality-grandpa" }
 grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 sc-client = { version = "2.0.0", path = "../../client/" }

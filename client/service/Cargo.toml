@@ -35,7 +35,7 @@ sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-session = { version = "2.0.0", path = "../../primitives/session" }
 sp-application-crypto = { version = "2.0.0", path = "../../primitives/application-crypto" }
-sp-consensus = { version = "2.0.0", path = "../../primitives/consensus/common" }
+sp-consensus = { version = "0.8", path = "../../primitives/consensus/common" }
 sc-network = { version = "0.8", path = "../network" }
 sc-chain-spec = { version = "2.0.0", path = "../chain-spec" }
 sc-client-api = { version = "2.0.0", path = "../api" }
@@ -57,7 +57,7 @@ tracing = "0.1.10"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-sp-consensus-babe = { version = "2.0.0", path = "../../primitives/consensus/babe" }
+sp-consensus-babe = { version = "0.8", path = "../../primitives/consensus/babe" }
 grandpa = { version = "2.0.0", package = "sc-finality-grandpa", path = "../finality-grandpa" }
 grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 tokio = "0.1"

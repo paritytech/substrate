@@ -7,8 +7,8 @@ build = "build.rs"
 
 [dependencies]
 sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../primitives/application-crypto" }
-sp-consensus-aura = { version = "2.0.0", default-features = false, path = "../../primitives/consensus/aura" }
-sp-consensus-babe = { version = "2.0.0", default-features = false, path = "../../primitives/consensus/babe" }
+sp-consensus-aura = { version = "0.8", default-features = false, path = "../../primitives/consensus/aura" }
+sp-consensus-babe = { version = "0.8", default-features = false, path = "../../primitives/consensus/babe" }
 sp-block-builder = { version = "2.0.0", default-features = false, path = "../../primitives/block-builder" }
 cfg-if = "0.1.10"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }

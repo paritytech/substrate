@@ -17,7 +17,7 @@ frame-system = { version = "2.0.0", default-features = false, path = "../system"
 pallet-timestamp = { version = "2.0.0", default-features = false, path = "../timestamp" }
 sp-timestamp = { version = "2.0.0", default-features = false, path = "../../primitives/timestamp" }
 pallet-session = { version = "2.0.0", default-features = false, path = "../session" }
-sp-consensus-babe = { version = "2.0.0", default-features = false, path = "../../primitives/consensus/babe" }
+sp-consensus-babe = { version = "0.8", default-features = false, path = "../../primitives/consensus/babe" }
 sp-io ={ path = "../../primitives/io", default-features = false }
 
 [dev-dependencies]

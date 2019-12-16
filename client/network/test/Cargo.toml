@@ -15,14 +15,14 @@ futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
 futures-timer = "0.4.0"
 rand = "0.7.2"
 libp2p = { version = "0.13.0", default-features = false, features = ["libp2p-websocket"] }
-sp-consensus = { version = "2.0.0", path = "../../../primitives/consensus/common" }
+sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
 sc-client = { version = "2.0.0", path = "../../" }
 sc-client-api = { version = "2.0.0", path = "../../api" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sc-block-builder = { version = "2.0.0", path = "../../block-builder" }
-sp-consensus-babe = { version = "2.0.0", path = "../../../primitives/consensus/babe" }
+sp-consensus-babe = { version = "0.8", path = "../../../primitives/consensus/babe" }
 env_logger = "0.7.0"
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }

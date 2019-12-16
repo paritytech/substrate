@@ -1,18 +1,18 @@
 [package]
 name = "sc-consensus-aura"
-version = "2.0.0"
+version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Aura consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
 sp-application-crypto = { version = "2.0.0", path = "../../../primitives/application-crypto" }
-sp-consensus-aura = { version = "2.0.0", path = "../../../primitives/consensus/aura" }
+sp-consensus-aura = { version = "0.8", path = "../../../primitives/consensus/aura" }
 sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
 sc-client = { version = "2.0.0", path = "../../" }
 sc-client-api = { version = "2.0.0", path = "../../api" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sp-consensus = { version = "2.0.0", path = "../../../primitives/consensus/common" }
+sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
 derive_more = "0.99.2"
 futures = { version = "0.3.1", features = ["compat"] }
 futures01 = { package = "futures", version = "0.1" }
@@ -25,7 +25,7 @@ sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
 sp-io = { version = "2.0.0", path = "../../../primitives/io" }
 sp-version = { version = "2.0.0", path = "../../../primitives/version" }
-sc-consensus-slots = { version = "2.0.0", path = "../slots" }
+sc-consensus-slots = { version = "0.8", path = "../slots" }
 sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "2.0.0", path = "../../../primitives/timestamp" }

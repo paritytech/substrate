@@ -1,13 +1,13 @@
 [package]
 name = "sc-consensus-babe"
-version = "2.0.0"
+version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "BABE consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-sp-consensus-babe = { version = "2.0.0", path = "../../../primitives/consensus/babe" }
+sp-consensus-babe = { version = "0.8", path = "../../../primitives/consensus/babe" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-application-crypto = { version = "2.0.0", path = "../../../primitives/application-crypto" }
 num-bigint = "0.2.3"
@@ -24,9 +24,9 @@ sc-client = { version = "2.0.0", path = "../../" }
 sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
-sp-consensus = { version = "2.0.0", path = "../../../primitives/consensus/common" }
-sc-consensus-uncles = { version = "2.0.0", path = "../uncles" }
-sc-consensus-slots = { version = "2.0.0", path = "../slots" }
+sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
+sc-consensus-uncles = { version = "0.8", path = "../uncles" }
+sc-consensus-slots = { version = "0.8", path = "../slots" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 fork-tree = { version = "2.0.0", path = "../../../utils/fork-tree" }
 futures = { version = "0.3.1", features = ["compat"] }

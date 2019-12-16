@@ -35,7 +35,7 @@ structopt = "0.3.3"
 
 # primitives
 sp-authority-discovery = { path = "../../../primitives/authority-discovery"}
-sp-consensus-babe = { version = "2.0.0", path = "../../../primitives/consensus/babe" }
+sp-consensus-babe = { version = "0.8", path = "../../../primitives/consensus/babe" }
 grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
@@ -44,7 +44,7 @@ sp-finality-tracker = { version = "2.0.0", default-features = false, path = "../
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
 sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }
 sp-io = { version = "2.0.0", path = "../../../primitives/io" }
-sp-consensus = { version = "2.0.0", path = "../../../primitives/consensus/common" }
+sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
 
 # client dependencies
 sc-client-api = { version = "2.0.0", path = "../../../client/api" }
@@ -53,7 +53,7 @@ sc-chain-spec = { version = "2.0.0", path = "../../../client/chain-spec" }
 sc-transaction-pool = { version = "2.0.0", path = "../../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
 sc-network = { version = "0.8", path = "../../../client/network" }
-sc-consensus-babe = { version = "2.0.0", path = "../../../client/consensus/babe" }
+sc-consensus-babe = { version = "0.8", path = "../../../client/consensus/babe" }
 grandpa = { version = "2.0.0", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
 sc-client-db = { version = "2.0.0", default-features = false, path = "../../../client/db" }
 sc-offchain = { version = "2.0.0", path = "../../../client/offchain" }
@@ -99,7 +99,7 @@ rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"], option
 
 [dev-dependencies]
 sc-keystore = { version = "2.0.0", path = "../../../client/keystore" }
-sc-consensus-babe = { version = "2.0.0", features = ["test-helpers"], path = "../../../client/consensus/babe" }
+sc-consensus-babe = { version = "0.8", features = ["test-helpers"], path = "../../../client/consensus/babe" }
 sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
 futures = "0.3.1"
 tempfile = "3.1.0"
