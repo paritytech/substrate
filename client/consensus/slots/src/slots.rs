@@ -16,19 +16,19 @@
 
 //! Utility stream for yielding slots in a loop.
 //!
-//! This is used instead of `wasm_timer::Interval` because it was unreliable.
+//! This is used instead of `futures_timer::Interval` because it was unreliable.
 
 use super::SlotCompatible;
 use sp_consensus::Error;
 use futures::{prelude::*, task::Context, task::Poll};
 use sp_inherents::{InherentData, InherentDataProviders};
 
-use std::{pin::Pin, time::Duration};
-use wasm_timer::{Delay, Instant};
+use std::{pin::Pin, time::{Duration, Instant}};
+use futures_timer::Delay;
 
 /// Returns current duration since unix epoch.
 pub fn duration_now() -> Duration {
-	use wasm_timer::SystemTime;
+	use std::time::SystemTime;
 	let now = SystemTime::now();
 	now.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_else(|e| panic!(
 		"Current time {:?} is before unix epoch. Something is wrong: {:?}",
@@ -127,7 +127,7 @@ impl<SC: SlotCompatible + Unpin> Stream for Slots<SC> {
 			if let Some(ref mut inner_delay) = self.inner_delay {
 				match Future::poll(Pin::new(inner_delay), cx) {
 					Poll::Pending => return Poll::Pending,
-					Poll::Ready(_) => {}
+					Poll::Ready(()) => {}
 				}
 			}
 

@@ -63,8 +63,7 @@ pub use sp_consensus_babe::{
 	CompatibleDigestItem,
 };
 pub use sp_consensus::SyncOracle;
-use std::{collections::HashMap, sync::Arc, u64, pin::Pin, time::Duration};
-use wasm_timer::Instant;
+use std::{collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration}};
 use sp_consensus_babe;
 use sp_consensus::{ImportResult, CanAuthorWith};
 use sp_consensus::import_queue::{

@@ -16,7 +16,7 @@ sc-telemetry = { path = "../../telemetry" }
 sp-consensus = { path = "../../../primitives/consensus/common" }
 sp-inherents = { path = "../../../primitives/inherents" }
 futures = "0.3.1"
-wasm-timer = "0.2"
+futures-timer = "2.0"
 parking_lot = "0.9.0"
 log = "0.4.8"
 
