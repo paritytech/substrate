@@ -527,8 +527,6 @@ decl_module! {
 			}
 		}
 
-		// TODO: revamp any other instances where we modify SubsOf
-
 		/// Clear an account's identity info and all sub-account and return all deposits.
 		///
 		/// Payment: All reserved balances on the account are returned.
@@ -541,7 +539,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R + S + X)`.
 		/// - One balance-reserve operation.
-		/// - Two storage mutations.
+		/// - `S + 2` storage deletions.
 		/// - One event.
 		/// # </weight>
 		fn clear_identity(origin) {
@@ -793,7 +791,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R + S + X)`.
 		/// - One balance-reserve operation.
-		/// - Two storage mutations.
+		/// - `S + 2` storage mutations.
 		/// - One event.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FreeOperational]
