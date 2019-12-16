@@ -6,13 +6,13 @@ description = "Primitives for Aura consensus"
 edition = "2018"
 
 [dependencies]
-sp-application-crypto = { default-features = false,  path = "../../application-crypto" }
+sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../application-crypto" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
-sp-std = { default-features = false,  path = "../../std" }
-sp-api = { default-features = false,  path = "../../api" }
-sp-runtime = { default-features = false,  path = "../../runtime" }
-sp-inherents = { default-features = false,  path = "../../inherents" }
-sp-timestamp = { default-features = false,   path = "../../timestamp" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../std" }
+sp-api = { version = "2.0.0", default-features = false, path = "../../api" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../runtime" }
+sp-inherents = { version = "2.0.0", default-features = false, path = "../../inherents" }
+sp-timestamp = { version = "2.0.0", default-features = false,  path = "../../timestamp" }
 
 [features]
 default = ["std"]

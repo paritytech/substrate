@@ -6,16 +6,16 @@ edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-std = { default-features = false,  path = "../../primitives/std" }
-sp-runtime = { default-features = false,  path = "../../primitives/runtime" }
-frame-support = { default-features = false,  path = "../support" }
-frame-system = { default-features = false,  path = "../system" }
-pallet-transaction-payment-rpc-runtime-api = { default-features = false,  path = "./rpc/runtime-api" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "./rpc/runtime-api" }
 
 [dev-dependencies]
-sp-io = { path = "../../primitives/io" }
-sp-core = { path = "../../primitives/core" }
-pallet-balances = { path = "../balances" }
+sp-io = { version = "2.0.0", path = "../../primitives/io" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+pallet-balances = { version = "2.0.0", path = "../balances" }
 
 [features]
 default = ["std"]

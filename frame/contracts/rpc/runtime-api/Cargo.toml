@@ -5,10 +5,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sp-api = { default-features = false,  path = "../../../../primitives/api" }
+sp-api = { version = "2.0.0", default-features = false, path = "../../../../primitives/api" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-std = { default-features = false,  path = "../../../../primitives/std" }
-sp-runtime = { default-features = false,  path = "../../../../primitives/runtime" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../../../primitives/std" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../../../primitives/runtime" }
 
 [features]
 default = ["std"]

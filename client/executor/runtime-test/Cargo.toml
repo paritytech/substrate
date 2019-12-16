@@ -6,14 +6,14 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-sp-std = { default-features = false,  path = "../../../primitives/std" }
-sp-io = { default-features = false,  path = "../../../primitives/io" }
-sp-sandbox = { default-features = false,  path = "../../../primitives/sandbox" }
-sp-core = { default-features = false,  path = "../../../primitives/core" }
-sp-runtime = { default-features = false,  path = "../../../primitives/runtime" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../../primitives/std" }
+sp-io = { version = "2.0.0", default-features = false, path = "../../../primitives/io" }
+sp-sandbox = { version = "2.0.0", default-features = false, path = "../../../primitives/sandbox" }
+sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
 
 [build-dependencies]
-wasm-builder-runner = { version = "1.0.4",  package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
+wasm-builder-runner = { version = "1.0.4", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner"  }
 
 [features]
 default = [ "std" ]

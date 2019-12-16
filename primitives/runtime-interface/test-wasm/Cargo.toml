@@ -6,13 +6,13 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-sp-runtime-interface = { default-features = false,  path = "../" }
-sp-std = { default-features = false,  path = "../../std" }
-sp-io = { default-features = false,  path = "../../io" }
-sp-core = { default-features = false,  path = "../../core" }
+sp-runtime-interface = { version = "2.0.0", default-features = false, path = "../" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../std" }
+sp-io = { version = "2.0.0", default-features = false, path = "../../io" }
+sp-core = { version = "2.0.0", default-features = false, path = "../../core" }
 
 [build-dependencies]
-wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.3", path = "../../../utils/wasm-builder-runner" }
+wasm-builder-runner = { version = "1.0.3", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner"  }
 
 [features]
 default = [ "std" ]
