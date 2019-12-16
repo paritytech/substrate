@@ -102,6 +102,18 @@ pub enum Vote {
 	Approve,
 }
 
+/// A judgement by the suspension judgement origin on a suspended candidate.
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum Judgement {
+	/// The suspension judgement origin takes no direct judgment
+	/// and places the candidate back into the bid pool.
+	Rebid,
+	/// The suspension judgement origin has rejected the candidate's application.
+	Reject,
+	/// The suspension judgement origin approves of the candidate's application.
+	Approve,
+}
+
 /// Details of a payout given as a per-block linear "trickle".
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, Default)]
 pub struct Payout<Balance, BlockNumber> {
@@ -331,11 +343,11 @@ decl_module! {
 		}
 
 		/// Allow founder origin to make judgement on a suspended candidate.
-		fn judge_suspended_candidate(origin, who: T::AccountId, approve: Option<bool>) {
+		fn judge_suspended_candidate(origin, who: T::AccountId, judgement: Judgement) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			if let Some((value, kind)) = <SuspendedCandidates<T>>::get(&who) {
-				if let Some(approved) = approve {
-					if approved {
+				match judgement {
+					Judgement::Approve => {
 						// Founder origin has approved this candidate
 						// Make sure we can pay them
 						let pot = Self::pot();
@@ -348,8 +360,9 @@ decl_module! {
 						Self::pay_accepted_candidate(&who, value, kind, maturity);
 						// Add user as a member!
 						let _ = Self::add_member(&who);
-					} else {
-						// Founder has denied this candidate
+					}
+					Judgement::Reject => {
+						// Founder has rejected this candidate
 						match kind {
 							BidKind::Deposit(deposit) => {
 								// Slash deposit and move it to the society account
@@ -371,9 +384,10 @@ decl_module! {
 						// Remove suspended candidate
 						<SuspendedCandidates<T>>::remove(who);
 					}
-				} else {
-					// Founder has taken no judgement, and candidate is placed back into the pool.
-					Self::put_bid(who.clone(), value, kind);
+					Judgement::Rebid => {
+						// Founder has taken no judgement, and candidate is placed back into the pool.
+						Self::put_bid(who.clone(), value, kind);
+					}
 				}
 			} else {
 				return Err("user is not suspended candidate");

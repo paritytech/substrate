@@ -309,10 +309,10 @@ fn suspended_candidate_rejected_works() {
 		assert_eq!(Society::suspended_candidate(20).is_some(), true);
 
 		// Normal user cannot make judgement on suspended candidate
-		assert_noop!(Society::judge_suspended_candidate(Origin::signed(20), 20, Some(true)), "Invalid origin");
+		assert_noop!(Society::judge_suspended_candidate(Origin::signed(20), 20, Judgement::Approve), "Invalid origin");
 
 		// Suspension judgement origin makes no direct judgement
-		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, None));
+		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Judgement::Rebid));
 		// They are placed back in bid pool, repeat suspension process
 		// Rotation Period
 		run_to_block(12);
@@ -326,8 +326,8 @@ fn suspended_candidate_rejected_works() {
 		assert_eq!(Society::candidates(), vec![]);
 		assert_eq!(Society::suspended_candidate(20).is_some(), true);
 
-		// Suspension judgement origin says not accepted
-		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Some(false)));
+		// Suspension judgement origin rejects the candidate
+		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Judgement::Reject));
 		// User is slashed
 		assert_eq!(Balances::free_balance(20), 25);
 		assert_eq!(Balances::reserved_balance(20), 0);
@@ -419,7 +419,7 @@ fn unvouch_works() {
 		run_to_block(4);
 		assert_eq!(Society::candidates(), vec![(100, 20, BidKind::Vouch(10, 0))]);
 		assert_noop!(Society::unvouch(Origin::signed(10), 0), "bad position");
-		// 10 is still vouching until candidate is accepted or denied
+		// 10 is still vouching until candidate is approved or rejected
 		assert_eq!(<Vouching<Test>>::get(), vec![10]);
 		run_to_block(8);
 		// In this case member is denied and suspended
@@ -428,7 +428,7 @@ fn unvouch_works() {
 		// User is stuck vouching until judgement origin resolves suspended candidate
 		assert_eq!(<Vouching<Test>>::get(), vec![10]);
 		// Judge denies candidate
-		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Some(false)));
+		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Judgement::Reject));
 		// 10 is finally unvouched
 		assert_eq!(<Vouching<Test>>::get(), vec![]);
 		assert_eq!(Society::members(), vec![10]);
@@ -482,7 +482,7 @@ fn head_cannot_be_removed() {
 		assert_eq!(Society::head(), Some(50));
 
 		// 10 can now be suspended for strikes
-		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 40, Some(false)));
+		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 40, Judgement::Reject));
 		assert_eq!(Strikes::<Test>::get(10), 0);
 		assert_eq!(<SuspendedMembers<Test>>::get(10), Some(()));
 		assert_eq!(Society::members(), vec![50]);
