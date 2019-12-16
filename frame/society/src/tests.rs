@@ -210,7 +210,7 @@ fn slash_payout_works() {
 		assert_eq!(Payouts::<Test>::get(20), vec![(9, 1000)]);
 		assert_noop!(Society::payout(Origin::signed(20)), "nothing to payout");
 		// slash payout
-		assert_eq!(Society::slash_payout(&20, 500), (9, 500));
+		assert_eq!(Society::slash_payout(&20, 500), 500);
 		assert_eq!(Payouts::<Test>::get(20), vec![(9, 500)]);
 		run_to_block(9);
 		// payout should be here, but 500 less
@@ -231,10 +231,10 @@ fn slash_payout_multi_works() {
 		// payouts in queue
 		assert_eq!(Payouts::<Test>::get(20), vec![(5, 100), (10, 100), (15, 100), (20, 100)]);
 		// slash payout
-		assert_eq!(Society::slash_payout(&20, 250), (15, 250));
+		assert_eq!(Society::slash_payout(&20, 250), 250);
 		assert_eq!(Payouts::<Test>::get(20), vec![(15, 50), (20, 100)]);
 		// slash again
-		assert_eq!(Society::slash_payout(&20, 50), (20, 50));
+		assert_eq!(Society::slash_payout(&20, 50), 50);
 		assert_eq!(Payouts::<Test>::get(20), vec![(20, 100)]);
 	});
 }

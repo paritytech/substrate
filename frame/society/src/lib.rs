@@ -622,7 +622,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				let bad_vote = |m: &T::AccountId| {
 					// Voter voted wrong way (or was just a lazy skeptic) then reduce their payout
 					// and increase their strikes. after MaxStrikes then they go into suspension.
-					let (_when, amount) = Self::slash_payout(m, T::WrongSideDeduction::get());
+					let amount = Self::slash_payout(m, T::WrongSideDeduction::get());
 
 					let strikes = <Strikes<T, I>>::mutate(m, |s| {
 						*s += 1;
@@ -729,14 +729,12 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	/// Attempt to slash the payout of some member. Return the payout block number most in the
 	/// future along with the total amount deducted.
-	fn slash_payout(who: &T::AccountId, value: BalanceOf<T, I>) -> (T::BlockNumber, BalanceOf<T, I>) {
-		let mut latest = T::BlockNumber::zero();
+	fn slash_payout(who: &T::AccountId, value: BalanceOf<T, I>) -> BalanceOf<T, I> {
 		let mut rest = value;
 		let mut payouts = <Payouts<T, I>>::get(who);
 		if !payouts.is_empty() {
 			let mut dropped = 0;
-			for (when, amount) in payouts.iter_mut() {
-				latest = *when;
+			for (_, amount) in payouts.iter_mut() {
 				if let Some(new_rest) = rest.checked_sub(&amount) {
 					// not yet totally slashed after this one; drop it completely.
 					rest = new_rest;
@@ -750,7 +748,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			}
 			<Payouts<T, I>>::insert(who, &payouts[dropped..]);
 		}
-		(latest, value - rest)
+		value - rest
 	}
 
 	/// Bump the payout amount of `who`, to be unlocked at the given block number.
