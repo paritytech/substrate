@@ -3590,6 +3590,7 @@ dependencies = [
  "pwasm-utils 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-core 2.0.0",
+ "sp-historical-data 2.0.0",
  "sp-io 2.0.0",
  "sp-runtime 2.0.0",
  "sp-sandbox 2.0.0",
