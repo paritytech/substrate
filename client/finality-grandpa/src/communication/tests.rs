@@ -18,24 +18,24 @@
 
 use futures::sync::mpsc;
 use futures::prelude::*;
-use network::{Event as NetworkEvent, PeerId, config::Roles};
+use sc_network::{Event as NetworkEvent, PeerId, config::Roles};
 use sc_network_test::{Block, Hash};
-use network_gossip::Validator;
+use sc_network_gossip::Validator;
 use tokio::runtime::current_thread;
 use std::sync::Arc;
-use keyring::Ed25519Keyring;
-use codec::Encode;
+use sp_keyring::Ed25519Keyring;
+use parity_scale_codec::Encode;
 use sp_runtime::{ConsensusEngineId, traits::NumberFor};
 use std::{pin::Pin, task::{Context, Poll}};
 use crate::environment::SharedVoterSetState;
-use fg_primitives::{AuthorityList, GRANDPA_ENGINE_ID};
+use sp_finality_grandpa::{AuthorityList, GRANDPA_ENGINE_ID};
 use super::gossip::{self, GossipValidator};
 use super::{AuthorityId, VoterSet, Round, SetId};
 
 enum Event {
 	EventStream(mpsc::UnboundedSender<NetworkEvent>),
-	WriteNotification(network::PeerId, Vec<u8>),
-	Report(network::PeerId, network::ReputationChange),
+	WriteNotification(sc_network::PeerId, Vec<u8>),
+	Report(sc_network::PeerId, sc_network::ReputationChange),
 	Announce(Hash),
 }
 
@@ -44,7 +44,7 @@ struct TestNetwork {
 	sender: mpsc::UnboundedSender<Event>,
 }
 
-impl network_gossip::Network<Block> for TestNetwork {
+impl sc_network_gossip::Network<Block> for TestNetwork {
 	fn event_stream(&self)
 	-> Box<dyn futures::Stream<Item = NetworkEvent, Error = ()> + Send> {
 		let (tx, rx) = mpsc::unbounded();
@@ -52,7 +52,7 @@ impl network_gossip::Network<Block> for TestNetwork {
 		Box::new(rx)
 	}
 
-	fn report_peer(&self, who: network::PeerId, cost_benefit: network::ReputationChange) {
+	fn report_peer(&self, who: sc_network::PeerId, cost_benefit: sc_network::ReputationChange) {
 		let _ = self.sender.unbounded_send(Event::Report(who, cost_benefit));
 	}
 
@@ -70,19 +70,19 @@ impl network_gossip::Network<Block> for TestNetwork {
 
 	fn set_sync_fork_request(
 		&self,
-		_peers: Vec<network::PeerId>,
+		_peers: Vec<sc_network::PeerId>,
 		_hash: Hash,
 		_number: NumberFor<Block>,
 	) {}
 }
 
-impl network_gossip::ValidatorContext<Block> for TestNetwork {
+impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 	fn broadcast_topic(&mut self, _: Hash, _: bool) { }
 
 	fn broadcast_message(&mut self, _: Hash, _: Vec<u8>, _: bool) {	}
 
-	fn send_message(&mut self, who: &network::PeerId, data: Vec<u8>) {
-		<Self as network_gossip::Network<Block>>::write_notification(
+	fn send_message(&mut self, who: &sc_network::PeerId, data: Vec<u8>) {
+		<Self as sc_network_gossip::Network<Block>>::write_notification(
 			self,
 			who.clone(),
 			GRANDPA_ENGINE_ID,
@@ -90,7 +90,7 @@ impl network_gossip::ValidatorContext<Block> for TestNetwork {
 		);
 	}
 
-	fn send_topic(&mut self, _: &network::PeerId, _: Hash, _: bool) { }
+	fn send_topic(&mut self, _: &sc_network::PeerId, _: Hash, _: bool) { }
 }
 
 struct Tester {
@@ -132,8 +132,8 @@ fn config() -> crate::Config {
 fn voter_set_state() -> SharedVoterSetState<Block> {
 	use crate::authorities::AuthoritySet;
 	use crate::environment::VoterSetState;
-	use grandpa::round::State as RoundState;
-	use primitives::H256;
+	use finality_grandpa::round::State as RoundState;
+	use sp_core::H256;
 
 	let state = RoundState::genesis((H256::zero(), 0));
 	let base = state.prevote_ghost.unwrap();
@@ -193,11 +193,11 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 
 struct NoopContext;
 
-impl network_gossip::ValidatorContext<Block> for NoopContext {
+impl sc_network_gossip::ValidatorContext<Block> for NoopContext {
 	fn broadcast_topic(&mut self, _: Hash, _: bool) { }
 	fn broadcast_message(&mut self, _: Hash, _: Vec<u8>, _: bool) { }
-	fn send_message(&mut self, _: &network::PeerId, _: Vec<u8>) { }
-	fn send_topic(&mut self, _: &network::PeerId, _: Hash, _: bool) { }
+	fn send_message(&mut self, _: &sc_network::PeerId, _: Vec<u8>) { }
+	fn send_topic(&mut self, _: &sc_network::PeerId, _: Hash, _: bool) { }
 }
 
 #[test]
@@ -213,9 +213,9 @@ fn good_commit_leads_to_relay() {
 		let target_hash: Hash = [1; 32].into();
 		let target_number = 500;
 
-		let precommit = grandpa::Precommit { target_hash: target_hash.clone(), target_number };
+		let precommit = finality_grandpa::Precommit { target_hash: target_hash.clone(), target_number };
 		let payload = super::localized_payload(
-			round, set_id, &grandpa::Message::Precommit(precommit.clone())
+			round, set_id, &finality_grandpa::Message::Precommit(precommit.clone())
 		);
 
 		let mut precommits = Vec::new();
@@ -224,11 +224,11 @@ fn good_commit_leads_to_relay() {
 		for (i, key) in private.iter().enumerate() {
 			precommits.push(precommit.clone());
 
-			let signature = fg_primitives::AuthoritySignature::from(key.sign(&payload[..]));
+			let signature = sp_finality_grandpa::AuthoritySignature::from(key.sign(&payload[..]));
 			auth_data.push((signature, public[i].0.clone()))
 		}
 
-		grandpa::CompactCommit {
+		finality_grandpa::CompactCommit {
 			target_hash,
 			target_number,
 			precommits,
@@ -242,14 +242,14 @@ fn good_commit_leads_to_relay() {
 		message: commit,
 	}).encode();
 
-	let id = network::PeerId::random();
+	let id = sc_network::PeerId::random();
 	let global_topic = super::global_topic::<Block>(set_id);
 
 	let threads_pool = futures03::executor::ThreadPool::new().unwrap();
 	let test = make_test_network(&threads_pool).0
 		.and_then(move |tester| {
 			// register a peer.
-			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::FULL);
+			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::FULL);
 			Ok((tester, id))
 		})
 		.and_then(move |(tester, id)| {
@@ -291,8 +291,8 @@ fn good_commit_leads_to_relay() {
 			let handle_commit = commits_in.into_future()
 				.map(|(item, _)| {
 					match item.unwrap() {
-						grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
-							callback.run(grandpa::voter::CommitProcessingOutcome::good());
+						finality_grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
+							callback.run(finality_grandpa::voter::CommitProcessingOutcome::good());
 						},
 						_ => panic!("commit expected"),
 					}
@@ -330,9 +330,9 @@ fn bad_commit_leads_to_report() {
 		let target_hash: Hash = [1; 32].into();
 		let target_number = 500;
 
-		let precommit = grandpa::Precommit { target_hash: target_hash.clone(), target_number };
+		let precommit = finality_grandpa::Precommit { target_hash: target_hash.clone(), target_number };
 		let payload = super::localized_payload(
-			round, set_id, &grandpa::Message::Precommit(precommit.clone())
+			round, set_id, &finality_grandpa::Message::Precommit(precommit.clone())
 		);
 
 		let mut precommits = Vec::new();
@@ -341,11 +341,11 @@ fn bad_commit_leads_to_report() {
 		for (i, key) in private.iter().enumerate() {
 			precommits.push(precommit.clone());
 
-			let signature = fg_primitives::AuthoritySignature::from(key.sign(&payload[..]));
+			let signature = sp_finality_grandpa::AuthoritySignature::from(key.sign(&payload[..]));
 			auth_data.push((signature, public[i].0.clone()))
 		}
 
-		grandpa::CompactCommit {
+		finality_grandpa::CompactCommit {
 			target_hash,
 			target_number,
 			precommits,
@@ -359,14 +359,14 @@ fn bad_commit_leads_to_report() {
 		message: commit,
 	}).encode();
 
-	let id = network::PeerId::random();
+	let id = sc_network::PeerId::random();
 	let global_topic = super::global_topic::<Block>(set_id);
 
 	let threads_pool = futures03::executor::ThreadPool::new().unwrap();
 	let test = make_test_network(&threads_pool).0
 		.and_then(move |tester| {
 			// register a peer.
-			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::FULL);
+			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::FULL);
 			Ok((tester, id))
 		})
 		.and_then(move |(tester, id)| {
@@ -408,8 +408,8 @@ fn bad_commit_leads_to_report() {
 			let handle_commit = commits_in.into_future()
 				.map(|(item, _)| {
 					match item.unwrap() {
-						grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
-							callback.run(grandpa::voter::CommitProcessingOutcome::bad());
+						finality_grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
+							callback.run(finality_grandpa::voter::CommitProcessingOutcome::bad());
 						},
 						_ => panic!("commit expected"),
 					}
@@ -435,14 +435,14 @@ fn bad_commit_leads_to_report() {
 
 #[test]
 fn peer_with_higher_view_leads_to_catch_up_request() {
-	let id = network::PeerId::random();
+	let id = sc_network::PeerId::random();
 
 	let threads_pool = futures03::executor::ThreadPool::new().unwrap();
 	let (tester, mut net) = make_test_network(&threads_pool);
 	let test = tester
 		.and_then(move |tester| {
 			// register a peer with authority role.
-			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::AUTHORITY);
+			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::AUTHORITY);
 			Ok((tester, id))
 		})
 		.and_then(move |(tester, id)| {
@@ -459,7 +459,7 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 
 			// neighbor packets are always discard
 			match result {
-				network_gossip::ValidationResult::Discard => {},
+				sc_network_gossip::ValidationResult::Discard => {},
 				_ => panic!("wrong expected outcome from neighbor validation"),
 			}
 

@@ -20,7 +20,7 @@ use super::*;
 use mock::*;
 use sp_runtime::{assert_eq_error_rate, traits::OnInitialize};
 use sp_staking::offence::OffenceDetails;
-use support::{assert_ok, assert_noop, traits::{Currency, ReservableCurrency}};
+use frame_support::{assert_ok, assert_noop, traits::{Currency, ReservableCurrency}};
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]
@@ -1688,9 +1688,9 @@ fn reward_validator_slashing_validator_doesnt_overflow() {
 #[test]
 fn reward_from_authorship_event_handler_works() {
 	ExtBuilder::default().build().execute_with(|| {
-		use authorship::EventHandler;
+		use pallet_authorship::EventHandler;
 
-		assert_eq!(<authorship::Module<Test>>::author(), 11);
+		assert_eq!(<pallet_authorship::Module<Test>>::author(), 11);
 
 		<Module<Test>>::note_author(11);
 		<Module<Test>>::note_uncle(21, 1);

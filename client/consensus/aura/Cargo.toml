@@ -6,38 +6,38 @@ description = "Aura consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-app-crypto = { package = "sp-application-crypto", path = "../../../primitives/application-crypto" }
-aura_primitives = { package = "sp-consensus-aura", path = "../../../primitives/consensus/aura" }
-block-builder-api = { package = "sp-block-builder", path = "../../../primitives/block-builder" }
-client = { package = "sc-client", path = "../../" }
-client-api = { package = "sc-client-api", path = "../../api" }
+sp-application-crypto = { path = "../../../primitives/application-crypto" }
+sp-consensus-aura = { path = "../../../primitives/consensus/aura" }
+sp-block-builder = { path = "../../../primitives/block-builder" }
+sc-client = { path = "../../" }
+sc-client-api = { path = "../../api" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-consensus_common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
+sp-consensus = { path = "../../../primitives/consensus/common" }
 derive_more = "0.99.2"
 futures = { version = "0.3.1", features = ["compat"] }
 futures01 = { package = "futures", version = "0.1" }
 futures-timer = "0.4.0"
-inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
-keystore = { package = "sc-keystore", path = "../../keystore" }
+sp-inherents = { path = "../../../primitives/inherents" }
+sc-keystore = { path = "../../keystore" }
 log = "0.4.8"
 parking_lot = "0.9.0"
-primitives = { package = "sp-core", path = "../../../primitives/core" }
+sp-core = { path = "../../../primitives/core" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
 sp-io = { path = "../../../primitives/io" }
-runtime_version = { package = "sp-version", path = "../../../primitives/version" }
-slots = { package = "sc-consensus-slots", path = "../slots" }
+sp-version = { path = "../../../primitives/version" }
+sc-consensus-slots = { path = "../slots" }
 sp-api = { path = "../../../primitives/api" }
 sp-runtime = {  path = "../../../primitives/runtime" }
 sp-timestamp = {  path = "../../../primitives/timestamp" }
 sc-telemetry = { path = "../../telemetry" }
 
 [dev-dependencies]
-keyring = { package = "sp-keyring", path = "../../../primitives/keyring" }
+sp-keyring = { path = "../../../primitives/keyring" }
 sc-executor = { path = "../../executor" }
 sc-network = { path = "../../network" }
 sc-network-test = { path = "../../network/test" }
-service = { package = "sc-service", path = "../../service" }
-test-client = { package = "substrate-test-runtime-client", path = "../../../test-utils/runtime/client" }
+sc-service = { path = "../../service" }
+substrate-test-runtime-client = { path = "../../../test-utils/runtime/client" }
 tokio = "0.1.22"
 env_logger = "0.7.0"
 tempfile = "3.1.0"

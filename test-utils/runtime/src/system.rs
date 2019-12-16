@@ -22,8 +22,8 @@ use sp_io::{
 	storage::root as storage_root, storage::changes_root as storage_changes_root,
 	hashing::blake2_256,
 };
-use runtime_support::storage;
-use runtime_support::{decl_storage, decl_module};
+use frame_support::storage;
+use frame_support::{decl_storage, decl_module};
 use sp_runtime::{
 	traits::{Hash as HashT, BlakeTwo256, Header as _}, generic, ApplyExtrinsicResult,
 	transaction_validity::{
@@ -35,7 +35,7 @@ use frame_system::Trait;
 use crate::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };
-use primitives::storage::well_known_keys;
+use sp_core::storage::well_known_keys;
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -169,7 +169,7 @@ fn execute_block_with_state_root_handler(
 /// The block executor.
 pub struct BlockExecutor;
 
-impl executive::ExecuteBlock<Block> for BlockExecutor {
+impl frame_executive::ExecuteBlock<Block> for BlockExecutor {
 	fn execute_block(block: Block) {
 		execute_block(block);
 	}
@@ -312,7 +312,7 @@ fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyExtrinsicRes
 
 #[cfg(feature = "std")]
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
-	use primitives::hexdisplay::HexDisplay;
+	use sp_core::hexdisplay::HexDisplay;
 	if given != expected {
 		println!(
 			"Hash: given={}, expected={}",
@@ -338,7 +338,7 @@ mod tests {
 	use sp_io::TestExternalities;
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
 	use crate::{Header, Transfer, WASM_BINARY};
-	use primitives::{NeverNativeValue, map, traits::CodeExecutor};
+	use sp_core::{NeverNativeValue, map, traits::CodeExecutor};
 	use sc_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
 	use sp_io::hashing::twox_128;
 
@@ -361,7 +361,7 @@ mod tests {
 		];
 		TestExternalities::new_with_code(
 			WASM_BINARY,
-			primitives::storage::Storage {
+			sp_core::storage::Storage {
 				top: map![
 					twox_128(b"latest").to_vec() => vec![69u8; 32],
 					twox_128(b"sys:auth").to_vec() => authorities.encode(),

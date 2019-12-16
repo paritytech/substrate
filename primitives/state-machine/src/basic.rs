@@ -21,9 +21,9 @@ use std::{
 };
 use crate::backend::{Backend, InMemory};
 use hash_db::Hasher;
-use trie::{TrieConfiguration, default_child_trie_root};
-use trie::trie_types::Layout;
-use primitives::{
+use sp_trie::{TrieConfiguration, default_child_trie_root};
+use sp_trie::trie_types::Layout;
+use sp_core::{
 	storage::{
 		well_known_keys::is_child_storage_key, ChildStorageKey, Storage,
 		ChildInfo, StorageChild,
@@ -59,7 +59,7 @@ impl BasicExternalities {
 	///
 	/// Returns the result of the closure and updates `storage` with all changes.
 	pub fn execute_with_storage<R>(
-		storage: &mut primitives::storage::Storage,
+		storage: &mut sp_core::storage::Storage,
 		f: impl FnOnce() -> R,
 	) -> R {
 		let mut ext = Self { inner: Storage {
@@ -78,7 +78,7 @@ impl BasicExternalities {
 	///
 	/// Returns the result of the given closure.
 	pub fn execute_with<R>(&mut self, f: impl FnOnce() -> R) -> R {
-		externalities::set_and_run_with_externalities(self, f)
+		sp_externalities::set_and_run_with_externalities(self, f)
 	}
 }
 
@@ -300,7 +300,7 @@ impl Externalities for BasicExternalities {
 	}
 }
 
-impl externalities::ExtensionStore for BasicExternalities {
+impl sp_externalities::ExtensionStore for BasicExternalities {
 	fn extension_by_type_id(&mut self, _: TypeId) -> Option<&mut dyn Any> {
 		warn!("Extensions are not supported by `BasicExternalities`.");
 		None
@@ -310,9 +310,9 @@ impl externalities::ExtensionStore for BasicExternalities {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::map;
-	use primitives::storage::{Storage, StorageChild};
-	use primitives::storage::well_known_keys::CODE;
+	use sp_core::map;
+	use sp_core::storage::{Storage, StorageChild};
+	use sp_core::storage::well_known_keys::CODE;
 	use hex_literal::hex;
 
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");

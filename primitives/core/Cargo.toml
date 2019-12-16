@@ -26,8 +26,8 @@ zeroize = { version = "1.0.0", default-features = false }
 lazy_static = { version = "1.4.0", default-features = false, optional = true }
 parking_lot = { version = "0.9.0", optional = true }
 sp-debug-derive = { version = "2.0.0", path = "../debug-derive" }
-externalities = { package = "sp-externalities", path = "../externalities", optional = true }
-primitives-storage = { package = "sp-storage", path = "../storage", default-features = false }
+sp-externalities = { path = "../externalities", optional = true }
+sp-storage = { path = "../storage", default-features = false }
 
 # full crypto
 ed25519-dalek = { version = "1.0.0-pre.3", default-features = false, features = ["u64_backend", "alloc"], optional = true }
@@ -39,7 +39,7 @@ sha2 = { version = "0.8.0", default-features = false, optional = true }
 hex = { version = "0.4", default-features = false, optional = true }
 twox-hash = { version = "1.5.0", default-features = false, optional = true }
 
-runtime-interface = { package = "sp-runtime-interface", path = "../runtime-interface", default-features = false }
+sp-runtime-interface = { path = "../runtime-interface", default-features = false }
 
 [dev-dependencies]
 sp-serializer = { path = "../serializer" }
@@ -93,9 +93,9 @@ std = [
 	"libsecp256k1",
 	"tiny-keccak",
 	"sp-debug-derive/std",
-	"externalities",
-	"primitives-storage/std",
-	"runtime-interface/std",
+	"sp-externalities",
+	"sp-storage/std",
+	"sp-runtime-interface/std",
 	"zeroize/alloc"
 ]
 
@@ -111,5 +111,5 @@ full_crypto = [
 	"hex",
 	"sha2",
 	"twox-hash",
-	"runtime-interface/disable_target_static_assertions",
+	"sp-runtime-interface/disable_target_static_assertions",
 ]

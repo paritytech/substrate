@@ -3,21 +3,21 @@
 use std::sync::Arc;
 use std::time::Duration;
 use sc_client::LongestChain;
-use runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
+use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
-use inherents::InherentDataProviders;
-use network::{construct_simple_protocol};
+use sp_inherents::InherentDataProviders;
+use sc_network::{construct_simple_protocol};
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
-use aura_primitives::sr25519::{AuthorityPair as AuraPair};
+use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
-use basic_authorship;
+use sc_basic_authority;
 
 // Our native executor instance.
 native_executor_instance!(
 	pub Executor,
-	runtime::api::dispatch,
-	runtime::native_version,
+	node_template_runtime::api::dispatch,
+	node_template_runtime::native_version,
 );
 
 construct_simple_protocol! {
@@ -32,19 +32,19 @@ construct_simple_protocol! {
 macro_rules! new_full_start {
 	($config:expr) => {{
 		let mut import_setup = None;
-		let inherent_data_providers = inherents::InherentDataProviders::new();
+		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
 		let builder = sc_service::ServiceBuilder::new_full::<
-			runtime::opaque::Block, runtime::RuntimeApi, crate::service::Executor
+			node_template_runtime::opaque::Block, node_template_runtime::RuntimeApi, crate::service::Executor
 		>($config)?
 			.with_select_chain(|_config, backend| {
 				Ok(sc_client::LongestChain::new(backend.clone()))
 			})?
 			.with_transaction_pool(|config, client, _fetcher| {
-				let pool_api = txpool::FullChainApi::new(client.clone());
-				let pool = txpool::BasicPool::new(config, pool_api);
-				let maintainer = txpool::FullBasicPoolMaintainer::new(pool.pool().clone(), client);
-				let maintainable_pool = txpool_api::MaintainableTransactionPool::new(pool, maintainer);
+				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
+				let pool = sc_transaction_pool::BasicPool::new(config, pool_api);
+				let maintainer = sc_transaction_pool::FullBasicPoolMaintainer::new(pool.pool().clone(), client);
+				let maintainable_pool = sp_transaction_pool::MaintainableTransactionPool::new(pool, maintainer);
 				Ok(maintainable_pool)
 			})?
 			.with_import_queue(|_config, client, mut select_chain, transaction_pool| {
@@ -52,12 +52,12 @@ macro_rules! new_full_start {
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 
 				let (grandpa_block_import, grandpa_link) =
-					grandpa::block_import::<_, _, _, runtime::RuntimeApi, _>(
+					grandpa::block_import::<_, _, _, node_template_runtime::RuntimeApi, _>(
 						client.clone(), &*client, select_chain
 					)?;
 
-				let import_queue = aura::import_queue::<_, _, AuraPair, _>(
-					aura::SlotDuration::get_or_compute(&*client)?,
+				let import_queue = sc_consensus_aura::import_queue::<_, _, AuraPair, _>(
+					sc_consensus_aura::SlotDuration::get_or_compute(&*client)?,
 					Box::new(grandpa_block_import.clone()),
 					Some(Box::new(grandpa_block_import.clone())),
 					None,
@@ -102,7 +102,7 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 		.build()?;
 
 	if participates_in_consensus {
-		let proposer = basic_authorship::ProposerFactory {
+		let proposer = sc_basic_authority::ProposerFactory {
 			client: service.client(),
 			transaction_pool: service.transaction_pool(),
 		};
@@ -112,10 +112,10 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 			.ok_or(ServiceError::SelectChainRequired)?;
 
 		let can_author_with =
-			consensus_common::CanAuthorWithNativeVersion::new(client.executor().clone());
+			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
-		let aura = aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _, _>(
-			aura::SlotDuration::get_or_compute(&*client)?,
+		let aura = sc_consensus_aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _, _>(
+			sc_consensus_aura::SlotDuration::get_or_compute(&*client)?,
 			client,
 			select_chain,
 			block_import,
@@ -203,10 +203,10 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 		.with_transaction_pool(|config, client, fetcher| {
 			let fetcher = fetcher
 				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
-			let pool_api = txpool::LightChainApi::new(client.clone(), fetcher.clone());
-			let pool = txpool::BasicPool::new(config, pool_api);
-			let maintainer = txpool::LightBasicPoolMaintainer::with_defaults(pool.pool().clone(), client, fetcher);
-			let maintainable_pool = txpool_api::MaintainableTransactionPool::new(pool, maintainer);
+			let pool_api = sc_transaction_pool::LightChainApi::new(client.clone(), fetcher.clone());
+			let pool = sc_transaction_pool::BasicPool::new(config, pool_api);
+			let maintainer = sc_transaction_pool::LightBasicPoolMaintainer::with_defaults(pool.pool().clone(), client, fetcher);
+			let maintainable_pool = sp_transaction_pool::MaintainableTransactionPool::new(pool, maintainer);
 			Ok(maintainable_pool)
 		})?
 		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
@@ -220,8 +220,8 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 			let finality_proof_request_builder =
 				finality_proof_import.create_finality_proof_request_builder();
 
-			let import_queue = aura::import_queue::<_, _, AuraPair, ()>(
-				aura::SlotDuration::get_or_compute(&*client)?,
+			let import_queue = sc_consensus_aura::import_queue::<_, _, AuraPair, ()>(
+				sc_consensus_aura::SlotDuration::get_or_compute(&*client)?,
 				Box::new(grandpa_block_import),
 				None,
 				Some(Box::new(finality_proof_import)),

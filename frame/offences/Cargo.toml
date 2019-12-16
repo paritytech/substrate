@@ -5,14 +5,14 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-balances = { package = "pallet-balances", path = "../balances", default-features = false }
+pallet-balances = { path = "../balances", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 sp-std = { path = "../../primitives/std", default-features = false }
 serde = { version = "1.0.101", optional = true }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 sp-staking = { path = "../../primitives/staking", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
+frame-support = { path = "../support", default-features = false }
+frame-system = { path = "../system", default-features = false }
 
 [dev-dependencies]
 sp-io = { path = "../../primitives/io" }
@@ -21,12 +21,12 @@ sp-core = { path = "../../primitives/core" }
 [features]
 default = ["std"]
 std = [
-	"balances/std",
+	"pallet-balances/std",
 	"codec/std",
 	"sp-std/std",
 	"serde",
 	"sp-runtime/std",
 	"sp-staking/std",
-	"support/std",
-	"system/std",
+	"frame-support/std",
+	"frame-system/std",
 ]

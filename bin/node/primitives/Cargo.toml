@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-primitives = { package = "sp-core", path = "../../../primitives/core", default-features = false }
+sp-core = { path = "../../../primitives/core", default-features = false }
 sp-runtime = { path = "../../../primitives/runtime", default-features = false }
 
 [dev-dependencies]
@@ -15,6 +15,6 @@ pretty_assertions = "0.6.1"
 [features]
 default = ["std"]
 std = [
-	"primitives/std",
+	"sp-core/std",
 	"sp-runtime/std",
 ]

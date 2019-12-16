@@ -436,7 +436,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 #[cfg(test)]
 mod tests {
 	use std::io;
-	use primitives::H256;
+	use sp_core::H256;
 	use super::{NonCanonicalOverlay, to_journal_key};
 	use crate::{ChangeSet, CommitSet};
 	use crate::test::{make_db, make_changeset};

@@ -26,16 +26,16 @@ use std::fmt::Display;
 
 use log::info;
 
-use client::Client;
-use block_builder_api::BlockBuilder;
+use sc_client::Client;
+use sp_block_builder::BlockBuilder;
 use sp_api::ConstructRuntimeApi;
-use consensus_common::{
+use sp_consensus::{
 	BlockOrigin, BlockImportParams, InherentData, ForkChoiceStrategy,
 	SelectChain
 };
-use consensus_common::block_import::BlockImport;
+use sp_consensus::block_import::BlockImport;
 use codec::{Decode, Encode};
-use primitives::{Blake2Hasher, Hasher};
+use sp_core::{Blake2Hasher, Hasher};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, ProvideRuntimeApi, SimpleArithmetic,
@@ -98,25 +98,25 @@ pub fn factory<RA, Backend, Exec, Block, RtApi, Sc>(
 	mut factory_state: RA,
 	client: &Arc<Client<Backend, Exec, Block, RtApi>>,
 	select_chain: &Sc,
-) -> cli::error::Result<()>
+) -> sc_cli::error::Result<()>
 where
 	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	Exec: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	Backend: client_api::backend::Backend<Block, Blake2Hasher> + Send,
+	Exec: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	Backend: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
 		BlockBuilder<Block, Error = sp_blockchain::Error>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	Sc: SelectChain<Block>,
 	RA: RuntimeAdapter,
-	<<RA as RuntimeAdapter>::Block as BlockT>::Hash: From<primitives::H256>,
+	<<RA as RuntimeAdapter>::Block as BlockT>::Hash: From<sp_core::H256>,
 {
 	if *factory_state.mode() != Mode::MasterToNToM && factory_state.rounds() > RA::Number::one() {
 		let msg = "The factory can only be used with rounds set to 1 in this mode.".into();
-		return Err(cli::error::Error::Input(msg));
+		return Err(sc_cli::error::Error::Input(msg));
 	}
 
-	let best_header: Result<<Block as BlockT>::Header, cli::error::Error> =
+	let best_header: Result<<Block as BlockT>::Header, sc_cli::error::Error> =
 		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
 	let mut best_hash = best_header?.hash();
 	let mut best_block_id = BlockId::<Block>::hash(best_hash);
@@ -160,8 +160,8 @@ pub fn create_block<RA, Backend, Exec, Block, RtApi>(
 ) -> Block
 where
 	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	Exec: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	Backend: client_api::backend::Backend<Block, Blake2Hasher> + Send,
+	Exec: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	Backend: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
@@ -186,8 +186,8 @@ fn import_block<Backend, Exec, Block, RtApi>(
 	block: Block
 ) -> () where
 	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	Exec: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	Backend: client_api::backend::Backend<Block, Blake2Hasher> + Send,
+	Exec: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	Backend: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send,
 {
 	let import = BlockImportParams {
 		origin: BlockOrigin::File,

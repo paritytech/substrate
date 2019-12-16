@@ -25,7 +25,7 @@ use sp_runtime::{
 	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable, Saturating},
 };
 use codec::{Ref, Encode, Decode, Input, Output, Error};
-use support::{
+use frame_support::{
 	decl_module, decl_storage, decl_event, ensure,
 	dispatch,
 	Parameter,
@@ -35,7 +35,7 @@ use support::{
 		OnFreeBalanceZero, OnUnbalanced
 	}
 };
-use system::{ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root};
 
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
@@ -173,13 +173,13 @@ impl Decode for Vote {
 	}
 }
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
-<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
-pub trait Trait: system::Trait + Sized {
+pub trait Trait: frame_system::Trait + Sized {
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// Currency type for this module.
 	type Currency: ReservableCurrency<Self::AccountId>
@@ -281,7 +281,7 @@ decl_storage! {
 		pub LowestUnbaked get(fn lowest_unbaked) build(|_| 0 as ReferendumIndex): ReferendumIndex;
 		/// Information concerning any given referendum.
 		pub ReferendumInfoOf get(fn referendum_info):
-			map ReferendumIndex => Option<(ReferendumInfo<T::BlockNumber, T::Hash>)>;
+			map ReferendumIndex => Option<ReferendumInfo<T::BlockNumber, T::Hash>>;
 		/// Queue of successful referenda to be dispatched. Stored ordered by block number.
 		pub DispatchQueue get(fn dispatch_queue): Vec<(T::BlockNumber, T::Hash, ReferendumIndex)>;
 
@@ -323,9 +323,9 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where
 		Balance = BalanceOf<T>,
-		<T as system::Trait>::AccountId,
-		<T as system::Trait>::Hash,
-		<T as system::Trait>::BlockNumber,
+		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Trait>::Hash,
+		<T as frame_system::Trait>::BlockNumber,
 	{
 		/// A motion has been proposed by a public account.
 		Proposed(PropIndex, Balance),
@@ -487,7 +487,7 @@ decl_module! {
 			T::ExternalOrigin::ensure_origin(origin)?;
 			ensure!(!<NextExternal<T>>::exists(), "proposal already made");
 			if let Some((until, _)) = <Blacklist<T>>::get(proposal_hash) {
-				ensure!(<system::Module<T>>::block_number() >= until, "proposal still blacklisted");
+				ensure!(<frame_system::Module<T>>::block_number() >= until, "proposal still blacklisted");
 			}
 			<NextExternal<T>>::put((proposal_hash, VoteThreshold::SuperMajorityApprove));
 		}
@@ -538,7 +538,7 @@ decl_module! {
 			ensure!(proposal_hash == e_proposal_hash, "invalid hash");
 
 			<NextExternal<T>>::kill();
-			let now = <system::Module<T>>::block_number();
+			let now = <frame_system::Module<T>>::block_number();
 			// We don't consider it an error if `vote_period` is too low, like `emergency_propose`.
 			let period = voting_period.max(T::EmergencyVotingPeriod::get());
 			Self::inject_referendum(now + period, proposal_hash, threshold, delay);
@@ -562,7 +562,7 @@ decl_module! {
 				.err().ok_or("identity may not veto a proposal twice")?;
 
 			existing_vetoers.insert(insert_position, who.clone());
-			let until = <system::Module<T>>::block_number() + T::CooloffPeriod::get();
+			let until = <frame_system::Module<T>>::block_number() + T::CooloffPeriod::get();
 			<Blacklist<T>>::insert(&proposal_hash, (until, existing_vetoers));
 
 			Self::deposit_event(RawEvent::Vetoed(who, proposal_hash, until));
@@ -659,7 +659,7 @@ decl_module! {
 			ensure!(<Delegations<T>>::exists(&who), "not delegated");
 			let (_, conviction) = <Delegations<T>>::take(&who);
 			// Indefinite lock is reduced to the maximum voting lock that could be possible.
-			let now = <system::Module<T>>::block_number();
+			let now = <frame_system::Module<T>>::block_number();
 			let locked_until = now + T::EnactmentPeriod::get() * conviction.lock_periods().into();
 			T::Currency::set_lock(
 				DEMOCRACY_ID,
@@ -691,7 +691,7 @@ decl_module! {
 				.saturating_mul(T::PreimageByteDeposit::get());
 			T::Currency::reserve(&who, deposit)?;
 
-			let now = <system::Module<T>>::block_number();
+			let now = <frame_system::Module<T>>::block_number();
 			<Preimages<T>>::insert(proposal_hash, (encoded_proposal, who.clone(), deposit, now));
 
 			Self::deposit_event(RawEvent::PreimageNoted(proposal_hash, who, deposit));
@@ -707,7 +707,7 @@ decl_module! {
 			let queue = <DispatchQueue<T>>::get();
 			ensure!(queue.iter().any(|item| &item.1 == &proposal_hash), "not imminent");
 
-			let now = <system::Module<T>>::block_number();
+			let now = <frame_system::Module<T>>::block_number();
 			let free = <BalanceOf<T>>::zero();
 			<Preimages<T>>::insert(proposal_hash, (encoded_proposal, who.clone(), free, now));
 
@@ -724,7 +724,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 
 			let (_, old, deposit, then) = <Preimages<T>>::get(&proposal_hash).ok_or("not found")?;
-			let now = <system::Module<T>>::block_number();
+			let now = <frame_system::Module<T>>::block_number();
 			let (voting, enactment) = (T::VotingPeriod::get(), T::EnactmentPeriod::get());
 			let additional = if who == old { Zero::zero() } else { enactment };
 			ensure!(now >= then + voting + additional, "too early");
@@ -863,7 +863,7 @@ impl<T: Trait> Module<T> {
 		delay: T::BlockNumber
 	) -> ReferendumIndex {
 		<Module<T>>::inject_referendum(
-			<system::Module<T>>::block_number() + T::VotingPeriod::get(),
+			<frame_system::Module<T>>::block_number() + T::VotingPeriod::get(),
 			proposal_hash,
 			threshold,
 			delay
@@ -927,7 +927,7 @@ impl<T: Trait> Module<T> {
 				let _ = T::Currency::unreserve(&who, amount);
 				Self::deposit_event(RawEvent::PreimageUsed(proposal_hash, who, amount));
 
-				let ok = proposal.dispatch(system::RawOrigin::Root.into()).is_ok();
+				let ok = proposal.dispatch(frame_system::RawOrigin::Root.into()).is_ok();
 				Self::deposit_event(RawEvent::Executed(index, ok));
 
 				Ok(())
@@ -1088,15 +1088,15 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 mod tests {
 	use super::*;
 	use std::cell::RefCell;
-	use support::{
+	use frame_support::{
 		impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
 		traits::Contains,
 		weights::Weight,
 	};
-	use primitives::H256;
+	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, Bounded}, testing::Header, Perbill};
-	use balances::BalanceLock;
-	use system::EnsureSignedBy;
+	use pallet_balances::BalanceLock;
+	use frame_system::EnsureSignedBy;
 
 	const AYE: Vote = Vote{ aye: true, conviction: Conviction::None };
 	const NAY: Vote = Vote{ aye: false, conviction: Conviction::None };
@@ -1104,12 +1104,12 @@ mod tests {
 	const BIG_NAY: Vote = Vote{ aye: false, conviction: Conviction::Locked1x };
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	impl_outer_dispatch! {
 		pub enum Call for Test where origin: Origin {
-			balances::Balances,
+			pallet_balances::Balances,
 			democracy::Democracy,
 		}
 	}
@@ -1123,7 +1123,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -1145,7 +1145,7 @@ mod tests {
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
-	impl balances::Trait for Test {
+	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
@@ -1185,7 +1185,7 @@ mod tests {
 	impl super::Trait for Test {
 		type Proposal = Call;
 		type Event = ();
-		type Currency = balances::Module<Self>;
+		type Currency = pallet_balances::Module<Self>;
 		type EnactmentPeriod = EnactmentPeriod;
 		type LaunchPeriod = LaunchPeriod;
 		type VotingPeriod = VotingPeriod;
@@ -1203,8 +1203,8 @@ mod tests {
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		balances::GenesisConfig::<Test>{
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		pallet_balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
 			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
@@ -1212,8 +1212,8 @@ mod tests {
 		sp_io::TestExternalities::new(t)
 	}
 
-	type System = system::Module<Test>;
-	type Balances = balances::Module<Test>;
+	type System = frame_system::Module<Test>;
+	type Balances = pallet_balances::Module<Test>;
 	type Democracy = Module<Test>;
 
 	#[test]
@@ -1226,7 +1226,7 @@ mod tests {
 	}
 
 	fn set_balance_proposal(value: u64) -> Vec<u8> {
-		Call::Balances(balances::Call::set_balance(42, value, 0)).encode()
+		Call::Balances(pallet_balances::Call::set_balance(42, value, 0)).encode()
 	}
 
 	fn set_balance_proposal_hash(value: u64) -> H256 {

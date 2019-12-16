@@ -25,12 +25,12 @@
 
 use hash_db;
 use codec::Encode;
-use trie;
+use sp_trie;
 
-use primitives::{H256, convert_hash};
+use sp_core::{H256, convert_hash};
 use sp_runtime::traits::{Header as HeaderT, SimpleArithmetic, Zero, One};
-use state_machine::backend::InMemory as InMemoryState;
-use state_machine::{MemoryDB, TrieBackend, Backend as StateBackend, StorageProof,
+use sp_state_machine::backend::InMemory as InMemoryState;
+use sp_state_machine::{MemoryDB, TrieBackend, Backend as StateBackend, StorageProof,
 	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend};
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
@@ -76,8 +76,8 @@ pub fn compute_root<Header, Hasher, I>(
 		Hasher::Out: Ord,
 		I: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
 {
-	use trie::TrieConfiguration;
-	Ok(trie::trie_types::Layout::<Hasher>::trie_root(
+	use sp_trie::TrieConfiguration;
+	Ok(sp_trie::trie_types::Layout::<Hasher>::trie_root(
 		build_pairs::<Header, I>(cht_size, cht_num, hashes)?
 	))
 }
@@ -317,8 +317,8 @@ pub fn decode_cht_value(value: &[u8]) -> Option<H256> {
 
 #[cfg(test)]
 mod tests {
-	use primitives::{Blake2Hasher};
-	use test_client::runtime::Header;
+	use sp_core::{Blake2Hasher};
+	use substrate_test_runtime_client::runtime::Header;
 	use super::*;
 
 	#[test]

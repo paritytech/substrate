@@ -38,21 +38,21 @@ use rpc::{
 	futures::stream::Stream,
 };
 
-use api::Subscriptions;
-use client_api::backend::Backend;
+use sc_rpc_api::Subscriptions;
+use sc_client_api::backend::Backend;
 use sp_blockchain::Error as ClientError;
-use client::{
+use sc_client::{
 	BlockchainEvents, Client, CallExecutor,
 	light::{
 		blockchain::{future_header, RemoteBlockchain},
 		fetcher::{Fetcher, RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest},
 	},
 };
-use primitives::{
+use sp_core::{
 	H256, Blake2Hasher, Bytes, OpaqueMetadata,
 	storage::{StorageKey, StorageData, StorageChangeSet},
 };
-use runtime_version::RuntimeVersion;
+use sp_version::RuntimeVersion;
 use sp_runtime::{
 	generic::BlockId,
 	traits::Block as BlockT,
@@ -711,7 +711,7 @@ fn ignore_error<F, T>(future: F) -> impl std::future::Future<Output=Result<Optio
 #[cfg(test)]
 mod tests {
 	use rpc::futures::stream::futures_ordered;
-	use test_client::runtime::Block;
+	use substrate_test_runtime_client::runtime::Block;
 	use super::*;
 
 	#[test]

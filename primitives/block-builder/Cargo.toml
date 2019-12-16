@@ -9,14 +9,14 @@ sp-runtime = { path = "../runtime", default-features = false }
 sp-api = { path = "../api", default-features = false }
 sp-std = { path = "../std", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false }
-inherents = { package = "sp-inherents", path = "../inherents", default-features = false }
+sp-inherents = { path = "../inherents", default-features = false }
 
 [features]
 default = [ "std" ]
 std = [
 	"sp-runtime/std",
 	"codec/std",
-	"inherents/std",
+	"sp-inherents/std",
 	"sp-api/std",
 	"sp-std/std",
 ]

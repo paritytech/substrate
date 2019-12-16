@@ -153,7 +153,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 					// AND are not in storage at the beginning of operation
 					if let Some(sk) = storage_key.as_ref() {
 						if !changes.child_storage(sk, k).map(|v| v.is_some()).unwrap_or_default() {
-							if let Some(child_info) = child_info.as_ref() { 
+							if let Some(child_info) = child_info.as_ref() {
 								if !backend.exists_child_storage(sk, child_info.as_ref(), k)
 									.map_err(|e| format!("{}", e))? {
 									return Ok(map);
@@ -338,9 +338,9 @@ fn prepare_digest_input<'a, H, Number>(
 #[cfg(test)]
 mod test {
 	use codec::Encode;
-	use primitives::Blake2Hasher;
-	use primitives::storage::well_known_keys::{EXTRINSIC_INDEX};
-	use primitives::storage::ChildInfo;
+	use sp_core::Blake2Hasher;
+	use sp_core::storage::well_known_keys::{EXTRINSIC_INDEX};
+	use sp_core::storage::ChildInfo;
 	use crate::backend::InMemory;
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
