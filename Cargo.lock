@@ -3156,7 +3156,7 @@ dependencies = [
  "node-primitives 2.0.0",
  "pallet-authority-discovery 2.0.0",
  "pallet-authorship 2.0.0",
- "pallet-babe 0.8.0",
+ "pallet-babe 2.0.0",
  "pallet-balances 2.0.0",
  "pallet-collective 2.0.0",
  "pallet-contracts 2.0.0",
@@ -3242,7 +3242,7 @@ dependencies = [
  "frame-executive 2.0.0",
  "frame-support 2.0.0",
  "frame-system 2.0.0",
- "pallet-aura 0.8.0",
+ "pallet-aura 2.0.0",
  "pallet-balances 2.0.0",
  "pallet-grandpa 2.0.0",
  "pallet-indices 2.0.0",
@@ -3475,7 +3475,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-aura"
-version = "0.8.0"
+version = "2.0.0"
 dependencies = [
  "frame-support 2.0.0",
  "frame-system 2.0.0",
@@ -3531,7 +3531,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-babe"
-version = "0.8.0"
+version = "2.0.0"
 dependencies = [
  "frame-support 2.0.0",
  "frame-system 2.0.0",
@@ -6763,7 +6763,7 @@ dependencies = [
  "frame-system-rpc-runtime-api 2.0.0",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "memory-db 0.15.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "pallet-babe 0.8.0",
+ "pallet-babe 2.0.0",
  "pallet-timestamp 2.0.0",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-client 2.0.0",
