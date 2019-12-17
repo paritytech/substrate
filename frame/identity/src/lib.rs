@@ -339,7 +339,7 @@ impl <
 	fn total_deposit(&self) -> Balance {
 		self.deposit + self.judgements.iter()
 			.map(|(_, ref j)| if let Judgement::FeePaid(fee) = j { *fee } else { Zero::zero() })
-			.fold(Zero::zero(), |a, i| a + i)
+			.fold(Zero::zero(), |a, i| a + i) // sum of balances fits in a Balance
 	}
 }
 
@@ -428,7 +428,7 @@ decl_module! {
 
 			let i = <Registrars<T>>::mutate(|r| {
 				r.push(Some(RegistrarInfo { account, fee: Zero::zero(), fields: Default::default() }));
-				(r.len() - 1) as RegistrarIndex
+				(r.len() - 1) as RegistrarIndex // we just pushed on to `r`, so it can’t be empty
 			});
 
 			Self::deposit_event(RawEvent::RegistrarAdded(i));
@@ -455,6 +455,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn set_identity(origin, info: IdentityInfo) {
 			let sender = ensure_signed(origin)?;
+			// overflow: u32 * u64 fits in a u128
 			let fd = <BalanceOf<T>>::from(info.additional.len() as u32) * T::FieldDeposit::get();
 
 			let mut id = match <IdentityOf<T>>::get(&sender) {
@@ -468,11 +469,11 @@ decl_module! {
 			};
 
 			let old_deposit = id.deposit;
+			// u64 + u96 fits in a u128
 			id.deposit = T::BasicDeposit::get() + fd;
 			if id.deposit > old_deposit {
 				T::Currency::reserve(&sender, id.deposit - old_deposit)?;
-			}
-			if old_deposit > id.deposit {
+			} else if old_deposit > id.deposit {
 				let _ = T::Currency::unreserve(&sender, old_deposit - id.deposit);
 			}
 
@@ -502,15 +503,14 @@ decl_module! {
 			ensure!(subs.len() <= T::MaximumSubAccounts::get() as usize, "too many subs");
 
 			let (old_deposit, old_ids) = <SubsOf<T>>::get(&sender);
+			// u64 * u32 fits in a u128
 			let new_deposit = T::SubAccountDeposit::get() * <BalanceOf<T>>::from(subs.len() as u32);
 
 			if old_deposit < new_deposit {
 				T::Currency::reserve(&sender, new_deposit - old_deposit)?;
-			}
-			// do nothing if they're equal.
-			if old_deposit > new_deposit {
+			} else if old_deposit > new_deposit {
 				let _ = T::Currency::unreserve(&sender, old_deposit - new_deposit);
-			}
+			} // do nothing if they're equal.
 
 			for s in old_ids.iter() {
 				<SuperOf<T>>::remove(s);
@@ -547,7 +547,7 @@ decl_module! {
 
 			let (subs_deposit, sub_ids) = <SubsOf<T>>::take(&sender);
 			let deposit = <IdentityOf<T>>::take(&sender).ok_or("not named")?.total_deposit()
-				+ subs_deposit;
+				+ subs_deposit; // sum of balances fits in a Balance
 			for sub in sub_ids.iter() {
 				<SuperOf<T>>::remove(sub);
 			}
@@ -806,7 +806,7 @@ decl_module! {
 			// Grab their deposit (and check that they have one).
 			let (subs_deposit, sub_ids) = <SubsOf<T>>::take(&target);
 			let deposit = <IdentityOf<T>>::take(&target).ok_or("not named")?.total_deposit()
-				+ subs_deposit;
+				+ subs_deposit; // sum of balances fits in a balance
 			for sub in sub_ids.iter() {
 				<SuperOf<T>>::remove(sub);
 			}
