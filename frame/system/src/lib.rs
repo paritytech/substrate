@@ -93,8 +93,7 @@ use serde::Serialize;
 use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
-use sp_std::marker::PhantomData;
-use sp_std::fmt::Debug;
+use sp_std::{result, marker::PhantomData, fmt::Debug};
 use sp_version::RuntimeVersion;
 use sp_runtime::{
 	RuntimeDebug,
@@ -105,7 +104,7 @@ use sp_runtime::{
 	},
 	traits::{
 		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Lookup, LookupError,
-		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, SaturatedConversion,
+		SimpleBitOps, Hash, Member, MaybeDisplay, SaturatedConversion,
 		MaybeSerialize, MaybeSerializeDeserialize, StaticLookup, One, Bounded,
 	},
 };
@@ -125,6 +124,20 @@ use sp_io::TestExternalities;
 use sp_core::ChangesTrieConfiguration;
 
 pub mod offchain;
+
+/// Some sort of check on the origin is performed by this object.
+pub trait EnsureOrigin<OuterOrigin> {
+	/// A return type.
+	type Success;
+
+	/// Perform the origin check.
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, Error> {
+		Self::try_origin(o).map_err(|_| Error::InvalidOrigin)
+	}
+
+	/// Perform the origin check.
+	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
+}
 
 /// Handler for when a new account has been created.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
@@ -323,6 +336,7 @@ decl_error! {
 		RequireSignedOrigin,
 		RequireRootOrigin,
 		RequireNoOrigin,
+		InvalidOrigin,
 	}
 }
 

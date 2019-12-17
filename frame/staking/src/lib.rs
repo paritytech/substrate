@@ -272,7 +272,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
-		SimpleArithmetic, EnsureOrigin, ModuleDispatchError,
+		SimpleArithmetic, ModuleDispatchError,
 	}
 };
 use sp_staking::{
@@ -281,7 +281,7 @@ use sp_staking::{
 };
 #[cfg(feature = "std")]
 use sp_runtime::{Serialize, Deserialize};
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root, EnsureOrigin};
 
 use sp_phragmen::{ExtendedBalance, PhragmenStakedAssignment};
 
@@ -794,8 +794,6 @@ decl_error! {
 		AlreadyBonded,
 		/// Controller is already paired.
 		AlreadyPaired,
-		/// Should be the root origin or the `T::SlashCancelOrigin`.
-		BadOrigin,
 		/// Targets cannot be empty.
 		EmptyTargets,
 		/// Duplicate index.
@@ -1191,7 +1189,7 @@ decl_module! {
 			T::SlashCancelOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)
-				.map_err(|_| Error::BadOrigin)?;
+				.map_err(|e| e.as_str())?;
 
 			let mut slash_indices = slash_indices;
 			slash_indices.sort_unstable();

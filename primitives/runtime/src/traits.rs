@@ -134,28 +134,6 @@ impl<
 	}
 }
 
-/// An error type that indicates that the origin is invalid.
-#[derive(Encode, Decode)]
-pub struct InvalidOrigin;
-
-impl From<InvalidOrigin> for &'static str {
-	fn from(_: InvalidOrigin) -> &'static str {
-		"Invalid origin"
-	}
-}
-
-/// Some sort of check on the origin is performed by this object.
-pub trait EnsureOrigin<OuterOrigin> {
-	/// A return type.
-	type Success;
-	/// Perform the origin check.
-	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, InvalidOrigin> {
-		Self::try_origin(o).map_err(|_| InvalidOrigin)
-	}
-	/// Perform the origin check.
-	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
-}
-
 /// An error that indicates that a lookup failed.
 #[derive(Encode, Decode)]
 pub struct LookupError;

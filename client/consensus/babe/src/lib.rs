@@ -487,7 +487,6 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		let slot_lenience = slot_info.number.saturating_sub(parent_slot + 1);
 
 		let slot_lenience = std::cmp::min(slot_lenience, BACKOFF_CAP);
-		let slot_duration = slot_info.duration << (slot_lenience / BACKOFF_STEP);
 
 		if slot_lenience >= 1 {
 			debug!(target: "babe", "No block for {} slots. Applying 2^({}/{}) lenience",

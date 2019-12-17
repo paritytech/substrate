@@ -22,7 +22,7 @@ use sp_std::prelude::*;
 use sp_std::{result, convert::TryFrom};
 use sp_runtime::{
 	RuntimeDebug,
-	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable, Saturating},
+	traits::{Zero, Bounded, CheckedMul, CheckedDiv, Hash, Dispatchable, Saturating},
 };
 use codec::{Ref, Encode, Decode, Input, Output, Error};
 use frame_support::{
@@ -35,7 +35,7 @@ use frame_support::{
 		OnFreeBalanceZero, OnUnbalanced
 	}
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root, EnsureOrigin};
 
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};

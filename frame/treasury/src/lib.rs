@@ -67,11 +67,11 @@ use frame_support::traits::{
 };
 use sp_runtime::{Permill, ModuleId};
 use sp_runtime::traits::{
-	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating, ModuleDispatchError,
+	Zero, StaticLookup, AccountIdConversion, Saturating, ModuleDispatchError,
 };
 use frame_support::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode};
-use frame_system::{self as system, ensure_signed};
+use frame_system::{self as system, ensure_signed, EnsureOrigin};
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
@@ -168,7 +168,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::RejectOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
+			T::RejectOrigin::ensure_origin(origin).map_err(|e| e.as_str())?;
 			let proposal = <Proposals<T>>::take(proposal_id).ok_or(Error::InvalidProposalIndex)?;
 
 			let value = proposal.bond;
@@ -186,7 +186,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::ApproveOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
+			T::ApproveOrigin::ensure_origin(origin).map_err(|e| e.as_str())?;
 
 			ensure!(<Proposals<T>>::exists(proposal_id), Error::InvalidProposalIndex);
 
