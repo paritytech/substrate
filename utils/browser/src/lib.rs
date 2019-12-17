@@ -31,12 +31,8 @@ use std::pin::Pin;
 use chain_spec::Extension;
 
 pub use libp2p::wasm_ext::{ExtTransport, ffi::Transport};
-
-/// Set up a panic hook and console logging.
-pub fn set_hooks(log_level: log::Level) {
-    console_error_panic_hook::set_once();
-    let _ = console_log::init_with_level(log_level);
-}
+pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
+pub use console_log::init_with_level as init_console_log;
 
 /// Create a service configuration from a chain spec and the websocket transport.
 ///
