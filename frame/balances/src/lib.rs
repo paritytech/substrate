@@ -459,34 +459,27 @@ decl_module! {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let existential_deposit = T::ExistentialDeposit::get();
-			let mut final_free = new_free;
-			let mut final_reserved = new_reserved;
 
-			if new_free < existential_deposit {
-				final_free = 0.into();
-			}
-
-			if new_reserved < existential_deposit {
-				final_reserved = 0.into();
-			}
+			let new_free = if new_free < existential_deposit { Zero::zero() } else { new_free };
+			let new_reserved = if new_reserved < existential_deposit { Zero::zero() } else { new_reserved };
 
 			let current_free = <FreeBalance<T, I>>::get(&who);
-			if final_free > current_free {
-				mem::drop(PositiveImbalance::<T, I>::new(final_free - current_free));
-			} else if final_free < current_free {
-				mem::drop(NegativeImbalance::<T, I>::new(current_free - final_free));
+			if new_free > current_free {
+				mem::drop(PositiveImbalance::<T, I>::new(new_free - current_free));
+			} else if new_free < current_free {
+				mem::drop(NegativeImbalance::<T, I>::new(current_free - new_free));
 			}
-			Self::set_free_balance(&who, final_free);
+			Self::set_free_balance(&who, new_free);
 
 			let current_reserved = <ReservedBalance<T, I>>::get(&who);
-			if final_reserved > current_reserved {
-				mem::drop(PositiveImbalance::<T, I>::new(final_reserved - current_reserved));
-			} else if final_reserved < current_reserved {
-				mem::drop(NegativeImbalance::<T, I>::new(current_reserved - final_reserved));
+			if new_reserved > current_reserved {
+				mem::drop(PositiveImbalance::<T, I>::new(new_reserved - current_reserved));
+			} else if new_reserved < current_reserved {
+				mem::drop(NegativeImbalance::<T, I>::new(current_reserved - new_reserved));
 			}
-			Self::set_reserved_balance(&who, final_reserved);
+			Self::set_reserved_balance(&who, new_reserved);
 
-			Self::deposit_event(RawEvent::BalanceSet(who, final_free, final_reserved));
+			Self::deposit_event(RawEvent::BalanceSet(who, new_free, new_reserved));
 		}
 
 		/// Exactly as `transfer`, except the origin must be root and the source account may be
