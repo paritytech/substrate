@@ -1093,6 +1093,7 @@ mod tests {
 		traits::Contains,
 		weights::Weight,
 	};
+	use frame_system::Error as SystemError;
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, Bounded}, testing::Header, Perbill};
 	use pallet_balances::BalanceLock;
@@ -1540,7 +1541,7 @@ mod tests {
 			);
 			assert!(Democracy::referendum_info(r).is_some());
 
-			assert_noop!(Democracy::emergency_cancel(Origin::signed(3), r), "Invalid origin");
+			assert_noop!(Democracy::emergency_cancel(Origin::signed(3), r), SystemError::InvalidOrigin.into());
 			assert_ok!(Democracy::emergency_cancel(Origin::signed(4), r));
 			assert!(Democracy::referendum_info(r).is_none());
 
@@ -1624,7 +1625,7 @@ mod tests {
 			assert_noop!(Democracy::external_propose(
 				Origin::signed(1),
 				set_balance_proposal_hash(2),
-			), "Invalid origin");
+			), SystemError::InvalidOrigin.into());
 			assert_ok!(Democracy::external_propose(
 				Origin::signed(2),
 				set_balance_proposal_hash_and_note(2),
@@ -1653,7 +1654,7 @@ mod tests {
 			assert_noop!(Democracy::external_propose_majority(
 				Origin::signed(1),
 				set_balance_proposal_hash(2)
-			), "Invalid origin");
+			), SystemError::InvalidOrigin.into());
 			assert_ok!(Democracy::external_propose_majority(
 				Origin::signed(3),
 				set_balance_proposal_hash_and_note(2)
@@ -1678,7 +1679,7 @@ mod tests {
 			assert_noop!(Democracy::external_propose_default(
 				Origin::signed(3),
 				set_balance_proposal_hash(2)
-			), "Invalid origin");
+			), SystemError::InvalidOrigin.into());
 			assert_ok!(Democracy::external_propose_default(
 				Origin::signed(1),
 				set_balance_proposal_hash_and_note(2)
@@ -1706,7 +1707,7 @@ mod tests {
 				Origin::signed(3),
 				set_balance_proposal_hash_and_note(2)
 			));
-			assert_noop!(Democracy::fast_track(Origin::signed(1), h, 3, 2), "Invalid origin");
+			assert_noop!(Democracy::fast_track(Origin::signed(1), h, 3, 2), SystemError::InvalidOrigin.into());
 			assert_ok!(Democracy::fast_track(Origin::signed(5), h, 0, 0));
 			assert_eq!(
 				Democracy::referendum_info(0),
