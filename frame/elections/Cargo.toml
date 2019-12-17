@@ -8,27 +8,27 @@ edition = "2018"
 serde = { version = "1.0.101", optional = true }
 safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
+sp-core = { path = "../../primitives/core", default-features = false }
 sp-std = { path = "../../primitives/std", default-features = false }
 sp-io = { path = "../../primitives/io", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
+frame-support = { path = "../support", default-features = false }
+frame-system = { path = "../system", default-features = false }
 
 [dev-dependencies]
 hex-literal = "0.2.1"
-balances = { package = "pallet-balances", path = "../balances" }
+pallet-balances = { path = "../balances" }
 
 [features]
 default = ["std"]
 std = [
 	"safe-mix/std",
 	"codec/std",
-	"primitives/std",
+	"sp-core/std",
 	"sp-std/std",
 	"serde",
 	"sp-io/std",
-	"support/std",
+	"frame-support/std",
 	"sp-runtime/std",
-	"system/std",
+	"frame-system/std",
 ]

@@ -17,7 +17,7 @@
 //! Changes trie pruning-related functions.
 
 use hash_db::Hasher;
-use trie::Recorder;
+use sp_trie::Recorder;
 use log::warn;
 use num_traits::One;
 use crate::proving_backend::ProvingBackendRecorder;
@@ -113,8 +113,8 @@ fn prune_trie<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 #[cfg(test)]
 mod tests {
 	use std::collections::HashSet;
-	use trie::MemoryDB;
-	use primitives::{H256, Blake2Hasher};
+	use sp_trie::MemoryDB;
+	use sp_core::{H256, Blake2Hasher};
 	use crate::backend::insert_into_memory_db;
 	use crate::changes_trie::storage::InMemoryStorage;
 	use codec::Encode;

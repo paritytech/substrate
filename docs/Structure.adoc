@@ -87,11 +87,14 @@ The default (testing) application pulling together our recommended setup of subs
 
 We also provide a template to get you started building your own node.
 
-==== Subkey
+==== Utils
 
-* _found in_: `/bin/subkey`
+* _found in_: `/bin/utils`
 
-Subkey is a client library to generate keys and sign transactions to send to a substrate node.
+- **subkey**
+  Subkey is a client library to generate keys and sign transactions to send to a substrate node.
+- **chain-spec-builder**
+  The chain spec builder builds a chain specification that includes a Substrate runtime compiled as WASM. To ensure proper functioning of the included runtime compile (or run) the chain spec builder binary in `--release` mode.
 
 == Internal Dependency Tree
 

@@ -22,12 +22,12 @@ use std::{fmt, result, collections::HashMap, panic::UnwindSafe, marker::PhantomD
 use log::{warn, trace};
 use hash_db::Hasher;
 use codec::{Decode, Encode, Codec};
-use primitives::{
-	NativeOrEncoded, NeverNativeValue,
+use sp_core::{
+	storage::ChildInfo, NativeOrEncoded, NeverNativeValue,
 	traits::CodeExecutor, hexdisplay::HexDisplay, hash::H256,
 };
 use overlayed_changes::OverlayedChangeSet;
-use externalities::Extensions;
+use sp_externalities::Extensions;
 
 pub mod backend;
 mod changes_trie;
@@ -40,7 +40,7 @@ mod proving_backend;
 mod trie_backend;
 mod trie_backend_essence;
 
-pub use trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB};
+pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use ext::Ext;
@@ -413,7 +413,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 				ExecutionManager::AlwaysWasm(trust_level) => {
 					let _abort_guard = match trust_level {
 						BackendTrustLevel::Trusted => None,
-						BackendTrustLevel::Untrusted => Some(panic_handler::AbortGuard::never_abort()),
+						BackendTrustLevel::Untrusted => Some(sp_panic_handler::AbortGuard::never_abort()),
 					};
 					let res = self.execute_aux(compute_tx, false, native_call);
 					(res.0, res.2, res.3)
@@ -551,6 +551,7 @@ where
 pub fn prove_child_read<B, H, I>(
 	mut backend: B,
 	storage_key: &[u8],
+	child_info: ChildInfo,
 	keys: I,
 ) -> Result<StorageProof, Box<dyn Error>>
 where
@@ -562,7 +563,7 @@ where
 {
 	let trie_backend = backend.as_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
-	prove_child_read_on_trie_backend(trie_backend, storage_key, keys)
+	prove_child_read_on_trie_backend(trie_backend, storage_key, child_info, keys)
 }
 
 /// Generate storage read proof on pre-created trie backend.
@@ -590,6 +591,7 @@ where
 pub fn prove_child_read_on_trie_backend<S, H, I>(
 	trie_backend: &TrieBackend<S, H>,
 	storage_key: &[u8],
+	child_info: ChildInfo,
 	keys: I,
 ) -> Result<StorageProof, Box<dyn Error>>
 where
@@ -602,7 +604,7 @@ where
 	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
 	for key in keys.into_iter() {
 		proving_backend
-			.child_storage(storage_key, key.as_ref())
+			.child_storage(storage_key, child_info.clone(), key.as_ref())
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	}
 	Ok(proving_backend.extract_proof())
@@ -677,7 +679,9 @@ where
 	H: Hasher,
 	H::Out: Ord + Codec,
 {
-	proving_backend.child_storage(storage_key, key).map_err(|e| Box::new(e) as Box<dyn Error>)
+	// Not a prefixed memory db, using empty unique id and include root resolution.
+	proving_backend.child_storage(storage_key, ChildInfo::new_default(&[]), key)
+		.map_err(|e| Box::new(e) as Box<dyn Error>)
 }
 
 #[cfg(test)]
@@ -689,7 +693,7 @@ mod tests {
 	use super::backend::InMemory;
 	use super::ext::Ext;
 	use super::changes_trie::Configuration as ChangesTrieConfig;
-	use primitives::{Blake2Hasher, map, traits::Externalities, storage::ChildStorageKey};
+	use sp_core::{Blake2Hasher, map, traits::Externalities, storage::ChildStorageKey};
 
 	struct DummyCodeExecutor {
 		change_changes_trie_config: bool,
@@ -697,6 +701,8 @@ mod tests {
 		native_succeeds: bool,
 		fallback_succeeds: bool,
 	}
+
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 
 	impl CodeExecutor for DummyCodeExecutor {
 		type Error = u8;
@@ -715,7 +721,7 @@ mod tests {
 		) -> (CallResult<R, Self::Error>, bool) {
 			if self.change_changes_trie_config {
 				ext.place_storage(
-					primitives::storage::well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
+					sp_core::storage::well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
 					Some(
 						ChangesTrieConfig {
 							digest_interval: 777,
@@ -925,22 +931,26 @@ mod tests {
 
 		ext.set_child_storage(
 			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+			CHILD_INFO_1,
 			b"abc".to_vec(),
 			b"def".to_vec()
 		);
 		assert_eq!(
 			ext.child_storage(
 				ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+				CHILD_INFO_1,
 				b"abc"
 			),
 			Some(b"def".to_vec())
 		);
 		ext.kill_child_storage(
-			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap()
+			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+			CHILD_INFO_1,
 		);
 		assert_eq!(
 			ext.child_storage(
 				ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+				CHILD_INFO_1,
 				b"abc"
 			),
 			None
@@ -976,6 +986,7 @@ mod tests {
 		let remote_proof = prove_child_read(
 			remote_backend,
 			b":child_storage:default:sub1",
+			CHILD_INFO_1,
 			&[b"value3"],
 		).unwrap();
 		let local_result1 = read_child_proof_check::<Blake2Hasher, _>(

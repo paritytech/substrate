@@ -3,9 +3,9 @@ use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use codec::{Encode, Decode};
-use primitives::{U256, H256, H160};
+use sp_core::{U256, H256, H160};
 use sp_runtime::traits::UniqueSaturatedInto;
-use support::storage::{StorageMap, StorageDoubleMap};
+use frame_support::storage::{StorageMap, StorageDoubleMap};
 use sha3::{Keccak256, Digest};
 use evm::Config;
 use evm::backend::{Backend as BackendT, ApplyBackend, Apply};
@@ -69,12 +69,12 @@ impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 			H256::default()
 		} else {
 			let number = T::BlockNumber::from(number.as_u32());
-			H256::from_slice(system::Module::<T>::block_hash(number).as_ref())
+			H256::from_slice(frame_system::Module::<T>::block_hash(number).as_ref())
 		}
 	}
 
 	fn block_number(&self) -> U256 {
-		let number: u128 = system::Module::<T>::block_number().unique_saturated_into();
+		let number: u128 = frame_system::Module::<T>::block_number().unique_saturated_into();
 		U256::from(number)
 	}
 
@@ -83,7 +83,7 @@ impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 	}
 
 	fn block_timestamp(&self) -> U256 {
-		let now: u128 = timestamp::Module::<T>::get().unique_saturated_into();
+		let now: u128 = pallet_timestamp::Module::<T>::get().unique_saturated_into();
 		U256::from(now)
 	}
 

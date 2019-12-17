@@ -52,7 +52,7 @@ pub enum Error {
 		/// Transaction entering the pool.
 		new: Priority
 	},
-	/// Deps cycle etected and we couldn't import transaction.
+	/// Deps cycle detected and we couldn't import transaction.
 	#[display(fmt="Cycle Detected")]
 	CycleDetected,
 	/// Transaction was dropped immediately after it got inserted.

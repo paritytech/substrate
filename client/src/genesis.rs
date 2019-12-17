@@ -43,25 +43,25 @@ pub fn construct_genesis_block<
 #[cfg(test)]
 mod tests {
 	use codec::{Encode, Decode, Joiner};
-	use executor::native_executor_instance;
-	use state_machine::{self, StateMachine, OverlayedChanges, ExecutionStrategy};
-	use state_machine::backend::InMemory;
-	use test_client::{
+	use sc_executor::native_executor_instance;
+	use sp_state_machine::{StateMachine, OverlayedChanges, ExecutionStrategy};
+	use sp_state_machine::backend::InMemory;
+	use substrate_test_runtime_client::{
 		runtime::genesismap::{GenesisConfig, insert_genesis_block},
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
 		AccountKeyring, Sr25519Keyring,
 	};
-	use primitives::{Blake2Hasher, map};
+	use sp_core::Blake2Hasher;
 	use hex_literal::*;
 
 	native_executor_instance!(
 		Executor,
-		test_client::runtime::api::dispatch,
-		test_client::runtime::native_version
+		substrate_test_runtime_client::runtime::api::dispatch,
+		substrate_test_runtime_client::runtime::native_version
 	);
 
-	fn executor() -> executor::NativeExecutor<Executor> {
-		executor::NativeExecutor::new(executor::WasmExecutionMethod::Interpreted, None)
+	fn executor() -> sc_executor::NativeExecutor<Executor> {
+		sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None)
 	}
 
 	fn construct_block(
@@ -71,7 +71,7 @@ mod tests {
 		state_root: Hash,
 		txs: Vec<Transfer>
 	) -> (Vec<u8>, Hash) {
-		use trie::{TrieConfiguration, trie_types::Layout};
+		use sp_trie::{TrieConfiguration, trie_types::Layout};
 
 		let transactions = txs.into_iter().map(|tx| tx.into_signed_tx()).collect::<Vec<_>>();
 
@@ -90,7 +90,7 @@ mod tests {
 
 		StateMachine::new(
 			backend,
-			state_machine::disabled_changes_trie_state::<_, u64>(),
+			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"Core_initialize_block",
@@ -103,7 +103,7 @@ mod tests {
 		for tx in transactions.iter() {
 			StateMachine::new(
 				backend,
-				state_machine::disabled_changes_trie_state::<_, u64>(),
+				sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 				&mut overlay,
 				&executor(),
 				"BlockBuilder_apply_extrinsic",
@@ -116,7 +116,7 @@ mod tests {
 
 		let (ret_data, _, _) = StateMachine::new(
 			backend,
-			state_machine::disabled_changes_trie_state::<_, u64>(),
+			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"BlockBuilder_finalize_block",
@@ -152,8 +152,7 @@ mod tests {
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
 			None,
-			map![],
-			map![],
+			Default::default(),
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
@@ -163,7 +162,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let _ = StateMachine::new(
 			&backend,
-			state_machine::disabled_changes_trie_state::<_, u64>(),
+			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
@@ -181,8 +180,7 @@ mod tests {
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
 			None,
-			map![],
-			map![],
+			Default::default(),
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
@@ -192,7 +190,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let _ = StateMachine::new(
 			&backend,
-			state_machine::disabled_changes_trie_state::<_, u64>(),
+			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
@@ -210,8 +208,7 @@ mod tests {
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			68,
 			None,
-			map![],
-			map![],
+			Default::default(),
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
@@ -221,7 +218,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let r = StateMachine::new(
 			&backend,
-			state_machine::disabled_changes_trie_state::<_, u64>(),
+			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",

@@ -23,15 +23,15 @@ use kvdb::{KeyValueDB, DBTransaction};
 use codec::{Decode, Encode};
 use parking_lot::RwLock;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
-use trie::MemoryDB;
-use client_api::backend::{PrunableStateChangesTrieStorage, ChangesTrieConfigurationRange};
-use client::blockchain::{well_known_cache_keys, Cache as BlockchainCache};
-use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
+use sp_trie::MemoryDB;
+use sc_client_api::backend::{PrunableStateChangesTrieStorage, ChangesTrieConfigurationRange};
+use sp_blockchain::{well_known_cache_keys, Cache as BlockchainCache};
+use sp_core::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, CheckedSub,
 };
 use sp_runtime::generic::{BlockId, DigestItem, ChangesTrieSignal};
-use state_machine::{DBValue, ChangesTrieBuildCache, ChangesTrieCacheAction};
+use sp_state_machine::{DBValue, ChangesTrieBuildCache, ChangesTrieCacheAction};
 use crate::utils::{self, Meta, meta_keys, db_err};
 use crate::cache::{
 	DbCacheSync, DbCache, DbCacheTransactionOps,
@@ -305,11 +305,11 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 				}
 
 				tries_meta.oldest_pruned_digest_range_end = end;
-				state_machine::prune_changes_tries(
+				sp_state_machine::prune_changes_tries(
 					&*self,
 					begin,
 					end,
-					&state_machine::ChangesTrieAnchorBlockId {
+					&sp_state_machine::ChangesTrieAnchorBlockId {
 						hash: convert_hash(&block_hash),
 						number: block_num,
 					},
@@ -381,7 +381,7 @@ impl<Block> PrunableStateChangesTrieStorage<Block, Blake2Hasher>
 where
 	Block: BlockT<Hash=H256>,
 {
-	fn storage(&self) -> &dyn state_machine::ChangesTrieStorage<Blake2Hasher, NumberFor<Block>> {
+	fn storage(&self) -> &dyn sp_state_machine::ChangesTrieStorage<Blake2Hasher, NumberFor<Block>> {
 		self
 	}
 
@@ -398,7 +398,7 @@ where
 	}
 }
 
-impl<Block> state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>>
+impl<Block> sp_state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>>
 	for DbChangesTrieStorage<Block>
 where
 	Block: BlockT<Hash=H256>,
@@ -406,11 +406,11 @@ where
 	fn build_anchor(
 		&self,
 		hash: H256,
-	) -> Result<state_machine::ChangesTrieAnchorBlockId<H256, NumberFor<Block>>, String> {
+	) -> Result<sp_state_machine::ChangesTrieAnchorBlockId<H256, NumberFor<Block>>, String> {
 		utils::read_header::<Block>(&*self.db, self.key_lookup_column, self.header_column, BlockId::Hash(hash))
 			.map_err(|e| e.to_string())
 			.and_then(|maybe_header| maybe_header.map(|header|
-				state_machine::ChangesTrieAnchorBlockId {
+				sp_state_machine::ChangesTrieAnchorBlockId {
 					hash,
 					number: *header.number(),
 				}
@@ -419,7 +419,7 @@ where
 
 	fn root(
 		&self,
-		anchor: &state_machine::ChangesTrieAnchorBlockId<H256, NumberFor<Block>>,
+		anchor: &sp_state_machine::ChangesTrieAnchorBlockId<H256, NumberFor<Block>>,
 		block: NumberFor<Block>,
 	) -> Result<Option<H256>, String> {
 		// check API requirement: we can't get NEXT block(s) based on anchor
@@ -465,12 +465,12 @@ where
 	}
 }
 
-impl<Block> state_machine::ChangesTrieStorage<Blake2Hasher, NumberFor<Block>>
+impl<Block> sp_state_machine::ChangesTrieStorage<Blake2Hasher, NumberFor<Block>>
 	for DbChangesTrieStorage<Block>
 where
 	Block: BlockT<Hash=H256>,
 {
-	fn as_roots_storage(&self) -> &dyn state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>> {
+	fn as_roots_storage(&self) -> &dyn sp_state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>> {
 		self
 	}
 
@@ -517,13 +517,13 @@ fn write_tries_meta<Block: BlockT>(
 #[cfg(test)]
 mod tests {
 	use hash_db::EMPTY_PREFIX;
-	use client_api::backend::{
+	use sc_client_api::backend::{
 		Backend as ClientBackend, NewBlockState, BlockImportOperation, PrunableStateChangesTrieStorage,
 	};
-	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
+	use sp_blockchain::HeaderBackend as BlockchainHeaderBackend;
 	use sp_runtime::testing::{Digest, Header};
 	use sp_runtime::traits::{Hash, BlakeTwo256};
-	use state_machine::{ChangesTrieRootsStorage, ChangesTrieStorage};
+	use sp_state_machine::{ChangesTrieRootsStorage, ChangesTrieStorage};
 	use crate::Backend;
 	use crate::tests::{Block, insert_header, prepare_changes};
 	use super::*;
@@ -578,7 +578,7 @@ mod tests {
 
 		let check_changes = |backend: &Backend<Block>, block: u64, changes: Vec<(Vec<u8>, Vec<u8>)>| {
 			let (changes_root, mut changes_trie_update) = prepare_changes(changes);
-			let anchor = state_machine::ChangesTrieAnchorBlockId {
+			let anchor = sp_state_machine::ChangesTrieAnchorBlockId {
 				hash: backend.blockchain().header(BlockId::Number(block)).unwrap().unwrap().hash(),
 				number: block
 			};
@@ -633,21 +633,21 @@ mod tests {
 
 		// branch1: when asking for finalized block hash
 		let (changes1_root, _) = prepare_changes(changes1);
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
+		let anchor = sp_state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
 		assert_eq!(backend.changes_tries_storage.root(&anchor, 1), Ok(Some(changes1_root)));
 
 		// branch2: when asking for finalized block hash
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_2_1, number: 4 };
+		let anchor = sp_state_machine::ChangesTrieAnchorBlockId { hash: block2_2_1, number: 4 };
 		assert_eq!(backend.changes_tries_storage.root(&anchor, 1), Ok(Some(changes1_root)));
 
 		// branch1: when asking for non-finalized block hash (search by traversal)
 		let (changes2_1_0_root, _) = prepare_changes(changes2_1_0);
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
+		let anchor = sp_state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
 		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_1_0_root)));
 
 		// branch2: when asking for non-finalized block hash (search using canonicalized hint)
 		let (changes2_2_0_root, _) = prepare_changes(changes2_2_0);
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_2_1, number: 4 };
+		let anchor = sp_state_machine::ChangesTrieAnchorBlockId { hash: block2_2_1, number: 4 };
 		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_2_0_root)));
 
 		// finalize first block of branch2 (block2_2_0)
@@ -659,7 +659,7 @@ mod tests {
 		// branch1: when asking for finalized block of other branch
 		// => result is incorrect (returned for the block of branch1), but this is expected,
 		// because the other fork is abandoned (forked before finalized header)
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
+		let anchor = sp_state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
 		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_2_0_root)));
 	}
 

@@ -34,9 +34,18 @@ function rename() {
 TO_RENAME=(
     # OLD-CRATE-NAME NEW-CRATE-NAME
 
+    # post initial rename fixes
+    "sc-application-crypto sp-application-crypto"
+    "sp-transaction-pool-api sp-transaction-pool"
+    "sp-transaction-pool-runtime-api sp-transaction-pool"
+    "sp-core-storage sp-storage"
+    "transaction-factory node-transaction-factory"
+    "sp-finality-granpda sp-finality-grandpa"
+    "sp-sesssion sp-session"
+    "sp-tracing-pool sp-transaction-pool"
+
     # PRIMITIVES
     "substrate-application-crypto sp-application-crypto"
-    "sc-application-crypto sp-application-crypto"
     "substrate-authority-discovery-primitives sp-authority-discovery"
     "substrate-block-builder-runtime-api sp-block-builder"
     "substrate-consensus-aura-primitives sp-consensus-aura"

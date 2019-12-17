@@ -21,10 +21,9 @@ use serde::{Deserialize, Serialize};
 
 use sp_std::prelude::*;
 
-use primitives::ChangesTrieConfiguration;
 use crate::ConsensusEngineId;
 use crate::codec::{Decode, Encode, Input, Error};
-use primitives::RuntimeDebug;
+use sp_core::{ChangesTrieConfiguration, RuntimeDebug};
 
 /// Generic header digest.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -128,7 +127,7 @@ pub enum ChangesTrieSignal {
 impl<Hash: Encode> serde::Serialize for DigestItem<Hash> {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
 		self.using_encoded(|bytes| {
-			primitives::bytes::serialize(bytes, seq)
+			sp_core::bytes::serialize(bytes, seq)
 		})
 	}
 }
@@ -138,7 +137,7 @@ impl<'a, Hash: Decode> serde::Deserialize<'a> for DigestItem<Hash> {
 	fn deserialize<D>(de: D) -> Result<Self, D::Error> where
 		D: serde::Deserializer<'a>,
 	{
-		let r = primitives::bytes::deserialize(de)?;
+		let r = sp_core::bytes::deserialize(de)?;
 		Decode::decode(&mut &r[..])
 			.map_err(|e| serde::de::Error::custom(format!("Decode error: {}", e)))
 	}

@@ -18,17 +18,17 @@
 #![allow(dead_code, unused_imports)]
 
 use super::{Trait, Module, GenesisConfig};
-use babe_primitives::AuthorityId;
+use sp_consensus_babe::AuthorityId;
 use sp_runtime::{
 	traits::IdentityLookup, Perbill, testing::{Header, UintAuthorityId}, impl_opaque_keys,
 };
 use sp_version::RuntimeVersion;
-use support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 use sp_io;
-use primitives::{H256, Blake2Hasher};
+use sp_core::{H256, Blake2Hasher};
 
 impl_outer_origin!{
-	pub enum Origin for Test {}
+	pub enum Origin for Test  where system = frame_system {}
 }
 
 type DummyValidatorId = u64;
@@ -45,11 +45,11 @@ parameter_types! {
 	pub const MinimumPeriod: u64 = 1;
 	pub const EpochDuration: u64 = 3;
 	pub const ExpectedBlockTime: u64 = 1;
-	pub const Version: RuntimeVersion = test_runtime::VERSION;
+	pub const Version: RuntimeVersion = substrate_test_runtime::VERSION;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(16);
 }
 
-impl system::Trait for Test {
+impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -73,9 +73,9 @@ impl_opaque_keys! {
 	}
 }
 
-impl session::Trait for Test {
+impl pallet_session::Trait for Test {
 	type Event = ();
-	type ValidatorId = <Self as system::Trait>::AccountId;
+	type ValidatorId = <Self as frame_system::Trait>::AccountId;
 	type ShouldEndSession = Babe;
 	type SessionHandler = (Babe,Babe,);
 	type OnSessionEnding = ();
@@ -85,7 +85,7 @@ impl session::Trait for Test {
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }
 
-impl timestamp::Trait for Test {
+impl pallet_timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = Babe;
 	type MinimumPeriod = MinimumPeriod;
@@ -98,12 +98,12 @@ impl Trait for Test {
 }
 
 pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> sp_io::TestExternalities {
-	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig {
 		authorities: authorities.into_iter().map(|a| (UintAuthorityId(a).to_public_key(), 1)).collect(),
 	}.assimilate_storage::<Test>(&mut t).unwrap();
 	t.into()
 }
 
-pub type System = system::Module<Test>;
+pub type System = frame_system::Module<Test>;
 pub type Babe = Module<Test>;

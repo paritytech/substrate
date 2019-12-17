@@ -114,14 +114,14 @@
 //! The Fees module uses the `Currency` trait to handle fee charge/refund, and its types inherit from `Currency`:
 //!
 //! ```
-//! use support::{
+//! use frame_support::{
 //! 	dispatch,
 //! 	traits::{Currency, ExistenceRequirement, WithdrawReason},
 //! };
-//! # pub trait Trait: system::Trait {
+//! # pub trait Trait: frame_system::Trait {
 //! # 	type Currency: Currency<Self::AccountId>;
 //! # }
-//! type AssetOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+//! type AssetOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 //!
 //! fn charge_fee<T: Trait>(transactor: &T::AccountId, amount: AssetOf<T>) -> dispatch::Result {
 //! 	// ...
@@ -161,7 +161,7 @@ use sp_runtime::traits::{
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, fmt::Debug};
-use support::{
+use frame_support::{
 	decl_event, decl_module, decl_storage, ensure, dispatch,
 	traits::{
 		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
@@ -169,14 +169,14 @@ use support::{
 	},
 	Parameter, StorageMap,
 };
-use system::{ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root};
 
 mod mock;
 mod tests;
 
 pub use self::imbalances::{NegativeImbalance, PositiveImbalance};
 
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	type Balance: Parameter
 		+ Member
 		+ SimpleArithmetic
@@ -185,10 +185,10 @@ pub trait Trait: system::Trait {
 		+ MaybeSerializeDeserialize
 		+ Debug;
 	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
-pub trait Subtrait: system::Trait {
+pub trait Subtrait: frame_system::Trait {
 	type Balance: Parameter
 		+ Member
 		+ SimpleArithmetic
@@ -495,10 +495,10 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where
-		<T as system::Trait>::AccountId,
+		<T as frame_system::Trait>::AccountId,
 		<T as Trait>::Balance,
 		<T as Trait>::AssetId,
-		AssetOptions = AssetOptions<<T as Trait>::Balance, <T as system::Trait>::AccountId>
+		AssetOptions = AssetOptions<<T as Trait>::Balance, <T as frame_system::Trait>::AccountId>
 	{
 		/// Asset created (asset_id, creator, asset_options).
 		Created(AssetId, AccountId, AssetOptions),
@@ -760,7 +760,7 @@ impl<T: Trait> Module<T> {
 		if locks.is_empty() {
 			return Ok(());
 		}
-		let now = <system::Module<T>>::block_number();
+		let now = <frame_system::Module<T>>::block_number();
 		if Self::locks(who)
 			.into_iter()
 			.all(|l| now >= l.until || new_balance >= l.amount || !l.reasons.intersects(reasons))
@@ -792,7 +792,7 @@ impl<T: Trait> Module<T> {
 		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		let now = <system::Module<T>>::block_number();
+		let now = <frame_system::Module<T>>::block_number();
 		let mut new_lock = Some(BalanceLock {
 			id,
 			amount,
@@ -824,7 +824,7 @@ impl<T: Trait> Module<T> {
 		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		let now = <system::Module<T>>::block_number();
+		let now = <frame_system::Module<T>>::block_number();
 		let mut new_lock = Some(BalanceLock {
 			id,
 			amount,
@@ -855,7 +855,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn remove_lock(id: LockIdentifier, who: &T::AccountId) {
-		let now = <system::Module<T>>::block_number();
+		let now = <frame_system::Module<T>>::block_number();
 		let locks = <Module<T>>::locks(who)
 			.into_iter()
 			.filter_map(|l| if l.until > now && l.id != id { Some(l) } else { None })
@@ -1076,7 +1076,7 @@ impl<T: Subtrait> PartialEq for ElevatedTrait<T> {
 	}
 }
 impl<T: Subtrait> Eq for ElevatedTrait<T> {}
-impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
+impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type Origin = T::Origin;
 	type Call = T::Call;
 	type Index = T::Index;

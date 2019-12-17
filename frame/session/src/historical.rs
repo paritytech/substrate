@@ -29,8 +29,8 @@ use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_runtime::KeyTypeId;
 use sp_runtime::traits::{Convert, OpaqueKeys, Hash as HashT};
-use support::{decl_module, decl_storage};
-use support::{Parameter, print};
+use frame_support::{decl_module, decl_storage};
+use frame_support::{Parameter, print};
 use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
 use sp_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
@@ -146,7 +146,7 @@ impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<
 	}
 }
 
-type HasherOf<T> = <<T as system::Trait>::Hashing as HashT>::Hasher;
+type HasherOf<T> = <<T as frame_system::Trait>::Hashing as HashT>::Hasher;
 
 /// A tuple of the validator's ID and their full identification.
 pub type IdentificationTuple<T> = (<T as crate::Trait>::ValidatorId, <T as Trait>::FullIdentification);
@@ -273,7 +273,7 @@ pub struct Proof {
 	trie_nodes: Vec<Vec<u8>>,
 }
 
-impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
+impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
 	for Module<T>
 {
 	type Proof = Proof;
@@ -310,18 +310,18 @@ impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::crypto::key_types::DUMMY;
+	use sp_core::crypto::key_types::DUMMY;
 	use sp_runtime::{traits::OnInitialize, testing::UintAuthorityId};
 	use crate::mock::{
 		NEXT_VALIDATORS, force_new_session,
 		set_next_validators, Test, System, Session,
 	};
-	use support::traits::KeyOwnerProofSystem;
+	use frame_support::traits::KeyOwnerProofSystem;
 
 	type Historical = Module<Test>;
 
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		crate::GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()

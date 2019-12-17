@@ -71,12 +71,12 @@ use hash_db::{Hasher, Prefix};
 use crate::backend::Backend;
 use num_traits::{One, Zero};
 use codec::{Decode, Encode};
-use primitives;
+use sp_core;
 use crate::changes_trie::build::prepare_input;
 use crate::changes_trie::build_cache::{IncompleteCachedBuildData, IncompleteCacheAction};
 use crate::overlayed_changes::OverlayedChanges;
-use trie::{MemoryDB, DBValue, TrieMut};
-use trie::trie_types::TrieDBMut;
+use sp_trie::{MemoryDB, DBValue, TrieMut};
+use sp_trie::trie_types::TrieDBMut;
 
 /// Changes that are made outside of extrinsics are marked with this index;
 pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
@@ -161,7 +161,7 @@ pub trait Storage<H: Hasher, Number: BlockNumber>: RootsStorage<H, Number> {
 pub struct TrieBackendStorageAdapter<'a, H: Hasher, Number: BlockNumber>(pub &'a dyn Storage<H, Number>);
 
 impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackendStorageAdapter<'a, H, N> {
-	type Overlay = trie::MemoryDB<H>;
+	type Overlay = sp_trie::MemoryDB<H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.0.get(key, prefix)
@@ -169,7 +169,7 @@ impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackend
 }
 
 /// Changes trie configuration.
-pub type Configuration = primitives::ChangesTrieConfiguration;
+pub type Configuration = sp_core::ChangesTrieConfiguration;
 
 /// Blocks range where configuration has been constant.
 #[derive(Clone)]
@@ -237,7 +237,7 @@ pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 
 	// prepare configuration range - we already know zero block. Current block may be the end block if configuration
 	// has been changed in this block
-	let is_config_changed = match changes.storage(primitives::storage::well_known_keys::CHANGES_TRIE_CONFIG) {
+	let is_config_changed = match changes.storage(sp_core::storage::well_known_keys::CHANGES_TRIE_CONFIG) {
 		Some(Some(new_config)) => new_config != &state.config.encode()[..],
 		Some(None) => true,
 		None => false,
