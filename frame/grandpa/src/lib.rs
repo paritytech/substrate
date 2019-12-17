@@ -207,7 +207,7 @@ decl_module! {
 				}
 
 				// enact the change if we've reached the enacting block
-				// OVERFLOW: what would go wrong here if it did happen?
+				// OVERFLOW: both inputs are trusted.
 				if block_number == pending_change.scheduled_at + pending_change.delay {
 					Self::set_grandpa_authorities(&pending_change.next_authorities);
 					Self::deposit_event(
@@ -226,7 +226,7 @@ decl_module! {
 					}
 
 					// enact change to paused state
-					// ERROR audit for overflow
+					// OVERFLOW: both inputs are trusted
 					if block_number == scheduled_at + delay {
 						<State<T>>::put(StoredState::Paused);
 						Self::deposit_event(Event::Paused);
@@ -239,7 +239,7 @@ decl_module! {
 					}
 
 					// enact change to live state
-					// ERROR audit for overflow
+					// OVERFLOW: both inputs are trusted
 					if block_number == scheduled_at + delay {
 						<State<T>>::put(StoredState::Live);
 						Self::deposit_event(Event::Resumed);
@@ -325,9 +325,13 @@ impl<T: Trait> Module<T> {
 					return Err("Cannot signal forced change so soon after last.");
 				}
 
+				if (T::BlockNumber::max_value() - scheduled_at) / 2 >= in_blocks {
+					return Err("overflow would occur")
+				}
+
 				// only allow the next forced change when twice the window has passed since
 				// this one.
-				// ERROR audit for overflow
+				// OVERFLOW: checked above
 				<NextForced<T>>::put(scheduled_at + in_blocks * 2.into());
 			}
 
