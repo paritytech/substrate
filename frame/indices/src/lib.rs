@@ -21,9 +21,9 @@
 
 use sp_std::{prelude::*, marker::PhantomData, convert::TryInto};
 use codec::{Encode, Codec};
-use support::{Parameter, decl_module, decl_event, decl_storage};
+use frame_support::{Parameter, decl_module, decl_event, decl_storage};
 use sp_runtime::traits::{One, SimpleArithmetic, StaticLookup, Member, LookupError};
-use system::{IsDeadAccount, OnNewAccount};
+use frame_system::{IsDeadAccount, OnNewAccount};
 
 use self::address::Address as RawAddress;
 
@@ -35,7 +35,7 @@ mod tests;
 /// Number of account IDs stored per enum set.
 const ENUM_SET_SIZE: u32 = 64;
 
-pub type Address<T> = RawAddress<<T as system::Trait>::AccountId, <T as Trait>::AccountIndex>;
+pub type Address<T> = RawAddress<<T as frame_system::Trait>::AccountId, <T as Trait>::AccountIndex>;
 
 /// Turn an Id into an Index, or None for the purpose of getting
 /// a hint at a possibly desired index.
@@ -56,7 +56,7 @@ impl<AccountId: Encode, AccountIndex: From<u32>>
 }
 
 /// The module's config trait.
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
 	type AccountIndex: Parameter + Member + Codec + Default + SimpleArithmetic + Copy;
@@ -68,18 +68,18 @@ pub trait Trait: system::Trait {
 	type ResolveHint: ResolveHint<Self::AccountId, Self::AccountIndex>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = frame_system {
 		fn deposit_event() = default;
 	}
 }
 
 decl_event!(
 	pub enum Event<T> where
-		<T as system::Trait>::AccountId,
+		<T as frame_system::Trait>::AccountId,
 		<T as Trait>::AccountIndex
 	{
 		/// A new account index was assigned.

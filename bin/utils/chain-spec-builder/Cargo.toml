@@ -7,8 +7,8 @@ build = "build.rs"
 
 [dependencies]
 ansi_term = "0.12.1"
-keystore = { package = "sc-keystore", path = "../../../client/keystore" }
+sc-keystore = { path = "../../../client/keystore" }
 node-cli = { path = "../../node/cli" }
-primitives = { package = "sp-core",  path = "../../../primitives/core" }
+sp-core = { path = "../../../primitives/core" }
 rand = "0.7.2"
 structopt = "0.3.3"

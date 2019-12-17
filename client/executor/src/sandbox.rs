@@ -21,12 +21,12 @@
 use crate::error::{Result, Error};
 use std::{collections::HashMap, rc::Rc};
 use codec::{Decode, Encode};
-use primitives::sandbox as sandbox_primitives;
+use sp_core::sandbox as sandbox_primitives;
 use wasmi::{
 	Externals, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
 	ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages,
 };
-use wasm_interface::{Pointer, WordSize};
+use sp_wasm_interface::{Pointer, WordSize};
 
 /// Index of a function inside the supervisor.
 ///

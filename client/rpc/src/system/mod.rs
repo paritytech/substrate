@@ -20,11 +20,11 @@
 mod tests;
 
 use futures::{channel::{mpsc, oneshot}, compat::Compat};
-use api::Receiver;
+use sc_rpc_api::Receiver;
 use sp_runtime::traits::{self, Header as HeaderT};
 use self::error::Result;
 
-pub use api::system::*;
+pub use sc_rpc_api::system::*;
 pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo, NodeRole};
 pub use self::gen_client::Client as SystemClient;
 

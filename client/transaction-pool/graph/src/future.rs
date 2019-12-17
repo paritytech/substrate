@@ -22,7 +22,7 @@ use std::{
 	time,
 };
 
-use primitives::hexdisplay::HexDisplay;
+use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };

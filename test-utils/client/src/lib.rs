@@ -20,42 +20,43 @@
 
 pub mod client_ext;
 
-pub use client::{blockchain, self};
-pub use client_api::execution_extensions::{ExecutionStrategies, ExecutionExtensions};
-pub use client_db::{Backend, self};
-pub use client_ext::ClientExt;
-pub use consensus;
-pub use executor::{NativeExecutor, WasmExecutionMethod, self};
-pub use keyring::{
+pub use sc_client::{blockchain, self};
+pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionExtensions};
+pub use sc_client_db::{Backend, self};
+pub use sp_consensus;
+pub use sc_executor::{NativeExecutor, WasmExecutionMethod, self};
+pub use sp_keyring::{
 	AccountKeyring,
 	ed25519::Keyring as Ed25519Keyring,
 	sr25519::Keyring as Sr25519Keyring,
 };
-pub use primitives::{Blake2Hasher, traits::BareCryptoStorePtr};
-pub use sp_runtime::{StorageOverlay, ChildrenStorageOverlay};
-pub use state_machine::ExecutionStrategy;
+pub use sp_core::{Blake2Hasher, traits::BareCryptoStorePtr};
+pub use sp_runtime::{Storage, StorageChild};
+pub use sp_state_machine::ExecutionStrategy;
+
+pub use self::client_ext::ClientExt;
 
 use std::sync::Arc;
 use std::collections::HashMap;
 use hash_db::Hasher;
-use primitives::storage::well_known_keys;
+use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_runtime::traits::Block as BlockT;
-use client::LocalCallExecutor;
+use sc_client::LocalCallExecutor;
 
 /// Test client light database backend.
-pub type LightBackend<Block> = client::light::backend::Backend<
-	client_db::light::LightStorage<Block>,
+pub type LightBackend<Block> = sc_client::light::backend::Backend<
+	sc_client_db::light::LightStorage<Block>,
 	Blake2Hasher,
 >;
 
 /// A genesis storage initialisation trait.
 pub trait GenesisInit: Default {
 	/// Construct genesis storage.
-	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay);
+	fn genesis_storage(&self) -> Storage;
 }
 
 impl GenesisInit for () {
-	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
+	fn genesis_storage(&self) -> Storage {
 		Default::default()
 	}
 }
@@ -64,7 +65,7 @@ impl GenesisInit for () {
 pub struct TestClientBuilder<Executor, Backend, G: GenesisInit> {
 	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
-	child_storage_extension: HashMap<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>,
+	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<Executor>,
 	keystore: Option<BareCryptoStorePtr>,
@@ -136,10 +137,15 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		mut self,
 		key: impl AsRef<[u8]>,
 		child_key: impl AsRef<[u8]>,
+		child_info: ChildInfo,
 		value: impl AsRef<[u8]>,
 	) -> Self {
-		let entry = self.child_storage_extension.entry(key.as_ref().to_vec()).or_insert_with(Vec::new);
-		entry.push((child_key.as_ref().to_vec(), value.as_ref().to_vec()));
+		let entry = self.child_storage_extension.entry(key.as_ref().to_vec())
+			.or_insert_with(|| StorageChild {
+				data: Default::default(),
+				child_info: child_info.to_owned(),
+			});
+		entry.data.insert(child_key.as_ref().to_vec(), value.as_ref().to_vec());
 		self
 	}
 
@@ -163,16 +169,16 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		self,
 		executor: Executor,
 	) -> (
-		client::Client<
+		sc_client::Client<
 			Backend,
 			Executor,
 			Block,
 			RuntimeApi,
 		>,
-		client::LongestChain<Backend, Block>,
+		sc_client::LongestChain<Backend, Block>,
 	) where
-		Executor: client::CallExecutor<Block, Blake2Hasher>,
-		Backend: client_api::backend::Backend<Block, Blake2Hasher>,
+		Executor: sc_client::CallExecutor<Block, Blake2Hasher>,
+		Backend: sc_client_api::backend::Backend<Block, Blake2Hasher>,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 	{
 
@@ -180,17 +186,20 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 			let mut storage = self.genesis_init.genesis_storage();
 
 			// Add some child storage keys.
-			for (key, value) in self.child_storage_extension {
-				storage.1.insert(
+			for (key, child_content) in self.child_storage_extension {
+				storage.children.insert(
 					well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().cloned().chain(key).collect(),
-					value.into_iter().collect(),
+					StorageChild {
+						data: child_content.data.into_iter().collect(),
+						child_info: child_content.child_info,
+					},
 				);
 			}
 
 			storage
 		};
 
-		let client = client::Client::new(
+		let client = sc_client::Client::new(
 			self.backend.clone(),
 			executor,
 			storage,
@@ -201,14 +210,14 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 			)
 		).expect("Creates new client");
 
-		let longest_chain = client::LongestChain::new(self.backend);
+		let longest_chain = sc_client::LongestChain::new(self.backend);
 
 		(client, longest_chain)
 	}
 }
 
 impl<E, Backend, G: GenesisInit> TestClientBuilder<
-	client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+	sc_client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 	Backend,
 	G,
 > {
@@ -217,17 +226,17 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 		self,
 		executor: I,
 	) -> (
-		client::Client<
+		sc_client::Client<
 			Backend,
-			client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+			sc_client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 			Block,
 			RuntimeApi
 		>,
-		client::LongestChain<Backend, Block>,
+		sc_client::LongestChain<Backend, Block>,
 	) where
 		I: Into<Option<NativeExecutor<E>>>,
-		E: executor::NativeExecutionDispatch,
-		Backend: client_api::backend::Backend<Block, Blake2Hasher>,
+		E: sc_executor::NativeExecutionDispatch,
+		Backend: sc_client_api::backend::Backend<Block, Blake2Hasher>,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 	{
 		let executor = executor.into().unwrap_or_else(||

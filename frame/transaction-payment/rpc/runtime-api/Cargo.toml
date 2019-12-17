@@ -10,7 +10,7 @@ sp-api = { path = "../../../../primitives/api", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
 sp-std = { path = "../../../../primitives/std", default-features = false }
 sp-runtime = { path = "../../../../primitives/runtime", default-features = false }
-support = { package = "frame-support", path = "../../../support", default-features = false }
+frame-support = { path = "../../../support", default-features = false }
 
 [dev-dependencies]
 serde_json = "1.0.41"
@@ -23,5 +23,5 @@ std = [
 	"codec/std",
 	"sp-std/std",
 	"sp-runtime/std",
-	"support/std",
+	"frame-support/std",
 ]

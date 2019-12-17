@@ -25,7 +25,7 @@ use futures::{Future, Stream, Poll};
 use tempfile::TempDir;
 use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
-use service::{
+use sc_service::{
 	AbstractService,
 	ChainSpec,
 	Configuration,
@@ -33,10 +33,10 @@ use service::{
 	Roles,
 	Error,
 };
-use network::{multiaddr, Multiaddr};
-use network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
+use sc_network::{multiaddr, Multiaddr};
+use sc_network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
-use txpool_api::TransactionPool;
+use sp_transaction_pool::TransactionPool;
 
 /// Maximum duration of single wait call.
 const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
@@ -72,9 +72,9 @@ impl<T> From<T> for SyncService<T> {
 	}
 }
 
-impl<T: Future<Item=(), Error=service::Error>> Future for SyncService<T> {
+impl<T: Future<Item=(), Error=sc_service::Error>> Future for SyncService<T> {
 	type Item = ();
-	type Error = service::Error;
+	type Error = sc_service::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		self.0.lock().unwrap().poll()
@@ -186,7 +186,7 @@ fn node_config<G, E: Clone> (
 		chain_spec: (*spec).clone(),
 		custom: Default::default(),
 		name: format!("Node {}", index),
-		wasm_method: service::config::WasmExecutionMethod::Interpreted,
+		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ws: None,

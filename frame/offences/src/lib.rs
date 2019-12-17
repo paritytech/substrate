@@ -25,7 +25,7 @@ mod mock;
 mod tests;
 
 use sp_std::vec::Vec;
-use support::{
+use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter,
 };
 use sp_runtime::traits::Hash;
@@ -33,17 +33,18 @@ use sp_staking::{
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails},
 };
 use codec::{Encode, Decode};
+use frame_system as system;
 
 /// A binary blob which represents a SCALE codec-encoded `O::TimeSlot`.
 type OpaqueTimeSlot = Vec<u8>;
 
 /// A type alias for a report identifier.
-type ReportIdOf<T> = <T as system::Trait>::Hash;
+type ReportIdOf<T> = <T as frame_system::Trait>::Hash;
 
 /// Offences trait
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
 	/// Full identification of the validator.
 	type IdentificationTuple: Parameter + Ord;
 	/// A handler called for every offence report.

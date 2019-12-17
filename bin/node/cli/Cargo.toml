@@ -34,45 +34,45 @@ rand = "0.7.2"
 structopt = "0.3.3"
 
 # primitives
-authority-discovery-primitives = { package = "sp-authority-discovery", path = "../../../primitives/authority-discovery"}
-babe-primitives = { package = "sp-consensus-babe", path = "../../../primitives/consensus/babe" }
+sp-authority-discovery = { path = "../../../primitives/authority-discovery"}
+sp-consensus-babe = { path = "../../../primitives/consensus/babe" }
 grandpa-primitives = { package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
-primitives = { package = "sp-core", path = "../../../primitives/core" }
+sp-core = { path = "../../../primitives/core" }
 sp-runtime = { path = "../../../primitives/runtime" }
 sp-timestamp = { path = "../../../primitives/timestamp", default-features = false }
 sp-finality-tracker = { path = "../../../primitives/finality-tracker", default-features = false }
-inherents = { package = "sp-inherents", path = "../../../primitives/inherents" }
-keyring = { package = "sp-keyring", path = "../../../primitives/keyring" }
+sp-inherents = { path = "../../../primitives/inherents" }
+sp-keyring = { path = "../../../primitives/keyring" }
 sp-io = { path = "../../../primitives/io" }
-consensus-common = { package = "sp-consensus", path = "../../../primitives/consensus/common" }
+sp-consensus = { path = "../../../primitives/consensus/common" }
 
 # client dependencies
-client-api = { package = "sc-client-api", path = "../../../client/api" }
-client = { package = "sc-client", path = "../../../client/" }
-chain-spec = { package = "sc-chain-spec", path = "../../../client/chain-spec" }
-txpool = { package = "sc-transaction-pool", path = "../../../client/transaction-pool" }
-txpool-api = { package = "sp-transaction-pool", path = "../../../primitives/transaction-pool" }
-network = { package = "sc-network", path = "../../../client/network" }
-babe = { package = "sc-consensus-babe", path = "../../../client/consensus/babe" }
+sc-client-api = { path = "../../../client/api" }
+sc-client = { path = "../../../client/" }
+sc-chain-spec = { path = "../../../client/chain-spec" }
+sc-transaction-pool = { path = "../../../client/transaction-pool" }
+sp-transaction-pool = { path = "../../../primitives/transaction-pool" }
+sc-network = { path = "../../../client/network" }
+sc-consensus-babe = { path = "../../../client/consensus/babe" }
 grandpa = { package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
-client-db = { package = "sc-client-db", path = "../../../client/db", default-features = false }
-offchain = { package = "sc-offchain", path = "../../../client/offchain" }
+sc-client-db = { path = "../../../client/db", default-features = false }
+sc-offchain = { path = "../../../client/offchain" }
 sc-rpc = { path = "../../../client/rpc" }
 sc-basic-authority = { path = "../../../client/basic-authorship" }
 sc-service = { path = "../../../client/service", default-features = false }
 sc-telemetry = { path = "../../../client/telemetry" }
-authority-discovery = { package = "sc-authority-discovery", path = "../../../client/authority-discovery"}
+sc-authority-discovery = { path = "../../../client/authority-discovery"}
 
 # frame dependencies
-indices = { package = "pallet-indices", path = "../../../frame/indices" }
-timestamp = { package = "pallet-timestamp", path = "../../../frame/timestamp", default-features = false }
-contracts = { package = "pallet-contracts", path = "../../../frame/contracts" }
-system = { package = "frame-system", path = "../../../frame/system" }
-balances = { package = "pallet-balances", path = "../../../frame/balances" }
-transaction-payment = { package = "pallet-transaction-payment", path = "../../../frame/transaction-payment" }
-support = { package = "frame-support", path = "../../../frame/support", default-features = false }
-im_online = { package = "pallet-im-online", path = "../../../frame/im-online", default-features = false }
-sr-authority-discovery = { package = "pallet-authority-discovery", path = "../../../frame/authority-discovery"}
+pallet-indices = { path = "../../../frame/indices" }
+pallet-timestamp = { path = "../../../frame/timestamp", default-features = false }
+pallet-contracts = { path = "../../../frame/contracts" }
+frame-system = { path = "../../../frame/system" }
+pallet-balances = { path = "../../../frame/balances" }
+pallet-transaction-payment = { path = "../../../frame/transaction-payment" }
+frame-support = { path = "../../../frame/support", default-features = false }
+pallet-im-online = { path = "../../../frame/im-online", default-features = false }
+pallet-authority-discovery = { path = "../../../frame/authority-discovery"}
 
 # node-specific dependencies
 node-runtime = { path = "../runtime" }
@@ -98,9 +98,9 @@ kvdb-memorydb = { version = "0.1.1", optional = true }
 rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"], optional = true }	# Imported just for the `wasm-bindgen` feature
 
 [dev-dependencies]
-keystore = { package = "sc-keystore", path = "../../../client/keystore" }
-babe = { package = "sc-consensus-babe", path = "../../../client/consensus/babe", features = ["test-helpers"] }
-service-test = { package = "sc-service-test", path = "../../../client/service/test" }
+sc-keystore = { path = "../../../client/keystore" }
+sc-consensus-babe = { path = "../../../client/consensus/babe", features = ["test-helpers"] }
+sc-service-test = { path = "../../../client/service/test" }
 futures = "0.3.1"
 tempfile = "3.1.0"
 
