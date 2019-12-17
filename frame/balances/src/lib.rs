@@ -263,9 +263,11 @@ decl_event!(
 		/// A new account was created.
 		NewAccount(AccountId, Balance),
 		/// An account was reaped.
-		ReapedAccount(AccountId),
+		ReapedAccount(AccountId, Balance),
 		/// Transfer succeeded (from, to, value, fees).
 		Transfer(AccountId, AccountId, Balance, Balance),
+		/// A balance was set by root (who, free, reserved).
+		BalanceSet(AccountId, Balance, Balance),
 	}
 );
 
@@ -456,6 +458,10 @@ decl_module! {
 		) {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
+			let existential_deposit = T::ExistentialDeposit::get();
+
+			let new_free = if new_free < existential_deposit { Zero::zero() } else { new_free };
+			let new_reserved = if new_reserved < existential_deposit { Zero::zero() } else { new_reserved };
 
 			let current_free = <FreeBalance<T, I>>::get(&who);
 			if new_free > current_free {
@@ -472,6 +478,8 @@ decl_module! {
 				mem::drop(NegativeImbalance::<T, I>::new(current_reserved - new_reserved));
 			}
 			Self::set_reserved_balance(&who, new_reserved);
+
+			Self::deposit_event(RawEvent::BalanceSet(who, new_free, new_reserved));
 		}
 
 		/// Exactly as `transfer`, except the origin must be root and the source account may be
@@ -564,9 +572,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Unregister an account.
 	///
 	/// This just removes the nonce and leaves an event.
-	fn reap_account(who: &T::AccountId) {
+	fn reap_account(who: &T::AccountId, dust: T::Balance) {
 		<frame_system::AccountNonce<T>>::remove(who);
-		Self::deposit_event(RawEvent::ReapedAccount(who.clone()));
+		Self::deposit_event(RawEvent::ReapedAccount(who.clone(), dust));
 	}
 
 	/// Account's free balance has dropped below existential deposit. Kill its
@@ -577,15 +585,23 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		let dust = <FreeBalance<T, I>>::take(who);
 		<Locks<T, I>>::remove(who);
 
-		// underflow should never happen, but if it does, there's not much we can do about it.
-		if !dust.is_zero() {
-			T::DustRemoval::on_unbalanced(NegativeImbalance::new(dust));
-		}
-
 		T::OnFreeBalanceZero::on_free_balance_zero(who);
 
-		if Self::reserved_balance(who).is_zero() {
-			Self::reap_account(who);
+		let mut reserved_balance = Self::reserved_balance(who);
+		
+		if !dust.is_zero() {
+			if reserved_balance >= T::ExistentialDeposit::get() {
+				// any individual account cannot cause overflow in balance.
+				reserved_balance += dust;
+				Self::set_reserved_balance(who, reserved_balance);
+			} else {
+				// underflow should never happen, but if it does, there's not much we can do.
+				T::DustRemoval::on_unbalanced(NegativeImbalance::new(dust));
+			}
+		}
+
+		if reserved_balance.is_zero() {
+			Self::reap_account(who, dust);
 		}
 	}
 
@@ -596,13 +612,21 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	fn on_reserved_too_low(who: &T::AccountId) {
 		let dust = <ReservedBalance<T, I>>::take(who);
 
-		// underflow should never happen, but it if does, there's nothing to be done here.
+		let mut free_balance = Self::free_balance(who);
+
 		if !dust.is_zero() {
-			T::DustRemoval::on_unbalanced(NegativeImbalance::new(dust));
+			if free_balance >= T::ExistentialDeposit::get() {
+				// any individual account cannot cause overflow in balance.
+				free_balance += dust;
+				Self::set_free_balance(who, free_balance);
+			} else {
+				// underflow should never happen, but it if does, there's nothing to be done here.
+				T::DustRemoval::on_unbalanced(NegativeImbalance::new(dust));
+			}
 		}
 
-		if Self::free_balance(who).is_zero() {
-			Self::reap_account(who);
+		if free_balance.is_zero() {
+			Self::reap_account(who, dust);
 		}
 	}
 }
