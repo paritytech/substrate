@@ -7,14 +7,14 @@ edition = "2018"
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
-frame-support = { path = "../support", default-features = false }
-frame-system = { path = "../system", default-features = false }
-pallet-timestamp = { path = "../timestamp", default-features = false }
-pallet-balances = { path = "../balances", default-features = false }
-sp-core = { path = "../../primitives/core", default-features = false }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
-sp-std = { path = "../../primitives/std", default-features = false }
-sp-io = { path = "../../primitives/io", default-features = false }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+pallet-timestamp = { version = "2.0.0", default-features = false, path = "../timestamp" }
+pallet-balances = { version = "2.0.0", default-features = false, path = "../balances" }
+sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
 primitive-types = { version = "0.6", default-features = false, features = ["rlp"] }
 rlp = { version = "0.4", default-features = false }
 evm = { version = "0.14", default-features = false }
