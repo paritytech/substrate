@@ -6,14 +6,14 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-runtime-interface = { package = "sp-runtime-interface", path = "../", default-features = false }
-rstd = { package = "sp-std", path = "../../sr-std", default-features = false }
-runtime-io = { package = "sp-io", path = "../../sr-io", default-features = false }
-primitives = { package = "sp-core", path = "../../core", default-features = false }
+sp-runtime-interface = { version = "2.0.0", default-features = false, path = "../" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../std" }
+sp-io = { version = "2.0.0", default-features = false, path = "../../io" }
+sp-core = { version = "2.0.0", default-features = false, path = "../../core" }
 
 [build-dependencies]
-wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.3", path = "../../../client/utils/wasm-builder-runner" }
+wasm-builder-runner = { version = "1.0.3", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
 
 [features]
 default = [ "std" ]
-std = [ "runtime-interface/std", "rstd/std", "primitives/std", "runtime-io/std" ]
+std = [ "sp-runtime-interface/std", "sp-std/std", "sp-core/std", "sp-io/std" ]

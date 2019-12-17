@@ -18,10 +18,12 @@
 //! Cryptographic utilities.
 // end::description[]
 
-use rstd::{vec::Vec, hash::Hash};
+use sp_std::hash::Hash;
+#[cfg(feature = "full_crypto")]
+use sp_std::vec::Vec;
 #[cfg(feature = "std")]
-use rstd::convert::TryInto;
-use rstd::convert::TryFrom;
+use sp_std::convert::TryInto;
+use sp_std::convert::TryFrom;
 #[cfg(feature = "std")]
 use parking_lot::Mutex;
 #[cfg(feature = "std")]
@@ -34,8 +36,8 @@ use base58::{FromBase58, ToBase58};
 
 use zeroize::Zeroize;
 #[doc(hidden)]
-pub use rstd::ops::Deref;
-use runtime_interface::pass_by::PassByInner;
+pub use sp_std::ops::Deref;
+use sp_runtime_interface::pass_by::PassByInner;
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
@@ -86,7 +88,7 @@ impl<T: Zeroize> AsRef<T> for Protected<T> {
 	}
 }
 
-impl<T: Zeroize> rstd::ops::Deref for Protected<T> {
+impl<T: Zeroize> sp_std::ops::Deref for Protected<T> {
 	type Target = T;
 
 	fn deref(&self) -> &T {
@@ -353,75 +355,84 @@ lazy_static::lazy_static! {
 		= Mutex::new(Ss58AddressFormat::SubstrateAccountDirect);
 }
 
-/// A known address (sub)format/network ID for SS58.
 #[cfg(feature = "full_crypto")]
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum Ss58AddressFormat {
-	/// Any Substrate network, direct checksum, standard account (*25519).
-	SubstrateAccountDirect,
-	/// Polkadot Relay-chain, direct checksum, standard account (*25519).
-	PolkadotAccountDirect,
-	/// Kusama Relay-chain, direct checksum, standard account (*25519).
-	KusamaAccountDirect,
-	/// Dothereum Para-chain, direct checksum, standard account (*25519).
-	DothereumAccountDirect,
-	/// Use a manually provided numeric value.
-	Custom(u8),
+macro_rules! ss58_address_format {
+	( $( $identifier:tt => ($number:expr, $name:expr, $desc:tt) )* ) => (
+		/// A known address (sub)format/network ID for SS58.
+		#[derive(Copy, Clone, PartialEq, Eq)]
+		pub enum Ss58AddressFormat {
+			$(#[doc = $desc] $identifier),*,
+			/// Use a manually provided numeric value.
+			Custom(u8),
+		}
+
+		static ALL_SS58_ADDRESS_FORMATS: [Ss58AddressFormat; 0 $(+ { let _ = $number; 1})*] = [
+			$(Ss58AddressFormat::$identifier),*,
+		];
+
+		impl Ss58AddressFormat {
+			/// All known address formats.
+			pub fn all() -> &'static [Ss58AddressFormat] {
+				&ALL_SS58_ADDRESS_FORMATS
+			}
+		}
+
+		impl From<Ss58AddressFormat> for u8 {
+			fn from(x: Ss58AddressFormat) -> u8 {
+				match x {
+					$(Ss58AddressFormat::$identifier => $number),*,
+					Ss58AddressFormat::Custom(n) => n,
+				}
+			}
+		}
+
+		impl TryFrom<u8> for Ss58AddressFormat {
+			type Error = ();
+
+			fn try_from(x: u8) -> Result<Ss58AddressFormat, ()> {
+				match x {
+					$($number => Ok(Ss58AddressFormat::$identifier)),*,
+					_ => Err(()),
+				}
+			}
+		}
+
+		impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
+			type Error = ();
+
+			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, ()> {
+				match x {
+					$($name => Ok(Ss58AddressFormat::$identifier)),*,
+					a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ()),
+				}
+			}
+		}
+
+		#[cfg(feature = "std")]
+		impl From<Ss58AddressFormat> for String {
+			fn from(x: Ss58AddressFormat) -> String {
+				match x {
+					$(Ss58AddressFormat::$identifier => $name.into()),*,
+					Ss58AddressFormat::Custom(x) => x.to_string(),
+				}
+			}
+		}
+	)
 }
 
 #[cfg(feature = "full_crypto")]
-impl From<Ss58AddressFormat> for u8 {
-	fn from(x: Ss58AddressFormat) -> u8 {
-		match x {
-			Ss58AddressFormat::SubstrateAccountDirect => 42,
-			Ss58AddressFormat::PolkadotAccountDirect => 0,
-			Ss58AddressFormat::KusamaAccountDirect => 2,
-			Ss58AddressFormat::DothereumAccountDirect => 20,
-			Ss58AddressFormat::Custom(n) => n,
-		}
-	}
-}
-
-#[cfg(feature = "full_crypto")]
-impl TryFrom<u8> for Ss58AddressFormat {
-	type Error = ();
-	fn try_from(x: u8) -> Result<Ss58AddressFormat, ()> {
-		match x {
-			42 => Ok(Ss58AddressFormat::SubstrateAccountDirect),
-			0 => Ok(Ss58AddressFormat::PolkadotAccountDirect),
-			2 => Ok(Ss58AddressFormat::KusamaAccountDirect),
-			20 => Ok(Ss58AddressFormat::DothereumAccountDirect),
-			_ => Err(()),
-		}
-	}
-}
-
-#[cfg(feature = "full_crypto")]
-impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
-	type Error = ();
-	fn try_from(x: &'a str) -> Result<Ss58AddressFormat, ()> {
-		match x {
-			"substrate" => Ok(Ss58AddressFormat::SubstrateAccountDirect),
-			"polkadot" => Ok(Ss58AddressFormat::PolkadotAccountDirect),
-			"kusama" => Ok(Ss58AddressFormat::KusamaAccountDirect),
-			"dothereum" => Ok(Ss58AddressFormat::DothereumAccountDirect),
-			a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ()),
-		}
-	}
-}
-
-#[cfg(feature = "std")]
-impl From<Ss58AddressFormat> for String {
-	fn from(x: Ss58AddressFormat) -> String {
-		match x {
-			Ss58AddressFormat::SubstrateAccountDirect => "substrate".into(),
-			Ss58AddressFormat::PolkadotAccountDirect => "polkadot".into(),
-			Ss58AddressFormat::KusamaAccountDirect => "kusama".into(),
-			Ss58AddressFormat::DothereumAccountDirect => "dothereum".into(),
-			Ss58AddressFormat::Custom(x) => x.to_string(),
-		}
-	}
-}
+ss58_address_format!(
+	SubstrateAccountDirect =>
+		(42, "substrate", "Any Substrate network, direct checksum, standard account (*25519).")
+	PolkadotAccountDirect =>
+		(0, "polkadot", "Polkadot Relay-chain, direct checksum, standard account (*25519).")
+	KusamaAccountDirect =>
+		(2, "kusama", "Kusama Relay-chain, direct checksum, standard account (*25519).")
+	DothereumAccountDirect =>
+		(20, "dothereum", "Dothereum Para-chain, direct checksum, standard account (*25519).")
+	KulupuAccountDirect =>
+		(16, "kulupu", "Kulupu mainnet, direct checksum, standard account (*25519).")
+);
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
 /// typically used not just to encode format/version but also network identity) that is used for
@@ -552,7 +563,7 @@ impl From<[u8; 32]> for AccountId32 {
 	}
 }
 
-impl<'a> rstd::convert::TryFrom<&'a [u8]> for AccountId32 {
+impl<'a> sp_std::convert::TryFrom<&'a [u8]> for AccountId32 {
 	type Error = ();
 	fn try_from(x: &'a [u8]) -> Result<AccountId32, ()> {
 		if x.len() == 32 {
@@ -578,15 +589,15 @@ impl std::fmt::Display for AccountId32 {
 	}
 }
 
-impl rstd::fmt::Debug for AccountId32 {
+impl sp_std::fmt::Debug for AccountId32 {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
@@ -625,7 +636,7 @@ mod dummy {
 		fn as_mut(&mut self) -> &mut[u8] {
 			unsafe {
 				#[allow(mutable_transmutes)]
-				rstd::mem::transmute::<_, &'static mut [u8]>(&b""[..])
+				sp_std::mem::transmute::<_, &'static mut [u8]>(&b""[..])
 			}
 		}
 	}
@@ -772,8 +783,8 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	///
 	/// `None` is returned if no matches are found.
 	#[cfg(feature = "std")]
-	fn from_string_with_seed(s: &str, password_override: Option<&str>) 
-		-> Result<(Self, Option<Self::Seed>), SecretStringError> 
+	fn from_string_with_seed(s: &str, password_override: Option<&str>)
+		-> Result<(Self, Option<Self::Seed>), SecretStringError>
 	{
 		let re = Regex::new(r"^(?P<phrase>[\d\w ]+)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
 			.expect("constructed from known-good static value; qed");

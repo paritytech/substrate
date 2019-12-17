@@ -18,7 +18,7 @@ use crate::error::{Error, Result};
 
 use cranelift_codegen::{ir, isa};
 use std::ops::Range;
-use wasm_interface::{Pointer, Signature, ValueType};
+use sp_wasm_interface::{Pointer, Signature, ValueType};
 
 /// Read data from a slice of memory into a destination buffer.
 ///

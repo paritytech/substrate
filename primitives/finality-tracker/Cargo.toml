@@ -6,13 +6,13 @@ edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
-inherents = { package = "sp-inherents", path = "../../primitives/inherents", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-inherents = { version = "2.0.0", default-features = false, path = "../../primitives/inherents" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
-	"rstd/std",
-	"inherents/std",
+	"sp-std/std",
+	"sp-inherents/std",
 ]

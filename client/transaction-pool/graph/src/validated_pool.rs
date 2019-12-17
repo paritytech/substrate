@@ -36,7 +36,7 @@ use sp_runtime::{
 	traits::{self, SaturatedConversion},
 	transaction_validity::TransactionTag as Tag,
 };
-use txpool_api::{error, PoolStatus};
+use sp_transaction_pool::{error, PoolStatus};
 
 use crate::base_pool::PruneStatus;
 use crate::pool::{EventStream, Options, ChainApi, BlockHash, ExHash, ExtrinsicFor, TransactionFor};
@@ -106,7 +106,12 @@ impl<B: ChainApi> ValidatedPool<B> {
 			.map(|validated_tx| self.submit_one(validated_tx))
 			.collect::<Vec<_>>();
 
-		let removed = self.enforce_limits();
+		// only enforce limits if there is at least one imported transaction
+		let removed = if results.iter().any(|res| res.is_ok()) {
+			self.enforce_limits()
+		} else {
+			Default::default()
+		};
 
 		results.into_iter().map(|res| match res {
 			Ok(ref hash) if removed.contains(hash) => Err(error::Error::ImmediatelyDropped.into()),
@@ -133,7 +138,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				Err(err.into())
 			},
 			ValidatedTransaction::Unknown(hash, err) => {
-				self.listener.write().invalid(&hash);
+				self.listener.write().invalid(&hash, false);
 				Err(err.into())
 			}
 		}
@@ -236,6 +241,8 @@ impl<B: ChainApi> ValidatedPool<B> {
 					initial_statuses.insert(removed_hash.clone(), Status::Ready);
 					txs_to_resubmit.push((removed_hash, tx_to_resubmit));
 				}
+				// make sure to remove the hash even if it's not present in the pool any more.
+				updated_transactions.remove(&hash);
 			}
 
 			// if we're rejecting future transactions, then insertion order matters here:
@@ -304,8 +311,8 @@ impl<B: ChainApi> ValidatedPool<B> {
 				match final_status {
 					Status::Future => listener.future(&hash),
 					Status::Ready => listener.ready(&hash, None),
-					Status::Failed => listener.invalid(&hash),
 					Status::Dropped => listener.dropped(&hash, None),
+					Status::Failed => listener.invalid(&hash, initial_status.is_some()),
 				}
 			}
 		}
@@ -471,7 +478,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 		let mut listener = self.listener.write();
 		for tx in &invalid {
-			listener.invalid(&tx.hash);
+			listener.invalid(&tx.hash, true);
 		}
 
 		invalid
@@ -499,7 +506,7 @@ fn fire_events<H, H2, Ex>(
 		base::Imported::Ready { ref promoted, ref failed, ref removed, ref hash } => {
 			listener.ready(hash, None);
 			for f in failed {
-				listener.invalid(f);
+				listener.invalid(f, true);
 			}
 			for r in removed {
 				listener.dropped(&r.hash, Some(hash));

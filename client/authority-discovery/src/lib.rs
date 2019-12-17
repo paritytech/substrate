@@ -55,18 +55,18 @@ use futures::task::{Context, Poll};
 use futures::{Future, FutureExt, Stream, StreamExt};
 use futures_timer::Delay;
 
-use authority_discovery_primitives::{
+use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair
 };
-use client_api::blockchain::HeaderBackend;
+use sc_client_api::blockchain::HeaderBackend;
 use codec::{Decode, Encode};
 use error::{Error, Result};
 use log::{debug, error, log_enabled, warn};
 use libp2p::Multiaddr;
-use network::specialization::NetworkSpecialization;
-use network::{DhtEvent, ExHashT};
-use primitives::crypto::{key_types, Pair};
-use primitives::traits::BareCryptoStorePtr;
+use sc_network::specialization::NetworkSpecialization;
+use sc_network::{DhtEvent, ExHashT};
+use sp_core::crypto::{key_types, Pair};
+use sp_core::traits::BareCryptoStorePtr;
 use prost::Message;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, ProvideRuntimeApi};
@@ -85,6 +85,12 @@ const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
 /// Name of the Substrate peerset priority group for authorities discovered through the authority
 /// discovery module.
 const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
+
+/// The maximum number of sentry node public addresses that we accept per authority.
+///
+/// Everything above this threshold should be dropped to prevent a single authority from filling up
+/// our peer set priority group.
+const MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY: usize = 5;
 
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
 pub struct AuthorityDiscovery<Client, Network, Block>
@@ -163,7 +169,7 @@ where
 		);
 
 		let sentry_nodes = if !sentry_nodes.is_empty() {
-			Some(sentry_nodes.into_iter().filter_map(|a| match a.parse() {
+			let addrs = sentry_nodes.into_iter().filter_map(|a| match a.parse() {
 				Ok(addr) => Some(addr),
 				Err(e) => {
 					error!(
@@ -172,10 +178,22 @@ where
 					);
 					None
 				}
-			}).collect())
+			}).collect::<Vec<Multiaddr>>();
+
+			if addrs.len() > MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY {
+				warn!(
+					target: "sub-authority-discovery",
+					"More than MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY ({:?}) were specified. Other \
+					nodes will likely ignore the remainder.",
+					MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY,
+				);
+			}
+
+			Some(addrs)
 		} else {
 			None
 		};
+
 
 		let address_cache = HashMap::new();
 
@@ -316,13 +334,25 @@ where
 				return Err(Error::VerifyingDhtPayload);
 			}
 
-			let addresses: Vec<libp2p::Multiaddr> = schema::AuthorityAddresses::decode(addresses)
+			let mut addresses: Vec<libp2p::Multiaddr> = schema::AuthorityAddresses::decode(addresses)
 				.map(|a| a.addresses)
 				.map_err(Error::DecodingProto)?
 				.into_iter()
 				.map(|a| a.try_into())
 				.collect::<std::result::Result<_, _>>()
 				.map_err(Error::ParsingMultiaddress)?;
+
+			if addresses.len() > MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY {
+				warn!(
+					target: "sub-authority-discovery",
+					"Got more than MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY ({:?}) for Authority \
+					'{:?}' from DHT, dropping the remainder.",
+					MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY,	authority_id,
+				);
+				addresses = addresses.into_iter()
+					.take(MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY)
+					.collect();
+			}
 
 			self.address_cache.insert(authority_id.clone(), addresses);
 		}
@@ -471,7 +501,7 @@ pub trait NetworkProvider {
 	fn get_value(&self, key: &libp2p::kad::record::Key);
 }
 
-impl<B, S, H> NetworkProvider for network::NetworkService<B, S, H>
+impl<B, S, H> NetworkProvider for sc_network::NetworkService<B, S, H>
 where
 	B: BlockT + 'static,
 	S: NetworkSpecialization<B>,
@@ -521,11 +551,11 @@ mod tests {
 	use futures::channel::mpsc::channel;
 	use futures::executor::block_on;
 	use futures::future::poll_fn;
-	use primitives::{ExecutionContext, NativeOrEncoded, testing::KeyStore};
+	use sp_core::{ExecutionContext, NativeOrEncoded, testing::KeyStore};
 	use sp_runtime::traits::Zero;
 	use sp_runtime::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
 	use std::sync::{Arc, Mutex};
-	use test_client::runtime::Block;
+	use sp_test_primitives::Block;
 
 	#[test]
 	fn interval_at_with_start_now() {
@@ -547,24 +577,26 @@ mod tests {
 	}
 
 	#[test]
-	fn interval_at_is_queuing_events() {
+	fn interval_at_is_queuing_ticks() {
 		let start = Instant::now();
 
 		let interval = interval_at(
-			std::time::Instant::now(),
-			std::time::Duration::from_millis(10),
+			start,
+			std::time::Duration::from_millis(100),
 		);
 
-		// Let's wait for 100ms, thus 10 elements should be queued up.
-		std::thread::sleep(Duration::from_millis(100));
+		// Let's wait for 200ms, thus 3 elements should be queued up (1st at 0ms, 2nd at 100ms, 3rd
+		// at 200ms).
+		std::thread::sleep(Duration::from_millis(200));
 
 		futures::executor::block_on(async {
-			interval.take(10).collect::<Vec<()>>().await;
+			interval.take(3).collect::<Vec<()>>().await;
 		});
 
-		// Make sure we did not just wait for yet another 100ms (10 elements).
+		// Make sure we did not wait for more than 300 ms, which would imply that `at_interval` is
+		// not queuing ticks.
 		assert!(
-			Instant::now().saturating_duration_since(start) < Duration::from_millis(150),
+			Instant::now().saturating_duration_since(start) < Duration::from_millis(300),
 			"Expect interval to /queue/ events when not polled for a while.",
 		);
 	}
@@ -610,8 +642,8 @@ mod tests {
 			Ok(None)
 		}
 
-		fn info(&self) -> client_api::blockchain::Info<Block> {
-			client_api::blockchain::Info {
+		fn info(&self) -> sc_client_api::blockchain::Info<Block> {
+			sc_client_api::blockchain::Info {
 				best_hash: Default::default(),
 				best_number: Zero::zero(),
 				finalized_hash: Default::default(),
@@ -623,8 +655,8 @@ mod tests {
 		fn status(
 			&self,
 			_id: BlockId<Block>,
-		) -> std::result::Result<client_api::blockchain::BlockStatus, sp_blockchain::Error> {
-			Ok(client_api::blockchain::BlockStatus::Unknown)
+		) -> std::result::Result<sc_client_api::blockchain::BlockStatus, sp_blockchain::Error> {
+			Ok(sc_client_api::blockchain::BlockStatus::Unknown)
 		}
 
 		fn number(
@@ -773,6 +805,7 @@ mod tests {
 
 	#[test]
 	fn request_addresses_of_others_triggers_dht_get_query() {
+		let _ = ::env_logger::try_init();
 		let (_dht_event_tx, dht_event_rx) = channel(1000);
 
 		// Generate authority keys
@@ -798,6 +831,7 @@ mod tests {
 
 	#[test]
 	fn handle_dht_events_with_value_found_should_call_set_priority_group() {
+		let _ = ::env_logger::try_init();
 		// Create authority discovery.
 
 		let (mut dht_event_tx, dht_event_rx) = channel(1000);
@@ -831,7 +865,7 @@ mod tests {
 		.encode(&mut signed_addresses)
 		.unwrap();
 
-		let dht_event = network::DhtEvent::ValueFound(vec![(authority_id_1, signed_addresses)]);
+		let dht_event = sc_network::DhtEvent::ValueFound(vec![(authority_id_1, signed_addresses)]);
 		dht_event_tx.try_send(dht_event).unwrap();
 
 		// Make authority discovery handle the event.

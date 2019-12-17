@@ -50,7 +50,7 @@ use crate::error::{Error, Result};
 use log::trace;
 use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
-use wasm_interface::{Pointer, WordSize};
+use sp_wasm_interface::{Pointer, WordSize};
 
 // The pointers need to be aligned to 8 bytes. This is because the
 // maximum value type handled by wasm32 is u64.

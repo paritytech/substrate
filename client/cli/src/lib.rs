@@ -26,24 +26,24 @@ mod execution_strategy;
 pub mod error;
 pub mod informant;
 
-use client_api::execution_extensions::ExecutionStrategies;
-use service::{
+use sc_client_api::execution_extensions::ExecutionStrategies;
+use sc_service::{
 	config::{Configuration, DatabaseConfig},
 	ServiceBuilderCommand,
 	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
 };
-use network::{
+use sc_network::{
 	self,
 	multiaddr::Protocol,
 	config::{
 		NetworkConfiguration, TransportConfig, NonReservedPeerMode, NodeKeyConfig, build_multiaddr
 	},
 };
-use primitives::H256;
+use sp_core::H256;
 
 use std::{
-	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fs::{self, File},
-	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr,
+	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fmt::Debug, fs::{self, File},
+	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr, pin::Pin, task::Poll
 };
 
 use names::{Generator, Name};
@@ -61,11 +61,10 @@ pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
-use futures::{Future, FutureExt, TryFutureExt};
-use futures01::{Async, Future as _};
+use futures::{Future, compat::Future01CompatExt, executor::block_on};
 use sc_telemetry::TelemetryEndpoints;
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 /// default sub directory to store network config
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
@@ -201,12 +200,12 @@ where
 	I: IntoIterator,
 	<I as IntoIterator>::Item: Into<std::ffi::OsString> + Clone,
 {
-	let full_version = service::config::full_version_from_strs(
+	let full_version = sc_service::config::full_version_from_strs(
 		version.version,
 		version.commit
 	);
 
-	panic_handler::set(version.support_url, &full_version);
+	sp_panic_handler::set(version.support_url, &full_version);
 	let matches = CoreParams::<CC, RP>::clap()
 		.name(version.executable_name)
 		.author(version.author)
@@ -334,7 +333,7 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 
 		if spec.boot_nodes().is_empty() && !self.params.disable_default_bootnode {
 			let base_path = base_path(&self.params.shared_params, self.version);
-			let cfg = service::Configuration::<C,_,_>::default_with_spec_and_base_path(spec.clone(), Some(base_path));
+			let cfg = sc_service::Configuration::<C,_,_>::default_with_spec_and_base_path(spec.clone(), Some(base_path));
 			let node_key = node_key_config(
 				self.params.node_key_params,
 				&Some(cfg.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a base_path"))
@@ -349,7 +348,7 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 			spec.add_boot_node(addr)
 		}
 
-		let json = service::chain_ops::build_spec(spec, raw_output)?;
+		let json = sc_service::chain_ops::build_spec(spec, raw_output)?;
 
 		print!("{}", json);
 
@@ -374,6 +373,8 @@ impl<'a> ParseAndPrepareExport<'a> {
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
 		B: ServiceBuilderCommand,
+		<<<<B as ServiceBuilderCommand>::Block as BlockT>::Header as HeaderT>
+			::Number as FromStr>::Err: Debug,
 		C: Default,
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -384,8 +385,9 @@ impl<'a> ParseAndPrepareExport<'a> {
 		if let DatabaseConfig::Path { ref path, .. } = &config.database {
 			info!("DB path: {}", path.display());
 		}
-		let from = self.params.from.unwrap_or(1);
-		let to = self.params.to;
+		let from = self.params.from.and_then(|f| f.parse().ok()).unwrap_or(1);
+		let to = self.params.to.and_then(|t| t.parse().ok());
+
 		let json = self.params.json;
 
 		let file: Box<dyn Write> = match self.params.output {
@@ -396,23 +398,23 @@ impl<'a> ParseAndPrepareExport<'a> {
 		// Note: while we would like the user to handle the exit themselves, we handle it here
 		// for backwards compatibility reasons.
 		let (exit_send, exit_recv) = std::sync::mpsc::channel();
-		let exit = exit.into_exit()
-			.map(|_| Ok::<_, ()>(()))
-			.compat();
+		let exit = exit.into_exit();
 		std::thread::spawn(move || {
-			let _ = exit.wait();
+			block_on(exit);
 			let _ = exit_send.send(());
 		});
 
-		let mut export_fut = builder(config)?.export_blocks(file, from.into(), to.map(Into::into), json);
-		let fut = futures01::future::poll_fn(|| {
+		let mut export_fut = builder(config)?
+			.export_blocks(file, from.into(), to, json)
+			.compat();
+		let fut = futures::future::poll_fn(|cx| {
 			if exit_recv.try_recv().is_ok() {
-				return Ok(Async::Ready(()));
+				return Poll::Ready(Ok(()));
 			}
-			export_fut.poll()
+			Pin::new(&mut export_fut).poll(cx)
 		});
 
-		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+		let mut runtime = tokio::runtime::Runtime::new().unwrap();
 		runtime.block_on(fut)?;
 		Ok(())
 	}
@@ -441,7 +443,7 @@ impl<'a> ParseAndPrepareImport<'a> {
 		Exit: IntoExit
 	{
 		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
-		fill_import_params(&mut config, &self.params.import_params, service::Roles::FULL)?;
+		fill_import_params(&mut config, &self.params.import_params, sc_service::Roles::FULL)?;
 
 		let file: Box<dyn ReadPlusSeek + Send> = match self.params.input {
 			Some(filename) => Box::new(File::open(filename)?),
@@ -455,23 +457,23 @@ impl<'a> ParseAndPrepareImport<'a> {
 		// Note: while we would like the user to handle the exit themselves, we handle it here
 		// for backwards compatibility reasons.
 		let (exit_send, exit_recv) = std::sync::mpsc::channel();
-		let exit = exit.into_exit()
-			.map(|_| Ok::<_, ()>(()))
-			.compat();
+		let exit = exit.into_exit();
 		std::thread::spawn(move || {
-			let _ = exit.wait();
+			block_on(exit);
 			let _ = exit_send.send(());
 		});
 
-		let mut import_fut = builder(config)?.import_blocks(file, false);
-		let fut = futures01::future::poll_fn(|| {
+		let mut import_fut = builder(config)?
+			.import_blocks(file, false)
+			.compat();
+		let fut = futures::future::poll_fn(|cx| {
 			if exit_recv.try_recv().is_ok() {
-				return Ok(Async::Ready(()));
+				return Poll::Ready(Ok(()));
 			}
-			import_fut.poll()
+			Pin::new(&mut import_fut).poll(cx)
 		});
 
-		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+		let mut runtime = tokio::runtime::Runtime::new().unwrap();
 		runtime.block_on(fut)?;
 		Ok(())
 	}
@@ -501,7 +503,7 @@ impl<'a> CheckBlock<'a> {
 			Exit: IntoExit
 	{
 		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
-		fill_import_params(&mut config, &self.params.import_params, service::Roles::FULL)?;
+		fill_import_params(&mut config, &self.params.import_params, sc_service::Roles::FULL)?;
 
 		let input = if self.params.input.starts_with("0x") { &self.params.input[2..] } else { &self.params.input[..] };
 		let block_id = match FromStr::from_str(input) {
@@ -513,8 +515,10 @@ impl<'a> CheckBlock<'a> {
 		};
 
 		let start = std::time::Instant::now();
-		let check = builder(config)?.check_block(block_id);
-		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+		let check = builder(config)?
+			.check_block(block_id)
+			.compat();
+		let mut runtime = tokio::runtime::Runtime::new().unwrap();
 		runtime.block_on(check)?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
 		Ok(())
@@ -595,6 +599,8 @@ impl<'a> ParseAndPrepareRevert<'a> {
 		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
 		B: ServiceBuilderCommand,
+		<<<<B as ServiceBuilderCommand>::Block as BlockT>::Header as HeaderT>
+			::Number as FromStr>::Err: Debug,
 		C: Default,
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -602,8 +608,8 @@ impl<'a> ParseAndPrepareRevert<'a> {
 		let config = create_config_with_db_path(
 			spec_factory, &self.params.shared_params, self.version
 		)?;
-		let blocks = self.params.num;
-		builder(config)?.revert_chain(blocks.into())?;
+		let blocks = self.params.num.parse()?;
+		builder(config)?.revert_chain(blocks)?;
 		Ok(())
 	}
 }
@@ -620,8 +626,8 @@ where
 			params.node_key.as_ref().map(parse_ed25519_secret).unwrap_or_else(||
 				Ok(params.node_key_file
 					.or_else(|| net_config_file(net_config_dir, NODE_KEY_ED25519_FILE))
-					.map(network::config::Secret::File)
-					.unwrap_or(network::config::Secret::New)))
+					.map(sc_network::config::Secret::File)
+					.unwrap_or(sc_network::config::Secret::New)))
 				.map(NodeKeyConfig::Ed25519)
 	}
 }
@@ -638,11 +644,11 @@ fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
 	error::Error::Input(format!("Invalid node key: {}", e))
 }
 
-/// Parse a Ed25519 secret key from a hex string into a `network::Secret`.
-fn parse_ed25519_secret(hex: &String) -> error::Result<network::config::Ed25519Secret> {
+/// Parse a Ed25519 secret key from a hex string into a `sc_network::Secret`.
+fn parse_ed25519_secret(hex: &String) -> error::Result<sc_network::config::Ed25519Secret> {
 	H256::from_str(&hex).map_err(invalid_node_key).and_then(|bytes|
-		network::config::identity::ed25519::SecretKey::from_bytes(bytes)
-			.map(network::config::Secret::Input)
+		sc_network::config::identity::ed25519::SecretKey::from_bytes(bytes)
+			.map(sc_network::config::Secret::Input)
 			.map_err(invalid_node_key))
 }
 
@@ -719,6 +725,7 @@ fn fill_network_configuration(
 	Ok(())
 }
 
+#[cfg(not(target_os = "unknown"))]
 fn input_keystore_password() -> Result<String, String> {
 	rpassword::read_password_from_tty(Some("Keystore password: "))
 		.map_err(|e| format!("{:?}", e))
@@ -726,11 +733,16 @@ fn input_keystore_password() -> Result<String, String> {
 
 /// Fill the password field of the given config instance.
 fn fill_config_keystore_password<C, G, E>(
-	config: &mut service::Configuration<C, G, E>,
+	config: &mut sc_service::Configuration<C, G, E>,
 	cli: &RunCmd,
 ) -> Result<(), String> {
 	config.keystore_password = if cli.password_interactive {
-		Some(input_keystore_password()?.into())
+		#[cfg(not(target_os = "unknown"))]
+		{
+			Some(input_keystore_password()?.into())
+		}
+		#[cfg(target_os = "unknown")]
+		None
 	} else if let Some(ref file) = cli.password_filename {
 		Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
 	} else if let Some(ref password) = cli.password {
@@ -746,7 +758,7 @@ fn fill_config_keystore_password<C, G, E>(
 pub fn fill_import_params<C, G, E>(
 	config: &mut Configuration<C, G, E>,
 	cli: &ImportParams,
-	role: service::Roles,
+	role: sc_service::Roles,
 ) -> error::Result<()>
 	where
 		C: Default,
@@ -767,10 +779,10 @@ pub fn fill_import_params<C, G, E>(
 	// unless `unsafe_pruning` is set.
 	config.pruning = match &cli.pruning {
 		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
-		None if role == service::Roles::AUTHORITY => PruningMode::ArchiveAll,
+		None if role == sc_service::Roles::AUTHORITY => PruningMode::ArchiveAll,
 		None => PruningMode::default(),
 		Some(s) => {
-			if role == service::Roles::AUTHORITY && !cli.unsafe_pruning {
+			if role == sc_service::Roles::AUTHORITY && !cli.unsafe_pruning {
 				return Err(error::Error::Input(
 					"Validators should run with state pruning disabled (i.e. archive). \
 					You can ignore this check with `--unsafe-pruning`.".to_string()
@@ -814,11 +826,11 @@ where
 	let is_authority = cli.validator || cli.sentry || is_dev || cli.keyring.account.is_some();
 	let role =
 		if cli.light {
-			service::Roles::LIGHT
+			sc_service::Roles::LIGHT
 		} else if is_authority {
-			service::Roles::AUTHORITY
+			sc_service::Roles::AUTHORITY
 		} else {
-			service::Roles::FULL
+			sc_service::Roles::FULL
 		};
 
 	fill_import_params(&mut config, &cli.import_params, role)?;
@@ -849,7 +861,7 @@ where
 	config.sentry_mode = cli.sentry;
 
 	config.offchain_worker = match (cli.offchain_worker, role) {
-		(params::OffchainWorkerEnabled::WhenValidating, service::Roles::AUTHORITY) => true,
+		(params::OffchainWorkerEnabled::WhenValidating, sc_service::Roles::AUTHORITY) => true,
 		(params::OffchainWorkerEnabled::Always, _) => true,
 		(params::OffchainWorkerEnabled::Never, _) => false,
 		(params::OffchainWorkerEnabled::WhenValidating, _) => false,
@@ -932,7 +944,7 @@ where
 	let spec = load_spec(cli, spec_factory)?;
 	let base_path = base_path(cli, version);
 
-	let mut config = service::Configuration::default_with_spec_and_base_path(
+	let mut config = sc_service::Configuration::default_with_spec_and_base_path(
 		spec.clone(),
 		Some(base_path),
 	);
@@ -1036,7 +1048,7 @@ fn kill_color(s: &str) -> String {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use network::config::identity::ed25519;
+	use sc_network::config::identity::ed25519;
 
 	#[test]
 	fn tests_node_name_good() {
@@ -1067,7 +1079,7 @@ mod tests {
 					node_key_file: None
 				};
 				node_key_config(params, &net_config_dir).and_then(|c| match c {
-					NodeKeyConfig::Ed25519(network::config::Secret::Input(ref ski))
+					NodeKeyConfig::Ed25519(sc_network::config::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Ed25519 &&
 							&sk[..] == ski.as_ref() => Ok(()),
 					_ => Err(error::Error::Input("Unexpected node key config".into()))
@@ -1092,7 +1104,7 @@ mod tests {
 					node_key_file: Some(file.clone())
 				};
 				node_key_config(params, &net_config_dir).and_then(|c| match c {
-					NodeKeyConfig::Ed25519(network::config::Secret::File(ref f))
+					NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
 						if node_key_type == NodeKeyType::Ed25519 && f == &file => Ok(()),
 					_ => Err(error::Error::Input("Unexpected node key config".into()))
 				})
@@ -1124,7 +1136,7 @@ mod tests {
 				let typ = params.node_key_type;
 				node_key_config::<String>(params, &None)
 					.and_then(|c| match c {
-						NodeKeyConfig::Ed25519(network::config::Secret::New)
+						NodeKeyConfig::Ed25519(sc_network::config::Secret::New)
 							if typ == NodeKeyType::Ed25519 => Ok(()),
 						_ => Err(error::Error::Input("Unexpected node key config".into()))
 					})
@@ -1137,7 +1149,7 @@ mod tests {
 				let typ = params.node_key_type;
 				node_key_config(params, &Some(net_config_dir.clone()))
 					.and_then(move |c| match c {
-						NodeKeyConfig::Ed25519(network::config::Secret::File(ref f))
+						NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
 							if typ == NodeKeyType::Ed25519 &&
 								f == &dir.join(NODE_KEY_ED25519_FILE) => Ok(()),
 						_ => Err(error::Error::Input("Unexpected node key config".into()))

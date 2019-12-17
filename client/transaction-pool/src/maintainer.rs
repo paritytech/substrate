@@ -23,34 +23,34 @@ use futures::{
 	Future, FutureExt,
 	future::{Either, join, ready},
 };
-use log::{warn, debug};
+use log::{warn, debug, trace};
 use parking_lot::Mutex;
 
-use client_api::{
+use sc_client_api::{
 	client::BlockBody,
 	light::{Fetcher, RemoteBodyRequest},
 };
-use primitives::{Blake2Hasher, H256};
+use sp_core::{Blake2Hasher, H256};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Extrinsic, Header, NumberFor, ProvideRuntimeApi, SimpleArithmetic},
 };
 use sp_blockchain::HeaderBackend;
-use txpool_api::TransactionPoolMaintainer;
-use txpool_runtime_api::TaggedTransactionQueue;
+use sp_transaction_pool::TransactionPoolMaintainer;
+use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 
-use txpool::{self, ChainApi};
+use sc_transaction_graph::{self, ChainApi};
 
 /// Basic transaction pool maintainer for full clients.
 pub struct FullBasicPoolMaintainer<Client, PoolApi: ChainApi> {
-	pool: Arc<txpool::Pool<PoolApi>>,
+	pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 	client: Arc<Client>,
 }
 
 impl<Client, PoolApi: ChainApi> FullBasicPoolMaintainer<Client, PoolApi> {
 	/// Create new basic full pool maintainer.
 	pub fn new(
-		pool: Arc<txpool::Pool<PoolApi>>,
+		pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 		client: Arc<Client>,
 	) -> Self {
 		FullBasicPoolMaintainer { pool, client }
@@ -61,7 +61,7 @@ impl<Block, Client, PoolApi> TransactionPoolMaintainer
 for
 	FullBasicPoolMaintainer<Client, PoolApi>
 where
-	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
+	Block: BlockT<Hash = <Blake2Hasher as sp_core::Hasher>::Out>,
 	Client: ProvideRuntimeApi + HeaderBackend<Block> + BlockBody<Block> + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 	PoolApi: ChainApi<Block = Block, Hash = H256> + 'static,
@@ -74,6 +74,11 @@ where
 		id: &BlockId<Block>,
 		retracted: &[Block::Hash],
 	) -> Box<dyn Future<Output=()> + Send + Unpin> {
+		let now = std::time::Instant::now();
+		let took = move || format!("Took {} ms", now.elapsed().as_millis());
+
+		let id = *id;
+		trace!(target: "txpool", "[{:?}] Starting pool maintainance", id);
 		// Put transactions from retracted blocks back into the pool.
 		let client_copy = self.client.clone();
 		let retracted_transactions = retracted.to_vec().into_iter()
@@ -82,13 +87,14 @@ where
 			// if signed information is not present, attempt to resubmit anyway.
 			.filter(|tx| tx.is_signed().unwrap_or(true));
 		let resubmit_future = self.pool
-			.submit_at(id, retracted_transactions, true)
-			.then(|resubmit_result| ready(match resubmit_result {
-				Ok(_) => (),
-				Err(e) => {
-					debug!(target: "txpool", "Error re-submitting transactions: {:?}", e);
-					()
-				}
+			.submit_at(&id, retracted_transactions, true)
+			.then(move |resubmit_result| ready(match resubmit_result {
+				Ok(_) => trace!(target: "txpool",
+					"[{:?}] Re-submitting retracted done. {}", id, took()
+				),
+				Err(e) => debug!(target: "txpool",
+					"[{:?}] Error re-submitting transactions: {:?}", id, e
+				),
 			}));
 
 		// Avoid calling into runtime if there is nothing to prune from the pool anyway.
@@ -96,34 +102,48 @@ where
 			return Box::new(resubmit_future)
 		}
 
-		let block = (self.client.header(*id), self.client.block_body(id));
-		match block {
+		let block = (self.client.header(id), self.client.block_body(&id));
+		let prune_future = match block {
 			(Ok(Some(header)), Ok(Some(extrinsics))) => {
 				let parent_id = BlockId::hash(*header.parent_hash());
 				let prune_future = self.pool
-					.prune(id, &parent_id, &extrinsics)
-					.then(|prune_result| ready(match prune_result {
-						Ok(_) => (),
-						Err(e) => {
-							warn!("Error pruning transactions: {:?}", e);
-							()
-						}
+					.prune(&id, &parent_id, &extrinsics)
+					.then(move |prune_result| ready(match prune_result {
+						Ok(_) => trace!(target: "txpool",
+							"[{:?}] Pruning done. {}", id, took()
+						),
+						Err(e) => warn!(target: "txpool",
+							"[{:?}] Error pruning transactions: {:?}", id, e
+						),
 					}));
 
-				Box::new(resubmit_future.then(|_| prune_future))
+				Either::Left(resubmit_future.then(|_| prune_future))
 			},
-			(Ok(_), Ok(_)) => Box::new(resubmit_future),
+			(Ok(_), Ok(_)) => Either::Right(resubmit_future),
 			err => {
-				warn!("Error reading block: {:?}", err);
-				Box::new(resubmit_future)
+				warn!(target: "txpool", "[{:?}] Error reading block: {:?}", id, err);
+				Either::Right(resubmit_future)
 			},
-		}
+		};
+
+		let revalidate_future = self.pool
+			.revalidate_ready(&id, Some(16))
+			.then(move |result| ready(match result {
+				Ok(_) => debug!(target: "txpool",
+					"[{:?}] Revalidation done: {}", id, took()
+				),
+				Err(e) => warn!(target: "txpool",
+					"[{:?}] Encountered errors while revalidating transactions: {:?}", id, e
+				),
+			}));
+
+		Box::new(prune_future.then(|_| revalidate_future))
 	}
 }
 
 /// Basic transaction pool maintainer for light clients.
 pub struct LightBasicPoolMaintainer<Block: BlockT, Client, PoolApi: ChainApi, F> {
-	pool: Arc<txpool::Pool<PoolApi>>,
+	pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 	client: Arc<Client>,
 	fetcher: Arc<F>,
 	revalidate_time_period: Option<std::time::Duration>,
@@ -134,7 +154,7 @@ pub struct LightBasicPoolMaintainer<Block: BlockT, Client, PoolApi: ChainApi, F>
 
 impl<Block, Client, PoolApi, F> LightBasicPoolMaintainer<Block, Client, PoolApi, F>
 	where
-		Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
+		Block: BlockT<Hash = <Blake2Hasher as sp_core::Hasher>::Out>,
 		Client: ProvideRuntimeApi + HeaderBackend<Block> + BlockBody<Block> + 'static,
 		Client::Api: TaggedTransactionQueue<Block>,
 		PoolApi: ChainApi<Block = Block, Hash = H256> + 'static,
@@ -145,7 +165,7 @@ impl<Block, Client, PoolApi, F> LightBasicPoolMaintainer<Block, Client, PoolApi,
 	/// Default constants are: revalidate every 60 seconds or every 20 blocks
 	/// (whatever happens first).
 	pub fn with_defaults(
-		pool: Arc<txpool::Pool<PoolApi>>,
+		pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 		client: Arc<Client>,
 		fetcher: Arc<F>,
 	) -> Self {
@@ -160,7 +180,7 @@ impl<Block, Client, PoolApi, F> LightBasicPoolMaintainer<Block, Client, PoolApi,
 
 	/// Create light pool maintainer with passed constants.
 	pub fn new(
-		pool: Arc<txpool::Pool<PoolApi>>,
+		pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 		client: Arc<Client>,
 		fetcher: Arc<F>,
 		revalidate_time_period: Option<std::time::Duration>,
@@ -228,7 +248,7 @@ impl<Block, Client, PoolApi, F> LightBasicPoolMaintainer<Block, Client, PoolApi,
 			true => {
 				let revalidation_status = self.revalidation_status.clone();
 				Either::Left(self.pool
-					.revalidate_ready(id)
+					.revalidate_ready(id, None)
 					.map(|r| r.map_err(|e| warn!("Error revalidating known transactions: {}", e)))
 					.map(move |_| revalidation_status.lock().clear()))
 			},
@@ -241,7 +261,7 @@ impl<Block, Client, PoolApi, F> TransactionPoolMaintainer
 for
 	LightBasicPoolMaintainer<Block, Client, PoolApi, F>
 where
-	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
+	Block: BlockT<Hash = <Blake2Hasher as sp_core::Hasher>::Out>,
 	Client: ProvideRuntimeApi + HeaderBackend<Block> + BlockBody<Block> + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 	PoolApi: ChainApi<Block = Block, Hash = H256> + 'static,
@@ -335,15 +355,15 @@ mod tests {
 	use super::*;
 	use futures::executor::block_on;
 	use codec::Encode;
-	use test_client::{prelude::*, runtime::{Block, Transfer}, consensus::{BlockOrigin, SelectChain}};
-	use txpool_api::PoolStatus;
+	use substrate_test_runtime_client::{prelude::*, runtime::{Block, Transfer}, sp_consensus::{BlockOrigin, SelectChain}};
+	use sp_transaction_pool::PoolStatus;
 	use crate::api::{FullChainApi, LightChainApi};
 
 	#[test]
 	fn should_remove_transactions_from_the_full_pool() {
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool = txpool::Pool::new(Default::default(), FullChainApi::new(client.clone()));
+		let pool = sc_transaction_graph::Pool::new(Default::default(), FullChainApi::new(client.clone()));
 		let pool = Arc::new(pool);
 		let transaction = Transfer {
 			amount: 5,
@@ -381,7 +401,7 @@ mod tests {
 			to: Default::default(),
 		}.into_signed_tx();
 		let fetcher_transaction = transaction.clone();
-		let fetcher = Arc::new(test_client::new_light_fetcher()
+		let fetcher = Arc::new(substrate_test_runtime_client::new_light_fetcher()
 			.with_remote_body(Some(Box::new(move |_| Ok(vec![fetcher_transaction.clone()]))))
 			.with_remote_call(Some(Box::new(move |_| {
 				let validity: sp_runtime::transaction_validity::TransactionValidity =
@@ -397,7 +417,7 @@ mod tests {
 
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool = txpool::Pool::new(Default::default(), LightChainApi::new(
+		let pool = sc_transaction_graph::Pool::new(Default::default(), LightChainApi::new(
 			client.clone(),
 			fetcher.clone(),
 		));
@@ -453,7 +473,7 @@ mod tests {
 
 		let build_fetcher = || {
 			let validated = Arc::new(atomic::AtomicBool::new(false));
-			Arc::new(test_client::new_light_fetcher()
+			Arc::new(substrate_test_runtime_client::new_light_fetcher()
 				.with_remote_body(Some(Box::new(move |_| Ok(vec![]))))
 				.with_remote_call(Some(Box::new(move |_| {
 					let is_inserted = validated.swap(true, atomic::Ordering::SeqCst);
@@ -484,7 +504,7 @@ mod tests {
 			let client = Arc::new(client);
 
 			// now let's prepare pool
-			let pool = txpool::Pool::new(Default::default(), LightChainApi::new(
+			let pool = sc_transaction_graph::Pool::new(Default::default(), LightChainApi::new(
 				client.clone(),
 				fetcher.clone(),
 			));
@@ -543,7 +563,7 @@ mod tests {
 	fn should_add_reverted_transactions_to_the_pool() {
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool = txpool::Pool::new(Default::default(), FullChainApi::new(client.clone()));
+		let pool = sc_transaction_graph::Pool::new(Default::default(), FullChainApi::new(client.clone()));
 		let pool = Arc::new(pool);
 		let transaction = Transfer {
 			amount: 5,

@@ -23,15 +23,15 @@ mod backend;
 
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
-use rstd::{vec::Vec, marker::PhantomData};
-use support::{dispatch::Result, decl_module, decl_storage, decl_event};
-use support::weights::{Weight, WeighData, ClassifyDispatch, DispatchClass, PaysFee};
-use support::traits::{Currency, WithdrawReason, ExistenceRequirement};
-use system::ensure_signed;
+use sp_std::{vec::Vec, marker::PhantomData};
+use frame_support::{dispatch, decl_module, decl_storage, decl_event};
+use frame_support::weights::{Weight, WeighData, ClassifyDispatch, DispatchClass, PaysFee};
+use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement};
+use frame_system::{self as system, ensure_signed};
 use sp_runtime::ModuleId;
-use support::weights::SimpleDispatchInfo;
+use frame_support::weights::SimpleDispatchInfo;
 use sp_runtime::traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion};
-use primitives::{U256, H256, H160};
+use sp_core::{U256, H256, H160};
 use evm::{ExitReason, ExitSucceed, ExitError};
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
@@ -39,7 +39,7 @@ use evm::backend::ApplyBackend;
 const MODULE_ID: ModuleId = ModuleId(*b"py/ethvm");
 
 /// Type alias for currency balance.
-pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
 /// Trait that outputs the current transaction gas price.
 pub trait FeeCalculator {
@@ -116,7 +116,7 @@ impl<F: FeeCalculator> PaysFee for WeightForCallCreate<F> {
 }
 
 /// EVM module trait
-pub trait Trait: system::Trait + timestamp::Trait {
+pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	/// Calculator for current gas price.
 	type FeeCalculator: FeeCalculator;
 	/// Convert account ID to H160;
@@ -124,7 +124,7 @@ pub trait Trait: system::Trait + timestamp::Trait {
 	/// Currency type for deposit and withdraw.
 	type Currency: Currency<Self::AccountId>;
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
 	/// Precompiles associated with this EVM engine.
 	type Precompiles: Precompiles;
 }
@@ -150,7 +150,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn deposit_balance(origin, value: BalanceOf<T>) -> Result {
+		fn deposit_balance(origin, value: BalanceOf<T>) -> dispatch::Result {
 			let sender = ensure_signed(origin)?;
 
 			let imbalance = T::Currency::withdraw(
@@ -171,7 +171,7 @@ decl_module! {
 		}
 
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn withdraw_balance(origin, value: BalanceOf<T>) -> Result {
+		fn withdraw_balance(origin, value: BalanceOf<T>) -> dispatch::Result {
 			let sender = ensure_signed(origin)?;
 			let address = T::ConvertAccountId::convert_account_id(&sender);
 			let bvalue = U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(value));
@@ -195,7 +195,9 @@ decl_module! {
 		}
 
 		#[weight = WeightForCallCreate::<T::FeeCalculator>::default()]
-		fn call(origin, target: H160, input: Vec<u8>, value: U256, gas_limit: u32) -> Result {
+		fn call(origin, target: H160, input: Vec<u8>, value: U256, gas_limit: u32)
+			-> dispatch::Result
+		{
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 			let gas_price = T::FeeCalculator::gas_price();
@@ -246,7 +248,7 @@ decl_module! {
 		}
 
 		#[weight = WeightForCallCreate::<T::FeeCalculator>::default()]
-		fn create(origin, init: Vec<u8>, value: U256, gas_limit: u32) -> Result {
+		fn create(origin, init: Vec<u8>, value: U256, gas_limit: u32) -> dispatch::Result {
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 			let gas_price = T::FeeCalculator::gas_price();

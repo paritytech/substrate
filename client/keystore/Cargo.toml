@@ -6,8 +6,8 @@ edition = "2018"
 
 [dependencies]
 derive_more = "0.99.2"
-primitives = { package = "sp-core",  path = "../../primitives/core" }
-app-crypto = { package = "sc-application-crypto",  path = "../../primitives/application-crypto" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+sp-application-crypto = { version = "2.0.0", path = "../../primitives/application-crypto" }
 hex = "0.4.0"
 rand = "0.7.2"
 serde_json = "1.0.41"

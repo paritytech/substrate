@@ -18,11 +18,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
+use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
 use sp_runtime::traits::{One, Zero, SaturatedConversion};
-use rstd::{prelude::*, result, cmp, vec};
-use support::{decl_module, decl_storage};
-use support::traits::Get;
+use sp_std::{prelude::*, result, cmp, vec};
+use frame_support::{decl_module, decl_storage};
+use frame_support::traits::Get;
 use frame_system::{ensure_none, Trait as SystemTrait};
 use sp_finality_tracker::{INHERENT_IDENTIFIER, FinalizedInherentData};
 
@@ -193,13 +193,13 @@ impl<T: Trait> ProvideInherent for Module<T> {
 mod tests {
 	use super::*;
 
-	use runtime_io::TestExternalities;
-	use primitives::H256;
+	use sp_io::TestExternalities;
+	use sp_core::H256;
 	use sp_runtime::{
 		testing::Header, Perbill,
 		traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT},
 	};
-	use support::{assert_ok, impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::{assert_ok, impl_outer_origin, parameter_types, weights::Weight};
 	use frame_system as system;
 	use std::cell::RefCell;
 
@@ -213,7 +213,7 @@ mod tests {
 	pub struct Test;
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	thread_local! {

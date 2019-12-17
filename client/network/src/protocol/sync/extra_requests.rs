@@ -288,7 +288,7 @@ mod tests {
 	use rand::Rng;
 	use std::collections::{HashMap, HashSet};
 	use super::*;
-	use test_client::runtime::{Block, BlockNumber, Hash};
+	use sp_test_primitives::{Block, BlockNumber, Hash};
 
 	#[test]
 	fn requests_are_processed_in_order() {

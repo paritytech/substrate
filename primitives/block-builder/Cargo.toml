@@ -1,0 +1,22 @@
+[package]
+name = "sp-block-builder"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
+sp-api = { version = "2.0.0", default-features = false, path = "../api" }
+sp-std = { version = "2.0.0", default-features = false, path = "../std" }
+codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false }
+sp-inherents = { version = "2.0.0", default-features = false, path = "../inherents" }
+
+[features]
+default = [ "std" ]
+std = [
+	"sp-runtime/std",
+	"codec/std",
+	"sp-inherents/std",
+	"sp-api/std",
+	"sp-std/std",
+]

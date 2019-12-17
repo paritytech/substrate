@@ -6,8 +6,8 @@ edition = "2018"
 
 [dependencies]
 parking_lot = { version = "0.9.0", optional = true }
-rstd = { package = "sp-std", path = "../sr-std", default-features = false }
-primitives = { package = "sp-core", path = "../core", default-features = false }
+sp-std = { version = "2.0.0", default-features = false, path = "../std" }
+sp-core = { version = "2.0.0", default-features = false, path = "../core" }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
 derive_more = { version = "0.99.2", optional = true }
 
@@ -15,8 +15,8 @@ derive_more = { version = "0.99.2", optional = true }
 default = [ "std" ]
 std = [
 	"parking_lot",
-	"rstd/std",
+	"sp-std/std",
 	"codec/std",
-	"primitives/std",
+	"sp-core/std",
 	"derive_more",
 ]

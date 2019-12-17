@@ -20,7 +20,7 @@ use futures::{
 	Stream,
 	channel::mpsc,
 };
-use txpool_api::TransactionStatus;
+use sp_transaction_pool::TransactionStatus;
 
 /// Extrinsic watcher.
 ///

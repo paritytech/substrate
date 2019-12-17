@@ -25,7 +25,7 @@ use futures::{Future, Stream, Poll};
 use tempfile::TempDir;
 use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
-use service::{
+use sc_service::{
 	AbstractService,
 	ChainSpec,
 	Configuration,
@@ -33,10 +33,10 @@ use service::{
 	Roles,
 	Error,
 };
-use network::{multiaddr, Multiaddr};
-use network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
+use sc_network::{multiaddr, Multiaddr};
+use sc_network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
-use txpool_api::TransactionPool;
+use sp_transaction_pool::TransactionPool;
 
 /// Maximum duration of single wait call.
 const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
@@ -72,9 +72,9 @@ impl<T> From<T> for SyncService<T> {
 	}
 }
 
-impl<T: Future<Item=(), Error=service::Error>> Future for SyncService<T> {
+impl<T: Future<Item=(), Error=sc_service::Error>> Future for SyncService<T> {
 	type Item = ();
-	type Error = service::Error;
+	type Error = sc_service::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		self.0.lock().unwrap().poll()
@@ -186,7 +186,7 @@ fn node_config<G, E: Clone> (
 		chain_spec: (*spec).clone(),
 		custom: Default::default(),
 		name: format!("Node {}", index),
-		wasm_method: service::config::WasmExecutionMethod::Interpreted,
+		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ws: None,
@@ -299,8 +299,6 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	spec: ChainSpec<G, E>,
 	full_builder: Fb,
 	light_builder: Lb,
-	light_node_interconnectivity: bool, // should normally be false, unless the light nodes
-	// aren't actually light.
 ) where
 	E: Clone,
 	Fb: Fn(Configuration<(), G, E>) -> Result<F, Error>,
@@ -312,11 +310,7 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	const NUM_LIGHT_NODES: usize = 5;
 
 	let expected_full_connections = NUM_FULL_NODES - 1 + NUM_LIGHT_NODES;
-	let expected_light_connections = if light_node_interconnectivity {
-		expected_full_connections
-	} else {
-		NUM_FULL_NODES
-	};
+	let expected_light_connections = NUM_FULL_NODES;
 
 	{
 		let temp = tempdir_with_prefix("substrate-connectivity-test");

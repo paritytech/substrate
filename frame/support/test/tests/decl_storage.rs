@@ -18,11 +18,12 @@
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
-	use support::metadata::*;
+	use frame_support::metadata::*;
+	use sp_io::TestExternalities;
 	use std::marker::PhantomData;
 	use codec::{Encode, Decode, EncodeLike};
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
@@ -31,7 +32,7 @@ mod tests {
 		type BlockNumber;
 	}
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as TestStorage {
 			// non-getters: pub / $default
 
@@ -44,7 +45,7 @@ mod tests {
 			// getters: pub / $default
 			// we need at least one type which uses T, otherwise GenesisConfig will complain.
 			GETU32 get(fn u32_getter): T::Origin;
-			pub PUBGETU32 get(fn pub_u32_getter) build(|config: &GenesisConfig| config.u32_getter_with_config): u32;
+			pub PUBGETU32 get(fn pub_u32_getter): u32;
 			GETU32WITHCONFIG get(fn u32_getter_with_config) config(): u32;
 			pub PUBGETU32WITHCONFIG get(fn pub_u32_getter_with_config) config(): u32;
 			GETU32MYDEF get(fn u32_getter_mydef): Option<u32>;
@@ -52,6 +53,10 @@ mod tests {
 			GETU32WITHCONFIGMYDEF get(fn u32_getter_with_config_mydef) config(): u32 = 2;
 			pub PUBGETU32WITHCONFIGMYDEF get(fn pub_u32_getter_with_config_mydef) config(): u32 = 1;
 			PUBGETU32WITHCONFIGMYDEFOPT get(fn pub_u32_getter_with_config_mydef_opt) config(): Option<u32>;
+
+			GetU32WithBuilder get(fn u32_with_builder) build(|_| 1): u32;
+			GetOptU32WithBuilderSome get(fn opt_u32_with_builder_some) build(|_| Some(1)): Option<u32>;
+			GetOptU32WithBuilderNone get(fn opt_u32_with_builder_none) build(|_| None): Option<u32>;
 
 			// map non-getters: pub / $default
 			MAPU32 : map u32 => Option<String>;
@@ -209,7 +214,33 @@ mod tests {
 					),
 					documentation: DecodeDifferent::Encode(&[]),
 				},
-
+				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("GetU32WithBuilder"),
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructGetU32WithBuilder(PhantomData::<TraitImpl>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("GetOptU32WithBuilderSome"),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructGetOptU32WithBuilderSome(PhantomData::<TraitImpl>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("GetOptU32WithBuilderNone"),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructGetOptU32WithBuilderNone(PhantomData::<TraitImpl>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
 				StorageEntryMetadata {
 					name: DecodeDifferent::Encode("MAPU32"),
 					modifier: StorageEntryModifier::Optional,
@@ -412,7 +443,7 @@ mod tests {
 	#[test]
 	fn store_metadata() {
 		let metadata = Module::<TraitImpl>::storage_metadata();
-		assert_eq!(EXPECTED_METADATA, metadata);
+		pretty_assertions::assert_eq!(EXPECTED_METADATA, metadata);
 	}
 
 	#[test]
@@ -427,6 +458,16 @@ mod tests {
 		assert_eq!(config.pub_u32_getter_with_config_mydef_opt, 0u32);
 	}
 
+	#[test]
+	fn check_builder_config() {
+		let config = GenesisConfig::default();
+		let storage = config.build_storage().unwrap();
+		TestExternalities::from(storage).execute_with(|| {
+			assert_eq!(Module::<TraitImpl>::u32_with_builder(), 1);
+			assert_eq!(Module::<TraitImpl>::opt_u32_with_builder_some(), Some(1));
+			assert_eq!(Module::<TraitImpl>::opt_u32_with_builder_none(), None);
+		})
+	}
 }
 
 #[cfg(test)]
@@ -437,13 +478,13 @@ mod test2 {
 		type BlockNumber;
 	}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
 	type PairOf<T> = (T, T);
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as TestStorage {
 			SingleDef : u32;
 			PairDef : PairOf<u32>;
@@ -472,10 +513,10 @@ mod test3 {
 		type Origin;
 		type BlockNumber;
 	}
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
 			Foo get(fn foo) config(initial_foo): u32;
 		}
@@ -494,7 +535,7 @@ mod test3 {
 #[cfg(test)]
 #[allow(dead_code)]
 mod test_append_and_len {
-	use runtime_io::TestExternalities;
+	use sp_io::TestExternalities;
 	use codec::{Encode, Decode};
 
 	pub trait Trait {
@@ -502,14 +543,14 @@ mod test_append_and_len {
 		type BlockNumber;
 	}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 	struct NoDef(u32);
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
 			NoDefault: Option<NoDef>;
 

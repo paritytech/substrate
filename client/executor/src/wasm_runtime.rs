@@ -26,12 +26,12 @@ use log::{trace, warn};
 
 use codec::Decode;
 
-use primitives::{storage::well_known_keys, traits::Externalities};
+use sp_core::{storage::well_known_keys, traits::Externalities};
 
-use runtime_version::RuntimeVersion;
+use sp_version::RuntimeVersion;
 use std::{collections::hash_map::{Entry, HashMap}, panic::AssertUnwindSafe};
 
-use wasm_interface::Function;
+use sp_wasm_interface::Function;
 
 /// The Substrate Wasm runtime.
 pub trait WasmRuntime {
@@ -259,11 +259,11 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 
 #[cfg(test)]
 mod tests {
-	use wasm_interface::HostFunctions;
+	use sp_wasm_interface::HostFunctions;
 
 	#[test]
 	fn host_functions_are_equal() {
-		let host_functions = runtime_io::SubstrateHostFunctions::host_functions();
+		let host_functions = sp_io::SubstrateHostFunctions::host_functions();
 
 		let equal = &host_functions[..] == &host_functions[..];
 		assert!(equal, "Host functions are not equal");
