@@ -49,8 +49,8 @@ pallet-membership = { version = "2.0.0", default-features = false, path = "../..
 pallet-nicks = { version = "2.0.0", default-features = false, path = "../../../frame/nicks" }
 pallet-offences = { version = "2.0.0", default-features = false, path = "../../../frame/offences" }
 pallet-randomness-collective-flip = { version = "2.0.0", default-features = false, path = "../../../frame/randomness-collective-flip" }
-pallet-session = { features = ["historical"], path = "../../../frame/session", default-features = false }
-pallet-staking = { features = ["migrate"], path = "../../../frame/staking", default-features = false }
+pallet-session = { version = "2.0.0", features = ["historical"], path = "../../../frame/session", default-features = false }
+pallet-staking = { version = "2.0.0", features = ["migrate"], path = "../../../frame/staking", default-features = false }
 pallet-staking-reward-curve = { version = "2.0.0",  path = "../../../frame/staking/reward-curve" }
 pallet-sudo = { version = "2.0.0", default-features = false, path = "../../../frame/sudo" }
 frame-support = { version = "2.0.0", default-features = false, path = "../../../frame/support" }

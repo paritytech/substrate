@@ -12,7 +12,7 @@ sp-core = { version = "2.0.0", default-features = false, path = "../../primitive
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 serde = { version = "1.0.101", optional = true }
 sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
-pallet-session = { features = ["historical" ], path = "../session", default-features = false }
+pallet-session = { version = "2.0.0", features = ["historical" ], path = "../session", default-features = false }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
