@@ -165,7 +165,7 @@ fn get_app<'a, 'b>() -> App<'a, 'b> {
 			-k, --secp256k1 'Use SECP256k1/ECDSA/BIP39 cryptography'
 			-s, --sr25519 'Use Schnorr/Ristretto x25519/BIP39 cryptography'
 			[network] -n, --network <network> 'Specify a network. One of substrate \
-									 (default), polkadot, kusama, dothereum, or kulupu'
+									 (default), polkadot, kusama, dothereum, edgeware, or kulupu'
 			[password] -p, --password <password> 'The password for the key'
 		")
 		.subcommands(vec![
@@ -244,7 +244,7 @@ where
 	let maybe_network: Option<Ss58AddressFormat> = matches.value_of("network").map(|network| {
 		network
 			.try_into()
-			.expect("Invalid network name: must be polkadot/substrate/kusama/dothereum")
+			.expect("Invalid network name: must be polkadot/substrate/kusama/dothereum/edgeware")
 	});
 	if let Some(network) = maybe_network {
 		set_default_ss58_version(network);

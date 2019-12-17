@@ -268,6 +268,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 				Ss58AddressFormat::PolkadotAccountDirect => Ok(r),
 				Ss58AddressFormat::KusamaAccountDirect => Ok(r),
 				Ss58AddressFormat::DothereumAccountDirect => Ok(r),
+				Ss58AddressFormat::EdgewareAccountDirect => Ok(r),
 				v if v == *DEFAULT_VERSION.lock() => Ok(r),
 				_ => Err(PublicError::UnknownVersion),
 			})
@@ -301,6 +302,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 				Ss58AddressFormat::PolkadotAccountDirect => Ok(r),
 				Ss58AddressFormat::KusamaAccountDirect => Ok(r),
 				Ss58AddressFormat::DothereumAccountDirect => Ok(r),
+				Ss58AddressFormat::EdgewareAccountDirect => Ok(r),
 				v if v == *DEFAULT_VERSION.lock() => Ok(r),
 				_ => Err(PublicError::UnknownVersion),
 			})
@@ -432,6 +434,8 @@ ss58_address_format!(
 		(20, "dothereum", "Dothereum Para-chain, direct checksum, standard account (*25519).")
 	KulupuAccountDirect =>
 		(16, "kulupu", "Kulupu mainnet, direct checksum, standard account (*25519).")
+	EdgewareAccountDirect =>
+		(7, "edgeware", "Edgeware mainnet, direct checksum, standard account (*25519).")
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
@@ -441,6 +445,7 @@ ss58_address_format!(
 /// Current known "versions" are:
 /// - 0 direct (payload) checksum for 32-byte *25519 Polkadot addresses.
 /// - 2 direct (payload) checksum for 32-byte *25519 Kusama addresses.
+/// - 7 direct (payload) checksum for 32-byte *25519 Edgeware addresses.
 /// - 20 direct (payload) checksum for 32-byte *25519 Dothereum addresses.
 /// - 42 direct (payload) checksum for 32-byte *25519 addresses on any Substrate-based network.
 #[cfg(feature = "std")]
