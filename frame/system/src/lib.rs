@@ -172,7 +172,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The block number type used by the runtime.
 	type BlockNumber:
 		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleArithmetic
-		+ Default + Bounded + Copy + sp_std::hash::Hash;
+		+ Default + Bounded + Copy + sp_std::hash::Hash + sp_std::str::FromStr;
 
 	/// The output of the `Hashing` function.
 	type Hash:

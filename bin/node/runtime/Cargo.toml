@@ -58,7 +58,7 @@ frame-system = { path = "../../../frame/system", default-features = false }
 frame-system-rpc-runtime-api = { path = "../../../frame/system/rpc/runtime-api/", default-features = false }
 pallet-timestamp = { path = "../../../frame/timestamp", default-features = false }
 pallet-treasury = { path = "../../../frame/treasury", default-features = false }
-frame-utility = { path = "../../../frame/utility", default-features = false }
+pallet-utility = { path = "../../../frame/utility", default-features = false }
 pallet-transaction-payment = { path = "../../../frame/transaction-payment", default-features = false }
 pallet-transaction-payment-rpc-runtime-api = { path = "../../../frame/transaction-payment/rpc/runtime-api/", default-features = false }
 
@@ -117,6 +117,6 @@ std = [
 	"pallet-transaction-payment/std",
 	"pallet-treasury/std",
 	"sp-transaction-pool/std",
-	"frame-utility/std",
+	"pallet-utility/std",
 	"sp-version/std",
 ]
