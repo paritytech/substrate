@@ -349,8 +349,7 @@ pub fn local_testnet_config() -> ChainSpec {
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
-	use crate::service::new_full;
-	use sc_service::Roles;
+	use crate::service::{new_full, new_light};
 	use sc_service_test;
 
 	fn local_testnet_genesis_instant_single() -> GenesisConfig {
@@ -398,12 +397,7 @@ pub(crate) mod tests {
 		sc_service_test::connectivity(
 			integration_test_config_with_two_authorities(),
 			|config| new_full(config),
-			|mut config| {
-				// light nodes are unsupported
-				config.roles = Roles::FULL;
-				new_full(config)
-			},
-			true,
+			|config| new_light(config),
 		);
 	}
 }
