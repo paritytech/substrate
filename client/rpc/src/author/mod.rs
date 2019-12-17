@@ -22,7 +22,7 @@ mod tests;
 use std::{sync::Arc, convert::TryInto};
 use log::warn;
 
-use client::Client;
+use sc_client::Client;
 use sp_blockchain::Error as ClientError;
 
 use rpc::futures::{
@@ -31,20 +31,20 @@ use rpc::futures::{
 };
 use futures::{StreamExt as _, compat::Compat};
 use futures::future::{ready, FutureExt, TryFutureExt};
-use api::Subscriptions;
+use sc_rpc_api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use codec::{Encode, Decode};
-use primitives::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
+use sp_core::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
 use sp_api::ConstructRuntimeApi;
 use sp_runtime::{generic, traits::{self, ProvideRuntimeApi}};
-use txpool_api::{
+use sp_transaction_pool::{
 	TransactionPool, InPoolTransaction, TransactionStatus,
 	BlockHash, TxHash, TransactionFor, error::IntoPoolError,
 };
-use session::SessionKeys;
+use sp_session::SessionKeys;
 
 /// Re-export the API for backward compatibility.
-pub use api::author::*;
+pub use sc_rpc_api::author::*;
 use self::error::{Error, FutureResult, Result};
 
 /// Authoring API
@@ -78,8 +78,8 @@ impl<B, E, P, Block: traits::Block, RA> Author<B, E, P, Block, RA> {
 
 impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P, Block, RA> where
 	Block: traits::Block<Hash=H256>,
-	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client_api::CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
+	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: sc_client_api::CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
 	P: TransactionPool<Block=Block, Hash=Block::Hash> + Sync + Send + 'static,
 	RA: ConstructRuntimeApi<Block, Client<B, E, Block, RA>> + Send + Sync + 'static,
 	Client<B, E, Block, RA>: ProvideRuntimeApi,

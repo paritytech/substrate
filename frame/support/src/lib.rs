@@ -39,7 +39,7 @@ pub use once_cell;
 pub use paste;
 #[cfg(feature = "std")]
 #[doc(hidden)]
-pub use state_machine::BasicExternalities;
+pub use sp_state_machine::BasicExternalities;
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 #[doc(hidden)]

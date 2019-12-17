@@ -7,6 +7,7 @@ description = "Integration tests for application-crypto"
 publish = false
 
 [dependencies]
-primitives = { package = "sp-core", path = "../../core", default-features = false }
-test-client = { package = "substrate-test-runtime-client", path = "../../../test-utils/runtime/client" }
+sp-core = { path = "../../core", default-features = false }
+substrate-test-runtime-client = { path = "../../../test-utils/runtime/client" }
 sp-runtime = { path = "../../runtime" }
+sp-application-crypto = { path = "../" }

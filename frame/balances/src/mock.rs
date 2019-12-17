@@ -17,14 +17,15 @@
 //! Test utilities
 
 use sp_runtime::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header};
-use primitives::H256;
+use sp_core::H256;
 use sp_io;
-use support::{impl_outer_origin, parameter_types};
-use support::traits::Get;
-use support::weights::{Weight, DispatchInfo};
+use frame_support::{impl_outer_origin, parameter_types};
+use frame_support::traits::Get;
+use frame_support::weights::{Weight, DispatchInfo};
 use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait};
 
+use frame_system as system;
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
 }
@@ -59,7 +60,7 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl system::Trait for Runtime {
+impl frame_system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -80,7 +81,7 @@ parameter_types! {
 	pub const TransactionBaseFee: u64 = 0;
 	pub const TransactionByteFee: u64 = 1;
 }
-impl transaction_payment::Trait for Runtime {
+impl pallet_transaction_payment::Trait for Runtime {
 	type Currency = Module<Runtime>;
 	type OnTransactionPayment = ();
 	type TransactionBaseFee = TransactionBaseFee;
@@ -150,7 +151,7 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
-		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		GenesisConfig::<Runtime> {
 			balances: if self.monied {
 				vec![
@@ -177,10 +178,10 @@ impl ExtBuilder {
 	}
 }
 
-pub type System = system::Module<Runtime>;
+pub type System = frame_system::Module<Runtime>;
 pub type Balances = Module<Runtime>;
 
-pub const CALL: &<Runtime as system::Trait>::Call = &();
+pub const CALL: &<Runtime as frame_system::Trait>::Call = &();
 
 /// create a transaction info struct from weight. Handy to avoid building the whole struct.
 pub fn info_from_weight(w: Weight) -> DispatchInfo {

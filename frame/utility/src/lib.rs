@@ -21,14 +21,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use support::{decl_module, decl_event, Parameter, weights::SimpleDispatchInfo};
-use system::ensure_root;
+use frame_support::{decl_module, decl_event, Parameter, weights::SimpleDispatchInfo};
+use frame_system::{self as system, ensure_root};
 use sp_runtime::{traits::Dispatchable, DispatchError};
 
 /// Configuration trait.
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin>;
@@ -51,7 +51,7 @@ decl_module! {
 		fn batch(origin, calls: Vec<<T as Trait>::Call>) {
 			ensure_root(origin)?;
 			let results = calls.into_iter()
-				.map(|call| call.dispatch(system::RawOrigin::Root.into()))
+				.map(|call| call.dispatch(frame_system::RawOrigin::Root.into()))
 				.map(|res| res.map_err(Into::into))
 				.collect::<Vec<_>>();
 			Self::deposit_event(Event::BatchExecuted(results));
@@ -63,20 +63,20 @@ decl_module! {
 mod tests {
 	use super::*;
 
-	use support::{
+	use frame_support::{
 		assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch,
 		weights::Weight
 	};
-	use primitives::H256;
+	use sp_core::H256;
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	impl_outer_dispatch! {
 		pub enum Call for Test where origin: Origin {
-			balances::Balances,
+			pallet_balances::Balances,
 			utility::Utility,
 		}
 	}
@@ -92,7 +92,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -114,7 +114,7 @@ mod tests {
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
-	impl balances::Trait for Test {
+	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
@@ -129,12 +129,12 @@ mod tests {
 		type Event = ();
 		type Call = Call;
 	}
-	type Balances = balances::Module<Test>;
+	type Balances = pallet_balances::Module<Test>;
 	type Utility = Module<Test>;
 
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		balances::GenesisConfig::<Test> {
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![(1, 10), (2, 0)],
 			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
@@ -147,12 +147,12 @@ mod tests {
 			assert_eq!(Balances::free_balance(1), 10);
 			assert_eq!(Balances::free_balance(2), 0);
 			assert_noop!(Utility::batch(Origin::signed(1), vec![
-				Call::Balances(balances::Call::force_transfer(1, 2, 5)),
-				Call::Balances(balances::Call::force_transfer(1, 2, 5))
+				Call::Balances(pallet_balances::Call::force_transfer(1, 2, 5)),
+				Call::Balances(pallet_balances::Call::force_transfer(1, 2, 5))
 			]), "RequireRootOrigin");
 			assert_ok!(Utility::batch(Origin::ROOT, vec![
-				Call::Balances(balances::Call::force_transfer(1, 2, 5)),
-				Call::Balances(balances::Call::force_transfer(1, 2, 5))
+				Call::Balances(pallet_balances::Call::force_transfer(1, 2, 5)),
+				Call::Balances(pallet_balances::Call::force_transfer(1, 2, 5))
 			]));
 			assert_eq!(Balances::free_balance(1), 0);
 			assert_eq!(Balances::free_balance(2), 10);
