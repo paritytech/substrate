@@ -20,14 +20,15 @@
 
 use sp_runtime::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
 use sp_io;
-use support::{impl_outer_origin, impl_outer_event, parameter_types, weights::Weight};
-use primitives::H256;
+use frame_support::{impl_outer_origin, impl_outer_event, parameter_types, weights::Weight};
+use sp_core::H256;
 use codec::{Encode, Decode};
 use crate::{AuthorityId, AuthorityList, GenesisConfig, Trait, Module, ConsensusLog};
 use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 
+use frame_system as system;
 impl_outer_origin!{
-	pub enum Origin for Test {}
+	pub enum Origin for Test  where system = frame_system {}
 }
 
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
@@ -47,7 +48,7 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl system::Trait for Test {
+impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -82,12 +83,12 @@ pub fn to_authorities(vec: Vec<(u64, u64)>) -> AuthorityList {
 }
 
 pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> sp_io::TestExternalities {
-	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig {
 		authorities: to_authorities(authorities),
 	}.assimilate_storage::<Test>(&mut t).unwrap();
 	t.into()
 }
 
-pub type System = system::Module<Test>;
+pub type System = frame_system::Module<Test>;
 pub type Grandpa = Module<Test>;

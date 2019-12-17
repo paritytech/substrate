@@ -22,12 +22,12 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::rc::Rc;
 use serde::{Serialize, Deserialize};
-use primitives::storage::{StorageKey, StorageData, ChildInfo, Storage, StorageChild};
+use sp_core::storage::{StorageKey, StorageData, ChildInfo, Storage, StorageChild};
 use sp_runtime::BuildStorage;
 use serde_json as json;
 use crate::RuntimeGenesis;
-use network::Multiaddr;
-use tel::TelemetryEndpoints;
+use sc_network::Multiaddr;
+use sc_telemetry::TelemetryEndpoints;
 
 enum GenesisSource<G> {
 	File(PathBuf),
@@ -77,7 +77,7 @@ impl<'a, G: RuntimeGenesis, E> BuildStorage for &'a ChainSpec<G, E> {
 			Genesis::Raw(RawGenesis { top: map, children: children_map }) => Ok(Storage {
 				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 				children: children_map.into_iter().map(|(sk, child_content)| {
-					let child_info = ChildInfo::resolve_child_info( 
+					let child_info = ChildInfo::resolve_child_info(
 						child_content.child_type,
 						child_content.child_info.as_slice(),
 					).expect("chainspec contains correct content").to_owned();
@@ -292,7 +292,7 @@ impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
 							StorageKey(sk),
 							ChildRawStorage {
 								data: child.data.into_iter()
-									.map(|(k, v)| (StorageKey(k), StorageData(v))) 
+									.map(|(k, v)| (StorageKey(k), StorageData(v)))
 									.collect(),
 								child_info: info.to_vec(),
 								child_type: ci_type,

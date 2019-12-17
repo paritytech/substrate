@@ -8,12 +8,12 @@ edition = "2018"
 futures = { version = "0.3.0", features = ["compat"] }
 jsonrpc-client-transports = "14"
 jsonrpc-core = "14"
-parity-scale-codec = "1"
+codec = { package = "parity-scale-codec", version = "1" }
 serde = "1"
-frame-support = { path = "../../../../frame/support" }
-sp-storage = { path = "../../../../primitives/storage" }
-sc-rpc-api = { path = "../../../../client/rpc-api" }
+frame-support = { version = "2.0.0", path = "../../../../frame/support" }
+sp-storage = { version = "2.0.0", path = "../../../../primitives/storage" }
+sc-rpc-api = { version = "2.0.0", path = "../../../../client/rpc-api" }
 
 [dev-dependencies]
-frame-system = { path = "../../../../frame/system" }
+frame-system = { version = "2.0.0", path = "../../../../frame/system" }
 tokio = "0.1"

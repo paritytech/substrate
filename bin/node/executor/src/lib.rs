@@ -32,15 +32,14 @@ native_executor_instance!(
 mod tests {
 	use sc_executor::error::Result;
 	use super::Executor;
-	use {balances, contracts, indices, system, timestamp};
 	use codec::{Encode, Decode, Joiner};
-	use runtime_support::{
+	use frame_support::{
 		Hashable, StorageValue, StorageMap,
 		traits::Currency,
 		weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
 	};
-	use state_machine::TestExternalities as CoreTestExternalities;
-	use primitives::{
+	use sp_state_machine::TestExternalities as CoreTestExternalities;
+	use sp_core::{
 		Blake2Hasher, NeverNativeValue, NativeOrEncoded, map,
 		traits::{CodeExecutor, Externalities}, storage::{well_known_keys, Storage},
 	};
@@ -48,9 +47,9 @@ mod tests {
 		Fixed64, traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyExtrinsicResult,
 		transaction_validity::InvalidTransaction,
 	};
-	use contracts::ContractAddressFor;
+	use pallet_contracts::ContractAddressFor;
 	use sc_executor::{NativeExecutor, WasmExecutionMethod};
-	use system::{EventRecord, Phase};
+	use frame_system::{EventRecord, Phase};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
 		System, TransactionPayment, Event, TransferFee, TransactionBaseFee, TransactionByteFee,
@@ -93,13 +92,13 @@ mod tests {
 			(extrinsic.encode().len() as Balance);
 
 		let weight = default_transfer_call().get_dispatch_info().weight;
-		let weight_fee = <Runtime as transaction_payment::Trait>::WeightToFee::convert(weight);
+		let weight_fee = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::convert(weight);
 
 		fee_multiplier.saturated_multiply_accumulate(length_fee + weight_fee) + TransferFee::get()
 	}
 
-	fn default_transfer_call() -> balances::Call<Runtime> {
-		balances::Call::transfer::<Runtime>(bob().into(), 69 * DOLLARS)
+	fn default_transfer_call() -> pallet_balances::Call<Runtime> {
+		pallet_balances::Call::transfer::<Runtime>(bob().into(), 69 * DOLLARS)
 	}
 
 	fn xt() -> UncheckedExtrinsic {
@@ -145,16 +144,16 @@ mod tests {
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, Storage {
 			top: map![
-				<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
+				<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
 					69_u128.encode()
 				},
-				<balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
+				<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 					69_u128.encode()
 				},
-				<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => {
+				<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => {
 					0_u128.encode()
 				},
-				<system::BlockHash<Runtime>>::hashed_key_for(0) => {
+				<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => {
 					vec![0u8; 32]
 				}
 			],
@@ -184,16 +183,16 @@ mod tests {
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, Storage {
 			top: map![
-				<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
+				<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
 					69_u128.encode()
 				},
-				<balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
+				<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 					69_u128.encode()
 				},
-				<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => {
+				<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => {
 					0_u128.encode()
 				},
-				<system::BlockHash<Runtime>>::hashed_key_for(0) => {
+				<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => {
 					vec![0u8; 32]
 				}
 			],
@@ -223,14 +222,14 @@ mod tests {
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, Storage {
 			top: map![
-				<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
+				<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
 					(111 * DOLLARS).encode()
 				},
-				<balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
+				<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 					(111 * DOLLARS).encode()
 				},
-				<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
-				<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
+				<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
+				<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 			],
 			children: map![],
 		});
@@ -265,14 +264,14 @@ mod tests {
 	fn successful_execution_with_foreign_code_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, Storage {
 			top: map![
-				<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
+				<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
 					(111 * DOLLARS).encode()
 				},
-				<balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
+				<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 					(111 * DOLLARS).encode()
 				},
-				<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
-				<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
+				<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
+				<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 			],
 			children: map![],
 		});
@@ -318,7 +317,7 @@ mod tests {
 		parent_hash: Hash,
 		extrinsics: Vec<CheckedExtrinsic>,
 	) -> (Vec<u8>, Hash) {
-		use trie::{TrieConfiguration, trie_types::Layout};
+		use sp_trie::{TrieConfiguration, trie_types::Layout};
 
 		// sign extrinsics.
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
@@ -379,11 +378,11 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42 * 1000)),
+					function: Call::Timestamp(pallet_timestamp::Call::set(42 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), signed_extra(0, 0))),
-					function: Call::Balances(balances::Call::transfer(bob().into(), 69 * DOLLARS)),
+					function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 69 * DOLLARS)),
 				},
 			]
 		)
@@ -401,11 +400,11 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42 * 1000)),
+					function: Call::Timestamp(pallet_timestamp::Call::set(42 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), signed_extra(0, 0))),
-					function: Call::Balances(balances::Call::transfer(bob().into(), 69 * DOLLARS)),
+					function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 69 * DOLLARS)),
 				},
 			]
 		);
@@ -416,15 +415,15 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(52 * 1000)),
+					function: Call::Timestamp(pallet_timestamp::Call::set(52 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((bob(), signed_extra(0, 0))),
-					function: Call::Balances(balances::Call::transfer(alice().into(), 5 * DOLLARS)),
+					function: Call::Balances(pallet_balances::Call::transfer(alice().into(), 5 * DOLLARS)),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), signed_extra(1, 0))),
-					function: Call::Balances(balances::Call::transfer(bob().into(), 15 * DOLLARS)),
+					function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 15 * DOLLARS)),
 				}
 			]
 		);
@@ -444,11 +443,11 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(time * 1000)),
+					function: Call::Timestamp(pallet_timestamp::Call::set(time * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), signed_extra(nonce, 0))),
-					function: Call::System(system::Call::remark(vec![0; size])),
+					function: Call::System(frame_system::Call::remark(vec![0; size])),
 				}
 			]
 		)
@@ -478,19 +477,19 @@ mod tests {
 			let events = vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: Event::system(system::Event::ExtrinsicSuccess(
+					event: Event::system(frame_system::Event::ExtrinsicSuccess(
 						DispatchInfo { weight: 10000, class: DispatchClass::Operational, pays_fee: true }
 					)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::treasury(treasury::RawEvent::Deposit(1984800000000)),
+					event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984800000000)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::balances(balances::RawEvent::Transfer(
+					event: Event::pallet_balances(pallet_balances::RawEvent::Transfer(
 						alice().into(),
 						bob().into(),
 						69 * DOLLARS,
@@ -500,7 +499,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::system(system::Event::ExtrinsicSuccess(
+					event: Event::system(frame_system::Event::ExtrinsicSuccess(
 						DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
 					)),
 					topics: vec![],
@@ -531,20 +530,20 @@ mod tests {
 			let events = vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: Event::system(system::Event::ExtrinsicSuccess(
+					event: Event::system(frame_system::Event::ExtrinsicSuccess(
 						DispatchInfo { weight: 10000, class: DispatchClass::Operational, pays_fee: true }
 					)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::treasury(treasury::RawEvent::Deposit(1984780231392)),
+					event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984780231392)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::balances(
-						balances::RawEvent::Transfer(
+					event: Event::pallet_balances(
+						pallet_balances::RawEvent::Transfer(
 							bob().into(),
 							alice().into(),
 							5 * DOLLARS,
@@ -555,20 +554,20 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::system(system::Event::ExtrinsicSuccess(
+					event: Event::system(frame_system::Event::ExtrinsicSuccess(
 						DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
 					)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
-					event: Event::treasury(treasury::RawEvent::Deposit(1984780231392)),
+					event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984780231392)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
-					event: Event::balances(
-						balances::RawEvent::Transfer(
+					event: Event::pallet_balances(
+						pallet_balances::RawEvent::Transfer(
 							alice().into(),
 							bob().into(),
 							15 * DOLLARS,
@@ -579,7 +578,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
-					event: Event::system(system::Event::ExtrinsicSuccess(
+					event: Event::system(frame_system::Event::ExtrinsicSuccess(
 						DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
 					)),
 					topics: vec![],
@@ -729,9 +728,9 @@ mod tests {
 	#[test]
 	fn deploying_wasm_contract_should_work() {
 		let transfer_code = wabt::wat2wasm(CODE_TRANSFER).unwrap();
-		let transfer_ch = <Runtime as system::Trait>::Hashing::hash(&transfer_code);
+		let transfer_ch = <Runtime as frame_system::Trait>::Hashing::hash(&transfer_code);
 
-		let addr = <Runtime as contracts::Trait>::DetermineContractAddress::contract_address_for(
+		let addr = <Runtime as pallet_contracts::Trait>::DetermineContractAddress::contract_address_for(
 			&transfer_ch,
 			&[],
 			&charlie(),
@@ -744,25 +743,25 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42 * 1000)),
+					function: Call::Timestamp(pallet_timestamp::Call::set(42 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(0, 0))),
 					function: Call::Contracts(
-						contracts::Call::put_code::<Runtime>(10_000, transfer_code)
+						pallet_contracts::Call::put_code::<Runtime>(10_000, transfer_code)
 					),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(1, 0))),
 					function: Call::Contracts(
-						contracts::Call::instantiate::<Runtime>(1 * DOLLARS, 10_000, transfer_ch, Vec::new())
+						pallet_contracts::Call::instantiate::<Runtime>(1 * DOLLARS, 10_000, transfer_ch, Vec::new())
 					),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(2, 0))),
 					function: Call::Contracts(
-						contracts::Call::call::<Runtime>(
-							indices::address::Address::Id(addr.clone()),
+						pallet_contracts::Call::call::<Runtime>(
+							pallet_indices::address::Address::Id(addr.clone()),
 							10,
 							10_000,
 							vec![0x00, 0x01, 0x02, 0x03]
@@ -785,7 +784,7 @@ mod tests {
 		t.execute_with(|| {
 			// Verify that the contract constructor worked well and code of TRANSFER contract is actually deployed.
 			assert_eq!(
-				&contracts::ContractInfoOf::<Runtime>::get(addr)
+				&pallet_contracts::ContractInfoOf::<Runtime>::get(addr)
 					.and_then(|c| c.get_alive())
 					.unwrap()
 					.code_hash,
@@ -842,14 +841,14 @@ mod tests {
 	fn panic_execution_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, Storage {
 			top: map![
-				<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
+				<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
 					0_u128.encode()
 				},
-				<balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
+				<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 					0_u128.encode()
 				},
-				<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
-				<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
+				<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
+				<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 			],
 			children: map![],
 		});
@@ -877,14 +876,14 @@ mod tests {
 	fn successful_execution_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, Storage {
 			top: map![
-				<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
+				<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
 					(111 * DOLLARS).encode()
 				},
-				<balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
+				<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 					(111 * DOLLARS).encode()
 				},
-				<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
-				<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
+				<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
+				<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 			],
 			children: map![],
 		});
@@ -952,7 +951,9 @@ mod tests {
 
 	#[test]
 	fn should_import_block_with_test_client() {
-		use node_testing::client::{ClientExt, TestClientBuilderExt, TestClientBuilder, consensus::BlockOrigin};
+		use node_testing::client::{
+			ClientExt, TestClientBuilderExt, TestClientBuilder, sp_consensus::BlockOrigin
+		};
 
 		let client = TestClientBuilder::new().build();
 		let block1 = changes_trie_block();
@@ -984,11 +985,11 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(timestamp::Call::set(42 * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set(42 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(0, 0))),
-					function: Call::System(system::Call::fill_block()),
+					function: Call::System(frame_system::Call::fill_block()),
 				}
 			]
 		);
@@ -1001,11 +1002,11 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(timestamp::Call::set(52 * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set(52 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(1, 0))),
-					function: Call::System(system::Call::remark(vec![0; 1])),
+					function: Call::System(frame_system::Call::remark(vec![0; 1])),
 				}
 			]
 		);
@@ -1057,17 +1058,17 @@ mod tests {
 		// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, Storage {
 			top: map![
-				<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
+				<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
 					(100 * DOLLARS).encode()
 				},
-				<balances::FreeBalance<Runtime>>::hashed_key_for(bob()) => {
+				<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(bob()) => {
 					(10 * DOLLARS).encode()
 				},
-				<balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
+				<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 					(110 * DOLLARS).encode()
 				},
-				<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
-				<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
+				<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
+				<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 			],
 			children: map![],
 		});
@@ -1147,12 +1148,12 @@ mod tests {
 			let num_transfers = block_number * factor;
 			let mut xts = (0..num_transfers).map(|i| CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(nonce + i as Index, 0))),
-				function: Call::Balances(balances::Call::transfer(bob().into(), 0)),
+				function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 0)),
 			}).collect::<Vec<CheckedExtrinsic>>();
 
 			xts.insert(0, CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(timestamp::Call::set(time * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set(time * 1000)),
 			});
 
 			// NOTE: this is super slow. Can probably be improved.
@@ -1219,11 +1220,11 @@ mod tests {
 				vec![
 					CheckedExtrinsic {
 						signed: None,
-						function: Call::Timestamp(timestamp::Call::set(time * 1000)),
+						function: Call::Timestamp(pallet_timestamp::Call::set(time * 1000)),
 					},
 					CheckedExtrinsic {
 						signed: Some((charlie(), signed_extra(nonce, 0))),
-						function: Call::System(system::Call::remark(vec![0u8; (block_number * factor) as usize])),
+						function: Call::System(frame_system::Call::remark(vec![0u8; (block_number * factor) as usize])),
 					},
 				]
 			);

@@ -24,7 +24,7 @@ use crate::gas::GasMeter;
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use sandbox;
+use sp_sandbox;
 
 #[macro_use]
 mod env_def;
@@ -114,7 +114,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 		gas_meter: &mut GasMeter<E::T>,
 	) -> ExecResult {
 		let memory =
-			sandbox::Memory::new(exec.prefab_module.initial, Some(exec.prefab_module.maximum))
+			sp_sandbox::Memory::new(exec.prefab_module.initial, Some(exec.prefab_module.maximum))
 				.unwrap_or_else(|_| {
 				// unlike `.expect`, explicit panic preserves the source location.
 				// Needed as we can't use `RUST_BACKTRACE` in here.
@@ -125,7 +125,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 					)
 				});
 
-		let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
+		let mut imports = sp_sandbox::EnvironmentDefinitionBuilder::new();
 		imports.add_memory("env", "memory", memory.clone());
 		runtime::Env::impls(&mut |name, func_ptr| {
 			imports.add_host_func("env", name, func_ptr);
@@ -141,7 +141,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 
 		// Instantiate the instance from the instrumented module code and invoke the contract
 		// entrypoint.
-		let result = sandbox::Instance::new(&exec.prefab_module.code, &imports, &mut runtime)
+		let result = sp_sandbox::Instance::new(&exec.prefab_module.code, &imports, &mut runtime)
 			.and_then(|mut instance| instance.invoke(exec.entrypoint_name, &[], &mut runtime));
 		to_execution_result(runtime, result)
 	}
@@ -152,7 +152,7 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 	use std::cell::RefCell;
-	use primitives::H256;
+	use sp_core::H256;
 	use crate::exec::{Ext, StorageKey, ExecError, ExecReturnValue, STATUS_SUCCESS};
 	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
@@ -1111,7 +1111,7 @@ mod tests {
 		assert_eq!(
 			&mock_ext.dispatches,
 			&[DispatchEntry(
-				Call::Balances(balances::Call::set_balance(42, 1337, 0)),
+				Call::Balances(pallet_balances::Call::set_balance(42, 1337, 0)),
 			)]
 		);
 	}

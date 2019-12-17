@@ -35,35 +35,35 @@ use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
-use client::Client;
+use sc_client::Client;
 use exit_future::Signal;
 use futures::prelude::*;
 use futures03::{
 	future::{ready, FutureExt as _, TryFutureExt as _},
 	stream::{StreamExt as _, TryStreamExt as _},
 };
-use network::{
+use sc_network::{
 	NetworkService, NetworkState, specialization::NetworkSpecialization,
 	Event, DhtEvent, PeerId, ReportHandle,
 };
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
-use primitives::{Blake2Hasher, H256};
+use sp_core::{Blake2Hasher, H256};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
 
 pub use self::error::Error;
 pub use self::builder::{ServiceBuilder, ServiceBuilderCommand};
 pub use config::{Configuration, Roles, PruningMode};
-pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
+pub use sc_chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
 pub use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, error::IntoPoolError};
-pub use txpool::txpool::Options as TransactionPoolOptions;
-pub use client::FinalityNotifications;
-pub use rpc::Metadata as RpcMetadata;
+pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
+pub use sc_client::FinalityNotifications;
+pub use sc_rpc::Metadata as RpcMetadata;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
-pub use network::{FinalityProofProvider, OnDemand, config::BoxFinalityProofRequestBuilder};
+pub use sc_network::{FinalityProofProvider, OnDemand, config::BoxFinalityProofRequestBuilder};
 #[doc(hidden)]
 pub use futures::future::Executor;
 
@@ -96,12 +96,12 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	/// If spawning a background task is not possible, we instead push the task into this `Vec`.
 	/// The elements must then be polled manually.
 	to_poll: Vec<Box<dyn Future<Item = (), Error = ()> + Send>>,
-	rpc_handlers: rpc_servers::RpcHandler<rpc::Metadata>,
+	rpc_handlers: sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
-	_telemetry: Option<tel::Telemetry>,
+	_telemetry: Option<sc_telemetry::Telemetry>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
 	_offchain_workers: Option<Arc<TOc>>,
-	keystore: keystore::KeyStorePtr,
+	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
 }
 
@@ -145,13 +145,13 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	/// Type of block of this chain.
 	type Block: BlockT<Hash = H256>;
 	/// Backend storage for the client.
-	type Backend: 'static + client_api::backend::Backend<Self::Block, Blake2Hasher>;
+	type Backend: 'static + sc_client_api::backend::Backend<Self::Block, Blake2Hasher>;
 	/// How to execute calls towards the runtime.
-	type CallExecutor: 'static + client::CallExecutor<Self::Block, Blake2Hasher> + Send + Sync + Clone;
+	type CallExecutor: 'static + sc_client::CallExecutor<Self::Block, Blake2Hasher> + Send + Sync + Clone;
 	/// API that the runtime provides.
 	type RuntimeApi: Send + Sync;
 	/// Chain selection algorithm.
-	type SelectChain: consensus_common::SelectChain<Self::Block>;
+	type SelectChain: sp_consensus::SelectChain<Self::Block>;
 	/// Transaction pool.
 	type TransactionPool: TransactionPool<Block = Self::Block>
 		+ TransactionPoolMaintainer<Block = Self::Block>;
@@ -162,7 +162,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()>;
 
 	/// return a shared instance of Telemetry (if enabled)
-	fn telemetry(&self) -> Option<tel::Telemetry>;
+	fn telemetry(&self) -> Option<sc_telemetry::Telemetry>;
 
 	/// Spawns a task in the background that runs the future passed as parameter.
 	fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static);
@@ -176,7 +176,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn spawn_task_handle(&self) -> SpawnTaskHandle;
 
 	/// Returns the keystore that stores keys.
-	fn keystore(&self) -> keystore::KeyStorePtr;
+	fn keystore(&self) -> sc_keystore::KeyStorePtr;
 
 	/// Starts an RPC query.
 	///
@@ -190,7 +190,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Item = Option<String>, Error = ()> + Send>;
 
 	/// Get shared client instance.
-	fn client(&self) -> Arc<client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>>;
+	fn client(&self) -> Arc<sc_client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>>;
 
 	/// Get clone of select chain.
 	fn select_chain(&self) -> Option<Self::SelectChain>;
@@ -213,10 +213,10 @@ impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPool, TOc> AbstractService 
 		NetworkService<TBl, TNetSpec, H256>, TExPool, TOc>
 where
 	TBl: BlockT<Hash = H256>,
-	TBackend: 'static + client_api::backend::Backend<TBl, Blake2Hasher>,
-	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
+	TBackend: 'static + sc_client_api::backend::Backend<TBl, Blake2Hasher>,
+	TExec: 'static + sc_client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
-	TSc: consensus_common::SelectChain<TBl> + 'static + Clone + Send,
+	TSc: sp_consensus::SelectChain<TBl> + 'static + Clone + Send,
 	TExPool: 'static + TransactionPool<Block = TBl>
 		+ TransactionPoolMaintainer<Block = TBl>,
 	TOc: 'static + Send + Sync,
@@ -236,11 +236,11 @@ where
 		stream
 	}
 
-	fn telemetry(&self) -> Option<tel::Telemetry> {
+	fn telemetry(&self) -> Option<sc_telemetry::Telemetry> {
 		self._telemetry.as_ref().map(|t| t.clone())
 	}
 
-	fn keystore(&self) -> keystore::KeyStorePtr {
+	fn keystore(&self) -> sc_keystore::KeyStorePtr {
 		self.keystore.clone()
 	}
 
@@ -276,7 +276,7 @@ where
 		Box::new(self.rpc_handlers.handle_request(request, mem.metadata.clone()))
 	}
 
-	fn client(&self) -> Arc<client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>> {
+	fn client(&self) -> Arc<sc_client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>> {
 		self.client.clone()
 	}
 
@@ -362,15 +362,15 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Executor<Box<dyn Future<Item
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 fn build_network_future<
 	B: BlockT,
-	C: client::BlockchainEvents<B>,
-	S: network::specialization::NetworkSpecialization<B>,
-	H: network::ExHashT
+	C: sc_client::BlockchainEvents<B>,
+	S: sc_network::specialization::NetworkSpecialization<B>,
+	H: sc_network::ExHashT
 > (
 	roles: Roles,
-	mut network: network::NetworkWorker<B, S, H>,
+	mut network: sc_network::NetworkWorker<B, S, H>,
 	client: Arc<C>,
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
-	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<rpc::system::Request<B>>,
+	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
 ) -> impl Future<Item = (), Error = ()> {
@@ -406,16 +406,16 @@ fn build_network_future<
 		// Poll the RPC requests and answer them.
 		while let Ok(Async::Ready(Some(request))) = rpc_rx.poll() {
 			match request {
-				rpc::system::Request::Health(sender) => {
-					let _ = sender.send(rpc::system::Health {
+				sc_rpc::system::Request::Health(sender) => {
+					let _ = sender.send(sc_rpc::system::Health {
 						peers: network.peers_debug_info().len(),
 						is_syncing: network.service().is_major_syncing(),
 						should_have_peers,
 					});
 				},
-				rpc::system::Request::Peers(sender) => {
+				sc_rpc::system::Request::Peers(sender) => {
 					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
-						rpc::system::PeerInfo {
+						sc_rpc::system::PeerInfo {
 							peer_id: peer_id.to_base58(),
 							roles: format!("{:?}", p.roles),
 							protocol_version: p.protocol_version,
@@ -424,13 +424,13 @@ fn build_network_future<
 						}
 					).collect());
 				}
-				rpc::system::Request::NetworkState(sender) => {
+				sc_rpc::system::Request::NetworkState(sender) => {
 					if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
 						let _ = sender.send(network_state);
 					}
 				}
-				rpc::system::Request::NodeRoles(sender) => {
-					use rpc::system::NodeRole;
+				sc_rpc::system::Request::NodeRoles(sender) => {
+					use sc_rpc::system::NodeRole;
 
 					let node_roles = (0 .. 8)
 						.filter(|&bit_number| (roles.bits() >> bit_number) & 1 == 1)
@@ -506,7 +506,7 @@ fn build_network_future<
 #[derive(Clone)]
 pub struct NetworkStatus<B: BlockT> {
 	/// Current global sync state.
-	pub sync_state: network::SyncState,
+	pub sync_state: sc_network::SyncState,
 	/// Target sync block number.
 	pub best_seen_block: Option<NumberFor<B>>,
 	/// Number of peers participating in syncing.
@@ -534,7 +534,7 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>(
+fn start_rpc_servers<C, G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
 	config: &Configuration<C, G, E>,
 	mut gen_handler: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
@@ -559,11 +559,11 @@ fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadat
 	Ok(Box::new((
 		maybe_start_server(
 			config.rpc_http,
-			|address| rpc_servers::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
+			|address| sc_rpc_server::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
 		)?,
 		maybe_start_server(
 			config.rpc_ws,
-			|address| rpc_servers::start_ws(
+			|address| sc_rpc_server::start_ws(
 				address,
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
@@ -575,7 +575,7 @@ fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadat
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>(
+fn start_rpc_servers<C, G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
 	_: &Configuration<C, G, E>,
 	_: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
@@ -586,7 +586,7 @@ fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadat
 /// the HTTP or WebSockets server).
 #[derive(Clone)]
 pub struct RpcSession {
-	metadata: rpc::Metadata,
+	metadata: sc_rpc::Metadata,
 }
 
 impl RpcSession {
@@ -632,10 +632,10 @@ where
 		.collect()
 }
 
-impl<B, H, C, Pool, E> network::TransactionPool<H, B> for
+impl<B, H, C, Pool, E> sc_network::TransactionPool<H, B> for
 	TransactionPoolAdapter<C, Pool>
 where
-	C: network::ClientHandle<B> + Send + Sync,
+	C: sc_network::ClientHandle<B> + Send + Sync,
 	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
@@ -653,8 +653,8 @@ where
 		&self,
 		report_handle: ReportHandle,
 		who: PeerId,
-		reputation_change_good: network::ReputationChange,
-		reputation_change_bad: network::ReputationChange,
+		reputation_change_good: sc_network::ReputationChange,
+		reputation_change_bad: sc_network::ReputationChange,
 		transaction: B::Extrinsic
 	) {
 		if !self.imports_external_transactions {
@@ -701,10 +701,10 @@ where
 mod tests {
 	use super::*;
 	use futures03::executor::block_on;
-	use consensus_common::SelectChain;
+	use sp_consensus::SelectChain;
 	use sp_runtime::traits::BlindCheckable;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
-	use txpool::{BasicPool, FullChainApi};
+	use sc_transaction_pool::{BasicPool, FullChainApi};
 
 	#[test]
 	fn should_not_propagate_transactions_that_are_marked_as_such() {

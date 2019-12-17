@@ -24,9 +24,9 @@ use lru::LruCache;
 use libp2p::PeerId;
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
 use sp_runtime::ConsensusEngineId;
-pub use network::message::generic::{Message, ConsensusMessage};
-use network::Context;
-use network::config::Roles;
+pub use sc_network::message::generic::{Message, ConsensusMessage};
+use sc_network::Context;
+use sc_network::config::Roles;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
@@ -34,7 +34,7 @@ const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
 const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_secs(30);
 
 mod rep {
-	use network::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 	/// Reputation change when a peer sends us a gossip message that we didn't know about.
 	pub const GOSSIP_SUCCESS: Rep = Rep::new(1 << 4, "Successfull gossip");
 	/// Reputation change when a peer sends us a gossip message that we already knew about.

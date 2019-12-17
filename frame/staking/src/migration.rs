@@ -25,7 +25,7 @@ pub const CURRENT_VERSION: VersionNumber = 1;
 #[cfg(any(test, feature = "migrate"))]
 mod inner {
 	use crate::{Store, Module, Trait};
-	use support::{StorageLinkedMap, StorageValue};
+	use frame_support::{StorageLinkedMap, StorageValue};
 	use sp_std::vec::Vec;
 	use super::{CURRENT_VERSION, VersionNumber};
 
@@ -51,21 +51,21 @@ mod inner {
 		);
 
 		if let Err(e) = res {
-			support::print("Encountered error in migration of Staking::Nominators map.");
+			frame_support::print("Encountered error in migration of Staking::Nominators map.");
 			if e.is_none() {
-				support::print("Staking::Nominators map reinitialized");
+				frame_support::print("Staking::Nominators map reinitialized");
 			}
 		}
 
-		support::print("Finished migrating Staking storage to v1.");
+		frame_support::print("Finished migrating Staking storage to v1.");
 	}
 
 	pub(super) fn perform_migrations<T: Trait>() {
 		<Module<T> as Store>::StorageVersion::mutate(|version| {
 			if *version < MIN_SUPPORTED_VERSION {
-				support::print("Cannot migrate staking storage because version is less than\
+				frame_support::print("Cannot migrate staking storage because version is less than\
 					minimum.");
-				support::print(*version);
+				frame_support::print(*version);
 				return
 			}
 

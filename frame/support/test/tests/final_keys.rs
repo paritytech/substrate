@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use support::storage::unhashed;
+use frame_support::storage::unhashed;
 use codec::Encode;
-use support::{StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue, StoragePrefixedMap};
+use frame_support::{StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue, StoragePrefixedMap};
 use sp_io::{TestExternalities, hashing::{twox_128, blake2_128, blake2_256}};
 
 mod no_instance {
@@ -27,11 +27,11 @@ mod no_instance {
 		type BlockNumber: Encode + Decode + EncodeLike + Default + Clone;
 	}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
-	support::decl_storage!{
+	frame_support::decl_storage!{
 		trait Store for Module<T: Trait> as FinalKeysNone {
 			pub Value config(value): u32;
 
@@ -54,12 +54,12 @@ mod no_instance {
 mod instance {
 	pub trait Trait<I = DefaultInstance>: super::no_instance::Trait {}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: Instantiable = DefaultInstance>
 			for enum Call where origin: T::Origin {}
 	}
 
-	support::decl_storage!{
+	frame_support::decl_storage!{
 		trait Store for Module<T: Trait<I>, I: Instantiable = DefaultInstance>
 			as FinalKeysSome
 		{

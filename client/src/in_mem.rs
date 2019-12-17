@@ -19,20 +19,20 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use parking_lot::RwLock;
-use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
-use primitives::offchain::storage::{
+use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
+use sp_core::offchain::storage::{
 	InMemOffchainStorage as OffchainStorage
 };
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor};
 use sp_runtime::{Justification, Storage};
-use state_machine::backend::{Backend as StateBackend, InMemory};
-use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId, ChangesTrieTransaction};
+use sp_state_machine::backend::{Backend as StateBackend, InMemory};
+use sp_state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId, ChangesTrieTransaction};
 use hash_db::{Hasher, Prefix};
-use trie::MemoryDB;
+use sp_trie::MemoryDB;
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata};
 
-use client_api::{
+use sc_client_api::{
 	backend::{self, NewBlockState, StorageCollection, ChildStorageCollection},
 	blockchain::{
 		self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
@@ -398,7 +398,7 @@ impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
 	}
 }
 
-impl<Block: BlockT> client_api::light::Storage<Block> for Blockchain<Block>
+impl<Block: BlockT> sc_client_api::light::Storage<Block> for Blockchain<Block>
 	where
 		Block::Hash: From<[u8; 32]>,
 {
@@ -752,7 +752,7 @@ impl<Block: BlockT, H: Hasher> backend::PrunableStateChangesTrieStorage<Block, H
 	}
 }
 
-impl<Block, H> state_machine::ChangesTrieRootsStorage<H, NumberFor<Block>> for ChangesTrieStorage<Block, H>
+impl<Block, H> sp_state_machine::ChangesTrieRootsStorage<H, NumberFor<Block>> for ChangesTrieStorage<Block, H>
 	where
 		Block: BlockT,
 		H: Hasher,
@@ -760,7 +760,7 @@ impl<Block, H> state_machine::ChangesTrieRootsStorage<H, NumberFor<Block>> for C
 	fn build_anchor(
 		&self,
 		_hash: H::Out,
-	) -> Result<state_machine::ChangesTrieAnchorBlockId<H::Out, NumberFor<Block>>, String> {
+	) -> Result<sp_state_machine::ChangesTrieAnchorBlockId<H::Out, NumberFor<Block>>, String> {
 		Err("Dummy implementation".into())
 	}
 
@@ -773,12 +773,12 @@ impl<Block, H> state_machine::ChangesTrieRootsStorage<H, NumberFor<Block>> for C
 	}
 }
 
-impl<Block, H> state_machine::ChangesTrieStorage<H, NumberFor<Block>> for ChangesTrieStorage<Block, H>
+impl<Block, H> sp_state_machine::ChangesTrieStorage<H, NumberFor<Block>> for ChangesTrieStorage<Block, H>
 	where
 		Block: BlockT,
 		H: Hasher,
 {
-	fn as_roots_storage(&self) -> &dyn state_machine::ChangesTrieRootsStorage<H, NumberFor<Block>> {
+	fn as_roots_storage(&self) -> &dyn sp_state_machine::ChangesTrieRootsStorage<H, NumberFor<Block>> {
 		self
 	}
 
@@ -790,7 +790,7 @@ impl<Block, H> state_machine::ChangesTrieStorage<H, NumberFor<Block>> for Change
 		false
 	}
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<state_machine::DBValue>, String> {
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<sp_state_machine::DBValue>, String> {
 		self.0.get(key, prefix)
 	}
 }
@@ -810,25 +810,25 @@ pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {
 
 #[cfg(test)]
 mod tests {
-	use primitives::offchain::{OffchainStorage, storage::InMemOffchainStorage};
+	use sp_core::offchain::{OffchainStorage, storage::InMemOffchainStorage};
 	use std::sync::Arc;
-	use test_client;
-	use primitives::Blake2Hasher;
+	use substrate_test_runtime_client;
+	use sp_core::Blake2Hasher;
 
-	type TestBackend = test_client::client::in_mem::Backend<test_client::runtime::Block, Blake2Hasher>;
+	type TestBackend = substrate_test_runtime_client::sc_client::in_mem::Backend<substrate_test_runtime_client::runtime::Block, Blake2Hasher>;
 
 	#[test]
 	fn test_leaves_with_complex_block_tree() {
 		let backend = Arc::new(TestBackend::new());
 
-		test_client::trait_tests::test_leaves_for_backend(backend);
+		substrate_test_runtime_client::trait_tests::test_leaves_for_backend(backend);
 	}
 
 	#[test]
 	fn test_blockchain_query_by_number_gets_canonical() {
 		let backend = Arc::new(TestBackend::new());
 
-		test_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
+		substrate_test_runtime_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
 	}
 
 	#[test]

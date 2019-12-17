@@ -79,7 +79,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 		&scrate,
 		DeclOuterKind::Origin,
 	)?;
-	let all_modules = decl_all_modules(&name, all_but_system_modules);
+	let all_modules = decl_all_modules(&name, &system_module, all_but_system_modules);
 
 	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
 	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate);
@@ -308,6 +308,7 @@ fn decl_outer_event_or_origin<'a>(
 
 fn decl_all_modules<'a>(
 	runtime: &'a Ident,
+	system_name: &'a Ident,
 	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
 ) -> TokenStream2 {
 	let mut types = TokenStream2::new();
@@ -335,7 +336,7 @@ fn decl_all_modules<'a>(
 	);
 
 	quote!(
-		pub type System = system::Module<#runtime>;
+		pub type System = #system_name::Module<#runtime>;
 		#types
 		type AllModules = ( #all_modules );
 	)

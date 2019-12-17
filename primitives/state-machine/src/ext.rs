@@ -24,12 +24,12 @@ use crate::{
 };
 
 use hash_db::Hasher;
-use primitives::{
+use sp_core::{
 	storage::{ChildStorageKey, well_known_keys::is_child_storage_key, ChildInfo},
 	traits::Externalities, hexdisplay::HexDisplay, hash::H256,
 };
-use trie::{trie_types::Layout, MemoryDB, default_child_trie_root};
-use externalities::Extensions;
+use sp_trie::{trie_types::Layout, MemoryDB, default_child_trie_root};
+use sp_externalities::Extensions;
 use codec::{Decode, Encode};
 
 use std::{error, fmt, any::{Any, TypeId}};
@@ -178,7 +178,7 @@ where
 	N: crate::changes_trie::BlockNumber,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
 		trace!(target: "state-trace", "{:04x}: Get {}={:?}",
@@ -190,7 +190,7 @@ where
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
 			.storage(key)
 			.map(|x| x.map(|x| H::hash(x)))
@@ -205,7 +205,7 @@ where
 	}
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
 
 		trace!(target: "state-trace", "{:04x}: GetOriginal {}={:?}",
@@ -217,7 +217,7 @@ where
 	}
 
 	fn original_storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
 
 		trace!(target: "state-trace", "{:04x}: GetOriginalHash {}={:?}",
@@ -234,7 +234,7 @@ where
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
 			.child_storage(storage_key.as_ref(), key)
 			.map(|x| x.map(|x| x.to_vec()))
@@ -259,7 +259,7 @@ where
 		_child_info: ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
 			.child_storage(storage_key.as_ref(), key)
 			.map(|x| x.map(|x| H::hash(x)))
@@ -283,7 +283,7 @@ where
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.backend
 			.child_storage(storage_key.as_ref(), child_info, key)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
@@ -303,7 +303,7 @@ where
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.backend
 			.child_storage_hash(storage_key.as_ref(), child_info, key)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
@@ -318,7 +318,7 @@ where
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> bool {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = match self.overlay.storage(key) {
 			Some(x) => x.is_some(),
 			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
@@ -339,7 +339,7 @@ where
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> bool {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 
 		let result = match self.overlay.child_storage(storage_key.as_ref(), key) {
 			Some(x) => x.is_some(),
@@ -407,7 +407,7 @@ where
 			HexDisplay::from(&key),
 			value.as_ref().map(HexDisplay::from)
 		);
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		if is_child_storage_key(&key) {
 			warn!(target: "trie", "Refuse to directly set child storage key");
 			return;
@@ -430,7 +430,7 @@ where
 			HexDisplay::from(&key),
 			value.as_ref().map(HexDisplay::from)
 		);
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
 		self.overlay.set_child_storage(storage_key.into_owned(), child_info, key, value);
@@ -445,7 +445,7 @@ where
 			self.id,
 			HexDisplay::from(&storage_key.as_ref()),
 		);
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
 		self.overlay.clear_child_storage(storage_key.as_ref(), child_info);
@@ -459,7 +459,7 @@ where
 			self.id,
 			HexDisplay::from(&prefix),
 		);
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		if is_child_storage_key(prefix) {
 			warn!(target: "trie", "Refuse to directly clear prefix that is part of child storage key");
 			return;
@@ -483,7 +483,7 @@ where
 			HexDisplay::from(&storage_key.as_ref()),
 			HexDisplay::from(&prefix),
 		);
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
 		self.overlay.clear_child_prefix(storage_key.as_ref(), child_info, prefix);
@@ -497,7 +497,7 @@ where
 	}
 
 	fn storage_root(&mut self) -> Vec<u8> {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		if let Some((_, ref root)) = self.storage_transaction {
 			trace!(target: "state-trace", "{:04x}: Root (cached) {}",
 				self.id,
@@ -524,7 +524,7 @@ where
 		&mut self,
 		storage_key: ChildStorageKey,
 	) -> Vec<u8> {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		if self.storage_transaction.is_some() {
 			let root = self
 				.storage(storage_key.as_ref())
@@ -588,7 +588,7 @@ where
 	}
 
 	fn storage_changes_root(&mut self, parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
 
 		self.changes_trie_transaction = build_changes_trie::<_, T, H, N>(
 			self.backend,
@@ -615,23 +615,26 @@ where
 	}
 
 	fn storage_start_transaction(&mut self) {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
+
 		self.overlay.start_transaction()
 	}
 
 	fn storage_discard_transaction(&mut self) {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
+
 		self.overlay.discard_transaction()
 	}
 
 	fn storage_commit_transaction(&mut self) {
-		let _guard = panic_handler::AbortGuard::force_abort();
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
+
 		self.overlay.commit_transaction()
 	}
 
 }
 
-impl<'a, H, B, T, N> externalities::ExtensionStore for Ext<'a, H, N, B, T>
+impl<'a, H, B, T, N> sp_externalities::ExtensionStore for Ext<'a, H, N, B, T>
 where
 	H: Hasher<Out=H256>,
 	B: 'a + Backend<H>,
@@ -648,14 +651,14 @@ mod tests {
 	use super::*;
 	use hex_literal::hex;
 	use codec::Encode;
-	use primitives::{Blake2Hasher, storage::well_known_keys::EXTRINSIC_INDEX, map};
+	use sp_core::{Blake2Hasher, storage::well_known_keys::EXTRINSIC_INDEX, map};
 	use crate::{
 		changes_trie::{
 			Configuration as ChangesTrieConfiguration,
 			InMemoryStorage as InMemoryChangesTrieStorage,
 		}, backend::InMemory, overlayed_changes::{OverlayedValue, OverlayedChangeSet},
 	};
-	use primitives::storage::{Storage, StorageChild};
+	use sp_core::storage::{Storage, StorageChild};
 	use sp_historical_data::synch_linear_transaction::{History, HistoricalValue, State};
 
 	type TestBackend = InMemory<Blake2Hasher>;

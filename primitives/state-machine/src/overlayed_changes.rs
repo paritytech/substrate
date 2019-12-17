@@ -21,7 +21,7 @@ use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeMap, BTreeSet};
 use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
-use primitives::storage::{well_known_keys::EXTRINSIC_INDEX, OwnedChildInfo, ChildInfo};
+use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, OwnedChildInfo, ChildInfo};
 use sp_historical_data::synch_linear_transaction::{
 	History, HistoricalValue, States,
 };
@@ -646,7 +646,7 @@ impl From<Option<Vec<u8>>> for OverlayedValue {
 #[cfg(test)]
 mod tests {
 	use hex_literal::hex;
-	use primitives::{
+	use sp_core::{
 		Blake2Hasher, traits::Externalities, storage::well_known_keys::EXTRINSIC_INDEX,
 	};
 	use crate::backend::InMemory;

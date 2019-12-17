@@ -23,11 +23,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use support::{decl_module, decl_storage};
-use authority_discovery_primitives::AuthorityId;
+use frame_support::{decl_module, decl_storage};
+use sp_authority_discovery::AuthorityId;
 
 /// The module's config trait.
-pub trait Trait: system::Trait + session::Trait {}
+pub trait Trait: frame_system::Trait + pallet_session::Trait {}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as AuthorityDiscovery {
@@ -63,7 +63,7 @@ impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(authorities: I)
@@ -92,15 +92,15 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use authority_discovery_primitives::{AuthorityPair};
-	use app_crypto::Pair;
-	use primitives::{crypto::key_types, H256};
+	use sp_authority_discovery::{AuthorityPair};
+	use sp_application_crypto::Pair;
+	use sp_core::{crypto::key_types, H256};
 	use sp_io::TestExternalities;
 	use sp_runtime::{
 		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
 		Perbill, KeyTypeId,
 	};
-	use support::{impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 
 	type AuthorityDiscovery = Module<Test>;
 	type SessionIndex = u32;
@@ -110,7 +110,7 @@ mod tests {
 	impl Trait for Test {}
 
 	pub struct TestOnSessionEnding;
-	impl session::OnSessionEnding<AuthorityId> for TestOnSessionEnding {
+	impl pallet_session::OnSessionEnding<AuthorityId> for TestOnSessionEnding {
 		fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<AuthorityId>> {
 			None
 		}
@@ -120,10 +120,10 @@ mod tests {
 		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 	}
 
-	impl session::Trait for Test {
+	impl pallet_session::Trait for Test {
 		type OnSessionEnding = TestOnSessionEnding;
 		type Keys = UintAuthorityId;
-		type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
+		type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 		type SessionHandler = TestSessionHandler;
 		type Event = ();
 		type ValidatorId = AuthorityId;
@@ -132,7 +132,7 @@ mod tests {
 		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	}
 
-	impl session::historical::Trait for Test {
+	impl pallet_session::historical::Trait for Test {
 		type FullIdentification = ();
 		type FullIdentificationOf = ();
 	}
@@ -149,7 +149,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = BlockNumber;
@@ -168,11 +168,11 @@ mod tests {
 	}
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	pub struct TestSessionHandler;
-	impl session::SessionHandler<AuthorityId> for TestSessionHandler {
+	impl pallet_session::SessionHandler<AuthorityId> for TestSessionHandler {
 		const KEY_TYPE_IDS: &'static [KeyTypeId] = &[key_types::DUMMY];
 
 		fn on_new_session<Ks: OpaqueKeys>(
@@ -190,7 +190,7 @@ mod tests {
 	#[test]
 	fn authorities_returns_current_authority_set() {
 		// The whole authority discovery module ignores account ids, but we still need it for
-		// `session::OneSessionHandler::on_new_session`, thus its safe to use the same value everywhere.
+		// `pallet_session::OneSessionHandler::on_new_session`, thus its safe to use the same value everywhere.
 		let account_id = AuthorityPair::from_seed_slice(vec![10; 32].as_ref()).unwrap().public();
 
 		let first_authorities: Vec<AuthorityId> = vec![0, 1].into_iter()
@@ -203,14 +203,14 @@ mod tests {
 			.map(AuthorityId::from)
 			.collect();
 
-		// Needed for `session::OneSessionHandler::on_new_session`.
+		// Needed for `pallet_session::OneSessionHandler::on_new_session`.
 		let second_authorities_and_account_ids: Vec<(&AuthorityId, AuthorityId)> = second_authorities.clone()
 			.into_iter()
 			.map(|id| (&account_id, id))
 			.collect();
 
 		// Build genesis.
-		let mut t = system::GenesisConfig::default()
+		let mut t = frame_system::GenesisConfig::default()
 			.build_storage::<Test>()
 			.unwrap();
 
@@ -224,7 +224,7 @@ mod tests {
 		let mut externalities = TestExternalities::new(t);
 
 		externalities.execute_with(|| {
-			use session::OneSessionHandler;
+			use pallet_session::OneSessionHandler;
 
 			AuthorityDiscovery::on_genesis_session(
 				first_authorities.iter().map(|id| (id, id.clone()))

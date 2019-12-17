@@ -322,9 +322,9 @@ fn prepare_digest_input<'a, H, Number>(
 #[cfg(test)]
 mod test {
 	use codec::Encode;
-	use primitives::Blake2Hasher;
-	use primitives::storage::well_known_keys::{EXTRINSIC_INDEX};
-	use primitives::storage::ChildInfo;
+	use sp_core::Blake2Hasher;
+	use sp_core::storage::well_known_keys::{EXTRINSIC_INDEX};
+	use sp_core::storage::ChildInfo;
 	use crate::backend::InMemory;
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};

@@ -21,18 +21,18 @@ use parking_lot::RwLock;
 use codec::{Decode, Encode, Codec};
 use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
-use trie::{
+use sp_trie::{
 	MemoryDB, PrefixedMemoryDB, default_child_trie_root,
 	read_trie_value_with, read_child_trie_value_with, record_all_keys
 };
-pub use trie::Recorder;
-pub use trie::trie_types::{Layout, TrieError};
+pub use sp_trie::Recorder;
+pub use sp_trie::trie_types::{Layout, TrieError};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
 use std::collections::{HashMap, HashSet};
 use crate::DBValue;
-use primitives::storage::ChildInfo;
+use sp_core::storage::ChildInfo;
 
 /// Patricia trie-based backend specialized in get value proofs.
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
@@ -394,7 +394,7 @@ mod tests {
 	use crate::backend::{InMemory};
 	use crate::trie_backend::tests::test_trie;
 	use super::*;
-	use primitives::{Blake2Hasher, storage::ChildStorageKey};
+	use sp_core::{Blake2Hasher, storage::ChildStorageKey};
 	use crate::proving_backend::create_proof_check_backend;
 
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
@@ -422,7 +422,7 @@ mod tests {
 
 	#[test]
 	fn proof_is_invalid_when_does_not_contains_root() {
-		use primitives::H256;
+		use sp_core::H256;
 		let result = create_proof_check_backend::<Blake2Hasher>(
 			H256::from_low_u64_be(1),
 			StorageProof::empty()

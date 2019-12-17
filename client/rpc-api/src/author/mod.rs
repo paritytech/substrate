@@ -21,8 +21,8 @@ pub mod hash;
 
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use primitives::Bytes;
-use txpool_api::TransactionStatus;
+use sp_core::Bytes;
+use sp_transaction_pool::TransactionStatus;
 use self::error::{FutureResult, Result};
 
 pub use self::gen_client::Client as AuthorClient;

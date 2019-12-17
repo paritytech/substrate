@@ -18,11 +18,12 @@
 
 
 use sp_runtime::{generic::BlockId, traits::ProvideRuntimeApi};
-use primitives::{testing::{KeyStore, SR25519}, crypto::Pair};
-use test_client::{
+use sp_core::{testing::{KeyStore, SR25519}, crypto::Pair};
+use substrate_test_runtime_client::{
 	TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
-	runtime::{TestAPI, app_crypto::sr25519::{AppPair, AppPublic}},
+	runtime::TestAPI,
 };
+use sp_application_crypto::sr25519::{AppPair, AppPublic};
 
 #[test]
 fn sr25519_works_in_runtime() {

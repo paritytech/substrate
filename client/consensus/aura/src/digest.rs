@@ -19,8 +19,8 @@
 //! This implements the digests for AuRa, to allow the private
 //! `CompatibleDigestItem` trait to appear in public interfaces.
 
-use primitives::Pair;
-use aura_primitives::AURA_ENGINE_ID;
+use sp_core::Pair;
+use sp_consensus_aura::AURA_ENGINE_ID;
 use sp_runtime::generic::{DigestItem, OpaqueDigestItemId};
 use codec::{Encode, Codec};
 use std::fmt::Debug;

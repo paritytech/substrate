@@ -22,13 +22,12 @@ use std::collections::HashSet;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
 use sp_runtime::testing::Header;
 use sp_runtime::Perbill;
-use primitives::H256;
-use support::{impl_outer_origin, parameter_types, weights::Weight};
-use {sp_io, system};
+use sp_core::H256;
+use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
 
 impl_outer_origin!{
-	pub enum Origin for Runtime {}
+	pub enum Origin for Runtime where system = frame_system {}
 }
 
 ref_thread_local! {
@@ -71,7 +70,7 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl system::Trait for Runtime {
+impl frame_system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -102,7 +101,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		for i in 1..5 { h.insert(i); }
 	}
 
-	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	GenesisConfig::<Runtime> {
 		ids: vec![1, 2, 3, 4]
 	}.assimilate_storage(&mut t).unwrap();
