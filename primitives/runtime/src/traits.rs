@@ -49,8 +49,8 @@ impl<'a> Lazy<[u8]> for &'a [u8] {
 	fn get(&mut self) -> &[u8] { &**self }
 }
 
-/// Some type that is able to be collapsed into an account ID. It is not possible to recreate the original value from
-/// the account ID.
+/// Some type that is able to be collapsed into an account ID. It is not possible to recreate the
+/// original value from the account ID.
 pub trait IdentifyAccount {
 	/// The account ID that this can be transformed into.
 	type AccountId;
@@ -358,7 +358,7 @@ pub trait OffchainWorker<BlockNumber> {
 	/// This function is being called after every block import (when fully synced).
 	///
 	/// Implement this and use any of the `Offchain` `sp_io` set of APIs
-	/// to perform offchain computations, calls and submit transactions
+	/// to perform off-chain computations, calls and submit transactions
 	/// with results to trigger any on-chain changes.
 	/// Any state alterations are lost and are not persisted.
 	fn offchain_worker(_n: BlockNumber) {}
@@ -498,9 +498,9 @@ pub trait RandomnessBeacon {
 	/// # Security
 	///
 	/// This MUST NOT be used for gambling, as it can be influenced by a
-	/// malicious validator in the short term.  It MAY be used in many
+	/// malicious validator in the short term. It MAY be used in many
 	/// cryptographic protocols, however, so long as one remembers that this
-	/// (like everything else on-chain) is public.  For example, it can be
+	/// (like everything else on-chain) is public. For example, it can be
 	/// used where a number is needed that cannot have been chosen by an
 	/// adversary, for purposes such as public-coin zero-knowledge proofs.
 	fn random() -> [u8; 32];
@@ -571,12 +571,12 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 	}
 }
 
-/// Something which fulfills the abstract idea of a Substrate block. It has types for an
-/// `Extrinsic` piece of information as well as a `Header`.
+/// Something which fulfills the abstract idea of a Substrate block. It has types for
+/// `Extrinsic` pieces of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
 pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
-	/// Type of extrinsics.
+	/// Type for extrinsics.
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	/// Header type.
 	type Header: Header<Hash=Self::Hash>;
@@ -596,7 +596,8 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 	fn hash(&self) -> Self::Hash {
 		<<Self::Header as Header>::Hashing as Hash>::hash_of(self.header())
 	}
-	/// Create an encoded block from the given `header` and `extrinsics` without requiring to create an instance.
+	/// Creates an encoded block from the given `header` and `extrinsics` without requiring the
+	/// creation of an instance.
 	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8>;
 }
 
@@ -703,7 +704,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	type Pre: Default;
 
 	/// An opaque set of information attached to the transaction. This could be constructed anywhere
-	/// down the line in a runtime. The current substrate runtime uses a struct with the same name
+	/// down the line in a runtime. The current Substrate runtime uses a struct with the same name
 	/// to represent the dispatch class and weight.
 	type DispatchInfo: Clone;
 
@@ -716,7 +717,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	/// This function can be called frequently by the transaction queue,
 	/// to obtain transaction validity against current state.
 	/// It should perform all checks that determine a valid transaction,
-	/// that can pay for it's execution and quickly eliminate ones
+	/// that can pay for its execution and quickly eliminate ones
 	/// that are stale or incorrect.
 	///
 	/// Make sure to perform the same checks in `pre_dispatch` function.
@@ -752,7 +753,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Validate an unsigned transaction for the transaction queue.
 	///
-	/// This function can be called frequently by the transaction queue,
+	/// This function can be called frequently by the transaction queue
 	/// to obtain transaction validity against current state.
 	/// It should perform all checks that determine a valid unsigned transaction,
 	/// and quickly eliminate ones that are stale or incorrect.
@@ -790,7 +791,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 /// An error that is returned by a dispatchable function of a module.
 pub trait ModuleDispatchError {
-	/// Convert this error to an `u8`.
+	/// Convert this error to a `u8`.
 	///
 	/// The `u8` corresponds to the index of the variant in the error enum.
 	fn as_u8(&self) -> u8;
@@ -875,10 +876,10 @@ impl SignedExtension for () {
 /// Also provides information on to whom this information is attributable and an index that allows
 /// each piece of attributable information to be disambiguated.
 pub trait Applyable: Sized + Send + Sync {
-	/// Id of the account that is responsible for this piece of information (sender).
+	/// ID of the account that is responsible for this piece of information (sender).
 	type AccountId: Member + MaybeDisplay;
 
-	/// Type by which we can dispatch. Restricts the UnsignedValidator type.
+	/// Type by which we can dispatch. Restricts the `UnsignedValidator` type.
 	type Call;
 
 	/// An opaque set of information attached to the transaction.
