@@ -21,16 +21,16 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::RwLock;
 
-use primitives::storage::{ChildInfo, OwnedChildInfo};
-use state_machine::{
-	Backend as StateBackend, TrieBackend, InMemoryBackend, ChangesTrieTransaction,
+use sp_core::storage::{ChildInfo, OwnedChildInfo};
+use sp_core::offchain::storage::InMemOffchainStorage;
+use sp_state_machine::{
+	Backend as StateBackend, TrieBackend, InMemoryBackend, ChangesTrieTransaction
 };
-use primitives::offchain::storage::InMemOffchainStorage;
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero, Header, HasherFor};
 use crate::in_mem::{self, check_genesis_storage};
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
-use client_api::{
+use sc_client_api::{
 	backend::{
 		AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
 		StorageCollection, ChildStorageCollection,
@@ -495,16 +495,16 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 #[cfg(test)]
 mod tests {
-	use primitives::Blake2Hasher;
-	use test_client::{self, runtime::Block};
-	use client_api::backend::NewBlockState;
+	use sp_core::Blake2Hasher;
+	use substrate_test_runtime_client::{self, runtime::Block};
+	use sc_client_api::backend::NewBlockState;
 	use crate::light::blockchain::tests::{DummyBlockchain, DummyStorage};
 	use super::*;
 
 	#[test]
 	fn local_state_is_created_when_genesis_state_is_available() {
 		let def = Default::default();
-		let header0 = test_client::runtime::Header::new(0, def, def, def, Default::default());
+		let header0 = substrate_test_runtime_client::runtime::Header::new(0, def, def, def, Default::default());
 
 		let backend: Backend<_, Blake2Hasher> = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
 		let mut op = backend.begin_operation().unwrap();

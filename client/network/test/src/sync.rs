@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use sc_network::config::Roles;
-use consensus::BlockOrigin;
+use sp_consensus::BlockOrigin;
 use futures03::TryFutureExt as _;
 use std::time::Duration;
 use tokio::runtime::current_thread;

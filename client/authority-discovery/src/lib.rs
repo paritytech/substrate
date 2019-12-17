@@ -55,18 +55,18 @@ use futures::task::{Context, Poll};
 use futures::{Future, FutureExt, Stream, StreamExt};
 use futures_timer::Delay;
 
-use authority_discovery_primitives::{
+use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair
 };
-use client_api::blockchain::HeaderBackend;
+use sc_client_api::blockchain::HeaderBackend;
 use codec::{Decode, Encode};
 use error::{Error, Result};
 use log::{debug, error, log_enabled, warn};
 use libp2p::Multiaddr;
-use network::specialization::NetworkSpecialization;
-use network::{DhtEvent, ExHashT};
-use primitives::crypto::{key_types, Pair};
-use primitives::traits::BareCryptoStorePtr;
+use sc_network::specialization::NetworkSpecialization;
+use sc_network::{DhtEvent, ExHashT};
+use sp_core::crypto::{key_types, Pair};
+use sp_core::traits::BareCryptoStorePtr;
 use prost::Message;
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
@@ -502,7 +502,7 @@ pub trait NetworkProvider {
 	fn get_value(&self, key: &libp2p::kad::record::Key);
 }
 
-impl<B, S, H> NetworkProvider for network::NetworkService<B, S, H>
+impl<B, S, H> NetworkProvider for sc_network::NetworkService<B, S, H>
 where
 	B: BlockT + 'static,
 	S: NetworkSpecialization<B>,
@@ -552,10 +552,10 @@ mod tests {
 	use futures::channel::mpsc::channel;
 	use futures::executor::block_on;
 	use futures::future::poll_fn;
-	use primitives::{ExecutionContext, NativeOrEncoded, testing::KeyStore};
+	use sp_core::{ExecutionContext, NativeOrEncoded, testing::KeyStore};
 	use sp_runtime::traits::{Zero, NumberFor};
 	use std::sync::{Arc, Mutex};
-	use test_client::runtime::Block;
+	use substrate_test_runtime_client::runtime::Block;
 
 	#[test]
 	fn interval_at_with_start_now() {
@@ -642,8 +642,8 @@ mod tests {
 			Ok(None)
 		}
 
-		fn info(&self) -> client_api::blockchain::Info<Block> {
-			client_api::blockchain::Info {
+		fn info(&self) -> sc_client_api::blockchain::Info<Block> {
+			sc_client_api::blockchain::Info {
 				best_hash: Default::default(),
 				best_number: Zero::zero(),
 				finalized_hash: Default::default(),
@@ -655,8 +655,8 @@ mod tests {
 		fn status(
 			&self,
 			_id: BlockId<Block>,
-		) -> std::result::Result<client_api::blockchain::BlockStatus, sp_blockchain::Error> {
-			Ok(client_api::blockchain::BlockStatus::Unknown)
+		) -> std::result::Result<sc_client_api::blockchain::BlockStatus, sp_blockchain::Error> {
+			Ok(sc_client_api::blockchain::BlockStatus::Unknown)
 		}
 
 		fn number(
@@ -715,7 +715,10 @@ mod tests {
 	}
 
 	impl ApiExt<Block> for RuntimeApi {
-		type StateBackend = client_api::StateBackendFor<test_client::Backend, Block>;
+		type StateBackend = sc_client_api::StateBackendFor<
+			substrate_test_runtime_client::Backend,
+			Block
+		>;
 
 		fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
 			&self,
@@ -883,7 +886,7 @@ mod tests {
 		.encode(&mut signed_addresses)
 		.unwrap();
 
-		let dht_event = network::DhtEvent::ValueFound(vec![(authority_id_1, signed_addresses)]);
+		let dht_event = sc_network::DhtEvent::ValueFound(vec![(authority_id_1, signed_addresses)]);
 		dht_event_tx.try_send(dht_event).unwrap();
 
 		// Make authority discovery handle the event.

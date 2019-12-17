@@ -16,18 +16,18 @@
 
 use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
-use sp_runtime::{generic::BlockId, traits::{Block as BlockT, HasherFor}};
-use state_machine::{
-	self, OverlayedChanges, Ext, ExecutionManager, StateMachine,
-	ExecutionStrategy, backend::Backend as _, StorageProof,
+use sp_runtime::{
+	generic::BlockId, traits::{Block as BlockT, HasherFor},
 };
-use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
-use externalities::Extensions;
-use primitives::{
-	NativeOrEncoded, NeverNativeValue, traits::CodeExecutor,
+use sp_state_machine::{
+	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
+	backend::Backend as _, StorageProof,
 };
+use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
+use sp_externalities::Extensions;
+use sp_core::{NativeOrEncoded, NeverNativeValue, traits::CodeExecutor};
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
-use client_api::{backend, call_executor::CallExecutor};
+use sc_client_api::{backend, call_executor::CallExecutor};
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
@@ -139,11 +139,11 @@ where
 			Some(recorder) => {
 				let trie_state = state.as_trie_backend()
 					.ok_or_else(||
-						Box::new(state_machine::ExecutionError::UnableToGenerateProof)
-							as Box<dyn state_machine::Error>
+						Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
+							as Box<dyn sp_state_machine::Error>
 					)?;
 
-				let backend = state_machine::ProvingBackend::new_with_recorder(
+				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
 					trie_state,
 					recorder.clone(),
 				);
@@ -200,14 +200,14 @@ where
 		version.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
 	}
 
-	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<HasherFor<Block>>>(
+	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HasherFor<Block>>>(
 		&self,
-		trie_state: &state_machine::TrieBackend<S, HasherFor<Block>>,
+		trie_state: &sp_state_machine::TrieBackend<S, HasherFor<Block>>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
-		state_machine::prove_execution_on_trie_backend(
+		sp_state_machine::prove_execution_on_trie_backend(
 			trie_state,
 			overlay,
 			&self.executor,
@@ -222,20 +222,20 @@ where
 	}
 }
 
-impl<B, E, Block> runtime_version::GetRuntimeVersion<Block> for LocalCallExecutor<B, E>
+impl<B, E, Block> sp_version::GetRuntimeVersion<Block> for LocalCallExecutor<B, E>
 	where
 		B: backend::Backend<Block>,
 		E: CodeExecutor + RuntimeInfo,
 		Block: BlockT,
 {
-	fn native_version(&self) -> &runtime_version::NativeVersion {
+	fn native_version(&self) -> &sp_version::NativeVersion {
 		self.executor.native_version()
 	}
 
 	fn runtime_version(
 		&self,
 		at: &BlockId<Block>,
-	) -> Result<runtime_version::RuntimeVersion, String> {
+	) -> Result<sp_version::RuntimeVersion, String> {
 		CallExecutor::runtime_version(self, at).map_err(|e| format!("{:?}", e))
 	}
 }

@@ -24,19 +24,19 @@ use log::warn;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use rpc::{Result as RpcResult, futures::{stream, Future, Sink, Stream, future::result}};
 
-use api::Subscriptions;
-use client_api::backend::Backend;
+use sc_rpc_api::Subscriptions;
+use sc_client_api::backend::Backend;
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata
 };
-use client::{
+use sc_client::{
 	Client, CallExecutor, BlockchainEvents,
 };
-use primitives::{
+use sp_core::{
 	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, ChildInfo},
 };
-use runtime_version::RuntimeVersion;
-use state_machine::ExecutionStrategy;
+use sp_version::RuntimeVersion;
+use sp_state_machine::ExecutionStrategy;
 use sp_runtime::{
 	generic::BlockId, traits::{Block as BlockT, NumberFor, SaturatedConversion},
 };

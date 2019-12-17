@@ -31,10 +31,10 @@ use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 use codec::{Decode, Encode};
-use consensus_common::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData, RecordProof};
+use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData, RecordProof};
 use futures::{prelude::*, future::{self, Either}};
 use futures_timer::Delay;
-use inherents::{InherentData, InherentDataProviders};
+use sp_inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header, HasherFor, NumberFor};
@@ -42,19 +42,18 @@ use sp_api::{ProvideRuntimeApi, ApiRef};
 use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::{Instant, Duration}};
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use parking_lot::Mutex;
-use client_api;
 
 /// The changes that need to applied to the storage to create the state for a block.
 ///
 /// See [`state_machine::StorageChanges`] for more information.
 pub type StorageChanges<Transaction, Block> =
-	state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>;
+	sp_state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>;
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: BlockT> {
 	/// The type of the future that will be returned when a new slot is
 	/// triggered.
-	type OnSlot: Future<Output = Result<(), consensus_common::Error>>;
+	type OnSlot: Future<Output = Result<(), sp_consensus::Error>>;
 
 	/// Called when a new slot is triggered.
 	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot;
@@ -88,11 +87,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 	/// Returns the epoch data necessary for authoring. For time-dependent epochs,
 	/// use the provided slot number as a canonical source of time.
-	fn epoch_data(
-		&self,
-		header: &B::Header,
-		slot_number: u64,
-	) -> Result<Self::EpochData, consensus_common::Error>;
+	fn epoch_data(&self, header: &B::Header, slot_number: u64) -> Result<Self::EpochData, sp_consensus::Error>;
 
 	/// Returns the number of authorities given the epoch data.
 	fn authorities_len(&self, epoch_data: &Self::EpochData) -> usize;
@@ -120,7 +115,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			Vec<B::Extrinsic>,
 			StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 			Self::Claim,
-		) -> consensus_common::BlockImportParams<
+		) -> sp_consensus::BlockImportParams<
 			B,
 			<Self::BlockImport as BlockImport<B>>::Transaction
 		>
@@ -134,7 +129,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle;
 
 	/// Returns a `Proposer` to author on top of the given block.
-	fn proposer(&mut self, block: &B::Header) -> Result<Self::Proposer, consensus_common::Error>;
+	fn proposer(&mut self, block: &B::Header) -> Result<Self::Proposer, sp_consensus::Error>;
 
 	/// Remaining duration of the slot.
 	fn slot_remaining_duration(&self, slot_info: &SlotInfo) -> Duration {
@@ -157,7 +152,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 	/// Implements the `on_slot` functionality from `SlotWorker`.
 	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo)
-		-> Pin<Box<dyn Future<Output = Result<(), consensus_common::Error>> + Send>> where
+		-> Pin<Box<dyn Future<Output = Result<(), sp_consensus::Error>> + Send>> where
 		Self: Send + Sync,
 		<Self::Proposer as Proposer<B>>::Proposal: Unpin + Send + 'static,
 	{
@@ -246,7 +241,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			},
 			slot_remaining_duration,
 			RecordProof::No,
-		).map_err(|e| consensus_common::Error::ClientImport(format!("{:?}", e)));
+		).map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
 		let delay: Box<dyn Future<Output=()> + Unpin + Send> = match proposing_remaining_duration {
 			Some(r) => Box::new(Delay::new(r)),
 			None => Box::new(future::pending()),
@@ -263,7 +258,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					telemetry!(CONSENSUS_INFO; "slots.discarding_proposal_took_too_long";
 						"slot" => slot_number,
 					);
-					Err(consensus_common::Error::ClientImport("Timeout in the Slots proposer".into()))
+					Err(sp_consensus::Error::ClientImport("Timeout in the Slots proposer".into()))
 				},
 			}));
 
@@ -319,7 +314,7 @@ pub trait SlotCompatible {
 	fn extract_timestamp_and_slot(
 		&self,
 		inherent: &InherentData,
-	) -> Result<(u64, u64, std::time::Duration), consensus_common::Error>;
+	) -> Result<(u64, u64, std::time::Duration), sp_consensus::Error>;
 
 	/// Get the difference between chain time and local time.  Defaults to
 	/// always returning zero.
@@ -443,7 +438,7 @@ impl<T: Clone> SlotDuration<T> {
 	/// `slot_key` is marked as `'static`, as it should really be a
 	/// compile-time constant.
 	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> sp_blockchain::Result<Self> where
-		C: client_api::backend::AuxStore,
+		C: sc_client_api::backend::AuxStore,
 		C: ProvideRuntimeApi<B>,
 		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> sp_blockchain::Result<T>,
 		T: SlotData + Encode + Decode + Debug,

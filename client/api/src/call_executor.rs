@@ -16,18 +16,22 @@
 
 use std::{panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
-use sp_runtime::{generic::BlockId, traits::{Block as BlockT, HasherFor}};
-use state_machine::{self, OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof};
-use executor::{RuntimeVersion, NativeVersion};
-use primitives::NativeOrEncoded;
-use externalities::Extensions;
+use sp_runtime::{
+	generic::BlockId, traits::{Block as BlockT, HasherFor},
+};
+use sp_state_machine::{
+	OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof,
+};
+use sc_executor::{RuntimeVersion, NativeVersion};
+use sp_externalities::Extensions;
+use sp_core::NativeOrEncoded;
 
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 
 /// Method call executor.
 pub trait CallExecutor<B: BlockT> {
 	/// Externalities error type.
-	type Error: state_machine::Error;
+	type Error: sp_state_machine::Error;
 
 	/// The backend used by the node.
 	type Backend: crate::backend::Backend<B>;
@@ -83,7 +87,7 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: state_machine::Backend<HasherFor<B>>>(
+	fn prove_at_state<S: sp_state_machine::Backend<HasherFor<B>>>(
 		&self,
 		mut state: S,
 		overlay: &mut OverlayedChanges,
@@ -92,8 +96,8 @@ pub trait CallExecutor<B: BlockT> {
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
 		let trie_state = state.as_trie_backend()
 			.ok_or_else(||
-				Box::new(state_machine::ExecutionError::UnableToGenerateProof)
-					as Box<dyn state_machine::Error>
+				Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
+					as Box<dyn sp_state_machine::Error>
 			)?;
 		self.prove_at_trie_state(trie_state, overlay, method, call_data)
 	}
@@ -101,9 +105,9 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of given trie state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<HasherFor<B>>>(
+	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HasherFor<B>>>(
 		&self,
-		trie_state: &state_machine::TrieBackend<S, HasherFor<B>>,
+		trie_state: &sp_state_machine::TrieBackend<S, HasherFor<B>>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]

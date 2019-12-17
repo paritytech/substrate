@@ -32,7 +32,7 @@ pub use client::*;
 pub use light::*;
 pub use notifications::*;
 
-pub use state_machine::{StorageProof, ExecutionStrategy};
+pub use sp_state_machine::{StorageProof, ExecutionStrategy};
 
 /// Utility methods for the client.
 pub mod utils {

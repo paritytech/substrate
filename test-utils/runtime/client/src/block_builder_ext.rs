@@ -16,17 +16,16 @@
 
 //! Block Builder extensions for tests.
 
-use runtime;
 use sp_api::{ApiExt, ProvideRuntimeApi};
-use client_api::backend;
+use sc_client_api::backend;
 use sp_runtime::traits::HasherFor;
 
-use block_builder::BlockBuilderApi;
+use sc_block_builder::BlockBuilderApi;
 
 /// Extension trait for test block builder.
 pub trait BlockBuilderExt {
 	/// Add transfer extrinsic to the block.
-	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), sp_blockchain::Error>;
+	fn push_transfer(&mut self, transfer: substrate_test_runtime::Transfer) -> Result<(), sp_blockchain::Error>;
 	/// Add storage change extrinsic to the block.
 	fn push_storage_change(
 		&mut self,
@@ -35,15 +34,19 @@ pub trait BlockBuilderExt {
 	) -> Result<(), sp_blockchain::Error>;
 }
 
-impl<'a, A, B> BlockBuilderExt for block_builder::BlockBuilder<'a, runtime::Block, A, B> where
-	A: ProvideRuntimeApi<runtime::Block> + 'a,
-	A::Api: BlockBuilderApi<runtime::Block, Error = sp_blockchain::Error> +
-		ApiExt<runtime::Block, StateBackend = backend::StateBackendFor<B, runtime::Block>>,
-	B: backend::Backend<runtime::Block>,
+impl<'a, A, B> BlockBuilderExt for sc_block_builder::BlockBuilder<'a, substrate_test_runtime::Block, A, B> where
+	A: ProvideRuntimeApi<substrate_test_runtime::Block> + 'a,
+	A::Api: BlockBuilderApi<substrate_test_runtime::Block, Error = sp_blockchain::Error> +
+		ApiExt<
+			substrate_test_runtime::Block,
+			StateBackend = backend::StateBackendFor<B, substrate_test_runtime::Block>
+		>,
+	B: backend::Backend<substrate_test_runtime::Block>,
 	// Rust bug: https://github.com/rust-lang/rust/issues/24159
-	backend::StateBackendFor<B, runtime::Block>: sp_api::StateBackend<HasherFor<runtime::Block>>,
+	backend::StateBackendFor<B, substrate_test_runtime::Block>:
+		sp_api::StateBackend<HasherFor<substrate_test_runtime::Block>>,
 {
-	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), sp_blockchain::Error> {
+	fn push_transfer(&mut self, transfer: substrate_test_runtime::Transfer) -> Result<(), sp_blockchain::Error> {
 		self.push(transfer.into_signed_tx())
 	}
 
@@ -52,6 +55,6 @@ impl<'a, A, B> BlockBuilderExt for block_builder::BlockBuilder<'a, runtime::Bloc
 		key: Vec<u8>,
 		value: Option<Vec<u8>>,
 	) -> Result<(), sp_blockchain::Error> {
-		self.push(runtime::Extrinsic::StorageChange(key, value))
+		self.push(substrate_test_runtime::Extrinsic::StorageChange(key, value))
 	}
 }

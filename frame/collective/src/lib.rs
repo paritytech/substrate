@@ -24,16 +24,16 @@
 #![recursion_limit="128"]
 
 use sp_std::{prelude::*, result};
-use primitives::u32_trait::Value as U32;
+use sp_core::u32_trait::Value as U32;
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::{Hash, EnsureOrigin};
-use support::weights::SimpleDispatchInfo;
-use support::{
+use frame_support::weights::SimpleDispatchInfo;
+use frame_support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
 	traits::{ChangeMembers, InitializeMembers}, decl_module, decl_event,
 	decl_storage, ensure,
 };
-use system::{self, ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root};
 
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
@@ -44,7 +44,7 @@ pub type ProposalIndex = u32;
 /// vote exactly once, therefore also the number of votes for any given motion.
 pub type MemberCount = u32;
 
-pub trait Trait<I=DefaultInstance>: system::Trait {
+pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	/// The outer origin type.
 	type Origin: From<RawOrigin<Self::AccountId, I>>;
 
@@ -52,7 +52,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait<I>>::Origin>;
 
 	/// The outer event type.
-	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
 /// Origin for the collective module.
@@ -67,7 +67,7 @@ pub enum RawOrigin<AccountId, I> {
 }
 
 /// Origin for the collective module.
-pub type Origin<T, I=DefaultInstance> = RawOrigin<<T as system::Trait>::AccountId, I>;
+pub type Origin<T, I=DefaultInstance> = RawOrigin<<T as frame_system::Trait>::AccountId, I>;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// Info for keeping track of a motion being voted on.
@@ -104,8 +104,8 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T, I=DefaultInstance> where
-		<T as system::Trait>::Hash,
-		<T as system::Trait>::AccountId,
+		<T as frame_system::Trait>::Hash,
+		<T as frame_system::Trait>::AccountId,
 	{
 		/// A motion (given hash) has been proposed (by given account) with a threshold (given
 		/// `MemberCount`).
@@ -128,7 +128,7 @@ decl_event!(
 // executed logic with other democracy function. Note that councillor operations are assigned to the
 // operational class.
 decl_module! {
-	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as system::Trait>::Origin {
+	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as frame_system::Trait>::Origin {
 		fn deposit_event() = default;
 
 		/// Set the collective's membership manually to `new_members`. Be nice to the chain and
@@ -379,10 +379,10 @@ impl<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use support::{Hashable, assert_ok, assert_noop, parameter_types, weights::Weight};
-	use system::{EventRecord, Phase};
+	use frame_support::{Hashable, assert_ok, assert_noop, parameter_types, weights::Weight};
+	use frame_system::{self as system, EventRecord, Phase};
 	use hex_literal::hex;
-	use primitives::H256;
+	use sp_core::H256;
 	use sp_runtime::{
 		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
 		BuildStorage,
@@ -395,7 +395,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -426,7 +426,7 @@ mod tests {
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
-	support::construct_runtime!(
+	frame_support::construct_runtime!(
 		pub enum Test where
 			Block = Block,
 			NodeBlock = Block,
@@ -458,7 +458,7 @@ mod tests {
 	}
 
 	fn make_proposal(value: u64) -> Call {
-		Call::System(system::Call::remark(value.encode()))
+		Call::System(frame_system::Call::remark(value.encode()))
 	}
 
 	#[test]

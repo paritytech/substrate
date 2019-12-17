@@ -24,12 +24,12 @@ use sp_runtime::{
 	traits::IdentityLookup, Perbill,
 	testing::{Header, UintAuthorityId},
 };
-use support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 use sp_io;
-use primitives::H256;
+use sp_core::H256;
 
 impl_outer_origin!{
-	pub enum Origin for Test {}
+	pub enum Origin for Test  where system = frame_system {}
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -44,7 +44,7 @@ parameter_types! {
 	pub const MinimumPeriod: u64 = 1;
 }
 
-impl system::Trait for Test {
+impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -73,7 +73,7 @@ impl Trait for Test {
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
-	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig::<Test>{
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a).to_public_key()).collect(),
 	}.assimilate_storage(&mut t).unwrap();

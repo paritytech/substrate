@@ -17,7 +17,7 @@
 //! Tests for the generic implementations of Extrinsic/Header/Block.
 
 use crate::codec::{Decode, Encode};
-use primitives::H256;
+use sp_core::H256;
 use super::DigestItem;
 
 #[test]

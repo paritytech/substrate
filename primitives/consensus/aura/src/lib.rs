@@ -26,7 +26,7 @@ pub mod inherents;
 
 pub mod sr25519 {
 	mod app_sr25519 {
-		use app_crypto::{app_crypto, key_types::AURA, sr25519};
+		use sp_application_crypto::{app_crypto, key_types::AURA, sr25519};
 		app_crypto!(sr25519, AURA);
 	}
 
@@ -43,7 +43,7 @@ pub mod sr25519 {
 
 pub mod ed25519 {
 	mod app_ed25519 {
-		use app_crypto::{app_crypto, key_types::AURA, ed25519};
+		use sp_application_crypto::{app_crypto, key_types::AURA, ed25519};
 		app_crypto!(ed25519, AURA);
 	}
 

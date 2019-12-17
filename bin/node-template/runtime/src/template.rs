@@ -8,7 +8,7 @@
 /// For more guidance on Substrate modules, see the example module
 /// https://github.com/paritytech/substrate/blob/master/frame/example/src/lib.rs
 
-use support::{decl_module, decl_storage, decl_event, dispatch};
+use frame_support::{decl_module, decl_storage, decl_event, dispatch};
 use system::ensure_signed;
 
 /// The module's configuration trait.
@@ -69,8 +69,8 @@ decl_event!(
 mod tests {
 	use super::*;
 
-	use primitives::H256;
-	use support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
+	use sp_core::H256;
+	use frame_support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
 	use sp_runtime::{
 		traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill,
 	};

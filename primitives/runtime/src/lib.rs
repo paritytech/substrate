@@ -35,14 +35,14 @@ pub use sp_std;
 pub use paste;
 
 #[doc(hidden)]
-pub use app_crypto;
+pub use sp_application_crypto as app_crypto;
 
 #[cfg(feature = "std")]
-pub use primitives::storage::{Storage, StorageChild};
+pub use sp_core::storage::{Storage, StorageChild};
 
 use sp_std::prelude::*;
 use sp_std::convert::TryFrom;
-use primitives::{crypto, ed25519, sr25519, ecdsa, hash::{H256, H512}};
+use sp_core::{crypto, ed25519, sr25519, ecdsa, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
 pub mod curve;
@@ -58,18 +58,18 @@ pub mod random_number_generator;
 pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
-pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, AccountId32}};
-pub use app_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
+pub use sp_core::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, AccountId32}};
+pub use sp_application_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
 
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
-pub use primitives::RuntimeDebug;
+pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
-pub use arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64};
+pub use sp_arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64};
 /// Re-export 128 bit helpers.
-pub use arithmetic::helpers_128bit;
+pub use sp_arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
-pub use arithmetic::biguint;
+pub use sp_arithmetic::biguint;
 
 pub use random_number_generator::RandomNumberGenerator;
 
@@ -121,7 +121,7 @@ use crate::traits::IdentifyAccount;
 #[cfg(feature = "std")]
 pub trait BuildStorage: Sized {
 	/// Build the storage out of this builder.
-	fn build_storage(&self) -> Result<primitives::storage::Storage, String> {
+	fn build_storage(&self) -> Result<sp_core::storage::Storage, String> {
 		let mut storage = Default::default();
 		self.assimilate_storage(&mut storage)?;
 		Ok(storage)
@@ -129,7 +129,7 @@ pub trait BuildStorage: Sized {
 	/// Assimilate the storage for this module into pre-existing overlays.
 	fn assimilate_storage(
 		&self,
-		storage: &mut primitives::storage::Storage,
+		storage: &mut sp_core::storage::Storage,
 	) -> Result<(), String>;
 }
 
@@ -139,15 +139,15 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.
 	fn build_module_genesis_storage(
 		&self,
-		storage: &mut primitives::storage::Storage,
+		storage: &mut sp_core::storage::Storage,
 	) -> Result<(), String>;
 }
 
 #[cfg(feature = "std")]
-impl BuildStorage for primitives::storage::Storage {
+impl BuildStorage for sp_core::storage::Storage {
 	fn assimilate_storage(
 		&self,
-		storage: &mut primitives::storage::Storage,
+		storage: &mut sp_core::storage::Storage,
 	)-> Result<(), String> {
 		storage.top.extend(self.top.iter().map(|(k, v)| (k.clone(), v.clone())));
 		for (k, other_map) in self.children.iter() {
@@ -304,7 +304,7 @@ impl std::fmt::Display for MultiSigner {
 impl Verify for MultiSignature {
 	type Signer = MultiSigner;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
-		use primitives::crypto::Public;
+		use sp_core::crypto::Public;
 		match (self, signer) {
 			(MultiSignature::Ed25519(ref sig), who) => sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
 			(MultiSignature::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
@@ -329,7 +329,7 @@ pub struct AnySignature(H512);
 impl Verify for AnySignature {
 	type Signer = sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sr25519::Public) -> bool {
-		use primitives::crypto::Public;
+		use sp_core::crypto::Public;
 		let msg = msg.get();
 		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
 			.map(|s| s.verify(msg, signer))
@@ -619,7 +619,7 @@ pub struct OpaqueExtrinsic(pub Vec<u8>);
 impl sp_std::fmt::Debug for OpaqueExtrinsic {
 	#[cfg(feature = "std")]
 	fn fmt(&self, fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(fmt, "{}", primitives::hexdisplay::HexDisplay::from(&self.0))
+		write!(fmt, "{}", sp_core::hexdisplay::HexDisplay::from(&self.0))
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -632,14 +632,14 @@ impl sp_std::fmt::Debug for OpaqueExtrinsic {
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
-		codec::Encode::using_encoded(&self.0, |bytes| ::primitives::bytes::serialize(bytes, seq))
+		codec::Encode::using_encoded(&self.0, |bytes| ::sp_core::bytes::serialize(bytes, seq))
 	}
 }
 
 #[cfg(feature = "std")]
 impl<'a> ::serde::Deserialize<'a> for OpaqueExtrinsic {
 	fn deserialize<D>(de: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'a> {
-		let r = ::primitives::bytes::deserialize(de)?;
+		let r = ::sp_core::bytes::deserialize(de)?;
 		Decode::decode(&mut &r[..])
 			.map_err(|e| ::serde::de::Error::custom(format!("Decode error: {}", e)))
 	}

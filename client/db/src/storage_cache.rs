@@ -22,11 +22,11 @@ use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
 use sp_runtime::traits::{Block as BlockT, Header, HasherFor, NumberFor};
-use primitives::hexdisplay::HexDisplay;
-use primitives::storage::ChildInfo;
-use state_machine::{backend::Backend as StateBackend, TrieBackend};
+use sp_core::hexdisplay::HexDisplay;
+use sp_core::storage::ChildInfo;
+use sp_state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
-use client_api::backend::{StorageCollection, ChildStorageCollection};
+use sc_client_api::backend::{StorageCollection, ChildStorageCollection};
 use std::hash::Hash as StdHash;
 
 const STATE_CACHE_BLOCKS: usize = 12;
@@ -652,8 +652,8 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 mod tests {
 	use super::*;
 	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
-	use state_machine::InMemoryBackend;
-	use primitives::Blake2Hasher;
+	use sp_state_machine::InMemoryBackend;
+	use sp_core::Blake2Hasher;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
@@ -1102,8 +1102,8 @@ mod qc {
 
 	use super::*;
 	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
-	use state_machine::InMemoryBackend;
-	use primitives::Blake2Hasher;
+	use sp_state_machine::InMemoryBackend;
+	use sp_core::Blake2Hasher;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 

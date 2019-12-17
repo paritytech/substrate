@@ -39,20 +39,20 @@ use std::sync::Arc;
 use log::{trace, warn};
 
 use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
-use client_api::{
+use sc_client_api::{
 	backend::Backend, CallExecutor, StorageProof,
 	light::{FetchChecker, RemoteReadRequest},
 };
-use client::Client;
-use codec::{Encode, Decode};
-use grandpa::BlockNumberOps;
+use sc_client::Client;
+use parity_scale_codec::{Encode, Decode};
+use finality_grandpa::BlockNumberOps;
 use sp_runtime::{
 	Justification, generic::BlockId,
 	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
 };
-use primitives::storage::StorageKey;
+use sp_core::storage::StorageKey;
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
-use fg_primitives::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
+use sp_finality_grandpa::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
 
 use crate::justification::GrandpaJustification;
 
@@ -154,7 +154,7 @@ impl<B, Block: BlockT> FinalityProofProvider<B, Block>
 	}
 }
 
-impl<B, Block> network::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>
+impl<B, Block> sc_network::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>
 	where
 		Block: BlockT,
 		NumberFor<Block>: BlockNumberOps,
@@ -580,11 +580,11 @@ impl<Block: BlockT> ProvableJustification<Block::Header> for GrandpaJustificatio
 
 #[cfg(test)]
 pub(crate) mod tests {
-	use test_client::runtime::{Block, Header, H256};
-	use client_api::NewBlockState;
-	use test_client::client::in_mem::Blockchain as InMemoryBlockchain;
+	use substrate_test_runtime_client::runtime::{Block, Header, H256};
+	use sc_client_api::NewBlockState;
+	use substrate_test_runtime_client::sc_client::in_mem::Blockchain as InMemoryBlockchain;
 	use super::*;
-	use primitives::crypto::Public;
+	use sp_core::crypto::Public;
 
 	type FinalityProof = super::FinalityProof<Header>;
 

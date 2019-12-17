@@ -32,22 +32,22 @@
 use std::sync::Arc;
 use std::thread;
 use std::collections::HashMap;
-use client_api::{BlockOf, backend::AuxStore};
+use sc_client_api::{BlockOf, backend::AuxStore};
 use sp_blockchain::{HeaderBackend, ProvideCache, well_known_cache_keys::Id as CacheKeyId};
-use block_builder_api::BlockBuilder as BlockBuilderApi;
+use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_runtime::{Justification, RuntimeString};
 use sp_runtime::generic::{BlockId, Digest, DigestItem};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_api::ProvideRuntimeApi;
-use pow_primitives::{Seal, TotalDifficulty, POW_ENGINE_ID};
-use inherents::{InherentDataProviders, InherentData};
-use consensus_common::{
+use sp_consensus_pow::{Seal, TotalDifficulty, POW_ENGINE_ID};
+use sp_inherents::{InherentDataProviders, InherentData};
+use sp_consensus::{
 	BlockImportParams, BlockOrigin, ForkChoiceStrategy, SyncOracle, Environment, Proposer,
 	SelectChain, Error as ConsensusError, CanAuthorWith, RecordProof,
 };
-use consensus_common::import_queue::{BoxBlockImport, BasicQueue, Verifier};
+use sp_consensus::import_queue::{BoxBlockImport, BasicQueue, Verifier};
 use codec::{Encode, Decode};
-use client_api;
+use sc_client_api;
 use log::*;
 use sp_timestamp::{InherentError as TIError, TimestampInherentData};
 
@@ -74,7 +74,7 @@ pub enum Error<B: BlockT> {
 	#[display(fmt = "Error with block built on {:?}: {:?}", _0, _1)]
 	BlockBuiltError(B::Hash, ConsensusError),
 	#[display(fmt = "Creating inherents failed: {}", _0)]
-	CreateInherents(inherents::Error),
+	CreateInherents(sp_inherents::Error),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
 	CheckInherents(String),
 	Client(sp_blockchain::Error),
@@ -149,7 +149,7 @@ pub trait PowAlgorithm<B: BlockT> {
 pub struct PowVerifier<B: BlockT, C, S, Algorithm> {
 	client: Arc<C>,
 	algorithm: Algorithm,
-	inherent_data_providers: inherents::InherentDataProviders,
+	inherent_data_providers: sp_inherents::InherentDataProviders,
 	select_chain: Option<S>,
 	check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
 }
@@ -160,7 +160,7 @@ impl<B: BlockT, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 		algorithm: Algorithm,
 		check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
 		select_chain: Option<S>,
-		inherent_data_providers: inherents::InherentDataProviders,
+		inherent_data_providers: sp_inherents::InherentDataProviders,
 	) -> Self {
 		Self { client, algorithm, inherent_data_providers, select_chain, check_inherents_after }
 	}
@@ -315,12 +315,12 @@ impl<B: BlockT, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S, Algorithm>
 /// Register the PoW inherent data provider, if not registered already.
 pub fn register_pow_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
-) -> Result<(), consensus_common::Error> {
+) -> Result<(), sp_consensus::Error> {
 	if !inherent_data_providers.has_provider(&sp_timestamp::INHERENT_IDENTIFIER) {
 		inherent_data_providers
 			.register_provider(sp_timestamp::InherentDataProvider)
 			.map_err(Into::into)
-			.map_err(consensus_common::Error::InherentData)
+			.map_err(sp_consensus::Error::InherentData)
 	} else {
 		Ok(())
 	}
@@ -339,7 +339,7 @@ pub fn import_queue<B, C, S, Algorithm>(
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<
 	PowImportQueue<B, sp_api::TransactionFor<C, B>>,
-	consensus_common::Error
+	sp_consensus::Error
 > where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + HeaderBackend<B> + BlockOf + ProvideCache<B> + AuxStore,
@@ -386,7 +386,7 @@ pub fn start_mine<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 	mut sync_oracle: SO,
 	build_time: std::time::Duration,
 	select_chain: Option<S>,
-	inherent_data_providers: inherents::InherentDataProviders,
+	inherent_data_providers: sp_inherents::InherentDataProviders,
 	can_author_with: CAW,
 ) where
 	C: HeaderBackend<B> + AuxStore + ProvideRuntimeApi<B> + 'static,
@@ -438,7 +438,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 	sync_oracle: &mut SO,
 	build_time: std::time::Duration,
 	select_chain: Option<&S>,
-	inherent_data_providers: &inherents::InherentDataProviders,
+	inherent_data_providers: &sp_inherents::InherentDataProviders,
 	can_author_with: &CAW,
 ) -> Result<(), Error<B>> where
 	C: HeaderBackend<B> + AuxStore + ProvideRuntimeApi<B>,

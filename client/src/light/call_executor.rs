@@ -21,10 +21,12 @@ use std::{
 };
 
 use codec::{Encode, Decode};
-use primitives::{convert_hash, NativeOrEncoded, traits::CodeExecutor};
-use sp_runtime::{generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HasherFor}};
-use externalities::Extensions;
-use state_machine::{
+use sp_core::{convert_hash, NativeOrEncoded, traits::CodeExecutor};
+use sp_runtime::{
+	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HasherFor},
+};
+use sp_externalities::Extensions;
+use sp_state_machine::{
 	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
 	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof,
 	merge_storage_proofs,
@@ -35,12 +37,12 @@ use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
-use client_api::{
+use sc_client_api::{
 	backend::RemoteBackend,
 	light::RemoteCallRequest,
 	call_executor::CallExecutor
 };
-use executor::{RuntimeVersion, NativeVersion};
+use sc_executor::{RuntimeVersion, NativeVersion};
 
 /// Call executor that is able to execute calls only on genesis state.
 ///
@@ -151,9 +153,9 @@ impl<Block, B, Local> CallExecutor<Block> for
 		}
 	}
 
-	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<HasherFor<Block>>>(
+	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HasherFor<Block>>>(
 		&self,
-		_state: &state_machine::TrieBackend<S, HasherFor<Block>>,
+		_state: &sp_state_machine::TrieBackend<S, HasherFor<Block>>,
 		_changes: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8],
@@ -184,8 +186,8 @@ pub fn prove_execution<Block, S, E>(
 {
 	let trie_state = state.as_trie_backend()
 		.ok_or_else(||
-			Box::new(state_machine::ExecutionError::UnableToGenerateProof) as
-				Box<dyn state_machine::Error>
+			Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as
+				Box<dyn sp_state_machine::Error>
 		)?;
 
 	// prepare execution environment + record preparation proof
@@ -278,11 +280,13 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use consensus::BlockOrigin;
-	use test_client::{self, runtime::{Header, Digest, Block}, ClientBlockImportExt, TestClient};
-	use executor::{NativeExecutor, WasmExecutionMethod};
-	use primitives::{Blake2Hasher, H256};
-	use client_api::{backend::Backend, NewBlockState};
+	use sp_consensus::BlockOrigin;
+	use substrate_test_runtime_client::{
+		runtime::{Header, Digest, Block}, TestClient, ClientBlockImportExt,
+	};
+	use sc_executor::{NativeExecutor, WasmExecutionMethod};
+	use sp_core::{Blake2Hasher, H256};
+	use sc_client_api::backend::{Backend, NewBlockState};
 	use crate::in_mem::Backend as InMemBackend;
 
 	struct DummyCallExecutor;
@@ -290,7 +294,7 @@ mod tests {
 	impl CallExecutor<Block> for DummyCallExecutor {
 		type Error = ClientError;
 
-		type Backend = test_client::Backend;
+		type Backend = substrate_test_runtime_client::Backend;
 
 		fn call(
 			&self,
@@ -322,7 +326,7 @@ mod tests {
 			_storage_transaction_cache: Option<&RefCell<
 				StorageTransactionCache<
 					Block,
-					<Self::Backend as client_api::backend::Backend<Block>>::State,
+					<Self::Backend as sc_client_api::backend::Backend<Block>>::State,
 				>
 			>>,
 			_initialize_block: InitializeBlock<'a, Block>,
@@ -338,9 +342,9 @@ mod tests {
 			unreachable!()
 		}
 
-		fn prove_at_trie_state<S: state_machine::TrieBackendStorage<HasherFor<Block>>>(
+		fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HasherFor<Block>>>(
 			&self,
-			_trie_state: &state_machine::TrieBackend<S, HasherFor<Block>>,
+			_trie_state: &sp_state_machine::TrieBackend<S, HasherFor<Block>>,
 			_overlay: &mut OverlayedChanges,
 			_method: &str,
 			_call_data: &[u8]
@@ -353,7 +357,7 @@ mod tests {
 		}
 	}
 
-	fn local_executor() -> NativeExecutor<test_client::LocalExecutor> {
+	fn local_executor() -> NativeExecutor<substrate_test_runtime_client::LocalExecutor> {
 		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
 	}
 
@@ -374,7 +378,7 @@ mod tests {
 			let local_result = check_execution_proof::<_, _, Blake2Hasher>(
 				&local_executor(),
 				&RemoteCallRequest {
-					block: test_client::runtime::Hash::default(),
+					block: substrate_test_runtime_client::runtime::Hash::default(),
 					header: remote_header,
 					method: method.into(),
 					call_data: vec![],
@@ -401,7 +405,7 @@ mod tests {
 			let execution_result = check_execution_proof_with_make_header::<_, _, Blake2Hasher, _>(
 				&local_executor(),
 				&RemoteCallRequest {
-					block: test_client::runtime::Hash::default(),
+					block: substrate_test_runtime_client::runtime::Hash::default(),
 					header: remote_header,
 					method: method.into(),
 					call_data: vec![],
@@ -423,7 +427,7 @@ mod tests {
 		}
 
 		// prepare remote client
-		let mut remote_client = test_client::new();
+		let mut remote_client = substrate_test_runtime_client::new();
 		for i in 1u32..3u32 {
 			let mut digest = Digest::default();
 			digest.push(sp_runtime::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
@@ -454,7 +458,7 @@ mod tests {
 		execute_with_proof_failure(&remote_client, 2, "Core_version");
 
 		// check that proof check doesn't panic even if proof is incorrect AND panic handler is set
-		panic_handler::set("TEST", "1.2.3");
+		sp_panic_handler::set("TEST", "1.2.3");
 		execute_with_proof_failure(&remote_client, 2, "Core_version");
 	}
 
@@ -462,9 +466,9 @@ mod tests {
 	fn code_is_executed_at_genesis_only() {
 		let backend = Arc::new(InMemBackend::<Block>::new());
 		let def = H256::default();
-		let header0 = test_client::runtime::Header::new(0, def, def, def, Default::default());
+		let header0 = substrate_test_runtime_client::runtime::Header::new(0, def, def, def, Default::default());
 		let hash0 = header0.hash();
-		let header1 = test_client::runtime::Header::new(1, def, def, hash0, Default::default());
+		let header1 = substrate_test_runtime_client::runtime::Header::new(1, def, def, hash0, Default::default());
 		let hash1 = header1.hash();
 		backend.blockchain().insert(hash0, header0, None, None, NewBlockState::Final).unwrap();
 		backend.blockchain().insert(hash1, header1, None, None, NewBlockState::Final).unwrap();

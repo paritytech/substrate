@@ -17,12 +17,13 @@
 //! Integration tests for ed25519
 
 use sp_runtime::generic::BlockId;
-use primitives::{testing::{KeyStore, ED25519}, crypto::Pair};
-use test_client::{
+use sp_core::{testing::{KeyStore, ED25519}, crypto::Pair};
+use substrate_test_runtime_client::{
 	TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
-	runtime::{TestAPI, app_crypto::ed25519::{AppPair, AppPublic}},
+	runtime::TestAPI,
 };
 use sp_api::ProvideRuntimeApi;
+use sp_application_crypto::ed25519::{AppPair, AppPublic};
 
 #[test]
 fn ed25519_works_in_runtime() {

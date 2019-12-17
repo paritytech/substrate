@@ -19,20 +19,20 @@
 // FIXME #1021 move this into sp-consensus
 
 use std::{time, sync::Arc};
-use client_api::{CallExecutor, backend};
-use client::Client as SubstrateClient;
+use sc_client_api::{CallExecutor, backend};
+use sc_client::Client as SubstrateClient;
 use codec::Decode;
-use consensus_common::{evaluation, Proposal, RecordProof};
-use inherents::InherentData;
+use sp_consensus::{evaluation, Proposal, RecordProof};
+use sp_inherents::InherentData;
 use log::{error, info, debug, trace};
-use primitives::ExecutionContext;
+use sp_core::ExecutionContext;
 use sp_runtime::{
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, DigestFor, BlakeTwo256},
 	generic::BlockId,
 };
-use txpool_api::{TransactionPool, InPoolTransaction};
+use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
-use block_builder::BlockBuilderApi;
+use sc_block_builder::BlockBuilderApi;
 use sp_api::{ProvideRuntimeApi, ApiExt};
 
 /// Proposer factory.
@@ -81,7 +81,7 @@ impl<B, E, Block, RA, A> ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 	}
 }
 
-impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
+impl<B, E, Block, RA, A> sp_consensus::Environment<Block> for
 	ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 		where
 			A: TransactionPool<Block = Block> + 'static,
@@ -120,7 +120,7 @@ struct ProposerInner<Block: BlockT, C, A: TransactionPool> {
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 }
 
-impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
+impl<B, E, Block, RA, A> sp_consensus::Proposer<Block> for
 	Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
 		where
 			A: TransactionPool<Block = Block> + 'static,
@@ -157,7 +157,7 @@ impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 
 impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, A>	where
 	A: TransactionPool<Block = Block>,
-	B: client_api::backend::Backend<Block> + Send + Sync + 'static,
+	B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
 	E: CallExecutor<Block> + Send + Sync + Clone + 'static,
 	Block: BlockT,
 	RA: Send + Sync + 'static,
@@ -215,7 +215,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 			let pending_tx_data = pending_tx.data().clone();
 			let pending_tx_hash = pending_tx.hash().clone();
 			trace!("[{:?}] Pushing to the block.", pending_tx_hash);
-			match block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
+			match sc_block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				}
@@ -280,12 +280,12 @@ mod tests {
 	use super::*;
 
 	use parking_lot::Mutex;
-	use consensus_common::Proposer;
-	use test_client::{
-		self, runtime::{Extrinsic, Transfer}, AccountKeyring, DefaultTestClientBuilderExt,
+	use sp_consensus::Proposer;
+	use substrate_test_runtime_client::{
+		runtime::{Extrinsic, Transfer}, AccountKeyring, DefaultTestClientBuilderExt,
 		TestClientBuilderExt,
 	};
-	use tx_pool::{BasicPool, FullChainApi};
+	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_api::Core;
 	use backend::Backend;
 
@@ -301,7 +301,7 @@ mod tests {
 	#[test]
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
-		let client = Arc::new(test_client::new());
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 
 		futures::executor::block_on(
@@ -339,7 +339,8 @@ mod tests {
 
 	#[test]
 	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
-		let (client, backend) = test_client::TestClientBuilder::new().build_with_backend();
+		let (client, backend) = substrate_test_runtime_client::TestClientBuilder::new()
+			.build_with_backend();
 		let client = Arc::new(client);
 		let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 		let genesis_hash = client.info().chain.best_hash;

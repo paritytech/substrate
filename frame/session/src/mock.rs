@@ -18,8 +18,8 @@
 
 use super::*;
 use std::cell::RefCell;
-use support::{impl_outer_origin, parameter_types, weights::Weight};
-use primitives::{crypto::key_types::DUMMY, H256};
+use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{
 	Perbill, impl_opaque_keys, traits::{BlakeTwo256, IdentityLookup, ConvertInto},
 	testing::{Header, UintAuthorityId}
@@ -39,7 +39,7 @@ impl From<UintAuthorityId> for MockSessionKeys {
 }
 
 impl_outer_origin! {
-	pub enum Origin for Test {}
+	pub enum Origin for Test  where system = frame_system {}
 }
 
 thread_local! {
@@ -158,7 +158,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
-impl system::Trait for Test {
+impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -176,7 +176,7 @@ impl system::Trait for Test {
 	type Version = ();
 }
 
-impl timestamp::Trait for Test {
+impl pallet_timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
@@ -207,5 +207,5 @@ impl crate::historical::Trait for Test {
 	type FullIdentificationOf = sp_runtime::traits::ConvertInto;
 }
 
-pub type System = system::Module<Test>;
+pub type System = frame_system::Module<Test>;
 pub type Session = Module<Test>;

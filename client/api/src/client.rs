@@ -18,9 +18,12 @@
 
 use std::collections::HashMap;
 use futures::channel::mpsc;
-use primitives::storage::StorageKey;
-use sp_runtime::{traits::{Block as BlockT, NumberFor}, generic::BlockId};
-use consensus::BlockOrigin;
+use sp_core::storage::StorageKey;
+use sp_runtime::{
+    traits::{Block as BlockT, NumberFor},
+    generic::BlockId
+};
+use sp_consensus::BlockOrigin;
 
 use crate::blockchain::Info;
 use crate::notifications::StorageEventStream;

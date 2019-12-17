@@ -19,11 +19,11 @@
 use crate::{trie_backend::TrieBackend, backend::{Backend, insert_into_memory_db}};
 use std::{error, fmt, collections::{BTreeMap, HashMap}, marker::PhantomData, ops};
 use hash_db::Hasher;
-use trie::{
+use sp_trie::{
 	MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration, trie_types::Layout,
 };
 use codec::Codec;
-use primitives::storage::{ChildInfo, OwnedChildInfo, Storage};
+use sp_core::storage::{ChildInfo, OwnedChildInfo, Storage};
 
 /// Error impossible.
 // FIXME: use `!` type when stabilized. https://github.com/rust-lang/rust/issues/35121
@@ -362,7 +362,7 @@ mod tests {
 	/// Assert in memory backend with only child trie keys works as trie backend.
 	#[test]
 	fn in_memory_with_child_trie_only() {
-		let storage = InMemory::<primitives::Blake2Hasher>::default();
+		let storage = InMemory::<sp_core::Blake2Hasher>::default();
 		let child_info = OwnedChildInfo::new_default(b"unique_id_1".to_vec());
 		let mut storage = storage.update(
 			vec![(

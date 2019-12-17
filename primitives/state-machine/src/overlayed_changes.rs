@@ -28,7 +28,7 @@ use crate::{
 use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeMap, BTreeSet};
 use codec::{Decode, Encode};
-use primitives::storage::{well_known_keys::EXTRINSIC_INDEX, OwnedChildInfo, ChildInfo};
+use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, OwnedChildInfo, ChildInfo};
 use std::{mem, ops};
 
 use hash_db::Hasher;
@@ -652,7 +652,7 @@ impl From<Option<Vec<u8>>> for OverlayedValue {
 #[cfg(test)]
 mod tests {
 	use hex_literal::hex;
-	use primitives::{
+	use sp_core::{
 		Blake2Hasher, traits::Externalities, storage::well_known_keys::EXTRINSIC_INDEX,
 	};
 	use crate::InMemoryBackend;

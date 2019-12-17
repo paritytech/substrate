@@ -19,7 +19,7 @@
 use codec::{Encode, Decode};
 use sp_std::{prelude::{Vec, Box}, convert::TryFrom};
 use crate::RuntimeDebug;
-use runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
+use sp_runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
 
 pub use crate::crypto::KeyTypeId;
 
@@ -669,7 +669,7 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 }
 
 #[cfg(feature = "std")]
-externalities::decl_extension! {
+sp_externalities::decl_extension! {
 	/// The offchain extension that will be registered at the Substrate externalities.
 	pub struct OffchainExt(Box<dyn Externalities>);
 }
@@ -696,7 +696,7 @@ pub trait TransactionPool {
 }
 
 #[cfg(feature = "std")]
-externalities::decl_extension! {
+sp_externalities::decl_extension! {
 	/// An externalities extension to submit transactions to the pool.
 	pub struct TransactionPoolExt(Box<dyn TransactionPool + Send>);
 }

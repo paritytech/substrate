@@ -25,7 +25,7 @@ use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::Prefix;
-use primitives::{
+use sp_core::{
 	ChangesTrieConfiguration, convert_hash, traits::CodeExecutor,
 	NativeOrEncoded, storage::{StorageKey, StorageData, well_known_keys, ChildInfo},
 };
@@ -38,14 +38,14 @@ use sp_runtime::{
 		DigestFor,
 	},
 };
-use state_machine::{
+use sp_state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieConfigurationRange, key_changes, key_changes_proof, StorageProof,
 	merge_storage_proofs,
 };
-use executor::{RuntimeVersion, RuntimeInfo};
-use consensus::{
+use sc_executor::{RuntimeVersion, RuntimeInfo};
+use sp_consensus::{
 	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams, ImportResult,
 	BlockOrigin, ForkChoiceStrategy, SelectChain, RecordProof,
 };
@@ -60,9 +60,9 @@ use sp_api::{
 	CallApiAt, ConstructRuntimeApi, Core as CoreApi, ApiExt, ApiRef, ProvideRuntimeApi,
 	CallApiAtParams,
 };
-use block_builder::BlockBuilderApi;
+use sc_block_builder::BlockBuilderApi;
 
-pub use client_api::{
+pub use sc_client_api::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
 		ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
@@ -129,7 +129,7 @@ impl<H> PrePostHeader<H> {
 pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: S,
-	keystore: Option<primitives::traits::BareCryptoStorePtr>,
+	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
 	LocalCallExecutor<in_mem::Backend<Block>, E>,
@@ -149,7 +149,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	backend: Arc<B>,
 	executor: E,
 	build_genesis_storage: S,
-	keystore: Option<primitives::traits::BareCryptoStorePtr>,
+	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
 		E: CodeExecutor + RuntimeInfo,
@@ -522,7 +522,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			AccessedRootsRecorder<'a, Block>
 		{
 			fn as_roots_storage(&self)
-				-> &dyn state_machine::ChangesTrieRootsStorage<HasherFor<Block>, NumberFor<Block>>
+				-> &dyn sp_state_machine::ChangesTrieRootsStorage<HasherFor<Block>, NumberFor<Block>>
 			{
 				self
 			}
@@ -654,7 +654,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn new_block(
 		&self,
 		inherent_digests: DigestFor<Block>,
-	) -> sp_blockchain::Result<block_builder::BlockBuilder<Block, Self, B>> where
+	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi<Block>,
@@ -662,7 +662,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 	{
 		let info = self.info();
-		block_builder::BlockBuilder::new(
+		sc_block_builder::BlockBuilder::new(
 			self,
 			info.chain.best_hash,
 			info.chain.best_number,
@@ -682,14 +682,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		parent: &BlockId<Block>,
 		inherent_digests: DigestFor<Block>,
 		record_proof: R,
-	) -> sp_blockchain::Result<block_builder::BlockBuilder<Block, Self, B>> where
+	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi<Block>,
 		<Self as ProvideRuntimeApi<Block>>::Api: BlockBuilderApi<Block, Error = Error> +
 			ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 	{
-		block_builder::BlockBuilder::new(
+		sc_block_builder::BlockBuilder::new(
 			self,
 			self.expect_block_hash_from_id(parent)?,
 			self.expect_block_number_from_id(parent)?,
@@ -1420,7 +1420,7 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 /// NOTE: only use this implementation when you are sure there are NO consensus-level BlockImport
 /// objects. Otherwise, importing blocks directly into the client would be bypassing
 /// important verification work.
-impl<B, E, Block, RA> consensus::BlockImport<Block> for &Client<B, E, Block, RA> where
+impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Clone + Send + Sync,
 	Block: BlockT,
@@ -1506,7 +1506,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for &Client<B, E, Block, RA>
 	}
 }
 
-impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> where
+impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Clone + Send + Sync,
 	Block: BlockT,
@@ -1783,7 +1783,7 @@ where
 	)
 }
 
-impl<BE, E, B, RA> consensus::block_validation::Chain<B> for Client<BE, E, B, RA>
+impl<BE, E, B, RA> sp_consensus::block_validation::Chain<B> for Client<BE, E, B, RA>
 	where BE: backend::Backend<B>,
 		  E: CallExecutor<B>,
 		  B: BlockT
@@ -1800,13 +1800,13 @@ impl<BE, E, B, RA> consensus::block_validation::Chain<B> for Client<BE, E, B, RA
 pub(crate) mod tests {
 	use std::collections::HashMap;
 	use super::*;
-	use primitives::{blake2_256, H256};
+	use sp_core::{blake2_256, H256};
 	use sp_runtime::DigestItem;
-	use consensus::{BlockOrigin, SelectChain, BlockImport};
-	use test_client::{
+	use sp_consensus::{BlockOrigin, SelectChain, BlockImport};
+	use substrate_test_runtime_client::{
 		prelude::*,
 		client_ext::ClientExt,
-		client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode},
+		sc_client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode},
 		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
 	};
 
@@ -1815,7 +1815,7 @@ pub(crate) mod tests {
 	/// 2) roots of changes tries for these blocks
 	/// 3) test cases in form (begin, end, key, vec![(block, extrinsic)]) that are required to pass
 	pub fn prepare_client_with_key_changes() -> (
-		test_client::client::Client<test_client::Backend, test_client::Executor, Block, RuntimeApi>,
+		substrate_test_runtime_client::sc_client::Client<substrate_test_runtime_client::Backend, substrate_test_runtime_client::Executor, Block, RuntimeApi>,
 		Vec<H256>,
 		Vec<(u64, u64, Vec<u8>, Vec<(u64, u32)>)>,
 	) {
@@ -1886,7 +1886,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn client_initializes_from_genesis_ok() {
-		let client = test_client::new();
+		let client = substrate_test_runtime_client::new();
 
 		assert_eq!(
 			client.runtime_api().balance_of(
@@ -1906,7 +1906,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn block_builder_works_with_no_transactions() {
-		let mut client = test_client::new();
+		let mut client = substrate_test_runtime_client::new();
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 
@@ -1917,7 +1917,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn block_builder_works_with_transactions() {
-		let mut client = test_client::new();
+		let mut client = substrate_test_runtime_client::new();
 
 		let mut builder = client.new_block(Default::default()).unwrap();
 
@@ -1954,7 +1954,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn block_builder_does_not_include_invalid() {
-		let mut client = test_client::new();
+		let mut client = substrate_test_runtime_client::new();
 
 		let mut builder = client.new_block(Default::default()).unwrap();
 
@@ -2019,7 +2019,7 @@ pub(crate) mod tests {
 	fn uncles_with_only_ancestors() {
 		// block tree:
 		// G -> A1 -> A2
-		let mut client = test_client::new();
+		let mut client = substrate_test_runtime_client::new();
 
 		// G -> A1
 		let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -2039,7 +2039,7 @@ pub(crate) mod tests {
 		//      A1 -> B2 -> B3 -> B4
 		//	          B2 -> C3
 		//	    A1 -> D2
-		let mut client = test_client::new();
+		let mut client = substrate_test_runtime_client::new();
 
 		// G -> A1
 		let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -2548,7 +2548,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn import_with_justification() {
-		let mut client = test_client::new();
+		let mut client = substrate_test_runtime_client::new();
 
 		// G -> A1
 		let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -2594,7 +2594,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn importing_diverged_finalized_block_should_trigger_reorg() {
-		let mut client = test_client::new();
+		let mut client = substrate_test_runtime_client::new();
 
 		// G -> A1 -> A2
 		//   \
@@ -2739,7 +2739,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn get_header_by_block_number_doesnt_panic() {
-		let client = test_client::new();
+		let client = substrate_test_runtime_client::new();
 
 		// backend uses u32 for block numbers, make sure we don't panic when
 		// trying to convert
@@ -2750,9 +2750,9 @@ pub(crate) mod tests {
 	#[test]
 	fn state_reverted_on_reorg() {
 		let _ = env_logger::try_init();
-		let mut client = test_client::new();
+		let mut client = substrate_test_runtime_client::new();
 
-		let current_balance = |client: &test_client::TestClient|
+		let current_balance = |client: &substrate_test_runtime_client::TestClient|
 			client.runtime_api().balance_of(
 				&BlockId::number(client.info().chain.best_number), AccountKeyring::Alice.into()
 			).unwrap();

@@ -26,24 +26,24 @@ use std::sync::Arc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use rpc::{Result as RpcResult, futures::Future};
 
-use api::Subscriptions;
-use client::{Client, CallExecutor, light::{blockchain::RemoteBlockchain, fetcher::Fetcher}};
-use primitives::{Bytes, storage::{StorageKey, StorageData, StorageChangeSet}};
-use runtime_version::RuntimeVersion;
+use sc_rpc_api::Subscriptions;
+use sc_client::{Client, CallExecutor, light::{blockchain::RemoteBlockchain, fetcher::Fetcher}};
+use sp_core::{Bytes, storage::{StorageKey, StorageData, StorageChangeSet}};
+use sp_version::RuntimeVersion;
 use sp_runtime::traits::Block as BlockT;
 
 use sp_api::{Metadata, ProvideRuntimeApi};
 
 use self::error::{Error, FutureResult};
 
-pub use api::state::*;
+pub use sc_rpc_api::state::*;
 
 /// State backend API.
 pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 	where
 		Block: BlockT + 'static,
-		B: client_api::backend::Backend<Block> + Send + Sync + 'static,
-		E: client::CallExecutor<Block> + Send + Sync + 'static,
+		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
+		E: sc_client::CallExecutor<Block> + Send + Sync + 'static,
 		RA: Send + Sync + 'static,
 {
 	/// Call runtime method at given block.
@@ -182,7 +182,7 @@ pub fn new_full<B, E, Block: BlockT, RA>(
 ) -> State<B, E, Block, RA>
 	where
 		Block: BlockT + 'static,
-		B: client_api::backend::Backend<Block> + Send + Sync + 'static,
+		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
 		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
@@ -203,7 +203,7 @@ pub fn new_light<B, E, Block: BlockT, RA, F: Fetcher<Block>>(
 ) -> State<B, E, Block, RA>
 	where
 		Block: BlockT + 'static,
-		B: client_api::backend::Backend<Block> + Send + Sync + 'static,
+		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
 		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		F: Send + Sync + 'static,
@@ -226,7 +226,7 @@ pub struct State<B, E, Block, RA> {
 impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 	where
 		Block: BlockT + 'static,
-		B: client_api::backend::Backend<Block> + Send + Sync + 'static,
+		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
 		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 {

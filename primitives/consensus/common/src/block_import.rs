@@ -137,7 +137,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// The changes to the storage to create the state for the block. If this is `Some(_)`,
 	/// the block import will not need to re-execute the block for importing it.
 	pub storage_changes: Option<
-		state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>
+		sp_state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>
 	>,
 	/// Is this block finalized already?
 	/// `true` implies instant finality.
@@ -164,7 +164,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 			Option<Justification>,
 			Vec<DigestItemFor<Block>>,
 			Option<Vec<Block::Extrinsic>>,
-			Option<state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>>,
+			Option<sp_state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>>,
 			bool,
 			Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		) {

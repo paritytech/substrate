@@ -20,9 +20,9 @@ use std::sync::Arc;
 use futures::{future::ready, FutureExt, TryFutureExt};
 use rpc::futures::future::{result, Future, Either};
 
-use api::Subscriptions;
-use client::{
-	self, Client, light::{fetcher::{Fetcher, RemoteBodyRequest}, blockchain::RemoteBlockchain},
+use sc_rpc_api::Subscriptions;
+use sc_client::{
+	Client, light::{fetcher::{Fetcher, RemoteBodyRequest}, blockchain::RemoteBlockchain},
 };
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
@@ -63,8 +63,8 @@ impl<B, E, Block: BlockT, RA, F: Fetcher<Block>> LightChain<B, E, Block, RA, F> 
 
 impl<B, E, Block, RA, F> ChainBackend<B, E, Block, RA> for LightChain<B, E, Block, RA, F> where
 	Block: BlockT + 'static,
-	B: client_api::backend::Backend<Block> + Send + Sync + 'static,
-	E: client::CallExecutor<Block> + Send + Sync + 'static,
+	B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
+	E: sc_client::CallExecutor<Block> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 	F: Fetcher<Block> + Send + Sync + 'static,
 {
@@ -80,7 +80,7 @@ impl<B, E, Block, RA, F> ChainBackend<B, E, Block, RA> for LightChain<B, E, Bloc
 		let hash = self.unwrap_or_best(hash);
 
 		let fetcher = self.fetcher.clone();
-		let maybe_header = client::light::blockchain::future_header(
+		let maybe_header = sc_client::light::blockchain::future_header(
 			&*self.remote_blockchain,
 			&*fetcher,
 			BlockId::Hash(hash),

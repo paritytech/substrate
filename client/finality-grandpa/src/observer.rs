@@ -19,14 +19,14 @@ use std::sync::Arc;
 use futures::prelude::*;
 use futures::{future, sync::mpsc};
 
-use grandpa::{
+use finality_grandpa::{
 	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
 };
 use log::{debug, info, warn};
 
-use consensus_common::SelectChain;
-use client_api::{CallExecutor, backend::{AuxStore, Backend}};
-use client::Client;
+use sp_consensus::SelectChain;
+use sc_client_api::{CallExecutor, backend::{Backend, AuxStore}};
+use sc_client::Client;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
 
 use crate::{
@@ -36,11 +36,11 @@ use crate::{
 use crate::authorities::SharedAuthoritySet;
 use crate::communication::NetworkBridge;
 use crate::consensus_changes::SharedConsensusChanges;
-use fg_primitives::AuthorityId;
+use sp_finality_grandpa::AuthorityId;
 
 struct ObserverChain<'a, Block: BlockT, B, E, RA>(&'a Client<B, E, Block, RA>);
 
-impl<'a, Block: BlockT, B, E, RA> grandpa::Chain<Block::Hash, NumberFor<Block>>
+impl<'a, Block: BlockT, B, E, RA> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
 	for ObserverChain<'a, Block, B, E, RA> where
 		B: Backend<Block>,
 		E: CallExecutor<Block>,
@@ -83,7 +83,7 @@ fn grandpa_observer<B, E, Block: BlockT, RA, S, F>(
 	let observer = commits.fold(last_finalized_number, move |last_finalized_number, global| {
 		let (round, commit, callback) = match global {
 			voter::CommunicationIn::Commit(round, commit, callback) => {
-				let commit = grandpa::Commit::from(commit);
+				let commit = finality_grandpa::Commit::from(commit);
 				(round, commit, callback)
 			},
 			voter::CommunicationIn::CatchUp(..) => {
@@ -98,7 +98,7 @@ fn grandpa_observer<B, E, Block: BlockT, RA, S, F>(
 			return future::ok(last_finalized_number);
 		}
 
-		let validation_result = match grandpa::validate_commit(
+		let validation_result = match finality_grandpa::validate_commit(
 			&commit,
 			&voters,
 			&ObserverChain(&*client),
@@ -129,14 +129,14 @@ fn grandpa_observer<B, E, Block: BlockT, RA, S, F>(
 			// and that implies that the next round has started.
 			note_round(round + 1);
 
-			grandpa::process_commit_validation_result(validation_result, callback);
+			finality_grandpa::process_commit_validation_result(validation_result, callback);
 
 			// proceed processing with new finalized block number
 			future::ok(finalized_number)
 		} else {
 			debug!(target: "afg", "Received invalid commit: ({:?}, {:?})", round, commit);
 
-			grandpa::process_commit_validation_result(validation_result, callback);
+			finality_grandpa::process_commit_validation_result(validation_result, callback);
 
 			// commit is invalid, continue processing commits with the current state
 			future::ok(last_finalized_number)
@@ -207,7 +207,7 @@ struct ObserverWork<B: BlockT, E, Backend, RA> {
 	client: Arc<Client<Backend, E, B, RA>>,
 	network: NetworkBridge<B>,
 	persistent_data: PersistentData<B>,
-	keystore: Option<keystore::KeyStorePtr>,
+	keystore: Option<sc_keystore::KeyStorePtr>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 }
 
@@ -224,7 +224,7 @@ where
 		client: Arc<Client<Bk, E, B, RA>>,
 		network: NetworkBridge<B>,
 		persistent_data: PersistentData<B>,
-		keystore: Option<keystore::KeyStorePtr>,
+		keystore: Option<sc_keystore::KeyStorePtr>,
 		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	) -> Self {
 

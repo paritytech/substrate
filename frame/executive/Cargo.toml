@@ -10,24 +10,24 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 sp-std = { path = "../../primitives/std", default-features = false }
 sp-io ={ path = "../../primitives/io", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
+frame-support = { path = "../support", default-features = false }
+frame-system = { path = "../system", default-features = false }
 
 [dev-dependencies]
 hex-literal = "0.2.1"
-primitives = { package = "sp-core",  path = "../../primitives/core" }
+sp-core = { path = "../../primitives/core" }
 pallet-indices = { path = "../indices" }
-balances = { package = "pallet-balances", path = "../balances" }
-transaction-payment = { package = "pallet-transaction-payment", path = "../transaction-payment" }
+pallet-balances = { path = "../balances" }
+pallet-transaction-payment = { path = "../transaction-payment" }
 
 [features]
 default = ["std"]
 std = [
 	"sp-std/std",
-	"support/std",
+	"frame-support/std",
 	"serde",
 	"codec/std",
 	"sp-runtime/std",
 	"sp-io/std",
-	"system/std",
+	"frame-system/std",
 ]

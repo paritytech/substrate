@@ -33,13 +33,11 @@ use sp_runtime::{
 	},
 };
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
-use primitives::ExecutionContext;
-
+use sp_core::ExecutionContext;
 use sp_api::{Core, ApiExt, ApiErrorFor, ApiRef, ProvideRuntimeApi, StorageChanges, StorageProof};
-
 use sp_consensus::RecordProof;
 
-pub use runtime_api::BlockBuilder as BlockBuilderApi;
+pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
 use sc_client_api::backend;
 

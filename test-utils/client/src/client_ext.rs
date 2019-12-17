@@ -16,10 +16,11 @@
 
 //! Client extension for tests.
 
-use client::{self, Client};
-use client_api::backend::Finalizer;
-use consensus::{
-	BlockImportParams, BlockImport, BlockOrigin, Error as ConsensusError, ForkChoiceStrategy,
+use sc_client::{self, Client};
+use sc_client_api::backend::Finalizer;
+use sp_consensus::{
+	BlockImportParams, BlockImport, BlockOrigin, Error as ConsensusError,
+	ForkChoiceStrategy,
 };
 use sp_runtime::Justification;
 use sp_runtime::traits::{Block as BlockT};
@@ -62,8 +63,8 @@ pub trait ClientBlockImportExt<Block: BlockT>: Sized {
 
 impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 	where
-		B: client_api::backend::Backend<Block>,
-		E: client::CallExecutor<Block>,
+		B: sc_client_api::backend::Backend<Block>,
+		E: sc_client::CallExecutor<Block>,
 		Self: BlockImport<Block, Error = ConsensusError>,
 		Block: BlockT,
 {

@@ -10,12 +10,12 @@ serde = { version = "1.0.101", optional = true }
 sp-io = { path = "../../primitives/io", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
 sp-std = { path = "../../primitives/std", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
+frame-support = { path = "../support", default-features = false }
+frame-system = { path = "../system", default-features = false }
 
 [dev-dependencies]
-balances = { package = "pallet-balances", path = "../balances" }
-primitives = { package = "sp-core",  path = "../../primitives/core" }
+pallet-balances = { path = "../balances" }
+sp-core = { path = "../../primitives/core" }
 
 [features]
 default = ["std"]
@@ -25,6 +25,6 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"support/std",
-	"system/std",
+	"frame-support/std",
+	"frame-system/std",
 ]

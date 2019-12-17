@@ -16,14 +16,14 @@
 
 //! Blockchain access trait
 
-use client::Client as SubstrateClient;
+use sc_client::Client as SubstrateClient;
 use sp_blockchain::Error;
-use client_api::{ChangesProof, StorageProof, ClientInfo, CallExecutor};
-use consensus::{BlockImport, BlockStatus, Error as ConsensusError};
+use sc_client_api::{ChangesProof, StorageProof, ClientInfo, CallExecutor};
+use sp_consensus::{BlockImport, BlockStatus, Error as ConsensusError};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::generic::{BlockId};
 use sp_runtime::Justification;
-use primitives::storage::{StorageKey, ChildInfo};
+use sp_core::storage::{StorageKey, ChildInfo};
 
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
@@ -92,7 +92,7 @@ impl<Block: BlockT> FinalityProofProvider<Block> for () {
 }
 
 impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
-	B: client_api::backend::Backend<Block> + Send + Sync + 'static,
+	B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
 	Self: BlockImport<Block, Error=ConsensusError>,
 	Block: BlockT,

@@ -26,32 +26,30 @@ use futures::{
 use log::{warn, debug, trace};
 use parking_lot::Mutex;
 
-use client_api::{
+use sc_client_api::{
 	client::BlockBody,
 	light::{Fetcher, RemoteBodyRequest},
 };
-use primitives::{Blake2Hasher, H256};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Extrinsic, Header, NumberFor, SimpleArithmetic},
 };
 use sp_blockchain::HeaderBackend;
-use txpool_api::TransactionPoolMaintainer;
+use sp_transaction_pool::{TransactionPoolMaintainer, runtime_api::TaggedTransactionQueue};
 use sp_api::ProvideRuntimeApi;
-use txpool_api::runtime_api::TaggedTransactionQueue;
 
-use txpool::{self, ChainApi};
+use sc_transaction_graph::{self, ChainApi};
 
 /// Basic transaction pool maintainer for full clients.
 pub struct FullBasicPoolMaintainer<Client, PoolApi: ChainApi> {
-	pool: Arc<txpool::Pool<PoolApi>>,
+	pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 	client: Arc<Client>,
 }
 
 impl<Client, PoolApi: ChainApi> FullBasicPoolMaintainer<Client, PoolApi> {
 	/// Create new basic full pool maintainer.
 	pub fn new(
-		pool: Arc<txpool::Pool<PoolApi>>,
+		pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 		client: Arc<Client>,
 	) -> Self {
 		FullBasicPoolMaintainer { pool, client }
@@ -62,10 +60,10 @@ impl<Block, Client, PoolApi> TransactionPoolMaintainer
 for
 	FullBasicPoolMaintainer<Client, PoolApi>
 where
-	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
+	Block: BlockT,
 	Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + BlockBody<Block> + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
-	PoolApi: ChainApi<Block = Block, Hash = H256> + 'static,
+	PoolApi: ChainApi<Block = Block, Hash = Block::Hash> + 'static,
 {
 	type Block = Block;
 	type Hash = Block::Hash;
@@ -144,7 +142,7 @@ where
 
 /// Basic transaction pool maintainer for light clients.
 pub struct LightBasicPoolMaintainer<Block: BlockT, Client, PoolApi: ChainApi, F> {
-	pool: Arc<txpool::Pool<PoolApi>>,
+	pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 	client: Arc<Client>,
 	fetcher: Arc<F>,
 	revalidate_time_period: Option<std::time::Duration>,
@@ -155,10 +153,10 @@ pub struct LightBasicPoolMaintainer<Block: BlockT, Client, PoolApi: ChainApi, F>
 
 impl<Block, Client, PoolApi, F> LightBasicPoolMaintainer<Block, Client, PoolApi, F>
 	where
-		Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
+		Block: BlockT,
 		Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + BlockBody<Block> + 'static,
 		Client::Api: TaggedTransactionQueue<Block>,
-		PoolApi: ChainApi<Block = Block, Hash = H256> + 'static,
+		PoolApi: ChainApi<Block = Block, Hash = Block::Hash> + 'static,
 		F: Fetcher<Block> + 'static,
 {
 	/// Create light pool maintainer with default constants.
@@ -166,7 +164,7 @@ impl<Block, Client, PoolApi, F> LightBasicPoolMaintainer<Block, Client, PoolApi,
 	/// Default constants are: revalidate every 60 seconds or every 20 blocks
 	/// (whatever happens first).
 	pub fn with_defaults(
-		pool: Arc<txpool::Pool<PoolApi>>,
+		pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 		client: Arc<Client>,
 		fetcher: Arc<F>,
 	) -> Self {
@@ -181,7 +179,7 @@ impl<Block, Client, PoolApi, F> LightBasicPoolMaintainer<Block, Client, PoolApi,
 
 	/// Create light pool maintainer with passed constants.
 	pub fn new(
-		pool: Arc<txpool::Pool<PoolApi>>,
+		pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 		client: Arc<Client>,
 		fetcher: Arc<F>,
 		revalidate_time_period: Option<std::time::Duration>,
@@ -262,10 +260,10 @@ impl<Block, Client, PoolApi, F> TransactionPoolMaintainer
 for
 	LightBasicPoolMaintainer<Block, Client, PoolApi, F>
 where
-	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
+	Block: BlockT,
 	Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + BlockBody<Block> + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
-	PoolApi: ChainApi<Block = Block, Hash = H256> + 'static,
+	PoolApi: ChainApi<Block = Block, Hash = Block::Hash> + 'static,
 	F: Fetcher<Block> + 'static,
 {
 	type Block = Block;
@@ -356,15 +354,15 @@ mod tests {
 	use super::*;
 	use futures::executor::block_on;
 	use codec::Encode;
-	use test_client::{prelude::*, runtime::{Block, Transfer}, consensus::{BlockOrigin, SelectChain}};
-	use txpool_api::PoolStatus;
+	use substrate_test_runtime_client::{prelude::*, runtime::{Block, Transfer}, sp_consensus::{BlockOrigin, SelectChain}};
+	use sp_transaction_pool::PoolStatus;
 	use crate::api::{FullChainApi, LightChainApi};
 
 	#[test]
 	fn should_remove_transactions_from_the_full_pool() {
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let mut client = Arc::new(client);
-		let pool = txpool::Pool::new(Default::default(), FullChainApi::new(client.clone()));
+		let pool = sc_transaction_graph::Pool::new(Default::default(), FullChainApi::new(client.clone()));
 		let pool = Arc::new(pool);
 		let transaction = Transfer {
 			amount: 5,
@@ -402,7 +400,7 @@ mod tests {
 			to: Default::default(),
 		}.into_signed_tx();
 		let fetcher_transaction = transaction.clone();
-		let fetcher = Arc::new(test_client::new_light_fetcher()
+		let fetcher = Arc::new(substrate_test_runtime_client::new_light_fetcher()
 			.with_remote_body(Some(Box::new(move |_| Ok(vec![fetcher_transaction.clone()]))))
 			.with_remote_call(Some(Box::new(move |_| {
 				let validity: sp_runtime::transaction_validity::TransactionValidity =
@@ -418,7 +416,7 @@ mod tests {
 
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool = txpool::Pool::new(Default::default(), LightChainApi::new(
+		let pool = sc_transaction_graph::Pool::new(Default::default(), LightChainApi::new(
 			client.clone(),
 			fetcher.clone(),
 		));
@@ -474,7 +472,7 @@ mod tests {
 
 		let build_fetcher = || {
 			let validated = Arc::new(atomic::AtomicBool::new(false));
-			Arc::new(test_client::new_light_fetcher()
+			Arc::new(substrate_test_runtime_client::new_light_fetcher()
 				.with_remote_body(Some(Box::new(move |_| Ok(vec![]))))
 				.with_remote_call(Some(Box::new(move |_| {
 					let is_inserted = validated.swap(true, atomic::Ordering::SeqCst);
@@ -505,7 +503,7 @@ mod tests {
 			let client = Arc::new(client);
 
 			// now let's prepare pool
-			let pool = txpool::Pool::new(Default::default(), LightChainApi::new(
+			let pool = sc_transaction_graph::Pool::new(Default::default(), LightChainApi::new(
 				client.clone(),
 				fetcher.clone(),
 			));
@@ -564,7 +562,7 @@ mod tests {
 	fn should_add_reverted_transactions_to_the_pool() {
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let mut client = Arc::new(client);
-		let pool = txpool::Pool::new(Default::default(), FullChainApi::new(client.clone()));
+		let pool = sc_transaction_graph::Pool::new(Default::default(), FullChainApi::new(client.clone()));
 		let pool = Arc::new(pool);
 		let transaction = Transfer {
 			amount: 5,

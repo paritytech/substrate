@@ -41,10 +41,11 @@
 use std::sync::Arc;
 
 use log::info;
-use client::Client;
-use block_builder_api::BlockBuilder;
+use sc_client::Client;
+use sp_block_builder::BlockBuilder;
 use sp_api::{ConstructRuntimeApi, ProvideRuntimeApi};
-use sp_runtime::{generic::BlockId, traits::{Block as BlockT, One, Zero}};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{Block as BlockT, One, Zero};
 
 use crate::{RuntimeAdapter, create_block};
 
@@ -58,8 +59,8 @@ pub fn next<RA, Backend, Exec, Block, RtApi>(
 ) -> Option<Block>
 where
 	Block: BlockT,
-	Exec: client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
-	Backend: client_api::backend::Backend<Block> + Send,
+	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
+	Backend: sc_client_api::backend::Backend<Block> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
 		BlockBuilder<Block, Error = sp_blockchain::Error> +

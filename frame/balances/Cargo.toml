@@ -10,13 +10,13 @@ safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 sp-std = { path = "../../primitives/std", default-features = false }
 sp-runtime = { path = "../../primitives/runtime", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
+frame-support = { path = "../support", default-features = false }
+frame-system = { path = "../system", default-features = false }
 
 [dev-dependencies]
 sp-io = { path = "../../primitives/io" }
-primitives = { package = "sp-core", path = "../../primitives/core" }
-transaction-payment = { package = "pallet-transaction-payment", path = "../transaction-payment" }
+sp-core = { path = "../../primitives/core" }
+pallet-transaction-payment = { path = "../transaction-payment" }
 
 [features]
 default = ["std"]
@@ -25,7 +25,7 @@ std = [
 	"safe-mix/std",
 	"codec/std",
 	"sp-std/std",
-	"support/std",
+	"frame-support/std",
 	"sp-runtime/std",
-	"system/std",
+	"frame-system/std",
 ]

@@ -25,7 +25,7 @@ use crate::{
 		BlockNumber as ChangesTrieBlockNumber,
 	},
 };
-use primitives::{
+use sp_core::{
 	storage::{
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
 		Storage,
@@ -33,7 +33,7 @@ use primitives::{
 	Blake2Hasher,
 };
 use codec::Encode;
-use externalities::{Extensions, Extension};
+use sp_externalities::{Extensions, Extension};
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher = Blake2Hasher, N: ChangesTrieBlockNumber = u64>
@@ -135,7 +135,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 	/// Returns the result of the given closure.
 	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {
 		let mut ext = self.ext();
-		externalities::set_and_run_with_externalities(&mut ext, execute)
+		sp_externalities::set_and_run_with_externalities(&mut ext, execute)
 	}
 }
 
@@ -174,7 +174,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> From<Storage> for TestExternalities<H
 	}
 }
 
-impl<H, N> externalities::ExtensionStore for TestExternalities<H, N> where
+impl<H, N> sp_externalities::ExtensionStore for TestExternalities<H, N> where
 	H: Hasher,
 	H::Out: codec::Codec,
 	N: ChangesTrieBlockNumber,
@@ -187,7 +187,7 @@ impl<H, N> externalities::ExtensionStore for TestExternalities<H, N> where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::traits::Externalities;
+	use sp_core::traits::Externalities;
 	use hex_literal::hex;
 
 	#[test]

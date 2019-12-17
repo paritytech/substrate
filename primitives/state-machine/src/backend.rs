@@ -20,9 +20,9 @@ use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
-use trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
+use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
 use codec::Encode;
-use primitives::storage::{ChildInfo, OwnedChildInfo};
+use sp_core::storage::{ChildInfo, OwnedChildInfo};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -307,9 +307,9 @@ impl Consolidate for Vec<(
 	}
 }
 
-impl<H: Hasher, KF: trie::KeyFunction<H>> Consolidate for trie::GenericMemoryDB<H, KF> {
+impl<H: Hasher, KF: sp_trie::KeyFunction<H>> Consolidate for sp_trie::GenericMemoryDB<H, KF> {
 	fn consolidate(&mut self, other: Self) {
-		trie::GenericMemoryDB::consolidate(self, other)
+		sp_trie::GenericMemoryDB::consolidate(self, other)
 	}
 }
 

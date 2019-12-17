@@ -35,18 +35,18 @@ extern crate self as sp_api;
 
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use state_machine::{
+pub use sp_state_machine::{
 	OverlayedChanges, StorageProof, Backend as StateBackend, ChangesTrieStorage,
 };
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use primitives::NativeOrEncoded;
+pub use sp_core::NativeOrEncoded;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use hash_db::Hasher;
 #[doc(hidden)]
 #[cfg(not(feature = "std"))]
-pub use primitives::to_substrate_wasm_fn_return_value;
+pub use sp_core::to_substrate_wasm_fn_return_value;
 #[doc(hidden)]
 pub use sp_runtime::{
 	traits::{
@@ -56,7 +56,7 @@ pub use sp_runtime::{
 	generic::BlockId, transaction_validity::TransactionValidity,
 };
 #[doc(hidden)]
-pub use primitives::{offchain, ExecutionContext};
+pub use sp_core::{offchain, ExecutionContext};
 #[doc(hidden)]
 pub use sp_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
 #[doc(hidden)]
@@ -65,7 +65,7 @@ pub use sp_std::{slice, mem};
 use sp_std::result;
 #[doc(hidden)]
 pub use codec::{Encode, Decode};
-use primitives::OpaqueMetadata;
+use sp_core::OpaqueMetadata;
 #[cfg(feature = "std")]
 use std::{panic::UnwindSafe, cell::RefCell};
 
@@ -228,20 +228,20 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 
 /// A type that records all accessed trie nodes and generates a proof out of it.
 #[cfg(feature = "std")]
-pub type ProofRecorder<B> = state_machine::ProofRecorder<
+pub type ProofRecorder<B> = sp_state_machine::ProofRecorder<
 	<<<B as BlockT>::Header as HeaderT>::Hashing as HashT>::Hasher
 >;
 
 /// A type that is used as cache for the storage transactions.
 #[cfg(feature = "std")]
 pub type StorageTransactionCache<Block, Backend> =
-	state_machine::StorageTransactionCache<
+	sp_state_machine::StorageTransactionCache<
 		<Backend as StateBackend<HasherFor<Block>>>::Transaction, HasherFor<Block>, NumberFor<Block>
 	>;
 
 #[cfg(feature = "std")]
 pub type StorageChanges<SBackend, Block> =
-	state_machine::StorageChanges<
+	sp_state_machine::StorageChanges<
 		<SBackend as StateBackend<HasherFor<Block>>>::Transaction,
 		HasherFor<Block>,
 		NumberFor<Block>
