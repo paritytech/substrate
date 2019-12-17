@@ -553,7 +553,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		self.peerset.remove_reserved_peer(peer);
 	}
 
-	/// Adds a `PeerId` and its address as reserved.
+	/// Adds a `PeerId` and its address as reserved. The string should encode the address
+	/// and peer ID of the remote node.
 	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
 		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
 		self.peerset.add_reserved_peer(peer_id.clone());

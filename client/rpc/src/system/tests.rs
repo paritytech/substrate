@@ -80,6 +80,18 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 						peerset: serde_json::Value::Null,
 					}).unwrap());
 				},
+				Request::NetworkAddReservedPeer(peer, sender) => {
+					let _ = match sc_network::config::parse_str_addr(&peer) {
+						Ok(_) => sender.send(Ok(())),
+						Err(s) => sender.send(Err(error::Error::MalformattedPeerArg(s.to_string()))),
+					};
+				},
+				Request::NetworkRemoveReservedPeer(peer, sender) => {
+					let _ = match peer.parse::<PeerId>() {
+						Ok(_) => sender.send(Ok(())),
+						Err(s) => sender.send(Err(error::Error::MalformattedPeerArg(s.to_string()))),
+					};
+				}
 				Request::NodeRoles(sender) => {
 					let _ = sender.send(vec![NodeRole::Authority]);
 				}
