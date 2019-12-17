@@ -6,11 +6,11 @@ description = "Authority discovery primitives"
 edition = "2018"
 
 [dependencies]
-sp-application-crypto = { path = "../application-crypto", default-features = false }
+sp-application-crypto = { version = "2.0.0", default-features = false, path = "../application-crypto" }
 codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
-sp-std = { path = "../std", default-features = false }
-sp-api = { path = "../api", default-features = false }
-sp-runtime = { path = "../runtime", default-features = false }
+sp-std = { version = "2.0.0", default-features = false, path = "../std" }
+sp-api = { version = "2.0.0", default-features = false, path = "../api" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
 
 [features]
 default = ["std"]
