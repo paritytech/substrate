@@ -544,7 +544,7 @@ macro_rules! __impl_outer_event_json_metadata {
 			}
 
 			#[allow(dead_code)]
-			pub fn [< __module_events_ $system >] () -> &'static [$crate::event::EventMetadata] {
+			pub fn _module_events_$system () -> &'static [$crate::event::EventMetadata] {
 				$system::Event::metadata()
 			}
 
