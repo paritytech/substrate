@@ -50,7 +50,7 @@ use pallet_timestamp;
 use sp_std::{result, prelude::*};
 use codec::{Encode, Decode};
 use frame_support::{
-	decl_storage, decl_module, Parameter, traits::{Get, FindAuthor},
+	decl_storage, decl_module, decl_error, Parameter, traits::{Get, FindAuthor},
 	ConsensusEngineId,
 };
 use sp_runtime::{
@@ -87,7 +87,18 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {	}
+}
+
+decl_error! {
+	pub enum Error {
+		/// Authorities are already initialized!
+		AlreadyInitialized,
+		/// Aura slot duration cannot be zero.
+		DurationZero,
+		/// Only one block may be authored per slot.
+		AlreadyAuthored,
+	}
 }
 
 impl<T: Trait> Module<T> {
@@ -103,7 +114,7 @@ impl<T: Trait> Module<T> {
 
 	fn initialize_authorities(authorities: &[T::AuthorityId]) {
 		if !authorities.is_empty() {
-			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
+			assert!(<Authorities<T>>::get().is_empty(), Error::AlreadyInitialized);
 			<Authorities<T>>::put(authorities);
 		}
 	}
@@ -187,12 +198,12 @@ impl<T: Trait> Module<T> {
 			return;
 		}
 
-		assert!(!slot_duration.is_zero(), "Aura slot duration cannot be zero.");
+		assert!(!slot_duration.is_zero(), Error::DurationZero);
 
 		let last_slot = last / slot_duration;
 		let cur_slot = now / slot_duration;
 
-		assert!(last_slot < cur_slot, "Only one block may be authored per slot.");
+		assert!(last_slot < cur_slot, Error::AlreadyAuthored);
 
 		// TODO [#3398] Generate offence report for all authorities that skipped their slots.
 	}
