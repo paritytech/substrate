@@ -38,7 +38,7 @@ fn basic_locking_should_work() {
 		Balances::set_lock(ID_1, &1, 9, u64::max_value(), WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 5, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::LiquidityRestrictions
 		);
 	});
 }
@@ -94,17 +94,17 @@ fn lock_value_extension_should_work() {
 		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::LiquidityRestrictions
 		);
 		Balances::extend_lock(ID_1, &1, 2, u64::max_value(), WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::LiquidityRestrictions
 		);
 		Balances::extend_lock(ID_1, &1, 8, u64::max_value(), WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 3, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::LiquidityRestrictions
 		);
 	});
 }
@@ -119,7 +119,7 @@ fn lock_reasons_should_work() {
 			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Transfer.into());
 			assert_noop!(
 				<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
-				"account liquidity restrictions prevent withdrawal"
+				Error::LiquidityRestrictions
 			);
 			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
 			// NOTE: this causes a fee payment.
@@ -135,7 +135,7 @@ fn lock_reasons_should_work() {
 			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 			assert_noop!(
 				<Balances as ReservableCurrency<_>>::reserve(&1, 1),
-				"account liquidity restrictions prevent withdrawal"
+				Error::LiquidityRestrictions
 			);
 			assert!(<ChargeTransactionPayment<Runtime> as SignedExtension>::pre_dispatch(
 				ChargeTransactionPayment::from(1),
@@ -164,7 +164,7 @@ fn lock_block_number_should_work() {
 		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::LiquidityRestrictions
 		);
 
 		System::set_block_number(2);
@@ -178,18 +178,18 @@ fn lock_block_number_extension_should_work() {
 		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::LiquidityRestrictions
 		);
 		Balances::extend_lock(ID_1, &1, 10, 1, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::LiquidityRestrictions
 		);
 		System::set_block_number(2);
 		Balances::extend_lock(ID_1, &1, 10, 8, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 3, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::LiquidityRestrictions
 		);
 	});
 }
@@ -200,17 +200,17 @@ fn lock_reasons_extension_should_work() {
 		Balances::set_lock(ID_1, &1, 10, 10, WithdrawReason::Transfer.into());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::LiquidityRestrictions
 		);
 		Balances::extend_lock(ID_1, &1, 10, 10, WithdrawReasons::none());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::LiquidityRestrictions
 		);
 		Balances::extend_lock(ID_1, &1, 10, 10, WithdrawReason::Reserve.into());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::LiquidityRestrictions
 		);
 	});
 }
@@ -227,7 +227,7 @@ fn default_indexing_on_new_accounts_should_not_work2() {
 			// ext_deposit is 10, value is 9, not satisfies for ext_deposit
 			assert_noop!(
 				Balances::transfer(Some(1).into(), 5, 9),
-				"value too low to create account",
+				Error::ExistentialDeposit,
 			);
 			assert_eq!(Balances::is_dead_account(&5), true); // account 5 should not exist
 			assert_eq!(Balances::free_balance(&1), 100);
@@ -347,7 +347,7 @@ fn force_transfer_works() {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_noop!(
 			Balances::force_transfer(Some(2).into(), 1, 2, 69),
-			"RequireRootOrigin",
+			"RequireRootOrigin".into(),
 		);
 		assert_ok!(Balances::force_transfer(RawOrigin::Root.into(), 1, 2, 69));
 		assert_eq!(Balances::total_balance(&1), 42);
@@ -379,7 +379,7 @@ fn balance_transfer_when_reserved_should_not_work() {
 		assert_ok!(Balances::reserve(&1, 69));
 		assert_noop!(
 			Balances::transfer(Some(1).into(), 2, 69),
-			"balance too low to send value",
+			Error::FreeBalanceLow,
 		);
 	});
 }
@@ -482,7 +482,7 @@ fn transferring_reserved_balance_to_nonexistent_should_fail() {
 	ExtBuilder::default().build().execute_with(|| {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 111));
-		assert_noop!(Balances::repatriate_reserved(&1, &2, 42), "beneficiary account must pre-exist");
+		assert_noop!(Balances::repatriate_reserved(&1, &2, 42), Error::NoBeneficiary);
 	});
 }
 
@@ -508,7 +508,7 @@ fn transferring_too_high_value_should_not_panic() {
 
 		assert_err!(
 			Balances::transfer(Some(1).into(), 2, u64::max_value()),
-			"destination balance too high to receive value",
+			Error::Overflow,
 		);
 
 		assert_eq!(Balances::free_balance(&1), u64::max_value());
@@ -575,7 +575,7 @@ fn transfer_overflow_isnt_exploitable() {
 
 		assert_err!(
 			Balances::transfer(Some(1).into(), 5, evil_value),
-			"got overflow after adding a fee to value",
+			Error::Overflow,
 		);
 	});
 }
@@ -656,7 +656,7 @@ fn unvested_balance_should_not_transfer() {
 			assert_eq!(Balances::vesting_balance(&1), 45);
 			assert_noop!(
 				Balances::transfer(Some(1).into(), 2, 56),
-				"vesting balance too high to send value",
+				Error::VestingBalance,
 			); // Account 1 cannot send more than vested amount
 		});
 }
@@ -751,7 +751,7 @@ fn transfer_keep_alive_works() {
 		let _ = Balances::deposit_creating(&1, 100);
 		assert_err!(
 			Balances::transfer_keep_alive(Some(1).into(), 2, 100),
-			"transfer would kill account"
+			Error::KeepAlive
 		);
 		assert_eq!(Balances::is_dead_account(&1), false);
 		assert_eq!(Balances::total_balance(&1), 100);

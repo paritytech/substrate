@@ -23,7 +23,7 @@ use codec::{FullCodec, Codec, Encode, Decode};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	ConsensusEngineId,
-	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
+	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating, ModuleDispatchError},
 };
 
 use crate::dispatch::Parameter;
@@ -333,6 +333,9 @@ pub trait Currency<AccountId> {
 	/// and must be dealt with. It may be dropped but cannot be cloned.
 	type NegativeImbalance: Imbalance<Self::Balance, Opposite=Self::PositiveImbalance>;
 
+	/// Error type for a module.
+	type Error: ModuleDispatchError;
+
 	// PUBLIC IMMUTABLES
 
 	/// The combined balance of `who`.
@@ -386,7 +389,7 @@ pub trait Currency<AccountId> {
 		_amount: Self::Balance,
 		reasons: WithdrawReasons,
 		new_balance: Self::Balance,
-	) -> result::Result<(), &'static str>;
+	) -> result::Result<(), Self::Error>;
 
 	// PUBLIC MUTABLES (DANGEROUS)
 
@@ -399,7 +402,7 @@ pub trait Currency<AccountId> {
 		dest: &AccountId,
 		value: Self::Balance,
 		existence_requirement: ExistenceRequirement,
-	) -> result::Result<(), &'static str>;
+	) -> result::Result<(), Self::Error>;
 
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
 	/// free balance. This function cannot fail.
@@ -419,7 +422,7 @@ pub trait Currency<AccountId> {
 	fn deposit_into_existing(
 		who: &AccountId,
 		value: Self::Balance
-	) -> result::Result<Self::PositiveImbalance, &'static str>;
+	) -> result::Result<Self::PositiveImbalance, Self::Error>;
 
 	/// Similar to deposit_creating, only accepts a `NegativeImbalance` and returns nothing on
 	/// success.
@@ -465,7 +468,7 @@ pub trait Currency<AccountId> {
 		value: Self::Balance,
 		reasons: WithdrawReasons,
 		liveness: ExistenceRequirement,
-	) -> result::Result<Self::NegativeImbalance, &'static str>;
+	) -> result::Result<Self::NegativeImbalance, Self::Error>;
 
 	/// Similar to withdraw, only accepts a `PositiveImbalance` and returns nothing on success.
 	fn settle(
@@ -528,7 +531,7 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	///
 	/// If the free balance is lower than `value`, then no funds will be moved and an `Err` will
 	/// be returned to notify of this. This is different behavior than `unreserve`.
-	fn reserve(who: &AccountId, value: Self::Balance) -> result::Result<(), &'static str>;
+	fn reserve(who: &AccountId, value: Self::Balance) -> result::Result<(), Self::Error>;
 
 	/// Moves up to `value` from reserved balance to free balance. This function cannot fail.
 	///
@@ -552,7 +555,7 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 		slashed: &AccountId,
 		beneficiary: &AccountId,
 		value: Self::Balance
-	) -> result::Result<Self::Balance, &'static str>;
+	) -> result::Result<Self::Balance, Self::Error>;
 }
 
 /// An identifier for a lock. Used for disambiguating different locks so that
@@ -619,7 +622,7 @@ pub trait VestingCurrency<AccountId>: Currency<AccountId> {
 		locked: Self::Balance,
 		per_block: Self::Balance,
 		starting_block: Self::Moment,
-	) -> result::Result<(), &'static str>;
+	) -> result::Result<(), Self::Error>;
 
 	/// Remove a vesting schedule for a given account.
 	fn remove_vesting_schedule(who: &AccountId);
