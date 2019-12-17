@@ -42,7 +42,7 @@ use sc_network::{
 use sp_core::H256;
 
 use std::{
-	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fs::{self, File},
+	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fmt::Debug, fs::{self, File},
 	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr, pin::Pin, task::Poll
 };
 
@@ -64,7 +64,7 @@ use lazy_static::lazy_static;
 use futures::{Future, compat::Future01CompatExt, executor::block_on};
 use sc_telemetry::TelemetryEndpoints;
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 /// default sub directory to store network config
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
@@ -373,6 +373,8 @@ impl<'a> ParseAndPrepareExport<'a> {
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
 		B: ServiceBuilderCommand,
+		<<<<B as ServiceBuilderCommand>::Block as BlockT>::Header as HeaderT>
+			::Number as FromStr>::Err: Debug,
 		C: Default,
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -383,8 +385,9 @@ impl<'a> ParseAndPrepareExport<'a> {
 		if let DatabaseConfig::Path { ref path, .. } = &config.database {
 			info!("DB path: {}", path.display());
 		}
-		let from = self.params.from.unwrap_or(1);
-		let to = self.params.to;
+		let from = self.params.from.and_then(|f| f.parse().ok()).unwrap_or(1);
+		let to = self.params.to.and_then(|t| t.parse().ok());
+
 		let json = self.params.json;
 
 		let file: Box<dyn Write> = match self.params.output {
@@ -402,7 +405,7 @@ impl<'a> ParseAndPrepareExport<'a> {
 		});
 
 		let mut export_fut = builder(config)?
-			.export_blocks(file, from.into(), to.map(Into::into), json)
+			.export_blocks(file, from.into(), to, json)
 			.compat();
 		let fut = futures::future::poll_fn(|cx| {
 			if exit_recv.try_recv().is_ok() {
@@ -596,6 +599,8 @@ impl<'a> ParseAndPrepareRevert<'a> {
 		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
 		B: ServiceBuilderCommand,
+		<<<<B as ServiceBuilderCommand>::Block as BlockT>::Header as HeaderT>
+			::Number as FromStr>::Err: Debug,
 		C: Default,
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -603,8 +608,8 @@ impl<'a> ParseAndPrepareRevert<'a> {
 		let config = create_config_with_db_path(
 			spec_factory, &self.params.shared_params, self.version
 		)?;
-		let blocks = self.params.num;
-		builder(config)?.revert_chain(blocks.into())?;
+		let blocks = self.params.num.parse()?;
+		builder(config)?.revert_chain(blocks)?;
 		Ok(())
 	}
 }
