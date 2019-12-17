@@ -589,23 +589,7 @@ impl<B: BlockT> ChainSync<B> {
 				trace!(target: "sync", "Peer {} is busy", id);
 				return None
 			}
-			if let Some((hash, req)) = fork_sync_request(
-				id,
-				fork_targets,
-				best_queued,
-				last_finalized,
-				attrs,
-				|hash| if queue.contains(hash) {
-					BlockStatus::Queued
-				} else {
-					client.block_status(&BlockId::Hash(*hash)).unwrap_or(BlockStatus::Unknown)
-				},
-			) {
-				trace!(target: "sync", "Downloading fork {:?} from {}", hash, id);
-				peer.state = PeerSyncState::DownloadingStale(hash);
-				have_requests = true;
-				Some((id.clone(), req))
-			} else if let Some((range, req)) = peer_block_request(
+			if let Some((range, req)) = peer_block_request(
 				id,
 				peer,
 				blocks,
@@ -622,6 +606,22 @@ impl<B: BlockT> ChainSync<B> {
 					peer.common_number,
 					req,
 				);
+				have_requests = true;
+				Some((id.clone(), req))
+			} else if let Some((hash, req)) = fork_sync_request(
+				id,
+				fork_targets,
+				best_queued,
+				last_finalized,
+				attrs,
+				|hash| if queue.contains(hash) {
+					BlockStatus::Queued
+				} else {
+					client.block_status(&BlockId::Hash(*hash)).unwrap_or(BlockStatus::Unknown)
+				},
+			) {
+				trace!(target: "sync", "Downloading fork {:?} from {}", hash, id);
+				peer.state = PeerSyncState::DownloadingStale(hash);
 				have_requests = true;
 				Some((id.clone(), req))
 			} else {
@@ -1292,11 +1292,16 @@ fn fork_sync_request<B: BlockT>(
 	check_block: impl Fn(&B::Hash) -> BlockStatus,
 ) -> Option<(B::Hash, BlockRequest<B>)>
 {
-	targets.retain(|hash, r| if r.number > finalized {
+	targets.retain(|hash, r| {
+		if r.number <= finalized {
+			trace!(target: "sync", "Removed expired fork sync request {:?} (#{})", hash, r.number);
+			return false;
+		}
+		if check_block(hash) != BlockStatus::Unknown {
+			trace!(target: "sync", "Removed obsolete fork sync request {:?} (#{})", hash, r.number);
+			return false;
+		}
 		true
-	} else {
-		trace!(target: "sync", "Removed expired fork sync request {:?} (#{})", hash, r.number);
-		false
 	});
 	for (hash, r) in targets {
 		if !r.peers.contains(id) {
