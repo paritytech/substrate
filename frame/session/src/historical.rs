@@ -115,6 +115,7 @@ impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<
 {
 	fn on_session_ending(ending: SessionIndex, applied_at: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		StoredRange::mutate(|range| {
+			// ending is a counter
 			range.get_or_insert_with(|| (ending, ending)).1 = ending + 1;
 		});
 

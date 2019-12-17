@@ -532,6 +532,7 @@ impl<T: Trait> Module<T> {
 			DisabledValidators::take();
 		}
 
+		// overflow: we will not run out of session indicies
 		let applied_at = session_index + 2;
 
 		// Get next validator set.
@@ -604,6 +605,7 @@ impl<T: Trait> Module<T> {
 			let i = i as u32;
 			if let Err(index) = disabled.binary_search(&i) {
 				let count = <Validators<T>>::decode_len().unwrap_or(0) as u32;
+				// we do not have enough validators for this to overflow
 				let threshold = T::DisabledValidatorsThreshold::get() * count;
 				disabled.insert(index, i);
 				(true, disabled.len() as u32 > threshold)
