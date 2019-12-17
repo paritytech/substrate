@@ -225,7 +225,7 @@ pub fn testnet_genesis(
 	const STASH: Balance = 100 * DOLLARS;
 
 	GenesisConfig {
-		system: Some(SystemConfig {
+		frame_system: Some(SystemConfig {
 			code: WASM_BINARY.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
