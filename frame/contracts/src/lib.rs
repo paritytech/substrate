@@ -83,9 +83,11 @@
 mod gas;
 
 mod account_db;
+mod storage;
 mod exec;
 mod wasm;
 mod rent;
+mod util;
 
 #[cfg(test)]
 mod tests;
@@ -252,6 +254,12 @@ where
 		storage_root.using_encoded(|encoded| buf.extend_from_slice(encoded));
 		buf.extend_from_slice(code_hash.as_ref());
 		RawTombstoneContractInfo(<Hasher as Hash>::hash(&buf[..]), PhantomData)
+	}
+}
+
+impl<T: Trait> From<AliveContractInfo<T>> for ContractInfo<T> {
+	fn from(alive_info: AliveContractInfo<T>) -> Self {
+		Self::Alive(alive_info)
 	}
 }
 
@@ -646,8 +654,13 @@ impl<T: Trait> Module<T> {
 		let result = func(&mut ctx, gas_meter);
 
 		if result.as_ref().map(|output| output.is_success()).unwrap_or(false) {
+			// TODO: Audit this.
+			//
+			// We no longer need to commit now, since all changes are committed eagearly, but
+			// rollbacked on error.
+
 			// Commit all changes that made it thus far into the persistent storage.
-			DirectAccountDb.commit(ctx.overlay.into_change_set());
+			// DirectAccountDb.commit(ctx.overlay.into_change_set());
 		}
 
 		// Execute deferred actions.

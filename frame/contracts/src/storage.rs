@@ -14,10 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{Trait, CodeHash, TrieId, ContractInfoOf, BalanceOf, exec::StorageKey};
-use crate::exec::{AccountIdOf};
+use crate::{
+	exec::{AccountIdOf, StorageKey},
+	AliveContractInfo, BalanceOf, CodeHash, ContractInfoOf, Trait, TrieId,
+};
 use sp_io::hashing::blake2_256;
-use support::{storage::child, StorageMap};
+use sp_runtime::traits::Bounded;
+use support::{storage::child, traits::Get, StorageMap};
 
 pub fn read_contract_storage(trie_id: &TrieId, key: &StorageKey) -> Option<Vec<u8>> {
 	child::get_raw(trie_id, &blake2_256(key))
@@ -42,4 +45,38 @@ pub fn set_rent_allowance<T: Trait>(account: &AccountIdOf<T>, rent_allowance: Ba
 
 pub fn code_hash<T: Trait>(account: &AccountIdOf<T>) -> Option<CodeHash<T>> {
 	<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
+}
+
+/// Creates a new contract descriptor in the storage with the given code hash at the given address.
+///
+/// Returns `Err` if there is already a contract (or a tombstone) exists at the given address.
+pub fn place_contract<T: Trait>(
+	account: &AccountIdOf<T>,
+	trie_id: TrieId,
+	ch: CodeHash<T>,
+) -> Result<(), &'static str> {
+	<ContractInfoOf<T>>::mutate(account, |maybe_contract_info| {
+		if maybe_contract_info.is_some() {
+			return Err("Alive contract or tombstone already exists");
+		}
+
+		*maybe_contract_info = Some(
+			AliveContractInfo::<T> {
+				code_hash: ch,
+				storage_size: T::StorageSizeOffset::get(),
+				trie_id,
+				deduct_block: <system::Module<T>>::block_number(),
+				rent_allowance: <BalanceOf<T>>::max_value(),
+				last_write: None,
+			}
+			.into(),
+		);
+
+		Ok(())
+	})
+}
+
+pub fn destroy_contract<T: Trait>(address: &AccountIdOf<T>, trie_id: &TrieId) {
+	<ContractInfoOf<T>>::remove(address);
+	child::kill_storage(trie_id);
 }
