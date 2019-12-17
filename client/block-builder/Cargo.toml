@@ -5,10 +5,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sp-state-machine = { path = "../../primitives/state-machine" }
-sp-runtime = { path = "../../primitives/runtime" }
-sp-blockchain = { path = "../../primitives/blockchain" }
-sp-core = { path = "../../primitives/core" }
+sp-state-machine = { version = "2.0.0", path = "../../primitives/state-machine" }
+sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
+sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
 codec = { package = "parity-scale-codec", version = "1.0.6", features = ["derive"] }
-sp-block-builder = { path = "../../primitives/block-builder" }
-sp-api = { path = "../../primitives/api" }
+sp-block-builder = { version = "2.0.0", path = "../../primitives/block-builder" }
+sp-api = { version = "2.0.0", path = "../../primitives/api" }

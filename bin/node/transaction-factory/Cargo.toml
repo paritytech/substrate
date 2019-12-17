@@ -1,19 +1,19 @@
 [package]
 name = "node-transaction-factory"
-version = "0.0.1"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sp-block-builder = { path = "../../../primitives/block-builder" }
-sc-cli = { path = "../../../client/cli" }
-sc-client-api = { path = "../../../client/api" }
-sc-client = { path = "../../../client" }
+sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
+sc-cli = { version = "2.0.0", path = "../../../client/cli" }
+sc-client-api = { version = "2.0.0", path = "../../../client/api" }
+sc-client = { version = "2.0.0", path = "../../../client" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-sp-consensus = { path = "../../../primitives/consensus/common" }
+sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
 log = "0.4.8"
-sp-core = { path = "../../../primitives/core" }
-sp-api = { path = "../../../primitives/api" }
-sp-runtime = { path = "../../../primitives/runtime" }
-sc-service = { path = "../../../client/service" }
-sp-blockchain = { path = "../../../primitives/blockchain" }
+sp-core = { version = "2.0.0", path = "../../../primitives/core" }
+sp-api = { version = "2.0.0", path = "../../../primitives/api" }
+sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
+sc-service = { version = "2.0.0", path = "../../../client/service" }
+sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }

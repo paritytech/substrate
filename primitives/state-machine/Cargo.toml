@@ -11,13 +11,13 @@ parking_lot = "0.9.0"
 hash-db = "0.15.2"
 trie-db = "0.16.0"
 trie-root = "0.15.2"
-sp-trie = { path = "../trie" }
-sp-core = { path = "../core" }
-sp-panic-handler = { path = "../panic-handler" }
+sp-trie = { version = "2.0.0", path = "../trie" }
+sp-core = { version = "2.0.0", path = "../core" }
+sp-panic-handler = { version = "2.0.0", path = "../panic-handler" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 num-traits = "0.2.8"
 rand = "0.7.2"
-sp-externalities = { path = "../externalities" }
+sp-externalities = { version = "2.0.0", path = "../externalities" }
 
 [dev-dependencies]
 hex-literal = "0.2.1"
