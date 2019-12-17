@@ -156,9 +156,9 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	{
 		if info.pays_fee {
 			let len = <BalanceOf<T>>::from(len);
-			let base = T::TransactionBaseFee::get();
+			let base_fee = T::TransactionBaseFee::get();
 			let per_byte = T::TransactionByteFee::get();
-			let len_fee = base.saturating_add(per_byte.saturating_mul(len));
+			let len_fee = per_byte.saturating_mul(len);
 
 			let weight_fee = {
 				// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
@@ -168,7 +168,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			};
 
 			// everything except for tip
-			let basic_fee = len_fee.saturating_add(weight_fee);
+			let basic_fee = base_fee.saturating_add(len_fee).saturating_add(weight_fee);
 			let fee_update = NextFeeMultiplier::get();
 			let adjusted_fee = fee_update.saturated_multiply_accumulate(basic_fee);
 
@@ -541,6 +541,78 @@ mod tests {
 				},
 			);
 
+		});
+	}
+
+	#[test]
+	fn compute_fee_works() {
+		ExtBuilder::default()
+		.fees(100, 10, 1)
+		.balance_factor(0)
+		.build()
+		.execute_with(||
+		{
+			// Next fee multiplier starts at zero so next tests are not affected
+			assert_eq!(NextFeeMultiplier::get(), Fixed64::from_natural(0));
+
+			// Tip only, no fees works
+			let dispatch_info = DispatchInfo {
+				weight: 0,
+				class: DispatchClass::Operational,
+				pays_fee: false,
+			};
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 10), 10);
+			// No tip, only base fee works
+			assert_eq!(TransactionBaseFee::get(), 100);
+			let dispatch_info = DispatchInfo {
+				weight: 0,
+				class: DispatchClass::Operational,
+				pays_fee: true,
+			};
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 0), 100);
+			// Tip + base fee works
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 69), 169);
+			// Len (byte fee) + base fee works
+			assert_eq!(TransactionByteFee::get(), 10);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(42, dispatch_info, 0), 520);
+			// Weight fee + base fee works
+			let dispatch_info = DispatchInfo {
+				weight: 1000,
+				class: DispatchClass::Operational,
+				pays_fee: true,
+			};
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 0), 1100);
+			
+			// Next fee multiplier works
+			NextFeeMultiplier::put(Fixed64::from_rational(1, 2)); // = 1/2 = .5
+			// Base fee + multiplier works
+			let dispatch_info = DispatchInfo {
+				weight: 0,
+				class: DispatchClass::Operational,
+				pays_fee: true,
+			};
+			// Should be (100 * .5) + 100 = 150
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 0), 150);
+
+			// Everything works together :)
+			let dispatch_info = DispatchInfo {
+				weight: 123,
+				class: DispatchClass::Operational,
+				pays_fee: true,
+			};
+			// 123 weight, 456 length, 100 base
+			// (123 * 1) + (456 * 10) + 100 = 4783
+			// Final fee = (5572 * .5) + 5572 = 7174.5 -> 7174
+			// + 789 tip = 7963
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(456, dispatch_info, 789), 7963);
+
+			// Overflow is handled
+			let dispatch_info = DispatchInfo {
+				weight: <u32>::max_value(),
+				class: DispatchClass::Operational,
+				pays_fee: true,
+			};
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(<u32>::max_value(), dispatch_info, <u64>::max_value()), <u64>::max_value());
 		});
 	}
 }
