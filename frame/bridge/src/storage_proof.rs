@@ -18,7 +18,7 @@
 
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX};
 use state_machine::StorageProof;
-use trie::{MemoryDB, Trie, trie_types::TrieDB};
+use sp_trie::{MemoryDB, Trie, trie_types::TrieDB};
 
 use crate::Error;
 

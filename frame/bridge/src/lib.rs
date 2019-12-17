@@ -39,7 +39,7 @@ mod storage_proof;
 use crate::storage_proof::StorageProofChecker;
 use codec::{Encode, Decode};
 use fg_primitives::{AuthorityId, AuthorityWeight};
-use sr_primitives::traits::Header;
+use sp_runtime::traits::Header;
 use state_machine::StorageProof;
 use support::{
 	decl_error, decl_module, decl_storage,
@@ -138,7 +138,7 @@ impl<T: Trait> Module<T> {
 		validator_set: &Vec<(AuthorityId, AuthorityWeight)>,
 	) -> Result<(), Error> {
 
-		let checker = <StorageProofChecker<<T::Hashing as sr_primitives::traits::Hash>::Hasher>>::new(
+		let checker = <StorageProofChecker<<T::Hashing as sp_runtime::traits::Hash>::Hasher>>::new(
 			*state_root,
 			proof.clone()
 		)?;
@@ -190,7 +190,7 @@ mod tests {
 	use super::*;
 
 	use primitives::{Blake2Hasher, H256, Public};
-	use sr_primitives::{
+	use sp_runtime::{
 		Perbill, traits::{Header as HeaderT, IdentityLookup}, testing::Header, generic::Digest,
 	};
 	use support::{assert_ok, assert_err, impl_outer_origin, parameter_types};
@@ -222,7 +222,7 @@ mod tests {
 		type BlockNumber = u64;
 		type Call = ();
 		type Hash = H256;
-		type Hashing = sr_primitives::traits::BlakeTwo256;
+		type Hashing = sp_runtime::traits::BlakeTwo256;
 		type AccountId = DummyAuthorityId;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
@@ -236,7 +236,7 @@ mod tests {
 
 	impl Trait for Test {}
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
+	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		GenesisConfig {
 			num_bridges: 0,
