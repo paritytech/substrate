@@ -170,6 +170,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			// everything except for tip
 			let basic_fee = base_fee.saturating_add(len_fee).saturating_add(weight_fee);
 			let fee_update = NextFeeMultiplier::get();
+			// basic_fee + (basic_fee * fee_update)
 			let adjusted_fee = fee_update.saturated_multiply_accumulate(basic_fee);
 
 			adjusted_fee.saturating_add(tip)
