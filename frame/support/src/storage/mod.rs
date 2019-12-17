@@ -439,7 +439,31 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 mod test {
 	use primitives::hashing::twox_128;
 	use sp_io::TestExternalities;
-	use crate::storage::{unhashed, StoragePrefixedMap};
+	use crate::storage::{unhashed, with_transaction, StoragePrefixedMap};
+
+	#[test]
+	fn with_transaction_works() {
+		type R = Result<(), ()>;
+		const KEY: &[u8] = b"abc";
+
+		TestExternalities::default().execute_with(|| {
+			unhashed::put(KEY, &1u32);
+
+			let _ = with_transaction(|| {
+				unhashed::put(b"abc", &2u32);
+				assert_eq!(unhashed::get(b"abc"), Some(2));
+
+				let _ = with_transaction(|| {
+					unhashed::put(b"abc", &3u32);
+					assert_eq!(unhashed::get(b"abc"), Some(3));
+					R::Err(())
+				});
+				assert_eq!(unhashed::get(b"abc"), Some(2));
+				R::Ok(())
+			});
+			assert_eq!(unhashed::get(b"abc"), Some(2));
+		});
+	}
 
 	#[test]
 	fn prefixed_map_works() {

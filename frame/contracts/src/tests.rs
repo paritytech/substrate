@@ -296,6 +296,14 @@ fn compile_module<T>(wabt_module: &str)
 	Ok((wasm, code_hash))
 }
 
+pub fn set_balance(who: &u64, amount: u64) {
+	Balances::deposit_creating(who, amount);
+}
+
+pub fn get_balance(who: &u64) -> u64 {
+	Balances::free_balance(who)
+}
+
 // Perform a simple transfer to a non-existent account supplying way more gas than needed.
 // Then we check that the all unused gas is refunded.
 #[test]
