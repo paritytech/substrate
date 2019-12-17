@@ -110,6 +110,7 @@ impl SlashingSpans {
 	// returns `true` if a new span was started, `false` otherwise. `false` indicates
 	// that internal state is unchanged.
 	fn end_span(&mut self, now: EraIndex) -> bool {
+		// OVERFLOW: by assumption, we will not run out of eras in a reasonable amount of time
 		let next_start = now + 1;
 		if next_start <= self.last_start { return false }
 
@@ -126,6 +127,8 @@ impl SlashingSpans {
 		let mut index = self.span_index;
 		let last = SlashingSpan { index, start: last_start, length: None };
 		let prior = self.prior.iter().cloned().map(move |length| {
+			// OVERFLOW: how do we know that length <= length?
+			// Is it because a duration is always less than the time since chain start?
 			let start = last_start - length;
 			last_start = start;
 			index -= 1;
@@ -148,12 +151,14 @@ impl SlashingSpans {
 	fn prune(&mut self, window_start: EraIndex) -> Option<(SpanIndex, SpanIndex)> {
 		let old_idx = self.iter()
 			.skip(1) // skip ongoing span.
-			.position(|span| span.length.map_or(false, |len| span.start + len <= window_start));
+			.position(|span| span.length.map_or(false, |len| len <= window_start && span.start <= window_start - len));
 
+		// how do we know this? ERROR OVERFLOW
 		let earliest_span_index = self.span_index - self.prior.len() as SpanIndex;
 		let pruned = match old_idx {
 			Some(o) => {
 				self.prior.truncate(o);
+				// ditto
 				let new_earliest = self.span_index - self.prior.len() as SpanIndex;
 				Some((earliest_span_index, new_earliest))
 			}
@@ -224,7 +229,9 @@ pub(crate) fn compute_slash<T: Trait>(params: SlashParams<T>)
 	let mut val_slashed = Zero::zero();
 
 	// is the slash amount here a maximum for the era?
+	// Cannot overflow
 	let own_slash = slash * exposure.own;
+	// product of nonzero numbers is nonzero.  I think?
 	if slash * exposure.total == Zero::zero() {
 		// kick out the validator even if they won't be slashed,
 		// as long as the misbehavior is from their most recent slashing span.
@@ -289,6 +296,7 @@ pub(crate) fn compute_slash<T: Trait>(params: SlashParams<T>)
 	}
 
 	let mut nominators_slashed = Vec::new();
+	// sum of balances fits in a Balance
 	reward_payout += slash_nominators::<T>(params, prior_slash_p, &mut nominators_slashed);
 
 	Some(UnappliedSlash {
@@ -356,6 +364,7 @@ fn slash_nominators<T: Trait>(
 		// the era slash of a nominator always grows, if the validator
 		// had a new max slash for the era.
 		let era_slash = {
+			// multiplications by perbill cannot overflow
 			let own_slash_prior = prior_slash_p * nominator.value;
 			let own_slash_by_validator = slash * nominator.value;
 			let own_slash_difference = own_slash_by_validator.saturating_sub(own_slash_prior);
@@ -365,6 +374,7 @@ fn slash_nominators<T: Trait>(
 				stash,
 			).unwrap_or(Zero::zero());
 
+			// sum of balances fits in a Balance
 			era_slash += own_slash_difference;
 
 			<Module<T> as Store>::NominatorSlashInEra::insert(
@@ -458,6 +468,7 @@ impl<'a, T: 'a + Trait> InspectingSpans<'a, T> {
 	}
 
 	fn add_slash(&mut self, amount: BalanceOf<T>) {
+		// sum of balances fits in a Balance
 		*self.slash_of += amount;
 	}
 
@@ -486,6 +497,8 @@ impl<'a, T: 'a + Trait> InspectingSpans<'a, T> {
 			span_record.slashed = slash;
 
 			// compute reward.
+			// if this overflows, we have generated an incredibly high reward and have bigger
+			// problems
 			let reward = REWARD_F1
 				* (self.reward_proportion * slash).saturating_sub(span_record.paid_out);
 
@@ -495,6 +508,7 @@ impl<'a, T: 'a + Trait> InspectingSpans<'a, T> {
 			reward
 		} else if span_record.slashed == slash {
 			// compute reward. no slash difference to apply.
+			// ditto w.r.t. overflow
 			REWARD_F1 * (self.reward_proportion * slash).saturating_sub(span_record.paid_out)
 		} else {
 			Zero::zero()
@@ -502,7 +516,9 @@ impl<'a, T: 'a + Trait> InspectingSpans<'a, T> {
 
 		if !reward.is_zero() {
 			changed = true;
+			// sum of balances fits in a Balance
 			span_record.paid_out += reward;
+			// ditto
 			*self.paid_out += reward;
 		}
 

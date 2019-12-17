@@ -312,6 +312,7 @@ impl EraPoints {
 	fn add_points_to_index(&mut self, index: u32, points: u32) {
 		if let Some(new_total) = self.total.checked_add(points) {
 			self.total = new_total;
+			assert!(index as usize < usize::max_value(), "we never use more than u32::MAX indicies; qed");
 			self.individual.resize((index as usize + 1).max(self.individual.len()), 0);
 			self.individual[index as usize] += points; // Addition is less than total
 		}
@@ -432,6 +433,8 @@ impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
 		let total = &mut self.total;
 		let active = &mut self.active;
 
+		// Slashes `value` from `target`, setting `value` to the amount remaining to be
+		// slashed.
 		let slash_out_of = |
 			total_remaining: &mut Balance,
 			target: &mut Balance,
@@ -440,21 +443,39 @@ impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
 			let mut slash_from_target = (*value).min(*target);
 
 			if !slash_from_target.is_zero() {
-				*target -= slash_from_target;
+				*target -= slash_from_target; // A
 
 				// don't leave a dust balance in the staking system.
 				if *target <= minimum_balance {
-					slash_from_target += *target;
-					*value += sp_std::mem::replace(target, Zero::zero());
+					// overflow: cannot exceed original balance
+					slash_from_target += *target; // B
+					*value += sp_std::mem::replace(target, Zero::zero()); // C
 				}
 
 				*total_remaining = total_remaining.saturating_sub(slash_from_target);
-				*value -= slash_from_target;
+				// Case 1: additional slashing via minimum balance.
+				// - slash_from_target becomes value₀
+				// - target becomes (target₀ - value₀) at A
+				// - slash_from_target becomes target + slash_from_target = value₀ + (target₀ - value₀) = target₀ at B
+				// - value becomes value₀ + (target₀ - value₀) = target₀ at C
+				// - value becomes target₀ - target₀ = 0 at D
+				// Case 2: no additional slashing via minimum balance (sufficient funds)
+				// - slash_from_target becomes value₀
+				// - target becomes (target₀ - value₀) at A
+				// - value becomes value₀ - slash_from_target = value₀ - value₀ = 0 at D
+				// Case 3: insufficient funds
+				// - slash_from_target becomes target₀
+				// - target becomes target₀ - target₀ = 0 at A
+				// - B and C do nothing
+				// - value becomes value₀ - target₀ = amount of funds still to be slashed
+				*value -= slash_from_target; // D
 			}
 		};
 
 		slash_out_of(total, active, &mut value);
 
+		// this works because iterators are lazy, so slash_out_of will not be called more than it
+		// should be.
 		let i = self.unlocking.iter_mut()
 			.map(|chunk| {
 				slash_out_of(total, &mut chunk.value, &mut value);
@@ -878,6 +899,7 @@ decl_module! {
 
 			if let Some(extra) = stash_balance.checked_sub(&ledger.total) {
 				let extra = extra.min(max_additional);
+				// sum of balances fits in a Balance
 				ledger.total += extra;
 				ledger.active += extra;
 				Self::update_ledger(&controller, &ledger);
@@ -923,10 +945,12 @@ decl_module! {
 
 				// Avoid there being a dust balance left in the staking system.
 				if ledger.active < T::Currency::minimum_balance() {
+					// OVERFLOW: sum of balances fits in a balance
 					value += ledger.active;
 					ledger.active = Zero::zero();
 				}
 
+				// OVERFLOW; durations will not overflow
 				let era = Self::current_era() + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
@@ -1239,6 +1263,7 @@ impl<T: Trait> Module<T> {
 			RewardDestination::Staked => Self::bonded(stash)
 				.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
 				.and_then(|(controller, mut l)| {
+					// sum of balances fits in a balance
 					l.active += amount;
 					l.total += amount;
 					let r = T::Currency::deposit_into_existing(stash, amount).ok();
@@ -1252,6 +1277,7 @@ impl<T: Trait> Module<T> {
 	/// nominators' balance, pro-rata based on their exposure, after having removed the validator's
 	/// pre-payout cut.
 	fn reward_validator(stash: &T::AccountId, reward: BalanceOf<T>) -> PositiveImbalanceOf<T> {
+		// we assume that this will not overflow
 		let off_the_table = Self::validators(stash).commission * reward;
 		let reward = reward.saturating_sub(off_the_table);
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
@@ -1263,13 +1289,16 @@ impl<T: Trait> Module<T> {
 
 			for i in &exposure.others {
 				let per_u64 = Perbill::from_rational_approximation(i.value, total);
+				// ERROR
 				imbalance.maybe_subsume(Self::make_payout(&i.who, per_u64 * reward));
 			}
 
 			let per_u64 = Perbill::from_rational_approximation(exposure.own, total);
+			// why will this not overflow? ERROR
 			per_u64 * reward
 		};
 
+		// ERROR
 		imbalance.maybe_subsume(Self::make_payout(stash, validator_cut + off_the_table));
 
 		imbalance
@@ -1311,6 +1340,7 @@ impl<T: Trait> Module<T> {
 			let validators = Self::current_elected();
 
 			let validator_len: BalanceOf<T> = (validators.len() as u32).into();
+			// will not be enough validators, or a large enough slot stake, for this to overflow
 			let total_rewarded_stake = Self::slot_stake() * validator_len;
 
 			let (total_payout, max_payout) = inflation::compute_total_payout(
@@ -1325,6 +1355,7 @@ impl<T: Trait> Module<T> {
 
 			for (v, p) in validators.iter().zip(points.individual.into_iter()) {
 				if p != 0 {
+					// ERROR
 					let reward = Perbill::from_rational_approximation(p, points.total) * total_payout;
 					total_imbalance.subsume(Self::reward_validator(v, reward));
 				}
@@ -1465,6 +1496,7 @@ impl<T: Trait> Module<T> {
 					}
 					for (c, per_thing) in assignment.iter() {
 						let nominator_stake = to_votes(Self::slashable_balance_of(n));
+						// ERROR
 						let other_stake = *per_thing * nominator_stake;
 						staked_assignment.push((c.clone(), other_stake));
 					}

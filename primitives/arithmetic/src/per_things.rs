@@ -144,7 +144,8 @@ macro_rules! implement_per_thing {
 			}
 		}
 
-		/// Overflow-prune multiplication.
+		/// Overflow-prone multiplication.  Requires a justification (at each use site) that this
+		/// will not overflow
 		///
 		/// tailored to be used with a balance type.
 		impl<N> ops::Mul<N> for $name

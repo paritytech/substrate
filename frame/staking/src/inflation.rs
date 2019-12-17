@@ -37,10 +37,13 @@ pub fn compute_total_payout<N>(
 	const MILLISECONDS_PER_YEAR: u64 = 1000 * 3600 * 24 * 36525 / 100;
 
 	let portion = Perbill::from_rational_approximation(era_duration as u64, MILLISECONDS_PER_YEAR);
+	// OVERFLOW: this should not overflow, since the total balance will not, but that is a weak
+	// justification.
 	let payout = portion * yearly_inflation.calculate_for_fraction_times_denominator(
 		npos_token_staked,
 		total_tokens.clone(),
 	);
+	// OVERFLOW: ditto
 	let maximum = portion * (yearly_inflation.maximum * total_tokens);
 	(payout, maximum)
 }
