@@ -1398,21 +1398,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "frame-utility"
-version = "2.0.0"
-dependencies = [
- "frame-support 2.0.0",
- "frame-system 2.0.0",
- "pallet-balances 2.0.0",
- "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-core 2.0.0",
- "sp-io 2.0.0",
- "sp-runtime 2.0.0",
- "sp-std 2.0.0",
-]
-
-[[package]]
 name = "fs-swap"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3025,11 +3010,11 @@ dependencies = [
  "node-primitives 2.0.0",
  "node-rpc 2.0.0",
  "node-runtime 2.0.0",
- "node-transaction-factory 0.0.1",
- "pallet-authority-discovery 0.1.0",
+ "node-transaction-factory 2.0.0",
+ "pallet-authority-discovery 2.0.0",
  "pallet-balances 2.0.0",
  "pallet-contracts 2.0.0",
- "pallet-im-online 0.1.0",
+ "pallet-im-online 2.0.0",
  "pallet-indices 2.0.0",
  "pallet-timestamp 2.0.0",
  "pallet-transaction-payment 2.0.0",
@@ -3043,10 +3028,10 @@ dependencies = [
  "sc-client 2.0.0",
  "sc-client-api 2.0.0",
  "sc-client-db 2.0.0",
- "sc-consensus-babe 2.0.0",
+ "sc-consensus-babe 0.8.0",
  "sc-finality-grandpa 2.0.0",
  "sc-keystore 2.0.0",
- "sc-network 2.0.0",
+ "sc-network 0.8.0",
  "sc-offchain 2.0.0",
  "sc-rpc 2.0.0",
  "sc-service 2.0.0",
@@ -3055,8 +3040,8 @@ dependencies = [
  "sc-transaction-pool 2.0.0",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-authority-discovery 2.0.0",
- "sp-consensus 2.0.0",
- "sp-consensus-babe 2.0.0",
+ "sp-consensus 0.8.0",
+ "sp-consensus-babe 0.8.0",
  "sp-core 2.0.0",
  "sp-finality-grandpa 2.0.0",
  "sp-finality-tracker 2.0.0",
@@ -3126,6 +3111,7 @@ dependencies = [
  "pallet-transaction-payment-rpc 2.0.0",
  "sc-client 2.0.0",
  "sp-api 2.0.0",
+ "sp-runtime 2.0.0",
  "sp-transaction-pool 2.0.0",
  "substrate-frame-rpc-system 2.0.0",
 ]
@@ -3151,11 +3137,10 @@ dependencies = [
  "frame-support 2.0.0",
  "frame-system 2.0.0",
  "frame-system-rpc-runtime-api 2.0.0",
- "frame-utility 2.0.0",
  "integer-sqrt 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 2.0.0",
- "pallet-authority-discovery 0.1.0",
- "pallet-authorship 0.1.0",
+ "pallet-authority-discovery 2.0.0",
+ "pallet-authorship 2.0.0",
  "pallet-babe 2.0.0",
  "pallet-balances 2.0.0",
  "pallet-collective 2.0.0",
@@ -3165,11 +3150,11 @@ dependencies = [
  "pallet-elections-phragmen 2.0.0",
  "pallet-finality-tracker 2.0.0",
  "pallet-grandpa 2.0.0",
- "pallet-im-online 0.1.0",
+ "pallet-im-online 2.0.0",
  "pallet-indices 2.0.0",
  "pallet-membership 2.0.0",
  "pallet-nicks 2.0.0",
- "pallet-offences 1.0.0",
+ "pallet-offences 2.0.0",
  "pallet-randomness-collective-flip 2.0.0",
  "pallet-session 2.0.0",
  "pallet-staking 2.0.0",
@@ -3179,6 +3164,7 @@ dependencies = [
  "pallet-transaction-payment 2.0.0",
  "pallet-transaction-payment-rpc-runtime-api 2.0.0",
  "pallet-treasury 2.0.0",
+ "pallet-utility 2.0.0",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3186,7 +3172,7 @@ dependencies = [
  "sp-api 2.0.0",
  "sp-authority-discovery 2.0.0",
  "sp-block-builder 2.0.0",
- "sp-consensus-babe 2.0.0",
+ "sp-consensus-babe 0.8.0",
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-io 2.0.0",
@@ -3215,14 +3201,14 @@ dependencies = [
  "sc-basic-authority 2.0.0",
  "sc-cli 2.0.0",
  "sc-client 2.0.0",
- "sc-consensus-aura 2.0.0",
+ "sc-consensus-aura 0.8.0",
  "sc-executor 2.0.0",
  "sc-finality-grandpa 2.0.0",
- "sc-network 2.0.0",
+ "sc-network 0.8.0",
  "sc-service 2.0.0",
  "sc-transaction-pool 2.0.0",
- "sp-consensus 2.0.0",
- "sp-consensus-aura 2.0.0",
+ "sp-consensus 0.8.0",
+ "sp-consensus-aura 0.8.0",
  "sp-core 2.0.0",
  "sp-finality-grandpa 2.0.0",
  "sp-inherents 2.0.0",
@@ -3255,7 +3241,7 @@ dependencies = [
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
  "sp-block-builder 2.0.0",
- "sp-consensus-aura 2.0.0",
+ "sp-consensus-aura 0.8.0",
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-io 2.0.0",
@@ -3299,7 +3285,7 @@ dependencies = [
 
 [[package]]
 name = "node-transaction-factory"
-version = "0.0.1"
+version = "2.0.0"
 dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3310,7 +3296,7 @@ dependencies = [
  "sp-api 2.0.0",
  "sp-block-builder 2.0.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
+ "sp-consensus 0.8.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
 ]
@@ -3486,7 +3472,7 @@ dependencies = [
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-application-crypto 2.0.0",
- "sp-consensus-aura 2.0.0",
+ "sp-consensus-aura 0.8.0",
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-io 2.0.0",
@@ -3497,7 +3483,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-authority-discovery"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "frame-support 2.0.0",
  "frame-system 2.0.0",
@@ -3515,7 +3501,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-authorship"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "frame-support 2.0.0",
  "frame-system 2.0.0",
@@ -3542,7 +3528,7 @@ dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-consensus-babe 2.0.0",
+ "sp-consensus-babe 0.8.0",
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-io 2.0.0",
@@ -3792,11 +3778,11 @@ dependencies = [
 
 [[package]]
 name = "pallet-im-online"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "frame-support 2.0.0",
  "frame-system 2.0.0",
- "pallet-authorship 0.1.0",
+ "pallet-authorship 2.0.0",
  "pallet-session 2.0.0",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3856,7 +3842,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-offences"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "frame-support 2.0.0",
  "frame-system 2.0.0",
@@ -3886,7 +3872,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-scored-pool"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "frame-support 2.0.0",
  "frame-system 2.0.0",
@@ -3926,7 +3912,7 @@ version = "2.0.0"
 dependencies = [
  "frame-support 2.0.0",
  "frame-system 2.0.0",
- "pallet-authorship 0.1.0",
+ "pallet-authorship 2.0.0",
  "pallet-balances 2.0.0",
  "pallet-session 2.0.0",
  "pallet-staking-reward-curve 2.0.0",
@@ -4033,6 +4019,21 @@ dependencies = [
 
 [[package]]
 name = "pallet-treasury"
+version = "2.0.0"
+dependencies = [
+ "frame-support 2.0.0",
+ "frame-system 2.0.0",
+ "pallet-balances 2.0.0",
+ "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-core 2.0.0",
+ "sp-io 2.0.0",
+ "sp-runtime 2.0.0",
+ "sp-std 2.0.0",
+]
+
+[[package]]
+name = "pallet-utility"
 version = "2.0.0"
 dependencies = [
  "frame-support 2.0.0",
@@ -4929,7 +4930,7 @@ dependencies = [
  "prost-build 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-client-api 2.0.0",
  "sc-keystore 2.0.0",
- "sc-network 2.0.0",
+ "sc-network 0.8.0",
  "sc-peerset 2.0.0",
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
@@ -4956,7 +4957,7 @@ dependencies = [
  "sc-transaction-pool 2.0.0",
  "sp-api 2.0.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
+ "sp-consensus 0.8.0",
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-runtime 2.0.0",
@@ -4974,7 +4975,7 @@ dependencies = [
  "sp-api 2.0.0",
  "sp-block-builder 2.0.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
+ "sp-consensus 0.8.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
  "sp-state-machine 2.0.0",
@@ -4986,7 +4987,7 @@ version = "2.0.0"
 dependencies = [
  "impl-trait-for-tuples 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-chain-spec-derive 2.0.0",
- "sc-network 2.0.0",
+ "sc-network 0.8.0",
  "sc-telemetry 2.0.0",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5022,7 +5023,7 @@ dependencies = [
  "regex 1.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rpassword 4.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-client-api 2.0.0",
- "sc-network 2.0.0",
+ "sc-network 0.8.0",
  "sc-service 2.0.0",
  "sc-telemetry 2.0.0",
  "sc-tracing 2.0.0",
@@ -5060,7 +5061,7 @@ dependencies = [
  "sc-telemetry 2.0.0",
  "sp-api 2.0.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
+ "sp-consensus 0.8.0",
  "sp-core 2.0.0",
  "sp-externalities 2.0.0",
  "sp-inherents 2.0.0",
@@ -5093,7 +5094,7 @@ dependencies = [
  "sc-telemetry 2.0.0",
  "sp-api 2.0.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
+ "sp-consensus 0.8.0",
  "sp-core 2.0.0",
  "sp-externalities 2.0.0",
  "sp-inherents 2.0.0",
@@ -5126,7 +5127,7 @@ dependencies = [
  "sc-executor 2.0.0",
  "sc-state-db 2.0.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
+ "sp-consensus 0.8.0",
  "sp-core 2.0.0",
  "sp-keyring 2.0.0",
  "sp-runtime 2.0.0",
@@ -5137,7 +5138,7 @@ dependencies = [
 
 [[package]]
 name = "sc-consensus-aura"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "derive_more 0.99.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5149,10 +5150,10 @@ dependencies = [
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-client 2.0.0",
  "sc-client-api 2.0.0",
- "sc-consensus-slots 2.0.0",
+ "sc-consensus-slots 0.8.0",
  "sc-executor 2.0.0",
  "sc-keystore 2.0.0",
- "sc-network 2.0.0",
+ "sc-network 0.8.0",
  "sc-network-test 2.0.0",
  "sc-service 2.0.0",
  "sc-telemetry 2.0.0",
@@ -5160,8 +5161,8 @@ dependencies = [
  "sp-application-crypto 2.0.0",
  "sp-block-builder 2.0.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
- "sp-consensus-aura 2.0.0",
+ "sp-consensus 0.8.0",
+ "sp-consensus-aura 0.8.0",
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-io 2.0.0",
@@ -5176,7 +5177,7 @@ dependencies = [
 
 [[package]]
 name = "sc-consensus-babe"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "derive_more 0.99.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5196,11 +5197,11 @@ dependencies = [
  "sc-block-builder 2.0.0",
  "sc-client 2.0.0",
  "sc-client-api 2.0.0",
- "sc-consensus-slots 2.0.0",
- "sc-consensus-uncles 2.0.0",
+ "sc-consensus-slots 0.8.0",
+ "sc-consensus-uncles 0.8.0",
  "sc-executor 2.0.0",
  "sc-keystore 2.0.0",
- "sc-network 2.0.0",
+ "sc-network 0.8.0",
  "sc-network-test 2.0.0",
  "sc-service 2.0.0",
  "sc-telemetry 2.0.0",
@@ -5209,8 +5210,8 @@ dependencies = [
  "sp-application-crypto 2.0.0",
  "sp-block-builder 2.0.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
- "sp-consensus-babe 2.0.0",
+ "sp-consensus 0.8.0",
+ "sp-consensus-babe 0.8.0",
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-io 2.0.0",
@@ -5225,7 +5226,7 @@ dependencies = [
 
 [[package]]
 name = "sc-consensus-pow"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "derive_more 0.99.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5235,8 +5236,8 @@ dependencies = [
  "sp-api 2.0.0",
  "sp-block-builder 2.0.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
- "sp-consensus-pow 2.0.0",
+ "sp-consensus 0.8.0",
+ "sp-consensus-pow 0.8.0",
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-runtime 2.0.0",
@@ -5245,7 +5246,7 @@ dependencies = [
 
 [[package]]
 name = "sc-consensus-slots"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-timer 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5256,7 +5257,7 @@ dependencies = [
  "sc-telemetry 2.0.0",
  "sp-api 2.0.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
+ "sp-consensus 0.8.0",
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-runtime 2.0.0",
@@ -5266,12 +5267,12 @@ dependencies = [
 
 [[package]]
 name = "sc-consensus-uncles"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-client-api 2.0.0",
  "sp-authorship 2.0.0",
- "sp-consensus 2.0.0",
+ "sp-consensus 0.8.0",
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-runtime 2.0.0",
@@ -5332,15 +5333,15 @@ dependencies = [
  "sc-client 2.0.0",
  "sc-client-api 2.0.0",
  "sc-keystore 2.0.0",
- "sc-network 2.0.0",
+ "sc-network 0.8.0",
  "sc-network-gossip 2.0.0",
  "sc-network-test 2.0.0",
  "sc-telemetry 2.0.0",
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
- "sp-consensus-babe 2.0.0",
+ "sp-consensus 0.8.0",
+ "sp-consensus-babe 0.8.0",
  "sp-core 2.0.0",
  "sp-finality-grandpa 2.0.0",
  "sp-finality-tracker 2.0.0",
@@ -5370,7 +5371,7 @@ dependencies = [
 
 [[package]]
 name = "sc-network"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "bitflags 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5404,8 +5405,8 @@ dependencies = [
  "smallvec 0.6.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-arithmetic 2.0.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
- "sp-consensus-babe 2.0.0",
+ "sp-consensus 0.8.0",
+ "sp-consensus-babe 0.8.0",
  "sp-core 2.0.0",
  "sp-keyring 2.0.0",
  "sp-runtime 2.0.0",
@@ -5431,7 +5432,7 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "lru 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-network 2.0.0",
+ "sc-network 0.8.0",
  "sp-runtime 2.0.0",
 ]
 
@@ -5450,10 +5451,10 @@ dependencies = [
  "sc-block-builder 2.0.0",
  "sc-client 2.0.0",
  "sc-client-api 2.0.0",
- "sc-network 2.0.0",
+ "sc-network 0.8.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
- "sp-consensus-babe 2.0.0",
+ "sp-consensus 0.8.0",
+ "sp-consensus-babe 0.8.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
  "substrate-test-runtime 2.0.0",
@@ -5482,7 +5483,7 @@ dependencies = [
  "sc-client-api 2.0.0",
  "sc-client-db 2.0.0",
  "sc-keystore 2.0.0",
- "sc-network 2.0.0",
+ "sc-network 0.8.0",
  "sc-transaction-pool 2.0.0",
  "sp-api 2.0.0",
  "sp-core 2.0.0",
@@ -5523,7 +5524,7 @@ dependencies = [
  "sc-client-api 2.0.0",
  "sc-executor 2.0.0",
  "sc-keystore 2.0.0",
- "sc-network 2.0.0",
+ "sc-network 0.8.0",
  "sc-rpc-api 2.0.0",
  "sc-transaction-pool 2.0.0",
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5609,7 +5610,7 @@ dependencies = [
  "sc-executor 2.0.0",
  "sc-finality-grandpa 2.0.0",
  "sc-keystore 2.0.0",
- "sc-network 2.0.0",
+ "sc-network 0.8.0",
  "sc-offchain 2.0.0",
  "sc-rpc 2.0.0",
  "sc-rpc-server 2.0.0",
@@ -5622,8 +5623,8 @@ dependencies = [
  "sp-api 2.0.0",
  "sp-application-crypto 2.0.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
- "sp-consensus-babe 2.0.0",
+ "sp-consensus 0.8.0",
+ "sp-consensus-babe 0.8.0",
  "sp-core 2.0.0",
  "sp-finality-grandpa 2.0.0",
  "sp-io 2.0.0",
@@ -5649,9 +5650,9 @@ dependencies = [
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-client 2.0.0",
- "sc-network 2.0.0",
+ "sc-network 0.8.0",
  "sc-service 2.0.0",
- "sp-consensus 2.0.0",
+ "sp-consensus 0.8.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
  "sp-transaction-pool 2.0.0",
@@ -6063,7 +6064,7 @@ dependencies = [
  "rustversion 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
+ "sp-consensus 0.8.0",
  "sp-runtime 2.0.0",
  "sp-state-machine 2.0.0",
  "sp-version 2.0.0",
@@ -6150,14 +6151,14 @@ dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-block-builder 2.0.0",
- "sp-consensus 2.0.0",
+ "sp-consensus 0.8.0",
  "sp-runtime 2.0.0",
  "sp-state-machine 2.0.0",
 ]
 
 [[package]]
 name = "sp-consensus"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "derive_more 0.99.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6177,7 +6178,7 @@ dependencies = [
 
 [[package]]
 name = "sp-consensus-aura"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
@@ -6190,13 +6191,13 @@ dependencies = [
 
 [[package]]
 name = "sp-consensus-babe"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "schnorrkel 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
  "sp-application-crypto 2.0.0",
- "sp-consensus 2.0.0",
+ "sp-consensus 0.8.0",
  "sp-inherents 2.0.0",
  "sp-runtime 2.0.0",
  "sp-std 2.0.0",
@@ -6205,7 +6206,7 @@ dependencies = [
 
 [[package]]
 name = "sp-consensus-pow"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
@@ -6758,7 +6759,7 @@ dependencies = [
  "sc-client-db 2.0.0",
  "sc-executor 2.0.0",
  "sp-blockchain 2.0.0",
- "sp-consensus 2.0.0",
+ "sp-consensus 0.8.0",
  "sp-core 2.0.0",
  "sp-keyring 2.0.0",
  "sp-runtime 2.0.0",
@@ -6785,8 +6786,8 @@ dependencies = [
  "sp-api 2.0.0",
  "sp-application-crypto 2.0.0",
  "sp-block-builder 2.0.0",
- "sp-consensus-aura 2.0.0",
- "sp-consensus-babe 2.0.0",
+ "sp-consensus-aura 0.8.0",
+ "sp-consensus-babe 0.8.0",
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-io 2.0.0",
