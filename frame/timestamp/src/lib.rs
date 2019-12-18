@@ -145,7 +145,7 @@ decl_module! {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 			assert!(
-				Self::now().is_zero() || now >= Self::now() + T::MinimumPeriod::get(),
+				Self::now().is_zero() || (now >= Self::now() && now >= Self::now() + T::MinimumPeriod::get()),
 				"Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
 			);
 			<Self as Store>::Now::put(now);
@@ -202,6 +202,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 			.expect("Gets and decodes timestamp inherent data")
 			.saturated_into();
 
+		// OVERFLOW: we assume that timestamps won’t overflow
 		let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
 		Some(Call::set(next_time.into()))
 	}
@@ -216,8 +217,8 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 		let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
 
-		let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
-		if t > data + MAX_TIMESTAMP_DRIFT_MILLIS {
+		let minimum = Self::now().saturating_add(T::MinimumPeriod::get()).saturated_into::<u64>();
+		if t > data.saturating_add(MAX_TIMESTAMP_DRIFT_MILLIS) {
 			Err(InherentError::Other("Timestamp too far in future to accept".into()))
 		} else if t < minimum {
 			Err(InherentError::ValidAtTimestamp(minimum))
