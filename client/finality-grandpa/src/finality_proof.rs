@@ -167,7 +167,7 @@ impl<B, Block> sc_network::FinalityProofProvider<Block> for FinalityProofProvide
 	) -> Result<Option<Vec<u8>>, ClientError> {
 		let request: FinalityProofRequest<Block::Hash> = Decode::decode(&mut &request[..])
 			.map_err(|e| {
-				warn!(target: "finality", "Unable to decode finality proof request: {}", e.what());
+				warn!(target: "afg", "Unable to decode finality proof request: {}", e.what());
 				ClientError::Backend(format!("Invalid finality proof request"))
 			})?;
 		match request {
@@ -269,7 +269,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 	let info = blockchain.info();
 	if info.finalized_number <= begin_number {
 		trace!(
-			target: "finality",
+			target: "afg",
 			"Requested finality proof for descendant of #{} while we only have finalized #{}. Returning empty proof.",
 			begin_number,
 			info.finalized_number,
@@ -344,7 +344,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 					);
 					if justification_check_result.is_err() {
 						trace!(
-							target: "finality",
+							target: "afg",
 							"Can not provide finality proof with requested set id #{}\
 							(possible forced change?). Returning empty proof.",
 							authorities_set_id,
@@ -387,7 +387,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 
 	if finality_proof.is_empty() {
 		trace!(
-			target: "finality",
+			target: "afg",
 			"No justifications found when making finality proof for {}. Returning empty proof.",
 			end,
 		);
@@ -395,7 +395,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 		Ok(None)
 	} else {
 		trace!(
-			target: "finality",
+			target: "afg",
 			"Built finality proof for {} of {} fragments. Last fragment for {}.",
 			end,
 			finality_proof.len(),

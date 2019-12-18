@@ -258,7 +258,7 @@ where
 			// check if the given best block is in the same branch as the block that signaled the change.
 			if is_descendent_of(&change.canon_hash, &best_hash)? {
 				// apply this change: make the set canonical
-				info!(target: "finality", "Applying authority set change forced at block #{:?}",
+				info!(target: "afg", "Applying authority set change forced at block #{:?}",
 					  change.canon_height);
 				telemetry!(CONSENSUS_INFO; "afg.applying_forced_authority_set_change";
 					"block" => ?change.canon_height
@@ -324,7 +324,7 @@ where
 				self.pending_forced_changes.clear();
 
 				if let Some(change) = change {
-					info!(target: "finality", "Applying authority set change scheduled at block #{:?}",
+					info!(target: "afg", "Applying authority set change scheduled at block #{:?}",
 						  change.canon_height);
 					telemetry!(CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
 						"block" => ?change.canon_height
