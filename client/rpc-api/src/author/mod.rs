@@ -61,7 +61,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 
 	/// Submit an extrinsic to watch.
 	///
-	/// See `sp_transaction_pool::TransactionStatus` for details on transaction
+	/// See [`TransactionStatus`](sp_transaction_pool::TransactionStatus) for details on transaction
 	/// lifecycle.
 	#[pubsub(
 		subscription = "author_extrinsicUpdate",
