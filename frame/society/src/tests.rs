@@ -261,7 +261,7 @@ fn suspended_member_lifecycle_works() {
 
 		// Suspended members cannot get payout
 		Society::bump_payout(&20, 10, 100);
-		assert_noop!(Society::payout(Origin::signed(20)), "account is suspended");
+		assert_noop!(Society::payout(Origin::signed(20)), "account is not a member");
 		
 		// Normal people cannot make judgement
 		assert_noop!(Society::judge_suspended_member(Origin::signed(20), 20, true), "Invalid origin");

@@ -333,7 +333,7 @@ decl_module! {
 		pub fn payout(origin) -> Result {
 			let who = ensure_signed(origin)?;
 
-			ensure!(<SuspendedMembers<T, I>>::get(&who).is_none(), "account is suspended");
+			ensure!(Self::is_member(&who), "account is not a member");
 
 			let mut payouts = <Payouts<T, I>>::get(&who);
 			if let Some((when, amount)) = payouts.first() {
