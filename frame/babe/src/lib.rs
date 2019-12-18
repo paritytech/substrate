@@ -124,7 +124,7 @@ decl_storage! {
 		/// This MUST NOT be used for gambling, as it can be influenced by a
 		/// malicious validator in the short term. It MAY be used in many
 		/// cryptographic protocols, however, so long as one remembers that this
-		/// (like everything else on-chain) it is public. For example, it can be
+		/// (like everything else on-chain) is public. For example, it can be
 		/// used where a number is needed that cannot have been chosen by an
 		/// adversary, for purposes such as public-coin zero-knowledge proofs.
 		// NOTE: the following fields don't use the constants to define the
