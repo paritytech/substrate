@@ -18,6 +18,7 @@ use crate::{
 	exec::{AccountIdOf, StorageKey},
 	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Trait, TrieId,
 };
+use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::Bounded;
 use support::{storage::child, traits::Get, StorageMap};
