@@ -172,6 +172,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
+		/// Despoit balance from currency/balances module into EVM.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn deposit_balance(origin, value: BalanceOf<T>) -> dispatch::Result {
 			let sender = ensure_signed(origin)?;
@@ -193,6 +194,7 @@ decl_module! {
 			Ok(())
 		}
 
+		/// Withdraw balance from EVM into currency/balances module.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn withdraw_balance(origin, value: BalanceOf<T>) -> dispatch::Result {
 			let sender = ensure_signed(origin)?;
@@ -217,9 +219,15 @@ decl_module! {
 			Ok(())
 		}
 
+		/// Issue an EVM call operation. This is similar to a message call transaction in Ethereum.
 		#[weight = WeightForCallCreate]
 		fn call(
-			origin, target: H160, input: Vec<u8>, value: U256, gas_limit: u32, gas_price: U256,
+			origin,
+			target: H160,
+			input: Vec<u8>,
+			value: U256,
+			gas_limit: u32,
+			gas_price: U256,
 		) -> dispatch::Result {
 			let sender = ensure_signed(origin)?;
 			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), "Gas price is too low");
@@ -271,9 +279,15 @@ decl_module! {
 			ret
 		}
 
+		/// Issue an EVM create operation. This is similar to a contract creation transaction in
+		/// Ethereum.
 		#[weight = WeightForCallCreate]
 		fn create(
-			origin, init: Vec<u8>, value: U256, gas_limit: u32, gas_price: U256,
+			origin,
+			init: Vec<u8>,
+			value: U256,
+			gas_limit: u32,
+			gas_price: U256,
 		) -> dispatch::Result {
 			let sender = ensure_signed(origin)?;
 			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), "Gas price is too low");
