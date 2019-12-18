@@ -21,7 +21,7 @@
 use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
 use sp_runtime::traits::{One, Zero, SaturatedConversion, ModuleDispatchError};
 use sp_std::{prelude::*, result, cmp, vec};
-use frame_support::{decl_module, decl_storage, decl_error};
+use frame_support::{decl_module, decl_storage, decl_error, ensure};
 use frame_support::traits::Get;
 use frame_system::{ensure_none, Trait as SystemTrait};
 use sp_finality_tracker::{INHERENT_IDENTIFIER, FinalizedInherentData};
@@ -78,8 +78,8 @@ decl_module! {
 		/// block is the given number.
 		fn final_hint(origin, #[compact] hint: T::BlockNumber) {
 			ensure_none(origin).map_err(|e| e.as_str())?;
-			assert!(!<Self as Store>::Update::exists(), Error::AlreadyUpdated);
-			assert!(
+			ensure!(!<Self as Store>::Update::exists(), Error::AlreadyUpdated);
+			ensure!(
 				frame_system::Module::<T>::block_number() >= hint,
 				Error::BadHint,
 			);
