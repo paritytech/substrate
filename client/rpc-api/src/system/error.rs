@@ -28,6 +28,8 @@ pub enum Error {
 	/// Provided block range couldn't be resolved to a list of blocks.
 	#[display(fmt = "Node is not fully functional: {}", _0)]
 	NotHealthy(Health),
+	/// Peer argument is malformatted.
+	MalformattedPeerArg(String),
 }
 
 impl std::error::Error for Error {}
@@ -43,6 +45,11 @@ impl From<Error> for rpc::Error {
 				message: format!("{}", e),
 				data: serde_json::to_value(h).ok(),
 			},
+			Error::MalformattedPeerArg(ref e) => rpc::Error {
+				code :rpc::ErrorCode::ServerError(BASE_ERROR + 2),
+				message: e.clone(),
+				data: None,
+			}
 		}
 	}
 }
