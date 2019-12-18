@@ -25,7 +25,7 @@
 //! ## Overview
 //!
 //! The Treasury Module itself provides the pot to store funds, and a means for stakeholders to
-//! propose, approve, and deny expendatures.  The chain will need to provide a method (e.g.
+//! propose, approve, and deny expenditures.  The chain will need to provide a method (e.g.
 //! inflation, fees) for collecting funds.
 //!
 //! By way of example, the Council could vote to fund the Treasury with a portion of the block
