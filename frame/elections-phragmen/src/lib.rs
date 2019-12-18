@@ -349,15 +349,15 @@ decl_module! {
 				return Ok(());
 			}
 
-			let mut runners_with_stake = Self::runners_up();
-			if let Ok(index) = runners_with_stake
-				.binary_search_by(|(ref r, ref _s)| r.cmp(&who))
+			let mut runners_up_with_stake = Self::runners_up();
+			if let Some(index) = runners_up_with_stake.iter()
+				.position(|(ref r, ref _s)| r == &who)
 			{
-				runners_with_stake.remove(index);
+				runners_up_with_stake.remove(index);
 				// unreserve the bond
 				T::Currency::unreserve(&who, T::CandidacyBond::get());
 				// update storage.
-				<RunnersUp<T>>::put(runners_with_stake);
+				<RunnersUp<T>>::put(runners_up_with_stake);
 				// safety guard to make sure we do only one arm. Better to read runners later.
 				return Ok(());
 			}
@@ -373,7 +373,7 @@ decl_module! {
 				return Ok(());
 			}
 
-			return Err("origin is not a candidate, member or a runner.");
+			return Err("origin is not a candidate, member or a runner up.");
 		}
 
 		/// Remove a particular member from the set. This is effective immediately and the bond of
@@ -1907,6 +1907,27 @@ mod tests {
 	}
 
 	#[test]
+	fn runner_up_replacement_works_when_out_of_order() {
+		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
+			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(2)));
+
+			assert_ok!(Elections::vote(Origin::signed(2), vec![5], 20));
+			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(Elections::vote(Origin::signed(5), vec![2], 50));
+
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members_ids(), vec![2, 4]);
+			assert_ok!(Elections::renounce_candidacy(Origin::signed(3)));
+		});
+	}
+
+	#[test]
 	fn can_renounce_candidacy_member_with_runners_bond_is_refunded() {
 		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
@@ -2010,7 +2031,7 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			assert_noop!(
 				Elections::renounce_candidacy(Origin::signed(5)),
-				"origin is not a candidate, member or a runner.",
+				"origin is not a candidate, member or a runner up.",
 			);
 		})
 	}
