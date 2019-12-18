@@ -66,7 +66,7 @@ impl<
 		self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
-	) -> Box<dyn Future<Output = Result<(), Error>> + Send> {
+	) -> Box<dyn Future<Output = Result<(), Error>> + Send + Unpin> {
 		struct WaitLink {
 			imported_blocks: u64,
 			has_error: bool,
@@ -212,7 +212,7 @@ impl<
 		from: NumberFor<TBl>,
 		to: Option<NumberFor<TBl>>,
 		json: bool
-	) -> Box<dyn Future<Output = Result<(), Error>>> {
+	) -> Box<dyn Future<Output = Result<(), Error>> + Unpin> {
 		let client = self.client;
 		let mut block = from;
 
@@ -293,7 +293,7 @@ impl<
 	fn check_block(
 		self,
 		block_id: BlockId<TBl>
-	) -> Box<dyn Future<Output = Result<(), Error>> + Send> {
+	) -> Box<dyn Future<Output = Result<(), Error>> + Send + Unpin> {
 		match self.client.block(&block_id) {
 			Ok(Some(block)) => {
 				let mut buf = Vec::new();

@@ -666,7 +666,7 @@ pub trait ServiceBuilderCommand {
 		self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
-	) -> Box<dyn Future<Output = Result<(), Error>> + Send>;
+	) -> Box<dyn Future<Output = Result<(), Error>> + Send + Unpin>;
 
 	/// Performs the blocks export.
 	fn export_blocks(
@@ -675,7 +675,7 @@ pub trait ServiceBuilderCommand {
 		from: NumberFor<Self::Block>,
 		to: Option<NumberFor<Self::Block>>,
 		json: bool
-	) -> Box<dyn Future<Output = Result<(), Error>>>;
+	) -> Box<dyn Future<Output = Result<(), Error>> + Unpin>;
 
 	/// Performs a revert of `blocks` blocks.
 	fn revert_chain(
@@ -687,7 +687,7 @@ pub trait ServiceBuilderCommand {
 	fn check_block(
 		self,
 		block: BlockId<Self::Block>
-	) -> Box<dyn Future<Output = Result<(), Error>> + Send>;
+	) -> Box<dyn Future<Output = Result<(), Error>> + Send + Unpin>;
 }
 
 impl<TBl, TRtApi, TCfg, TGen, TCSExt, TBackend, TExec, TSc, TImpQu, TNetP, TExPool, TRpc>
