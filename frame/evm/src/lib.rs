@@ -24,7 +24,7 @@ mod backend;
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
 use sp_std::{vec::Vec, marker::PhantomData};
-use frame_support::{ensure, dispatch, decl_module, decl_storage, decl_event, decl_error};
+use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
 use frame_support::weights::{Weight, WeighData, ClassifyDispatch, DispatchClass, PaysFee};
 use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement};
 use frame_system::{self as system, ensure_signed};
@@ -185,6 +185,8 @@ decl_error! {
 		PaymentOverflow,
 		/// Withdraw fee failed
 		WithdrawFailed,
+		/// Gas price is too low.
+		GasPriceTooLow,
 		/// Call failed
 		ExitReasonFailed,
 		/// Call reverted
@@ -252,9 +254,9 @@ decl_module! {
 			value: U256,
 			gas_limit: u32,
 			gas_price: U256,
-		) -> dispatch::Result {
-			let sender = ensure_signed(origin)?.map_err(|e| e.as_str())?;
-			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), "Gas price is too low");
+		) {
+			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
+			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::GasPriceTooLow);
 
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
@@ -312,9 +314,9 @@ decl_module! {
 			value: U256,
 			gas_limit: u32,
 			gas_price: U256,
-		) -> dispatch::Result {
-			let sender = ensure_signed(origin)?.map_err(|e| e.as_str())?;
-			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), "Gas price is too low");
+		) {
+			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
+			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::GasPriceTooLow);
 
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
