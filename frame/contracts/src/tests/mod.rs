@@ -22,7 +22,7 @@
 use crate::{
 	BalanceOf, ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig,
 	Module, RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter, Schedule,
-	TrieIdGenerator, CheckBlockGasLimit, account_db::{AccountDb, DirectAccountDb, OverlayAccountDb},
+	TrieIdGenerator, CheckBlockGasLimit, CodeHash, storage,
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
@@ -304,6 +304,32 @@ pub fn get_balance(who: &u64) -> u64 {
 	Balances::free_balance(who)
 }
 
+pub fn place_contract(address: &u64, code_hash: CodeHash<Test>) {
+	use crate::TrieIdGenerator;
+	let trie_id = <Test as crate::Trait>::TrieIdGenerator::trie_id(address);
+	storage::place_contract::<Test>(&address, trie_id, code_hash).unwrap()
+}
+
+pub fn get_storage(who: &u64, key: [u8; 32]) -> Option<Vec<u8>> {
+	use crate::ContractInfoOf;
+	let trie_id = <ContractInfoOf<Test>>::get(who)
+		.expect("no contract info under the given address")
+		.get_alive()
+		.expect("the contract exists but not alive")
+		.trie_id;
+	storage::read_contract_storage(&trie_id, &key)
+}
+
+pub fn set_storage(who: &u64, key: [u8; 32], value: Option<Vec<u8>>) {
+	use crate::ContractInfoOf;
+	let trie_id = <ContractInfoOf<Test>>::get(who)
+		.expect("no contract info under the given address")
+		.get_alive()
+		.expect("the contract exists but not alive")
+		.trie_id;
+	storage::write_contract_storage::<Test>(who, &trie_id, &key, value);
+}
+
 // Perform a simple transfer to a non-existent account supplying way more gas than needed.
 // Then we check that the all unused gas is refunded.
 #[test]
@@ -321,62 +347,40 @@ fn refunds_unused_gas() {
 #[test]
 fn account_removal_removes_storage() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let trie_id1 = <Test as Trait>::TrieIdGenerator::trie_id(&1);
-		let trie_id2 = <Test as Trait>::TrieIdGenerator::trie_id(&2);
-		let key1 = &[1; 32];
-		let key2 = &[2; 32];
+		let key1 = [1; 32];
+		let key2 = [2; 32];
 
 		// Set up two accounts with free balance above the existential threshold.
 		{
 			Balances::deposit_creating(&1, 110);
-			ContractInfoOf::<Test>::insert(1, &ContractInfo::Alive(RawAliveContractInfo {
-				trie_id: trie_id1.clone(),
-				storage_size: <Test as Trait>::StorageSizeOffset::get(),
-				deduct_block: System::block_number(),
-				code_hash: H256::repeat_byte(1),
-				rent_allowance: 40,
-				last_write: None,
-			}));
-
-			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
-			overlay.set_storage(&1, key1.clone(), Some(b"1".to_vec()));
-			overlay.set_storage(&1, key2.clone(), Some(b"2".to_vec()));
-			DirectAccountDb.commit(overlay.into_change_set());
+			place_contract(&1, H256::repeat_byte(1));
+			set_storage(&1, key1.clone(), Some(b"1".to_vec()));
+			set_storage(&1, key2.clone(), Some(b"2".to_vec()));
 
 			Balances::deposit_creating(&2, 110);
-			ContractInfoOf::<Test>::insert(2, &ContractInfo::Alive(RawAliveContractInfo {
-				trie_id: trie_id2.clone(),
-				storage_size: <Test as Trait>::StorageSizeOffset::get(),
-				deduct_block: System::block_number(),
-				code_hash: H256::repeat_byte(2),
-				rent_allowance: 40,
-				last_write: None,
-			}));
-
-			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
-			overlay.set_storage(&2, key1.clone(), Some(b"3".to_vec()));
-			overlay.set_storage(&2, key2.clone(), Some(b"4".to_vec()));
-			DirectAccountDb.commit(overlay.into_change_set());
+			place_contract(&2, H256::repeat_byte(2));
+			set_storage(&2, key1.clone(), Some(b"3".to_vec()));
+			set_storage(&2, key2.clone(), Some(b"4".to_vec()));
 		}
 
 		// Transfer funds from account 1 of such amount that after this transfer
 		// the balance of account 1 will be below the existential threshold.
 		//
-		// This should lead to the removal of all storage associated with this account.
+		// This should trigger OnFreeBalanceZero callback and therefore kill the child storage and
+		// remove the contract info.
 		assert_ok!(Balances::transfer(Origin::signed(1), 2, 20));
 
-		// Verify that all entries from account 1 is removed, while
-		// entries from account 2 is in place.
+		// Verify that the account 1 is removed, while the account 2 is in place.
 		{
-			assert!(<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key1).is_none());
-			assert!(<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key2).is_none());
+			assert!(<ContractInfoOf<Test>>::get(&1).is_none());
 
+			assert!(<ContractInfoOf<Test>>::get(&2).is_some());
 			assert_eq!(
-				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key1),
+				get_storage(&2, key1),
 				Some(b"3".to_vec())
 			);
 			assert_eq!(
-				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key2),
+				get_storage(&2, key2),
 				Some(b"4".to_vec())
 			);
 		}
