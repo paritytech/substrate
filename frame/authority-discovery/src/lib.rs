@@ -23,7 +23,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use frame_support::{decl_module, decl_storage, decl_error};
+use frame_support::{decl_module, decl_storage};
 use sp_authority_discovery::AuthorityId;
 
 /// The module's config trait.
@@ -45,13 +45,6 @@ decl_module! {
 	}
 }
 
-decl_error! {
-	pub enum Error {
-		/// Keys are already initialized!
-		AlreadyInitialized,
-	}
-}
-
 impl<T: Trait> Module<T> {
 	/// Retrieve authority identifiers of the current authority set.
 	pub fn authorities() -> Vec<AuthorityId> {
@@ -60,7 +53,7 @@ impl<T: Trait> Module<T> {
 
 	fn initialize_keys(keys: &[AuthorityId]) {
 		if !keys.is_empty() {
-			assert!(Keys::get().is_empty(), Error::AlreadyInitialized);
+			assert!(Keys::get().is_empty(), "Keys are already initialized!");
 			Keys::put(keys);
 		}
 	}
