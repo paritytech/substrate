@@ -15,7 +15,131 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! # Society Module
-//!
+//! 
+//! - [`society::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//! 
+//! ## Overview
+//! 
+//! The Society module is an economic game which incentivizes user to participate
+//! and maintain a membership society. 
+//! 
+//! ### User Types
+//! 
+//! At any point, a users in the society can be one of:
+//! * a Bid
+//! * a Candidate
+//! * a Suspended Candidate
+//! * a Member
+//! * a Suspended Member
+//! 
+//! Of the non-suspended members, there is always a Head and a Defender.
+//! 
+//! ### First Principles
+//! 
+//! #### Rewards
+//! 
+//! Members are incentivized to participate in the society through rewards paid
+//! by the Society treasury. These payments have a maturity period that the user
+//! must wait before they are able to access the funds.
+//! 
+//! #### Punishments
+//! 
+//! Members can be punished by slashing the reward payouts that have not been
+//! collected. Additionally, members can accumulate "strikes", and when they
+//! reach a max strike limit, they become suspended.
+//! 
+//! ### User Life Cycle
+//! 
+//! A user can go through the following phases:
+//! 
+//! ```
+//!           +------->  User  <----------+
+//!           |           +               |
+//!           |           |               |
+//! +----------------------------------------------+
+//! |         |           |               |        |
+//! |         |           v               |        |
+//! |         |          Bid <------------+        |
+//! |         |           +               |        |
+//! |         |           |               +        |
+//! |         |           v            Suspended   |
+//! |         |       Candidate +----> Candidate   |
+//! |         |           +               +        |
+//! |         |           |               |        |
+//! |         +           |               |        |
+//! |   Suspended +------>|               |        |
+//! |      Member         |               |        |
+//! |         ^           |               |        |
+//! |         |           v               |        |
+//! |         +-------+ Member <----------+        |
+//! |                                              |
+//! |                                              |
+//! +------------------Society---------------------+
+//! ```
+//! 
+//! #### Initialization
+//! 
+//! The society is initialized with a single member who is automatically chosen as the Head.
+//! 
+//! #### Bid Phase
+//! 
+//! New users must first have a bid to join the society.
+//! 
+//! A user can make a bid by reserving a deposit of funds. Alternatively an already existing member
+//! can create a bid on a user's behalf by "vouching" for them.
+//! 
+//! A bid includes reward information that the user would like to receive for joining
+//! the society. A voucher can additionally request some portion of that reward as a tip,
+//! for vouching for the prospective candidate.
+//! 
+//! Every rotation period, Bids are ordered by reward amount, and the module
+//! selects as many bids the Society pot can support for that period.
+//! 
+//! These selected bids become candidates and move on to the Candidate phase.
+//! Bids that were not selected stay in the bid pool until they are selected or
+//! a user chooses to "unbid".
+//! 
+//! #### Candidate Phase
+//! 
+//! Once a user becomes a candidate, members vote whether to approve or reject
+//! that user into society. This voting process also happens during one rotation period.
+//! 
+//! The approval and rejection criteria for candidates are not set on chain,
+//! and may change for different societies.
+//! 
+//! At the end of the rotation period, each candidate has their votes tallied,
+//! and a randomly selected vote is chosen as the final outcome.
+//! 
+//! +----------------------------------+
+//! |                                  |
+//! |  Member   |0|1|2|3|4|5|6|7|8|9|  |
+//! |  -----------------------------   |
+//! |  Vote     |y|y|y|n|y|y|n|y|n|y|  |
+//! |  -----------------------------   |
+//! |  Selected | | | |x| | | | | | |  |
+//! |                                  |
+//! +----------------------------------+
+//! 
+//! Each member that voted opposite to this randomly selected vote is punished by
+//! slashing their unclaimed payouts and increasing the number of strikes they have.
+//! 
+//! These slashed funds are given to a random user who voted the same as the
+//! selected vote as a reward for participating in the vote.
+//! 
+//! If the candidate wins the vote, they receive their bid reward as a future payout.
+//! If the bid was placed by a voucher, they will receive their portion of the reward,
+//! before the rest is paid to the winning candidate.
+//! 
+//! If the candidate loses the vote, they are suspended and it is up to the Suspension
+//! Judgement origin to determine if the candidate should go through the bidding process
+//! again, should be accepted into the membership society, or rejected and their deposit
+//! slashed.
+//! 
+//! ## Interface
+//! 
+//! 
+//! 
 //! The Society module allows one or more initial accounts to create a membership society.
 //!
 //! An induction process can be customized for new members, allowing candidates to submit their
