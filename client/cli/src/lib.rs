@@ -890,8 +890,8 @@ where
 			}
 		});
 
-	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
-	let ws_interface: &str = if cli.ws_external { "0.0.0.0" } else { "127.0.0.1" };
+	let rpc_interface: &str = interface_str(cli.rpc_external, cli.unsafe_rpc_external, cli.validator)?;
+	let ws_interface: &str = interface_str(cli.ws_external, cli.unsafe_ws_external, cli.validator)?;
 	let grafana_interface: &str = if cli.grafana_external { "0.0.0.0" } else { "127.0.0.1" };
 
 	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
@@ -929,6 +929,28 @@ where
 	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
 
 	Ok(config)
+}
+
+fn interface_str(
+	is_external: bool,
+	is_unsafe_external: bool,
+	is_validator: bool
+) -> Result<&'static str, error::Error> {
+	if is_external && is_validator {
+		return Err(error::Error::Input("--rpc-external and --ws-external options shouldn't be \
+		used if the node is running as vaidator.".to_owned()));
+	}
+
+	if is_external {
+		log::warn!("It isn't safe to expose RPC publicly without a proxy server. \
+		Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.");
+	}
+
+	if is_external || is_unsafe_external {
+		Ok("0.0.0.0")
+	} else {
+		Ok("127.0.0.1")
+	}
 }
 
 /// Creates a configuration including the database path.
