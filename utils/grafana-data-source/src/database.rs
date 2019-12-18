@@ -121,7 +121,7 @@ impl Datapoint {
 		})
 	}
 
-	fn make_absolute(&self, base_timestamp: i64) -> (f32, i64) {
+	fn make_absolute(self, base_timestamp: i64) -> (f32, i64) {
 		(self.value, base_timestamp + self.delta_timestamp as i64)
 	}
 }

@@ -17,7 +17,7 @@
 use serde::{Serialize, de::DeserializeOwned};
 use hyper::{Body, Request, Response, header, service::{service_fn, make_service_fn}, Server};
 use chrono::{Duration, Utc};
-use futures_util::{FutureExt, future::{Future, select, Either}};
+use futures_util::{FutureExt, TryStreamExt, future::{Future, select, Either}};
 use futures_timer::Delay;
 use crate::{DATABASE, Error, types::{Target, Query, TimeseriesData, Range}};
 
@@ -63,9 +63,8 @@ async fn map_request_to_response<Req, Res, T>(req: Request<Body>, transformation
 		Res: Serialize,
 		T: Fn(Req) -> Res + Send + Sync + 'static
 {
-	use futures_util_alpha::TryStreamExt;
-
 	let body = req.into_body()
+		.map_ok(|bytes| bytes.to_vec())
 		.try_concat()
 		.await
 		.map_err(Error::Hyper)?;
@@ -85,14 +84,13 @@ async fn map_request_to_response<Req, Res, T>(req: Request<Body>, transformation
 pub struct Executor;
 
 #[cfg(not(target_os = "unknown"))]
-impl<T> tokio_executor::TypedExecutor<T> for Executor
+impl<T> hyper::rt::Executor<T> for Executor
 	where
 		T: Future + Send + 'static,
 		T::Output: Send + 'static,
 {
-	fn spawn(&mut self, future: T) -> Result<(), tokio_executor::SpawnError> {
+	fn execute(&self, future: T) {
 		async_std::task::spawn(future);
-		Ok(())
 	}
 }
 
@@ -118,7 +116,7 @@ pub async fn run_server(mut address: std::net::SocketAddr) -> Result<(), Error> 
 					address.set_port(0);
 					continue;
 				},
-				_ => Err(err)?,
+				_ => return Err(err.into()),
 			}
 		}
 	};
