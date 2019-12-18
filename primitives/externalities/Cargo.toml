@@ -6,6 +6,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sp-storage = { path = "../storage" }
-sp-std = { path = "../std" }
+sp-storage = { version = "2.0.0", path = "../storage" }
+sp-std = { version = "2.0.0", path = "../std" }
 environmental = { version = "1.0.2" }

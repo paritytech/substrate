@@ -60,14 +60,14 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use sp_std::prelude::*;
-use frame_support::{decl_module, decl_storage, decl_event, ensure, print};
+use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error};
 use frame_support::traits::{
 	Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced,
 	ReservableCurrency, WithdrawReason
 };
 use sp_runtime::{Permill, ModuleId};
 use sp_runtime::traits::{
-	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating
+	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating, ModuleDispatchError,
 };
 use frame_support::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode};
@@ -126,7 +126,10 @@ decl_module! {
 		/// Percentage of spare funds (if any) that are burnt per spend period.
 		const Burn: Permill = T::Burn::get();
 
+		type Error = Error;
+
 		fn deposit_event() = default;
+
 		/// Put forward a suggestion for spending. A deposit proportional to the value
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
 		/// proposal is awarded.
@@ -142,12 +145,12 @@ decl_module! {
 			#[compact] value: BalanceOf<T>,
 			beneficiary: <T::Lookup as StaticLookup>::Source
 		) {
-			let proposer = ensure_signed(origin)?;
+			let proposer = ensure_signed(origin).map_err(|e| e.as_str())?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			let bond = Self::calculate_bond(value);
 			T::Currency::reserve(&proposer, bond)
-				.map_err(|_| "Proposer's balance too low")?;
+				.map_err(|_| Error::InsufficientProposersBalance)?;
 
 			let c = Self::proposal_count();
 			ProposalCount::put(c + 1);
@@ -165,8 +168,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::RejectOrigin::ensure_origin(origin)?;
-			let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
+			T::RejectOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
+			let proposal = <Proposals<T>>::take(proposal_id).ok_or(Error::InvalidProposalIndex)?;
 
 			let value = proposal.bond;
 			let imbalance = T::Currency::slash_reserved(&proposal.proposer, value).0;
@@ -183,9 +186,9 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::ApproveOrigin::ensure_origin(origin)?;
+			T::ApproveOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
 
-			ensure!(<Proposals<T>>::exists(proposal_id), "No proposal at that index");
+			ensure!(<Proposals<T>>::exists(proposal_id), Error::InvalidProposalIndex);
 
 			Approvals::mutate(|v| v.push(proposal_id));
 		}
@@ -251,6 +254,16 @@ decl_event!(
 		Deposit(Balance),
 	}
 );
+
+decl_error! {
+	/// Error for the treasury module.
+	pub enum Error {
+		/// Proposer's balance is too low.
+		InsufficientProposersBalance,
+		/// No proposal at that index.
+		InvalidProposalIndex,
+	}
+}
 
 impl<T: Trait> Module<T> {
 	// Add public immutables and private mutables.
@@ -471,7 +484,7 @@ mod tests {
 	#[test]
 	fn spend_proposal_fails_when_proposer_poor() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Treasury::propose_spend(Origin::signed(2), 100, 3), "Proposer's balance too low");
+			assert_noop!(Treasury::propose_spend(Origin::signed(2), 100, 3), Error::InsufficientProposersBalance);
 		});
 	}
 
@@ -523,21 +536,21 @@ mod tests {
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
-			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), Error::InvalidProposalIndex);
 		});
 	}
 
 	#[test]
 	fn reject_non_existant_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), Error::InvalidProposalIndex);
 		});
 	}
 
 	#[test]
 	fn accept_non_existant_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), Error::InvalidProposalIndex);
 		});
 	}
 
@@ -548,7 +561,7 @@ mod tests {
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
-			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), Error::InvalidProposalIndex);
 		});
 	}
 

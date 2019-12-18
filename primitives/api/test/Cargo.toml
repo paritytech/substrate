@@ -5,20 +5,20 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sp-api = { path = "../" }
-substrate-test-runtime-client = { path = "../../../test-utils/runtime/client" }
-sp-version = { path = "../../version" }
-sp-runtime = { path = "../../runtime" }
-sp-blockchain = { path = "../../blockchain" }
-sp-consensus = { path = "../../../primitives/consensus/common" }
+sp-api = { version = "2.0.0", path = "../" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
+sp-version = { version = "2.0.0", path = "../../version" }
+sp-runtime = { version = "2.0.0", path = "../../runtime" }
+sp-blockchain = { version = "2.0.0", path = "../../blockchain" }
+sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sp-state-machine = { path = "../../../primitives/state-machine" }
+sp-state-machine = { version = "2.0.0", path = "../../../primitives/state-machine" }
 trybuild = "1.0.17"
 rustversion = "1.0.0"
 
 [dev-dependencies]
 criterion = "0.3.0"
-substrate-test-runtime-client = { path = "../../../test-utils/runtime/client" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 
 [[bench]]
 name = "bench"

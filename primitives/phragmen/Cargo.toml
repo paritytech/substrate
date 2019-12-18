@@ -6,12 +6,12 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-std = { path = "../std", default-features = false }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
+sp-std = { version = "2.0.0", default-features = false, path = "../std" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 
 [dev-dependencies]
-substrate-test-utils = { path = "../../test-utils" }
-sp-io ={ path = "../../primitives/io" }
+substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
+sp-io ={ version = "2.0.0", path = "../../primitives/io" }
 rand = "0.7.2"
 
 [features]
