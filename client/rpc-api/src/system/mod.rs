@@ -22,9 +22,8 @@ pub mod helpers;
 use crate::helpers::Receiver;
 use jsonrpc_derive::rpc;
 use futures::{future::BoxFuture, compat::Compat};
-use std::pin::Pin;
 
-use self::error::{Error, Result};
+use self::error::Result as SystemResult;
 
 pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo, NodeRole};
 pub use self::gen_client::Client as SystemClient;
@@ -34,19 +33,19 @@ pub use self::gen_client::Client as SystemClient;
 pub trait SystemApi<Hash, Number> {
 	/// Get the node's implementation name. Plain old string.
 	#[rpc(name = "system_name")]
-	fn system_name(&self) -> Result<String>;
+	fn system_name(&self) -> SystemResult<String>;
 
 	/// Get the node implementation's version. Should be a semver string.
 	#[rpc(name = "system_version")]
-	fn system_version(&self) -> Result<String>;
+	fn system_version(&self) -> SystemResult<String>;
 
 	/// Get the chain's type. Given as a string identifier.
 	#[rpc(name = "system_chain")]
-	fn system_chain(&self) -> Result<String>;
+	fn system_chain(&self) -> SystemResult<String>;
 
 	/// Get a custom set of properties as a JSON object, defined in the chain spec.
 	#[rpc(name = "system_properties")]
-	fn system_properties(&self) -> Result<Properties>;
+	fn system_properties(&self) -> SystemResult<Properties>;
 
 	/// Return health status of the node.
 	///
@@ -74,13 +73,13 @@ pub trait SystemApi<Hash, Number> {
 	/// is an example of a valid, passing multiaddr with PeerId attached.
 	#[rpc(name = "system_addReservedPeer", returns = "()")]
 	fn system_add_reserved_peer(&self, peer: String)
-		-> Compat<BoxFuture<'static, std::result::Result<(), jsonrpc_core::Error>>>;
+		-> Compat<BoxFuture<'static, Result<(), jsonrpc_core::Error>>>;
 
 	/// Remove a reserved peer. Returns the empty string or an error. The string
 	/// should encode only the PeerId e.g. `QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`.
 	#[rpc(name = "system_removeReservedPeer", returns = "()")]
 	fn system_remove_reserved_peer(&self, peer_id: String)
-		-> Compat<BoxFuture<'static, std::result::Result<(), jsonrpc_core::Error>>>;
+		-> Compat<BoxFuture<'static, Result<(), jsonrpc_core::Error>>>;
 
 	/// Returns the roles the node is running as.
 	#[rpc(name = "system_nodeRoles", returns = "Vec<NodeRole>")]
