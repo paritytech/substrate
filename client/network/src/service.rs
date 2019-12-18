@@ -319,6 +319,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		self.network_service.user_protocol().num_queued_blocks()
 	}
 
+	/// Number of active sync requests.
+	pub fn num_sync_requests(&self) -> usize {
+		self.network_service.user_protocol().num_sync_requests()
+	}
+
 	/// Adds an address for a node.
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		self.network_service.add_known_address(peer_id, addr);

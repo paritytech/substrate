@@ -547,6 +547,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.sync.status().queued_blocks
 	}
 
+	/// Number of active sync requests.
+	pub fn num_sync_requests(&self) -> usize {
+		self.sync.num_sync_requests()
+	}
+
 	/// Starts a new data demand request.
 	///
 	/// The parameter contains a `Sender` where the result, once received, must be sent.
@@ -892,7 +897,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			}
 		} else {
-			match self.sync.on_block_data(peer, request, response) {
+			match self.sync.on_block_data(peer, Some(request), response) {
 				Ok(sync::OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
 				Ok(sync::OnBlockData::Request(peer, req)) => {
@@ -1320,14 +1325,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		// been sent over network (but it is not in our case)
 		let blocks_to_import = self.sync.on_block_data(
 			who.clone(),
-			message::generic::BlockRequest {
-				id: 0,
-				fields: BlockAttributes::HEADER,
-				from: message::FromBlock::Hash(hash),
-				to: None,
-				direction: message::Direction::Ascending,
-				max: Some(1),
-			},
+			None,
 			message::generic::BlockResponse {
 				id: 0,
 				blocks: vec![
