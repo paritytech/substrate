@@ -24,13 +24,13 @@ mod backend;
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
 use sp_std::{vec::Vec, marker::PhantomData};
-use frame_support::{ensure, dispatch, decl_module, decl_storage, decl_event};
+use frame_support::{ensure, dispatch, decl_module, decl_storage, decl_event, decl_error};
 use frame_support::weights::{Weight, WeighData, ClassifyDispatch, DispatchClass, PaysFee};
 use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::ModuleId;
 use frame_support::weights::SimpleDispatchInfo;
-use sp_runtime::traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion};
+use sp_runtime::traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion, ModuleDispatchError};
 use sp_core::{U256, H256, H160, Hasher};
 use evm::{ExitReason, ExitSucceed, ExitError};
 use evm::executor::StackExecutor;
@@ -167,22 +167,43 @@ decl_storage! {
 	}
 }
 
-decl_event!(
+decl_event! {
 	/// EVM events
 	pub enum Event {
 		/// Ethereum events from contracts.
 		Log(Log),
 	}
-);
+}
+
+decl_error! {
+	pub enum Error {
+		/// Not enough balance to perform action
+		BalanceLow,
+		/// Calculating total fee overflowed
+		FeeOverflow,
+		/// Calculating total payment overflowed
+		PaymentOverflow,
+		/// Withdraw fee failed
+		WithdrawFailed,
+		/// Call failed
+		ExitReasonFailed,
+		/// Call reverted
+		ExitReasonRevert,
+		/// Call returned VM fatal error
+		ExitReasonFatal,
+	}
+}
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error;
+
 		fn deposit_event() = default;
 
 		/// Despoit balance from currency/balances module into EVM.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn deposit_balance(origin, value: BalanceOf<T>) -> dispatch::Result {
-			let sender = ensure_signed(origin)?;
+		fn deposit_balance(origin, value: BalanceOf<T>) {
+			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
 
 			let imbalance = T::Currency::withdraw(
 				&sender,
@@ -197,20 +218,18 @@ decl_module! {
 			Accounts::mutate(&address, |account| {
 				account.balance += bvalue;
 			});
-
-			Ok(())
 		}
 
 		/// Withdraw balance from EVM into currency/balances module.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn withdraw_balance(origin, value: BalanceOf<T>) -> dispatch::Result {
-			let sender = ensure_signed(origin)?;
+		fn withdraw_balance(origin, value: BalanceOf<T>) {
+			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
 			let address = T::ConvertAccountId::convert_account_id(&sender);
 			let bvalue = U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(value));
 
 			let mut account = Accounts::get(&address);
 			account.balance = account.balance.checked_sub(bvalue)
-				.ok_or("Not enough balance to withdraw")?;
+				.ok_or(Error::BalanceLow)?;
 
 			let imbalance = T::Currency::withdraw(
 				&Self::account_id(),
@@ -222,8 +241,6 @@ decl_module! {
 			Accounts::insert(&address, account);
 
 			T::Currency::resolve_creating(&sender, imbalance);
-
-			Ok(())
 		}
 
 		/// Issue an EVM call operation. This is similar to a message call transaction in Ethereum.
@@ -236,7 +253,7 @@ decl_module! {
 			gas_limit: u32,
 			gas_price: U256,
 		) -> dispatch::Result {
-			let sender = ensure_signed(origin)?;
+			let sender = ensure_signed(origin)?.map_err(|e| e.as_str())?;
 			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), "Gas price is too low");
 
 			let source = T::ConvertAccountId::convert_account_id(&sender);
@@ -255,13 +272,13 @@ decl_module! {
 			);
 
 			let total_fee = gas_price.checked_mul(U256::from(gas_limit))
-				.ok_or("Calculating total fee overflowed")?;
+				.ok_or(Error::FeeOverflow)?;
 			if Accounts::get(&source).balance <
-				value.checked_add(total_fee).ok_or("Calculating total payment overflowed")?
+				value.checked_add(total_fee).ok_or(Error::PaymentOverflow)?
 			{
-				return Err("Not enough balance to pay transaction fee")
+				return Err(Error::BalanceLow)
 			}
-			executor.withdraw(source, total_fee).map_err(|_| "Withdraw fee failed")?;
+			executor.withdraw(source, total_fee).map_err(|_| Error::WithdrawFailed)?;
 
 			let reason = executor.transact_call(
 				source,
@@ -273,9 +290,9 @@ decl_module! {
 
 			let ret = match reason {
 				ExitReason::Succeed(_) => Ok(()),
-				ExitReason::Error(_) => Err("Execute message call failed"),
-				ExitReason::Revert(_) => Err("Execute message call reverted"),
-				ExitReason::Fatal(_) => Err("Execute message call returned VM fatal error"),
+				ExitReason::Error(_) => Err(Error::ExitReasonFailed),
+				ExitReason::Revert(_) => Err(Error::ExitReasonRevert),
+				ExitReason::Fatal(_) => Err(Error::ExitReasonFatal),
 			};
 			let actual_fee = executor.fee(gas_price);
 			executor.deposit(source, total_fee.saturating_sub(actual_fee));
@@ -283,7 +300,7 @@ decl_module! {
 			let (values, logs) = executor.deconstruct();
 			backend.apply(values, logs, true);
 
-			ret
+			return ret;
 		}
 
 		/// Issue an EVM create operation. This is similar to a contract creation transaction in
@@ -296,7 +313,7 @@ decl_module! {
 			gas_limit: u32,
 			gas_price: U256,
 		) -> dispatch::Result {
-			let sender = ensure_signed(origin)?;
+			let sender = ensure_signed(origin)?.map_err(|e| e.as_str())?;
 			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), "Gas price is too low");
 
 			let source = T::ConvertAccountId::convert_account_id(&sender);
@@ -315,13 +332,13 @@ decl_module! {
 			);
 
 			let total_fee = gas_price.checked_mul(U256::from(gas_limit))
-				.ok_or("Calculating total fee overflowed")?;
+				.ok_or(Error::FeeOverflow)?;
 			if Accounts::get(&source).balance <
-				value.checked_add(total_fee).ok_or("Calculating total payment overflowed")?
+				value.checked_add(total_fee).ok_or(Error::PaymentOverflow)?
 			{
-				return Err("Not enough balance to pay transaction fee")
+				return Err(Error::BalanceLow)
 			}
-			executor.withdraw(source, total_fee).map_err(|_| "Withdraw fee failed")?;
+			executor.withdraw(source, total_fee).map_err(|_| Error::WithdrawFailed)?;
 
 			let reason = executor.transact_create(
 				source,
@@ -332,9 +349,9 @@ decl_module! {
 
 			let ret = match reason {
 				ExitReason::Succeed(_) => Ok(()),
-				ExitReason::Error(_) => Err("Execute contract creation failed"),
-				ExitReason::Revert(_) => Err("Execute contract creation reverted"),
-				ExitReason::Fatal(_) => Err("Execute contract creation returned VM fatal error"),
+				ExitReason::Error(_) => Err(Error::ExitReasonFailed),
+				ExitReason::Revert(_) => Err(Error::ExitReasonRevert),
+				ExitReason::Fatal(_) => Err(Error::ExitReasonFatal),
 			};
 			let actual_fee = executor.fee(gas_price);
 			executor.deposit(source, total_fee.saturating_sub(actual_fee));
@@ -342,7 +359,7 @@ decl_module! {
 			let (values, logs) = executor.deconstruct();
 			backend.apply(values, logs, true);
 
-			ret
+			return ret;
 		}
 	}
 }
