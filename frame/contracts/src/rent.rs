@@ -41,8 +41,8 @@ pub enum RentOutcome {
 /// Evict and optionally pay dues (or check account can pay them otherwise) at the current
 /// block number (modulo `handicap`, read on).
 ///
-/// Returns `None` if the account was removed along with its `ContractInfo` due to dropping its
-/// balance below the subsistence threshold.
+/// Returns `None` if the account has no contract info or it was removed along with its
+/// `ContractInfo` due to dropping its balance below the subsistence threshold.
 ///
 /// `pay_rent` gives an ability to pay or skip paying rent.
 /// `handicap` gives a way to check or pay the rent up to a moment in the past instead
@@ -56,6 +56,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 ) -> (RentOutcome, Option<ContractInfo<T>>) {
 	let contract_info = <ContractInfoOf<T>>::get(account);
 	let contract = match contract_info {
+		// We don't collect rent from non-contract accounts and tombstones.
 		None | Some(ContractInfo::Tombstone(_)) => return (RentOutcome::Exempted, contract_info),
 		Some(ContractInfo::Alive(contract)) => contract,
 	};
@@ -180,8 +181,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 
 /// Make account paying the rent for the current block number
 ///
-/// Returns `None` if the account was removed along with its `ContractInfo` due to dropping its
-/// balance below the subsistence threshold.
+/// Returns `None` if the account has no contract info or it was removed along with its
+/// `ContractInfo` due to dropping its balance below the subsistence threshold.
 ///
 /// NOTE: This function acts eagerly.
 pub fn pay_rent<T: Trait>(account: &T::AccountId) -> Option<ContractInfo<T>> {

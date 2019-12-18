@@ -450,10 +450,12 @@ fn instantiate_and_call_and_deposit_event() {
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100)),
-				topics: vec![],
-			},
+                phase: Phase::ApplyExtrinsic(0),
+                event: MetaEvent::balances(
+                    balances::RawEvent::Transfer(ALICE, BOB, 100, 0)
+                ),
+                topics: vec![],
+            },
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::contract(RawEvent::Contract(BOB, vec![1, 2, 3, 4])),
@@ -463,7 +465,7 @@ fn instantiate_and_call_and_deposit_event() {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB)),
 				topics: vec![],
-			}
+			},
 		]);
 
 		assert_ok!(creation);
@@ -553,7 +555,9 @@ fn dispatch_call() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100)),
+				event: MetaEvent::balances(
+					balances::RawEvent::Transfer(ALICE, BOB, 100, 0)
+				),
 				topics: vec![],
 			},
 			EventRecord {
@@ -675,7 +679,9 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100)),
+				event: MetaEvent::balances(
+					balances::RawEvent::Transfer(ALICE, BOB, 100, 0)
+				),
 				topics: vec![],
 			},
 			EventRecord {
@@ -1368,10 +1374,10 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		);
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 
-		/// Create another account with the address `DJANGO` with `CODE_RESTORATION`.
-		///
-		/// Note that we can't use `ALICE` for creating `DJANGO` so we create yet another
-		/// account `CHARLIE` and create `DJANGO` with it.
+		// Create another account with the address `DJANGO` with `CODE_RESTORATION`.
+		//
+		// Note that we can't use `ALICE` for creating `DJANGO` so we create yet another
+		// account `CHARLIE` and create `DJANGO` with it.
 		Balances::deposit_creating(&CHARLIE, 1_000_000);
 		assert_ok!(Contract::instantiate(
 			Origin::signed(CHARLIE),

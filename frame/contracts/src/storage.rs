@@ -16,7 +16,7 @@
 
 use crate::{
 	exec::{AccountIdOf, StorageKey},
-	AliveContractInfo, BalanceOf, CodeHash, ContractInfoOf, Trait, TrieId,
+	ContractInfo, AliveContractInfo, BalanceOf, CodeHash, ContractInfoOf, Trait, TrieId,
 };
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::Bounded;
@@ -26,13 +26,34 @@ pub fn read_contract_storage(trie_id: &TrieId, key: &StorageKey) -> Option<Vec<u
 	child::get_raw(trie_id, &blake2_256(key))
 }
 
-pub fn write_contract_storage(trie_id: &TrieId, key: &StorageKey, value: Option<Vec<u8>>) {
-	// TODO: How do we track the size of the contract's
+pub fn write_contract_storage<T: Trait>(account: &AccountIdOf<T>, trie_id: &TrieId, key: &StorageKey, value: Option<Vec<u8>>) {
 	let hashed_key = blake2_256(key);
-	match value {
-		Some(v) => child::put_raw(trie_id, &hashed_key, &v),
-		None => child::kill(trie_id, &hashed_key),
-	}
+
+	// We need to accurately track the size of the storage of the contract.
+	//
+	// For that we query the previous value and get its size.
+	let existing_size = child::get_raw(trie_id, &hashed_key).map(|v| v.len()).unwrap_or(0);
+	let new_size = match value {
+		Some(v) => {
+			child::put_raw(trie_id, &hashed_key, &v);
+			v.len()
+		}
+		None => {
+			child::kill(trie_id, &hashed_key);
+			0
+		}
+	};
+
+	<ContractInfoOf<T>>::mutate(account, |maybe_contract_info| {
+		match maybe_contract_info {
+			Some(ContractInfo::Alive(ref mut alive_info)) => {
+				alive_info.storage_size -= existing_size as u32;
+				alive_info.storage_size += new_size as u32;
+				alive_info.last_write = Some(<system::Module<T>>::block_number());
+			},
+			_ => panic!(), // TODO: Justify this.
+		}
+	});
 }
 
 pub fn rent_allowance<T: Trait>(account: &AccountIdOf<T>) -> Option<BalanceOf<T>> {
@@ -40,7 +61,12 @@ pub fn rent_allowance<T: Trait>(account: &AccountIdOf<T>) -> Option<BalanceOf<T>
 }
 
 pub fn set_rent_allowance<T: Trait>(account: &AccountIdOf<T>, rent_allowance: BalanceOf<T>) {
-	unimplemented!()
+	<ContractInfoOf<T>>::mutate(account, |maybe_contract_info| {
+		match maybe_contract_info {
+			Some(ContractInfo::Alive(ref mut alive_info)) => alive_info.rent_allowance = rent_allowance,
+			_ => panic!(), // TODO: Justify this.
+		}
+	})
 }
 
 pub fn code_hash<T: Trait>(account: &AccountIdOf<T>) -> Option<CodeHash<T>> {
