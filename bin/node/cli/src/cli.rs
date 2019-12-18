@@ -194,9 +194,6 @@ where
 
 	let service_res = {
 		let exit = e.into_exit();
-		let service = service
-			.map_err(|err| error::Error::Service(err))
-			.compat();
 		let select = select(service, exit)
 			.map(|_| Ok(()))
 			.compat();

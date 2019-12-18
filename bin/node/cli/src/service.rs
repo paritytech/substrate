@@ -113,12 +113,11 @@ macro_rules! new_full_start {
 /// concrete types instead.
 macro_rules! new_full {
 	($config:expr, $with_startup_data: expr) => {{
-		use futures01::sync::mpsc;
 		use sc_network::DhtEvent;
 		use futures::{
-			compat::Stream01CompatExt,
+			compat::{Stream01CompatExt, Future01CompatExt},
 			stream::StreamExt,
-			future::{FutureExt, TryFutureExt},
+			future::{TryFutureExt, FutureExt},
 		};
 
 		let (
@@ -147,7 +146,7 @@ macro_rules! new_full {
 		// This estimates the authority set size to be somewhere below 10 000 thereby setting the channel buffer size to
 		// 10 000.
 		let (dht_event_tx, dht_event_rx) =
-			mpsc::channel::<DhtEvent>(10_000);
+			futures::channel::mpsc::channel::<DhtEvent>(10_000);
 
 		let service = builder.with_network_protocol(|_| Ok(crate::service::NodeProtocol::new()))?
 			.with_finality_proof_provider(|client, backend|
@@ -187,22 +186,18 @@ macro_rules! new_full {
 				can_author_with,
 			};
 
-			let babe = sc_consensus_babe::start_babe(babe_config)?;
+			let babe = sc_consensus_babe::start_babe(babe_config)?.compat().map(drop);
 			service.spawn_essential_task(babe);
 
-			let future03_dht_event_rx = dht_event_rx.compat()
-				.map(|x| x.expect("<mpsc::channel::Receiver as Stream> never returns an error; qed"))
-				.boxed();
 			let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
 				service.client(),
 				service.network(),
 				sentry_nodes,
 				service.keystore(),
-				future03_dht_event_rx,
+				dht_event_rx.boxed(),
 			);
-			let future01_authority_discovery = authority_discovery.map(|x| Ok(x)).compat();
 
-			service.spawn_task(future01_authority_discovery);
+			service.spawn_task(authority_discovery);
 		}
 
 		// if the node isn't actively participating in consensus then it doesn't
@@ -232,7 +227,7 @@ macro_rules! new_full {
 					service.network(),
 					service.on_exit(),
 					service.spawn_task_handle(),
-				)?);
+				)?.compat().map(drop));
 			},
 			(true, false) => {
 				// start the full GRANDPA voter
@@ -248,7 +243,9 @@ macro_rules! new_full {
 				};
 				// the GRANDPA voter task is considered infallible, i.e.
 				// if it fails we take down the service with it.
-				service.spawn_essential_task(grandpa::run_grandpa_voter(grandpa_config)?);
+				service.spawn_essential_task(
+					grandpa::run_grandpa_voter(grandpa_config)?.compat().map(drop)
+				);
 			},
 			(_, true) => {
 				grandpa::setup_disabled_grandpa(

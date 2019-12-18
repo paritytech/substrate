@@ -17,7 +17,7 @@
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
 use sc_client_api::BlockchainEvents;
-use futures::{StreamExt, TryStreamExt, FutureExt, future, compat::Stream01CompatExt};
+use futures::{StreamExt, FutureExt, future};
 use log::{info, warn};
 use sp_runtime::traits::Header;
 use sc_service::AbstractService;
@@ -33,11 +33,10 @@ pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()
 
 	let display_notifications = service
 		.network_status(Duration::from_millis(5000))
-		.compat()
-		.try_for_each(move |(net_status, _)| {
+		.for_each(move |(net_status, _)| {
 			let info = client.info();
 			display.display(&info, net_status);
-			future::ok(())
+			future::ready(())
 		});
 
 	let client = service.client();

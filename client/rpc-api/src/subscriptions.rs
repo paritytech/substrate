@@ -22,11 +22,12 @@ use jsonrpc_pubsub::{SubscriptionId, typed::{Sink, Subscriber}};
 use parking_lot::Mutex;
 use jsonrpc_core::futures::sync::oneshot;
 use jsonrpc_core::futures::{Future, future};
+use futures::{task::{Spawn, SpawnExt}, FutureExt, compat::Future01CompatExt};
 
 type Id = u64;
 
 /// Alias for a an implementation of `futures::future::Executor`.
-pub type TaskExecutor = Arc<dyn future::Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>;
+pub type TaskExecutor = Arc<dyn Spawn + Send + Sync>;
 
 /// Generate unique ids for subscriptions.
 #[derive(Clone, Debug)]
@@ -92,11 +93,12 @@ impl Subscriptions {
 			let (tx, rx) = oneshot::channel();
 			let future = into_future(sink)
 				.into_future()
-				.select(rx.map_err(|e| warn!("Error timeing out: {:?}", e)))
-				.then(|_| Ok(()));
+				.select(rx.map_err(|e| warn!("Error timing out: {:?}", e)))
+				.compat()
+				.map(drop);
 
 			self.active_subscriptions.lock().insert(id, tx);
-			if self.executor.execute(Box::new(future)).is_err() {
+			if self.executor.spawn(Box::new(future)).is_err() {
 				error!("Failed to spawn RPC subscription task");
 			}
 		}

@@ -21,10 +21,7 @@ use crate::builder::{ServiceBuilderCommand, ServiceBuilder};
 use crate::error::Error;
 use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension};
 use log::{warn, info};
-use futures::{future, prelude::*};
-use futures03::{
-	TryFutureExt as _,
-};
+use futures::{future, Future};
 use sp_core::{Blake2Hasher, Hasher};
 use sp_runtime::traits::{
 	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
@@ -69,7 +66,7 @@ impl<
 		self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
-	) -> Box<dyn Future<Item = (), Error = Error> + Send> {
+	) -> Box<dyn Future<Output = Result<(), Error>> + Send> {
 		struct WaitLink {
 			imported_blocks: u64,
 			has_error: bool,
@@ -118,7 +115,7 @@ impl<
 		// queue, the `Future` re-schedules itself and returns `Poll::Pending`.
 		// This makes it possible either to interleave other operations in-between the block imports,
 		// or to stop the operation completely.
-		let import = futures03::future::poll_fn(move |cx| {
+		let import = future::poll_fn(move |cx| {
 			// Start by reading the number of blocks if not done so already.
 			let count = match count {
 				Some(c) => c,
@@ -206,7 +203,7 @@ impl<
 				return std::task::Poll::Pending;
 			}
 		});
-		Box::new(import.compat())
+		Box::new(import)
 	}
 
 	fn export_blocks(
@@ -215,7 +212,7 @@ impl<
 		from: NumberFor<TBl>,
 		to: Option<NumberFor<TBl>>,
 		json: bool
-	) -> Box<dyn Future<Item = (), Error = Error>> {
+	) -> Box<dyn Future<Output = Result<(), Error>>> {
 		let client = self.client;
 		let mut block = from;
 
@@ -234,7 +231,7 @@ impl<
 		// `Poll::Pending`.
 		// This makes it possible either to interleave other operations in-between the block exports,
 		// or to stop the operation completely.
-		let export = futures03::future::poll_fn(move |cx| {
+		let export = future::poll_fn(move |cx| {
 			if last < block {
 				return std::task::Poll::Ready(Err("Invalid block range specified".into()));
 			}
@@ -275,7 +272,7 @@ impl<
 			std::task::Poll::Pending
 		});
 
-		Box::new(export.compat())
+		Box::new(export)
 	}
 
 	fn revert_chain(
@@ -296,7 +293,7 @@ impl<
 	fn check_block(
 		self,
 		block_id: BlockId<TBl>
-	) -> Box<dyn Future<Item = (), Error = Error> + Send> {
+	) -> Box<dyn Future<Output = Result<(), Error>> + Send> {
 		match self.client.block(&block_id) {
 			Ok(Some(block)) => {
 				let mut buf = Vec::new();
