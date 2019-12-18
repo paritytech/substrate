@@ -391,7 +391,11 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// Any balance that is becoming free, which may eventually be transferred out
 	/// of the stash (assuming it doesn't get slashed first).
 	pub unlocking: Vec<UnlockChunk<Balance>>,
+	/// The era up until which this staker had their reward paid.
+	pub last_reward: EraIndex,
+	// TODO: ^^^ this will need migration logic.
 }
+
 
 impl<
 	AccountId,
@@ -502,6 +506,7 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	pub own: Balance,
 	/// The portions of nominators stashes that are exposed.
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
+	// TODO: Should be ordered by AccountId.
 }
 
 /// A pending slash record. The value of the slash has been computed but not applied yet,
@@ -633,6 +638,8 @@ impl Default for Forcing {
 	fn default() -> Self { Forcing::NotForcing }
 }
 
+const HISTORY_DEPTH: EraIndex = 84;
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
 
@@ -668,8 +675,17 @@ decl_storage! {
 		/// Nominators for a particular account that is in action right now. You can't iterate
 		/// through validators here, but you can find them in the Session module.
 		///
-		/// This is keyed by the stash account.
-		pub Stakers get(fn stakers): map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
+		/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
+		///
+		/// Is it removed after `HISTORY_DEPTH` eras.
+		pub Stakers get(fn stakers): double_map EraIndex hasher(twox_64_concat),
+			twox_64_concat(T::AccountId) => Exposure<T::AccountId, BalanceOf<T>>;
+		// TODO: ^^^ This will need a migration.
+		// TODO: consider switching this to a simple map EraIndex => Vec<Exposure>
+
+		/// The per-validator era payout for one in the last `HISTORY_DEPTH` eras.
+		pub EraValidatorReward: map EraIndex => BalanceOf<T>;
+		/// TODO: Will likely need initialising for the migration.
 
 		/// The currently elected validator set keyed by stash account ID.
 		pub CurrentElected get(fn current_elected): Vec<T::AccountId>;
@@ -823,6 +839,7 @@ decl_module! {
 
 		fn on_initialize() {
 			Self::ensure_storage_upgraded();
+			// TODO: Remove old `EraValidatorReward` and `Stakers` entries.
 		}
 
 		fn on_finalize() {
@@ -932,7 +949,8 @@ decl_module! {
 		/// - Contains a limited number of reads.
 		/// - Each call (requires the remainder of the bonded balance to be above `minimum_balance`)
 		///   will cause a new entry to be inserted into a vector (`Ledger.unlocking`) kept in storage.
-		///   The only way to clean the aforementioned storage item is also user-controlled via `withdraw_unbonded`.
+		///   The only way to clean the aforementioned storage item is also user-controlled via
+		///   `withdraw_unbonded`.
 		/// - One DB entry.
 		/// </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(400_000)]
@@ -1213,6 +1231,40 @@ decl_module! {
 
 			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
 		}
+
+		/// Make one staker's payout for one era.
+		///
+		/// - `who` is the nominator to pay out.
+		/// - `era` may not be lower than one following the most recently paid era. If it is higher,
+		///   then it indicates an instruction to skip the payout of all previous eras.
+		/// - `validators` is the list of all validators that `who` had exposure to during `era`.
+		///   If it is incomplete, then less than the full reward will be paid out.
+		///
+		/// WARNING: Incorrect arguments here can result in loss of payout. Be very careful.
+		///
+		/// 1 balance transfer
+		/// Up to 16 storage reads, each of `O(N)` size and decode complexity; `N` is maximum
+		/// nominations that can be given to a single validator. (`MAX_NOMINATIONS` is the maximum
+		/// number of validators that may be nominated by a single nominator.) This is bounded only
+		/// economically (all nominators are required to place a minimum stake).
+		/// Compute: O(MAX_NOMINATIONS * logN).
+		// TODO: Limit the amount of nominators that can be assigned to a validator by Phragmen.
+		fn payout_nominator(origin, era: EraIndex, validators: Vec<T::AccountId>) {
+			let who = ensure_signed(origin)?;
+			Self::do_payout_nominator(who, era, validators)
+		}
+
+		/// Make one staker's payout for one era.
+		///
+		/// - `who` is the nominator to pay out.
+		/// - `era` may not be lower than one following the most recently paid era. If it is higher,
+		///   then it indicates an instruction to skip the payout of all previous eras.
+		///
+		/// WARNING: Incorrect arguments here can result in loss of payout. Be very careful.
+		fn payout_validator(origin, era: EraIndex) {
+			let who = ensure_signed(origin)?;
+			Self::do_payout_validator(who, era)
+		}
 	}
 }
 
@@ -1225,6 +1277,29 @@ impl<T: Trait> Module<T> {
 	}
 
 	// MUTABLES (DANGEROUS)
+
+	fn do_payout_nominator(who: T::AccountId, era: EraIndex, validators: Vec<T::AccountId>) {
+		// TODO: lookup `who` in ledger to get `StakingLedger`.
+		// TODO: check most recent and ensure it's less than era
+		// TODO: bump the staking ledger's era to `era`
+		// TODO: grab the payout info for the era
+		// TODO: for each in `validators`:
+		// TODO: - grab exposure information for era
+		// TODO: - lookup `who` and accumulate their reward
+		// TODO: reward `who` accordingly.
+	}
+
+	fn do_payout_validator(who: T::AccountId, era: EraIndex) {
+		// TODO: lookup `who` in ledger to get `StakingLedger`.
+		// TODO: check most recent and ensure it's less than era
+		// TODO: bump the staking ledger's era to `era`
+		// TODO: grab the payout and exposure information for era
+		// TODO: reward `who` accordingly (if they were a validator).
+	}
+
+	// TODO: at the end of session, ensure that points are accumulated within the correct era.
+	// TODO: currently, validator set changes lag by one session, therefore, in the first session of
+	// TODO:   an era, the points should be accumulated by the validator set of the era before.
 
 	/// Update the ledger for a controller. This will also update the stash lock. The lock will
 	/// will lock the entire funds except paying for further transactions.
@@ -1280,8 +1355,8 @@ impl<T: Trait> Module<T> {
 	/// nominators' balance, pro-rata based on their exposure, after having removed the validator's
 	/// pre-payout cut.
 	fn reward_validator(stash: &T::AccountId, reward: BalanceOf<T>) -> PositiveImbalanceOf<T> {
-		let off_the_table = Self::validators(stash).commission * reward;
-		let reward = reward.saturating_sub(off_the_table);
+		let commission = Self::validators(stash).commission * reward;
+		let reward = reward.saturating_sub(commission);
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
 		let validator_cut = if reward.is_zero() {
 			Zero::zero()
@@ -1298,7 +1373,7 @@ impl<T: Trait> Module<T> {
 			per_u64 * reward
 		};
 
-		imbalance.maybe_subsume(Self::make_payout(stash, validator_cut + off_the_table));
+		imbalance.maybe_subsume(Self::make_payout(stash, validator_cut + commission));
 
 		imbalance
 	}
@@ -1589,6 +1664,19 @@ impl<T: Trait> Module<T> {
 	///
 	/// COMPLEXITY: Complexity is `number_of_validator_to_reward x current_elected_len`.
 	/// If you need to reward lots of validator consider using `reward_by_indices`.
+
+	// TODO: This is based on a false assumption; that rewarding will always add to a validator
+	// in the current era. It will not, since validator set lags by some amount (currently one
+	// session, but this may be configurable in the future).
+
+	// TODO: Force the rewarder to pass in the representative era index (or the session index) so
+	// we can figure out which era's reward this should go to and be able to add points to eras that
+	// have already passed.
+
+	// TODO: We should also ban collecting rewards from an era that may yet have points added to it.
+	// This will likely need an additional API from session to let us know when an era will no
+	// longer have any points added to it (i.e. basically just when the last session whose
+	// validator set is some previous era).
 	pub fn reward_by_ids(validators_points: impl IntoIterator<Item = (T::AccountId, u32)>) {
 		CurrentEraPointsEarned::mutate(|rewards| {
 			let current_elected = <Module<T>>::current_elected();
