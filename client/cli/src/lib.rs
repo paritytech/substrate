@@ -934,19 +934,18 @@ where
 fn interface_str(
 	is_external: bool,
 	is_unsafe_external: bool,
-	is_validator: bool
+	is_validator: bool,
 ) -> Result<&'static str, error::Error> {
 	if is_external && is_validator {
 		return Err(error::Error::Input("--rpc-external and --ws-external options shouldn't be \
-		used if the node is running as vaidator.".to_owned()));
-	}
-
-	if is_external {
-		log::warn!("It isn't safe to expose RPC publicly without a proxy server. \
-		Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.");
+		used if the node is running as a validator. Use `--unsafe-rpc-external` if you understand \
+		the risks. See the options description for more information.".to_owned()));
 	}
 
 	if is_external || is_unsafe_external {
+		log::warn!("It isn't safe to expose RPC publicly without a proxy server that filters \
+		available set of RPC methods.");
+
 		Ok("0.0.0.0")
 	} else {
 		Ok("127.0.0.1")
