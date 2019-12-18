@@ -265,7 +265,7 @@ impl<T: Trait> Module<T> {
 
 	/// The needed bond for a proposal whose spend is `value`.
 	fn calculate_bond(value: BalanceOf<T>) -> BalanceOf<T> {
-		T::ProposalBondMinimum::get().max(T::ProposalBond::get() * value)
+		T::ProposalBondMinimum::get().max(T::ProposalBond::get().saturating_mul(value))
 	}
 
 	// Spend some money!
@@ -277,7 +277,7 @@ impl<T: Trait> Module<T> {
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
 		Approvals::mutate(|v| {
 			v.retain(|&index| {
-				// Should always be true, but shouldn't panic if false or we're screwed.
+				// Should always be true, but shouldn’t panic if false or we're screwed.
 				if let Some(p) = Self::proposals(index) {
 					if p.value <= budget_remaining {
 						budget_remaining -= p.value;
@@ -303,7 +303,7 @@ impl<T: Trait> Module<T> {
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
-			let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
+			let burn = T::Burn::get().saturating_add(budget_remaining).min(budget_remaining);
 			budget_remaining -= burn;
 			imbalance.subsume(T::Currency::burn(burn));
 			Self::deposit_event(RawEvent::Burnt(burn))
