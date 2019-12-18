@@ -247,6 +247,7 @@ decl_module! {
 		pub fn bid(origin, value: BalanceOf<T, I>) -> Result {
 			let who = ensure_signed(origin)?;
 			ensure!(!<SuspendedCandidates<T, I>>::exists(&who), "candidate is suspended");
+			ensure!(!<SuspendedMembers<T, I>>::exists(&who), "member is suspended");
 			ensure!(!Self::is_member(&who), "candidate is already a member");
 
 			let deposit = T::CandidateDeposit::get();
