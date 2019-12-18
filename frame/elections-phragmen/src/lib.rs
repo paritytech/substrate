@@ -350,7 +350,9 @@ decl_module! {
 			}
 
 			let mut runners_up_with_stake = Self::runners_up();
-			if let Some(index) = runners_up_with_stake.position(|(ref r, ref _s)| r == &who) {
+			if let Some(index) = runners_up_with_stake.iter()
+				.position(|(ref r, ref _s)| r == &who)
+			{
 				runners_up_with_stake.remove(index);
 				// unreserve the bond
 				T::Currency::unreserve(&who, T::CandidacyBond::get());
