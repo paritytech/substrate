@@ -356,7 +356,6 @@ where	H: Hasher,
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		info!("DEBUG_CS_INSTRUMENTATION {}:{}", file!(), line!());
 		trace!(target: "state-trace", "{:04x}: ClearPrefix {}",
 			self.id,
 			HexDisplay::from(&prefix),
@@ -375,7 +374,6 @@ where	H: Hasher,
 	}
 
 	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]) {
-		info!("DEBUG_CS_INSTRUMENTATION {}:{}", file!(), line!());
 		trace!(target: "state-trace", "{:04x}: ClearChildPrefix({}) {}",
 			self.id,
 			HexDisplay::from(&storage_key.as_ref()),
@@ -391,7 +389,6 @@ where	H: Hasher,
 	}
 
 	fn chain_id(&self) -> u64 {
-		info!("DEBUG_CS_INSTRUMENTATION {}:{}", file!(), line!());
 		42
 	}
 
@@ -486,12 +483,10 @@ where	H: Hasher,
 	}
 
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
-		info!("DEBUG_CS_INSTRUMENTATION {}:{}", file!(), line!());
 		self.offchain_externalities.as_mut().map(|x| &mut **x as _)
 	}
 
 	fn keystore(&self) -> Option<BareCryptoStorePtr> {
-		info!("DEBUG_CS_INSTRUMENTATION {}:{}", file!(), line!());
 		self.keystore.clone()
 	}
 
