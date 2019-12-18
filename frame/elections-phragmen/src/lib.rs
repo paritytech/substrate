@@ -2031,7 +2031,7 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			assert_noop!(
 				Elections::renounce_candidacy(Origin::signed(5)),
-				"origin is not a candidate, member or a runner.",
+				"origin is not a candidate, member or a runner up.",
 			);
 		})
 	}
