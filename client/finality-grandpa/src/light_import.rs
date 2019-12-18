@@ -274,7 +274,7 @@ fn do_import_block<B, C, Block: BlockT, J>(
 	match justification {
 		Some(justification) => {
 			trace!(
-				target: "finality",
+				target: "afg",
 				"Imported block {}{}. Importing justification.",
 				if enacts_consensus_change { " which enacts consensus changes" } else { "" },
 				hash,
@@ -284,7 +284,7 @@ fn do_import_block<B, C, Block: BlockT, J>(
 		},
 		None if enacts_consensus_change => {
 			trace!(
-				target: "finality",
+				target: "afg",
 				"Imported block {} which enacts consensus changes. Requesting finality proof.",
 				hash,
 			);
@@ -416,7 +416,7 @@ fn do_import_justification<B, C, Block: BlockT, J>(
 	let justification = match justification {
 		Err(ClientError::BadJustification(_)) => {
 			trace!(
-				target: "finality",
+				target: "afg",
 				"Justification for {} is not valid within current authorities set. Requesting finality proof.",
 				hash,
 			);
@@ -427,7 +427,7 @@ fn do_import_justification<B, C, Block: BlockT, J>(
 		},
 		Err(e) => {
 			trace!(
-				target: "finality",
+				target: "afg",
 				"Justification for {} is not valid. Bailing.",
 				hash,
 			);
@@ -436,7 +436,7 @@ fn do_import_justification<B, C, Block: BlockT, J>(
 		},
 		Ok(justification) => {
 			trace!(
-				target: "finality",
+				target: "afg",
 				"Justification for {} is valid. Finalizing the block.",
 				hash,
 			);
@@ -467,7 +467,7 @@ fn do_finalize_block<B, C, Block: BlockT>(
 {
 	// finalize the block
 	client.finalize_block(BlockId::Hash(hash), Some(justification), true).map_err(|e| {
-		warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+		warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 		ConsensusError::ClientImport(e.to_string())
 	})?;
 
@@ -559,8 +559,8 @@ fn require_insert_aux<T: Encode, A: AuxStore>(
 
 /// Display inconsistency warning.
 fn on_post_finalization_error(error: ClientError, value_type: &str) -> ConsensusError {
-	warn!(target: "finality", "Failed to write updated {} to disk. Bailing.", value_type);
-	warn!(target: "finality", "Node is in a potentially inconsistent state.");
+	warn!(target: "afg", "Failed to write updated {} to disk. Bailing.", value_type);
+	warn!(target: "afg", "Node is in a potentially inconsistent state.");
 	ConsensusError::ClientImport(error.to_string())
 }
 
