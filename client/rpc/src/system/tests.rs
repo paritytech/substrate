@@ -244,3 +244,27 @@ fn system_node_roles() {
 		vec![NodeRole::Authority]
 	);
 }
+
+#[test]
+fn system_network_add_reserved() {
+	let good_peer_id = "/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV";
+	let bad_peer_id = "/ip4/198.51.100.19/tcp/30333";
+	let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+
+	let good_fut = api(None).system_add_reserved_peer(good_peer_id.into());
+	let bad_fut = api(None).system_add_reserved_peer(bad_peer_id.into());
+	assert_eq!(runtime.block_on(good_fut), Ok(()));
+	assert!(runtime.block_on(bad_fut).is_err());
+}
+
+#[test]
+fn system_network_remove_reserved() {
+	let good_peer_id = "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV";
+	let bad_peer_id = "/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV";
+	let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+
+	let good_fut = api(None).system_remove_reserved_peer(good_peer_id.into());
+	let bad_fut = api(None).system_remove_reserved_peer(bad_peer_id.into());
+	assert_eq!(runtime.block_on(good_fut), Ok(()));
+	assert!(runtime.block_on(bad_fut).is_err());
+}
