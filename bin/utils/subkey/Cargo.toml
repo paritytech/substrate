@@ -17,9 +17,9 @@ substrate-bip39 = "0.3.1"
 hex = "0.4.0"
 hex-literal = "0.2.1"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-frame-system = { path = "../../../frame/system" }
-pallet-balances = { path = "../../../frame/balances" }
-pallet-transaction-payment = { path = "../../../frame/transaction-payment" }
+frame-system = { version = "2.0.0", path = "../../../frame/system" }
+pallet-balances = { version = "2.0.0", path = "../../../frame/balances" }
+pallet-transaction-payment = { version = "2.0.0", path = "../../../frame/transaction-payment" }
 
 [features]
 bench = []

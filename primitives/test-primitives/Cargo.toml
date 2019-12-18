@@ -5,11 +5,11 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sp-application-crypto = { path = "../application-crypto", default-features = false }
+sp-application-crypto = { version = "2.0.0", default-features = false, path = "../application-crypto" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-core = { path = "../core", default-features = false }
+sp-core = { version = "2.0.0", default-features = false, path = "../core" }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-runtime = {  path = "../runtime", default-features = false }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
 
 [features]
 default = [
