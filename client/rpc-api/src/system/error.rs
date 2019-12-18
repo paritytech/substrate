@@ -47,7 +47,7 @@ impl From<Error> for rpc::Error {
 			},
 			Error::MalformattedPeerArg(ref e) => rpc::Error {
 				code :rpc::ErrorCode::ServerError(BASE_ERROR + 2),
-				message: format!("{}", e),
+				message: e.clone(),
 				data: Some(e.to_string().into()),
 			}
 		}
