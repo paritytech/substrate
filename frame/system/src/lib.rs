@@ -639,6 +639,7 @@ impl<T: Trait> Module<T> {
 		<Number<T>>::put(number);
 		<Digest<T>>::put(digest);
 		<ParentHash<T>>::put(parent_hash);
+		// OVERFLOW: block 0 is genesis
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
 		<Events<T>>::kill();
@@ -745,6 +746,7 @@ impl<T: Trait> Module<T> {
 
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_nonce(who: &T::AccountId) {
+		// OVERFLOW: will not run out of nonces in my lifetime
 		<AccountNonce<T>>::insert(who, Self::account_nonce(who) + T::Index::one());
 	}
 
@@ -812,7 +814,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	) -> Result<Weight, TransactionValidityError> {
 		let current_weight = Module::<T>::all_extrinsics_weight();
 		let maximum_weight = T::MaximumBlockWeight::get();
-		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_weight;
+		let limit = Self::get_dispatch_limit_ratio(info.class).saturating_mul(maximum_weight);
 		let added_weight = info.weight.min(limit);
 		let next_weight = current_weight.saturating_add(added_weight);
 		if next_weight > limit {
@@ -831,7 +833,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	) -> Result<u32, TransactionValidityError> {
 		let current_len = Module::<T>::all_extrinsics_len();
 		let maximum_len = T::MaximumBlockLength::get();
-		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_len;
+		let limit = Self::get_dispatch_limit_ratio(info.class).saturating_mul(maximum_len);
 		let added_len = len as u32;
 		let next_len = current_len.saturating_add(added_len);
 		if next_len > limit {
@@ -962,6 +964,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 			)
 		}
 
+		// OVERFLOW: we won’t run out of nonces
 		<AccountNonce<T>>::insert(who, expected + T::Index::one());
 		Ok(())
 	}
