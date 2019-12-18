@@ -225,7 +225,7 @@ impl Core<Block> for RuntimeApi {
 		&self,
 		_: &BlockId<Block>,
 		_: ExecutionContext,
-		_: Option<(Block)>,
+		_: Option<Block>,
 		_: Vec<u8>,
 	) -> Result<NativeOrEncoded<()>> {
 		unimplemented!("Not required for testing!")

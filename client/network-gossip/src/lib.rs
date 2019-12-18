@@ -66,8 +66,11 @@ use std::sync::Arc;
 mod bridge;
 mod state_machine;
 
-/// Abstraction over a network.
+/// Abstraction over a network. Using this trait instead of `NetworkService` itself makes it easier for unit tests.
 pub trait Network<B: BlockT> {
+	/// Returns the local node's `PeerId`.
+	fn local_peer_id(&self) -> PeerId;
+
 	/// Returns a stream of events representing what happens on the network.
 	fn event_stream(&self) -> Box<dyn futures01::Stream<Item = Event, Error = ()> + Send>;
 
@@ -107,6 +110,10 @@ pub trait Network<B: BlockT> {
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network<B> for Arc<NetworkService<B, S, H>> {
+	fn local_peer_id(&self) -> PeerId {
+		NetworkService::local_peer_id(self)
+	}
+
 	fn event_stream(&self) -> Box<dyn futures01::Stream<Item = Event, Error = ()> + Send> {
 		Box::new(NetworkService::event_stream(self))
 	}
@@ -131,7 +138,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network<B> for Arc<Netw
 	}
 
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
-		NetworkService::announce_block(self, block, associated_data)
+		self.announce_block(block, associated_data)
 	}
 
 	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
