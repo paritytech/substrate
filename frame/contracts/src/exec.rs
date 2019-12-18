@@ -330,7 +330,7 @@ where
 		}
 	}
 
-	fn nested<'b, 'c: 'b>(&'c self, dest: T::AccountId, trie_id: TrieId)
+	fn nested<'b, 'c: 'b>(&'c self, dest: T::AccountId, trie_id: Option<TrieId>)
 		-> ExecutionContext<'b, T, V, L>
 	{
 		ExecutionContext {
@@ -399,10 +399,11 @@ where
 			return Err(ExecError {
 				reason: "contract has been evicted".into(),
 				buffer: input_data,
-			}),
-			Some(ContractInfo::Alive(alive_info)) => alive_info.trie_id,
+			});
 		};
+
 		let caller = self.self_account.clone();
+		let dest_trie_id = contract_info.and_then(|i| i.as_alive().map(|i| i.trie_id.clone()));
 
 		self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
 			if value > BalanceOf::<T>::zero() {
@@ -499,7 +500,7 @@ where
 		// Generate it now.
 		let dest_trie_id = <T as Trait>::TrieIdGenerator::trie_id(&dest);
 
-		let output = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
+		let output = self.with_nested_context(dest.clone(), Some(dest_trie_id), |nested| {
 			try_or_exec_error!(
 				storage::place_contract::<T>(
 					&dest,
@@ -602,7 +603,8 @@ where
 		}
 	}
 
-	fn with_nested_context<F>(&mut self, dest: T::AccountId, trie_id: TrieId, func: F)
+	/// Execute the given closure within a nested execution context.
+	fn with_nested_context<F>(&mut self, dest: T::AccountId, trie_id: Option<TrieId>, func: F)
 		-> ExecResult
 		where F: FnOnce(&mut ExecutionContext<T, V, L>) -> ExecResult
 	{
@@ -720,10 +722,6 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 
 	// Make the transfer.
 	T::Currency::transfer(transactor, dest, value, ExistenceRequirement::AllowDeath)?;
-	ctx.deferred.push(DeferredAction::DepositEvent {
-		event: RawEvent::Transfer(transactor.clone(), dest.clone(), value),
-		topics: Vec::new(),
-	});
 
 	Ok(())
 }
@@ -763,7 +761,7 @@ where
 		}
 
 		match self.ctx.self_trie_id {
-			Some(ref trie_id) => storage::write_contract_storage(trie_id, &key, value),
+			Some(ref trie_id) => storage::write_contract_storage::<T>(&self.ctx.self_account, trie_id, &key, value),
 			// TODO: My current understanding is that `self.ctx.self_trie_id` can be `None` only
 			// for the top-level account, i.e. EOA. As such, it cannot issue any reads to the
 			// storage, because it has no. Furthermore, EOA cannot have contract storage.
@@ -915,7 +913,7 @@ mod tests {
 		Vm, ExecResult, RawEvent, DeferredAction,
 	};
 	use crate::{
-		account_db::AccountDb, gas::GasMeter, tests::{ExtBuilder, Test, set_balance, get_balance},
+		gas::GasMeter, tests::{ExtBuilder, Test, set_balance, get_balance},
 		exec::{ExecReturnValue, ExecError, STATUS_SUCCESS}, CodeHash, Config,
 		gas::Gas,
 		storage,
@@ -1035,7 +1033,7 @@ mod tests {
 	fn place_contract(address: &u64, code_hash: CodeHash<Test>) {
 		use crate::TrieIdGenerator;
 		let trie_id = <Test as crate::Trait>::TrieIdGenerator::trie_id(address);
-		storage::place_contract::<Test>(&BOB, trie_id, code_hash).unwrap()
+		storage::place_contract::<Test>(&address, trie_id, code_hash).unwrap()
 	}
 
 	#[test]
@@ -1595,10 +1593,6 @@ mod tests {
 			assert_eq!(storage::code_hash::<Test>(&instantiated_contract_address).unwrap(), dummy_ch);
 			assert_eq!(&ctx.events(), &[
 				DeferredAction::DepositEvent {
-					event: RawEvent::Transfer(ALICE, instantiated_contract_address, 100),
-					topics: Vec::new(),
-				},
-				DeferredAction::DepositEvent {
 					event: RawEvent::Instantiated(ALICE, instantiated_contract_address),
 					topics: Vec::new(),
 				}
@@ -1679,14 +1673,6 @@ mod tests {
 			assert_eq!(storage::code_hash::<Test>(&instantiated_contract_address).unwrap(), dummy_ch);
 			assert_eq!(&ctx.events(), &[
 				DeferredAction::DepositEvent {
-					event: RawEvent::Transfer(ALICE, BOB, 20),
-					topics: Vec::new(),
-				},
-				DeferredAction::DepositEvent {
-					event: RawEvent::Transfer(BOB, instantiated_contract_address, 15),
-					topics: Vec::new(),
-				},
-				DeferredAction::DepositEvent {
 					event: RawEvent::Instantiated(BOB, instantiated_contract_address),
 					topics: Vec::new(),
 				},
@@ -1734,12 +1720,7 @@ mod tests {
 
 			// The contract wasn't instantiated so we don't expect to see an instantiation
 			// event here.
-			assert_eq!(&ctx.events(), &[
-				DeferredAction::DepositEvent {
-					event: RawEvent::Transfer(ALICE, BOB, 20),
-					topics: Vec::new(),
-				},
-			]);
+			assert_eq!(&ctx.events(), &[]);
 		});
 	}
 

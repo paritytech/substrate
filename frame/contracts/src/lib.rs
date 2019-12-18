@@ -798,13 +798,9 @@ impl<T: Trait> Module<T> {
 decl_event! {
 	pub enum Event<T>
 	where
-		Balance = BalanceOf<T>,
-		<T as frame_system::Trait>::AccountId,
-		<T as frame_system::Trait>::Hash
+		<T as system::Trait>::AccountId,
+		<T as system::Trait>::Hash
 	{
-		/// Transfer happened `from` to `to` with given `value` as part of a `call` or `instantiate`.
-		Transfer(AccountId, AccountId, Balance),
-
 		/// Contract deployed by address at the specified address.
 		Instantiated(AccountId, AccountId),
 
