@@ -34,8 +34,8 @@ use futures03::{compat::Compat, stream::StreamExt, future::FutureExt as _, futur
 use finality_grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use finality_grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
-use sc_network::ReputationChange;
-use sc_network_gossip::{GossipEngine, Network};
+use sc_network::{NetworkService, ReputationChange};
+use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use parity_scale_codec::{Encode, Decode};
 use sp_core::Pair;
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
@@ -95,6 +95,30 @@ mod benefit {
 	pub(super) const PER_EQUIVOCATION: i32 = 10;
 }
 
+/// A handle to the network.
+///
+/// Something that provides both the capabilities needed for the `gossip_network::Network` trait as
+/// well as the ability to set a fork sync request for a particular block.
+pub trait Network<Block: BlockT>: GossipNetwork<Block> + Clone + Send + 'static {
+	/// Notifies the sync service to try and sync the given block from the given
+	/// peers.
+	///
+	/// If the given vector of peers is empty then the underlying implementation
+	/// should make a best effort to fetch the block from any peers it is
+	/// connected to (NOTE: this assumption will change in the future #3629).
+	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
+}
+
+impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
+	B: BlockT,
+	S: sc_network::specialization::NetworkSpecialization<B>,
+	H: sc_network::ExHashT,
+{
+	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
+		NetworkService::set_sync_fork_request(self, peers, hash, number)
+	}
+}
+
 /// Create a unique topic for a round and set-id combo.
 pub(crate) fn round_topic<B: BlockT>(round: RoundNumber, set_id: SetIdNumber) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-{}", set_id, round).as_bytes())
@@ -106,18 +130,19 @@ pub(crate) fn global_topic<B: BlockT>(set_id: SetIdNumber) -> B::Hash {
 }
 
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
-pub(crate) struct NetworkBridge<B: BlockT> {
+pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
+	service: N,
 	gossip_engine: GossipEngine<B>,
 	validator: Arc<GossipValidator<B>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
 }
 
-impl<B: BlockT> NetworkBridge<B> {
+impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle.
 	/// On creation it will register previous rounds' votes with the gossip
 	/// service taken from the VoterSetState.
-	pub(crate) fn new<N: Network<B> + Clone + Send + 'static>(
+	pub(crate) fn new(
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
@@ -130,7 +155,7 @@ impl<B: BlockT> NetworkBridge<B> {
 		);
 
 		let validator = Arc::new(validator);
-		let gossip_engine = GossipEngine::new(service, executor, GRANDPA_ENGINE_ID, validator.clone());
+		let gossip_engine = GossipEngine::new(service.clone(), executor, GRANDPA_ENGINE_ID, validator.clone());
 
 		{
 			// register all previous votes with the gossip service so that they're
@@ -173,7 +198,7 @@ impl<B: BlockT> NetworkBridge<B> {
 		let (rebroadcast_job, neighbor_sender) = periodic::neighbor_packet_worker(gossip_engine.clone());
 		let reporting_job = report_stream.consume(gossip_engine.clone());
 
-		let bridge = NetworkBridge { gossip_engine, validator, neighbor_sender };
+		let bridge = NetworkBridge { service, gossip_engine, validator, neighbor_sender };
 
 		let executor = Compat::new(executor);
 		executor.execute(Box::new(rebroadcast_job.select(on_exit.clone().map(Ok).compat()).then(|_| Ok(()))))
@@ -356,8 +381,13 @@ impl<B: BlockT> NetworkBridge<B> {
 	/// If the given vector of peers is empty then the underlying implementation
 	/// should make a best effort to fetch the block from any peers it is
 	/// connected to (NOTE: this assumption will change in the future #3629).
-	pub(crate) fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		self.gossip_engine.set_sync_fork_request(peers, hash, number)
+	pub(crate) fn set_sync_fork_request(
+		&self,
+		peers: Vec<sc_network::PeerId>,
+		hash: B::Hash,
+		number: NumberFor<B>
+	) {
+		Network::set_sync_fork_request(&self.service, peers, hash, number)
 	}
 }
 
@@ -493,9 +523,10 @@ fn incoming_global<B: BlockT>(
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }
 
-impl<B: BlockT> Clone for NetworkBridge<B> {
+impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 	fn clone(&self) -> Self {
 		NetworkBridge {
+			service: self.service.clone(),
 			gossip_engine: self.gossip_engine.clone(),
 			validator: Arc::clone(&self.validator),
 			neighbor_sender: self.neighbor_sender.clone(),
