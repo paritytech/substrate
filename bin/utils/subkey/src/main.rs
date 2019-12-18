@@ -362,14 +362,15 @@ fn read_message_from_stdin(should_decode: bool) -> Vec<u8> {
 	message
 }
 
-fn read_required_parameter<T: FromStr>(matches: &ArgMatches, name: &str) -> T
-where
+fn read_required_parameter<T: FromStr>(matches: &ArgMatches, name: &str) -> T where
 	<T as FromStr>::Err: std::fmt::Debug,
 {
 	let str_value = matches
 		.value_of(name)
 		.expect("parameter is required; thus it can't be None; qed");
-	str::parse::<T>(str_value).expect("Invalid 'nonce' parameter; expecting an integer.")
+	str::parse::<T>(str_value).unwrap_or_else(|_|
+		panic!("Invalid `{}' parameter; expecting an integer.", name)
+	)
 }
 
 fn read_genesis_hash(matches: &ArgMatches) -> H256 {
@@ -388,8 +389,7 @@ fn read_genesis_hash(matches: &ArgMatches) -> H256 {
 	genesis_hash
 }
 
-fn read_signature<C: Crypto>(matches: &ArgMatches) -> SignatureOf<C>
-where
+fn read_signature<C: Crypto>(matches: &ArgMatches) -> SignatureOf<C> where
 	SignatureOf<C>: SignatureT,
 	PublicOf<C>: PublicT,
 {
@@ -446,8 +446,7 @@ fn read_account_id(matched_uri: Option<&str>) -> AccountId {
 fn read_pair<C: Crypto>(
 	matched_suri: Option<&str>,
 	password: Option<&str>,
-) -> <C as Crypto>::Pair
-where
+) -> <C as Crypto>::Pair where
 	SignatureOf<C>: SignatureT,
 	PublicOf<C>: PublicT,
 {
