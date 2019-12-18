@@ -23,7 +23,7 @@ mod backend;
 
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
-use sp_std::vec::Vec;
+use sp_std::{vec::Vec, marker::PhantomData};
 use frame_support::{ensure, dispatch, decl_module, decl_storage, decl_event};
 use frame_support::weights::{Weight, WeighData, ClassifyDispatch, DispatchClass, PaysFee};
 use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement};
@@ -31,7 +31,7 @@ use frame_system::{self as system, ensure_signed};
 use sp_runtime::ModuleId;
 use frame_support::weights::SimpleDispatchInfo;
 use sp_runtime::traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion};
-use sp_core::{U256, H256, H160};
+use sp_core::{U256, H256, H160, Hasher};
 use evm::{ExitReason, ExitSucceed, ExitError};
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
@@ -63,11 +63,18 @@ pub trait ConvertAccountId<A> {
 	fn convert_account_id(account_id: &A) -> H160;
 }
 
-/// Truncate the account id, taking the last 160-bit as the Ethereum address.
-pub struct TruncateConvertAccountId;
+/// Hash and then truncate the account id, taking the last 160-bit as the Ethereum address.
+pub struct HashTruncateConvertAccountId<H>(PhantomData<H>);
 
-impl<A: AsRef<[u8]>> ConvertAccountId<A> for TruncateConvertAccountId {
+impl<H: Hasher> Default for HashTruncateConvertAccountId<H> {
+	fn default() -> Self {
+		Self(PhantomData)
+	}
+}
+
+impl<H: Hasher, A: AsRef<[u8]>> ConvertAccountId<A> for HashTruncateConvertAccountId<H> {
 	fn convert_account_id(account_id: &A) -> H160 {
+		let account_id = H::hash(account_id.as_ref());
 		let account_id_len = account_id.as_ref().len();
 		let mut value = [0u8; 20];
 		let value_len = value.len();
