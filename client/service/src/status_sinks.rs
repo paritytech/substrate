@@ -57,7 +57,7 @@ impl<T> StatusSinks<T> {
 	/// pushes what it returns to the sender.
 	///
 	/// This function doesn't return anything, but it should be treated as if it implicitly
-	/// returns `Ok(Async::NotReady)`. In particular, it should be called again when the task
+	/// returns `Poll::Pending`. In particular, it should be called again when the task
 	/// is waken up.
 	///
 	/// # Panic
@@ -108,8 +108,9 @@ impl<T> futures::Future for YieldAfter<T> {
 mod tests {
 	use super::StatusSinks;
 	use futures::prelude::*;
-	use futures::sync::mpsc;
+	use futures::channel::mpsc;
 	use std::time::Duration;
+	use std::task::Poll;
 
 	#[test]
 	fn works() {
@@ -124,18 +125,18 @@ mod tests {
 		let mut runtime = tokio::runtime::Runtime::new().unwrap();
 
 		let mut val_order = 5;
-		runtime.spawn(futures::future::poll_fn(move || {
-			status_sinks.poll(|| { val_order += 1; val_order });
-			Ok(Async::NotReady)
+		runtime.spawn(futures::future::poll_fn(move |cx| {
+			status_sinks.poll(cx, || { val_order += 1; val_order });
+			Poll::<()>::Pending
 		}));
 
 		let done = rx
 			.into_future()
-			.and_then(|(item, rest)| {
+			.then(|(item, rest)| {
 				assert_eq!(item, Some(6));
 				rest.into_future()
 			})
-			.and_then(|(item, rest)| {
+			.then(|(item, rest)| {
 				assert_eq!(item, Some(7));
 				rest.into_future()
 			})
@@ -143,6 +144,6 @@ mod tests {
 				assert_eq!(item, Some(8));
 			});
 
-		runtime.block_on(done).unwrap();
+		runtime.block_on(done);
 	}
 }

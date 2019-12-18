@@ -668,7 +668,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use future::executor::block_on;
+	use futures::executor::block_on;
 	use sp_consensus::SelectChain;
 	use sp_runtime::traits::BlindCheckable;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
