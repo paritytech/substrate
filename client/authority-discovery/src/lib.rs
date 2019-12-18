@@ -745,7 +745,7 @@ mod tests {
 		fn into_storage_changes<
 			T: sp_api::ChangesTrieStorage<sp_api::HasherFor<Block>, sp_api::NumberFor<Block>>
 		>(
-			self,
+			&self,
 			_: &Self::StateBackend,
 			_: Option<&T>,
 			_: <Block as sp_api::BlockT>::Hash,

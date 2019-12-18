@@ -981,13 +981,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 				let state = self.backend.state_at(at)?;
 
-				let gen_storage_changes = unsafe {
-					runtime_api.consume_inner(|a| a.into_storage_changes(
-						&state,
-						self.backend.changes_trie_storage(),
-						*parent_hash,
-					))
-				};
+				let gen_storage_changes = runtime_api.into_storage_changes(
+					&state,
+					self.backend.changes_trie_storage(),
+					*parent_hash,
+				);
 
 				{
 					let _lock = self.backend.get_import_lock().read();

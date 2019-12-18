@@ -326,7 +326,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			fn into_storage_changes<
 				T: #crate_::ChangesTrieStorage<#crate_::HasherFor<Block>, #crate_::NumberFor<Block>>
 			>(
-				self,
+				&self,
 				backend: &Self::StateBackend,
 				changes_trie_storage: Option<&T>,
 				parent_hash: Block::Hash,
@@ -334,11 +334,12 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				#crate_::StorageChanges<Self::StateBackend, Block>,
 				String
 			> where Self: Sized {
-				self.changes.into_inner().into_storage_changes(
+				self.initialized_block.borrow_mut().take();
+				self.changes.replace(Default::default()).into_storage_changes(
 					backend,
 					changes_trie_storage,
 					parent_hash,
-					self.storage_transaction_cache.into_inner(),
+					self.storage_transaction_cache.replace(Default::default()),
 				)
 			}
 		}

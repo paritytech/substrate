@@ -323,8 +323,10 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 
 	/// Convert the api object into the storage changes that were done while executing runtime
 	/// api functions.
+	///
+	/// After executing this function, all collected changes are reset.
 	fn into_storage_changes<T: ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>>(
-		self,
+		&self,
 		backend: &Self::StateBackend,
 		changes_trie_storage: Option<&T>,
 		parent_hash: Block::Hash,
@@ -408,19 +410,6 @@ pub trait CallApiAt<Block: BlockT> {
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
 #[cfg(feature = "std")]
 pub struct ApiRef<'a, T>(T, std::marker::PhantomData<&'a ()>);
-
-#[cfg(feature = "std")]
-impl<'a, T> ApiRef<'a, T> {
-	/// Consume this type and call the given closure with the inner.
-	///
-	/// # Attention
-	///
-	/// The inner type should be consumed as well and not used outside of this ref. This is the
-	/// reason why this function is `unsafe`.
-	pub unsafe fn consume_inner<R>(self, consume: impl FnOnce(T) -> R) -> R {
-		consume(self.0)
-	}
-}
 
 #[cfg(feature = "std")]
 impl<'a, T> From<T> for ApiRef<'a, T> {

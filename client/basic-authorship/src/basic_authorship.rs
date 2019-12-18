@@ -373,11 +373,8 @@ mod tests {
 		let state = backend.state_at(block_id).unwrap();
 		let changes_trie_storage = backend.changes_trie_storage();
 
-		let storage_changes = unsafe {
-			api.consume_inner(|a|
-				a.into_storage_changes(&state, changes_trie_storage, genesis_hash)
-			).unwrap()
-		};
+		let storage_changes = api.into_storage_changes(&state, changes_trie_storage, genesis_hash)
+			.unwrap();
 
 		assert_eq!(
 			proposal.storage_changes.transaction_storage_root,
