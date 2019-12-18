@@ -97,7 +97,7 @@ use frame_support::traits::{Time, Get};
 use sp_runtime::{
 	RuntimeString,
 	traits::{
-		SimpleArithmetic, Zero, SaturatedConversion, Scale
+		SimpleArithmetic, Zero, SaturatedConversion, Scale, Saturating
 	}
 };
 use frame_support::weights::SimpleDispatchInfo;

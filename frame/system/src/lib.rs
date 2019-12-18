@@ -814,7 +814,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	) -> Result<Weight, TransactionValidityError> {
 		let current_weight = Module::<T>::all_extrinsics_weight();
 		let maximum_weight = T::MaximumBlockWeight::get();
-		let limit = Self::get_dispatch_limit_ratio(info.class).saturating_mul(maximum_weight);
+		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_weight;
 		let added_weight = info.weight.min(limit);
 		let next_weight = current_weight.saturating_add(added_weight);
 		if next_weight > limit {
@@ -833,7 +833,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	) -> Result<u32, TransactionValidityError> {
 		let current_len = Module::<T>::all_extrinsics_len();
 		let maximum_len = T::MaximumBlockLength::get();
-		let limit = Self::get_dispatch_limit_ratio(info.class).saturating_mul(maximum_len);
+		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_len;
 		let added_len = len as u32;
 		let next_len = current_len.saturating_add(added_len);
 		if next_len > limit {

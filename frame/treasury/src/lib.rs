@@ -265,7 +265,7 @@ impl<T: Trait> Module<T> {
 
 	/// The needed bond for a proposal whose spend is `value`.
 	fn calculate_bond(value: BalanceOf<T>) -> BalanceOf<T> {
-		T::ProposalBondMinimum::get().max(T::ProposalBond::get().saturating_mul(value))
+		T::ProposalBondMinimum::get().max(T::ProposalBond::get() * value)
 	}
 
 	// Spend some money!
@@ -303,7 +303,8 @@ impl<T: Trait> Module<T> {
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
-			let burn = T::Burn::get().saturating_add(budget_remaining).min(budget_remaining);
+			// How do we know this will not overflow? OVERFLOW
+			let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
 			budget_remaining -= burn;
 			imbalance.subsume(T::Currency::burn(burn));
 			Self::deposit_event(RawEvent::Burnt(burn))

@@ -34,7 +34,7 @@ use sp_std::prelude::*;
 use codec::{self as codec, Encode, Decode, Error};
 use frame_support::{decl_event, decl_storage, decl_module, dispatch, storage};
 use sp_runtime::{
-	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
+	generic::{DigestItem, OpaqueDigestItemId}, traits::{Bounded, Zero}, Perbill,
 };
 use sp_staking::{
 	SessionIndex,
@@ -325,7 +325,7 @@ impl<T: Trait> Module<T> {
 					return Err("Cannot signal forced change so soon after last.");
 				}
 
-				if (T::BlockNumber::max_value() - scheduled_at) / 2 >= in_blocks {
+				if (T::BlockNumber::max_value() - scheduled_at) / 2.into() >= in_blocks {
 					return Err("overflow would occur")
 				}
 
