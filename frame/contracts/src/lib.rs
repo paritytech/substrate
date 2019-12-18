@@ -81,8 +81,6 @@
 
 #[macro_use]
 mod gas;
-
-mod account_db;
 mod storage;
 mod exec;
 mod wasm;
@@ -93,7 +91,6 @@ mod util;
 mod tests;
 
 use crate::exec::ExecutionContext;
-use crate::account_db::{AccountDb, DirectAccountDb};
 use crate::wasm::{WasmLoader, WasmVm};
 
 pub use crate::gas::{Gas, GasMeter};
@@ -620,12 +617,7 @@ impl<T: Trait> Module<T> {
 			.get_alive()
 			.ok_or(ContractAccessError::IsTombstone)?;
 
-		let maybe_value = AccountDb::<T>::get_storage(
-			&DirectAccountDb,
-			&address,
-			Some(&contract_info.trie_id),
-			&key,
-		);
+		let maybe_value = storage::read_contract_storage(&contract_info.trie_id, &key);
 		Ok(maybe_value)
 	}
 

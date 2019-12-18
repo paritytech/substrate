@@ -913,7 +913,7 @@ mod tests {
 		Vm, ExecResult, RawEvent, DeferredAction,
 	};
 	use crate::{
-		gas::GasMeter, tests::{ExtBuilder, Test, set_balance, get_balance},
+		gas::GasMeter, tests::{ExtBuilder, Test, set_balance, get_balance, place_contract},
 		exec::{ExecReturnValue, ExecError, STATUS_SUCCESS}, CodeHash, Config,
 		gas::Gas,
 		storage,
@@ -1028,12 +1028,6 @@ mod tests {
 
 	fn exec_success() -> ExecResult {
 		Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() })
-	}
-
-	fn place_contract(address: &u64, code_hash: CodeHash<Test>) {
-		use crate::TrieIdGenerator;
-		let trie_id = <Test as crate::Trait>::TrieIdGenerator::trie_id(address);
-		storage::place_contract::<Test>(&address, trie_id, code_hash).unwrap()
 	}
 
 	#[test]
