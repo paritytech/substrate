@@ -3,11 +3,11 @@
   "id": "flamingfir5",
   "bootNodes": [
     "/ip4/35.246.224.91/tcp/30333/p2p/QmaGKGpdm2iLiVCAnEcwrAhHxrcjMdGao4UubJxq7AF77n",
-    "/ip4/35.246.224.91/tcp/30334/ws/QmaGKGpdm2iLiVCAnEcwrAhHxrcjMdGao4UubJxq7AF77n",
+    "/ip4/35.246.224.91/tcp/30334/ws/p2p/QmaGKGpdm2iLiVCAnEcwrAhHxrcjMdGao4UubJxq7AF77n",
     "/ip4/35.246.210.11/tcp/30333/p2p/QmbS1xrmWyP5h4xsPwAS7CJEJNStsuAUDUzhggqDJtLpou",
-    "/ip4/35.246.210.11/tcp/30334/ws/QmbS1xrmWyP5h4xsPwAS7CJEJNStsuAUDUzhggqDJtLpou",
+    "/ip4/35.246.210.11/tcp/30334/ws/p2p/QmbS1xrmWyP5h4xsPwAS7CJEJNStsuAUDUzhggqDJtLpou",
     "/ip4/35.198.110.45/tcp/30333/p2p/QmdSHZLmwEL5Axz5JvWNE2mmxU7qyd7xHBFpyUfktgAdg7",
-    "/ip4/35.198.110.45/tcp/30334/ws/QmdSHZLmwEL5Axz5JvWNE2mmxU7qyd7xHBFpyUfktgAdg7",
+    "/ip4/35.198.110.45/tcp/30334/ws/p2p/QmdSHZLmwEL5Axz5JvWNE2mmxU7qyd7xHBFpyUfktgAdg7",
     "/ip4/35.198.114.154/tcp/30333/p2p/Qmeo7it7YGbhGZqkDGpgnR3xMRFSp6AutA9oTDZPQyny8h",
     "/ip4/35.198.114.154/tcp/30334/ws/p2p/Qmeo7it7YGbhGZqkDGpgnR3xMRFSp6AutA9oTDZPQyny8h"
   ],
