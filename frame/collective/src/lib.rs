@@ -307,7 +307,7 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 impl<T: Trait<I>, I: Instance> InitializeMembers<T::AccountId> for Module<T, I> {
 	fn initialize_members(members: &[T::AccountId]) {
 		if !members.is_empty() {
-			assert!(<Members<T, I>>::get().is_empty(), Error::AlreadyInitialized);
+			assert!(<Members<T, I>>::get().is_empty(), "Members are already initialized!");
 			<Members<T, I>>::put(members);
 		}
 	}
