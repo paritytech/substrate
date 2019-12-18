@@ -103,7 +103,7 @@ impl Serializer for ToSendSerializer {
 		Ok(())
 	}
 
-	fn emit_serde(&mut self, key: Key, value: &slog::SerdeValue) -> slog::Result {
+	fn emit_serde(&mut self, key: Key, value: &dyn slog::SerdeValue) -> slog::Result {
 		let val = value.to_sendable();
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
