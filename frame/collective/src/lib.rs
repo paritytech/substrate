@@ -26,7 +26,7 @@
 use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::RuntimeDebug;
-use sp_runtime::traits::{Hash, EnsureOrigin, ModuleDispatchError};
+use sp_runtime::traits::{Hash, EnsureOrigin};
 use frame_support::weights::SimpleDispatchInfo;
 use frame_support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
@@ -125,7 +125,7 @@ decl_event! {
 }
 
 decl_error! {
-	pub enum Error {
+	pub enum Error for Module<T: Trait<I>, I: Instance> {
 		/// Account is not a member
 		NotMember,
 		/// Duplicate proposals not allowed
@@ -146,7 +146,7 @@ decl_error! {
 // operational class.
 decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as frame_system::Trait>::Origin {
-		type Error = Error;
+		type Error = Error<T, I>;
 
 		fn deposit_event() = default;
 
@@ -156,7 +156,7 @@ decl_module! {
 		/// Requires root origin.
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn set_members(origin, new_members: Vec<T::AccountId>) {
-			ensure_root(origin).map_err(|e| e.as_str())?;
+			ensure_root(origin)?;
 			let mut new_members = new_members;
 			new_members.sort();
 			<Members<T, I>>::mutate(|m| {
@@ -170,8 +170,8 @@ decl_module! {
 		/// Origin must be a member of the collective.
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn execute(origin, proposal: Box<<T as Trait<I>>::Proposal>) {
-			let who = ensure_signed(origin).map_err(|e| e.as_str())?;
-			ensure!(Self::is_member(&who), Error::NotMember);
+			let who = ensure_signed(origin)?;
+			ensure!(Self::is_member(&who), Error::<T, I>::NotMember);
 
 			let proposal_hash = T::Hashing::hash_of(&proposal);
 			let ok = proposal.dispatch(RawOrigin::Member(who).into()).is_ok();
@@ -184,12 +184,12 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(5_000_000)]
 		fn propose(origin, #[compact] threshold: MemberCount, proposal: Box<<T as Trait<I>>::Proposal>) {
-			let who = ensure_signed(origin).map_err(|e| e.as_str())?;
-			ensure!(Self::is_member(&who), Error::NotMember);
+			let who = ensure_signed(origin)?;
+			ensure!(Self::is_member(&who), Error::<T, I>::NotMember);
 
 			let proposal_hash = T::Hashing::hash_of(&proposal);
 
-			ensure!(!<ProposalOf<T, I>>::exists(proposal_hash), Error::DuplicateProposal);
+			ensure!(!<ProposalOf<T, I>>::exists(proposal_hash), Error::<T, I>::DuplicateProposal);
 
 			if threshold < 2 {
 				let seats = Self::members().len() as MemberCount;
@@ -213,11 +213,11 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
 		fn vote(origin, proposal: T::Hash, #[compact] index: ProposalIndex, approve: bool) {
-			let who = ensure_signed(origin).map_err(|e| e.as_str())?;
-			ensure!(Self::is_member(&who), Error::NotMember);
+			let who = ensure_signed(origin)?;
+			ensure!(Self::is_member(&who), Error::<T, I>::NotMember);
 
-			let mut voting = Self::voting(&proposal).ok_or(Error::ProposalMissing)?;
-			ensure!(voting.index == index, Error::WrongIndex);
+			let mut voting = Self::voting(&proposal).ok_or(Error::<T, I>::ProposalMissing)?;
+			ensure!(voting.index == index, Error::<T, I>::WrongIndex);
 
 			let position_yes = voting.ayes.iter().position(|a| a == &who);
 			let position_no = voting.nays.iter().position(|a| a == &who);
@@ -226,7 +226,7 @@ decl_module! {
 				if position_yes.is_none() {
 					voting.ayes.push(who.clone());
 				} else {
-					return Err(Error::DuplicateVote)
+					Err(Error::<T, I>::DuplicateVote)?
 				}
 				if let Some(pos) = position_no {
 					voting.nays.swap_remove(pos);
@@ -235,7 +235,7 @@ decl_module! {
 				if position_no.is_none() {
 					voting.nays.push(who.clone());
 				} else {
-					return Err(Error::DuplicateVote)
+					Err(Error::<T, I>::DuplicateVote)?
 				}
 				if let Some(pos) = position_yes {
 					voting.ayes.swap_remove(pos);
@@ -430,6 +430,7 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 	impl Trait<Instance1> for Test {
 		type Origin = Origin;
@@ -584,7 +585,7 @@ mod tests {
 			let proposal = make_proposal(42);
 			assert_noop!(
 				Collective::propose(Origin::signed(42), 3, Box::new(proposal.clone())),
-				Error::NotMember
+				Error::<Test, Instance1>::NotMember
 			);
 		});
 	}
@@ -598,7 +599,7 @@ mod tests {
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
 			assert_noop!(
 				Collective::vote(Origin::signed(42), hash.clone(), 0, true),
-				Error::NotMember,
+				Error::<Test, Instance1>::NotMember,
 			);
 		});
 	}
@@ -612,7 +613,7 @@ mod tests {
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
 			assert_noop!(
 				Collective::vote(Origin::signed(2), hash.clone(), 1, true),
-				Error::WrongIndex,
+				Error::<Test, Instance1>::WrongIndex,
 			);
 		});
 	}
@@ -630,7 +631,7 @@ mod tests {
 			);
 			assert_noop!(
 				Collective::vote(Origin::signed(1), hash.clone(), 0, true),
-				Error::DuplicateVote,
+				Error::<Test, Instance1>::DuplicateVote,
 			);
 			assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, false));
 			assert_eq!(
@@ -639,7 +640,7 @@ mod tests {
 			);
 			assert_noop!(
 				Collective::vote(Origin::signed(1), hash.clone(), 0, false),
-				Error::DuplicateVote,
+				Error::<Test, Instance1>::DuplicateVote,
 			);
 
 			assert_eq!(System::events(), vec![

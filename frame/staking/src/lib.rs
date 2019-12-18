@@ -147,7 +147,7 @@
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //!			/// Reward a validator.
-//! 		pub fn reward_myself(origin) -> dispatch::Result {
+//! 		pub fn reward_myself(origin) -> dispatch::DispatchResult {
 //! 			let reported = ensure_signed(origin)?;
 //! 			<staking::Module<T>>::reward_by_ids(vec![(reported, 10)]);
 //! 			Ok(())
@@ -272,7 +272,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
-		SimpleArithmetic, EnsureOrigin, ModuleDispatchError,
+		SimpleArithmetic, EnsureOrigin,
 	}
 };
 use sp_staking::{
@@ -785,7 +785,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the stacking module.
-	pub enum Error {
+	pub enum Error for Module<T: Trait> {
 		/// Not a controller account.
 		NotController,
 		/// Not a stash account.
@@ -817,7 +817,7 @@ decl_module! {
 		/// Number of eras that staked funds must remain bonded for.
 		const BondingDuration: EraIndex = T::BondingDuration::get();
 
-		type Error = Error;
+		type Error = Error<T>;
 
 		fn deposit_event() = default;
 
@@ -853,21 +853,21 @@ decl_module! {
 			#[compact] value: BalanceOf<T>,
 			payee: RewardDestination
 		) {
-			let stash = ensure_signed(origin).map_err(|e| e.as_str())?;
+			let stash = ensure_signed(origin)?;
 
 			if <Bonded<T>>::exists(&stash) {
-				return Err(Error::AlreadyBonded)
+				Err(Error::<T>::AlreadyBonded)?
 			}
 
 			let controller = T::Lookup::lookup(controller)?;
 
 			if <Ledger<T>>::exists(&controller) {
-				return Err(Error::AlreadyPaired)
+				Err(Error::<T>::AlreadyPaired)?
 			}
 
 			// reject a bond which is considered to be _dust_.
 			if value < T::Currency::minimum_balance() {
-				return Err(Error::InsufficientValue)
+				Err(Error::<T>::InsufficientValue)?
 			}
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
@@ -897,10 +897,10 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn bond_extra(origin, #[compact] max_additional: BalanceOf<T>) {
-			let stash = ensure_signed(origin).map_err(|e| e.as_str())?;
+			let stash = ensure_signed(origin)?;
 
-			let controller = Self::bonded(&stash).ok_or(Error::NotStash)?;
-			let mut ledger = Self::ledger(&controller).ok_or(Error::NotController)?;
+			let controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
+			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 
 			let stash_balance = T::Currency::free_balance(&stash);
 
@@ -937,11 +937,11 @@ decl_module! {
 		/// </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(400_000)]
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
-			let controller = ensure_signed(origin).map_err(|e| e.as_str())?;
-			let mut ledger = Self::ledger(&controller).ok_or(Error::NotController)?;
+			let controller = ensure_signed(origin)?;
+			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(
 				ledger.unlocking.len() < MAX_UNLOCKING_CHUNKS,
-				Error::NoMoreChunks
+				Error::<T>::NoMoreChunks,
 			);
 
 			let mut value = value.min(ledger.active);
@@ -979,8 +979,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(400_000)]
 		fn withdraw_unbonded(origin) {
-			let controller = ensure_signed(origin).map_err(|e| e.as_str())?;
-			let ledger = Self::ledger(&controller).ok_or(Error::NotController)?;
+			let controller = ensure_signed(origin)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let ledger = ledger.consolidate_unlocked(Self::current_era());
 
 			if ledger.unlocking.is_empty() && ledger.active.is_zero() {
@@ -1013,8 +1013,8 @@ decl_module! {
 		fn validate(origin, prefs: ValidatorPrefs) {
 			Self::ensure_storage_upgraded();
 
-			let controller = ensure_signed(origin).map_err(|e| e.as_str())?;
-			let ledger = Self::ledger(&controller).ok_or(Error::NotController)?;
+			let controller = ensure_signed(origin)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 			<Nominators<T>>::remove(stash);
 			<Validators<T>>::insert(stash, prefs);
@@ -1035,10 +1035,10 @@ decl_module! {
 		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			Self::ensure_storage_upgraded();
 
-			let controller = ensure_signed(origin).map_err(|e| e.as_str())?;
-			let ledger = Self::ledger(&controller).ok_or(Error::NotController)?;
+			let controller = ensure_signed(origin)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
-			ensure!(!targets.is_empty(), Error::EmptyTargets);
+			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			let targets = targets.into_iter()
 				.take(MAX_NOMINATIONS)
 				.map(|t| T::Lookup::lookup(t))
@@ -1067,8 +1067,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn chill(origin) {
-			let controller = ensure_signed(origin).map_err(|e| e.as_str())?;
-			let ledger = Self::ledger(&controller).ok_or(Error::NotController)?;
+			let controller = ensure_signed(origin)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			Self::chill_stash(&ledger.stash);
 		}
 
@@ -1085,8 +1085,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn set_payee(origin, payee: RewardDestination) {
-			let controller = ensure_signed(origin).map_err(|e| e.as_str())?;
-			let ledger = Self::ledger(&controller).ok_or(Error::NotController)?;
+			let controller = ensure_signed(origin)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 			<Payee<T>>::insert(stash, payee);
 		}
@@ -1104,11 +1104,11 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
 		fn set_controller(origin, controller: <T::Lookup as StaticLookup>::Source) {
-			let stash = ensure_signed(origin).map_err(|e| e.as_str())?;
-			let old_controller = Self::bonded(&stash).ok_or(Error::NotStash)?;
+			let stash = ensure_signed(origin)?;
+			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
 			let controller = T::Lookup::lookup(controller)?;
 			if <Ledger<T>>::exists(&controller) {
-				return Err(Error::AlreadyPaired)
+				Err(Error::<T>::AlreadyPaired)?
 			}
 			if controller != old_controller {
 				<Bonded<T>>::insert(&stash, &controller);
@@ -1121,7 +1121,7 @@ decl_module! {
 		/// The ideal number of validators.
 		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn set_validator_count(origin, #[compact] new: u32) {
-			ensure_root(origin).map_err(|e| e.as_str())?;
+			ensure_root(origin)?;
 			ValidatorCount::put(new);
 		}
 
@@ -1134,7 +1134,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn force_no_eras(origin) {
-			ensure_root(origin).map_err(|e| e.as_str())?;
+			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNone);
 		}
 
@@ -1146,21 +1146,21 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn force_new_era(origin) {
-			ensure_root(origin).map_err(|e| e.as_str())?;
+			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNew);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
 		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
-			ensure_root(origin).map_err(|e| e.as_str())?;
+			ensure_root(origin)?;
 			<Invulnerables<T>>::put(validators);
 		}
 
 		/// Force a current staker to become completely unstaked, immediately.
 		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn force_unstake(origin, stash: T::AccountId) {
-			ensure_root(origin).map_err(|e| e.as_str())?;
+			ensure_root(origin)?;
 
 			// remove the lock.
 			T::Currency::remove_lock(STAKING_ID, &stash);
@@ -1175,7 +1175,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn force_new_era_always(origin) {
-			ensure_root(origin).map_err(|e| e.as_str())?;
+			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceAlways);
 		}
 
@@ -1191,7 +1191,7 @@ decl_module! {
 			T::SlashCancelOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)
-				.map_err(|_| Error::BadOrigin)?;
+				.map_err(|_| Error::<T>::BadOrigin)?;
 
 			let mut slash_indices = slash_indices;
 			slash_indices.sort_unstable();
@@ -1201,12 +1201,12 @@ decl_module! {
 				let index = index as usize;
 
 				// if `index` is not duplicate, `removed` must be <= index.
-				ensure!(removed <= index, Error::DuplicateIndex);
+				ensure!(removed <= index, Error::<T>::DuplicateIndex);
 
 				// all prior removals were from before this index, since the
 				// list is sorted.
 				let index = index - removed;
-				ensure!(index < unapplied.len(), Error::InvalidSlashIndex);
+				ensure!(index < unapplied.len(), Error::<T>::InvalidSlashIndex);
 
 				unapplied.remove(index);
 			}
