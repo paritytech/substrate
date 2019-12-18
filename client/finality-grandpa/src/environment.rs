@@ -1010,8 +1010,8 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			);
 
 			if let Err(e) = write_result {
-				warn!(target: "finality", "Failed to write updated consensus changes to disk. Bailing.");
-				warn!(target: "finality", "Node is in a potentially inconsistent state.");
+				warn!(target: "afg", "Failed to write updated consensus changes to disk. Bailing.");
+				warn!(target: "afg", "Node is in a potentially inconsistent state.");
 
 				return Err(e.into());
 			}
@@ -1063,7 +1063,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
 		client.apply_finality(import_op, BlockId::Hash(hash), justification, true).map_err(|e| {
-			warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+			warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 			e
 		})?;
 		telemetry!(CONSENSUS_INFO; "afg.finalized_blocks_up_to";
@@ -1103,8 +1103,8 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			);
 
 			if let Err(e) = write_result {
-				warn!(target: "finality", "Failed to write updated authority set to disk. Bailing.");
-				warn!(target: "finality", "Node is in a potentially inconsistent state.");
+				warn!(target: "afg", "Failed to write updated authority set to disk. Bailing.");
+				warn!(target: "afg", "Node is in a potentially inconsistent state.");
 
 				return Err(e.into());
 			}
