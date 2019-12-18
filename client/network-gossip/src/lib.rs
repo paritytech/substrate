@@ -60,7 +60,7 @@ pub use self::state_machine::{Validator, ValidatorContext, ValidationResult};
 pub use self::state_machine::DiscardAll;
 
 use sc_network::{specialization::NetworkSpecialization, Event, ExHashT, NetworkService, PeerId, ReputationChange};
-use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
+use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::sync::Arc;
 
 mod bridge;
@@ -93,17 +93,6 @@ pub trait Network<B: BlockT> {
 	/// Note: this method isn't strictly related to gossiping and should eventually be moved
 	/// somewhere else.
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>);
-
-	/// Notifies the sync service to try and sync the given block from the given
-	/// peers.
-	///
-	/// If the given vector of peers is empty then the underlying implementation
-	/// should make a best effort to fetch the block from any peers it is
-	/// connected to (NOTE: this assumption will change in the future #3629).
-	///
-	/// Note: this method isn't strictly related to gossiping and should eventually be moved
-	/// somewhere else.
-	fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>);
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network<B> for Arc<NetworkService<B, S, H>> {
@@ -132,9 +121,5 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network<B> for Arc<Netw
 
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
 		NetworkService::announce_block(self, block, associated_data)
-	}
-
-	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		NetworkService::set_sync_fork_request(self, peers, hash, number)
 	}
 }
