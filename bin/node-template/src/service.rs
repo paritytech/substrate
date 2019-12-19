@@ -126,7 +126,7 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 			force_authoring,
 			service.keystore(),
 			can_author_with,
-		)?.compat().map(drop);
+		)?;
 
 		// the AURA authoring task is considered essential, i.e. if it
 		// fails we take down the service with it.
