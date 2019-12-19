@@ -22,9 +22,8 @@ pub mod helpers;
 use crate::helpers::Receiver;
 use jsonrpc_derive::rpc;
 use futures::{future::BoxFuture, compat::Compat};
-use std::pin::Pin;
 
-use self::error::{Error, Result};
+use self::error::Result;
 
 pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo, NodeRole};
 pub use self::gen_client::Client as SystemClient;
