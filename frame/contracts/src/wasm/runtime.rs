@@ -799,17 +799,18 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Record a request to restore the caller contract to the specified contract.
+	// Try to restore the given destination contract sacrificing the caller.
 	//
-	// At the finalization stage, i.e. when all changes from the extrinsic that invoked this
-	// contract are committed, this function will compute a tombstone hash from the caller's
-	// storage and the given code hash and if the hash matches the hash found in the tombstone at
-	// the specified address - kill the caller contract and restore the destination contract and set
-	// the specified `rent_allowance`. All caller's funds are transferred to the destination.
+	// This function will compute a tombstone hash from the caller's storage and the given code hash
+	// and if the hash matches the hash found in the tombstone at the specified address - kill
+	// the caller contract and restore the destination contract and set the specified `rent_allowance`.
+	// All caller's funds are transfered to the destination.
 	//
-	// This function doesn't perform restoration right away but defers it to the end of the
-	// transaction. If there is no tombstone in the destination address or if the hashes don't match
-	// then restoration is cancelled and no changes are made.
+	// If there is no tombstone at the destination address or if the hashes don't match
+	// then restoration is cancelled and no changes are made. In this case this function
+	// will return non-zero code.
+	//
+	// Otherwise, If the restoration was performed correctly, 0 is returned.
 	//
 	// `dest_ptr`, `dest_len` - the pointer and the length of a buffer that encodes `T::AccountId`
 	// with the address of the to be restored contract.
@@ -829,7 +830,7 @@ define_env!(Env, <E: Ext>,
 		rent_allowance_len: u32,
 		delta_ptr: u32,
 		delta_count: u32
-	) => {
+	) -> u32 => {
 		let dest: <<E as Ext>::T as frame_system::Trait>::AccountId =
 			read_sandbox_memory_as(ctx, dest_ptr, dest_len)?;
 		let code_hash: CodeHash<<E as Ext>::T> =
@@ -857,14 +858,15 @@ define_env!(Env, <E: Ext>,
 			delta
 		};
 
-		ctx.ext.note_restore_to(
+		match ctx.ext.restore_to(
 			dest,
 			code_hash,
 			rent_allowance,
 			delta,
-		);
-
-		Ok(())
+		) {
+			Ok(_) => Ok(0),
+			Err(_) => Ok(1),
+		}
 	},
 
 	// Returns the size of the scratch buffer.

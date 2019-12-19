@@ -148,14 +148,14 @@ pub trait Ext {
 	/// Notes a call dispatch.
 	fn note_dispatch_call(&mut self, call: CallOf<Self::T>);
 
-	/// Notes a restoration request.
-	fn note_restore_to(
+	/// Restores the given destination contract sacrificing the current one.
+	fn restore_to(
 		&mut self,
 		dest: AccountIdOf<Self::T>,
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	);
+	) -> Result<(), &'static str>;
 
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
@@ -270,19 +270,6 @@ pub enum DeferredAction<T: Trait> {
 		origin: T::AccountId,
 		/// The call to dispatch.
 		call: <T as Trait>::Call,
-	},
-	RestoreTo {
-		/// The account id of the contract which is removed during the restoration and transfers
-		/// its storage to the restored contract.
-		donor: T::AccountId,
-		/// The account id of the restored contract.
-		dest: T::AccountId,
-		/// The code hash of the restored contract.
-		code_hash: CodeHash<T>,
-		/// The initial rent allowance to set.
-		rent_allowance: BalanceOf<T>,
-		/// The keys to delete upon restoration.
-		delta: Vec<StorageKey>,
 	},
 }
 
@@ -805,20 +792,20 @@ where
 		});
 	}
 
-	fn note_restore_to(
+	fn restore_to(
 		&mut self,
 		dest: AccountIdOf<Self::T>,
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	) {
-		self.ctx.deferred.push(DeferredAction::RestoreTo {
-			donor: self.ctx.self_account.clone(),
+	) -> Result<(), &'static str> {
+		crate::rent::restore_to::<T>(
+			self.ctx.self_account.clone(),
 			dest,
 			code_hash,
 			rent_allowance,
 			delta,
-		});
+		)
 	}
 
 	fn address(&self) -> &T::AccountId {
@@ -910,7 +897,7 @@ fn deposit_event<T: Trait>(
 #[cfg(test)]
 mod tests {
 	use super::{
-		BalanceOf, DeferredAction, Event, ExecFeeToken, ExecResult, ExecutionContext, Ext, Loader,
+		BalanceOf, Event, ExecFeeToken, ExecResult, ExecutionContext, Ext, Loader,
 		RawEvent, TransferFeeKind, TransferFeeToken, Vm,
 	};
 	use crate::{
