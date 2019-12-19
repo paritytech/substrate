@@ -21,9 +21,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use frame_support::{decl_module, decl_event, Parameter, weights::SimpleDispatchInfo};
-use frame_system::{self as system, ensure_root};
-use sp_runtime::{traits::Dispatchable, DispatchError};
+use codec::{Encode, Decode};
+use sp_core::TypeId;
+use frame_support::{decl_module, decl_event, decl_storage, Parameter};
+use frame_support::weights::{
+	SimpleDispatchInfo, GetDispatchInfo, ClassifyDispatch, WeighData, Weight, DispatchClass, PaysFee
+};
+use frame_system::{self as system, ensure_root, ensure_signed};
+use sp_runtime::{DispatchError, DispatchResult, traits::{Dispatchable, AccountIdConversion}};
 
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {
@@ -31,7 +36,14 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The overarching call type.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin>;
+	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo;
+}
+
+decl_storage! {
+	trait Store for Module<T: Trait> as Utility {
+		/// The ideal number of staking participants.
+		pub ValidatorCount get(fn validator_count) config(): u32;
+	}
 }
 
 decl_event!(
@@ -41,12 +53,44 @@ decl_event!(
 	}
 );
 
+/// Simple index-based pass through for the weight functions.
+struct Passthrough<Call>(sp_std::marker::PhantomData<Call>);
+
+impl<Call> Passthrough<Call> {
+	fn new() -> Self { Self(Default::default()) }
+}
+impl<Call: GetDispatchInfo> WeighData<(&u16, &Box<Call>)> for Passthrough<Call> {
+	fn weigh_data(&self, (_, call): (&u16, &Box<Call>)) -> Weight {
+		call.get_dispatch_info().weight
+	}
+}
+impl<Call: GetDispatchInfo> ClassifyDispatch<(&u16, &Box<Call>)> for Passthrough<Call> {
+	fn classify_dispatch(&self, (_, call): (&u16, &Box<Call>)) -> DispatchClass {
+		call.get_dispatch_info().class
+	}
+}
+impl<Call: GetDispatchInfo> PaysFee for Passthrough<Call> {
+	fn pays_fee(&self) -> bool {
+		true
+	}
+}
+
+/// A module identifier. These are per module and should be stored in a registry somewhere.
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
+struct IndexedUtilityModuleId(u16);
+
+impl TypeId for IndexedUtilityModuleId {
+	const TYPE_ID: [u8; 4] = *b"suba";
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
 		/// Send a batch of dispatch calls (only root).
+		// TODO: Should also pass through the weights.
+		// TODO: Should not be restricted to Root origin; should duplicate the origin for each.
 		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn batch(origin, calls: Vec<<T as Trait>::Call>) {
 			ensure_root(origin)?;
@@ -56,6 +100,22 @@ decl_module! {
 				.collect::<Vec<_>>();
 			Self::deposit_event(Event::BatchExecuted(results));
 		}
+
+		/// Send a call through an indexed pseudonym of the sender.
+		#[weight = <Passthrough<<T as Trait>::Call>>::new()]
+		fn as_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let pseudonym = Self::sub_account_id(who, index);
+			call.dispatch(frame_system::RawOrigin::Signed(pseudonym).into())
+		}
+	}
+}
+
+impl<T: Trait> Module<T> {
+	pub fn sub_account_id(who: T::AccountId, index: u16) -> T::AccountId {
+		// the slightly odd order of having the index value have a sub account of `who` here
+		// is to ensure that only the account id `who` is truncated, not the `index`.
+		IndexedUtilityModuleId(index).into_sub_account(&who)
 	}
 }
 
@@ -133,6 +193,8 @@ mod tests {
 	type Balances = pallet_balances::Module<Test>;
 	type Utility = Module<Test>;
 
+	use pallet_balances::Call as BalancesCall;
+
 	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		pallet_balances::GenesisConfig::<Test> {
@@ -143,20 +205,40 @@ mod tests {
 	}
 
 	#[test]
+	fn as_sub_works() {
+		new_test_ext().execute_with(|| {
+			let sub_1_0 = Utility::sub_account_id(1, 0);
+			assert_ok!(Balances::transfer(Origin::signed(1), sub_1_0, 5));
+			assert_noop!(Utility::as_sub(
+				Origin::signed(1),
+				1,
+				Box::new(Call::Balances(BalancesCall::transfer(2, 3))),
+			), "balance too low to send value");
+			assert_ok!(Utility::as_sub(
+				Origin::signed(1),
+				0,
+				Box::new(Call::Balances(BalancesCall::transfer(2, 3))),
+			));
+			assert_eq!(Balances::free_balance(sub_1_0), 2);
+			assert_eq!(Balances::free_balance(2), 3);
+		});
+	}
+
+	#[test]
 	fn batch_works() {
 		new_test_ext().execute_with(|| {
 			assert_eq!(Balances::free_balance(1), 10);
 			assert_eq!(Balances::free_balance(2), 0);
 			assert_noop!(
 				Utility::batch(Origin::signed(1), vec![
-					Call::Balances(pallet_balances::Call::force_transfer(1, 2, 5)),
-					Call::Balances(pallet_balances::Call::force_transfer(1, 2, 5))
+					Call::Balances(BalancesCall::force_transfer(1, 2, 5)),
+					Call::Balances(BalancesCall::force_transfer(1, 2, 5))
 				]),
 				BadOrigin,
 			);
 			assert_ok!(Utility::batch(Origin::ROOT, vec![
-				Call::Balances(pallet_balances::Call::force_transfer(1, 2, 5)),
-				Call::Balances(pallet_balances::Call::force_transfer(1, 2, 5))
+				Call::Balances(BalancesCall::force_transfer(1, 2, 5)),
+				Call::Balances(BalancesCall::force_transfer(1, 2, 5))
 			]));
 			assert_eq!(Balances::free_balance(1), 0);
 			assert_eq!(Balances::free_balance(2), 10);
