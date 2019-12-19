@@ -740,13 +740,6 @@ impl<T: Trait> Module<T> {
 		ctx.deferred.into_iter().for_each(|deferred| {
 			use self::exec::DeferredAction::*;
 			match deferred {
-				DepositEvent {
-					topics,
-					event,
-				} => <system::Module<T>>::deposit_event_indexed(
-					&*topics,
-					<T as Trait>::Event::from(event).into(),
-				),
 				DispatchRuntimeCall {
 					origin: who,
 					call,
