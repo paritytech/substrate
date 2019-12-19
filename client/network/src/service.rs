@@ -422,11 +422,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkService<B, S, H> {
-	/// Returns the network identity of the node.
-	pub fn local_peer_id(&self) -> PeerId {
-		self.local_peer_id.clone()
-	}
-
 	/// Writes a message on an open notifications channel. Has no effect if the notifications
 	/// channel with this protocol name is closed.
 	///
@@ -609,11 +604,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	pub fn num_connected(&self) -> usize {
 		self.num_connected.load(Ordering::Relaxed)
 	}
-
-	/// Returns the local external addresses.
-	pub fn external_addresses(&self) -> Vec<Multiaddr> {
-		self.external_addresses.lock().clone()
-	}
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> sp_consensus::SyncOracle
@@ -646,7 +636,7 @@ pub trait NetworkStateInfo {
 	fn external_addresses(&self) -> Vec<Multiaddr>;
 
 	/// Returns the local Peer ID.
-	fn peer_id(&self) -> PeerId;
+	fn local_peer_id(&self) -> PeerId;
 }
 
 impl<B, S, H> NetworkStateInfo for NetworkService<B, S, H>
@@ -661,7 +651,7 @@ impl<B, S, H> NetworkStateInfo for NetworkService<B, S, H>
 	}
 
 	/// Returns the local Peer ID.
-	fn peer_id(&self) -> PeerId {
+	fn local_peer_id(&self) -> PeerId {
 		self.local_peer_id.clone()
 	}
 }
