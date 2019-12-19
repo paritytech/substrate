@@ -7,32 +7,32 @@ edition = "2018"
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
-sp-finality-grandpa = { path = "../../primitives/finality-grandpa", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
-sp-staking = { path = "../../primitives/sr-staking-primitives", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
-session = { package = "pallet-session", path = "../session", default-features = false }
-finality-tracker = { package = "pallet-finality-tracker", path = "../finality-tracker", default-features = false }
+sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
+sp-finality-grandpa = { version = "2.0.0", default-features = false, path = "../../primitives/finality-grandpa" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+pallet-session = { version = "2.0.0", default-features = false, path = "../session" }
+pallet-finality-tracker = { version = "2.0.0", default-features = false, path = "../finality-tracker" }
 
 [dev-dependencies]
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io" }
+sp-io ={ version = "2.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
 std = [
 	"serde",
 	"codec/std",
-	"primitives/std",
+	"sp-core/std",
 	"sp-finality-grandpa/std",
-	"rstd/std",
-	"support/std",
+	"sp-std/std",
+	"frame-support/std",
 	"sp-runtime/std",
 	"sp-staking/std",
-	"system/std",
-	"session/std",
-	"finality-tracker/std",
+	"frame-system/std",
+	"pallet-session/std",
+	"pallet-finality-tracker/std",
 ]
 migrate-authorities = []

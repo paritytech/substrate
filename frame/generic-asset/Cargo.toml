@@ -7,22 +7,22 @@ edition = "2018"
 [dependencies]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 
 [dev-dependencies]
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io" }
-primitives = { package = "sp-core",  path = "../../primitives/core" }
+sp-io ={ version = "2.0.0", path = "../../primitives/io" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
 
 [features]
 default = ["std"]
 std =[
     "serde/std",
     "codec/std",
-    "rstd/std",
+    "sp-std/std",
     "sp-runtime/std",
-    "support/std",
-    "system/std",
+    "frame-support/std",
+    "frame-system/std",
 ]

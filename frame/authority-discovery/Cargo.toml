@@ -1,37 +1,37 @@
 [package]
 name = "pallet-authority-discovery"
-version = "0.1.0"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-authority-discovery-primitives = { package = "sp-authority-discovery", path = "../../primitives/authority-discovery", default-features = false }
-app-crypto = { package = "sc-application-crypto", path = "../../primitives/application-crypto", default-features = false }
+sp-authority-discovery = { version = "2.0.0", default-features = false, path = "../../primitives/authority-discovery" }
+sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../primitives/application-crypto" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 serde = { version = "1.0.101", optional = true }
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
-session = { package = "pallet-session", path = "../session", default-features = false, features = ["historical" ] }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
+sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
+pallet-session = { version = "2.0.0", features = ["historical" ], path = "../session", default-features = false }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 
 [dev-dependencies]
-sp-staking = { path = "../../primitives/sr-staking-primitives", default-features = false }
+sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
 
 [features]
 default = ["std"]
 std = [
-	"app-crypto/std",
-	"authority-discovery-primitives/std",
+	"sp-application-crypto/std",
+	"sp-authority-discovery/std",
 	"codec/std",
-	"primitives/std",
-	"rstd/std",
-	"runtime-io/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-std/std",
 	"serde",
-	"session/std",
+	"pallet-session/std",
 	"sp-runtime/std",
-	"support/std",
-	"system/std",
+	"frame-support/std",
+	"frame-system/std",
 ]

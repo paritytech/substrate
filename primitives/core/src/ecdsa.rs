@@ -19,9 +19,9 @@
 // end::description[]
 
 #[cfg(feature = "full_crypto")]
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 
-use rstd::cmp::Ordering;
+use sp_std::cmp::Ordering;
 use codec::{Encode, Decode};
 
 #[cfg(feature = "full_crypto")]
@@ -102,7 +102,7 @@ impl AsMut<[u8]> for Public {
 	}
 }
 
-impl rstd::convert::TryFrom<&[u8]> for Public {
+impl sp_std::convert::TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
@@ -166,8 +166,8 @@ impl<'de> Deserialize<'de> for Public {
 }
 
 #[cfg(feature = "full_crypto")]
-impl rstd::hash::Hash for Public {
-	fn hash<H: rstd::hash::Hasher>(&self, state: &mut H) {
+impl sp_std::hash::Hash for Public {
+	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
 		self.0.hash(state);
 	}
 }
@@ -176,7 +176,7 @@ impl rstd::hash::Hash for Public {
 #[derive(Encode, Decode)]
 pub struct Signature([u8; 65]);
 
-impl rstd::convert::TryFrom<&[u8]> for Signature {
+impl sp_std::convert::TryFrom<&[u8]> for Signature {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
@@ -261,9 +261,9 @@ impl std::fmt::Debug for Signature {
 }
 
 #[cfg(feature = "full_crypto")]
-impl rstd::hash::Hash for Signature {
-	fn hash<H: rstd::hash::Hasher>(&self, state: &mut H) {
-		rstd::hash::Hash::hash(&self.0[..], state);
+impl sp_std::hash::Hash for Signature {
+	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
+		sp_std::hash::Hash::hash(&self.0[..], state);
 	}
 }
 

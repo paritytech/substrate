@@ -16,7 +16,7 @@
 
 //! Stuff to do with the runtime's storage.
 
-use rstd::{prelude::*, marker::PhantomData};
+use sp_std::{prelude::*, marker::PhantomData};
 use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
 use crate::{traits::Len, hash::{Twox128, StorageHasher}};
 
@@ -305,6 +305,9 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: ?Sized + EncodeLike<K1>;
 
+	fn iter_prefix<KArg1>(k1: KArg1) -> PrefixIterator<V>
+		where KArg1: ?Sized + EncodeLike<K1>;
+
 	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
 	where
 		KArg1: EncodeLike<K1>,
@@ -364,8 +367,10 @@ impl<Value: Decode> Iterator for PrefixIterator<Value> {
 	type Item = Value;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		match runtime_io::storage::next_key(&self.previous_key) {
-			Some(next_key) if next_key.starts_with(&self.prefix[..]) => {
+		match sp_io::storage::next_key(&self.previous_key)
+			.filter(|n| n.starts_with(&self.prefix[..]))
+		{
+			Some(next_key) => {
 				let value = unhashed::get(&next_key);
 
 				if value.is_none() {
@@ -406,7 +411,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	}
 
 	fn remove_all() {
-		runtime_io::storage::clear_prefix(&Self::final_prefix())
+		sp_io::storage::clear_prefix(&Self::final_prefix())
 	}
 
 	fn iter() -> PrefixIterator<Value> {
@@ -421,8 +426,8 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 
 #[cfg(test)]
 mod test {
-	use primitives::hashing::twox_128;
-	use runtime_io::TestExternalities;
+	use sp_core::hashing::twox_128;
+	use sp_io::TestExternalities;
 	use crate::storage::{unhashed, StoragePrefixedMap};
 
 	#[test]

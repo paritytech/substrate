@@ -6,24 +6,24 @@ edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
-transaction-payment-rpc-runtime-api = { package = "pallet-transaction-payment-rpc-runtime-api", path = "./rpc/runtime-api", default-features = false }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "./rpc/runtime-api" }
 
 [dev-dependencies]
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io" }
-primitives = { package = "sp-core",  path = "../../primitives/core" }
-balances = { package = "pallet-balances", path = "../balances" }
+sp-io = { version = "2.0.0", path = "../../primitives/io" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+pallet-balances = { version = "2.0.0", path = "../balances" }
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
-	"rstd/std",
+	"sp-std/std",
 	"sp-runtime/std",
-	"support/std",
-	"system/std",
-	"transaction-payment-rpc-runtime-api/std"
+	"frame-support/std",
+	"frame-system/std",
+	"pallet-transaction-payment-rpc-runtime-api/std"
 ]

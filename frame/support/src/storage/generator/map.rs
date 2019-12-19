@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[cfg(not(feature = "std"))]
-use rstd::prelude::*;
-use rstd::borrow::Borrow;
+use sp_std::prelude::*;
+use sp_std::borrow::Borrow;
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Ref, EncodeAppend};
 use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}, traits::Len};
 
@@ -143,7 +143,7 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 			.unwrap_or_else(|| {
 				match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
 					Some(value) => value.encode(),
-					None => vec![],
+					None => Vec::new(),
 				}
 			});
 

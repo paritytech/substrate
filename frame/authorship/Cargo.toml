@@ -1,32 +1,32 @@
 [package]
 name = "pallet-authorship"
-version = "0.1.0"
+version = "2.0.0"
 description = "Block and Uncle Author tracking for the SRML"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
+sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-inherents = { package = "sp-inherents", path = "../../primitives/inherents", default-features = false }
-sp-authorship = { path = "../../primitives/authorship", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+sp-inherents = { version = "2.0.0", default-features = false, path = "../../primitives/inherents" }
+sp-authorship = { version = "2.0.0", default-features = false, path = "../../primitives/authorship" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+sp-io ={ path = "../../primitives/io", default-features = false }
 impl-trait-for-tuples = "0.1.3"
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
-	"primitives/std",
-	"inherents/std",
+	"sp-core/std",
+	"sp-inherents/std",
 	"sp-runtime/std",
-	"rstd/std",
-	"support/std",
-	"system/std",
-	"runtime-io/std",
+	"sp-std/std",
+	"frame-support/std",
+	"frame-system/std",
+	"sp-io/std",
 	"sp-authorship/std",
 ]

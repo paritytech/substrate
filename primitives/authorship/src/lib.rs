@@ -18,7 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{result::Result, prelude::*};
+use sp_std::{result::Result, prelude::*};
 
 use codec::{Encode, Decode};
 use sp_inherents::{Error, InherentIdentifier, InherentData, IsFatalError};

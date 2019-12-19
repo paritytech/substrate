@@ -26,7 +26,7 @@ use cranelift_codegen::print_errors::pretty_error;
 use wasmtime_jit::{CodeMemory, Compiler};
 use wasmtime_environ::CompiledFunction;
 use wasmtime_runtime::{VMContext, VMFunctionBody};
-use wasm_interface::{Function, Value, ValueType};
+use sp_wasm_interface::{Function, Value, ValueType};
 use std::{cmp, panic::{self, AssertUnwindSafe}, ptr};
 
 use crate::error::{Error, WasmError};

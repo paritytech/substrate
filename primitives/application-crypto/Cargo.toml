@@ -1,28 +1,24 @@
 [package]
-name = "sc-application-crypto"
+name = "sp-application-crypto"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 description = "Provides facilities for generating application specific crypto wrapper types."
 
 [dependencies]
-primitives = { package = "sp-core", path = "../core", default-features = false }
+sp-core = { version = "2.0.0", default-features = false, path = "../core" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-rstd = { package = "sp-std", path = "../sr-std", default-features = false }
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io", default-features = false }
-
-[dev-dependencies]
-test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
-sp-runtime = { path = "../../primitives/runtime" }
+sp-std = { version = "2.0.0", default-features = false, path = "../std" }
+sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
 
 [features]
 default = [ "std" ]
-std = [ "full_crypto", "primitives/std", "codec/std", "serde", "rstd/std", "runtime-io/std" ]
+std = [ "full_crypto", "sp-core/std", "codec/std", "serde", "sp-std/std", "sp-io/std" ]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers
 # or Intel SGX.
 # For the regular wasm runtime builds this should not be used.
 full_crypto = [
-    "primitives/full_crypto"
+    "sp-core/full_crypto"
 ]

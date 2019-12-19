@@ -1,23 +1,23 @@
 [package]
 name = "sp-consensus-pow"
-version = "2.0.0"
+version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for Aura consensus"
 edition = "2018"
 
 [dependencies]
-sp-api = { path = "../../sr-api", default-features = false }
-rstd = { package = "sp-std", path = "../../sr-std", default-features = false }
-sp-runtime = { path = "../../runtime", default-features = false }
-primitives = { package = "sp-core", path = "../../core", default-features = false }
+sp-api = { version = "2.0.0", default-features = false, path = "../../api" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../std" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../runtime" }
+sp-core = { version = "2.0.0", default-features = false, path = "../../core" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 
 [features]
 default = ["std"]
 std = [
-	"rstd/std",
+	"sp-std/std",
 	"sp-api/std",
 	"sp-runtime/std",
-	"primitives/std",
+	"sp-core/std",
 	"codec/std",
 ]

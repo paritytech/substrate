@@ -1,4 +1,4 @@
-use support::construct_runtime;
+use frame_support::construct_runtime;
 
 construct_runtime! {
 	pub enum Runtime {}

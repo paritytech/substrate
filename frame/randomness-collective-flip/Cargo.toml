@@ -7,22 +7,22 @@ edition = "2018"
 [dependencies]
 safe-mix = { version = "1.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-primitives = { package = "sp-core",  path = "../../primitives/core" }
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+sp-io = { version = "2.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
 std = [
 	"safe-mix/std",
-	"system/std",
+	"frame-system/std",
 	"codec/std",
-	"support/std",
+	"frame-support/std",
 	"sp-runtime/std",
-	"rstd/std",
+	"sp-std/std",
 ]

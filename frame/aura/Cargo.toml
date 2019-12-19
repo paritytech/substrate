@@ -5,20 +5,20 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-app-crypto = { package = "sc-application-crypto",  path = "../../primitives/application-crypto", default-features = false }
+sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../primitives/application-crypto" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-inherents = { package = "sp-inherents", path = "../../primitives/inherents", default-features = false }
-primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-inherents = { version = "2.0.0", default-features = false, path = "../../primitives/inherents" }
+sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 serde = { version = "1.0.101", optional = true }
-session = { package = "pallet-session", path = "../session", default-features = false }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
+pallet-session = { version = "2.0.0", default-features = false, path = "../session" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-io ={ path = "../../primitives/io", default-features = false }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 sp-consensus-aura = { path = "../../primitives/consensus/aura", default-features = false}
-system = { package = "frame-system", path = "../system", default-features = false }
-sp-timestamp = { package = "sp-timestamp", path = "../../primitives/timestamp", default-features = false }
-pallet-timestamp = { package = "pallet-timestamp", path = "../timestamp", default-features = false }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+sp-timestamp = { version = "2.0.0", default-features = false, path = "../../primitives/timestamp" }
+pallet-timestamp = { version = "2.0.0", default-features = false, path = "../timestamp" }
 
 
 [dev-dependencies]
@@ -28,17 +28,17 @@ parking_lot = "0.9.0"
 [features]
 default = ["std"]
 std = [
-	"app-crypto/std",
+	"sp-application-crypto/std",
 	"codec/std",
-	"inherents/std",
-	"runtime-io/std",
-	"primitives/std",
-	"rstd/std",
+	"sp-inherents/std",
+	"sp-io/std",
+	"sp-core/std",
+	"sp-std/std",
 	"serde",
 	"sp-runtime/std",
-	"support/std",
+	"frame-support/std",
 	"sp-consensus-aura/std",
-	"system/std",
+	"frame-system/std",
 	"sp-timestamp/std",
 	"pallet-timestamp/std",
 ]

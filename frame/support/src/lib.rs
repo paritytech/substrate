@@ -29,7 +29,7 @@ pub extern crate tracing;
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]
-pub use rstd;
+pub use sp_std;
 #[doc(hidden)]
 pub use codec;
 #[cfg(feature = "std")]
@@ -39,9 +39,9 @@ pub use once_cell;
 pub use paste;
 #[cfg(feature = "std")]
 #[doc(hidden)]
-pub use state_machine::BasicExternalities;
+pub use sp_state_machine::BasicExternalities;
 #[doc(hidden)]
-pub use runtime_io::storage::root as storage_root;
+pub use sp_io::storage::root as storage_root;
 #[doc(hidden)]
 pub use sp_runtime::RuntimeDebug;
 
@@ -124,7 +124,7 @@ pub use frame_support_procedural::{decl_storage, construct_runtime};
 #[macro_export]
 macro_rules! fail {
 	( $y:expr ) => {{
-		return Err($y);
+		return Err($y.into());
 	}}
 }
 
@@ -168,7 +168,7 @@ macro_rules! assert_noop {
 #[cfg(feature = "std")]
 macro_rules! assert_err {
 	( $x:expr , $y:expr $(,)? ) => {
-		assert_eq!($x, Err($y));
+		assert_eq!($x, Err($y.into()));
 	}
 }
 
@@ -204,7 +204,7 @@ mod tests {
 		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
 		StorageEntryModifier, DefaultByteGetter, StorageHasher,
 	};
-	use rstd::marker::PhantomData;
+	use sp_std::marker::PhantomData;
 
 	pub trait Trait {
 		type BlockNumber: Codec + EncodeLike + Default;
@@ -249,7 +249,7 @@ mod tests {
 		type Origin = u32;
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
+	fn new_test_ext() -> sp_io::TestExternalities {
 		GenesisConfig::default().build_storage().unwrap().into()
 	}
 

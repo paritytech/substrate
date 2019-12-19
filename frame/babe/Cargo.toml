@@ -8,39 +8,39 @@ edition = "2018"
 hex-literal = "0.2.1"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.101", optional = true }
-inherents = { package = "sp-inherents", path = "../../primitives/inherents", default-features = false }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
-sp-staking = { path = "../../primitives/sr-staking-primitives", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
-timestamp = { package = "pallet-timestamp", path = "../timestamp", default-features = false }
-sp-timestamp = { path = "../../primitives/timestamp", default-features = false }
-session = { package = "pallet-session", path = "../session", default-features = false }
-babe-primitives = { package = "sp-consensus-babe", path = "../../primitives/consensus/babe", default-features = false }
-runtime-io ={ package = "sp-io", path = "../../primitives/sr-io", default-features = false }
+sp-inherents = { version = "2.0.0", default-features = false, path = "../../primitives/inherents" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+pallet-timestamp = { version = "2.0.0", default-features = false, path = "../timestamp" }
+sp-timestamp = { version = "2.0.0", default-features = false, path = "../../primitives/timestamp" }
+pallet-session = { version = "2.0.0", default-features = false, path = "../session" }
+sp-consensus-babe = { version = "0.8", default-features = false, path = "../../primitives/consensus/babe" }
+sp-io ={ path = "../../primitives/io", default-features = false }
 
 [dev-dependencies]
 lazy_static = "1.4.0"
 parking_lot = "0.9.0"
-sp-version = { path = "../../primitives/sr-version", default-features = false }
-primitives = { package = "sp-core",  path = "../../primitives/core" }
-test-runtime = { package = "substrate-test-runtime", path = "../../test/utils/runtime" }
+sp-version = { version = "2.0.0", default-features = false, path = "../../primitives/version" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 
 [features]
 default = ["std"]
 std = [
 	"serde",
 	"codec/std",
-	"rstd/std",
-	"support/std",
+	"sp-std/std",
+	"frame-support/std",
 	"sp-runtime/std",
 	"sp-staking/std",
-	"system/std",
-	"timestamp/std",
+	"frame-system/std",
+	"pallet-timestamp/std",
 	"sp-timestamp/std",
-	"inherents/std",
-	"babe-primitives/std",
-	"session/std",
-	"runtime-io/std",
+	"sp-inherents/std",
+	"sp-consensus-babe/std",
+	"pallet-session/std",
+	"sp-io/std",
 ]

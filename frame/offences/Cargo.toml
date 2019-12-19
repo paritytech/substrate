@@ -1,32 +1,32 @@
 [package]
 name = "pallet-offences"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-balances = { package = "pallet-balances", path = "../balances", default-features = false }
+pallet-balances = { version = "2.0.0", default-features = false, path = "../balances" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-rstd = { package = "sp-std", path = "../../primitives/sr-std", default-features = false }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 serde = { version = "1.0.101", optional = true }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
-sp-staking = { path = "../../primitives/sr-staking-primitives", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 
 [dev-dependencies]
-runtime-io = { package = "sp-io", path = "../../primitives/sr-io" }
-sp-core = { path = "../../primitives/core" }
+sp-io = { version = "2.0.0", path = "../../primitives/io" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
 
 [features]
 default = ["std"]
 std = [
-	"balances/std",
+	"pallet-balances/std",
 	"codec/std",
-	"rstd/std",
+	"sp-std/std",
 	"serde",
 	"sp-runtime/std",
 	"sp-staking/std",
-	"support/std",
-	"system/std",
+	"frame-support/std",
+	"frame-system/std",
 ]

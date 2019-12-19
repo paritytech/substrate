@@ -25,8 +25,8 @@ extern crate alloc;
 use serde::Serialize;
 use codec::{Encode, Decode, Input, Codec};
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
-use rstd::borrow::Cow;
-use rstd::vec::Vec;
+use sp_std::borrow::Cow;
+use sp_std::vec::Vec;
 
 mod app {
 	use app_crypto::{app_crypto, key_types::GRANDPA, ed25519};

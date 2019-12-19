@@ -18,8 +18,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
-use support::weights::{Weight, DispatchClass};
+use sp_std::prelude::*;
+use frame_support::weights::{Weight, DispatchClass};
 use codec::{Encode, Codec, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};

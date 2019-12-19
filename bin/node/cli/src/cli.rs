@@ -24,7 +24,7 @@ use structopt::{StructOpt, clap::App};
 use sc_cli::{display_role, parse_and_prepare, AugmentClap, GetLogFilter, ParseAndPrepare};
 use crate::{service, ChainSpec, load_spec};
 use crate::factory_impl::FactoryState;
-use transaction_factory::RuntimeAdapter;
+use node_transaction_factory::RuntimeAdapter;
 
 /// Custom subcommands.
 #[derive(Clone, Debug, StructOpt)]
@@ -70,7 +70,7 @@ pub struct FactoryCmd {
 	///
 	/// These three modes control manufacturing.
 	#[structopt(long="mode", default_value = "MasterToN")]
-	pub mode: transaction_factory::Mode,
+	pub mode: node_transaction_factory::Mode,
 
 	/// Number of transactions to generate. In mode `MasterNToNToM` this is
 	/// the number of transactions per round.
@@ -155,7 +155,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 			);
 
 			let service_builder = new_full_start!(config).0;
-			transaction_factory::factory::<FactoryState<_>, _, _, _, _, _>(
+			node_transaction_factory::factory::<FactoryState<_>, _, _, _, _, _>(
 				factory_state,
 				service_builder.client(),
 				service_builder.select_chain()

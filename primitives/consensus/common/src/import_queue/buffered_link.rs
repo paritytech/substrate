@@ -23,7 +23,7 @@
 //! ```
 //! use sp_consensus::import_queue::Link;
 //! # use sp_consensus::import_queue::buffered_link::buffered_link;
-//! # use test_client::runtime::Block;
+//! # use sp_test_primitives::Block;
 //! # struct DummyLink; impl Link<Block> for DummyLink {}
 //! # let mut my_link = DummyLink;
 //! let (mut tx, mut rx) = buffered_link::<Block>();
@@ -161,7 +161,7 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 
 #[cfg(test)]
 mod tests {
-	use test_client::runtime::Block;
+	use sp_test_primitives::Block;
 
 	#[test]
 	fn is_closed() {

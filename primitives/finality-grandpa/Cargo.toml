@@ -5,19 +5,19 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-app-crypto = { package = "sc-application-crypto", path = "../application-crypto", default-features = false }
+app-crypto = { version = "2.0.0", default-features = false, package = "sp-application-crypto", path = "../application-crypto" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-rstd = { package = "sp-std", path = "../sr-std", default-features = false }
+sp-std = { version = "2.0.0", default-features = false, path = "../std" }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-api = { path = "../sr-api", default-features = false }
-sp-runtime = { path = "../runtime", default-features = false }
+sp-api = { version = "2.0.0", default-features = false, path = "../api" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
 
 [features]
 default = ["std"]
 std = [
 	"app-crypto/std",
 	"codec/std",
-	"rstd/std",
+	"sp-std/std",
 	"serde",
 	"sp-api/std",
 	"sp-runtime/std",
