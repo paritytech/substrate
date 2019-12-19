@@ -21,8 +21,10 @@ pub mod helpers;
 
 use crate::helpers::Receiver;
 use jsonrpc_derive::rpc;
+use futures::{future::BoxFuture, compat::Compat};
+use std::pin::Pin;
 
-use self::error::Result;
+use self::error::{Error, Result};
 
 pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo, NodeRole};
 pub use self::gen_client::Client as SystemClient;
@@ -64,6 +66,21 @@ pub trait SystemApi<Hash, Number> {
 	// TODO: make this stable and move structs https://github.com/paritytech/substrate/issues/1890
 	#[rpc(name = "system_networkState", returns = "jsonrpc_core::Value")]
 	fn system_network_state(&self) -> Receiver<jsonrpc_core::Value>;
+
+	/// Adds a reserved peer. Returns the empty string or an error. The string
+	/// parameter should encode a `p2p` multiaddr.
+	///
+	/// `/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`
+	/// is an example of a valid, passing multiaddr with PeerId attached.
+	#[rpc(name = "system_addReservedPeer", returns = "()")]
+	fn system_add_reserved_peer(&self, peer: String)
+		-> Compat<BoxFuture<'static, std::result::Result<(), jsonrpc_core::Error>>>;
+
+	/// Remove a reserved peer. Returns the empty string or an error. The string
+	/// should encode only the PeerId e.g. `QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`.
+	#[rpc(name = "system_removeReservedPeer", returns = "()")]
+	fn system_remove_reserved_peer(&self, peer_id: String)
+		-> Compat<BoxFuture<'static, std::result::Result<(), jsonrpc_core::Error>>>;
 
 	/// Returns the roles the node is running as.
 	#[rpc(name = "system_nodeRoles", returns = "Vec<NodeRole>")]

@@ -8,8 +8,8 @@ edition = "2018"
 
 [dependencies]
 bytes = "0.4.12"
-sc-client-api = { path = "../api" }
-sp-api = { path = "../../primitives/api" }
+sc-client-api = { version = "2.0.0", path = "../api" }
+sp-api = { version = "2.0.0", path = "../../primitives/api" }
 fnv = "1.0.6"
 futures01 = { package = "futures", version = "0.1" }
 futures = "0.3.1"
@@ -17,26 +17,26 @@ futures-timer = "2.0"
 log = "0.4.8"
 threadpool = "1.7"
 num_cpus = "1.10"
-sp-offchain = { path = "../../primitives/offchain" }
+sp-offchain = { version = "2.0.0", path = "../../primitives/offchain" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 parking_lot = "0.9.0"
-sp-core = { path = "../../primitives/core" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
 rand = "0.7.2"
-sp-runtime = { path = "../../primitives/runtime" }
-sc-network = { path = "../network" }
-sc-keystore = { path = "../keystore" }
+sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
+sc-network = { version = "0.8", path = "../network" }
+sc-keystore = { version = "2.0.0", path = "../keystore" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 hyper = "0.12.35"
 hyper-rustls = "0.17.1"
 
 [dev-dependencies]
-sc-client-db = { path = "../db/", default-features = true }
+sc-client-db = { version = "2.0.0", default-features = true, path = "../db/" }
 env_logger = "0.7.0"
-substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 tokio = "0.1.22"
-sc-transaction-pool = { path = "../../client/transaction-pool" }
-sp-transaction-pool = { path = "../../primitives/transaction-pool" }
+sc-transaction-pool = { version = "2.0.0", path = "../../client/transaction-pool" }
+sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
 
 [features]
 default = []

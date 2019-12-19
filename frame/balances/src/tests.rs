@@ -248,7 +248,7 @@ fn reserved_balance_should_prevent_reclaim_count() {
 
 			assert_ok!(Balances::reserve(&2, 256 * 19 + 1)); // account 2 becomes mostly reserved
 			assert_eq!(Balances::free_balance(&2), 0); // "free" account deleted."
-			assert_eq!(Balances::total_balance(&2), 256 * 19 + 1); // reserve still exists.
+			assert_eq!(Balances::total_balance(&2), 256 * 20); // reserve still exists.
 			assert_eq!(Balances::is_dead_account(&2), false);
 			assert_eq!(System::account_nonce(&2), 1);
 
@@ -257,7 +257,7 @@ fn reserved_balance_should_prevent_reclaim_count() {
 			assert_eq!(Balances::total_balance(&5), 256 * 1 + 0x69);
 			assert_eq!(Balances::is_dead_account(&5), false);
 
-			assert!(Balances::slash(&2, 256 * 18 + 2).1.is_zero()); // account 2 gets slashed
+			assert!(Balances::slash(&2, 256 * 19 + 2).1.is_zero()); // account 2 gets slashed
 			// "reserve" account reduced to 255 (below ED) so account deleted
 			assert_eq!(Balances::total_balance(&2), 0);
 			assert_eq!(System::account_nonce(&2), 0);	// nonce zero
@@ -768,4 +768,43 @@ fn cannot_set_genesis_value_below_ed() {
 		balances: vec![(1, 10)],
 		vesting: vec![],
 	}.assimilate_storage(&mut t).unwrap();
+}
+
+#[test]
+fn dust_moves_between_free_and_reserved() {
+	ExtBuilder::default()
+	.existential_deposit(100)
+	.build()
+	.execute_with(|| {
+		// Set balance to free and reserved at the existential deposit
+		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 100));
+		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 2, 100, 100));
+		// Check balance
+		assert_eq!(Balances::free_balance(1), 100);
+		assert_eq!(Balances::reserved_balance(1), 100);
+		assert_eq!(Balances::free_balance(2), 100);
+		assert_eq!(Balances::reserved_balance(2), 100);
+
+		// Drop 1 free_balance below ED
+		assert_ok!(Balances::transfer(Some(1).into(), 2, 1));
+		// Check balance, the other 99 should move to reserved_balance
+		assert_eq!(Balances::free_balance(1), 0);
+		assert_eq!(Balances::reserved_balance(1), 199);
+
+		// Reset accounts
+		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 100));
+		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 2, 100, 100));
+
+		// Drop 2 reserved_balance below ED
+		Balances::unreserve(&2, 1);
+		// Check balance, all 100 should move to free_balance
+		assert_eq!(Balances::free_balance(2), 200);
+		assert_eq!(Balances::reserved_balance(2), 0);
+
+		// An account with both too little free and reserved is completely killed
+		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 99, 99));
+		// Check balance is 0 for everything
+		assert_eq!(Balances::free_balance(1), 0);
+		assert_eq!(Balances::reserved_balance(1), 0);
+	});
 }

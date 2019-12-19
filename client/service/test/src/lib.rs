@@ -299,8 +299,6 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	spec: ChainSpec<G, E>,
 	full_builder: Fb,
 	light_builder: Lb,
-	light_node_interconnectivity: bool, // should normally be false, unless the light nodes
-	// aren't actually light.
 ) where
 	E: Clone,
 	Fb: Fn(Configuration<(), G, E>) -> Result<F, Error>,
@@ -312,11 +310,7 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	const NUM_LIGHT_NODES: usize = 5;
 
 	let expected_full_connections = NUM_FULL_NODES - 1 + NUM_LIGHT_NODES;
-	let expected_light_connections = if light_node_interconnectivity {
-		expected_full_connections
-	} else {
-		NUM_FULL_NODES
-	};
+	let expected_light_connections = NUM_FULL_NODES;
 
 	{
 		let temp = tempdir_with_prefix("substrate-connectivity-test");

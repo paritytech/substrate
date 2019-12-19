@@ -8,28 +8,28 @@ edition = "2018"
 [dependencies]
 trie-root = "0.15.2"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sp-io = { path = "../../../primitives/io" }
-sp-state-machine = { path = "../../../primitives/state-machine" }
-sc-executor = { path = "../../../client/executor" }
-sp-core = { path = "../../../primitives/core" }
-sp-trie = { path = "../../../primitives/trie" }
-node-primitives = { path = "../primitives" }
-node-runtime = { path = "../runtime" }
+sp-io = { version = "2.0.0", path = "../../../primitives/io" }
+sp-state-machine = { version = "2.0.0", path = "../../../primitives/state-machine" }
+sc-executor = { version = "2.0.0", path = "../../../client/executor" }
+sp-core = { version = "2.0.0", path = "../../../primitives/core" }
+sp-trie = { version = "2.0.0", path = "../../../primitives/trie" }
+node-primitives = { version = "2.0.0", path = "../primitives" }
+node-runtime = { version = "2.0.0", path = "../runtime" }
 
 [dev-dependencies]
-node-testing = { path = "../testing" }
-substrate-test-client = { path = "../../../test-utils/client" }
-sp-runtime = { path = "../../../primitives/runtime" }
-frame-support = { path = "../../../frame/support" }
-pallet-balances = { path = "../../../frame/balances" }
-pallet-transaction-payment = { path = "../../../frame/transaction-payment" }
-pallet-session = { path = "../../../frame/session" }
-frame-system = { path = "../../../frame/system" }
-pallet-timestamp = { path = "../../../frame/timestamp" }
-pallet-treasury = { path = "../../../frame/treasury" }
-pallet-contracts = { path = "../../../frame/contracts" }
-pallet-grandpa = { path = "../../../frame/grandpa" }
-pallet-indices = { path = "../../../frame/indices" }
+node-testing = { version = "2.0.0", path = "../testing" }
+substrate-test-client = { version = "2.0.0", path = "../../../test-utils/client" }
+sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
+frame-support = { version = "2.0.0", path = "../../../frame/support" }
+pallet-balances = { version = "2.0.0", path = "../../../frame/balances" }
+pallet-transaction-payment = { version = "2.0.0", path = "../../../frame/transaction-payment" }
+pallet-session = { version = "2.0.0", path = "../../../frame/session" }
+frame-system = { version = "2.0.0", path = "../../../frame/system" }
+pallet-timestamp = { version = "2.0.0", path = "../../../frame/timestamp" }
+pallet-treasury = { version = "2.0.0", path = "../../../frame/treasury" }
+pallet-contracts = { version = "2.0.0", path = "../../../frame/contracts" }
+pallet-grandpa = { version = "2.0.0", path = "../../../frame/grandpa" }
+pallet-indices = { version = "2.0.0", path = "../../../frame/indices" }
 wabt = "0.9.2"
 criterion = "0.3.0"
 

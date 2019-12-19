@@ -15,8 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Uncles functionality for Substrate.
-//!
-#![deny(warnings)]
 #![forbid(unsafe_code, missing_docs)]
 
 use sp_consensus::SelectChain;
