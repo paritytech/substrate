@@ -19,14 +19,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Encode, Decode, Codec};
-use rstd::vec::Vec;
-use sr_primitives::ConsensusEngineId;
+use sp_std::vec::Vec;
+use sp_runtime::ConsensusEngineId;
 
 pub mod inherents;
 
 pub mod sr25519 {
 	mod app_sr25519 {
-		use app_crypto::{app_crypto, key_types::AURA, sr25519};
+		use sp_application_crypto::{app_crypto, key_types::AURA, sr25519};
 		app_crypto!(sr25519, AURA);
 	}
 
@@ -43,7 +43,7 @@ pub mod sr25519 {
 
 pub mod ed25519 {
 	mod app_ed25519 {
-		use app_crypto::{app_crypto, key_types::AURA, ed25519};
+		use sp_application_crypto::{app_crypto, key_types::AURA, ed25519};
 		app_crypto!(ed25519, AURA);
 	}
 
@@ -75,7 +75,7 @@ pub enum ConsensusLog<AuthorityId: Codec> {
 	OnDisabled(AuthorityIndex),
 }
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with aura.
 	pub trait AuraApi<AuthorityId: Codec> {
 		/// Return the slot duration in seconds for Aura.

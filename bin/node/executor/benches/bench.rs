@@ -23,12 +23,12 @@ use node_runtime::{
 };
 use node_runtime::constants::currency::*;
 use node_testing::keyring::*;
-use primitives::{Blake2Hasher, NativeOrEncoded, NeverNativeValue};
-use primitives::storage::well_known_keys;
-use primitives::traits::CodeExecutor;
-use runtime_support::Hashable;
-use state_machine::TestExternalities as CoreTestExternalities;
-use substrate_executor::{NativeExecutor, RuntimeInfo, WasmExecutionMethod, Externalities};
+use sp_core::{Blake2Hasher, NativeOrEncoded, NeverNativeValue};
+use sp_core::storage::well_known_keys;
+use sp_core::traits::CodeExecutor;
+use	frame_support::Hashable;
+use sp_state_machine::TestExternalities as CoreTestExternalities;
+use sc_executor::{NativeExecutor, RuntimeInfo, WasmExecutionMethod, Externalities};
 
 criterion_group!(benches, bench_execute_block);
 criterion_main!(benches);
@@ -70,7 +70,7 @@ fn construct_block<E: Externalities>(
 	parent_hash: Hash,
 	extrinsics: Vec<CheckedExtrinsic>,
 ) -> (Vec<u8>, Hash) {
-	use trie::{TrieConfiguration, trie_types::Layout};
+	use sp_trie::{TrieConfiguration, trie_types::Layout};
 
 	// sign extrinsics.
 	let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
@@ -131,13 +131,13 @@ fn test_blocks(genesis_config: &GenesisConfig, executor: &NativeExecutor<Executo
 	let mut block1_extrinsics = vec![
 		CheckedExtrinsic {
 			signed: None,
-			function: Call::Timestamp(timestamp::Call::set(42 * 1000)),
+			function: Call::Timestamp(pallet_timestamp::Call::set(42 * 1000)),
 		},
 	];
 	block1_extrinsics.extend((0..20).map(|i| {
 		CheckedExtrinsic {
 			signed: Some((alice(), signed_extra(i, 0))),
-			function: Call::Balances(balances::Call::transfer(bob().into(), 1 * DOLLARS)),
+			function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 1 * DOLLARS)),
 		}
 	}));
 	let block1 = construct_block(

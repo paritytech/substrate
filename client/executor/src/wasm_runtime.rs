@@ -26,12 +26,12 @@ use log::{trace, warn};
 
 use codec::Decode;
 
-use primitives::{storage::well_known_keys, traits::Externalities, H256};
+use sp_core::{storage::well_known_keys, traits::Externalities};
 
-use runtime_version::RuntimeVersion;
+use sp_version::RuntimeVersion;
 use std::{collections::hash_map::{Entry, HashMap}, panic::AssertUnwindSafe};
 
-use wasm_interface::Function;
+use sp_wasm_interface::Function;
 
 /// The Substrate Wasm runtime.
 pub trait WasmRuntime {
@@ -82,7 +82,7 @@ pub struct RuntimesCache {
 	/// A cache of runtime instances along with metadata, ready to be reused.
 	///
 	/// Instances are keyed by the Wasm execution method and the hash of their code.
-	instances: HashMap<(WasmExecutionMethod, [u8; 32]), Result<VersionedRuntime, WasmError>>,
+	instances: HashMap<(WasmExecutionMethod, Vec<u8>), Result<VersionedRuntime, WasmError>>,
 }
 
 impl RuntimesCache {
@@ -128,7 +128,7 @@ impl RuntimesCache {
 		wasm_method: WasmExecutionMethod,
 		default_heap_pages: u64,
 		host_functions: &[&'static dyn Function],
-	) -> Result<(&mut (dyn WasmRuntime + 'static), &RuntimeVersion, H256), Error> {
+	) -> Result<(&mut (dyn WasmRuntime + 'static), &RuntimeVersion, Vec<u8>), Error> {
 		let code_hash = ext
 			.original_storage_hash(well_known_keys::CODE)
 			.ok_or(Error::InvalidCode("`CODE` not found in storage.".into()))?;
@@ -138,7 +138,7 @@ impl RuntimesCache {
 			.and_then(|pages| u64::decode(&mut &pages[..]).ok())
 			.unwrap_or(default_heap_pages);
 
-		let result = match self.instances.entry((wasm_method, code_hash.into())) {
+		let result = match self.instances.entry((wasm_method, code_hash.clone())) {
 			Entry::Occupied(o) => {
 				let result = o.into_mut();
 				if let Ok(ref mut cached_runtime) = result {
@@ -198,10 +198,10 @@ impl RuntimesCache {
 	pub fn invalidate_runtime(
 		&mut self,
 		wasm_method: WasmExecutionMethod,
-		code_hash: H256,
+		code_hash: Vec<u8>,
 	) {
 		// Just remove the instance, it will be re-created the next time it is requested.
-		self.instances.remove(&(wasm_method, code_hash.into()));
+		self.instances.remove(&(wasm_method, code_hash));
 	}
 }
 
@@ -259,11 +259,11 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 
 #[cfg(test)]
 mod tests {
-	use wasm_interface::HostFunctions;
+	use sp_wasm_interface::HostFunctions;
 
 	#[test]
 	fn host_functions_are_equal() {
-		let host_functions = runtime_io::SubstrateHostFunctions::host_functions();
+		let host_functions = sp_io::SubstrateHostFunctions::host_functions();
 
 		let equal = &host_functions[..] == &host_functions[..];
 		assert!(equal, "Host functions are not equal");

@@ -17,7 +17,7 @@
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
 use bitflags::bitflags;
-use sr_primitives::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
+use sp_runtime::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
 use codec::{Encode, Decode, Input, Output, Error};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
@@ -26,7 +26,7 @@ pub use self::generic::{
 	FinalityProofRequest, FinalityProofResponse,
 	FromBlock, RemoteReadChildRequest,
 };
-use client_api::StorageProof;
+use sc_client_api::StorageProof;
 
 /// A unique ID of a request.
 pub type RequestId = u64;
@@ -138,7 +138,7 @@ pub struct RemoteReadResponse {
 /// Generic types.
 pub mod generic {
 	use codec::{Encode, Decode, Input, Output};
-	use sr_primitives::Justification;
+	use sp_runtime::Justification;
 	use crate::config::Roles;
 	use super::{
 		RemoteReadResponse, Transactions, Direction,
@@ -368,6 +368,11 @@ pub mod generic {
 		pub block: H,
 		/// Child Storage key.
 		pub storage_key: Vec<u8>,
+		/// Child trie source information.
+		pub child_info: Vec<u8>,
+		/// Child type, its required to resolve `child_info`
+		/// content and choose child implementation.
+		pub child_type: u32,
 		/// Storage key.
 		pub keys: Vec<Vec<u8>>,
 	}

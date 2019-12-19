@@ -16,11 +16,11 @@
 
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
-use client_api::BlockchainEvents;
+use sc_client_api::BlockchainEvents;
 use futures::{StreamExt, TryStreamExt, FutureExt, future, compat::Stream01CompatExt};
 use log::{info, warn};
-use sr_primitives::traits::Header;
-use service::AbstractService;
+use sp_runtime::traits::Header;
+use sc_service::AbstractService;
 use std::time::Duration;
 
 mod display;
@@ -50,7 +50,7 @@ pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()
 		// detect and log reorganizations.
 		if let Some((ref last_num, ref last_hash)) = last_best {
 			if n.header.parent_hash() != last_hash && n.is_new_best  {
-				let maybe_ancestor = header_metadata::lowest_common_ancestor(
+				let maybe_ancestor = sp_blockchain::lowest_common_ancestor(
 					&*client,
 					last_hash.clone(),
 					n.hash,

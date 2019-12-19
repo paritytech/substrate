@@ -18,20 +18,20 @@
 
 use std::{cmp::Ord, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
-use sr_primitives::{
+use sp_runtime::{
 	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
 };
-use state_machine::{
+use sp_state_machine::{
 	self, OverlayedChanges, ExecutionManager, ExecutionStrategy,
 	ChangesTrieTransaction, StorageProof,
 };
-use executor::{RuntimeVersion, NativeVersion};
-use externalities::Extensions;
+use sc_executor::{RuntimeVersion, NativeVersion};
+use sp_externalities::Extensions;
 use hash_db::Hasher;
-use primitives::{Blake2Hasher, NativeOrEncoded};
+use sp_core::{Blake2Hasher, NativeOrEncoded};
 
-use sr_api::{ProofRecorder, InitializeBlock};
-use crate::error;
+use sp_api::{ProofRecorder, InitializeBlock};
+use sp_blockchain;
 
 /// Method call executor.
 pub trait CallExecutor<B, H>
@@ -41,7 +41,7 @@ where
 	H::Out: Ord,
 {
 	/// Externalities error type.
-	type Error: state_machine::Error;
+	type Error: sp_state_machine::Error;
 
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
@@ -53,7 +53,7 @@ where
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
 		extensions: Option<Extensions>,
-	) -> Result<Vec<u8>, error::Error>;
+	) -> Result<Vec<u8>, sp_blockchain::Error>;
 
 	/// Execute a contextual call on top of state in a block of a given hash.
 	///
@@ -62,7 +62,7 @@ where
 	/// of the execution context.
 	fn contextual_call<
 		'a,
-		IB: Fn() -> error::Result<()>,
+		IB: Fn() -> sp_blockchain::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
@@ -81,18 +81,18 @@ where
 		native_call: Option<NC>,
 		proof_recorder: &Option<ProofRecorder<B>>,
 		extensions: Option<Extensions>,
-	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
+	) -> sp_blockchain::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
 	///
 	/// No changes are made.
-	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, error::Error>;
+	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, sp_blockchain::Error>;
 
 	/// Execute a call to a contract on top of given state.
 	///
 	/// No changes are made.
 	fn call_at_state<
-		S: state_machine::Backend<H>,
+		S: sp_state_machine::Backend<H>,
 		F: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -113,23 +113,23 @@ where
 			(S::Transaction, H::Out),
 			Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<B>>>
 		),
-		error::Error,
+		sp_blockchain::Error,
 	>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: state_machine::Backend<H>>(
+	fn prove_at_state<S: sp_state_machine::Backend<H>>(
 		&self,
 		mut state: S,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, StorageProof), error::Error> {
+	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
 		let trie_state = state.as_trie_backend()
 			.ok_or_else(||
-				Box::new(state_machine::ExecutionError::UnableToGenerateProof)
-					as Box<dyn state_machine::Error>
+				Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
+					as Box<dyn sp_state_machine::Error>
 			)?;
 		self.prove_at_trie_state(trie_state, overlay, method, call_data)
 	}
@@ -137,13 +137,13 @@ where
 	/// Execute a call to a contract on top of given trie state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<H>>(
+	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<H>>(
 		&self,
-		trie_state: &state_machine::TrieBackend<S, H>,
+		trie_state: &sp_state_machine::TrieBackend<S, H>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, StorageProof), error::Error>;
+	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;
 
 	/// Get runtime version if supported.
 	fn native_runtime_version(&self) -> Option<&NativeVersion>;

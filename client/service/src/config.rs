@@ -16,17 +16,17 @@
 
 //! Service configuration.
 
-pub use client::ExecutionStrategies;
-pub use client_db::{kvdb::KeyValueDB, PruningMode};
-pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
-pub use substrate_executor::WasmExecutionMethod;
+pub use sc_client::ExecutionStrategies;
+pub use sc_client_db::{kvdb::KeyValueDB, PruningMode};
+pub use sc_network::config::{ExtTransport, NetworkConfiguration, Roles};
+pub use sc_executor::WasmExecutionMethod;
 
 use std::{path::PathBuf, net::SocketAddr, sync::Arc};
-use transaction_pool;
-use chain_spec::{ChainSpec, RuntimeGenesis, Extension, NoExtension};
-use primitives::crypto::Protected;
+pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
+use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension, NoExtension};
+use sp_core::crypto::Protected;
 use target_info::Target;
-use tel::TelemetryEndpoints;
+use sc_telemetry::TelemetryEndpoints;
 
 /// Service configuration.
 #[derive(Clone)]
@@ -40,7 +40,7 @@ pub struct Configuration<C, G, E = NoExtension> {
 	/// Node roles.
 	pub roles: Roles,
 	/// Extrinsic pool configuration.
-	pub transaction_pool: transaction_pool::txpool::Options,
+	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
 	pub network: NetworkConfiguration,
 	/// Path to the base configuration directory.
@@ -103,7 +103,7 @@ pub struct Configuration<C, G, E = NoExtension> {
 	/// Tracing targets
 	pub tracing_targets: Option<String>,
 	/// Tracing receiver
-	pub tracing_receiver: substrate_tracing::TracingReceiver,
+	pub tracing_receiver: sc_tracing::TracingReceiver,
 }
 
 /// Configuration of the database of the client.

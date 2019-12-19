@@ -21,11 +21,12 @@ use std::sync::Arc;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
-use sr_primitives::traits::{Block as BlockT, Header};
-use primitives::hexdisplay::HexDisplay;
-use state_machine::{backend::Backend as StateBackend, TrieBackend};
+use sp_runtime::traits::{Block as BlockT, Header};
+use sp_core::hexdisplay::HexDisplay;
+use sp_core::storage::ChildInfo;
+use sp_state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
-use client_api::backend::{StorageCollection, ChildStorageCollection};
+use sc_client_api::backend::{StorageCollection, ChildStorageCollection};
 use std::hash::Hash as StdHash;
 
 const STATE_CACHE_BLOCKS: usize = 12;
@@ -309,7 +310,7 @@ impl<H: Hasher, B: BlockT> CacheChanges<H, B> {
 	/// that are invalidated by chain reorganization. `sync_cache`
 	/// should be called after the block has been committed and the
 	/// blockchain route has been calculated.
-	pub fn sync_cache<F: FnOnce() -> bool> (
+	pub fn sync_cache(
 		&mut self,
 		enacted: &[B::Hash],
 		retracted: &[B::Hash],
@@ -317,10 +318,9 @@ impl<H: Hasher, B: BlockT> CacheChanges<H, B> {
 		child_changes: ChildStorageCollection,
 		commit_hash: Option<B::Hash>,
 		commit_number: Option<<B::Header as Header>::Number>,
-		is_best: F,
+		is_best: bool,
 	) {
 		let mut cache = self.shared_cache.lock();
-		let is_best = is_best();
 		trace!("Syncing cache, id = (#{:?}, {:?}), parent={:?}, best={}", commit_number, commit_hash, self.parent_hash, is_best);
 		let cache = &mut *cache;
 		// Filter out commiting block if any.
@@ -517,7 +517,12 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		Ok(hash)
 	}
 
-	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
 		let key = (storage_key.to_vec(), key.to_vec());
 		let local_cache = self.cache.local_cache.upgradable_read();
 		if let Some(entry) = local_cache.child_storage.get(&key).cloned() {
@@ -532,7 +537,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 			}
 		}
 		trace!("Cache miss: {:?}", key);
-		let value = self.state.child_storage(storage_key, &key.1[..])?;
+		let value = self.state.child_storage(storage_key, child_info, &key.1[..])?;
 		RwLockUpgradableReadGuard::upgrade(local_cache).child_storage.insert(key, value.clone());
 		Ok(value)
 	}
@@ -541,12 +546,35 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		Ok(self.storage(key)?.is_some())
 	}
 
-	fn exists_child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<bool, Self::Error> {
-		self.state.exists_child_storage(storage_key, key)
+	fn exists_child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<bool, Self::Error> {
+		self.state.exists_child_storage(storage_key, child_info, key)
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
-		self.state.for_keys_in_child_storage(storage_key, f)
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		f: F,
+	) {
+		self.state.for_keys_in_child_storage(storage_key, child_info, f)
+	}
+
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.next_storage_key(key)
+	}
+
+	fn next_child_storage_key(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.next_child_storage_key(storage_key, child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -557,8 +585,14 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.for_key_values_with_prefix(prefix, f)
 	}
 
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
-		self.state.for_child_keys_with_prefix(storage_key, prefix, f)
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+		f: F,
+	) {
+		self.state.for_child_keys_with_prefix(storage_key, child_info, prefix, f)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
@@ -569,12 +603,17 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		delta: I,
+	) -> (H::Out, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 			H::Out: Ord
 	{
-		self.state.child_storage_root(storage_key, delta)
+		self.state.child_storage_root(storage_key, child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -585,8 +624,13 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.keys(prefix)
 	}
 
-	fn child_keys(&self, child_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.state.child_keys(child_key, prefix)
+	fn child_keys(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+	) -> Vec<Vec<u8>> {
+		self.state.child_keys(storage_key, child_info, prefix)
 	}
 
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
@@ -597,9 +641,9 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
-	use state_machine::backend::InMemory;
-	use primitives::Blake2Hasher;
+	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sp_state_machine::backend::InMemory;
+	use sp_core::Blake2Hasher;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
@@ -621,22 +665,22 @@ mod tests {
 		// blocks  [ 3a(c) 2a(c) 2b 1b 1a(c) 0 ]
 		// state   [ 5     5     4  3  2     2 ]
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h0), Some(0), || true);
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h0), Some(0), true);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h0));
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1a), Some(1), || true);
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1a), Some(1), true);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h0));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h1b), Some(1), || false);
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h1b), Some(1), false);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1b.clone()));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![4]))], vec![], Some(h2b), Some(2), || false);
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![4]))], vec![], Some(h2b), Some(2), false);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1a.clone()));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![5]))], vec![], Some(h2a), Some(2), || true);
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![5]))], vec![], Some(h2a), Some(2), true);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2a));
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h3a), Some(3), || true);
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h3a), Some(3), true);
 
 		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h3a));
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![5]);
@@ -660,7 +704,7 @@ mod tests {
 			vec![],
 			Some(h3b),
 			Some(3),
-			|| true,
+			true,
 		);
 		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h3a));
 		assert!(s.storage(&key).unwrap().is_none());
@@ -680,16 +724,16 @@ mod tests {
 		let shared = new_shared_cache::<Block, Blake2Hasher>(256*1024, (0,1));
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h1), Some(1), || true);
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h1), Some(1), true);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1));
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), || true);
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), true);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h2b), Some(2), || false);
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h2b), Some(2), false);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2b));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h3b), Some(2), || false);
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h3b), Some(2), false);
 
 		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2a));
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![2]);
@@ -708,19 +752,19 @@ mod tests {
 		let shared = new_shared_cache::<Block, Blake2Hasher>(256*1024, (0,1));
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent));
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1), Some(1), || true);
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1), Some(1), true);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1));
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), || true);
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), true);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2a));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h3a), Some(3), || true);
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h3a), Some(3), true);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1));
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2b), Some(2), || false);
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2b), Some(2), false);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2b));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h3b), Some(3), || false);
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h3b), Some(3), false);
 
 		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h3a));
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![2]);
@@ -743,7 +787,7 @@ mod tests {
 			vec![],
 			Some(h0),
 			Some(0),
-			|| true,
+			true,
 		);
 		// 32 key, 3 byte size
 		assert_eq!(shared.lock().used_storage_cache_size(), 35 /* bytes */);
@@ -756,7 +800,7 @@ mod tests {
 			vec![(s_key.clone(), vec![(key.clone(), Some(vec![1, 2]))])],
 			Some(h0),
 			Some(0),
-			|| true,
+			true,
 		);
 		// 35 + (2 * 32) key, 2 byte size
 		assert_eq!(shared.lock().used_storage_cache_size(), 101 /* bytes */);
@@ -778,7 +822,7 @@ mod tests {
 			vec![],
 			Some(h0),
 			Some(0),
-			|| true,
+			true,
 		);
 		// 32 key, 4 byte size
 		assert_eq!(shared.lock().used_storage_cache_size(), 36 /* bytes */);
@@ -791,7 +835,7 @@ mod tests {
 			vec![],
 			Some(h0),
 			Some(0),
-			|| true,
+			true,
 		);
 		// 32 key, 2 byte size
 		assert_eq!(shared.lock().used_storage_cache_size(), 34 /* bytes */);
@@ -809,10 +853,10 @@ mod tests {
 
 		let shared = new_shared_cache::<Block, Blake2Hasher>(256*1024, (0, 1));
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h0), Some(0), || true);
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h0), Some(0), true);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h0));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h1), Some(1), || true);
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h1), Some(1), true);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1));
 		assert_eq!(s.storage(&key).unwrap(), Some(vec![3]));
@@ -831,7 +875,7 @@ mod tests {
 		s.cache.local_cache.write().storage.insert(key.clone(), Some(vec![42]));
 
 		// New value is propagated.
-		s.cache.sync_cache(&[], &[], vec![], vec![], None, None, || true);
+		s.cache.sync_cache(&[], &[], vec![], vec![], None, None, true);
 
 		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1));
 		assert_eq!(s.storage(&key).unwrap(), None);
@@ -845,9 +889,9 @@ mod qc {
 	use quickcheck::{quickcheck, TestResult, Arbitrary};
 
 	use super::*;
-	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
-	use state_machine::backend::InMemory;
-	use primitives::Blake2Hasher;
+	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sp_state_machine::backend::InMemory;
+	use sp_core::Blake2Hasher;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
@@ -1051,7 +1095,7 @@ mod qc {
 						vec![],
 						Some(hash),
 						Some(total_h as u64),
-						|| false,
+						false,
 					);
 
 					state
@@ -1090,7 +1134,7 @@ mod qc {
 						vec![],
 						Some(hash),
 						Some(self.canon.len() as u64 + 1),
-						|| true,
+						true,
 					);
 
 					self.canon.push(next);
@@ -1138,7 +1182,7 @@ mod qc {
 								vec![],
 								Some(hash),
 								Some(height),
-								|| true,
+								true,
 							);
 
 							state

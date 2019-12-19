@@ -19,7 +19,7 @@
 //! The staking rate in NPoS is the total amount of tokens staked by nominators and validators,
 //! divided by the total token supply.
 
-use sr_primitives::{Perbill, traits::SimpleArithmetic, curve::PiecewiseLinear};
+use sp_runtime::{Perbill, traits::SimpleArithmetic, curve::PiecewiseLinear};
 
 /// The total payout to all validators (and their nominators) per era.
 ///
@@ -47,7 +47,7 @@ pub fn compute_total_payout<N>(
 
 #[cfg(test)]
 mod test {
-	use sr_primitives::curve::PiecewiseLinear;
+	use sp_runtime::curve::PiecewiseLinear;
 
 	pallet_staking_reward_curve::build! {
 		const I_NPOS: PiecewiseLinear<'static> = curve!(

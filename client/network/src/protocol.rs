@@ -15,30 +15,29 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
-use crate::legacy_proto::{LegacyProto, LegacyProtoOut};
+use legacy_proto::{LegacyProto, LegacyProtoOut};
 use crate::utils::interval;
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};
 use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{ConnectedPoint, nodes::Substream, muxing::StreamMuxerBox};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use primitives::storage::StorageKey;
-use consensus::{
+use sp_core::storage::{StorageKey, ChildInfo};
+use sp_consensus::{
 	BlockOrigin,
 	block_validation::BlockAnnounceValidator,
 	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
 };
 use codec::{Decode, Encode};
-use sr_primitives::{generic::BlockId, ConsensusEngineId, Justification};
-use sr_primitives::traits::{
+use sp_runtime::{generic::BlockId, ConsensusEngineId, Justification};
+use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, CheckedSub
 };
-use sr_arithmetic::traits::SaturatedConversion;
+use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
-use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
 use specialization::NetworkSpecialization;
 use sync::{ChainSync, SyncState};
@@ -51,12 +50,13 @@ use std::fmt::Write;
 use std::{cmp, num::NonZeroUsize, time};
 use log::{log, Level, trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
-use client_api::{FetchChecker, ChangesProof, StorageProof};
+use sc_client_api::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
 use util::LruHashSet;
 
+mod legacy_proto;
 mod util;
-pub mod consensus_gossip;
+
 pub mod message;
 pub mod event;
 pub mod light_dispatch;
@@ -88,23 +88,38 @@ const MAX_CONSENSUS_MESSAGES: usize = 256;
 /// and disconnect to free connection slot.
 const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
-/// Reputation change when a peer is "clogged", meaning that it's not fast enough to process our
-/// messages.
-const CLOGGED_PEER_REPUTATION_CHANGE: i32 = -(1 << 12);
-/// Reputation change when a peer doesn't respond in time to our messages.
-const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 10);
-/// Reputation change when a peer sends us a status message while we already received one.
-const UNEXPECTED_STATUS_REPUTATION_CHANGE: i32 = -(1 << 20);
-/// Reputation change when we are a light client and a peer is behind us.
-const PEER_BEHIND_US_LIGHT_REPUTATION_CHANGE: i32 = -(1 << 8);
-/// Reputation change when a peer sends us an extrinsic that we didn't know about.
-const GOOD_EXTRINSIC_REPUTATION_CHANGE: i32 = 1 << 7;
-/// Reputation change when a peer sends us a bad extrinsic.
-const BAD_EXTRINSIC_REPUTATION_CHANGE: i32 = -(1 << 12);
-/// We sent an RPC query to the given node, but it failed.
-const RPC_FAILED_REPUTATION_CHANGE: i32 = -(1 << 12);
-/// We received a message that failed to decode.
-const BAD_MESSAGE_REPUTATION_CHANGE: i32 = -(1 << 12);
+mod rep {
+	use sc_peerset::ReputationChange as Rep;
+	/// Reputation change when a peer is "clogged", meaning that it's not fast enough to process our
+	/// messages.
+	pub const CLOGGED_PEER: Rep = Rep::new(-(1 << 12), "Clogged message queue");
+	/// Reputation change when a peer doesn't respond in time to our messages.
+	pub const TIMEOUT: Rep = Rep::new(-(1 << 10), "Request timeout");
+	/// Reputation change when a peer sends us a status message while we already received one.
+	pub const UNEXPECTED_STATUS: Rep = Rep::new(-(1 << 20), "Unexpected status message");
+	/// Reputation change when we are a light client and a peer is behind us.
+	pub const PEER_BEHIND_US_LIGHT: Rep = Rep::new(-(1 << 8), "Useless for a light peer");
+	/// Reputation change when a peer sends us an extrinsic that we didn't know about.
+	pub const GOOD_EXTRINSIC: Rep = Rep::new(1 << 7, "Good extrinsic");
+	/// Reputation change when a peer sends us a bad extrinsic.
+	pub const BAD_EXTRINSIC: Rep = Rep::new(-(1 << 12), "Bad extrinsic");
+	/// We sent an RPC query to the given node, but it failed.
+	pub const RPC_FAILED: Rep = Rep::new(-(1 << 12), "Remote call failed");
+	/// We received a message that failed to decode.
+	pub const BAD_MESSAGE: Rep = Rep::new(-(1 << 12), "Bad message");
+	/// We received an unexpected response.
+	pub const UNEXPECTED_RESPONSE: Rep = Rep::new_fatal("Unexpected response packet");
+	/// We received an unexpected extrinsic packet.
+	pub const UNEXPECTED_EXTRINSICS: Rep = Rep::new_fatal("Unexpected extrinsics packet");
+	/// We received an unexpected light node request.
+	pub const UNEXPECTED_REQUEST: Rep = Rep::new_fatal("Unexpected block request packet");
+	/// Peer has different genesis.
+	pub const GENESIS_MISMATCH: Rep = Rep::new_fatal("Genesis mismatch");
+	/// Peer is on unsupported protocol version.
+	pub const BAD_PROTOCOL: Rep = Rep::new_fatal("Unsupported protocol");
+	/// Peer role does not match (e.g. light peer connecting to another light peer).
+	pub const BAD_ROLE: Rep = Rep::new_fatal("Unsupported role");
+}
 
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
@@ -118,7 +133,6 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	genesis_hash: B::Hash,
 	sync: ChainSync<B>,
 	specialization: S,
-	consensus_gossip: ConsensusGossip<B>,
 	context_data: ContextData<B, H>,
 	/// List of nodes for which we perform additional logging because they are important for the
 	/// user.
@@ -126,12 +140,14 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	// Connected peers pending Status message.
 	handshaking_peers: HashMap<PeerId, HandshakingPeer>,
 	/// Used to report reputation changes.
-	peerset_handle: peerset::PeersetHandle,
+	peerset_handle: sc_peerset::PeersetHandle,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	/// When asked for a proof of finality, we use this struct to build one.
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: LegacyProto<Substream<StreamMuxerBox>>,
+	/// List of notification protocols that have been registered.
+	registered_notif_protocols: HashSet<ConsensusEngineId>,
 }
 
 #[derive(Default)]
@@ -179,11 +195,11 @@ pub struct PeerInfo<B: BlockT> {
 
 struct LightDispatchIn<'a> {
 	behaviour: &'a mut LegacyProto<Substream<StreamMuxerBox>>,
-	peerset: peerset::PeersetHandle,
+	peerset: sc_peerset::PeersetHandle,
 }
 
 impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
-	fn report_peer(&mut self, who: &PeerId, reputation: i32) {
+	fn report_peer(&mut self, who: &PeerId, reputation: sc_peerset::ReputationChange) {
 		self.peerset.report_peer(who.clone(), reputation)
 	}
 
@@ -222,12 +238,16 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 		id: RequestId,
 		block: <B as BlockT>::Hash,
 		storage_key: Vec<u8>,
+		child_info: Vec<u8>,
+		child_type: u32,
 		keys: Vec<Vec<u8>>,
 	) {
 		let message: Message<B> = message::generic::Message::RemoteReadChildRequest(message::RemoteReadChildRequest {
 			id,
 			block,
 			storage_key,
+			child_info,
+			child_type,
 			keys,
 		});
 
@@ -303,7 +323,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 pub trait Context<B: BlockT> {
 	/// Adjusts the reputation of the peer. Use this to point out that a peer has been malign or
 	/// irresponsible or appeared lazy.
-	fn report_peer(&mut self, who: PeerId, reputation: i32);
+	fn report_peer(&mut self, who: PeerId, reputation: sc_peerset::ReputationChange);
 
 	/// Force disconnecting from a peer. Use this when a peer misbehaved.
 	fn disconnect_peer(&mut self, who: PeerId);
@@ -319,21 +339,21 @@ pub trait Context<B: BlockT> {
 struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
 	behaviour: &'a mut LegacyProto<Substream<StreamMuxerBox>>,
 	context_data: &'a mut ContextData<B, H>,
-	peerset_handle: &'a peerset::PeersetHandle,
+	peerset_handle: &'a sc_peerset::PeersetHandle,
 }
 
 impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 	fn new(
 		context_data: &'a mut ContextData<B, H>,
 		behaviour: &'a mut LegacyProto<Substream<StreamMuxerBox>>,
-		peerset_handle: &'a peerset::PeersetHandle,
+		peerset_handle: &'a sc_peerset::PeersetHandle,
 	) -> Self {
 		ProtocolContext { context_data, peerset_handle, behaviour }
 	}
 }
 
 impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, H> {
-	fn report_peer(&mut self, who: PeerId, reputation: i32) {
+	fn report_peer(&mut self, who: PeerId, reputation: sc_peerset::ReputationChange) {
 		self.peerset_handle.report_peer(who, reputation)
 	}
 
@@ -417,9 +437,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 		finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 		protocol_id: ProtocolId,
-		peerset_config: peerset::PeersetConfig,
+		peerset_config: sc_peerset::PeersetConfig,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
-	) -> error::Result<(Protocol<B, S, H>, peerset::PeersetHandle)> {
+	) -> error::Result<(Protocol<B, S, H>, sc_peerset::PeersetHandle)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
 			config.roles,
@@ -439,7 +459,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			imp_p
 		};
 
-		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset_config);
+		let (peerset, peerset_handle) = sc_peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
 		let behaviour = LegacyProto::new(protocol_id, versions, peerset);
 
@@ -456,13 +476,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			genesis_hash: info.chain.genesis_hash,
 			sync,
 			specialization,
-			consensus_gossip: ConsensusGossip::new(),
 			handshaking_peers: HashMap::new(),
 			important_peers,
 			transaction_pool,
 			finality_proof_provider,
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
+			registered_notif_protocols: HashSet::new(),
 		};
 
 		Ok((protocol, peerset_handle))
@@ -557,7 +577,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				return request.map(|(_, r)| r)
 			}
 			trace!(target: "sync", "Unexpected response packet from {} ({})", who, response.id);
-			self.peerset_handle.report_peer(who.clone(), i32::min_value());
+			self.peerset_handle.report_peer(who.clone(), rep::UNEXPECTED_RESPONSE);
 			self.behaviour.disconnect_peer(&who);
 		}
 		None
@@ -587,7 +607,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			Ok(message) => message,
 			Err(err) => {
 				debug!(target: "sync", "Couldn't decode packet sent by {}: {:?}: {}", who, data, err.what());
-				self.peerset_handle.report_peer(who.clone(), BAD_MESSAGE_REPUTATION_CHANGE);
+				self.peerset_handle.report_peer(who.clone(), rep::BAD_MESSAGE);
 				return CustomMessageOutcome::None;
 			}
 		};
@@ -597,7 +617,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		stats.count_in += 1;
 
 		match message {
-			GenericMessage::Status(s) => self.on_status_message(who, s),
+			GenericMessage::Status(s) => return self.on_status_message(who, s),
 			GenericMessage::BlockRequest(r) => self.on_block_request(who, r),
 			GenericMessage::BlockResponse(r) => {
 				// Note, this is safe because only `ordinary bodies` and `remote bodies` are received in this matter.
@@ -639,20 +659,38 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				return self.on_finality_proof_response(who, response),
 			GenericMessage::RemoteReadChildRequest(request) =>
 				self.on_remote_read_child_request(who, request),
-			GenericMessage::Consensus(msg) => {
-				self.consensus_gossip.on_incoming(
-					&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
-					who,
-					vec![msg],
-				);
-			}
+			GenericMessage::Consensus(msg) =>
+				return if self.registered_notif_protocols.contains(&msg.engine_id) {
+					CustomMessageOutcome::NotificationsReceived {
+						remote: who.clone(),
+						messages: vec![(msg.engine_id, From::from(msg.data))],
+					}
+				} else {
+					warn!(target: "sync", "Received message on non-registered protocol: {:?}", msg.engine_id);
+					CustomMessageOutcome::None
+				},
 			GenericMessage::ConsensusBatch(messages) => {
-				self.consensus_gossip.on_incoming(
-					&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
-					who,
-					messages,
-				);
-			}
+				let messages = messages
+					.into_iter()
+					.filter_map(|msg| {
+						if self.registered_notif_protocols.contains(&msg.engine_id) {
+							Some((msg.engine_id, From::from(msg.data)))
+						} else {
+							warn!(target: "sync", "Received message on non-registered protocol: {:?}", msg.engine_id);
+							None
+						}
+					})
+					.collect::<Vec<_>>();
+
+				return if !messages.is_empty() {
+					CustomMessageOutcome::NotificationsReceived {
+						remote: who.clone(),
+						messages,
+					}
+				} else {
+					CustomMessageOutcome::None
+				};
+			},
 			GenericMessage::ChainSpecific(msg) => self.specialization.on_message(
 				&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
 				who,
@@ -682,40 +720,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
-	/// Locks `self` and returns a context plus the `ConsensusGossip` struct.
-	pub fn consensus_gossip_lock<'a>(
-		&'a mut self,
-	) -> (impl Context<B> + 'a, &'a mut ConsensusGossip<B>) {
-		let context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		(context, &mut self.consensus_gossip)
-	}
-
 	/// Locks `self` and returns a context plus the network specialization.
 	pub fn specialization_lock<'a>(
 		&'a mut self,
 	) -> (impl Context<B> + 'a, &'a mut S) {
 		let context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
 		(context, &mut self.specialization)
-	}
-
-	/// Gossip a consensus message to the network.
-	pub fn gossip_consensus_message(
-		&mut self,
-		topic: B::Hash,
-		engine_id: ConsensusEngineId,
-		message: Vec<u8>,
-		recipient: GossipMessageRecipient,
-	) {
-		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		let message = ConsensusMessage { data: message, engine_id };
-		match recipient {
-			GossipMessageRecipient::BroadcastToAll =>
-				self.consensus_gossip.multicast(&mut context, topic, message, true),
-			GossipMessageRecipient::BroadcastNew =>
-				self.consensus_gossip.multicast(&mut context, topic, message, false),
-			GossipMessageRecipient::Peer(who) =>
-				self.send_message(&who, GenericMessage::Consensus(message)),
-		}
 	}
 
 	/// Called when a new peer is connected
@@ -738,11 +748,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			self.handshaking_peers.remove(&peer);
 			self.context_data.peers.remove(&peer)
 		};
-		if let Some(peer_data) = removed {
+		if let Some(_peer_data) = removed {
 			let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-			if peer_data.info.protocol_version > 2 {
-				self.consensus_gossip.peer_disconnected(&mut context, peer.clone());
-			}
 			self.sync.peer_disconnected(peer.clone());
 			self.specialization.on_disconnect(&mut context, peer.clone());
 			self.light_dispatch.on_disconnect(LightDispatchIn {
@@ -755,7 +762,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Called as a back-pressure mechanism if the networking detects that the peer cannot process
 	/// our messaging rate fast enough.
 	pub fn on_clogged_peer(&self, who: PeerId, _msg: Option<Message<B>>) {
-		self.peerset_handle.report_peer(who.clone(), CLOGGED_PEER_REPUTATION_CHANGE);
+		self.peerset_handle.report_peer(who.clone(), rep::CLOGGED_PEER);
 
 		// Print some diagnostics.
 		if let Some(peer) = self.context_data.peers.get(&who) {
@@ -784,7 +791,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		if !self.config.roles.is_full() {
 			trace!(target: "sync", "Peer {} is trying to sync from the light node", peer);
 			self.behaviour.disconnect_peer(&peer);
-			self.peerset_handle.report_peer(peer, i32::min_value());
+			self.peerset_handle.report_peer(peer, rep::UNEXPECTED_REQUEST);
 			return;
 		}
 
@@ -846,7 +853,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Adjusts the reputation of a node.
-	pub fn report_peer(&self, who: PeerId, reputation: i32) {
+	pub fn report_peer(&self, who: PeerId, reputation: sc_peerset::ReputationChange) {
 		self.peerset_handle.report_peer(who, reputation)
 	}
 
@@ -905,9 +912,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	///
 	/// > **Note**: This method normally doesn't have to be called except for testing purposes.
 	pub fn tick(&mut self) {
-		self.consensus_gossip.tick(
-			&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle)
-		);
 		self.maintain_peers();
 		self.light_dispatch.maintain_peers(LightDispatchIn {
 			behaviour: &mut self.behaviour,
@@ -953,22 +957,22 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 		for p in aborting {
 			self.behaviour.disconnect_peer(&p);
-			self.peerset_handle.report_peer(p, TIMEOUT_REPUTATION_CHANGE);
+			self.peerset_handle.report_peer(p, rep::TIMEOUT);
 		}
 	}
 
 	/// Called by peer to report status
-	fn on_status_message(&mut self, who: PeerId, status: message::Status<B>) {
+	fn on_status_message(&mut self, who: PeerId, status: message::Status<B>) -> CustomMessageOutcome<B> {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
-		let protocol_version = {
+		let _protocol_version = {
 			if self.context_data.peers.contains_key(&who) {
 				log!(
 					target: "sync",
 					if self.important_peers.contains(&who) { Level::Warn } else { Level::Debug },
 					"Unexpected status packet from {}", who
 				);
-				self.peerset_handle.report_peer(who, UNEXPECTED_STATUS_REPUTATION_CHANGE);
-				return;
+				self.peerset_handle.report_peer(who, rep::UNEXPECTED_STATUS);
+				return CustomMessageOutcome::None;
 			}
 			if status.genesis_hash != self.genesis_hash {
 				log!(
@@ -977,9 +981,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					"Peer is on different chain (our genesis: {} theirs: {})",
 					self.genesis_hash, status.genesis_hash
 				);
-				self.peerset_handle.report_peer(who.clone(), i32::min_value());
+				self.peerset_handle.report_peer(who.clone(), rep::GENESIS_MISMATCH);
 				self.behaviour.disconnect_peer(&who);
-				return;
+				return CustomMessageOutcome::None;
 			}
 			if status.version < MIN_VERSION && CURRENT_VERSION < status.min_supported_version {
 				log!(
@@ -987,18 +991,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					if self.important_peers.contains(&who) { Level::Warn } else { Level::Trace },
 					"Peer {:?} using unsupported protocol version {}", who, status.version
 				);
-				self.peerset_handle.report_peer(who.clone(), i32::min_value());
+				self.peerset_handle.report_peer(who.clone(), rep::BAD_PROTOCOL);
 				self.behaviour.disconnect_peer(&who);
-				return;
+				return CustomMessageOutcome::None;
 			}
 
 			if self.config.roles.is_light() {
 				// we're not interested in light peers
 				if status.roles.is_light() {
 					debug!(target: "sync", "Peer {} is unable to serve light requests", who);
-					self.peerset_handle.report_peer(who.clone(), i32::min_value());
+					self.peerset_handle.report_peer(who.clone(), rep::BAD_ROLE);
 					self.behaviour.disconnect_peer(&who);
-					return;
+					return CustomMessageOutcome::None;
 				}
 
 				// we don't interested in peers that are far behind us
@@ -1013,9 +1017,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					.saturated_into::<u64>();
 				if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
 					debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
-					self.peerset_handle.report_peer(who.clone(), PEER_BEHIND_US_LIGHT_REPUTATION_CHANGE);
+					self.peerset_handle.report_peer(who.clone(), rep::PEER_BEHIND_US_LIGHT);
 					self.behaviour.disconnect_peer(&who);
-					return;
+					return CustomMessageOutcome::None;
 				}
 			}
 
@@ -1030,7 +1034,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				},
 				None => {
 					error!(target: "sync", "Received status from previously unconnected node {}", who);
-					return;
+					return CustomMessageOutcome::None;
 				},
 			};
 
@@ -1065,11 +1069,64 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			}
 		}
+
 		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		if protocol_version > 2 {
-			self.consensus_gossip.new_peer(&mut context, who.clone(), status.roles);
+		self.specialization.on_connect(&mut context, who.clone(), status);
+
+		// Notify all the notification protocols as open.
+		CustomMessageOutcome::NotificationStreamOpened {
+			remote: who,
+			protocols: self.registered_notif_protocols.iter().cloned().collect(),
+			roles: info.roles,
 		}
-		self.specialization.on_connect(&mut context, who, status);
+	}
+
+	/// Send a notification to the given peer we're connected to.
+	///
+	/// Doesn't do anything if we don't have a notifications substream for that protocol with that
+	/// peer.
+	pub fn write_notification(
+		&mut self,
+		target: PeerId,
+		engine_id: ConsensusEngineId,
+		message: impl Into<Vec<u8>>
+	) {
+		if !self.registered_notif_protocols.contains(&engine_id) {
+			error!(
+				target: "sub-libp2p",
+				"Sending a notification with a protocol that wasn't registered: {:?}",
+				engine_id
+			);
+		}
+
+		self.send_message(&target, GenericMessage::Consensus(ConsensusMessage {
+			engine_id,
+			data: message.into(),
+		}));
+	}
+
+	/// Registers a new notifications protocol.
+	///
+	/// You are very strongly encouraged to call this method very early on. Any connection open
+	/// will retain the protocols that were registered then, and not any new one.
+	pub fn register_notifications_protocol(
+		&mut self,
+		engine_id: ConsensusEngineId,
+	) -> Vec<event::Event> {
+		if !self.registered_notif_protocols.insert(engine_id) {
+			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", engine_id);
+		}
+
+		// Registering a protocol while we already have open connections isn't great, but for now
+		// we handle it by notifying that we opened channels with everyone.
+		self.context_data.peers.iter()
+			.map(|(peer_id, peer)|
+				event::Event::NotificationStreamOpened {
+					remote: peer_id.clone(),
+					engine_id,
+					roles: peer.info.roles,
+				})
+			.collect()
 	}
 
 	/// Called when peer sends us new extrinsics
@@ -1082,7 +1139,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		if !self.config.roles.is_full() {
 			trace!(target: "sync", "Peer {} is trying to send extrinsic to the light node", who);
 			self.behaviour.disconnect_peer(&who);
-			self.peerset_handle.report_peer(who, i32::min_value());
+			self.peerset_handle.report_peer(who, rep::UNEXPECTED_EXTRINSICS);
 			return;
 		}
 
@@ -1100,8 +1157,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.transaction_pool.import(
 					self.peerset_handle.clone().into(),
 					who.clone(),
-					GOOD_EXTRINSIC_REPUTATION_CHANGE,
-					BAD_EXTRINSIC_REPUTATION_CHANGE,
+					rep::GOOD_EXTRINSIC,
+					rep::BAD_EXTRINSIC,
 					t,
 				);
 			}
@@ -1351,7 +1408,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					request.block,
 					error
 				);
-				self.peerset_handle.report_peer(who.clone(), RPC_FAILED_REPUTATION_CHANGE);
+				self.peerset_handle.report_peer(who.clone(), rep::RPC_FAILED);
 				StorageProof::empty()
 			}
 		};
@@ -1501,23 +1558,37 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
 			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
-		let proof = match self.context_data.chain.read_child_proof(
-			&request.block,
-			&request.storage_key,
-			&request.keys,
-		) {
-			Ok(proof) => proof,
-			Err(error) => {
-				trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
-					request.id,
-					who,
-					request.storage_key.to_hex::<String>(),
-					keys_str(),
-					request.block,
-					error
-				);
-				StorageProof::empty()
+		let proof = if let Some(child_info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
+			match self.context_data.chain.read_child_proof(
+				&request.block,
+				&request.storage_key,
+				child_info,
+				&request.keys,
+			) {
+				Ok(proof) => proof,
+				Err(error) => {
+					trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
+						request.id,
+						who,
+						request.storage_key.to_hex::<String>(),
+						keys_str(),
+						request.block,
+						error
+					);
+					StorageProof::empty()
+				}
 			}
+		} else {
+			trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
+				request.id,
+				who,
+				request.storage_key.to_hex::<String>(),
+				keys_str(),
+				request.block,
+				"invalid child info and type",
+			);
+
+			StorageProof::empty()
 		};
 		self.send_message(
 			&who,
@@ -1679,7 +1750,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				None
 			},
 		};
- 		self.send_message(
+		self.send_message(
 			&who,
 			GenericMessage::FinalityProofResponse(message::FinalityProofResponse {
 				id: 0,
@@ -1741,6 +1812,12 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
+	/// Notification protocols have been opened with a remote.
+	NotificationStreamOpened { remote: PeerId, protocols: Vec<ConsensusEngineId>, roles: Roles },
+	/// Notification protocols have been closed with a remote.
+	NotificationsStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
+	/// Messages have been received on one or more notifications protocols.
+	NotificationsReceived { remote: PeerId, messages: Vec<(ConsensusEngineId, Bytes)> },
 	None,
 }
 
@@ -1870,12 +1947,16 @@ Protocol<B, S, H> {
 					version <= CURRENT_VERSION as u8
 					&& version >= MIN_VERSION as u8
 				);
-				self.on_peer_connected(peer_id);
+				self.on_peer_connected(peer_id.clone());
 				CustomMessageOutcome::None
 			}
 			LegacyProtoOut::CustomProtocolClosed { peer_id, .. } => {
-				self.on_peer_disconnected(peer_id);
-				CustomMessageOutcome::None
+				self.on_peer_disconnected(peer_id.clone());
+				// Notify all the notification protocols as closed.
+				CustomMessageOutcome::NotificationsStreamClosed {
+					remote: peer_id,
+					protocols: self.registered_notif_protocols.iter().cloned().collect(),
+				}
 			},
 			LegacyProtoOut::CustomMessage { peer_id, message } =>
 				self.on_custom_message(peer_id, message),

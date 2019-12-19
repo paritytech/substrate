@@ -39,15 +39,15 @@
 use serde::{Serialize, Deserialize};
 use impl_trait_for_tuples::impl_for_tuples;
 use codec::{Encode, Decode};
-use sr_arithmetic::traits::{Bounded, Zero};
-use sr_primitives::{
+use sp_arithmetic::traits::{Bounded, Zero};
+use sp_runtime::{
 	RuntimeDebug,
 	traits::SignedExtension,
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
 };
 
 /// Re-export priority as type
-pub use sr_primitives::transaction_validity::TransactionPriority;
+pub use sp_runtime::transaction_validity::TransactionPriority;
 
 /// Numeric range of a transaction weight.
 pub type Weight = u32;
@@ -74,6 +74,14 @@ pub trait WeighBlock<BlockNumber> {
 	fn on_initialize(_: BlockNumber) -> Weight { Zero::zero() }
 	/// Return the weight of the block's on_finalize hook.
 	fn on_finalize(_: BlockNumber) -> Weight { Zero::zero() }
+}
+
+/// Indicates if dispatch function should pay fees or not.
+/// If set to false, the block resource limits are applied, yet no fee is deducted.
+pub trait PaysFee {
+	fn pays_fee(&self) -> bool {
+		true
+	}
 }
 
 /// Maybe I can do something to remove the duplicate code here.
@@ -146,17 +154,8 @@ pub struct DispatchInfo {
 	pub weight: Weight,
 	/// Class of this transaction.
 	pub class: DispatchClass,
-}
-
-impl DispatchInfo {
-	/// Determine if this dispatch should pay the base length-related fee or not.
-	pub fn pay_length_fee(&self) -> bool {
-		match self.class {
-			DispatchClass::Normal => true,
-			// For now we assume all operational transactions don't pay the length fee.
-			DispatchClass::Operational => false,
-		}
-	}
+	/// Does this transaction pay fees.
+	pub pays_fee: bool,
 }
 
 /// A `Dispatchable` function (aka transaction) that can carry some static information along with
@@ -220,6 +219,20 @@ impl<T> ClassifyDispatch<T> for SimpleDispatchInfo {
 	}
 }
 
+impl PaysFee for SimpleDispatchInfo {
+	fn pays_fee(&self) -> bool {
+		match self {
+			SimpleDispatchInfo::FixedNormal(_) => true,
+			SimpleDispatchInfo::MaxNormal => true,
+			SimpleDispatchInfo::FreeNormal => true,
+
+			SimpleDispatchInfo::FixedOperational(_) => true,
+			SimpleDispatchInfo::MaxOperational => true,
+			SimpleDispatchInfo::FreeOperational => false,
+		}
+	}
+}
+
 impl Default for SimpleDispatchInfo {
 	fn default() -> Self {
 		// Default weight of all transactions.
@@ -236,7 +249,7 @@ impl SimpleDispatchInfo {
 
 /// A struct to represent a weight which is a function of the input arguments. The given closure's
 /// arguments must match the dispatch's argument types, given as a tuple.
-pub struct FunctionOf<F, Class>(pub F, pub Class);
+pub struct FunctionOf<F, Class>(pub F, pub Class, pub bool);
 
 impl<Args, F, Class> WeighData<Args> for FunctionOf<F, Class>
 where
@@ -255,6 +268,13 @@ where
 		self.1.clone().into()
 	}
 }
+
+impl<F, Class> PaysFee for FunctionOf<F, Class> {
+	fn pays_fee(&self) -> bool {
+		self.2
+	}
+}
+
 
 /// Implementation for unchecked extrinsic.
 impl<Address, Call, Signature, Extra> GetDispatchInfo
@@ -281,11 +301,12 @@ where
 
 /// Implementation for test extrinsic.
 #[cfg(feature = "std")]
-impl<Call: Encode, Extra: Encode> GetDispatchInfo for sr_primitives::testing::TestXt<Call, Extra> {
+impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestXt<Call, Extra> {
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
 		DispatchInfo {
 			weight: self.encode().len() as _,
+			pays_fee: true,
 			..Default::default()
 		}
 	}
@@ -318,10 +339,10 @@ mod tests {
 			fn f0(_origin) { unimplemented!(); }
 
 			// weight = a x 10 + b
-			#[weight = FunctionOf(|args: (&u32, &u32)| args.0 * 10 + args.1, DispatchClass::Normal)]
+			#[weight = FunctionOf(|args: (&u32, &u32)| args.0 * 10 + args.1, DispatchClass::Normal, true)]
 			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
-			#[weight = FunctionOf(|_: (&u32, &u32)| 0, 1u8)]
+			#[weight = FunctionOf(|_: (&u32, &u32)| 0, 1u8, true)]
 			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 		}
 	}

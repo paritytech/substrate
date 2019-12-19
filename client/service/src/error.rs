@@ -16,10 +16,10 @@
 
 //! Errors that can occur during the service operation.
 
-use client;
-use network;
-use keystore;
-use consensus_common;
+use sc_network;
+use sc_keystore;
+use sp_consensus;
+use sp_blockchain;
 
 /// Service Result typedef.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -28,15 +28,15 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Client error.
-	Client(client::error::Error),
+	Client(sp_blockchain::Error),
 	/// IO error.
 	Io(std::io::Error),
 	/// Consensus error.
-	Consensus(consensus_common::Error),
+	Consensus(sp_consensus::Error),
 	/// Network error.
-	Network(network::error::Error),
+	Network(sc_network::error::Error),
 	/// Keystore error.
-	Keystore(keystore::Error),
+	Keystore(sc_keystore::Error),
 	/// Best chain selection strategy is missing.
 	#[display(fmt="Best chain selection strategy (SelectChain) is not provided.")]
 	SelectChainRequired,

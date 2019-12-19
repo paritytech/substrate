@@ -27,12 +27,12 @@ use quote::quote;
 
 pub mod syn_ext;
 
-// FIXME #1569, remove the following functions, which are copied from sr-api-macros
+// FIXME #1569, remove the following functions, which are copied from sp-api-macros
 use proc_macro2::{TokenStream, Span};
 use syn::Ident;
 
 fn generate_hidden_includes_mod_name(unique_id: &str) -> Ident {
-	Ident::new(&format!("sr_api_hidden_includes_{}", unique_id), Span::call_site())
+	Ident::new(&format!("sp_api_hidden_includes_{}", unique_id), Span::call_site())
 }
 
 /// Generates the access to the `frame-support` crate.
@@ -47,7 +47,7 @@ pub fn generate_crate_access(unique_id: &str, def_crate: &str) -> TokenStream {
 
 /// Generates the hidden includes that are required to make the macro independent from its scope.
 pub fn generate_hidden_includes(unique_id: &str, def_crate: &str) -> TokenStream {
-	if ::std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
+	if std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
 		TokenStream::new()
 	} else {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);

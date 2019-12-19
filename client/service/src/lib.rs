@@ -31,41 +31,39 @@ use std::io;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
-use client::Client;
+use sc_client::Client;
 use exit_future::Signal;
 use futures::prelude::*;
 use futures03::{
 	future::{ready, FutureExt as _, TryFutureExt as _},
 	stream::{StreamExt as _, TryStreamExt as _},
 };
-use network::{
+use sc_network::{
 	NetworkService, NetworkState, specialization::NetworkSpecialization,
 	Event, DhtEvent, PeerId, ReportHandle,
 };
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
-use primitives::{Blake2Hasher, H256};
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{NumberFor, Block as BlockT};
+use sp_core::{Blake2Hasher, H256};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{NumberFor, Block as BlockT};
 
 pub use self::error::Error;
-pub use self::builder::{ServiceBuilder, ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert};
+pub use self::builder::{ServiceBuilder, ServiceBuilderCommand};
 pub use config::{Configuration, Roles, PruningMode};
-pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
-pub use transaction_pool::txpool::{
-	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
-};
-pub use client::FinalityNotifications;
-pub use rpc::Metadata as RpcMetadata;
+pub use sc_chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
+pub use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, error::IntoPoolError};
+pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
+pub use sc_client::FinalityNotifications;
+pub use sc_rpc::Metadata as RpcMetadata;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
-pub use network::{FinalityProofProvider, OnDemand, config::BoxFinalityProofRequestBuilder};
+pub use sc_network::{FinalityProofProvider, OnDemand, config::BoxFinalityProofRequestBuilder};
 #[doc(hidden)]
 pub use futures::future::Executor;
 
@@ -85,9 +83,11 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	exit: exit_future::Exit,
 	/// A signal that makes the exit future above resolve, fired on service drop.
 	signal: Option<Signal>,
-	/// Set to `true` when a spawned essential task has failed. The next time
+	/// Send a signal when a spawned essential task has concluded. The next time
 	/// the service future is polled it should complete with an error.
-	essential_failed: Arc<AtomicBool>,
+	essential_failed_tx: mpsc::UnboundedSender<()>,
+	/// A receiver for spawned essential-tasks concluding.
+	essential_failed_rx: mpsc::UnboundedReceiver<()>,
 	/// Sender for futures that must be spawned as background tasks.
 	to_spawn_tx: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Receiver for futures that must be spawned as background tasks.
@@ -96,12 +96,12 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	/// If spawning a background task is not possible, we instead push the task into this `Vec`.
 	/// The elements must then be polled manually.
 	to_poll: Vec<Box<dyn Future<Item = (), Error = ()> + Send>>,
-	rpc_handlers: rpc_servers::RpcHandler<rpc::Metadata>,
+	rpc_handlers: sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
-	_telemetry: Option<tel::Telemetry>,
+	_telemetry: Option<sc_telemetry::Telemetry>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
 	_offchain_workers: Option<Arc<TOc>>,
-	keystore: keystore::KeyStorePtr,
+	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
 }
 
@@ -120,7 +120,8 @@ impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SpawnTaskHandle
 		&self,
 		future: Box<dyn Future<Item = (), Error = ()> + Send>,
 	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
-		let future = Box::new(future.select(self.on_exit.clone()).then(|_| Ok(())));
+		let exit = self.on_exit.clone().map(Ok).compat();
+		let future = Box::new(future.select(exit).then(|_| Ok(())));
 		if let Err(err) = self.sender.unbounded_send(future) {
 			let kind = futures::future::ExecuteErrorKind::Shutdown;
 			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
@@ -130,21 +131,30 @@ impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SpawnTaskHandle
 	}
 }
 
+impl futures03::task::Spawn for SpawnTaskHandle {
+	fn spawn_obj(&self, future: futures03::task::FutureObj<'static, ()>)
+	-> Result<(), futures03::task::SpawnError> {
+		self.execute(Box::new(futures03::compat::Compat::new(future.unit_error())))
+			.map_err(|_| futures03::task::SpawnError::shutdown())
+	}
+}
+
 /// Abstraction over a Substrate service.
 pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send {
 	/// Type of block of this chain.
 	type Block: BlockT<Hash = H256>;
 	/// Backend storage for the client.
-	type Backend: 'static + client_api::backend::Backend<Self::Block, Blake2Hasher>;
+	type Backend: 'static + sc_client_api::backend::Backend<Self::Block, Blake2Hasher>;
 	/// How to execute calls towards the runtime.
-	type CallExecutor: 'static + client::CallExecutor<Self::Block, Blake2Hasher> + Send + Sync + Clone;
+	type CallExecutor: 'static + sc_client::CallExecutor<Self::Block, Blake2Hasher> + Send + Sync + Clone;
 	/// API that the runtime provides.
 	type RuntimeApi: Send + Sync;
 	/// Chain selection algorithm.
-	type SelectChain: consensus_common::SelectChain<Self::Block>;
-	/// API of the transaction pool.
-	type TransactionPoolApi: ChainApi<Block = Self::Block>;
+	type SelectChain: sp_consensus::SelectChain<Self::Block>;
+	/// Transaction pool.
+	type TransactionPool: TransactionPool<Block = Self::Block>
+		+ TransactionPoolMaintainer<Block = Self::Block>;
 	/// Network specialization.
 	type NetworkSpecialization: NetworkSpecialization<Self::Block>;
 
@@ -152,7 +162,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()>;
 
 	/// return a shared instance of Telemetry (if enabled)
-	fn telemetry(&self) -> Option<tel::Telemetry>;
+	fn telemetry(&self) -> Option<sc_telemetry::Telemetry>;
 
 	/// Spawns a task in the background that runs the future passed as parameter.
 	fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static);
@@ -166,7 +176,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn spawn_task_handle(&self) -> SpawnTaskHandle;
 
 	/// Returns the keystore that stores keys.
-	fn keystore(&self) -> keystore::KeyStorePtr;
+	fn keystore(&self) -> sc_keystore::KeyStorePtr;
 
 	/// Starts an RPC query.
 	///
@@ -180,7 +190,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Item = Option<String>, Error = ()> + Send>;
 
 	/// Get shared client instance.
-	fn client(&self) -> Arc<client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>>;
+	fn client(&self) -> Arc<sc_client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>>;
 
 	/// Get clone of select chain.
 	fn select_chain(&self) -> Option<Self::SelectChain>;
@@ -192,22 +202,23 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
 
 	/// Get shared transaction pool instance.
-	fn transaction_pool(&self) -> Arc<TransactionPool<Self::TransactionPoolApi>>;
+	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
 
 	/// Get a handle to a future that will resolve on exit.
 	fn on_exit(&self) -> ::exit_future::Exit;
 }
 
-impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPoolApi, TOc> AbstractService for
+impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPool, TOc> AbstractService for
 	Service<TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
-		NetworkService<TBl, TNetSpec, H256>, TransactionPool<TExPoolApi>, TOc>
+		NetworkService<TBl, TNetSpec, H256>, TExPool, TOc>
 where
 	TBl: BlockT<Hash = H256>,
-	TBackend: 'static + client_api::backend::Backend<TBl, Blake2Hasher>,
-	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
+	TBackend: 'static + sc_client_api::backend::Backend<TBl, Blake2Hasher>,
+	TExec: 'static + sc_client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
-	TSc: consensus_common::SelectChain<TBl> + 'static + Clone + Send,
-	TExPoolApi: 'static + ChainApi<Block = TBl>,
+	TSc: sp_consensus::SelectChain<TBl> + 'static + Clone + Send,
+	TExPool: 'static + TransactionPool<Block = TBl>
+		+ TransactionPoolMaintainer<Block = TBl>,
 	TOc: 'static + Send + Sync,
 	TNetSpec: NetworkSpecialization<TBl>,
 {
@@ -216,7 +227,7 @@ where
 	type CallExecutor = TExec;
 	type RuntimeApi = TRtApi;
 	type SelectChain = TSc;
-	type TransactionPoolApi = TExPoolApi;
+	type TransactionPool = TExPool;
 	type NetworkSpecialization = TNetSpec;
 
 	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()> {
@@ -225,26 +236,31 @@ where
 		stream
 	}
 
-	fn telemetry(&self) -> Option<tel::Telemetry> {
+	fn telemetry(&self) -> Option<sc_telemetry::Telemetry> {
 		self._telemetry.as_ref().map(|t| t.clone())
 	}
 
-	fn keystore(&self) -> keystore::KeyStorePtr {
+	fn keystore(&self) -> sc_keystore::KeyStorePtr {
 		self.keystore.clone()
 	}
 
 	fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let task = task.select(self.on_exit()).then(|_| Ok(()));
+		let exit = self.on_exit().map(Ok).compat();
+		let task = task.select(exit).then(|_| Ok(()));
 		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
 	}
 
 	fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let essential_failed = self.essential_failed.clone();
-		let essential_task = task.map_err(move |_| {
-			error!("Essential task failed. Shutting down service.");
-			essential_failed.store(true, Ordering::Relaxed);
-		});
-		let task = essential_task.select(self.on_exit()).then(|_| Ok(()));
+		let essential_failed = self.essential_failed_tx.clone();
+		let essential_task = std::panic::AssertUnwindSafe(task)
+			.catch_unwind()
+			.then(move |_| {
+				error!("Essential task failed. Shutting down service.");
+				let _ = essential_failed.send(());
+				Ok(())
+			});
+		let exit = self.on_exit().map(Ok::<_, ()>).compat();
+		let task = essential_task.select(exit).then(|_| Ok(()));
 
 		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
 	}
@@ -260,7 +276,7 @@ where
 		Box::new(self.rpc_handlers.handle_request(request, mem.metadata.clone()))
 	}
 
-	fn client(&self) -> Arc<client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>> {
+	fn client(&self) -> Arc<sc_client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>> {
 		self.client.clone()
 	}
 
@@ -278,7 +294,7 @@ where
 		stream
 	}
 
-	fn transaction_pool(&self) -> Arc<TransactionPool<Self::TransactionPoolApi>> {
+	fn transaction_pool(&self) -> Arc<Self::TransactionPool> {
 		self.transaction_pool.clone()
 	}
 
@@ -294,8 +310,13 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 	type Error = Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		if self.essential_failed.load(Ordering::Relaxed) {
-			return Err(Error::Other("Essential task failed.".into()));
+		match self.essential_failed_rx.poll() {
+			Ok(Async::NotReady) => {},
+			Ok(Async::Ready(_)) | Err(_) => {
+				// Ready(None) should not be possible since we hold a live
+				// sender.
+				return Err(Error::Other("Essential task failed.".into()));
+			}
 		}
 
 		while let Ok(Async::Ready(Some(task_to_spawn))) = self.to_spawn_rx.poll() {
@@ -341,15 +362,15 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Executor<Box<dyn Future<Item
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 fn build_network_future<
 	B: BlockT,
-	C: client::BlockchainEvents<B>,
-	S: network::specialization::NetworkSpecialization<B>,
-	H: network::ExHashT
+	C: sc_client::BlockchainEvents<B>,
+	S: sc_network::specialization::NetworkSpecialization<B>,
+	H: sc_network::ExHashT
 > (
 	roles: Roles,
-	mut network: network::NetworkWorker<B, S, H>,
+	mut network: sc_network::NetworkWorker<B, S, H>,
 	client: Arc<C>,
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
-	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<rpc::system::Request<B>>,
+	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
 ) -> impl Future<Item = (), Error = ()> {
@@ -361,6 +382,9 @@ fn build_network_future<
 		.map(|v| Ok::<_, ()>(v)).compat();
 	let mut finality_notification_stream = client.finality_notification_stream().fuse()
 		.map(|v| Ok::<_, ()>(v)).compat();
+
+	// Initializing a stream in order to obtain DHT events from the network.
+	let mut event_stream = network.service().event_stream();
 
 	futures::future::poll_fn(move || {
 		let before_polling = Instant::now();
@@ -382,16 +406,16 @@ fn build_network_future<
 		// Poll the RPC requests and answer them.
 		while let Ok(Async::Ready(Some(request))) = rpc_rx.poll() {
 			match request {
-				rpc::system::Request::Health(sender) => {
-					let _ = sender.send(rpc::system::Health {
+				sc_rpc::system::Request::Health(sender) => {
+					let _ = sender.send(sc_rpc::system::Health {
 						peers: network.peers_debug_info().len(),
 						is_syncing: network.service().is_major_syncing(),
 						should_have_peers,
 					});
 				},
-				rpc::system::Request::Peers(sender) => {
+				sc_rpc::system::Request::Peers(sender) => {
 					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
-						rpc::system::PeerInfo {
+						sc_rpc::system::PeerInfo {
 							peer_id: peer_id.to_base58(),
 							roles: format!("{:?}", p.roles),
 							protocol_version: p.protocol_version,
@@ -400,13 +424,29 @@ fn build_network_future<
 						}
 					).collect());
 				}
-				rpc::system::Request::NetworkState(sender) => {
+				sc_rpc::system::Request::NetworkState(sender) => {
 					if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
 						let _ = sender.send(network_state);
 					}
 				}
-				rpc::system::Request::NodeRoles(sender) => {
-					use rpc::system::NodeRole;
+				sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
+					let x = network.add_reserved_peer(peer_addr)
+						.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
+					let _ = sender.send(x);
+				}
+				sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender) => {
+					let _ = match peer_id.parse::<PeerId>() {
+						Ok(peer_id) => {
+							network.remove_reserved_peer(peer_id);
+							sender.send(Ok(()))
+						}
+						Err(e) => sender.send(Err(sc_rpc::system::error::Error::MalformattedPeerArg(
+							e.to_string(),
+						))),
+					};
+				}
+				sc_rpc::system::Request::NodeRoles(sender) => {
+					use sc_rpc::system::NodeRole;
 
 					let node_roles = (0 .. 8)
 						.filter(|&bit_number| (roles.bits() >> bit_number) & 1 == 1)
@@ -438,22 +478,32 @@ fn build_network_future<
 			(status, state)
 		});
 
+		// Processing DHT events.
+		while let Ok(Async::Ready(Some(event))) = event_stream.poll() {
+			match event {
+				Event::Dht(event) => {
+					// Given that client/authority-discovery is the only upper stack consumer of Dht events at the moment, all Dht
+					// events are being passed on to the authority-discovery module. In the future there might be multiple
+					// consumers of these events. In that case this would need to be refactored to properly dispatch the events,
+					// e.g. via a subscriber model.
+					if let Some(Err(e)) = dht_event_tx.as_ref().map(|c| c.clone().try_send(event)) {
+						if e.is_full() {
+							warn!(target: "service", "Dht event channel to authority discovery is full, dropping event.");
+						} else if e.is_disconnected() {
+							warn!(target: "service", "Dht event channel to authority discovery is disconnected, dropping event.");
+						}
+					}
+				}
+				_ => {}
+			}
+		}
+
 		// Main network polling.
-		while let Ok(Async::Ready(Some(Event::Dht(event)))) = network.poll().map_err(|err| {
+		if let Ok(Async::Ready(())) = network.poll().map_err(|err| {
 			warn!(target: "service", "Error in network: {:?}", err);
 		}) {
-			// Given that client/authority-discovery is the only upper stack consumer of Dht events at the moment, all Dht
-			// events are being passed on to the authority-discovery module. In the future there might be multiple
-			// consumers of these events. In that case this would need to be refactored to properly dispatch the events,
-			// e.g. via a subscriber model.
-			if let Some(Err(e)) = dht_event_tx.as_ref().map(|c| c.clone().try_send(event)) {
-				if e.is_full() {
-					warn!(target: "service", "Dht event channel to authority discovery is full, dropping event.");
-				} else if e.is_disconnected() {
-					warn!(target: "service", "Dht event channel to authority discovery is disconnected, dropping event.");
-				}
-			}
-		};
+			return Ok(Async::Ready(()));
+		}
 
 		// Now some diagnostic for performances.
 		let polling_dur = before_polling.elapsed();
@@ -472,7 +522,7 @@ fn build_network_future<
 #[derive(Clone)]
 pub struct NetworkStatus<B: BlockT> {
 	/// Current global sync state.
-	pub sync_state: network::SyncState,
+	pub sync_state: sc_network::SyncState,
 	/// Target sync block number.
 	pub best_seen_block: Option<NumberFor<B>>,
 	/// Number of peers participating in syncing.
@@ -493,14 +543,14 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
 		if let Some(signal) = self.signal.take() {
-			signal.fire();
+			let _ = signal.fire();
 		}
 	}
 }
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>(
+fn start_rpc_servers<C, G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
 	config: &Configuration<C, G, E>,
 	mut gen_handler: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
@@ -512,7 +562,7 @@ fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadat
 				.or_else(|e| match e.kind() {
 					io::ErrorKind::AddrInUse |
 					io::ErrorKind::PermissionDenied => {
-						warn!("Unable to bind server to {}. Trying random port.", address);
+						warn!("Unable to bind RPC server to {}. Trying random port.", address);
 						address.set_port(0);
 						start(&address)
 					},
@@ -525,11 +575,11 @@ fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadat
 	Ok(Box::new((
 		maybe_start_server(
 			config.rpc_http,
-			|address| rpc_servers::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
+			|address| sc_rpc_server::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
 		)?,
 		maybe_start_server(
 			config.rpc_ws,
-			|address| rpc_servers::start_ws(
+			|address| sc_rpc_server::start_ws(
 				address,
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
@@ -541,7 +591,7 @@ fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadat
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>(
+fn start_rpc_servers<C, G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
 	_: &Configuration<C, G, E>,
 	_: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
@@ -552,7 +602,7 @@ fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadat
 /// the HTTP or WebSockets server).
 #[derive(Clone)]
 pub struct RpcSession {
-	metadata: rpc::Metadata,
+	metadata: sc_rpc::Metadata,
 }
 
 impl RpcSession {
@@ -580,35 +630,35 @@ pub struct TransactionPoolAdapter<C, P> {
 /// Get transactions for propagation.
 ///
 /// Function extracted to simplify the test and prevent creating `ServiceFactory`.
-fn transactions_to_propagate<PoolApi, B, H, E>(pool: &TransactionPool<PoolApi>)
+fn transactions_to_propagate<Pool, B, H, E>(pool: &Pool)
 	-> Vec<(H, B::Extrinsic)>
 where
-	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
+	Pool: TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
-	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
-	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
+	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
+	E: IntoPoolError + From<sp_transaction_pool::error::Error>,
 {
 	pool.ready()
 		.filter(|t| t.is_propagateable())
 		.map(|t| {
-			let hash = t.hash.clone();
-			let ex: B::Extrinsic = t.data.clone();
+			let hash = t.hash().clone();
+			let ex: B::Extrinsic = t.data().clone();
 			(hash, ex)
 		})
 		.collect()
 }
 
-impl<B, H, C, PoolApi, E> network::TransactionPool<H, B> for
-	TransactionPoolAdapter<C, TransactionPool<PoolApi>>
+impl<B, H, C, Pool, E> sc_network::TransactionPool<H, B> for
+	TransactionPoolAdapter<C, Pool>
 where
-	C: network::ClientHandle<B> + Send + Sync,
-	PoolApi: 'static + ChainApi<Block=B, Hash=H, Error=E>,
+	C: sc_network::ClientHandle<B> + Send + Sync,
+	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
-	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
-	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
+	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
+	E: 'static + IntoPoolError + From<sp_transaction_pool::error::Error>,
 {
 	fn transactions(&self) -> Vec<(H, <B as BlockT>::Extrinsic)> {
-		transactions_to_propagate(&self.pool)
+		transactions_to_propagate(&*self.pool)
 	}
 
 	fn hash_of(&self, transaction: &B::Extrinsic) -> H {
@@ -619,8 +669,8 @@ where
 		&self,
 		report_handle: ReportHandle,
 		who: PeerId,
-		reputation_change_good: i32,
-		reputation_change_bad: i32,
+		reputation_change_good: sc_network::ReputationChange,
+		reputation_change_bad: sc_network::ReputationChange,
 		transaction: B::Extrinsic
 	) {
 		if !self.imports_external_transactions {
@@ -638,7 +688,7 @@ where
 						match import_result {
 							Ok(_) => report_handle.report_peer(who, reputation_change_good),
 							Err(e) => match e.into_pool_error() {
-								Ok(txpool::error::Error::AlreadyImported(_)) => (),
+								Ok(sp_transaction_pool::error::Error::AlreadyImported(_)) => (),
 								Ok(e) => {
 									report_handle.report_peer(who, reputation_change_bad);
 									debug!("Error adding transaction to the pool: {:?}", e)
@@ -667,19 +717,17 @@ where
 mod tests {
 	use super::*;
 	use futures03::executor::block_on;
-	use consensus_common::SelectChain;
-	use sr_primitives::traits::BlindCheckable;
+	use sp_consensus::SelectChain;
+	use sp_runtime::traits::BlindCheckable;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
+	use sc_transaction_pool::{BasicPool, FullChainApi};
 
 	#[test]
 	fn should_not_propagate_transactions_that_are_marked_as_such() {
 		// given
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool = Arc::new(TransactionPool::new(
-			Default::default(),
-			transaction_pool::FullChainApi::new(client.clone())
-		));
+		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
 			amount: 5,
@@ -692,7 +740,7 @@ mod tests {
 		assert_eq!(pool.status().ready, 2);
 
 		// when
-		let transactions = transactions_to_propagate(&pool);
+		let transactions = transactions_to_propagate(&*pool);
 
 		// then
 		assert_eq!(transactions.len(), 1);

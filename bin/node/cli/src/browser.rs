@@ -19,7 +19,7 @@ use futures01::{prelude::*, sync::oneshot, sync::mpsc};
 use libp2p::wasm_ext;
 use log::{debug, info};
 use std::sync::Arc;
-use substrate_service::{AbstractService, RpcSession, Roles as ServiceRoles, Configuration, config::DatabaseConfig};
+use sc_service::{AbstractService, RpcSession, Roles as ServiceRoles, Configuration, config::DatabaseConfig};
 use wasm_bindgen::prelude::*;
 
 /// Starts the client.
@@ -40,7 +40,7 @@ fn start_inner(wasm_ext: wasm_ext::ffi::Transport) -> Result<Client, Box<dyn std
 		let wasm_ext = wasm_ext::ExtTransport::new(wasm_ext);
 		let chain_spec = ChainSpec::FlamingFir.load().map_err(|e| format!("{:?}", e))?;
 		let mut config = Configuration::<(), _, _>::default_with_spec_and_base_path(chain_spec, None);
-		config.network.transport = network::config::TransportConfig::Normal {
+		config.network.transport = sc_network::config::TransportConfig::Normal {
 			wasm_external_transport: Some(wasm_ext.clone()),
 			allow_private_ipv4: true,
 			enable_mdns: false,

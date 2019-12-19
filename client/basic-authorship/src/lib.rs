@@ -19,15 +19,14 @@
 //! # Example
 //!
 //! ```
-//! # use substrate_basic_authorship::ProposerFactory;
-//! # use consensus_common::{Environment, Proposer};
-//! # use sr_primitives::generic::BlockId;
+//! # use sc_basic_authority::ProposerFactory;
+//! # use sp_consensus::{Environment, Proposer};
+//! # use sp_runtime::generic::BlockId;
 //! # use std::{sync::Arc, time::Duration};
-//! # use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
-//! # use transaction_pool::txpool::{self, Pool as TransactionPool};
-//! # let client = Arc::new(test_client::new());
-//! # let chain_api = transaction_pool::FullChainApi::new(client.clone());
-//! # let txpool = Arc::new(TransactionPool::new(Default::default(), chain_api));
+//! # use substrate_test_runtime_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
+//! # use sc_transaction_pool::{BasicPool, FullChainApi};
+//! # let client = Arc::new(substrate_test_runtime_client::new());
+//! # let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 //! // The first step is to create a `ProposerFactory`.
 //! let mut proposer_factory = ProposerFactory {
 //! 	client: client.clone(),

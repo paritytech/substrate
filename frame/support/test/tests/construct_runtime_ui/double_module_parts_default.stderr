@@ -1,0 +1,5 @@
+error: `Config` is already included in `default`. Either remove `default` or remove `Config`
+  --> $DIR/double_module_parts_default.rs:10:32
+   |
+10 |         Balance: balances::{default, Config},
+   |                                      ^^^^^^

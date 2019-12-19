@@ -18,9 +18,9 @@
 
 #![cfg(test)]
 
-use sr_primitives::{testing::Digest, traits::{Header, OnFinalize}};
+use sp_runtime::{testing::Digest, traits::{Header, OnFinalize}};
 use crate::mock::*;
-use system::{EventRecord, Phase};
+use frame_system::{EventRecord, Phase};
 use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;
 use super::*;
@@ -312,7 +312,7 @@ fn time_slot_have_sane_ord() {
 #[test]
 #[cfg(feature = "migrate-authorities")]
 fn authorities_migration() {
-	use sr_primitives::traits::OnInitialize;
+	use sp_runtime::traits::OnInitialize;
 
 	with_externalities(&mut new_test_ext(vec![]), || {
 		let authorities = to_authorities(vec![(1, 1), (2, 1), (3, 1)]);

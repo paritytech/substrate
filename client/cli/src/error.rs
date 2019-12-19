@@ -16,8 +16,6 @@
 
 //! Initialization errors.
 
-use client_api;
-
 /// Result type alias for the CLI.
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -29,15 +27,17 @@ pub enum Error {
 	/// Cli error
 	Cli(clap::Error),
 	/// Service error
-	Service(service::Error),
+	Service(sc_service::Error),
 	/// Client error
-	Client(client_api::error::Error),
+	Client(sp_blockchain::Error),
 	/// Input error
+	#[from(ignore)]
 	Input(String),
 	/// Invalid listen multiaddress
 	#[display(fmt="Invalid listen multiaddress")]
 	InvalidListenMultiaddress,
 	/// Other uncategorized error.
+	#[from(ignore)]
 	Other(String),
 }
 

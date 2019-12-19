@@ -1,0 +1,5 @@
+error: `Config` was already declared before. Please remove the duplicate declaration
+  --> $DIR/double_module_parts.rs:10:37
+   |
+10 |         Balance: balances::{Config, Call, Config<T>, Origin<T>},
+   |                                           ^^^^^^

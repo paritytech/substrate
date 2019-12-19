@@ -22,7 +22,7 @@ use super::{BABE_ENGINE_ID, AuthoritySignature};
 use super::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
 use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight};
 #[cfg(feature = "std")]
-use sr_primitives::{DigestItem, generic::OpaqueDigestItemId};
+use sp_runtime::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
 use std::fmt::Debug;
 use codec::{Decode, Encode};
@@ -33,7 +33,7 @@ use schnorrkel::{
 	SignatureError, errors::MultiSignatureStage,
 	vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}
 };
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 
 
 /// A BABE pre-runtime digest. This contains all data required to validate a
@@ -195,7 +195,7 @@ impl Decode for BabePreDigest {
 
 /// Information about the next epoch. This is broadcast in the first block
 /// of the epoch.
-#[derive(Decode, Encode, Default, PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
+#[derive(Decode, Encode, Default, PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
 pub struct NextEpochDescriptor {
 	/// The authorities.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,

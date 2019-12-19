@@ -8,33 +8,33 @@ edition =  "2018"
 serde = { version = "1.0.101", optional = true }
 safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
-sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
-sr-staking-primitives = { path = "../../primitives/sr-staking-primitives", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
-timestamp = { package = "pallet-timestamp", path = "../timestamp", default-features = false }
-substrate-trie = { path = "../../primitives/trie", default-features = false, optional = true }
-runtime-io ={ package = "sr-io", path = "../../primitives/sr-io", default-features = false }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+pallet-timestamp = { version = "2.0.0", default-features = false, path = "../timestamp" }
+sp-trie = { optional = true, path = "../../primitives/trie", default-features = false }
+sp-io ={ path = "../../primitives/io", default-features = false }
 impl-trait-for-tuples = "0.1.3"
 
 [dev-dependencies]
-primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
-app-crypto = { package = "substrate-application-crypto",  path = "../../primitives/application-crypto" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+sp-application-crypto = { version = "2.0.0", path = "../../primitives/application-crypto" }
 lazy_static = "1.4.0"
 
 [features]
 default = ["std", "historical"]
-historical = ["substrate-trie"]
+historical = ["sp-trie"]
 std = [
 	"serde",
 	"safe-mix/std",
 	"codec/std",
-	"rstd/std",
-	"support/std",
-	"sr-primitives/std",
-	"sr-staking-primitives/std",
-	"timestamp/std",
-	"substrate-trie/std",
-	"runtime-io/std",
+	"sp-std/std",
+	"frame-support/std",
+	"sp-runtime/std",
+	"sp-staking/std",
+	"pallet-timestamp/std",
+	"sp-trie/std",
+	"sp-io/std",
 ]

@@ -19,12 +19,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
-use sr_primitives::traits::NumberFor;
+use sp_runtime::traits::NumberFor;
 
 /// Local Storage Prefix used by the Offchain Worker API to
 pub const STORAGE_PREFIX: &[u8] = b"storage";
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// The offchain worker api.
 	pub trait OffchainWorkerApi {
 		/// Starts the off-chain task for given block number.

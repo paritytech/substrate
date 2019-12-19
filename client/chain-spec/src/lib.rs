@@ -30,7 +30,7 @@
 //! ```rust
 //! use std::collections::HashMap;
 //! use serde::{Serialize, Deserialize};
-//! use substrate_chain_spec::{ChainSpec, ChainSpecExtension};
+//! use sc_chain_spec::{ChainSpec, ChainSpecExtension};
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecExtension)]
 //! pub struct MyExtension {
@@ -49,7 +49,7 @@
 //!
 //! ```rust
 //! use serde::{Serialize, Deserialize};
-//! use substrate_chain_spec::{Forks, ChainSpec, ChainSpecGroup, ChainSpecExtension};
+//! use sc_chain_spec::{Forks, ChainSpec, ChainSpecGroup, ChainSpecExtension};
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
@@ -84,7 +84,7 @@
 //!
 //! ```rust
 //! use serde::{Serialize, Deserialize};
-//! use substrate_chain_spec::{Forks, ChainSpec, ChainSpecGroup, ChainSpecExtension};
+//! use sc_chain_spec::{Forks, ChainSpec, ChainSpecGroup, ChainSpecExtension};
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
@@ -113,10 +113,10 @@ mod extension;
 
 pub use chain_spec::{ChainSpec, Properties, NoExtension};
 pub use extension::{Group, Fork, Forks, Extension};
-pub use substrate_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
+pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 
 use serde::{Serialize, de::DeserializeOwned};
-use sr_primitives::BuildStorage;
+use sp_runtime::BuildStorage;
 
 /// A set of traits for the runtime genesis config.
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}

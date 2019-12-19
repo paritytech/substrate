@@ -33,7 +33,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::rc::Rc;
-use wasm_interface::{Pointer, WordSize, Function};
+use sp_wasm_interface::{Pointer, WordSize, Function};
 use wasmtime_environ::{Module, translate_signature};
 use wasmtime_jit::{
 	ActionOutcome, ActionError, CodeMemory, CompilationStrategy, CompiledModule, Compiler, Context,
@@ -175,7 +175,7 @@ fn call_method(
 	let args = [RuntimeValue::I32(u32::from(data_ptr) as i32), RuntimeValue::I32(data_len as i32)];
 
 	// Invoke the function in the runtime.
-	let outcome = externalities::set_and_run_with_externalities(ext, || {
+	let outcome = sp_externalities::set_and_run_with_externalities(ext, || {
 		context
 			.invoke(&mut instance, method, &args[..])
 			.map_err(Error::Wasmtime)

@@ -16,8 +16,6 @@
 
 //! Substrate network possible errors.
 
-use client_api;
-
 use libp2p::{PeerId, Multiaddr};
 
 use std::fmt;
@@ -31,7 +29,7 @@ pub enum Error {
 	/// Io error
 	Io(std::io::Error),
 	/// Client error
-	Client(client_api::error::Error),
+	Client(sp_blockchain::Error),
 	/// The same bootnode (based on address) is registered with two different peer ids.
 	#[display(
 		fmt = "The same bootnode (`{}`) is registered with two different peer ids: `{}` and `{}`",

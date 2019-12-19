@@ -28,14 +28,77 @@ use crate::host::*;
 use crate::wasm::*;
 
 #[cfg(feature = "std")]
-use wasm_interface::{FunctionContext, Pointer, Result};
+use sp_wasm_interface::{FunctionContext, Pointer, Result};
 
-use rstd::{marker::PhantomData, convert::TryFrom};
+use sp_std::{marker::PhantomData, convert::TryFrom};
 
 #[cfg(not(feature = "std"))]
-use rstd::{slice, vec::Vec};
+use sp_std::{slice, vec::Vec};
 
-pub use substrate_runtime_interface_proc_macro::{PassByCodec, PassByInner, PassByEnum};
+/// Derive macro for implementing [`PassBy`] with the [`Codec`] strategy.
+///
+/// This requires that the type implements [`Encode`](codec::Encode) and [`Decode`](codec::Decode)
+/// from `parity-scale-codec`.
+///
+/// # Example
+///
+/// ```
+/// # use sp_runtime_interface::pass_by::PassByCodec;
+/// # use codec::{Encode, Decode};
+/// #[derive(PassByCodec, Encode, Decode)]
+/// struct EncodableType {
+///     name: Vec<u8>,
+///     param: u32,
+/// }
+/// ```
+pub use sp_runtime_interface_proc_macro::PassByCodec;
+
+/// Derive macro for implementing [`PassBy`] with the [`Inner`] strategy.
+///
+/// Besides implementing [`PassBy`], this derive also implements the helper trait [`PassByInner`].
+///
+/// The type is required to be a struct with just one field. The field type needs to implement
+/// the required traits to pass it between the wasm and the native side. (See the runtime interface
+/// crate for more information about these traits.)
+///
+/// # Example
+///
+/// ```
+/// # use sp_runtime_interface::pass_by::PassByInner;
+/// #[derive(PassByInner)]
+/// struct Data([u8; 32]);
+/// ```
+///
+/// ```
+/// # use sp_runtime_interface::pass_by::PassByInner;
+/// #[derive(PassByInner)]
+/// struct Data {
+///     data: [u8; 32],
+/// }
+/// ```
+pub use sp_runtime_interface_proc_macro::PassByInner;
+
+/// Derive macro for implementing [`PassBy`] with the [`Enum`] strategy.
+///
+/// Besides implementing [`PassBy`], this derive also implements `TryFrom<u8>` and
+/// `From<Self> for u8` for the type.
+///
+/// The type is required to be an enum with only unit variants and at maximum `256` variants. Also
+/// it is required that the type implements `Copy`.
+///
+/// # Example
+///
+/// ```
+/// # use sp_runtime_interface::pass_by::PassByEnum;
+/// #[derive(PassByEnum, Copy, Clone)]
+/// enum Data {
+///     Okay,
+///     NotOkay,
+///     // This will not work with the derive.
+///     //Why(u32),
+/// }
+/// ```
+pub use sp_runtime_interface_proc_macro::PassByEnum;
 
 /// Something that should be passed between wasm and the host using the given strategy.
 ///
@@ -145,7 +208,7 @@ impl<T: PassBy> FromFFIValue for T {
 ///
 /// # Example
 /// ```
-/// # use substrate_runtime_interface::pass_by::{PassBy, Codec};
+/// # use sp_runtime_interface::pass_by::{PassBy, Codec};
 /// #[derive(codec::Encode, codec::Decode)]
 /// struct Test;
 ///
@@ -237,7 +300,7 @@ pub trait PassByInner: Sized {
 ///
 /// # Example
 /// ```
-/// # use substrate_runtime_interface::pass_by::{PassBy, Inner, PassByInner};
+/// # use sp_runtime_interface::pass_by::{PassBy, Inner, PassByInner};
 /// struct Test([u8; 32]);
 ///
 /// impl PassBy for Test {
@@ -311,7 +374,7 @@ impl<T: PassByInner<Inner = I>, I: RIType> RIType for Inner<T, I> {
 ///
 /// # Example
 /// ```
-/// # use substrate_runtime_interface::pass_by::{PassBy, Enum};
+/// # use sp_runtime_interface::pass_by::{PassBy, Enum};
 /// #[derive(Clone, Copy)]
 /// enum Test {
 ///     Test1,

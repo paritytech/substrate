@@ -20,24 +20,19 @@ use std::sync::Arc;
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 
-use sr_primitives::{
+use sp_runtime::{
     traits::{
         Block as BlockT, Header as HeaderT, NumberFor,
     },
     generic::BlockId
 };
-use primitives::{ChangesTrieConfiguration};
-use state_machine::StorageProof;
-use header_metadata::HeaderMetadata;
-use crate::{
-	backend::{
-		AuxStore, NewBlockState,
-	},
-    blockchain::{
-        well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
-    },
-    error::{ Error as ClientError, Result as ClientResult },
+use sp_core::ChangesTrieConfiguration;
+use sp_state_machine::StorageProof;
+use sp_blockchain::{
+	HeaderMetadata, well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
+	Error as ClientError, Result as ClientResult,
 };
+use crate::backend::{ AuxStore, NewBlockState };
 /// Remote call request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RemoteCallRequest<Header: HeaderT> {
@@ -86,6 +81,11 @@ pub struct RemoteReadChildRequest<Header: HeaderT> {
 	pub header: Header,
 	/// Storage key for child.
 	pub storage_key: Vec<u8>,
+	/// Child trie source information.
+	pub child_info: Vec<u8>,
+	/// Child type, its required to resolve `child_info`
+	/// content and choose child implementation.
+	pub child_type: u32,
 	/// Child storage key to read.
 	pub keys: Vec<Vec<u8>>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
@@ -144,15 +144,30 @@ pub struct RemoteBodyRequest<Header: HeaderT> {
 /// is correct (see FetchedDataChecker) and return already checked data.
 pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Remote header future.
-	type RemoteHeaderResult: Future<Output = Result<Block::Header, ClientError>> + Send + 'static;
+	type RemoteHeaderResult: Future<Output = Result<
+		Block::Header,
+		ClientError,
+	>> + Unpin + Send + 'static;
 	/// Remote storage read future.
-	type RemoteReadResult: Future<Output = Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>> + Send + 'static;
+	type RemoteReadResult: Future<Output = Result<
+		HashMap<Vec<u8>, Option<Vec<u8>>>,
+		ClientError,
+	>> + Unpin + Send + 'static;
 	/// Remote call result future.
-	type RemoteCallResult: Future<Output = Result<Vec<u8>, ClientError>> + Send + 'static;
+	type RemoteCallResult: Future<Output = Result<
+		Vec<u8>,
+		ClientError,
+	>> + Unpin + Send + 'static;
 	/// Remote changes result future.
-	type RemoteChangesResult: Future<Output = Result<Vec<(NumberFor<Block>, u32)>, ClientError>> + Send + 'static;
+	type RemoteChangesResult: Future<Output = Result<
+		Vec<(NumberFor<Block>, u32)>,
+		ClientError,
+	>> + Unpin + Send + 'static;
 	/// Remote block body result future.
-	type RemoteBodyResult: Future<Output = Result<Vec<Block::Extrinsic>, ClientError>> + Send + 'static;
+	type RemoteBodyResult: Future<Output = Result<
+		Vec<Block::Extrinsic>,
+		ClientError,
+	>> + Unpin + Send + 'static;
 
 	/// Fetch remote header.
 	fn remote_header(&self, request: RemoteHeaderRequest<Block::Header>) -> Self::RemoteHeaderResult;
@@ -288,8 +303,8 @@ pub trait RemoteBlockchain<Block: BlockT>: Send + Sync {
 pub mod tests {
 	use futures::future::Ready;
 	use parking_lot::Mutex;
-    use crate::error::Error as ClientError;
-    use test_primitives::{Block, Header, Extrinsic};
+    use sp_blockchain::Error as ClientError;
+    use sp_test_primitives::{Block, Header, Extrinsic};
 	use super::*;
 
 	pub type OkCallFetcher = Mutex<Vec<u8>>;

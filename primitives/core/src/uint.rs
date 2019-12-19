@@ -22,7 +22,7 @@ pub use primitive_types::U256;
 mod tests {
 	use super::*;
 	use codec::{Encode, Decode};
-	use substrate_serializer as ser;
+	use sp_serializer as ser;
 
 	macro_rules! test {
 		($name: ident, $test_name: ident) => {

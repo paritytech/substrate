@@ -18,7 +18,7 @@
 
 use kvdb::{KeyValueDB, DBTransaction};
 use codec::{Encode, Decode};
-use client_api::error;
+use sp_blockchain;
 use std::hash::Hash;
 
 
@@ -26,13 +26,13 @@ use std::hash::Hash;
 pub fn read_children<
 	K: Eq + Hash + Clone + Encode + Decode,
 	V: Eq + Hash + Clone + Encode + Decode,
->(db: &dyn KeyValueDB, column: Option<u32>, prefix: &[u8], parent_hash: K) -> error::Result<Vec<V>> {
+>(db: &dyn KeyValueDB, column: Option<u32>, prefix: &[u8], parent_hash: K) -> sp_blockchain::Result<Vec<V>> {
 	let mut buf = prefix.to_vec();
 	parent_hash.using_encoded(|s| buf.extend(s));
 
 	let raw_val_opt = match db.get(column, &buf[..]) {
 		Ok(raw_val_opt) => raw_val_opt,
-		Err(_) => return Err(error::Error::Backend("Error reading value from database".into())),
+		Err(_) => return Err(sp_blockchain::Error::Backend("Error reading value from database".into())),
 	};
 
 	let raw_val = match raw_val_opt {
@@ -42,7 +42,7 @@ pub fn read_children<
 
 	let children: Vec<V> = match Decode::decode(&mut &raw_val[..]) {
 		Ok(children) => children,
-		Err(_) => return Err(error::Error::Backend("Error decoding children".into())),
+		Err(_) => return Err(sp_blockchain::Error::Backend("Error decoding children".into())),
 	};
 
 	Ok(children)

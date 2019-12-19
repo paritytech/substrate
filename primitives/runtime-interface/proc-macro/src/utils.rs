@@ -33,10 +33,10 @@ use inflector::Inflector;
 
 /// Generates the include for the runtime-interface crate.
 pub fn generate_runtime_interface_include() -> TokenStream {
-	if env::var("CARGO_PKG_NAME").unwrap() == "substrate-runtime-interface" {
+	if env::var("CARGO_PKG_NAME").unwrap() == "sp-runtime-interface" {
 		TokenStream::new()
 	} else {
-		match crate_name("substrate-runtime-interface") {
+		match crate_name("sp-runtime-interface") {
 			Ok(crate_name) => {
 				let crate_name = Ident::new(&crate_name, Span::call_site());
 				quote!(
@@ -52,10 +52,10 @@ pub fn generate_runtime_interface_include() -> TokenStream {
 	}
 }
 
-/// Generates the access to the `substrate-runtime-interface` crate.
+/// Generates the access to the `sp-runtime-interface` crate.
 pub fn generate_crate_access() -> TokenStream {
-	if env::var("CARGO_PKG_NAME").unwrap() == "substrate-runtime-interface" {
-		quote!( substrate_runtime_interface )
+	if env::var("CARGO_PKG_NAME").unwrap() == "sp-runtime-interface" {
+		quote!( sp_runtime_interface )
 	} else {
 		quote!( proc_macro_runtime_interface )
 	}

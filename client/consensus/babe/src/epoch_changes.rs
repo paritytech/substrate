@@ -20,18 +20,14 @@
 //! persistent DAG superimposed over the forks of the blockchain.
 
 use std::sync::Arc;
-use babe_primitives::{Epoch, SlotNumber, NextEpochDescriptor};
+use sp_consensus_babe::{Epoch, SlotNumber, NextEpochDescriptor};
 use fork_tree::ForkTree;
 use parking_lot::{Mutex, MutexGuard};
-use sr_primitives::traits::{Block as BlockT, NumberFor, One, Zero};
+use sp_runtime::traits::{Block as BlockT, NumberFor, One, Zero};
 use codec::{Encode, Decode};
-use client_api::{
-	error::Error as ClientError,
-	utils::is_descendent_of,
-	blockchain::HeaderBackend
-};
-use header_metadata::HeaderMetadata;
-use primitives::H256;
+use sc_client_api::utils::is_descendent_of;
+use sp_blockchain::{HeaderMetadata, HeaderBackend, Error as ClientError};
+use sp_core::H256;
 use std::ops::Add;
 
 /// A builder for `is_descendent_of` functions.

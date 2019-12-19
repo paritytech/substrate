@@ -19,12 +19,12 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 use lazy_static::lazy_static;
-use primitives::{sr25519::{Pair, Public, Signature}, Pair as PairT, Public as PublicT, H256};
-pub use primitives::sr25519;
-use sr_primitives::AccountId32;
+use sp_core::{sr25519::{Pair, Public, Signature}, Pair as PairT, Public as PublicT, H256};
+pub use sp_core::sr25519;
+use sp_runtime::AccountId32;
 
 /// Set of test accounts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum_macros::Display, strum_macros::EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumIter)]
 pub enum Keyring {
 	Alice,
 	Bob,
@@ -107,9 +107,9 @@ impl From<Keyring> for &'static str {
 	}
 }
 
-impl From<Keyring> for sr_primitives::MultiSigner {
+impl From<Keyring> for sp_runtime::MultiSigner {
 	fn from(x: Keyring) -> Self {
-		sr_primitives::MultiSigner::Sr25519(x.into())
+		sp_runtime::MultiSigner::Sr25519(x.into())
 	}
 }
 
@@ -181,7 +181,7 @@ impl Deref for Keyring {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::{sr25519::Pair, Pair as PairT};
+	use sp_core::{sr25519::Pair, Pair as PairT};
 
 	#[test]
 	fn should_work() {

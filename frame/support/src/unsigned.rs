@@ -16,9 +16,9 @@
 
 #[doc(hidden)]
 #[allow(deprecated)]
-pub use crate::sr_primitives::traits::ValidateUnsigned;
+pub use crate::sp_runtime::traits::ValidateUnsigned;
 #[doc(hidden)]
-pub use crate::sr_primitives::transaction_validity::{
+pub use crate::sp_runtime::transaction_validity::{
 	TransactionValidity, UnknownTransaction, TransactionValidityError,
 };
 

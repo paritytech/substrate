@@ -141,7 +141,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 /// # Example
 ///
 /// ```
-/// # use substrate_primitives::wasm_export_functions;
+/// # use sp_core::wasm_export_functions;
 ///
 /// wasm_export_functions! {
 ///     fn test_in_wasm(value: bool, another_value: Vec<u8>) -> bool {
@@ -184,7 +184,7 @@ macro_rules! wasm_export_functions {
 				&[0u8; 0]
 			} else {
 				unsafe {
-					$crate::rstd::slice::from_raw_parts(input_data, input_len)
+					$crate::sp_std::slice::from_raw_parts(input_data, input_len)
 				}
 			};
 
@@ -212,7 +212,7 @@ macro_rules! wasm_export_functions {
 				&[0u8; 0]
 			} else {
 				unsafe {
-					$crate::rstd::slice::from_raw_parts(input_data, input_len)
+					$crate::sp_std::slice::from_raw_parts(input_data, input_len)
 				}
 			};
 

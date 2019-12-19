@@ -57,8 +57,8 @@ impl ChangesTrieConfiguration {
 	) -> bool
 		where
 			Number: From<u32> + PartialEq +
-			::rstd::ops::Rem<Output=Number> + ::rstd::ops::Sub<Output=Number> +
-			::rstd::cmp::PartialOrd + Zero,
+			::sp_std::ops::Rem<Output=Number> + ::sp_std::ops::Sub<Output=Number> +
+			::sp_std::cmp::PartialOrd + Zero,
 	{
 		block > zero
 			&& self.is_digest_build_enabled()
@@ -92,8 +92,8 @@ impl ChangesTrieConfiguration {
 	) -> Option<Number>
 		where
 			Number: Clone + From<u32> + PartialOrd + PartialEq +
-			::rstd::ops::Add<Output=Number> + ::rstd::ops::Sub<Output=Number> +
-			::rstd::ops::Div<Output=Number> + ::rstd::ops::Mul<Output=Number> + Zero,
+			::sp_std::ops::Add<Output=Number> + ::sp_std::ops::Sub<Output=Number> +
+			::sp_std::ops::Div<Output=Number> + ::sp_std::ops::Mul<Output=Number> + Zero,
 	{
 		if block <= zero {
 			return None;
@@ -126,8 +126,8 @@ impl ChangesTrieConfiguration {
 	) -> Option<(Number, Number)>
 		where
 			Number: Clone + From<u32> + PartialOrd + PartialEq +
-			::rstd::ops::Add<Output=Number> + ::rstd::ops::Sub<Output=Number> +
-			::rstd::ops::Div<Output=Number> + ::rstd::ops::Mul<Output=Number>,
+			::sp_std::ops::Add<Output=Number> + ::sp_std::ops::Sub<Output=Number> +
+			::sp_std::ops::Div<Output=Number> + ::sp_std::ops::Mul<Output=Number>,
 	{
 		if !self.is_digest_build_enabled() {
 			return None;
@@ -160,8 +160,8 @@ impl ChangesTrieConfiguration {
 	pub fn digest_level_at_block<Number>(&self, zero: Number, block: Number) -> Option<(u32, u32, u32)>
 		where
 			Number: Clone + From<u32> + PartialEq +
-			::rstd::ops::Rem<Output=Number> + ::rstd::ops::Sub<Output=Number> +
-			::rstd::cmp::PartialOrd + Zero,
+			::sp_std::ops::Rem<Output=Number> + ::sp_std::ops::Sub<Output=Number> +
+			::sp_std::cmp::PartialOrd + Zero,
 	{
 		if !self.is_digest_build_required_at_block(zero.clone(), block.clone()) {
 			return None;

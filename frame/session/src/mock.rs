@@ -18,13 +18,13 @@
 
 use super::*;
 use std::cell::RefCell;
-use support::{impl_outer_origin, parameter_types};
-use primitives::{crypto::key_types::DUMMY, H256};
-use sr_primitives::{
+use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use sp_core::{crypto::key_types::DUMMY, H256};
+use sp_runtime::{
 	Perbill, impl_opaque_keys, traits::{BlakeTwo256, IdentityLookup, ConvertInto},
 	testing::{Header, UintAuthorityId}
 };
-use sr_staking_primitives::SessionIndex;
+use sp_staking::SessionIndex;
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
@@ -39,7 +39,7 @@ impl From<UintAuthorityId> for MockSessionKeys {
 }
 
 impl_outer_origin! {
-	pub enum Origin for Test {}
+	pub enum Origin for Test  where system = frame_system {}
 }
 
 thread_local! {
@@ -66,7 +66,7 @@ impl ShouldEndSession<u64> for TestShouldEndSession {
 
 pub struct TestSessionHandler;
 impl SessionHandler<u64> for TestSessionHandler {
-	const KEY_TYPE_IDS: &'static [sr_primitives::KeyTypeId] = &[UintAuthorityId::ID];
+	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[UintAuthorityId::ID];
 	fn on_genesis_session<T: OpaqueKeys>(_validators: &[(u64, T)]) {}
 	fn on_new_session<T: OpaqueKeys>(
 		changed: bool,
@@ -152,13 +152,13 @@ pub struct Test;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const MinimumPeriod: u64 = 5;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
-impl system::Trait for Test {
+impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -174,9 +174,10 @@ impl system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
+	type ModuleToIndex = ();
 }
 
-impl timestamp::Trait for Test {
+impl pallet_timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
@@ -204,8 +205,8 @@ impl Trait for Test {
 #[cfg(feature = "historical")]
 impl crate::historical::Trait for Test {
 	type FullIdentification = u64;
-	type FullIdentificationOf = sr_primitives::traits::ConvertInto;
+	type FullIdentificationOf = sp_runtime::traits::ConvertInto;
 }
 
-pub type System = system::Module<Test>;
+pub type System = frame_system::Module<Test>;
 pub type Session = Module<Test>;

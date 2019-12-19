@@ -20,11 +20,14 @@
 use std::future::Future;
 use std::sync::Arc;
 
-use sr_primitives::{Justification, generic::BlockId};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
+use sp_runtime::{Justification, generic::BlockId};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
-use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
-pub use client_api::{
+use sp_blockchain::{
+	HeaderMetadata, CachedHeaderMetadata,
+	Error as ClientError, Result as ClientResult,
+};
+pub use sc_client_api::{
 	backend::{
 		AuxStore, NewBlockState
 	},
@@ -32,9 +35,6 @@ pub use client_api::{
 		Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 		HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo, ProvideCache,
 		well_known_cache_keys,
-	},
-	error::{
-		Error as ClientError, Result as ClientResult
 	},
 	light::{
 		RemoteBlockchain, LocalOrRemote, Storage
@@ -195,8 +195,8 @@ pub fn future_header<Block: BlockT, F: Fetcher<Block>>(
 pub mod tests {
 	use std::collections::HashMap;
 	use parking_lot::Mutex;
-	use test_client::runtime::{Hash, Block, Header};
-	use client_api::blockchain::Info;
+	use substrate_test_runtime_client::runtime::{Hash, Block, Header};
+	use sc_client_api::blockchain::Info;
 	use super::*;
 
 	pub type DummyBlockchain = Blockchain<DummyStorage>;

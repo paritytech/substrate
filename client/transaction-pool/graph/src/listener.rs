@@ -22,7 +22,7 @@ use std::{
 };
 use serde::Serialize;
 use crate::watcher;
-use sr_primitives::traits;
+use sp_runtime::traits;
 use log::{debug, trace, warn};
 
 /// Extrinsic pool default listener.
@@ -91,14 +91,18 @@ impl<H: hash::Hash + traits::Member + Serialize, H2: Clone + fmt::Debug> Listene
 	}
 
 	/// Transaction was removed as invalid.
-	pub fn invalid(&mut self, tx: &H) {
-		warn!(target: "transaction-pool", "Extrinsic invalid: {:?}", tx);
+	pub fn invalid(&mut self, tx: &H, warn: bool) {
+		if warn {
+			warn!(target: "txpool", "Extrinsic invalid: {:?}", tx);
+		} else {
+			debug!(target: "txpool", "Extrinsic invalid: {:?}", tx);
+		}
 		self.fire(tx, |watcher| watcher.invalid());
 	}
 
 	/// Transaction was pruned from the pool.
 	pub fn pruned(&mut self, header_hash: H2, tx: &H) {
 		debug!(target: "txpool", "[{:?}] Pruned at {:?}", tx, header_hash);
-		self.fire(tx, |watcher| watcher.finalized(header_hash))
+		self.fire(tx, |watcher| watcher.in_block(header_hash))
 	}
 }

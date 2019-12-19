@@ -16,18 +16,19 @@
 
 use super::*;
 use assert_matches::assert_matches;
-use test_client::{
+use substrate_test_runtime_client::{
 	prelude::*,
-	consensus::BlockOrigin,
+	sp_consensus::BlockOrigin,
 	runtime::{H256, Block, Header},
 };
+use sp_rpc::list::ListOrValue;
 
 #[test]
 fn should_return_header() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let client = Arc::new(test_client::new());
+	let client = Arc::new(substrate_test_runtime_client::new());
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 	assert_matches!(
@@ -63,7 +64,7 @@ fn should_return_a_block() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let client = Arc::new(test_client::new());
+	let client = Arc::new(substrate_test_runtime_client::new());
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 	let block = client.new_block(Default::default()).unwrap().bake().unwrap();
@@ -115,39 +116,44 @@ fn should_return_block_hash() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let client = Arc::new(test_client::new());
+	let client = Arc::new(substrate_test_runtime_client::new());
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 	assert_matches!(
 		api.block_hash(None.into()),
-		Ok(Some(ref x)) if x == &client.genesis_hash()
+		Ok(ListOrValue::Value(Some(ref x))) if x == &client.genesis_hash()
 	);
 
 
 	assert_matches!(
-		api.block_hash(Some(0u64.into()).into()),
-		Ok(Some(ref x)) if x == &client.genesis_hash()
+		api.block_hash(Some(ListOrValue::Value(0u64.into())).into()),
+		Ok(ListOrValue::Value(Some(ref x))) if x == &client.genesis_hash()
 	);
 
 	assert_matches!(
-		api.block_hash(Some(1u64.into()).into()),
-		Ok(None)
+		api.block_hash(Some(ListOrValue::Value(1u64.into())).into()),
+		Ok(ListOrValue::Value(None))
 	);
 
 	let block = client.new_block(Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, block.clone()).unwrap();
 
 	assert_matches!(
-		api.block_hash(Some(0u64.into()).into()),
-		Ok(Some(ref x)) if x == &client.genesis_hash()
+		api.block_hash(Some(ListOrValue::Value(0u64.into())).into()),
+		Ok(ListOrValue::Value(Some(ref x))) if x == &client.genesis_hash()
 	);
 	assert_matches!(
-		api.block_hash(Some(1u64.into()).into()),
-		Ok(Some(ref x)) if x == &block.hash()
+		api.block_hash(Some(ListOrValue::Value(1u64.into())).into()),
+		Ok(ListOrValue::Value(Some(ref x))) if x == &block.hash()
 	);
 	assert_matches!(
-		api.block_hash(Some(::primitives::U256::from(1u64).into()).into()),
-		Ok(Some(ref x)) if x == &block.hash()
+		api.block_hash(Some(ListOrValue::Value(sp_core::U256::from(1u64).into())).into()),
+		Ok(ListOrValue::Value(Some(ref x))) if x == &block.hash()
+	);
+
+	assert_matches!(
+		api.block_hash(Some(vec![0u64.into(), 1.into(), 2.into()].into())),
+		Ok(ListOrValue::List(list)) if list == &[client.genesis_hash().into(), block.hash().into(), None]
 	);
 }
 
@@ -157,7 +163,7 @@ fn should_return_finalized_hash() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let client = Arc::new(test_client::new());
+	let client = Arc::new(substrate_test_runtime_client::new());
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 	assert_matches!(
@@ -189,7 +195,7 @@ fn should_notify_about_latest_block() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let client = Arc::new(test_client::new());
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		api.subscribe_new_heads(Default::default(), subscriber);
@@ -218,7 +224,7 @@ fn should_notify_about_finalized_block() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let client = Arc::new(test_client::new());
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		api.subscribe_finalized_heads(Default::default(), subscriber);

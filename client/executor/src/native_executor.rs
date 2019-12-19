@@ -19,17 +19,17 @@ use crate::{
 	wasm_runtime::{RuntimesCache, WasmExecutionMethod, WasmRuntime},
 };
 
-use runtime_version::{NativeVersion, RuntimeVersion};
+use sp_version::{NativeVersion, RuntimeVersion};
 
 use codec::{Decode, Encode};
 
-use primitives::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
+use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
 
-use log::{trace, warn};
+use log::trace;
 
 use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}};
 
-use wasm_interface::{HostFunctions, Function};
+use sp_wasm_interface::{HostFunctions, Function};
 
 thread_local! {
 	static RUNTIMES_CACHE: RefCell<RuntimesCache> = RefCell::new(RuntimesCache::new());
@@ -43,7 +43,7 @@ pub(crate) fn safe_call<F, U>(f: F) -> Result<U>
 {
 	// Substrate uses custom panic hook that terminates process on panic. Disable
 	// termination for the native call.
-	let _guard = panic_handler::AbortGuard::force_unwind();
+	let _guard = sp_panic_handler::AbortGuard::force_unwind();
 	std::panic::catch_unwind(f).map_err(|_| Error::Runtime)
 }
 
@@ -53,7 +53,7 @@ pub(crate) fn safe_call<F, U>(f: F) -> Result<U>
 pub fn with_native_environment<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	externalities::set_and_run_with_externalities(ext, move || safe_call(f))
+	sp_externalities::set_and_run_with_externalities(ext, move || safe_call(f))
 }
 
 /// Delegate for dispatching a CodeExecutor call.
@@ -98,7 +98,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	pub fn new(fallback_method: WasmExecutionMethod, default_heap_pages: Option<u64>) -> Self {
-		let mut host_functions = runtime_io::SubstrateHostFunctions::host_functions();
+		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions();
 		// Add the old and deprecated host functions as well, so that we support old wasm runtimes.
 		host_functions.extend(
 			crate::deprecated_host_interface::SubstrateExternals::host_functions(),
@@ -181,14 +181,8 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	fn runtime_version<E: Externalities>(
 		&self,
 		ext: &mut E,
-	) -> Option<RuntimeVersion> {
-		match self.with_runtime(ext, |_runtime, version, _ext| Ok(Ok(version.clone()))) {
-			Ok(version) => Some(version),
-			Err(e) => {
-				warn!(target: "executor", "Failed to fetch runtime: {:?}", e);
-				None
-			}
-		}
+	) -> Result<RuntimeVersion> {
+		self.with_runtime(ext, |_runtime, version, _ext| Ok(Ok(version.clone())))
 	}
 }
 
@@ -271,10 +265,10 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 /// # Example
 ///
 /// ```
-/// substrate_executor::native_executor_instance!(
+/// sc_executor::native_executor_instance!(
 ///     pub MyExecutor,
-///     test_runtime::api::dispatch,
-///     test_runtime::native_version,
+///     substrate_test_runtime::api::dispatch,
+///     substrate_test_runtime::native_version,
 /// );
 /// ```
 ///
@@ -284,7 +278,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 /// executor aware of the host functions for these interfaces.
 ///
 /// ```
-/// # use runtime_interface::runtime_interface;
+/// # use sp_runtime_interface::runtime_interface;
 ///
 /// #[runtime_interface]
 /// trait MyInterface {
@@ -293,10 +287,10 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 ///     }
 /// }
 ///
-/// substrate_executor::native_executor_instance!(
+/// sc_executor::native_executor_instance!(
 ///     pub MyExecutor,
-///     test_runtime::api::dispatch,
-///     test_runtime::native_version,
+///     substrate_test_runtime::api::dispatch,
+///     substrate_test_runtime::native_version,
 ///     my_interface::HostFunctions,
 /// );
 /// ```
@@ -343,7 +337,7 @@ macro_rules! native_executor_instance {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_interface::runtime_interface;
+	use sp_runtime_interface::runtime_interface;
 
 	#[runtime_interface]
 	trait MyInterface {
@@ -354,8 +348,8 @@ mod tests {
 
 	native_executor_instance!(
 		pub MyExecutor,
-		test_runtime::api::dispatch,
-		test_runtime::native_version,
+		substrate_test_runtime::api::dispatch,
+		substrate_test_runtime::native_version,
 		(my_interface::HostFunctions, my_interface::HostFunctions),
 	);
 
