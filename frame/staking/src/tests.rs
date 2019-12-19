@@ -20,7 +20,11 @@ use super::*;
 use mock::*;
 use sp_runtime::{assert_eq_error_rate, traits::{OnInitialize, BadOrigin}};
 use sp_staking::offence::OffenceDetails;
-use frame_support::{assert_ok, assert_noop, traits::{Currency, ReservableCurrency}};
+use frame_support::{
+	assert_ok, assert_noop,
+	traits::{Currency, ReservableCurrency},
+	dispatch::DispatchError,
+};
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]
@@ -32,7 +36,11 @@ fn force_unstake_works() {
 		// Cant transfer
 		assert_noop!(
 			Balances::transfer(Origin::signed(11), 1, 10),
-			"account liquidity restrictions prevent withdrawal"
+			DispatchError::Module {
+				index: 0,
+				error: 1,
+				message: Some("LiquidityRestrictions"),
+			}
 		);
 		// Force unstake requires root.
 		assert_noop!(Staking::force_unstake(Origin::signed(11), 11), BadOrigin);
@@ -326,7 +334,14 @@ fn staking_should_work() {
 				Some(StakingLedger { stash: 3, total: 1500, active: 1500, unlocking: vec![] })
 			);
 			// e.g. it cannot spend more than 500 that it has free from the total 2000
-			assert_noop!(Balances::reserve(&3, 501), "account liquidity restrictions prevent withdrawal");
+			assert_noop!(
+				Balances::reserve(&3, 501),
+				DispatchError::Module {
+					index: 0,
+					error: 1,
+					message: Some("LiquidityRestrictions"),
+				}
+			);
 			assert_ok!(Balances::reserve(&3, 409));
 		});
 }
@@ -817,7 +832,11 @@ fn cannot_transfer_staked_balance() {
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
 			Balances::transfer(Origin::signed(11), 20, 1),
-			"account liquidity restrictions prevent withdrawal",
+			DispatchError::Module {
+				index: 0,
+				error: 1,
+				message: Some("LiquidityRestrictions"),
+			}
 		);
 
 		// Give account 11 extra free balance
@@ -842,7 +861,11 @@ fn cannot_transfer_staked_balance_2() {
 		// Confirm account 21 can transfer at most 1000
 		assert_noop!(
 			Balances::transfer(Origin::signed(21), 20, 1001),
-			"account liquidity restrictions prevent withdrawal",
+			DispatchError::Module {
+				index: 0,
+				error: 1,
+				message: Some("LiquidityRestrictions"),
+			}
 		);
 		assert_ok!(Balances::transfer(Origin::signed(21), 20, 1000));
 	});
@@ -859,7 +882,14 @@ fn cannot_reserve_staked_balance() {
 		// Confirm account 11 (via controller 10) is totally staked
 		assert_eq!(Staking::stakers(&11).own, 1000);
 		// Confirm account 11 cannot transfer as a result
-		assert_noop!(Balances::reserve(&11, 1), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			Balances::reserve(&11, 1),
+			DispatchError::Module {
+				index: 0,
+				error: 1,
+				message: Some("LiquidityRestrictions"),
+			}
+		);
 
 		// Give account 11 extra free balance
 		let _ = Balances::make_free_balance_be(&11, 10000);
