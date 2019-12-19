@@ -33,7 +33,7 @@ impl hyper::server::accept::Accept for Incoming<'_> {
 
 pub struct TcpStream(pub async_std::net::TcpStream);
 
-impl tokio_io::AsyncRead for TcpStream {
+impl tokio::io::AsyncRead for TcpStream {
 	fn poll_read(
 		self: Pin<&mut Self>,
 		cx: &mut Context,
@@ -44,7 +44,7 @@ impl tokio_io::AsyncRead for TcpStream {
 	}
 }
 
-impl tokio_io::AsyncWrite for TcpStream {
+impl tokio::io::AsyncWrite for TcpStream {
 	fn poll_write(
 		self: Pin<&mut Self>,
 		cx: &mut Context,
