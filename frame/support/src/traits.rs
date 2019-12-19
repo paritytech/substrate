@@ -333,9 +333,6 @@ pub trait Currency<AccountId> {
 	/// and must be dealt with. It may be dropped but cannot be cloned.
 	type NegativeImbalance: Imbalance<Self::Balance, Opposite=Self::PositiveImbalance>;
 
-	/// Error type for a module.
-	type Error: ModuleDispatchError;
-
 	// PUBLIC IMMUTABLES
 
 	/// The combined balance of `who`.

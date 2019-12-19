@@ -175,7 +175,7 @@ use sp_runtime::{
 	RuntimeDebug, DispatchResult, DispatchError,
 	traits::{
 		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
-		Saturating, Bounded, ModuleDispatchError,
+		Saturating, Bounded,
 	},
 };
 use frame_system::{self as system, IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
@@ -273,7 +273,7 @@ decl_event!(
 );
 
 decl_error! {
-	pub enum Error {
+	pub enum Error for Module<T: Trait<I>, I: Instance> {
 		/// Vesting balance too high to send value
 		VestingBalance,
 		/// Account liquidity restrictions prevent withdrawal
@@ -281,7 +281,7 @@ decl_error! {
 		/// Got an overflow after adding
 		Overflow,
 		/// Balance too low to send value
-		FreeBalanceLow,
+		InsufficientBalance,
 		/// Value too low to create account due to existential deposit
 		ExistentialDeposit,
 		/// Transfer/payment would kill account
@@ -289,7 +289,7 @@ decl_error! {
 		/// A vesting schedule already exists for this account
 		ExistingVestingSchedule,
 		/// Beneficiary account must pre-exist
-		NoBeneficiary,
+		DeadAccount,
 	}
 }
 
@@ -411,6 +411,8 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
+		type Error = Error<T, I>;
+
 		/// The minimum amount required to keep an account open.
 		const ExistentialDeposit: T::Balance = T::ExistentialDeposit::get();
 
@@ -419,8 +421,6 @@ decl_module! {
 
 		/// The fee required to create an account.
 		const CreationFee: T::Balance = T::CreationFee::get();
-
-		type Error = Error;
 
 		fn deposit_event() = default;
 
@@ -455,7 +455,7 @@ decl_module! {
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: T::Balance
 		) {
-			let transactor = ensure_signed(origin).map_err(|e| e.as_str())?;
+			let transactor = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as Currency<_>>::transfer(&transactor, &dest, value, ExistenceRequirement::AllowDeath)?;
 		}
@@ -480,7 +480,7 @@ decl_module! {
 			#[compact] new_free: T::Balance,
 			#[compact] new_reserved: T::Balance
 		) {
-			ensure_root(origin).map_err(|e| e.as_str())?;
+			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let existential_deposit = T::ExistentialDeposit::get();
 
@@ -515,7 +515,7 @@ decl_module! {
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: T::Balance
 		) {
-			ensure_root(origin).map_err(|e| e.as_str())?;
+			ensure_root(origin)?;
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as Currency<_>>::transfer(&source, &dest, value, ExistenceRequirement::AllowDeath)?;
@@ -533,7 +533,7 @@ decl_module! {
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: T::Balance
 		) {
-			let transactor = ensure_signed(origin).map_err(|e| e.as_str())?;
+			let transactor = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as Currency<_>>::transfer(&transactor, &dest, value, ExistenceRequirement::KeepAlive)?;
 		}
@@ -867,8 +867,6 @@ where
 	type PositiveImbalance = PositiveImbalance<T, I>;
 	type NegativeImbalance = NegativeImbalance<T, I>;
 
-	type Error = Error;
-
 	fn total_balance(who: &T::AccountId) -> Self::Balance {
 		Self::free_balance(who) + Self::reserved_balance(who)
 	}
@@ -922,7 +920,7 @@ where
 		if reasons.intersects(WithdrawReason::Reserve | WithdrawReason::Transfer)
 			&& Self::vesting_balance(who) > new_balance
 		{
-			Err("vesting balance too high to send value")?
+			Err(Error::<T, I>::VestingBalance)?
 		}
 		let locks = Self::locks(who);
 		if locks.is_empty() {
@@ -939,7 +937,7 @@ where
 		{
 			Ok(())
 		} else {
-			Err("account liquidity restrictions prevent withdrawal".into())
+			Err(Error::<T, I>::LiquidityRestrictions.into())
 		}
 	}
 
@@ -955,15 +953,15 @@ where
 		let fee = if would_create { T::CreationFee::get() } else { T::TransferFee::get() };
 		let liability = match value.checked_add(&fee) {
 			Some(l) => l,
-			None => Err("got overflow after adding a fee to value")?,
+			None => Err(Error::<T, I>::Overflow)?,
 		};
 
 		let new_from_balance = match from_balance.checked_sub(&liability) {
-			None => Err("balance too low to send value")?,
+			None => Err(Error::<T, I>::InsufficientBalance)?,
 			Some(b) => b,
 		};
 		if would_create && value < T::ExistentialDeposit::get() {
-			Err("value too low to create account")?
+			Err(Error::<T, I>::ExistentialDeposit)?
 		}
 		Self::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer.into(), new_from_balance)?;
 
@@ -971,13 +969,13 @@ where
 		// but better to be safe than sorry.
 		let new_to_balance = match to_balance.checked_add(&value) {
 			Some(b) => b,
-			None => Err("destination balance too high to receive value")?,
+			None => Err(Error::<T, I>::Overflow)?,
 		};
 
 		if transactor != dest {
 			if existence_requirement == ExistenceRequirement::KeepAlive {
 				if new_from_balance < Self::minimum_balance() {
-					Err("transfer would kill account")?
+					Err(Error::<T, I>::KeepAlive)?
 				}
 			}
 
@@ -1051,7 +1049,7 @@ where
 		value: Self::Balance
 	) -> result::Result<Self::PositiveImbalance, DispatchError> {
 		if Self::total_balance(who).is_zero() {
-			Err("beneficiary account must pre-exist")?
+			Err(Error::<T, I>::DeadAccount)?
 		}
 		Self::set_free_balance(who, Self::free_balance(who) + value);
 		Ok(PositiveImbalance::new(value))
@@ -1168,7 +1166,7 @@ where
 		value: Self::Balance,
 	) -> result::Result<Self::Balance, DispatchError> {
 		if Self::total_balance(beneficiary).is_zero() {
-			Err("beneficiary account must pre-exist")?
+			Err(Error::<T, I>::DeadAccount)?
 		}
 		let b = Self::reserved_balance(slashed);
 		let slash = cmp::min(b, value);
