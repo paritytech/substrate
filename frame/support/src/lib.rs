@@ -187,8 +187,7 @@ macro_rules! assert_ok {
 	}
 }
 
-/// The void type.  Creating an instance of this type immediately invokes Undefined Behavior, but
-/// is impossible in safe code.
+/// The void type - it cannot exist.
 // Oh rust, you crack me up...
 #[derive(Clone, Eq, PartialEq, RuntimeDebug)]
 pub enum Void {}

@@ -35,7 +35,7 @@ use codec::{self as codec, Encode, Decode};
 use frame_support::{decl_event, decl_storage, decl_module, decl_error, storage};
 use sp_runtime::{
 	generic::{DigestItem, OpaqueDigestItemId},
-	traits::{Bounded, Zero, ModuleDispatchError},
+	traits::{Zero, ModuleDispatchError},
 	Perbill,
 };
 use sp_staking::{
@@ -226,7 +226,6 @@ decl_module! {
 				}
 
 				// enact the change if we've reached the enacting block
-				// OVERFLOW: both inputs are trusted.
 				if block_number == pending_change.scheduled_at + pending_change.delay {
 					Self::set_grandpa_authorities(&pending_change.next_authorities);
 					Self::deposit_event(
@@ -245,7 +244,6 @@ decl_module! {
 					}
 
 					// enact change to paused state
-					// OVERFLOW: both inputs are trusted
 					if block_number == scheduled_at + delay {
 						<State<T>>::put(StoredState::Paused);
 						Self::deposit_event(Event::Paused);
@@ -258,7 +256,6 @@ decl_module! {
 					}
 
 					// enact change to live state
-					// OVERFLOW: both inputs are trusted
 					if block_number == scheduled_at + delay {
 						<State<T>>::put(StoredState::Live);
 						Self::deposit_event(Event::Resumed);
@@ -342,13 +339,8 @@ impl<T: Trait> Module<T> {
 					return Err(Error::TooSoon);
 				}
 
-				if (T::BlockNumber::max_value() - scheduled_at) / 2.into() >= in_blocks {
-					return Err("overflow would occur")
-				}
-
 				// only allow the next forced change when twice the window has passed since
 				// this one.
-				// OVERFLOW: checked above
 				<NextForced<T>>::put(scheduled_at + in_blocks * 2.into());
 			}
 
@@ -454,7 +446,6 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
 			} else {
 				let _ = Self::schedule_change(next_authorities, Zero::zero(), None);
 			}
-			// safe, we will not reach 2^32 sets
 			CurrentSetId::mutate(|s| { *s += 1; *s })
 		} else {
 			// nothing's changed, neither economic conditions nor session keys. update the pointer
@@ -529,7 +520,6 @@ impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocat
 		validator_set_count: u32,
 	) -> Perbill {
 		// the formula is min((3k / n)^2, 1)
-		// will not overflow, we do not have enough validators
 		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
 		// _ ^ 2
 		x.square()

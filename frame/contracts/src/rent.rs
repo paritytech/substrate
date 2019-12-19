@@ -107,7 +107,6 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	let dues = fee_per_block
 		.checked_mul(&blocks_passed.saturated_into::<u32>().into())
 		.unwrap_or(<BalanceOf<T>>::max_value());
-	// checked above
 	let rent_budget = contract.rent_allowance.min(balance - subsistence_threshold);
 	let insufficient_rent = rent_budget < dues;
 
@@ -166,7 +165,6 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 
 	if pay_rent {
 		let contract_info = ContractInfo::Alive(AliveContractInfo::<T> {
-			// cannot overflow, since if it did, we would be in the “insufficient rent” situation.
 			rent_allowance: contract.rent_allowance - dues, // rent_allowance is not exceeded
 			deduct_block: current_block_number,
 			..contract

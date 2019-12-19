@@ -290,7 +290,7 @@ impl<T: Trait> Module<T> {
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
 		Approvals::mutate(|v| {
 			v.retain(|&index| {
-				// Should always be true, but shouldn’t panic if false or we're screwed.
+				// Should always be true, but shouldn't panic if false or we're screwed.
 				if let Some(p) = Self::proposals(index) {
 					if p.value <= budget_remaining {
 						budget_remaining -= p.value;
@@ -316,7 +316,6 @@ impl<T: Trait> Module<T> {
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
-			// How do we know this will not overflow? OVERFLOW
 			let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
 			budget_remaining -= burn;
 			imbalance.subsume(T::Currency::burn(burn));

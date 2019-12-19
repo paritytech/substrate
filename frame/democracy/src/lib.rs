@@ -24,7 +24,7 @@ use sp_runtime::{
 	RuntimeDebug,
 	traits::{
 		Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash,
-		Dispatchable, Saturating, ModuleDispatchError, CheckedAdd,
+		Dispatchable, Saturating, ModuleDispatchError,
 	},
 };
 use codec::{Ref, Encode, Decode, Input, Output};
@@ -459,8 +459,6 @@ decl_module! {
 			T::Currency::reserve(&who, value)?;
 
 			let index = Self::public_prop_count();
-			// ASSUMPTION: we do not have 4 billion proposals
-			// ensure!(PropIndex::max_value() - 1 >= index, "would overflow u32");
 			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (value, &[&who][..]));
 
@@ -595,7 +593,6 @@ decl_module! {
 			let now = <frame_system::Module<T>>::block_number();
 			// We don't consider it an error if `vote_period` is too low, like `emergency_propose`.
 			let period = voting_period.max(T::EmergencyVotingPeriod::get());
-			ensure!(T::BlockNumber::max_value() - now >= period, "referendum voting period would overflow");
 			Self::inject_referendum(now + period, proposal_hash, threshold, delay);
 		}
 
@@ -617,8 +614,6 @@ decl_module! {
 				.err().ok_or(Error::AlreadyVetoed)?;
 
 			existing_vetoers.insert(insert_position, who.clone());
-			// SAFE: will not overflow for a few hundred years, assuming `CooloffPeriod` is
-			// reasonable.
 			let until = <frame_system::Module<T>>::block_number() + T::CooloffPeriod::get();
 			<Blacklist<T>>::insert(&proposal_hash, (until, existing_vetoers));
 
@@ -717,7 +712,7 @@ decl_module! {
 			let (_, conviction) = <Delegations<T>>::take(&who);
 			// Indefinite lock is reduced to the maximum voting lock that could be possible.
 			let now = <frame_system::Module<T>>::block_number();
-			let locked_until = now.saturating_add(T::EnactmentPeriod::get().saturating_mul(conviction.lock_periods().into()));
+			let locked_until = now + T::EnactmentPeriod::get() * conviction.lock_periods().into();
 			T::Currency::set_lock(
 				DEMOCRACY_ID,
 				&who,
@@ -784,7 +779,7 @@ decl_module! {
 			let now = <frame_system::Module<T>>::block_number();
 			let (voting, enactment) = (T::VotingPeriod::get(), T::EnactmentPeriod::get());
 			let additional = if who == old { Zero::zero() } else { enactment };
-			ensure!(now >= then.checked_add(&(voting + additional)).ok_or(Error::Early)?, Error::Early);
+			ensure!(now >= then + voting + additional, Error::Early);
 
 			let queue = <DispatchQueue<T>>::get();
 			ensure!(!queue.iter().any(|item| &item.1 == &proposal_hash), Error::Imminent);
@@ -802,7 +797,6 @@ impl<T: Trait> Module<T> {
 	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal
 	/// index.
 	pub fn locked_for(proposal: PropIndex) -> Option<BalanceOf<T>> {
-		// ERROR what is the best solution here?
 		Self::deposit_of(proposal).map(|(d, l)| d * (l.len() as u32).into())
 	}
 
@@ -850,14 +844,10 @@ impl<T: Trait> Module<T> {
 						(Zero::zero(), votes, turnout)
 					}
 				}).fold(
-				    // ERROR what to do if there is overflow?
-					// This could be okay on the grounds there will not be 4 billion
-					// votors, but that needs to be checked.
 					(Zero::zero(), Zero::zero(), Zero::zero()),
 					|(a, b, c), (d, e, f)| (a + d, b + e, c + f)
 				);
 		let (del_approve, del_against, del_capital) = Self::tally_delegation(ref_index);
-		// ditto
 		(approve + del_approve, against + del_against, capital + del_capital)
 	}
 
@@ -876,10 +866,8 @@ impl<T: Trait> Module<T> {
 					MAX_RECURSION_LIMIT
 				);
 				if aye {
-					// WARN is this safe in practice?
 					(approve_acc + votes, against_acc, turnout_acc + turnout)
 				} else {
-					// WARN is this safe in practice?
 					(approve_acc, against_acc + votes, turnout_acc + turnout)
 				}
 			}
@@ -906,10 +894,8 @@ impl<T: Trait> Module<T> {
 						ref_index,
 						delegator,
 						conviction,
-						// SAFE: we checked that recursion_limit > 0 earlier
 						recursion_limit - 1
 					);
-					// WARN is this safe in practice?
 					(votes_acc + votes + del_votes, turnout_acc + turnout + del_turnout)
 				}
 			)
@@ -929,8 +915,7 @@ impl<T: Trait> Module<T> {
 		delay: T::BlockNumber
 	) -> ReferendumIndex {
 		<Module<T>>::inject_referendum(
-			// SAFE: we assume that chain parameters are reasonable
-			<system::Module<T>>::block_number() + T::VotingPeriod::get(),
+			<frame_system::Module<T>>::block_number() + T::VotingPeriod::get(),
 			proposal_hash,
 			threshold,
 			delay
@@ -1024,7 +1009,6 @@ impl<T: Trait> Module<T> {
 			LastTabledWasExternal::put(true);
 			Self::deposit_event(RawEvent::ExternalTabled);
 			Self::inject_referendum(
-				// SAFE will not overflow in any reasonable amount of time.
 				now + T::VotingPeriod::get(),
 				proposal,
 				threshold,
@@ -1054,7 +1038,6 @@ impl<T: Trait> Module<T> {
 				}
 				Self::deposit_event(RawEvent::Tabled(prop_index, deposit, depositors));
 				Self::inject_referendum(
-					// SAFE for reasonable parameters
 					now + T::VotingPeriod::get(),
 					proposal,
 					VoteThreshold::SuperMajorityApprove,
@@ -1088,7 +1071,7 @@ impl<T: Trait> Module<T> {
 		{
 			// now plus: the base lock period multiplied by the number of periods this voter
 			// offered to lock should they win...
-			let locked_until = now.saturating_add(T::EnactmentPeriod::get().saturating_mul(conviction.lock_periods().into()));
+			let locked_until = now + T::EnactmentPeriod::get() * conviction.lock_periods().into();
 			// ...extend their bondage until at least then.
 			T::Currency::extend_lock(
 				DEMOCRACY_ID,
@@ -1106,7 +1089,7 @@ impl<T: Trait> Module<T> {
 			if info.delay.is_zero() {
 				let _ = Self::enact_proposal(info.proposal_hash, index);
 			} else {
-				let item = (now.saturating_add(info.delay), info.proposal_hash, index);
+				let item = (now + info.delay,info.proposal_hash, index);
 				<DispatchQueue<T>>::mutate(|queue| {
 					let pos = queue.binary_search_by_key(&item.0, |x| x.0).unwrap_or_else(|e| e);
 					queue.insert(pos, item);

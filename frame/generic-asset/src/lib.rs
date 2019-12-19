@@ -453,7 +453,6 @@ decl_storage! {
 	trait Store for Module<T: Trait> as GenericAsset {
 		/// Total issuance of a given asset.
 		pub TotalIssuance get(fn total_issuance) build(|config: &GenesisConfig<T>| {
-			// OVERFLOW: happens at genesis, can be checked statically
 			let issuance = config.initial_balance * (config.endowed_accounts.len() as u32).into();
 			config.assets.iter().map(|id| (id.clone(), issuance)).collect::<Vec<_>>()
 		}): map T::AssetId => T::Balance;
@@ -519,7 +518,6 @@ impl<T: Trait> Module<T> {
 
 	/// Get an account's total balance of an asset kind.
 	pub fn total_balance(asset_id: &T::AssetId, who: &T::AccountId) -> T::Balance {
-		// OVERFLOW: total balance fits in a Balance
 		Self::free_balance(asset_id, who) + Self::reserved_balance(asset_id, who)
 	}
 
@@ -585,9 +583,7 @@ impl<T: Trait> Module<T> {
 		Self::ensure_can_withdraw(asset_id, from, amount, WithdrawReason::Transfer.into(), new_balance)?;
 
 		if from != to {
-			// OVERFLOW: already checked that this can happen
 			<FreeBalance<T>>::mutate(asset_id, from, |balance| *balance -= amount);
-			// OVERFLOW: total balance fits in a Balance
 			<FreeBalance<T>>::mutate(asset_id, to, |balance| *balance += amount);
 		}
 
@@ -622,14 +618,10 @@ impl<T: Trait> Module<T> {
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
 		let original_free_balance = Self::free_balance(asset_id, who);
 		if original_free_balance < amount {
-			return Err("not enough free funds")
-		}
-		if T::Balance::max_value() - amount <= original_reserve_balance {
-			return Err("transfer would overflow")
+			return Err("not enough free funds");
 		}
 		let new_reserve_balance = original_reserve_balance + amount;
 		Self::set_reserved_balance(asset_id, who, new_reserve_balance);
-		// checked for overflow earlier
 		let new_free_balance = original_free_balance - amount;
 		Self::set_free_balance(asset_id, who, new_free_balance);
 		Ok(())
@@ -644,7 +636,6 @@ impl<T: Trait> Module<T> {
 		let b = Self::reserved_balance(asset_id, who);
 		let actual = sp_std::cmp::min(b, amount);
 		let original_free_balance = Self::free_balance(asset_id, who);
-		// overflow: total balance fits in a Balance → safe
 		let new_free_balance = original_free_balance + actual;
 		Self::set_free_balance(asset_id, who, new_free_balance);
 		Self::set_reserved_balance(asset_id, who, b - actual);
@@ -705,7 +696,7 @@ impl<T: Trait> Module<T> {
 		let slash = sp_std::cmp::min(b, amount);
 
 		let original_free_balance = Self::free_balance(asset_id, beneficiary);
-		let new_free_balance = original_free_balance.saturating_add(slash);
+		let new_free_balance = original_free_balance + slash;
 		Self::set_free_balance(asset_id, beneficiary, new_free_balance);
 
 		let new_reserve_balance = b - slash;
@@ -1121,7 +1112,6 @@ where
 	type NegativeImbalance = NegativeImbalance<T, U>;
 
 	fn total_balance(who: &T::AccountId) -> Self::Balance {
-		// overflow: total balance fits in a Balance
 		Self::free_balance(&who) + Self::reserved_balance(&who)
 	}
 
@@ -1179,8 +1169,7 @@ where
 	}
 
 	fn deposit_creating(who: &T::AccountId, value: Self::Balance) -> Self::PositiveImbalance {
-		// if this overflows, we are likely in an unrecoverable state, but at least do not panic!
-		let (imbalance, _) = Self::make_free_balance_be(who, Self::free_balance(who).saturating_add(value));
+		let (imbalance, _) = Self::make_free_balance_be(who, Self::free_balance(who) + value);
 		if let SignedImbalance::Positive(p) = imbalance {
 			p
 		} else {
@@ -1275,7 +1264,6 @@ where
 		(NegativeImbalance::new(slash), value - slash)
 	}
 
-	/// WRONG!!!!  does not preserve total issuance
 	fn repatriate_reserved(
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,

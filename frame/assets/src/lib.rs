@@ -183,9 +183,7 @@ decl_module! {
 			ensure!(origin_balance >= amount, Error::BalanceLow);
 
 			Self::deposit_event(RawEvent::Transferred(id, origin, target.clone(), amount));
-			// we check above that this will not overflow
 			<Balances<T>>::insert(origin_account, origin_balance - amount);
-			// sum of all issuances will not exceed 2**96; `Balance` in Polkadot is `u128`
 			<Balances<T>>::mutate((id, target), |balance| *balance += amount);
 		}
 
@@ -195,7 +193,6 @@ decl_module! {
 			let balance = <Balances<T>>::take((id, &origin));
 			ensure!(!balance.is_zero(), Error::BalanceZero);
 
-			// the total supply must not be less than the balance WARN
 			<TotalSupply<T>>::mutate(id, |total_supply| *total_supply -= balance);
 			Self::deposit_event(RawEvent::Destroyed(id, origin, balance));
 		}

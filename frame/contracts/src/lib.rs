@@ -105,7 +105,6 @@ use crate::wasm::{WasmLoader, WasmVm};
 
 pub use crate::gas::{Gas, GasMeter};
 pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
-use core::u32;
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
@@ -845,11 +844,10 @@ impl<T: Trait> Module<T> {
 			return Err("Tombstones don't match");
 		}
 
-		let delta = key_values_taken.iter()
+		origin_contract.storage_size -= key_values_taken.iter()
 			.map(|(_, value)| value.len() as u32)
 			.sum::<u32>();
-		assert!(u32::MAX - origin_contract.storage_size >= delta);
-		origin_contract.storage_size -= delta;
+
 		<ContractInfoOf<T>>::remove(&origin);
 		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(RawAliveContractInfo {
 			trie_id: origin_contract.trie_id,

@@ -651,7 +651,7 @@ struct VoterWork<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
 impl<B, E, Block, N, RA, SC, VR> VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT<Hash=H256>,
-	N: NetworkT<Block> + Sync,
+ 	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -826,7 +826,7 @@ where
 impl<B, E, Block, N, RA, SC, VR> Future for VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT<Hash=H256>,
-	N: NetworkT<Block> + Sync,
+ 	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,

@@ -639,7 +639,6 @@ impl<T: Trait> Module<T> {
 		<Number<T>>::put(number);
 		<Digest<T>>::put(digest);
 		<ParentHash<T>>::put(parent_hash);
-		// OVERFLOW: block 0 is genesis
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
 		<Events<T>>::kill();
@@ -746,7 +745,6 @@ impl<T: Trait> Module<T> {
 
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_nonce(who: &T::AccountId) {
-		// OVERFLOW: will not run out of nonces in my lifetime
 		<AccountNonce<T>>::insert(who, Self::account_nonce(who) + T::Index::one());
 	}
 
@@ -964,7 +962,6 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 			)
 		}
 
-		// OVERFLOW: we won’t run out of nonces
 		<AccountNonce<T>>::insert(who, expected + T::Index::one());
 		Ok(())
 	}

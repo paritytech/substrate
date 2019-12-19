@@ -218,7 +218,6 @@ decl_module! {
 			let bvalue = U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(value));
 			let address = T::ConvertAccountId::convert_account_id(&sender);
 			Accounts::mutate(&address, |account| {
-				// cannot overflow: total balance fits in a `Balance`
 				account.balance += bvalue;
 			});
 		}

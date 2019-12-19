@@ -60,11 +60,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 		let key_hashed = key.borrow().using_encoded(Self::Hasher::hash);
 
 		let mut final_key = Vec::with_capacity(
-			module_prefix_hashed
-				.len()
-				.checked_add(storage_prefix_hashed.len())
-				.and_then(|s| s.checked_add(key_hashed.as_ref().len()))
-				.expect("capacity overflow!"),
+			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.as_ref().len()
 		);
 
 		final_key.extend_from_slice(&module_prefix_hashed[..]);
