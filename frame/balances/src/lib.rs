@@ -951,15 +951,9 @@ where
 		let to_balance = Self::free_balance(dest);
 		let would_create = to_balance.is_zero();
 		let fee = if would_create { T::CreationFee::get() } else { T::TransferFee::get() };
-		let liability = match value.checked_add(&fee) {
-			Some(l) => l,
-			None => Err(Error::<T, I>::Overflow)?,
-		};
+		let liability = value.checked_add(&fee).ok_or(Error::<T, I>::Overflow)?;
+		let new_from_balance = from_balance.checked_sub(&liability).ok_or(Error::<T, I>::InsufficientBalance)?;
 
-		let new_from_balance = match from_balance.checked_sub(&liability) {
-			None => Err(Error::<T, I>::InsufficientBalance)?,
-			Some(b) => b,
-		};
 		if would_create && value < T::ExistentialDeposit::get() {
 			Err(Error::<T, I>::ExistentialDeposit)?
 		}
@@ -967,10 +961,7 @@ where
 
 		// NOTE: total stake being stored in the same type means that this could never overflow
 		// but better to be safe than sorry.
-		let new_to_balance = match to_balance.checked_add(&value) {
-			Some(b) => b,
-			None => Err(Error::<T, I>::Overflow)?,
-		};
+		let new_to_balance = to_balance.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
 
 		if transactor != dest {
 			if existence_requirement == ExistenceRequirement::KeepAlive {
