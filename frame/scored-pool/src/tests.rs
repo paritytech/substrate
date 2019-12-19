@@ -41,7 +41,7 @@ fn submit_candidacy_must_not_work() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			ScoredPool::submit_candidacy(Origin::signed(99)),
-			Error::<Test, DefaultInstance>::InsufficientBalance
+			"not enough free funds"
 		);
 		assert_noop!(
 			ScoredPool::submit_candidacy(Origin::signed(40)),

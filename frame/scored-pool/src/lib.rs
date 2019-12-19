@@ -227,8 +227,6 @@ decl_error! {
 	pub enum Error for Module<T: Trait<I>, I: Instance> {
 		/// Already a member.
 		AlreadyInPool,
-		/// Balance is too low to submit candidacy.
-		InsufficientBalance,
 		/// Index out of bounds.
 		InvalidIndex,
 		/// Index does not match requested account.
@@ -270,7 +268,7 @@ decl_module! {
 			ensure!(!<CandidateExists<T, I>>::exists(&who), Error::<T, I>::AlreadyInPool);
 
 			let deposit = T::CandidateDeposit::get();
-			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T, I>::InsufficientBalance)?;
+			T::Currency::reserve(&who, deposit)?;
 
 			// can be inserted as last element in pool, since entities with
 			// `None` are always sorted to the end.
