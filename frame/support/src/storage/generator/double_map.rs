@@ -181,6 +181,17 @@ where
 		unhashed::kill_prefix(Self::storage_double_map_final_key1(k1).as_ref())
 	}
 
+	fn iter_prefix<KArg1>(k1: KArg1) -> storage::PrefixIterator<V>
+		where KArg1: ?Sized + EncodeLike<K1>
+	{
+		let prefix = Self::storage_double_map_final_key1(k1);
+		storage::PrefixIterator::<V> {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			phantom_data: Default::default(),
+		}
+	}
+
 	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
 	where
 		KArg1: EncodeLike<K1>,
@@ -264,5 +275,36 @@ where
 
 			Ok(len)
 		}
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use sp_io::TestExternalities;
+	use crate::storage::{self, StorageDoubleMap};
+	use crate::hash::Twox128;
+
+	#[test]
+	fn iter_prefix_works() {
+		TestExternalities::default().execute_with(|| {
+			struct MyStorage;
+			impl storage::generator::StorageDoubleMap<u64, u64, u64> for MyStorage {
+				type Query = Option<u64>;
+				fn module_prefix() -> &'static [u8] { b"MyModule" }
+				fn storage_prefix() -> &'static [u8] { b"MyStorage" }
+				type Hasher1 = Twox128;
+				type Hasher2 = Twox128;
+				fn from_optional_value_to_query(v: Option<u64>) -> Self::Query { v }
+				fn from_query_to_optional_value(v: Self::Query) -> Option<u64> { v }
+			}
+
+			MyStorage::insert(1, 3, 7);
+			MyStorage::insert(1, 4, 8);
+			MyStorage::insert(2, 5, 9);
+			MyStorage::insert(2, 6, 10);
+
+			assert_eq!(MyStorage::iter_prefix(1).collect::<Vec<_>>(), vec![7, 8]);
+			assert_eq!(MyStorage::iter_prefix(2).collect::<Vec<_>>(), vec![10, 9]);
+		});
 	}
 }

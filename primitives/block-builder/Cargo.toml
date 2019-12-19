@@ -5,11 +5,11 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sp-runtime = { path = "../runtime", default-features = false }
-sp-api = { path = "../api", default-features = false }
-sp-std = { path = "../std", default-features = false }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
+sp-api = { version = "2.0.0", default-features = false, path = "../api" }
+sp-std = { version = "2.0.0", default-features = false, path = "../std" }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false }
-sp-inherents = { path = "../inherents", default-features = false }
+sp-inherents = { version = "2.0.0", default-features = false, path = "../inherents" }
 
 [features]
 default = [ "std" ]

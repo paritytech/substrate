@@ -147,7 +147,7 @@
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //!			/// Reward a validator.
-//! 		pub fn reward_myself(origin) -> dispatch::Result {
+//! 		pub fn reward_myself(origin) -> dispatch::DispatchResult {
 //! 			let reported = ensure_signed(origin)?;
 //! 			<staking::Module<T>>::reward_by_ids(vec![(reported, 10)]);
 //! 			Ok(())
@@ -258,7 +258,7 @@ pub mod inflation;
 use sp_std::{prelude::*, result};
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
-	decl_module, decl_event, decl_storage, ensure,
+	decl_module, decl_event, decl_storage, ensure, decl_error,
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
@@ -783,6 +783,32 @@ decl_event!(
 	}
 );
 
+decl_error! {
+	/// Error for the stacking module.
+	pub enum Error for Module<T: Trait> {
+		/// Not a controller account.
+		NotController,
+		/// Not a stash account.
+		NotStash,
+		/// Stash is already bonded.
+		AlreadyBonded,
+		/// Controller is already paired.
+		AlreadyPaired,
+		/// Should be the root origin or the `T::SlashCancelOrigin`.
+		BadOrigin,
+		/// Targets cannot be empty.
+		EmptyTargets,
+		/// Duplicate index.
+		DuplicateIndex,
+		/// Slash record index out of bounds.
+		InvalidSlashIndex,
+		/// Can not bond with value less than minimum balance.
+		InsufficientValue,
+		/// Can not schedule more unlock chunks.
+		NoMoreChunks,
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Number of sessions per era.
@@ -790,6 +816,8 @@ decl_module! {
 
 		/// Number of eras that staked funds must remain bonded for.
 		const BondingDuration: EraIndex = T::BondingDuration::get();
+
+		type Error = Error<T>;
 
 		fn deposit_event() = default;
 
@@ -828,18 +856,18 @@ decl_module! {
 			let stash = ensure_signed(origin)?;
 
 			if <Bonded<T>>::exists(&stash) {
-				return Err("stash already bonded")
+				Err(Error::<T>::AlreadyBonded)?
 			}
 
 			let controller = T::Lookup::lookup(controller)?;
 
 			if <Ledger<T>>::exists(&controller) {
-				return Err("controller already paired")
+				Err(Error::<T>::AlreadyPaired)?
 			}
 
 			// reject a bond which is considered to be _dust_.
 			if value < T::Currency::minimum_balance() {
-				return Err("can not bond with value less than minimum balance")
+				Err(Error::<T>::InsufficientValue)?
 			}
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
@@ -871,8 +899,8 @@ decl_module! {
 		fn bond_extra(origin, #[compact] max_additional: BalanceOf<T>) {
 			let stash = ensure_signed(origin)?;
 
-			let controller = Self::bonded(&stash).ok_or("not a stash")?;
-			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
+			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 
 			let stash_balance = T::Currency::free_balance(&stash);
 
@@ -910,10 +938,10 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(400_000)]
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
-			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(
 				ledger.unlocking.len() < MAX_UNLOCKING_CHUNKS,
-				"can not schedule more unlock chunks"
+				Error::<T>::NoMoreChunks,
 			);
 
 			let mut value = value.min(ledger.active);
@@ -952,7 +980,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(400_000)]
 		fn withdraw_unbonded(origin) {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let ledger = ledger.consolidate_unlocked(Self::current_era());
 
 			if ledger.unlocking.is_empty() && ledger.active.is_zero() {
@@ -986,7 +1014,7 @@ decl_module! {
 			Self::ensure_storage_upgraded();
 
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 			<Nominators<T>>::remove(stash);
 			<Validators<T>>::insert(stash, prefs);
@@ -1008,9 +1036,9 @@ decl_module! {
 			Self::ensure_storage_upgraded();
 
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
-			ensure!(!targets.is_empty(), "targets cannot be empty");
+			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			let targets = targets.into_iter()
 				.take(MAX_NOMINATIONS)
 				.map(|t| T::Lookup::lookup(t))
@@ -1040,7 +1068,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn chill(origin) {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			Self::chill_stash(&ledger.stash);
 		}
 
@@ -1058,7 +1086,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn set_payee(origin, payee: RewardDestination) {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 			<Payee<T>>::insert(stash, payee);
 		}
@@ -1077,10 +1105,10 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
 		fn set_controller(origin, controller: <T::Lookup as StaticLookup>::Source) {
 			let stash = ensure_signed(origin)?;
-			let old_controller = Self::bonded(&stash).ok_or("not a stash")?;
+			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
 			let controller = T::Lookup::lookup(controller)?;
 			if <Ledger<T>>::exists(&controller) {
-				return Err("controller already paired")
+				Err(Error::<T>::AlreadyPaired)?
 			}
 			if controller != old_controller {
 				<Bonded<T>>::insert(&stash, &controller);
@@ -1163,7 +1191,7 @@ decl_module! {
 			T::SlashCancelOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)
-				.map_err(|_| "bad origin")?;
+				.map_err(|_| Error::<T>::BadOrigin)?;
 
 			let mut slash_indices = slash_indices;
 			slash_indices.sort_unstable();
@@ -1173,12 +1201,12 @@ decl_module! {
 				let index = index as usize;
 
 				// if `index` is not duplicate, `removed` must be <= index.
-				ensure!(removed <= index, "duplicate index");
+				ensure!(removed <= index, Error::<T>::DuplicateIndex);
 
 				// all prior removals were from before this index, since the
 				// list is sorted.
 				let index = index - removed;
-				ensure!(index < unapplied.len(), "slash record index out of bounds");
+				ensure!(index < unapplied.len(), Error::<T>::InvalidSlashIndex);
 
 				unapplied.remove(index);
 			}

@@ -5,12 +5,12 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sc-client = { path = "../../../client/" }
+sc-client = { version = "2.0.0", path = "../../../client/" }
 jsonrpc-core = "14.0.3"
-node-primitives = { path = "../primitives" }
-node-runtime = { path = "../runtime" }
-sp-runtime = { path = "../../../primitives/runtime" }
-pallet-contracts-rpc = { path = "../../../frame/contracts/rpc/" }
-pallet-transaction-payment-rpc = { path = "../../../frame/transaction-payment/rpc/" }
-substrate-frame-rpc-system = { path = "../../../utils/frame/rpc/system" }
-sp-transaction-pool = { path = "../../../primitives/transaction-pool" }
+node-primitives = { version = "2.0.0", path = "../primitives" }
+node-runtime = { version = "2.0.0", path = "../runtime" }
+sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
+pallet-contracts-rpc = { version = "2.0.0", path = "../../../frame/contracts/rpc/" }
+pallet-transaction-payment-rpc = { version = "2.0.0", path = "../../../frame/transaction-payment/rpc/" }
+substrate-frame-rpc-system = { version = "2.0.0", path = "../../../utils/frame/rpc/system" }
+sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }

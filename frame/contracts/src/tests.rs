@@ -117,6 +117,7 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
+	type ModuleToIndex = ();
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;

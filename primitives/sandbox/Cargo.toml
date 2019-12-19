@@ -6,9 +6,9 @@ edition = "2018"
 
 [dependencies]
 wasmi = { version = "0.6.2", optional = true }
-sp-core = { path = "../core", default-features = false }
-sp-std = { path = "../std", default-features = false }
-sp-io = { path = "../io", default-features = false }
+sp-core = { version = "2.0.0", default-features = false, path = "../core" }
+sp-std = { version = "2.0.0", default-features = false, path = "../std" }
+sp-io = { version = "2.0.0", default-features = false, path = "../io" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 
 [dev-dependencies]

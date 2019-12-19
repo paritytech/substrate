@@ -16,7 +16,7 @@
 
 use crate::traits::{AugmentClap, GetLogFilter};
 
-use std::path::PathBuf;
+use std::{str::FromStr, path::PathBuf};
 use structopt::{StructOpt, clap::{arg_enum, App, AppSettings, SubCommand, Arg}};
 
 pub use crate::execution_strategy::ExecutionStrategy;
@@ -438,15 +438,31 @@ pub struct RunCmd {
 
 	/// Listen to all RPC interfaces.
 	///
-	/// Default is local.
+	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use a RPC proxy
+	/// server to filter out dangerous methods. More details: https://github.com/paritytech/substrate/wiki/Public-RPC.
+	/// Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "rpc-external")]
 	pub rpc_external: bool,
 
+	/// Listen to all RPC interfaces.
+	///
+	/// Same as `--rpc-external`.
+	#[structopt(long = "unsafe-rpc-external")]
+	pub unsafe_rpc_external: bool,
+
 	/// Listen to all Websocket interfaces.
 	///
-	/// Default is local.
+	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use a RPC proxy
+	/// server to filter out dangerous methods. More details: https://github.com/paritytech/substrate/wiki/Public-RPC.
+	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "ws-external")]
 	pub ws_external: bool,
+
+	/// Listen to all Websocket interfaces.
+	///
+	/// Same as `--ws-external`.
+	#[structopt(long = "unsafe-ws-external")]
+	pub unsafe_ws_external: bool,
 
 	/// Listen to all Grafana data source interfaces.
 	///
@@ -734,6 +750,41 @@ pub struct BuildSpecCmd {
 
 impl_get_log_filter!(BuildSpecCmd);
 
+/// Wrapper type of `String` which holds an arbitary sized unsigned integer formatted as decimal.
+#[derive(Debug, Clone)]
+pub struct BlockNumber(String);
+
+impl FromStr for BlockNumber {
+	type Err = String;
+
+	fn from_str(block_number: &str) -> Result<Self, Self::Err> {
+		if block_number.chars().any(|d| !d.is_digit(10)) {
+			Err(format!(
+				"Invalid block number: {}, expected decimal formatted unsigned integer",
+				block_number
+			))
+		} else {
+			Ok(Self(block_number.to_owned()))
+		}
+	}
+}
+
+impl BlockNumber {
+	/// Wrapper on top of `std::str::parse<N>` but with `Error` as a `String`
+	///
+	/// See `https://doc.rust-lang.org/std/primitive.str.html#method.parse` for more elaborate
+	/// documentation.
+	pub fn parse<N>(&self) -> Result<N, String>
+	where
+		N: FromStr,
+		N::Err: std::fmt::Debug,
+	{
+		self.0
+			.parse()
+			.map_err(|e| format!("BlockNumber: {} parsing failed because of {:?}", self.0, e))
+	}
+}
+
 /// The `export-blocks` command used to export blocks.
 #[derive(Debug, StructOpt, Clone)]
 pub struct ExportBlocksCmd {
@@ -745,13 +796,13 @@ pub struct ExportBlocksCmd {
 	///
 	/// Default is 1.
 	#[structopt(long = "from", value_name = "BLOCK")]
-	pub from: Option<u32>,
+	pub from: Option<BlockNumber>,
 
 	/// Specify last block number.
 	///
 	/// Default is best block.
 	#[structopt(long = "to", value_name = "BLOCK")]
-	pub to: Option<u32>,
+	pub to: Option<BlockNumber>,
 
 	/// Use JSON output rather than binary.
 	#[structopt(long = "json")]
@@ -817,7 +868,7 @@ impl_get_log_filter!(CheckBlockCmd);
 pub struct RevertCmd {
 	/// Number of blocks to revert.
 	#[structopt(default_value = "256")]
-	pub num: u32,
+	pub num: BlockNumber,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]

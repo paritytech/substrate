@@ -125,9 +125,10 @@ impl frame_system::Trait for Runtime {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = Version;
+	type ModuleToIndex = ();
 }
 
-impl frame_utility::Trait for Runtime {
+impl pallet_utility::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
 }
@@ -507,15 +508,14 @@ impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for 
 	}
 }
 
-use frame_system as system;
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Storage, Config, Event},
-		Utility: frame_utility::{Module, Call, Event},
+		System: frame_system::{Module, Call, Storage, Config, Event},
+		Utility: pallet_utility::{Module, Call, Event},
 		Babe: pallet_babe::{Module, Call, Storage, Config, Inherent(Timestamp)},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},

@@ -238,6 +238,7 @@ impl system::Trait for Runtime {
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
+	type ModuleToIndex = ();
 }
 
 frame_support::construct_runtime!(

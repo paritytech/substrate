@@ -54,7 +54,7 @@
 //! blocks) and will go with the longest one in case of a tie.
 //!
 //! An in-depth description and analysis of the protocol can be found here:
-//! <https://research.web3.foundation/en/latest/polkadot/BABE/Babe>
+//! <https://research.web3.foundation/en/latest/polkadot/BABE/Babe.html>
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -493,8 +493,6 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 			debug!(target: "babe", "No block for {} slots. Applying 2^({}/{}) lenience",
 				slot_lenience, slot_lenience, BACKOFF_STEP);
 		}
-
-		let slot_duration = slot_info.duration << (slot_lenience / BACKOFF_STEP);
 
 		let slot_lenience = Duration::from_secs(slot_duration);
 		Some(slot_lenience + slot_remaining)

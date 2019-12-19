@@ -12,21 +12,21 @@ kvdb-rocksdb = { version = "0.2", optional = true }
 kvdb-memorydb = "0.1.2"
 linked-hash-map = "0.5.2"
 hash-db = "0.15.2"
-sc-client-api = { path = "../api" }
-sp-core = { path = "../../primitives/core" }
-sp-runtime = {  path = "../../primitives/runtime" }
-sc-client = { path = "../" }
-sp-state-machine = { path = "../../primitives/state-machine" }
+sc-client-api = { version = "2.0.0", path = "../api" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
+sc-client = { version = "2.0.0", path = "../" }
+sp-state-machine = { version = "2.0.0", path = "../../primitives/state-machine" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-sc-executor = { path = "../executor" }
-sc-state-db = { path = "../state-db" }
-sp-trie = { path = "../../primitives/trie" }
-sp-consensus = { path = "../../primitives/consensus/common" }
-sp-blockchain = { path = "../../primitives/blockchain" }
+sc-executor = { version = "2.0.0", path = "../executor" }
+sc-state-db = { version = "2.0.0", path = "../state-db" }
+sp-trie = { version = "2.0.0", path = "../../primitives/trie" }
+sp-consensus = { version = "0.8", path = "../../primitives/consensus/common" }
+sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 
 [dev-dependencies]
-sp-keyring = { path = "../../primitives/keyring" }
-substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
+sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 env_logger = "0.7.0"
 quickcheck = "0.9"
 

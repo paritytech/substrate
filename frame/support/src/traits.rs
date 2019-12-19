@@ -22,8 +22,8 @@ use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
-	ConsensusEngineId,
-	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating, ModuleDispatchError},
+	ConsensusEngineId, DispatchResult, DispatchError,
+	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
 };
 
 use crate::dispatch::Parameter;
@@ -389,7 +389,7 @@ pub trait Currency<AccountId> {
 		_amount: Self::Balance,
 		reasons: WithdrawReasons,
 		new_balance: Self::Balance,
-	) -> result::Result<(), Self::Error>;
+	) -> DispatchResult;
 
 	// PUBLIC MUTABLES (DANGEROUS)
 
@@ -402,7 +402,7 @@ pub trait Currency<AccountId> {
 		dest: &AccountId,
 		value: Self::Balance,
 		existence_requirement: ExistenceRequirement,
-	) -> result::Result<(), Self::Error>;
+	) -> DispatchResult;
 
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
 	/// free balance. This function cannot fail.
@@ -422,7 +422,7 @@ pub trait Currency<AccountId> {
 	fn deposit_into_existing(
 		who: &AccountId,
 		value: Self::Balance
-	) -> result::Result<Self::PositiveImbalance, Self::Error>;
+	) -> result::Result<Self::PositiveImbalance, DispatchError>;
 
 	/// Similar to deposit_creating, only accepts a `NegativeImbalance` and returns nothing on
 	/// success.
@@ -468,7 +468,7 @@ pub trait Currency<AccountId> {
 		value: Self::Balance,
 		reasons: WithdrawReasons,
 		liveness: ExistenceRequirement,
-	) -> result::Result<Self::NegativeImbalance, Self::Error>;
+	) -> result::Result<Self::NegativeImbalance, DispatchError>;
 
 	/// Similar to withdraw, only accepts a `PositiveImbalance` and returns nothing on success.
 	fn settle(
@@ -531,7 +531,7 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	///
 	/// If the free balance is lower than `value`, then no funds will be moved and an `Err` will
 	/// be returned to notify of this. This is different behavior than `unreserve`.
-	fn reserve(who: &AccountId, value: Self::Balance) -> result::Result<(), Self::Error>;
+	fn reserve(who: &AccountId, value: Self::Balance) -> DispatchResult;
 
 	/// Moves up to `value` from reserved balance to free balance. This function cannot fail.
 	///
@@ -555,7 +555,7 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 		slashed: &AccountId,
 		beneficiary: &AccountId,
 		value: Self::Balance
-	) -> result::Result<Self::Balance, Self::Error>;
+	) -> result::Result<Self::Balance, DispatchError>;
 }
 
 /// An identifier for a lock. Used for disambiguating different locks so that
@@ -622,7 +622,7 @@ pub trait VestingCurrency<AccountId>: Currency<AccountId> {
 		locked: Self::Balance,
 		per_block: Self::Balance,
 		starting_block: Self::Moment,
-	) -> result::Result<(), Self::Error>;
+	) -> DispatchResult;
 
 	/// Remove a vesting schedule for a given account.
 	fn remove_vesting_schedule(who: &AccountId);
@@ -779,4 +779,16 @@ pub trait ValidatorRegistration<ValidatorId> {
 	/// Returns true if the provided validator ID has been registered with the implementing runtime
 	/// module
 	fn is_registered(id: &ValidatorId) -> bool;
+}
+
+/// Something that can convert a given module into the index of the module in the runtime.
+///
+/// The index of a module is determined by the position it appears in `construct_runtime!`.
+pub trait ModuleToIndex {
+	/// Convert the given module `M` into an index.
+	fn module_to_index<M: 'static>() -> Option<usize>;
+}
+
+impl ModuleToIndex for () {
+	fn module_to_index<M: 'static>() -> Option<usize> { Some(0) }
 }
