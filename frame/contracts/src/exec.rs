@@ -265,12 +265,6 @@ impl<T: Trait> Token<T> for ExecFeeToken {
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq, Clone))]
 #[derive(sp_runtime::RuntimeDebug)]
 pub enum DeferredAction<T: Trait> {
-	DepositEvent {
-		/// A list of topics this event will be deposited with.
-		topics: Vec<T::Hash>,
-		/// The event to deposit.
-		event: Event<T>,
-	},
 	DispatchRuntimeCall {
 		/// The account id of the contract who dispatched this call.
 		origin: T::AccountId,
@@ -550,10 +544,7 @@ where
 			}
 
 			// Deposit an instantiation event.
-			nested.deferred.push(DeferredAction::DepositEvent {
-				event: RawEvent::Instantiated(caller.clone(), dest.clone()),
-				topics: Vec::new(),
-			});
+			deposit_event::<T>(vec![], RawEvent::Instantiated(caller.clone(), dest.clone()));
 
 			Ok(output)
 		})?;
@@ -896,6 +887,16 @@ where
 	}
 }
 
+fn deposit_event<T: Trait>(
+	topics: Vec<T::Hash>,
+	event: Event<T>,
+) {
+	<system::Module<T>>::deposit_event_indexed(
+		&*topics,
+		<T as Trait>::Event::from(event).into(),
+	)
+}
+
 /// These tests exercise the executive layer.
 ///
 /// In these tests the VM/loader are mocked. Instead of dealing with wasm bytecode they use simple closures.
@@ -909,38 +910,33 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{
-		BalanceOf, ExecFeeToken, ExecutionContext, Ext, Loader, TransferFeeKind, TransferFeeToken,
-		Vm, ExecResult, RawEvent, DeferredAction,
+		BalanceOf, DeferredAction, Event, ExecFeeToken, ExecResult, ExecutionContext, Ext, Loader,
+		RawEvent, TransferFeeKind, TransferFeeToken, Vm,
 	};
 	use crate::{
 		gas::GasMeter, tests::{ExtBuilder, Test, set_balance, get_balance, place_contract},
 		exec::{ExecReturnValue, ExecError, STATUS_SUCCESS}, CodeHash, Config,
 		gas::Gas,
 		storage,
+		tests::{get_balance, place_contract, set_balance, ExtBuilder, MetaEvent, Test},
+		CodeHash, Config,
 	};
-	use std::{cell::RefCell, rc::Rc, collections::HashMap, marker::PhantomData};
-	use assert_matches::assert_matches;
 	use sp_runtime::DispatchError;
+	use assert_matches::assert_matches;
+	use std::{cell::RefCell, collections::HashMap, marker::PhantomData, rc::Rc};
 
 	const ALICE: u64 = 1;
 	const BOB: u64 = 2;
 	const CHARLIE: u64 = 3;
 
-	const GAS_LIMIT: Gas = 10_000_000_000;
-
-	impl<'a, T, V, L> ExecutionContext<'a, T, V, L>
-		where T: crate::Trait
-	{
-		fn events(&self) -> Vec<DeferredAction<T>> {
-			self.deferred
-				.iter()
-				.filter(|action| match *action {
-					DeferredAction::DepositEvent { .. } => true,
-					_ => false,
-				})
-				.cloned()
-				.collect()
-		}
+	fn events() -> Vec<Event<Test>> {
+		<system::Module<Test>>::events()
+			.into_iter()
+			.filter_map(|meta| match meta.event {
+				MetaEvent::contract(contract_event) => Some(contract_event),
+				_ => None,
+			})
+			.collect()
 	}
 
 	struct MockCtx<'a> {
@@ -1585,11 +1581,8 @@ mod tests {
 			// Check that the newly created account has the expected code hash and
 			// there are instantiation event.
 			assert_eq!(storage::code_hash::<Test>(&instantiated_contract_address).unwrap(), dummy_ch);
-			assert_eq!(&ctx.events(), &[
-				DeferredAction::DepositEvent {
-					event: RawEvent::Instantiated(ALICE, instantiated_contract_address),
-					topics: Vec::new(),
-				}
+			assert_eq!(&events(), &[
+				RawEvent::Instantiated(ALICE, instantiated_contract_address)
 			]);
 		});
 	}
@@ -1620,7 +1613,7 @@ mod tests {
 
 			// Check that the account has not been created.
 			assert!(storage::code_hash::<Test>(&instantiated_contract_address).is_none());
-			assert!(ctx.events().is_empty());
+			assert!(events().is_empty());
 		});
 	}
 
@@ -1665,11 +1658,8 @@ mod tests {
 			// Check that the newly created account has the expected code hash and
 			// there are instantiation event.
 			assert_eq!(storage::code_hash::<Test>(&instantiated_contract_address).unwrap(), dummy_ch);
-			assert_eq!(&ctx.events(), &[
-				DeferredAction::DepositEvent {
-					event: RawEvent::Instantiated(BOB, instantiated_contract_address),
-					topics: Vec::new(),
-				},
+			assert_eq!(&events(), &[
+				RawEvent::Instantiated(BOB, instantiated_contract_address)
 			]);
 		});
 	}
@@ -1714,7 +1704,7 @@ mod tests {
 
 			// The contract wasn't instantiated so we don't expect to see an instantiation
 			// event here.
-			assert_eq!(&ctx.events(), &[]);
+			assert_eq!(&events(), &[]);
 		});
 	}
 
