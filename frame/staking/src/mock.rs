@@ -137,6 +137,7 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
+	type ModuleToIndex = ();
 }
 parameter_types! {
 	pub const TransferFee: Balance = 0;

@@ -358,26 +358,57 @@ impl From<DispatchError> for DispatchOutcome {
 	}
 }
 
+/// Result of a module function call; either nothing (functions are only called for "side effects")
+/// or an error message.
+pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
+
+/// Reason why a dispatch call failed
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize))]
-/// Reason why a dispatch call failed
-pub struct DispatchError {
-	/// Module index, matching the metadata module index
-	pub module: Option<u8>,
-	/// Module specific error value
-	pub error: u8,
-	/// Optional error message.
-	#[codec(skip)]
-	pub message: Option<&'static str>,
+pub enum DispatchError {
+	/// Some error occurred.
+	Other(#[codec(skip)] &'static str),
+	/// Failed to lookup some data.
+	CannotLookup,
+	/// A bad origin.
+	BadOrigin,
+	/// A custom error in a module
+	Module {
+		/// Module index, matching the metadata module index
+		index: u8,
+		/// Module specific error value
+		error: u8,
+		/// Optional error message.
+		#[codec(skip)]
+		message: Option<&'static str>,
+	},
 }
 
-impl DispatchError {
-	/// Create a new instance of `DispatchError`.
-	pub fn new(module: Option<u8>, error: u8, message: Option<&'static str>) -> Self {
-		Self {
-			module,
-			error,
-			message,
+impl From<crate::traits::LookupError> for DispatchError {
+	fn from(_: crate::traits::LookupError) -> Self {
+		Self::CannotLookup
+	}
+}
+
+impl From<crate::traits::BadOrigin> for DispatchError {
+	fn from(_: crate::traits::BadOrigin) -> Self {
+		Self::BadOrigin
+	}
+}
+
+impl From<&'static str> for DispatchError {
+	fn from(err: &'static str) -> DispatchError {
+		DispatchError::Other(err)
+	}
+}
+
+impl Into<&'static str> for DispatchError {
+	fn into(self) -> &'static str {
+		match self {
+			Self::Other(msg) => msg,
+			Self::CannotLookup => "Can not lookup",
+			Self::BadOrigin => "Bad origin",
+			Self::Module { message, .. } => message.unwrap_or("Unknown module error"),
 		}
 	}
 }
@@ -385,29 +416,18 @@ impl DispatchError {
 impl traits::Printable for DispatchError {
 	fn print(&self) {
 		"DispatchError".print();
-		if let Some(module) = self.module {
-			module.print();
+		match self {
+			Self::Other(err) => err.print(),
+			Self::CannotLookup => "Can not lookup".print(),
+			Self::BadOrigin => "Bad origin".print(),
+			Self::Module { index, error, message } => {
+				index.print();
+				error.print();
+				if let Some(msg) = message {
+					msg.print();
+				}
+			}
 		}
-		self.error.print();
-		if let Some(msg) = self.message {
-			msg.print();
-		}
-	}
-}
-
-impl traits::ModuleDispatchError for &'static str {
-	fn as_u8(&self) -> u8 {
-		0
-	}
-
-	fn as_str(&self) -> &'static str {
-		self
-	}
-}
-
-impl From<&'static str> for DispatchError {
-	fn from(err: &'static str) -> DispatchError {
-		DispatchError::new(None, 0, Some(err))
 	}
 }
 
@@ -668,18 +688,18 @@ mod tests {
 
 	#[test]
 	fn dispatch_error_encoding() {
-		let error = DispatchError {
-			module: Some(1),
+		let error = DispatchError::Module {
+			index: 1,
 			error: 2,
 			message: Some("error message"),
 		};
 		let encoded = error.encode();
 		let decoded = DispatchError::decode(&mut &encoded[..]).unwrap();
-		assert_eq!(encoded, vec![1, 1, 2]);
+		assert_eq!(encoded, vec![3, 1, 2]);
 		assert_eq!(
 			decoded,
-			DispatchError {
-				module: Some(1),
+			DispatchError::Module {
+				index: 1,
 				error: 2,
 				message: None,
 			},

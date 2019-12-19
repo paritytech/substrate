@@ -18,7 +18,7 @@
 
 use super::*;
 use mock::*;
-use sp_runtime::{assert_eq_error_rate, traits::OnInitialize};
+use sp_runtime::{assert_eq_error_rate, traits::{OnInitialize, BadOrigin}};
 use sp_staking::offence::OffenceDetails;
 use frame_support::{assert_ok, assert_noop, traits::{Currency, ReservableCurrency}};
 use substrate_test_utils::assert_eq_uvec;
@@ -35,7 +35,7 @@ fn force_unstake_works() {
 			"account liquidity restrictions prevent withdrawal"
 		);
 		// Force unstake requires root.
-		assert_noop!(Staking::force_unstake(Origin::signed(11), 11), "RequireRootOrigin".into());
+		assert_noop!(Staking::force_unstake(Origin::signed(11), 11), BadOrigin);
 		// We now force them to unstake
 		assert_ok!(Staking::force_unstake(Origin::ROOT, 11));
 		// No longer bonded.
@@ -142,7 +142,7 @@ fn change_controller_works() {
 
 		assert_noop!(
 			Staking::validate(Origin::signed(10), ValidatorPrefs::default()),
-			Error::NotController,
+			Error::<Test>::NotController,
 		);
 		assert_ok!(Staking::validate(Origin::signed(5), ValidatorPrefs::default()));
 	})
@@ -680,10 +680,10 @@ fn double_staking_should_fail() {
 		// 4 = not used so far, 1 stashed => not allowed.
 		assert_noop!(
 			Staking::bond(Origin::signed(1), 4, arbitrary_value,
-			RewardDestination::default()), Error::AlreadyBonded,
+			RewardDestination::default()), Error::<Test>::AlreadyBonded,
 		);
 		// 1 = stashed => attempting to nominate should fail.
-		assert_noop!(Staking::nominate(Origin::signed(1), vec![1]), Error::NotController);
+		assert_noop!(Staking::nominate(Origin::signed(1), vec![1]), Error::<Test>::NotController);
 		// 2 = controller  => nominating should work.
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![1]));
 	});
@@ -705,7 +705,7 @@ fn double_controlling_should_fail() {
 		// 2 = controller, 3 stashed (Note that 2 is reused.) => no-op
 		assert_noop!(
 			Staking::bond(Origin::signed(3), 2, arbitrary_value, RewardDestination::default()),
-			Error::AlreadyPaired,
+			Error::<Test>::AlreadyPaired,
 		);
 	});
 }
@@ -1152,11 +1152,11 @@ fn too_many_unbond_calls_should_not_work() {
 		// locked at era 1 until 4
 		assert_ok!(Staking::unbond(Origin::signed(10), 1));
 		// can't do more.
-		assert_noop!(Staking::unbond(Origin::signed(10), 1), Error::NoMoreChunks);
+		assert_noop!(Staking::unbond(Origin::signed(10), 1), Error::<Test>::NoMoreChunks);
 
 		start_era(3);
 
-		assert_noop!(Staking::unbond(Origin::signed(10), 1), Error::NoMoreChunks);
+		assert_noop!(Staking::unbond(Origin::signed(10), 1), Error::<Test>::NoMoreChunks);
 		// free up.
 		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10)));
 
@@ -1422,7 +1422,7 @@ fn bond_with_no_staked_value() {
 			// Can't bond with 1
 			assert_noop!(
 				Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller),
-				Error::InsufficientValue,
+				Error::<Test>::InsufficientValue,
 			);
 			// bonded with absolute minimum value possible.
 			assert_ok!(Staking::bond(Origin::signed(1), 2, 5, RewardDestination::Controller));

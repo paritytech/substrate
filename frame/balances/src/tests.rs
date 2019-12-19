@@ -18,7 +18,7 @@
 
 use super::*;
 use mock::{Balances, ExtBuilder, Runtime, System, info_from_weight, CALL};
-use sp_runtime::traits::SignedExtension;
+use sp_runtime::traits::{SignedExtension, BadOrigin};
 use frame_support::{
 	assert_noop, assert_ok, assert_err,
 	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
@@ -347,7 +347,7 @@ fn force_transfer_works() {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_noop!(
 			Balances::force_transfer(Some(2).into(), 1, 2, 69),
-			"RequireRootOrigin",
+			BadOrigin,
 		);
 		assert_ok!(Balances::force_transfer(RawOrigin::Root.into(), 1, 2, 69));
 		assert_eq!(Balances::total_balance(&1), 42);

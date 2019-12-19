@@ -21,16 +21,12 @@
 use sp_std::prelude::*;
 use sp_std::{result, convert::TryFrom};
 use sp_runtime::{
-	RuntimeDebug,
-	traits::{
-		Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash,
-		Dispatchable, Saturating, ModuleDispatchError,
-	},
+	RuntimeDebug, DispatchResult,
+	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable, Saturating},
 };
 use codec::{Ref, Encode, Decode, Input, Output};
 use frame_support::{
-	decl_module, decl_storage, decl_event, decl_error, ensure,
-	Parameter,
+	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
@@ -365,7 +361,7 @@ decl_event! {
 }
 
 decl_error! {
-	pub enum Error {
+	pub enum Error for Module<T: Trait> {
 		/// Value too low
 		ValueLow,
 		/// Proposal does not exist
@@ -415,7 +411,7 @@ decl_error! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		type Error = Error;
+		type Error = Error<T>;
 		/// The minimum period of locking and the period between a proposal being approved and enacted.
 		///
 		/// It should generally be a little more than the unstake period to ensure that
@@ -454,8 +450,8 @@ decl_module! {
 			proposal_hash: T::Hash,
 			#[compact] value: BalanceOf<T>
 		) {
-			let who = ensure_signed(origin).map_err(|e| e.as_str())?;
-			ensure!(value >= T::MinimumDeposit::get(), Error::ValueLow);
+			let who = ensure_signed(origin)?;
+			ensure!(value >= T::MinimumDeposit::get(), Error::<T>::ValueLow);
 			T::Currency::reserve(&who, value)?;
 
 			let index = Self::public_prop_count();
@@ -476,9 +472,9 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn second(origin, #[compact] proposal: PropIndex) {
-			let who = ensure_signed(origin).map_err(|e| e.as_str())?;
+			let who = ensure_signed(origin)?;
 			let mut deposit = Self::deposit_of(proposal)
-				.ok_or(Error::ProposalMissing)?;
+				.ok_or(Error::<T>::ProposalMissing)?;
 			T::Currency::reserve(&who, deposit.0)?;
 			deposit.1.push(who);
 			<DepositOf<T>>::insert(proposal, deposit);
@@ -495,8 +491,8 @@ decl_module! {
 		fn vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: Vote
-		) -> Result<(), Error> {
-			let who = ensure_signed(origin).map_err(|e| e.as_str())?;
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
 			Self::do_vote(who, ref_index, vote)
 		}
 
@@ -511,10 +507,8 @@ decl_module! {
 		fn proxy_vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: Vote
-		) -> Result<(), Error> {
-			let who = Self::proxy(
-				ensure_signed(origin).map_err(|e| e.as_str())?
-			).ok_or(Error::NotProxy)?;
+		) -> DispatchResult {
+			let who = Self::proxy(ensure_signed(origin)?).ok_or(Error::<T>::NotProxy)?;
 			Self::do_vote(who, ref_index, vote)
 		}
 
@@ -522,11 +516,11 @@ decl_module! {
 		/// referendum.
 		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
 		fn emergency_cancel(origin, ref_index: ReferendumIndex) {
-			T::CancellationOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
+			T::CancellationOrigin::ensure_origin(origin)?;
 
-			let info = Self::referendum_info(ref_index).ok_or(Error::BadIndex)?;
+			let info = Self::referendum_info(ref_index).ok_or(Error::<T>::BadIndex)?;
 			let h = info.proposal_hash;
-			ensure!(!<Cancellations<T>>::exists(h), Error::AlreadyCanceled);
+			ensure!(!<Cancellations<T>>::exists(h), Error::<T>::AlreadyCanceled);
 
 			<Cancellations<T>>::insert(h, true);
 			Self::clear_referendum(ref_index);
@@ -536,10 +530,13 @@ decl_module! {
 		/// referendum.
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn external_propose(origin, proposal_hash: T::Hash) {
-			T::ExternalOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
-			ensure!(!<NextExternal<T>>::exists(), Error::DuplicateProposal);
+			T::ExternalOrigin::ensure_origin(origin)?;
+			ensure!(!<NextExternal<T>>::exists(), Error::<T>::DuplicateProposal);
 			if let Some((until, _)) = <Blacklist<T>>::get(proposal_hash) {
-				ensure!(<frame_system::Module<T>>::block_number() >= until, Error::ProposalBlacklisted);
+				ensure!(
+					<frame_system::Module<T>>::block_number() >= until,
+					Error::<T>::ProposalBlacklisted,
+				);
 			}
 			<NextExternal<T>>::put((proposal_hash, VoteThreshold::SuperMajorityApprove));
 		}
@@ -551,7 +548,7 @@ decl_module! {
 		/// pre-scheduled `external_propose` call.
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn external_propose_majority(origin, proposal_hash: T::Hash) {
-			T::ExternalMajorityOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
+			T::ExternalMajorityOrigin::ensure_origin(origin)?;
 			<NextExternal<T>>::put((proposal_hash, VoteThreshold::SimpleMajority));
 		}
 
@@ -562,7 +559,7 @@ decl_module! {
 		/// pre-scheduled `external_propose` call.
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn external_propose_default(origin, proposal_hash: T::Hash) {
-			T::ExternalDefaultOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
+			T::ExternalDefaultOrigin::ensure_origin(origin)?;
 			<NextExternal<T>>::put((proposal_hash, VoteThreshold::SuperMajorityAgainst));
 		}
 
@@ -581,13 +578,13 @@ decl_module! {
 			voting_period: T::BlockNumber,
 			delay: T::BlockNumber
 		) {
-			T::FastTrackOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
-			let (e_proposal_hash, threshold) = <NextExternal<T>>::get().ok_or(Error::ProposalMissing)?;
+			T::FastTrackOrigin::ensure_origin(origin)?;
+			let (e_proposal_hash, threshold) = <NextExternal<T>>::get().ok_or(Error::<T>::ProposalMissing)?;
 			ensure!(
 				threshold != VoteThreshold::SuperMajorityApprove,
-				Error::NotSimpleMajority
+				Error::<T>::NotSimpleMajority,
 			);
-			ensure!(proposal_hash == e_proposal_hash, Error::InvalidHash);
+			ensure!(proposal_hash == e_proposal_hash, Error::<T>::InvalidHash);
 
 			<NextExternal<T>>::kill();
 			let now = <frame_system::Module<T>>::block_number();
@@ -599,19 +596,19 @@ decl_module! {
 		/// Veto and blacklist the external proposal hash.
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn veto_external(origin, proposal_hash: T::Hash) {
-			let who = T::VetoOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
+			let who = T::VetoOrigin::ensure_origin(origin)?;
 
 			if let Some((e_proposal_hash, _)) = <NextExternal<T>>::get() {
-				ensure!(proposal_hash == e_proposal_hash, Error::ProposalMissing);
+				ensure!(proposal_hash == e_proposal_hash, Error::<T>::ProposalMissing);
 			} else {
-				Err(Error::NoProposal)?;
+				Err(Error::<T>::NoProposal)?;
 			}
 
 			let mut existing_vetoers = <Blacklist<T>>::get(&proposal_hash)
 				.map(|pair| pair.1)
 				.unwrap_or_else(Vec::new);
 			let insert_position = existing_vetoers.binary_search(&who)
-				.err().ok_or(Error::AlreadyVetoed)?;
+				.err().ok_or(Error::<T>::AlreadyVetoed)?;
 
 			existing_vetoers.insert(insert_position, who.clone());
 			let until = <frame_system::Module<T>>::block_number() + T::CooloffPeriod::get();
@@ -624,24 +621,24 @@ decl_module! {
 		/// Remove a referendum.
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn cancel_referendum(origin, #[compact] ref_index: ReferendumIndex) {
-			ensure_root(origin).map_err(|e| e.as_str())?;
+			ensure_root(origin)?;
 			Self::clear_referendum(ref_index);
 		}
 
 		/// Cancel a proposal queued for enactment.
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn cancel_queued(origin, which: ReferendumIndex) {
-			ensure_root(origin).map_err(|e| e.as_str())?;
+			ensure_root(origin)?;
 			let mut items = <DispatchQueue<T>>::get();
 			let original_len = items.len();
 			items.retain(|i| i.2 != which);
-			ensure!(items.len() < original_len, Error::ProposalMissing);
+			ensure!(items.len() < original_len, Error::<T>::ProposalMissing);
 			<DispatchQueue<T>>::put(items);
 		}
 
 		fn on_initialize(n: T::BlockNumber) {
 			if let Err(e) = Self::begin_block(n) {
-				sp_runtime::print(e.as_str());
+				sp_runtime::print(e);
 			}
 		}
 
@@ -652,8 +649,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn set_proxy(origin, proxy: T::AccountId) {
-			let who = ensure_signed(origin).map_err(|e| e.as_str())?;
-			ensure!(!<Proxy<T>>::exists(&proxy), Error::AlreadyProxy);
+			let who = ensure_signed(origin)?;
+			ensure!(!<Proxy<T>>::exists(&proxy), Error::<T>::AlreadyProxy);
 			<Proxy<T>>::insert(proxy, who)
 		}
 
@@ -664,7 +661,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn resign_proxy(origin) {
-			let who = ensure_signed(origin).map_err(|e| e.as_str())?;
+			let who = ensure_signed(origin)?;
 			<Proxy<T>>::remove(who);
 		}
 
@@ -675,8 +672,11 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn remove_proxy(origin, proxy: T::AccountId) {
-			let who = ensure_signed(origin).map_err(|e| e.as_str())?;
-			ensure!(&Self::proxy(&proxy).ok_or(Error::NotProxy)? == &who, Error::WrongProxy);
+			let who = ensure_signed(origin)?;
+			ensure!(
+				&Self::proxy(&proxy).ok_or(Error::<T>::NotProxy)? == &who,
+				Error::<T>::WrongProxy,
+			);
 			<Proxy<T>>::remove(proxy);
 		}
 
@@ -687,7 +687,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		pub fn delegate(origin, to: T::AccountId, conviction: Conviction) {
-			let who = ensure_signed(origin).map_err(|e| e.as_str())?;
+			let who = ensure_signed(origin)?;
 			<Delegations<T>>::insert(&who, (&to, conviction));
 			// Currency is locked indefinitely as long as it's delegated.
 			T::Currency::extend_lock(
@@ -707,8 +707,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn undelegate(origin) {
-			let who = ensure_signed(origin).map_err(|e| e.as_str())?;
-			ensure!(<Delegations<T>>::exists(&who), Error::NotDelegated);
+			let who = ensure_signed(origin)?;
+			ensure!(<Delegations<T>>::exists(&who), Error::<T>::NotDelegated);
 			let (_, conviction) = <Delegations<T>>::take(&who);
 			// Indefinite lock is reduced to the maximum voting lock that could be possible.
 			let now = <frame_system::Module<T>>::block_number();
@@ -726,7 +726,7 @@ decl_module! {
 		/// Veto and blacklist the proposal hash. Must be from Root origin.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn clear_public_proposals(origin) {
-			ensure_root(origin).map_err(|e| e.as_str())?;
+			ensure_root(origin)?;
 
 			<PublicProps<T>>::kill();
 		}
@@ -735,9 +735,9 @@ decl_module! {
 		/// in the dispatch queue but does require a deposit, returned once enacted.
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn note_preimage(origin, encoded_proposal: Vec<u8>) {
-			let who = ensure_signed(origin).map_err(|e| e.as_str())?;
+			let who = ensure_signed(origin)?;
 			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
-			ensure!(!<Preimages<T>>::exists(&proposal_hash), Error::DuplicatePreimage);
+			ensure!(!<Preimages<T>>::exists(&proposal_hash), Error::<T>::DuplicatePreimage);
 
 			let deposit = <BalanceOf<T>>::from(encoded_proposal.len() as u32)
 				.saturating_mul(T::PreimageByteDeposit::get());
@@ -753,11 +753,11 @@ decl_module! {
 		/// in the dispatch queue. No deposit is needed.
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) {
-			let who = ensure_signed(origin).map_err(|e| e.as_str())?;
+			let who = ensure_signed(origin)?;
 			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
-			ensure!(!<Preimages<T>>::exists(&proposal_hash), Error::DuplicatePreimage);
+			ensure!(!<Preimages<T>>::exists(&proposal_hash), Error::<T>::DuplicatePreimage);
 			let queue = <DispatchQueue<T>>::get();
-			ensure!(queue.iter().any(|item| &item.1 == &proposal_hash), Error::NotImminent);
+			ensure!(queue.iter().any(|item| &item.1 == &proposal_hash), Error::<T>::NotImminent);
 
 			let now = <frame_system::Module<T>>::block_number();
 			let free = <BalanceOf<T>>::zero();
@@ -773,16 +773,17 @@ decl_module! {
 		/// work an additional `EnactmentPeriod` later.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn reap_preimage(origin, proposal_hash: T::Hash) {
-			let who = ensure_signed(origin).map_err(|e| e.as_str())?;
+			let who = ensure_signed(origin)?;
 
-			let (_, old, deposit, then) = <Preimages<T>>::get(&proposal_hash).ok_or(Error::PreimageMissing)?;
+			let (_, old, deposit, then) = <Preimages<T>>::get(&proposal_hash)
+				.ok_or(Error::<T>::PreimageMissing)?;
 			let now = <frame_system::Module<T>>::block_number();
 			let (voting, enactment) = (T::VotingPeriod::get(), T::EnactmentPeriod::get());
 			let additional = if who == old { Zero::zero() } else { enactment };
-			ensure!(now >= then + voting + additional, Error::Early);
+			ensure!(now >= then + voting + additional, Error::<T>::Early);
 
 			let queue = <DispatchQueue<T>>::get();
-			ensure!(!queue.iter().any(|item| &item.1 == &proposal_hash), Error::Imminent);
+			ensure!(!queue.iter().any(|item| &item.1 == &proposal_hash), Error::<T>::Imminent);
 
 			let _ = T::Currency::repatriate_reserved(&old, &who, deposit);
 			<Preimages<T>>::remove(&proposal_hash);
@@ -931,8 +932,8 @@ impl<T: Trait> Module<T> {
 	// private.
 
 	/// Actually enact a vote, if legit.
-	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> Result<(), Error> {
-		ensure!(Self::is_active_referendum(ref_index), Error::ReferendumInvalid);
+	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> DispatchResult {
+		ensure!(Self::is_active_referendum(ref_index), Error::<T>::ReferendumInvalid);
 		if !<VoteOf<T>>::exists((ref_index, &who)) {
 			<VotersFor<T>>::append_or_insert(ref_index, &[&who][..]);
 		}
@@ -959,6 +960,7 @@ impl<T: Trait> Module<T> {
 	fn clear_referendum(ref_index: ReferendumIndex) {
 		<ReferendumInfoOf<T>>::remove(ref_index);
 
+
 		LowestUnbaked::mutate(|i| if *i == ref_index {
 			*i += 1;
 			let end = ReferendumCount::get();
@@ -973,7 +975,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Enact a proposal from a referendum.
-	fn enact_proposal(proposal_hash: T::Hash, index: ReferendumIndex) -> Result<(), Error> {
+	fn enact_proposal(proposal_hash: T::Hash, index: ReferendumIndex) -> DispatchResult {
 		if let Some((encoded_proposal, who, amount, _)) = <Preimages<T>>::take(&proposal_hash) {
 			if let Ok(proposal) = T::Proposal::decode(&mut &encoded_proposal[..]) {
 				let _ = T::Currency::unreserve(&who, amount);
@@ -986,25 +988,25 @@ impl<T: Trait> Module<T> {
 			} else {
 				T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
 				Self::deposit_event(RawEvent::PreimageInvalid(proposal_hash, index));
-				Err(Error::PreimageInvalid)
+				Err(Error::<T>::PreimageInvalid.into())
 			}
 		} else {
 			Self::deposit_event(RawEvent::PreimageMissing(proposal_hash, index));
-			Err(Error::PreimageMissing)
+			Err(Error::<T>::PreimageMissing.into())
 		}
 	}
 
 	/// Table the next waiting proposal for a vote.
-	fn launch_next(now: T::BlockNumber) -> Result<(), Error> {
+	fn launch_next(now: T::BlockNumber) -> DispatchResult {
 		if LastTabledWasExternal::take() {
 			Self::launch_public(now).or_else(|_| Self::launch_external(now))
 		} else {
 			Self::launch_external(now).or_else(|_| Self::launch_public(now))
-		}.map_err(|_| Error::NoneWaiting)
+		}.map_err(|_| Error::<T>::NoneWaiting.into())
 	}
 
 	/// Table the waiting external proposal for a vote, if there is one.
-	fn launch_external(now: T::BlockNumber) -> Result<(), Error> {
+	fn launch_external(now: T::BlockNumber) -> DispatchResult {
 		if let Some((proposal, threshold)) = <NextExternal<T>>::take() {
 			LastTabledWasExternal::put(true);
 			Self::deposit_event(RawEvent::ExternalTabled);
@@ -1016,12 +1018,12 @@ impl<T: Trait> Module<T> {
 			);
 			Ok(())
 		} else {
-			Err(Error::NoneWaiting)
+			Err(Error::<T>::NoneWaiting)?
 		}
 	}
 
 	/// Table the waiting public proposal with the highest backing for a vote.
-	fn launch_public(now: T::BlockNumber) -> Result<(), Error> {
+	fn launch_public(now: T::BlockNumber) -> DispatchResult {
 		let mut public_props = Self::public_props();
 		if let Some((winner_index, _)) = public_props.iter()
 			.enumerate()
@@ -1046,7 +1048,7 @@ impl<T: Trait> Module<T> {
 			}
 			Ok(())
 		} else {
-			Err(Error::NoneWaiting)
+			Err(Error::<T>::NoneWaiting)?
 		}
 
 	}
@@ -1055,7 +1057,7 @@ impl<T: Trait> Module<T> {
 		now: T::BlockNumber,
 		index: ReferendumIndex,
 		info: ReferendumInfo<T::BlockNumber, T::Hash>
-	) -> Result<(), Error> {
+	) -> DispatchResult {
 		let (approve, against, capital) = Self::tally(index);
 		let total_issuance = T::Currency::total_issuance();
 		let approved = info.threshold.approved(approve, against, capital, total_issuance);
@@ -1103,7 +1105,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Current era is ending; we should finish up any proposals.
-	fn begin_block(now: T::BlockNumber) -> Result<(), Error> {
+	fn begin_block(now: T::BlockNumber) -> DispatchResult {
 		// pick out another public referendum if it's time.
 		if (now % T::LaunchPeriod::get()).is_zero() {
 			// Errors come from the queue being empty. we don't really care about that, and even if
@@ -1146,7 +1148,10 @@ mod tests {
 		weights::Weight,
 	};
 	use sp_core::H256;
-	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, Bounded}, testing::Header, Perbill};
+	use sp_runtime::{
+		traits::{BlakeTwo256, IdentityLookup, Bounded, BadOrigin},
+		testing::Header, Perbill,
+	};
 	use pallet_balances::BalanceLock;
 	use frame_system::EnsureSignedBy;
 
@@ -1191,6 +1196,7 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -1289,13 +1295,14 @@ mod tests {
 		let p = set_balance_proposal(value);
 		let h = BlakeTwo256::hash(&p[..]);
 		match Democracy::note_preimage(Origin::signed(6), p) {
-			Ok(_) | Err(Error::DuplicatePreimage) => (),
+			Ok(_) => (),
+			Err(x) if x == Error::<Test>::DuplicatePreimage.into() => (),
 			Err(x) => panic!(x),
 		}
 		h
 	}
 
-	fn propose_set_balance(who: u64, value: u64, delay: u64) -> Result<(), Error> {
+	fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
 		Democracy::propose(
 			Origin::signed(who),
 			set_balance_proposal_hash(value),
@@ -1303,7 +1310,7 @@ mod tests {
 		)
 	}
 
-	fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> Result<(), Error> {
+	fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> DispatchResult {
 		Democracy::propose(
 			Origin::signed(who),
 			set_balance_proposal_hash_and_note(value),
@@ -1349,7 +1356,7 @@ mod tests {
 			PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 100);
 			assert_noop!(
 				Democracy::note_preimage(Origin::signed(6), vec![0; 500]),
-				Error::Other("not enough free funds")
+				"not enough free funds",
 			);
 			// fee of 1 is reasonable.
 			PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
@@ -1384,7 +1391,7 @@ mod tests {
 			next_block();
 			assert_noop!(
 				Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)),
-				Error::Early
+				Error::<Test>::Early
 			);
 			next_block();
 			assert_ok!(Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)));
@@ -1400,7 +1407,7 @@ mod tests {
 			System::set_block_number(1);
 			assert_noop!(
 				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)),
-				Error::PreimageMissing
+				Error::<Test>::PreimageMissing
 			);
 
 			PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
@@ -1412,7 +1419,7 @@ mod tests {
 			next_block();
 			assert_noop!(
 				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)),
-				Error::Early
+				Error::<Test>::Early
 			);
 
 			next_block();
@@ -1439,7 +1446,7 @@ mod tests {
 
 			assert_noop!(
 				Democracy::note_imminent_preimage(Origin::signed(7), set_balance_proposal(2)),
-				Error::NotImminent
+				Error::<Test>::NotImminent
 			);
 
 			next_block();
@@ -1463,7 +1470,7 @@ mod tests {
 			next_block();
 			next_block();
 			// now imminent.
-			assert_noop!(Democracy::reap_preimage(Origin::signed(6), h), Error::Imminent);
+			assert_noop!(Democracy::reap_preimage(Origin::signed(6), h), Error::<Test>::Imminent);
 		});
 	}
 
@@ -1592,7 +1599,7 @@ mod tests {
 			);
 			assert!(Democracy::referendum_info(r).is_some());
 
-			assert_noop!(Democracy::emergency_cancel(Origin::signed(3), r), "Invalid origin".into());
+			assert_noop!(Democracy::emergency_cancel(Origin::signed(3), r), BadOrigin);
 			assert_ok!(Democracy::emergency_cancel(Origin::signed(4), r));
 			assert!(Democracy::referendum_info(r).is_none());
 
@@ -1605,7 +1612,7 @@ mod tests {
 				2
 			);
 			assert!(Democracy::referendum_info(r).is_some());
-			assert_noop!(Democracy::emergency_cancel(Origin::signed(4), r), Error::AlreadyCanceled);
+			assert_noop!(Democracy::emergency_cancel(Origin::signed(4), r), Error::<Test>::AlreadyCanceled);
 		});
 	}
 
@@ -1627,14 +1634,14 @@ mod tests {
 			assert_noop!(Democracy::external_propose(
 				Origin::signed(2),
 				set_balance_proposal_hash(2),
-			), Error::ProposalBlacklisted);
+			), Error::<Test>::ProposalBlacklisted);
 
 			fast_forward_to(1);
 			// fails as we're still in cooloff period.
 			assert_noop!(Democracy::external_propose(
 				Origin::signed(2),
 				set_balance_proposal_hash(2),
-			), Error::ProposalBlacklisted);
+			), Error::<Test>::ProposalBlacklisted);
 
 			fast_forward_to(2);
 			// works; as we're out of the cooloff period.
@@ -1647,7 +1654,7 @@ mod tests {
 			// 3 can't veto the same thing twice.
 			assert_noop!(
 				Democracy::veto_external(Origin::signed(3), h.clone()),
-				Error::AlreadyVetoed
+				Error::<Test>::AlreadyVetoed
 			);
 
 			// 4 vetoes.
@@ -1660,7 +1667,7 @@ mod tests {
 			assert_noop!(Democracy::external_propose(
 				Origin::signed(2),
 				set_balance_proposal_hash(2),
-			), Error::ProposalBlacklisted);
+			), Error::<Test>::ProposalBlacklisted);
 			// different proposal works fine.
 			assert_ok!(Democracy::external_propose(
 				Origin::signed(2),
@@ -1673,10 +1680,13 @@ mod tests {
 	fn external_referendum_works() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(0);
-			assert_noop!(Democracy::external_propose(
-				Origin::signed(1),
-				set_balance_proposal_hash(2),
-			), "Invalid origin".into());
+			assert_noop!(
+				Democracy::external_propose(
+					Origin::signed(1),
+					set_balance_proposal_hash(2),
+				),
+				BadOrigin,
+			);
 			assert_ok!(Democracy::external_propose(
 				Origin::signed(2),
 				set_balance_proposal_hash_and_note(2),
@@ -1684,7 +1694,7 @@ mod tests {
 			assert_noop!(Democracy::external_propose(
 				Origin::signed(2),
 				set_balance_proposal_hash(1),
-			), Error::DuplicateProposal);
+			), Error::<Test>::DuplicateProposal);
 			fast_forward_to(2);
 			assert_eq!(
 				Democracy::referendum_info(0),
@@ -1702,10 +1712,13 @@ mod tests {
 	fn external_majority_referendum_works() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(0);
-			assert_noop!(Democracy::external_propose_majority(
-				Origin::signed(1),
-				set_balance_proposal_hash(2)
-			), "Invalid origin".into());
+			assert_noop!(
+				Democracy::external_propose_majority(
+					Origin::signed(1),
+					set_balance_proposal_hash(2)
+				),
+				BadOrigin,
+			);
 			assert_ok!(Democracy::external_propose_majority(
 				Origin::signed(3),
 				set_balance_proposal_hash_and_note(2)
@@ -1727,10 +1740,13 @@ mod tests {
 	fn external_default_referendum_works() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(0);
-			assert_noop!(Democracy::external_propose_default(
-				Origin::signed(3),
-				set_balance_proposal_hash(2)
-			), "Invalid origin".into());
+			assert_noop!(
+				Democracy::external_propose_default(
+					Origin::signed(3),
+					set_balance_proposal_hash(2)
+				),
+				BadOrigin,
+			);
 			assert_ok!(Democracy::external_propose_default(
 				Origin::signed(1),
 				set_balance_proposal_hash_and_note(2)
@@ -1753,12 +1769,12 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(0);
 			let h = set_balance_proposal_hash_and_note(2);
-			assert_noop!(Democracy::fast_track(Origin::signed(5), h, 3, 2), Error::ProposalMissing);
+			assert_noop!(Democracy::fast_track(Origin::signed(5), h, 3, 2), Error::<Test>::ProposalMissing);
 			assert_ok!(Democracy::external_propose_majority(
 				Origin::signed(3),
 				set_balance_proposal_hash_and_note(2)
 			));
-			assert_noop!(Democracy::fast_track(Origin::signed(1), h, 3, 2), "Invalid origin".into());
+			assert_noop!(Democracy::fast_track(Origin::signed(1), h, 3, 2), BadOrigin);
 			assert_ok!(Democracy::fast_track(Origin::signed(5), h, 0, 0));
 			assert_eq!(
 				Democracy::referendum_info(0),
@@ -1783,7 +1799,7 @@ mod tests {
 			));
 			assert_noop!(
 				Democracy::fast_track(Origin::signed(5), h, 3, 2),
-				Error::NotSimpleMajority
+				Error::<Test>::NotSimpleMajority
 			);
 		});
 	}
@@ -1865,7 +1881,7 @@ mod tests {
 				(6, set_balance_proposal_hash_and_note(2), 0)
 			]);
 
-			assert_noop!(Democracy::cancel_queued(Origin::ROOT, 1), Error::ProposalMissing);
+			assert_noop!(Democracy::cancel_queued(Origin::ROOT, 1), Error::<Test>::ProposalMissing);
 			assert_ok!(Democracy::cancel_queued(Origin::ROOT, 0));
 			assert_eq!(Democracy::dispatch_queue(), vec![]);
 		});
@@ -1879,7 +1895,7 @@ mod tests {
 			assert_eq!(Democracy::proxy(10), Some(1));
 
 			// Can't set when already set.
-			assert_noop!(Democracy::set_proxy(Origin::signed(2), 10), Error::AlreadyProxy);
+			assert_noop!(Democracy::set_proxy(Origin::signed(2), 10), Error::<Test>::AlreadyProxy);
 
 			// But this works because 11 isn't proxying.
 			assert_ok!(Democracy::set_proxy(Origin::signed(2), 11));
@@ -1887,7 +1903,7 @@ mod tests {
 			assert_eq!(Democracy::proxy(11), Some(2));
 
 			// 2 cannot fire 1's proxy:
-			assert_noop!(Democracy::remove_proxy(Origin::signed(2), 10), Error::WrongProxy);
+			assert_noop!(Democracy::remove_proxy(Origin::signed(2), 10), Error::<Test>::WrongProxy);
 
 			// 1 fires his proxy:
 			assert_ok!(Democracy::remove_proxy(Origin::signed(1), 10));
@@ -2094,7 +2110,7 @@ mod tests {
 	fn proposal_with_deposit_below_minimum_should_not_work() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
-			assert_noop!(propose_set_balance(1, 2, 0), Error::ValueLow);
+			assert_noop!(propose_set_balance(1, 2, 0), Error::<Test>::ValueLow);
 		});
 	}
 
@@ -2102,7 +2118,7 @@ mod tests {
 	fn poor_proposer_should_not_work() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
-			assert_noop!(propose_set_balance(1, 2, 11), Error::Other("not enough free funds"));
+			assert_noop!(propose_set_balance(1, 2, 11), "not enough free funds");
 		});
 	}
 
@@ -2111,7 +2127,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
 			assert_ok!(propose_set_balance_and_note(2, 2, 11));
-			assert_noop!(Democracy::second(Origin::signed(1), 0), Error::Other("not enough free funds"));
+			assert_noop!(Democracy::second(Origin::signed(1), 0), "not enough free funds");
 		});
 	}
 
