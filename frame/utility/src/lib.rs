@@ -23,6 +23,7 @@
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_core::TypeId;
+use sp_core::blake2_256;
 use frame_support::{decl_module, decl_event, decl_storage, Parameter};
 use frame_support::weights::{
 	SimpleDispatchInfo, GetDispatchInfo, ClassifyDispatch, WeighData, Weight, DispatchClass, PaysFee
@@ -61,7 +62,7 @@ impl<Call> Passthrough<Call> {
 }
 impl<Call: GetDispatchInfo> WeighData<(&u16, &Box<Call>)> for Passthrough<Call> {
 	fn weigh_data(&self, (_, call): (&u16, &Box<Call>)) -> Weight {
-		call.get_dispatch_info().weight
+		call.get_dispatch_info().weight + 10_000
 	}
 }
 impl<Call: GetDispatchInfo> ClassifyDispatch<(&u16, &Box<Call>)> for Passthrough<Call> {
@@ -105,7 +106,8 @@ decl_module! {
 		#[weight = <Passthrough<<T as Trait>::Call>>::new()]
 		fn as_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let pseudonym = Self::sub_account_id(who, index);
+			let entropy = (b"modlpy/utilisuba", who, index).using_encoded(blake2_256);
+			let pseudonym = T::AccountId::decode(&mut &entropy[..]).unwrap_or_default();
 			call.dispatch(frame_system::RawOrigin::Signed(pseudonym).into())
 		}
 	}
