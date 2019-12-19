@@ -68,15 +68,15 @@ pub enum Error {
 impl std::error::Error for Error {}
 
 /// Transaction pool error conversion.
-pub trait IntoPoolError: ::std::error::Error + Send + Sized {
+pub trait IntoPoolError: std::error::Error + Send + Sized {
 	/// Try to extract original `Error`
 	///
 	/// This implementation is optional and used only to
 	/// provide more descriptive error messages for end users
 	/// of RPC API.
-	fn into_pool_error(self) -> ::std::result::Result<Error, Self> { Err(self) }
+	fn into_pool_error(self) -> std::result::Result<Error, Self> { Err(self) }
 }
 
 impl IntoPoolError for Error {
-	fn into_pool_error(self) -> ::std::result::Result<Error, Self> { Ok(self) }
+	fn into_pool_error(self) -> std::result::Result<Error, Self> { Ok(self) }
 }

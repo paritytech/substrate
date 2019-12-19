@@ -418,7 +418,8 @@ pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 			StorageValue as _,
 			StorageMap as _,
 			StorageLinkedMap as _,
-			StorageDoubleMap as _
+			StorageDoubleMap as _,
+			StoragePrefixedMap as _,
 		};
 
 		#scrate_decl

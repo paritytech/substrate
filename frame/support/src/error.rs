@@ -28,10 +28,12 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 /// error type implements `From<&'static str>` and `From<LookupError>` to make them usable with the
 /// try operator.
 ///
+/// `decl_error!` supports only variants that do not hold any data.
+///
 /// # Usage
 ///
 /// ```
-/// # use frame_support::decl_error;
+/// # use frame_support::{decl_error, decl_module};
 /// decl_error! {
 ///     /// Errors that can occur in my module.
 ///     pub enum MyError {
@@ -41,9 +43,23 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 ///         YouAreNotCoolEnough,
 ///     }
 /// }
-/// ```
 ///
-/// `decl_error!` supports only variants that do not hold any data.
+/// # use frame_system::{self as system, Trait, ensure_signed};
+///
+/// // You need to register the error type in `decl_module!` as well.
+///
+/// decl_module! {
+///     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+///         type Error = MyError;
+///
+///         fn do_something(origin) -> Result<(), MyError> {
+///             Err(MyError::YouAreNotCoolEnough)
+///         }
+///     }
+/// }
+///
+/// # fn main() {}
+/// ```
 #[macro_export]
 macro_rules! decl_error {
 	(

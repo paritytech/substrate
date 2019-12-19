@@ -122,7 +122,7 @@ cargo-check-subkey:
   except:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
-    - cd ./bin/subkey
+    - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
 
@@ -300,7 +300,7 @@ build-linux-subkey:
     variables:
       - $DEPLOY_TAG
   script:
-    - cd ./bin/subkey
+    - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
     - cd -
     - sccache -s
@@ -329,7 +329,7 @@ build-rust-doc-release:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
     - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html" time cargo +nightly doc --release --all --verbose
     - cp -R ./target/doc ./crate-docs
-    - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
+    - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
 
 check_warnings:
@@ -357,22 +357,17 @@ check_polkadot:
   <<:                              *docker-env
   allow_failure:                   true
   script:
-    - COMMIT_HASH=$(git rev-parse HEAD)
     - SUBSTRATE_PATH=$(pwd)
     # Clone the current Polkadot master branch into ./polkadot.
     - git clone --depth 1 https://gitlab.parity.io/parity/polkadot.git
     - cd polkadot
-    # Within Polkadot 'master' alter each Cargo.toml that references the
-    # Substrate 'polkadot-master' branch:
-    # 1. Replace the 'branch = "polkadot-master"' statements with the rev of our
-    #    commit.
-    # 2. Replace 'git = "https://.*"' with 'git = "file://.*"' (the local
-    #    checked out Substrate repository one folder above).
-    # 3. Remove any trailing commas.
-    - git grep -l "polkadot-master" | grep toml | xargs sed -i "s/branch.*=.*\"polkadot-master\"/rev = \"$COMMIT_HASH\"/; s~https://github.com/paritytech/substrate~file://$SUBSTRATE_PATH~; s/,\s*}/ }/"
-    # Make sure 'Cargo.lock' matches 'Cargo.toml'. It's enough to update one
+    # Make sure we override the crates in native and wasm build
+    - mkdir .cargo
+    - echo "paths = [ \"$SUBSTRATE_PATH\" ]" > .cargo/config
+    - mkdir -p target/debug/wbuild/.cargo
+    - echo "paths = [ \"$SUBSTRATE_PATH\" ]" > target/debug/wbuild/.cargo/config
     # package, others are updated along the way.
-    - cargo update -p sp-io
+    - cargo update
     # Check whether Polkadot 'master' branch builds with this Substrate commit.
     - time cargo check
     - cd -

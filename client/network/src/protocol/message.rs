@@ -26,7 +26,7 @@ pub use self::generic::{
 	FinalityProofRequest, FinalityProofResponse,
 	FromBlock, RemoteReadChildRequest,
 };
-use client_api::StorageProof;
+use sc_client_api::StorageProof;
 
 /// A unique ID of a request.
 pub type RequestId = u64;
@@ -368,6 +368,11 @@ pub mod generic {
 		pub block: H,
 		/// Child Storage key.
 		pub storage_key: Vec<u8>,
+		/// Child trie source information.
+		pub child_info: Vec<u8>,
+		/// Child type, its required to resolve `child_info`
+		/// content and choose child implementation.
+		pub child_type: u32,
 		/// Storage key.
 		pub keys: Vec<Vec<u8>>,
 	}

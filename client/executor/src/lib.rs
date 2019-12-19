@@ -46,12 +46,12 @@ mod integration_tests;
 pub mod error;
 pub use wasmi;
 pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
-pub use runtime_version::{RuntimeVersion, NativeVersion};
+pub use sp_version::{RuntimeVersion, NativeVersion};
 pub use codec::Codec;
 #[doc(hidden)]
-pub use primitives::traits::Externalities;
+pub use sp_core::traits::Externalities;
 #[doc(hidden)]
-pub use wasm_interface;
+pub use sp_wasm_interface;
 pub use wasm_runtime::WasmExecutionMethod;
 
 /// Call the given `function` in the given wasm `code`.
@@ -64,7 +64,7 @@ pub use wasm_runtime::WasmExecutionMethod;
 /// - `heap_pages`: The number of heap pages to allocate.
 ///
 /// Returns the `Vec<u8>` that contains the return value of the function.
-pub fn call_in_wasm<E: Externalities, HF: wasm_interface::HostFunctions>(
+pub fn call_in_wasm<E: Externalities, HF: sp_wasm_interface::HostFunctions>(
 	function: &str,
 	call_data: &[u8],
 	execution_method: WasmExecutionMethod,
@@ -93,14 +93,14 @@ pub trait RuntimeInfo {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_test::WASM_BINARY;
-	use runtime_io::TestExternalities;
+	use sc_runtime_test::WASM_BINARY;
+	use sp_io::TestExternalities;
 
 	#[test]
 	fn call_in_interpreted_wasm_works() {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
-		let res = call_in_wasm::<_, runtime_io::SubstrateHostFunctions>(
+		let res = call_in_wasm::<_, sp_io::SubstrateHostFunctions>(
 			"test_empty_return",
 			&[],
 			WasmExecutionMethod::Interpreted,

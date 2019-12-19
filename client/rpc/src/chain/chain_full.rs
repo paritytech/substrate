@@ -19,10 +19,10 @@
 use std::sync::Arc;
 use rpc::futures::future::result;
 
-use api::Subscriptions;
-use client_api::{CallExecutor, backend::Backend};
-use client::Client;
-use primitives::{H256, Blake2Hasher};
+use sc_rpc_api::Subscriptions;
+use sc_client_api::{CallExecutor, backend::Backend};
+use sc_client::Client;
+use sp_core::{H256, Blake2Hasher};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT},

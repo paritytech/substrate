@@ -22,18 +22,18 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
-use support::{
+use sp_std::prelude::*;
+use frame_support::{
 	decl_module, decl_storage, decl_event,
 	traits::{ChangeMembers, InitializeMembers},
 	weights::SimpleDispatchInfo,
 };
-use system::ensure_root;
+use frame_system::{self as system, ensure_root, ensure_signed};
 use sp_runtime::traits::EnsureOrigin;
 
-pub trait Trait<I=DefaultInstance>: system::Trait {
+pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// Required origin for adding a member (though can always be Root).
 	type AddOrigin: EnsureOrigin<Self::Origin>;
@@ -63,7 +63,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
-		config(phantom): rstd::marker::PhantomData<I>;
+		config(phantom): sp_std::marker::PhantomData<I>;
 		build(|config: &Self| {
 			let mut members = config.members.clone();
 			members.sort();
@@ -75,7 +75,7 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T, I=DefaultInstance> where
-		<T as system::Trait>::AccountId,
+		<T as frame_system::Trait>::AccountId,
 		<T as Trait<I>>::Event,
 	{
 		/// The given member was added; see the transaction for who.
@@ -86,8 +86,10 @@ decl_event!(
 		MembersSwapped,
 		/// The membership was reset; see the transaction for who the new set is.
 		MembersReset,
+		/// One of the members' keys changed.
+		KeyChanged,
 		/// Phantom member, never used.
-		Dummy(rstd::marker::PhantomData<(AccountId, Event)>),
+		Dummy(sp_std::marker::PhantomData<(AccountId, Event)>),
 	}
 );
 
@@ -152,8 +154,8 @@ decl_module! {
 
 			let mut members = <Members<T, I>>::get();
 			let location = members.binary_search(&remove).ok().ok_or("not a member")?;
+			let _ = members.binary_search(&add).err().ok_or("already a member")?;
 			members[location] = add.clone();
-			let _location = members.binary_search(&add).err().ok_or("already a member")?;
 			members.sort();
 			<Members<T, I>>::put(&members);
 
@@ -186,6 +188,31 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::MembersReset);
 		}
+
+		/// Swap out the sending member for some other key `new`.
+		///
+		/// May only be called from `Signed` origin of a current member.
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		fn change_key(origin, new: T::AccountId) {
+			let remove = ensure_signed(origin)?;
+
+			if remove != new {
+				let mut members = <Members<T, I>>::get();
+				let location = members.binary_search(&remove).ok().ok_or("not a member")?;
+				let _ = members.binary_search(&new).err().ok_or("already a member")?;
+				members[location] = new.clone();
+				members.sort();
+				<Members<T, I>>::put(&members);
+
+				T::MembershipChanged::change_members_sorted(
+					&[new],
+					&[remove],
+					&members[..],
+				);
+			}
+
+			Self::deposit_event(RawEvent::KeyChanged);
+		}
 	}
 }
 
@@ -194,15 +221,15 @@ mod tests {
 	use super::*;
 
 	use std::cell::RefCell;
-	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
-	use primitives::H256;
+	use frame_support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
+	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-	use system::EnsureSignedBy;
+	use frame_system::EnsureSignedBy;
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	// For testing the module, we construct most of a mock runtime. This means
@@ -216,7 +243,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -279,8 +306,8 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	fn new_test_ext() -> sp_io::TestExternalities {
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		GenesisConfig::<Test>{
 			members: vec![10, 20, 30],
@@ -329,6 +356,35 @@ mod tests {
 			assert_eq!(Membership::members(), vec![10, 20, 30]);
 			assert_ok!(Membership::swap_member(Origin::signed(3), 10, 25));
 			assert_eq!(Membership::members(), vec![20, 25, 30]);
+			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
+		});
+	}
+
+	#[test]
+	fn swap_member_works_that_does_not_change_order() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Membership::swap_member(Origin::signed(3), 10, 5));
+			assert_eq!(Membership::members(), vec![5, 20, 30]);
+			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
+		});
+	}
+
+	#[test]
+	fn change_key_works() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(Membership::change_key(Origin::signed(3), 25), "not a member");
+			assert_noop!(Membership::change_key(Origin::signed(10), 20), "already a member");
+			assert_ok!(Membership::change_key(Origin::signed(10), 40));
+			assert_eq!(Membership::members(), vec![20, 30, 40]);
+			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
+		});
+	}
+
+	#[test]
+	fn change_key_works_that_does_not_change_order() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Membership::change_key(Origin::signed(10), 5));
+			assert_eq!(Membership::members(), vec![5, 20, 30]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
 		});
 	}

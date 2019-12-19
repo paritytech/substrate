@@ -23,7 +23,7 @@ mod digest;
 pub mod inherents;
 
 use codec::{Encode, Decode};
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 
 #[cfg(feature = "std")]
@@ -31,7 +31,7 @@ pub use digest::{BabePreDigest, CompatibleDigestItem};
 pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest, NextEpochDescriptor};
 
 mod app {
-	use app_crypto::{app_crypto, key_types::BABE, sr25519};
+	use sp_application_crypto::{app_crypto, key_types::BABE, sr25519};
 	app_crypto!(sr25519, BABE);
 }
 
@@ -157,7 +157,7 @@ pub struct BabeConfiguration {
 }
 
 #[cfg(feature = "std")]
-impl slots::SlotData for BabeConfiguration {
+impl sp_consensus::SlotData for BabeConfiguration {
 	fn slot_duration(&self) -> u64 {
 		self.slot_duration
 	}

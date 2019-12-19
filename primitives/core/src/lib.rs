@@ -31,8 +31,8 @@ macro_rules! map {
 	);
 }
 
-use rstd::prelude::*;
-use rstd::ops::Deref;
+use sp_std::prelude::*;
+use sp_std::ops::Deref;
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 #[cfg(feature = "std")]
@@ -84,10 +84,10 @@ pub use hash_db::Hasher;
 // pub use self::hasher::blake::BlakeHasher;
 pub use self::hasher::blake2::Blake2Hasher;
 
-pub use primitives_storage as storage;
+pub use sp_storage as storage;
 
 #[doc(hidden)]
-pub use rstd;
+pub use sp_std;
 
 /// Context for executing a call into the runtime.
 pub enum ExecutionContext {
@@ -147,7 +147,7 @@ impl OpaqueMetadata {
 	}
 }
 
-impl rstd::ops::Deref for OpaqueMetadata {
+impl sp_std::ops::Deref for OpaqueMetadata {
 	type Target = Vec<u8>;
 
 	fn deref(&self) -> &Self::Target {
@@ -165,8 +165,8 @@ pub enum NativeOrEncoded<R> {
 }
 
 #[cfg(feature = "std")]
-impl<R: codec::Encode> rstd::fmt::Debug for NativeOrEncoded<R> {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+impl<R: codec::Encode> sp_std::fmt::Debug for NativeOrEncoded<R> {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		hexdisplay::HexDisplay::from(&self.as_encoded().as_ref()).fmt(f)
 	}
 }
@@ -235,8 +235,8 @@ pub trait TypeId {
 
 /// A log level matching the one from `log` crate.
 ///
-/// Used internally by `runtime_io::log` method.
-#[derive(Encode, Decode, runtime_interface::pass_by::PassByEnum, Copy, Clone)]
+/// Used internally by `sp_io::log` method.
+#[derive(Encode, Decode, sp_runtime_interface::pass_by::PassByEnum, Copy, Clone)]
 pub enum LogLevel {
 	/// `Error` log level.
 	Error = 1,
@@ -305,7 +305,7 @@ pub fn to_substrate_wasm_fn_return_value(value: &impl Encode) -> u64 {
 	// Leak the output vector to avoid it being freed.
 	// This is fine in a WASM context since the heap
 	// will be discarded after the call.
-	rstd::mem::forget(encoded);
+	sp_std::mem::forget(encoded);
 
 	res
 }

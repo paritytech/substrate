@@ -41,7 +41,7 @@ impl<Public, Signature, AppPublic> Signer<Public, Signature> for AppPublic where
 	Signature: From<
 		<<AppPublic as RuntimeAppPublic>::Signature as app_crypto::AppSignature>::Generic
 	>,
-	Public: rstd::convert::TryInto<<AppPublic as app_crypto::AppPublic>::Generic>
+	Public: sp_std::convert::TryInto<<AppPublic as app_crypto::AppPublic>::Generic>
 {
 	fn sign<Payload: Encode>(public: Public, raw_payload: &Payload) -> Option<Signature> {
 		raw_payload.using_encoded(|payload| {
@@ -56,7 +56,7 @@ impl<Public, Signature, AppPublic> Signer<Public, Signature> for AppPublic where
 	}
 }
 
-/// Creates runtime-specific signed transaction.
+/// Creates a runtime-specific signed transaction.
 pub trait CreateTransaction<T: crate::Trait, Extrinsic: ExtrinsicT> {
 	/// A `Public` key representing a particular `AccountId`.
 	type Public: IdentifyAccount<AccountId=T::AccountId> + Clone;
@@ -111,11 +111,11 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 			::create_transaction::<Self::Signer>(call, public, id, expected)
 			.ok_or(())?;
 		let xt = Self::Extrinsic::new(call, Some(signature_data)).ok_or(())?;
-		runtime_io::offchain::submit_transaction(xt.encode())
+		sp_io::offchain::submit_transaction(xt.encode())
 	}
 }
 
-/// A trait to submit unsigned transactions in offchain calls.
+/// A trait to submit unsigned transactions in off-chain calls.
 pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 	/// Unchecked extrinsic type.
 	type Extrinsic: ExtrinsicT<Call=Call> + codec::Encode;
@@ -126,13 +126,13 @@ pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 	/// and `Err` if transaction was rejected from the pool.
 	fn submit_unsigned(call: impl Into<Call>) -> Result<(), ()> {
 		let xt = Self::Extrinsic::new(call.into(), None).ok_or(())?;
-		runtime_io::offchain::submit_transaction(xt.encode())
+		sp_io::offchain::submit_transaction(xt.encode())
 	}
 }
 
 /// A default type used to submit transactions to the pool.
 pub struct TransactionSubmitter<S, C, E> {
-	_signer: rstd::marker::PhantomData<(S, C, E)>,
+	_signer: sp_std::marker::PhantomData<(S, C, E)>,
 }
 
 impl<S, C, E> Default for TransactionSubmitter<S, C, E> {

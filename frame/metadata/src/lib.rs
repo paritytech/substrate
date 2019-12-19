@@ -27,8 +27,8 @@ use serde::Serialize;
 #[cfg(feature = "std")]
 use codec::{Decode, Input, Error};
 use codec::{Encode, Output};
-use rstd::vec::Vec;
-use primitives::RuntimeDebug;
+use sp_std::vec::Vec;
+use sp_core::RuntimeDebug;
 
 #[cfg(feature = "std")]
 type StringBuf = String;
@@ -85,12 +85,12 @@ impl<B, O> Eq for DecodeDifferent<B, O>
 	where B: Encode + Eq + PartialEq + 'static, O: Encode + Eq + PartialEq + 'static
 {}
 
-impl<B, O> rstd::fmt::Debug for DecodeDifferent<B, O>
+impl<B, O> sp_std::fmt::Debug for DecodeDifferent<B, O>
 	where
-		B: rstd::fmt::Debug + Eq + 'static,
-		O: rstd::fmt::Debug + Eq + 'static,
+		B: sp_std::fmt::Debug + Eq + 'static,
+		O: sp_std::fmt::Debug + Eq + 'static,
 {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		match self {
 			DecodeDifferent::Encode(b) => b.fmt(f),
 			DecodeDifferent::Decoded(o) => o.fmt(f),
@@ -151,8 +151,8 @@ impl<E: Encode + PartialEq> PartialEq for FnEncode<E> {
 	}
 }
 
-impl<E: Encode + rstd::fmt::Debug> rstd::fmt::Debug for FnEncode<E> {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+impl<E: Encode + sp_std::fmt::Debug> sp_std::fmt::Debug for FnEncode<E> {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		self.0().fmt(f)
 	}
 }
@@ -261,8 +261,8 @@ impl serde::Serialize for DefaultByteGetter {
 	}
 }
 
-impl rstd::fmt::Debug for DefaultByteGetter {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+impl sp_std::fmt::Debug for DefaultByteGetter {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		self.0.default_byte().fmt(f)
 	}
 }
@@ -391,9 +391,9 @@ pub struct ModuleMetadata {
 type ODFnA<T> = Option<DFnA<T>>;
 type DFnA<T> = DecodeDifferent<FnEncode<&'static [T]>, Vec<T>>;
 
-impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
-	fn into(self) -> primitives::OpaqueMetadata {
-		primitives::OpaqueMetadata::new(self.encode())
+impl Into<sp_core::OpaqueMetadata> for RuntimeMetadataPrefixed {
+	fn into(self) -> sp_core::OpaqueMetadata {
+		sp_core::OpaqueMetadata::new(self.encode())
 	}
 }
 

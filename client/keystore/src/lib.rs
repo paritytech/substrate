@@ -20,11 +20,11 @@
 
 use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 
-use primitives::{
+use sp_core::{
 	crypto::{KeyTypeId, Pair as PairT, Public, IsWrappedBy, Protected}, traits::BareCryptoStore,
 };
 
-use app_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
+use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
 
 use parking_lot::RwLock;
 
@@ -318,7 +318,7 @@ impl BareCryptoStore for Store {
 mod tests {
 	use super::*;
 	use tempfile::TempDir;
-	use primitives::{testing::{SR25519}, crypto::{Ss58Codec}};
+	use sp_core::{testing::{SR25519}, crypto::{Ss58Codec}};
 
 	#[test]
 	fn basic_store() {

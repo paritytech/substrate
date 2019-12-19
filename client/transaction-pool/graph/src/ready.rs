@@ -22,13 +22,13 @@ use std::{
 };
 
 use serde::Serialize;
-use log::debug;
+use log::trace;
 use parking_lot::RwLock;
 use sp_runtime::traits::Member;
 use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };
-use txpool_api::error;
+use sp_transaction_pool::error;
 
 use crate::future::WaitingTransaction;
 use crate::base_pool::Transaction;
@@ -267,7 +267,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 				to_remove.append(&mut tx.unlocks);
 
 				// add to removed
-				debug!(target: "txpool", "[{:?}] Removed as invalid: ", hash);
+				trace!(target: "txpool", "[{:?}] Removed as part of the subtree.", hash);
 				removed.push(tx.transaction.transaction);
 			}
 		}
