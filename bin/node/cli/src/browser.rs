@@ -21,6 +21,7 @@ use log::{debug, info};
 use std::sync::Arc;
 use sc_service::{AbstractService, RpcSession, Roles as ServiceRoles, Configuration, config::DatabaseConfig};
 use wasm_bindgen::prelude::*;
+use futures::{FutureExt, TryFutureExt};
 
 /// Starts the client.
 ///
@@ -75,7 +76,9 @@ fn start_inner(wasm_ext: wasm_ext::ffi::Transport) -> Result<Client, Box<dyn std
 		loop {
 			match rpc_send_rx.poll() {
 				Ok(Async::Ready(Some(message))) => {
-					let fut = service.rpc_query(&message.session, &message.rpc_json);
+					let fut = service.rpc_query(&message.session, &message.rpc_json)
+						.unit_error()
+						.compat();
 					let _ = message.send_back.send(Box::new(fut));
 				},
 				Ok(Async::NotReady) => break,
@@ -84,7 +87,7 @@ fn start_inner(wasm_ext: wasm_ext::ffi::Transport) -> Result<Client, Box<dyn std
 		}
 
 		loop {
-			match service.poll().map_err(|_| ())? {
+			match (&mut service).compat().poll().map_err(|_| ())? {
 				Async::Ready(()) => return Ok(Async::Ready(())),
 				Async::NotReady => break
 			}

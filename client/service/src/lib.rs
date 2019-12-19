@@ -182,7 +182,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	///
 	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
 	/// send back spontaneous events.
-	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Output = Option<String>> + Send>;
+	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Output = Option<String>> + Send + Unpin>;
 
 	/// Get shared client instance.
 	fn client(&self) -> Arc<sc_client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>>;
@@ -264,7 +264,7 @@ where
 		}
 	}
 
-	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Output = Option<String>> + Send> {
+	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Output = Option<String>> + Send + Unpin> {
 		Box::new(
 			self.rpc_handlers.handle_request(request, mem.metadata.clone())
 				.compat()

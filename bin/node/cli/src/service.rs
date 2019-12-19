@@ -115,9 +115,9 @@ macro_rules! new_full {
 	($config:expr, $with_startup_data: expr) => {{
 		use sc_network::DhtEvent;
 		use futures::{
-			compat::{Stream01CompatExt, Future01CompatExt},
+			compat::Future01CompatExt,
 			stream::StreamExt,
-			future::{TryFutureExt, FutureExt},
+			future::FutureExt,
 		};
 
 		let (
@@ -186,7 +186,7 @@ macro_rules! new_full {
 				can_author_with,
 			};
 
-			let babe = sc_consensus_babe::start_babe(babe_config)?.compat().map(drop);
+			let babe = sc_consensus_babe::start_babe(babe_config)?;
 			service.spawn_essential_task(babe);
 
 			let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(

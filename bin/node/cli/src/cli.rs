@@ -176,7 +176,7 @@ where
 	T: AbstractService,
 	E: IntoExit,
 {
-	use futures::{FutureExt, TryFutureExt, channel::oneshot, future::select, compat::Future01CompatExt};
+	use futures::{FutureExt, TryFutureExt, channel::oneshot, future::select};
 
 	let (exit_send, exit) = oneshot::channel();
 
