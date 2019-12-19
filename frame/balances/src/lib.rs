@@ -267,6 +267,8 @@ decl_event!(
 		Transfer(AccountId, AccountId, Balance, Balance),
 		/// A balance was set by root (who, free, reserved).
 		BalanceSet(AccountId, Balance, Balance),
+		/// Some amount was deposited (e.g. for transaction fees).
+		Deposit(AccountId, Balance),
 	}
 );
 
@@ -587,7 +589,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		T::OnFreeBalanceZero::on_free_balance_zero(who);
 
 		let mut reserved_balance = Self::reserved_balance(who);
-		
+
 		if !dust.is_zero() {
 			if reserved_balance >= T::ExistentialDeposit::get() {
 				// any individual account cannot cause overflow in balance.
