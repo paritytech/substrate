@@ -178,8 +178,9 @@ fn get_app<'a, 'b>() -> App<'a, 'b> {
 				"),
 			SubCommand::with_name("inspect")
 				.about("Gets a public key and a SS58 address from the provided Secret URI")
-				.args_from_usage("<uri> 'A Key URI to be inspected. May be a secret seed, \
-						secret URI (with derivation paths and password), SS58 or public URI.'
+				.args_from_usage("[uri] 'A Key URI to be inspected. May be a secret seed, \
+						secret URI (with derivation paths and password), SS58 or public URI. \
+						If not given, you will be prompted for the URI.'
 				"),
 			SubCommand::with_name("sign")
 				.about("Sign a message, provided on STDIN, with a given (secret) key")
@@ -270,10 +271,13 @@ where
 			C::print_from_uri(mnemonic.phrase(), password, maybe_network);
 		}
 		("inspect", Some(matches)) => {
-			let uri = matches
-				.value_of("uri")
-				.expect("URI parameter is required; thus it can't be None; qed");
-			C::print_from_uri(uri, password, maybe_network);
+			let uri = match matches.value_of("uri") {
+				Some(uri) => uri.into(),
+				None => rpassword::read_password_from_tty(Some("URI: "))
+					.expect("Failed to read URI"),
+			};
+
+			C::print_from_uri(&uri, password, maybe_network);
 		}
 		("sign", Some(matches)) => {
 			let should_decode = matches.is_present("hex");
