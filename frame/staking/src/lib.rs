@@ -784,7 +784,7 @@ decl_event!(
 );
 
 decl_error! {
-	/// Error for the stacking module.
+	/// Error for the staking module.
 	pub enum Error for Module<T: Trait> {
 		/// Not a controller account.
 		NotController,
