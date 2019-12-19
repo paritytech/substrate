@@ -163,7 +163,7 @@ use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
-	StorageValue, Parameter, decl_event, decl_storage, decl_module,
+	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error,
 	traits::{
 		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced, TryDrop,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
@@ -271,6 +271,27 @@ decl_event!(
 		Deposit(AccountId, Balance),
 	}
 );
+
+decl_error! {
+	pub enum Error for Module<T: Trait<I>, I: Instance> {
+		/// Vesting balance too high to send value
+		VestingBalance,
+		/// Account liquidity restrictions prevent withdrawal
+		LiquidityRestrictions,
+		/// Got an overflow after adding
+		Overflow,
+		/// Balance too low to send value
+		InsufficientBalance,
+		/// Value too low to create account due to existential deposit
+		ExistentialDeposit,
+		/// Transfer/payment would kill account
+		KeepAlive,
+		/// A vesting schedule already exists for this account
+		ExistingVestingSchedule,
+		/// Beneficiary account must pre-exist
+		DeadAccount,
+	}
+}
 
 /// Struct to encode the vesting schedule of an individual account.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -390,6 +411,8 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
+		type Error = Error<T, I>;
+
 		/// The minimum amount required to keep an account open.
 		const ExistentialDeposit: T::Balance = T::ExistentialDeposit::get();
 
@@ -897,7 +920,7 @@ where
 		if reasons.intersects(WithdrawReason::Reserve | WithdrawReason::Transfer)
 			&& Self::vesting_balance(who) > new_balance
 		{
-			Err("vesting balance too high to send value")?
+			Err(Error::<T, I>::VestingBalance)?
 		}
 		let locks = Self::locks(who);
 		if locks.is_empty() {
@@ -914,7 +937,7 @@ where
 		{
 			Ok(())
 		} else {
-			Err("account liquidity restrictions prevent withdrawal".into())
+			Err(Error::<T, I>::LiquidityRestrictions.into())
 		}
 	}
 
@@ -928,31 +951,22 @@ where
 		let to_balance = Self::free_balance(dest);
 		let would_create = to_balance.is_zero();
 		let fee = if would_create { T::CreationFee::get() } else { T::TransferFee::get() };
-		let liability = match value.checked_add(&fee) {
-			Some(l) => l,
-			None => Err("got overflow after adding a fee to value")?,
-		};
+		let liability = value.checked_add(&fee).ok_or(Error::<T, I>::Overflow)?;
+		let new_from_balance = from_balance.checked_sub(&liability).ok_or(Error::<T, I>::InsufficientBalance)?;
 
-		let new_from_balance = match from_balance.checked_sub(&liability) {
-			None => Err("balance too low to send value")?,
-			Some(b) => b,
-		};
 		if would_create && value < T::ExistentialDeposit::get() {
-			Err("value too low to create account")?
+			Err(Error::<T, I>::ExistentialDeposit)?
 		}
 		Self::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer.into(), new_from_balance)?;
 
 		// NOTE: total stake being stored in the same type means that this could never overflow
 		// but better to be safe than sorry.
-		let new_to_balance = match to_balance.checked_add(&value) {
-			Some(b) => b,
-			None => Err("destination balance too high to receive value")?,
-		};
+		let new_to_balance = to_balance.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
 
 		if transactor != dest {
 			if existence_requirement == ExistenceRequirement::KeepAlive {
 				if new_from_balance < Self::minimum_balance() {
-					Err("transfer would kill account")?
+					Err(Error::<T, I>::KeepAlive)?
 				}
 			}
 
@@ -1026,7 +1040,7 @@ where
 		value: Self::Balance
 	) -> result::Result<Self::PositiveImbalance, DispatchError> {
 		if Self::total_balance(who).is_zero() {
-			Err("beneficiary account must pre-exist")?
+			Err(Error::<T, I>::DeadAccount)?
 		}
 		Self::set_free_balance(who, Self::free_balance(who) + value);
 		Ok(PositiveImbalance::new(value))
@@ -1143,7 +1157,7 @@ where
 		value: Self::Balance,
 	) -> result::Result<Self::Balance, DispatchError> {
 		if Self::total_balance(beneficiary).is_zero() {
-			Err("beneficiary account must pre-exist")?
+			Err(Error::<T, I>::DeadAccount)?
 		}
 		let b = Self::reserved_balance(slashed);
 		let slash = cmp::min(b, value);
