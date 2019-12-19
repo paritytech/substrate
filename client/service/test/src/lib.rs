@@ -33,7 +33,7 @@ use sc_service::{
 	Roles,
 	Error,
 };
-use sc_network::{multiaddr, Multiaddr};
+use sc_network::{multiaddr, Multiaddr, NetworkStateInfo};
 use sc_network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_transaction_pool::TransactionPool;
