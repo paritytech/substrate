@@ -161,6 +161,7 @@ mod tests {
 	use wabt;
 	use hex_literal::hex;
 	use assert_matches::assert_matches;
+	use sp_runtime::DispatchError;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct DispatchEntry(Call);
@@ -1429,7 +1430,7 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(ExecError { reason: "during execution", buffer: _ })
+			Err(ExecError { reason: DispatchError::Other("during execution"), buffer: _ })
 		);
 	}
 
@@ -1471,7 +1472,7 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(ExecError { reason: "during execution", buffer: _ })
+			Err(ExecError { reason: DispatchError::Other("during execution"), buffer: _ })
 		);
 	}
 

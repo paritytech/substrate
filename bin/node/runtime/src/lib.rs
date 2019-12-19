@@ -125,6 +125,7 @@ impl frame_system::Trait for Runtime {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = Version;
+	type ModuleToIndex = ();
 }
 
 impl pallet_utility::Trait for Runtime {

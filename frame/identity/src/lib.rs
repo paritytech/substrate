@@ -69,9 +69,9 @@ use sp_std::prelude::*;
 use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
-use sp_runtime::{traits::{StaticLookup, EnsureOrigin, Zero}, RuntimeDebug};
+use sp_runtime::{DispatchResult, traits::{StaticLookup, EnsureOrigin, Zero}, RuntimeDebug};
 use frame_support::{
-	decl_module, decl_event, decl_storage, ensure, dispatch::Result,
+	decl_module, decl_event, decl_storage, ensure,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
 	weights::SimpleDispatchInfo,
 };
@@ -423,8 +423,7 @@ decl_module! {
 		fn add_registrar(origin, account: T::AccountId) {
 			T::RegistrarOrigin::try_origin(origin)
 				.map(|_| ())
-				.or_else(ensure_root)
-				.map_err(|_| "bad origin")?;
+				.or_else(ensure_root)?;
 
 			let i = <Registrars<T>>::mutate(|r| {
 				r.push(Some(RegistrarInfo { account, fee: Zero::zero(), fields: Default::default() }));
@@ -595,7 +594,7 @@ decl_module! {
 			let item = (reg_index, Judgement::FeePaid(registrar.fee));
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
 				Ok(i) => if id.judgements[i].1.is_sticky() {
-					return Err("sticky judgement")
+					Err("sticky judgement")?
 				} else {
 					id.judgements[i] = item
 				},
@@ -636,7 +635,7 @@ decl_module! {
 			let fee = if let Judgement::FeePaid(fee) = id.judgements.remove(pos).1 {
 				fee
 			} else {
-				return Err("judgement given")
+				Err("judgement given")?
 			};
 
 			let _ = T::Currency::unreserve(&sender, fee);
@@ -661,14 +660,14 @@ decl_module! {
 		fn set_fee(origin,
 			#[compact] index: RegistrarIndex,
 			#[compact] fee: BalanceOf<T>,
-		) -> Result {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			<Registrars<T>>::mutate(|rs|
 				rs.get_mut(index as usize)
 					.and_then(|x| x.as_mut())
 					.and_then(|r| if r.account == who { r.fee = fee; Some(()) } else { None })
-					.ok_or("invalid index")
+					.ok_or_else(|| "invalid index".into())
 			)
 		}
 
@@ -688,14 +687,14 @@ decl_module! {
 		fn set_account_id(origin,
 			#[compact] index: RegistrarIndex,
 			new: T::AccountId,
-		) -> Result {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			<Registrars<T>>::mutate(|rs|
 				rs.get_mut(index as usize)
 					.and_then(|x| x.as_mut())
 					.and_then(|r| if r.account == who { r.account = new; Some(()) } else { None })
-					.ok_or("invalid index")
+					.ok_or_else(|| "invalid index".into())
 			)
 		}
 
@@ -715,14 +714,14 @@ decl_module! {
 		fn set_fields(origin,
 			#[compact] index: RegistrarIndex,
 			fields: IdentityFields,
-		) -> Result {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			<Registrars<T>>::mutate(|rs|
 				rs.get_mut(index as usize)
 					.and_then(|x| x.as_mut())
 					.and_then(|r| if r.account == who { r.fields = fields; Some(()) } else { None })
-					.ok_or("invalid index")
+					.ok_or_else(|| "invalid index".into())
 			)
 		}
 
@@ -798,8 +797,7 @@ decl_module! {
 		fn kill_identity(origin, target: <T::Lookup as StaticLookup>::Source) {
 			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
-				.or_else(ensure_root)
-				.map_err(|_| "bad origin")?;
+				.or_else(ensure_root)?;
 
 			// Figure out who we're meant to be clearing.
 			let target = T::Lookup::lookup(target)?;
@@ -822,6 +820,7 @@ decl_module! {
 mod tests {
 	use super::*;
 
+	use sp_runtime::traits::BadOrigin;
 	use frame_support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
 	use sp_core::H256;
 	use frame_system::EnsureSignedBy;
@@ -862,6 +861,7 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -999,7 +999,7 @@ mod tests {
 	fn killing_slashing_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_noop!(Identity::kill_identity(Origin::signed(1), 10), "bad origin");
+			assert_noop!(Identity::kill_identity(Origin::signed(1), 10), BadOrigin);
 			assert_ok!(Identity::kill_identity(Origin::signed(2), 10));
 			assert_eq!(Identity::identity(10), None);
 			assert_eq!(Balances::free_balance(10), 90);

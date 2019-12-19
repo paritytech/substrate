@@ -92,7 +92,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn issue_token_airdrop(origin) -> dispatch::Result {
+//! 		pub fn issue_token_airdrop(origin) -> dispatch::DispatchResult {
 //! 			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
 //!
 //! 			const ACCOUNT_ALICE: u64 = 1;
@@ -133,7 +133,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure};
-use sp_runtime::traits::{Member, SimpleArithmetic, Zero, StaticLookup, ModuleDispatchError};
+use sp_runtime::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::traits::One;
 
@@ -151,14 +151,14 @@ pub trait Trait: frame_system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		type Error = Error;
+		type Error = Error<T>;
 
 		fn deposit_event() = default;
 		/// Issue a new class of fungible assets. There are, and will only ever be, `total`
 		/// such assets and they'll all belong to the `origin` initially. It will have an
 		/// identifier `AssetId` instance: this will be specified in the `Issued` event.
 		fn issue(origin, #[compact] total: T::Balance) {
-			let origin = ensure_signed(origin).map_err(|e| e.as_str())?;
+			let origin = ensure_signed(origin)?;
 
 			let id = Self::next_asset_id();
 			<NextAssetId<T>>::mutate(|id| *id += One::one());
@@ -175,12 +175,12 @@ decl_module! {
 			target: <T::Lookup as StaticLookup>::Source,
 			#[compact] amount: T::Balance
 		) {
-			let origin = ensure_signed(origin).map_err(|e| e.as_str())?;
+			let origin = ensure_signed(origin)?;
 			let origin_account = (id, origin.clone());
 			let origin_balance = <Balances<T>>::get(&origin_account);
 			let target = T::Lookup::lookup(target)?;
-			ensure!(!amount.is_zero(), Error::AmountZero);
-			ensure!(origin_balance >= amount, Error::BalanceLow);
+			ensure!(!amount.is_zero(), Error::<T>::AmountZero);
+			ensure!(origin_balance >= amount, Error::<T>::BalanceLow);
 
 			Self::deposit_event(RawEvent::Transferred(id, origin, target.clone(), amount));
 			<Balances<T>>::insert(origin_account, origin_balance - amount);
@@ -189,9 +189,9 @@ decl_module! {
 
 		/// Destroy any assets of `id` owned by `origin`.
 		fn destroy(origin, #[compact] id: T::AssetId) {
-			let origin = ensure_signed(origin).map_err(|e| e.as_str())?;
+			let origin = ensure_signed(origin)?;
 			let balance = <Balances<T>>::take((id, &origin));
-			ensure!(!balance.is_zero(), Error::BalanceZero);
+			ensure!(!balance.is_zero(), Error::<T>::BalanceZero);
 
 			<TotalSupply<T>>::mutate(id, |total_supply| *total_supply -= balance);
 			Self::deposit_event(RawEvent::Destroyed(id, origin, balance));
@@ -215,7 +215,7 @@ decl_event! {
 }
 
 decl_error! {
-	pub enum Error {
+	pub enum Error for Module<T: Trait> {
 		/// Transfer amount should be non-zero
 		AmountZero,
 		/// Account balance must be greater than or equal to the transfer amount
@@ -293,6 +293,7 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -353,7 +354,7 @@ mod tests {
 			assert_eq!(Assets::balance(0, 2), 50);
 			assert_ok!(Assets::destroy(Origin::signed(1), 0));
 			assert_eq!(Assets::balance(0, 1), 0);
-			assert_noop!(Assets::transfer(Origin::signed(1), 0, 1, 50), Error::BalanceLow);
+			assert_noop!(Assets::transfer(Origin::signed(1), 0, 1, 50), Error::<Test>::BalanceLow);
 		});
 	}
 
@@ -362,7 +363,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
-			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 0), Error::AmountZero);
+			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 0), Error::<Test>::AmountZero);
 		});
 	}
 
@@ -371,7 +372,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
-			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 101), Error::BalanceLow);
+			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 101), Error::<Test>::BalanceLow);
 		});
 	}
 
@@ -389,7 +390,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 2), 0);
-			assert_noop!(Assets::destroy(Origin::signed(2), 0), Error::BalanceZero);
+			assert_noop!(Assets::destroy(Origin::signed(2), 0), Error::<Test>::BalanceZero);
 		});
 	}
 }

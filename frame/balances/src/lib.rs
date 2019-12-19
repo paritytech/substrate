@@ -170,10 +170,9 @@ use frame_support::{
 		Imbalance, SignedImbalance, ReservableCurrency, Get, VestingCurrency,
 	},
 	weights::SimpleDispatchInfo,
-	dispatch::Result,
 };
 use sp_runtime::{
-	RuntimeDebug,
+	RuntimeDebug, DispatchResult, DispatchError,
 	traits::{
 		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
 		Saturating, Bounded,
@@ -821,6 +820,7 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type Version = T::Version;
+	type ModuleToIndex = T::ModuleToIndex;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
@@ -891,11 +891,11 @@ where
 		_amount: T::Balance,
 		reasons: WithdrawReasons,
 		new_balance: T::Balance,
-	) -> Result {
+	) -> DispatchResult {
 		if reasons.intersects(WithdrawReason::Reserve | WithdrawReason::Transfer)
 			&& Self::vesting_balance(who) > new_balance
 		{
-			return Err("vesting balance too high to send value");
+			Err("vesting balance too high to send value")?
 		}
 		let locks = Self::locks(who);
 		if locks.is_empty() {
@@ -912,7 +912,7 @@ where
 		{
 			Ok(())
 		} else {
-			Err("account liquidity restrictions prevent withdrawal")
+			Err("account liquidity restrictions prevent withdrawal".into())
 		}
 	}
 
@@ -921,22 +921,22 @@ where
 		dest: &T::AccountId,
 		value: Self::Balance,
 		existence_requirement: ExistenceRequirement,
-	) -> Result {
+	) -> DispatchResult {
 		let from_balance = Self::free_balance(transactor);
 		let to_balance = Self::free_balance(dest);
 		let would_create = to_balance.is_zero();
 		let fee = if would_create { T::CreationFee::get() } else { T::TransferFee::get() };
 		let liability = match value.checked_add(&fee) {
 			Some(l) => l,
-			None => return Err("got overflow after adding a fee to value"),
+			None => Err("got overflow after adding a fee to value")?,
 		};
 
 		let new_from_balance = match from_balance.checked_sub(&liability) {
-			None => return Err("balance too low to send value"),
+			None => Err("balance too low to send value")?,
 			Some(b) => b,
 		};
 		if would_create && value < T::ExistentialDeposit::get() {
-			return Err("value too low to create account");
+			Err("value too low to create account")?
 		}
 		Self::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer.into(), new_from_balance)?;
 
@@ -944,13 +944,13 @@ where
 		// but better to be safe than sorry.
 		let new_to_balance = match to_balance.checked_add(&value) {
 			Some(b) => b,
-			None => return Err("destination balance too high to receive value"),
+			None => Err("destination balance too high to receive value")?,
 		};
 
 		if transactor != dest {
 			if existence_requirement == ExistenceRequirement::KeepAlive {
 				if new_from_balance < Self::minimum_balance() {
-					return Err("transfer would kill account");
+					Err("transfer would kill account")?
 				}
 			}
 
@@ -976,7 +976,7 @@ where
 		value: Self::Balance,
 		reasons: WithdrawReasons,
 		liveness: ExistenceRequirement,
-	) -> result::Result<Self::NegativeImbalance, &'static str> {
+	) -> result::Result<Self::NegativeImbalance, DispatchError> {
 		let old_balance = Self::free_balance(who);
 		if let Some(new_balance) = old_balance.checked_sub(&value) {
 			// if we need to keep the account alive...
@@ -986,13 +986,13 @@ where
 				// ...yet is was alive before
 				&& old_balance >= T::ExistentialDeposit::get()
 			{
-				return Err("payment would kill account")
+				Err("payment would kill account")?
 			}
 			Self::ensure_can_withdraw(who, value, reasons, new_balance)?;
 			Self::set_free_balance(who, new_balance);
 			Ok(NegativeImbalance::new(value))
 		} else {
-			Err("too few free funds in account")
+			Err("too few free funds in account")?
 		}
 	}
 
@@ -1022,9 +1022,9 @@ where
 	fn deposit_into_existing(
 		who: &T::AccountId,
 		value: Self::Balance
-	) -> result::Result<Self::PositiveImbalance, &'static str> {
+	) -> result::Result<Self::PositiveImbalance, DispatchError> {
 		if Self::total_balance(who).is_zero() {
-			return Err("beneficiary account must pre-exist");
+			Err("beneficiary account must pre-exist")?
 		}
 		Self::set_free_balance(who, Self::free_balance(who) + value);
 		Ok(PositiveImbalance::new(value))
@@ -1104,10 +1104,10 @@ where
 		<ReservedBalance<T, I>>::get(who)
 	}
 
-	fn reserve(who: &T::AccountId, value: Self::Balance) -> result::Result<(), &'static str> {
+	fn reserve(who: &T::AccountId, value: Self::Balance) -> result::Result<(), DispatchError> {
 		let b = Self::free_balance(who);
 		if b < value {
-			return Err("not enough free funds")
+			Err("not enough free funds")?
 		}
 		let new_balance = b - value;
 		Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), new_balance)?;
@@ -1139,9 +1139,9 @@ where
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
 		value: Self::Balance,
-	) -> result::Result<Self::Balance, &'static str> {
+	) -> result::Result<Self::Balance, DispatchError> {
 		if Self::total_balance(beneficiary).is_zero() {
-			return Err("beneficiary account must pre-exist");
+			Err("beneficiary account must pre-exist")?
 		}
 		let b = Self::reserved_balance(slashed);
 		let slash = cmp::min(b, value);
@@ -1250,9 +1250,9 @@ where
 		locked: T::Balance,
 		per_block: T::Balance,
 		starting_block: T::BlockNumber
-	) -> Result {
+	) -> DispatchResult {
 		if <Vesting<T, I>>::exists(who) {
-			return Err("A vesting schedule already exists for this account.");
+			Err("A vesting schedule already exists for this account.")?
 		}
 		let vesting_schedule = VestingSchedule {
 			locked,

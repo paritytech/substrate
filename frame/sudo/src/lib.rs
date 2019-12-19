@@ -58,7 +58,7 @@
 //!
 //! decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//!         pub fn privileged_function(origin) -> dispatch::Result {
+//!         pub fn privileged_function(origin) -> dispatch::DispatchResult {
 //!             ensure_root(origin)?;
 //!
 //!             // do something...
@@ -87,9 +87,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::{
-	traits::{StaticLookup, Dispatchable, ModuleDispatchError}, DispatchError,
-};
+use sp_runtime::{traits::{StaticLookup, Dispatchable}, DispatchError};
 
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
@@ -108,7 +106,7 @@ pub trait Trait: frame_system::Trait {
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		type Error = Error;
+		type Error = Error<T>;
 
 		fn deposit_event() = default;
 
@@ -125,8 +123,8 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn sudo(origin, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
-			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
-			ensure!(sender == Self::key(), Error::RequireSudo);
+			let sender = ensure_signed(origin)?;
+			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
 			let res = match proposal.dispatch(frame_system::RawOrigin::Root.into()) {
 				Ok(_) => true,
@@ -151,8 +149,8 @@ decl_module! {
 		/// # </weight>
 		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
 			// This is a public call, so we ensure that the origin is some signed account.
-			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
-			ensure!(sender == Self::key(), Error::RequireSudo);
+			let sender = ensure_signed(origin)?;
+			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 			let new = T::Lookup::lookup(new)?;
 
 			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
@@ -173,8 +171,8 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedOperational(0)]
 		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
-			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
-			ensure!(sender == Self::key(), Error::RequireSudo);
+			let sender = ensure_signed(origin)?;
+			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
 			let who = T::Lookup::lookup(who)?;
 
@@ -212,7 +210,7 @@ decl_storage! {
 
 decl_error! {
 	/// Error for the Sudo module
-	pub enum Error {
+	pub enum Error for Module<T: Trait> {
 		/// Sender must be the Sudo account
 		RequireSudo,
 	}
