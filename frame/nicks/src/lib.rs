@@ -247,7 +247,7 @@ mod tests {
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
-		Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup},
+		Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup, BadOrigin},
 	};
 
 	impl_outer_origin! {
@@ -348,7 +348,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
 				Nicks::set_name(Origin::signed(2), b"Dr. David Brubeck, III".to_vec()),
-				"Name too long"
+				Error::<Test>::TooLong,
 			);
 
 			assert_ok!(Nicks::set_name(Origin::signed(2), b"Dave".to_vec()));
@@ -381,18 +381,18 @@ mod tests {
 	#[test]
 	fn error_catching_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Nicks::clear_name(Origin::signed(1)), "Not named");
+			assert_noop!(Nicks::clear_name(Origin::signed(1)), Error::<Test>::Unnamed);
 
 			assert_noop!(Nicks::set_name(Origin::signed(3), b"Dave".to_vec()), "not enough free funds");
 
-			assert_noop!(Nicks::set_name(Origin::signed(1), b"Ga".to_vec()), "Name too short");
+			assert_noop!(Nicks::set_name(Origin::signed(1), b"Ga".to_vec()), Error::<Test>::TooShort);
 			assert_noop!(
 				Nicks::set_name(Origin::signed(1), b"Gavin James Wood, Esquire".to_vec()),
-				"Name too long"
+				Error::<Test>::TooLong
 			);
 			assert_ok!(Nicks::set_name(Origin::signed(1), b"Dave".to_vec()));
-			assert_noop!(Nicks::kill_name(Origin::signed(2), 1), "bad origin");
-			assert_noop!(Nicks::force_name(Origin::signed(2), 1, b"Whatever".to_vec()), "bad origin");
+			assert_noop!(Nicks::kill_name(Origin::signed(2), 1), BadOrigin);
+			assert_noop!(Nicks::force_name(Origin::signed(2), 1, b"Whatever".to_vec()), BadOrigin);
 		});
 	}
 }
