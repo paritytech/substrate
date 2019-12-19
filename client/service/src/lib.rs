@@ -317,6 +317,7 @@ impl<TBl: Unpin, TCl, TSc: Unpin, TNetStatus, TNet, TTxPool, TOc> Future for
 		}
 
 		while let Poll::Ready(Some(task_to_spawn)) = Pin::new(&mut this.to_spawn_rx).poll_next(cx) {
+			// TODO: Update to tokio 0.2 when libp2p get switched to std futures (#4383)
 			let executor = tokio_executor::DefaultExecutor::current();
 			use futures01::future::Executor;
 			if let Err(err) = executor.execute(task_to_spawn.unit_error().compat()) {
