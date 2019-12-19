@@ -494,8 +494,6 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 				slot_lenience, slot_lenience, BACKOFF_STEP);
 		}
 
-		let slot_duration = slot_info.duration << (slot_lenience / BACKOFF_STEP);
-
 		let slot_lenience = Duration::from_secs(slot_duration);
 		Some(slot_lenience + slot_remaining)
 	}
