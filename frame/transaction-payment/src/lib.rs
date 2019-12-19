@@ -146,7 +146,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	///      size-fee, this is not input dependent and reflects the _complexity_ of the execution
 	///      and the time it consumes.
 	///   - _targeted_fee_adjustment_: This is a multiplier that can tune the final fee based on
-	///     is affected by the congestion of the network.
+	///     the congestion of the network.
 	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
 	///      transactions can have a tip.
 	///
