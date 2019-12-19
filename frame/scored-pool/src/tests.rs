@@ -221,7 +221,7 @@ fn index_mismatches_should_abort() {
 		let who = 40;
 		let index = 3;
 		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), index), Error::<Test, DefaultInstance>::WrongAccountIndex);
-		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99), Error::<Test, DefaultInstance>::WrongAccountIndex);
+		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99), Error::<Test, _>::WrongAccountIndex);
 		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index), Error::<Test, DefaultInstance>::WrongAccountIndex);
 	});
 }
