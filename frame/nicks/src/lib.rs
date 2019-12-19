@@ -43,7 +43,7 @@ use sp_runtime::{
 	traits::{StaticLookup, EnsureOrigin, Zero}
 };
 use frame_support::{
-	decl_module, decl_event, decl_storage, ensure,
+	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
 	weights::SimpleDispatchInfo,
 };
@@ -97,9 +97,23 @@ decl_event!(
 	}
 );
 
+decl_error! {
+	/// Error for the nicks module.
+	pub enum Error for Module<T: Trait> {
+		/// A name is too short.
+		TooShort,
+		/// A name is too long.
+		TooLong,
+		/// An account in't named.
+		Unnamed,
+	}
+}
+
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		fn deposit_event() = default;
 
 		/// Reservation fee.
@@ -131,8 +145,8 @@ decl_module! {
 		fn set_name(origin, name: Vec<u8>) {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(name.len() >= T::MinLength::get(), "Name too short");
-			ensure!(name.len() <= T::MaxLength::get(), "Name too long");
+			ensure!(name.len() >= T::MinLength::get(), Error::<T>::TooShort,);
+			ensure!(name.len() <= T::MaxLength::get(), Error::<T>::TooLong);
 
 			let deposit = if let Some((_, deposit)) = <NameOf<T>>::get(&sender) {
 				Self::deposit_event(RawEvent::NameSet(sender.clone()));
@@ -160,7 +174,7 @@ decl_module! {
 		fn clear_name(origin) {
 			let sender = ensure_signed(origin)?;
 
-			let deposit = <NameOf<T>>::take(&sender).ok_or("Not named")?.1;
+			let deposit = <NameOf<T>>::take(&sender).ok_or(Error::<T>::Unnamed)?.1;
 
 			let _ = T::Currency::unreserve(&sender, deposit.clone());
 
@@ -184,13 +198,12 @@ decl_module! {
 		fn kill_name(origin, target: <T::Lookup as StaticLookup>::Source) {
 			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
-				.or_else(ensure_root)
-				.map_err(|_| "bad origin")?;
+				.or_else(ensure_root)?;
 
 			// Figure out who we're meant to be clearing.
 			let target = T::Lookup::lookup(target)?;
 			// Grab their deposit (and check that they have one).
-			let deposit = <NameOf<T>>::take(&target).ok_or("Not named")?.1;
+			let deposit = <NameOf<T>>::take(&target).ok_or(Error::<T>::Unnamed)?.1;
 			// Slash their deposit from them.
 			T::Slashed::on_unbalanced(T::Currency::slash_reserved(&target, deposit.clone()).0);
 
@@ -213,8 +226,7 @@ decl_module! {
 		fn force_name(origin, target: <T::Lookup as StaticLookup>::Source, name: Vec<u8>) {
 			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
-				.or_else(ensure_root)
-				.map_err(|_| "bad origin")?;
+				.or_else(ensure_root)?;
 
 			let target = T::Lookup::lookup(target)?;
 			let deposit = <NameOf<T>>::get(&target).map(|x| x.1).unwrap_or_else(Zero::zero);
