@@ -24,14 +24,14 @@ mod backend;
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
 use sp_std::{vec::Vec, marker::PhantomData};
-use frame_support::{decl_module, decl_storage, decl_event, decl_error};
+use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
 use frame_support::weights::{Weight, WeighData, ClassifyDispatch, DispatchClass, PaysFee};
 use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::ModuleId;
 use frame_support::weights::SimpleDispatchInfo;
 use sp_runtime::traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion, ModuleDispatchError};
-use sp_core::{U256, H256, H160};
+use sp_core::{U256, H256, H160, Hasher};
 use evm::{ExitReason, ExitSucceed, ExitError};
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
@@ -43,8 +43,12 @@ pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::
 
 /// Trait that outputs the current transaction gas price.
 pub trait FeeCalculator {
-	/// Return the current gas price.
-	fn gas_price() -> U256;
+	/// Return the minimal required gas price.
+	fn min_gas_price() -> U256;
+}
+
+impl FeeCalculator for () {
+	fn min_gas_price() -> U256 { U256::zero() }
 }
 
 /// Trait for converting account ids of `balances` module into
@@ -57,6 +61,32 @@ pub trait FeeCalculator {
 pub trait ConvertAccountId<A> {
 	/// Given a Substrate address, return the corresponding Ethereum address.
 	fn convert_account_id(account_id: &A) -> H160;
+}
+
+/// Hash and then truncate the account id, taking the last 160-bit as the Ethereum address.
+pub struct HashTruncateConvertAccountId<H>(PhantomData<H>);
+
+impl<H: Hasher> Default for HashTruncateConvertAccountId<H> {
+	fn default() -> Self {
+		Self(PhantomData)
+	}
+}
+
+impl<H: Hasher, A: AsRef<[u8]>> ConvertAccountId<A> for HashTruncateConvertAccountId<H> {
+	fn convert_account_id(account_id: &A) -> H160 {
+		let account_id = H::hash(account_id.as_ref());
+		let account_id_len = account_id.as_ref().len();
+		let mut value = [0u8; 20];
+		let value_len = value.len();
+
+		if value_len > account_id_len {
+			value[(value_len - account_id_len)..].copy_from_slice(account_id.as_ref());
+		} else {
+			value.copy_from_slice(&account_id.as_ref()[(account_id_len - value_len)..]);
+		}
+
+		H160::from(value)
+	}
 }
 
 /// Custom precompiles to be used by EVM engine.
@@ -83,33 +113,33 @@ impl Precompiles for () {
 	}
 }
 
-struct WeightForCallCreate<F>(PhantomData<F>);
+struct WeightForCallCreate;
 
-impl<F> Default for WeightForCallCreate<F> {
-	fn default() -> Self {
-		Self(PhantomData)
+impl WeighData<(&H160, &Vec<u8>, &U256, &u32, &U256)> for WeightForCallCreate {
+	fn weigh_data(
+		&self,
+		(_, _, _, gas_provided, gas_price): (&H160, &Vec<u8>, &U256, &u32, &U256)
+	) -> Weight {
+		(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_provided)
 	}
 }
 
-impl<F: FeeCalculator> WeighData<(&H160, &Vec<u8>, &U256, &u32)> for WeightForCallCreate<F> {
-	fn weigh_data(&self, (_, _, _, gas_provided): (&H160, &Vec<u8>, &U256, &u32)) -> Weight {
-		F::gas_price().saturated_into::<Weight>().saturating_mul(*gas_provided)
+impl WeighData<(&Vec<u8>, &U256, &u32, &U256)> for WeightForCallCreate {
+	fn weigh_data(
+		&self,
+		(_, _, gas_provided, gas_price): (&Vec<u8>, &U256, &u32, &U256)
+	) -> Weight {
+		(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_provided)
 	}
 }
 
-impl<F: FeeCalculator> WeighData<(&Vec<u8>, &U256, &u32)> for WeightForCallCreate<F> {
-	fn weigh_data(&self, (_, _, gas_provided): (&Vec<u8>, &U256, &u32)) -> Weight {
-		F::gas_price().saturated_into::<Weight>().saturating_mul(*gas_provided)
-	}
-}
-
-impl<F: FeeCalculator, T> ClassifyDispatch<T> for WeightForCallCreate<F> {
+impl<T> ClassifyDispatch<T> for WeightForCallCreate {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		DispatchClass::Normal
 	}
 }
 
-impl<F: FeeCalculator> PaysFee for WeightForCallCreate<F> {
+impl PaysFee for WeightForCallCreate {
 	fn pays_fee(&self) -> bool {
 		true
 	}
@@ -155,6 +185,8 @@ decl_error! {
 		PaymentOverflow,
 		/// Withdraw fee failed
 		WithdrawFailed,
+		/// Gas price is too low.
+		GasPriceTooLow,
 		/// Call failed
 		ExitReasonFailed,
 		/// Call reverted
@@ -170,6 +202,7 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		/// Despoit balance from currency/balances module into EVM.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn deposit_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
@@ -189,6 +222,7 @@ decl_module! {
 			});
 		}
 
+		/// Withdraw balance from EVM into currency/balances module.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn withdraw_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
@@ -211,11 +245,20 @@ decl_module! {
 			T::Currency::resolve_creating(&sender, imbalance);
 		}
 
-		#[weight = WeightForCallCreate::<T::FeeCalculator>::default()]
-		fn call(origin, target: H160, input: Vec<u8>, value: U256, gas_limit: u32) {
+		/// Issue an EVM call operation. This is similar to a message call transaction in Ethereum.
+		#[weight = WeightForCallCreate]
+		fn call(
+			origin,
+			target: H160,
+			input: Vec<u8>,
+			value: U256,
+			gas_limit: u32,
+			gas_price: U256,
+		) {
 			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
+			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::GasPriceTooLow);
+
 			let source = T::ConvertAccountId::convert_account_id(&sender);
-			let gas_price = T::FeeCalculator::gas_price();
 
 			let vicinity = Vicinity {
 				gas_price,
@@ -262,11 +305,20 @@ decl_module! {
 			return ret;
 		}
 
-		#[weight = WeightForCallCreate::<T::FeeCalculator>::default()]
-		fn create(origin, init: Vec<u8>, value: U256, gas_limit: u32) {
+		/// Issue an EVM create operation. This is similar to a contract creation transaction in
+		/// Ethereum.
+		#[weight = WeightForCallCreate]
+		fn create(
+			origin,
+			init: Vec<u8>,
+			value: U256,
+			gas_limit: u32,
+			gas_price: U256,
+		) {
 			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
+			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::GasPriceTooLow);
+
 			let source = T::ConvertAccountId::convert_account_id(&sender);
-			let gas_price = T::FeeCalculator::gas_price();
 
 			let vicinity = Vicinity {
 				gas_price,
