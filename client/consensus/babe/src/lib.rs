@@ -288,7 +288,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	babe_link,
 	can_author_with,
 }: BabeParams<B, C, E, I, SO, SC, CAW>) -> Result<
-	impl futures01::Future<Item=(), Error=()>,
+	impl futures::Future<Output=()>,
 	sp_consensus::Error,
 > where
 	B: BlockT<Hash=H256>,
@@ -324,7 +324,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	)?;
 
 	babe_info!("Starting BABE Authorship worker");
-	let slot_worker = sc_consensus_slots::start_slot_worker(
+	Ok(sc_consensus_slots::start_slot_worker(
 		config.0,
 		select_chain,
 		worker,
@@ -332,9 +332,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		inherent_data_providers,
 		babe_link.time_source,
 		can_author_with,
-	);
-
-	Ok(slot_worker.map(|_| Ok::<(), ()>(())).compat())
+	))
 }
 
 struct BabeWorker<B: BlockT, C, E, I, SO> {

@@ -32,7 +32,7 @@ use sc_network_test::*;
 use sc_network_test::{Block as TestBlock, PeersClient};
 use sc_network::config::{BoxFinalityProofRequestBuilder, ProtocolConfig};
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
-use tokio::runtime::current_thread;
+use tokio::runtime::Runtime;
 use sc_client_api::BlockchainEvents;
 use log::debug;
 use std::{time::Duration, cell::RefCell};
@@ -347,7 +347,7 @@ fn run_one_test(
 
 	let net = Arc::new(Mutex::new(net));
 	let mut import_notifications = Vec::new();
-	let mut runtime = current_thread::Runtime::new().unwrap();
+	let mut runtime = Runtime::new().unwrap();
 	let mut keystore_paths = Vec::new();
 
 	for (peer_id, seed) in peers {
@@ -406,13 +406,12 @@ fn run_one_test(
 		}).expect("Starts babe"));
 	}
 
-	runtime.spawn(futures01::future::poll_fn(move || {
+	runtime.spawn(futures::future::poll_fn(move |_| {
 		net.lock().poll();
-		Ok::<_, ()>(futures01::Async::NotReady::<()>)
+		std::task::Poll::<()>::Pending
 	}));
 
-	runtime.block_on(future::join_all(import_notifications)
-		.map(|_| Ok::<(), ()>(())).compat()).unwrap();
+	runtime.block_on(future::join_all(import_notifications));
 }
 
 #[test]

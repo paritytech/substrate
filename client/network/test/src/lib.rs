@@ -217,7 +217,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	verifier: VerifierAdapter<dyn Verifier<Block>>,
 	/// We keep a copy of the block_import so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
-	block_import: Box<dyn BlockImport<Block, Error = ConsensusError>>,
+	block_import: Box<dyn BlockImport<Block, Error = ConsensusError> + Send>,
 	select_chain: Option<LongestChain<substrate_test_runtime_client::Backend, Block>>,
 	backend: Option<Arc<substrate_test_runtime_client::Backend>>,
 	network: NetworkWorker<Block, S, <Block as BlockT>::Hash>,
