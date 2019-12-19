@@ -39,7 +39,7 @@ use parking_lot::Mutex;
 use sc_client::Client;
 use exit_future::Signal;
 use futures::{
-	Future, FutureExt, Stream, StreamExt,
+	Future, FutureExt, Stream, StreamExt, TryFutureExt,
 	future::select, channel::mpsc,
 	compat::*,
 	sink::SinkExt,
@@ -317,7 +317,16 @@ impl<TBl: Unpin, TCl, TSc: Unpin, TNetStatus, TNet, TTxPool, TOc> Future for
 		}
 
 		while let Poll::Ready(Some(task_to_spawn)) = Pin::new(&mut this.to_spawn_rx).poll_next(cx) {
-			tokio::spawn(task_to_spawn);
+			let executor = tokio_executor::DefaultExecutor::current();
+			use futures01::future::Executor;
+			if let Err(err) = executor.execute(task_to_spawn.unit_error().compat()) {
+				debug!(
+					target: "service",
+					"Failed to spawn background task: {:?}; falling back to manual polling",
+					err
+				);
+				this.to_poll.push(Box::new(err.into_future().compat().map(drop)));
+			}
 		}
 
 		// Polling all the `to_poll` futures.
