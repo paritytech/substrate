@@ -140,12 +140,17 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	/// Compute the final fee value for a particular transaction.
 	///
 	/// The final fee is composed of:
-	///   - _length-fee_: This is the amount paid merely to pay for size of the transaction.
-	///   - _weight-fee_: This amount is computed based on the weight of the transaction. Unlike
+	///   - _base_fee_: This is the minimum amount a user pays for a transaction.
+	///   - _len_fee_: This is the amount paid merely to pay for size of the transaction.
+	///   - _weight_fee_: This amount is computed based on the weight of the transaction. Unlike
 	///      size-fee, this is not input dependent and reflects the _complexity_ of the execution
 	///      and the time it consumes.
+	///   - _targeted_fee_adjustment_: This is a multiplier that can tune the final fee based on
+	///     is affected by the congestion of the network.
 	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
 	///      transactions can have a tip.
+	///
+	/// final_fee = base_fee + targeted_fee_adjustment(len_fee + weight_fee) + tip;
 	fn compute_fee(
 		len: u32,
 		info: <Self as SignedExtension>::DispatchInfo,
@@ -167,13 +172,14 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 				T::WeightToFee::convert(capped_weight)
 			};
 
-			// everything except for tip
-			let basic_fee = base_fee.saturating_add(len_fee).saturating_add(weight_fee);
-			let fee_update = NextFeeMultiplier::get();
-			// basic_fee + (basic_fee * fee_update)
-			let adjusted_fee = fee_update.saturated_multiply_accumulate(basic_fee);
+			// the adjustable part of the fee
+			let adjustable_fee = len_fee.saturating_add(weight_fee);
+			let targeted_fee_adjustment = NextFeeMultiplier::get();
+			// adjustable_fee + (adjustable_fee * targeted_fee_adjustment)
+			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee);
+			let final_fee = base_fee.saturating_add(adjusted_fee).saturating_add(tip);
 
-			adjusted_fee.saturating_add(tip)
+			final_fee
 		} else {
 			tip
 		}
@@ -508,7 +514,7 @@ mod tests {
 					.pre_dispatch(&1, CALL, info_from_weight(3), len)
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(&1), 100 - 10 - (5 + 10 + 3) * 3 / 2);
+			assert_eq!(Balances::free_balance(&1), 100 - 10 - 5 - (10 + 3) * 3 / 2);
 		})
 	}
 
@@ -534,11 +540,12 @@ mod tests {
 				RuntimeDispatchInfo {
 					weight: info.weight,
 					class: info.class,
-					partial_fee: (
+					partial_fee:
 						5 /* base */
-						+ len as u64 /* len * 1 */
-						+ info.weight.min(MaximumBlockWeight::get()) as u64 * 2 /* weight * weight_to_fee */
-					) * 3 / 2
+						+ (
+							len as u64 /* len * 1 */
+							+ info.weight.min(MaximumBlockWeight::get()) as u64 * 2 /* weight * weight_to_fee */
+						) * 3 / 2
 				},
 			);
 
@@ -586,14 +593,13 @@ mod tests {
 			
 			// Next fee multiplier works
 			NextFeeMultiplier::put(Fixed64::from_rational(1, 2)); // = 1/2 = .5
-			// Base fee + multiplier works
+			// Base fee is unaffected by multiplier
 			let dispatch_info = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};
-			// Should be (100 * .5) + 100 = 150
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 0), 150);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 0), 100);
 
 			// Everything works together :)
 			let dispatch_info = DispatchInfo {
@@ -602,10 +608,10 @@ mod tests {
 				pays_fee: true,
 			};
 			// 123 weight, 456 length, 100 base
-			// (123 * 1) + (456 * 10) + 100 = 4783
-			// Final fee = (5572 * .5) + 5572 = 7174.5 -> 7174
-			// + 789 tip = 7963
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(456, dispatch_info, 789), 7963);
+			// adjustable fee = (123 * 1) + (456 * 10) = 4683
+			// adjusted fee = (4683 * .5) + 4683 = 7024.5 -> 7024
+			// final fee = 100 + 7024 + 789 tip = 7913
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(456, dispatch_info, 789), 7913);
 
 			// Overflow is handled
 			let dispatch_info = DispatchInfo {
@@ -613,7 +619,14 @@ mod tests {
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(<u32>::max_value(), dispatch_info, <u64>::max_value()), <u64>::max_value());
+			assert_eq!(
+				ChargeTransactionPayment::<Runtime>::compute_fee(
+					<u32>::max_value(),
+					dispatch_info,
+					<u64>::max_value()
+				),
+				<u64>::max_value()
+			);
 		});
 	}
 }
