@@ -14,11 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo, Trait, AliveContractInfo};
+use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo, Trait, AliveContractInfo, CodeHash, RawAliveContractInfo, exec};
 use sp_runtime::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
 	SaturatedConversion};
+use support::storage::child;
 use support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason, OnUnbalanced};
 use support::StorageMap;
+use primitives::blake2_256;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 #[must_use]
@@ -198,4 +200,87 @@ pub fn pay_rent<T: Trait>(account: &T::AccountId) -> Option<ContractInfo<T>> {
 /// NOTE: This function acts eagerly.
 pub fn try_evict<T: Trait>(account: &T::AccountId, handicap: T::BlockNumber) -> RentOutcome {
 	try_evict_or_and_pay_rent::<T>(account, handicap, false).0
+}
+
+/// Restores the destination account using the origin as prototype.
+///
+/// The restoration will be performed iff:
+/// - origin exists and is alive,
+/// - the origin's storage is not written in the current block
+/// - the restored account has tombstone
+/// - the tombstone matches the hash of the origin storage root, and code hash.
+///
+/// Upon succesful restoration, `origin` will be destroyed, all its funds are transferred to
+/// the restored account. The restored account will inherit the last write block and its last
+/// deduct block will be set to the current block.
+pub fn restore_to<T: Trait>(
+	origin: T::AccountId,
+	dest: T::AccountId,
+	code_hash: CodeHash<T>,
+	rent_allowance: BalanceOf<T>,
+	delta: Vec<exec::StorageKey>,
+) -> Result<(), &'static str> {
+	let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
+		.and_then(|c| c.get_alive())
+		.ok_or("Cannot restore from inexisting or tombstone contract")?;
+
+	let current_block = <system::Module<T>>::block_number();
+
+	if origin_contract.last_write == Some(current_block) {
+		return Err("Origin TrieId written in the current block");
+	}
+
+	let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
+		.and_then(|c| c.get_tombstone())
+		.ok_or("Cannot restore to inexisting or alive contract")?;
+
+	let last_write = if !delta.is_empty() {
+		Some(current_block)
+	} else {
+		origin_contract.last_write
+	};
+
+	let key_values_taken = delta.iter()
+		.filter_map(|key| {
+			child::get_raw(&origin_contract.trie_id, &blake2_256(key)).map(|value| {
+				child::kill(&origin_contract.trie_id, &blake2_256(key));
+				(key, value)
+			})
+		})
+		.collect::<Vec<_>>();
+
+	let tombstone = <TombstoneContractInfo<T>>::new(
+		// This operation is cheap enough because last_write (delta not included)
+		// is not this block as it has been checked earlier.
+		&sp_io::storage::child_root(&origin_contract.trie_id)[..],
+		code_hash,
+	);
+
+	if tombstone != dest_tombstone {
+		for (key, value) in key_values_taken {
+			child::put_raw(&origin_contract.trie_id, &blake2_256(key), &value);
+		}
+
+		return Err("Tombstones don't match");
+	}
+
+	origin_contract.storage_size -= key_values_taken.iter()
+		.map(|(_, value)| value.len() as u32)
+		.sum::<u32>();
+
+	<ContractInfoOf<T>>::remove(&origin);
+	<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(RawAliveContractInfo {
+		trie_id: origin_contract.trie_id,
+		storage_size: origin_contract.storage_size,
+		code_hash,
+		rent_allowance,
+		deduct_block: current_block,
+		last_write,
+	}));
+
+	let origin_free_balance = T::Currency::free_balance(&origin);
+	T::Currency::make_free_balance_be(&origin, <BalanceOf<T>>::zero());
+	T::Currency::deposit_creating(&dest, origin_free_balance);
+
+	Ok(())
 }
