@@ -66,7 +66,7 @@ use std::sync::Arc;
 mod bridge;
 mod state_machine;
 
-/// Abstraction over a network. Using this trait instead of `NetworkService` itself makes it easier for unit tests.
+/// Abstraction over a network.
 pub trait Network<B: BlockT> {
 	/// Returns a stream of events representing what happens on the network.
 	fn event_stream(&self) -> Box<dyn futures01::Stream<Item = Event, Error = ()> + Send>;
@@ -120,6 +120,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network<B> for Arc<Netw
 	}
 
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
-		self.announce_block(block, associated_data)
+		NetworkService::announce_block(self, block, associated_data)
 	}
 }
