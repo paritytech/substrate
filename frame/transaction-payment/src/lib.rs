@@ -140,12 +140,17 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	/// Compute the final fee value for a particular transaction.
 	///
 	/// The final fee is composed of:
-	///   - _length-fee_: This is the amount paid merely to pay for size of the transaction.
-	///   - _weight-fee_: This amount is computed based on the weight of the transaction. Unlike
+	///   - _base_fee_: This is the minimum amount a user pays for a transaction.
+	///   - _len_fee_: This is the amount paid merely to pay for size of the transaction.
+	///   - _weight_fee_: This amount is computed based on the weight of the transaction. Unlike
 	///      size-fee, this is not input dependent and reflects the _complexity_ of the execution
 	///      and the time it consumes.
+	///   - _targeted_fee_adjustment_: This is a multiplier that can tune the final fee based on
+	///     the congestion of the network.
 	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
 	///      transactions can have a tip.
+	///
+	/// final_fee = base_fee + targeted_fee_adjustment(len_fee + weight_fee) + tip;
 	fn compute_fee(
 		len: u32,
 		info: <Self as SignedExtension>::DispatchInfo,
@@ -156,9 +161,8 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	{
 		if info.pays_fee {
 			let len = <BalanceOf<T>>::from(len);
-			let base = T::TransactionBaseFee::get();
 			let per_byte = T::TransactionByteFee::get();
-			let len_fee = base.saturating_add(per_byte.saturating_mul(len));
+			let len_fee = per_byte.saturating_mul(len);
 
 			let weight_fee = {
 				// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
@@ -167,12 +171,16 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 				T::WeightToFee::convert(capped_weight)
 			};
 
-			// everything except for tip
-			let basic_fee = len_fee.saturating_add(weight_fee);
-			let fee_update = NextFeeMultiplier::get();
-			let adjusted_fee = fee_update.saturated_multiply_accumulate(basic_fee);
+			// the adjustable part of the fee
+			let adjustable_fee = len_fee.saturating_add(weight_fee);
+			let targeted_fee_adjustment = NextFeeMultiplier::get();
+			// adjusted_fee = adjustable_fee + (adjustable_fee * targeted_fee_adjustment)
+			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee);
 
-			adjusted_fee.saturating_add(tip)
+			let base_fee = T::TransactionBaseFee::get();
+			let final_fee = base_fee.saturating_add(adjusted_fee).saturating_add(tip);
+
+			final_fee
 		} else {
 			tip
 		}
@@ -508,7 +516,7 @@ mod tests {
 					.pre_dispatch(&1, CALL, info_from_weight(3), len)
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(&1), 100 - 10 - (5 + 10 + 3) * 3 / 2);
+			assert_eq!(Balances::free_balance(&1), 100 - 10 - 5 - (10 + 3) * 3 / 2);
 		})
 	}
 
@@ -534,14 +542,111 @@ mod tests {
 				RuntimeDispatchInfo {
 					weight: info.weight,
 					class: info.class,
-					partial_fee: (
+					partial_fee:
 						5 /* base */
-						+ len as u64 /* len * 1 */
-						+ info.weight.min(MaximumBlockWeight::get()) as u64 * 2 /* weight * weight_to_fee */
-					) * 3 / 2
+						+ (
+							len as u64 /* len * 1 */
+							+ info.weight.min(MaximumBlockWeight::get()) as u64 * 2 /* weight * weight_to_fee */
+						) * 3 / 2
 				},
 			);
 
+		});
+	}
+
+	#[test]
+	fn compute_fee_works_without_multiplier() {
+		ExtBuilder::default()
+		.fees(100, 10, 1)
+		.balance_factor(0)
+		.build()
+		.execute_with(||
+		{
+			// Next fee multiplier is zero
+			assert_eq!(NextFeeMultiplier::get(), Fixed64::from_natural(0));
+
+			// Tip only, no fees works
+			let dispatch_info = DispatchInfo {
+				weight: 0,
+				class: DispatchClass::Operational,
+				pays_fee: false,
+			};
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 10), 10);
+			// No tip, only base fee works
+			let dispatch_info = DispatchInfo {
+				weight: 0,
+				class: DispatchClass::Operational,
+				pays_fee: true,
+			};
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 0), 100);
+			// Tip + base fee works
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 69), 169);
+			// Len (byte fee) + base fee works
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(42, dispatch_info, 0), 520);
+			// Weight fee + base fee works
+			let dispatch_info = DispatchInfo {
+				weight: 1000,
+				class: DispatchClass::Operational,
+				pays_fee: true,
+			};
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 0), 1100);
+		});
+	}
+
+	#[test]
+	fn compute_fee_works_with_multiplier() {
+		ExtBuilder::default()
+		.fees(100, 10, 1)
+		.balance_factor(0)
+		.build()
+		.execute_with(||
+		{
+			// Add a next fee multiplier
+			NextFeeMultiplier::put(Fixed64::from_rational(1, 2)); // = 1/2 = .5
+			// Base fee is unaffected by multiplier
+			let dispatch_info = DispatchInfo {
+				weight: 0,
+				class: DispatchClass::Operational,
+				pays_fee: true,
+			};
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 0), 100);
+
+			// Everything works together :)
+			let dispatch_info = DispatchInfo {
+				weight: 123,
+				class: DispatchClass::Operational,
+				pays_fee: true,
+			};
+			// 123 weight, 456 length, 100 base
+			// adjustable fee = (123 * 1) + (456 * 10) = 4683
+			// adjusted fee = (4683 * .5) + 4683 = 7024.5 -> 7024
+			// final fee = 100 + 7024 + 789 tip = 7913
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(456, dispatch_info, 789), 7913);
+		});
+	}
+
+	#[test]
+	fn compute_fee_does_not_overflow() {
+		ExtBuilder::default()
+		.fees(100, 10, 1)
+		.balance_factor(0)
+		.build()
+		.execute_with(||
+		{
+			// Overflow is handled
+			let dispatch_info = DispatchInfo {
+				weight: <u32>::max_value(),
+				class: DispatchClass::Operational,
+				pays_fee: true,
+			};
+			assert_eq!(
+				ChargeTransactionPayment::<Runtime>::compute_fee(
+					<u32>::max_value(),
+					dispatch_info,
+					<u64>::max_value()
+				),
+				<u64>::max_value()
+			);
 		});
 	}
 }
