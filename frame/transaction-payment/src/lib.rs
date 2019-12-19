@@ -161,7 +161,6 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	{
 		if info.pays_fee {
 			let len = <BalanceOf<T>>::from(len);
-			let base_fee = T::TransactionBaseFee::get();
 			let per_byte = T::TransactionByteFee::get();
 			let len_fee = per_byte.saturating_mul(len);
 
@@ -177,6 +176,8 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			let targeted_fee_adjustment = NextFeeMultiplier::get();
 			// adjusted_fee = adjustable_fee + (adjustable_fee * targeted_fee_adjustment)
 			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee);
+			
+			let base_fee = T::TransactionBaseFee::get();
 			let final_fee = base_fee.saturating_add(adjusted_fee).saturating_add(tip);
 
 			final_fee
