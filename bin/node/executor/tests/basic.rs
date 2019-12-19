@@ -783,7 +783,7 @@ fn full_native_block_import_works_with_changes_trie() {
 		None,
 	).0.unwrap();
 
-	assert!(t.ext().storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
+	assert!(t.ext().storage_changes_root(&GENESIS_HASH).unwrap().is_some());
 }
 
 #[test]
@@ -799,7 +799,7 @@ fn full_wasm_block_import_works_with_changes_trie() {
 		None,
 	).0.unwrap();
 
-	assert!(t.ext().storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
+	assert!(t.ext().storage_changes_root(&GENESIS_HASH).unwrap().is_some());
 }
 
 #[test]

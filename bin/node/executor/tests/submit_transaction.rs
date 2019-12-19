@@ -17,6 +17,8 @@
 use node_runtime::{
 	Call, Runtime, SubmitTransaction,
 };
+use primitives::testing::{KeyStore, ED25519, SR25519};
+use primitives::traits::{KeystoreExt, BareCryptoStorePtr};
 use primitives::offchain::{
 	TransactionPoolExt,
 	testing::TestTransactionPoolExt,
@@ -56,10 +58,13 @@ fn should_submit_signed_transaction() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
+	let mut keystore = KeyStore::new();
+	t.register_extension(KeystoreExt(keystore));
+
 	t.execute_with(|| {
-		let call = balances::Call::transfer(Default::default());
-		let results = SubmitSignedTransaction<Runtime, Call>
-			::submit_signed(call, vec![]);
+		let call = balances::Call::transfer(Default::default(), Default::default());
+		let results =
+			<SubmitTransaction as SubmitSignedTransaction<Runtime, Call>>::submit_signed(call);
 
 		let len = results.len();
 		assert_eq!(len, 3);

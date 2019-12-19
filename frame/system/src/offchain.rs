@@ -228,7 +228,6 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 	}
 }
 
-
 /// A default type used to submit transactions to the pool.
 ///
 /// This is passed into each runtime as an opaque associated type that can have either of:
