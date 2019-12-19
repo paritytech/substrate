@@ -42,7 +42,6 @@ use sp_transaction_pool::{
 	BlockHash, TxHash, TransactionFor, error::IntoPoolError,
 };
 use sp_session::SessionKeys;
-use futures::task::SpawnExt;
 
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::author::*;
@@ -194,7 +193,9 @@ impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P,
 				},
 			});
 
-		if self.subscriptions.executor().spawn(Box::new(future)).is_err() {
+		let res = self.subscriptions.executor()
+			.execute(Box::new(Compat::new(future.map(|_| Ok(())))));
+		if res.is_err() {
 			warn!("Error spawning subscription RPC task.");
 		}
 	}

@@ -125,6 +125,15 @@ impl Spawn for SpawnTaskHandle {
 	}
 }
 
+type Boxed01Future01 = Box<dyn futures01::Future<Item = (), Error = ()> + Send + 'static>;
+
+impl futures01::future::Executor<Boxed01Future01> for SpawnTaskHandle {
+	fn execute(&self, future: Boxed01Future01) -> Result<(), futures01::future::ExecuteError<Boxed01Future01>>{
+		self.spawn(future.compat().map(drop));
+		Ok(())
+	}
+}
+
 /// Abstraction over a Substrate service.
 pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	Spawn + Send + Unpin {
