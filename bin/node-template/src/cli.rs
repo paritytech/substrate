@@ -1,5 +1,5 @@
 use crate::service;
-use futures::{future::{select, Map}, FutureExt, TryFutureExt, channel::oneshot, compat::Future01CompatExt};
+use futures::{future::{select, Map}, FutureExt, TryFutureExt, channel::oneshot};
 use std::cell::RefCell;
 use tokio::runtime::Runtime;
 pub use sc_cli::{VersionInfo, IntoExit, error};
@@ -87,9 +87,6 @@ where
 
 	let service_res = {
 		let exit = e.into_exit();
-		let service = service
-			.map_err(|err| error::Error::Service(err))
-			.compat();
 		let select = select(service, exit)
 			.map(|_| Ok(()))
 			.compat();
