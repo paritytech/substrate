@@ -87,14 +87,14 @@ mod tests {
 
 	/// Default transfer fee
 	fn transfer_fee<E: Encode>(extrinsic: &E, fee_multiplier: Fixed64) -> Balance {
-		let length_fee = TransactionBaseFee::get() +
-			TransactionByteFee::get() *
-			(extrinsic.encode().len() as Balance);
+		let length_fee = TransactionByteFee::get() * (extrinsic.encode().len() as Balance);
 
 		let weight = default_transfer_call().get_dispatch_info().weight;
 		let weight_fee = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::convert(weight);
 
-		fee_multiplier.saturated_multiply_accumulate(length_fee + weight_fee) + TransferFee::get()
+		let base_fee = TransactionBaseFee::get();
+
+		 base_fee + fee_multiplier.saturated_multiply_accumulate(length_fee + weight_fee) + TransferFee::get()
 	}
 
 	fn default_transfer_call() -> pallet_balances::Call<Runtime> {
@@ -537,7 +537,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984780231392)),
+					event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984788199392)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -561,7 +561,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
-					event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984780231392)),
+					event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(1984788199392)),
 					topics: vec![],
 				},
 				EventRecord {
