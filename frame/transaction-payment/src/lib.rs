@@ -176,7 +176,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			let targeted_fee_adjustment = NextFeeMultiplier::get();
 			// adjusted_fee = adjustable_fee + (adjustable_fee * targeted_fee_adjustment)
 			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee);
-			
+
 			let base_fee = T::TransactionBaseFee::get();
 			let final_fee = base_fee.saturating_add(adjusted_fee).saturating_add(tip);
 
@@ -554,14 +554,14 @@ mod tests {
 	}
 
 	#[test]
-	fn compute_fee_works() {
+	fn compute_fee_works_without_multiplier() {
 		ExtBuilder::default()
 		.fees(100, 10, 1)
 		.balance_factor(0)
 		.build()
 		.execute_with(||
 		{
-			// Next fee multiplier starts at zero so next tests are not affected
+			// Next fee multiplier is zero
 			assert_eq!(NextFeeMultiplier::get(), Fixed64::from_natural(0));
 
 			// Tip only, no fees works
@@ -572,7 +572,6 @@ mod tests {
 			};
 			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 10), 10);
 			// No tip, only base fee works
-			assert_eq!(TransactionBaseFee::get(), 100);
 			let dispatch_info = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
@@ -582,7 +581,6 @@ mod tests {
 			// Tip + base fee works
 			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 69), 169);
 			// Len (byte fee) + base fee works
-			assert_eq!(TransactionByteFee::get(), 10);
 			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(42, dispatch_info, 0), 520);
 			// Weight fee + base fee works
 			let dispatch_info = DispatchInfo {
@@ -591,8 +589,18 @@ mod tests {
 				pays_fee: true,
 			};
 			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 0), 1100);
-			
-			// Next fee multiplier works
+		});
+	}
+
+	#[test]
+	fn compute_fee_works_with_multiplier() {
+		ExtBuilder::default()
+		.fees(100, 10, 1)
+		.balance_factor(0)
+		.build()
+		.execute_with(||
+		{
+			// Add a next fee multiplier
 			NextFeeMultiplier::put(Fixed64::from_rational(1, 2)); // = 1/2 = .5
 			// Base fee is unaffected by multiplier
 			let dispatch_info = DispatchInfo {
@@ -613,7 +621,17 @@ mod tests {
 			// adjusted fee = (4683 * .5) + 4683 = 7024.5 -> 7024
 			// final fee = 100 + 7024 + 789 tip = 7913
 			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(456, dispatch_info, 789), 7913);
+		});
+	}
 
+	#[test]
+	fn compute_fee_does_not_overflow() {
+		ExtBuilder::default()
+		.fees(100, 10, 1)
+		.balance_factor(0)
+		.build()
+		.execute_with(||
+		{
 			// Overflow is handled
 			let dispatch_info = DispatchInfo {
 				weight: <u32>::max_value(),
