@@ -175,7 +175,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			// the adjustable part of the fee
 			let adjustable_fee = len_fee.saturating_add(weight_fee);
 			let targeted_fee_adjustment = NextFeeMultiplier::get();
-			// adjustable_fee + (adjustable_fee * targeted_fee_adjustment)
+			// adjusted_fee = adjustable_fee + (adjustable_fee * targeted_fee_adjustment)
 			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee);
 			let final_fee = base_fee.saturating_add(adjusted_fee).saturating_add(tip);
 
