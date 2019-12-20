@@ -17,7 +17,7 @@
 //! Tests for the module.
 
 use super::*;
-use mock::{Balances, ExtBuilder, Runtime, System, info_from_weight, CALL};
+use mock::{Balances, ExtBuilder, Test, System, info_from_weight, CALL};
 use sp_runtime::traits::{SignedExtension, BadOrigin};
 use frame_support::{
 	assert_noop, assert_ok, assert_err,
@@ -38,7 +38,7 @@ fn basic_locking_should_work() {
 		Balances::set_lock(ID_1, &1, 9, u64::max_value(), WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 5, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::<Test, _>::LiquidityRestrictions
 		);
 	});
 }
@@ -94,17 +94,17 @@ fn lock_value_extension_should_work() {
 		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::<Test, _>::LiquidityRestrictions
 		);
 		Balances::extend_lock(ID_1, &1, 2, u64::max_value(), WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::<Test, _>::LiquidityRestrictions
 		);
 		Balances::extend_lock(ID_1, &1, 8, u64::max_value(), WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 3, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::<Test, _>::LiquidityRestrictions
 		);
 	});
 }
@@ -119,11 +119,11 @@ fn lock_reasons_should_work() {
 			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Transfer.into());
 			assert_noop!(
 				<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
-				"account liquidity restrictions prevent withdrawal"
+				Error::<Test, _>::LiquidityRestrictions
 			);
 			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
 			// NOTE: this causes a fee payment.
-			assert!(<ChargeTransactionPayment<Runtime> as SignedExtension>::pre_dispatch(
+			assert!(<ChargeTransactionPayment<Test> as SignedExtension>::pre_dispatch(
 				ChargeTransactionPayment::from(1),
 				&1,
 				CALL,
@@ -135,9 +135,9 @@ fn lock_reasons_should_work() {
 			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 			assert_noop!(
 				<Balances as ReservableCurrency<_>>::reserve(&1, 1),
-				"account liquidity restrictions prevent withdrawal"
+				Error::<Test, _>::LiquidityRestrictions
 			);
-			assert!(<ChargeTransactionPayment<Runtime> as SignedExtension>::pre_dispatch(
+			assert!(<ChargeTransactionPayment<Test> as SignedExtension>::pre_dispatch(
 				ChargeTransactionPayment::from(1),
 				&1,
 				CALL,
@@ -148,7 +148,7 @@ fn lock_reasons_should_work() {
 			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::TransactionPayment.into());
 			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
-			assert!(<ChargeTransactionPayment<Runtime> as SignedExtension>::pre_dispatch(
+			assert!(<ChargeTransactionPayment<Test> as SignedExtension>::pre_dispatch(
 				ChargeTransactionPayment::from(1),
 				&1,
 				CALL,
@@ -164,7 +164,7 @@ fn lock_block_number_should_work() {
 		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::<Test, _>::LiquidityRestrictions
 		);
 
 		System::set_block_number(2);
@@ -178,18 +178,18 @@ fn lock_block_number_extension_should_work() {
 		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::<Test, _>::LiquidityRestrictions
 		);
 		Balances::extend_lock(ID_1, &1, 10, 1, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::<Test, _>::LiquidityRestrictions
 		);
 		System::set_block_number(2);
 		Balances::extend_lock(ID_1, &1, 10, 8, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 3, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::<Test, _>::LiquidityRestrictions
 		);
 	});
 }
@@ -200,17 +200,17 @@ fn lock_reasons_extension_should_work() {
 		Balances::set_lock(ID_1, &1, 10, 10, WithdrawReason::Transfer.into());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::<Test, _>::LiquidityRestrictions
 		);
 		Balances::extend_lock(ID_1, &1, 10, 10, WithdrawReasons::none());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::<Test, _>::LiquidityRestrictions
 		);
 		Balances::extend_lock(ID_1, &1, 10, 10, WithdrawReason::Reserve.into());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-			"account liquidity restrictions prevent withdrawal"
+			Error::<Test, _>::LiquidityRestrictions
 		);
 	});
 }
@@ -227,7 +227,7 @@ fn default_indexing_on_new_accounts_should_not_work2() {
 			// ext_deposit is 10, value is 9, not satisfies for ext_deposit
 			assert_noop!(
 				Balances::transfer(Some(1).into(), 5, 9),
-				"value too low to create account",
+				Error::<Test, _>::ExistentialDeposit,
 			);
 			assert_eq!(Balances::is_dead_account(&5), true); // account 5 should not exist
 			assert_eq!(Balances::free_balance(&1), 100);
@@ -277,7 +277,7 @@ fn reward_should_work() {
 		assert_eq!(Balances::total_balance(&1), 10);
 		assert_ok!(Balances::deposit_into_existing(&1, 10).map(drop));
 		assert_eq!(Balances::total_balance(&1), 20);
-		assert_eq!(<TotalIssuance<Runtime>>::get(), 120);
+		assert_eq!(<TotalIssuance<Test>>::get(), 120);
 	});
 }
 
@@ -379,7 +379,7 @@ fn balance_transfer_when_reserved_should_not_work() {
 		assert_ok!(Balances::reserve(&1, 69));
 		assert_noop!(
 			Balances::transfer(Some(1).into(), 2, 69),
-			"balance too low to send value",
+			Error::<Test, _>::InsufficientBalance,
 		);
 	});
 }
@@ -412,7 +412,7 @@ fn slashing_balance_should_work() {
 		assert!(Balances::slash(&1, 69).1.is_zero());
 		assert_eq!(Balances::free_balance(&1), 0);
 		assert_eq!(Balances::reserved_balance(&1), 42);
-		assert_eq!(<TotalIssuance<Runtime>>::get(), 42);
+		assert_eq!(<TotalIssuance<Test>>::get(), 42);
 	});
 }
 
@@ -424,7 +424,7 @@ fn slashing_incomplete_balance_should_work() {
 		assert_eq!(Balances::slash(&1, 69).1, 27);
 		assert_eq!(Balances::free_balance(&1), 0);
 		assert_eq!(Balances::reserved_balance(&1), 0);
-		assert_eq!(<TotalIssuance<Runtime>>::get(), 0);
+		assert_eq!(<TotalIssuance<Test>>::get(), 0);
 	});
 }
 
@@ -447,7 +447,7 @@ fn slashing_reserved_balance_should_work() {
 		assert_eq!(Balances::slash_reserved(&1, 42).1, 0);
 		assert_eq!(Balances::reserved_balance(&1), 69);
 		assert_eq!(Balances::free_balance(&1), 0);
-		assert_eq!(<TotalIssuance<Runtime>>::get(), 69);
+		assert_eq!(<TotalIssuance<Test>>::get(), 69);
 	});
 }
 
@@ -459,7 +459,7 @@ fn slashing_incomplete_reserved_balance_should_work() {
 		assert_eq!(Balances::slash_reserved(&1, 69).1, 27);
 		assert_eq!(Balances::free_balance(&1), 69);
 		assert_eq!(Balances::reserved_balance(&1), 0);
-		assert_eq!(<TotalIssuance<Runtime>>::get(), 69);
+		assert_eq!(<TotalIssuance<Test>>::get(), 69);
 	});
 }
 
@@ -482,7 +482,7 @@ fn transferring_reserved_balance_to_nonexistent_should_fail() {
 	ExtBuilder::default().build().execute_with(|| {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 111));
-		assert_noop!(Balances::repatriate_reserved(&1, &2, 42), "beneficiary account must pre-exist");
+		assert_noop!(Balances::repatriate_reserved(&1, &2, 42), Error::<Test, _>::DeadAccount);
 	});
 }
 
@@ -503,12 +503,12 @@ fn transferring_incomplete_reserved_balance_should_work() {
 #[test]
 fn transferring_too_high_value_should_not_panic() {
 	ExtBuilder::default().build().execute_with(|| {
-		<FreeBalance<Runtime>>::insert(1, u64::max_value());
-		<FreeBalance<Runtime>>::insert(2, 1);
+		<FreeBalance<Test>>::insert(1, u64::max_value());
+		<FreeBalance<Test>>::insert(2, 1);
 
 		assert_err!(
 			Balances::transfer(Some(1).into(), 2, u64::max_value()),
-			"destination balance too high to receive value",
+			Error::<Test, _>::Overflow,
 		);
 
 		assert_eq!(Balances::free_balance(&1), u64::max_value());
@@ -520,12 +520,12 @@ fn transferring_too_high_value_should_not_panic() {
 fn account_create_on_free_too_low_with_other() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&1, 100);
-		assert_eq!(<TotalIssuance<Runtime>>::get(), 100);
+		assert_eq!(<TotalIssuance<Test>>::get(), 100);
 
 		// No-op.
 		let _ = Balances::deposit_creating(&2, 50);
 		assert_eq!(Balances::free_balance(&2), 0);
-		assert_eq!(<TotalIssuance<Runtime>>::get(), 100);
+		assert_eq!(<TotalIssuance<Test>>::get(), 100);
 	})
 }
 
@@ -536,14 +536,14 @@ fn account_create_on_free_too_low() {
 		// No-op.
 		let _ = Balances::deposit_creating(&2, 50);
 		assert_eq!(Balances::free_balance(&2), 0);
-		assert_eq!(<TotalIssuance<Runtime>>::get(), 0);
+		assert_eq!(<TotalIssuance<Test>>::get(), 0);
 	})
 }
 
 #[test]
 fn account_removal_on_free_too_low() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		assert_eq!(<TotalIssuance<Runtime>>::get(), 0);
+		assert_eq!(<TotalIssuance<Test>>::get(), 0);
 
 		// Setup two accounts with free balance above the existential threshold.
 		let _ = Balances::deposit_creating(&1, 110);
@@ -551,7 +551,7 @@ fn account_removal_on_free_too_low() {
 
 		assert_eq!(Balances::free_balance(&1), 110);
 		assert_eq!(Balances::free_balance(&2), 110);
-		assert_eq!(<TotalIssuance<Runtime>>::get(), 220);
+		assert_eq!(<TotalIssuance<Test>>::get(), 220);
 
 		// Transfer funds from account 1 of such amount that after this transfer
 		// the balance of account 1 will be below the existential threshold.
@@ -563,7 +563,7 @@ fn account_removal_on_free_too_low() {
 		assert_eq!(Balances::free_balance(&2), 130);
 
 		// Verify that TotalIssuance tracks balance removal when free balance is too low.
-		assert_eq!(<TotalIssuance<Runtime>>::get(), 130);
+		assert_eq!(<TotalIssuance<Test>>::get(), 130);
 	});
 }
 
@@ -575,7 +575,7 @@ fn transfer_overflow_isnt_exploitable() {
 
 		assert_err!(
 			Balances::transfer(Some(1).into(), 5, evil_value),
-			"got overflow after adding a fee to value",
+			Error::<Test, _>::Overflow,
 		);
 	});
 }
@@ -656,7 +656,7 @@ fn unvested_balance_should_not_transfer() {
 			assert_eq!(Balances::vesting_balance(&1), 45);
 			assert_noop!(
 				Balances::transfer(Some(1).into(), 2, 56),
-				"vesting balance too high to send value",
+				Error::<Test, _>::VestingBalance,
 			); // Account 1 cannot send more than vested amount
 		});
 }
@@ -751,7 +751,7 @@ fn transfer_keep_alive_works() {
 		let _ = Balances::deposit_creating(&1, 100);
 		assert_err!(
 			Balances::transfer_keep_alive(Some(1).into(), 2, 100),
-			"transfer would kill account"
+			Error::<Test, _>::KeepAlive
 		);
 		assert_eq!(Balances::is_dead_account(&1), false);
 		assert_eq!(Balances::total_balance(&1), 100);
@@ -763,8 +763,8 @@ fn transfer_keep_alive_works() {
 #[should_panic="the balance of any account should always be more than existential deposit."]
 fn cannot_set_genesis_value_below_ed() {
 	mock::EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = 11);
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-	let _ = GenesisConfig::<Runtime> {
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let _ = GenesisConfig::<Test> {
 		balances: vec![(1, 10)],
 		vesting: vec![],
 	}.assimilate_storage(&mut t).unwrap();
