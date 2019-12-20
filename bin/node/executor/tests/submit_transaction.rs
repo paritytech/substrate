@@ -58,8 +58,6 @@ const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put c
 
 #[test]
 fn should_submit_signed_transaction() {
-	env_logger::try_init();
-
 	let mut t = new_test_ext(COMPACT_CODE, false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
@@ -92,8 +90,6 @@ fn should_submit_signed_transaction() {
 
 #[test]
 fn should_submit_signed_twice_from_the_same_account() {
-	env_logger::try_init();
-
 	let mut t = new_test_ext(COMPACT_CODE, false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
