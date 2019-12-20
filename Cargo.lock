@@ -6675,6 +6675,7 @@ dependencies = [
  "pallet-transaction-payment 2.0.0",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rpassword 4.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
