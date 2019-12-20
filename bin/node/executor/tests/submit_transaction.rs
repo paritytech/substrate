@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use node_runtime::{
-	Call, Runtime, SubmitTransaction,
+	Call, Runtime, SubmitTransaction, UncheckedExtrinsic,
 };
 use sp_application_crypto::AppKey;
 use sp_core::testing::KeyStore;
@@ -26,6 +26,7 @@ use sp_core::offchain::{
 };
 use frame_system::offchain::{SubmitSignedTransaction, SubmitUnsignedTransaction};
 use pallet_im_online::sr25519::AuthorityPair as Key;
+use codec::Decode;
 
 mod common;
 use self::common::*;
@@ -106,7 +107,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		let len = results.len();
 		assert_eq!(len, 1);
 		assert_eq!(results.into_iter().filter_map(|x| x.1.ok()).count(), len);
-		assert_eq!(state.read().transactions.len(), len);
+		assert_eq!(state.read().transactions.len(), 1);
 
 		// submit another one from the same account. The nonce should be incremented.
 				let call = pallet_balances::Call::transfer(Default::default(), Default::default());
@@ -116,13 +117,19 @@ fn should_submit_signed_twice_from_the_same_account() {
 		let len = results.len();
 		assert_eq!(len, 1);
 		assert_eq!(results.into_iter().filter_map(|x| x.1.ok()).count(), len);
-		assert_eq!(state.read().transactions.len(), len + 1);
+		assert_eq!(state.read().transactions.len(), 2);
 
-		// now check that the transactions are not equal
+		// now check that the transaction nonces are not equal
 		let s = state.read();
+		fn nonce(tx: UncheckedExtrinsic) -> frame_system::CheckNonce<Runtime> {
+			let extra = tx.signature.unwrap().2;
+			extra.3
+		}
+		let nonce1 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[0]).unwrap());
+		let nonce2 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[1]).unwrap());
 		assert!(
-			s.transactions[0] != s.transactions[1],
-			"Transactions should have different nonces."
+			nonce1 != nonce2,
+			"Transactions should have different nonces. Got: {:?}", nonce1
 		);
 	});
 }

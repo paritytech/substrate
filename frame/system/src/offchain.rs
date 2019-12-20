@@ -136,8 +136,12 @@ pub trait SignAndSubmitTransaction<T: crate::Trait, Call> {
 			expected,
 		);
 		let (call, signature_data) = Self::CreateTransaction
-			::create_transaction::<Self::Signer>(call, public, id, expected)
+			::create_transaction::<Self::Signer>(call, public, id.clone(), expected)
 			.ok_or(())?;
+		// increment the nonce. This is fine, since the code should always
+		// be running in off-chain context, so we NEVER persists data.
+		<crate::Module<T>>::inc_account_nonce(&id);
+
 		let xt = Self::Extrinsic::new(call, Some(signature_data)).ok_or(())?;
 		sp_io::offchain::submit_transaction(xt.encode())
 	}
