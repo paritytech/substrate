@@ -94,7 +94,7 @@ use sp_std::{
 	prelude::*,
 };
 use frame_support::{
-	decl_module, decl_storage, decl_event, ensure,
+	decl_module, decl_storage, decl_event, ensure, decl_error,
 	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
 };
 use frame_system::{self as system, ensure_root, ensure_signed};
@@ -222,11 +222,25 @@ decl_event!(
 	}
 );
 
+decl_error! {
+	/// Error for the scored-pool module.
+	pub enum Error for Module<T: Trait<I>, I: Instance> {
+		/// Already a member.
+		AlreadyInPool,
+		/// Index out of bounds.
+		InvalidIndex,
+		/// Index does not match requested account.
+		WrongAccountIndex,
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance>
 		for enum Call
 		where origin: T::Origin
 	{
+		type Error = Error<T, I>;
+
 		fn deposit_event() = default;
 
 		/// Every `Period` blocks the `Members` set is refreshed from the
@@ -251,11 +265,10 @@ decl_module! {
 		/// the index of the transactor in the `Pool`.
 		pub fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
-			ensure!(!<CandidateExists<T, I>>::exists(&who), "already a member");
+			ensure!(!<CandidateExists<T, I>>::exists(&who), Error::<T, I>::AlreadyInPool);
 
 			let deposit = T::CandidateDeposit::get();
-			T::Currency::reserve(&who, deposit)
-				.map_err(|_| "balance too low to submit candidacy")?;
+			T::Currency::reserve(&who, deposit)?;
 
 			// can be inserted as last element in pool, since entities with
 			// `None` are always sorted to the end.
@@ -305,8 +318,7 @@ decl_module! {
 		) {
 			T::KickOrigin::try_origin(origin)
 				.map(|_| ())
-				.or_else(ensure_root)
-				.map_err(|_| "bad origin")?;
+				.or_else(ensure_root)?;
 
 			let who = T::Lookup::lookup(dest)?;
 
@@ -331,8 +343,7 @@ decl_module! {
 		) {
 			T::ScoreOrigin::try_origin(origin)
 				.map(|_| ())
-				.or_else(ensure_root)
-				.map_err(|_| "bad origin")?;
+				.or_else(ensure_root)?;
 
 			let who = T::Lookup::lookup(dest)?;
 
@@ -414,7 +425,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		mut pool: PoolT<T, I>,
 		remove: T::AccountId,
 		index: u32
-	) -> Result<(), &'static str> {
+	) -> Result<(), Error<T, I>> {
 		// all callers of this function in this module also check
 		// the index for validity before calling this function.
 		// nevertheless we check again here, to assert that there was
@@ -444,11 +455,11 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		pool: &PoolT<T, I>,
 		who: &T::AccountId,
 		index: u32
-	) -> Result<(), &'static str> {
-		ensure!(index < pool.len() as u32, "index out of bounds");
+	) -> Result<(), Error<T, I>> {
+		ensure!(index < pool.len() as u32, Error::<T, I>::InvalidIndex);
 
 		let (index_who, _index_score) = &pool[index as usize];
-		ensure!(index_who == who, "index does not match requested account");
+		ensure!(index_who == who, Error::<T, I>::WrongAccountIndex);
 
 		Ok(())
 	}
