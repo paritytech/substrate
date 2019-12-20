@@ -47,7 +47,7 @@ pub fn generate_crate_access(unique_id: &str, def_crate: &str) -> TokenStream {
 
 /// Generates the hidden includes that are required to make the macro independent from its scope.
 pub fn generate_hidden_includes(unique_id: &str, def_crate: &str) -> TokenStream {
-	if ::std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
+	if std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
 		TokenStream::new()
 	} else {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);

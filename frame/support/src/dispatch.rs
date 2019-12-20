@@ -27,16 +27,10 @@ pub use crate::weights::{
 	SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch,
 	TransactionPriority, Weight, WeighBlock, PaysFee,
 };
-pub use sp_runtime::{
-	traits::{Dispatchable, DispatchResult, ModuleDispatchError},
-	DispatchError,
-};
+pub use sp_runtime::{traits::Dispatchable, DispatchError, DispatchResult};
 
 /// A type that cannot be instantiated.
 pub enum Never {}
-
-/// Result with string error message. This exists for backward compatibility purpose.
-pub type Result = DispatchResult<&'static str>;
 
 /// Serializable version of Dispatchable.
 /// This value can be used as a "function" in an extrinsic.
@@ -68,14 +62,14 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 /// 		// Private functions are dispatchable, but not available to other
 /// 		// SRML modules.
-/// 		fn my_function(origin, var: u64) -> dispatch::Result {
+/// 		fn my_function(origin, var: u64) -> dispatch::DispatchResult {
 ///				// Your implementation
 ///				Ok(())
 /// 		}
 ///
 ///			// Public functions are both dispatchable and available to other
 /// 		// SRML modules.
-///			pub fn my_public_function(origin) -> dispatch::Result {
+///			pub fn my_public_function(origin) -> dispatch::DispatchResult {
 /// 			// Your implementation
 ///				Ok(())
 /// 		}
@@ -95,8 +89,8 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 /// ### Shorthand Example
 ///
-/// The macro automatically expands a shorthand function declaration to return the `Result` type.
-/// These functions are the same:
+/// The macro automatically expands a shorthand function declaration to return the
+/// [`DispatchResult`] type. These functions are the same:
 ///
 /// ```
 /// # #[macro_use]
@@ -106,7 +100,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
-/// 		fn my_long_function(origin) -> dispatch::Result {
+/// 		fn my_long_function(origin) -> dispatch::DispatchResult {
 ///				// Your implementation
 /// 			Ok(())
 /// 		}
@@ -130,7 +124,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # use frame_system::{self as system, Trait, ensure_signed, ensure_root};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-///			fn my_privileged_function(origin) -> dispatch::Result {
+///			fn my_privileged_function(origin) -> dispatch::DispatchResult {
 /// 			ensure_root(origin)?;
 ///				// Your implementation
 /// 			Ok(())
@@ -1043,9 +1037,8 @@ macro_rules! decl_module {
 		#[allow(unreachable_code)]
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
-		) -> $crate::dispatch::DispatchResult<$error_type> {
-			use $crate::sp_std::if_std;
-			if_std! {
+		) -> $crate::dispatch::DispatchResult {
+			$crate::sp_std::if_std! {
 				use $crate::tracing;
 				let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
 				let _enter = span.enter();
@@ -1417,8 +1410,7 @@ macro_rules! decl_module {
 		{
 			type Trait = $trait_instance;
 			type Origin = $origin_type;
-			type Error = $error_type;
-			fn dispatch(self, _origin: Self::Origin) -> $crate::dispatch::DispatchResult<Self::Error> {
+			fn dispatch(self, _origin: Self::Origin) -> $crate::sp_runtime::DispatchResult {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) => {
@@ -1446,7 +1438,7 @@ macro_rules! decl_module {
 			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(
 				d: D,
 				origin: D::Origin
-			) -> $crate::dispatch::DispatchResult<D::Error> {
+			) -> $crate::sp_runtime::DispatchResult {
 				d.dispatch(origin)
 			}
 		}
@@ -1514,11 +1506,10 @@ macro_rules! impl_outer_dispatch {
 		impl $crate::dispatch::Dispatchable for $call_type {
 			type Origin = $origin;
 			type Trait = $call_type;
-			type Error = $crate::dispatch::DispatchError;
 			fn dispatch(
 				self,
 				origin: $origin,
-			) -> $crate::dispatch::DispatchResult<$crate::dispatch::DispatchError> {
+			) -> $crate::sp_runtime::DispatchResult {
 				$crate::impl_outer_dispatch! {
 					@DISPATCH_MATCH
 					self
@@ -1565,11 +1556,7 @@ macro_rules! impl_outer_dispatch {
 			$origin
 			{
 				$( $generated )*
-				$call_type::$name(call) => call.dispatch($origin).map_err(|e| {
-					let mut error: $crate::dispatch::DispatchError = e.into();
-					error.module = Some($index);
-					error
-				}),
+				$call_type::$name(call) => call.dispatch($origin),
 			}
 			$index + 1;
 			$( $rest ),*
@@ -1895,13 +1882,13 @@ mod tests {
 	}
 
 	pub mod system {
-		use super::Result;
+		use super::*;
 
 		pub trait Trait {
 			type AccountId;
 		}
 
-		pub fn ensure_root<R>(_: R) -> Result {
+		pub fn ensure_root<R>(_: R) -> DispatchResult {
 			Ok(())
 		}
 	}
@@ -1917,13 +1904,13 @@ mod tests {
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
-			fn aux_0(_origin) -> Result { unreachable!() }
-			fn aux_1(_origin, #[compact] _data: u32,) -> Result { unreachable!() }
-			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
+			fn aux_0(_origin) -> DispatchResult { unreachable!() }
+			fn aux_1(_origin, #[compact] _data: u32,) -> DispatchResult { unreachable!() }
+			fn aux_2(_origin, _data: i32, _data2: String) -> DispatchResult { unreachable!() }
 			#[weight = SimpleDispatchInfo::FixedNormal(3)]
-			fn aux_3(_origin) -> Result { unreachable!() }
-			fn aux_4(_origin, _data: i32) -> Result { unreachable!() }
-			fn aux_5(_origin, _data: i32, #[compact] _data2: u32,) -> Result { unreachable!() }
+			fn aux_3(_origin) -> DispatchResult { unreachable!() }
+			fn aux_4(_origin, _data: i32) -> DispatchResult { unreachable!() }
+			fn aux_5(_origin, _data: i32, #[compact] _data2: u32,) -> DispatchResult { unreachable!() }
 
 			#[weight = SimpleDispatchInfo::FixedNormal(7)]
 			fn on_initialize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_initialize") } }

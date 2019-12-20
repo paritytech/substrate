@@ -240,13 +240,14 @@ mod tests {
 	mod system {
 		use super::*;
 
-		pub trait Trait {
+		pub trait Trait: 'static {
 			const ASSOCIATED_CONST: u64 = 500;
 			type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 				+ From<RawOrigin<Self::AccountId>>;
 			type AccountId: From<u32> + Encode;
 			type BlockNumber: From<u32> + Encode;
 			type SomeValue: Get<u32>;
+			type ModuleToIndex: crate::traits::ModuleToIndex;
 		}
 
 		decl_module! {
@@ -286,10 +287,8 @@ mod tests {
 	mod event_module {
 		use crate::dispatch::DispatchResult;
 
-		pub trait Trait {
-			type Origin;
+		pub trait Trait: super::system::Trait {
 			type Balance;
-			type BlockNumber;
 		}
 
 		decl_event!(
@@ -302,14 +301,14 @@ mod tests {
 
 		decl_module! {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-				type Error = Error;
+				type Error = Error<T>;
 
-				fn aux_0(_origin) -> DispatchResult<Error> { unreachable!() }
+				fn aux_0(_origin) -> DispatchResult { unreachable!() }
 			}
 		}
 
 		crate::decl_error! {
-			pub enum Error {
+			pub enum Error for Module<T: Trait> {
 				/// Some user input error
 				UserInputError,
 				/// Something bad happened
@@ -372,9 +371,7 @@ mod tests {
 	}
 
 	impl event_module::Trait for TestRuntime {
-		type Origin = Origin;
 		type Balance = u32;
-		type BlockNumber = u32;
 	}
 
 	impl event_module2::Trait for TestRuntime {
@@ -392,6 +389,7 @@ mod tests {
 		type AccountId = u32;
 		type BlockNumber = u32;
 		type SomeValue = SystemValue;
+		type ModuleToIndex = ();
 	}
 
 	impl_runtime_metadata!(
