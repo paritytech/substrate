@@ -22,6 +22,7 @@ use bip39::{Language, Mnemonic, MnemonicType};
 use clap::{App, ArgMatches, SubCommand};
 use codec::{Decode, Encode};
 use hex_literal::hex;
+use itertools::Itertools;
 use node_primitives::{Balance, Hash, Index, AccountId, Signature};
 use node_runtime::{BalancesCall, Call, Runtime, SignedPayload, UncheckedExtrinsic, VERSION};
 use sp_core::{
@@ -155,20 +156,23 @@ impl PublicT for sr25519::Public { fn into_runtime(self) -> AccountPublic { self
 impl PublicT for ed25519::Public { fn into_runtime(self) -> AccountPublic { self.into() } }
 impl PublicT for ecdsa::Public { fn into_runtime(self) -> AccountPublic { self.into() } }
 
-fn get_app<'a, 'b>() -> App<'a, 'b> {
-	App::new("subkey")
+fn main() {
+	let networks = Ss58AddressFormat::all().iter().cloned().map(String::from).join("/");
+	let default_network = String::from(Ss58AddressFormat::default());
+	let usage = format!("
+		-e, --ed25519 'Use Ed25519/BIP39 cryptography'
+		-k, --secp256k1 'Use SECP256k1/ECDSA/BIP39 cryptography'
+		-s, --sr25519 'Use Schnorr/Ristretto x25519/BIP39 cryptography'
+		[network] -n, --network <network> 'Specify a network. One of {}. Default is {}'
+		[password] -p, --password <password> 'The password for the key'
+		--password-interactive 'You will be prompted for the password for the key.'
+	", networks, default_network);
+
+	let matches = App::new("subkey")
 		.author("Parity Team <admin@parity.io>")
 		.about("Utility for generating and restoring with Substrate keys")
 		.version(env!("CARGO_PKG_VERSION"))
-		.args_from_usage("
-			-e, --ed25519 'Use Ed25519/BIP39 cryptography'
-			-k, --secp256k1 'Use SECP256k1/ECDSA/BIP39 cryptography'
-			-s, --sr25519 'Use Schnorr/Ristretto x25519/BIP39 cryptography'
-			[network] -n, --network <network> 'Specify a network. One of substrate \
-									 (default), polkadot, kusama, dothereum, edgeware, or kulupu'
-			[password] -p, --password <password> 'The password for the key'
-			--password-interactive 'You will be prompted for the password for the key.'
-		")
+		.args_from_usage(&usage)
 		.subcommands(vec![
 			SubCommand::with_name("generate")
 				.about("Generate a random account")
@@ -222,11 +226,7 @@ fn get_app<'a, 'b>() -> App<'a, 'b> {
 					<sig> 'Signature, hex-encoded.'
 					<uri> 'The public or secret key URI.'
 				"),
-		])
-}
-
-fn main() {
-	let matches = get_app().get_matches();
+		]).get_matches();
 
 	if matches.is_present("ed25519") {
 		return execute::<Ed25519>(matches)
@@ -260,7 +260,7 @@ where
 	let maybe_network: Option<Ss58AddressFormat> = matches.value_of("network").map(|network| {
 		network
 			.try_into()
-			.expect("Invalid network name: must be polkadot/substrate/kusama/dothereum/edgeware")
+			.expect("Invalid network name. See --help for available networks.")
 	});
 	if let Some(network) = maybe_network {
 		set_default_ss58_version(network);
