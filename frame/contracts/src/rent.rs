@@ -15,12 +15,13 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo, Trait, AliveContractInfo, CodeHash, RawAliveContractInfo, exec};
+use sp_std::prelude::*;
 use sp_runtime::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
 	SaturatedConversion};
+use sp_io::hashing::blake2_256;
 use support::storage::child;
 use support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason, OnUnbalanced};
 use support::StorageMap;
-use primitives::blake2_256;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 #[must_use]
