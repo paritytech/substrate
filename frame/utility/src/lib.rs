@@ -58,8 +58,6 @@ decl_storage! {
 	}
 }
 
-// TODO: introduce random data into the open multisig to prevent replay.
-
 decl_error! {
 	pub enum Error for Module<T: Trait> {
 		/// Threshold is too low (zero).
