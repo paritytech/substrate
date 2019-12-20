@@ -28,7 +28,7 @@ use sp_runtime::traits::Member;
 use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };
-use txpool_api::error;
+use sp_transaction_pool::error;
 
 use crate::future::WaitingTransaction;
 use crate::base_pool::Transaction;

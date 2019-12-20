@@ -1,0 +1,18 @@
+[package]
+name = "sp-staking"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
+sp-std = { version = "2.0.0", default-features = false, path = "../std" }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"sp-runtime/std",
+	"sp-std/std",
+]

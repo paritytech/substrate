@@ -64,7 +64,7 @@ impl Error {
 }
 
 /// An error that can occur within the inherent data system.
-#[derive(Encode, primitives::RuntimeDebug)]
+#[derive(Encode, sp_core::RuntimeDebug)]
 #[cfg(not(feature = "std"))]
 pub struct Error(&'static str);
 

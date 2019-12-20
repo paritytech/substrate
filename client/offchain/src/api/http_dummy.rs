@@ -16,7 +16,7 @@
 
 //! Contains the same API as the `http` module, except that everything returns an error.
 
-use primitives::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
+use sp_core::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
 use std::{future::Future, pin::Pin, task::Context, task::Poll};
 
 /// Creates a pair of [`HttpApi`] and [`HttpWorker`].

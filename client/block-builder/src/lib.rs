@@ -34,11 +34,11 @@ use sp_runtime::{
 	}
 };
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
-use primitives::ExecutionContext;
-use state_machine::StorageProof;
+use sp_core::ExecutionContext;
+use sp_state_machine::StorageProof;
 use sp_api::{Core, ApiExt, ApiErrorFor};
 
-pub use runtime_api::BlockBuilder as BlockBuilderApi;
+pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.

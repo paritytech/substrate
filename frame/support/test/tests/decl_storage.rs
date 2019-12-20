@@ -18,12 +18,12 @@
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
-	use support::metadata::*;
+	use frame_support::metadata::*;
 	use sp_io::TestExternalities;
 	use std::marker::PhantomData;
 	use codec::{Encode, Decode, EncodeLike};
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
@@ -32,7 +32,7 @@ mod tests {
 		type BlockNumber;
 	}
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as TestStorage {
 			// non-getters: pub / $default
 
@@ -478,13 +478,13 @@ mod test2 {
 		type BlockNumber;
 	}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
 	type PairOf<T> = (T, T);
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as TestStorage {
 			SingleDef : u32;
 			PairDef : PairOf<u32>;
@@ -513,10 +513,10 @@ mod test3 {
 		type Origin;
 		type BlockNumber;
 	}
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
 			Foo get(fn foo) config(initial_foo): u32;
 		}
@@ -543,14 +543,14 @@ mod test_append_and_len {
 		type BlockNumber;
 	}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 	struct NoDef(u32);
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
 			NoDefault: Option<NoDef>;
 

@@ -122,7 +122,7 @@ cargo-check-subkey:
   except:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
-    - cd ./bin/subkey
+    - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
 
@@ -202,7 +202,7 @@ test-linux-stable-int:
     - echo "___Logs will be partly shown at the end in case of failure.___"
     - echo "___Full log will be saved to the job artifacts only in case of failure.___"
     - WASM_BUILD_NO_COLOR=1 RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
-        time cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
+        time cargo test -p node-cli --release --verbose --locked -- --ignored
         &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
     - sccache -s
   after_script:
@@ -300,7 +300,7 @@ build-linux-subkey:
     variables:
       - $DEPLOY_TAG
   script:
-    - cd ./bin/subkey
+    - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
     - cd -
     - sccache -s
@@ -329,7 +329,7 @@ build-rust-doc-release:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
     - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html" time cargo +nightly doc --release --all --verbose
     - cp -R ./target/doc ./crate-docs
-    - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
+    - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
 
 check_warnings:

@@ -24,14 +24,14 @@ use crate::traits::{
 	MaybeSerializeDeserialize, MaybeSerialize, MaybeDisplay,
 };
 use crate::generic::Digest;
-use primitives::U256;
+use sp_core::U256;
 use sp_std::{
 	convert::TryFrom,
 	fmt::Debug,
 };
 
 /// Abstraction over a block header for a substrate chain.
-#[derive(PartialEq, Eq, Clone, primitives::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, sp_core::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
@@ -105,7 +105,7 @@ impl<Number, Hash> codec::EncodeLike for Header<Number, Hash> where
 
 impl<Number, Hash> traits::Header for Header<Number, Hash> where
 	Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + MaybeDisplay +
-		SimpleArithmetic + Codec + Copy + Into<U256> + TryFrom<U256>,
+		SimpleArithmetic + Codec + Copy + Into<U256> + TryFrom<U256> + sp_std::str::FromStr,
 	Hash: HashT,
 	Hash::Output: Default + sp_std::hash::Hash + Copy + Member +
 		MaybeSerialize + Debug + MaybeDisplay + SimpleBitOps + Codec,

@@ -53,7 +53,7 @@ use super::{
 	NegativeImbalanceOf, UnappliedSlash,
 };
 use sp_runtime::traits::{Zero, Saturating};
-use support::{
+use frame_support::{
 	StorageMap, StorageDoubleMap,
 	traits::{Currency, OnUnbalanced, Imbalance},
 };

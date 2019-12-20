@@ -28,7 +28,7 @@ use serde::Serialize;
 use codec::{Decode, Input, Error};
 use codec::{Encode, Output};
 use sp_std::vec::Vec;
-use primitives::RuntimeDebug;
+use sp_core::RuntimeDebug;
 
 #[cfg(feature = "std")]
 type StringBuf = String;
@@ -391,9 +391,9 @@ pub struct ModuleMetadata {
 type ODFnA<T> = Option<DFnA<T>>;
 type DFnA<T> = DecodeDifferent<FnEncode<&'static [T]>, Vec<T>>;
 
-impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
-	fn into(self) -> primitives::OpaqueMetadata {
-		primitives::OpaqueMetadata::new(self.encode())
+impl Into<sp_core::OpaqueMetadata> for RuntimeMetadataPrefixed {
+	fn into(self) -> sp_core::OpaqueMetadata {
+		sp_core::OpaqueMetadata::new(self.encode())
 	}
 }
 

@@ -19,12 +19,12 @@
 use super::*;
 use mock::*;
 
-use support::{assert_ok, assert_noop};
+use frame_support::{assert_ok, assert_noop};
 use sp_runtime::traits::OnInitialize;
 
 type ScoredPool = Module<Test>;
-type System = system::Module<Test>;
-type Balances = balances::Module<Test>;
+type System = frame_system::Module<Test>;
+type Balances = pallet_balances::Module<Test>;
 
 const OOB_ERR: &str = "index out of bounds";
 const INDEX_ERR: &str = "index does not match requested account";

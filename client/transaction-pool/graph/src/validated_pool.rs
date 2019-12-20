@@ -36,7 +36,7 @@ use sp_runtime::{
 	traits::{self, SaturatedConversion},
 	transaction_validity::TransactionTag as Tag,
 };
-use txpool_api::{error, PoolStatus};
+use sp_transaction_pool::{error, PoolStatus};
 
 use crate::base_pool::PruneStatus;
 use crate::pool::{EventStream, Options, ChainApi, BlockHash, ExHash, ExtrinsicFor, TransactionFor};

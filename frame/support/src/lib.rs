@@ -39,7 +39,7 @@ pub use once_cell;
 pub use paste;
 #[cfg(feature = "std")]
 #[doc(hidden)]
-pub use state_machine::BasicExternalities;
+pub use sp_state_machine::BasicExternalities;
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 #[doc(hidden)]
@@ -124,7 +124,7 @@ pub use frame_support_procedural::{decl_storage, construct_runtime};
 #[macro_export]
 macro_rules! fail {
 	( $y:expr ) => {{
-		return Err($y);
+		return Err($y.into());
 	}}
 }
 
@@ -168,7 +168,7 @@ macro_rules! assert_noop {
 #[cfg(feature = "std")]
 macro_rules! assert_err {
 	( $x:expr , $y:expr $(,)? ) => {
-		assert_eq!($x, Err($y));
+		assert_eq!($x, Err($y.into()));
 	}
 }
 

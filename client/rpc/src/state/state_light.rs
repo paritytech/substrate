@@ -38,21 +38,21 @@ use rpc::{
 	futures::stream::Stream,
 };
 
-use api::Subscriptions;
-use client_api::backend::Backend;
+use sc_rpc_api::Subscriptions;
+use sc_client_api::backend::Backend;
 use sp_blockchain::Error as ClientError;
-use client::{
+use sc_client::{
 	BlockchainEvents, Client, CallExecutor,
 	light::{
 		blockchain::{future_header, RemoteBlockchain},
 		fetcher::{Fetcher, RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest},
 	},
 };
-use primitives::{
+use sp_core::{
 	H256, Blake2Hasher, Bytes, OpaqueMetadata,
 	storage::{StorageKey, StorageData, StorageChangeSet},
 };
-use runtime_version::RuntimeVersion;
+use sp_version::RuntimeVersion;
 use sp_runtime::{
 	generic::BlockId,
 	traits::Block as BlockT,
@@ -236,6 +236,8 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		&self,
 		_block: Option<Block::Hash>,
 		_child_storage_key: StorageKey,
+		_child_info: StorageKey,
+		_child_type: u32,
 		_prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
@@ -245,6 +247,8 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		&self,
 		block: Option<Block::Hash>,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
 		let block = self.block_or_best(block);
@@ -255,6 +259,8 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 					block,
 					header,
 					storage_key: child_storage_key.0,
+					child_info: child_info.0,
+					child_type,
 					keys: vec![key.0.clone()],
 					retry_count: Default::default(),
 				}).then(move |result| ready(result
@@ -275,10 +281,12 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		&self,
 		block: Option<Block::Hash>,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
 		Box::new(self
-			.child_storage(block, child_storage_key, key)
+			.child_storage(block, child_storage_key, child_info, child_type, key)
 			.and_then(|maybe_storage|
 				result(Ok(maybe_storage.map(|storage| Blake2Hasher::hash(&storage.0))))
 			)
@@ -703,7 +711,7 @@ fn ignore_error<F, T>(future: F) -> impl std::future::Future<Output=Result<Optio
 #[cfg(test)]
 mod tests {
 	use rpc::futures::stream::futures_ordered;
-	use test_client::runtime::Block;
+	use substrate_test_runtime_client::runtime::Block;
 	use super::*;
 
 	#[test]

@@ -25,7 +25,7 @@
 //! ## Overview
 //!
 //! The Treasury Module itself provides the pot to store funds, and a means for stakeholders to
-//! propose, approve, and deny expendatures.  The chain will need to provide a method (e.g.
+//! propose, approve, and deny expenditures.  The chain will need to provide a method (e.g.
 //! inflation, fees) for collecting funds.
 //!
 //! By way of example, the Council could vote to fund the Treasury with a portion of the block
@@ -60,26 +60,24 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use sp_std::prelude::*;
-use support::{decl_module, decl_storage, decl_event, ensure, print};
-use support::traits::{
+use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error};
+use frame_support::traits::{
 	Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced,
 	ReservableCurrency, WithdrawReason
 };
 use sp_runtime::{Permill, ModuleId};
-use sp_runtime::traits::{
-	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating
-};
-use support::weights::SimpleDispatchInfo;
+use sp_runtime::traits::{Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating};
+use frame_support::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode};
-use system::ensure_signed;
+use frame_system::{self as system, ensure_signed};
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
+type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
 
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// The staking balance.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
@@ -90,7 +88,7 @@ pub trait Trait: system::Trait {
 	type RejectOrigin: EnsureOrigin<Self::Origin>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// Handler for the unbalanced decrease when slashing for a rejected proposal.
 	type ProposalRejection: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -126,7 +124,10 @@ decl_module! {
 		/// Percentage of spare funds (if any) that are burnt per spend period.
 		const Burn: Permill = T::Burn::get();
 
+		type Error = Error<T>;
+
 		fn deposit_event() = default;
+
 		/// Put forward a suggestion for spending. A deposit proportional to the value
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
 		/// proposal is awarded.
@@ -147,7 +148,7 @@ decl_module! {
 
 			let bond = Self::calculate_bond(value);
 			T::Currency::reserve(&proposer, bond)
-				.map_err(|_| "Proposer's balance too low")?;
+				.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
 
 			let c = Self::proposal_count();
 			ProposalCount::put(c + 1);
@@ -165,8 +166,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::RejectOrigin::ensure_origin(origin)?;
-			let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
+			T::RejectOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
+			let proposal = <Proposals<T>>::take(proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
 
 			let value = proposal.bond;
 			let imbalance = T::Currency::slash_reserved(&proposal.proposer, value).0;
@@ -183,9 +184,9 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::ApproveOrigin::ensure_origin(origin)?;
+			T::ApproveOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
 
-			ensure!(<Proposals<T>>::exists(proposal_id), "No proposal at that index");
+			ensure!(<Proposals<T>>::exists(proposal_id), Error::<T>::InvalidProposalIndex);
 
 			Approvals::mutate(|v| v.push(proposal_id));
 		}
@@ -235,7 +236,7 @@ decl_event!(
 	pub enum Event<T>
 	where
 		Balance = BalanceOf<T>,
-		<T as system::Trait>::AccountId
+		<T as frame_system::Trait>::AccountId
 	{
 		/// New proposal.
 		Proposed(ProposalIndex),
@@ -251,6 +252,16 @@ decl_event!(
 		Deposit(Balance),
 	}
 );
+
+decl_error! {
+	/// Error for the treasury module.
+	pub enum Error for Module<T: Trait> {
+		/// Proposer's balance is too low.
+		InsufficientProposersBalance,
+		/// No proposal at that index.
+		InvalidProposalIndex,
+	}
+}
 
 impl<T: Trait> Module<T> {
 	// Add public immutables and private mutables.
@@ -351,14 +362,14 @@ impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
 mod tests {
 	use super::*;
 
-	use support::{assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight};
-	use primitives::H256;
+	use frame_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight};
+	use sp_core::H256;
 	use sp_runtime::{
 		traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header, Perbill
 	};
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -369,7 +380,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -385,13 +396,14 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
-	impl balances::Trait for Test {
+	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnNewAccount = ();
 		type OnFreeBalanceZero = ();
@@ -409,9 +421,9 @@ mod tests {
 		pub const Burn: Permill = Permill::from_percent(50);
 	}
 	impl Trait for Test {
-		type Currency = balances::Module<Test>;
-		type ApproveOrigin = system::EnsureRoot<u64>;
-		type RejectOrigin = system::EnsureRoot<u64>;
+		type Currency = pallet_balances::Module<Test>;
+		type ApproveOrigin = frame_system::EnsureRoot<u64>;
+		type RejectOrigin = frame_system::EnsureRoot<u64>;
 		type Event = ();
 		type ProposalRejection = ();
 		type ProposalBond = ProposalBond;
@@ -419,12 +431,12 @@ mod tests {
 		type SpendPeriod = SpendPeriod;
 		type Burn = Burn;
 	}
-	type Balances = balances::Module<Test>;
+	type Balances = pallet_balances::Module<Test>;
 	type Treasury = Module<Test>;
 
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		balances::GenesisConfig::<Test>{
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		pallet_balances::GenesisConfig::<Test>{
 			// Total issuance will be 200 with treasury account initialized at ED.
 			balances: vec![(0, 100), (1, 98), (2, 1)],
 			vesting: vec![],
@@ -471,7 +483,10 @@ mod tests {
 	#[test]
 	fn spend_proposal_fails_when_proposer_poor() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Treasury::propose_spend(Origin::signed(2), 100, 3), "Proposer's balance too low");
+			assert_noop!(
+				Treasury::propose_spend(Origin::signed(2), 100, 3),
+				Error::<Test>::InsufficientProposersBalance,
+			);
 		});
 	}
 
@@ -523,21 +538,21 @@ mod tests {
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
-			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
 	}
 
 	#[test]
 	fn reject_non_existant_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
 	}
 
 	#[test]
 	fn accept_non_existant_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
 	}
 
@@ -548,7 +563,7 @@ mod tests {
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
-			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
 	}
 
@@ -614,8 +629,8 @@ mod tests {
 	// This is usefull for chain that will just update runtime.
 	#[test]
 	fn inexisting_account_works() {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		balances::GenesisConfig::<Test>{
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		pallet_balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
 			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();

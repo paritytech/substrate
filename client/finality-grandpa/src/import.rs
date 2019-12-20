@@ -17,25 +17,25 @@
 use std::{sync::Arc, collections::HashMap};
 
 use log::{debug, trace, info};
-use codec::Encode;
+use parity_scale_codec::Encode;
 use futures::sync::mpsc;
 use parking_lot::RwLockWriteGuard;
 
 use sp_blockchain::{HeaderBackend, BlockStatus, well_known_cache_keys};
-use client_api::{backend::Backend, CallExecutor, utils::is_descendent_of};
-use client::Client;
-use consensus_common::{
+use sc_client_api::{backend::Backend, CallExecutor, utils::is_descendent_of};
+use sc_client::Client;
+use sp_consensus::{
 	BlockImport, Error as ConsensusError,
 	BlockCheckParams, BlockImportParams, ImportResult, JustificationImport,
 	SelectChain,
 };
-use fg_primitives::{GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog};
+use sp_finality_grandpa::{GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog};
 use sp_runtime::Justification;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{
 	Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero,
 };
-use primitives::{H256, Blake2Hasher};
+use sp_core::{H256, Blake2Hasher};
 
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
@@ -76,7 +76,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC: Clone> Clone for
 
 impl<B, E, Block: BlockT<Hash=H256>, RA, SC> JustificationImport<Block>
 	for GrandpaBlockImport<B, E, Block, RA, SC> where
-		NumberFor<Block>: grandpa::BlockNumberOps,
+		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
@@ -204,7 +204,7 @@ fn find_forced_change<B: BlockT>(header: &B::Header)
 impl<B, E, Block: BlockT<Hash=H256>, RA, SC>
 	GrandpaBlockImport<B, E, Block, RA, SC>
 where
-	NumberFor<Block>: grandpa::BlockNumberOps,
+	NumberFor<Block>: finality_grandpa::BlockNumberOps,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	DigestFor<Block>: Encode,
@@ -381,7 +381,7 @@ where
 
 impl<B, E, Block: BlockT<Hash=H256>, RA, SC> BlockImport<Block>
 	for GrandpaBlockImport<B, E, Block, RA, SC> where
-		NumberFor<Block>: grandpa::BlockNumberOps,
+		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
@@ -472,7 +472,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC> BlockImport<Block>
 			Some(justification) => {
 				self.import_justification(hash, number, justification, needs_justification).unwrap_or_else(|err| {
 					if needs_justification || enacts_consensus_change {
-						debug!(target: "finality", "Imported block #{} that enacts authority set change with \
+						debug!(target: "afg", "Imported block #{} that enacts authority set change with \
 							invalid justification: {:?}, requesting justification from peers.", number, err);
 						imported_aux.bad_justification = true;
 						imported_aux.needs_justification = true;
@@ -482,7 +482,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC> BlockImport<Block>
 			None => {
 				if needs_justification {
 					trace!(
-						target: "finality",
+						target: "afg",
 						"Imported unjustified block #{} that enacts authority set change, waiting for finality for enactment.",
 						number,
 					);
@@ -532,7 +532,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC>
 impl<B, E, Block: BlockT<Hash=H256>, RA, SC>
 	GrandpaBlockImport<B, E, Block, RA, SC>
 where
-	NumberFor<Block>: grandpa::BlockNumberOps,
+	NumberFor<Block>: finality_grandpa::BlockNumberOps,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
@@ -573,7 +573,7 @@ where
 
 		match result {
 			Err(CommandOrError::VoterCommand(command)) => {
-				info!(target: "finality", "Imported justification for block #{} that triggers \
+				info!(target: "afg", "Imported justification for block #{} that triggers \
 					command {}, signaling voter.", number, command);
 
 				// send the command to the voter
