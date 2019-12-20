@@ -411,7 +411,12 @@ fn run_one_test(
 		std::task::Poll::<()>::Pending
 	}));
 
-	runtime.block_on(future::join_all(import_notifications));
+	let timed_out = future::select(
+		future::join_all(import_notifications),
+		futures_timer::Delay::new(std::time::Duration::from_secs(60))
+	).map(drop);
+
+	runtime.block_on(timed_out);
 }
 
 #[test]
