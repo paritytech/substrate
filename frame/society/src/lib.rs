@@ -453,6 +453,7 @@ decl_module! {
 			ensure!(!<SuspendedCandidates<T, I>>::exists(&who), Error::<T, I>::Suspended);
 			ensure!(!<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::Suspended);
 			ensure!(!Self::is_member(&who), Error::<T, I>::AlreadyMember);
+			ensure!(!Self::is_bid(&who), Error::<T, I>::AlreadyBid);
 
 			let deposit = T::CandidateDeposit::get();
 			T::Currency::reserve(&who, deposit)?;
@@ -491,6 +492,7 @@ decl_module! {
 		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			ensure!(Self::is_member(&voucher), Error::<T, I>::NotMember);
+			ensure!(!Self::is_bid(&who), Error::<T, I>::AlreadyBid);
 			Self::set_vouching(voucher.clone())?;
 
 			Self::put_bid(who.clone(), value.clone(), BidKind::Vouch(voucher.clone(), tip));
@@ -682,6 +684,8 @@ decl_error! {
 		NotVouching,
 		/// Cannot remove head
 		Head,
+		/// User has already made a bid
+		AlreadyBid,
 	}
 }
 
@@ -779,6 +783,15 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				}
 			}
 		)
+	}
+
+	/// Check a user is a bid.
+	fn is_bid(m: &T::AccountId) -> bool {
+		// Bids are ordered by `value`, so we cannot binary search for a user.
+		<Bids<T, I>>::get()
+			.iter()
+			.find(|x| x.1 == *m)
+			.is_some()
 	}
 
 	/// Check a user is a member.

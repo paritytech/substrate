@@ -570,3 +570,17 @@ fn bad_vote_slash_works() {
 		assert_eq!(<Payouts<Test>>::get(40), vec![(5, 100)]);
 	});
 }
+
+#[test]
+fn user_cannot_bid_twice() {
+	EnvBuilder::new().execute(|| {
+		// Cannot bid twice
+		assert_ok!(Society::bid(Origin::signed(20), 100));
+		assert_noop!(Society::bid(Origin::signed(20), 100), Error::<Test, _>::AlreadyBid);
+		// Cannot bid when vouched
+		assert_ok!(Society::vouch(Origin::signed(10), 30, 100, 100));
+		assert_noop!(Society::bid(Origin::signed(30), 100), Error::<Test, _>::AlreadyBid);
+		// Cannot vouch when already bid
+		assert_noop!(Society::vouch(Origin::signed(10), 20, 100, 100), Error::<Test, _>::AlreadyBid);
+	});
+}
