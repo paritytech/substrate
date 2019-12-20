@@ -86,7 +86,7 @@ macro_rules! decl_error {
 		pub enum $error<$generic: $trait $(, $inst_generic: $instance)?> {
 			#[doc(hidden)]
 			__Ignore(
-				$crate::sp_std::marker::PhantomData<($generic $(, $inst_generic)?)>,
+				$crate::sp_std::marker::PhantomData<($generic, $( $inst_generic)?)>,
 				$crate::dispatch::Never,
 			),
 			$(
