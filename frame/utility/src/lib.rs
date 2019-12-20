@@ -35,7 +35,8 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trai
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo;
@@ -81,12 +82,17 @@ decl_error! {
 	}
 }
 
-decl_event!(
+decl_event! {
 	/// Events type.
-	pub enum Event {
+	pub enum Event<T> where
+		AccountId = <T as system::Trait>::AccountId,
+		BlockNumber = <T as system::Trait>::BlockNumber
+	{
 		BatchExecuted(Vec<Result<(), DispatchError>>),
+		NewMultisig(AccountId, AccountId),
+		MultisigApprove(BlockNumber, u32, AccountId, AccountId),
 	}
-);
+}
 
 /// Simple index-based pass through for the weight functions.
 struct Passthrough<Call>(sp_std::marker::PhantomData<Call>);
@@ -168,7 +174,7 @@ decl_module! {
 				.map(|call| call.dispatch(frame_system::RawOrigin::Root.into()))
 				.map(|res| res.map_err(Into::into))
 				.collect::<Vec<_>>();
-			Self::deposit_event(Event::BatchExecuted(results));
+			Self::deposit_event(Event::<T>::BatchExecuted(results));
 		}
 
 		/// Send a call through an indexed pseudonym of the sender.
@@ -408,6 +414,7 @@ mod tests {
 	type Utility = Module<Test>;
 
 	use pallet_balances::Call as BalancesCall;
+	use pallet_balances::Error as BalancesError;
 
 	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -416,6 +423,35 @@ mod tests {
 			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
+	}
+
+	#[test]
+	fn timepoint_checking_works() {
+		new_test_ext().execute_with(|| {
+			let multi = Utility::multi_account_id(&[1, 2, 3][..], 2);
+			assert_ok!(Balances::transfer(Origin::signed(1), multi, 5));
+			assert_ok!(Balances::transfer(Origin::signed(2), multi, 5));
+			assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
+
+			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
+			let hash = call.using_encoded(blake2_256);
+
+			assert_noop!(
+				Utility::approve_as_multi(Origin::signed(2), 2, vec![1, 3], Some((1, 0)), hash.clone()),
+				Error::<Test>::UnexpectedTimepoint,
+			);
+
+			assert_ok!(Utility::approve_as_multi(Origin::signed(1), 2, vec![2, 3], None, hash));
+
+			assert_noop!(
+				Utility::as_multi(Origin::signed(2), 2, vec![1, 3], None, call.clone()),
+				Error::<Test>::NoTimepoint,
+			);
+			assert_noop!(
+				Utility::as_multi(Origin::signed(2), 2, vec![1, 3], Some((1, 1)), call.clone()),
+				Error::<Test>::WrongTimepoint,
+			);
+		});
 	}
 
 	#[test]
@@ -464,7 +500,7 @@ mod tests {
 			assert_ok!(Utility::approve_as_multi(Origin::signed(2), 3, vec![1, 3], Some((1, 0)), hash.clone()));
 			assert_noop!(
 				Utility::as_multi(Origin::signed(3), 3, vec![1, 2], Some((1, 0)), call),
-				"balance too low to send value",
+				BalancesError::<Test, _>::InsufficientBalance,
 			);
 			assert_noop!(
 				Utility::cancel_as_multi(Origin::signed(2), 3, vec![1, 3], (1, 0), hash.clone()),
@@ -530,7 +566,7 @@ mod tests {
 			assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], None, call.clone()));
 			assert_noop!(
 				Utility::as_multi(Origin::signed(3), 2, vec![1, 2], Some((1, 0)), call),
-				"balance too low to send value",
+				BalancesError::<Test, _>::InsufficientBalance,
 			);
 		});
 	}
@@ -591,7 +627,7 @@ mod tests {
 			);
 			assert_noop!(
 				Utility::as_multi(Origin::signed(4), 1, vec![2, 3], None, call.clone()),
-				"balance too low to send value",
+				BalancesError::<Test, _>::InsufficientBalance,
 			);
 			assert_ok!(Utility::as_multi(Origin::signed(1), 1, vec![2, 3], None, call));
 
@@ -608,7 +644,7 @@ mod tests {
 				Origin::signed(1),
 				1,
 				Box::new(Call::Balances(BalancesCall::transfer(6, 3))),
-			), "balance too low to send value");
+			), BalancesError::<Test, _>::InsufficientBalance);
 			assert_ok!(Utility::as_sub(
 				Origin::signed(1),
 				0,
