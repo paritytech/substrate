@@ -45,7 +45,7 @@ fn submit_candidacy_must_not_work() {
 		);
 		assert_noop!(
 			ScoredPool::submit_candidacy(Origin::signed(40)),
-			Error::<Test, DefaultInstance>::AlreadyInPool
+			Error::<Test, _>::AlreadyInPool
 		);
 	});
 }
@@ -200,7 +200,7 @@ fn withdraw_candidacy_must_only_work_for_members() {
 	new_test_ext().execute_with(|| {
 		let who = 77;
 		let index = 0;
-		assert_noop!( ScoredPool::withdraw_candidacy(Origin::signed(who), index), Error::<Test, DefaultInstance>::WrongAccountIndex);
+		assert_noop!( ScoredPool::withdraw_candidacy(Origin::signed(who), index), Error::<Test, _>::WrongAccountIndex);
 	});
 }
 
@@ -209,9 +209,9 @@ fn oob_index_should_abort() {
 	new_test_ext().execute_with(|| {
 		let who = 40;
 		let oob_index = ScoredPool::pool().len() as u32;
-		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), oob_index), Error::<Test, DefaultInstance>::InvalidIndex);
-		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, oob_index, 99), Error::<Test, DefaultInstance>::InvalidIndex);
-		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, oob_index), Error::<Test, DefaultInstance>::InvalidIndex);
+		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), oob_index), Error::<Test, _>::InvalidIndex);
+		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, oob_index, 99), Error::<Test, _>::InvalidIndex);
+		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, oob_index), Error::<Test, _>::InvalidIndex);
 	});
 }
 
@@ -220,9 +220,9 @@ fn index_mismatches_should_abort() {
 	new_test_ext().execute_with(|| {
 		let who = 40;
 		let index = 3;
-		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), index), Error::<Test, DefaultInstance>::WrongAccountIndex);
+		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), index), Error::<Test, _>::WrongAccountIndex);
 		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99), Error::<Test, _>::WrongAccountIndex);
-		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index), Error::<Test, DefaultInstance>::WrongAccountIndex);
+		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index), Error::<Test, _>::WrongAccountIndex);
 	});
 }
 
