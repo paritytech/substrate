@@ -490,7 +490,10 @@ impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for 
 		index: Index,
 	) -> Option<(Call, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
 		let period = 1 << 8;
-		let current_block = System::block_number().saturated_into::<u64>();
+		let current_block = System::block_number()
+			.saturated_into::<u64>()
+			// make sure we actually construct on top of the parent block.
+			.saturating_sub(1);
 		let tip = 0;
 		let extra: SignedExtra = (
 			frame_system::CheckVersion::<Runtime>::new(),

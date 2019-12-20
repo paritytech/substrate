@@ -17,13 +17,15 @@
 use node_runtime::{
 	Call, Runtime, SubmitTransaction,
 };
-use sp_core::testing::{KeyStore, ED25519, SR25519};
-use sp_core::traits::{KeystoreExt, BareCryptoStorePtr};
+use sp_application_crypto::AppKey;
+use sp_core::testing::KeyStore;
+use sp_core::traits::KeystoreExt;
 use sp_core::offchain::{
 	TransactionPoolExt,
 	testing::TestTransactionPoolExt,
 };
 use frame_system::offchain::{SubmitSignedTransaction, SubmitUnsignedTransaction};
+use pallet_im_online::sr25519::AuthorityPair as Key;
 
 mod common;
 use self::common::*;
@@ -52,23 +54,31 @@ fn should_submit_unsigned_transaction() {
 	});
 }
 
+const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
+
 #[test]
 fn should_submit_signed_transaction() {
-	use pallet_im_online::sr25519 as im_online_crypto;
-	use sp_application_crypto::traits::AppKey;
+	env_logger::try_init();
 
 	let mut t = new_test_ext(COMPACT_CODE, false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(
-		im_online_crypto::AuthorityPair::ID,
-		Some("hunter2")
-	);
+	keystore.write().sr25519_generate_new(Key::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
+	keystore.write().sr25519_generate_new(Key::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
+	keystore.write().sr25519_generate_new(Key::ID, Some(&format!("{}/hunter3", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
+		let keys = <SubmitTransaction as SubmitSignedTransaction<Runtime, Call>>
+			::find_all_local_keys();
+		assert_eq!(keys.len(), 3, "Missing keys: {:?}", keys);
+
+		let can_sign = <SubmitTransaction as SubmitSignedTransaction<Runtime, Call>>
+			::can_sign();
+		assert!(can_sign, "Since there are keys, `can_sign` should return true");
+
 		let call = pallet_balances::Call::transfer(Default::default(), Default::default());
 		let results =
 			<SubmitTransaction as SubmitSignedTransaction<Runtime, Call>>::submit_signed(call);
@@ -77,5 +87,46 @@ fn should_submit_signed_transaction() {
 		assert_eq!(len, 3);
 		assert_eq!(results.into_iter().filter_map(|x| x.1.ok()).count(), len);
 		assert_eq!(state.read().transactions.len(), len);
+	});
+}
+
+#[test]
+fn should_submit_signed_twice_from_the_same_account() {
+	env_logger::try_init();
+
+	let mut t = new_test_ext(COMPACT_CODE, false);
+	let (pool, state) = TestTransactionPoolExt::new();
+	t.register_extension(TransactionPoolExt::new(pool));
+
+	let keystore = KeyStore::new();
+	keystore.write().sr25519_generate_new(Key::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
+	t.register_extension(KeystoreExt(keystore));
+
+	t.execute_with(|| {
+		let call = pallet_balances::Call::transfer(Default::default(), Default::default());
+		let results =
+			<SubmitTransaction as SubmitSignedTransaction<Runtime, Call>>::submit_signed(call);
+
+		let len = results.len();
+		assert_eq!(len, 1);
+		assert_eq!(results.into_iter().filter_map(|x| x.1.ok()).count(), len);
+		assert_eq!(state.read().transactions.len(), len);
+
+		// submit another one from the same account. The nonce should be incremented.
+				let call = pallet_balances::Call::transfer(Default::default(), Default::default());
+		let results =
+			<SubmitTransaction as SubmitSignedTransaction<Runtime, Call>>::submit_signed(call);
+
+		let len = results.len();
+		assert_eq!(len, 1);
+		assert_eq!(results.into_iter().filter_map(|x| x.1.ok()).count(), len);
+		assert_eq!(state.read().transactions.len(), len + 1);
+
+		// now check that the transactions are not equal
+		let s = state.read();
+		assert!(
+			s.transactions[0] != s.transactions[1],
+			"Transactions should have different nonces."
+		);
 	});
 }

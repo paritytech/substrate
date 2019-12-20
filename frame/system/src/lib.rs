@@ -1046,6 +1046,9 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
 		let n = (self.0).0.birth(current_u64).saturated_into::<T::BlockNumber>();
+		frame_support::debug::native::trace!(
+			"Looking for hash of {:?} (current: {:?})", n, current_u64
+		);
 		if !<BlockHash<T>>::exists(n) {
 			Err(InvalidTransaction::AncientBirthBlock.into())
 		} else {

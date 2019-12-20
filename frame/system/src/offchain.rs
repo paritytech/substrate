@@ -56,8 +56,8 @@ pub trait CreateTransaction<T: crate::Trait, Extrinsic: ExtrinsicT> {
 /// It has a blanket implementation for all `RuntimeAppPublic` types,
 /// so it's enough to pass an application-specific crypto type.
 ///
-/// To easily create `SignedTransaction`s have a look at  the
-/// `TransactionSubmitter` type.
+/// To easily create `SignedTransaction`s have a look at the
+/// [`TransactionSubmitter`](frame_system::offchain::TransactionSubmitter) type.
 pub trait Signer<Public, Signature> {
 	/// Sign any encodable payload with given account and produce a signature.
 	///
@@ -104,7 +104,8 @@ pub type PublicOf<T, Call, X> = <
 /// A trait to sign and submit transactions in off-chain calls.
 ///
 /// NOTE: Most likely you should not implement this trait yourself.
-/// There is an implementation for `TransactionSubmitter` type, which
+/// There is an implementation for
+/// [`TransactionSubmitter`](frame_system::offchain::TransactionSubmitter) type, which
 /// you should use.
 pub trait SignAndSubmitTransaction<T: crate::Trait, Call> {
 	/// Unchecked extrinsic type.
@@ -145,7 +146,8 @@ pub trait SignAndSubmitTransaction<T: crate::Trait, Call> {
 /// A trait to submit unsigned transactions in off-chain calls.
 ///
 /// NOTE: Most likely you should not implement this trait yourself.
-/// There is an implementation for `TransactionSubmitter` type, which
+/// There is an implementation for
+/// [`TransactionSubmitter`](frame_system::offchain::TransactionSubmitter) type, which
 /// you should use.
 pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 	/// Unchecked extrinsic type.
@@ -165,7 +167,8 @@ pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 /// from accounts in node's local keystore.
 ///
 /// NOTE: Most likely you should not implement this trait yourself.
-/// There is an implementation for `TransactionSubmitter` type, which
+/// There is an implementation for
+/// [`TransactionSubmitter`](frame_system::offchain::TransactionSubmitter) type, which
 /// you should use.
 pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 	/// A `SignAndSubmitTransaction` implementation.
@@ -184,13 +187,27 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 		PublicOf<T, Call, Self::SignAndSubmit>,
 	)>;
 
-	/// Check if there are any keys that could be used to send a transaction.
+	/// Find all available local keys.
+	///
+	/// This is equivalent of calling `find_local_keys(None)`.
+	fn find_all_local_keys() -> Vec<(T::AccountId, PublicOf<T, Call, Self::SignAndSubmit>)> {
+		Self::find_local_keys(None as Option<Vec<_>>)
+	}
+
+	/// Check if there are keys for any of given accounts that could be used to send a transaction.
 	///
 	/// This check can be used as an early-exit condition to avoid doing too
 	/// much work, before we actually realise that there are no accounts that you
 	/// we could use for signing.
-	fn can_sign(accounts: Option<impl IntoIterator<Item = T::AccountId>>) -> bool {
+	fn can_sign_with(accounts: Option<impl IntoIterator<Item = T::AccountId>>) -> bool {
 		!Self::find_local_keys(accounts).is_empty()
+	}
+
+	/// Check if there are any keys that could be used for signing.
+	///
+	/// This is equivalent of calling `can_sign_with(None)`.
+	fn can_sign() -> bool {
+		Self::can_sign_with(None as Option<Vec<_>>)
 	}
 
 	/// Create and submit signed transactions from supported accounts.
@@ -225,7 +242,7 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 	fn submit_signed(
 		call: impl Into<Call> + Clone,
 	) -> Vec<(T::AccountId, Result<(), ()>)> {
-		let keys = Self::find_local_keys(None as Option<Vec<_>>);
+		let keys = Self::find_all_local_keys();
 		keys.into_iter().map(|(account, pub_key)| {
 			let call = call.clone().into();
 			(
@@ -332,7 +349,7 @@ impl<T, C, E, S, Call> SubmitSignedTransaction<T, Call> for TransactionSubmitter
 		}
 	}
 
-	fn can_sign(accounts: Option<impl IntoIterator<Item = T::AccountId>>) -> bool {
+	fn can_sign_with(accounts: Option<impl IntoIterator<Item = T::AccountId>>) -> bool {
 		// early exit if we care about any account.
 		if accounts.is_none() {
 			!S::all().is_empty()
