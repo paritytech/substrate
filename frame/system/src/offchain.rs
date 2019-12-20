@@ -184,6 +184,15 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 		PublicOf<T, Call, Self::SignAndSubmit>,
 	)>;
 
+	/// Check if there are any keys that could be used to send a transaction.
+	///
+	/// This check can be used as an early-exit condition to avoid doing too
+	/// much work, before we actually realise that there are no accounts that you
+	/// we could use for signing.
+	fn can_sign(accounts: Option<impl IntoIterator<Item = T::AccountId>>) -> bool {
+		!Self::find_local_keys(accounts).is_empty()
+	}
+
 	/// Create and submit signed transactions from supported accounts.
 	///
 	/// This method should intersect given list of accounts with the ones
@@ -194,7 +203,7 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 	#[must_use]
 	fn submit_signed_from(
 		call: impl Into<Call> + Clone,
-		accounts: impl IntoIterator<Item= T::AccountId>,
+		accounts: impl IntoIterator<Item = T::AccountId>,
 	) -> Vec<(T::AccountId, Result<(), ()>)> {
 		let keys = Self::find_local_keys(Some(accounts));
 		keys.into_iter().map(|(account, pub_key)| {
@@ -320,6 +329,15 @@ impl<T, C, E, S, Call> SubmitSignedTransaction<T, Call> for TransactionSubmitter
 		} else {
 			// just return all account ids and keys
 			local_accounts_and_keys
+		}
+	}
+
+	fn can_sign(accounts: Option<impl IntoIterator<Item = T::AccountId>>) -> bool {
+		// early exit if we care about any account.
+		if accounts.is_none() {
+			!S::all().is_empty()
+		} else {
+			!Self::find_local_keys(accounts).is_empty()
 		}
 	}
 }
