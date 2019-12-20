@@ -132,7 +132,7 @@ enum Genesis<G> {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-struct ChainSpecFile<E> {
+struct ClientSpec<E> {
 	pub name: String,
 	pub id: String,
 	pub boot_nodes: Vec<String>,
@@ -157,14 +157,14 @@ pub type NoExtension = Option<()>;
 
 /// A configuration of a chain. Can be used to build a genesis block.
 pub struct ChainSpec<G, E = NoExtension> {
-	spec: ChainSpecFile<E>,
+	client_spec: ClientSpec<E>,
 	genesis: GenesisSource<G>,
 }
 
 impl<G, E: Clone> Clone for ChainSpec<G, E> {
 	fn clone(&self) -> Self {
 		ChainSpec {
-			spec: self.spec.clone(),
+			client_spec: self.client_spec.clone(),
 			genesis: self.genesis.clone(),
 		}
 	}
@@ -173,44 +173,44 @@ impl<G, E: Clone> Clone for ChainSpec<G, E> {
 impl<G, E> ChainSpec<G, E> {
 	/// A list of bootnode addresses.
 	pub fn boot_nodes(&self) -> &[String] {
-		&self.spec.boot_nodes
+		&self.client_spec.boot_nodes
 	}
 
 	/// Spec name.
 	pub fn name(&self) -> &str {
-		&self.spec.name
+		&self.client_spec.name
 	}
 
 	/// Spec id.
 	pub fn id(&self) -> &str {
-		&self.spec.id
+		&self.client_spec.id
 	}
 
 	/// Telemetry endpoints (if any)
 	pub fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints> {
-		&self.spec.telemetry_endpoints
+		&self.client_spec.telemetry_endpoints
 	}
 
 	/// Network protocol id.
 	pub fn protocol_id(&self) -> Option<&str> {
-		self.spec.protocol_id.as_ref().map(String::as_str)
+		self.client_spec.protocol_id.as_ref().map(String::as_str)
 	}
 
 	/// Additional loosly-typed properties of the chain.
 	///
 	/// Returns an empty JSON object if 'properties' not defined in config
 	pub fn properties(&self) -> Properties {
-		self.spec.properties.as_ref().unwrap_or(&json::map::Map::new()).clone()
+		self.client_spec.properties.as_ref().unwrap_or(&json::map::Map::new()).clone()
 	}
 
 	/// Add a bootnode to the list.
 	pub fn add_boot_node(&mut self, addr: Multiaddr) {
-		self.spec.boot_nodes.push(addr.to_string())
+		self.client_spec.boot_nodes.push(addr.to_string())
 	}
 
 	/// Returns a reference to defined chain spec extensions.
 	pub fn extensions(&self) -> &E {
-		&self.spec.extensions
+		&self.client_spec.extensions
 	}
 
 	/// Create hardcoded spec.
@@ -224,7 +224,7 @@ impl<G, E> ChainSpec<G, E> {
 		properties: Option<Properties>,
 		extensions: E,
 	) -> Self {
-		let spec = ChainSpecFile {
+		let client_spec = ClientSpec {
 			name: name.to_owned(),
 			id: id.to_owned(),
 			boot_nodes: boot_nodes,
@@ -237,7 +237,7 @@ impl<G, E> ChainSpec<G, E> {
 		};
 
 		ChainSpec {
-			spec,
+			client_spec,
 			genesis: GenesisSource::Factory(Rc::new(constructor)),
 		}
 	}
@@ -247,10 +247,10 @@ impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
 	/// Parse json content into a `ChainSpec`
 	pub fn from_json_bytes(json: impl Into<Cow<'static, [u8]>>) -> Result<Self, String> {
 		let json = json.into();
-		let spec = json::from_slice(json.as_ref())
+		let client_spec = json::from_slice(json.as_ref())
 			.map_err(|e| format!("Error parsing spec file: {}", e))?;
 		Ok(ChainSpec {
-			spec,
+			client_spec,
 			genesis: GenesisSource::Binary(json),
 		})
 	}
@@ -259,10 +259,10 @@ impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
 	pub fn from_json_file(path: PathBuf) -> Result<Self, String> {
 		let file = File::open(&path)
 			.map_err(|e| format!("Error opening spec file: {}", e))?;
-		let spec = json::from_reader(file)
+		let client_spec = json::from_reader(file)
 			.map_err(|e| format!("Error parsing spec file: {}", e))?;
 		Ok(ChainSpec {
-			spec,
+			client_spec,
 			genesis: GenesisSource::File(path),
 		})
 	}
@@ -274,7 +274,7 @@ impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
 		#[derive(Serialize, Deserialize)]
 		struct Container<G, E> {
 			#[serde(flatten)]
-			spec: ChainSpecFile<E>,
+			client_spec: ClientSpec<E>,
 			genesis: Genesis<G>,
 
 		};
@@ -304,11 +304,11 @@ impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
 			},
 			(_, genesis) => genesis,
 		};
-		let spec = Container {
-			spec: self.spec,
+		let container = Container {
+			client_spec: self.client_spec,
 			genesis,
 		};
-		json::to_string_pretty(&spec)
+		json::to_string_pretty(&container)
 			.map_err(|e| format!("Error generating spec json: {}", e))
 	}
 }
