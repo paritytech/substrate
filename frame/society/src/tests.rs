@@ -19,14 +19,15 @@
 use super::*;
 use mock::*;
 
-use support::{assert_ok, assert_noop};
+use frame_support::{assert_ok, assert_noop};
+use sp_runtime::traits::BadOrigin;
 
 #[test]
 fn founding_works() {
 	EnvBuilder::new().with_members(vec![]).execute(|| {
 		// Account 1 is set as the founder origin
 		// Account 5 cannot start a society
-		assert_noop!(Society::found(Origin::signed(5), 20), "Invalid origin");
+		assert_noop!(Society::found(Origin::signed(5), 20), BadOrigin);
 		// Account 1 can start a society, where 10 is the founding member
 		assert_ok!(Society::found(Origin::signed(1), 10));
 		// Society members only include 10
@@ -34,7 +35,7 @@ fn founding_works() {
 		// 10 is the head of the society
 		assert_eq!(Society::head(), Some(10));
 		// Cannot start another society
-		assert_noop!(Society::found(Origin::signed(1), 20), "already founded");
+		assert_noop!(Society::found(Origin::signed(1), 20), Error::<Test, _>::AlreadyFounded);
 	});
 }
 
@@ -132,7 +133,7 @@ fn unbidding_works() {
 		assert_eq!(Balances::free_balance(30), 25);
 		assert_eq!(Balances::reserved_balance(30), 25);
 		// Must know right position to unbid + cannot unbid someone else
-		assert_noop!(Society::unbid(Origin::signed(30), 1), "bad position");
+		assert_noop!(Society::unbid(Origin::signed(30), 1), Error::<Test, _>::BadPosition);
 		// Can unbid themselves with the right position
 		assert_ok!(Society::unbid(Origin::signed(30), 0));
 		// Balance is returned
@@ -154,7 +155,7 @@ fn payout_works() {
 		assert_ok!(Society::vote(Origin::signed(10), 20, true));
 		run_to_block(8);
 		// payout not ready
-		assert_noop!(Society::payout(Origin::signed(20)), "nothing to payout");
+		assert_noop!(Society::payout(Origin::signed(20)), Error::<Test, _>::NoPayout);
 		run_to_block(9);
 		// payout should be here
 		assert_ok!(Society::payout(Origin::signed(20)));
@@ -208,7 +209,7 @@ fn slash_payout_works() {
 		run_to_block(8);
 		// payout in queue
 		assert_eq!(Payouts::<Test>::get(20), vec![(9, 1000)]);
-		assert_noop!(Society::payout(Origin::signed(20)), "nothing to payout");
+		assert_noop!(Society::payout(Origin::signed(20)), Error::<Test, _>::NoPayout);
 		// slash payout
 		assert_eq!(Society::slash_payout(&20, 500), 500);
 		assert_eq!(Payouts::<Test>::get(20), vec![(9, 500)]);
@@ -261,10 +262,10 @@ fn suspended_member_lifecycle_works() {
 
 		// Suspended members cannot get payout
 		Society::bump_payout(&20, 10, 100);
-		assert_noop!(Society::payout(Origin::signed(20)), "account is not a member");
+		assert_noop!(Society::payout(Origin::signed(20)), Error::<Test, _>::NotMember);
 		
 		// Normal people cannot make judgement
-		assert_noop!(Society::judge_suspended_member(Origin::signed(20), 20, true), "Invalid origin");
+		assert_noop!(Society::judge_suspended_member(Origin::signed(20), 20, true), BadOrigin);
 
 		// Suspension judgment origin can judge thee
 		// Suspension judgement origin forgives the suspended member
@@ -307,7 +308,7 @@ fn suspended_candidate_rejected_works() {
 		assert_eq!(Society::suspended_candidate(20).is_some(), true);
 
 		// Normal user cannot make judgement on suspended candidate
-		assert_noop!(Society::judge_suspended_candidate(Origin::signed(20), 20, Judgement::Approve), "Invalid origin");
+		assert_noop!(Society::judge_suspended_candidate(Origin::signed(20), 20, Judgement::Approve), BadOrigin);
 
 		// Suspension judgement origin makes no direct judgement
 		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Judgement::Rebid));
@@ -343,12 +344,12 @@ fn vouch_works() {
 		// 10 is the only member
 		assert_eq!(Society::members(), vec![10]);
 		// A non-member cannot vouch
-		assert_noop!(Society::vouch(Origin::signed(1), 20, 1000, 100), "not a member");
+		assert_noop!(Society::vouch(Origin::signed(1), 20, 1000, 100), Error::<Test, _>::NotMember);
 		// A member can though
 		assert_ok!(Society::vouch(Origin::signed(10), 20, 1000, 100));
 		assert_eq!(<Vouching<Test>>::get(), vec![10]);
 		// A member cannot vouch twice at the same time
-		assert_noop!(Society::vouch(Origin::signed(10), 30, 100, 0), "already vouching");
+		assert_noop!(Society::vouch(Origin::signed(10), 30, 100, 0), Error::<Test, _>::AlreadyVouching);
 		// Vouching creates the right kind of bid
 		assert_eq!(<Bids<Test>>::get(), vec![(1000, 20, BidKind::Vouch(10, 100))]);
 		// Vouched user can become candidate
@@ -404,7 +405,7 @@ fn unvouch_works() {
 		// 10 is vouched
 		assert_eq!(<Vouching<Test>>::get(), vec![10]);
 		// To unvouch, you must know the right bid position
-		assert_noop!(Society::unvouch(Origin::signed(10), 2), "bad position");
+		assert_noop!(Society::unvouch(Origin::signed(10), 2), Error::<Test, _>::BadPosition);
 		// 10 can unvouch with the right position
 		assert_ok!(Society::unvouch(Origin::signed(10), 0));
 		// 20 no longer has a bid
@@ -416,7 +417,7 @@ fn unvouch_works() {
 		assert_ok!(Society::vouch(Origin::signed(10), 20, 100, 0));
 		run_to_block(4);
 		assert_eq!(Society::candidates(), vec![(100, 20, BidKind::Vouch(10, 0))]);
-		assert_noop!(Society::unvouch(Origin::signed(10), 0), "bad position");
+		assert_noop!(Society::unvouch(Origin::signed(10), 0), Error::<Test, _>::BadPosition);
 		// 10 is still vouching until candidate is approved or rejected
 		assert_eq!(<Vouching<Test>>::get(), vec![10]);
 		run_to_block(8);
@@ -506,7 +507,7 @@ fn challenges_work() {
 		// New challenge period
 		assert_eq!(Society::defender(), Some(20));
 		// Non-member cannot challenge
-		assert_noop!(Society::defender_vote(Origin::signed(1), true), "not a member");
+		assert_noop!(Society::defender_vote(Origin::signed(1), true), Error::<Test, _>::NotMember);
 		// 2 people say accept, 2 reject
 		assert_ok!(Society::defender_vote(Origin::signed(10), true));
 		assert_ok!(Society::defender_vote(Origin::signed(20), true));

@@ -18,14 +18,14 @@
 
 use super::*;
 
-use support::{impl_outer_origin, parameter_types};
-use primitives::H256;
+use frame_support::{impl_outer_origin, parameter_types};
+use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 use sp_runtime::{
 	Perbill, traits::{BlakeTwo256, IdentityLookup, OnInitialize, OnFinalize}, testing::Header,
 };
-use system::EnsureSignedBy;
+use frame_system::EnsureSignedBy;
 
 impl_outer_origin! {
 	pub enum Origin for Test {}
@@ -57,7 +57,7 @@ parameter_types! {
 	pub const CreationFee: u64 = 0;
 }
 
-impl system::Trait for Test {
+impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -73,9 +73,10 @@ impl system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
+	type ModuleToIndex = ();
 }
 
-impl balances::Trait for Test {
+impl pallet_balances::Trait for Test {
 	type Balance = u64;
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
@@ -89,7 +90,7 @@ impl balances::Trait for Test {
 
 impl Trait for Test {
 	type Event = ();
-	type Currency = balances::Module<Self>;
+	type Currency = pallet_balances::Module<Self>;
 	type Randomness = ();
 	type CandidateDeposit = CandidateDeposit;
 	type WrongSideDeduction = WrongSideDeduction;
@@ -104,8 +105,8 @@ impl Trait for Test {
 }
 
 pub type Society = Module<Test>;
-pub type System = system::Module<Test>;
-pub type Balances = balances::Module<Test>;
+pub type System = frame_system::Module<Test>;
+pub type Balances = pallet_balances::Module<Test>;
 
 pub struct EnvBuilder {
 	members: Vec<u128>,
@@ -132,9 +133,9 @@ impl EnvBuilder {
 	}
 
 	pub fn execute<R, F: FnOnce() -> R>(mut self, f: F) -> R {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		self.balances.push((Society::account_id(), self.balance.max(self.pot)));
-		balances::GenesisConfig::<Test> {
+		pallet_balances::GenesisConfig::<Test> {
 			balances: self.balances,
 			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
@@ -142,7 +143,7 @@ impl EnvBuilder {
 			members: self.members,
 			pot: self.pot,
 		}.assimilate_storage(&mut t).unwrap();
-		let mut ext: runtime_io::TestExternalities = t.into();
+		let mut ext: sp_io::TestExternalities = t.into();
 		ext.execute_with(f)
 	}
 	#[allow(dead_code)]

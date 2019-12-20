@@ -73,7 +73,7 @@
 //! 
 //! A user can go through the following phases:
 //! 
-//! ```
+//! ```ignore
 //!           +------->  User  <----------+
 //!           |           +               |
 //!           |           |               |
@@ -131,7 +131,7 @@
 //! At the end of the rotation period, each we collect the votes for a candidate
 //! and randomly select a vote as the final outcome.
 //! 
-//! ```
+//! ```ignore
 //!  [ a-accept, r-reject, s-skeptic ]
 //! +----------------------------------+
 //! |                                  |
@@ -233,18 +233,20 @@ mod mock;
 mod tests;
 
 use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
-use rstd::prelude::*;
+use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use sp_runtime::{Percent, ModuleId, RuntimeDebug, traits::{
-	StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot,
-	TrailingZeroInput, CheckedSub, EnsureOrigin
-}};
-use support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::Result};
-use support::traits::{
+use sp_runtime::{Percent, ModuleId, RuntimeDebug,
+	traits::{
+		StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot,
+		TrailingZeroInput, CheckedSub, EnsureOrigin
+	}
+};
+use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
+use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers,
 	ExistenceRequirement::{KeepAlive, AllowDeath},
 };
-use system::ensure_signed;
+use frame_system::{self as system, ensure_signed};
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
@@ -345,15 +347,15 @@ pub enum BidKind<AccountId, Balance> {
 }
 
 impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
-	fn check_voucher(&self, v: &AccountId) -> rstd::result::Result<(), &'static str> {
+	fn check_voucher(&self, v: &AccountId) -> DispatchResult {
 		if let BidKind::Vouch(ref a, _) = self {
 			if a == v {
 				Ok(())
 			} else {
-				Err("incorrect identity")
+				Err("incorrect identity")?
 			}
 		} else {
-			Err("not vouched")
+			Err("not vouched")?
 		}
 	}
 }
@@ -419,6 +421,7 @@ decl_storage! {
 decl_module! {
 	/// The module declaration.
 	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: T::Origin {
+		type Error = Error<T, I>;
 		/// The minimum amount of a deposit required for a bid to be made.
 		const CandidateDeposit: BalanceOf<T, I> = T::CandidateDeposit::get();
 
@@ -445,11 +448,11 @@ decl_module! {
 		/// Make a bid for entry.
 		///
 		/// Alters Bids (O(N) decode+encode, O(logN) search, <=2*O(N) write).
-		pub fn bid(origin, value: BalanceOf<T, I>) -> Result {
+		pub fn bid(origin, value: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(!<SuspendedCandidates<T, I>>::exists(&who), "candidate is suspended");
-			ensure!(!<SuspendedMembers<T, I>>::exists(&who), "member is suspended");
-			ensure!(!Self::is_member(&who), "candidate is already a member");
+			ensure!(!<SuspendedCandidates<T, I>>::exists(&who), Error::<T, I>::Suspended);
+			ensure!(!<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::Suspended);
+			ensure!(!Self::is_member(&who), Error::<T, I>::AlreadyMember);
 
 			let deposit = T::CandidateDeposit::get();
 			T::Currency::reserve(&who, deposit)?;
@@ -459,7 +462,7 @@ decl_module! {
 			Ok(())
 		}
 
-		pub fn unbid(origin, pos: u32) -> Result {
+		pub fn unbid(origin, pos: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			let pos = pos as usize;
@@ -479,15 +482,15 @@ decl_module! {
 					Self::deposit_event(RawEvent::Unbid(who));
 					Ok(())
 				} else {
-					Err("bad position")
+					Err(Error::<T, I>::BadPosition)?
 				}
 			)
 		}
 
 		/// Vouch for someone else.
-		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> Result {
+		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
-			ensure!(Self::is_member(&voucher), "not a member");
+			ensure!(Self::is_member(&voucher), Error::<T, I>::NotMember);
 			Self::set_vouching(voucher.clone())?;
 
 			Self::put_bid(who.clone(), value.clone(), BidKind::Vouch(voucher.clone(), tip));
@@ -496,7 +499,7 @@ decl_module! {
 		}
 
 		/// Only works while candidate is still a bid.
-		pub fn unvouch(origin, pos: u32) -> Result {
+		pub fn unvouch(origin, pos: u32) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 
 			let pos = pos as usize;
@@ -508,7 +511,7 @@ decl_module! {
 					Self::deposit_event(RawEvent::Unvouch(who));
 					Ok(())
 				} else {
-					Err("bad position")
+					Err(Error::<T, I>::BadPosition)?
 				}
 			)
 		}
@@ -516,7 +519,7 @@ decl_module! {
 		/// As a member, vote on an candidate.
 		pub fn vote(origin, candidate: <T::Lookup as StaticLookup>::Source, approve: bool) {
 			let voter = ensure_signed(origin)?;
-			ensure!(Self::is_member(&voter), "not a member");
+			ensure!(Self::is_member(&voter), Error::<T, I>::NotMember);
 			let candidate = T::Lookup::lookup(candidate)?;
 			let vote = if approve { Vote::Approve } else { Vote::Reject };
 			<Votes<T, I>>::insert(candidate, voter, vote);
@@ -525,16 +528,16 @@ decl_module! {
 		/// As a member, vote on the defender.
 		pub fn defender_vote(origin, approve: bool) {
 			let voter = ensure_signed(origin)?;
-			ensure!(Self::is_member(&voter), "not a member");
+			ensure!(Self::is_member(&voter), Error::<T, I>::NotMember);
 			let vote = if approve { Vote::Approve } else { Vote::Reject };
 			<DefenderVotes<T, I>>::insert(voter, vote);
 		}
 
 		/// Transfer the first matured payment and remove it from the records.
-		pub fn payout(origin) -> Result {
+		pub fn payout(origin) {
 			let who = ensure_signed(origin)?;
 
-			ensure!(Self::is_member(&who), "account is not a member");
+			ensure!(Self::is_member(&who), Error::<T, I>::NotMember);
 
 			let mut payouts = <Payouts<T, I>>::get(&who);
 			if let Some((when, amount)) = payouts.first() {
@@ -549,14 +552,14 @@ decl_module! {
 					return Ok(())
 				}
 			}
-			Err("nothing to payout")
+			Err(Error::<T, I>::NoPayout)?
 		}
 
 		/// Found the society. This is done as a discrete action in order to allow for the
 		/// module to be included into a running chain.
 		fn found(origin, founder: T::AccountId) {
 			T::FounderOrigin::ensure_origin(origin)?;
-			ensure!(!<Head<T, I>>::exists(), "already founded");
+			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
 			Self::add_member(&founder)?;
 			<Head<T, I>>::put(&founder);
 			Self::deposit_event(RawEvent::Founded(founder));
@@ -565,7 +568,7 @@ decl_module! {
 		/// Allow founder origin to make judgement on a suspended member.
 		fn judge_suspended_member(origin, who: T::AccountId, forgive: bool) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
-			ensure!(<SuspendedMembers<T, I>>::exists(&who), "user is not suspended member");
+			ensure!(<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::NotSuspended);
 			
 			if forgive {
 				// Add member back to society.
@@ -589,7 +592,7 @@ decl_module! {
 						// Founder origin has approved this candidate
 						// Make sure we can pay them
 						let pot = Self::pot();
-						ensure!(pot > value, "not enough in pot to accept candidate");
+						ensure!(pot > value, Error::<T, I>::InsufficientPot);
 						// Reduce next pot by payout
 						<Pot<T, I>>::put(pot - value);
 						// Add payout for new candidate
@@ -628,7 +631,7 @@ decl_module! {
 					}
 				}
 			} else {
-				return Err("user is not suspended candidate");
+				Err(Error::<T, I>::NotSuspended)?
 			}
 		}
 
@@ -656,9 +659,29 @@ decl_module! {
 
 decl_error! {
 	/// Errors for this module.
-	pub enum Error {
+	pub enum Error for Module<T: Trait<I>, I: Instance> {
 		/// An incorrect position was provided.
-		BadPositionHint,
+		BadPosition,
+		/// User is not a member
+		NotMember,
+		/// User is already a member
+		AlreadyMember,
+		/// User is suspended
+		Suspended,
+		/// User is not suspended
+		NotSuspended,
+		/// Nothing to payout
+		NoPayout,
+		/// Society already founded
+		AlreadyFounded,
+		/// Not enough in pot to accept candidate
+		InsufficientPot,
+		/// Member is already vouching
+		AlreadyVouching,
+		/// Member is not vouching
+		NotVouching,
+		/// Cannot remove head
+		Head,
 	}
 }
 
@@ -733,23 +756,23 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Add a member to the vouching set.
-	fn set_vouching(v: T::AccountId) -> Result {
+	fn set_vouching(v: T::AccountId) -> DispatchResult{
 		<Vouching<T, I>>::mutate(|vouchers|
 			match vouchers.binary_search(&v) {
 				Err(i) => {
 					vouchers.insert(i, v);
 					Ok(())
 				}
-				Ok(_) => Err("already vouching"),
+				Ok(_) => Err(Error::<T, I>::AlreadyVouching)?,
 			}
 		)
 	}
 
 	/// Remove a member from the vouching set.
-	fn unset_vouching(v: &T::AccountId) -> Result {
+	fn unset_vouching(v: &T::AccountId) -> DispatchResult {
 		<Vouching<T, I>>::mutate(|vouchers|
 			match vouchers.binary_search(&v) {
-				Err(_) => Err("not vouching"),
+				Err(_) => Err(Error::<T, I>::NotVouching)?,
 				Ok(i) => {
 					vouchers.remove(i);
 					Ok(())
@@ -766,10 +789,10 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Add a member to the sorted members list. Will not add a duplicate member.
-	fn add_member(m: &T::AccountId) -> Result {
+	fn add_member(m: &T::AccountId) -> DispatchResult {
 		<Members<T, I>>::mutate(|members| {
 			match members.binary_search(m) {
-				Ok(_) => Err("already a member"),
+				Ok(_) => Err(Error::<T, I>::AlreadyMember)?,
 				Err(i) => {
 					members.insert(i, m.clone());
 					T::MembershipChanged::change_members_sorted(&[m.clone()], &[], members);
@@ -783,12 +806,12 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// NOTE: This does not correctly clean up a member from storage. It simply
 	/// removes them from the Members storage item.
-	pub fn remove_member(m: &T::AccountId) -> Result {
-		ensure!(Self::head() != Some(m.clone()), "cannot remove head");
+	pub fn remove_member(m: &T::AccountId) -> DispatchResult {
+		ensure!(Self::head() != Some(m.clone()), Error::<T, I>::Head);
 
 		<Members<T, I>>::mutate(|members|
 			match members.binary_search(&m) {
-				Err(_) => Err("not a member"),
+				Err(_) => Err(Error::<T, I>::NotMember)?,
 				Ok(i) => {
 					members.remove(i);
 					T::MembershipChanged::change_members_sorted(&[], &[m.clone()], members);
