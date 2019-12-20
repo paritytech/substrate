@@ -70,6 +70,8 @@ decl_error! {
 		TooManySignatories,
 		/// Multisig operation not found when attempting to cancel.
 		NotFound,
+		/// Only the account that originally created the multisig is able to cancel it.
+		NotOwner,
 		/// No timepoint was given, yet the multisig operation is already underway.
 		NoTimepoint,
 		/// A different timepoint was given to the multisig operation that is underway.
@@ -254,6 +256,7 @@ decl_module! {
 			let (then, deposit, depositor, _) = <Multisigs<T>>::get(&id, call_hash)
 				.ok_or(Error::<T>::NotFound)?;
 			ensure!(then == timepoint, Error::<T>::WrongTimepoint);
+			ensure!(depositor == who, Error::<T>::NotOwner);
 
 			let _ = T::Currency::unreserve(&depositor, deposit);
 			<Multisigs<T>>::remove(&id, call_hash);
@@ -449,6 +452,27 @@ mod tests {
 
 			assert_ok!(Utility::as_multi(Origin::signed(3), 3, vec![1, 2], Some((1, 0)), call));
 			assert_eq!(Balances::free_balance(6), 15);
+		});
+	}
+
+	#[test]
+	fn cancel_multisig_works() {
+		new_test_ext().execute_with(|| {
+			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
+			let hash = call.using_encoded(blake2_256);
+			assert_ok!(Utility::approve_as_multi(Origin::signed(1), 3, vec![2, 3], None, hash.clone()));
+			assert_ok!(Utility::approve_as_multi(Origin::signed(2), 3, vec![1, 3], Some((1, 0)), hash.clone()));
+			assert_noop!(
+				Utility::as_multi(Origin::signed(3), 3, vec![1, 2], Some((1, 0)), call),
+				"balance too low to send value",
+			);
+			assert_noop!(
+				Utility::cancel_as_multi(Origin::signed(2), 3, vec![1, 3], (1, 0), hash.clone()),
+				Error::<Test>::NotOwner,
+			);
+			assert_ok!(
+				Utility::cancel_as_multi(Origin::signed(1), 3, vec![2, 3], (1, 0), hash.clone()),
+			);
 		});
 	}
 
