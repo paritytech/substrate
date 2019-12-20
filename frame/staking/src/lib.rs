@@ -794,8 +794,6 @@ decl_error! {
 		AlreadyBonded,
 		/// Controller is already paired.
 		AlreadyPaired,
-		/// Should be the root origin or the `T::SlashCancelOrigin`.
-		BadOrigin,
 		/// Targets cannot be empty.
 		EmptyTargets,
 		/// Duplicate index.
@@ -1190,8 +1188,7 @@ decl_module! {
 		fn cancel_deferred_slash(origin, era: EraIndex, slash_indices: Vec<u32>) {
 			T::SlashCancelOrigin::try_origin(origin)
 				.map(|_| ())
-				.or_else(ensure_root)
-				.map_err(|_| Error::<T>::BadOrigin)?;
+				.or_else(ensure_root)?;
 
 			let mut slash_indices = slash_indices;
 			slash_indices.sort_unstable();
