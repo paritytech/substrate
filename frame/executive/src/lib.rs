@@ -415,6 +415,7 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -660,14 +661,7 @@ mod tests {
 
 		t.execute_with(|| {
 			assert_eq!(Executive::validate_transaction(xt.clone()), Ok(Default::default()));
-			assert_eq!(
-				Executive::apply_extrinsic(xt),
-				Ok(
-					Err(
-						DispatchError { module: Some(1), error: 0, message: Some("RequireRootOrigin") }
-					)
-				)
-			);
+			assert_eq!(Executive::apply_extrinsic(xt), Ok(Err(DispatchError::BadOrigin)));
 		});
 	}
 

@@ -40,7 +40,7 @@ decl_module! {
 		// Just a dummy entry point.
 		// function that can be called by the external world as an extrinsics call
 		// takes a parameter of the type `AccountId`, stores it and emits an event
-		pub fn do_something(origin, something: u32) -> dispatch::Result {
+		pub fn do_something(origin, something: u32) -> dispatch::DispatchResult {
 			// TODO: You only need this if you want to check it was signed.
 			let who = ensure_signed(origin)?;
 
@@ -106,6 +106,7 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 	impl Trait for Test {
 		type Event = ();

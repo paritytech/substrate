@@ -19,7 +19,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
-use sp_runtime::traits::{One, Zero, SaturatedConversion, ModuleDispatchError};
+use sp_runtime::traits::{One, Zero, SaturatedConversion};
 use sp_std::{prelude::*, result, cmp, vec};
 use frame_support::{decl_module, decl_storage, decl_error, ensure};
 use frame_support::traits::Get;
@@ -57,7 +57,7 @@ decl_storage! {
 }
 
 decl_error! {
-	pub enum Error {
+	pub enum Error for Module<T: Trait> {
 		/// Final hint must be updated only once in the block
 		AlreadyUpdated,
 		/// Finalized height above block number
@@ -67,7 +67,7 @@ decl_error! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		type Error = Error;
+		type Error = Error<T>;
 		/// The number of recent samples to keep from this chain. Default is 101.
 		const WindowSize: T::BlockNumber = T::WindowSize::get();
 
@@ -77,11 +77,11 @@ decl_module! {
 		/// Hint that the author of this block thinks the best finalized
 		/// block is the given number.
 		fn final_hint(origin, #[compact] hint: T::BlockNumber) {
-			ensure_none(origin).map_err(|e| e.as_str())?;
-			ensure!(!<Self as Store>::Update::exists(), Error::AlreadyUpdated);
+			ensure_none(origin)?;
+			ensure!(!<Self as Store>::Update::exists(), Error::<T>::AlreadyUpdated);
 			ensure!(
 				frame_system::Module::<T>::block_number() >= hint,
-				Error::BadHint,
+				Error::<T>::BadHint,
 			);
 			<Self as Store>::Update::put(hint);
 		}
@@ -260,6 +260,7 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 	parameter_types! {
 		pub const WindowSize: u64 = 11;

@@ -1034,7 +1034,10 @@ fn election_double_presentations_should_be_punished() {
 		System::set_block_number(6);
 		assert_ok!(Elections::present_winner(Origin::signed(4), 2, 20, 0));
 		assert_ok!(Elections::present_winner(Origin::signed(4), 5, 50, 0));
-		assert_eq!(Elections::present_winner(Origin::signed(4), 5, 50, 0), Err("duplicate presentation"));
+		assert_eq!(
+			Elections::present_winner(Origin::signed(4), 5, 50, 0),
+			Err("duplicate presentation".into()),
+		);
 		assert_ok!(Elections::end_block(System::block_number()));
 
 		assert_eq!(Elections::members(), vec![(5, 11), (2, 11)]);

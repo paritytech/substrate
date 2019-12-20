@@ -136,11 +136,11 @@ impl<
 
 /// An error type that indicates that the origin is invalid.
 #[derive(Encode, Decode)]
-pub struct InvalidOrigin;
+pub struct BadOrigin;
 
-impl From<InvalidOrigin> for &'static str {
-	fn from(_: InvalidOrigin) -> &'static str {
-		"Invalid origin"
+impl From<BadOrigin> for &'static str {
+	fn from(_: BadOrigin) -> &'static str {
+		"Bad origin"
 	}
 }
 
@@ -149,8 +149,8 @@ pub trait EnsureOrigin<OuterOrigin> {
 	/// A return type.
 	type Success;
 	/// Perform the origin check.
-	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, InvalidOrigin> {
-		Self::try_origin(o).map_err(|_| InvalidOrigin)
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, BadOrigin> {
+		Self::try_origin(o).map_err(|_| BadOrigin)
 	}
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
@@ -668,10 +668,6 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	}
 }
 
-/// Result of a module function call; either nothing (functions are only called for "side effects")
-/// or an error message.
-pub type DispatchResult<Error> = result::Result<(), Error>;
-
 /// A lazy call (module function and argument values) that can be executed via its `dispatch`
 /// method.
 pub trait Dispatchable {
@@ -681,10 +677,8 @@ pub trait Dispatchable {
 	type Origin;
 	/// ...
 	type Trait;
-	/// The error type returned by this dispatchable.
-	type Error: Into<crate::DispatchError>;
 	/// Actually dispatch this call and result the result of it.
-	fn dispatch(self, origin: Self::Origin) -> DispatchResult<Self::Error>;
+	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResult;
 }
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
@@ -787,17 +781,6 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Do any post-flight stuff for a transaction.
 	fn post_dispatch(_pre: Self::Pre, _info: Self::DispatchInfo, _len: usize) { }
-}
-
-/// An error that is returned by a dispatchable function of a module.
-pub trait ModuleDispatchError {
-	/// Convert this error to a `u8`.
-	///
-	/// The `u8` corresponds to the index of the variant in the error enum.
-	fn as_u8(&self) -> u8;
-
-	/// Convert the error to a `&'static str`.
-	fn as_str(&self) -> &'static str;
 }
 
 #[impl_for_tuples(1, 12)]

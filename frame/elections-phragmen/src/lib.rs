@@ -83,9 +83,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
+use sp_runtime::{print, DispatchResult, traits::{Zero, StaticLookup, Bounded, Convert}};
 use frame_support::{
-	decl_storage, decl_event, ensure, decl_module, dispatch, weights::SimpleDispatchInfo,
+	decl_storage, decl_event, ensure, decl_module, weights::SimpleDispatchInfo,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason
@@ -373,7 +373,7 @@ decl_module! {
 				return Ok(());
 			}
 
-			return Err("origin is not a candidate, member or a runner up.");
+			Err("origin is not a candidate, member or a runner up.")?
 		}
 
 		/// Remove a particular member from the set. This is effective immediately and the bond of
@@ -390,7 +390,7 @@ decl_module! {
 		/// Writes: O(do_phragmen)
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(2_000_000)]
-		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) -> dispatch::Result {
+		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
@@ -402,7 +402,7 @@ decl_module! {
 				if !had_replacement {
 					Self::do_phragmen();
 				}
-			})
+			}).map_err(Into::into)
 		}
 
 		/// What to do at the end of each block. Checks if an election needs to happen or not.
@@ -566,7 +566,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// Runs phragmen election and cleans all the previous candidate state. The voter state is NOT
 	/// cleaned and voters must themselves submit a transaction to retract.
-	fn end_block(block_number: T::BlockNumber) -> dispatch::Result {
+	fn end_block(block_number: T::BlockNumber) -> DispatchResult {
 		if !Self::term_duration().is_zero() {
 			if (block_number % Self::term_duration()).is_zero() {
 				Self::do_phragmen();
@@ -768,6 +768,7 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 
 	parameter_types! {

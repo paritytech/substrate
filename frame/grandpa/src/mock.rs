@@ -64,6 +64,7 @@ impl frame_system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
+	type ModuleToIndex = ();
 }
 
 mod grandpa {
