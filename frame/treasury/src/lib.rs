@@ -166,7 +166,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::RejectOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
+			T::RejectOrigin::ensure_origin(origin)?;
 			let proposal = <Proposals<T>>::take(proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
 
 			let value = proposal.bond;
@@ -184,7 +184,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::ApproveOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
+			T::ApproveOrigin::ensure_origin(origin)?;
 
 			ensure!(<Proposals<T>>::exists(proposal_id), Error::<T>::InvalidProposalIndex);
 
