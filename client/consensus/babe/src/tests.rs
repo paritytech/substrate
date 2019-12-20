@@ -32,7 +32,7 @@ use sc_network_test::*;
 use sc_network_test::{Block as TestBlock, PeersClient};
 use sc_network::config::{BoxFinalityProofRequestBuilder, ProtocolConfig};
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
-use tokio::runtime::Runtime;
+use tokio::runtime::current_thread;
 use sc_client_api::BlockchainEvents;
 use log::debug;
 use std::{time::Duration, cell::RefCell};
@@ -347,7 +347,7 @@ fn run_one_test(
 
 	let net = Arc::new(Mutex::new(net));
 	let mut import_notifications = Vec::new();
-	let mut runtime = Runtime::new().unwrap();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut keystore_paths = Vec::new();
 
 	for (peer_id, seed) in peers {
@@ -403,20 +403,16 @@ fn run_one_test(
 			babe_link: data.link.clone(),
 			keystore,
 			can_author_with: sp_consensus::AlwaysCanAuthor,
-		}).expect("Starts babe"));
+		}).expect("Starts babe").unit_error().compat());
 	}
 
 	runtime.spawn(futures::future::poll_fn(move |_| {
 		net.lock().poll();
 		std::task::Poll::<()>::Pending
-	}));
+	}).unit_error().compat());
 
-	let timed_out = future::select(
-		future::join_all(import_notifications),
-		futures_timer::Delay::new(std::time::Duration::from_secs(60))
-	).map(drop);
-
-	runtime.block_on(timed_out);
+	runtime.block_on(future::join_all(import_notifications)
+		.unit_error().compat()).unwrap();
 }
 
 #[test]
