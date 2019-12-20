@@ -79,7 +79,7 @@ mod tests {
 
 			COMPLEXTYPE1: ::std::vec::Vec<<T as Trait>::Origin>;
 			COMPLEXTYPE2: (Vec<Vec<(u16,Box<(  )>)>>, u32);
-			COMPLEXTYPE3: ([u32;25]);
+			COMPLEXTYPE3: [u32;25];
 		}
 		add_extra_genesis {
 			build(|_| {});
