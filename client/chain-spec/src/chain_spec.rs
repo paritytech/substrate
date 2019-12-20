@@ -80,7 +80,7 @@ impl<'a, G: RuntimeGenesis, E> BuildStorage for &'a ChainSpec<G, E> {
 					let child_info = ChildInfo::resolve_child_info(
 						child_content.child_type,
 						child_content.child_info.as_slice(),
-					).expect("chainspec contains correct content").to_owned();
+					).expect("chain spec contains correct content").to_owned();
 					(
 						sk.0,
 						StorageChild {
