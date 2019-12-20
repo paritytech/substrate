@@ -54,11 +54,18 @@ fn should_submit_unsigned_transaction() {
 
 #[test]
 fn should_submit_signed_transaction() {
+	use pallet_im_online::sr25519 as im_online_crypto;
+	use sp_application_crypto::traits::AppKey;
+
 	let mut t = new_test_ext(COMPACT_CODE, false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let mut keystore = KeyStore::new();
+	let keystore = KeyStore::new();
+	keystore.write().sr25519_generate_new(
+		im_online_crypto::AuthorityPair::ID,
+		Some("hunter2")
+	);
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
