@@ -167,6 +167,7 @@ fn get_app<'a, 'b>() -> App<'a, 'b> {
 			[network] -n, --network <network> 'Specify a network. One of substrate \
 									 (default), polkadot, kusama, dothereum, edgeware, or kulupu'
 			[password] -p, --password <password> 'The password for the key'
+			--password-interactive 'You will be prompted for the password for the key.'
 		")
 		.subcommands(vec![
 			SubCommand::with_name("generate")
@@ -177,8 +178,9 @@ fn get_app<'a, 'b>() -> App<'a, 'b> {
 				"),
 			SubCommand::with_name("inspect")
 				.about("Gets a public key and a SS58 address from the provided Secret URI")
-				.args_from_usage("<uri> 'A Key URI to be inspected. May be a secret seed, \
-						secret URI (with derivation paths and password), SS58 or public URI.'
+				.args_from_usage("[uri] 'A Key URI to be inspected. May be a secret seed, \
+						secret URI (with derivation paths and password), SS58 or public URI. \
+						If not given, you will be prompted for the URI.'
 				"),
 			SubCommand::with_name("sign")
 				.about("Sign a message, provided on STDIN, with a given (secret) key")
@@ -240,7 +242,21 @@ where
 	SignatureOf<C>: SignatureT,
 	PublicOf<C>: PublicT,
 {
+	let password_interactive = matches.is_present("password-interactive");
 	let password = matches.value_of("password");
+
+	let password = if password.is_some() && password_interactive {
+		panic!("`--password` given and `--password-interactive` selected!");
+	} else if password_interactive {
+		Some(
+			rpassword::read_password_from_tty(Some("Key password: "))
+				.expect("Reads password from tty")
+		)
+	} else {
+		password.map(Into::into)
+	};
+	let password = password.as_ref().map(String::as_str);
+
 	let maybe_network: Option<Ss58AddressFormat> = matches.value_of("network").map(|network| {
 		network
 			.try_into()
@@ -255,10 +271,13 @@ where
 			C::print_from_uri(mnemonic.phrase(), password, maybe_network);
 		}
 		("inspect", Some(matches)) => {
-			let uri = matches
-				.value_of("uri")
-				.expect("URI parameter is required; thus it can't be None; qed");
-			C::print_from_uri(uri, password, maybe_network);
+			let uri = match matches.value_of("uri") {
+				Some(uri) => uri.into(),
+				None => rpassword::read_password_from_tty(Some("URI: "))
+					.expect("Failed to read URI"),
+			};
+
+			C::print_from_uri(&uri, password, maybe_network);
 		}
 		("sign", Some(matches)) => {
 			let should_decode = matches.is_present("hex");
