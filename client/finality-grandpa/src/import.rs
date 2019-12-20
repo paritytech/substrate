@@ -472,7 +472,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC> BlockImport<Block>
 			Some(justification) => {
 				self.import_justification(hash, number, justification, needs_justification).unwrap_or_else(|err| {
 					if needs_justification || enacts_consensus_change {
-						debug!(target: "finality", "Imported block #{} that enacts authority set change with \
+						debug!(target: "afg", "Imported block #{} that enacts authority set change with \
 							invalid justification: {:?}, requesting justification from peers.", number, err);
 						imported_aux.bad_justification = true;
 						imported_aux.needs_justification = true;
@@ -482,7 +482,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC> BlockImport<Block>
 			None => {
 				if needs_justification {
 					trace!(
-						target: "finality",
+						target: "afg",
 						"Imported unjustified block #{} that enacts authority set change, waiting for finality for enactment.",
 						number,
 					);
@@ -573,7 +573,7 @@ where
 
 		match result {
 			Err(CommandOrError::VoterCommand(command)) => {
-				info!(target: "finality", "Imported justification for block #{} that triggers \
+				info!(target: "afg", "Imported justification for block #{} that triggers \
 					command {}, signaling voter.", number, command);
 
 				// send the command to the voter

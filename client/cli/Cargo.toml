@@ -42,5 +42,5 @@ tempfile = "3.1.0"
 
 [features]
 wasmtime = [
-    "sc-service/wasmtime",
+	"sc-service/wasmtime",
 ]

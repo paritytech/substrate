@@ -84,12 +84,13 @@ impl<H: Clone, H2: Clone> Sender<H, H2> {
 
 	/// Some state change (perhaps another extrinsic was included) rendered this extrinsic invalid.
 	pub fn usurped(&mut self, hash: H) {
-		self.send(TransactionStatus::Usurped(hash))
+		self.send(TransactionStatus::Usurped(hash));
+		self.finalized = true;
 	}
 
-	/// Extrinsic has been finalized in block with given hash.
-	pub fn finalized(&mut self, hash: H2) {
-		self.send(TransactionStatus::Finalized(hash));
+	/// Extrinsic has been included in block with given hash.
+	pub fn in_block(&mut self, hash: H2) {
+		self.send(TransactionStatus::InBlock(hash));
 		self.finalized = true;
 	}
 
@@ -103,6 +104,7 @@ impl<H: Clone, H2: Clone> Sender<H, H2> {
 	/// Transaction has been dropped from the pool because of the limit.
 	pub fn dropped(&mut self) {
 		self.send(TransactionStatus::Dropped);
+		self.finalized = true;
 	}
 
 	/// The extrinsic has been broadcast to the given peers.
