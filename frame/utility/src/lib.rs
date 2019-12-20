@@ -54,7 +54,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Utility {
 		/// The set of open multisig operations.
 		pub Multisigs: double_map hasher(twox_64_concat) T::AccountId, twox_64_concat([u8; 32])
-			=> Option<(BalanceOf<T>, T::AccountId, Vec<T::AccountId>)>;
+			=> Option<((T::BlockNumber, u32), BalanceOf<T>, T::AccountId, Vec<T::AccountId>)>;
 	}
 }
 
@@ -70,6 +70,14 @@ decl_error! {
 		NoApprovalsNeeded,
 		/// There are too many signatories in the list.
 		TooManySignatories,
+		/// Multisig operation not found when attempting to cancel.
+		NotFound,
+		/// No timepoint was given, yet the multisig operation is already underway.
+		NoTimepoint,
+		/// A different timepoint was given to the multisig operation that is underway.
+		WrongTimepoint,
+		/// A timepoint was given, yet no multisig operation is underway.
+		UnexpectedTimepoint,
 	}
 }
 
@@ -102,29 +110,36 @@ impl<Call: GetDispatchInfo> PaysFee for Passthrough<Call> {
 	}
 }
 
-/// Simple index-based pass through for the weight functions.
-struct PassthroughMulti<Call, AccountId>(sp_std::marker::PhantomData<(Call, AccountId)>);
+/// A point in time that no two transactions will share.
+pub type Timepoint<T> = (<T as system::Trait>::BlockNumber, u32);
 
-impl<Call, AccountId> PassthroughMulti<Call, AccountId> {
+/// Simple index-based pass through for the weight functions.
+struct PassthroughMulti<Call, AccountId, Timepoint>(
+	sp_std::marker::PhantomData<(Call, AccountId, Timepoint)>
+);
+
+impl<Call, AccountId, Timepoint> PassthroughMulti<Call, AccountId, Timepoint> {
 	fn new() -> Self { Self(Default::default()) }
 }
-impl<Call: GetDispatchInfo, AccountId> WeighData<(&u16, &Vec<AccountId>, &Box<Call>)>
-	for PassthroughMulti<Call, AccountId>
+impl<Call: GetDispatchInfo, AccountId, Timepoint> WeighData<(&u16, &Vec<AccountId>, &Timepoint, &Box<Call>)>
+	for PassthroughMulti<Call, AccountId, Timepoint>
 {
-	fn weigh_data(&self, (_, _, call): (&u16, &Vec<AccountId>, &Box<Call>)) -> Weight {
+	fn weigh_data(&self, (_, _, _, call): (&u16, &Vec<AccountId>, &Timepoint, &Box<Call>)) -> Weight {
 		call.get_dispatch_info().weight + 10_000
 	}
 }
-impl<Call: GetDispatchInfo, AccountId> ClassifyDispatch<(&u16, &Vec<AccountId>, &Box<Call>)>
-	for PassthroughMulti<Call, AccountId>
+impl<Call: GetDispatchInfo, AccountId, Timepoint> ClassifyDispatch<(&u16, &Vec<AccountId>, &Timepoint, &Box<Call>)>
+	for PassthroughMulti<Call, AccountId, Timepoint>
 {
-	fn classify_dispatch(&self, (_, _, call): (&u16, &Vec<AccountId>, &Box<Call>))
+	fn classify_dispatch(&self, (_, _, _, call): (&u16, &Vec<AccountId>, &Timepoint, &Box<Call>))
 		-> DispatchClass
 	{
 		call.get_dispatch_info().class
 	}
 }
-impl<Call: GetDispatchInfo, AccountId> PaysFee for PassthroughMulti<Call, AccountId> {
+impl<Call: GetDispatchInfo, AccountId, Timepoint> PaysFee
+	for PassthroughMulti<Call, AccountId, Timepoint>
+{
 	fn pays_fee(&self) -> bool {
 		true
 	}
@@ -167,10 +182,11 @@ decl_module! {
 		/// Send a call from a deterministic composite account if approved by `threshold` of
 		/// `signatories`.
 		// TODO: make weight dependent on signatories len.
-		#[weight = <PassthroughMulti<<T as Trait>::Call, T::AccountId>>::new()]
+		#[weight = <PassthroughMulti<<T as Trait>::Call, T::AccountId, Option<(T::BlockNumber, u32)>>>::new()]
 		fn as_multi(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
+			maybe_timepoint: Option<(T::BlockNumber, u32)>,
 			call: Box<<T as Trait>::Call>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -186,11 +202,13 @@ decl_module! {
 			let id = Self::multi_account_id(&signatories, threshold);
 			let call_hash = call.using_encoded(blake2_256);
 
-			if let Some((deposit, depositor, mut sigs)) = <Multisigs<T>>::get(&id, call_hash) {
+			if let Some((then, deposit, depositor, mut sigs)) = <Multisigs<T>>::get(&id, call_hash) {
+				let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
+				ensure!(then == timepoint, Error::<T>::WrongTimepoint);
 				if let Err(pos) = sigs.binary_search(&who) {
 					if (sigs.len() as u16) + 1 < threshold {
 						sigs.insert(pos, who);
-						<Multisigs<T>>::insert(&id, call_hash, (deposit, depositor, sigs));
+						<Multisigs<T>>::insert(&id, call_hash, (then, deposit, depositor, sigs));
 						return Ok(())
 					}
 				} else {
@@ -202,10 +220,12 @@ decl_module! {
 				let _ = T::Currency::unreserve(&depositor, deposit);
 				<Multisigs<T>>::remove(&id, call_hash);
 			} else {
+				ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
 				if threshold > 1 {
 					let deposit = T::MultisigDeposit::get();
 					T::Currency::reserve(&who, deposit)?;
-					<Multisigs<T>>::insert(&id, call_hash, (deposit, who.clone(), vec![who]));
+					let now = Self::timepoint();
+					<Multisigs<T>>::insert(&id, call_hash, (now, deposit, who.clone(), vec![who]));
 				} else {
 					call.dispatch(frame_system::RawOrigin::Signed(id).into())?;
 				}
@@ -218,6 +238,7 @@ decl_module! {
 		fn cancel_as_multi(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
+			timepoint: (T::BlockNumber, u32),
 			call_hash: [u8; 32]
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -232,10 +253,12 @@ decl_module! {
 
 			let id = Self::multi_account_id(&signatories, threshold);
 
-			if let Some((deposit, depositor, _)) = <Multisigs<T>>::get(&id, call_hash) {
-				let _ = T::Currency::unreserve(&depositor, deposit);
-				<Multisigs<T>>::remove(&id, call_hash);
-			}
+			let (then, deposit, depositor, _) = <Multisigs<T>>::get(&id, call_hash)
+				.ok_or(Error::<T>::NotFound)?;
+			ensure!(then == timepoint, Error::<T>::WrongTimepoint);
+
+			let _ = T::Currency::unreserve(&depositor, deposit);
+			<Multisigs<T>>::remove(&id, call_hash);
 			Ok(())
 		}
 
@@ -245,6 +268,7 @@ decl_module! {
 		fn approve_as_multi(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
+			maybe_timepoint: Option<(T::BlockNumber, u32)>,
 			call_hash: [u8; 32],
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -259,19 +283,23 @@ decl_module! {
 
 			let id = Self::multi_account_id(&signatories, threshold);
 
-			if let Some((deposit, depositor, mut sigs)) = <Multisigs<T>>::get(&id, call_hash) {
+			if let Some((then, deposit, depositor, mut sigs)) = <Multisigs<T>>::get(&id, call_hash) {
+				let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
+				ensure!(then == timepoint, Error::<T>::WrongTimepoint);
 				if let Err(pos) = sigs.binary_search(&who) {
 					sigs.insert(pos, who);
-					<Multisigs<T>>::insert(id, call_hash, (deposit, depositor, sigs));
+					<Multisigs<T>>::insert(id, call_hash, (then, deposit, depositor, sigs));
 					return Ok(())
 				} else {
 					Err(Error::<T>::AlreadyApproved)?
 				}
 			} else {
 				if threshold > 1 {
+					ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
 					let deposit = T::MultisigDeposit::get();
 					T::Currency::reserve(&who, deposit)?;
-					<Multisigs<T>>::insert(id, call_hash, (deposit, who.clone(), vec![who]));
+					let now = Self::timepoint();
+					<Multisigs<T>>::insert(id, call_hash, (now, deposit, who.clone(), vec![who]));
 					return Ok(())
 				} else {
 					Err(Error::<T>::NoApprovalsNeeded)?
@@ -290,6 +318,10 @@ impl<T: Trait> Module<T> {
 	pub fn multi_account_id(who: &[T::AccountId], threshold: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, threshold).using_encoded(blake2_256);
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+	}
+
+	pub fn timepoint() -> (T::BlockNumber, u32) {
+		(<system::Module<T>>::block_number(), <system::Module<T>>::extrinsic_count())
 	}
 }
 
@@ -395,10 +427,10 @@ mod tests {
 
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
 			let hash = call.using_encoded(blake2_256);
-			assert_ok!(Utility::approve_as_multi(Origin::signed(1), 2, vec![2, 3], hash));
+			assert_ok!(Utility::approve_as_multi(Origin::signed(1), 2, vec![2, 3], None, hash));
 			assert_eq!(Balances::free_balance(6), 0);
 
-			assert_ok!(Utility::as_multi(Origin::signed(2), 2, vec![1, 3], call));
+			assert_ok!(Utility::as_multi(Origin::signed(2), 2, vec![1, 3], Some((1, 0)), call));
 			assert_eq!(Balances::free_balance(6), 15);
 		});
 	}
@@ -413,11 +445,11 @@ mod tests {
 
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
 			let hash = call.using_encoded(blake2_256);
-			assert_ok!(Utility::approve_as_multi(Origin::signed(1), 3, vec![2, 3], hash.clone()));
-			assert_ok!(Utility::approve_as_multi(Origin::signed(2), 3, vec![1, 3], hash.clone()));
+			assert_ok!(Utility::approve_as_multi(Origin::signed(1), 3, vec![2, 3], None, hash.clone()));
+			assert_ok!(Utility::approve_as_multi(Origin::signed(2), 3, vec![1, 3], Some((1, 0)), hash.clone()));
 			assert_eq!(Balances::free_balance(6), 0);
 
-			assert_ok!(Utility::as_multi(Origin::signed(3), 3, vec![1, 2], call));
+			assert_ok!(Utility::as_multi(Origin::signed(3), 3, vec![1, 2], Some((1, 0)), call));
 			assert_eq!(Balances::free_balance(6), 15);
 		});
 	}
@@ -431,10 +463,10 @@ mod tests {
 			assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
 
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
-			assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], call.clone()));
+			assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], None, call.clone()));
 			assert_eq!(Balances::free_balance(6), 0);
 
-			assert_ok!(Utility::as_multi(Origin::signed(2), 2, vec![1, 3], call));
+			assert_ok!(Utility::as_multi(Origin::signed(2), 2, vec![1, 3], Some((1, 0)), call));
 			assert_eq!(Balances::free_balance(6), 15);
 		});
 	}
@@ -450,10 +482,10 @@ mod tests {
 			let call1 = Box::new(Call::Balances(BalancesCall::transfer(6, 10)));
 			let call2 = Box::new(Call::Balances(BalancesCall::transfer(7, 5)));
 
-			assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], call1.clone()));
-			assert_ok!(Utility::as_multi(Origin::signed(2), 2, vec![1, 3], call2.clone()));
-			assert_ok!(Utility::as_multi(Origin::signed(3), 2, vec![1, 2], call2));
-			assert_ok!(Utility::as_multi(Origin::signed(3), 2, vec![1, 2], call1));
+			assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], None, call1.clone()));
+			assert_ok!(Utility::as_multi(Origin::signed(2), 2, vec![1, 3], None, call2.clone()));
+			assert_ok!(Utility::as_multi(Origin::signed(3), 2, vec![1, 2], Some((1, 0)), call2));
+			assert_ok!(Utility::as_multi(Origin::signed(3), 2, vec![1, 2], Some((1, 0)), call1));
 
 			assert_eq!(Balances::free_balance(6), 10);
 			assert_eq!(Balances::free_balance(7), 5);
@@ -469,13 +501,13 @@ mod tests {
 			assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
 
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 10)));
-			assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], call.clone()));
-			assert_ok!(Utility::as_multi(Origin::signed(2), 2, vec![1, 3], call.clone()));
+			assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], None, call.clone()));
+			assert_ok!(Utility::as_multi(Origin::signed(2), 2, vec![1, 3], Some((1, 0)), call.clone()));
 			assert_eq!(Balances::free_balance(multi), 5);
 
-			assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], call.clone()));
+			assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], None, call.clone()));
 			assert_noop!(
-				Utility::as_multi(Origin::signed(3), 2, vec![1, 2], call),
+				Utility::as_multi(Origin::signed(3), 2, vec![1, 2], Some((1, 0)), call),
 				"balance too low to send value",
 			);
 		});
@@ -486,7 +518,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
 			assert_noop!(
-				Utility::as_multi(Origin::signed(1), 0, vec![2], call),
+				Utility::as_multi(Origin::signed(1), 0, vec![2], None, call),
 				Error::<Test>::ZeroThreshold,
 			);
 		});
@@ -497,7 +529,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
 			assert_noop!(
-				Utility::as_multi(Origin::signed(1), 2, vec![2, 3, 4], call.clone()),
+				Utility::as_multi(Origin::signed(1), 2, vec![2, 3, 4], None, call.clone()),
 				Error::<Test>::TooManySignatories,
 			);
 		});
@@ -508,14 +540,14 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
 			let hash = call.using_encoded(blake2_256);
-			assert_ok!(Utility::approve_as_multi(Origin::signed(1), 2, vec![2, 3], hash.clone()));
-			assert_ok!(Utility::approve_as_multi(Origin::signed(2), 2, vec![1, 3], hash.clone()));
+			assert_ok!(Utility::approve_as_multi(Origin::signed(1), 2, vec![2, 3], None, hash.clone()));
+			assert_ok!(Utility::approve_as_multi(Origin::signed(2), 2, vec![1, 3], Some((1, 0)), hash.clone()));
 			assert_noop!(
-				Utility::approve_as_multi(Origin::signed(1), 2, vec![2, 3], hash.clone()),
+				Utility::approve_as_multi(Origin::signed(1), 2, vec![2, 3], Some((1, 0)), hash.clone()),
 				Error::<Test>::AlreadyApproved,
 			);
 			assert_noop!(
-				Utility::approve_as_multi(Origin::signed(2), 2, vec![1, 3], hash.clone()),
+				Utility::approve_as_multi(Origin::signed(2), 2, vec![1, 3], Some((1, 0)), hash.clone()),
 				Error::<Test>::AlreadyApproved,
 			);
 		});
@@ -532,14 +564,14 @@ mod tests {
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
 			let hash = call.using_encoded(blake2_256);
 			assert_noop!(
-				Utility::approve_as_multi(Origin::signed(1), 1, vec![2, 3], hash.clone()),
+				Utility::approve_as_multi(Origin::signed(1), 1, vec![2, 3], None, hash.clone()),
 				Error::<Test>::NoApprovalsNeeded,
 			);
 			assert_noop!(
-				Utility::as_multi(Origin::signed(4), 1, vec![2, 3], call.clone()),
+				Utility::as_multi(Origin::signed(4), 1, vec![2, 3], None, call.clone()),
 				"balance too low to send value",
 			);
-			assert_ok!(Utility::as_multi(Origin::signed(1), 1, vec![2, 3], call));
+			assert_ok!(Utility::as_multi(Origin::signed(1), 1, vec![2, 3], None, call));
 
 			assert_eq!(Balances::free_balance(6), 15);
 		});
