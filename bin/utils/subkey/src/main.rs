@@ -156,23 +156,25 @@ impl PublicT for sr25519::Public { fn into_runtime(self) -> AccountPublic { self
 impl PublicT for ed25519::Public { fn into_runtime(self) -> AccountPublic { self.into() } }
 impl PublicT for ecdsa::Public { fn into_runtime(self) -> AccountPublic { self.into() } }
 
-fn main() {
+fn get_usage() -> String {
 	let networks = Ss58AddressFormat::all().iter().cloned().map(String::from).join("/");
 	let default_network = String::from(Ss58AddressFormat::default());
-	let usage = format!("
+	format!("
 		-e, --ed25519 'Use Ed25519/BIP39 cryptography'
 		-k, --secp256k1 'Use SECP256k1/ECDSA/BIP39 cryptography'
 		-s, --sr25519 'Use Schnorr/Ristretto x25519/BIP39 cryptography'
 		[network] -n, --network <network> 'Specify a network. One of {}. Default is {}'
 		[password] -p, --password <password> 'The password for the key'
 		--password-interactive 'You will be prompted for the password for the key.'
-	", networks, default_network);
+	", networks, default_network)
+}
 
-	let matches = App::new("subkey")
+fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
+	App::new("subkey")
 		.author("Parity Team <admin@parity.io>")
 		.about("Utility for generating and restoring with Substrate keys")
 		.version(env!("CARGO_PKG_VERSION"))
-		.args_from_usage(&usage)
+		.args_from_usage(usage)
 		.subcommands(vec![
 			SubCommand::with_name("generate")
 				.about("Generate a random account")
@@ -226,7 +228,12 @@ fn main() {
 					<sig> 'Signature, hex-encoded.'
 					<uri> 'The public or secret key URI.'
 				"),
-		]).get_matches();
+		])
+}
+
+fn main() {
+	let usage = get_usage();
+	let matches = get_app(&usage).get_matches();
 
 	if matches.is_present("ed25519") {
 		return execute::<Ed25519>(matches)
@@ -553,7 +560,8 @@ mod tests {
 		SignatureOf<CryptoType>: SignatureT,
 		PublicOf<CryptoType>: PublicT,
 	{
-		let app = get_app();
+		let usage = get_usage();
+		let app = get_app(&usage);
 		let password = None;
 
 		// Generate public key and seed.
@@ -581,7 +589,7 @@ mod tests {
 		// Verify the previous signature.
 		let arg_vec = vec!["subkey", "verify", &signature[..], &public_key[..]];
 
-		let matches = get_app().get_matches_from(arg_vec);
+		let matches = get_app(&usage).get_matches_from(arg_vec);
 		let matches = matches.subcommand().1.unwrap();
 		assert!(do_verify::<CryptoType>(matches, message));
 	}
