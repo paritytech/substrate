@@ -15,11 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use codec::{Encode, Decode};
-use runtime_support::{
+use frame_support::{
 	Hashable,
 };
-use state_machine::TestExternalities as CoreTestExternalities;
-use primitives::{
+use sp_state_machine::TestExternalities as CoreTestExternalities;
+use sp_core::{
 	Blake2Hasher, NeverNativeValue, NativeOrEncoded,
 	traits::CodeExecutor,
 };
@@ -53,8 +53,8 @@ pub fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 	node_testing::keyring::sign(xt, VERSION, GENESIS_HASH)
 }
 
-pub fn default_transfer_call() -> balances::Call<Runtime> {
-	balances::Call::transfer::<Runtime>(bob().into(), 69 * DOLLARS)
+pub fn default_transfer_call() -> pallet_balances::Call<Runtime> {
+	pallet_balances::Call::transfer::<Runtime>(bob().into(), 69 * DOLLARS)
 }
 
 pub fn from_block_number(n: u32) -> Header {
@@ -100,7 +100,7 @@ pub fn construct_block(
 	parent_hash: Hash,
 	extrinsics: Vec<CheckedExtrinsic>,
 ) -> (Vec<u8>, Hash) {
-	use trie::{TrieConfiguration, trie_types::Layout};
+	use sp_trie::{TrieConfiguration, trie_types::Layout};
 
 	// sign extrinsics.
 	let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();

@@ -15,13 +15,14 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use codec::{Encode, Joiner};
-use runtime_support::{
+use frame_support::{
 	StorageValue, StorageMap,
 	traits::Currency,
 	weights::GetDispatchInfo,
 };
-use primitives::{
+use sp_core::{
 	Blake2Hasher, NeverNativeValue, map,
+	storage::Storage,
 };
 use sp_runtime::{
 	Fixed64,
@@ -60,11 +61,11 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		vec![
 			CheckedExtrinsic {
 			signed: None,
-			function: Call::Timestamp(timestamp::Call::set(42 * 1000)),
+			function: Call::Timestamp(pallet_timestamp::Call::set(42 * 1000)),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
-				function: Call::System(system::Call::fill_block()),
+				function: Call::System(frame_system::Call::fill_block()),
 			}
 		]
 	);
@@ -77,11 +78,11 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		vec![
 			CheckedExtrinsic {
 			signed: None,
-			function: Call::Timestamp(timestamp::Call::set(52 * 1000)),
+			function: Call::Timestamp(pallet_timestamp::Call::set(52 * 1000)),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(1, 0))),
-				function: Call::System(system::Call::remark(vec![0; 1])),
+				function: Call::System(frame_system::Call::remark(vec![0; 1])),
 			}
 		]
 	);
@@ -131,19 +132,22 @@ fn transaction_fee_is_correct_ultimate() {
 	//   - 1 MILLICENTS in substrate node.
 	//   - 1 milli-dot based on current polkadot runtime.
 	// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
-	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
-		<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
-			(100 * DOLLARS).encode()
-		},
-		<balances::FreeBalance<Runtime>>::hashed_key_for(bob()) => {
-			(10 * DOLLARS).encode()
-		},
-		<balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
-			(110 * DOLLARS).encode()
-		},
-		<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
-		<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
-	], map![]));
+	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, Storage {
+		top: map![
+			<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
+				(100 * DOLLARS).encode()
+			},
+			<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(bob()) => {
+				(10 * DOLLARS).encode()
+			},
+			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
+				(110 * DOLLARS).encode()
+			},
+			<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
+			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
+		],
+		children: map![],
+	});
 
 	let tip = 1_000_000;
 	let xt = sign(CheckedExtrinsic {
@@ -220,12 +224,12 @@ fn block_weight_capacity_report() {
 		let num_transfers = block_number * factor;
 		let mut xts = (0..num_transfers).map(|i| CheckedExtrinsic {
 			signed: Some((charlie(), signed_extra(nonce + i as Index, 0))),
-			function: Call::Balances(balances::Call::transfer(bob().into(), 0)),
+			function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 0)),
 		}).collect::<Vec<CheckedExtrinsic>>();
 
 		xts.insert(0, CheckedExtrinsic {
 			signed: None,
-			function: Call::Timestamp(timestamp::Call::set(time * 1000)),
+			function: Call::Timestamp(pallet_timestamp::Call::set(time * 1000)),
 		});
 
 		// NOTE: this is super slow. Can probably be improved.
@@ -292,11 +296,11 @@ fn block_length_capacity_report() {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(time * 1000)),
+					function: Call::Timestamp(pallet_timestamp::Call::set(time * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(nonce, 0))),
-					function: Call::System(system::Call::remark(vec![0u8; (block_number * factor) as usize])),
+					function: Call::System(frame_system::Call::remark(vec![0u8; (block_number * factor) as usize])),
 				},
 			]
 		);

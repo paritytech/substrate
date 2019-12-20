@@ -17,13 +17,13 @@
 use node_runtime::{
 	Call, Runtime, SubmitTransaction,
 };
-use primitives::testing::{KeyStore, ED25519, SR25519};
-use primitives::traits::{KeystoreExt, BareCryptoStorePtr};
-use primitives::offchain::{
+use sp_core::testing::{KeyStore, ED25519, SR25519};
+use sp_core::traits::{KeystoreExt, BareCryptoStorePtr};
+use sp_core::offchain::{
 	TransactionPoolExt,
 	testing::TestTransactionPoolExt,
 };
-use system::offchain::{SubmitSignedTransaction, SubmitUnsignedTransaction};
+use frame_system::offchain::{SubmitSignedTransaction, SubmitUnsignedTransaction};
 
 mod common;
 use self::common::*;
@@ -36,14 +36,14 @@ fn should_submit_unsigned_transaction() {
 
 	t.execute_with(|| {
 		let signature = Default::default();
-		let heartbeat_data = imonline::Heartbeat {
+		let heartbeat_data = pallet_im_online::Heartbeat {
 			block_number: 1,
 			network_state: Default::default(),
 			session_index: 1,
 			authority_index: 0,
 		};
 
-		let call = imonline::Call::heartbeat(heartbeat_data, signature);
+		let call = pallet_im_online::Call::heartbeat(heartbeat_data, signature);
 		<SubmitTransaction as SubmitUnsignedTransaction<Runtime, Call>>
 			::submit_unsigned(call)
 			.unwrap();
@@ -62,7 +62,7 @@ fn should_submit_signed_transaction() {
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
-		let call = balances::Call::transfer(Default::default(), Default::default());
+		let call = pallet_balances::Call::transfer(Default::default(), Default::default());
 		let results =
 			<SubmitTransaction as SubmitSignedTransaction<Runtime, Call>>::submit_signed(call);
 
