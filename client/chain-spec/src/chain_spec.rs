@@ -129,6 +129,7 @@ enum Genesis<G> {
 	Raw(RawGenesis),
 }
 
+/// A configuration of a client. Does not include runtime storage initialization.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
