@@ -71,13 +71,16 @@ use prost::Message;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, ProvideRuntimeApi};
 
-type Interval = Box<dyn Stream<Item = ()> + Unpin + Send + Sync>;
+#[cfg(test)]
+mod tests;
 
 mod error;
 /// Dht payload schemas generated from Protobuf definitions via Prost crate in build.rs.
 mod schema {
 	include!(concat!(env!("OUT_DIR"), "/authority_discovery.rs"));
 }
+
+type Interval = Box<dyn Stream<Item = ()> + Unpin + Send + Sync>;
 
 /// Upper bound estimation on how long one should wait before accessing the Kademlia DHT.
 const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
@@ -96,7 +99,7 @@ const MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY: usize = 5;
 pub struct AuthorityDiscovery<Client, Network, Block>
 where
 	Block: BlockT + 'static,
-	Network: NetworkProvider + NetworkStateInfo,
+	Network: NetworkProvider,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block>,
 {
@@ -134,7 +137,7 @@ where
 impl<Client, Network, Block> AuthorityDiscovery<Client, Network, Block>
 where
 	Block: BlockT + Unpin + 'static,
-	Network: NetworkProvider + NetworkStateInfo,
+	Network: NetworkProvider,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
 	Self: Future<Output = ()>,
@@ -431,7 +434,7 @@ where
 impl<Client, Network, Block> Future for AuthorityDiscovery<Client, Network, Block>
 where
 	Block: BlockT + Unpin + 'static,
-	Network: NetworkProvider + NetworkStateInfo,
+	Network: NetworkProvider,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
 {
@@ -479,7 +482,7 @@ where
 /// NetworkProvider provides AuthorityDiscovery with all necessary hooks into the underlying
 /// Substrate networking. Using this trait abstraction instead of NetworkService directly is
 /// necessary to unit test AuthorityDiscovery.
-pub trait NetworkProvider {
+pub trait NetworkProvider: NetworkStateInfo {
 	/// Modify a peerset priority group.
 	fn set_priority_group(
 		&self,
@@ -530,6 +533,3 @@ fn interval_at(start: Instant, duration: Duration) -> Interval {
 
 	Box::new(stream)
 }
-
-#[cfg(test)]
-mod tests;
