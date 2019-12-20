@@ -167,11 +167,13 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::ensure_origin(origin)?;
-			let proposal = <Proposals<T>>::take(proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
+			let proposal = <Proposals<T>>::take(&proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
 
 			let value = proposal.bond;
 			let imbalance = T::Currency::slash_reserved(&proposal.proposer, value).0;
 			T::ProposalRejection::on_unbalanced(imbalance);
+
+			Self::deposit_event(Event::<T>::Rejected(proposal_id, value));
 		}
 
 		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
@@ -244,6 +246,8 @@ decl_event!(
 		Spending(Balance),
 		/// Some funds have been allocated.
 		Awarded(ProposalIndex, Balance, AccountId),
+		/// A proposal was rejected; funds were slashed.
+		Rejected(ProposalIndex, Balance),
 		/// Some of our funds have been burnt.
 		Burnt(Balance),
 		/// Spending has finished; this is the amount that rolls over until next spend.
