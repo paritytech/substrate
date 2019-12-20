@@ -61,7 +61,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn candidate(origin) -> dispatch::Result {
+//! 		pub fn candidate(origin) -> dispatch::DispatchResult {
 //! 			let who = ensure_signed(origin)?;
 //!
 //! 			let _ = <scored_pool::Module<T>>::submit_candidacy(
@@ -261,7 +261,7 @@ decl_module! {
 			// `None` are always sorted to the end.
 			if let Err(e) = <Pool<T, I>>::append(&[(who.clone(), None)]) {
 				T::Currency::unreserve(&who, deposit);
-				return Err(e);
+				Err(e)?
 			}
 
 			<CandidateExists<T, I>>::insert(&who, true);

@@ -98,7 +98,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 		// validated by the code preparation process. However, because panics are really
 		// undesirable in the runtime code, we treat this as a trap for now. Eventually, we might
 		// want to revisit this.
-		Ok(_) => Err(ExecError { reason: "return type error", buffer: runtime.scratch_buf }),
+		Ok(_) => Err(ExecError { reason: "return type error".into(), buffer: runtime.scratch_buf }),
 		// `Error::Module` is returned only if instantiation or linking failed (i.e.
 		// wasm binary tried to import a function that is not provided by the host).
 		// This shouldn't happen because validation process ought to reject such binaries.
@@ -106,10 +106,10 @@ pub(crate) fn to_execution_result<E: Ext>(
 		// Because panics are really undesirable in the runtime code, we treat this as
 		// a trap for now. Eventually, we might want to revisit this.
 		Err(sp_sandbox::Error::Module) =>
-			Err(ExecError { reason: "validation error", buffer: runtime.scratch_buf }),
+			Err(ExecError { reason: "validation error".into(), buffer: runtime.scratch_buf }),
 		// Any other kind of a trap should result in a failure.
 		Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
-			Err(ExecError { reason: "during execution", buffer: runtime.scratch_buf }),
+			Err(ExecError { reason: "during execution".into(), buffer: runtime.scratch_buf }),
 	}
 }
 

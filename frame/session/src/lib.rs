@@ -483,14 +483,14 @@ decl_module! {
 		/// - One extra DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
-		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::Result {
+		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(keys.ownership_proof_is_valid(&proof), "invalid ownership proof");
 
 			let who = match T::ValidatorIdOf::convert(who) {
 				Some(val_id) => val_id,
-				None => return Err("no associated validator ID for account."),
+				None => Err("no associated validator ID for account.")?,
 			};
 
 			Self::do_set_keys(&who, keys)?;
@@ -631,7 +631,7 @@ impl<T: Trait> Module<T> {
 
 	// perform the set_key operation, checking for duplicates.
 	// does not set `Changed`.
-	fn do_set_keys(who: &T::ValidatorId, keys: T::Keys) -> dispatch::Result {
+	fn do_set_keys(who: &T::ValidatorId, keys: T::Keys) -> dispatch::DispatchResult {
 		let old_keys = Self::load_keys(&who);
 
 		for id in T::Keys::key_ids() {
