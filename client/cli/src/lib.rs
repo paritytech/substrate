@@ -57,7 +57,7 @@ use params::{
 	NodeKeyParams, NodeKeyType, Cors, CheckBlockCmd,
 };
 pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy};
-pub use traits::{GetLogFilter, AugmentClap};
+pub use traits::{GetSharedParams, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
@@ -195,7 +195,7 @@ pub fn parse_and_prepare<'a, CC, RP, I>(
 	args: I,
 ) -> ParseAndPrepare<'a, CC, RP>
 where
-	CC: StructOpt + Clone + GetLogFilter,
+	CC: StructOpt + Clone + GetSharedParams,
 	RP: StructOpt + Clone + AugmentClap,
 	I: IntoIterator,
 	<I as IntoIterator>::Item: Into<std::ffi::OsString> + Clone,
@@ -216,10 +216,9 @@ where
 		.setting(AppSettings::SubcommandsNegateReqs)
 		.get_matches_from(args);
 	let cli_args = CoreParams::<CC, RP>::from_clap(&matches);
-	init_logger(cli_args.get_log_filter().as_ref().map(|v| v.as_ref()).unwrap_or(""));
 	fdlimit::raise_fd_limit();
 
-	match cli_args {
+	let args = match cli_args {
 		params::CoreParams::Run(params) => ParseAndPrepare::Run(
 			ParseAndPrepareRun { params, impl_name, version }
 		),
@@ -242,7 +241,9 @@ where
 			ParseAndPrepareRevert { params, version }
 		),
 		params::CoreParams::Custom(params) => ParseAndPrepare::CustomCommand(params),
-	}
+	};
+	init_logger(args.shared_params().and_then(|p| p.log.as_ref()).map(|v| v.as_ref()).unwrap_or(""));
+	args
 }
 
 /// Returns a string displaying the node role, special casing the sentry mode
@@ -275,6 +276,22 @@ pub enum ParseAndPrepare<'a, CC, RP> {
 	RevertChain(ParseAndPrepareRevert<'a>),
 	/// An additional custom command passed to `parse_and_prepare`.
 	CustomCommand(CC),
+}
+
+impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> where CC: GetSharedParams {
+	/// Return common set of parameters shared by all commands.
+	pub fn shared_params(&self) -> Option<&SharedParams> {
+		match self {
+			ParseAndPrepare::Run(c) => Some(&c.params.left.shared_params),
+			ParseAndPrepare::BuildSpec(c) => Some(&c.params.shared_params),
+			ParseAndPrepare::ExportBlocks(c) => Some(&c.params.shared_params),
+			ParseAndPrepare::ImportBlocks(c) => Some(&c.params.shared_params),
+			ParseAndPrepare::CheckBlock(c) => Some(&c.params.shared_params),
+			ParseAndPrepare::PurgeChain(c) => Some(&c.params.shared_params),
+			ParseAndPrepare::RevertChain(c) => Some(&c.params.shared_params),
+			ParseAndPrepare::CustomCommand(c) => c.shared_params(),
+		}
+	}
 }
 
 /// Command ready to run the main client.

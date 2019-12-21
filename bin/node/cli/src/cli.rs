@@ -21,7 +21,7 @@ use sc_cli::{IntoExit, NoCustom, SharedParams, ImportParams, error};
 use sc_service::{AbstractService, Roles as ServiceRoles, Configuration};
 use log::info;
 use structopt::{StructOpt, clap::App};
-use sc_cli::{display_role, parse_and_prepare, AugmentClap, GetLogFilter, ParseAndPrepare};
+use sc_cli::{display_role, parse_and_prepare, AugmentClap, GetSharedParams, ParseAndPrepare};
 use crate::{service, ChainSpec, load_spec};
 use crate::factory_impl::FactoryState;
 use node_transaction_factory::RuntimeAdapter;
@@ -38,9 +38,11 @@ pub enum CustomSubcommands {
 	Factory(FactoryCmd),
 }
 
-impl GetLogFilter for CustomSubcommands {
-	fn get_log_filter(&self) -> Option<String> {
-		None
+impl GetSharedParams for CustomSubcommands {
+	fn shared_params(&self) -> Option<&SharedParams> {
+		match self {
+			CustomSubcommands::Factory(cmd) => Some(&cmd.shared_params),
+		}
 	}
 }
 
