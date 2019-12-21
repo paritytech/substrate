@@ -17,7 +17,6 @@
 //! Runtime Modules shared primitive types.
 
 #![warn(missing_docs)]
-#![allow(unused_variables)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // to allow benchmarking

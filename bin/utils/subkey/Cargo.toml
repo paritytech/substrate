@@ -20,6 +20,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0" }
 frame-system = { version = "2.0.0", path = "../../../frame/system" }
 pallet-balances = { version = "2.0.0", path = "../../../frame/balances" }
 pallet-transaction-payment = { version = "2.0.0", path = "../../../frame/transaction-payment" }
+rpassword = "4.0.1"
 
 [features]
 bench = []

@@ -1186,7 +1186,7 @@ macro_rules! decl_module {
 		{
 			#[doc(hidden)]
 			#[codec(skip)]
-			__PhantomItem($crate::sp_std::marker::PhantomData<($trait_instance $(, $instance)?)>, $crate::dispatch::Never),
+			__PhantomItem($crate::sp_std::marker::PhantomData<($trait_instance, $($instance)?)>, $crate::dispatch::Never),
 			$( $generated_variants )*
 		}
 	};
@@ -1224,7 +1224,7 @@ macro_rules! decl_module {
 		pub struct $mod_type<
 			$trait_instance: $trait_name
 			$(<I>, $instance: $instantiable $( = $module_default_instance)?)?
-		>($crate::sp_std::marker::PhantomData<($trait_instance $(, $instance)?)>) where
+		>($crate::sp_std::marker::PhantomData<($trait_instance, $( $instance)?)>) where
 			$( $other_where_bounds )*;
 
 		$crate::decl_module! {
@@ -1671,7 +1671,7 @@ macro_rules! __impl_module_constants_metadata {
 							<I>, $const_instance: $const_instantiable
 						)?
 					>($crate::dispatch::marker::PhantomData<
-						($const_trait_instance $(, $const_instance)?)
+						($const_trait_instance, $( $const_instance)?)
 					>);
 					impl<$const_trait_instance: 'static + $const_trait_name $(
 						<I>, $const_instance: $const_instantiable)?
