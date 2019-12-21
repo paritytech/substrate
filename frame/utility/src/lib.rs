@@ -27,7 +27,7 @@ use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter
 use frame_support::{traits::{Get, ReservableCurrency, Currency}, weights::{
 	SimpleDispatchInfo, GetDispatchInfo, ClassifyDispatch, WeighData, Weight, DispatchClass, PaysFee
 }};
-use frame_system::{self as system, ensure_root, ensure_signed};
+use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -88,7 +88,8 @@ decl_event! {
 		AccountId = <T as system::Trait>::AccountId,
 		BlockNumber = <T as system::Trait>::BlockNumber
 	{
-		BatchExecuted(Vec<Result<(), DispatchError>>),
+		BatchInterrupted(u32, DispatchError),
+		BatchCompleted,
 		NewMultisig(AccountId, AccountId),
 		MultisigApprove(BlockNumber, u32, AccountId, AccountId),
 	}
@@ -111,6 +112,32 @@ impl<Call: GetDispatchInfo> ClassifyDispatch<(&u16, &Box<Call>)> for Passthrough
 	}
 }
 impl<Call: GetDispatchInfo> PaysFee for Passthrough<Call> {
+	fn pays_fee(&self) -> bool {
+		true
+	}
+}
+
+/// Sumation pass-through for the weight function of the batch call.
+///
+/// This just adds all of the weights together of all of the calls.
+struct BatchPassthrough<Call>(sp_std::marker::PhantomData<Call>);
+
+impl<Call> BatchPassthrough<Call> {
+	fn new() -> Self { Self(Default::default()) }
+}
+impl<Call: GetDispatchInfo> WeighData<(&Vec<Call>,)> for BatchPassthrough<Call> {
+	fn weigh_data(&self, (calls,): (&Vec<Call>,)) -> Weight {
+		calls.iter()
+			.map(|call| call.get_dispatch_info().weight)
+			.fold(10_000, |a, n| a + n)
+	}
+}
+impl<Call: GetDispatchInfo> ClassifyDispatch<(&Vec<Call>,)> for BatchPassthrough<Call> {
+	fn classify_dispatch(&self, (_,): (&Vec<Call>,)) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+impl<Call: GetDispatchInfo> PaysFee for BatchPassthrough<Call> {
 	fn pays_fee(&self) -> bool {
 		true
 	}
@@ -164,17 +191,25 @@ decl_module! {
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
-		/// Send a batch of dispatch calls (only root).
-		// TODO: Should also pass through the weights.
-		// TODO: Should not be restricted to Root origin; should duplicate the origin for each.
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		/// Send a batch of dispatch calls.
+		///
+		/// This will execute until the first one fails and then stop.
+		///
+		/// This will return `Ok` in all circumstances. To determine the success of the batch, an
+		/// event is deposited. If a call failed and the batch was interrupted, then the
+		/// `BatchInterrupted` event is deposited, along with the number of successful calls made
+		/// and the error of the failed call. If all were successful, then the `BatchCompleted`
+		/// event is deposited.
+		#[weight = <BatchPassthrough<<T as Trait>::Call>>::new()]
 		fn batch(origin, calls: Vec<<T as Trait>::Call>) {
-			ensure_root(origin)?;
-			let results = calls.into_iter()
-				.map(|call| call.dispatch(frame_system::RawOrigin::Root.into()))
-				.map(|res| res.map_err(Into::into))
-				.collect::<Vec<_>>();
-			Self::deposit_event(Event::<T>::BatchExecuted(results));
+			for (index, call) in calls.into_iter().enumerate() {
+				let result = call.dispatch(origin.clone());
+				if let Err(e) = result {
+					Self::deposit_event(Event::<T>::BatchInterrupted(index as u32, e));
+					return Ok(());
+				}
+			}
+			Self::deposit_event(Event::<T>::BatchCompleted);
 		}
 
 		/// Send a call through an indexed pseudonym of the sender.
@@ -341,7 +376,7 @@ mod tests {
 		weights::Weight
 	};
 	use sp_core::H256;
-	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
+	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test  where system = frame_system {}
@@ -656,23 +691,49 @@ mod tests {
 	}
 
 	#[test]
-	fn batch_works() {
+	fn batch_with_root_works() {
 		new_test_ext().execute_with(|| {
 			assert_eq!(Balances::free_balance(1), 10);
 			assert_eq!(Balances::free_balance(2), 10);
-			assert_noop!(
-				Utility::batch(Origin::signed(1), vec![
-					Call::Balances(BalancesCall::force_transfer(1, 2, 5)),
-					Call::Balances(BalancesCall::force_transfer(1, 2, 5))
-				]),
-				BadOrigin,
-			);
 			assert_ok!(Utility::batch(Origin::ROOT, vec![
 				Call::Balances(BalancesCall::force_transfer(1, 2, 5)),
 				Call::Balances(BalancesCall::force_transfer(1, 2, 5))
 			]));
 			assert_eq!(Balances::free_balance(1), 0);
 			assert_eq!(Balances::free_balance(2), 20);
+		});
+	}
+
+	#[test]
+	fn batch_with_signed_works() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(Balances::free_balance(1), 10);
+			assert_eq!(Balances::free_balance(2), 10);
+			assert_ok!(
+				Utility::batch(Origin::signed(1), vec![
+					Call::Balances(BalancesCall::transfer(2, 5)),
+					Call::Balances(BalancesCall::transfer(2, 5))
+				]),
+			);
+			assert_eq!(Balances::free_balance(1), 0);
+			assert_eq!(Balances::free_balance(2), 20);
+		});
+	}
+
+	#[test]
+	fn batch_early_exit_works() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(Balances::free_balance(1), 10);
+			assert_eq!(Balances::free_balance(2), 10);
+			assert_ok!(
+				Utility::batch(Origin::signed(1), vec![
+					Call::Balances(BalancesCall::transfer(2, 5)),
+					Call::Balances(BalancesCall::transfer(2, 10)),
+					Call::Balances(BalancesCall::transfer(2, 5)),
+				]),
+			);
+			assert_eq!(Balances::free_balance(1), 5);
+			assert_eq!(Balances::free_balance(2), 15);
 		});
 	}
 }
