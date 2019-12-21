@@ -14,23 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::traits::{AugmentClap, GetLogFilter};
+use crate::traits::{AugmentClap, GetSharedParams};
 
 use std::{str::FromStr, path::PathBuf};
 use structopt::{StructOpt, clap::{arg_enum, App, AppSettings, SubCommand, Arg}};
 
 pub use crate::execution_strategy::ExecutionStrategy;
-
-/// Auxiliary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
-macro_rules! impl_get_log_filter {
-	( $type:ident ) => {
-		impl $crate::GetLogFilter for $type {
-			fn get_log_filter(&self) -> Option<String> {
-				self.shared_params.get_log_filter()
-			}
-		}
-	}
-}
 
 impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
 	fn into(self) -> sc_client_api::ExecutionStrategy {
@@ -151,12 +140,6 @@ pub struct ImportParams {
 	/// Specify the state cache size.
 	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
 	pub state_cache_size: usize,
-}
-
-impl GetLogFilter for SharedParams {
-	fn get_log_filter(&self) -> Option<String> {
-		self.log.clone()
-	}
 }
 
 /// Parameters used to create the network configuration.
@@ -723,7 +706,6 @@ fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
 }
 
 impl_augment_clap!(RunCmd);
-impl_get_log_filter!(RunCmd);
 
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt, Clone)]
@@ -747,8 +729,6 @@ pub struct BuildSpecCmd {
 	#[structopt(flatten)]
 	pub node_key_params: NodeKeyParams,
 }
-
-impl_get_log_filter!(BuildSpecCmd);
 
 /// Wrapper type of `String` which holds an arbitary sized unsigned integer formatted as decimal.
 #[derive(Debug, Clone)]
@@ -813,8 +793,6 @@ pub struct ExportBlocksCmd {
 	pub shared_params: SharedParams,
 }
 
-impl_get_log_filter!(ExportBlocksCmd);
-
 /// The `import-blocks` command used to import blocks.
 #[derive(Debug, StructOpt, Clone)]
 pub struct ImportBlocksCmd {
@@ -836,8 +814,6 @@ pub struct ImportBlocksCmd {
 	#[structopt(flatten)]
 	pub import_params: ImportParams,
 }
-
-impl_get_log_filter!(ImportBlocksCmd);
 
 /// The `check-block` command used to validate blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -861,8 +837,6 @@ pub struct CheckBlockCmd {
 	pub import_params: ImportParams,
 }
 
-impl_get_log_filter!(CheckBlockCmd);
-
 /// The `revert` command used revert the chain to a previous state.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RevertCmd {
@@ -875,8 +849,6 @@ pub struct RevertCmd {
 	pub shared_params: SharedParams,
 }
 
-impl_get_log_filter!(RevertCmd);
-
 /// The `purge-chain` command used to remove the whole chain.
 #[derive(Debug, StructOpt, Clone)]
 pub struct PurgeChainCmd {
@@ -888,8 +860,6 @@ pub struct PurgeChainCmd {
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 }
-
-impl_get_log_filter!(PurgeChainCmd);
 
 /// All core commands that are provided by default.
 ///
@@ -924,7 +894,7 @@ pub enum CoreParams<CC, RP> {
 }
 
 impl<CC, RP> StructOpt for CoreParams<CC, RP> where
-	CC: StructOpt + GetLogFilter,
+	CC: StructOpt + GetSharedParams,
 	RP: StructOpt + AugmentClap
 {
 	fn clap<'a, 'b>() -> App<'a, 'b> {
@@ -979,21 +949,6 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 	}
 }
 
-impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
-	fn get_log_filter(&self) -> Option<String> {
-		match self {
-			CoreParams::Run(c) => c.left.get_log_filter(),
-			CoreParams::BuildSpec(c) => c.get_log_filter(),
-			CoreParams::ExportBlocks(c) => c.get_log_filter(),
-			CoreParams::ImportBlocks(c) => c.get_log_filter(),
-			CoreParams::CheckBlock(c) => c.get_log_filter(),
-			CoreParams::PurgeChain(c) => c.get_log_filter(),
-			CoreParams::Revert(c) => c.get_log_filter(),
-			CoreParams::Custom(c) => c.get_log_filter(),
-		}
-	}
-}
-
 /// A special commandline parameter that expands to nothing.
 /// Should be used as custom subcommand/run arguments if no custom values are required.
 #[derive(Clone, Debug, Default)]
@@ -1015,8 +970,8 @@ impl AugmentClap for NoCustom {
 	}
 }
 
-impl GetLogFilter for NoCustom {
-	fn get_log_filter(&self) -> Option<String> {
+impl GetSharedParams for NoCustom {
+	fn shared_params(&self) -> Option<&SharedParams> {
 		None
 	}
 }
