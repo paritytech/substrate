@@ -264,11 +264,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
 		Self::from_ss58check_with_version(s)
 			.and_then(|(r, v)| match v {
-				Ss58AddressFormat::SubstrateAccountDirect => Ok(r),
-				Ss58AddressFormat::PolkadotAccountDirect => Ok(r),
-				Ss58AddressFormat::KusamaAccountDirect => Ok(r),
-				Ss58AddressFormat::DothereumAccountDirect => Ok(r),
-				Ss58AddressFormat::EdgewareAccountDirect => Ok(r),
+				v if !v.is_custom() => Ok(r),
 				v if v == *DEFAULT_VERSION.lock() => Ok(r),
 				_ => Err(PublicError::UnknownVersion),
 			})
@@ -298,11 +294,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	fn from_string(s: &str) -> Result<Self, PublicError> {
 		Self::from_string_with_version(s)
 			.and_then(|(r, v)| match v {
-				Ss58AddressFormat::SubstrateAccountDirect => Ok(r),
-				Ss58AddressFormat::PolkadotAccountDirect => Ok(r),
-				Ss58AddressFormat::KusamaAccountDirect => Ok(r),
-				Ss58AddressFormat::DothereumAccountDirect => Ok(r),
-				Ss58AddressFormat::EdgewareAccountDirect => Ok(r),
+				v if !v.is_custom() => Ok(r),
 				v if v == *DEFAULT_VERSION.lock() => Ok(r),
 				_ => Err(PublicError::UnknownVersion),
 			})
@@ -377,6 +369,14 @@ macro_rules! ss58_address_format {
 			pub fn all() -> &'static [Ss58AddressFormat] {
 				&ALL_SS58_ADDRESS_FORMATS
 			}
+
+			/// Whether the address is custom.
+			pub fn is_custom(&self) -> bool {
+				match self {
+					Self::Custom(_) => true,
+					_ => false,
+				}
+			}
 		}
 
 		impl From<Ss58AddressFormat> for u8 {
@@ -407,6 +407,13 @@ macro_rules! ss58_address_format {
 					$($name => Ok(Ss58AddressFormat::$identifier)),*,
 					a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ()),
 				}
+			}
+		}
+
+		#[cfg(feature = "std")]
+		impl Default for Ss58AddressFormat {
+			fn default() -> Self {
+				*DEFAULT_VERSION.lock()
 			}
 		}
 
@@ -442,12 +449,7 @@ ss58_address_format!(
 /// typically used not just to encode format/version but also network identity) that is used for
 /// encoding and decoding SS58 addresses. If an unknown version is provided then it fails.
 ///
-/// Current known "versions" are:
-/// - 0 direct (payload) checksum for 32-byte *25519 Polkadot addresses.
-/// - 2 direct (payload) checksum for 32-byte *25519 Kusama addresses.
-/// - 7 direct (payload) checksum for 32-byte *25519 Edgeware addresses.
-/// - 20 direct (payload) checksum for 32-byte *25519 Dothereum addresses.
-/// - 42 direct (payload) checksum for 32-byte *25519 addresses on any Substrate-based network.
+/// See `ss58_address_format!` for all current known "versions".
 #[cfg(feature = "std")]
 pub fn set_default_ss58_version(version: Ss58AddressFormat) {
 	*DEFAULT_VERSION.lock() = version
