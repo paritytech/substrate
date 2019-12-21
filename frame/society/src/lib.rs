@@ -217,11 +217,6 @@
 //! * `judge_suspended_member` - The founder origin is able to make judgement on a suspended member.
 //! * `judge_suspended_candidate` - The founder origin is able to make judgement on a suspended candidate.
 //! 
-//! The Society module allows one or more initial accounts to create a membership society.
-//!
-//! An induction process can be customized for new members, allowing candidates to submit their
-//! intention to become members and allowing current members to vote on candidates. Maintenance
-//! or verification requirements on members can also be imposed.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
