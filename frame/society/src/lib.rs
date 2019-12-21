@@ -333,6 +333,15 @@ pub struct Payout<Balance, BlockNumber> {
 	paid: Balance,
 }
 
+/// Status of a vouching member.
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum VouchingStatus {
+	/// Member is currently vouching for a user.
+	Vouching,
+	/// Member is banned from vouching for other members.
+	Banned,
+}
+
 /// Number of strikes that a member has against them.
 pub type StrikeCount = u32;
 
@@ -388,11 +397,11 @@ decl_storage! {
 		/// The set of suspended members.
 		pub SuspendedMembers get(fn suspended_member): map T::AccountId => Option<()>;
 
-		/// The current bids.
+		/// The current bids, stored ordered by the first `BalanceOf` value.
 		Bids: Vec<(BalanceOf<T, I>, T::AccountId, BidKind<T::AccountId, BalanceOf<T, I>>)>;
 
-		/// Members currently vouching, stored ordered
-		Vouching: Vec<T::AccountId>;
+		/// Members currently vouching or banned from vouching again
+		Vouching get(fn vouching): map T::AccountId => Option<VouchingStatus>;
 
 		/// Pending payouts; ordered by block number, with the amount that should be paid out.
 		Payouts: map T::AccountId => Vec<(T::BlockNumber, BalanceOf<T, I>)>;
@@ -425,7 +434,7 @@ decl_module! {
 		/// The minimum amount of a deposit required for a bid to be made.
 		const CandidateDeposit: BalanceOf<T, I> = T::CandidateDeposit::get();
 
-		/// The proportion of the unpaid reward that gets deducted in the case that either a skeptic
+		/// The amount of the unpaid reward that gets deducted in the case that either a skeptic
 		/// doesn't vote or someone votes in the wrong way.
 		const WrongSideDeduction: BalanceOf<T, I> = T::WrongSideDeduction::get();
 
@@ -477,7 +486,7 @@ decl_module! {
 							let _ = T::Currency::unreserve(&who, deposit);
 						}
 						BidKind::Vouch(voucher, _) => {
-							let _ = Self::unset_vouching(&voucher);
+							<Vouching<T, I>>::remove(&voucher);
 						}
 					}
 					Self::deposit_event(RawEvent::Unbid(who));
@@ -488,27 +497,29 @@ decl_module! {
 			)
 		}
 
-		/// Vouch for someone else.
+		/// As a member, vouch for someone else.
 		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			ensure!(Self::is_member(&voucher), Error::<T, I>::NotMember);
 			ensure!(!Self::is_bid(&who), Error::<T, I>::AlreadyBid);
-			Self::set_vouching(voucher.clone())?;
+			ensure!(!<Vouching<T, I>>::exists(&voucher), Error::<T, I>::AlreadyVouching);
 
+			<Vouching<T, I>>::insert(&voucher, VouchingStatus::Vouching);
 			Self::put_bid(who.clone(), value.clone(), BidKind::Vouch(voucher.clone(), tip));
 			Self::deposit_event(RawEvent::Vouch(who, value, voucher));
 			Ok(())
 		}
 
-		/// Only works while candidate is still a bid.
+		/// As a vouching member, unvouch. This only works while candidate is still a bid.
 		pub fn unvouch(origin, pos: u32) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
+			ensure!(Self::vouching(&voucher) == Some(VouchingStatus::Vouching), Error::<T, I>::NotVouching);
 
 			let pos = pos as usize;
 			<Bids<T, I>>::mutate(|b|
 				if pos < b.len() {
 					b[pos].2.check_voucher(&voucher)?;
-					Self::unset_vouching(&voucher)?;
+					<Vouching<T, I>>::remove(&voucher);
 					let who = b.remove(pos).1;
 					Self::deposit_event(RawEvent::Unvouch(who));
 					Ok(())
@@ -612,16 +623,8 @@ decl_module! {
 								let _ = T::Currency::repatriate_reserved(&who, &Self::account_id(), deposit);
 							}
 							BidKind::Vouch(voucher, _) => {
-								// Really shouldn't fail given the conditional we're in.
-								let _ = Self::unset_vouching(&voucher);
-								// Give voucher a strike
-								let strikes = <Strikes<T, I>>::mutate(&voucher, |s| {
-									*s += 1;
-									*s
-								});
-								if strikes >= T::MaxStrikes::get() {
-									Self::suspend_member(&voucher);
-								}
+								// Ban the voucher from vouching again
+								<Vouching<T, I>>::insert(&voucher, VouchingStatus::Banned);
 							}
 						}
 						// Remove suspended candidate
@@ -678,7 +681,7 @@ decl_error! {
 		AlreadyFounded,
 		/// Not enough in pot to accept candidate
 		InsufficientPot,
-		/// Member is already vouching
+		/// Member is already vouching or banned from vouching again
 		AlreadyVouching,
 		/// Member is not vouching
 		NotVouching,
@@ -750,39 +753,12 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			if bids.len() > MAX_BID_COUNT {
 				let (_, popped, kind) = bids.pop().expect("b.len() > 1000; qed");
 				if let BidKind::Vouch(voucher, _) = kind {
-					// needs to be unset. this really shouldn't fail with the above condition.
-					let _ = Self::unset_vouching(&voucher);
+					<Vouching<T, I>>::remove(&voucher);
 				}
 				let _unreserved = T::Currency::unreserve(&popped, T::CandidateDeposit::get());
 				Self::deposit_event(RawEvent::AutoUnbid(popped));
 			}
 		});
-	}
-
-	/// Add a member to the vouching set.
-	fn set_vouching(v: T::AccountId) -> DispatchResult{
-		<Vouching<T, I>>::mutate(|vouchers|
-			match vouchers.binary_search(&v) {
-				Err(i) => {
-					vouchers.insert(i, v);
-					Ok(())
-				}
-				Ok(_) => Err(Error::<T, I>::AlreadyVouching)?,
-			}
-		)
-	}
-
-	/// Remove a member from the vouching set.
-	fn unset_vouching(v: &T::AccountId) -> DispatchResult {
-		<Vouching<T, I>>::mutate(|vouchers|
-			match vouchers.binary_search(&v) {
-				Err(_) => Err(Error::<T, I>::NotVouching)?,
-				Ok(i) => {
-					vouchers.remove(i);
-					Ok(())
-				}
-			}
-		)
 	}
 
 	/// Check a user is a bid.
@@ -1040,12 +1016,11 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				let _ = T::Currency::unreserve(candidate, deposit);
 				value
 			}
-			BidKind::Vouch(who, tip) => {
+			BidKind::Vouch(voucher, tip) => {
 				// In the case that a vouched-for bid is accepted we unset the
 				// vouching status and transfer the tip over to the voucher.
-				Self::bump_payout(&who, maturity, tip.min(value));
-				// Really shouldn't fail given the conditional we're in.
-				let _ = Self::unset_vouching(&who);
+				Self::bump_payout(&voucher, maturity, tip.min(value));
+				<Vouching<T, I>>::remove(&voucher);
 				value.saturating_sub(tip)
 			}
 		};

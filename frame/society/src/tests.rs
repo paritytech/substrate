@@ -347,7 +347,7 @@ fn vouch_works() {
 		assert_noop!(Society::vouch(Origin::signed(1), 20, 1000, 100), Error::<Test, _>::NotMember);
 		// A member can though
 		assert_ok!(Society::vouch(Origin::signed(10), 20, 1000, 100));
-		assert_eq!(<Vouching<Test>>::get(), vec![10]);
+		assert_eq!(<Vouching<Test>>::get(10), Some(VouchingStatus::Vouching));
 		// A member cannot vouch twice at the same time
 		assert_noop!(Society::vouch(Origin::signed(10), 30, 100, 0), Error::<Test, _>::AlreadyVouching);
 		// Vouching creates the right kind of bid
@@ -365,7 +365,7 @@ fn vouch_works() {
 		// Vouched user wins the rest
 		assert_eq!(<Payouts<Test>>::get(20), vec![(9, 900)]);
 		// 10 is no longer vouching
-		assert_eq!(<Vouching<Test>>::get(), vec![]);
+		assert_eq!(<Vouching<Test>>::get(10), None);
 	});
 }
 
@@ -403,7 +403,7 @@ fn unvouch_works() {
 		// 20 has a bid
 		assert_eq!(<Bids<Test>>::get(), vec![(100, 20, BidKind::Vouch(10, 0))]);
 		// 10 is vouched
-		assert_eq!(<Vouching<Test>>::get(), vec![10]);
+		assert_eq!(<Vouching<Test>>::get(10), Some(VouchingStatus::Vouching));
 		// To unvouch, you must know the right bid position
 		assert_noop!(Society::unvouch(Origin::signed(10), 2), Error::<Test, _>::BadPosition);
 		// 10 can unvouch with the right position
@@ -411,7 +411,7 @@ fn unvouch_works() {
 		// 20 no longer has a bid
 		assert_eq!(<Bids<Test>>::get(), vec![]);
 		// 10 is no longer vouching
-		assert_eq!(<Vouching<Test>>::get(), vec![]);
+		assert_eq!(<Vouching<Test>>::get(10), None);
 
 		// Cannot unvouch after they become candidate
 		assert_ok!(Society::vouch(Origin::signed(10), 20, 100, 0));
@@ -419,18 +419,23 @@ fn unvouch_works() {
 		assert_eq!(Society::candidates(), vec![(100, 20, BidKind::Vouch(10, 0))]);
 		assert_noop!(Society::unvouch(Origin::signed(10), 0), Error::<Test, _>::BadPosition);
 		// 10 is still vouching until candidate is approved or rejected
-		assert_eq!(<Vouching<Test>>::get(), vec![10]);
+		assert_eq!(<Vouching<Test>>::get(10), Some(VouchingStatus::Vouching));
 		run_to_block(8);
-		// In this case member is denied and suspended
+		// In this case candidate is denied and suspended
 		assert!(Society::suspended_candidate(&20).is_some());
 		assert_eq!(Society::members(), vec![10]);
 		// User is stuck vouching until judgement origin resolves suspended candidate
-		assert_eq!(<Vouching<Test>>::get(), vec![10]);
+		assert_eq!(<Vouching<Test, _>>::get(10), Some(VouchingStatus::Vouching));
 		// Judge denies candidate
 		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Judgement::Reject));
-		// 10 is finally unvouched
-		assert_eq!(<Vouching<Test>>::get(), vec![]);
+		// 10 is banned from vouching
+		assert_eq!(<Vouching<Test, _>>::get(10), Some(VouchingStatus::Banned));
 		assert_eq!(Society::members(), vec![10]);
+
+		// 10 cannot vouch again
+		assert_noop!(Society::vouch(Origin::signed(10), 30, 100, 0), Error::<Test, _>::AlreadyVouching);
+		// 10 cannot unvouch either, so they are banned forever.
+		assert_noop!(Society::unvouch(Origin::signed(10), 0), Error::<Test, _>::NotVouching);
 	});
 }
 
@@ -444,11 +449,11 @@ fn unbid_vouch_works() {
 		// 20 has a bid
 		assert_eq!(<Bids<Test>>::get(), vec![(100, 20, BidKind::Vouch(10, 0))]);
 		// 10 is vouched
-		assert_eq!(<Vouching<Test>>::get(), vec![10]);
+		assert_eq!(<Vouching<Test>>::get(10), Some(VouchingStatus::Vouching));
 		// 20 doesn't want to be a member and can unbid themselves.
 		assert_ok!(Society::unbid(Origin::signed(20), 0));
 		// Everything is cleaned up
-		assert_eq!(<Vouching<Test>>::get(), vec![]);
+		assert_eq!(<Vouching<Test>>::get(10), None);
 		assert_eq!(<Bids<Test>>::get(), vec![]);
 	});
 }
@@ -467,8 +472,7 @@ fn head_cannot_be_removed() {
 		run_to_block(16);
 		assert_eq!(Strikes::<Test>::get(10), 2);
 		// Awkwardly they can obtain more than MAX_STRIKES...
-		// TODO: Check if this is okay behavior
-		assert_ok!(Society::vouch(Origin::signed(10), 40, 0, 0));
+		assert_ok!(Society::bid(Origin::signed(40), 0));
 		run_to_block(24);
 		assert_eq!(Strikes::<Test>::get(10), 3);
 
@@ -481,7 +485,11 @@ fn head_cannot_be_removed() {
 		assert_eq!(Society::head(), Some(50));
 
 		// 10 can now be suspended for strikes
-		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 40, Judgement::Reject));
+		assert_ok!(Society::bid(Origin::signed(60), 0));
+		run_to_block(36);
+		// The candidate is rejected, so voting approve will give a strike
+		assert_ok!(Society::vote(Origin::signed(10), 60, true));
+		run_to_block(40);
 		assert_eq!(Strikes::<Test>::get(10), 0);
 		assert_eq!(<SuspendedMembers<Test>>::get(10), Some(()));
 		assert_eq!(Society::members(), vec![50]);
