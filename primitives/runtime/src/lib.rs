@@ -380,7 +380,6 @@ pub enum DispatchError {
 		error: u8,
 		/// Optional error message.
 		#[codec(skip)]
-		#[allow(unused_variables)]
 		message: Option<&'static str>,
 	},
 }

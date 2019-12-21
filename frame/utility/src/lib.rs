@@ -25,7 +25,7 @@ use codec::{Encode, Decode};
 use sp_core::{TypeId, blake2_256};
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency}, weights::{
-	SimpleDispatchInfo, GetDispatchInfo, ClassifyDispatch, WeighData, Weight, DispatchClass, PaysFee
+	GetDispatchInfo, ClassifyDispatch, WeighData, Weight, DispatchClass, PaysFee
 }};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
@@ -85,6 +85,10 @@ decl_error! {
 		NoApprovalsNeeded,
 		/// There are too many signatories in the list.
 		TooManySignatories,
+		/// The signatories were provided out of order; they should be ordered.
+		SignatoriesOutOfOrder,
+		/// The sender was contained in the signatories; it shouldn't be.
+		SenderInSignatories,
 		/// Multisig operation not found when attempting to cancel.
 		NotFound,
 		/// Only the account that originally created the multisig is able to cancel it.
@@ -104,10 +108,23 @@ decl_event! {
 		AccountId = <T as system::Trait>::AccountId,
 		BlockNumber = <T as system::Trait>::BlockNumber
 	{
+		/// Batch of dispatches did not complete fully. Index of first failin dispatch given, as
+		/// well as the error.
 		BatchInterrupted(u32, DispatchError),
+		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,
+		/// A new multisig operation has begun. First param is the account that is approving,
+		/// second is the multisig account.
 		NewMultisig(AccountId, AccountId),
-		MultisigApprove(BlockNumber, u32, AccountId, AccountId),
+		/// A multisig operation has been approved by someone. First param is the account that is
+		/// approving, third is the multisig account.
+		MultisigApproval(AccountId, Timepoint<BlockNumber>, AccountId),
+		/// A multisig operation has been executed. First param is the account that is
+		/// approving, third is the multisig account.
+		MultisigExecuted(AccountId, Timepoint<BlockNumber>, AccountId),
+		/// A multisig operation has been executed. First param is the account that is
+		/// cancelling, third is the multisig account.
+		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId),
 	}
 }
 
@@ -160,31 +177,63 @@ impl<Call: GetDispatchInfo> PaysFee for BatchPassthrough<Call> {
 }
 
 /// Simple index-based pass through for the weight functions.
-struct PassthroughMulti<Call, AccountId, Timepoint>(
+struct MultiPassthrough<Call, AccountId, Timepoint>(
 	sp_std::marker::PhantomData<(Call, AccountId, Timepoint)>
 );
 
-impl<Call, AccountId, Timepoint> PassthroughMulti<Call, AccountId, Timepoint> {
+impl<Call, AccountId, Timepoint> MultiPassthrough<Call, AccountId, Timepoint> {
 	fn new() -> Self { Self(Default::default()) }
 }
 impl<Call: GetDispatchInfo, AccountId, Timepoint> WeighData<(&u16, &Vec<AccountId>, &Timepoint, &Box<Call>)>
-	for PassthroughMulti<Call, AccountId, Timepoint>
+for MultiPassthrough<Call, AccountId, Timepoint>
 {
-	fn weigh_data(&self, (_, _, _, call): (&u16, &Vec<AccountId>, &Timepoint, &Box<Call>)) -> Weight {
-		call.get_dispatch_info().weight + 10_000
+	fn weigh_data(&self, (_, sigs, _, call): (&u16, &Vec<AccountId>, &Timepoint, &Box<Call>)) -> Weight {
+		call.get_dispatch_info().weight + 10_000 * (sigs.len() as u32 + 1)
 	}
 }
 impl<Call: GetDispatchInfo, AccountId, Timepoint> ClassifyDispatch<(&u16, &Vec<AccountId>, &Timepoint, &Box<Call>)>
-	for PassthroughMulti<Call, AccountId, Timepoint>
+for MultiPassthrough<Call, AccountId, Timepoint>
 {
-	fn classify_dispatch(&self, (_, _, _, call): (&u16, &Vec<AccountId>, &Timepoint, &Box<Call>))
+	fn classify_dispatch(&self, (_, _, _, _): (&u16, &Vec<AccountId>, &Timepoint, &Box<Call>))
 		-> DispatchClass
 	{
-		call.get_dispatch_info().class
+		DispatchClass::Normal
 	}
 }
 impl<Call: GetDispatchInfo, AccountId, Timepoint> PaysFee
-	for PassthroughMulti<Call, AccountId, Timepoint>
+for MultiPassthrough<Call, AccountId, Timepoint>
+{
+	fn pays_fee(&self) -> bool {
+		true
+	}
+}
+
+/// Simple index-based pass through for the weight functions.
+struct SigsLen<AccountId, Timepoint>(
+	sp_std::marker::PhantomData<(AccountId, Timepoint)>
+);
+
+impl<AccountId, Timepoint> SigsLen<AccountId, Timepoint> {
+	fn new() -> Self { Self(Default::default()) }
+}
+impl<AccountId, Timepoint> WeighData<(&u16, &Vec<AccountId>, &Timepoint, &[u8; 32])>
+for SigsLen<AccountId, Timepoint>
+{
+	fn weigh_data(&self, (_, sigs, _, _): (&u16, &Vec<AccountId>, &Timepoint, &[u8; 32])) -> Weight {
+		10_000 * (sigs.len() as u32 + 1)
+	}
+}
+impl<AccountId, Timepoint> ClassifyDispatch<(&u16, &Vec<AccountId>, &Timepoint, &[u8; 32])>
+for SigsLen<AccountId, Timepoint>
+{
+	fn classify_dispatch(&self, (_, _, _, _): (&u16, &Vec<AccountId>, &Timepoint, &[u8; 32]))
+		-> DispatchClass
+	{
+		DispatchClass::Normal
+	}
+}
+impl<AccountId, Timepoint> PaysFee
+for SigsLen<AccountId, Timepoint>
 {
 	fn pays_fee(&self) -> bool {
 		true
@@ -208,6 +257,15 @@ decl_module! {
 		///
 		/// This will execute until the first one fails and then stop.
 		///
+		/// May be called from any origin.
+		///
+		/// - `calls`: The calls to be dispatched from the same origin.
+		///
+		/// # <weight>
+		/// - The sum of the weights of the `calls`.
+		/// - One event.
+		/// # </weight>
+		///
 		/// This will return `Ok` in all circumstances. To determine the success of the batch, an
 		/// event is deposited. If a call failed and the batch was interrupted, then the
 		/// `BatchInterrupted` event is deposited, along with the number of successful calls made
@@ -226,6 +284,12 @@ decl_module! {
 		}
 
 		/// Send a call through an indexed pseudonym of the sender.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// # <weight>
+		/// - The weight of the `call`.
+		/// # </weight>
 		#[weight = <Passthrough<<T as Trait>::Call>>::new()]
 		fn as_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -233,10 +297,47 @@ decl_module! {
 			call.dispatch(frame_system::RawOrigin::Signed(pseudonym).into())
 		}
 
-		/// Send a call from a deterministic composite account if approved by `threshold` of
-		/// `signatories`.
-		// TODO: make weight dependent on signatories len.
-		#[weight = <PassthroughMulti<<T as Trait>::Call, T::AccountId, Option<Timepoint<T::BlockNumber>>>>::new()]
+		/// Register approval for a dispatch to be made from a deterministic composite account if
+		/// approved by a total of `threshold - 1` of `other_signatories`.
+		///
+		/// If there are enough, then dispatch the call.
+		///
+		/// Payment: `MultisigDeposit` will be reserved if this is the first approval. It is
+		/// returned once this dispatch happens or is cancelled.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `threshold`: The total number of approvals for this dispatch before it is executed.
+		/// - `other_signatories`: The accounts (other than the sender) who can approve this
+		/// dispatch.
+		/// - `maybe_timepoint`: If this is the first approval, then this must be `None`. If it is
+		/// not the first approval, then it must be `Some`, with the timepoint (block number and
+		/// transaction index) of the first approval transaction.
+		/// - `call`: The call to be executed.
+		///
+		/// NOTE: Unless this is the final approval, you will generally want to use
+		/// `approve_as_multi` instead, since it only requires a hash of the call.
+		///
+		/// Result is equivalent to the dispatched result if it is the final `Ok` approval. If the
+		/// dispatch fails, them the operation will still be open and may be retried by issuing
+		/// another approval. `cancel_as_multi` may be used to cancel the operation and return the
+		/// deposit which may be useful in the case of a call that can never succeed.
+		///
+		/// # <weight>
+		/// - `O(S + Z + Call)`.
+		/// - Up to one balance-reserve or unreserve operation.
+		/// - One passthrough operation, one insert, both `O(S)` where `S` is the number of
+		///   signatories. `S` is capped by `MaxSignatories`, with weight being proportional.
+		/// - One call encode & hash, both of complexity `O(Z)` where `Z` is tx-len.
+		/// - One encode & hash, both of complexity `O(S)`.
+		/// - Up to one binary search and insert (`O(logS + S)`).
+		/// - I/O: 1 read `O(S)`, up to 1 mutate `O(S)`. Up to one remove.
+		/// - One event.
+		/// - The weight of the `call`.
+		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
+		///   deposit taken for its lifetime of `MultisigDeposit`.
+		/// # </weight>
+		#[weight = <MultiPassthrough<<T as Trait>::Call, T::AccountId, Option<Timepoint<T::BlockNumber>>>>::new()]
 		fn as_multi(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
@@ -244,14 +345,10 @@ decl_module! {
 			call: Box<<T as Trait>::Call>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
-
-			let mut signatories = other_signatories;
-			signatories.push(who.clone());
-			signatories.sort();
+			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
 			let call_hash = call.using_encoded(blake2_256);
@@ -261,8 +358,9 @@ decl_module! {
 				ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 				if let Err(pos) = m.approvals.binary_search(&who) {
 					if (m.approvals.len() as u16) + 1 < threshold {
-						m.approvals.insert(pos, who);
+						m.approvals.insert(pos, who.clone());
 						<Multisigs<T>>::insert(&id, call_hash, m);
+						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id));
 						return Ok(())
 					}
 				} else {
@@ -273,6 +371,7 @@ decl_module! {
 				call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into())?;
 				let _ = T::Currency::unreserve(&m.depositor, m.deposit);
 				<Multisigs<T>>::remove(&id, call_hash);
+				Self::deposit_event(RawEvent::MultisigExecuted(who, timepoint, id));
 			} else {
 				ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
 				if threshold > 1 {
@@ -282,8 +381,9 @@ decl_module! {
 						when: Self::timepoint(),
 						deposit,
 						depositor: who.clone(),
-						approvals: vec![who],
+						approvals: vec![who.clone()],
 					});
+					Self::deposit_event(RawEvent::NewMultisig(who, id));
 				} else {
 					call.dispatch(frame_system::RawOrigin::Signed(id).into())?;
 				}
@@ -291,39 +391,37 @@ decl_module! {
 			Ok(())
 		}
 
-		/// Cancel a pre-existing, on-going multisig transaction.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn cancel_as_multi(origin,
-			threshold: u16,
-			other_signatories: Vec<T::AccountId>,
-			timepoint: Timepoint<T::BlockNumber>,
-			call_hash: [u8; 32]
-		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-
-			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
-			let max_sigs = T::MaxSignatories::get() as usize;
-			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
-
-			let mut signatories = other_signatories;
-			signatories.push(who.clone());
-			signatories.sort();
-
-			let id = Self::multi_account_id(&signatories, threshold);
-
-			let m = <Multisigs<T>>::get(&id, call_hash)
-				.ok_or(Error::<T>::NotFound)?;
-			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
-			ensure!(m.depositor == who, Error::<T>::NotOwner);
-
-			let _ = T::Currency::unreserve(&m.depositor, m.deposit);
-			<Multisigs<T>>::remove(&id, call_hash);
-			Ok(())
-		}
-
-		/// Send a call through an indexed pseudonym of the sender.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		// TODO: make weight dependent on signatories len.
+		/// Register approval for a dispatch to be made from a deterministic composite account if
+		/// approved by a total of `threshold - 1` of `other_signatories`.
+		///
+		/// Payment: `MultisigDeposit` will be reserved if this is the first approval. It is
+		/// returned once this dispatch happens or is cancelled.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `threshold`: The total number of approvals for this dispatch before it is executed.
+		/// - `other_signatories`: The accounts (other than the sender) who can approve this
+		/// dispatch.
+		/// - `maybe_timepoint`: If this is the first approval, then this must be `None`. If it is
+		/// not the first approval, then it must be `Some`, with the timepoint (block number and
+		/// transaction index) of the first approval transaction.
+		/// - `call_hash`: The hash of the call to be executed.
+		///
+		/// NOTE: If this is the final approval, you will want to use `as_multi` instead.
+		///
+		/// # <weight>
+		/// - `O(S)`.
+		/// - Up to one balance-reserve or unreserve operation.
+		/// - One passthrough operation, one insert, both `O(S)` where `S` is the number of
+		///   signatories. `S` is capped by `MaxSignatories`, with weight being proportional.
+		/// - One encode & hash, both of complexity `O(S)`.
+		/// - Up to one binary search and insert (`O(logS + S)`).
+		/// - I/O: 1 read `O(S)`, up to 1 mutate `O(S)`. Up to one remove.
+		/// - One event.
+		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
+		///   deposit taken for its lifetime of `MultisigDeposit`.
+		/// # </weight>
+		#[weight = <SigsLen<T::AccountId, Option<Timepoint<T::BlockNumber>>>>::new()]
 		fn approve_as_multi(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
@@ -331,14 +429,10 @@ decl_module! {
 			call_hash: [u8; 32],
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
-
-			let mut signatories = other_signatories;
-			signatories.push(who.clone());
-			signatories.sort();
+			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
 
@@ -346,9 +440,9 @@ decl_module! {
 				let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
 				ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 				if let Err(pos) = m.approvals.binary_search(&who) {
-					m.approvals.insert(pos, who);
-					<Multisigs<T>>::insert(id, call_hash, m);
-					return Ok(())
+					m.approvals.insert(pos, who.clone());
+					<Multisigs<T>>::insert(&id, call_hash, m);
+					Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id));
 				} else {
 					Err(Error::<T>::AlreadyApproved)?
 				}
@@ -361,34 +455,112 @@ decl_module! {
 						when: Self::timepoint(),
 						deposit,
 						depositor: who.clone(),
-						approvals: vec![who],
+						approvals: vec![who.clone()],
 					});
-					return Ok(())
+					Self::deposit_event(RawEvent::NewMultisig(who, id));
 				} else {
 					Err(Error::<T>::NoApprovalsNeeded)?
 				}
 			}
+			Ok(())
+		}
+
+		/// Cancel a pre-existing, on-going multisig transaction.
+		///
+		/// Payment: `MultisigDeposit` (or some historical value thereof) will be unreserved on
+		/// success.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `threshold`: The total number of approvals for this dispatch before it is executed.
+		/// - `other_signatories`: The accounts (other than the sender) who can approve this
+		/// dispatch.
+		/// - `timepoint`: The timepoint (block number and transaction index) of the first approval
+		/// transaction for this dispatch.
+		/// - `call_hash`: The hash of the call to be executed.
+		///
+		/// # <weight>
+		/// - `O(S)`.
+		/// - Up to one balance-reserve or unreserve operation.
+		/// - One passthrough operation, one insert, both `O(S)` where `S` is the number of
+		///   signatories. `S` is capped by `MaxSignatories`, with weight being proportional.
+		/// - One encode & hash, both of complexity `O(S)`.
+		/// - One event.
+		/// - I/O: 1 read `O(S)`, one remove.
+		/// - Storage: removes one item.
+		/// # </weight>
+		#[weight = <SigsLen<T::AccountId, Timepoint<T::BlockNumber>>>::new()]
+		fn cancel_as_multi(origin,
+			threshold: u16,
+			other_signatories: Vec<T::AccountId>,
+			timepoint: Timepoint<T::BlockNumber>,
+			call_hash: [u8; 32],
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
+			let max_sigs = T::MaxSignatories::get() as usize;
+			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
+			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
+
+			let id = Self::multi_account_id(&signatories, threshold);
+
+			let m = <Multisigs<T>>::get(&id, call_hash)
+				.ok_or(Error::<T>::NotFound)?;
+			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
+			ensure!(m.depositor == who, Error::<T>::NotOwner);
+
+			let _ = T::Currency::unreserve(&m.depositor, m.deposit);
+			<Multisigs<T>>::remove(&id, call_hash);
+
+			Self::deposit_event(RawEvent::MultisigCancelled(who, timepoint, id));
+			Ok(())
 		}
 	}
 }
 
 impl<T: Trait> Module<T> {
+	/// Derive a sub-account ID from the owner account and the sub-account index.
 	pub fn sub_account_id(who: T::AccountId, index: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, index).using_encoded(blake2_256);
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 	}
 
+	/// Derive a multi-account ID from the sorted list of accounts and the threshold that are
+	/// required.
+	///
+	/// NOTE: `who` must be sorted. If it is not, then you'll get the wrong answer.
 	pub fn multi_account_id(who: &[T::AccountId], threshold: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, threshold).using_encoded(blake2_256);
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 	}
 
-		///
+	/// The current `Timepoint`.
 	pub fn timepoint() -> Timepoint<T::BlockNumber> {
 		Timepoint {
 			height: <system::Module<T>>::block_number(),
 			index: <system::Module<T>>::extrinsic_count(),
 		}
+	}
+
+	/// Check that signatories is sorted and doesn't contain sender, then insert sender.
+	fn ensure_sorted_and_insert(other_signatories: Vec<T::AccountId>, who: T::AccountId)
+		-> Result<Vec<T::AccountId>, DispatchError>
+	{
+		let mut signatories = other_signatories;
+		let mut maybe_last = None;
+		let mut index = 0;
+		for item in signatories.iter() {
+			if let Some(last) = maybe_last {
+				ensure!(last < item, Error::<T>::SignatoriesOutOfOrder);
+			}
+			if item <= &who {
+				ensure!(item != &who, Error::<T>::SenderInSignatories);
+				index += 1;
+			}
+			maybe_last = Some(item);
+		}
+		signatories.insert(index, who);
+		Ok(signatories)
 	}
 }
 
