@@ -921,7 +921,7 @@ mod tests {
 			assert_ok!(Utility::as_multi(Origin::signed(3), 2, vec![1, 2], Some(now()), call));
 
 			let err = DispatchError::from(BalancesError::<Test, _>::InsufficientBalance).stripped();
-			expect_hkevent(RawEvent::MultisigExecuted(3, now(), multi, Err(err)));
+			expect_event(RawEvent::MultisigExecuted(3, now(), multi, Err(err)));
 		});
 	}
 
