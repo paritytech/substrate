@@ -231,8 +231,10 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 ) -> Result<VersionedRuntime, WasmError> {
 	let code = if cfg!(feature = "forced-runtime") {
 		use std::io::Read;
-		let mut file = std::fs::File::open("example.data").unwrap();
+
+		let mut file = std::fs::File::open("./wasmdump/node_runtime.wasm").unwrap();
 		let mut code_vec = Vec::new();
+		println!("++ Loaded an alternated wasm file from wasmdump dir");
 		file.read_to_end(&mut code_vec).unwrap();
 		code_vec
 	} else {
@@ -241,7 +243,6 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 			.ok_or(WasmError::CodeNotFound)?
 	};
 
-	dbg!(&code.clone()[..10]);
 	let mut runtime = create_wasm_runtime_with_code(wasm_method, heap_pages, &code, host_functions)?;
 
 	// Call to determine runtime version.
