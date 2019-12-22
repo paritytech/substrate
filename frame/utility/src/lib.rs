@@ -167,7 +167,7 @@ decl_event! {
 		AccountId = <T as system::Trait>::AccountId,
 		BlockNumber = <T as system::Trait>::BlockNumber
 	{
-		/// Batch of dispatches did not complete fully. Index of first failin dispatch given, as
+		/// Batch of dispatches did not complete fully. Index of first failing dispatch given, as
 		/// well as the error.
 		BatchInterrupted(u32, DispatchError),
 		/// Batch of dispatches completed fully with no error.
