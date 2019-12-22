@@ -542,6 +542,7 @@ mod tests {
 	use super::*;
 
 	use frame_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight};
+	use frame_system::EnsureSignedBy;
 	use sp_core::H256;
 	use sp_runtime::{
 		traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header, Perbill
@@ -598,11 +599,18 @@ mod tests {
 		pub const ProposalBondMinimum: u64 = 1;
 		pub const SpendPeriod: u64 = 2;
 		pub const Burn: Permill = Permill::from_percent(50);
+		pub const TipOrigin: Vec<u64> = vec![10, 11, 12, 13, 14];
 	}
 	impl Trait for Test {
 		type Currency = pallet_balances::Module<Test>;
 		type ApproveOrigin = frame_system::EnsureRoot<u64>;
 		type RejectOrigin = frame_system::EnsureRoot<u64>;
+		type TipOrigin: EnsureSignedBy<TipOrigin, u64>;
+		type TipThreshold: Get<u32>;
+		type TipCountdown: Get<Self::BlockNumber>;
+		type TipFindersFee: Get<Percent>;
+		type TipReportDepositBase: Get<BalanceOf<Self>>;
+		type TipReportDepositPerByte: Get<BalanceOf<Self>>;
 		type Event = ();
 		type ProposalRejection = ();
 		type ProposalBond = ProposalBond;
@@ -629,6 +637,15 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_eq!(Treasury::pot(), 0);
 			assert_eq!(Treasury::proposal_count(), 0);
+		});
+	}
+
+	#[test]
+	fn basic_tipping_works() {
+		new_test_ext().execute_with(|| {
+			// Check that accumulate works when we have Some value in Dummy already.
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
+			assert_eq!(Treasury::pot(), 100);
 		});
 	}
 
