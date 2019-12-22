@@ -60,13 +60,13 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use sp_std::prelude::*;
-use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error};
+use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error, Parameter};
 use frame_support::traits::{
-	Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced,
+	Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, ExistenceRequirement::AllowDeath,
 	ReservableCurrency, WithdrawReason
 };
-use sp_runtime::{Permill, ModuleId};
-use sp_runtime::traits::{Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating};
+use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug};
+use sp_runtime::traits::{Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating, Hash};
 use frame_support::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
@@ -86,6 +86,24 @@ pub trait Trait: frame_system::Trait {
 
 	/// Origin from which rejections must come.
 	type RejectOrigin: EnsureOrigin<Self::Origin>;
+
+	/// Origin from which tippers must come.
+	type TipOrigin: EnsureOrigin<Self::Origin, Success=Self::AccountId>;
+
+	/// The number of tippers a tipping proposal must get before it will happen.
+	type TipThreshold: Get<u32>;
+
+	/// The period for which a tip remains open after is has achieved `TipThreshold` tippers.
+	type TipCountdown: Get<Self::BlockNumber>;
+
+	/// The amount of the final tip which goes to the original reporter of the tip.
+	type TipFindersFee: Get<Percent>;
+
+	/// The amount held on deposit for placing a tip report.
+	type TipReportDepositBase: Get<BalanceOf<Self>>;
+
+	/// The amount held on deposit per byte within the tip report reason.
+	type TipReportDepositPerByte: Get<BalanceOf<Self>>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -109,6 +127,113 @@ pub trait Trait: frame_system::Trait {
 
 type ProposalIndex = u32;
 
+/// A spending proposal.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct Proposal<AccountId, Balance> {
+	proposer: AccountId,
+	value: Balance,
+	beneficiary: AccountId,
+	bond: Balance,
+}
+
+/// An open tipping "motion".
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+pub struct OpenTip<
+	AccountId: Parameter,
+	Balance: Parameter,
+	BlockNumber: Parameter,
+> {
+	/// The reason for the tip. Should be a human-readable UTF-8 encoded string. A URL would be
+	/// sensible.
+	reason: Vec<u8>,
+	/// The account to be tipped.
+	who: AccountId,
+	/// The account who began this tip and the amount held on deposit.
+	finder: Option<(AccountId, Balance)>,
+	/// The block number at which this tip will close if `Some`. If `None`, then no closing is
+	/// scheduled.
+	closes: Option<BlockNumber>,
+	/// The members who have voted for this tip. Sorted by AccountId.
+	tips: Vec<(AccountId, Balance)>,
+}
+
+decl_storage! {
+	trait Store for Module<T: Trait> as Treasury {
+		/// Number of proposals that have been made.
+		ProposalCount get(fn proposal_count): ProposalIndex;
+
+		/// Proposals that have been made.
+		Proposals get(fn proposals): map ProposalIndex => Option<Proposal<T::AccountId, BalanceOf<T>>>;
+
+		/// Proposal indices that have been approved but not yet awarded.
+		Approvals get(fn approvals): Vec<ProposalIndex>;
+
+		/// Tips that are not yet completed. Keyed by the hash of `(reason, who)` from the value.
+		pub Tips get(fn tips): map hasher(twox_64_concat) T::Hash
+			=> Option<OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
+	}
+	add_extra_genesis {
+		build(|_config| {
+			// Create Treasury account
+			let _ = T::Currency::make_free_balance_be(
+				&<Module<T>>::account_id(),
+				T::Currency::minimum_balance(),
+			);
+		});
+	}
+}
+
+decl_event!(
+	pub enum Event<T>
+	where
+		Balance = BalanceOf<T>,
+		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Trait>::Hash,
+	{
+		/// New proposal.
+		Proposed(ProposalIndex),
+		/// We have ended a spend period and will now allocate funds.
+		Spending(Balance),
+		/// Some funds have been allocated.
+		Awarded(ProposalIndex, Balance, AccountId),
+		/// A proposal was rejected; funds were slashed.
+		Rejected(ProposalIndex, Balance),
+		/// Some of our funds have been burnt.
+		Burnt(Balance),
+		/// Spending has finished; this is the amount that rolls over until next spend.
+		Rollover(Balance),
+		/// Some funds have been deposited.
+		Deposit(Balance),
+		/// A new tip suggestion has been opened.
+		NewTip(Hash),
+		/// A tip suggestion has reached threshold and .
+		TipClosing(Hash),
+		/// A new tip suggestion has been opened.
+		TipClosed(Hash, AccountId, Balance),
+		/// A new tip suggestion has been opened.
+		TipRetracted(Hash),
+	}
+);
+
+decl_error! {
+	/// Error for the treasury module.
+	pub enum Error for Module<T: Trait> {
+		/// Proposer's balance is too low.
+		InsufficientProposersBalance,
+		/// No proposal at that index.
+		InvalidProposalIndex,
+		/// The reason give is just too big.
+		ReasonTooBig,
+		/// The tip was already found/started.
+		AlreadyKnown,
+		/// The tip hash is unknown.
+		UnknownTip,
+		/// The account attempting to retract the tip is not the finder of the tip.
+		NotFinder,
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
@@ -127,6 +252,80 @@ decl_module! {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
+
+		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
+			let finder = ensure_signed(origin)?;
+
+			const MAX_SENSIBLE_REASON_LENGTH: usize = 1024;
+			ensure!(reason.len() <= MAX_SENSIBLE_REASON_LENGTH, Error::<T>::ReasonTooBig);
+
+			let hash = T::Hashing::hash_of(&(&reason, &who));
+			ensure!(!Tips::<T>::exists(&hash), Error::<T>::AlreadyKnown);
+
+			let deposit = T::TipReportDepositBase::get()
+				+ T::TipReportDepositPerByte::get() * (reason.len() as u32).into();
+			T::Currency::reserve(&finder, deposit)?;
+
+			let finder = Some((finder, deposit));
+			Tips::<T>::insert(&hash, OpenTip { reason, who, finder, closes: None, tips: vec![] });
+			Self::deposit_event(RawEvent::NewTip(hash));
+		}
+
+		fn retract_tip(origin, hash: T::Hash) {
+			let who = ensure_signed(origin)?;
+
+			let tip = Tips::<T>::get(&hash).ok_or(Error::<T>::UnknownTip)?;
+			let (finder, deposit) = tip.finder.ok_or(Error::<T>::NotFinder)?;
+			ensure!(finder == who, Error::<T>::NotFinder);
+			Tips::<T>::remove(&hash);
+			let _ = T::Currency::unreserve(&who, deposit);
+			Self::deposit_event(RawEvent::TipRetracted(hash));
+		}
+
+		/// Give a tip for something new.
+		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T>) {
+			let tipper = T::TipOrigin::ensure_origin(origin)?;
+
+			let hash = T::Hashing::hash_of(&(&reason, &who));
+			let tip = if let Some(mut tip) = Tips::<T>::get(hash) {
+				if Self::insert_tip_and_check_closing(&mut tip, tipper, tip_value) {
+					Self::deposit_event(RawEvent::TipClosing(hash.clone()));
+				}
+				tip
+			} else {
+				Self::deposit_event(RawEvent::NewTip(hash.clone()));
+				OpenTip { reason, who, finder: None, closes: None, tips: vec![(tipper, tip_value)] }
+			};
+			Tips::<T>::insert(&hash, tip);
+		}
+
+		/// Add onto an existing tip.
+		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T>) {
+			let tipper = T::TipOrigin::ensure_origin(origin)?;
+
+			let mut tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
+			if Self::insert_tip_and_check_closing(&mut tip, tipper, tip_value) {
+				Self::deposit_event(RawEvent::TipClosing(hash.clone()));
+			}
+			Tips::<T>::insert(&hash, tip);
+		}
+
+		/// Close and payout a tip.
+		///
+		/// Doesn't matter who calls this.
+		fn close_tip(origin, hash: T::Hash) {
+			ensure_signed(origin)?;
+
+			if let Some(tip) = Tips::<T>::get(&hash) {
+				if let Some(n) = tip.closes.as_ref() {
+					if system::Module::<T>::block_number() >= *n {
+						// closed.
+						Self::payout_tip(tip);
+						Tips::<T>::remove(hash);
+					}
+				}
+			}
+		}
 
 		/// Put forward a suggestion for spending. A deposit proportional to the value
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
@@ -202,71 +401,6 @@ decl_module! {
 	}
 }
 
-/// A spending proposal.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, sp_runtime::RuntimeDebug)]
-pub struct Proposal<AccountId, Balance> {
-	proposer: AccountId,
-	value: Balance,
-	beneficiary: AccountId,
-	bond: Balance,
-}
-
-decl_storage! {
-	trait Store for Module<T: Trait> as Treasury {
-		/// Number of proposals that have been made.
-		ProposalCount get(fn proposal_count): ProposalIndex;
-
-		/// Proposals that have been made.
-		Proposals get(fn proposals): map ProposalIndex => Option<Proposal<T::AccountId, BalanceOf<T>>>;
-
-		/// Proposal indices that have been approved but not yet awarded.
-		Approvals get(fn approvals): Vec<ProposalIndex>;
-	}
-	add_extra_genesis {
-		build(|_config| {
-			// Create Treasury account
-			let _ = T::Currency::make_free_balance_be(
-				&<Module<T>>::account_id(),
-				T::Currency::minimum_balance(),
-			);
-		});
-	}
-}
-
-decl_event!(
-	pub enum Event<T>
-	where
-		Balance = BalanceOf<T>,
-		<T as frame_system::Trait>::AccountId
-	{
-		/// New proposal.
-		Proposed(ProposalIndex),
-		/// We have ended a spend period and will now allocate funds.
-		Spending(Balance),
-		/// Some funds have been allocated.
-		Awarded(ProposalIndex, Balance, AccountId),
-		/// A proposal was rejected; funds were slashed.
-		Rejected(ProposalIndex, Balance),
-		/// Some of our funds have been burnt.
-		Burnt(Balance),
-		/// Spending has finished; this is the amount that rolls over until next spend.
-		Rollover(Balance),
-		/// Some funds have been deposited.
-		Deposit(Balance),
-	}
-);
-
-decl_error! {
-	/// Error for the treasury module.
-	pub enum Error for Module<T: Trait> {
-		/// Proposer's balance is too low.
-		InsufficientProposersBalance,
-		/// No proposal at that index.
-		InvalidProposalIndex,
-	}
-}
-
 impl<T: Trait> Module<T> {
 	// Add public immutables and private mutables.
 
@@ -281,6 +415,47 @@ impl<T: Trait> Module<T> {
 	/// The needed bond for a proposal whose spend is `value`.
 	fn calculate_bond(value: BalanceOf<T>) -> BalanceOf<T> {
 		T::ProposalBondMinimum::get().max(T::ProposalBond::get() * value)
+	}
+
+	/// Given a mutable reference to an `OpenTip`, insert the tip into it and check whether it
+	/// closes, if so, then deposit the relevant event and set closing accordingly.
+	fn insert_tip_and_check_closing(
+		tip: &mut OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber>,
+		tipper: T::AccountId,
+		tip_value: BalanceOf<T>,
+	) -> bool {
+		match tip.tips.binary_search_by_key(&&tipper, |x| &x.0) {
+			Ok(pos) => tip.tips.insert(pos, (tipper, tip_value)),
+			Err(pos) => tip.tips[pos] = (tipper, tip_value),
+		}
+		if tip.tips.len() >= T::TipThreshold::get() as usize && tip.closes.is_none() {
+			tip.closes = Some(system::Module::<T>::block_number() + T::TipCountdown::get());
+			true
+		} else {
+			false
+		}
+	}
+
+	/// Execute the payout of a tip.
+	fn payout_tip(tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber>) {
+		let mut tips = tip.tips;
+		tips.sort_by_key(|i| i.1);
+		let treasury = Self::account_id();
+		let max_payout = T::Currency::free_balance(&treasury);
+		let mut payout = tips[tips.len() / 2].1.min(max_payout);
+		if let Some((finder, deposit)) = tip.finder {
+			let _ = T::Currency::unreserve(&finder, deposit);
+			if finder != tip.who {
+				// pay out the finder's fee.
+				let finders_fee = T::TipFindersFee::get() * payout;
+				payout -= finders_fee;
+				// this should go through given we checked it's at most the free balance, but still
+				// we only make a best-effort.
+				let _ = T::Currency::transfer(&treasury, &finder, deposit, AllowDeath);
+			}
+		}
+		// same as above: best-effort only.
+		let _ = T::Currency::transfer(&treasury, &tip.who, payout, AllowDeath);
 	}
 
 	// Spend some money!
