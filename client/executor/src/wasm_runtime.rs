@@ -229,9 +229,19 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
 ) -> Result<VersionedRuntime, WasmError> {
-	let code = ext
-		.original_storage(well_known_keys::CODE)
-		.ok_or(WasmError::CodeNotFound)?;
+	let code = if cfg!(feature = "forced-runtime") {
+		use std::io::Read;
+		let mut file = std::fs::File::open("example.data").unwrap();
+		let mut code_vec = Vec::new();
+		file.read_to_end(&mut code_vec).unwrap();
+		code_vec
+	} else {
+		ext
+			.original_storage(well_known_keys::CODE)
+			.ok_or(WasmError::CodeNotFound)?
+	};
+
+	dbg!(&code.clone()[..10]);
 	let mut runtime = create_wasm_runtime_with_code(wasm_method, heap_pages, &code, host_functions)?;
 
 	// Call to determine runtime version.

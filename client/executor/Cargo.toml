@@ -42,10 +42,11 @@ sp-state-machine = { version = "2.0.0", path = "../../primitives/state-machine" 
 test-case = "0.3.3"
 
 [features]
-default = [ "std" ]
+default = [ "std", "forced-runtime" ]
 # This crate does not have `no_std` support, we just require this for tests
 std = []
 wasm-extern-trace = []
+forced-runtime = []
 wasmtime = [
 	"cranelift-codegen",
 	"cranelift-entity",
