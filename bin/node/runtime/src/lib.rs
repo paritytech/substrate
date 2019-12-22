@@ -140,7 +140,8 @@ impl pallet_utility::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
 	type Currency = Balances;
-	type MultisigDeposit = MultisigDeposit;
+	type MultisigDepositBase = MultisigDepositBase;
+	type MultisigDepositFactor = MultisigDepositFactor;
 	type MaxSignatories = MaxSignatories;
 }
 
