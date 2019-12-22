@@ -15,16 +15,16 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use test_client::{
+use substrate_test_runtime_client::{
 	DefaultTestClientBuilderExt, TestClientBuilder,
 	TestClientBuilderExt, runtime::TestAPI,
 };
 use sp_runtime::{generic::BlockId, traits::ProvideRuntimeApi};
-use state_machine::ExecutionStrategy;
+use sp_state_machine::ExecutionStrategy;
 
 fn sp_api_benchmark(c: &mut Criterion) {
 	c.bench_function("add one with same runtime api", |b| {
-		let client = test_client::new();
+		let client = substrate_test_runtime_client::new();
 		let runtime_api = client.runtime_api();
 		let block_id = BlockId::Number(client.info().chain.best_number);
 
@@ -32,14 +32,14 @@ fn sp_api_benchmark(c: &mut Criterion) {
 	});
 
 	c.bench_function("add one with recreating runtime api", |b| {
-		let client = test_client::new();
+		let client = substrate_test_runtime_client::new();
 		let block_id = BlockId::Number(client.info().chain.best_number);
 
 		b.iter(|| client.runtime_api().benchmark_add_one(&block_id, &1))
 	});
 
 	c.bench_function("vector add one with same runtime api", |b| {
-		let client = test_client::new();
+		let client = substrate_test_runtime_client::new();
 		let runtime_api = client.runtime_api();
 		let block_id = BlockId::Number(client.info().chain.best_number);
 		let data = vec![0; 1000];
@@ -48,7 +48,7 @@ fn sp_api_benchmark(c: &mut Criterion) {
 	});
 
 	c.bench_function("vector add one with recreating runtime api", |b| {
-		let client = test_client::new();
+		let client = substrate_test_runtime_client::new();
 		let block_id = BlockId::Number(client.info().chain.best_number);
 		let data = vec![0; 1000];
 

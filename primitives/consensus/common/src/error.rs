@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Error types in Consensus
-use runtime_version::RuntimeVersion;
-use primitives::ed25519::{Public, Signature};
+use sp_version::RuntimeVersion;
+use sp_core::ed25519::{Public, Signature};
 use std::error;
 
 /// Result type alias.
@@ -36,7 +36,7 @@ pub enum Error {
 	FaultyTimer(std::io::Error),
 	/// Error while working with inherent data.
 	#[display(fmt="InherentData error: {}", _0)]
-	InherentData(inherents::Error),
+	InherentData(sp_inherents::Error),
 	/// Unable to propose a block.
 	#[display(fmt="Unable to create block proposal.")]
 	CannotPropose,

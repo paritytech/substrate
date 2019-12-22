@@ -305,6 +305,9 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: ?Sized + EncodeLike<K1>;
 
+	fn iter_prefix<KArg1>(k1: KArg1) -> PrefixIterator<V>
+		where KArg1: ?Sized + EncodeLike<K1>;
+
 	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
 	where
 		KArg1: EncodeLike<K1>,
@@ -423,7 +426,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 
 #[cfg(test)]
 mod test {
-	use primitives::hashing::twox_128;
+	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
 	use crate::storage::{unhashed, StoragePrefixedMap};
 

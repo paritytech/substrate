@@ -22,12 +22,12 @@ use std::{fmt, result, collections::HashMap, panic::UnwindSafe, marker::PhantomD
 use log::{warn, trace};
 use hash_db::Hasher;
 use codec::{Decode, Encode, Codec};
-use primitives::{
+use sp_core::{
 	storage::{well_known_keys, ChildInfo}, NativeOrEncoded, NeverNativeValue,
 	traits::CodeExecutor, hexdisplay::HexDisplay, hash::H256,
 };
 use overlayed_changes::OverlayedChangeSet;
-use externalities::Extensions;
+use sp_externalities::Extensions;
 
 pub mod backend;
 mod changes_trie;
@@ -40,7 +40,7 @@ mod proving_backend;
 mod trie_backend;
 mod trie_backend_essence;
 
-pub use trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB};
+pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use ext::Ext;
@@ -424,7 +424,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 				ExecutionManager::AlwaysWasm(trust_level) => {
 					let _abort_guard = match trust_level {
 						BackendTrustLevel::Trusted => None,
-						BackendTrustLevel::Untrusted => Some(panic_handler::AbortGuard::never_abort()),
+						BackendTrustLevel::Untrusted => Some(sp_panic_handler::AbortGuard::never_abort()),
 					};
 					let res = self.execute_aux(compute_tx, false, native_call);
 					(res.0, res.2, res.3)
@@ -745,7 +745,7 @@ mod tests {
 		InMemoryStorage as InMemoryChangesTrieStorage,
 		Configuration as ChangesTrieConfig,
 	};
-	use primitives::{Blake2Hasher, map, traits::Externalities, storage::ChildStorageKey};
+	use sp_core::{Blake2Hasher, map, traits::Externalities, storage::ChildStorageKey};
 
 	struct DummyCodeExecutor {
 		change_changes_trie_config: bool,

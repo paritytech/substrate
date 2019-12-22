@@ -2,7 +2,7 @@ macro_rules! reserved {
 	($($reserved:ident)*) => {
 		$(
 			mod $reserved {
-				pub use support::dispatch;
+				pub use frame_support::dispatch;
 
 				pub trait Trait {
 					type Origin;
@@ -10,16 +10,16 @@ macro_rules! reserved {
 				}
 
 				pub mod system {
-					use support::dispatch;
+					use frame_support::dispatch;
 
-					pub fn ensure_root<R>(_: R) -> dispatch::Result {
+					pub fn ensure_root<R>(_: R) -> dispatch::DispatchResult {
 						Ok(())
 					}
 				}
 
-				support::decl_module! {
+				frame_support::decl_module! {
 					pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-						fn $reserved(_origin) -> dispatch::Result { unreachable!() }
+						fn $reserved(_origin) -> dispatch::DispatchResult { unreachable!() }
 					}
 				}
 			}

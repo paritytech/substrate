@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sp_std::{prelude::*, slice, marker, mem, vec, rc::Rc};
 use codec::{Decode, Encode};
-use primitives::sandbox as sandbox_primitives;
-use super::{Error, TypedValue, ReturnValue, HostFuncType};
+use sp_core::sandbox as sandbox_primitives;
 use sp_io::sandbox;
+use sp_std::{prelude::*, slice, marker, mem, vec, rc::Rc};
+use super::{Error, TypedValue, ReturnValue, HostFuncType};
 
 mod ffi {
 	use sp_std::mem;

@@ -18,15 +18,15 @@ mod sandbox;
 
 use codec::{Encode, Decode};
 use hex_literal::hex;
-use primitives::{
+use sp_core::{
 	Blake2Hasher, blake2_128, blake2_256, ed25519, sr25519, map, Pair,
 	offchain::{OffchainExt, testing},
 	traits::Externalities,
 };
-use runtime_test::WASM_BINARY;
-use state_machine::TestExternalities as CoreTestExternalities;
+use sc_runtime_test::WASM_BINARY;
+use sp_state_machine::TestExternalities as CoreTestExternalities;
 use test_case::test_case;
-use trie::{TrieConfiguration, trie_types::Layout};
+use sp_trie::{TrieConfiguration, trie_types::Layout};
 
 use crate::WasmExecutionMethod;
 
@@ -128,7 +128,7 @@ fn storage_should_work(wasm_method: WasmExecutionMethod) {
 		assert_eq!(output, b"all ok!".to_vec().encode());
 	}
 
-	let expected = TestExternalities::new(primitives::storage::Storage {
+	let expected = TestExternalities::new(sp_core::storage::Storage {
 		top: map![
 			b"input".to_vec() => b"Hello world".to_vec(),
 			b"foo".to_vec() => b"bar".to_vec(),
@@ -165,7 +165,7 @@ fn clear_prefix_should_work(wasm_method: WasmExecutionMethod) {
 		assert_eq!(output, b"all ok!".to_vec().encode());
 	}
 
-	let expected = TestExternalities::new(primitives::storage::Storage {
+	let expected = TestExternalities::new(sp_core::storage::Storage {
 		top: map![
 			b"aaa".to_vec() => b"1".to_vec(),
 			b"aab".to_vec() => b"2".to_vec(),
@@ -443,7 +443,7 @@ fn ordered_trie_root_should_work(wasm_method: WasmExecutionMethod) {
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn offchain_local_storage_should_work(wasm_method: WasmExecutionMethod) {
-	use primitives::offchain::OffchainStorage;
+	use sp_core::offchain::OffchainStorage;
 
 	let mut ext = TestExternalities::default();
 	let (offchain, state) = testing::TestOffchainExt::new();

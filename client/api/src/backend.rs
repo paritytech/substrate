@@ -18,12 +18,12 @@
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use primitives::ChangesTrieConfiguration;
-use primitives::offchain::OffchainStorage;
+use sp_core::ChangesTrieConfiguration;
+use sp_core::offchain::OffchainStorage;
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use state_machine::backend::Backend as StateBackend;
-use state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction};
+use sp_state_machine::backend::Backend as StateBackend;
+use sp_state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction};
 use crate::{
 	blockchain::{
 		Backend as BlockchainBackend, well_known_cache_keys
@@ -31,7 +31,7 @@ use crate::{
 	light::RemoteBlockchain,
 };
 use sp_blockchain;
-use consensus::BlockOrigin;
+use sp_consensus::BlockOrigin;
 use hash_db::Hasher;
 use parking_lot::RwLock;
 

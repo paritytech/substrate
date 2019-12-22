@@ -19,7 +19,7 @@
 use node_primitives::Balance;
 use sp_runtime::traits::{Convert, Saturating};
 use sp_runtime::{Fixed64, Perbill};
-use support::{traits::{OnUnbalanced, Currency, Get}, weights::Weight};
+use frame_support::{traits::{OnUnbalanced, Currency, Get}, weights::Weight};
 use crate::{Balances, System, Authorship, MaximumBlockWeight, NegativeImbalance};
 
 pub struct Author;
@@ -118,7 +118,7 @@ mod tests {
 	use sp_runtime::assert_eq_error_rate;
 	use crate::{MaximumBlockWeight, AvailableBlockRatio, Runtime};
 	use crate::{constants::currency::*, TransactionPayment, TargetBlockFullness};
-	use support::weights::Weight;
+	use frame_support::weights::Weight;
 
 	fn max() -> Weight {
 		MaximumBlockWeight::get()
@@ -151,7 +151,7 @@ mod tests {
 
 	fn run_with_system_weight<F>(w: Weight, assertions: F) where F: Fn() -> () {
 		let mut t: sp_io::TestExternalities =
-			system::GenesisConfig::default().build_storage::<Runtime>().unwrap().into();
+			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap().into();
 		t.execute_with(|| {
 			System::set_block_limits(w, 0);
 			assertions()
@@ -227,7 +227,7 @@ mod tests {
 				if fm == next { panic!("The fee should ever increase"); }
 				fm = next;
 				iterations += 1;
-				let fee = <Runtime as transaction_payment::Trait>::WeightToFee::convert(tx_weight);
+				let fee = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::convert(tx_weight);
 				let adjusted_fee = fm.saturated_multiply_accumulate(fee);
 				println!(
 					"iteration {}, new fm = {:?}. Fee at this point is: {} units / {} millicents, \

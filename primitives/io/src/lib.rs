@@ -34,7 +34,7 @@ use sp_std::vec::Vec;
 use sp_std::ops::Deref;
 
 #[cfg(feature = "std")]
-use primitives::{
+use sp_core::{
 	crypto::Pair,
 	traits::KeystoreExt,
 	offchain::{OffchainExt, TransactionPoolExt},
@@ -42,7 +42,7 @@ use primitives::{
 	storage::{ChildStorageKey, ChildInfo},
 };
 
-use primitives::{
+use sp_core::{
 	crypto::KeyTypeId, ed25519, sr25519, H256, LogLevel,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
@@ -50,14 +50,14 @@ use primitives::{
 };
 
 #[cfg(feature = "std")]
-use ::trie::{TrieConfiguration, trie_types::Layout};
+use ::sp_trie::{TrieConfiguration, trie_types::Layout};
 
-use runtime_interface::{runtime_interface, Pointer};
+use sp_runtime_interface::{runtime_interface, Pointer};
 
 use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
-use externalities::{ExternalitiesExt, Externalities};
+use sp_externalities::{ExternalitiesExt, Externalities};
 
 /// Error verifying ECDSA signature
 #[derive(Encode, Decode)]
@@ -318,12 +318,12 @@ pub trait Storage {
 pub trait Trie {
 	/// A trie root formed from the iterated items.
 	fn blake2_256_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
-		Layout::<primitives::Blake2Hasher>::trie_root(input)
+		Layout::<sp_core::Blake2Hasher>::trie_root(input)
 	}
 
 	/// A trie root formed from the enumerated items.
 	fn blake2_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
-		Layout::<primitives::Blake2Hasher>::ordered_trie_root(input)
+		Layout::<sp_core::Blake2Hasher>::ordered_trie_root(input)
 	}
 }
 
@@ -332,7 +332,7 @@ pub trait Trie {
 pub trait Misc {
 	/// The current relay chain identifier.
 	fn chain_id(&self) -> u64 {
-		externalities::Externalities::chain_id(*self)
+		sp_externalities::Externalities::chain_id(*self)
 	}
 
 	/// Print a number.
@@ -496,37 +496,37 @@ pub trait Crypto {
 pub trait Hashing {
 	/// Conduct a 256-bit Keccak hash.
 	fn keccak_256(data: &[u8]) -> [u8; 32] {
-		primitives::hashing::keccak_256(data)
+		sp_core::hashing::keccak_256(data)
 	}
 
 	/// Conduct a 256-bit Sha2 hash.
 	fn sha2_256(data: &[u8]) -> [u8; 32] {
-		primitives::hashing::sha2_256(data)
+		sp_core::hashing::sha2_256(data)
 	}
 
 	/// Conduct a 128-bit Blake2 hash.
 	fn blake2_128(data: &[u8]) -> [u8; 16] {
-		primitives::hashing::blake2_128(data)
+		sp_core::hashing::blake2_128(data)
 	}
 
 	/// Conduct a 256-bit Blake2 hash.
 	fn blake2_256(data: &[u8]) -> [u8; 32] {
-		primitives::hashing::blake2_256(data)
+		sp_core::hashing::blake2_256(data)
 	}
 
 	/// Conduct four XX hashes to give a 256-bit result.
 	fn twox_256(data: &[u8]) -> [u8; 32] {
-		primitives::hashing::twox_256(data)
+		sp_core::hashing::twox_256(data)
 	}
 
 	/// Conduct two XX hashes to give a 128-bit result.
 	fn twox_128(data: &[u8]) -> [u8; 16] {
-		primitives::hashing::twox_128(data)
+		sp_core::hashing::twox_128(data)
 	}
 
 	/// Conduct two XX hashes to give a 64-bit result.
 	fn twox_64(data: &[u8]) -> [u8; 8] {
-		primitives::hashing::twox_64(data)
+		sp_core::hashing::twox_64(data)
 	}
 }
 
@@ -881,7 +881,7 @@ pub fn oom(_: core::alloc::Layout) -> ! {
 
 /// Type alias for Externalities implementation used in tests.
 #[cfg(feature = "std")]
-pub type TestExternalities = sp_state_machine::TestExternalities<primitives::Blake2Hasher, u64>;
+pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher, u64>;
 
 /// The host functions Substrate provides for the Wasm runtime environment.
 ///
@@ -902,9 +902,9 @@ pub type SubstrateHostFunctions = (
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::map;
+	use sp_core::map;
 	use sp_state_machine::BasicExternalities;
-	use primitives::storage::Storage;
+	use sp_core::storage::Storage;
 
 	#[test]
 	fn storage_works() {

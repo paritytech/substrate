@@ -425,7 +425,7 @@ mod trie_constants {
 mod tests {
 	use super::*;
 	use codec::{Encode, Compact};
-	use primitives::Blake2Hasher;
+	use sp_core::Blake2Hasher;
 	use hash_db::{HashDB, Hasher};
 	use trie_db::{DBValue, TrieMut, Trie, NodeCodec as NodeCodecT};
 	use trie_standardmap::{Alphabet, ValueMode, StandardMap};

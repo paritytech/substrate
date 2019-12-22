@@ -29,19 +29,19 @@ use super::{
 };
 
 use log::{debug, warn};
-use client_api::{BlockImportNotification, ImportNotifications};
+use sc_client_api::{BlockImportNotification, ImportNotifications};
 use futures::prelude::*;
 use futures::stream::Fuse;
 use futures_timer::Delay;
 use futures03::{StreamExt as _, TryStreamExt as _};
-use grandpa::voter;
+use finality_grandpa::voter;
 use parking_lot::Mutex;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
 use std::time::{Duration, Instant};
-use fg_primitives::AuthorityId;
+use sp_finality_grandpa::AuthorityId;
 
 const LOG_PENDING_INTERVAL: Duration = Duration::from_secs(15);
 
@@ -475,13 +475,13 @@ mod tests {
 	use super::*;
 	use crate::{CatchUp, CompactCommit};
 	use tokio::runtime::current_thread::Runtime;
-	use test_client::runtime::{Block, Hash, Header};
-	use consensus_common::BlockOrigin;
-	use client_api::BlockImportNotification;
+	use substrate_test_runtime_client::runtime::{Block, Hash, Header};
+	use sp_consensus::BlockOrigin;
+	use sc_client_api::BlockImportNotification;
 	use futures::future::Either;
 	use futures_timer::Delay;
 	use futures03::{channel::mpsc, future::FutureExt as _, future::TryFutureExt as _};
-	use grandpa::Precommit;
+	use finality_grandpa::Precommit;
 
 	#[derive(Clone)]
 	struct TestChainState {
@@ -543,7 +543,7 @@ mod tests {
 	}
 
 	impl BlockSyncRequesterT<Block> for TestBlockSyncRequester {
-		fn set_sync_fork_request(&self, _peers: Vec<network::PeerId>, hash: Hash, number: NumberFor<Block>) {
+		fn set_sync_fork_request(&self, _peers: Vec<sc_network::PeerId>, hash: Hash, number: NumberFor<Block>) {
 			self.requests.lock().push((hash, number));
 		}
 	}
@@ -741,10 +741,10 @@ mod tests {
 		let h3 = make_header(7);
 
 		let signed_prevote = |header: &Header| {
-			grandpa::SignedPrevote {
+			finality_grandpa::SignedPrevote {
 				id: Default::default(),
 				signature: Default::default(),
-				prevote: grandpa::Prevote {
+				prevote: finality_grandpa::Prevote {
 					target_hash: header.hash(),
 					target_number: *header.number(),
 				},
@@ -752,10 +752,10 @@ mod tests {
 		};
 
 		let signed_precommit = |header: &Header| {
-			grandpa::SignedPrecommit {
+			finality_grandpa::SignedPrecommit {
 				id: Default::default(),
 				signature: Default::default(),
-				precommit: grandpa::Precommit {
+				precommit: finality_grandpa::Precommit {
 					target_hash: header.hash(),
 					target_number: *header.number(),
 				},
@@ -772,7 +772,7 @@ mod tests {
 			signed_precommit(&h2),
 		];
 
-		let unknown_catch_up = grandpa::CatchUp {
+		let unknown_catch_up = finality_grandpa::CatchUp {
 			round_number: 1,
 			prevotes,
 			precommits,
@@ -807,10 +807,10 @@ mod tests {
 		let h3 = make_header(7);
 
 		let signed_prevote = |header: &Header| {
-			grandpa::SignedPrevote {
+			finality_grandpa::SignedPrevote {
 				id: Default::default(),
 				signature: Default::default(),
-				prevote: grandpa::Prevote {
+				prevote: finality_grandpa::Prevote {
 					target_hash: header.hash(),
 					target_number: *header.number(),
 				},
@@ -818,10 +818,10 @@ mod tests {
 		};
 
 		let signed_precommit = |header: &Header| {
-			grandpa::SignedPrecommit {
+			finality_grandpa::SignedPrecommit {
 				id: Default::default(),
 				signature: Default::default(),
-				precommit: grandpa::Precommit {
+				precommit: finality_grandpa::Precommit {
 					target_hash: header.hash(),
 					target_number: *header.number(),
 				},
@@ -838,7 +838,7 @@ mod tests {
 			signed_precommit(&h2),
 		];
 
-		let unknown_catch_up = grandpa::CatchUp {
+		let unknown_catch_up = finality_grandpa::CatchUp {
 			round_number: 1,
 			prevotes,
 			precommits,

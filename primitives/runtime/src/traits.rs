@@ -23,18 +23,18 @@ use sp_io;
 use std::fmt::Display;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use primitives::{self, Hasher, Blake2Hasher, TypeId};
+use sp_core::{self, Hasher, Blake2Hasher, TypeId};
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
 use crate::generic::{Digest, DigestItem};
-pub use arithmetic::traits::{
+pub use sp_arithmetic::traits::{
 	SimpleArithmetic, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
 	CheckedShl, CheckedShr, IntegerSquareRoot
 };
-use app_crypto::AppKey;
+use sp_application_crypto::AppKey;
 use impl_trait_for_tuples::impl_for_tuples;
 
 /// A lazy value.
@@ -49,8 +49,8 @@ impl<'a> Lazy<[u8]> for &'a [u8] {
 	fn get(&mut self) -> &[u8] { &**self }
 }
 
-/// Some type that is able to be collapsed into an account ID. It is not possible to recreate the original value from
-/// the account ID.
+/// Some type that is able to be collapsed into an account ID. It is not possible to recreate the
+/// original value from the account ID.
 pub trait IdentifyAccount {
 	/// The account ID that this can be transformed into.
 	type AccountId;
@@ -58,17 +58,17 @@ pub trait IdentifyAccount {
 	fn into_account(self) -> Self::AccountId;
 }
 
-impl IdentifyAccount for primitives::ed25519::Public {
+impl IdentifyAccount for sp_core::ed25519::Public {
 	type AccountId = Self;
 	fn into_account(self) -> Self { self }
 }
 
-impl IdentifyAccount for primitives::sr25519::Public {
+impl IdentifyAccount for sp_core::sr25519::Public {
 	type AccountId = Self;
 	fn into_account(self) -> Self { self }
 }
 
-impl IdentifyAccount for primitives::ecdsa::Public {
+impl IdentifyAccount for sp_core::ecdsa::Public {
 	type AccountId = Self;
 	fn into_account(self) -> Self { self }
 }
@@ -81,23 +81,23 @@ pub trait Verify {
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool;
 }
 
-impl Verify for primitives::ed25519::Signature {
-	type Signer = primitives::ed25519::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ed25519::Public) -> bool {
+impl Verify for sp_core::ed25519::Signature {
+	type Signer = sp_core::ed25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::ed25519::Public) -> bool {
 		sp_io::crypto::ed25519_verify(self, msg.get(), signer)
 	}
 }
 
-impl Verify for primitives::sr25519::Signature {
-	type Signer = primitives::sr25519::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::sr25519::Public) -> bool {
+impl Verify for sp_core::sr25519::Signature {
+	type Signer = sp_core::sr25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::sr25519::Public) -> bool {
 		sp_io::crypto::sr25519_verify(self, msg.get(), signer)
 	}
 }
 
-impl Verify for primitives::ecdsa::Signature {
-	type Signer = primitives::ecdsa::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ecdsa::Public) -> bool {
+impl Verify for sp_core::ecdsa::Signature {
+	type Signer = sp_core::ecdsa::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::ecdsa::Public) -> bool {
 		match sp_io::crypto::secp256k1_ecdsa_recover_compressed(
 			self.as_ref(),
 			&sp_io::hashing::blake2_256(msg.get()),
@@ -117,30 +117,30 @@ pub trait AppVerify {
 }
 
 impl<
-	S: Verify<Signer=<<T as AppKey>::Public as app_crypto::AppPublic>::Generic> + From<T>,
-	T: app_crypto::Wraps<Inner=S> + app_crypto::AppKey + app_crypto::AppSignature +
+	S: Verify<Signer=<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic> + From<T>,
+	T: sp_application_crypto::Wraps<Inner=S> + sp_application_crypto::AppKey + sp_application_crypto::AppSignature +
 		AsRef<S> + AsMut<S> + From<S>,
 > AppVerify for T where
 	<S as Verify>::Signer: IdentifyAccount<AccountId = <S as Verify>::Signer>,
-	<<T as AppKey>::Public as app_crypto::AppPublic>::Generic:
-		IdentifyAccount<AccountId = <<T as AppKey>::Public as app_crypto::AppPublic>::Generic>,
+	<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic:
+		IdentifyAccount<AccountId = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic>,
 {
 	type AccountId = <T as AppKey>::Public;
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<T as AppKey>::Public) -> bool {
-		use app_crypto::IsWrappedBy;
+		use sp_application_crypto::IsWrappedBy;
 		let inner: &S = self.as_ref();
-		let inner_pubkey = <<T as AppKey>::Public as app_crypto::AppPublic>::Generic::from_ref(&signer);
+		let inner_pubkey = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic::from_ref(&signer);
 		Verify::verify(inner, msg, inner_pubkey)
 	}
 }
 
 /// An error type that indicates that the origin is invalid.
 #[derive(Encode, Decode)]
-pub struct InvalidOrigin;
+pub struct BadOrigin;
 
-impl From<InvalidOrigin> for &'static str {
-	fn from(_: InvalidOrigin) -> &'static str {
-		"Invalid origin"
+impl From<BadOrigin> for &'static str {
+	fn from(_: BadOrigin) -> &'static str {
+		"Bad origin"
 	}
 }
 
@@ -149,8 +149,8 @@ pub trait EnsureOrigin<OuterOrigin> {
 	/// A return type.
 	type Success;
 	/// Perform the origin check.
-	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, InvalidOrigin> {
-		Self::try_origin(o).map_err(|_| InvalidOrigin)
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, BadOrigin> {
+		Self::try_origin(o).map_err(|_| BadOrigin)
 	}
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
@@ -358,7 +358,7 @@ pub trait OffchainWorker<BlockNumber> {
 	/// This function is being called after every block import (when fully synced).
 	///
 	/// Implement this and use any of the `Offchain` `sp_io` set of APIs
-	/// to perform offchain computations, calls and submit transactions
+	/// to perform off-chain computations, calls and submit transactions
 	/// with results to trigger any on-chain changes.
 	/// Any state alterations are lost and are not persisted.
 	fn offchain_worker(_n: BlockNumber) {}
@@ -391,12 +391,12 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 }
 
 /// Blake2-256 Hash implementation.
-#[derive(PartialEq, Eq, Clone, primitives::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, sp_core::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
-	type Output = primitives::H256;
+	type Output = sp_core::H256;
 	type Hasher = Blake2Hasher;
 	fn hash(s: &[u8]) -> Self::Output {
 		sp_io::hashing::blake2_256(s).into()
@@ -417,10 +417,10 @@ pub trait CheckEqual {
 	fn check_equal(&self, other: &Self);
 }
 
-impl CheckEqual for primitives::H256 {
+impl CheckEqual for sp_core::H256 {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
-		use primitives::hexdisplay::HexDisplay;
+		use sp_core::hexdisplay::HexDisplay;
 		if self != other {
 			println!(
 				"Hash: given={}, expected={}",
@@ -498,9 +498,9 @@ pub trait RandomnessBeacon {
 	/// # Security
 	///
 	/// This MUST NOT be used for gambling, as it can be influenced by a
-	/// malicious validator in the short term.  It MAY be used in many
+	/// malicious validator in the short term. It MAY be used in many
 	/// cryptographic protocols, however, so long as one remembers that this
-	/// (like everything else on-chain) is public.  For example, it can be
+	/// (like everything else on-chain) is public. For example, it can be
 	/// used where a number is needed that cannot have been chosen by an
 	/// adversary, for purposes such as public-coin zero-knowledge proofs.
 	fn random() -> [u8; 32];
@@ -524,7 +524,7 @@ pub trait IsMember<MemberId> {
 pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Header number.
 	type Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
-		+ Copy + MaybeDisplay + SimpleArithmetic + Codec;
+		+ Copy + MaybeDisplay + SimpleArithmetic + Codec + sp_std::str::FromStr;
 	/// Header hash type
 	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
@@ -571,12 +571,12 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 	}
 }
 
-/// Something which fulfills the abstract idea of a Substrate block. It has types for an
-/// `Extrinsic` piece of information as well as a `Header`.
+/// Something which fulfills the abstract idea of a Substrate block. It has types for
+/// `Extrinsic` pieces of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
 pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
-	/// Type of extrinsics.
+	/// Type for extrinsics.
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	/// Header type.
 	type Header: Header<Hash=Self::Hash>;
@@ -596,7 +596,8 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 	fn hash(&self) -> Self::Hash {
 		<<Self::Header as Header>::Hashing as Hash>::hash_of(self.header())
 	}
-	/// Create an encoded block from the given `header` and `extrinsics` without requiring to create an instance.
+	/// Creates an encoded block from the given `header` and `extrinsics` without requiring the
+	/// creation of an instance.
 	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8>;
 }
 
@@ -667,10 +668,6 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	}
 }
 
-/// Result of a module function call; either nothing (functions are only called for "side effects")
-/// or an error message.
-pub type DispatchResult<Error> = result::Result<(), Error>;
-
 /// A lazy call (module function and argument values) that can be executed via its `dispatch`
 /// method.
 pub trait Dispatchable {
@@ -680,10 +677,8 @@ pub trait Dispatchable {
 	type Origin;
 	/// ...
 	type Trait;
-	/// The error type returned by this dispatchable.
-	type Error: Into<crate::DispatchError>;
 	/// Actually dispatch this call and result the result of it.
-	fn dispatch(self, origin: Self::Origin) -> DispatchResult<Self::Error>;
+	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResult;
 }
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
@@ -703,7 +698,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	type Pre: Default;
 
 	/// An opaque set of information attached to the transaction. This could be constructed anywhere
-	/// down the line in a runtime. The current substrate runtime uses a struct with the same name
+	/// down the line in a runtime. The current Substrate runtime uses a struct with the same name
 	/// to represent the dispatch class and weight.
 	type DispatchInfo: Clone;
 
@@ -716,7 +711,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	/// This function can be called frequently by the transaction queue,
 	/// to obtain transaction validity against current state.
 	/// It should perform all checks that determine a valid transaction,
-	/// that can pay for it's execution and quickly eliminate ones
+	/// that can pay for its execution and quickly eliminate ones
 	/// that are stale or incorrect.
 	///
 	/// Make sure to perform the same checks in `pre_dispatch` function.
@@ -752,7 +747,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Validate an unsigned transaction for the transaction queue.
 	///
-	/// This function can be called frequently by the transaction queue,
+	/// This function can be called frequently by the transaction queue
 	/// to obtain transaction validity against current state.
 	/// It should perform all checks that determine a valid unsigned transaction,
 	/// and quickly eliminate ones that are stale or incorrect.
@@ -786,17 +781,6 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Do any post-flight stuff for a transaction.
 	fn post_dispatch(_pre: Self::Pre, _info: Self::DispatchInfo, _len: usize) { }
-}
-
-/// An error that is returned by a dispatchable function of a module.
-pub trait ModuleDispatchError {
-	/// Convert this error to an `u8`.
-	///
-	/// The `u8` corresponds to the index of the variant in the error enum.
-	fn as_u8(&self) -> u8;
-
-	/// Convert the error to a `&'static str`.
-	fn as_str(&self) -> &'static str;
 }
 
 #[impl_for_tuples(1, 12)]
@@ -875,10 +859,10 @@ impl SignedExtension for () {
 /// Also provides information on to whom this information is attributable and an index that allows
 /// each piece of attributable information to be disambiguated.
 pub trait Applyable: Sized + Send + Sync {
-	/// Id of the account that is responsible for this piece of information (sender).
+	/// ID of the account that is responsible for this piece of information (sender).
 	type AccountId: Member + MaybeDisplay;
 
-	/// Type by which we can dispatch. Restricts the UnsignedValidator type.
+	/// Type by which we can dispatch. Restricts the `UnsignedValidator` type.
 	type Call;
 
 	/// An opaque set of information attached to the transaction.
@@ -1281,8 +1265,8 @@ mod tests {
 	use crate::codec::{Encode, Decode, Input};
 
 	mod t {
-		use primitives::crypto::KeyTypeId;
-		use app_crypto::{app_crypto, sr25519};
+		use sp_core::crypto::KeyTypeId;
+		use sp_application_crypto::{app_crypto, sr25519};
 		app_crypto!(sr25519, KeyTypeId(*b"test"));
 	}
 

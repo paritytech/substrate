@@ -22,20 +22,20 @@ use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
-use client_api::backend::{AuxStore, NewBlockState};
-use client::blockchain::{
+use sc_client_api::backend::{AuxStore, NewBlockState};
+use sc_client::blockchain::{
 	BlockStatus, Cache as BlockchainCache,Info as BlockchainInfo,
 };
-use client::cht;
+use sc_client::cht;
 use sp_blockchain::{
 	CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache,
 	Error as ClientError, Result as ClientResult,
 	HeaderBackend as BlockchainHeaderBackend, 
 	well_known_cache_keys,
 };
-use client::light::blockchain::Storage as LightBlockchainStorage;
+use sc_client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
-use primitives::Blake2Hasher;
+use sp_core::Blake2Hasher;
 use sp_runtime::generic::{DigestItem, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
@@ -559,14 +559,14 @@ fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-	use client::cht;
+	use sc_client::cht;
 	use sp_runtime::generic::DigestItem;
 	use sp_runtime::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
 	use sp_blockchain::{lowest_common_ancestor, tree_route};
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
-	type AuthorityId = primitives::ed25519::Public;
+	type AuthorityId = sp_core::ed25519::Public;
 
 	pub fn default_header(parent: &Hash, number: u64) -> Header {
 		Header {

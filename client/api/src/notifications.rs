@@ -23,7 +23,7 @@ use std::{
 
 use fnv::{FnvHashSet, FnvHashMap};
 use futures::channel::mpsc;
-use primitives::storage::{StorageKey, StorageData};
+use sp_core::storage::{StorageKey, StorageData};
 use sp_runtime::traits::Block as BlockT;
 
 /// Storage change set

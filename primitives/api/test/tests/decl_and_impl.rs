@@ -18,7 +18,7 @@ use sp_api::{RuntimeApiInfo, decl_runtime_apis, impl_runtime_apis};
 
 use sp_runtime::{traits::{GetNodeBlockType, Block as BlockT}, generic::BlockId};
 
-use test_client::runtime::Block;
+use substrate_test_runtime_client::runtime::Block;
 use sp_blockchain::Result;
 
 /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
@@ -81,8 +81,11 @@ impl_runtime_apis! {
 	}
 }
 
-type TestClient = test_client::client::Client<
-	test_client::Backend, test_client::Executor, Block, RuntimeApi
+type TestClient = substrate_test_runtime_client::sc_client::Client<
+	substrate_test_runtime_client::Backend,
+	substrate_test_runtime_client::Executor,
+	Block,
+	RuntimeApi,
 >;
 
 #[test]

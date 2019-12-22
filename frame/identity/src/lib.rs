@@ -69,20 +69,20 @@ use sp_std::prelude::*;
 use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
-use sp_runtime::{traits::{StaticLookup, EnsureOrigin, Zero}, RuntimeDebug};
-use support::{
-	decl_module, decl_event, decl_storage, ensure, dispatch::Result,
+use sp_runtime::{DispatchResult, traits::{StaticLookup, EnsureOrigin, Zero}, RuntimeDebug};
+use frame_support::{
+	decl_module, decl_event, decl_storage, ensure,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
 	weights::SimpleDispatchInfo,
 };
-use system::{ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root};
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The currency trait.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -93,10 +93,12 @@ pub trait Trait: system::Trait {
 	/// The amount held on deposit per additional field for a registered identity.
 	type FieldDeposit: Get<BalanceOf<Self>>;
 
-	/// The amount held on deposit for a registered subaccount.
+	/// The amount held on deposit for a registered subaccount. This should account for the fact
+	/// that one storage item's value will increase by the size of an account ID, and there will be
+	/// another trie item whose value is the size of an account ID plus 32 bytes.
 	type SubAccountDeposit: Get<BalanceOf<Self>>;
 
-	/// The amount held on deposit for a registered subaccount.
+	/// The maximum number of sub-accounts allowed per identified account.
 	type MaximumSubAccounts: Get<u32>;
 
 	/// What to do with slashed funds.
@@ -363,11 +365,14 @@ decl_storage! {
 		/// Information that is pertinent to identify the entity behind an account.
 		pub IdentityOf get(fn identity): map T::AccountId => Option<Registration<BalanceOf<T>>>;
 
+		/// The super-identity of an alternative "sub" identity together with its name, within that
+		/// context. If the account is not some other account's sub-identity, then just `None`.
+		pub SuperOf get(fn super_of): map T::AccountId => Option<(T::AccountId, Data)>;
+
 		/// Alternative "sub" identities of this account.
 		///
-		/// The first item is the deposit, the second is a vector of the accounts together with
-		/// their "local" name (i.e. in the context of the identity).
-		pub SubsOf get(fn subs): map T::AccountId => (BalanceOf<T>, Vec<(T::AccountId, Data)>);
+		/// The first item is the deposit, the second is a vector of the accounts.
+		pub SubsOf get(fn subs): map T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
 		/// The set of registrars. Not expected to get very big as can only be added through a
 		/// special origin (likely a council motion).
@@ -378,7 +383,7 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId, Balance = BalanceOf<T> {
+	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
 		/// A name was set or reset (which will remove all judgements).
 		IdentitySet(AccountId),
 		/// A name was cleared, and the given balance returned.
@@ -418,8 +423,7 @@ decl_module! {
 		fn add_registrar(origin, account: T::AccountId) {
 			T::RegistrarOrigin::try_origin(origin)
 				.map(|_| ())
-				.or_else(ensure_root)
-				.map_err(|_| "bad origin")?;
+				.or_else(ensure_root)?;
 
 			let i = <Registrars<T>>::mutate(|r| {
 				r.push(Some(RegistrarInfo { account, fee: Zero::zero(), fields: Default::default() }));
@@ -488,14 +492,15 @@ decl_module! {
 		/// # <weight>
 		/// - `O(S)` where `S` subs-count (hard- and deposit-bounded).
 		/// - At most two balance operations.
-		/// - One storage mutation (codec `O(S)`); one storage-exists.
+		/// - At most O(2 * S + 1) storage mutations; codec complexity `O(1 * S + S * 1)`);
+		///   one storage-exists.
 		/// # </weight>
 		fn set_subs(origin, subs: Vec<(T::AccountId, Data)>) {
 			let sender = ensure_signed(origin)?;
 			ensure!(<IdentityOf<T>>::exists(&sender), "not found");
 			ensure!(subs.len() <= T::MaximumSubAccounts::get() as usize, "too many subs");
 
-			let old_deposit = <SubsOf<T>>::get(&sender).0;
+			let (old_deposit, old_ids) = <SubsOf<T>>::get(&sender);
 			let new_deposit = T::SubAccountDeposit::get() * <BalanceOf<T>>::from(subs.len() as u32);
 
 			if old_deposit < new_deposit {
@@ -506,10 +511,18 @@ decl_module! {
 				let _ = T::Currency::unreserve(&sender, old_deposit - new_deposit);
 			}
 
-			if subs.is_empty() {
+			for s in old_ids.iter() {
+				<SuperOf<T>>::remove(s);
+			}
+			let ids = subs.into_iter().map(|(id, name)| {
+				<SuperOf<T>>::insert(&id, (sender.clone(), name));
+				id
+			}).collect::<Vec<_>>();
+
+			if ids.is_empty() {
 				<SubsOf<T>>::remove(&sender);
 			} else {
-				<SubsOf<T>>::insert(&sender, (new_deposit, subs));
+				<SubsOf<T>>::insert(&sender, (new_deposit, ids));
 			}
 		}
 
@@ -525,14 +538,18 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R + S + X)`.
 		/// - One balance-reserve operation.
-		/// - Two storage mutations.
+		/// - `S + 2` storage deletions.
 		/// - One event.
 		/// # </weight>
 		fn clear_identity(origin) {
 			let sender = ensure_signed(origin)?;
 
+			let (subs_deposit, sub_ids) = <SubsOf<T>>::take(&sender);
 			let deposit = <IdentityOf<T>>::take(&sender).ok_or("not named")?.total_deposit()
-				+ <SubsOf<T>>::take(&sender).0;
+				+ subs_deposit;
+			for sub in sub_ids.iter() {
+				<SuperOf<T>>::remove(sub);
+			}
 
 			let _ = T::Currency::unreserve(&sender, deposit.clone());
 
@@ -577,7 +594,7 @@ decl_module! {
 			let item = (reg_index, Judgement::FeePaid(registrar.fee));
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
 				Ok(i) => if id.judgements[i].1.is_sticky() {
-					return Err("sticky judgement")
+					Err("sticky judgement")?
 				} else {
 					id.judgements[i] = item
 				},
@@ -618,7 +635,7 @@ decl_module! {
 			let fee = if let Judgement::FeePaid(fee) = id.judgements.remove(pos).1 {
 				fee
 			} else {
-				return Err("judgement given")
+				Err("judgement given")?
 			};
 
 			let _ = T::Currency::unreserve(&sender, fee);
@@ -643,14 +660,41 @@ decl_module! {
 		fn set_fee(origin,
 			#[compact] index: RegistrarIndex,
 			#[compact] fee: BalanceOf<T>,
-		) -> Result {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			<Registrars<T>>::mutate(|rs|
 				rs.get_mut(index as usize)
 					.and_then(|x| x.as_mut())
 					.and_then(|r| if r.account == who { r.fee = fee; Some(()) } else { None })
-					.ok_or("invalid index")
+					.ok_or_else(|| "invalid index".into())
+			)
+		}
+
+		/// Change the account associated with a registrar.
+		///
+		/// The dispatch origin for this call must be _Signed_ and the sender must be the account
+		/// of the registrar whose index is `index`.
+		///
+		/// - `index`: the index of the registrar whose fee is to be set.
+		/// - `new`: the new account ID.
+		///
+		/// # <weight>
+		/// - `O(R)`.
+		/// - One storage mutation `O(R)`.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		fn set_account_id(origin,
+			#[compact] index: RegistrarIndex,
+			new: T::AccountId,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			<Registrars<T>>::mutate(|rs|
+				rs.get_mut(index as usize)
+					.and_then(|x| x.as_mut())
+					.and_then(|r| if r.account == who { r.account = new; Some(()) } else { None })
+					.ok_or_else(|| "invalid index".into())
 			)
 		}
 
@@ -670,14 +714,14 @@ decl_module! {
 		fn set_fields(origin,
 			#[compact] index: RegistrarIndex,
 			fields: IdentityFields,
-		) -> Result {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			<Registrars<T>>::mutate(|rs|
 				rs.get_mut(index as usize)
 					.and_then(|x| x.as_mut())
 					.and_then(|r| if r.account == who { r.fields = fields; Some(()) } else { None })
-					.ok_or("invalid index")
+					.ok_or_else(|| "invalid index".into())
 			)
 		}
 
@@ -746,21 +790,24 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R + S + X)`.
 		/// - One balance-reserve operation.
-		/// - Two storage mutations.
+		/// - `S + 2` storage mutations.
 		/// - One event.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn kill_identity(origin, target: <T::Lookup as StaticLookup>::Source) {
 			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
-				.or_else(ensure_root)
-				.map_err(|_| "bad origin")?;
+				.or_else(ensure_root)?;
 
 			// Figure out who we're meant to be clearing.
 			let target = T::Lookup::lookup(target)?;
 			// Grab their deposit (and check that they have one).
+			let (subs_deposit, sub_ids) = <SubsOf<T>>::take(&target);
 			let deposit = <IdentityOf<T>>::take(&target).ok_or("not named")?.total_deposit()
-				+ <SubsOf<T>>::take(&target).0;
+				+ subs_deposit;
+			for sub in sub_ids.iter() {
+				<SuperOf<T>>::remove(sub);
+			}
 			// Slash their deposit from them.
 			T::Slashed::on_unbalanced(T::Currency::slash_reserved(&target, deposit).0);
 
@@ -773,9 +820,10 @@ decl_module! {
 mod tests {
 	use super::*;
 
-	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
-	use primitives::H256;
-	use system::EnsureSignedBy;
+	use sp_runtime::traits::BadOrigin;
+	use frame_support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
+	use sp_core::H256;
+	use frame_system::EnsureSignedBy;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
@@ -783,7 +831,7 @@ mod tests {
 	};
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	// For testing the module, we construct most of a mock runtime. This means
@@ -797,7 +845,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -813,13 +861,14 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
-	impl balances::Trait for Test {
+	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
@@ -849,15 +898,15 @@ mod tests {
 		type RegistrarOrigin = EnsureSignedBy<One, u64>;
 		type ForceOrigin = EnsureSignedBy<Two, u64>;
 	}
-	type Balances = balances::Module<Test>;
+	type Balances = pallet_balances::Module<Test>;
 	type Identity = Module<Test>;
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
-		balances::GenesisConfig::<Test> {
+		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![
 				(1, 10),
 				(2, 10),
@@ -950,7 +999,7 @@ mod tests {
 	fn killing_slashing_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_noop!(Identity::kill_identity(Origin::signed(1), 10), "bad origin");
+			assert_noop!(Identity::kill_identity(Origin::signed(1), 10), BadOrigin);
 			assert_ok!(Identity::kill_identity(Origin::signed(2), 10));
 			assert_eq!(Identity::identity(10), None);
 			assert_eq!(Balances::free_balance(10), 90);
@@ -967,15 +1016,57 @@ mod tests {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 			assert_eq!(Balances::free_balance(10), 80);
-			assert_eq!(Identity::subs(10), (10, subs.clone()));
+			assert_eq!(Identity::subs(10), (10, vec![20]));
+			assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1]))));
 
+			// push another item and re-set it.
+			subs.push((30, Data::Raw(vec![50; 1])));
+			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
+			assert_eq!(Balances::free_balance(10), 70);
+			assert_eq!(Identity::subs(10), (20, vec![20, 30]));
+			assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1]))));
+			assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1]))));
+
+			// switch out one of the items and re-set.
+			subs[0] = (40, Data::Raw(vec![60; 1]));
+			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
+			assert_eq!(Balances::free_balance(10), 70); // no change in the balance
+			assert_eq!(Identity::subs(10), (20, vec![40, 30]));
+			assert_eq!(Identity::super_of(20), None);
+			assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1]))));
+			assert_eq!(Identity::super_of(40), Some((10, Data::Raw(vec![60; 1]))));
+
+			// clear
 			assert_ok!(Identity::set_subs(Origin::signed(10), vec![]));
 			assert_eq!(Balances::free_balance(10), 90);
 			assert_eq!(Identity::subs(10), (0, vec![]));
+			assert_eq!(Identity::super_of(30), None);
+			assert_eq!(Identity::super_of(40), None);
 
-			subs.push((30, Data::Raw(vec![41; 1])));
-			subs.push((40, Data::Raw(vec![42; 1])));
+			subs.push((20, Data::Raw(vec![40; 1])));
 			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone()), "too many subs");
+		});
+	}
+
+	#[test]
+	fn clearing_account_should_remove_subaccounts_and_refund() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+			assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1]))]));
+			assert_ok!(Identity::clear_identity(Origin::signed(10)));
+			assert_eq!(Balances::free_balance(10), 100);
+			assert!(Identity::super_of(20).is_none());
+		});
+	}
+
+	#[test]
+	fn killing_account_should_remove_subaccounts_and_not_refund() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+			assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1]))]));
+			assert_ok!(Identity::kill_identity(Origin::ROOT, 10));
+			assert_eq!(Balances::free_balance(10), 80);
+			assert!(Identity::super_of(20).is_none());
 		});
 	}
 
@@ -1038,6 +1129,19 @@ mod tests {
 				], .. Default::default()
 			}));
 			assert_eq!(Balances::free_balance(10), 70);
+		});
+	}
+
+	#[test]
+	fn setting_account_id_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			// account 4 cannot change the first registrar's identity since it's owned by 3.
+			assert_noop!(Identity::set_account_id(Origin::signed(4), 0, 3), "invalid index");
+			// account 3 can, because that's the registrar's current account.
+			assert_ok!(Identity::set_account_id(Origin::signed(3), 0, 4));
+			// account 4 can now, because that's their new ID.
+			assert_ok!(Identity::set_account_id(Origin::signed(4), 0, 3));
 		});
 	}
 }

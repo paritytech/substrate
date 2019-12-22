@@ -24,7 +24,7 @@ use codec::{Decode, Encode};
 use hex_literal::hex;
 use node_primitives::{Balance, Hash, Index, AccountId, Signature};
 use node_runtime::{BalancesCall, Call, Runtime, SignedPayload, UncheckedExtrinsic, VERSION};
-use primitives::{
+use sp_core::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, Ss58Codec},
 	ed25519, sr25519, ecdsa, Pair, Public, H256, hexdisplay::HexDisplay,
 };
@@ -165,8 +165,9 @@ fn get_app<'a, 'b>() -> App<'a, 'b> {
 			-k, --secp256k1 'Use SECP256k1/ECDSA/BIP39 cryptography'
 			-s, --sr25519 'Use Schnorr/Ristretto x25519/BIP39 cryptography'
 			[network] -n, --network <network> 'Specify a network. One of substrate \
-									 (default), polkadot, kusama, dothereum, or kulupu'
+									 (default), polkadot, kusama, dothereum, edgeware, or kulupu'
 			[password] -p, --password <password> 'The password for the key'
+			--password-interactive 'You will be prompted for the password for the key.'
 		")
 		.subcommands(vec![
 			SubCommand::with_name("generate")
@@ -177,8 +178,9 @@ fn get_app<'a, 'b>() -> App<'a, 'b> {
 				"),
 			SubCommand::with_name("inspect")
 				.about("Gets a public key and a SS58 address from the provided Secret URI")
-				.args_from_usage("<uri> 'A Key URI to be inspected. May be a secret seed, \
-						secret URI (with derivation paths and password), SS58 or public URI.'
+				.args_from_usage("[uri] 'A Key URI to be inspected. May be a secret seed, \
+						secret URI (with derivation paths and password), SS58 or public URI. \
+						If not given, you will be prompted for the URI.'
 				"),
 			SubCommand::with_name("sign")
 				.about("Sign a message, provided on STDIN, with a given (secret) key")
@@ -197,7 +199,7 @@ fn get_app<'a, 'b>() -> App<'a, 'b> {
 					-s, --suri <suri> 'The secret key URI.'
 				"),
 			SubCommand::with_name("transfer")
-				.about("Author and sign a Node balances::Transfer transaction with a given (secret) key")
+				.about("Author and sign a Node pallet_balances::Transfer transaction with a given (secret) key")
 				.args_from_usage("
 					<genesis> -g, --genesis <genesis> 'The genesis hash or a recognised \
 											chain identifier (dev, elm, alex).'
@@ -240,11 +242,25 @@ where
 	SignatureOf<C>: SignatureT,
 	PublicOf<C>: PublicT,
 {
+	let password_interactive = matches.is_present("password-interactive");
 	let password = matches.value_of("password");
+
+	let password = if password.is_some() && password_interactive {
+		panic!("`--password` given and `--password-interactive` selected!");
+	} else if password_interactive {
+		Some(
+			rpassword::read_password_from_tty(Some("Key password: "))
+				.expect("Reads password from tty")
+		)
+	} else {
+		password.map(Into::into)
+	};
+	let password = password.as_ref().map(String::as_str);
+
 	let maybe_network: Option<Ss58AddressFormat> = matches.value_of("network").map(|network| {
 		network
 			.try_into()
-			.expect("Invalid network name: must be polkadot/substrate/kusama/dothereum")
+			.expect("Invalid network name: must be polkadot/substrate/kusama/dothereum/edgeware")
 	});
 	if let Some(network) = maybe_network {
 		set_default_ss58_version(network);
@@ -255,10 +271,13 @@ where
 			C::print_from_uri(mnemonic.phrase(), password, maybe_network);
 		}
 		("inspect", Some(matches)) => {
-			let uri = matches
-				.value_of("uri")
-				.expect("URI parameter is required; thus it can't be None; qed");
-			C::print_from_uri(uri, password, maybe_network);
+			let uri = match matches.value_of("uri") {
+				Some(uri) => uri.into(),
+				None => rpassword::read_password_from_tty(Some("URI: "))
+					.expect("Failed to read URI"),
+			};
+
+			C::print_from_uri(&uri, password, maybe_network);
 		}
 		("sign", Some(matches)) => {
 			let should_decode = matches.is_present("hex");
@@ -362,14 +381,15 @@ fn read_message_from_stdin(should_decode: bool) -> Vec<u8> {
 	message
 }
 
-fn read_required_parameter<T: FromStr>(matches: &ArgMatches, name: &str) -> T
-where
+fn read_required_parameter<T: FromStr>(matches: &ArgMatches, name: &str) -> T where
 	<T as FromStr>::Err: std::fmt::Debug,
 {
 	let str_value = matches
 		.value_of(name)
 		.expect("parameter is required; thus it can't be None; qed");
-	str::parse::<T>(str_value).expect("Invalid 'nonce' parameter; expecting an integer.")
+	str::parse::<T>(str_value).unwrap_or_else(|_|
+		panic!("Invalid `{}' parameter; expecting an integer.", name)
+	)
 }
 
 fn read_genesis_hash(matches: &ArgMatches) -> H256 {
@@ -388,8 +408,7 @@ fn read_genesis_hash(matches: &ArgMatches) -> H256 {
 	genesis_hash
 }
 
-fn read_signature<C: Crypto>(matches: &ArgMatches) -> SignatureOf<C>
-where
+fn read_signature<C: Crypto>(matches: &ArgMatches) -> SignatureOf<C> where
 	SignatureOf<C>: SignatureT,
 	PublicOf<C>: PublicT,
 {
@@ -446,8 +465,7 @@ fn read_account_id(matched_uri: Option<&str>) -> AccountId {
 fn read_pair<C: Crypto>(
 	matched_suri: Option<&str>,
 	password: Option<&str>,
-) -> <C as Crypto>::Pair
-where
+) -> <C as Crypto>::Pair where
 	SignatureOf<C>: SignatureT,
 	PublicOf<C>: PublicT,
 {
@@ -484,12 +502,12 @@ fn create_extrinsic<C: Crypto>(
 {
 	let extra = |i: Index, f: Balance| {
 		(
-			system::CheckVersion::<Runtime>::new(),
-			system::CheckGenesis::<Runtime>::new(),
-			system::CheckEra::<Runtime>::from(Era::Immortal),
-			system::CheckNonce::<Runtime>::from(i),
-			system::CheckWeight::<Runtime>::new(),
-			transaction_payment::ChargeTransactionPayment::<Runtime>::from(f),
+			frame_system::CheckVersion::<Runtime>::new(),
+			frame_system::CheckGenesis::<Runtime>::new(),
+			frame_system::CheckEra::<Runtime>::from(Era::Immortal),
+			frame_system::CheckNonce::<Runtime>::from(i),
+			frame_system::CheckWeight::<Runtime>::new(),
+			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(f),
 			Default::default(),
 		)
 	};

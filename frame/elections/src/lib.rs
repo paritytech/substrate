@@ -25,12 +25,11 @@
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	RuntimeDebug,
-	print,
+	RuntimeDebug, DispatchResult, print,
 	traits::{Zero, One, StaticLookup, Bounded, Saturating},
 };
-use support::{
-	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
+use frame_support::{
+	decl_storage, decl_event, ensure, decl_module,
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier,
@@ -38,7 +37,7 @@ use support::{
 	}
 };
 use codec::{Encode, Decode};
-use system::{self, ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root};
 
 mod mock;
 mod tests;
@@ -134,9 +133,9 @@ pub const VOTER_SET_SIZE: usize = 64;
 /// NUmber of approvals grouped in one chunk.
 pub const APPROVAL_SET_SIZE: usize = 8;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 /// Index used to access chunks.
 type SetIndex = u32;
@@ -147,8 +146,8 @@ type ApprovalFlag = u32;
 /// Number of approval flags that can fit into [`ApprovalFlag`] type.
 const APPROVAL_FLAG_LEN: usize = 32;
 
-pub trait Trait: system::Trait {
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+pub trait Trait: frame_system::Trait {
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The currency that people are electing with.
 	type Currency:
@@ -346,7 +345,7 @@ decl_module! {
 			#[compact] index: VoteIndex,
 			hint: SetIndex,
 			#[compact] value: BalanceOf<T>
-		) -> Result {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::do_set_approvals(who, votes, index, hint, value)
 		}
@@ -363,7 +362,7 @@ decl_module! {
 			#[compact] index: VoteIndex,
 			hint: SetIndex,
 			#[compact] value: BalanceOf<T>
-		) -> Result {
+		) -> DispatchResult {
 			let who = Self::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
 			Self::do_set_approvals(who, votes, index, hint, value)
 		}
@@ -526,7 +525,7 @@ decl_module! {
 			candidate: <T::Lookup as StaticLookup>::Source,
 			#[compact] total: BalanceOf<T>,
 			#[compact] index: VoteIndex
-		) -> Result {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(
 				!total.is_zero(),
@@ -587,7 +586,7 @@ decl_module! {
 				// better safe than sorry.
 				let imbalance = T::Currency::slash(&who, bad_presentation_punishment).0;
 				T::BadPresentation::on_unbalanced(imbalance);
-				Err(if dupe { "duplicate presentation" } else { "incorrect total" })
+				Err(if dupe { "duplicate presentation" } else { "incorrect total" })?
 			}
 		}
 
@@ -643,7 +642,7 @@ decl_module! {
 }
 
 decl_event!(
-	pub enum Event<T> where <T as system::Trait>::AccountId {
+	pub enum Event<T> where <T as frame_system::Trait>::AccountId {
 		/// reaped voter, reaper
 		VoterReaped(AccountId, AccountId),
 		/// slashed reaper
@@ -695,7 +694,7 @@ impl<T: Trait> Module<T> {
 					// if there's a tally in progress, then next tally can begin immediately afterwards
 					(tally_end, c.len() - leavers.len() + comers as usize, comers)
 				} else {
-					(<system::Module<T>>::block_number(), c.len(), 0)
+					(<frame_system::Module<T>>::block_number(), c.len(), 0)
 				};
 			if count < desired_seats as usize {
 				Some(next_possible)
@@ -714,7 +713,7 @@ impl<T: Trait> Module<T> {
 
 	// Private
 	/// Check there's nothing to do this block
-	fn end_block(block_number: T::BlockNumber) -> Result {
+	fn end_block(block_number: T::BlockNumber) -> DispatchResult {
 		if (block_number % T::VotingPeriod::get()).is_zero() {
 			if let Some(number) = Self::next_tally() {
 				if block_number == number {
@@ -750,7 +749,7 @@ impl<T: Trait> Module<T> {
 		index: VoteIndex,
 		hint: SetIndex,
 		value: BalanceOf<T>,
-	) -> Result {
+	) -> DispatchResult {
 		let candidates_len = <Self as Store>::Candidates::decode_len().unwrap_or(0_usize);
 
 		ensure!(!Self::presentation_active(), "no approval changes during presentation period");
@@ -851,7 +850,7 @@ impl<T: Trait> Module<T> {
 	fn start_tally() {
 		let members = Self::members();
 		let desired_seats = Self::desired_seats() as usize;
-		let number = <system::Module<T>>::block_number();
+		let number = <frame_system::Module<T>>::block_number();
 		let expiring =
 			members.iter().take_while(|i| i.1 <= number).map(|i| i.0.clone()).collect::<Vec<_>>();
 		let retaining_seats = members.len() - expiring.len();
@@ -873,13 +872,13 @@ impl<T: Trait> Module<T> {
 	/// approved candidates in their place. If the total number of members is less than the desired
 	/// membership a new vote is started. Clears all presented candidates, returning the bond of the
 	/// elected ones.
-	fn finalize_tally() -> Result {
+	fn finalize_tally() -> DispatchResult {
 		let (_, coming, expiring): (T::BlockNumber, u32, Vec<T::AccountId>) =
 			<NextFinalize<T>>::take()
 				.ok_or("finalize can only be called after a tally is started.")?;
 		let leaderboard: Vec<(BalanceOf<T>, T::AccountId)> = <Leaderboard<T>>::take()
 			.unwrap_or_default();
-		let new_expiry = <system::Module<T>>::block_number() + Self::term_duration();
+		let new_expiry = <frame_system::Module<T>>::block_number() + Self::term_duration();
 
 		// return bond to winners.
 		let candidacy_bond = T::CandidacyBond::get();

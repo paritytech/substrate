@@ -21,7 +21,7 @@
 use sp_std::vec::Vec;
 
 mod app {
-	use app_crypto::{app_crypto, key_types::AUTHORITY_DISCOVERY, sr25519};
+	use sp_application_crypto::{app_crypto, key_types::AUTHORITY_DISCOVERY, sr25519};
 	app_crypto!(sr25519, AUTHORITY_DISCOVERY);
 }
 

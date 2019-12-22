@@ -18,12 +18,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use runtime_interface::runtime_interface;
+use sp_runtime_interface::runtime_interface;
 
 #[cfg(not(feature = "std"))]
 use sp_std::{vec, vec::Vec, mem, convert::TryFrom};
 
-use primitives::{sr25519::Public, wasm_export_functions};
+use sp_core::{sr25519::Public, wasm_export_functions};
 
 // Inlucde the WASM binary
 #[cfg(feature = "std")]

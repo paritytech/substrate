@@ -39,9 +39,9 @@ use std::path::PathBuf;
 use std::io;
 use std::collections::{HashMap, HashSet};
 
-use client_api::{execution_extensions::ExecutionExtensions, ForkBlocks};
-use client_api::backend::NewBlockState;
-use client_api::backend::{StorageCollection, ChildStorageCollection};
+use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks};
+use sc_client_api::backend::NewBlockState;
+use sc_client_api::backend::{StorageCollection, ChildStorageCollection};
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
 	well_known_cache_keys, HeaderBackend,
@@ -49,10 +49,10 @@ use sp_blockchain::{
 use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
 use kvdb::{KeyValueDB, DBTransaction};
-use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
+use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::{Mutex, RwLock};
-use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash, traits::CodeExecutor};
-use primitives::storage::{well_known_keys, ChildInfo};
+use sp_core::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash, traits::CodeExecutor};
+use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_runtime::{
 	generic::{BlockId, DigestItem}, Justification, Storage,
 	BuildStorage,
@@ -60,21 +60,21 @@ use sp_runtime::{
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion
 };
-use executor::RuntimeInfo;
-use state_machine::{
+use sc_executor::RuntimeInfo;
+use sp_state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, ChangesTrieBuildCache,
 	backend::Backend as StateBackend,
 };
 use crate::utils::{Meta, db_err, meta_keys, read_db, read_meta};
-use client::leaves::{LeafSet, FinalizationDisplaced};
-use state_db::StateDb;
+use sc_client::leaves::{LeafSet, FinalizationDisplaced};
+use sc_state_db::StateDb;
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
-pub use state_db::PruningMode;
+pub use sc_state_db::PruningMode;
 
 #[cfg(feature = "test-helpers")]
-use client::in_mem::Backend as InMemoryBackend;
+use sc_client::in_mem::Backend as InMemoryBackend;
 
 const CANONICALIZATION_DELAY: u64 = 4096;
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
@@ -83,7 +83,7 @@ const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
 const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
-pub type DbState = state_machine::TrieBackend<Arc<dyn state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
+pub type DbState = sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
 
 /// Re-export the KVDB trait so that one can pass an implementation of it.
 pub use kvdb;
@@ -239,7 +239,7 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 
 	fn as_trie_backend(
 		&mut self,
-	) -> Option<&state_machine::TrieBackend<Self::TrieBackendStorage, Blake2Hasher>> {
+	) -> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, Blake2Hasher>> {
 		self.state.as_trie_backend()
 	}
 }
@@ -278,9 +278,9 @@ pub fn new_client<E, S, Block, RA>(
 	fork_blocks: ForkBlocks<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 ) -> Result<(
-		client::Client<
+		sc_client::Client<
 			Backend<Block>,
-			client::LocalCallExecutor<Backend<Block>, E>,
+			sc_client::LocalCallExecutor<Backend<Block>, E>,
 			Block,
 			RA,
 		>,
@@ -294,9 +294,9 @@ pub fn new_client<E, S, Block, RA>(
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
-	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
+	let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor);
 	Ok((
-		client::Client::new(backend.clone(), executor, genesis_storage, fork_blocks, execution_extensions)?,
+		sc_client::Client::new(backend.clone(), executor, genesis_storage, fork_blocks, execution_extensions)?,
 		backend,
 	))
 }
@@ -326,7 +326,7 @@ struct PendingBlock<Block: BlockT> {
 // wrapper that implements trait required for state_db
 struct StateMetaDb<'a>(&'a dyn KeyValueDB);
 
-impl<'a> state_db::MetaDb for StateMetaDb<'a> {
+impl<'a> sc_state_db::MetaDb for StateMetaDb<'a> {
 	type Error = io::Error;
 
 	fn get_meta(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -379,14 +379,14 @@ impl<Block: BlockT> BlockchainDb<Block> {
 	}
 }
 
-impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
+impl<Block: BlockT> sc_client::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
 		utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
 	}
 
-	fn info(&self) -> client::blockchain::Info<Block> {
+	fn info(&self) -> sc_client::blockchain::Info<Block> {
 		let meta = self.meta.read();
-		client::blockchain::Info {
+		sc_client::blockchain::Info {
 			best_hash: meta.best_hash,
 			best_number: meta.best_number,
 			genesis_hash: meta.genesis_hash,
@@ -395,7 +395,7 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 		}
 	}
 
-	fn status(&self, id: BlockId<Block>) -> ClientResult<client::blockchain::BlockStatus> {
+	fn status(&self, id: BlockId<Block>) -> ClientResult<sc_client::blockchain::BlockStatus> {
 		let exists = match id {
 			BlockId::Hash(_) => read_db(
 				&*self.db,
@@ -406,8 +406,8 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 			BlockId::Number(n) => n <= self.meta.read().best_number,
 		};
 		match exists {
-			true => Ok(client::blockchain::BlockStatus::InChain),
-			false => Ok(client::blockchain::BlockStatus::Unknown),
+			true => Ok(sc_client::blockchain::BlockStatus::InChain),
+			false => Ok(sc_client::blockchain::BlockStatus::Unknown),
 		}
 	}
 
@@ -423,7 +423,7 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 	}
 }
 
-impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
+impl<Block: BlockT> sc_client::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn body(&self, id: BlockId<Block>) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
 			Some(body) => match Decode::decode(&mut &body[..]) {
@@ -452,7 +452,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		Ok(self.meta.read().finalized_hash.clone())
 	}
 
-	fn cache(&self) -> Option<Arc<dyn client::blockchain::Cache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn sc_client::blockchain::Cache<Block>>> {
 		None
 	}
 
@@ -465,8 +465,8 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 	}
 }
 
-impl<Block: BlockT> client::blockchain::ProvideCache<Block> for BlockchainDb<Block> {
-	fn cache(&self) -> Option<Arc<dyn client::blockchain::Cache<Block>>> {
+impl<Block: BlockT> sc_client::blockchain::ProvideCache<Block> for BlockchainDb<Block> {
+	fn cache(&self) -> Option<Arc<dyn sc_client::blockchain::Cache<Block>>> {
 		None
 	}
 }
@@ -522,7 +522,7 @@ impl<Block: BlockT, H: Hasher> BlockImportOperation<Block, H> {
 	}
 }
 
-impl<Block> client_api::backend::BlockImportOperation<Block, Blake2Hasher>
+impl<Block> sc_client_api::backend::BlockImportOperation<Block, Blake2Hasher>
 	for BlockImportOperation<Block, Blake2Hasher> where Block: BlockT<Hash=H256>,
 {
 	type State = CachingState<Blake2Hasher, RefTrackingState<Block>, Block>;
@@ -630,7 +630,7 @@ struct StorageDb<Block: BlockT> {
 	pub state_db: StateDb<Block::Hash, Vec<u8>>,
 }
 
-impl<Block: BlockT> state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
+impl<Block: BlockT> sp_state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
 	fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let key = prefixed_key::<Blake2Hasher>(key, prefix);
 		self.state_db.get(&key, self).map(|r| r.map(|v| DBValue::from_slice(&v)))
@@ -638,7 +638,7 @@ impl<Block: BlockT> state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
 	}
 }
 
-impl<Block: BlockT> state_db::NodeDb for StorageDb<Block> {
+impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
 	type Error = io::Error;
 	type Key = [u8];
 
@@ -653,12 +653,12 @@ impl DbGenesisStorage {
 	pub fn new() -> Self {
 		let mut root = H256::default();
 		let mut mdb = MemoryDB::<Blake2Hasher>::default();
-		state_machine::TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
+		sp_state_machine::TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
 		DbGenesisStorage(root)
 	}
 }
 
-impl state_machine::Storage<Blake2Hasher> for DbGenesisStorage {
+impl sp_state_machine::Storage<Blake2Hasher> for DbGenesisStorage {
 	fn get(&self, _key: &H256, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
@@ -700,11 +700,11 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 			None => return,
 		};
 
-		state_machine::prune_changes_tries(
+		sp_state_machine::prune_changes_tries(
 			config,
 			&*self,
 			min_blocks_to_keep.into(),
-			&state_machine::ChangesTrieAnchorBlockId {
+			&sp_state_machine::ChangesTrieAnchorBlockId {
 				hash: convert_hash(&block_hash),
 				number: block_num,
 			},
@@ -712,7 +712,7 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	}
 }
 
-impl<Block> client_api::backend::PrunableStateChangesTrieStorage<Block, Blake2Hasher>
+impl<Block> sc_client_api::backend::PrunableStateChangesTrieStorage<Block, Blake2Hasher>
 	for DbChangesTrieStorage<Block>
 where
 	Block: BlockT<Hash=H256>,
@@ -723,7 +723,7 @@ where
 		best_finalized_block: NumberFor<Block>,
 	) -> NumberFor<Block> {
 		match self.min_blocks_to_keep {
-			Some(min_blocks_to_keep) => state_machine::oldest_non_pruned_changes_trie(
+			Some(min_blocks_to_keep) => sp_state_machine::oldest_non_pruned_changes_trie(
 				config,
 				min_blocks_to_keep.into(),
 				best_finalized_block,
@@ -733,7 +733,7 @@ where
 	}
 }
 
-impl<Block> state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>>
+impl<Block> sp_state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>>
 	for DbChangesTrieStorage<Block>
 where
 	Block: BlockT<Hash=H256>,
@@ -741,11 +741,11 @@ where
 	fn build_anchor(
 		&self,
 		hash: H256,
-	) -> Result<state_machine::ChangesTrieAnchorBlockId<H256, NumberFor<Block>>, String> {
+	) -> Result<sp_state_machine::ChangesTrieAnchorBlockId<H256, NumberFor<Block>>, String> {
 		utils::read_header::<Block>(&*self.db, columns::KEY_LOOKUP, columns::HEADER, BlockId::Hash(hash))
 			.map_err(|e| e.to_string())
 			.and_then(|maybe_header| maybe_header.map(|header|
-				state_machine::ChangesTrieAnchorBlockId {
+				sp_state_machine::ChangesTrieAnchorBlockId {
 					hash,
 					number: *header.number(),
 				}
@@ -754,7 +754,7 @@ where
 
 	fn root(
 		&self,
-		anchor: &state_machine::ChangesTrieAnchorBlockId<H256, NumberFor<Block>>,
+		anchor: &sp_state_machine::ChangesTrieAnchorBlockId<H256, NumberFor<Block>>,
 		block: NumberFor<Block>,
 	) -> Result<Option<H256>, String> {
 		// check API requirement: we can't get NEXT block(s) based on anchor
@@ -800,12 +800,12 @@ where
 	}
 }
 
-impl<Block> state_machine::ChangesTrieStorage<Blake2Hasher, NumberFor<Block>>
+impl<Block> sp_state_machine::ChangesTrieStorage<Blake2Hasher, NumberFor<Block>>
 	for DbChangesTrieStorage<Block>
 where
 	Block: BlockT<Hash=H256>,
 {
-	fn as_roots_storage(&self) -> &dyn state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>> {
+	fn as_roots_storage(&self) -> &dyn sp_state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>> {
 		self
 	}
 
@@ -870,7 +870,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		let is_archive_pruning = config.pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone())?;
 		let meta = blockchain.meta.clone();
-		let map_e = |e: state_db::Error<io::Error>| ::sp_blockchain::Error::from(format!("State database error: {:?}", e));
+		let map_e = |e: sc_state_db::Error<io::Error>| ::sp_blockchain::Error::from(format!("State database error: {:?}", e));
 		let state_db: StateDb<_, _> = StateDb::new(config.pruning.clone(), &StateMetaDb(&*db)).map_err(map_e)?;
 		let storage_db = StorageDb {
 			db: db.clone(),
@@ -904,8 +904,8 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	/// Returns in-memory blockchain that contains the same set of blocks that the self.
 	#[cfg(feature = "test-helpers")]
 	pub fn as_in_memory(&self) -> InMemoryBackend<Block, Blake2Hasher> {
-		use client_api::backend::{Backend as ClientBackend, BlockImportOperation};
-		use client::blockchain::Backend as BlockchainBackend;
+		use sc_client_api::backend::{Backend as ClientBackend, BlockImportOperation};
+		use sc_client::blockchain::Backend as BlockchainBackend;
 
 		let inmem = InMemoryBackend::<Block, Blake2Hasher>::new();
 
@@ -965,7 +965,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		match cached_changes_trie_config.clone() {
 			Some(cached_changes_trie_config) => Ok(cached_changes_trie_config),
 			None => {
-				use client_api::backend::Backend;
+				use sc_client_api::backend::Backend;
 				let changes_trie_config = self
 					.state_at(BlockId::Hash(block))?
 					.storage(well_known_keys::CHANGES_TRIE_CONFIG)?
@@ -1109,14 +1109,14 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			let hash = if new_canonical == number_u64 {
 				hash
 			} else {
-				::client::blockchain::HeaderBackend::hash(&self.blockchain, new_canonical.saturated_into())?
+				::sc_client::blockchain::HeaderBackend::hash(&self.blockchain, new_canonical.saturated_into())?
 					.expect("existence of block with number `new_canonical` \
 						implies existence of blocks with all numbers before it; qed")
 			};
 
 			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
 			let commit = self.storage.state_db.canonicalize_block(&hash)
-				.map_err(|e: state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
+				.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
 			apply_state_commit(transaction, commit);
 		};
 
@@ -1190,7 +1190,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			}
 
 			let finalized = if operation.commit_state {
-				let mut changeset: state_db::ChangeSet<Vec<u8>> = state_db::ChangeSet::default();
+				let mut changeset: sc_state_db::ChangeSet<Vec<u8>> = sc_state_db::ChangeSet::default();
 				for (key, (val, rc)) in operation.db_updates.drain() {
 					if rc > 0 {
 						changeset.inserted.push((key, val.to_vec()));
@@ -1200,7 +1200,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				}
 				let number_u64 = number.saturated_into::<u64>();
 				let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset)
-					.map_err(|e: state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
+					.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
 				apply_state_commit(&mut transaction, commit);
 
 				// Check if need to finalize. Genesis is always finalized instantly.
@@ -1253,7 +1253,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		};
 
 		let cache_update = if let Some(set_head) = operation.set_head {
-			if let Some(header) = ::client::blockchain::HeaderBackend::header(&self.blockchain, set_head)? {
+			if let Some(header) = ::sc_client::blockchain::HeaderBackend::header(&self.blockchain, set_head)? {
 				let number = header.number();
 				let hash = header.hash();
 
@@ -1336,7 +1336,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 			let commit = self.storage.state_db.canonicalize_block(&f_hash)
-				.map_err(|e: state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
+				.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
 			apply_state_commit(transaction, commit);
 
 			let changes_trie_config = self.changes_trie_config(parent_hash)?;
@@ -1355,7 +1355,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	}
 }
 
-fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitSet<Vec<u8>>) {
+fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::CommitSet<Vec<u8>>) {
 	for (key, val) in commit.data.inserted.into_iter() {
 		transaction.put(columns::STATE, &key[..], &val);
 	}
@@ -1370,7 +1370,7 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 	}
 }
 
-impl<Block> client_api::backend::AuxStore for Backend<Block> where Block: BlockT<Hash=H256> {
+impl<Block> sc_client_api::backend::AuxStore for Backend<Block> where Block: BlockT<Hash=H256> {
 	fn insert_aux<
 		'a,
 		'b: 'a,
@@ -1394,7 +1394,7 @@ impl<Block> client_api::backend::AuxStore for Backend<Block> where Block: BlockT
 	}
 }
 
-impl<Block> client_api::backend::Backend<Block, Blake2Hasher> for Backend<Block> where Block: BlockT<Hash=H256> {
+impl<Block> sc_client_api::backend::Backend<Block, Blake2Hasher> for Backend<Block> where Block: BlockT<Hash=H256> {
 	type BlockImportOperation = BlockImportOperation<Block, Blake2Hasher>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = CachingState<Blake2Hasher, RefTrackingState<Block>, Block>;
@@ -1530,7 +1530,7 @@ impl<Block> client_api::backend::Backend<Block, Blake2Hasher> for Backend<Block>
 	}
 
 	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {
-		use client::blockchain::HeaderBackend as BcHeaderBackend;
+		use sc_client::blockchain::HeaderBackend as BcHeaderBackend;
 
 		// special case for genesis initialization
 		match block {
@@ -1568,7 +1568,7 @@ impl<Block> client_api::backend::Backend<Block, Blake2Hasher> for Backend<Block>
 		if self.is_archive {
 			match self.blockchain.header(BlockId::Hash(hash.clone())) {
 				Ok(Some(header)) => {
-					state_machine::Storage::get(self.storage.as_ref(), &header.state_root(), (&[], None)).unwrap_or(None).is_some()
+					sp_state_machine::Storage::get(self.storage.as_ref(), &header.state_root(), (&[], None)).unwrap_or(None).is_some()
 				},
 				_ => false,
 			}
@@ -1590,7 +1590,7 @@ impl<Block> client_api::backend::Backend<Block, Blake2Hasher> for Backend<Block>
 	}
 }
 
-impl<Block> client_api::backend::LocalBackend<Block, Blake2Hasher> for Backend<Block>
+impl<Block> sc_client_api::backend::LocalBackend<Block, Blake2Hasher> for Backend<Block>
 where Block: BlockT<Hash=H256> {}
 
 /// TODO: remove me in #3201
@@ -1604,14 +1604,12 @@ mod tests {
 	use hash_db::{HashDB, EMPTY_PREFIX};
 	use super::*;
 	use crate::columns;
-	use client_api::backend::{Backend as BTrait, BlockImportOperation as Op};
-	use client::blockchain::Backend as BLBTrait;
+	use sc_client_api::backend::{Backend as BTrait, BlockImportOperation as Op};
+	use sc_client::blockchain::Backend as BLBTrait;
 	use sp_runtime::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use sp_runtime::traits::{Hash, BlakeTwo256};
-	use state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};
+	use sp_state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};
 	use sp_blockchain::{lowest_common_ancestor, tree_route};
-
-	use test_client;
 
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
@@ -1849,7 +1847,7 @@ mod tests {
 			backend.commit_operation(op).unwrap();
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
-				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+				&sp_trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
 			).unwrap().unwrap(), &b"hello"[..]);
 			hash
 		};
@@ -1886,7 +1884,7 @@ mod tests {
 			backend.commit_operation(op).unwrap();
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
-				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+				&sp_trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
 			).unwrap().unwrap(), &b"hello"[..]);
 			hash
 		};
@@ -1924,7 +1922,7 @@ mod tests {
 
 			assert!(backend.storage.db.get(
 				columns::STATE,
-				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+				&sp_trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
 			).unwrap().is_some());
 			hash
 		};
@@ -1958,7 +1956,7 @@ mod tests {
 			backend.commit_operation(op).unwrap();
 			assert!(backend.storage.db.get(
 				columns::STATE,
-				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+				&sp_trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
 			).unwrap().is_none());
 		}
 
@@ -1967,7 +1965,7 @@ mod tests {
 		backend.finalize_block(BlockId::Number(3), None).unwrap();
 		assert!(backend.storage.db.get(
 			columns::STATE,
-			&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+			&sp_trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
 		).unwrap().is_none());
 	}
 
@@ -1979,7 +1977,7 @@ mod tests {
 
 		let check_changes = |backend: &Backend<Block>, block: u64, changes: Vec<(Vec<u8>, Vec<u8>)>| {
 			let (changes_root, mut changes_trie_update) = prepare_changes(changes);
-			let anchor = state_machine::ChangesTrieAnchorBlockId {
+			let anchor = sp_state_machine::ChangesTrieAnchorBlockId {
 				hash: backend.blockchain().header(BlockId::Number(block)).unwrap().unwrap().hash(),
 				number: block
 			};
@@ -2033,21 +2031,21 @@ mod tests {
 
 		// branch1: when asking for finalized block hash
 		let (changes1_root, _) = prepare_changes(changes1);
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
+		let anchor = sp_state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
 		assert_eq!(backend.changes_tries_storage.root(&anchor, 1), Ok(Some(changes1_root)));
 
 		// branch2: when asking for finalized block hash
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_2_1, number: 4 };
+		let anchor = sp_state_machine::ChangesTrieAnchorBlockId { hash: block2_2_1, number: 4 };
 		assert_eq!(backend.changes_tries_storage.root(&anchor, 1), Ok(Some(changes1_root)));
 
 		// branch1: when asking for non-finalized block hash (search by traversal)
 		let (changes2_1_0_root, _) = prepare_changes(changes2_1_0);
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
+		let anchor = sp_state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
 		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_1_0_root)));
 
 		// branch2: when asking for non-finalized block hash (search using canonicalized hint)
 		let (changes2_2_0_root, _) = prepare_changes(changes2_2_0);
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_2_1, number: 4 };
+		let anchor = sp_state_machine::ChangesTrieAnchorBlockId { hash: block2_2_1, number: 4 };
 		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_2_0_root)));
 
 		// finalize first block of branch2 (block2_2_0)
@@ -2059,7 +2057,7 @@ mod tests {
 		// branch1: when asking for finalized block of other branch
 		// => result is incorrect (returned for the block of branch1), but this is expected,
 		// because the other fork is abandoned (forked before finalized header)
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
+		let anchor = sp_state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
 		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_2_0_root)));
 	}
 
@@ -2090,7 +2088,7 @@ mod tests {
 		backend.changes_tries_storage.meta.write().finalized_number = 13;
 
 		// check that roots of all tries are in the columns::CHANGES_TRIE
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block13, number: 13 };
+		let anchor = sp_state_machine::ChangesTrieAnchorBlockId { hash: block13, number: 13 };
 		fn read_changes_trie_root(backend: &Backend<Block>, num: u64) -> H256 {
 			backend.blockchain().header(BlockId::Number(num)).unwrap().unwrap().digest().logs().iter()
 				.find(|i| i.as_changes_trie_root().is_some()).unwrap().as_changes_trie_root().unwrap().clone()
@@ -2161,7 +2159,7 @@ mod tests {
 		let block6 = insert_header(&backend, 6, block5, vec![(b"key_at_6".to_vec(), b"val_at_6".to_vec())], Default::default());
 
 		// check that roots of all tries are in the columns::CHANGES_TRIE
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block6, number: 6 };
+		let anchor = sp_state_machine::ChangesTrieAnchorBlockId { hash: block6, number: 6 };
 		fn read_changes_trie_root(backend: &Backend<Block>, num: u64) -> H256 {
 			backend.blockchain().header(BlockId::Number(num)).unwrap().unwrap().digest().logs().iter()
 				.find(|i| i.as_changes_trie_root().is_some()).unwrap().as_changes_trie_root().unwrap().clone()
@@ -2348,20 +2346,20 @@ mod tests {
 
 	#[test]
 	fn test_leaves_with_complex_block_tree() {
-		let backend: Arc<Backend<test_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
-		test_client::trait_tests::test_leaves_for_backend(backend);
+		let backend: Arc<Backend<substrate_test_runtime_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
+		substrate_test_runtime_client::trait_tests::test_leaves_for_backend(backend);
 	}
 
 	#[test]
 	fn test_children_with_complex_block_tree() {
-		let backend: Arc<Backend<test_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
-		test_client::trait_tests::test_children_for_backend(backend);
+		let backend: Arc<Backend<substrate_test_runtime_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
+		substrate_test_runtime_client::trait_tests::test_children_for_backend(backend);
 	}
 
 	#[test]
 	fn test_blockchain_query_by_number_gets_canonical() {
-		let backend: Arc<Backend<test_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
-		test_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
+		let backend: Arc<Backend<substrate_test_runtime_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
+		substrate_test_runtime_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
 	}
 
 	#[test]
@@ -2390,7 +2388,7 @@ mod tests {
 
 	#[test]
 	fn test_aux() {
-		let backend: Backend<test_client::runtime::Block> = Backend::new_test(0, 0);
+		let backend: Backend<substrate_test_runtime_client::runtime::Block> = Backend::new_test(0, 0);
 		assert!(backend.get_aux(b"test").unwrap().is_none());
 		backend.insert_aux(&[(&b"test"[..], &b"hello"[..])], &[]).unwrap();
 		assert_eq!(b"hello", &backend.get_aux(b"test").unwrap().unwrap()[..]);
@@ -2400,7 +2398,7 @@ mod tests {
 
 	#[test]
 	fn test_finalize_block_with_justification() {
-		use client::blockchain::{Backend as BlockChainBackend};
+		use sc_client::blockchain::{Backend as BlockChainBackend};
 
 		let backend = Backend::<Block>::new_test(10, 10);
 

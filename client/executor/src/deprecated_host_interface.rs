@@ -18,12 +18,12 @@
 
 use codec::Encode;
 use std::{convert::TryFrom, str};
-use primitives::{
+use sp_core::{
 	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, keccak_256, Blake2Hasher, Pair,
 	crypto::KeyTypeId, offchain,
 };
-use trie::{TrieConfiguration, trie_types::Layout};
-use wasm_interface::{
+use sp_trie::{TrieConfiguration, trie_types::Layout};
+use sp_wasm_interface::{
 	Pointer, WordSize, WritePrimitive, ReadPrimitive, FunctionContext, Result as WResult,
 };
 

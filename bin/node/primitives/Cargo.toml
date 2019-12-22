@@ -5,16 +5,16 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-primitives = { package = "sp-core", path = "../../../primitives/core", default-features = false }
-sp-runtime = { path = "../../../primitives/runtime", default-features = false }
+sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-sp-serializer = { path = "../../../primitives/serializer" }
+sp-serializer = { version = "2.0.0", path = "../../../primitives/serializer" }
 pretty_assertions = "0.6.1"
 
 [features]
 default = ["std"]
 std = [
-	"primitives/std",
+	"sp-core/std",
 	"sp-runtime/std",
 ]

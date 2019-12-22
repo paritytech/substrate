@@ -103,6 +103,6 @@ impl<H: hash::Hash + traits::Member + Serialize, H2: Clone + fmt::Debug> Listene
 	/// Transaction was pruned from the pool.
 	pub fn pruned(&mut self, header_hash: H2, tx: &H) {
 		debug!(target: "txpool", "[{:?}] Pruned at {:?}", tx, header_hash);
-		self.fire(tx, |watcher| watcher.finalized(header_hash))
+		self.fire(tx, |watcher| watcher.in_block(header_hash))
 	}
 }
