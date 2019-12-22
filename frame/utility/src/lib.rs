@@ -22,7 +22,8 @@
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use sp_core::{TypeId, blake2_256};
+use sp_core::TypeId;
+use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency}, weights::{
 	GetDispatchInfo, ClassifyDispatch, WeighData, Weight, DispatchClass, PaysFee
