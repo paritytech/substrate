@@ -384,6 +384,17 @@ pub enum DispatchError {
 	},
 }
 
+impl DispatchError {
+	/// Return the same error but without the attached message.
+	pub fn stripped(self) -> Self {
+		match self {
+			DispatchError::Module { index, error, message: Some(_) }
+				=> DispatchError::Module { index, error, message: None },
+			m => m,
+		}
+	}
+}
+
 impl From<crate::traits::LookupError> for DispatchError {
 	fn from(_: crate::traits::LookupError) -> Self {
 		Self::CannotLookup
