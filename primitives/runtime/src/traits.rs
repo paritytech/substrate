@@ -1000,6 +1000,52 @@ pub trait OpaqueKeys: Clone {
 }
 
 /// Input that adds infinite number of zero after wrapped input.
+///
+/// This can add an infinite stream of zeros onto any input, not just a slice as with
+/// `TrailingZerosInput`.
+pub struct AppendZerosInput<'a, T>(&'a mut T);
+
+impl<'a, T> AppendZerosInput<'a, T> {
+	/// Create a new instance from the given byte array.
+	pub fn new(input: &'a mut T) -> Self {
+		Self(input)
+	}
+}
+
+impl<'a, T: codec::Input> codec::Input for AppendZerosInput<'a, T> {
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+		Ok(None)
+	}
+
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+		let remaining = self.0.remaining_len()?;
+		let completed = if let Some(n) = remaining {
+			let readable = into.len().min(n);
+			// this should never fail if `remaining_len` API is implemented correctly.
+			self.0.read(&mut into[..readable])?;
+			readable
+		} else {
+			// Fill it byte-by-byte.
+			let mut i = 0;
+			while i < into.len() {
+				if let Ok(b) = self.0.read_byte() {
+					into[i] = b;
+					i += 1;
+				} else {
+					break;
+				}
+			}
+			i
+		};
+		// Fill the rest with zeros.
+		for i in &mut into[completed..] {
+			*i = 0;
+		}
+		Ok(())
+	}
+}
+
+/// Input that adds infinite number of zero after wrapped input.
 pub struct TrailingZeroInput<'a>(&'a [u8]);
 
 impl<'a> TrailingZeroInput<'a> {
