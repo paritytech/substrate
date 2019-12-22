@@ -398,7 +398,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
-			ensure!(!other_signatories.empty(), Error::<T>::TooFewSignatories);
+			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
 			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
@@ -483,7 +483,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
-			ensure!(!other_signatories.empty(), Error::<T>::TooFewSignatories);
+			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
 			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
@@ -552,7 +552,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
-			ensure!(!other_signatories.empty(), Error::<T>::TooFewSignatories);
+			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
 			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
