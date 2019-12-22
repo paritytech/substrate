@@ -129,9 +129,11 @@ impl frame_system::Trait for Runtime {
 }
 
 parameter_types! {
-	// One storage item, up to 584 bytes.
-	pub const MultisigDeposit: Balance = 1 * DOLLARS;
-	pub const MaxSignatories: u16 = 16;
+	// One storage item; value is size 4+4+8+32 bytes = 48 bytes.
+	pub const MultisigDepositBase: Balance = 30 * CENTS;
+	// Additional storage item size of 32 bytes.
+	pub const MultisigDepositFactor: Balance = 5 * CENTS;
+	pub const MaxSignatories: u16 = 100;
 }
 
 impl pallet_utility::Trait for Runtime {

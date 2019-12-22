@@ -85,8 +85,16 @@ pub trait Trait: frame_system::Trait {
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
 
-	/// The amount of currency needed to reserve for creating a multisig execution.
-	type MultisigDeposit: Get<BalanceOf<Self>>;
+	/// The base amount of currency needed to reserve for creating a multisig execution.
+	///
+	/// This is held for an additional storage item whose value size is
+	/// `4 + sizeof((BlockNumber, Balance, AccountId))` bytes.
+	type MultisigDepositBase: Get<BalanceOf<Self>>;
+
+	/// The amount of currency needed per unit threshold when creating a multisig execution.
+	///
+	/// This is held for adding 32 bytes more into a pre-existing storage value.
+	type MultisigDepositFactor: Get<BalanceOf<Self>>;
 
 	/// The maximum amount of signatories allowed in the multisig.
 	type MaxSignatories: Get<u16>;
@@ -130,7 +138,7 @@ decl_error! {
 		ZeroThreshold,
 		/// Call is already approved by this signatory.
 		AlreadyApproved,
-		/// Call doesn't need any approvals as the threshold is just one.
+		/// Call doesn't need any (more) approvals.
 		NoApprovalsNeeded,
 		/// There are too few signatories in the list.
 		TooFewSignatories,
@@ -353,8 +361,9 @@ decl_module! {
 		///
 		/// If there are enough, then dispatch the call.
 		///
-		/// Payment: `MultisigDeposit` will be reserved if this is the first approval. It is
-		/// returned once this dispatch happens or is cancelled.
+		/// Payment: `MultisigDepositBase` will be reserved if this is the first approval, plus
+		/// `threshold` times `MultisigDepositFactor`. It is returned once this dispatch happens or
+		/// is cancelled.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -386,7 +395,8 @@ decl_module! {
 		/// - One event.
 		/// - The weight of the `call`.
 		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
-		///   deposit taken for its lifetime of `MultisigDeposit`.
+		///   deposit taken for its lifetime of
+		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
 		/// # </weight>
 		#[weight = <MultiPassthrough<<T as Trait>::Call, T::AccountId, Option<Timepoint<T::BlockNumber>>>>::new()]
 		fn as_multi(origin,
@@ -427,7 +437,8 @@ decl_module! {
 			} else {
 				ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
 				if threshold > 1 {
-					let deposit = T::MultisigDeposit::get();
+					let deposit = T::MultisigDepositBase::get()
+						+ T::MultisigDepositFactor::get() * threshold.into();
 					T::Currency::reserve(&who, deposit)?;
 					<Multisigs<T>>::insert(&id, call_hash, Multisig {
 						when: Self::timepoint(),
@@ -446,8 +457,9 @@ decl_module! {
 		/// Register approval for a dispatch to be made from a deterministic composite account if
 		/// approved by a total of `threshold - 1` of `other_signatories`.
 		///
-		/// Payment: `MultisigDeposit` will be reserved if this is the first approval. It is
-		/// returned once this dispatch happens or is cancelled.
+		/// Payment: `MultisigDepositBase` will be reserved if this is the first approval, plus
+		/// `threshold` times `MultisigDepositFactor`. It is returned once this dispatch happens or
+		/// is cancelled.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -471,7 +483,8 @@ decl_module! {
 		/// - I/O: 1 read `O(S)`, up to 1 mutate `O(S)`. Up to one remove.
 		/// - One event.
 		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
-		///   deposit taken for its lifetime of `MultisigDeposit`.
+		///   deposit taken for its lifetime of
+		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
 		/// # </weight>
 		#[weight = <SigsLen<T::AccountId, Option<Timepoint<T::BlockNumber>>>>::new()]
 		fn approve_as_multi(origin,
@@ -492,6 +505,7 @@ decl_module! {
 			if let Some(mut m) = <Multisigs<T>>::get(&id, call_hash) {
 				let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
 				ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
+				ensure!(m.approvals.len() < threshold as usize, Error::<T>::NoApprovalsNeeded);
 				if let Err(pos) = m.approvals.binary_search(&who) {
 					m.approvals.insert(pos, who.clone());
 					<Multisigs<T>>::insert(&id, call_hash, m);
@@ -502,7 +516,8 @@ decl_module! {
 			} else {
 				if threshold > 1 {
 					ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
-					let deposit = T::MultisigDeposit::get();
+					let deposit = T::MultisigDepositBase::get()
+						+ T::MultisigDepositFactor::get() * threshold.into();
 					T::Currency::reserve(&who, deposit)?;
 					<Multisigs<T>>::insert(&id, call_hash, Multisig {
 						when: Self::timepoint(),
@@ -518,10 +533,8 @@ decl_module! {
 			Ok(())
 		}
 
-		/// Cancel a pre-existing, on-going multisig transaction.
-		///
-		/// Payment: `MultisigDeposit` (or some historical value thereof) will be unreserved on
-		/// success.
+		/// Cancel a pre-existing, on-going multisig transaction. Any deposit reserved previously
+		/// for this operation will be unreserved on success.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -686,14 +699,16 @@ mod tests {
 		type CreationFee = CreationFee;
 	}
 	parameter_types! {
-		pub const MultisigDeposit: u64 = 0;
+		pub const MultisigDepositBase: u64 = 1;
+		pub const MultisigDepositFactor: u64 = 1;
 		pub const MaxSignatories: u16 = 3;
 	}
 	impl Trait for Test {
 		type Event = ();
 		type Call = Call;
 		type Currency = Balances;
-		type MultisigDeposit = MultisigDeposit;
+		type MultisigDepositBase = MultisigDepositBase;
+		type MultisigDepositFactor = MultisigDepositFactor;
 		type MaxSignatories = MaxSignatories;
 	}
 	type Balances = pallet_balances::Module<Test>;
@@ -713,6 +728,42 @@ mod tests {
 
 	fn now() -> Timepoint<u64> {
 		Utility::timepoint()
+	}
+
+	#[test]
+	fn multisig_deposit_is_taken_and_returned() {
+		new_test_ext().execute_with(|| {
+			let multi = Utility::multi_account_id(&[1, 2, 3][..], 2);
+			assert_ok!(Balances::transfer(Origin::signed(1), multi, 5));
+			assert_ok!(Balances::transfer(Origin::signed(2), multi, 5));
+			assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
+
+			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
+			assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], None, call.clone()));
+			assert_eq!(Balances::free_balance(1), 2);
+			assert_eq!(Balances::reserved_balance(1), 3);
+
+			assert_ok!(Utility::as_multi(Origin::signed(2), 2, vec![1, 3], Some(now()), call));
+			assert_eq!(Balances::free_balance(1), 5);
+			assert_eq!(Balances::reserved_balance(1), 0);
+		});
+	}
+
+	#[test]
+	fn cancel_multisig_returns_deposit() {
+		new_test_ext().execute_with(|| {
+			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
+			let hash = call.using_encoded(blake2_256);
+			assert_ok!(Utility::approve_as_multi(Origin::signed(1), 3, vec![2, 3], None, hash.clone()));
+			assert_ok!(Utility::approve_as_multi(Origin::signed(2), 3, vec![1, 3], Some(now()), hash.clone()));
+			assert_eq!(Balances::free_balance(1), 6);
+			assert_eq!(Balances::reserved_balance(1), 4);
+			assert_ok!(
+				Utility::cancel_as_multi(Origin::signed(1), 3, vec![2, 3], now(), hash.clone()),
+			);
+			assert_eq!(Balances::free_balance(1), 10);
+			assert_eq!(Balances::reserved_balance(1), 0);
+		});
 	}
 
 	#[test]
@@ -890,14 +941,14 @@ mod tests {
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
 			let hash = call.using_encoded(blake2_256);
 			assert_ok!(Utility::approve_as_multi(Origin::signed(1), 2, vec![2, 3], None, hash.clone()));
-			assert_ok!(Utility::approve_as_multi(Origin::signed(2), 2, vec![1, 3], Some(now()), hash.clone()));
 			assert_noop!(
 				Utility::approve_as_multi(Origin::signed(1), 2, vec![2, 3], Some(now()), hash.clone()),
 				Error::<Test>::AlreadyApproved,
 			);
+			assert_ok!(Utility::approve_as_multi(Origin::signed(2), 2, vec![1, 3], Some(now()), hash.clone()));
 			assert_noop!(
-				Utility::approve_as_multi(Origin::signed(2), 2, vec![1, 3], Some(now()), hash.clone()),
-				Error::<Test>::AlreadyApproved,
+				Utility::approve_as_multi(Origin::signed(3), 2, vec![1, 2], Some(now()), hash.clone()),
+				Error::<Test>::NoApprovalsNeeded,
 			);
 		});
 	}
