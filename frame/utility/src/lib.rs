@@ -419,7 +419,8 @@ decl_module! {
 				let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
 				ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 				if let Err(pos) = m.approvals.binary_search(&who) {
-					if (m.approvals.len() as u16) + 1 < threshold {
+					// we know threshold is greater than zero from the above ensure.
+					if m.approvals.len() as u16 < threshold - 1 {
 						m.approvals.insert(pos, who.clone());
 						<Multisigs<T>>::insert(&id, call_hash, m);
 						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id));
