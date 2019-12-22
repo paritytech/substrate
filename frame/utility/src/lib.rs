@@ -181,7 +181,7 @@ decl_event! {
 		/// A multisig operation has been executed. First param is the account that is
 		/// approving, third is the multisig account.
 		MultisigExecuted(AccountId, Timepoint<BlockNumber>, AccountId, DispatchResult),
-		/// A multisig operation has been executed. First param is the account that is
+		/// A multisig operation has been cancelled. First param is the account that is
 		/// cancelling, third is the multisig account.
 		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId),
 	}
