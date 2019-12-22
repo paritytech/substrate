@@ -15,7 +15,48 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! # Utility Module
-//! A module full of useful helpers for practical chain management.
+//! A module with helpers for dispatch management.
+//!
+//! - [`utility::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! This module contains three basic pieces of functionality, two of which are stateless:
+//! - Batch dispatch: A stateless operation, allowing any origin to execute multiple calls in a
+//!   single dispatch. This can be useful to amalgamate proposals, combining `set_code` with
+//!   corresponding `set_storage`s, for efficient multiple payouts with just a single signature
+//!   verify, or in combination with one of the other two dispatch functionality.
+//! - Pseudonymal dispatch: A stateless operation, allowing a signed origin to execute a call from
+//!   an alternative signed origin. Each account has 2**16 possible "pseudonyms" (alternative
+//!   account IDs) and these can be stacked. This can be useful as a key management tool, where you
+//!   need multiple distinct accounts (e.g. as controllers for many staking accounts), but where
+//!   it's perfectly fine to have each of them controlled by the same underlying keypair.
+//! - Multisig dispatch (stateful): A potentially stateful operation, allowing multiple signed
+//!   origins (accounts) to coordinate and dispatch a call from a well-known origin, derivable
+//!   deterministically from the set of account IDs and the threshold number of accounts from the
+//!   set that must approve it. In the case that the threshold is just one then this is a stateless
+//!   operation. This is useful for multisig wallets where cryptographic threshold signatures are
+//!   not available or desired.
+//!
+//! ## Interface
+//!
+//! ### Dispatchable Functions
+//!
+//! #### For batch dispatch
+//! * `batch` - Dispatch multiple calls from the sender's origin.
+//!
+//! #### For pseudonymal dispatch
+//! * `as_sub` - Dispatch a call from a secondary ("sub") signed origin.
+//!
+//! #### For multisig dispatch
+//! * `as_multi` - Approve and if possible dispatch a call from a composite origin formed from a
+//!   number of signed origins.
+//! * `approve_as_multi` - Approve a call from a composite origin.
+//! * `cancel_as_multi` - Cancel a call from a composite origin.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -38,7 +79,6 @@ pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
-
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo;
 
@@ -52,19 +92,27 @@ pub trait Trait: frame_system::Trait {
 	type MaxSignatories: Get<u16>;
 }
 
-/// A point in on-chain time, given by a block number and a transaction index within that block.
+/// A global extrinsic index, formed as the extrinsic index within a block, together with that
+/// block's height. This allows a transaction in which a multisig operation of a particular
+/// composite was created to be uniquely identified.
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
 pub struct Timepoint<BlockNumber> {
+	/// The hieght of the chain at the point in time.
 	height: BlockNumber,
+	/// The index of the extrinsic at the point in time.
 	index: u32,
 }
 
-/// An open multisig transaction.
+/// An open multisig operation.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
 pub struct Multisig<BlockNumber, Balance, AccountId> {
+	/// The extrinsic when the multisig operation was opened.
 	when: Timepoint<BlockNumber>,
+	/// The amount held in reserve of the `depositor`, to be returned once the operation ends.
 	deposit: Balance,
+	/// The account who opened it (i.e. the first to approve it).
 	depositor: AccountId,
+	/// The approvals achieved so far, including the depositor.
 	approvals: Vec<AccountId>,
 }
 
@@ -84,6 +132,8 @@ decl_error! {
 		AlreadyApproved,
 		/// Call doesn't need any approvals as the threshold is just one.
 		NoApprovalsNeeded,
+		/// There are too few signatories in the list.
+		TooFewSignatories,
 		/// There are too many signatories in the list.
 		TooManySignatories,
 		/// The signatories were provided out of order; they should be ordered.
@@ -310,7 +360,7 @@ decl_module! {
 		///
 		/// - `threshold`: The total number of approvals for this dispatch before it is executed.
 		/// - `other_signatories`: The accounts (other than the sender) who can approve this
-		/// dispatch.
+		/// dispatch. May not be empty.
 		/// - `maybe_timepoint`: If this is the first approval, then this must be `None`. If it is
 		/// not the first approval, then it must be `Some`, with the timepoint (block number and
 		/// transaction index) of the first approval transaction.
@@ -348,6 +398,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
+			ensure!(!other_signatories.empty(), Error::<T>::TooFewSignatories);
 			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
@@ -402,7 +453,7 @@ decl_module! {
 		///
 		/// - `threshold`: The total number of approvals for this dispatch before it is executed.
 		/// - `other_signatories`: The accounts (other than the sender) who can approve this
-		/// dispatch.
+		/// dispatch. May not be empty.
 		/// - `maybe_timepoint`: If this is the first approval, then this must be `None`. If it is
 		/// not the first approval, then it must be `Some`, with the timepoint (block number and
 		/// transaction index) of the first approval transaction.
@@ -432,6 +483,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
+			ensure!(!other_signatories.empty(), Error::<T>::TooFewSignatories);
 			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
@@ -475,7 +527,7 @@ decl_module! {
 		///
 		/// - `threshold`: The total number of approvals for this dispatch before it is executed.
 		/// - `other_signatories`: The accounts (other than the sender) who can approve this
-		/// dispatch.
+		/// dispatch. May not be empty.
 		/// - `timepoint`: The timepoint (block number and transaction index) of the first approval
 		/// transaction for this dispatch.
 		/// - `call_hash`: The hash of the call to be executed.
@@ -500,6 +552,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
+			ensure!(!other_signatories.empty(), Error::<T>::TooFewSignatories);
 			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
