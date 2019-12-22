@@ -128,9 +128,18 @@ impl frame_system::Trait for Runtime {
 	type ModuleToIndex = ();
 }
 
+parameter_types! {
+	// One storage item, up to 584 bytes.
+	pub const MultisigDeposit: Balance = 1 * DOLLARS;
+	pub const MaxSignatories: u16 = 16;
+}
+
 impl pallet_utility::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
+	type Currency = Balances;
+	type MultisigDeposit = MultisigDeposit;
+	type MaxSignatories = MaxSignatories;
 }
 
 parameter_types! {
@@ -515,7 +524,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: frame_system::{Module, Call, Storage, Config, Event},
-		Utility: pallet_utility::{Module, Call, Event},
+		Utility: pallet_utility::{Module, Call, Storage, Event<T>, Error},
 		Babe: pallet_babe::{Module, Call, Storage, Config, Inherent(Timestamp)},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
