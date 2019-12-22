@@ -120,14 +120,14 @@ pub struct Multisig<BlockNumber, Balance, AccountId> {
 	deposit: Balance,
 	/// The account who opened it (i.e. the first to approve it).
 	depositor: AccountId,
-	/// The approvals achieved so far, including the depositor.
+	/// The approvals achieved so far, including the depositor. Always sorted.
 	approvals: Vec<AccountId>,
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Utility {
 		/// The set of open multisig operations.
-		pub Multisigs: double_map hasher(twox_64_concat) T::AccountId, twox_64_concat([u8; 32])
+		pub Multisigs: double_map hasher(twox_64_concat) T::AccountId, blake2_128_concat([u8; 32])
 			=> Option<Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
 	}
 }
@@ -146,7 +146,7 @@ decl_error! {
 		TooManySignatories,
 		/// The signatories were provided out of order; they should be ordered.
 		SignatoriesOutOfOrder,
-		/// The sender was contained in the signatories; it shouldn't be.
+		/// The sender was contained in the other signatories; it shouldn't be.
 		SenderInSignatories,
 		/// Multisig operation not found when attempting to cancel.
 		NotFound,
@@ -180,7 +180,7 @@ decl_event! {
 		MultisigApproval(AccountId, Timepoint<BlockNumber>, AccountId),
 		/// A multisig operation has been executed. First param is the account that is
 		/// approving, third is the multisig account.
-		MultisigExecuted(AccountId, Timepoint<BlockNumber>, AccountId),
+		MultisigExecuted(AccountId, Timepoint<BlockNumber>, AccountId, DispatchResult),
 		/// A multisig operation has been executed. First param is the account that is
 		/// cancelling, third is the multisig account.
 		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId),
@@ -378,10 +378,9 @@ decl_module! {
 		/// NOTE: Unless this is the final approval, you will generally want to use
 		/// `approve_as_multi` instead, since it only requires a hash of the call.
 		///
-		/// Result is equivalent to the dispatched result if it is the final `Ok` approval. If the
-		/// dispatch fails, them the operation will still be open and may be retried by issuing
-		/// another approval. `cancel_as_multi` may be used to cancel the operation and return the
-		/// deposit which may be useful in the case of a call that can never succeed.
+		/// Result is equivalent to the dispatched result if `threshold` is exactly `1`. Otherwise
+		/// on success, result is `Ok` and the result from the interior call, if it was executed,
+		/// may be found in the deposited `MultisigExecuted` event.
 		///
 		/// # <weight>
 		/// - `O(S + Z + Call)`.
@@ -420,7 +419,7 @@ decl_module! {
 				ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 				if let Err(pos) = m.approvals.binary_search(&who) {
 					// we know threshold is greater than zero from the above ensure.
-					if m.approvals.len() as u16 < threshold - 1 {
+					if (m.approvals.len() as u16) < threshold - 1 {
 						m.approvals.insert(pos, who.clone());
 						<Multisigs<T>>::insert(&id, call_hash, m);
 						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id));
@@ -431,10 +430,11 @@ decl_module! {
 						Err(Error::<T>::AlreadyApproved)?
 					}
 				}
-				call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into())?;
+
+				let result = call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into());
 				let _ = T::Currency::unreserve(&m.depositor, m.deposit);
 				<Multisigs<T>>::remove(&id, call_hash);
-				Self::deposit_event(RawEvent::MultisigExecuted(who, timepoint, id));
+				Self::deposit_event(RawEvent::MultisigExecuted(who, timepoint, id, result));
 			} else {
 				ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
 				if threshold > 1 {
@@ -449,7 +449,7 @@ decl_module! {
 					});
 					Self::deposit_event(RawEvent::NewMultisig(who, id));
 				} else {
-					call.dispatch(frame_system::RawOrigin::Signed(id).into())?;
+					return call.dispatch(frame_system::RawOrigin::Signed(id).into())
 				}
 			}
 			Ok(())
@@ -638,15 +638,22 @@ mod tests {
 
 	use frame_support::{
 		assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch,
-		weights::Weight
+		weights::Weight, impl_outer_event
 	};
 	use sp_core::H256;
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use crate as utility;
 
 	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+		pub enum Origin for Test where system = frame_system {}
 	}
 
+	impl_outer_event! {
+		pub enum TestEvent for Test {
+			pallet_balances<T>,
+			utility<T>,
+		}
+	}
 	impl_outer_dispatch! {
 		pub enum Call for Test where origin: Origin {
 			pallet_balances::Balances,
@@ -675,7 +682,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = TestEvent;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
@@ -692,7 +699,7 @@ mod tests {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
-		type Event = ();
+		type Event = TestEvent;
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
@@ -705,7 +712,7 @@ mod tests {
 		pub const MaxSignatories: u16 = 3;
 	}
 	impl Trait for Test {
-		type Event = ();
+		type Event = TestEvent;
 		type Call = Call;
 		type Currency = Balances;
 		type MultisigDepositBase = MultisigDepositBase;
@@ -725,6 +732,14 @@ mod tests {
 			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
+	}
+
+	fn last_event() -> TestEvent {
+		system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
+	}
+
+	fn expect_event<E: Into<TestEvent>>(e: E) {
+		assert_eq!(last_event(), e.into());
 	}
 
 	fn now() -> Timepoint<u64> {
@@ -842,10 +857,6 @@ mod tests {
 			assert_ok!(Utility::approve_as_multi(Origin::signed(1), 3, vec![2, 3], None, hash.clone()));
 			assert_ok!(Utility::approve_as_multi(Origin::signed(2), 3, vec![1, 3], Some(now()), hash.clone()));
 			assert_noop!(
-				Utility::as_multi(Origin::signed(3), 3, vec![1, 2], Some(now()), call),
-				BalancesError::<Test, _>::InsufficientBalance,
-			);
-			assert_noop!(
 				Utility::cancel_as_multi(Origin::signed(2), 3, vec![1, 3], now(), hash.clone()),
 				Error::<Test>::NotOwner,
 			);
@@ -894,7 +905,7 @@ mod tests {
 	}
 
 	#[test]
-	fn multisig_2_of_3_reissue_same_call_works() {
+	fn multisig_2_of_3_cannot_reissue_same_call() {
 		new_test_ext().execute_with(|| {
 			let multi = Utility::multi_account_id(&[1, 2, 3][..], 2);
 			assert_ok!(Balances::transfer(Origin::signed(1), multi, 5));
@@ -907,10 +918,10 @@ mod tests {
 			assert_eq!(Balances::free_balance(multi), 5);
 
 			assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], None, call.clone()));
-			assert_noop!(
-				Utility::as_multi(Origin::signed(3), 2, vec![1, 2], Some(now()), call),
-				BalancesError::<Test, _>::InsufficientBalance,
-			);
+			assert_ok!(Utility::as_multi(Origin::signed(3), 2, vec![1, 2], Some(now()), call));
+
+			let err = DispatchError::from(BalancesError::<Test, _>::InsufficientBalance).stripped();
+			expect_hkevent(RawEvent::MultisigExecuted(3, now(), multi, Err(err)));
 		});
 	}
 
