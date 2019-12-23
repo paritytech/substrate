@@ -161,7 +161,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 		&mut self,
 		tx: WaitingTransaction<Hash, Ex>,
 	) -> error::Result<Vec<Arc<Transaction<Hash, Ex>>>> {
-		assert!(tx.is_ready(), "Only ready transactions can be imported.");
+		assert!(
+			tx.is_ready(),
+			"Only ready transactions can be imported. Missing: {:?}", tx.missing_tags
+		);
 		assert!(!self.ready.read().contains_key(&tx.transaction.hash), "Transaction is already imported.");
 
 		self.insertion_id += 1;
@@ -173,6 +176,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 
 		let mut goes_to_best = true;
 		let mut ready = self.ready.write();
+		let mut requires_offset = 0;
 		// Add links to transactions that unlock the current one
 		for tag in &transaction.requires {
 			// Check if the transaction that satisfies the tag is still in the queue.
@@ -181,6 +185,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 				tx.unlocks.push(hash.clone());
 				// this transaction depends on some other, so it doesn't go to best directly.
 				goes_to_best = false;
+			} else {
+				requires_offset += 1;
 			}
 	 	}
 
@@ -205,7 +211,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 		ready.insert(hash, ReadyTx {
 			transaction,
 			unlocks,
-			requires_offset: 0,
+			requires_offset,
 		});
 
 		Ok(replaced)
@@ -472,7 +478,7 @@ pub struct BestIterator<Hash, Ex> {
 }
 
 impl<Hash: hash::Hash + Member, Ex> BestIterator<Hash, Ex> {
-	/// Depending on number of satisfied requirements insert given ref
+	/// Depending on number of satisfied equirements insert given ref
 	/// either to awaiting set or to best set.
 	fn best_or_awaiting(&mut self, satisfied: usize, tx_ref: TransactionRef<Hash, Ex>) {
 		if satisfied >= tx_ref.transaction.requires.len() {
@@ -548,6 +554,15 @@ mod tests {
 		}
 	}
 
+	fn import<H: hash::Hash + Eq + Member + Serialize, Ex>(
+		ready: &mut ReadyTransactions<H, Ex>,
+		tx: Transaction<H, Ex>
+	) -> error::Result<Vec<Arc<Transaction<H, Ex>>>> {
+		let x = WaitingTransaction::new(tx, ready.provided_tags(), &[]);
+		ready.import(x)
+	}
+
+
 	#[test]
 	fn should_replace_transaction_that_provides_the_same_tag() {
 		// given
@@ -562,24 +577,56 @@ mod tests {
 		tx3.provides = vec![vec![4]];
 
 		// when
-		let x = WaitingTransaction::new(tx2, &ready.provided_tags(), &[]);
-		ready.import(x).unwrap();
-		let x = WaitingTransaction::new(tx3, &ready.provided_tags(), &[]);
-		ready.import(x).unwrap();
+		import(&mut ready, tx2).unwrap();
+		import(&mut ready, tx3).unwrap();
 		assert_eq!(ready.get().count(), 2);
 
 		// too low priority
-		let x = WaitingTransaction::new(tx1.clone(), &ready.provided_tags(), &[]);
-		ready.import(x).unwrap_err();
+		import(&mut ready, tx1.clone()).unwrap_err();
 
 		tx1.priority = 10;
-		let x = WaitingTransaction::new(tx1.clone(), &ready.provided_tags(), &[]);
-		ready.import(x).unwrap();
+		import(&mut ready, tx1).unwrap();
 
 		// then
 		assert_eq!(ready.get().count(), 1);
 	}
 
+	#[test]
+	fn should_replace_multiple_transactions_correctly() {
+		// given
+		let mut ready = ReadyTransactions::default();
+		let mut tx0 = tx(0);
+		tx0.requires = vec![];
+		tx0.provides = vec![vec![0]];
+		let mut tx1 = tx(1);
+		tx1.requires = vec![];
+		tx1.provides = vec![vec![1]];
+		let mut tx2 = tx(2);
+		tx2.requires = vec![vec![0], vec![1]];
+		tx2.provides = vec![vec![2], vec![3]];
+		let mut tx3 = tx(3);
+		tx3.requires = vec![vec![2]];
+		tx3.provides = vec![vec![4]];
+		let mut tx4 = tx(4);
+		tx4.requires = vec![vec![3]];
+		tx4.provides = vec![vec![5]];
+		// replacement
+		let mut tx2_2 = tx(5);
+		tx2_2.requires = vec![vec![0], vec![1]];
+		tx2_2.provides = vec![vec![2]];
+		tx2_2.priority = 10;
+
+		for tx in vec![tx0, tx1, tx2, tx3, tx4] {
+			import(&mut ready, tx).unwrap();
+		}
+		assert_eq!(ready.get().count(), 5);
+
+		// when
+		import(&mut ready, tx2_2).unwrap();
+
+		// then
+		assert_eq!(ready.get().count(), 3);
+	}
 
 	#[test]
 	fn should_return_best_transactions_in_correct_order() {
@@ -608,16 +655,9 @@ mod tests {
 		};
 
 		// when
-		let x = WaitingTransaction::new(tx1, &ready.provided_tags(), &[]);
-		ready.import(x).unwrap();
-		let x = WaitingTransaction::new(tx2, &ready.provided_tags(), &[]);
-		ready.import(x).unwrap();
-		let x = WaitingTransaction::new(tx3, &ready.provided_tags(), &[]);
-		ready.import(x).unwrap();
-		let x = WaitingTransaction::new(tx4, &ready.provided_tags(), &[]);
-		ready.import(x).unwrap();
-		let x = WaitingTransaction::new(tx5, &ready.provided_tags(), &[]);
-		ready.import(x).unwrap();
+		for tx in vec![tx1, tx2, tx3, tx4, tx5] {
+			import(&mut ready, tx).unwrap();
+		}
 
 		// then
 		assert_eq!(ready.best.len(), 1);
