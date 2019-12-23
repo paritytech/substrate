@@ -1152,7 +1152,7 @@ mod tests {
 		traits::{BlakeTwo256, IdentityLookup, Bounded, BadOrigin},
 		testing::Header, Perbill,
 	};
-	use pallet_balances::BalanceLock;
+	use pallet_balances::{BalanceLock, Error as BalancesError};
 	use frame_system::EnsureSignedBy;
 
 	const AYE: Vote = Vote{ aye: true, conviction: Conviction::None };
@@ -1356,7 +1356,7 @@ mod tests {
 			PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 100);
 			assert_noop!(
 				Democracy::note_preimage(Origin::signed(6), vec![0; 500]),
-				"not enough free funds",
+				BalancesError::<Test, _>::InsufficientBalance,
 			);
 			// fee of 1 is reasonable.
 			PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
@@ -2118,7 +2118,7 @@ mod tests {
 	fn poor_proposer_should_not_work() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
-			assert_noop!(propose_set_balance(1, 2, 11), "not enough free funds");
+			assert_noop!(propose_set_balance(1, 2, 11), BalancesError::<Test, _>::InsufficientBalance);
 		});
 	}
 
@@ -2127,7 +2127,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
 			assert_ok!(propose_set_balance_and_note(2, 2, 11));
-			assert_noop!(Democracy::second(Origin::signed(1), 0), "not enough free funds");
+			assert_noop!(Democracy::second(Origin::signed(1), 0), BalancesError::<Test, _>::InsufficientBalance);
 		});
 	}
 

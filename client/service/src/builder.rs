@@ -95,7 +95,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImp
 }
 
 /// Full client type.
-type TFullClient<TBl, TRtApi, TExecDisp> = Client<
+pub type TFullClient<TBl, TRtApi, TExecDisp> = Client<
 	TFullBackend<TBl>,
 	TFullCallExecutor<TBl, TExecDisp>,
 	TBl,
@@ -103,16 +103,16 @@ type TFullClient<TBl, TRtApi, TExecDisp> = Client<
 >;
 
 /// Full client backend type.
-type TFullBackend<TBl> = sc_client_db::Backend<TBl>;
+pub type TFullBackend<TBl> = sc_client_db::Backend<TBl>;
 
 /// Full client call executor type.
-type TFullCallExecutor<TBl, TExecDisp> = sc_client::LocalCallExecutor<
+pub type TFullCallExecutor<TBl, TExecDisp> = sc_client::LocalCallExecutor<
 	sc_client_db::Backend<TBl>,
 	NativeExecutor<TExecDisp>,
 >;
 
 /// Light client type.
-type TLightClient<TBl, TRtApi, TExecDisp> = Client<
+pub type TLightClient<TBl, TRtApi, TExecDisp> = Client<
 	TLightBackend<TBl>,
 	TLightCallExecutor<TBl, TExecDisp>,
 	TBl,
@@ -120,13 +120,13 @@ type TLightClient<TBl, TRtApi, TExecDisp> = Client<
 >;
 
 /// Light client backend type.
-type TLightBackend<TBl> = sc_client::light::backend::Backend<
+pub type TLightBackend<TBl> = sc_client::light::backend::Backend<
 	sc_client_db::light::LightStorage<TBl>,
 	Blake2Hasher,
 >;
 
 /// Light call executor type.
-type TLightCallExecutor<TBl, TExecDisp> = sc_client::light::call_executor::GenesisCallExecutor<
+pub type TLightCallExecutor<TBl, TExecDisp> = sc_client::light::call_executor::GenesisCallExecutor<
 	sc_client::light::backend::Backend<
 		sc_client_db::light::LightStorage<TBl>,
 		Blake2Hasher

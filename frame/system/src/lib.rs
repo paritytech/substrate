@@ -158,7 +158,9 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 pub trait Trait: 'static + Eq + Clone {
 	/// The aggregated `Origin` type used by dispatchable calls.
 	type Origin:
-		Into<Result<RawOrigin<Self::AccountId>, Self::Origin>> + From<RawOrigin<Self::AccountId>>;
+		Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
+		+ From<RawOrigin<Self::AccountId>>
+		+ Clone;
 
 	/// The aggregated `Call` type.
 	type Call: Debug;
