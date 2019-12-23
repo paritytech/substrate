@@ -14,11 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Definitions for a wasm runtime.
+
 use crate::error::Error;
 use sp_core::traits::Externalities;
 use sp_wasm_interface::Function;
 
-/// The Substrate Wasm runtime.
+/// A trait that defines an abstract wasm runtime.
+///
+/// This can be implemented by an execution engine.
 pub trait WasmRuntime {
 	/// Attempt to update the number of heap pages available during execution.
 	///

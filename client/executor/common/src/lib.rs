@@ -14,6 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! A set of common definitions that are needed for defining execution engines.
+
+#![warn(missing_docs)]
+
 pub mod sandbox;
 pub mod allocator;
 pub mod error;
