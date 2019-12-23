@@ -473,7 +473,7 @@ decl_error! {
 		/// A new schedule must have a greater version than the current one.
 		InvalidScheduleVersion,
 		/// An origin must be signed or inherent and auxiliary sender only provided on inherent.
-		InvaidSurchargeClaim,
+		InvalidSurchargeClaim,
 		/// Cannot restore from nonexisting or tombstone contract.
 		InvalidSourceContract,
 		/// Cannot restore to nonexisting or alive contract.
@@ -858,7 +858,7 @@ impl<T: Trait> Module<T> {
 				);
 			}
 
-			return Err(Error::<T>::InvalidTombstone);
+			return Err(Error::<T>::InvalidTombstone.into());
 		}
 
 		origin_contract.storage_size -= key_values_taken.iter()
