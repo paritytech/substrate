@@ -27,6 +27,8 @@ github_label () {
 
 
 
+git fetch --depth=${GIT_DEPTH:-100} origin master
+
 # check if master is part of this checkout
 if ! git log -n 1 origin/master
 then
