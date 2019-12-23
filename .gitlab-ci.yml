@@ -119,8 +119,10 @@ build-linux-substrate:
     - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
     - sccache -s
 # trigger the pipeline
-# control-trigger:
-#   stage:                           workspace
+control-trigger:
+  stage:                           publish
+  needs:
+    - build-linux-substrate
   variables:
     SUBSTRATE_VERSION:             tbdn
     SUBSTRATE_COMMIT:              $CI_COMMIT_SHA
