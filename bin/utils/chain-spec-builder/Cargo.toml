@@ -12,3 +12,4 @@ node-cli = { version = "2.0.0", path = "../../node/cli" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 rand = "0.7.2"
 structopt = "=0.3.5"
+structopt-derive = "=0.3.5"
