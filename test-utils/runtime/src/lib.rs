@@ -50,6 +50,8 @@ use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 use sp_core::storage::ChildType;
+#[cfg(feature = "std")]
+use parity_util_mem::MallocSizeOf;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::AuthorityId;
@@ -108,6 +110,14 @@ pub enum Extrinsic {
 	Transfer(Transfer, AccountSignature),
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
+}
+
+// TODO: this is a stub, not sure if it is needed to track runtime memory usage atm
+#[cfg(feature = "std")]
+impl MallocSizeOf for Extrinsic {
+	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		0
+	}
 }
 
 #[cfg(feature = "std")]

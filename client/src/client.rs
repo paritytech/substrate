@@ -25,6 +25,7 @@ use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::{Hasher, Prefix};
+use parity_util_mem::MallocSizeOfExt;
 use sp_core::{
 	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash,
 	NeverNativeValue, ExecutionContext, NativeOrEncoded,
@@ -1157,7 +1158,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		if let Some(changes_trie) = self.backend.changes_trie_storage() {
 			// unlikely that memory used overflows address space,
 			// but instance requested might misbehave!
-			mem_used = mem_used.saturating_add(changes_trie.mem_used());
+			mem_used = mem_used.saturating_add(changes_trie.malloc_size_of());
 		}
 
 		ClientInfo {

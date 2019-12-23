@@ -71,7 +71,7 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, MallocSizeOf))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Block<Header, Extrinsic: MaybeSerialize> {
+pub struct Block<Header, Extrinsic: MaybeSerialize + MaybeMallocSizeOf> {
 	/// The block header.
 	pub header: Header,
 	/// The accompanying extrinsics.
