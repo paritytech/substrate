@@ -241,7 +241,9 @@ pub mod host;
 pub mod wasm;
 pub mod pass_by;
 
-pub use impls::pointer_and_len_from_u64;
+mod util;
+
+pub use util::unpack_ptr_and_len;
 
 /// Something that can be used by the runtime interface as type to communicate between wasm and the
 /// host.

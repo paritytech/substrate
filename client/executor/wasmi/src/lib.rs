@@ -33,7 +33,7 @@ use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module
 use sp_wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
-use sp_runtime_interface::pointer_and_len_from_u64;
+use sp_runtime_interface::unpack_ptr_and_len;
 use sc_executor_common::wasm_runtime::WasmRuntime;
 
 struct FunctionExecutor<'a> {
@@ -377,7 +377,7 @@ fn call_in_wasm_module(
 
 	match result {
 		Ok(Some(I64(r))) => {
-			let (ptr, length) = pointer_and_len_from_u64(r as u64);
+			let (ptr, length) = unpack_ptr_and_len(r as u64);
 			memory.get(ptr.into(), length as usize).map_err(|_| Error::Runtime)
 		},
 		Err(e) => {

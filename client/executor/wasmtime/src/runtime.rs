@@ -26,7 +26,7 @@ use sc_executor_common::{
 };
 use sp_core::traits::Externalities;
 use sp_wasm_interface::{Pointer, WordSize, Function};
-use sp_runtime_interface::pointer_and_len_from_u64;
+use sp_runtime_interface::unpack_ptr_and_len;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -187,7 +187,7 @@ fn call_method(
 	let trap_error = reset_env_state_and_take_trap(context, None)?;
 	let (output_ptr, output_len) = match outcome {
 		ActionOutcome::Returned { values } => match values.as_slice() {
-			[RuntimeValue::I64(retval)] => pointer_and_len_from_u64(*retval as u64),
+			[RuntimeValue::I64(retval)] => unpack_ptr_and_len(*retval as u64),
 			_ => return Err(Error::InvalidReturn),
 		}
 		ActionOutcome::Trapped { message } => return Err(trap_error.unwrap_or_else(
