@@ -211,7 +211,7 @@ pub fn open_database(
 	let db: Arc<dyn KeyValueDB> = match &config.source {
 		#[cfg(feature = "kvdb-rocksdb")]
 		DatabaseSettingsSrc::Path { path, cache_size } => {
-			let mut db_config = DatabaseConfig::with_columns(Some(NUM_COLUMNS));
+			let mut db_config = DatabaseConfig::with_columns(NUM_COLUMNS);
 
 			if let Some(cache_size) = cache_size {
 				let state_col_budget = (*cache_size as f64 * 0.9) as usize;
@@ -219,10 +219,10 @@ pub fn open_database(
 
 				let mut memory_budget = std::collections::HashMap::new();
 				for i in 0..NUM_COLUMNS {
-					if Some(i) == crate::columns::STATE {
-						memory_budget.insert(Some(i), state_col_budget);
+					if i == crate::columns::STATE {
+						memory_budget.insert(i, state_col_budget);
 					} else {
-						memory_budget.insert(Some(i), other_col_budget);
+						memory_budget.insert(i, other_col_budget);
 					}
 				}
 
