@@ -116,18 +116,18 @@ build-linux-substrate:
       fi
     - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
 
-build-linux-node-template:
-  stage:                           build
-  <<:                              *collect-artifacts
-  <<:                              *docker-env
-  # <<:                              *build-only
-  except:
-    variables:
-      - $DEPLOY_TAG
-  script:
-      - mkdir -p ./artifacts/substrate/
-      - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
-      - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
+# build-linux-node-template:
+#   stage:                           build
+#   <<:                              *collect-artifacts
+#   <<:                              *docker-env
+#   # <<:                              *build-only
+#   except:
+#     variables:
+#       - $DEPLOY_TAG
+#   script:
+#       - mkdir -p ./artifacts/substrate/
+#       - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
+#       - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
 
 # trigger the pipeline
 control-trigger:
