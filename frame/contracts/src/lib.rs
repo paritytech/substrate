@@ -113,7 +113,10 @@ use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
-	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension},
+	traits::{
+		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, MaybeMallocSizeOf, Member,
+		SignedExtension,
+	},
 	transaction_validity::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
 	},
@@ -244,7 +247,7 @@ pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
 
 impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
 where
-	H: Member + MaybeSerializeDeserialize+ Debug
+	H: Member + MaybeSerializeDeserialize + MaybeMallocSizeOf + Debug
 		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default
 		+ sp_std::hash::Hash + Codec,
 	Hasher: Hash<Output=H>,

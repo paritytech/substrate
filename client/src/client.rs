@@ -25,7 +25,7 @@ use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::{Hasher, Prefix};
-use parity_util_mem::MallocSizeOfExt;
+use parity_util_mem::MallocSizeOf;
 use sp_core::{
 	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash,
 	NeverNativeValue, ExecutionContext, NativeOrEncoded,
@@ -59,7 +59,6 @@ use sp_blockchain::{self as blockchain,
 	well_known_cache_keys::Id as CacheKeyId,
 	HeaderMetadata, CachedHeaderMetadata,
 };
-
 use sp_api::{CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder, InitializeBlock};
 use sc_block_builder::BlockBuilderApi;
 
@@ -1151,20 +1150,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Get blockchain info.
 	pub fn info(&self) -> ClientInfo<Block> {
-		let info = self.backend.blockchain().info();
-
-		let mut mem_used = self.backend.blockchain().mem_used();
-
-		if let Some(changes_trie) = self.backend.changes_trie_storage() {
-			// unlikely that memory used overflows address space,
-			// but instance requested might misbehave!
-			mem_used = mem_used.saturating_add(changes_trie.malloc_size_of());
-		}
-
 		ClientInfo {
-			chain: info,
+			chain: self.backend.blockchain().info(),
 			used_state_cache_size: self.backend.used_state_cache_size(),
-			mem_used,
 		}
 	}
 
@@ -1268,6 +1256,17 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		))
 	}
 }
+
+impl<B, E, Block, RA> MallocSizeOf for Client<B, E, Block, RA>
+ 	where B: MallocSizeOf, Block: MallocSizeOf + BlockT
+ {
+ 	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+ 		self.backend.size_of(ops) +
+ 			self.fork_blocks.size_of(ops)
+
+ 		// other members seem to have little footprint (TODO: check though)
+ 	}
+ }
 
 impl<B, E, Block, RA> HeaderMetadata<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
