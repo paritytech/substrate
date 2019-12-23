@@ -16,7 +16,8 @@
 
 //! This module implements sandboxing support in the runtime.
 //!
-//! Sandboxing is
+//! Sandboxing is baked by wasmi at the moment. In future, however, we would like to add/switch to
+//! a compiled execution engine.
 
 use crate::error::{Result, Error};
 use std::{collections::HashMap, rc::Rc};
