@@ -898,8 +898,8 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 	RP: StructOpt + AugmentClap
 {
 	fn clap<'a, 'b>() -> App<'a, 'b> {
-		RP::augment_clap(
-			RunCmd::augment_clap(
+		<RP as AugmentClap>::augment_clap(
+			<RunCmd as AugmentClap>::augment_clap(
 				CC::clap().unset_setting(AppSettings::SubcommandRequiredElseHelp)
 			)
 		).subcommand(
@@ -987,7 +987,7 @@ pub struct MergeParameters<L, R> {
 
 impl<L, R> StructOpt for MergeParameters<L, R> where L: StructOpt + AugmentClap, R: StructOpt {
 	fn clap<'a, 'b>() -> App<'a, 'b> {
-		L::augment_clap(R::clap())
+		<L as AugmentClap>::augment_clap(R::clap())
 	}
 
 	fn from_clap(matches: &::structopt::clap::ArgMatches) -> Self {

@@ -25,6 +25,12 @@ pub trait AugmentClap: StructOpt {
 	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b>;
 }
 
+/// Supports getting common params.
+pub trait GetSharedParams {
+	/// Returns shared params if any.
+	fn shared_params(&self) -> Option<&SharedParams>;
+}
+
 /// Macro for implementing the `AugmentClap` trait.
 /// This requires that the given type uses `derive(StructOpt)`!
 #[macro_export]
@@ -32,14 +38,8 @@ macro_rules! impl_augment_clap {
 	( $type:ident ) => {
 		impl $crate::AugmentClap for $type {
 			fn augment_clap<'a, 'b>(app: $crate::App<'a, 'b>) -> $crate::App<'a, 'b> {
-				$type::augment_clap(app)
+				<$type as StructOpt>::augment_clap(app)
 			}
 		}
 	}
-}
-
-/// Supports getting common params.
-pub trait GetSharedParams {
-	/// Returns shared params if any.
-	fn shared_params(&self) -> Option<&SharedParams>;
 }
