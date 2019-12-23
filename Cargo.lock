@@ -5288,6 +5288,7 @@ dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-wasm 0.41.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sc-executor-common 2.0.0",
  "sc-runtime-test 2.0.0",
  "sp-core 2.0.0",
  "sp-externalities 2.0.0",
@@ -5306,6 +5307,20 @@ dependencies = [
  "wasmtime-environ 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmtime-jit 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmtime-runtime 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "sc-executor-common"
+version = "2.0.0"
+dependencies = [
+ "derive_more 0.99.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-core 2.0.0",
+ "sp-runtime-interface 2.0.0",
+ "sp-serializer 2.0.0",
+ "sp-wasm-interface 2.0.0",
+ "wasmi 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

@@ -17,23 +17,25 @@
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
 
 use crate::error::{Error, Result, WasmError};
-use crate::wasm_runtime::WasmRuntime;
 use crate::wasmtime::function_executor::FunctionExecutorState;
 use crate::wasmtime::trampoline::{EnvState, make_trampoline};
 use crate::wasmtime::util::{cranelift_ir_signature, read_memory_into, write_memory_from};
 use crate::Externalities;
+
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::convert::TryFrom;
+use std::rc::Rc;
+
+use sp_wasm_interface::{Pointer, WordSize, Function};
+use sp_runtime_interface::pointer_and_len_from_u64;
+use sc_executor_common::wasm_runtime::WasmRuntime;
 
 use cranelift_codegen::ir;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilderContext;
 use cranelift_wasm::DefinedFuncIndex;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::rc::Rc;
-use sp_wasm_interface::{Pointer, WordSize, Function};
-use sp_runtime_interface::pointer_and_len_from_u64;
 use wasmtime_environ::{Module, translate_signature};
 use wasmtime_jit::{
 	ActionOutcome, ActionError, CodeMemory, CompilationStrategy, CompiledModule, Compiler, Context,

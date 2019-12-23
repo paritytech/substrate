@@ -20,7 +20,6 @@ use crate::{
 	error::{Error, WasmError},
 	sandbox,
 	allocator,
-	wasm_runtime::WasmRuntime,
 };
 use std::{str, mem};
 use wasmi::{
@@ -35,6 +34,7 @@ use sp_wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
 use sp_runtime_interface::pointer_and_len_from_u64;
+use sc_executor_common::wasm_runtime::WasmRuntime;
 
 struct FunctionExecutor<'a> {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,
