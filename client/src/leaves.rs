@@ -77,7 +77,7 @@ impl<H, N> LeafSet<H, N> where
 	}
 
 	/// Read the leaf list from the DB, using given prefix for keys.
-	pub fn read_from_db(db: &dyn KeyValueDB, column: Option<u32>, prefix: &[u8]) -> Result<Self> {
+	pub fn read_from_db(db: &dyn KeyValueDB, column: u32, prefix: &[u8]) -> Result<Self> {
 		let mut storage = BTreeMap::new();
 
 		for (key, value) in db.iter_from_prefix(column, prefix) {
@@ -173,7 +173,7 @@ impl<H, N> LeafSet<H, N> where
 	}
 
 	/// Write the leaf list to the database transaction.
-	pub fn prepare_transaction(&mut self, tx: &mut DBTransaction, column: Option<u32>, prefix: &[u8]) {
+	pub fn prepare_transaction(&mut self, tx: &mut DBTransaction, column: u32, prefix: &[u8]) {
 		let mut buf = prefix.to_vec();
 		for LeafSetItem { hash, number } in self.pending_added.drain(..) {
 			hash.using_encoded(|s| buf.extend(s));
@@ -288,10 +288,10 @@ mod tests {
 
 		let mut tx = DBTransaction::new();
 
-		set.prepare_transaction(&mut tx, None, PREFIX);
+		set.prepare_transaction(&mut tx, 0, PREFIX);
 		db.write(tx).unwrap();
 
-		let set2 = LeafSet::read_from_db(&db, None, PREFIX).unwrap();
+		let set2 = LeafSet::read_from_db(&db, 0, PREFIX).unwrap();
 		assert_eq!(set, set2);
 	}
 
@@ -322,12 +322,12 @@ mod tests {
 		assert!(set.contains(10, 10_1));
 
 		let mut tx = DBTransaction::new();
-		set.prepare_transaction(&mut tx, None, PREFIX);
+		set.prepare_transaction(&mut tx, 0, PREFIX);
 		db.write(tx).unwrap();
 
 		let _ = set.finalize_height(11);
 		let mut tx = DBTransaction::new();
-		set.prepare_transaction(&mut tx, None, PREFIX);
+		set.prepare_transaction(&mut tx, 0, PREFIX);
 		db.write(tx).unwrap();
 
 		assert!(set.contains(11, 11_1));
@@ -335,7 +335,7 @@ mod tests {
 		assert!(set.contains(12, 12_1));
 		assert!(!set.contains(10, 10_1));
 
-		let set2 = LeafSet::read_from_db(&db, None, PREFIX).unwrap();
+		let set2 = LeafSet::read_from_db(&db, 0, PREFIX).unwrap();
 		assert_eq!(set, set2);
 	}
 

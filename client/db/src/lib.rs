@@ -302,18 +302,18 @@ pub fn new_client<E, S, Block, RA>(
 }
 
 pub(crate) mod columns {
-	pub const META: Option<u32> = crate::utils::COLUMN_META;
-	pub const STATE: Option<u32> = Some(1);
-	pub const STATE_META: Option<u32> = Some(2);
+	pub const META: u32 = crate::utils::COLUMN_META;
+	pub const STATE: u32 = 1;
+	pub const STATE_META: u32 = 2;
 	/// maps hashes to lookup keys and numbers to canon hashes.
-	pub const KEY_LOOKUP: Option<u32> = Some(3);
-	pub const HEADER: Option<u32> = Some(4);
-	pub const BODY: Option<u32> = Some(5);
-	pub const JUSTIFICATION: Option<u32> = Some(6);
-	pub const CHANGES_TRIE: Option<u32> = Some(7);
-	pub const AUX: Option<u32> = Some(8);
+	pub const KEY_LOOKUP: u32 = 3;
+	pub const HEADER: u32 = 4;
+	pub const BODY: u32 = 5;
+	pub const JUSTIFICATION: u32 = 6;
+	pub const CHANGES_TRIE: u32 = 7;
+	pub const AUX: u32 = 8;
 	/// Offchain workers local storage
-	pub const OFFCHAIN: Option<u32> = Some(9);
+	pub const OFFCHAIN: u32 = 9;
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -633,7 +633,7 @@ struct StorageDb<Block: BlockT> {
 impl<Block: BlockT> sp_state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
 	fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let key = prefixed_key::<Blake2Hasher>(key, prefix);
-		self.state_db.get(&key, self).map(|r| r.map(|v| DBValue::from_slice(&v)))
+		self.state_db.get(&key, self)
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 }
