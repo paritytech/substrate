@@ -1144,7 +1144,7 @@ fn election_present_outside_of_presentation_period_should_not_work() {
 		assert!(!Elections::presentation_active());
 		assert_noop!(
 			Elections::present_winner(Origin::signed(5), 5, 1, 0),
-			Error::<Test>::NotPresentationPeriod
+			Error::<Test>::NotPresentationPeriod,
 		);
 	});
 }
@@ -1190,7 +1190,7 @@ fn election_present_when_presenter_is_poor_should_not_work() {
 				if p > 5 {
 					assert_noop!(Elections::present_winner(
 						Origin::signed(1), 1, 10, 0),
-						Error::<Test>::InsufficientPresenterFunds
+						Error::<Test>::InsufficientPresenterFunds,
 					);
 				} else {
 					assert_ok!(Elections::present_winner(Origin::signed(1), 1, 10, 0));

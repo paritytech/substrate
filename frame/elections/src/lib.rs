@@ -556,7 +556,7 @@ decl_module! {
 			ensure!(
 				(slot == count && count == candidates.len()) ||
 					(slot < candidates.len() && candidates[slot] == T::AccountId::default()),
-				Error::<T>::InvalidCandidateSlot
+				Error::<T>::InvalidCandidateSlot,
 			);
 			// NOTE: This must be last as it has side-effects.
 			T::Currency::reserve(&who, T::CandidacyBond::get())
@@ -592,7 +592,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(
 				!total.is_zero(),
-				Error::<T>::ZeroDeposit
+				Error::<T>::ZeroDeposit,
 			);
 
 			let candidate = T::Lookup::lookup(candidate)?;
@@ -827,7 +827,7 @@ impl<T: Trait> Module<T> {
 		// bond would cover.
 		ensure!(
 			candidates_len >= votes.len(),
-			Error::<T>::TooManyVotes
+			Error::<T>::TooManyVotes,
 		);
 		ensure!(value >= T::MinimumVotingLock::get(), Error::<T>::InsufficientLockedValue);
 
@@ -850,7 +850,7 @@ impl<T: Trait> Module<T> {
 			// not yet a voter. Index _could be valid_. Fee might apply. Bond will be reserved O(1).
 			ensure!(
 				T::Currency::free_balance(&who) > T::VotingBond::get(),
-				Error::<T>::InsufficientVoterFunds
+				Error::<T>::InsufficientVoterFunds,
 			);
 
 			let (set_index, vec_index) = Self::split_index(hint, VOTER_SET_SIZE);
