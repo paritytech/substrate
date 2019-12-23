@@ -17,7 +17,13 @@
 #![warn(missing_docs)]
 
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
-use std::collections::HashMap;
+use std::{
+	clone::Clone,
+	cmp::{Eq, PartialEq},
+	collections::HashMap,
+	convert::AsRef,
+	hash::Hash,
+};
 
 /// The maximum number of authority connections initialized through the authority discovery module.
 ///
@@ -45,9 +51,8 @@ pub(super) struct AddrCache<Id, Addr> {
 
 impl<Id, Addr> AddrCache<Id, Addr>
 where
-	// TODO: Import std above.
-	Id: std::cmp::Eq + std::hash::Hash,
-	Addr: std::clone::Clone + std::cmp::PartialEq + std::convert::AsRef<[u8]>,
+	Id: Eq + Hash,
+	Addr: Clone + PartialEq + AsRef<[u8]>,
 {
 	pub fn new() -> Self {
 		AddrCache {
@@ -61,8 +66,11 @@ where
 			return;
 		}
 
-		// TODO: Handle unwrap
-		addresses.sort_by(|a, b| a.as_ref().partial_cmp(b.as_ref()).unwrap());
+		addresses.sort_by(|a, b| {
+			a.as_ref()
+				.partial_cmp(b.as_ref())
+				.expect("partial cmp of two u8 slices can not fail")
+		});
 		self.cache.insert(id, addresses);
 	}
 
@@ -87,8 +95,11 @@ where
 			.collect::<Vec<Addr>>();
 
 		addresses.dedup();
-		// TODO: Handle unwrap
-		addresses.sort_by(|a, b| a.as_ref().partial_cmp(b.as_ref()).unwrap());
+		addresses.sort_by(|a, b| {
+			a.as_ref()
+				.partial_cmp(b.as_ref())
+				.expect("partial cmp of two u8 slices can not fail")
+		});
 
 		addresses
 			.choose_multiple(&mut rng, MAX_NUM_AUTHORITY_CONN)

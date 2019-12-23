@@ -310,29 +310,29 @@ where
 			.get(&remote_key)
 			.ok_or(Error::MatchingHashedAuthorityIdWithAuthorityId)?;
 
-		let remote_addresses: Vec<Multiaddr> = values.into_iter().map(|(_k, v)| {
-			let schema::SignedAuthorityAddresses {
-				signature,
-				addresses,
-			} = schema::SignedAuthorityAddresses::decode(v).map_err(Error::DecodingProto)?;
-			let signature = AuthoritySignature::decode(&mut &signature[..])
-				.map_err(Error::EncodingDecodingScale)?;
+		let remote_addresses: Vec<Multiaddr> = values.into_iter()
+			.map(|(_k, v)| {
+				let schema::SignedAuthorityAddresses {
+					signature,
+					addresses,
+				} = schema::SignedAuthorityAddresses::decode(v).map_err(Error::DecodingProto)?;
+				let signature = AuthoritySignature::decode(&mut &signature[..])
+					.map_err(Error::EncodingDecodingScale)?;
 
-			if !AuthorityPair::verify(&signature, &addresses, authority_id) {
-				return Err(Error::VerifyingDhtPayload);
-			}
+				if !AuthorityPair::verify(&signature, &addresses, authority_id) {
+					return Err(Error::VerifyingDhtPayload);
+				}
 
-			let addresses: Vec<libp2p::Multiaddr> = schema::AuthorityAddresses::decode(addresses)
-				.map(|a| a.addresses)
-				.map_err(Error::DecodingProto)?
-				.into_iter()
-				.map(|a| a.try_into())
-				.collect::<std::result::Result<_, _>>()
-				.map_err(Error::ParsingMultiaddress)?;
+				let addresses: Vec<libp2p::Multiaddr> = schema::AuthorityAddresses::decode(addresses)
+					.map(|a| a.addresses)
+					.map_err(Error::DecodingProto)?
+					.into_iter()
+					.map(|a| a.try_into())
+					.collect::<std::result::Result<_, _>>()
+					.map_err(Error::ParsingMultiaddress)?;
 
-			Ok(addresses)
-		})
-			// TODO: Can we do this nicer?
+				Ok(addresses)
+			})
 			.collect::<Result<Vec<Vec<Multiaddr>>>>()?
 			.into_iter().flatten().collect();
 
