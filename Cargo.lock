@@ -5337,6 +5337,7 @@ dependencies = [
 name = "sc-executor-wasmtime"
 version = "2.0.0"
 dependencies = [
+ "assert_matches 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cranelift-codegen 0.50.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cranelift-entity 0.50.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cranelift-frontend 0.50.0 (registry+https://github.com/rust-lang/crates.io-index)",
