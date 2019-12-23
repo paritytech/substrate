@@ -125,6 +125,7 @@ build-linux-node-template:
     variables:
       - $DEPLOY_TAG
   script:
+      - mkdir -p ./artifacts/substrate/
       - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
       - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
 
@@ -140,8 +141,9 @@ control-trigger:
     SUBSTRATE_JOB_URL:             $CI_JOB_URL
   trigger:
     project:                       parity/srml-contracts-waterfall
-    branch:                        "26"
+    branch:                        "28"
     strategy:                      depend
+
 # check_warnings:
 #   stage:                           build
 #   <<:                              *docker-env
