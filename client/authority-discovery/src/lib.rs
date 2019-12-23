@@ -281,7 +281,7 @@ where
 
 					self.handle_dht_value_found_event(v)?;
 				}
-				DhtEvent::ValueNotFound(hash) => warn!(
+				DhtEvent::ValueNotFound(hash) => debug!(
 					target: "sub-authority-discovery",
 					"Value for hash '{:?}' not found on Dht.", hash
 				),
