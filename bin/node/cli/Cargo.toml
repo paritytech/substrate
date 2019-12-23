@@ -34,7 +34,6 @@ rand = "0.7.2"
 structopt = "=0.3.5"
 structopt-derive = "=0.3.5"
 
-
 # primitives
 sp-authority-discovery = { version = "2.0.0",  path = "../../../primitives/authority-discovery" }
 sp-consensus-babe = { version = "0.8", path = "../../../primitives/consensus/babe" }
