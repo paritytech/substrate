@@ -562,7 +562,6 @@ mod tests {
 		ready.import(x)
 	}
 
-
 	#[test]
 	fn should_replace_transaction_that_provides_the_same_tag() {
 		// given
