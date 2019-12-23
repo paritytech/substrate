@@ -17,6 +17,7 @@
 //! Changes tries build cache.
 
 use std::collections::{HashMap, HashSet};
+use parity_util_mem::MallocSizeOf;
 
 /// Changes trie build cache.
 ///
@@ -29,6 +30,7 @@ use std::collections::{HashMap, HashSet};
 /// Entries are pruned from the cache once digest block that is using this entry
 /// is inserted (because digest block will includes all keys from this entry).
 /// When there's a fork, entries are pruned when first changes trie is inserted.
+#[derive(MallocSizeOf)]
 pub struct BuildCache<H, N> {
 	/// Map of block (implies changes true) number => changes trie root.
 	roots_by_number: HashMap<N, H>,

@@ -1151,9 +1151,19 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Get blockchain info.
 	pub fn info(&self) -> ClientInfo<Block> {
 		let info = self.backend.blockchain().info();
+
+		let mut mem_used = self.backend.blockchain().mem_used();
+
+		if let Some(changes_trie) = self.backend.changes_trie_storage() {
+			// unlikely that memory used overflows address space,
+			// but instance requested might misbehave!
+			mem_used = mem_used.saturating_add(changes_trie.mem_used());
+		}
+
 		ClientInfo {
 			chain: info,
 			used_state_cache_size: self.backend.used_state_cache_size(),
+			mem_used,
 		}
 	}
 

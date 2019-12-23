@@ -106,7 +106,7 @@ use sp_runtime::{
 	traits::{
 		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, BadOrigin, SaturatedConversion,
-		MaybeSerialize, MaybeSerializeDeserialize, StaticLookup, One, Bounded,
+		MaybeSerialize, MaybeSerializeDeserialize, StaticLookup, One, Bounded, MaybeMallocSizeOf,
 	},
 };
 
@@ -168,18 +168,19 @@ pub trait Trait: 'static + Eq + Clone {
 	/// Account index (aka nonce) type. This stores the number of previous transactions associated
 	/// with a sender account.
 	type Index:
-		Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + SimpleArithmetic
-		+ Copy;
+		Parameter + Member + MaybeSerialize + MaybeMallocSizeOf + Debug + Default + MaybeDisplay +
+		SimpleArithmetic + Copy;
 
 	/// The block number type used by the runtime.
 	type BlockNumber:
-		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleArithmetic
-		+ Default + Bounded + Copy + sp_std::hash::Hash + sp_std::str::FromStr;
+		Parameter + Member + MaybeSerializeDeserialize + MaybeMallocSizeOf + Debug + MaybeDisplay +
+		SimpleArithmetic + Default + Bounded + Copy + sp_std::hash::Hash + sp_std::str::FromStr;
 
 	/// The output of the `Hashing` function.
 	type Hash:
-		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps
-		+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
+		Parameter + Member + MaybeSerializeDeserialize + MaybeMallocSizeOf + Debug + MaybeDisplay +
+		SimpleBitOps + Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> +
+		AsMut<[u8]>;
 
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;

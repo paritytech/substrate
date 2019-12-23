@@ -29,6 +29,7 @@ use crate::{generic, KeyTypeId, ApplyExtrinsicResult};
 pub use sp_core::{H256, sr25519};
 use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::{TransactionValidity, TransactionValidityError};
+use parity_util_mem::MallocSizeOf;
 
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
@@ -144,7 +145,7 @@ pub type DigestItem = generic::DigestItem<H256>;
 pub type Digest = generic::Digest<H256>;
 
 /// Block Header
-#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, Default)]
+#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, Default, MallocSizeOf)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Header {
@@ -216,7 +217,7 @@ impl<'a> Deserialize<'a> for Header {
 }
 
 /// An opaque extrinsic wrapper type.
-#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, MallocSizeOf)]
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
 impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
@@ -249,7 +250,7 @@ impl<Xt> Deref for ExtrinsicWrapper<Xt> {
 }
 
 /// Testing block
-#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, MallocSizeOf)]
 pub struct Block<Xt> {
 	/// Block header
 	pub header: Header,
@@ -257,7 +258,7 @@ pub struct Block<Xt> {
 	pub extrinsics: Vec<Xt>,
 }
 
-impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic> traits::Block
+impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + MallocSizeOf + Clone + Eq + Debug + traits::Extrinsic> traits::Block
 	for Block<Xt>
 {
 	type Extrinsic = Xt;
@@ -293,7 +294,7 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 /// with index only used if sender is some.
 ///
 /// If sender is some then the transaction is signed otherwise it is unsigned.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, MallocSizeOf)]
 pub struct TestXt<Call, Extra>(pub Option<(u64, Extra)>, pub Call);
 
 impl<Call, Extra> Serialize for TestXt<Call, Extra> where TestXt<Call, Extra>: Encode {

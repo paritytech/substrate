@@ -88,6 +88,8 @@ pub struct ClientInfo<Block: BlockT> {
 	pub chain: Info<Block>,
 	/// State Cache Size currently used by the backend
 	pub used_state_cache_size: Option<usize>,
+	/// Memory used
+	pub mem_used: usize,
 }
 
 /// Summary of an imported block

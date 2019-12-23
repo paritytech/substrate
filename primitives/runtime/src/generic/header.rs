@@ -18,10 +18,13 @@
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "std")]
+use parity_util_mem::MallocSizeOf;
+
 use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef, Error};
 use crate::traits::{
 	self, Member, SimpleArithmetic, SimpleBitOps, Hash as HashT,
-	MaybeSerializeDeserialize, MaybeSerialize, MaybeDisplay,
+	MaybeSerializeDeserialize, MaybeSerialize, MaybeDisplay, MaybeMallocSizeOf,
 };
 use crate::generic::Digest;
 use sp_core::U256;
@@ -32,7 +35,7 @@ use sp_std::{
 
 /// Abstraction over a block header for a substrate chain.
 #[derive(PartialEq, Eq, Clone, sp_core::RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, MallocSizeOf))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
@@ -105,10 +108,11 @@ impl<Number, Hash> codec::EncodeLike for Header<Number, Hash> where
 
 impl<Number, Hash> traits::Header for Header<Number, Hash> where
 	Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + MaybeDisplay +
-		SimpleArithmetic + Codec + Copy + Into<U256> + TryFrom<U256> + sp_std::str::FromStr,
+		SimpleArithmetic + Codec + Copy + Into<U256> + TryFrom<U256> + sp_std::str::FromStr +
+		MaybeMallocSizeOf,
 	Hash: HashT,
 	Hash::Output: Default + sp_std::hash::Hash + Copy + Member +
-		MaybeSerialize + Debug + MaybeDisplay + SimpleBitOps + Codec,
+		MaybeSerialize + MaybeMallocSizeOf + Debug + MaybeDisplay + SimpleBitOps + Codec,
 {
 	type Number = Number;
 	type Hash = <Hash as HashT>::Output;

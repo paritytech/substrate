@@ -40,6 +40,8 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	fn number(&self, hash: Block::Hash) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
 	fn hash(&self, number: NumberFor<Block>) -> Result<Option<Block::Hash>>;
+	/// Get current memory used by instance (if implemented or have in-memory state at all).
+	fn mem_used(&self) -> usize { 0 }
 
 	/// Convert an arbitrary block ID into a block hash.
 	fn block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Option<Block::Hash>> {

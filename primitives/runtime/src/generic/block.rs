@@ -22,15 +22,20 @@ use std::fmt;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "std")]
+use parity_util_mem::MallocSizeOf;
+
 use sp_std::prelude::*;
 use sp_core::RuntimeDebug;
 use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize};
+use crate::traits::{
+	self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize, MaybeMallocSizeOf,
+};
 use crate::Justification;
 
 /// Something to identify a block.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize))]
+#[cfg_attr(feature = "std", derive(Serialize, MallocSizeOf))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub enum BlockId<Block: BlockT> {
@@ -63,7 +68,7 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 
 /// Abstraction over a substrate block.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, MallocSizeOf))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Block<Header, Extrinsic: MaybeSerialize> {
@@ -73,7 +78,7 @@ pub struct Block<Header, Extrinsic: MaybeSerialize> {
 	pub extrinsics: Vec<Extrinsic>,
 }
 
-impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
+impl<Header, Extrinsic: MaybeSerialize + MaybeMallocSizeOf> traits::Block for Block<Header, Extrinsic>
 where
 	Header: HeaderT,
 	Extrinsic: Member + Codec + traits::Extrinsic,
@@ -101,7 +106,7 @@ where
 
 /// Abstraction over a substrate block and justification.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, MallocSizeOf))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct SignedBlock<Block> {
