@@ -184,12 +184,12 @@ decl_module! {
 
 		/// Provide a set of uncles.
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
-		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> dispatch::Result {
+		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
 			ensure_none(origin)?;
 			ensure!(new_uncles.len() <= MAX_UNCLES, "Too many uncles");
 
 			if <Self as Store>::DidSetUncles::get() {
-				return Err("Uncles already set in block.");
+				Err("Uncles already set in block.")?
 			}
 			<Self as Store>::DidSetUncles::put(true);
 
@@ -219,7 +219,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> dispatch::Result {
+	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
 		let now = <frame_system::Module<T>>::block_number();
 
 		let mut uncles = <Self as Store>::Uncles::get();
@@ -408,6 +408,7 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 
 	parameter_types! {
@@ -565,7 +566,7 @@ mod tests {
 				);
 				assert_eq!(
 					Authorship::verify_and_import_uncles(vec![uncle_a.clone(), uncle_a.clone()]),
-					Err("uncle already included"),
+					Err("uncle already included".into()),
 				);
 			}
 
@@ -580,7 +581,7 @@ mod tests {
 
 				assert_eq!(
 					Authorship::verify_and_import_uncles(vec![uncle_a.clone()]),
-					Err("uncle already included"),
+					Err("uncle already included".into()),
 				);
 			}
 
@@ -590,7 +591,7 @@ mod tests {
 
 				assert_eq!(
 					Authorship::verify_and_import_uncles(vec![uncle_clone]),
-					Err("uncle already included"),
+					Err("uncle already included".into()),
 				);
 			}
 
@@ -599,7 +600,7 @@ mod tests {
 				let unsealed = create_header(3, canon_chain.canon_hash(2), [2; 32].into());
 				assert_eq!(
 					Authorship::verify_and_import_uncles(vec![unsealed]),
-					Err("no author"),
+					Err("no author".into()),
 				);
 			}
 
@@ -614,7 +615,7 @@ mod tests {
 
 				assert_eq!(
 					Authorship::verify_and_import_uncles(vec![gen_2]),
-					Err("uncle not recent enough to be included"),
+					Err("uncle not recent enough to be included".into()),
 				);
 			}
 

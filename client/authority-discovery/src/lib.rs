@@ -693,7 +693,7 @@ mod tests {
 			&self,
 			_: &BlockId<Block>,
 			_: ExecutionContext,
-			_: Option<(Block)>,
+			_: Option<Block>,
 			_: Vec<u8>,
 		) -> std::result::Result<NativeOrEncoded<()>, sp_blockchain::Error> {
 			unimplemented!("Not required for testing!")

@@ -25,7 +25,7 @@
 //! ## Overview
 //!
 //! The Treasury Module itself provides the pot to store funds, and a means for stakeholders to
-//! propose, approve, and deny expendatures.  The chain will need to provide a method (e.g.
+//! propose, approve, and deny expenditures.  The chain will need to provide a method (e.g.
 //! inflation, fees) for collecting funds.
 //!
 //! By way of example, the Council could vote to fund the Treasury with a portion of the block
@@ -66,9 +66,7 @@ use frame_support::traits::{
 	ReservableCurrency, WithdrawReason
 };
 use sp_runtime::{Permill, ModuleId};
-use sp_runtime::traits::{
-	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating, ModuleDispatchError,
-};
+use sp_runtime::traits::{Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating};
 use frame_support::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
@@ -126,7 +124,7 @@ decl_module! {
 		/// Percentage of spare funds (if any) that are burnt per spend period.
 		const Burn: Permill = T::Burn::get();
 
-		type Error = Error;
+		type Error = Error<T>;
 
 		fn deposit_event() = default;
 
@@ -145,12 +143,12 @@ decl_module! {
 			#[compact] value: BalanceOf<T>,
 			beneficiary: <T::Lookup as StaticLookup>::Source
 		) {
-			let proposer = ensure_signed(origin).map_err(|e| e.as_str())?;
+			let proposer = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			let bond = Self::calculate_bond(value);
 			T::Currency::reserve(&proposer, bond)
-				.map_err(|_| Error::InsufficientProposersBalance)?;
+				.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
 
 			let c = Self::proposal_count();
 			ProposalCount::put(c + 1);
@@ -168,12 +166,14 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::RejectOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
-			let proposal = <Proposals<T>>::take(proposal_id).ok_or(Error::InvalidProposalIndex)?;
+			T::RejectOrigin::ensure_origin(origin)?;
+			let proposal = <Proposals<T>>::take(&proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
 
 			let value = proposal.bond;
 			let imbalance = T::Currency::slash_reserved(&proposal.proposer, value).0;
 			T::ProposalRejection::on_unbalanced(imbalance);
+
+			Self::deposit_event(Event::<T>::Rejected(proposal_id, value));
 		}
 
 		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
@@ -186,9 +186,9 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::ApproveOrigin::ensure_origin(origin).map_err(|e| Into::<&str>::into(e))?;
+			T::ApproveOrigin::ensure_origin(origin)?;
 
-			ensure!(<Proposals<T>>::exists(proposal_id), Error::InvalidProposalIndex);
+			ensure!(<Proposals<T>>::exists(proposal_id), Error::<T>::InvalidProposalIndex);
 
 			Approvals::mutate(|v| v.push(proposal_id));
 		}
@@ -246,6 +246,8 @@ decl_event!(
 		Spending(Balance),
 		/// Some funds have been allocated.
 		Awarded(ProposalIndex, Balance, AccountId),
+		/// A proposal was rejected; funds were slashed.
+		Rejected(ProposalIndex, Balance),
 		/// Some of our funds have been burnt.
 		Burnt(Balance),
 		/// Spending has finished; this is the amount that rolls over until next spend.
@@ -257,7 +259,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the treasury module.
-	pub enum Error {
+	pub enum Error for Module<T: Trait> {
 		/// Proposer's balance is too low.
 		InsufficientProposersBalance,
 		/// No proposal at that index.
@@ -398,6 +400,7 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
@@ -484,7 +487,10 @@ mod tests {
 	#[test]
 	fn spend_proposal_fails_when_proposer_poor() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Treasury::propose_spend(Origin::signed(2), 100, 3), Error::InsufficientProposersBalance);
+			assert_noop!(
+				Treasury::propose_spend(Origin::signed(2), 100, 3),
+				Error::<Test>::InsufficientProposersBalance,
+			);
 		});
 	}
 
@@ -536,21 +542,21 @@ mod tests {
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
-			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), Error::InvalidProposalIndex);
+			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
 	}
 
 	#[test]
 	fn reject_non_existant_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), Error::InvalidProposalIndex);
+			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
 	}
 
 	#[test]
 	fn accept_non_existant_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), Error::InvalidProposalIndex);
+			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
 	}
 
@@ -561,7 +567,7 @@ mod tests {
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
-			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), Error::InvalidProposalIndex);
+			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), Error::<Test>::InvalidProposalIndex);
 		});
 	}
 

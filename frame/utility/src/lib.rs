@@ -68,7 +68,7 @@ mod tests {
 		weights::Weight
 	};
 	use sp_core::H256;
-	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test  where system = frame_system {}
@@ -108,6 +108,7 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -146,10 +147,13 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_eq!(Balances::free_balance(1), 10);
 			assert_eq!(Balances::free_balance(2), 0);
-			assert_noop!(Utility::batch(Origin::signed(1), vec![
-				Call::Balances(pallet_balances::Call::force_transfer(1, 2, 5)),
-				Call::Balances(pallet_balances::Call::force_transfer(1, 2, 5))
-			]), "RequireRootOrigin");
+			assert_noop!(
+				Utility::batch(Origin::signed(1), vec![
+					Call::Balances(pallet_balances::Call::force_transfer(1, 2, 5)),
+					Call::Balances(pallet_balances::Call::force_transfer(1, 2, 5))
+				]),
+				BadOrigin,
+			);
 			assert_ok!(Utility::batch(Origin::ROOT, vec![
 				Call::Balances(pallet_balances::Call::force_transfer(1, 2, 5)),
 				Call::Balances(pallet_balances::Call::force_transfer(1, 2, 5))

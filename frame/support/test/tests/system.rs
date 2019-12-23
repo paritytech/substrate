@@ -8,6 +8,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Hash;
 	type AccountId: Encode + EncodeLike + Decode;
 	type Event: From<Event>;
+	type ModuleToIndex: frame_support::traits::ModuleToIndex;
 }
 
 frame_support::decl_module! {
@@ -28,7 +29,7 @@ frame_support::decl_event!(
 );
 
 frame_support::decl_error! {
-	pub enum Error {
+	pub enum Error for Module<T: Trait> {
 		/// Test error documentation
 		TestError,
 		/// Error documentation
