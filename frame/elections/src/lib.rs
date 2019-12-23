@@ -275,7 +275,7 @@ decl_error! {
 		/// Target for inactivity cleanup must be active.
 		InactiveTarget,
 		/// Cannot reap during presentation period.
-		ReapPresenting,
+		CannotReapPresenting,
 		/// Cannot reap during grace period.
 		ReapGrace,
 		/// Not a proxy.
@@ -287,7 +287,7 @@ decl_error! {
 		/// Invalid vote index.
 		InvalidVoteIndex,
 		/// Cannot retract when presenting.
-		RetractPresenting,
+		CannotRetractPresenting,
 		/// Cannot retract non-voter.
 		RetractNonVoter,
 		/// Invalid retraction index.
@@ -454,7 +454,7 @@ decl_module! {
 			let reporter = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
-			ensure!(!Self::presentation_active(), Error::<T>::ReapPresenting);
+			ensure!(!Self::presentation_active(), Error::<T>::CannotReapPresenting);
 			ensure!(Self::voter_info(&reporter).is_some(), Error::<T>::NotVoter);
 
 			let info = Self::voter_info(&who).ok_or(Error::<T>::InactiveTarget)?;
@@ -521,7 +521,7 @@ decl_module! {
 		fn retract_voter(origin, #[compact] index: u32) {
 			let who = ensure_signed(origin)?;
 
-			ensure!(!Self::presentation_active(), Error::<T>::RetractPresenting);
+			ensure!(!Self::presentation_active(), Error::<T>::CannotRetractPresenting);
 			ensure!(<VoterInfoOf<T>>::exists(&who), Error::<T>::RetractNonVoter);
 			let index = index as usize;
 			let voter = Self::voter_at(index).ok_or(Error::<T>::InvalidRetractionIndex)?;
