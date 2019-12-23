@@ -56,8 +56,8 @@ impl<Hash, Ex> Clone for TransactionRef<Hash, Ex> {
 impl<Hash, Ex> Ord for TransactionRef<Hash, Ex> {
 	fn cmp(&self, other: &Self) -> cmp::Ordering {
 		self.transaction.priority.cmp(&other.transaction.priority)
-			.then(other.transaction.valid_till.cmp(&self.transaction.valid_till))
-			.then(other.insertion_id.cmp(&self.insertion_id))
+			.then_with(|| other.transaction.valid_till.cmp(&self.transaction.valid_till))
+			.then_with(|| other.insertion_id.cmp(&self.insertion_id))
 	}
 }
 
@@ -169,7 +169,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 		let hash = tx.transaction.hash.clone();
 		let transaction = tx.transaction;
 
-		let replaced = self.replace_previous(&transaction)?;
+		let (replaced, unlocks) = self.replace_previous(&transaction)?;
 
 		let mut goes_to_best = true;
 		let mut ready = self.ready.write();
@@ -185,6 +185,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	 	}
 
 		// update provided_tags
+		// call to replace_previous guarantees that we will be overwriting
+		// only entries that have been removed.
 		for tag in &transaction.provides {
 			self.provided_tags.insert(tag.clone(), hash.clone());
 		}
@@ -202,7 +204,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 		// insert to Ready
 		ready.insert(hash, ReadyTx {
 			transaction,
-			unlocks: vec![],
+			unlocks,
 			requires_offset: 0,
 		});
 
@@ -236,9 +238,21 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	/// (i.e. the entire subgraph that this transaction is a start of will be removed).
 	/// All removed transactions are returned.
 	pub fn remove_subtree(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex>>> {
-		let mut removed = vec![];
-		let mut to_remove = hashes.iter().cloned().collect::<Vec<_>>();
+		let to_remove = hashes.iter().cloned().collect::<Vec<_>>();
+		self.remove_subtree_with_tag_filter(to_remove, None)
+	}
 
+	/// Removes a subtrees of transactions trees starting from roots given in `to_remove`.
+	///
+	/// We proceed with a particular branch only if there is at least one provided tag
+	/// that is not part of `provides_tag_filter`. I.e. the filter contains tags
+	/// that will stay in the pool, so that we can early exit and avoid descending.
+	fn remove_subtree_with_tag_filter(
+		&mut self,
+		mut to_remove: Vec<Hash>,
+		provides_tag_filter: Option<HashSet<Tag>>,
+	) -> Vec<Arc<Transaction<Hash, Ex>>> {
+		let mut removed = vec![];
 		let mut ready = self.ready.write();
 		loop {
 			let hash = match to_remove.pop() {
@@ -247,10 +261,21 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 			};
 
 			if let Some(mut tx) = ready.remove(&hash) {
+				let invalidated = tx.transaction.transaction.provides
+					.iter()
+					.filter(|tag| provides_tag_filter
+						.as_ref()
+						.map(|filter| !filter.contains(&**tag))
+						.unwrap_or(true)
+					);
+
+				let mut removed_some_tags = false;
 				// remove entries from provided_tags
-				for tag in &tx.transaction.transaction.provides {
+				for tag in invalidated {
+					removed_some_tags = true;
 					self.provided_tags.remove(tag);
 				}
+
 				// remove from unlocks
 				for tag in &tx.transaction.transaction.requires {
 					if let Some(hash) = self.provided_tags.get(tag) {
@@ -263,8 +288,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 				// remove from best
 				self.best.remove(&tx.transaction);
 
-				// remove all transactions that the current one unlocks
-				to_remove.append(&mut tx.unlocks);
+				if removed_some_tags {
+					// remove all transactions that the current one unlocks
+					to_remove.append(&mut tx.unlocks);
+				}
 
 				// add to removed
 				trace!(target: "txpool", "[{:?}] Removed as part of the subtree.", hash);
@@ -363,9 +390,15 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	/// we are about to replace is lower than the priority of the replacement transaction.
 	/// We remove/replace old transactions in case they have lower priority.
 	///
-	/// In case replacement is successful returns a list of removed transactions.
-	fn replace_previous(&mut self, tx: &Transaction<Hash, Ex>) -> error::Result<Vec<Arc<Transaction<Hash, Ex>>>> {
-		let mut to_remove = {
+	/// In case replacement is successful returns a list of removed transactions
+	/// and a list of hashes that are still in pool and gets unlocked by the new transaction.
+	fn replace_previous(
+		&mut self,
+		tx: &Transaction<Hash, Ex>,
+	) -> error::Result<
+		(Vec<Arc<Transaction<Hash, Ex>>>, Vec<Hash>)
+	> {
+		let (to_remove, unlocks) = {
 			// check if we are replacing a transaction
 			let replace_hashes = tx.provides
 				.iter()
@@ -374,7 +407,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 
 			// early exit if we are not replacing anything.
 			if replace_hashes.is_empty() {
-				return Ok(vec![]);
+				return Ok((vec![], vec![]));
 			}
 
 			// now check if collective priority is lower than the replacement transaction.
@@ -383,7 +416,9 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 				replace_hashes
 					.iter()
 					.filter_map(|hash| ready.get(hash))
-					.fold(0u64, |total, tx| total.saturating_add(tx.transaction.transaction.priority))
+					.fold(0u64, |total, tx|
+						total.saturating_add(tx.transaction.transaction.priority)
+					)
 			};
 
 			// bail - the transaction has too low priority to replace the old ones
@@ -391,35 +426,31 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 				return Err(error::Error::TooLowPriority { old: old_priority, new: tx.priority })
 			}
 
-			replace_hashes.into_iter().cloned().collect::<Vec<_>>()
+			// construct a list of unlocked transactions
+			let unlocks = {
+				let ready = self.ready.read();
+				replace_hashes
+					.iter()
+					.filter_map(|hash| ready.get(hash))
+					.fold(vec![], |mut list, tx| {
+						list.extend(tx.unlocks.iter().cloned());
+						list
+					})
+			};
+
+			(
+				replace_hashes.into_iter().cloned().collect::<Vec<_>>(),
+				unlocks
+			)
 		};
 
 		let new_provides = tx.provides.iter().cloned().collect::<HashSet<_>>();
-		let mut removed = vec![];
-		loop {
-			let hash = match to_remove.pop() {
-				Some(hash) => hash,
-				None => return Ok(removed),
-			};
+		let removed = self.remove_subtree_with_tag_filter(to_remove, Some(new_provides));
 
-			let tx = self.ready.write().remove(&hash).expect(HASH_READY);
-			// check if this transaction provides stuff that is not provided by the new one.
-			let (mut unlocks, tx) = (tx.unlocks, tx.transaction.transaction);
-			{
-				let invalidated = tx.provides
-					.iter()
-					.filter(|tag| !new_provides.contains(&**tag));
-
-				for tag in invalidated {
-					// remove the tag since it's no longer provided by any transaction
-					self.provided_tags.remove(tag);
-					// add more transactions to remove
-					to_remove.append(&mut unlocks);
-				}
-			}
-
-			removed.push(tx);
-		}
+		Ok((
+			removed,
+			unlocks
+		))
 	}
 
 	/// Returns number of transactions in this queue.
@@ -444,7 +475,7 @@ impl<Hash: hash::Hash + Member, Ex> BestIterator<Hash, Ex> {
 	/// Depending on number of satisfied requirements insert given ref
 	/// either to awaiting set or to best set.
 	fn best_or_awaiting(&mut self, satisfied: usize, tx_ref: TransactionRef<Hash, Ex>) {
-		if satisfied == tx_ref.transaction.requires.len() {
+		if satisfied >= tx_ref.transaction.requires.len() {
 			// If we have satisfied all deps insert to best
 			self.best.insert(tx_ref);
 
