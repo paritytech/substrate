@@ -478,7 +478,7 @@ pub struct BestIterator<Hash, Ex> {
 }
 
 impl<Hash: hash::Hash + Member, Ex> BestIterator<Hash, Ex> {
-	/// Depending on number of satisfied equirements insert given ref
+	/// Depending on number of satisfied requirements insert given ref
 	/// either to awaiting set or to best set.
 	fn best_or_awaiting(&mut self, satisfied: usize, tx_ref: TransactionRef<Hash, Ex>) {
 		if satisfied >= tx_ref.transaction.requires.len() {
