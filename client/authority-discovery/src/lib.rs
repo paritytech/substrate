@@ -59,7 +59,6 @@ use error::{Error, Result};
 use libp2p::Multiaddr;
 use log::{debug, error, log_enabled, warn};
 use prost::Message;
-use rand::{Rng, rngs::StdRng, SeedableRng, seq::SliceRandom};
 use sc_client_api::blockchain::HeaderBackend;
 use sc_network::specialization::NetworkSpecialization;
 use sc_network::{DhtEvent, ExHashT};
@@ -68,10 +67,12 @@ use sp_core::crypto::{key_types, Pair};
 use sp_core::traits::BareCryptoStorePtr;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, ProvideRuntimeApi};
+use addr_cache::AddrCache;
 
 type Interval = Box<dyn Stream<Item = ()> + Unpin + Send + Sync>;
 
 mod error;
+mod addr_cache;
 /// Dht payload schemas generated from Protobuf definitions via Prost crate in build.rs.
 mod schema {
 	include!(concat!(env!("OUT_DIR"), "/authority_discovery.rs"));
@@ -83,11 +84,6 @@ const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
 /// Name of the Substrate peerset priority group for authorities discovered through the authority
 /// discovery module.
 const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
-
-/// The maximum number of authority connections initialized through the authority discovery module.
-///
-/// In other words the maximum size of the `authority` peer set priority group.
-const MAX_NUM_AUTHORITY_CONN: usize = 10;
 
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
 pub struct AuthorityDiscovery<Client, Network, Block>
@@ -119,21 +115,7 @@ where
 	/// Interval on which to query for addresses of other authorities.
 	query_interval: Interval,
 
-	/// Cache of Multiaddresses of authority nodes or their sentry nodes.
-	//
-	// The network peerset interface for priority groups lets us only set an entire group, but we
-	// retrieve the addresses of other authorities one by one from the network. To use the peerset
-	// interface we need to cache the addresses and always overwrite the entire peerset priority
-	// group. To ensure this map doesn't grow indefinitely `purge_old_authorities_from_cache`
-	// function is called each time we add a new entry.
-	address_cache: HashMap<AuthorityId, Vec<Multiaddr>>,
-	/// Random number to seed address selection RNG.
-	///
-	/// A node should only try to connect to a subset of all authorities. To choose this subset one
-	/// uses randomness. The choice should differ between nodes to prevent hot spots, but not within
-	/// each node between each update to prevent connection churn. Thus before each selection we
-	/// seed an RNG with the same seed.
-	rand_addr_selection_seed: u64,
+	addr_cache: addr_cache::AddrCache<AuthorityId, Multiaddr>,
 
 	phantom: PhantomData<Block>,
 }
@@ -191,9 +173,7 @@ where
 			None
 		};
 
-
-		let address_cache = HashMap::new();
-		let rand_addr_selection_seed = rand::thread_rng().gen();
+		let addr_cache = AddrCache::new();
 
 		AuthorityDiscovery {
 			client,
@@ -203,8 +183,7 @@ where
 			key_store,
 			publish_interval,
 			query_interval,
-			address_cache,
-			rand_addr_selection_seed,
+			addr_cache,
 			phantom: PhantomData,
 		}
 	}
@@ -319,7 +298,7 @@ where
 			// authority id and to ensure it is actually an authority, we match the hash against the
 			// hash of the authority id of all other authorities.
 			let authorities = self.client.runtime_api().authorities(&block_id)?;
-			self.purge_old_authorities_from_cache(&authorities);
+			self.addr_cache.retain_ids(&authorities);
 			authorities
 				.into_iter()
 				.map(|id| hash_authority_id(id.as_ref()).map(|h| (h, id)))
@@ -331,7 +310,7 @@ where
 			.get(&remote_key)
 			.ok_or(Error::MatchingHashedAuthorityIdWithAuthorityId)?;
 
-		let mut remote_addresses: Vec<Multiaddr> = values.into_iter().map(|(_k, v)| {
+		let remote_addresses: Vec<Multiaddr> = values.into_iter().map(|(_k, v)| {
 			let schema::SignedAuthorityAddresses {
 				signature,
 				addresses,
@@ -358,18 +337,11 @@ where
 			.into_iter().flatten().collect();
 
 		if !remote_addresses.is_empty() {
-			// TODO: Handle unwrap
-			remote_addresses.sort_by(|a, b| a.as_ref().partial_cmp(b.as_ref()).unwrap());
-			self.address_cache.insert(authority_id.clone(), remote_addresses);
+			self.addr_cache.insert(authority_id.clone(), remote_addresses);
 			self.update_peer_set_priority_group()?;
 		}
 
 		Ok(())
-	}
-
-	fn purge_old_authorities_from_cache(&mut self, current_authorities: &Vec<AuthorityId>) {
-		self.address_cache
-			.retain(|peer_id, _addresses| current_authorities.contains(peer_id))
 	}
 
 	/// Retrieve all local authority discovery private keys that are within the current authority
@@ -420,27 +392,8 @@ where
 
 	/// Update the peer set 'authority' priority group.
 	//
-	// Each node should connect to a subset of all authorities. In order to prevent hot spots, this
-	// selection is based on randomness. Selecting randomly each time we change the address cache
-	// would result in connection churn. Instead a node generates a seed on startup and uses this
-	// seed for a new rng on each update. (One could as well use ones peer id as a seed. Given that
-	// the peer id is publicly known, it would make this process predictable by others, which might
-	// be used as an attack.)
 	fn update_peer_set_priority_group(&self) -> Result<()>{
-		let mut rng = StdRng::seed_from_u64(self.rand_addr_selection_seed);
-
-		let mut addresses = self.address_cache
-			.iter()
-			.map(|(_peer_id, addresses)| addresses.choose(&mut rng)
-				 .expect("an empty address vector is never inserted into the cache"))
-			.cloned()
-			.collect::<Vec<Multiaddr>>();
-
-		addresses.dedup();
-		// TODO: Handle unwrap
-		addresses.sort_by(|a, b| a.as_ref().partial_cmp(b.as_ref()).unwrap());
-
-		addresses = addresses.choose_multiple(&mut rng, MAX_NUM_AUTHORITY_CONN).cloned().collect();
+		let addresses = self.addr_cache.get_subset();
 
 		debug!(
 			target: "sub-authority-discovery",
