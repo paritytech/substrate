@@ -525,7 +525,9 @@ pub trait IsMember<MemberId> {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + MaybeMallocSizeOf + Debug + 'static {
+pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + MaybeMallocSizeOf +
+	Debug + 'static
+{
 	/// Header number.
 	type Number: Member + MaybeSerializeDeserialize + MaybeMallocSizeOf + Debug + sp_std::hash::Hash
 		+ Copy + MaybeDisplay + SimpleArithmetic + Codec + sp_std::str::FromStr;
@@ -579,7 +581,9 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + MaybeMallo
 /// `Extrinsic` pieces of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + MaybeMallocSizeOf +
+	Debug + 'static
+{
 	/// Type for extrinsics.
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize + MaybeMallocSizeOf;
 	/// Header type.

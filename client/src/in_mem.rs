@@ -31,6 +31,7 @@ use sp_state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockI
 use hash_db::{Hasher, Prefix};
 use sp_trie::MemoryDB;
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata};
+use parity_util_mem::MallocSizeOf;
 
 use sc_client_api::{
 	backend::{self, NewBlockState, StorageCollection, ChildStorageCollection},
@@ -45,7 +46,7 @@ struct PendingBlock<B: BlockT> {
 	state: NewBlockState,
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, MallocSizeOf)]
 enum StoredBlock<B: BlockT> {
 	Header(B::Header, Option<Justification>),
 	Full(B, Option<Justification>),
@@ -90,7 +91,7 @@ impl<B: BlockT> StoredBlock<B> {
 	}
 }
 
-#[derive(Clone)]
+#[derive(Clone, MallocSizeOf)]
 struct BlockchainStorage<Block: BlockT> {
 	blocks: HashMap<Block::Hash, StoredBlock<Block>>,
 	hashes: HashMap<NumberFor<Block>, Block::Hash>,
@@ -106,6 +107,7 @@ struct BlockchainStorage<Block: BlockT> {
 }
 
 /// In-memory blockchain. Supports concurrent reads.
+#[derive(MallocSizeOf)]
 pub struct Blockchain<Block: BlockT> {
 	storage: Arc<RwLock<BlockchainStorage<Block>>>,
 }

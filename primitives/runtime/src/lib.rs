@@ -54,6 +54,9 @@ pub mod traits;
 pub mod transaction_validity;
 pub mod random_number_generator;
 
+#[cfg(feature = "std")]
+use parity_util_mem::MallocSizeOf;
+
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};
 
@@ -645,6 +648,7 @@ macro_rules! assert_eq_error_rate {
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(MallocSizeOf))]
 pub struct OpaqueExtrinsic(pub Vec<u8>);
 
 impl sp_std::fmt::Debug for OpaqueExtrinsic {

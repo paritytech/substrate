@@ -24,6 +24,7 @@ use kvdb::{KeyValueDB, DBTransaction};
 #[cfg(feature = "kvdb-rocksdb")]
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use log::debug;
+use parity_util_mem::MallocSizeOf;
 
 use codec::Decode;
 use sp_trie::DBValue;
@@ -71,6 +72,19 @@ pub struct Meta<N, H> {
 	pub finalized_number: N,
 	/// Hash of the genesis block.
 	pub genesis_hash: H,
+}
+
+impl<H, N> parity_util_mem::MallocSizeOf for Meta<H, N>
+	where H: parity_util_mem::MallocSizeOf,
+		N: parity_util_mem::MallocSizeOf
+{
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.best_hash.size_of(ops) +
+			self.best_number.size_of(ops) +
+			self.finalized_hash.size_of(ops) +
+			self.finalized_number.size_of(ops) +
+			self.genesis_hash.size_of(ops)
+	}
 }
 
 /// A block lookup key: used for canonical lookup from block number to hash

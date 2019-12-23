@@ -22,6 +22,7 @@ use log::{info, warn};
 use sp_runtime::traits::Header;
 use sc_service::AbstractService;
 use std::time::Duration;
+use parity_util_mem::MallocSizeOfExt;
 
 mod display;
 
@@ -36,7 +37,8 @@ pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()
 		.compat()
 		.try_for_each(move |(net_status, _)| {
 			let info = client.info();
-			display.display(&info, net_status);
+			let memory = display::MemoryFootprint { blockchain: client.malloc_size_of() };
+			display.display(&info, net_status, &memory);
 			future::ok(())
 		});
 

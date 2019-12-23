@@ -557,6 +557,13 @@ fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 	Ok(key)
 }
 
+// TODO: this is a stub
+impl<Block: BlockT> parity_util_mem::MallocSizeOf for LightStorage<Block> {
+	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		0
+	}
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
 	use sc_client::cht;

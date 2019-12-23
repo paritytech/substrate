@@ -24,6 +24,8 @@ pub mod blake2 {
 	use super::{Hasher, Hash256StdHasher, H256};
 	#[cfg(feature = "std")]
 	use crate::hashing::blake2_256;
+	#[cfg(feature = "std")]
+	use parity_util_mem::MallocSizeOf;
 
 	#[cfg(not(feature = "std"))]
 	extern "C" {
@@ -40,6 +42,7 @@ pub mod blake2 {
 
 	/// Concrete implementation of Hasher using Blake2b 256-bit hashes
 	#[derive(Debug)]
+	#[cfg_attr(feature = "std", derive(MallocSizeOf))]
 	pub struct Blake2Hasher;
 
 	impl Hasher for Blake2Hasher {

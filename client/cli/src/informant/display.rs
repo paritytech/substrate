@@ -43,6 +43,11 @@ pub struct InformantDisplay<B: BlockT> {
 	last_update: time::Instant,
 }
 
+/// Memory footprint info.
+pub struct MemoryFootprint {
+	pub blockchain: usize,
+}
+
 impl<B: BlockT> InformantDisplay<B> {
 	/// Builds a new informant display system.
 	pub fn new() -> InformantDisplay<B> {
@@ -53,7 +58,11 @@ impl<B: BlockT> InformantDisplay<B> {
 	}
 
 	/// Displays the informant by calling `info!`.
-	pub fn display(&mut self, info: &ClientInfo<B>, net_status: NetworkStatus<B>) {
+	pub fn display(&mut self,
+		info: &ClientInfo<B>,
+	    net_status: NetworkStatus<B>,
+		memory: &MemoryFootprint,
+	) {
 		let best_number = info.chain.best_number;
 		let best_hash = info.chain.best_hash;
 		let speed = speed::<B>(best_number, self.last_number, self.last_update);
@@ -68,7 +77,7 @@ impl<B: BlockT> InformantDisplay<B> {
 
 		info!(
 			target: "substrate",
-			"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
+			"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}, mem: {}",
 			Colour::White.bold().paint(&status),
 			target,
 			Colour::White.bold().paint(format!("{}", net_status.num_connected_peers)),
@@ -78,6 +87,7 @@ impl<B: BlockT> InformantDisplay<B> {
 			info.chain.finalized_hash,
 			TransferRateFormat(net_status.average_download_per_sec),
 			TransferRateFormat(net_status.average_upload_per_sec),
+			memory.blockchain,
 		);
 	}
 }

@@ -43,10 +43,12 @@ use sc_client_api::{
 use crate::light::blockchain::Blockchain;
 use hash_db::Hasher;
 use sp_trie::MemoryDB;
+use parity_util_mem::MallocSizeOf;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always succeeds; qed";
 
 /// Light client backend.
+#[derive(MallocSizeOf)]
 pub struct Backend<S, H: Hasher> {
 	blockchain: Arc<Blockchain<S>>,
 	genesis_state: RwLock<Option<InMemoryState<H>>>,

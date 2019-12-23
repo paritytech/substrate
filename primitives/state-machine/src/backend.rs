@@ -341,6 +341,12 @@ pub struct InMemory<H: Hasher> {
 	_hasher: PhantomData<H>,
 }
 
+impl<H: Hasher> parity_util_mem::MallocSizeOf for InMemory<H> {
+	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		unimplemented!("not used in production, so call here should be error")
+	}
+}
+
 impl<H: Hasher> std::fmt::Debug for InMemory<H> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "InMemory ({} values)", self.inner.len())

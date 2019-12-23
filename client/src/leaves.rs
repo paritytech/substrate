@@ -22,11 +22,21 @@ use kvdb::{KeyValueDB, DBTransaction};
 use sp_runtime::traits::SimpleArithmetic;
 use codec::{Encode, Decode};
 use sp_blockchain::{Error, Result};
+use parity_util_mem::MallocSizeOf;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LeafSetItem<H, N> {
 	hash: H,
 	number: Reverse<N>,
+}
+
+impl<H, N> parity_util_mem::MallocSizeOf for LeafSetItem<H, N>
+	where H: parity_util_mem::MallocSizeOf,
+		N: parity_util_mem::MallocSizeOf
+{
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.hash.size_of(ops)
+	}
 }
 
 /// A displaced leaf after import.
@@ -61,6 +71,17 @@ pub struct LeafSet<H, N> {
 	storage: BTreeMap<Reverse<N>, Vec<H>>,
 	pending_added: Vec<LeafSetItem<H, N>>,
 	pending_removed: Vec<H>,
+}
+
+impl<H, N> parity_util_mem::MallocSizeOf for LeafSet<H, N>
+	where H: parity_util_mem::MallocSizeOf,
+		N: parity_util_mem::MallocSizeOf
+{
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.storage.size_of(ops) +
+			self.pending_added.size_of(ops) +
+			self.pending_removed.size_of(ops)
+	}
 }
 
 impl<H, N> LeafSet<H, N> where

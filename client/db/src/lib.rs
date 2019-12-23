@@ -1599,6 +1599,13 @@ pub fn unused_sink<Block: BlockT>(cache_tx: crate::cache::DbCacheTransaction<Blo
 	unimplemented!()
 }
 
+// TODO: this is a stub
+impl<Block> parity_util_mem::MallocSizeOf for Backend<Block> where Block: BlockT<Hash=H256> {
+	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		0
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use hash_db::{HashDB, EMPTY_PREFIX};

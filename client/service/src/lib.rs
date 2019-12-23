@@ -51,6 +51,7 @@ use codec::{Encode, Decode};
 use sp_core::{Blake2Hasher, H256};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
+use parity_util_mem::MallocSizeOf;
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -144,20 +145,29 @@ impl futures03::task::Spawn for SpawnTaskHandle {
 
 /// Abstraction over a Substrate service.
 pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
-	Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send {
+	Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send
+{
 	/// Type of block of this chain.
-	type Block: BlockT<Hash = H256>;
+	type Block: BlockT<Hash = H256> + MallocSizeOf;
+
 	/// Backend storage for the client.
-	type Backend: 'static + sc_client_api::backend::Backend<Self::Block, Blake2Hasher>;
+	type Backend: 'static + sc_client_api::backend::Backend<Self::Block, Blake2Hasher>
+		+ MallocSizeOf;
+
 	/// How to execute calls towards the runtime.
-	type CallExecutor: 'static + sc_client::CallExecutor<Self::Block, Blake2Hasher> + Send + Sync + Clone;
+	type CallExecutor: 'static + sc_client::CallExecutor<Self::Block, Blake2Hasher>
+		+ Send + Sync + Clone;
+
 	/// API that the runtime provides.
 	type RuntimeApi: Send + Sync;
+
 	/// Chain selection algorithm.
 	type SelectChain: sp_consensus::SelectChain<Self::Block>;
+
 	/// Transaction pool.
 	type TransactionPool: TransactionPool<Block = Self::Block>
 		+ TransactionPoolMaintainer<Block = Self::Block>;
+
 	/// Network specialization.
 	type NetworkSpecialization: NetworkSpecialization<Self::Block>;
 
@@ -216,7 +226,7 @@ impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPool, TOc> AbstractService 
 		NetworkService<TBl, TNetSpec, H256>, TExPool, TOc>
 where
 	TBl: BlockT<Hash = H256>,
-	TBackend: 'static + sc_client_api::backend::Backend<TBl, Blake2Hasher>,
+	TBackend: 'static + sc_client_api::backend::Backend<TBl, Blake2Hasher> + MallocSizeOf,
 	TExec: 'static + sc_client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
 	TSc: sp_consensus::SelectChain<TBl> + 'static + Clone + Send,

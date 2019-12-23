@@ -40,10 +40,12 @@ pub use sc_client_api::{
 		RemoteBlockchain, LocalOrRemote, Storage
 	}
 };
+use parity_util_mem::MallocSizeOf;
 use crate::cht;
 use crate::light::fetcher::{Fetcher, RemoteHeaderRequest};
 
 /// Light client blockchain.
+#[derive(MallocSizeOf)]
 pub struct Blockchain<S> {
 	storage: S,
 }
