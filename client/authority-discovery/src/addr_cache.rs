@@ -57,17 +57,21 @@ where
 	}
 
 	pub fn insert(&mut self, id: Id, mut addresses: Vec<Addr>) {
+		if addresses.is_empty() {
+			return;
+		}
+
 		// TODO: Handle unwrap
 		addresses.sort_by(|a, b| a.as_ref().partial_cmp(b.as_ref()).unwrap());
 		self.cache.insert(id, addresses);
 	}
 
 	// Each node should connect to a subset of all authorities. In order to prevent hot spots, this
-	// selection is based on randomness. Selecting randomly each time we change the address cache
-	// would result in connection churn. Instead a node generates a seed on startup and uses this
-	// seed for a new rng on each update. (One could as well use ones peer id as a seed. Given that
-	// the peer id is publicly known, it would make this process predictable by others, which might
-	// be used as an attack.)
+	// selection is based on randomness. Selecting randomly each time we alter the address cache
+	// would result in connection churn. To reduce this churn a node generates a seed on startup and
+	// uses this seed for a new rng on each update. (One could as well use ones peer id as a seed.
+	// Given that the peer id is publicly known, it would make this process predictable by others,
+	// which might be used as an attack.)
 	pub fn get_subset(&self) -> Vec<Addr> {
 		let mut rng = StdRng::seed_from_u64(self.rand_addr_selection_seed);
 
@@ -94,5 +98,76 @@ where
 
 	pub fn retain_ids(&mut self, ids: &Vec<Id>) {
 		self.cache.retain(|id, _addresses| ids.contains(id))
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use quickcheck::{QuickCheck, TestResult};
+
+	#[test]
+	fn returns_addresses_of_same_authorities_on_repeated_calls() {
+		fn property(input: Vec<(u32, Vec<String>)>) -> TestResult {
+			// Expect less than 1000 authorities.
+			if input.len() > 1000 {
+				return TestResult::discard();
+			}
+
+			// Expect less than 100 addresses per authority.
+			for i in &input {
+				if i.1.len() > 100 {
+					return TestResult::discard();
+				}
+			}
+
+			let mut c = AddrCache::new();
+
+			for (id, addresses) in input {
+				c.insert(id, addresses);
+			}
+
+			let result = c.get_subset();
+			assert!(result.len() <= MAX_NUM_AUTHORITY_CONN);
+
+			for _ in 1..100 {
+				assert_eq!(c.get_subset(), result);
+			}
+
+			TestResult::passed()
+		}
+
+		QuickCheck::new()
+			.max_tests(10)
+			.quickcheck(property as fn(Vec<(u32, Vec<String>)>) -> TestResult)
+	}
+
+	#[test]
+	fn returns_same_addresses_of_first_authority_when_second_authority_changes() {
+		let mut c = AddrCache::new();
+
+		// Insert addresses of first authority.
+		let addresses = (1..100)
+			.map(|i| format!("{:?}", i))
+			.collect::<Vec<String>>();
+		c.insert(1, addresses);
+		let first_subset = c.get_subset();
+		assert_eq!(1, first_subset.len());
+
+		// Insert address of second authority.
+		c.insert(2, vec!["a".to_string()]);
+		let second_subset = c.get_subset();
+		assert_eq!(2, second_subset.len());
+
+		// Expect same address of first authority.
+		assert!(second_subset.contains(&first_subset[0]));
+
+		// Alter address of second authority.
+		c.insert(2, vec!["b".to_string()]);
+		let second_subset = c.get_subset();
+		assert_eq!(2, second_subset.len());
+
+		// Expect same address of first authority.
+		assert!(second_subset.contains(&first_subset[0]));
 	}
 }
