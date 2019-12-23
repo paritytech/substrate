@@ -146,7 +146,7 @@ control-trigger:
     strategy:                      depend
 
 # check_warnings:
-#   stage:                           build
+#   stage:                           build 
 #   <<:                              *docker-env
 #   except:
 #     variables:
