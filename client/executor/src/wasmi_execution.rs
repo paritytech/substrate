@@ -16,18 +16,20 @@
 
 //! Implementation of a Wasm runtime using the Wasmi interpreter.
 
+use crate::{
+	error::{Error, WasmError},
+	sandbox,
+	allocator,
+	wasm_utils::interpret_runtime_api_result,
+	wasm_runtime::WasmRuntime,
+};
 use std::{str, mem};
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 	memory_units::Pages, RuntimeValue::{I32, I64, self},
 };
-use crate::error::{Error, WasmError};
 use codec::{Encode, Decode};
 use sp_core::{sandbox as sandbox_primitives, traits::Externalities};
-use crate::sandbox;
-use crate::allocator;
-use crate::wasm_utils::interpret_runtime_api_result;
-use crate::wasm_runtime::WasmRuntime;
 use log::{error, trace};
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
 use sp_wasm_interface::{
