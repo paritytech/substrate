@@ -35,8 +35,6 @@ mod wasm_utils;
 mod native_executor;
 pub mod deprecated_host_interface;
 mod wasm_runtime;
-#[cfg(feature = "wasmtime")]
-mod wasmtime;
 #[cfg(test)]
 mod integration_tests;
 

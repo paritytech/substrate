@@ -20,8 +20,6 @@
 //! components of the runtime that are expensive to initialize.
 
 use crate::error::{Error, WasmError};
-#[cfg(feature = "wasmtime")]
-use crate::wasmtime;
 use log::{trace, warn};
 use codec::Decode;
 use sp_core::{storage::well_known_keys, traits::Externalities};
@@ -200,7 +198,7 @@ pub fn create_wasm_runtime_with_code(
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled =>
-			wasmtime::create_instance(code, heap_pages, host_functions)
+			sc_executor_wasmtime::create_instance(code, heap_pages, host_functions)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 	}
 }

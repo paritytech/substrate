@@ -18,8 +18,6 @@
 
 use sp_serializer;
 use wasmi;
-#[cfg(feature = "wasmtime")]
-use wasmtime_jit::{ActionError, SetupError};
 
 /// Result type alias.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -35,7 +33,7 @@ pub enum Error {
 	Wasmi(wasmi::Error),
 	/// Wasmtime action error
 	#[cfg(feature = "wasmtime")]
-	Wasmtime(ActionError),
+	Wasmtime(wasmtime_jit::ActionError),
 	/// Error in the API. Parameter is an error message.
 	#[from(ignore)]
 	ApiError(String),
@@ -140,5 +138,5 @@ pub enum WasmError {
 	MissingCompilerSupport(&'static str),
 	/// Wasmtime setup error.
 	#[cfg(feature = "wasmtime")]
-	WasmtimeSetup(SetupError),
+	WasmtimeSetup(wasmtime_jit::SetupError),
 }
