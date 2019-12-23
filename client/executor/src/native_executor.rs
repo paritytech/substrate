@@ -18,17 +18,11 @@ use crate::{
 	RuntimeInfo, error::{Error, Result},
 	wasm_runtime::{RuntimesCache, WasmExecutionMethod, WasmRuntime},
 };
-
 use sp_version::{NativeVersion, RuntimeVersion};
-
 use codec::{Decode, Encode};
-
 use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
-
 use log::trace;
-
 use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}};
-
 use sp_wasm_interface::{HostFunctions, Function};
 
 thread_local! {

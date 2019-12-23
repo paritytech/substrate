@@ -20,7 +20,6 @@ use crate::{
 	error::{Error, WasmError},
 	sandbox,
 	allocator,
-	wasm_utils::interpret_runtime_api_result,
 	wasm_runtime::WasmRuntime,
 };
 use std::{str, mem};
@@ -35,6 +34,7 @@ use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module
 use sp_wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
+use sp_runtime_interface::pointer_and_len_from_u64;
 
 struct FunctionExecutor<'a> {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,
@@ -377,7 +377,7 @@ fn call_in_wasm_module(
 
 	match result {
 		Ok(Some(I64(r))) => {
-			let (ptr, length) = interpret_runtime_api_result(r);
+			let (ptr, length) = pointer_and_len_from_u64(r as u64);
 			memory.get(ptr.into(), length as usize).map_err(|_| Error::Runtime)
 		},
 		Err(e) => {

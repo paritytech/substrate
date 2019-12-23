@@ -54,6 +54,10 @@ pub fn pointer_and_len_to_u64(ptr: u32, len: u32) -> u64 {
 }
 
 /// Splits an `u64` into the pointer and length.
+///
+/// Runtime API functions return a 64-bit value which encodes a pointer in the least-significant
+/// 32-bits and a length in the most-significant 32 bits. This interprets the returned value as a pointer,
+/// length tuple.
 pub fn pointer_and_len_from_u64(val: u64) -> (u32, u32) {
 	// The static assertions from above are changed into a runtime check.
 	#[cfg(all(not(feature = "std"), feature = "disable_target_static_assertions"))]

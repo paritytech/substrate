@@ -18,7 +18,6 @@
 
 use crate::error::{Error, Result, WasmError};
 use crate::wasm_runtime::WasmRuntime;
-use crate::wasm_utils::interpret_runtime_api_result;
 use crate::wasmtime::function_executor::FunctionExecutorState;
 use crate::wasmtime::trampoline::{EnvState, make_trampoline};
 use crate::wasmtime::util::{cranelift_ir_signature, read_memory_into, write_memory_from};
@@ -34,6 +33,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::rc::Rc;
 use sp_wasm_interface::{Pointer, WordSize, Function};
+use sp_runtime_interface::pointer_and_len_from_u64;
 use wasmtime_environ::{Module, translate_signature};
 use wasmtime_jit::{
 	ActionOutcome, ActionError, CodeMemory, CompilationStrategy, CompiledModule, Compiler, Context,
@@ -183,7 +183,7 @@ fn call_method(
 	let trap_error = reset_env_state_and_take_trap(context, None)?;
 	let (output_ptr, output_len) = match outcome {
 		ActionOutcome::Returned { values } => match values.as_slice() {
-			[RuntimeValue::I64(retval)] => interpret_runtime_api_result(*retval),
+			[RuntimeValue::I64(retval)] => pointer_and_len_from_u64(*retval as u64),
 			_ => return Err(Error::InvalidReturn),
 		}
 		ActionOutcome::Trapped { message } => return Err(trap_error.unwrap_or_else(
@@ -194,7 +194,7 @@ fn call_method(
 	// Read the output data from guest memory.
 	let mut output = vec![0; output_len as usize];
 	let memory = get_memory_mut(&mut instance)?;
-	read_memory_into(memory, output_ptr, &mut output)?;
+	read_memory_into(memory, Pointer::new(output_ptr), &mut output)?;
 	Ok(output)
 }
 
