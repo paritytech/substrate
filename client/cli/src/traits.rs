@@ -38,7 +38,7 @@ macro_rules! impl_augment_clap {
 	( $type:ident ) => {
 		impl $crate::AugmentClap for $type {
 			fn augment_clap<'a, 'b>(app: $crate::App<'a, 'b>) -> $crate::App<'a, 'b> {
-				<$type as StructOpt>::augment_clap(app)
+				$type::augment_clap(app)
 			}
 		}
 	}

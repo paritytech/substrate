@@ -480,7 +480,7 @@ dependencies = [
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-keystore 2.0.0",
  "sp-core 2.0.0",
- "structopt 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "structopt 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3041,7 +3041,7 @@ dependencies = [
  "sp-runtime 2.0.0",
  "sp-timestamp 2.0.0",
  "sp-transaction-pool 2.0.0",
- "structopt 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "structopt 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-build-script-utils 2.0.0",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5031,7 +5031,7 @@ dependencies = [
  "sp-panic-handler 2.0.0",
  "sp-runtime 2.0.0",
  "sp-state-machine 2.0.0",
- "structopt 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "structopt 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6625,7 +6625,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "structopt"
-version = "0.3.6"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -8521,7 +8521,7 @@ dependencies = [
 "checksum string 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "d24114bfcceb867ca7f71a0d3fe45d45619ec47a6fbfa98cb14e14250bfa5d6d"
 "checksum string-interner 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)" = "fd710eadff449a1531351b0e43eb81ea404336fa2f56c777427ab0e32a4cf183"
 "checksum strsim 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
-"checksum structopt 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)" = "df55a89a335d771b9183c06afc6ed9f8e7593cffbd06ddc15f22d843ee3edda5"
+"checksum structopt 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)" = "30b3a3e93f5ad553c38b3301c8a0a0cec829a36783f6a0c467fc4bf553a5f5bf"
 "checksum structopt-derive 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)" = "1ff2ee51ea794265685fd0d79a4b4f0d66bb03f49355a9ee107a49b03cff350e"
 "checksum strum 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6138f8f88a16d90134763314e3fc76fa3ed6a7db4725d6acf9a3ef95a3188d22"
 "checksum strum_macros 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0054a7df764039a6cd8592b9de84be4bec368ff081d203a7d5371cbfa8e65c81"
