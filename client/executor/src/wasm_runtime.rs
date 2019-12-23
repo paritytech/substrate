@@ -19,7 +19,7 @@
 //! The primary means of accessing the runtimes is through a cache which saves the reusable
 //! components of the runtime that are expensive to initialize.
 
-use crate::{wasmi_execution, error::{Error, WasmError}};
+use crate::error::{Error, WasmError};
 #[cfg(feature = "wasmtime")]
 use crate::wasmtime;
 use log::{trace, warn};
@@ -196,7 +196,7 @@ pub fn create_wasm_runtime_with_code(
 ) -> Result<Box<dyn WasmRuntime>, WasmError> {
 	match wasm_method {
 		WasmExecutionMethod::Interpreted =>
-			wasmi_execution::create_instance(code, heap_pages, host_functions)
+			sc_executor_wasmi::create_instance(code, heap_pages, host_functions)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled =>

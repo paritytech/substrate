@@ -31,7 +31,6 @@
 
 #[macro_use]
 mod wasm_utils;
-mod wasmi_execution;
 #[macro_use]
 mod native_executor;
 pub mod deprecated_host_interface;
