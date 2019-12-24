@@ -69,7 +69,7 @@ variables:
 
 #### stage:                        test
 
-build-linux-substrate:
+build-linux-substrate:             &build-binary
   stage:                           test
   <<:                              *collect-artifacts
   <<:                              *docker-env
@@ -77,21 +77,29 @@ build-linux-substrate:
   except:
     variables:
       - $DEPLOY_TAG
-      script:
-        - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
-        - mkdir -p ./artifacts/substrate/
-        - cp ${CARGO_TARGET_DIR}/release/substrate ./artifacts/substrate/.
-        - echo -n "Substrate version = "
-        - if [ "${CI_COMMIT_TAG}" ]; then
-        echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
-        else
-        ./artifacts/substrate/substrate --version |
-        sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-        tee ./artifacts/substrate/VERSION;
-        fi
-        - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
+  script:
+    - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
+    - mkdir -p ./artifacts/substrate/
+    - cp ${CARGO_TARGET_DIR}/release/substrate ./artifacts/substrate/.
+    - echo -n "Substrate version = "
+    - if [ "${CI_COMMIT_TAG}" ]; then
+    echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
+    else
+    ./artifacts/substrate/substrate --version |
+    sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
+    tee ./artifacts/substrate/VERSION;
+    fi
+    - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
 
 #### stage:                        build
+
+build-linux-node-template:
+  <<:                              *build-binary
+  stage:                           build
+  script:
+      - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
+      - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
+      - sccache -s
 
 test-linux-stable:                 &test-linux
   stage:                           test
@@ -136,6 +144,30 @@ node-exits:
     # Send `SIGINT` and give the process 30 seconds to end
     - kill -INT $PID
     - timeout 30 tail --pid=$PID -f /dev/null
+
+test-linux-stable-int:
+  <<:                              *test-linux
+  except:
+    refs:
+      - /^v[0-9]+\.[0-9]+.*$/      # i.e. v1.0, v2.1rc1
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - echo "___Logs will be partly shown at the end in case of failure.___"
+    - echo "___Full log will be saved to the job artifacts only in case of failure.___"
+    - WASM_BUILD_NO_COLOR=1 RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
+        time cargo test -p node-cli --release --verbose --locked -- --ignored
+        &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
+    - sccache -s
+  after_script:
+    - awk '/FAILED|^error\[/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
+  artifacts:
+    name:                          $CI_COMMIT_SHORT_SHA
+    when:                          on_failure
+    expire_in:                     24 hrs
+    paths:
+      - ${CI_COMMIT_SHORT_SHA}_int_failure.log
+    
 
 # trigger the pipeline
 # control-trigger:
