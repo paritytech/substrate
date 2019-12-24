@@ -64,20 +64,23 @@ use error::{Error, Result};
 use log::{debug, error, log_enabled, warn};
 use libp2p::Multiaddr;
 use sc_network::specialization::NetworkSpecialization;
-use sc_network::{DhtEvent, ExHashT};
+use sc_network::{DhtEvent, ExHashT, NetworkStateInfo};
 use sp_core::crypto::{key_types, Pair};
 use sp_core::traits::BareCryptoStorePtr;
 use prost::Message;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, ProvideRuntimeApi};
 
-type Interval = Box<dyn Stream<Item = ()> + Unpin + Send + Sync>;
+#[cfg(test)]
+mod tests;
 
 mod error;
 /// Dht payload schemas generated from Protobuf definitions via Prost crate in build.rs.
 mod schema {
 	include!(concat!(env!("OUT_DIR"), "/authority_discovery.rs"));
 }
+
+type Interval = Box<dyn Stream<Item = ()> + Unpin + Send + Sync>;
 
 /// Upper bound estimation on how long one should wait before accessing the Kademlia DHT.
 const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
@@ -99,7 +102,6 @@ where
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block>,
-
 {
 	client: Arc<Client>,
 
@@ -480,13 +482,7 @@ where
 /// NetworkProvider provides AuthorityDiscovery with all necessary hooks into the underlying
 /// Substrate networking. Using this trait abstraction instead of NetworkService directly is
 /// necessary to unit test AuthorityDiscovery.
-pub trait NetworkProvider {
-	/// Returns the local external addresses.
-	fn external_addresses(&self) -> Vec<libp2p::Multiaddr>;
-
-	/// Returns the network identity of the node.
-	fn local_peer_id(&self) -> libp2p::PeerId;
-
+pub trait NetworkProvider: NetworkStateInfo {
 	/// Modify a peerset priority group.
 	fn set_priority_group(
 		&self,
@@ -507,12 +503,6 @@ where
 	S: NetworkSpecialization<B>,
 	H: ExHashT,
 {
-	fn external_addresses(&self) -> Vec<libp2p::Multiaddr> {
-		self.external_addresses()
-	}
-	fn local_peer_id(&self) -> libp2p::PeerId {
-		self.local_peer_id()
-	}
 	fn set_priority_group(
 		&self,
 		group_id: String,
@@ -542,350 +532,4 @@ fn interval_at(start: Instant, duration: Duration) -> Interval {
 	});
 
 	Box::new(stream)
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use sp_api::{ApiExt, Core, RuntimeVersion, StorageProof};
-	use futures::channel::mpsc::channel;
-	use futures::executor::block_on;
-	use futures::future::poll_fn;
-	use sp_core::{ExecutionContext, NativeOrEncoded, testing::KeyStore};
-	use sp_runtime::traits::Zero;
-	use sp_runtime::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
-	use std::sync::{Arc, Mutex};
-	use sp_test_primitives::Block;
-
-	#[test]
-	fn interval_at_with_start_now() {
-		let start = Instant::now();
-
-		let mut interval = interval_at(
-			std::time::Instant::now(),
-			std::time::Duration::from_secs(10),
-		);
-
-		futures::executor::block_on(async {
-			interval.next().await;
-		});
-
-		assert!(
-			Instant::now().saturating_duration_since(start) < Duration::from_secs(1),
-			"Expected low resolution instant interval to fire within less than a second.",
-		);
-	}
-
-	#[test]
-	fn interval_at_is_queuing_ticks() {
-		let start = Instant::now();
-
-		let interval = interval_at(
-			start,
-			std::time::Duration::from_millis(100),
-		);
-
-		// Let's wait for 200ms, thus 3 elements should be queued up (1st at 0ms, 2nd at 100ms, 3rd
-		// at 200ms).
-		std::thread::sleep(Duration::from_millis(200));
-
-		futures::executor::block_on(async {
-			interval.take(3).collect::<Vec<()>>().await;
-		});
-
-		// Make sure we did not wait for more than 300 ms, which would imply that `at_interval` is
-		// not queuing ticks.
-		assert!(
-			Instant::now().saturating_duration_since(start) < Duration::from_millis(300),
-			"Expect interval to /queue/ events when not polled for a while.",
-		);
-	}
-
-	#[test]
-	fn interval_at_with_initial_delay() {
-		let start = Instant::now();
-
-		let mut interval = interval_at(
-			std::time::Instant::now() + Duration::from_millis(100),
-			std::time::Duration::from_secs(10),
-		);
-
-		futures::executor::block_on(async {
-			interval.next().await;
-		});
-
-		assert!(
-			Instant::now().saturating_duration_since(start) > Duration::from_millis(100),
-			"Expected interval with initial delay not to fire right away.",
-		);
-	}
-
-	#[derive(Clone)]
-	struct TestApi {
-		authorities: Vec<AuthorityId>,
-	}
-
-	impl ProvideRuntimeApi for TestApi {
-		type Api = RuntimeApi;
-
-		fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
-			RuntimeApi{authorities: self.authorities.clone()}.into()
-		}
-	}
-
-	/// Blockchain database header backend. Does not perform any validation.
-	impl<Block: BlockT> HeaderBackend<Block> for TestApi {
-		fn header(
-			&self,
-			_id: BlockId<Block>,
-		) -> std::result::Result<Option<Block::Header>, sp_blockchain::Error> {
-			Ok(None)
-		}
-
-		fn info(&self) -> sc_client_api::blockchain::Info<Block> {
-			sc_client_api::blockchain::Info {
-				best_hash: Default::default(),
-				best_number: Zero::zero(),
-				finalized_hash: Default::default(),
-				finalized_number: Zero::zero(),
-				genesis_hash: Default::default(),
-			}
-		}
-
-		fn status(
-			&self,
-			_id: BlockId<Block>,
-		) -> std::result::Result<sc_client_api::blockchain::BlockStatus, sp_blockchain::Error> {
-			Ok(sc_client_api::blockchain::BlockStatus::Unknown)
-		}
-
-		fn number(
-			&self,
-			_hash: Block::Hash,
-		) -> std::result::Result<Option<NumberFor<Block>>, sp_blockchain::Error> {
-			Ok(None)
-		}
-
-		fn hash(
-			&self,
-			_number: NumberFor<Block>,
-		) -> std::result::Result<Option<Block::Hash>, sp_blockchain::Error> {
-			Ok(None)
-		}
-	}
-
-	struct RuntimeApi {
-		authorities: Vec<AuthorityId>,
-	}
-
-	impl Core<Block> for RuntimeApi {
-		fn Core_version_runtime_api_impl(
-			&self,
-			_: &BlockId<Block>,
-			_: ExecutionContext,
-			_: Option<()>,
-			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<RuntimeVersion>, sp_blockchain::Error> {
-			unimplemented!("Not required for testing!")
-		}
-
-		fn Core_execute_block_runtime_api_impl(
-			&self,
-			_: &BlockId<Block>,
-			_: ExecutionContext,
-			_: Option<Block>,
-			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<()>, sp_blockchain::Error> {
-			unimplemented!("Not required for testing!")
-		}
-
-		fn Core_initialize_block_runtime_api_impl(
-			&self,
-			_: &BlockId<Block>,
-			_: ExecutionContext,
-			_: Option<&<Block as BlockT>::Header>,
-			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<()>, sp_blockchain::Error> {
-			unimplemented!("Not required for testing!")
-		}
-	}
-
-	impl ApiExt<Block> for RuntimeApi {
-		type Error = sp_blockchain::Error;
-
-		fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
-			&self,
-			_: F,
-		) -> std::result::Result<R, E> {
-			unimplemented!("Not required for testing!")
-		}
-
-		fn runtime_version_at(
-			&self,
-			_: &BlockId<Block>,
-		) -> std::result::Result<RuntimeVersion, sp_blockchain::Error> {
-			unimplemented!("Not required for testing!")
-		}
-
-		fn record_proof(&mut self) {
-			unimplemented!("Not required for testing!")
-		}
-
-		fn extract_proof(&mut self) -> Option<StorageProof> {
-			unimplemented!("Not required for testing!")
-		}
-	}
-
-	impl AuthorityDiscoveryApi<Block> for RuntimeApi {
-		fn AuthorityDiscoveryApi_authorities_runtime_api_impl(
-			&self,
-			_: &BlockId<Block>,
-			_: ExecutionContext,
-			_: Option<()>,
-			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<Vec<AuthorityId>>, sp_blockchain::Error> {
-			return Ok(NativeOrEncoded::Native(self.authorities.clone()));
-		}
-	}
-
-	#[derive(Default)]
-	struct TestNetwork {
-		// Whenever functions on `TestNetwork` are called, the function arguments are added to the
-		// vectors below.
-		pub put_value_call: Arc<Mutex<Vec<(libp2p::kad::record::Key, Vec<u8>)>>>,
-		pub get_value_call: Arc<Mutex<Vec<libp2p::kad::record::Key>>>,
-		pub set_priority_group_call: Arc<Mutex<Vec<(String, HashSet<libp2p::Multiaddr>)>>>,
-	}
-
-	impl NetworkProvider for TestNetwork {
-		fn external_addresses(&self) -> Vec<libp2p::Multiaddr> {
-			vec![]
-		}
-		fn local_peer_id(&self) -> libp2p::PeerId {
-			libp2p::PeerId::random()
-		}
-		fn set_priority_group(
-			&self,
-			group_id: String,
-			peers: HashSet<libp2p::Multiaddr>,
-		) -> std::result::Result<(), String> {
-			self.set_priority_group_call
-				.lock()
-				.unwrap()
-				.push((group_id, peers));
-			Ok(())
-		}
-		fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>) {
-			self.put_value_call.lock().unwrap().push((key, value));
-		}
-		fn get_value(&self, key: &libp2p::kad::record::Key) {
-			self.get_value_call.lock().unwrap().push(key.clone());
-		}
-	}
-
-	#[test]
-	fn publish_ext_addresses_puts_record_on_dht() {
-		let (_dht_event_tx, dht_event_rx) = channel(1000);
-		let network: Arc<TestNetwork> = Arc::new(Default::default());
-		let key_store = KeyStore::new();
-		let public = key_store.write()
-			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
-			.unwrap();
-		let test_api = Arc::new(TestApi {authorities: vec![public.into()]});
-
-		let mut authority_discovery = AuthorityDiscovery::new(
-			test_api, network.clone(), vec![], key_store, dht_event_rx.boxed(),
-		);
-
-		authority_discovery.publish_ext_addresses().unwrap();
-
-		// Expect authority discovery to put a new record onto the dht.
-		assert_eq!(network.put_value_call.lock().unwrap().len(), 1);
-	}
-
-	#[test]
-	fn request_addresses_of_others_triggers_dht_get_query() {
-		let _ = ::env_logger::try_init();
-		let (_dht_event_tx, dht_event_rx) = channel(1000);
-
-		// Generate authority keys
-		let authority_1_key_pair = AuthorityPair::from_seed_slice(&[1; 32]).unwrap();
-		let authority_2_key_pair = AuthorityPair::from_seed_slice(&[2; 32]).unwrap();
-
-		let test_api = Arc::new(TestApi {
-			authorities: vec![authority_1_key_pair.public(), authority_2_key_pair.public()],
-		});
-
-		let network: Arc<TestNetwork> = Arc::new(Default::default());
-		let key_store = KeyStore::new();
-
-		let mut authority_discovery = AuthorityDiscovery::new(
-			test_api, network.clone(), vec![], key_store, dht_event_rx.boxed(),
-		);
-
-		authority_discovery.request_addresses_of_others().unwrap();
-
-		// Expect authority discovery to request new records from the dht.
-		assert_eq!(network.get_value_call.lock().unwrap().len(), 2);
-	}
-
-	#[test]
-	fn handle_dht_events_with_value_found_should_call_set_priority_group() {
-		let _ = ::env_logger::try_init();
-		// Create authority discovery.
-
-		let (mut dht_event_tx, dht_event_rx) = channel(1000);
-		let key_pair = AuthorityPair::from_seed_slice(&[1; 32]).unwrap();
-		let test_api = Arc::new(TestApi {authorities: vec![key_pair.public()]});
-		let network: Arc<TestNetwork> = Arc::new(Default::default());
-		let key_store = KeyStore::new();
-
-		let mut authority_discovery = AuthorityDiscovery::new(
-			test_api, network.clone(), vec![], key_store, dht_event_rx.boxed(),
-		);
-
-		// Create sample dht event.
-
-		let authority_id_1 = hash_authority_id(key_pair.public().as_ref()).unwrap();
-		let address_1: libp2p::Multiaddr = "/ip6/2001:db8::".parse().unwrap();
-
-		let mut serialized_addresses = vec![];
-		schema::AuthorityAddresses {
-			addresses: vec![address_1.to_vec()],
-		}
-		.encode(&mut serialized_addresses)
-		.unwrap();
-
-		let signature = key_pair.sign(serialized_addresses.as_ref()).encode();
-		let mut signed_addresses = vec![];
-		schema::SignedAuthorityAddresses {
-			addresses: serialized_addresses,
-			signature: signature,
-		}
-		.encode(&mut signed_addresses)
-		.unwrap();
-
-		let dht_event = sc_network::DhtEvent::ValueFound(vec![(authority_id_1, signed_addresses)]);
-		dht_event_tx.try_send(dht_event).unwrap();
-
-		// Make authority discovery handle the event.
-		let f = |cx: &mut Context<'_>| -> Poll<()> {
-			authority_discovery.handle_dht_events(cx).unwrap();
-
-			// Expect authority discovery to set the priority set.
-			assert_eq!(network.set_priority_group_call.lock().unwrap().len(), 1);
-
-			assert_eq!(
-				network.set_priority_group_call.lock().unwrap()[0],
-				(
-					"authorities".to_string(),
-					HashSet::from_iter(vec![address_1.clone()].into_iter())
-				)
-			);
-
-			Poll::Ready(())
-		};
-
-		let _ = block_on(poll_fn(f));
-	}
 }
