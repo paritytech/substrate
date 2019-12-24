@@ -374,8 +374,8 @@ fn own_blocks_are_announced() {
 
 	net.block_until_sync(&mut runtime);
 
-	assert_eq!(net.peer(0).client.info().chain.best_number, 1);
-	assert_eq!(net.peer(1).client.info().chain.best_number, 1);
+	assert_eq!(net.peer(0).client.chain_info().best_number, 1);
+	assert_eq!(net.peer(1).client.chain_info().best_number, 1);
 	let peer0 = &net.peers()[0];
 	assert!(net.peers()[1].blockchain_canon_equals(peer0));
 	(net.peers()[2].blockchain_canon_equals(peer0));
@@ -396,9 +396,9 @@ fn blocks_are_not_announced_by_light_nodes() {
 
 	// Sync between 0 and 1.
 	net.peer(0).push_blocks(1, false);
-	assert_eq!(net.peer(0).client.info().chain.best_number, 1);
+	assert_eq!(net.peer(0).client.chain_info().best_number, 1);
 	net.block_until_sync(&mut runtime);
-	assert_eq!(net.peer(1).client.info().chain.best_number, 1);
+	assert_eq!(net.peer(1).client.chain_info().best_number, 1);
 
 	// Add another node and remove node 0.
 	net.add_full_peer(&ProtocolConfig::default());
@@ -410,7 +410,7 @@ fn blocks_are_not_announced_by_light_nodes() {
 		net.poll();
 		delay.poll().map_err(|_| ())
 	})).unwrap();
-	assert_eq!(net.peer(1).client.info().chain.best_number, 0);
+	assert_eq!(net.peer(1).client.chain_info().best_number, 0);
 }
 
 #[test]
@@ -493,8 +493,8 @@ fn can_not_sync_from_light_peer() {
 	net.block_until_sync(&mut runtime);
 
 	// ensure #0 && #1 have the same best block
-	let full0_info = net.peer(0).client.info().chain;
-	let light_info = net.peer(1).client.info().chain;
+	let full0_info = net.peer(0).client.chain_info();
+	let light_info = net.peer(1).client.chain_info();
 	assert_eq!(full0_info.best_number, 1);
 	assert_eq!(light_info.best_number, 1);
 	assert_eq!(light_info.best_hash, full0_info.best_hash);

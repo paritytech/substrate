@@ -22,8 +22,6 @@ use log::{info, warn};
 use sp_runtime::traits::Header;
 use sc_service::AbstractService;
 use std::time::Duration;
-use parity_util_mem::MallocSizeOfExt;
-use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 
 mod display;
 
@@ -37,20 +35,16 @@ pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()
 		.network_status(Duration::from_millis(5000))
 		.compat()
 		.try_for_each(move |(net_status, _)| {
-			let info = client.info();
-			let cache_sizes = display::CacheSizes { db: client.malloc_size_of() };
+			let info = client.usage_info();
+			let cache_sizes = display::CacheSizes { db: info.cache_size };
 			display.display(&info, net_status, &cache_sizes);
-
-			telemetry!(SUBSTRATE_INFO; "stats.memory";
-				"db" => cache_sizes.db,
-			);
 
 			future::ok(())
 		});
 
 	let client = service.client();
 	let mut last_best = {
-		let info = client.info();
+		let info = client.usage_info();
 		Some((info.chain.best_number, info.chain.best_hash))
 	};
 

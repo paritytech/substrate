@@ -86,8 +86,8 @@ pub trait ProvideUncles<Block: BlockT> {
 pub struct ClientInfo<Block: BlockT> {
 	/// Best block hash.
 	pub chain: Info<Block>,
-	/// State Cache Size currently used by the backend
-	pub used_state_cache_size: Option<usize>,
+	/// Database cache size currently used by the backend
+	pub cache_size: usize,
 }
 
 /// Summary of an imported block

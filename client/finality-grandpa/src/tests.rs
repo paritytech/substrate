@@ -602,7 +602,7 @@ fn transition_3_voters_twice_1_full_observer() {
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
 		let full_client = peer.client().as_full().expect("only full clients are used in test");
-		assert_eq!(full_client.info().chain.best_number, 1,
+		assert_eq!(full_client.chain_info().best_number, 1,
 					"Peer #{} failed to sync", i);
 
 		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(&*full_client).unwrap();

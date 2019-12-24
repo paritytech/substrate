@@ -24,7 +24,6 @@ use kvdb::{KeyValueDB, DBTransaction};
 #[cfg(feature = "kvdb-rocksdb")]
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use log::debug;
-use parity_util_mem::MallocSizeOf;
 
 use codec::Decode;
 use sp_trie::DBValue;
