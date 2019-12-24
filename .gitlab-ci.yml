@@ -77,9 +77,10 @@ build-linux-substrate:             &build-binary
   except:
     variables:
       - $DEPLOY_TAG
+  before_script:
+    - mkdir -p ./artifacts/substrate/
   script:
     - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
-    - mkdir -p ./artifacts/substrate/
     - cp ${CARGO_TARGET_DIR}/release/substrate ./artifacts/substrate/.
     - echo -n "Substrate version = "
     - if [ "${CI_COMMIT_TAG}" ]; then
@@ -115,6 +116,7 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
+    - echo $CARGO_TARGET_DIR
     - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked |
         tee output.log
     - sccache -s
@@ -131,6 +133,7 @@ node-exits:
   stage:                           build
   <<:                              *docker-env
   variables:
+    GIT_STRATEGY:                  none
     CARGO_TARGET_DIR:              "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/build-linux-substrate"
   needs:
     - build-linux-substrate
