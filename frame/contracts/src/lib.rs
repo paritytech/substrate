@@ -121,7 +121,7 @@ use sp_runtime::{
 };
 use frame_support::dispatch::{DispatchResult, Dispatchable};
 use frame_support::{
-	Parameter, decl_module, decl_event, decl_storage, storage::child,
+	Parameter, decl_module, decl_event, decl_storage, decl_error, storage::child,
 	parameter_types, IsSubType,
 	weights::DispatchInfo,
 };
@@ -467,9 +467,29 @@ impl<T: Trait> ComputeDispatchFee<<T as Trait>::Call, BalanceOf<T>> for DefaultD
 	}
 }
 
+decl_error! {
+	/// Error for the contracts module.
+	pub enum Error for Module<T: Trait> {
+		/// A new schedule must have a greater version than the current one.
+		InvalidScheduleVersion,
+		/// An origin must be signed or inherent and auxiliary sender only provided on inherent.
+		InvalidSurchargeClaim,
+		/// Cannot restore from nonexisting or tombstone contract.
+		InvalidSourceContract,
+		/// Cannot restore to nonexisting or alive contract.
+		InvalidDestinationContract,
+		/// Tombstones don't match.
+		InvalidTombstone,
+		/// An origin TrieId written in the current block.
+		InvalidContractOrigin
+	}
+}
+
 decl_module! {
 	/// Contracts module.
 	pub struct Module<T: Trait> for enum Call where origin: <T as frame_system::Trait>::Origin {
+		type Error = Error<T>;
+
 		/// Number of block delay an extrinsic claim surcharge has.
 		///
 		/// When claim surcharge is called by an extrinsic the rent is checked
@@ -542,7 +562,7 @@ decl_module! {
 		pub fn update_schedule(origin, schedule: Schedule) -> DispatchResult {
 			ensure_root(origin)?;
 			if <Module<T>>::current_schedule().version >= schedule.version {
-				Err("new schedule must have a greater version than current")?
+				Err(Error::<T>::InvalidScheduleVersion)?
 			}
 
 			Self::deposit_event(RawEvent::ScheduleUpdated(schedule.version));
@@ -636,10 +656,7 @@ decl_module! {
 				(Ok(frame_system::RawOrigin::None), Some(aux_sender)) => {
 					(false, aux_sender)
 				},
-				_ => Err(
-					"Invalid surcharge claim: origin must be signed or \
-					inherent and auxiliary sender only provided on inherent"
-				)?,
+				_ => Err(Error::<T>::InvalidSurchargeClaim)?,
 			};
 
 			// Add some advantage for block producers (who send unsigned extrinsics) by
@@ -786,17 +803,17 @@ impl<T: Trait> Module<T> {
 	) -> DispatchResult {
 		let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
 			.and_then(|c| c.get_alive())
-			.ok_or("Cannot restore from inexisting or tombstone contract")?;
+			.ok_or(Error::<T>::InvalidSourceContract)?;
 
 		let current_block = <frame_system::Module<T>>::block_number();
 
 		if origin_contract.last_write == Some(current_block) {
-			Err("Origin TrieId written in the current block")?
+			Err(Error::<T>::InvalidContractOrigin)?
 		}
 
 		let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
 			.and_then(|c| c.get_tombstone())
-			.ok_or("Cannot restore to inexisting or alive contract")?;
+			.ok_or(Error::<T>::InvalidDestinationContract)?;
 
 		let last_write = if !delta.is_empty() {
 			Some(current_block)
@@ -841,7 +858,7 @@ impl<T: Trait> Module<T> {
 				);
 			}
 
-			return Err("Tombstones don't match".into());
+			return Err(Error::<T>::InvalidTombstone.into());
 		}
 
 		origin_contract.storage_size -= key_values_taken.iter()
