@@ -16,7 +16,10 @@
 
 //! Provides implementations for the runtime interface traits.
 
-use crate::{RIType, Pointer, pass_by::{PassBy, Codec, Inner, PassByInner}};
+use crate::{
+	RIType, Pointer, pass_by::{PassBy, Codec, Inner, PassByInner},
+	util::{unpack_ptr_and_len, pack_ptr_and_len},
+};
 #[cfg(feature = "std")]
 use crate::host::*;
 #[cfg(not(feature = "std"))]
@@ -43,27 +46,6 @@ use sp_std::{slice, boxed::Box};
 assert_eq_size!(usize, u32);
 #[cfg(all(not(feature = "std"), not(feature = "disable_target_static_assertions")))]
 assert_eq_size!(*const u8, u32);
-
-/// Converts a pointer and length into an `u64`.
-pub fn pointer_and_len_to_u64(ptr: u32, len: u32) -> u64 {
-	// The static assertions from above are changed into a runtime check.
-	#[cfg(all(not(feature = "std"), feature = "disable_target_static_assertions"))]
-	assert_eq!(4, sp_std::mem::size_of::<usize>());
-
-	(u64::from(len) << 32) | u64::from(ptr)
-}
-
-/// Splits an `u64` into the pointer and length.
-pub fn pointer_and_len_from_u64(val: u64) -> (u32, u32) {
-	// The static assertions from above are changed into a runtime check.
-	#[cfg(all(not(feature = "std"), feature = "disable_target_static_assertions"))]
-	assert_eq!(4, sp_std::mem::size_of::<usize>());
-
-	let ptr = (val & (!0u32 as u64)) as u32;
-	let len = (val >> 32) as u32;
-
-	(ptr, len)
-}
 
 /// Implement the traits for the given primitive traits.
 macro_rules! impl_traits_for_primitives {
@@ -186,7 +168,7 @@ impl<T: 'static + Encode> IntoFFIValue for Vec<T> {
 		let ptr = context.allocate_memory(vec.as_ref().len() as u32)?;
 		context.write_memory(ptr, &vec)?;
 
-		Ok(pointer_and_len_to_u64(ptr.into(), vec.len() as u32))
+		Ok(pack_ptr_and_len(ptr.into(), vec.len() as u32))
 	}
 }
 
@@ -211,7 +193,7 @@ impl<T: 'static + Encode> IntoFFIValue for Vec<T> {
 #[cfg(not(feature = "std"))]
 impl<T: 'static + Decode> FromFFIValue for Vec<T> {
 	fn from_ffi_value(arg: u64) -> Vec<T> {
-		let (ptr, len) = pointer_and_len_from_u64(arg);
+		let (ptr, len) = unpack_ptr_and_len(arg);
 		let len = len as usize;
 
 		if TypeId::of::<T>() == TypeId::of::<u8>() {
@@ -238,7 +220,7 @@ impl<T: 'static + Decode> FromFFIValue for [T] {
 	type SelfInstance = Vec<T>;
 
 	fn from_ffi_value(context: &mut dyn FunctionContext, arg: u64) -> Result<Vec<T>> {
-		let (ptr, len) = pointer_and_len_from_u64(arg);
+		let (ptr, len) = unpack_ptr_and_len(arg);
 
 		let vec = context.read_memory(Pointer::new(ptr), len)?;
 
@@ -259,7 +241,7 @@ impl IntoPreallocatedFFIValue for [u8] {
 		context: &mut dyn FunctionContext,
 		allocated: u64,
 	) -> Result<()> {
-		let (ptr, len) = pointer_and_len_from_u64(allocated);
+		let (ptr, len) = unpack_ptr_and_len(allocated);
 
 		if (len as usize) < self_instance.len() {
 			Err(
@@ -282,10 +264,10 @@ impl<T: 'static + Encode> IntoFFIValue for [T] {
 	fn into_ffi_value(&self) -> WrappedFFIValue<u64, Vec<u8>> {
 		if TypeId::of::<T>() == TypeId::of::<u8>() {
 			let slice = unsafe { mem::transmute::<&[T], &[u8]>(self) };
-			pointer_and_len_to_u64(slice.as_ptr() as u32, slice.len() as u32).into()
+			pack_ptr_and_len(slice.as_ptr() as u32, slice.len() as u32).into()
 		} else {
 			let data = self.encode();
-			let ffi_value = pointer_and_len_to_u64(data.as_ptr() as u32, data.len() as u32);
+			let ffi_value = pack_ptr_and_len(data.as_ptr() as u32, data.len() as u32);
 			(ffi_value, data).into()
 		}
 	}
@@ -428,7 +410,7 @@ impl FromFFIValue for str {
 	type SelfInstance = String;
 
 	fn from_ffi_value(context: &mut dyn FunctionContext, arg: u64) -> Result<String> {
-		let (ptr, len) = pointer_and_len_from_u64(arg);
+		let (ptr, len) = unpack_ptr_and_len(arg);
 
 		let vec = context.read_memory(Pointer::new(ptr), len)?;
 
@@ -443,7 +425,7 @@ impl IntoFFIValue for str {
 
 	fn into_ffi_value(&self) -> WrappedFFIValue<u64, ()> {
 		let bytes = self.as_bytes();
-		pointer_and_len_to_u64(bytes.as_ptr() as u32, bytes.len() as u32).into()
+		pack_ptr_and_len(bytes.as_ptr() as u32, bytes.len() as u32).into()
 	}
 }
 
