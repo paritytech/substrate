@@ -23,6 +23,7 @@ use sp_runtime::traits::Header;
 use sc_service::AbstractService;
 use std::time::Duration;
 use parity_util_mem::MallocSizeOfExt;
+use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 
 mod display;
 
@@ -39,6 +40,11 @@ pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()
 			let info = client.info();
 			let cache_sizes = display::CacheSizes { db: client.malloc_size_of() };
 			display.display(&info, net_status, &cache_sizes);
+
+			telemetry!(SUBSTRATE_INFO; "stats.memory";
+				"db" => cache_sizes.db,
+			);
+
 			future::ok(())
 		});
 
