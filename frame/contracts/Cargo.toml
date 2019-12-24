@@ -8,7 +8,7 @@ edition = "2018"
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 pwasm-utils = { version = "0.12.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-parity-util-mem = "0.3"
+parity-util-mem = { version = "0.3.0", default-features = false }
 parity-wasm = { version = "0.41.0", default-features = false }
 wasmi-validation = { version = "0.3.0", default-features = false }
 sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
@@ -39,6 +39,7 @@ std = [
 	"sp-sandbox/std",
 	"frame-support/std",
 	"frame-system/std",
+	"parity-util-mem/std",
 	"parity-wasm/std",
 	"pwasm-utils/std",
 	"wasmi-validation/std",

@@ -72,6 +72,7 @@ use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
 pub use sc_state_db::PruningMode;
+pub use parity_util_mem::MallocSizeOf;
 
 #[cfg(feature = "test-helpers")]
 use sc_client::in_mem::Backend as InMemoryBackend;
@@ -340,6 +341,12 @@ pub struct BlockchainDb<Block: BlockT> {
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	header_metadata_cache: HeaderMetadataCache<Block>,
+}
+
+impl<B: BlockT> MallocSizeOf for BlockchainDb<B> {
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.db.size_of(ops) + self.leaves.size_of(ops)
+	}
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
@@ -630,6 +637,13 @@ struct StorageDb<Block: BlockT> {
 	pub state_db: StateDb<Block::Hash, Vec<u8>>,
 }
 
+impl<B: BlockT> MallocSizeOf for StorageDb<B> {
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.db.size_of(ops) +
+			0 // TODO: also track self.state_db
+	}
+}
+
 impl<Block: BlockT> sp_state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
 	fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let key = prefixed_key::<Blake2Hasher>(key, prefix);
@@ -837,6 +851,15 @@ pub struct Backend<Block: BlockT> {
 	shared_cache: SharedCache<Block, Blake2Hasher>,
 	import_lock: RwLock<()>,
 	is_archive: bool,
+}
+
+impl<B: BlockT> MallocSizeOf for Backend<B> {
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.storage.size_of(ops) +
+			self.blockchain.size_of(ops) +
+			// TODO: shared cache should also bee updated to use `MallocSizeOf`
+			self.shared_cache.lock().used_storage_cache_size()
+	}
 }
 
 impl<Block: BlockT<Hash=H256>> Backend<Block> {
@@ -1597,13 +1620,6 @@ where Block: BlockT<Hash=H256> {}
 pub fn unused_sink<Block: BlockT>(cache_tx: crate::cache::DbCacheTransaction<Block>) {
 	cache_tx.on_block_revert(&crate::cache::ComplexBlockId::new(Default::default(), 0.into())).unwrap();
 	unimplemented!()
-}
-
-// TODO: this is a stub
-impl<Block> parity_util_mem::MallocSizeOf for Backend<Block> where Block: BlockT<Hash=H256> {
-	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		0
-	}
 }
 
 #[cfg(test)]

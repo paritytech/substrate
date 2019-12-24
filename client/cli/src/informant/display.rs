@@ -43,9 +43,17 @@ pub struct InformantDisplay<B: BlockT> {
 	last_update: time::Instant,
 }
 
+/// Format byte counts to standard denominations.
+pub fn format_bytes(b: u64) -> String {
+	match number_prefix::NumberPrefix::binary(b as f64) {
+		number_prefix::Standalone(bytes)   => format!("{} bytes", bytes),
+		number_prefix::Prefixed(prefix, n) => format!("{:.0} {}B", n, prefix),
+	}
+}
+
 /// Memory footprint info.
-pub struct MemoryFootprint {
-	pub blockchain: usize,
+pub struct CacheSizes {
+	pub db: usize,
 }
 
 impl<B: BlockT> InformantDisplay<B> {
@@ -61,7 +69,7 @@ impl<B: BlockT> InformantDisplay<B> {
 	pub fn display(&mut self,
 		info: &ClientInfo<B>,
 	    net_status: NetworkStatus<B>,
-		memory: &MemoryFootprint,
+		memory: &CacheSizes,
 	) {
 		let best_number = info.chain.best_number;
 		let best_hash = info.chain.best_hash;
@@ -77,7 +85,7 @@ impl<B: BlockT> InformantDisplay<B> {
 
 		info!(
 			target: "substrate",
-			"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}, mem: {}",
+			"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}, cache: {}",
 			Colour::White.bold().paint(&status),
 			target,
 			Colour::White.bold().paint(format!("{}", net_status.num_connected_peers)),
@@ -87,7 +95,7 @@ impl<B: BlockT> InformantDisplay<B> {
 			info.chain.finalized_hash,
 			TransferRateFormat(net_status.average_download_per_sec),
 			TransferRateFormat(net_status.average_upload_per_sec),
-			memory.blockchain,
+			format_bytes(memory.db as u64),
 		);
 	}
 }

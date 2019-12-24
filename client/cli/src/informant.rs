@@ -37,8 +37,8 @@ pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()
 		.compat()
 		.try_for_each(move |(net_status, _)| {
 			let info = client.info();
-			let memory = display::MemoryFootprint { blockchain: client.malloc_size_of() };
-			display.display(&info, net_status, &memory);
+			let cache_sizes = display::CacheSizes { db: client.malloc_size_of() };
+			display.display(&info, net_status, &cache_sizes);
 			future::ok(())
 		});
 
