@@ -301,7 +301,7 @@ macro_rules! impl_traits_for_arrays {
 			#[cfg(not(feature = "std"))]
 			impl FromFFIValue for [u8; $n] {
 				fn from_ffi_value(arg: u32) -> [u8; $n] {
-					let mut res = unsafe { mem::MaybeUninit::<[u8; $n]>::zeroed().assume_init() };
+					let mut res = [0u8; $n];
 					res.copy_from_slice(unsafe { slice::from_raw_parts(arg as *const u8, $n) });
 
 					// Make sure we free the pointer.
@@ -317,7 +317,7 @@ macro_rules! impl_traits_for_arrays {
 
 				fn from_ffi_value(context: &mut dyn FunctionContext, arg: u32) -> Result<[u8; $n]> {
 					let data = context.read_memory(Pointer::new(arg), $n)?;
-					let mut res = unsafe { mem::MaybeUninit::<[u8; $n]>::zeroed().assume_init() };
+					let mut res = [0u8; $n];
 					res.copy_from_slice(&data);
 					Ok(res)
 				}
