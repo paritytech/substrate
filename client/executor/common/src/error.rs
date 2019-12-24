@@ -31,9 +31,6 @@ pub enum Error {
 	Trap(wasmi::Trap),
 	/// Wasmi loading/instantiating error
 	Wasmi(wasmi::Error),
-	/// Wasmtime action error
-	#[cfg(feature = "wasmtime")]
-	Wasmtime(wasmtime_jit::ActionError),
 	/// Error in the API. Parameter is an error message.
 	#[from(ignore)]
 	ApiError(String),
@@ -133,10 +130,6 @@ pub enum WasmError {
 	InvalidHeapPages,
 	/// Instantiation error.
 	Instantiation(String),
-	/// The compiler does not support the host machine as a target.
-	#[cfg(feature = "wasmtime")]
-	MissingCompilerSupport(&'static str),
-	/// Wasmtime setup error.
-	#[cfg(feature = "wasmtime")]
-	WasmtimeSetup(wasmtime_jit::SetupError),
+	/// Other error happenend.
+	Other(String),
 }

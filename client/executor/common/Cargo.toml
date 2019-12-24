@@ -14,10 +14,5 @@ sp-wasm-interface = { version = "2.0.0", path = "../../../primitives/wasm-interf
 sp-runtime-interface = { version = "2.0.0", path = "../../../primitives/runtime-interface" }
 sp-serializer = { version = "2.0.0", path = "../../../primitives/serializer" }
 
-wasmtime-jit = { version = "0.8", optional = true }
-
 [features]
 default = []
-wasmtime = [
-	"wasmtime-jit",
-]

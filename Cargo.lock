@@ -5315,7 +5315,6 @@ dependencies = [
  "sp-serializer 2.0.0",
  "sp-wasm-interface 2.0.0",
  "wasmi 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmtime-jit 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

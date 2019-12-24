@@ -42,7 +42,6 @@ std = []
 wasm-extern-trace = []
 wasmtime = [
 	"sc-executor-wasmtime",
-	"sc-executor-common/wasmtime",
 ]
 wasmi-errno = [
 	"wasmi/errno"

@@ -173,7 +173,7 @@ impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 		let exec_code_buf = self.compiler
 			.get_published_trampoline(func_ptr, &signature, value_size)
 			.map_err(ActionError::Setup)
-			.map_err(Error::Wasmtime)?;
+			.map_err(|e| Error::Other(e.to_string()))?;
 
 		// Call the trampoline.
 		if let Err(message) = unsafe {

@@ -40,8 +40,7 @@ use cranelift_frontend::FunctionBuilderContext;
 use cranelift_wasm::DefinedFuncIndex;
 use wasmtime_environ::{Module, translate_signature};
 use wasmtime_jit::{
-	ActionOutcome, ActionError, CodeMemory, CompilationStrategy, CompiledModule, Compiler, Context,
-	SetupError, RuntimeValue,
+	ActionOutcome, CodeMemory, CompilationStrategy, CompiledModule, Compiler, Context, RuntimeValue,
 };
 use wasmtime_runtime::{Export, Imports, InstanceHandle, VMFunctionBody};
 
@@ -138,7 +137,7 @@ fn create_compiled_unit(
 
 	// Compile the wasm module.
 	let module = context.compile_module(&code)
-		.map_err(WasmError::WasmtimeSetup)?;
+		.map_err(|e| WasmError::Other(format!("module compile error: {}", e)))?;
 
 	Ok((module, context))
 }
@@ -159,9 +158,7 @@ fn call_method(
 	clear_globals(&mut *context.get_global_exports().borrow_mut());
 
 	let mut instance = module.instantiate()
-		.map_err(SetupError::Instantiate)
-		.map_err(ActionError::Setup)
-		.map_err(Error::Wasmtime)?;
+		.map_err(|e| Error::Other(e.to_string()))?;
 
 	// Ideally there would be a way to set the heap pages during instantiation rather than
 	// growing the memory after the fact. Currently this may require an additional mmap and copy.
@@ -182,7 +179,7 @@ fn call_method(
 	let outcome = sp_externalities::set_and_run_with_externalities(ext, || {
 		context
 			.invoke(&mut instance, method, &args[..])
-			.map_err(Error::Wasmtime)
+			.map_err(|e| Error::Other(format!("error calling runtime: {}", e)))
 	})?;
 	let trap_error = reset_env_state_and_take_trap(context, None)?;
 	let (output_ptr, output_len) = match outcome {
@@ -256,13 +253,13 @@ fn instantiate_env_module(
 		None,
 		Box::new(env_state),
 	);
-	result.map_err(|e| WasmError::WasmtimeSetup(SetupError::Instantiate(e)))
+	result.map_err(|e| WasmError::Other(format!("cannot instantiate env: {}", e)))
 }
 
 /// Build a new TargetIsa for the host machine.
 fn target_isa() -> std::result::Result<Box<dyn TargetIsa>, WasmError> {
 	let isa_builder = cranelift_native::builder()
-		.map_err(WasmError::MissingCompilerSupport)?;
+		.map_err(|e| WasmError::Other(format!("missing compiler support: {}", e)))?;
 	let flag_builder = cranelift_codegen::settings::builder();
 	Ok(isa_builder.finish(cranelift_codegen::settings::Flags::new(flag_builder)))
 }
