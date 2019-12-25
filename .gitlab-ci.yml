@@ -91,19 +91,11 @@ build-linux-substrate:             &build-binary
           tee ./artifacts/substrate/VERSION;
       fi
     - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
+    - printf '\n# building node-template\n\n'
+    - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
+    - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
 
 #### stage:                        build
-
-build-linux-node-template:
-  <<:                              *build-binary
-  stage:                           build
-  variables:
-    CARGO_TARGET_DIR:              "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/build-linux-substrate"
-  script:
-      - echo $CARGO_TARGET_DIR
-      - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
-      - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
-      - sccache -s
 
 test-linux-stable:                 &test-linux
   stage:                           build
@@ -162,6 +154,8 @@ test-linux-stable-int:
       - /^v[0-9]+\.[0-9]+.*$/      # i.e. v1.0, v2.1rc1
     variables:
       - $DEPLOY_TAG
+  variables:
+    CARGO_TARGET_DIR:              "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/build-linux-substrate"
   script:
     - echo "___Logs will be partly shown at the end in case of failure.___"
     - echo "___Full log will be saved to the job artifacts only in case of failure.___"
