@@ -639,8 +639,7 @@ struct StorageDb<Block: BlockT> {
 
 impl<B: BlockT> MallocSizeOf for StorageDb<B> {
 	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.db.size_of(ops) +
-			0 // TODO: also track self.state_db
+		self.db.size_of(ops) + self.state_db.size_of(ops)
 	}
 }
 

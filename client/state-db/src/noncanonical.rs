@@ -25,11 +25,15 @@ use std::collections::{HashMap, VecDeque, hash_map::Entry};
 use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key};
 use codec::{Encode, Decode};
 use log::trace;
+use parity_util_mem::MallocSizeOf;
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 const LAST_CANONICAL: &[u8] = b"last_canonical";
 
-/// See module documentation.
+/// Non-canonical overlay.
+///
+/// For more description, see module level documentation.
+#[derive(MallocSizeOf)]
 pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	last_canonicalized: Option<(BlockHash, u64)>,
 	levels: VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
@@ -53,6 +57,7 @@ fn to_journal_key(block: u64, index: u64) -> Vec<u8> {
 }
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
+#[derive(MallocSizeOf)]
 struct BlockOverlay<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	journal_key: Vec<u8>,

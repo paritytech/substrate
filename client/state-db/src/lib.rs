@@ -41,6 +41,8 @@ use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 use log::trace;
 
+use parity_util_mem::MallocSizeOf;
+
 const PRUNING_MODE: &[u8] = b"mode";
 const PRUNING_MODE_ARCHIVE: &[u8] = b"archive";
 const PRUNING_MODE_ARCHIVE_CANON: &[u8] = b"archive_canonical";
@@ -50,8 +52,8 @@ const PRUNING_MODE_CONSTRAINED: &[u8] = b"constrained";
 pub type DBValue = Vec<u8>;
 
 /// Basic set of requirements for the Block hash and node key types.
-pub trait Hash: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Codec + std::hash::Hash + 'static {}
-impl<T: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Codec + std::hash::Hash + 'static> Hash for T {}
+pub trait Hash: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Codec + std::hash::Hash + MallocSizeOf + 'static {}
+impl<T: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Codec + std::hash::Hash + MallocSizeOf + 'static> Hash for T {}
 
 /// Backend database trait. Read-only.
 pub trait MetaDb {
@@ -131,7 +133,7 @@ pub struct CommitSet<H: Hash> {
 }
 
 /// Pruning constraints. If none are specified pruning is
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Default, Debug, Clone, Eq, PartialEq, MallocSizeOf)]
 pub struct Constraints {
 	/// Maximum blocks. Defaults to 0 when unspecified, effectively keeping only non-canonical states.
 	pub max_blocks: Option<u32>,
@@ -140,7 +142,7 @@ pub struct Constraints {
 }
 
 /// Pruning mode.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, MallocSizeOf)]
 pub enum PruningMode {
 	/// Maintain a pruning window.
 	Constrained(Constraints),
@@ -189,6 +191,7 @@ fn to_meta_key<S: Codec>(suffix: &[u8], data: &S) -> Vec<u8> {
 	buffer
 }
 
+#[derive(MallocSizeOf)]
 struct StateDbSync<BlockHash: Hash, Key: Hash> {
 	mode: PruningMode,
 	non_canonical: NonCanonicalOverlay<BlockHash, Key>,
@@ -401,6 +404,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 
 /// State DB maintenance. See module description.
 /// Can be shared across threads.
+#[derive(MallocSizeOf)]
 pub struct StateDb<BlockHash: Hash, Key: Hash> {
 	db: RwLock<StateDbSync<BlockHash, Key>>,
 }

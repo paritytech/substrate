@@ -26,11 +26,15 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use codec::{Encode, Decode};
 use crate::{CommitSet, Error, MetaDb, to_meta_key, Hash};
 use log::{trace, warn};
+use parity_util_mem::MallocSizeOf;
 
 const LAST_PRUNED: &[u8] = b"last_pruned";
 const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
 
-/// See module documentation.
+/// Reference window.
+///
+/// For more detailed description, see module-level documentation.
+#[derive(MallocSizeOf)]
 pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 	/// A queue of keys that should be deleted for each block in the pruning window.
 	death_rows: VecDeque<DeathRow<BlockHash, Key>>,
@@ -46,7 +50,7 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 	pending_prunings: usize,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, MallocSizeOf)]
 struct DeathRow<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	journal_key: Vec<u8>,
