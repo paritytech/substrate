@@ -117,7 +117,7 @@ pub trait AppVerify {
 }
 
 impl<
-	S: Verify<Signer=<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic> + From<T>,
+	S: Verify<Signer = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic> + From<T>,
 	T: sp_application_crypto::Wraps<Inner=S> + sp_application_crypto::AppKey + sp_application_crypto::AppSignature +
 		AsRef<S> + AsMut<S> + From<S>,
 > AppVerify for T where
