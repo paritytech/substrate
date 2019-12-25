@@ -44,7 +44,7 @@ use sp_consensus::{
 	BlockOrigin, Error as ConsensusError, SelectChain, SlotData, BlockCheckParams, ImportResult
 };
 use sp_consensus::import_queue::{
-	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
+	Verifier, BasicQueue, BoxJustificationImport, BoxFinalityProofImport,
 };
 use sc_client_api::backend::AuxStore;
 use sc_client::BlockOf;
@@ -730,7 +730,8 @@ impl<Block: BlockT, C, I: Clone + BlockImport<Block>, P> Clone for AuraBlockImpo
 }
 
 impl<Block: BlockT, C, I: BlockImport<Block>, P> AuraBlockImport<Block, C, I, P> {
-	fn new(
+	/// New aura block import.
+	pub fn new(
 		inner: I,
 		client: Arc<C>,
 	) -> Self {
@@ -805,7 +806,6 @@ pub fn import_queue<B, I, C, P, T>(
 	transaction_pool: Option<Arc<T>>,
 ) -> Result<AuraImportQueue<B>, sp_consensus::Error> where
 	B: BlockT,
-	C: 'static + ProvideRuntimeApi + BlockOf + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,
 	C: 'static + ProvideRuntimeApi + BlockOf + ProvideCache<B> + Send + Sync + AuxStore + HeaderBackend<B>,
 	I: BlockImport<B,Error=ConsensusError> + Send + Sync + 'static,
@@ -826,7 +826,7 @@ pub fn import_queue<B, I, C, P, T>(
 	};
 	Ok(BasicQueue::new(
 		verifier,
-		Box::new(block_impor),
+		Box::new(block_import),
 		justification_import,
 		finality_proof_import,
 	))
