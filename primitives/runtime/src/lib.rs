@@ -310,7 +310,7 @@ impl Verify for MultiSignature {
 			(MultiSignature::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
 			(MultiSignature::Ecdsa(ref sig), who) => {
 				let m = sp_io::hashing::blake2_256(msg.get());
-				match sp_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
+				match sp_io::crypto::secp256k1_ecdsa_recover(sig.as_ref(), &m) {
 					Ok(pubkey) =>
 						&sp_io::hashing::blake2_256(pubkey.as_ref())
 							== <dyn AsRef<[u8; 32]>>::as_ref(who),
