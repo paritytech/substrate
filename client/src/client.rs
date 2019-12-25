@@ -1171,7 +1171,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			None => Ok(BlockStatus::Unknown),
 		}
 	}
-
+	/// Chain info
 	pub fn chain_info(&self) -> sp_blockchain::Info<Block> {
 		self.backend.blockchain().info()
 	}

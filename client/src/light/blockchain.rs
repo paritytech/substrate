@@ -208,6 +208,13 @@ pub mod tests {
 		pub aux_store: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
 	}
 
+	impl parity_util_mem::MallocSizeOf for DummyStorage {
+		fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+			// TODO: use less verbose statement to not track memory
+			0
+		}
+	}
+
 	impl DummyStorage {
 		pub fn new() -> Self {
 			DummyStorage {

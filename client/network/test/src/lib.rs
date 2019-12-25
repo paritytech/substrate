@@ -28,10 +28,10 @@ use libp2p::build_multiaddr;
 use log::trace;
 use sc_network::FinalityProofProvider;
 use sp_blockchain::{
-	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId},
+	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId}, Info as ChainInfo,
 };
 use sc_client_api::{
-	ClientInfo, BlockchainEvents, BlockImportNotification,
+	BlockchainEvents, BlockImportNotification,
 	FinalityNotifications, ImportNotifications,
 	FinalityNotification,
 	backend::{AuxStore, Backend, Finalizer}
@@ -161,10 +161,10 @@ impl PeersClient {
 		}
 	}
 
-	pub fn info(&self) -> ClientInfo<Block> {
+	pub fn chain_info(&self) -> ChainInfo<Block> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.info(),
-			PeersClient::Light(ref client, ref _backend) => client.info(),
+			PeersClient::Full(ref client, ref _backend) => client.chain_info(),
+			PeersClient::Light(ref client, ref _backend) => client.chain_info(),
 		}
 	}
 

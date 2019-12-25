@@ -6641,6 +6641,7 @@ name = "sp-test-primitives"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-util-mem 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-application-crypto 2.0.0",
  "sp-core 2.0.0",

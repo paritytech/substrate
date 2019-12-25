@@ -423,13 +423,13 @@ fn can_sync_small_non_best_forks() {
 
 	// small fork + reorg on peer 1.
 	net.peer(0).push_blocks_at(BlockId::Number(30), 2, true);
-	let small_hash = net.peer(0).client().info().chain.best_hash;
+	let small_hash = net.peer(0).client().chain_info().best_hash;
 	net.peer(0).push_blocks_at(BlockId::Number(30), 10, false);
-	assert_eq!(net.peer(0).client().info().chain.best_number, 40);
+	assert_eq!(net.peer(0).client().chain_info().best_number, 40);
 
 	// peer 1 only ever had the long fork.
 	net.peer(1).push_blocks(10, false);
-	assert_eq!(net.peer(1).client().info().chain.best_number, 40);
+	assert_eq!(net.peer(1).client().chain_info().best_number, 40);
 
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none());
@@ -446,7 +446,7 @@ fn can_sync_small_non_best_forks() {
 
 	// synchronization: 0 synced to longer chain and 1 didn't sync to small chain.
 
-	assert_eq!(net.peer(0).client().info().chain.best_number, 40);
+	assert_eq!(net.peer(0).client().chain_info().best_number, 40);
 
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(!net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
@@ -555,14 +555,14 @@ fn can_sync_explicit_forks() {
 
 	// small fork + reorg on peer 1.
 	net.peer(0).push_blocks_at(BlockId::Number(30), 2, true);
-	let small_hash = net.peer(0).client().info().chain.best_hash;
-	let small_number = net.peer(0).client().info().chain.best_number;
+	let small_hash = net.peer(0).client().chain_info().best_hash;
+	let small_number = net.peer(0).client().chain_info().best_number;
 	net.peer(0).push_blocks_at(BlockId::Number(30), 10, false);
-	assert_eq!(net.peer(0).client().info().chain.best_number, 40);
+	assert_eq!(net.peer(0).client().chain_info().best_number, 40);
 
 	// peer 1 only ever had the long fork.
 	net.peer(1).push_blocks(10, false);
-	assert_eq!(net.peer(1).client().info().chain.best_number, 40);
+	assert_eq!(net.peer(1).client().chain_info().best_number, 40);
 
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none());
@@ -579,7 +579,7 @@ fn can_sync_explicit_forks() {
 
 	// synchronization: 0 synced to longer chain and 1 didn't sync to small chain.
 
-	assert_eq!(net.peer(0).client().info().chain.best_number, 40);
+	assert_eq!(net.peer(0).client().chain_info().best_number, 40);
 
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(!net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
@@ -612,8 +612,8 @@ fn syncs_header_only_forks() {
 	net.peer(1).push_blocks(2, false);
 
 	net.peer(0).push_blocks(2, true);
-	let small_hash = net.peer(0).client().info().chain.best_hash;
-	let small_number = net.peer(0).client().info().chain.best_number;
+	let small_hash = net.peer(0).client().chain_info().best_hash;
+	let small_number = net.peer(0).client().chain_info().best_number;
 	net.peer(1).push_blocks(4, false);
 
 	net.block_until_sync(&mut runtime);

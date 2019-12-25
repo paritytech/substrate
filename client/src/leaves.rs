@@ -22,7 +22,6 @@ use kvdb::{KeyValueDB, DBTransaction};
 use sp_runtime::traits::SimpleArithmetic;
 use codec::{Encode, Decode};
 use sp_blockchain::{Error, Result};
-use parity_util_mem::MallocSizeOf;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LeafSetItem<H, N> {

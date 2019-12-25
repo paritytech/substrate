@@ -217,8 +217,15 @@ impl<'a> Deserialize<'a> for Header {
 }
 
 /// An opaque extrinsic wrapper type.
-#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, MallocSizeOf)]
+#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
 pub struct ExtrinsicWrapper<Xt>(Xt);
+
+impl<Xt> MallocSizeOf for ExtrinsicWrapper<Xt> {
+	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		// TODO: use less verbose statement to not track memory
+		0
+	}
+}
 
 impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
 	type Call = ();
@@ -294,8 +301,15 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 /// with index only used if sender is some.
 ///
 /// If sender is some then the transaction is signed otherwise it is unsigned.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, MallocSizeOf)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct TestXt<Call, Extra>(pub Option<(u64, Extra)>, pub Call);
+
+impl<Call, Extra> MallocSizeOf for TestXt<Call, Extra> {
+	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		// TODO: use less verbose statement to not track memory
+		0
+	}
+}
 
 impl<Call, Extra> Serialize for TestXt<Call, Extra> where TestXt<Call, Extra>: Encode {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: Serializer {
