@@ -20,6 +20,8 @@ use sp_blockchain::Result as ClientResult;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use codec::{Encode, Decode};
 
+use parity_util_mem::MallocSizeOf;
+
 use crate::cache::{CacheItemT, ComplexBlockId};
 use crate::cache::list_storage::{Storage};
 
@@ -31,6 +33,12 @@ pub struct Entry<Block: BlockT, T> {
 	pub valid_from: ComplexBlockId<Block>,
 	/// Value stored at this entry.
 	pub value: T,
+}
+
+impl<B: BlockT, T: MallocSizeOf> parity_util_mem::MallocSizeOf for Entry<B, T> {
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.valid_from.size_of(ops) + self.value.size_of(ops)
+	}
 }
 
 /// Internal representation of the single list-based cache entry. The entry points to the

@@ -43,6 +43,8 @@ use std::collections::{BTreeSet, BTreeMap};
 
 use log::warn;
 
+use parity_util_mem::MallocSizeOf;
+
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_runtime::traits::{
 	Block as BlockT, NumberFor, Zero, Bounded, CheckedSub
@@ -75,6 +77,12 @@ pub struct ListCache<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> {
 	unfinalized: Vec<Fork<Block, T>>,
 }
 
+impl<B: BlockT, T: MallocSizeOf + CacheItemT, S: MallocSizeOf + Storage<B, T>> parity_util_mem::MallocSizeOf for ListCache<B, T, S> {
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.storage.size_of(ops) + self.unfinalized.size_of(ops)
+	}
+}
+
 /// All possible list cache operations that could be performed after transaction is committed.
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -105,6 +113,12 @@ pub struct Fork<Block: BlockT, T> {
 	best_block: Option<ComplexBlockId<Block>>,
 	/// The head entry of this fork.
 	head: Entry<Block, T>,
+}
+
+impl<B: BlockT, T: MallocSizeOf> parity_util_mem::MallocSizeOf for Fork<B, T> {
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.best_block.size_of(ops) + self.head.size_of(ops)
+	}
 }
 
 /// Outcome of Fork::try_append_or_fork.

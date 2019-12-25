@@ -41,7 +41,7 @@ pub struct Metadata<Block: BlockT> {
 }
 
 /// Readonly list-cache storage trait.
-pub trait Storage<Block: BlockT, T: CacheItemT> {
+pub trait Storage<Block: BlockT, T: CacheItemT> : parity_util_mem::MallocSizeOf {
 	/// Reads hash of the block at given number.
 	fn read_id(&self, at: NumberFor<Block>) -> ClientResult<Option<Block::Hash>>;
 
@@ -99,6 +99,12 @@ pub struct DbStorage {
 	meta_key: Vec<u8>,
 	db: Arc<dyn KeyValueDB>,
 	columns: DbColumns,
+}
+
+impl parity_util_mem::MallocSizeOf for DbStorage {
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.db.size_of(ops)
+	}
 }
 
 impl DbStorage {
@@ -257,6 +263,9 @@ pub mod tests {
 	use std::collections::{HashMap, HashSet};
 	use super::*;
 
+	use parity_util_mem::MallocSizeOf;
+
+	#[derive(MallocSizeOf)]
 	pub struct FaultyStorage;
 
 	impl<Block: BlockT, T: CacheItemT> Storage<Block, T> for FaultyStorage {
@@ -282,6 +291,12 @@ pub mod tests {
 		ids: HashMap<NumberFor<Block>, Block::Hash>,
 		headers: HashMap<Block::Hash, Block::Header>,
 		entries: HashMap<Block::Hash, StorageEntry<Block, T>>,
+	}
+
+	impl<B: BlockT, T: CacheItemT> MallocSizeOf for DummyStorage<B, T> {
+		fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+			0
+		}
 	}
 
 	impl<Block: BlockT, T: CacheItemT> DummyStorage<Block, T> {

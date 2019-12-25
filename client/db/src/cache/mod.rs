@@ -17,6 +17,7 @@
 //! DB-backed cache of blockchain data.
 
 use std::{sync::Arc, collections::HashMap};
+use parity_util_mem::MallocSizeOf;
 use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
@@ -49,7 +50,7 @@ pub enum EntryType {
 }
 
 /// Block identifier that holds both hash and number.
-#[derive(Clone, Debug, Encode, Decode, PartialEq)]
+#[derive(Clone, Debug, Encode, Decode, PartialEq, MallocSizeOf)]
 pub struct ComplexBlockId<Block: BlockT> {
 	hash: Block::Hash,
 	number: NumberFor<Block>,
@@ -82,6 +83,13 @@ pub struct DbCache<Block: BlockT> {
 	authorities_column: u32,
 	genesis_hash: Block::Hash,
 	best_finalized_block: ComplexBlockId<Block>,
+}
+
+impl<B: BlockT> MallocSizeOf for DbCache<B> {
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.cache_at.size_of(ops) +
+			self.db.size_of(ops)
+	}
 }
 
 impl<Block: BlockT> DbCache<Block> {
@@ -292,6 +300,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 }
 
 /// Synchronous implementation of database-backed blockchain data cache.
+#[derive(MallocSizeOf)]
 pub struct DbCacheSync<Block: BlockT>(pub RwLock<DbCache<Block>>);
 
 impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {

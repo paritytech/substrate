@@ -30,7 +30,7 @@ use sc_client::cht;
 use sp_blockchain::{
 	CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache,
 	Error as ClientError, Result as ClientResult,
-	HeaderBackend as BlockchainHeaderBackend, 
+	HeaderBackend as BlockchainHeaderBackend,
 	well_known_cache_keys,
 };
 use sc_client::light::blockchain::Storage as LightBlockchainStorage;
@@ -64,6 +64,12 @@ pub struct LightStorage<Block: BlockT> {
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	cache: Arc<DbCacheSync<Block>>,
 	header_metadata_cache: HeaderMetadataCache<Block>,
+}
+
+impl<B: BlockT> parity_util_mem::MallocSizeOf for LightStorage<B> {
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		self.db.size_of(ops) + self.cache.size_of(ops) + self.header_metadata_cache.size_of(ops)
+	}
 }
 
 impl<Block> LightStorage<Block>
@@ -555,13 +561,6 @@ fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 	let mut key = [cht_type; 5];
 	key[1..].copy_from_slice(&utils::number_index_key(block)?);
 	Ok(key)
-}
-
-// TODO: this is a stub
-impl<Block: BlockT> parity_util_mem::MallocSizeOf for LightStorage<Block> {
-	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		0
-	}
 }
 
 #[cfg(test)]
