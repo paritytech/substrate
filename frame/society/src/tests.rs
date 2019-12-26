@@ -84,14 +84,9 @@ fn bidding_works() {
 		// A member votes for these candidates to join the society
 		assert_ok!(Society::vote(Origin::signed(10), 30, true));
 		assert_ok!(Society::vote(Origin::signed(10), 40, true));
-		assert_eq!(<Votes<Test>>::get(30, 10), Some(Vote::Approve));
-		assert_eq!(<Votes<Test>>::get(40, 10), Some(Vote::Approve));
 		run_to_block(8);
 		// Candidates become members after a period rotation
 		assert_eq!(Society::members(), vec![10, 30, 40]);
-		// Votes are cleaned up
-		assert_eq!(<Votes<Test>>::get(30, 10), None);
-		assert_eq!(<Votes<Test>>::get(40, 10), None);
 		// Pot is increased by 1000, but pays out 700 to the members
 		assert_eq!(Balances::free_balance(Society::account_id()), 9_300);
 		assert_eq!(Society::pot(), 1_300);
@@ -654,5 +649,32 @@ fn vouching_handles_removed_member_with_candidate() {
 		// Payout does not go to removed member
 		assert_eq!(<Payouts<Test>>::get(20), vec![]);
 		assert_eq!(<Payouts<Test>>::get(30), vec![(9, 1000)]);
+	});
+}
+
+#[test]
+fn votes_are_working() {
+	EnvBuilder::new().execute(|| {
+		// Users make bids of various amounts
+		assert_ok!(Society::bid(Origin::signed(50), 500));
+		assert_ok!(Society::bid(Origin::signed(40), 400));
+		assert_ok!(Society::bid(Origin::signed(30), 300));
+		// Rotate period
+		run_to_block(4);
+		// A member votes for these candidates to join the society
+		assert_ok!(Society::vote(Origin::signed(10), 30, true));
+		assert_ok!(Society::vote(Origin::signed(10), 40, true));
+		// You cannot vote for a non-candidate
+		assert_noop!(Society::vote(Origin::signed(10), 50, true), Error::<Test, _>::NotCandidate);
+		// Votes are stored
+		assert_eq!(<Votes<Test>>::get(30, 10), Some(Vote::Approve));
+		assert_eq!(<Votes<Test>>::get(40, 10), Some(Vote::Approve));
+		assert_eq!(<Votes<Test>>::get(50, 10), None);
+		run_to_block(8);
+		// Candidates become members after a period rotation
+		assert_eq!(Society::members(), vec![10, 30, 40]);
+		// Votes are cleaned up
+		assert_eq!(<Votes<Test>>::get(30, 10), None);
+		assert_eq!(<Votes<Test>>::get(40, 10), None);
 	});
 }

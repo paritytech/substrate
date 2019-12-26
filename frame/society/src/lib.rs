@@ -598,24 +598,28 @@ decl_module! {
 		///
 		/// Parameters:
 		///
-		/// - `candidate`: Position in the `Bids` vector of the bid who should be unvouched.
+		/// - `candidate`: The candidate that the member would like to bid on.
 		///
 		/// # <weight>
-		/// - One storage read to check the signer is a vouching member.
-		/// - One storage read and write to retrieve and update the bids.
-		/// - A vector lookup to check if the user is at the specified position.
-		/// - One vouching storage removal.
+		/// - One storage read and O(log M) search to check user is a member.
+		/// - One storage read to lookup candidate index.
+		/// - One storage read and O(C) search to check that user is a candidate.
+		/// - One storage write to add vote to votes.
 		/// - One event.
 		/// # </weight>
 		///
 
-		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
 		pub fn vote(origin, candidate: <T::Lookup as StaticLookup>::Source, approve: bool) {
 			let voter = ensure_signed(origin)?;
 			ensure!(Self::is_member(&voter), Error::<T, I>::NotMember);
 			let candidate = T::Lookup::lookup(candidate)?;
+			ensure!(Self::is_candidate(&candidate), Error::<T, I>::NotCandidate);
+
 			let vote = if approve { Vote::Approve } else { Vote::Reject };
-			<Votes<T, I>>::insert(candidate, voter, vote);
+			<Votes<T, I>>::insert(&candidate, &voter, vote);
+
+			Self::deposit_event(RawEvent::Vote(candidate, voter, approve));
 		}
 
 		/// As a member, vote on the defender.
@@ -784,6 +788,8 @@ decl_error! {
 		AlreadyBid,
 		/// User is already a candidate
 		AlreadyCandidate,
+		/// User is not a candidate
+		NotCandidate,
 	}
 }
 
@@ -818,6 +824,8 @@ decl_event! {
 		MemberSuspended(AccountId),
 		/// A member has been challenged
 		Challenged(AccountId),
+		/// A vote has been placed (candidate, voter, vote)
+		Vote(AccountId, AccountId, bool),
 	}
 }
 
