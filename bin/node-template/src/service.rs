@@ -57,10 +57,10 @@ macro_rules! new_full_start {
 					)?;
 
 				let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
-					grandpa_block_import, client.clone(),
+					grandpa_block_import.clone(), client.clone(),
 				);
 
-				let import_queue = sc_consensus_aura::import_queue::<_, _, AuraPair, _>(
+				let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
 					sc_consensus_aura::SlotDuration::get_or_compute(&*client)?,
 					aura_block_import,
 					Some(Box::new(grandpa_block_import.clone())),
@@ -224,7 +224,7 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 			let finality_proof_request_builder =
 				finality_proof_import.create_finality_proof_request_builder();
 
-			let import_queue = sc_consensus_aura::import_queue::<_, _, AuraPair, ()>(
+			let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, ()>(
 				sc_consensus_aura::SlotDuration::get_or_compute(&*client)?,
 				grandpa_block_import,
 				None,
