@@ -256,7 +256,7 @@ fn main() {
 fn get_uri(match_name: &str, matches: &ArgMatches) -> String {
 	if let Some(uri) = matches.value_of(match_name) {
 		let file = PathBuf::from(uri);
-		if file.is_file() && file.exists() {
+		if file.is_file() {
 			fs::read_to_string(uri)
 				.expect(&format!("Failed to read `URI` file: {}", uri))
 				.trim_end()
@@ -599,21 +599,16 @@ mod tests {
 		let public_key = CryptoType::public_from_pair(&pair);
 		let public_key = format_public_key::<CryptoType>(public_key);
 		let seed = format_seed::<CryptoType>(seed);
-
-		// Sign a message using previous seed.
-		let arg_vec = vec!["subkey", "sign", &seed[..]];
-
-		let matches = app.get_matches_from(arg_vec);
-		let matches = matches.subcommand().1.unwrap();
 		let message = "Blah Blah\n".as_bytes().to_vec();
-		let signature = do_sign::<CryptoType>(matches, message.clone(), password);
+
+		let signature = do_sign::<CryptoType>(&seed, message.clone(), password);
 
 		// Verify the previous signature.
 		let arg_vec = vec!["subkey", "verify", &signature[..], &public_key[..]];
 
 		let matches = get_app(&usage).get_matches_from(arg_vec);
 		let matches = matches.subcommand().1.unwrap();
-		assert!(do_verify::<CryptoType>(matches, message));
+		assert!(do_verify::<CryptoType>(matches, &public_key, message));
 	}
 
 	#[test]
