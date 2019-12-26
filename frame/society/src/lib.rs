@@ -237,6 +237,7 @@ use sp_runtime::{Percent, ModuleId, RuntimeDebug,
 	}
 };
 use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
+use frame_support::weights::SimpleDispatchInfo;
 use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers,
 	ExistenceRequirement::{KeepAlive, AllowDeath},
@@ -449,15 +450,40 @@ decl_module! {
 		// Used for handling module events.
 		fn deposit_event() = default;
 
-		/// Make a bid for entry.
+		/// A user outside of the society can make a bid for entry.
 		///
+		/// Payment: `CandidateDeposit` will be reserved for making a bid. It is returned
+		/// when the bid becomes a member, or if the bid calls `unbid`.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Parameters:
+		///
+		/// - `value`: A one time payment the bid would like to receive when joining the society.
+		///
+		/// # <weight>
+		/// - Storage Reads:
+		/// 	- One storage read to check for suspended candidate.
+		/// 	- One storage read to check for suspended member.
+		/// 	- One storage read to retrieve all current bids.
+		/// 	- One storage read to retrieve all current candidates.
+		/// 	- One storage read to retrieve all members.
+		/// - O(B + C + log M) to check user is not already a part of society.
+		/// - External Module Operations:
+		/// 	- One balance reserve operation.
+		/// - Write Operations:
+		/// 	- 
+		/// - One event.
+		/// # </weight>
+
 		/// Alters Bids (O(N) decode+encode, O(logN) search, <=2*O(N) write).
 		pub fn bid(origin, value: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(!<SuspendedCandidates<T, I>>::exists(&who), Error::<T, I>::Suspended);
 			ensure!(!<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::Suspended);
-			ensure!(!Self::is_member(&who), Error::<T, I>::AlreadyMember);
 			ensure!(!Self::is_bid(&who), Error::<T, I>::AlreadyBid);
+			ensure!(!Self::is_candidate(&who), Error::<T, I>::AlreadyCandidate);
+			ensure!(!Self::is_member(&who), Error::<T, I>::AlreadyMember);
 
 			let deposit = T::CandidateDeposit::get();
 			T::Currency::reserve(&who, deposit)?;
@@ -467,6 +493,27 @@ decl_module! {
 			Ok(())
 		}
 
+		/// A bid can remove their bid for entry into society.
+		///
+		/// By doing so, they will have their candidate deposit returned or
+		/// they will unvouch their voucher.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Parameters:
+		///
+		/// - `pos`: Position in the `Bids` vector of the bid who wants to unbid.
+		///
+		/// # <weight>
+		/// - One storage read and write to retrieve and update the bids.
+		/// - A vector lookup to check if the user is at the specified position.
+		/// - Up to one unreserve balance action.
+		/// - Up to vouching storage removal.
+		/// - One event.
+		/// # </weight>
+		///
+
+		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
 		pub fn unbid(origin, pos: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -495,9 +542,15 @@ decl_module! {
 		/// As a member, vouch for someone else.
 		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
+			// Check signer can vouch.
 			ensure!(Self::is_member(&voucher), Error::<T, I>::NotMember);
-			ensure!(!Self::is_bid(&who), Error::<T, I>::AlreadyBid);
 			ensure!(!<Vouching<T, I>>::exists(&voucher), Error::<T, I>::AlreadyVouching);
+			// Check user is not already part of society.
+			ensure!(!<SuspendedCandidates<T, I>>::exists(&who), Error::<T, I>::Suspended);
+			ensure!(!<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::Suspended);
+			ensure!(!Self::is_bid(&who), Error::<T, I>::AlreadyBid);
+			ensure!(!Self::is_candidate(&who), Error::<T, I>::AlreadyCandidate);
+			ensure!(!Self::is_member(&who), Error::<T, I>::AlreadyMember);
 
 			<Vouching<T, I>>::insert(&voucher, VouchingStatus::Vouching);
 			Self::put_bid(who.clone(), value.clone(), BidKind::Vouch(voucher.clone(), tip));
@@ -506,6 +559,23 @@ decl_module! {
 		}
 
 		/// As a vouching member, unvouch. This only works while vouched user is still a bid.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Parameters:
+		///
+		/// - `pos`: Position in the `Bids` vector of the bid who should be unvouched.
+		///
+		/// # <weight>
+		/// - One storage read to check the signer is a vouching member.
+		/// - One storage read and write to retrieve and update the bids.
+		/// - A vector lookup to check if the user is at the specified position.
+		/// - One vouching storage removal.
+		/// - One event.
+		/// # </weight>
+		///
+
+		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
 		pub fn unvouch(origin, pos: u32) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			ensure!(Self::vouching(&voucher) == Some(VouchingStatus::Vouching), Error::<T, I>::NotVouching);
@@ -525,6 +595,21 @@ decl_module! {
 		}
 
 		/// As a member, vote on an candidate.
+		///
+		/// Parameters:
+		///
+		/// - `candidate`: Position in the `Bids` vector of the bid who should be unvouched.
+		///
+		/// # <weight>
+		/// - One storage read to check the signer is a vouching member.
+		/// - One storage read and write to retrieve and update the bids.
+		/// - A vector lookup to check if the user is at the specified position.
+		/// - One vouching storage removal.
+		/// - One event.
+		/// # </weight>
+		///
+
+		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
 		pub fn vote(origin, candidate: <T::Lookup as StaticLookup>::Source, approve: bool) {
 			let voter = ensure_signed(origin)?;
 			ensure!(Self::is_member(&voter), Error::<T, I>::NotMember);
@@ -697,6 +782,8 @@ decl_error! {
 		Head,
 		/// User has already made a bid
 		AlreadyBid,
+		/// User is already a candidate
+		AlreadyCandidate,
 	}
 }
 
@@ -778,6 +865,15 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			.is_some()
 	}
 
+	/// Check a user is a candidate.
+	fn is_candidate(m: &T::AccountId) -> bool {
+		// Candidates are ordered by `value`, so we cannot binary search for a user.
+		<Candidates<T, I>>::get()
+			.iter()
+			.find(|x| x.1 == *m)
+			.is_some()
+	}
+
 	/// Check a user is a member.
 	fn is_member(m: &T::AccountId) -> bool {
 		<Members<T, I>>::get()
@@ -850,7 +946,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				// Creates a vector of (vote, member) for the given candidate
 				// and tallies total number of approve votes for that candidate.
 				let votes = members.iter()
-					.filter_map(|m| <Votes<T, I>>::get(&candidate, m).map(|v| (v, m)))
+					.filter_map(|m| <Votes<T, I>>::take(&candidate, m).map(|v| (v, m)))
 					.inspect(|&(v, _)| if v == Vote::Approve { approval_count += 1 })
 					.collect::<Vec<_>>();
 				

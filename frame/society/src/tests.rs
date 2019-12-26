@@ -589,7 +589,8 @@ fn user_cannot_bid_twice() {
 		assert_ok!(Society::vouch(Origin::signed(10), 30, 100, 100));
 		assert_noop!(Society::bid(Origin::signed(30), 100), Error::<Test, _>::AlreadyBid);
 		// Cannot vouch when already bid
-		assert_noop!(Society::vouch(Origin::signed(10), 20, 100, 100), Error::<Test, _>::AlreadyBid);
+		Society::add_member(&50);
+		assert_noop!(Society::vouch(Origin::signed(50), 20, 100, 100), Error::<Test, _>::AlreadyBid);
 	});
 }
 
