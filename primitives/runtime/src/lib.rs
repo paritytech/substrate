@@ -310,7 +310,7 @@ impl Verify for MultiSignature {
 			(MultiSignature::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
 			(MultiSignature::Ecdsa(ref sig), who) => {
 				let m = sp_io::hashing::blake2_256(msg.get());
-				match sp_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
+				match sp_io::crypto::secp256k1_ecdsa_recover(sig.as_ref(), &m) {
 					Ok(pubkey) =>
 						&sp_io::hashing::blake2_256(pubkey.as_ref())
 							== <dyn AsRef<[u8; 32]>>::as_ref(who),
@@ -688,8 +688,9 @@ pub fn print(print: impl traits::Printable) {
 
 #[cfg(test)]
 mod tests {
-	use crate::DispatchError;
+	use super::*;
 	use codec::{Encode, Decode};
+	use sp_core::crypto::Pair;
 
 	#[test]
 	fn opaque_extrinsic_serialization() {
@@ -715,5 +716,18 @@ mod tests {
 				message: None,
 			},
 		);
+	}
+
+	#[test]
+	fn multi_signature_ecdsa_verify_works() {
+		let msg = &b"test-message"[..];
+		let (pair, _) = ecdsa::Pair::generate();
+
+		let signature = pair.sign(&msg);
+		assert!(ecdsa::Pair::verify(&signature, msg, &pair.public()));
+
+		let multi_sig = MultiSignature::from(signature);
+		let multi_signer = MultiSigner::from(pair.public());
+		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
 	}
 }
