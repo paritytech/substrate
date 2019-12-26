@@ -84,9 +84,14 @@ fn bidding_works() {
 		// A member votes for these candidates to join the society
 		assert_ok!(Society::vote(Origin::signed(10), 30, true));
 		assert_ok!(Society::vote(Origin::signed(10), 40, true));
+		assert_eq!(<Votes<Test>>::get(30, 10), Some(Vote::Approve));
+		assert_eq!(<Votes<Test>>::get(40, 10), Some(Vote::Approve));
 		run_to_block(8);
 		// Candidates become members after a period rotation
 		assert_eq!(Society::members(), vec![10, 30, 40]);
+		// Votes are cleaned up
+		assert_eq!(<Votes<Test>>::get(30, 10), None);
+		assert_eq!(<Votes<Test>>::get(40, 10), None);
 		// Pot is increased by 1000, but pays out 700 to the members
 		assert_eq!(Balances::free_balance(Society::account_id()), 9_300);
 		assert_eq!(Society::pot(), 1_300);
@@ -589,7 +594,7 @@ fn user_cannot_bid_twice() {
 		assert_ok!(Society::vouch(Origin::signed(10), 30, 100, 100));
 		assert_noop!(Society::bid(Origin::signed(30), 100), Error::<Test, _>::AlreadyBid);
 		// Cannot vouch when already bid
-		Society::add_member(&50);
+		assert_ok!(Society::add_member(&50));
 		assert_noop!(Society::vouch(Origin::signed(50), 20, 100, 100), Error::<Test, _>::AlreadyBid);
 	});
 }
