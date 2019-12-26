@@ -623,11 +623,27 @@ decl_module! {
 		}
 
 		/// As a member, vote on the defender.
+		///
+		/// Parameters:
+		///
+		/// - `candidate`: The candidate that the member would like to bid on.
+		///
+		/// # <weight>
+		/// - One storage read and O(log M) search to check user is a member.
+		/// - One storage write to add vote to votes.
+		/// - One event.
+		/// # </weight>
+		///
+
+		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
 		pub fn defender_vote(origin, approve: bool) {
 			let voter = ensure_signed(origin)?;
 			ensure!(Self::is_member(&voter), Error::<T, I>::NotMember);
+
 			let vote = if approve { Vote::Approve } else { Vote::Reject };
-			<DefenderVotes<T, I>>::insert(voter, vote);
+			<DefenderVotes<T, I>>::insert(&voter, vote);
+
+			Self::deposit_event(RawEvent::DefenderVote(voter, approve));
 		}
 
 		/// Transfer the first matured payment and remove it from the records.
@@ -826,6 +842,8 @@ decl_event! {
 		Challenged(AccountId),
 		/// A vote has been placed (candidate, voter, vote)
 		Vote(AccountId, AccountId, bool),
+		/// A vote has been placed for a defending member (voter, vote)
+		DefenderVote(AccountId, bool),
 	}
 }
 
