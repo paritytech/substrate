@@ -592,3 +592,61 @@ fn user_cannot_bid_twice() {
 		assert_noop!(Society::vouch(Origin::signed(10), 20, 100, 100), Error::<Test, _>::AlreadyBid);
 	});
 }
+
+#[test]
+fn vouching_handles_removed_member_with_bid() {
+	EnvBuilder::new().execute(|| {
+		// Add a member
+		assert_ok!(Society::add_member(&20));
+		// Have that member vouch for a user
+		assert_ok!(Society::vouch(Origin::signed(20), 30, 1000, 100));
+		// That user is now a bid and the member is vouching
+		assert_eq!(<Bids<Test>>::get(), vec![(1000, 30, BidKind::Vouch(20, 100))]);
+		assert_eq!(<Vouching<Test>>::get(20), Some(VouchingStatus::Vouching));
+		// Suspend that member
+		Society::suspend_member(&20);
+		assert_eq!(<SuspendedMembers<Test>>::get(20), Some(()));
+		// Nothing changes yet
+		assert_eq!(<Bids<Test>>::get(), vec![(1000, 30, BidKind::Vouch(20, 100))]);
+		assert_eq!(<Vouching<Test>>::get(20), Some(VouchingStatus::Vouching));
+		// Remove member
+		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 20, false));
+		// Bid is removed, vouching status is removed
+		assert_eq!(<Bids<Test>>::get(), vec![]);
+		assert_eq!(<Vouching<Test>>::get(20), None);
+	});
+}
+
+#[test]
+fn vouching_handles_removed_member_with_candidate() {
+	EnvBuilder::new().execute(|| {
+		// Add a member
+		assert_ok!(Society::add_member(&20));
+		// Have that member vouch for a user
+		assert_ok!(Society::vouch(Origin::signed(20), 30, 1000, 100));
+		// That user is now a bid and the member is vouching
+		assert_eq!(<Bids<Test>>::get(), vec![(1000, 30, BidKind::Vouch(20, 100))]);
+		assert_eq!(<Vouching<Test>>::get(20), Some(VouchingStatus::Vouching));
+		// Make that bid a candidate
+		run_to_block(4);
+		assert_eq!(Society::candidates(), vec![(1000, 30, BidKind::Vouch(20, 100))]);
+		// Suspend that member
+		Society::suspend_member(&20);
+		assert_eq!(<SuspendedMembers<Test>>::get(20), Some(()));
+		// Nothing changes yet
+		assert_eq!(Society::candidates(), vec![(1000, 30, BidKind::Vouch(20, 100))]);
+		assert_eq!(<Vouching<Test>>::get(20), Some(VouchingStatus::Vouching));
+		// Remove member
+		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 20, false));
+		// Vouching status is removed, but candidate is still in the queue
+		assert_eq!(<Vouching<Test>>::get(20), None);
+		assert_eq!(Society::candidates(), vec![(1000, 30, BidKind::Vouch(20, 100))]);
+		// Candidate wins
+		assert_ok!(Society::vote(Origin::signed(10), 30, true));
+		run_to_block(8);
+		assert_eq!(Society::members(), vec![10, 30]);
+		// Payout does not go to removed member
+		assert_eq!(<Payouts<Test>>::get(20), vec![]);
+		assert_eq!(<Payouts<Test>>::get(30), vec![(9, 1000)]);
+	});
+}

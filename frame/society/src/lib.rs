@@ -505,7 +505,7 @@ decl_module! {
 			Ok(())
 		}
 
-		/// As a vouching member, unvouch. This only works while candidate is still a bid.
+		/// As a vouching member, unvouch. This only works while vouched user is still a bid.
 		pub fn unvouch(origin, pos: u32) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			ensure!(Self::vouching(&voucher) == Some(VouchingStatus::Vouching), Error::<T, I>::NotVouching);
@@ -585,6 +585,19 @@ decl_module! {
 				// Cancel a suspended member's membership, remove their payouts.
 				<Payouts<T, I>>::remove(&who);
 				<Strikes<T, I>>::remove(&who);
+				// Remove their vouching status, potentially unbanning them in the future.
+				if <Vouching<T, I>>::take(&who) == Some(VouchingStatus::Vouching) {
+					// Try to remove their bid if they are vouching.
+					// If their vouch is already a candidate, do nothing.
+					<Bids<T, I>>::mutate(|bids|
+						// Try to find the matching bid
+						if let Some(pos) = bids.iter().position(|b| b.2.check_voucher(&who).is_ok()) {
+							// Remove the bid, and emit an event
+							let vouched = bids.remove(pos).1;
+							Self::deposit_event(RawEvent::Unvouch(vouched));
+						}
+					);
+				}
 			}
 
 			<SuspendedMembers<T, I>>::remove(&who);
@@ -1012,11 +1025,15 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				value
 			}
 			BidKind::Vouch(voucher, tip) => {
-				// In the case that a vouched-for bid is accepted we unset the
-				// vouching status and transfer the tip over to the voucher.
-				Self::bump_payout(&voucher, maturity, tip.min(value));
-				<Vouching<T, I>>::remove(&voucher);
-				value.saturating_sub(tip)
+				// Check that the voucher is still vouching, else some other logic may have removed their status.
+				if <Vouching<T, I>>::take(&voucher) == Some(VouchingStatus::Vouching) {
+					// In the case that a vouched-for bid is accepted we unset the
+					// vouching status and transfer the tip over to the voucher.
+					Self::bump_payout(&voucher, maturity, tip.min(value));
+					value.saturating_sub(tip)
+				} else {
+					value
+				}
 			}
 		};
 
