@@ -69,9 +69,10 @@ use sp_std::prelude::*;
 use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
-use sp_runtime::{DispatchResult, traits::{StaticLookup, EnsureOrigin, Zero}, RuntimeDebug};
+use sp_runtime::{DispatchResult, RuntimeDebug};
+use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput};
 use frame_support::{
-	decl_module, decl_event, decl_storage, ensure,
+	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
 	weights::SimpleDispatchInfo,
 };
@@ -246,6 +247,7 @@ pub enum IdentityField {
 	Email          = 0b0000000000000000000000000000000000000000000000000000000000010000,
 	PgpFingerprint = 0b0000000000000000000000000000000000000000000000000000000000100000,
 	Image          = 0b0000000000000000000000000000000000000000000000000000000001000000,
+	Twitter        = 0b0000000000000000000000000000000000000000000000000000000010000000,
 }
 
 /// Wrapper type for `BitFlags<IdentityField>` that implements `Codec`.
@@ -296,7 +298,7 @@ pub struct IdentityInfo {
 	/// Stored as UTF-8.
 	pub web: Data,
 
-	/// The Riot handle held by the controller of the account.
+	/// The Riot/Matrix handle held by the controller of the account.
 	///
 	/// Stored as UTF-8.
 	pub riot: Data,
@@ -312,6 +314,9 @@ pub struct IdentityInfo {
 	/// A graphic image representing the controller of the account. Should be a company,
 	/// organization or project logo or a headshot in the case of a human.
 	pub image: Data,
+
+	/// The Twitter identity. The leading `@` character may be elided.
+	pub twitter: Data,
 }
 
 /// Information concerning the identity of the controller of an account.
@@ -344,7 +349,7 @@ impl <
 }
 
 /// Information concerning a registrar.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug)]
 pub struct RegistrarInfo<
 	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
 	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
@@ -358,6 +363,16 @@ pub struct RegistrarInfo<
 	/// Relevant fields for this registrar. Registrar judgements are limited to attestations on
 	/// these fields.
 	pub fields: IdentityFields,
+}
+
+impl<
+	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
+	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
+> Decode for RegistrarInfo<Balance, AccountId> {
+	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
+		let (account, fee, fields) = Decode::decode(&mut AppendZerosInput::new(input))?;
+		Ok(Self { account, fee, fields })
+	}
 }
 
 decl_storage! {
@@ -401,9 +416,39 @@ decl_event!(
 	}
 );
 
+decl_error! {
+	/// Error for the identity module.
+	pub enum Error for Module<T: Trait> {
+		/// Too many subs-accounts.
+		TooManySubAccounts,
+		/// Account isn't found.
+		NotFound,
+		/// Account isn't named.
+		NotNamed,
+		/// Empty index.
+		EmptyIndex,
+		/// Fee is changed.
+		FeeChanged,
+		/// No identity found.
+		NoIdentity,
+		/// Sticky judgement.
+		StickyJudgement,
+		/// Judgement given.
+		JudgementGiven,
+		/// Invalid judgement.
+		InvalidJudgement,
+		/// The index is invalid.
+		InvalidIndex,
+		/// The target is invalid.
+		InvalidTarget,
+	}
+}
+
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		fn deposit_event() = default;
 
 		/// Add a registrar to the system.
@@ -497,8 +542,8 @@ decl_module! {
 		/// # </weight>
 		fn set_subs(origin, subs: Vec<(T::AccountId, Data)>) {
 			let sender = ensure_signed(origin)?;
-			ensure!(<IdentityOf<T>>::exists(&sender), "not found");
-			ensure!(subs.len() <= T::MaximumSubAccounts::get() as usize, "too many subs");
+			ensure!(<IdentityOf<T>>::exists(&sender), Error::<T>::NotFound);
+			ensure!(subs.len() <= T::MaximumSubAccounts::get() as usize, Error::<T>::TooManySubAccounts);
 
 			let (old_deposit, old_ids) = <SubsOf<T>>::get(&sender);
 			let new_deposit = T::SubAccountDeposit::get() * <BalanceOf<T>>::from(subs.len() as u32);
@@ -545,7 +590,7 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 
 			let (subs_deposit, sub_ids) = <SubsOf<T>>::take(&sender);
-			let deposit = <IdentityOf<T>>::take(&sender).ok_or("not named")?.total_deposit()
+			let deposit = <IdentityOf<T>>::take(&sender).ok_or(Error::<T>::NotNamed)?.total_deposit()
 				+ subs_deposit;
 			for sub in sub_ids.iter() {
 				<SuperOf<T>>::remove(sub);
@@ -587,14 +632,14 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			let registrars = <Registrars<T>>::get();
 			let registrar = registrars.get(reg_index as usize).and_then(Option::as_ref)
-				.ok_or("empty index")?;
-			ensure!(max_fee >= registrar.fee, "fee changed");
-			let mut id = <IdentityOf<T>>::get(&sender).ok_or("no identity")?;
+				.ok_or(Error::<T>::EmptyIndex)?;
+			ensure!(max_fee >= registrar.fee, Error::<T>::FeeChanged);
+			let mut id = <IdentityOf<T>>::get(&sender).ok_or(Error::<T>::NoIdentity)?;
 
 			let item = (reg_index, Judgement::FeePaid(registrar.fee));
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
 				Ok(i) => if id.judgements[i].1.is_sticky() {
-					Err("sticky judgement")?
+					Err(Error::<T>::StickyJudgement)?
 				} else {
 					id.judgements[i] = item
 				},
@@ -628,14 +673,14 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn cancel_request(origin, reg_index: RegistrarIndex) {
 			let sender = ensure_signed(origin)?;
-			let mut id = <IdentityOf<T>>::get(&sender).ok_or("no identity")?;
+			let mut id = <IdentityOf<T>>::get(&sender).ok_or(Error::<T>::NoIdentity)?;
 
 			let pos = id.judgements.binary_search_by_key(&reg_index, |x| x.0)
-				.map_err(|_| "not found")?;
+				.map_err(|_| Error::<T>::NotFound)?;
 			let fee = if let Judgement::FeePaid(fee) = id.judgements.remove(pos).1 {
 				fee
 			} else {
-				Err("judgement given")?
+				Err(Error::<T>::JudgementGiven)?
 			};
 
 			let _ = T::Currency::unreserve(&sender, fee);
@@ -667,7 +712,7 @@ decl_module! {
 				rs.get_mut(index as usize)
 					.and_then(|x| x.as_mut())
 					.and_then(|r| if r.account == who { r.fee = fee; Some(()) } else { None })
-					.ok_or_else(|| "invalid index".into())
+					.ok_or_else(|| Error::<T>::InvalidIndex.into())
 			)
 		}
 
@@ -694,7 +739,7 @@ decl_module! {
 				rs.get_mut(index as usize)
 					.and_then(|x| x.as_mut())
 					.and_then(|r| if r.account == who { r.account = new; Some(()) } else { None })
-					.ok_or_else(|| "invalid index".into())
+					.ok_or_else(|| Error::<T>::InvalidIndex.into())
 			)
 		}
 
@@ -721,7 +766,7 @@ decl_module! {
 				rs.get_mut(index as usize)
 					.and_then(|x| x.as_mut())
 					.and_then(|r| if r.account == who { r.fields = fields; Some(()) } else { None })
-					.ok_or_else(|| "invalid index".into())
+					.ok_or_else(|| Error::<T>::InvalidIndex.into())
 			)
 		}
 
@@ -752,13 +797,13 @@ decl_module! {
 		) {
 			let sender = ensure_signed(origin)?;
 			let target = T::Lookup::lookup(target)?;
-			ensure!(!judgement.has_deposit(), "invalid judgement");
+			ensure!(!judgement.has_deposit(), Error::<T>::InvalidJudgement);
 			<Registrars<T>>::get()
 				.get(reg_index as usize)
 				.and_then(Option::as_ref)
 				.and_then(|r| if r.account == sender { Some(r) } else { None })
-				.ok_or("invalid index")?;
-			let mut id = <IdentityOf<T>>::get(&target).ok_or("invalid target")?;
+				.ok_or(Error::<T>::InvalidIndex)?;
+			let mut id = <IdentityOf<T>>::get(&target).ok_or(Error::<T>::InvalidTarget)?;
 
 			let item = (reg_index, judgement);
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
@@ -803,7 +848,7 @@ decl_module! {
 			let target = T::Lookup::lookup(target)?;
 			// Grab their deposit (and check that they have one).
 			let (subs_deposit, sub_ids) = <SubsOf<T>>::take(&target);
-			let deposit = <IdentityOf<T>>::take(&target).ok_or("not named")?.total_deposit()
+			let deposit = <IdentityOf<T>>::take(&target).ok_or(Error::<T>::NotNamed)?.total_deposit()
 				+ subs_deposit;
 			for sub in sub_ids.iter() {
 				<SuperOf<T>>::remove(sub);
@@ -929,6 +974,16 @@ mod tests {
 	}
 
 	#[test]
+	fn trailing_zeros_decodes_into_default_data() {
+		let encoded = Data::Raw(b"Hello".to_vec()).encode();
+		assert!(<(Data, Data)>::decode(&mut &encoded[..]).is_err());
+		let input = &mut &encoded[..];
+		let (a, b) = <(Data, Data)>::decode(&mut AppendZerosInput::new(input)).unwrap();
+		assert_eq!(a, Data::Raw(b"Hello".to_vec()));
+		assert_eq!(b, Data::None);
+	}
+
+	#[test]
 	fn adding_registrar_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
@@ -951,7 +1006,7 @@ mod tests {
 			assert_eq!(Balances::free_balance(10), 90);
 			assert_ok!(Identity::clear_identity(Origin::signed(10)));
 			assert_eq!(Balances::free_balance(10), 100);
-			assert_noop!(Identity::clear_identity(Origin::signed(10)), "not named");
+			assert_noop!(Identity::clear_identity(Origin::signed(10)), Error::<Test>::NotNamed);
 		});
 	}
 
@@ -960,23 +1015,23 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
 				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable),
-				"invalid index"
+				Error::<Test>::InvalidIndex
 			);
 
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_noop!(
 				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable),
-				"invalid target"
+				Error::<Test>::InvalidTarget
 			);
 
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_noop!(
 				Identity::provide_judgement(Origin::signed(10), 0, 10, Judgement::Reasonable),
-				"invalid index"
+				Error::<Test>::InvalidIndex
 			);
 			assert_noop!(
 				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::FeePaid(1)),
-				"invalid judgement"
+				Error::<Test>::InvalidJudgement
 			);
 
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
@@ -1003,7 +1058,7 @@ mod tests {
 			assert_ok!(Identity::kill_identity(Origin::signed(2), 10));
 			assert_eq!(Identity::identity(10), None);
 			assert_eq!(Balances::free_balance(10), 90);
-			assert_noop!(Identity::kill_identity(Origin::signed(2), 10), "not named");
+			assert_noop!(Identity::kill_identity(Origin::signed(2), 10), Error::<Test>::NotNamed);
 		});
 	}
 
@@ -1011,7 +1066,7 @@ mod tests {
 	fn setting_subaccounts_should_work() {
 		new_test_ext().execute_with(|| {
 			let mut subs = vec![(20, Data::Raw(vec![40; 1]))];
-			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone()), "not found");
+			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone()), Error::<Test>::NotFound);
 
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
@@ -1044,7 +1099,7 @@ mod tests {
 			assert_eq!(Identity::super_of(40), None);
 
 			subs.push((20, Data::Raw(vec![40; 1])));
-			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone()), "too many subs");
+			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone()), Error::<Test>::TooManySubAccounts);
 		});
 	}
 
@@ -1075,15 +1130,15 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
-			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), "no identity");
+			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), Error::<Test>::NoIdentity);
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 			assert_ok!(Identity::cancel_request(Origin::signed(10), 0));
 			assert_eq!(Balances::free_balance(10), 90);
-			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), "not found");
+			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), Error::<Test>::NotFound);
 
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
-			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), "judgement given");
+			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), Error::<Test>::JudgementGiven);
 		});
 	}
 
@@ -1093,19 +1148,19 @@ mod tests {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 9), "fee changed");
+			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 9), Error::<Test>::FeeChanged);
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 			// 10 for the judgement request, 10 for the identity.
 			assert_eq!(Balances::free_balance(10), 80);
 
 			// Re-requesting won't work as we already paid.
-			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10), "sticky judgement");
+			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10), Error::<Test>::StickyJudgement);
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Erroneous));
 			// Registrar got their payment now.
 			assert_eq!(Balances::free_balance(3), 20);
 
 			// Re-requesting still won't work as it's erroneous.
-			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10), "sticky judgement");
+			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10), Error::<Test>::StickyJudgement);
 
 			// Requesting from a second registrar still works.
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 4));
@@ -1137,7 +1192,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			// account 4 cannot change the first registrar's identity since it's owned by 3.
-			assert_noop!(Identity::set_account_id(Origin::signed(4), 0, 3), "invalid index");
+			assert_noop!(Identity::set_account_id(Origin::signed(4), 0, 3), Error::<Test>::InvalidIndex);
 			// account 3 can, because that's the registrar's current account.
 			assert_ok!(Identity::set_account_id(Origin::signed(3), 0, 4));
 			// account 4 can now, because that's their new ID.

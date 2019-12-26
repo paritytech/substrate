@@ -19,6 +19,9 @@
 //! This code is based on and large parts are copied from wasmtime's
 //! wasmtime-api/src/trampoline/func.rs.
 
+use crate::function_executor::{FunctionExecutorState, FunctionExecutor};
+use sc_executor_common::error::{Error, WasmError};
+
 use cranelift_codegen::{Context, binemit, ir, isa};
 use cranelift_codegen::ir::{InstBuilder, StackSlotData, StackSlotKind, TrapCode};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
@@ -28,9 +31,6 @@ use wasmtime_environ::CompiledFunction;
 use wasmtime_runtime::{VMContext, VMFunctionBody};
 use sp_wasm_interface::{Function, Value, ValueType};
 use std::{cmp, panic::{self, AssertUnwindSafe}, ptr};
-
-use crate::error::{Error, WasmError};
-use crate::wasmtime::function_executor::{FunctionExecutorState, FunctionExecutor};
 
 const CALL_SUCCESS: u32 = 0;
 const CALL_FAILED_WITH_ERROR: u32 = 1;
