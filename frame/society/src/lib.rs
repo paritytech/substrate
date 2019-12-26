@@ -558,7 +558,7 @@ decl_module! {
 			Ok(())
 		}
 
-		/// As a vouching member, unvouch. This only works while vouched user is still a bid.
+		/// As a vouching member, unvouch a bid. This only works while vouched user is still a bid.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -594,11 +594,15 @@ decl_module! {
 			)
 		}
 
-		/// As a member, vote on an candidate.
+		/// As a member, vote on a candidate.
+		///
+		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// Parameters:
 		///
 		/// - `candidate`: The candidate that the member would like to bid on.
+		/// - `approve`: A boolean which says if the candidate should be
+		///              approved (`true`) or rejected (`false`).
 		///
 		/// # <weight>
 		/// - One storage read and O(log M) search to check user is a member.
@@ -624,9 +628,12 @@ decl_module! {
 
 		/// As a member, vote on the defender.
 		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
 		/// Parameters:
 		///
-		/// - `candidate`: The candidate that the member would like to bid on.
+		/// - `approve`: A boolean which says if the candidate should be
+		///              approved (`true`) or rejected (`false`).
 		///
 		/// # <weight>
 		/// - One storage read and O(log M) search to check user is a member.
@@ -646,7 +653,22 @@ decl_module! {
 			Self::deposit_event(RawEvent::DefenderVote(voter, approve));
 		}
 
-		/// Transfer the first matured payment and remove it from the records.
+		/// Transfer the first matured payout for the sender and remove it from the records.
+		///
+		/// This extrinsic can be called multiple times to claim all matured payouts.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// # <weight>
+		/// - One storage read and O(log M) search to check signer is a member.
+		/// - One storage read to get all payouts for a member.
+		/// - One storage read to get the current block number.
+		/// - Up to one currency transfer call.
+		/// - One storage write or removal to update the member's payouts.
+		/// # </weight>
+		///
+
+		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
 		pub fn payout(origin) {
 			let who = ensure_signed(origin)?;
 
@@ -668,8 +690,28 @@ decl_module! {
 			Err(Error::<T, I>::NoPayout)?
 		}
 
-		/// Found the society. This is done as a discrete action in order to allow for the
+		/// Found the society.
+		///
+		/// This is done as a discrete action in order to allow for the
 		/// module to be included into a running chain.
+		///
+		/// The dispatch origin for this call must be from the _FounderOrigin_.
+		///
+		/// Parameters:
+		///
+		/// - `founder` - The first member and head of the newly founded society.
+		///
+		/// # <weight>
+		/// - One storage read to check `Head`.
+		/// - One storage write to add the first member to society.
+		/// - One storage write to add new Head.
+		/// - One event.
+		///
+		/// This is marked as `Operational` since it is a low level system action.
+		/// # </weight>
+		///
+
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn found(origin, founder: T::AccountId) {
 			T::FounderOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
@@ -679,6 +721,35 @@ decl_module! {
 		}
 
 		/// Allow founder origin to make judgement on a suspended member.
+		///
+		/// If a suspended member is forgiven, we simply add them back as a member, not affecting
+		/// any of the existing storage items for that member.
+		///
+		/// If a suspended member is rejected, remove all associated storage items, including
+		/// their payouts, and remove any vouched bids they currently have.
+		///
+		/// The dispatch origin for this call must be from the _SuspensionJudgementOrigin_.
+		///
+		/// Parameters:
+		///
+		/// - `who` - The suspended member to be judged.
+		/// - `forgive` - A boolean representing whether the suspension judgement origin
+		///               forgives (`true`) or rejects (`false`) a suspended member.
+		///
+		/// # <weight>
+		/// - One storage read to check `who` is a suspended member.
+		/// - Up to one storage write with O(log M) binary search to add a member back to society.
+		/// - Up to 3 storage removals to clean up a removed member.
+		/// - Up to one storage write with O(B) search to remove vouched bid from bids.
+		/// - Up to one additional event if unvouch takes place.
+		/// - One storage removal.
+		/// - One event for the judgement.
+		///
+		/// This is marked as `Operational` since it comes from a privileged origin.
+		/// # </weight>
+		///
+
+		#[weight = SimpleDispatchInfo::FixedOperational(30_000)]
 		fn judge_suspended_member(origin, who: T::AccountId, forgive: bool) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			ensure!(<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::NotSuspended);
@@ -706,10 +777,53 @@ decl_module! {
 			}
 
 			<SuspendedMembers<T, I>>::remove(&who);
-			Self::deposit_event(RawEvent::Removed(who));
+			Self::deposit_event(RawEvent::SuspendedMemberJudgement(who, forgive));
 		}
 
+
 		/// Allow founder origin to make judgement on a suspended candidate.
+		///
+		/// If the judgement is `Approve`, we add them to society as a member with the appropriate
+		/// payment for joining society.
+		///
+		/// If the judgement is `Reject`, we either slash the deposit of the bid, giving it back
+		/// to the society treasury, or we ban the voucher from vouching again.
+		///
+		/// If the judgement is `Rebid`, we put the candidate back in the bid pool and let them go
+		/// through the induction process again.
+		///
+		/// The dispatch origin for this call must be from the _SuspensionJudgementOrigin_.
+		///
+		/// Parameters:
+		///
+		/// - `who` - The suspended candidate to be judged.
+		/// - `judgement` - `Approve`, `Reject`, or `Rebid`.
+		///
+		/// # <weight>
+		/// - One storage read to check `who` is a suspended candidate.
+		/// - One storage removal of the suspended candidate.
+		/// - Approve Logic
+		/// 	- One storage read to get the available pot to pay users with.
+		/// 	- One storage write to update the available pot.
+		/// 	- One storage read to get the current block number.
+		/// 	- One storage read to get all members.
+		/// 	- Up to one unreserve currency action.
+		/// 	- Up to two new storage writes to payouts.
+		/// 	- Up to one storage write with O(log M) binary search to add a member to society.
+		/// - Reject Logic
+		/// 	- Up to one repatriate reserved currency action.
+		/// 	- Up to one storage write to ban the vouching member from vouching again.
+		/// - Rebid Logic
+		/// 	- Storage mutate with O(log B) binary search to place the user back into bids.
+		/// - Up to one additional event if unvouch takes place.
+		/// - One storage removal.
+		/// - One event for the judgement.
+		///
+		/// This is marked as `Operational` since it comes from a privileged origin.
+		/// # </weight>
+		///
+
+		#[weight = SimpleDispatchInfo::FixedOperational(50_000)]
 		fn judge_suspended_candidate(origin, who: T::AccountId, judgement: Judgement) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			if let Some((value, kind)) = <SuspendedCandidates<T, I>>::get(&who) {
@@ -740,14 +854,15 @@ decl_module! {
 								<Vouching<T, I>>::insert(&voucher, VouchingStatus::Banned);
 							}
 						}
-						// Remove suspended candidate
-						<SuspendedCandidates<T, I>>::remove(who);
 					}
 					Judgement::Rebid => {
 						// Founder has taken no judgement, and candidate is placed back into the pool.
 						Self::put_bid(who.clone(), value, kind);
 					}
 				}
+
+				// Remove suspended candidate
+				<SuspendedCandidates<T, I>>::remove(who);
 			} else {
 				Err(Error::<T, I>::NotSuspended)?
 			}
@@ -832,8 +947,8 @@ decl_event! {
 		/// A group of candidates have been inducted. The batch's primary is the first value, the
 		/// batch in full is the second.
 		Inducted(AccountId, Vec<AccountId>),
-		/// A member has been removed from Society
-		Removed(AccountId),
+		/// A suspended member has been judged
+		SuspendedMemberJudgement(AccountId, bool),
 		/// A candidate has been suspended
 		CandidateSuspended(AccountId),
 		/// A member has been suspended
