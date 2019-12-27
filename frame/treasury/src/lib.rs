@@ -65,9 +65,10 @@ use frame_support::traits::{
 	Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, ExistenceRequirement::AllowDeath,
 	ReservableCurrency, WithdrawReason
 };
-use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug};
-use sp_runtime::traits::{Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating, Hash};
-use frame_support::weights::SimpleDispatchInfo;
+use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
+	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
+}};
+use frame_support::{weights::SimpleDispatchInfo, traits::Contains};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
 
@@ -88,7 +89,7 @@ pub trait Trait: frame_system::Trait {
 	type RejectOrigin: EnsureOrigin<Self::Origin>;
 
 	/// Origin from which tippers must come.
-	type TipOrigin: EnsureOrigin<Self::Origin, Success=Self::AccountId>;
+	type Tippers: Contains<Self::AccountId>;
 
 	/// The number of tippers a tipping proposal must get before it will happen.
 	type TipThreshold: Get<u32>;
@@ -137,7 +138,8 @@ pub struct Proposal<AccountId, Balance> {
 	bond: Balance,
 }
 
-/// An open tipping "motion".
+/// An open tipping "motion". Retains all details of a tip including information on the finder
+/// and the members who have voted.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 pub struct OpenTip<
 	AccountId: Parameter,
@@ -288,7 +290,8 @@ decl_module! {
 
 		/// Give a tip for something new.
 		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T>) {
-			let tipper = T::TipOrigin::ensure_origin(origin)?;
+			let tipper = ensure_signed(origin)?;
+			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 
 			let hash = T::Hashing::hash_of(&(&reason, &who));
 			let tip = if let Some(mut tip) = Tips::<T>::get(hash) {
@@ -305,7 +308,8 @@ decl_module! {
 
 		/// Add onto an existing tip.
 		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T>) {
-			let tipper = T::TipOrigin::ensure_origin(origin)?;
+			let tipper = ensure_signed(origin)?;
+			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 
 			let mut tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
 			if Self::insert_tip_and_check_closing(&mut tip, tipper, tip_value) {
@@ -429,6 +433,7 @@ impl<T: Trait> Module<T> {
 			Ok(pos) => tip.tips[pos] = (tipper, tip_value),
 			Err(pos) => tip.tips.insert(pos, (tipper, tip_value)),
 		}
+		tip.tips.retain(|(ref a, _)| T::Tippers::contains(a));
 		if tip.tips.len() >= T::TipThreshold::get() as usize && tip.closes.is_none() {
 			tip.closes = Some(system::Module::<T>::block_number() + T::TipCountdown::get());
 			true
@@ -440,6 +445,7 @@ impl<T: Trait> Module<T> {
 	/// Execute the payout of a tip.
 	fn payout_tip(tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber>) {
 		let mut tips = tip.tips;
+		tips.retain(|(ref a, _)| T::Tippers::contains(a));
 		tips.sort_by_key(|i| i.1);
 		let treasury = Self::account_id();
 		let max_payout = T::Currency::free_balance(&treasury);
@@ -616,7 +622,7 @@ mod tests {
 		type Currency = pallet_balances::Module<Test>;
 		type ApproveOrigin = frame_system::EnsureRoot<u64>;
 		type RejectOrigin = frame_system::EnsureRoot<u64>;
-		type TipOrigin = frame_system::EnsureSignedBy<TenToFourteen, u64>;
+		type Tippers = TenToFourteen;
 		type TipThreshold = TipThreshold;
 		type TipCountdown = TipCountdown;
 		type TipFindersFee = TipFindersFee;

@@ -58,12 +58,6 @@ pub trait Contains<T> {
 	fn contains(t: &T) -> bool;
 }
 
-impl<V: PartialEq, T: Get<V>> Contains<V> for T {
-	fn contains(t: &V) -> bool {
-		&Self::get() == t
-	}
-}
-
 /// The account with the given id was killed.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnFreeBalanceZero<AccountId> {
