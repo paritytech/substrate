@@ -98,11 +98,11 @@ impl Verify for sp_core::sr25519::Signature {
 impl Verify for sp_core::ecdsa::Signature {
 	type Signer = sp_core::ecdsa::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::ecdsa::Public) -> bool {
-		match sp_io::crypto::secp256k1_ecdsa_recover(
+		match sp_io::crypto::secp256k1_ecdsa_recover_compressed(
 			self.as_ref(),
 			&sp_io::hashing::blake2_256(msg.get()),
 		) {
-			Ok(pubkey) => <dyn AsRef<[u8]>>::as_ref(signer) == &pubkey[..],
+			Ok(pubkey) => signer.as_compressed().map(|s| &s[..] == &pubkey[..]).unwrap_or(false),
 			_ => false,
 		}
 	}
@@ -1399,5 +1399,6 @@ mod tests {
 		assert!(ecdsa::Pair::verify(&signature, msg, &pair.public()));
 
 		assert!(signature.verify(msg, &pair.public()));
+		assert!(signature.verify(msg, &pair.public().into_compressed().unwrap()));
 	}
 }
