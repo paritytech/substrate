@@ -41,13 +41,14 @@ where
 	pub function: Call,
 }
 
-// TODO: this is a stub, not sure if it is needed to track runtime memory usage atm
 #[cfg(feature = "std")]
 impl<A, C, S, Extra> parity_util_mem::MallocSizeOf for UncheckedExtrinsic<A, C, S, Extra>
 where
 	Extra: SignedExtension
 {
 	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		// TODO: this is a stub, but may as well be legit implementation,
+		//  	 since the structure exists only in runtime.
 		0
 	}
 }

@@ -44,8 +44,8 @@ pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()
 
 	let client = service.client();
 	let mut last_best = {
-		let info = client.usage_info();
-		Some((info.chain.best_number, info.chain.best_hash))
+		let info = client.chain_info();
+		Some((info.best_number, info.best_hash))
 	};
 
 	let display_block_import = client.import_notification_stream().for_each(move |n| {

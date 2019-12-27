@@ -53,6 +53,7 @@ pub fn format_bytes(b: u64) -> String {
 
 /// Memory footprint info.
 pub struct CacheSizes {
+	/// Database cache.
 	pub db: usize,
 }
 
