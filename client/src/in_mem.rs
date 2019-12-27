@@ -566,6 +566,17 @@ where
 	import_lock: RwLock<()>,
 }
 
+impl<B, H> parity_util_mem::MallocSizeOf for Backend<B, H>
+where
+	B: BlockT,
+	H: Hasher<Out=B::Hash>,
+	H::Out: Ord,
+{
+	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		0 // used only for testing, so no need to calculate footprint
+	}
+}
+
 impl<Block, H> Backend<Block, H>
 where
 	Block: BlockT,

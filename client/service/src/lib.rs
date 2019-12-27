@@ -151,8 +151,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	type Block: BlockT<Hash = H256> + MallocSizeOf;
 
 	/// Backend storage for the client.
-	type Backend: 'static + sc_client_api::backend::Backend<Self::Block, Blake2Hasher>
-		+ MallocSizeOf;
+	type Backend: 'static + sc_client_api::backend::Backend<Self::Block, Blake2Hasher>;
 
 	/// How to execute calls towards the runtime.
 	type CallExecutor: 'static + sc_client::CallExecutor<Self::Block, Blake2Hasher>
@@ -226,7 +225,7 @@ impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPool, TOc> AbstractService 
 		NetworkService<TBl, TNetSpec, H256>, TExPool, TOc>
 where
 	TBl: BlockT<Hash = H256>,
-	TBackend: 'static + sc_client_api::backend::Backend<TBl, Blake2Hasher> + MallocSizeOf,
+	TBackend: 'static + sc_client_api::backend::Backend<TBl, Blake2Hasher>,
 	TExec: 'static + sc_client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
 	TSc: sp_consensus::SelectChain<TBl> + 'static + Clone + Send,

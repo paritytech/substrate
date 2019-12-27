@@ -33,6 +33,7 @@ use crate::{
 use sp_blockchain;
 use sp_consensus::BlockOrigin;
 use hash_db::Hasher;
+use parity_util_mem::MallocSizeOf;
 use parking_lot::RwLock;
 
 /// In memory array of storage values.
@@ -227,7 +228,7 @@ pub trait AuxStore {
 ///
 /// The same applies for live `BlockImportOperation`s: while an import operation building on a parent `P`
 /// is alive, the state for `P` should not be pruned.
-pub trait Backend<Block, H>: AuxStore + Send + Sync where
+pub trait Backend<Block, H>: AuxStore + Send + Sync + MallocSizeOf where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
 {
