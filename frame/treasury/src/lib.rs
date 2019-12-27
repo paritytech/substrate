@@ -231,6 +231,10 @@ decl_error! {
 		UnknownTip,
 		/// The account attempting to retract the tip is not the finder of the tip.
 		NotFinder,
+		/// The tip cannot be claimed/closed because there are not enough tippers yet.
+		StillOpen,
+		/// The tip cannot be claimed/closed because it's still in the countdown period.
+		Premature,
 	}
 }
 
@@ -316,15 +320,12 @@ decl_module! {
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
 
-			if let Some(tip) = Tips::<T>::get(&hash) {
-				if let Some(n) = tip.closes.as_ref() {
-					if system::Module::<T>::block_number() >= *n {
-						// closed.
-						Self::payout_tip(tip);
-						Tips::<T>::remove(hash);
-					}
-				}
-			}
+			let tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
+			let n = tip.closes.as_ref().ok_or(Error::<T>::StillOpen)?;
+			ensure!(system::Module::<T>::block_number() >= *n, Error::<T>::Premature);
+			// closed.
+			Self::payout_tip(tip);
+			Tips::<T>::remove(hash);
 		}
 
 		/// Put forward a suggestion for spending. A deposit proportional to the value
@@ -425,8 +426,8 @@ impl<T: Trait> Module<T> {
 		tip_value: BalanceOf<T>,
 	) -> bool {
 		match tip.tips.binary_search_by_key(&&tipper, |x| &x.0) {
-			Ok(pos) => tip.tips.insert(pos, (tipper, tip_value)),
-			Err(pos) => tip.tips[pos] = (tipper, tip_value),
+			Ok(pos) => tip.tips[pos] = (tipper, tip_value),
+			Err(pos) => tip.tips.insert(pos, (tipper, tip_value)),
 		}
 		if tip.tips.len() >= T::TipThreshold::get() as usize && tip.closes.is_none() {
 			tip.closes = Some(system::Module::<T>::block_number() + T::TipCountdown::get());
@@ -451,7 +452,7 @@ impl<T: Trait> Module<T> {
 				payout -= finders_fee;
 				// this should go through given we checked it's at most the free balance, but still
 				// we only make a best-effort.
-				let _ = T::Currency::transfer(&treasury, &finder, deposit, AllowDeath);
+				let _ = T::Currency::transfer(&treasury, &finder, finders_fee, AllowDeath);
 			}
 		}
 		// same as above: best-effort only.
@@ -542,10 +543,10 @@ mod tests {
 	use super::*;
 
 	use frame_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight};
-	use frame_system::EnsureSignedBy;
+	use frame_support::traits::Contains;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header, Perbill
+		traits::{BlakeTwo256, OnFinalize, IdentityLookup, BadOrigin}, testing::Header, Perbill
 	};
 
 	impl_outer_origin! {
@@ -594,23 +595,33 @@ mod tests {
 		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
 	}
+	pub struct TenToFourteen;
+	impl Contains<u64> for TenToFourteen {
+		fn contains(n: &u64) -> bool {
+			*n >= 10 && *n <= 14
+		}
+	}
 	parameter_types! {
 		pub const ProposalBond: Permill = Permill::from_percent(5);
 		pub const ProposalBondMinimum: u64 = 1;
 		pub const SpendPeriod: u64 = 2;
 		pub const Burn: Permill = Permill::from_percent(50);
-		pub const TipOrigin: Vec<u64> = vec![10, 11, 12, 13, 14];
+		pub const TipThreshold: u32 = 3;
+		pub const TipCountdown: u64 = 1;
+		pub const TipFindersFee: Percent = Percent::from_percent(20);
+		pub const TipReportDepositBase: u64 = 1;
+		pub const TipReportDepositPerByte: u64 = 1;
 	}
 	impl Trait for Test {
 		type Currency = pallet_balances::Module<Test>;
 		type ApproveOrigin = frame_system::EnsureRoot<u64>;
 		type RejectOrigin = frame_system::EnsureRoot<u64>;
-		type TipOrigin: EnsureSignedBy<TipOrigin, u64>;
-		type TipThreshold: Get<u32>;
-		type TipCountdown: Get<Self::BlockNumber>;
-		type TipFindersFee: Get<Percent>;
-		type TipReportDepositBase: Get<BalanceOf<Self>>;
-		type TipReportDepositPerByte: Get<BalanceOf<Self>>;
+		type TipOrigin = frame_system::EnsureSignedBy<TenToFourteen, u64>;
+		type TipThreshold = TipThreshold;
+		type TipCountdown = TipCountdown;
+		type TipFindersFee = TipFindersFee;
+		type TipReportDepositBase = TipReportDepositBase;
+		type TipReportDepositPerByte = TipReportDepositPerByte;
 		type Event = ();
 		type ProposalRejection = ();
 		type ProposalBond = ProposalBond;
@@ -618,6 +629,7 @@ mod tests {
 		type SpendPeriod = SpendPeriod;
 		type Burn = Burn;
 	}
+	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
 	type Treasury = Module<Test>;
 
@@ -641,11 +653,142 @@ mod tests {
 	}
 
 	#[test]
-	fn basic_tipping_works() {
+	fn tip_new_works() {
+		new_test_ext().execute_with(|| {
+			// Check that accumulate works when we have Some value in Dummy already.
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
+			assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
+			assert_ok!(Treasury::tip_new(Origin::signed(11), b"awesome.dot".to_vec(), 3, 10));
+			assert_ok!(Treasury::tip_new(Origin::signed(12), b"awesome.dot".to_vec(), 3, 10));
+
+			assert_noop!(Treasury::tip_new(Origin::signed(9), b"awesome.dot".to_vec(), 3, 10), BadOrigin);
+
+			System::set_block_number(2);
+			let h = BlakeTwo256::hash_of(&(&b"awesome.dot".to_vec(), &3u64));
+			assert_ok!(Treasury::close_tip(Origin::signed(0), h.into()));
+		});
+	}
+
+	#[test]
+	fn report_awesome_and_tip_works() {
+		new_test_ext().execute_with(|| {
+			// Check that accumulate works when we have Some value in Dummy already.
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
+			assert_ok!(Treasury::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
+			assert_eq!(Balances::reserved_balance(&0), 12);
+			assert_eq!(Balances::free_balance(&0), 88);
+
+			// other reports don't count.
+			assert_noop!(
+				Treasury::report_awesome(Origin::signed(1), b"awesome.dot".to_vec(), 3),
+				Error::<Test>::AlreadyKnown
+			);
+
+			let h = BlakeTwo256::hash_of(&(&b"awesome.dot".to_vec(), &3u64));
+			assert_ok!(Treasury::tip(Origin::signed(10), h.clone(), 10));
+			assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
+			assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
+			assert_noop!(Treasury::tip(Origin::signed(9), h.clone(), 10), BadOrigin);
+			System::set_block_number(2);
+			assert_ok!(Treasury::close_tip(Origin::signed(100), h.into()));
+			assert_eq!(Balances::reserved_balance(&0), 0);
+			assert_eq!(Balances::free_balance(&0), 102);
+			assert_eq!(Balances::free_balance(&3), 8);
+		});
+	}
+
+	#[test]
+	fn report_awesome_from_beneficiary_and_tip_works() {
+		new_test_ext().execute_with(|| {
+			// Check that accumulate works when we have Some value in Dummy already.
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
+			assert_ok!(Treasury::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 0));
+			assert_eq!(Balances::reserved_balance(&0), 12);
+			assert_eq!(Balances::free_balance(&0), 88);
+			let h = BlakeTwo256::hash_of(&(&b"awesome.dot".to_vec(), &0u64));
+			assert_ok!(Treasury::tip(Origin::signed(10), h.clone(), 10));
+			assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
+			assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
+			System::set_block_number(2);
+			assert_ok!(Treasury::close_tip(Origin::signed(100), h.into()));
+			assert_eq!(Balances::reserved_balance(&0), 0);
+			assert_eq!(Balances::free_balance(&0), 110);
+		});
+	}
+
+	#[test]
+	fn close_tip_works() {
 		new_test_ext().execute_with(|| {
 			// Check that accumulate works when we have Some value in Dummy already.
 			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_eq!(Treasury::pot(), 100);
+
+			assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
+			let h = BlakeTwo256::hash_of(&(&b"awesome.dot".to_vec(), &3u64));
+			assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
+			assert_noop!(Treasury::close_tip(Origin::signed(0), h.into()), Error::<Test>::StillOpen);
+
+			assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
+			assert_noop!(Treasury::close_tip(Origin::signed(0), h.into()), Error::<Test>::Premature);
+
+			System::set_block_number(2);
+			assert_noop!(Treasury::close_tip(Origin::NONE, h.into()), BadOrigin);
+			assert_ok!(Treasury::close_tip(Origin::signed(0), h.into()));
+			assert_eq!(Balances::free_balance(&3), 10);
+
+			assert_noop!(Treasury::close_tip(Origin::signed(100), h.into()), Error::<Test>::UnknownTip);
+		});
+	}
+
+	#[test]
+	fn retract_tip_works() {
+		new_test_ext().execute_with(|| {
+			// Check that accumulate works when we have Some value in Dummy already.
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
+			assert_ok!(Treasury::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
+			let h = BlakeTwo256::hash_of(&(&b"awesome.dot".to_vec(), &3u64));
+			assert_ok!(Treasury::tip(Origin::signed(10), h.clone(), 10));
+			assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
+			assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
+			assert_noop!(Treasury::retract_tip(Origin::signed(10), h.clone()), Error::<Test>::NotFinder);
+			assert_ok!(Treasury::retract_tip(Origin::signed(0), h.clone()));
+			System::set_block_number(2);
+			assert_noop!(Treasury::close_tip(Origin::signed(0), h.into()), Error::<Test>::UnknownTip);
+		});
+	}
+
+	#[test]
+	fn tip_median_calculation_works() {
+		new_test_ext().execute_with(|| {
+			// Check that accumulate works when we have Some value in Dummy already.
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
+			assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 0));
+			let h = BlakeTwo256::hash_of(&(&b"awesome.dot".to_vec(), &3u64));
+			assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
+			assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 1000000));
+			System::set_block_number(2);
+			assert_ok!(Treasury::close_tip(Origin::signed(0), h.into()));
+			assert_eq!(Balances::free_balance(&3), 10);
+		});
+	}
+
+	#[test]
+	fn tip_changing_works() {
+		new_test_ext().execute_with(|| {
+			// Check that accumulate works when we have Some value in Dummy already.
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
+			assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10000));
+			let h = BlakeTwo256::hash_of(&(&b"awesome.dot".to_vec(), &3u64));
+			assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10000));
+			assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10000));
+			assert_ok!(Treasury::tip(Origin::signed(13), h.clone(), 0));
+			assert_ok!(Treasury::tip(Origin::signed(14), h.clone(), 0));
+			assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 1000));
+			assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 100));
+			assert_ok!(Treasury::tip(Origin::signed(10), h.clone(), 10));
+			System::set_block_number(2);
+			assert_ok!(Treasury::close_tip(Origin::signed(0), h.into()));
+			assert_eq!(Balances::free_balance(&3), 10);
 		});
 	}
 
