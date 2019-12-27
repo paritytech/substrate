@@ -16,28 +16,31 @@
 
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
 
-use crate::error::{Error, Result, WasmError};
-use crate::wasm_runtime::WasmRuntime;
-use crate::wasm_utils::interpret_runtime_api_result;
-use crate::wasmtime::function_executor::FunctionExecutorState;
-use crate::wasmtime::trampoline::{EnvState, make_trampoline};
-use crate::wasmtime::util::{cranelift_ir_signature, read_memory_into, write_memory_from};
-use crate::Externalities;
+use crate::function_executor::FunctionExecutorState;
+use crate::trampoline::{EnvState, make_trampoline};
+use crate::util::{cranelift_ir_signature, read_memory_into, write_memory_from};
+
+use sc_executor_common::{
+	error::{Error, Result, WasmError},
+	wasm_runtime::WasmRuntime,
+};
+use sp_core::traits::Externalities;
+use sp_wasm_interface::{Pointer, WordSize, Function};
+use sp_runtime_interface::unpack_ptr_and_len;
+
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::convert::TryFrom;
+use std::rc::Rc;
 
 use cranelift_codegen::ir;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilderContext;
 use cranelift_wasm::DefinedFuncIndex;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::rc::Rc;
-use sp_wasm_interface::{Pointer, WordSize, Function};
 use wasmtime_environ::{Module, translate_signature};
 use wasmtime_jit::{
-	ActionOutcome, ActionError, CodeMemory, CompilationStrategy, CompiledModule, Compiler, Context,
-	SetupError, RuntimeValue,
+	ActionOutcome, CodeMemory, CompilationStrategy, CompiledModule, Compiler, Context, RuntimeValue,
 };
 use wasmtime_runtime::{Export, Imports, InstanceHandle, VMFunctionBody};
 
@@ -134,7 +137,7 @@ fn create_compiled_unit(
 
 	// Compile the wasm module.
 	let module = context.compile_module(&code)
-		.map_err(WasmError::WasmtimeSetup)?;
+		.map_err(|e| WasmError::Other(format!("module compile error: {}", e)))?;
 
 	Ok((module, context))
 }
@@ -155,9 +158,7 @@ fn call_method(
 	clear_globals(&mut *context.get_global_exports().borrow_mut());
 
 	let mut instance = module.instantiate()
-		.map_err(SetupError::Instantiate)
-		.map_err(ActionError::Setup)
-		.map_err(Error::Wasmtime)?;
+		.map_err(|e| Error::Other(e.to_string()))?;
 
 	// Ideally there would be a way to set the heap pages during instantiation rather than
 	// growing the memory after the fact. Currently this may require an additional mmap and copy.
@@ -178,12 +179,12 @@ fn call_method(
 	let outcome = sp_externalities::set_and_run_with_externalities(ext, || {
 		context
 			.invoke(&mut instance, method, &args[..])
-			.map_err(Error::Wasmtime)
+			.map_err(|e| Error::Other(format!("error calling runtime: {}", e)))
 	})?;
 	let trap_error = reset_env_state_and_take_trap(context, None)?;
 	let (output_ptr, output_len) = match outcome {
 		ActionOutcome::Returned { values } => match values.as_slice() {
-			[RuntimeValue::I64(retval)] => interpret_runtime_api_result(*retval),
+			[RuntimeValue::I64(retval)] => unpack_ptr_and_len(*retval as u64),
 			_ => return Err(Error::InvalidReturn),
 		}
 		ActionOutcome::Trapped { message } => return Err(trap_error.unwrap_or_else(
@@ -194,7 +195,7 @@ fn call_method(
 	// Read the output data from guest memory.
 	let mut output = vec![0; output_len as usize];
 	let memory = get_memory_mut(&mut instance)?;
-	read_memory_into(memory, output_ptr, &mut output)?;
+	read_memory_into(memory, Pointer::new(output_ptr), &mut output)?;
 	Ok(output)
 }
 
@@ -252,13 +253,13 @@ fn instantiate_env_module(
 		None,
 		Box::new(env_state),
 	);
-	result.map_err(|e| WasmError::WasmtimeSetup(SetupError::Instantiate(e)))
+	result.map_err(|e| WasmError::Other(format!("cannot instantiate env: {}", e)))
 }
 
 /// Build a new TargetIsa for the host machine.
 fn target_isa() -> std::result::Result<Box<dyn TargetIsa>, WasmError> {
 	let isa_builder = cranelift_native::builder()
-		.map_err(WasmError::MissingCompilerSupport)?;
+		.map_err(|e| WasmError::Other(format!("missing compiler support: {}", e)))?;
 	let flag_builder = cranelift_codegen::settings::builder();
 	Ok(isa_builder.finish(cranelift_codegen::settings::Flags::new(flag_builder)))
 }

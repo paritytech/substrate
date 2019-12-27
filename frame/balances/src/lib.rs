@@ -1002,13 +1002,13 @@ where
 				// ...yet is was alive before
 				&& old_balance >= T::ExistentialDeposit::get()
 			{
-				Err("payment would kill account")?
+				Err(Error::<T, I>::KeepAlive)?
 			}
 			Self::ensure_can_withdraw(who, value, reasons, new_balance)?;
 			Self::set_free_balance(who, new_balance);
 			Ok(NegativeImbalance::new(value))
 		} else {
-			Err("too few free funds in account")?
+			Err(Error::<T, I>::InsufficientBalance)?
 		}
 	}
 
@@ -1123,7 +1123,7 @@ where
 	fn reserve(who: &T::AccountId, value: Self::Balance) -> result::Result<(), DispatchError> {
 		let b = Self::free_balance(who);
 		if b < value {
-			Err("not enough free funds")?
+			Err(Error::<T, I>::InsufficientBalance)?
 		}
 		let new_balance = b - value;
 		Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), new_balance)?;
@@ -1268,7 +1268,7 @@ where
 		starting_block: T::BlockNumber
 	) -> DispatchResult {
 		if <Vesting<T, I>>::exists(who) {
-			Err("A vesting schedule already exists for this account.")?
+			Err(Error::<T, I>::ExistingVestingSchedule)?
 		}
 		let vesting_schedule = VestingSchedule {
 			locked,

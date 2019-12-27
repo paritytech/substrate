@@ -31,19 +31,13 @@
 
 #[macro_use]
 mod wasm_utils;
-mod wasmi_execution;
 #[macro_use]
 mod native_executor;
-mod sandbox;
-mod allocator;
 pub mod deprecated_host_interface;
 mod wasm_runtime;
-#[cfg(feature = "wasmtime")]
-mod wasmtime;
 #[cfg(test)]
 mod integration_tests;
 
-pub mod error;
 pub use wasmi;
 pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
 pub use sp_version::{RuntimeVersion, NativeVersion};
@@ -53,6 +47,8 @@ pub use sp_core::traits::Externalities;
 #[doc(hidden)]
 pub use sp_wasm_interface;
 pub use wasm_runtime::WasmExecutionMethod;
+
+pub use sc_executor_common::{error, allocator, sandbox};
 
 /// Call the given `function` in the given wasm `code`.
 ///
