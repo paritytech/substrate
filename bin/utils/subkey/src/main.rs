@@ -31,9 +31,7 @@ use sp_core::{
 };
 use sp_runtime::{traits::{IdentifyAccount, Verify}, generic::Era};
 use std::{
-	convert::{TryInto, TryFrom},
-	io::{stdin, Read},
-	str::FromStr,
+	convert::{TryInto, TryFrom}, io::{stdin, Read}, str::FromStr, path::PathBuf, fs,
 };
 
 mod vanity;
@@ -186,13 +184,16 @@ fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
 				.about("Gets a public key and a SS58 address from the provided Secret URI")
 				.args_from_usage("[uri] 'A Key URI to be inspected. May be a secret seed, \
 						secret URI (with derivation paths and password), SS58 or public URI. \
+						If the value is a file, the file content is used as URI. \
 						If not given, you will be prompted for the URI.'
 				"),
 			SubCommand::with_name("sign")
 				.about("Sign a message, provided on STDIN, with a given (secret) key")
 				.args_from_usage("
 					-h, --hex 'The message on STDIN is hex-encoded data'
-					<suri> 'The secret key URI.'
+					<suri> 'The secret key URI. \
+						If the value is a file, the file content is used as URI. \
+						If not given, you will be prompted for the URI.'
 				"),
 			SubCommand::with_name("sign-transaction")
 				.about("Sign transaction from encoded Call. Returns a signed and encoded \
@@ -226,7 +227,9 @@ fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
 				.args_from_usage("
 					-h, --hex 'The message on STDIN is hex-encoded data'
 					<sig> 'Signature, hex-encoded.'
-					<uri> 'The public or secret key URI.'
+					<uri> 'The public or secret key URI. \
+						If the value is a file, the file content is used as URI. \
+						If not given, you will be prompted for the URI.'
 				"),
 		])
 }
@@ -242,6 +245,29 @@ fn main() {
 		return execute::<Ecdsa>(matches)
 	}
 	return execute::<Sr25519>(matches)
+}
+
+/// Get `URI` from CLI or prompt the user.
+///
+/// `URI` is extracted from `matches` by using `match_name`.
+///
+/// If the `URI` given as CLI argument is a file, the file content is taken as `URI`.
+/// If no `URI` is given to the CLI, the user is prompted for it.
+fn get_uri(match_name: &str, matches: &ArgMatches) -> String {
+	if let Some(uri) = matches.value_of(match_name) {
+		let file = PathBuf::from(uri);
+		if file.is_file() {
+			fs::read_to_string(uri)
+				.expect(&format!("Failed to read `URI` file: {}", uri))
+				.trim_end()
+				.into()
+		} else {
+			uri.into()
+		}
+	} else {
+		rpassword::read_password_from_tty(Some("URI: "))
+			.expect("Failed to read `URI`")
+	}
 }
 
 fn execute<C: Crypto>(matches: ArgMatches)
@@ -278,24 +304,20 @@ where
 			C::print_from_uri(mnemonic.phrase(), password, maybe_network);
 		}
 		("inspect", Some(matches)) => {
-			let uri = match matches.value_of("uri") {
-				Some(uri) => uri.into(),
-				None => rpassword::read_password_from_tty(Some("URI: "))
-					.expect("Failed to read URI"),
-			};
-
-			C::print_from_uri(&uri, password, maybe_network);
+			C::print_from_uri(&get_uri("uri", &matches), password, maybe_network);
 		}
 		("sign", Some(matches)) => {
+			let suri = get_uri("suri", &matches);
 			let should_decode = matches.is_present("hex");
 			let message = read_message_from_stdin(should_decode);
-			let signature = do_sign::<C>(matches, message, password);
+			let signature = do_sign::<C>(&suri, message, password);
 			println!("{}", signature);
 		}
 		("verify", Some(matches)) => {
+			let uri = get_uri("uri", &matches);
 			let should_decode = matches.is_present("hex");
 			let message = read_message_from_stdin(should_decode);
-			let is_valid_signature = do_verify::<C>(matches, message);
+			let is_valid_signature = do_verify::<C>(matches, &uri, message);
 			if is_valid_signature {
 				println!("Signature verifies correctly.");
 			} else {
@@ -356,23 +378,23 @@ fn generate_mnemonic(matches: &ArgMatches) -> Mnemonic {
 	Mnemonic::new(words, Language::English)
 }
 
-fn do_sign<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&str>) -> String
+fn do_sign<C: Crypto>(suri: &str, message: Vec<u8>, password: Option<&str>) -> String
 where
 	SignatureOf<C>: SignatureT,
 	PublicOf<C>: PublicT,
 {
-	let pair = read_pair::<C>(matches.value_of("suri"), password);
+	let pair = read_pair::<C>(Some(suri), password);
 	let signature = pair.sign(&message);
 	format_signature::<C>(&signature)
 }
 
-fn do_verify<C: Crypto>(matches: &ArgMatches, message: Vec<u8>) -> bool
+fn do_verify<C: Crypto>(matches: &ArgMatches, uri: &str, message: Vec<u8>) -> bool
 where
 	SignatureOf<C>: SignatureT,
 	PublicOf<C>: PublicT,
 {
 	let signature = read_signature::<C>(matches);
-	let pubkey = read_public_key::<C>(matches.value_of("uri"));
+	let pubkey = read_public_key::<C>(Some(uri));
 	<<C as Crypto>::Pair as Pair>::verify(&signature, &message, &pubkey)
 }
 
@@ -577,21 +599,16 @@ mod tests {
 		let public_key = CryptoType::public_from_pair(&pair);
 		let public_key = format_public_key::<CryptoType>(public_key);
 		let seed = format_seed::<CryptoType>(seed);
-
-		// Sign a message using previous seed.
-		let arg_vec = vec!["subkey", "sign", &seed[..]];
-
-		let matches = app.get_matches_from(arg_vec);
-		let matches = matches.subcommand().1.unwrap();
 		let message = "Blah Blah\n".as_bytes().to_vec();
-		let signature = do_sign::<CryptoType>(matches, message.clone(), password);
+
+		let signature = do_sign::<CryptoType>(&seed, message.clone(), password);
 
 		// Verify the previous signature.
 		let arg_vec = vec!["subkey", "verify", &signature[..], &public_key[..]];
 
 		let matches = get_app(&usage).get_matches_from(arg_vec);
 		let matches = matches.subcommand().1.unwrap();
-		assert!(do_verify::<CryptoType>(matches, message));
+		assert!(do_verify::<CryptoType>(matches, &public_key, message));
 	}
 
 	#[test]
