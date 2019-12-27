@@ -23,7 +23,7 @@ sc-state-db = { version = "2.0.0", path = "../state-db" }
 sp-trie = { version = "2.0.0", path = "../../primitives/trie" }
 sp-consensus = { version = "0.8", path = "../../primitives/consensus/common" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
-parity-util-mem = { version = "0.3.0", features = ["std"] }
+parity-util-mem = { version = "0.3.0", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
