@@ -223,7 +223,6 @@ decl_error! {
 		/// Balance should be non-zero
 		BalanceZero,
 	}
-
 }
 
 decl_storage! {

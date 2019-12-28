@@ -274,7 +274,12 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 			&self.recently_pruned,
 		);
 		trace!(target: "txpool", "[{:?}] {:?}", tx.transaction.hash, tx);
-		debug!(target: "txpool", "[{:?}] Importing to {}", tx.transaction.hash, if tx.is_ready() { "ready" } else { "future" });
+		debug!(
+			target: "txpool",
+			"[{:?}] Importing to {}",
+			tx.transaction.hash,
+			if tx.is_ready() { "ready" } else { "future" }
+		);
 
 		// If all tags are not satisfied import to future.
 		if !tx.is_ready() {

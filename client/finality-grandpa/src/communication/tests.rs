@@ -45,8 +45,7 @@ struct TestNetwork {
 }
 
 impl sc_network_gossip::Network<Block> for TestNetwork {
-	fn event_stream(&self)
-	-> Box<dyn futures::Stream<Item = NetworkEvent, Error = ()> + Send> {
+	fn event_stream(&self) -> Box<dyn futures::Stream<Item = NetworkEvent, Error = ()> + Send> {
 		let (tx, rx) = mpsc::unbounded();
 		let _ = self.sender.unbounded_send(Event::EventStream(tx));
 		Box::new(rx)

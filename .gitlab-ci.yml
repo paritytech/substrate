@@ -15,7 +15,7 @@ stages:
 
 variables:
   GIT_STRATEGY:                    fetch
-  GIT_DEPTH:                       "3"
+  GIT_DEPTH:                       100
   CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
   SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
   CARGO_INCREMENTAL:               0
