@@ -204,7 +204,7 @@ fn find_and_clear_workspace_members(wasm_workspace: &Path) -> Vec<String> {
 			.and_then(|s| toml::from_str::<Table>(&s).ok())
 			.and_then(|mut t| t.remove("dependencies"))
 			.and_then(|p| p.try_into::<Table>().ok())
-			.and_then(|mut t| t.remove("wasm-project"))
+			.and_then(|mut t| t.remove("wasm_project"))
 			.and_then(|p| p.try_into::<Table>().ok())
 		{
 			if let Some(path) = wasm_project.remove("path")
@@ -322,7 +322,7 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path) -> PathBuf {
 				crate-type = ["cdylib"]
 
 				[dependencies]
-				wasm-project = {{ package = "{crate_name}", path = "{crate_path}", default-features = false }}
+				wasm_project = {{ package = "{crate_name}", path = "{crate_path}", default-features = false }}
 			"#,
 			crate_name = crate_name,
 			crate_path = crate_path.display(),
