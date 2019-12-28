@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::traits::{AugmentClap, GetSharedParams};
+use crate::traits::GetSharedParams;
 
 use std::{str::FromStr, path::PathBuf};
-use structopt::{StructOpt, clap::{arg_enum, App, AppSettings, SubCommand, Arg}};
+use structopt::{StructOpt, StructOptInternal, clap::{arg_enum, App, AppSettings, SubCommand, Arg}};
 
 pub use crate::execution_strategy::ExecutionStrategy;
 
@@ -208,7 +208,7 @@ pub struct NetworkConfigurationParams {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub node_key_params: NodeKeyParams
+	pub node_key_params: NodeKeyParams,
 }
 
 arg_enum! {
@@ -278,7 +278,7 @@ pub struct NodeKeyParams {
 	/// If the file does not exist, it is created with a newly generated secret key of
 	/// the chosen type.
 	#[structopt(long = "node-key-file", value_name = "FILE")]
-	pub node_key_file: Option<PathBuf>
+	pub node_key_file: Option<PathBuf>,
 }
 
 /// Parameters used to create the pool configuration.
@@ -623,14 +623,14 @@ impl StructOpt for Keyring {
 		unimplemented!("Should not be called for `TestAccounts`.")
 	}
 
-	fn from_clap(m: &::structopt::clap::ArgMatches) -> Self {
+	fn from_clap(m: &structopt::clap::ArgMatches) -> Self {
 		Keyring {
 			account: TEST_ACCOUNTS_CLI_VALUES.iter().find(|a| m.is_present(&a.name)).map(|a| a.variant),
 		}
 	}
 }
 
-impl AugmentClap for Keyring {
+impl StructOptInternal for Keyring {
 	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
 		TEST_ACCOUNTS_CLI_VALUES.iter().fold(app, |app, a| {
 			let conflicts_with_strs = a.conflicts_with.iter().map(|s| s.as_str()).collect::<Vec<_>>();
@@ -643,12 +643,6 @@ impl AugmentClap for Keyring {
 					.takes_value(false)
 			)
 		})
-	}
-}
-
-impl Keyring {
-	fn is_subcommand() -> bool {
-		false
 	}
 }
 
@@ -704,8 +698,6 @@ fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
 
 	Ok(if is_all { Cors::All } else { Cors::List(origins) })
 }
-
-impl_augment_clap!(RunCmd);
 
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt, Clone)]
@@ -895,7 +887,7 @@ pub enum CoreParams<CC, RP> {
 
 impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 	CC: StructOpt + GetSharedParams,
-	RP: StructOpt + AugmentClap
+	RP: StructOpt + StructOptInternal,
 {
 	fn clap<'a, 'b>() -> App<'a, 'b> {
 		RP::augment_clap(
@@ -964,7 +956,7 @@ impl StructOpt for NoCustom {
 	}
 }
 
-impl AugmentClap for NoCustom {
+impl StructOptInternal for NoCustom {
 	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
 		app
 	}
@@ -985,7 +977,7 @@ pub struct MergeParameters<L, R> {
 	pub right: R,
 }
 
-impl<L, R> StructOpt for MergeParameters<L, R> where L: StructOpt + AugmentClap, R: StructOpt {
+impl<L, R> StructOpt for MergeParameters<L, R> where L: StructOpt + StructOptInternal, R: StructOpt {
 	fn clap<'a, 'b>() -> App<'a, 'b> {
 		L::augment_clap(R::clap())
 	}

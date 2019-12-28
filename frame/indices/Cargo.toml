@@ -16,9 +16,6 @@ sp-core = { version = "2.0.0", default-features = false, path = "../../primitive
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 
-[dev-dependencies]
-ref_thread_local = "0.0.0"
-
 [features]
 default = ["std"]
 std = [
