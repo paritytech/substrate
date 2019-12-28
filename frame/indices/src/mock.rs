@@ -18,8 +18,7 @@
 
 #![cfg(test)]
 
-use std::collections::HashSet;
-use ref_thread_local::{ref_thread_local, RefThreadLocal};
+use std::{cell::RefCell, collections::HashSet};
 use sp_runtime::testing::Header;
 use sp_runtime::Perbill;
 use sp_core::H256;
@@ -31,7 +30,7 @@ impl_outer_origin!{
 }
 
 thread_local! {
-	static managed ALIVE: RefCell<HashSet<u64>> = Default::default();
+	static ALIVE: RefCell<HashSet<u64>> = Default::default();
 }
 
 pub fn make_account(who: u64) {
