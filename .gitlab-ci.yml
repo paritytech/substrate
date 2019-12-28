@@ -150,7 +150,7 @@ test-linux-stable:                 &test-linux
     paths:
       - ${CI_COMMIT_SHORT_SHA}_warnings.log
 
-test-dependency-rules:             &test-linux
+test-dependency-rules:
   stage:                           test
   <<:                              *docker-env
   except:
@@ -159,7 +159,7 @@ test-dependency-rules:             &test-linux
   script:
     - .maintain/ensure-deps.sh
 
-test-frame-staking:                 &test-frame-staking
+test-frame-staking:
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -175,7 +175,7 @@ test-frame-staking:                 &test-frame-staking
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features std
     - sccache -s
 
-test-wasmtime:                 &test-wasmtime
+test-wasmtime:
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -244,7 +244,7 @@ node-exits:
     - ./.maintain/check_for_exit.sh
 
 
-test-full-crypto-feature:          &test-full-crypto-feature
+test-full-crypto-feature:
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -265,17 +265,18 @@ test-full-crypto-feature:          &test-full-crypto-feature
 
 #### stage:                        build
 
-build-linux-substrate:
+build-linux-substrate:             &build-binary
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
   <<:                              *build-only
+  before_script:
+    - mkdir -p ./artifacts/substrate/
   except:
     variables:
       - $DEPLOY_TAG
   script:
     - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
-    - mkdir -p ./artifacts/substrate/
     - mv ./target/release/substrate ./artifacts/substrate/.
     - echo -n "Substrate version = "
     - if [ "${CI_COMMIT_TAG}" ]; then
@@ -292,19 +293,13 @@ build-linux-substrate:
     - sccache -s
 
 build-linux-subkey:
-  stage:                           build
-  <<:                              *collect-artifacts
-  <<:                              *docker-env
-  <<:                              *build-only
-  except:
-    variables:
-      - $DEPLOY_TAG
+  <<:                              *build-binary
+  before_script:
+    - mkdir -p ./artifacts/subkey
   script:
     - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
     - cd -
-    - sccache -s
-    - mkdir -p ./artifacts/subkey
     - mv ./target/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
     - ./artifacts/subkey/subkey --version |
