@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#![warn(missing_docs)]
-
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use std::{
 	clone::Clone,
@@ -66,10 +64,9 @@ where
 			return;
 		}
 
-		addresses.sort_by(|a, b| {
+		addresses.sort_unstable_by(|a, b| {
 			a.as_ref()
-				.partial_cmp(b.as_ref())
-				.expect("partial cmp of two u8 slices can not fail")
+				.cmp(b.as_ref())
 		});
 		self.cache.insert(id, addresses);
 	}
@@ -95,10 +92,9 @@ where
 			.collect::<Vec<Addr>>();
 
 		addresses.dedup();
-		addresses.sort_by(|a, b| {
+		addresses.sort_unstable_by(|a, b| {
 			a.as_ref()
-				.partial_cmp(b.as_ref())
-				.expect("partial cmp of two u8 slices can not fail")
+				.cmp(b.as_ref())
 		});
 
 		addresses
