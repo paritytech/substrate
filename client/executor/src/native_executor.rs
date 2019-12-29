@@ -16,20 +16,15 @@
 
 use crate::{
 	RuntimeInfo, error::{Error, Result},
-	wasm_runtime::{RuntimesCache, WasmExecutionMethod, WasmRuntime},
+	wasm_runtime::{RuntimesCache, WasmExecutionMethod},
 };
-
 use sp_version::{NativeVersion, RuntimeVersion};
-
 use codec::{Decode, Encode};
-
 use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
-
 use log::trace;
-
 use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}};
-
 use sp_wasm_interface::{HostFunctions, Function};
+use sc_executor_common::wasm_runtime::WasmRuntime;
 
 thread_local! {
 	static RUNTIMES_CACHE: RefCell<RuntimesCache> = RefCell::new(RuntimesCache::new());

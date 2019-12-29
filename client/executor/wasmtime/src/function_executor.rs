@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::allocator::FreeingBumpHeapAllocator;
-use crate::error::{Error, Result};
-use crate::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
-use crate::wasmtime::util::{
+use sc_executor_common::allocator::FreeingBumpHeapAllocator;
+use sc_executor_common::error::{Error, Result};
+use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
+use crate::util::{
 	checked_range, cranelift_ir_signature, read_memory_into, write_memory_from,
 };
 
@@ -173,7 +173,7 @@ impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 		let exec_code_buf = self.compiler
 			.get_published_trampoline(func_ptr, &signature, value_size)
 			.map_err(ActionError::Setup)
-			.map_err(Error::Wasmtime)?;
+			.map_err(|e| Error::Other(e.to_string()))?;
 
 		// Call the trampoline.
 		if let Err(message) = unsafe {

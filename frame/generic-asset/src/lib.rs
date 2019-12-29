@@ -321,7 +321,7 @@ impl<AccountId> Into<PermissionVersions<AccountId>> for PermissionLatest<Account
 }
 
 decl_error! {
-	/// Error for the identity module.
+	/// Error for the generic-asset module.
 	pub enum Error for Module<T: Trait> {
 		/// No new assets id available.
 		NoIdAvailable,

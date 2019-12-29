@@ -31,7 +31,7 @@ hex-literal = "0.2.1"
 jsonrpc-core = "14.0.3"
 log = "0.4.8"
 rand = "0.7.2"
-structopt = "0.3.3"
+structopt = "=0.3.7"
 
 # primitives
 sp-authority-discovery = { version = "2.0.0",  path = "../../../primitives/authority-discovery" }
@@ -107,7 +107,7 @@ tempfile = "3.1.0"
 [build-dependencies]
 sc-cli = { version = "2.0.0", package = "sc-cli", path = "../../../client/cli" }
 build-script-utils = { version = "2.0.0", package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
-structopt = "0.3.3"
+structopt = "=0.3.7"
 vergen = "3.0.4"
 
 [features]
