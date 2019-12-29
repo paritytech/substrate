@@ -76,6 +76,7 @@ impl<Hash: Encode + Decode + MaybeMallocSizeOf> Digest<Hash> {
 /// Digest item that is able to encode/decode 'system' digest items and
 /// provide opaque access to other items.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
+#[cfg_attr(featuers = "std", derive(MallocSizeOf))]
 pub enum DigestItem<Hash> {
 	/// System digest item that contains the root of changes trie at given
 	/// block. It is created for every block iff runtime supports changes
@@ -120,19 +121,6 @@ impl<'a, Hash: Decode> serde::Deserialize<'a> for DigestItem<Hash> {
 		let r = sp_core::bytes::deserialize(de)?;
 		Decode::decode(&mut &r[..])
 			.map_err(|e| serde::de::Error::custom(format!("Decode error: {}", e)))
-	}
-}
-
-#[cfg(feature = "std")]
-impl<Hash: MaybeMallocSizeOf> MallocSizeOf for DigestItem<Hash> {
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		match self {
-			DigestItem::ChangesTrieRoot(hash) => hash.size_of(ops),
-			DigestItem::Consensus(_, v) => v.size_of(ops),
-			DigestItem::Other(v) => v.size_of(ops),
-			DigestItem::PreRuntime(_, v) => v.size_of(ops),
-			DigestItem::Seal(_, v) => v.size_of(ops),
-		}
 	}
 }
 
