@@ -247,7 +247,7 @@ impl traits::IdentifyAccount for MultiSigner {
 			MultiSigner::Ed25519(who) => <[u8; 32]>::from(who).into(),
 			MultiSigner::Sr25519(who) => <[u8; 32]>::from(who).into(),
 			MultiSigner::Ecdsa(who) => sp_io::hashing::blake2_256(
-				&who.as_compressed().expect("what should we do?")[..],
+				&who.as_compressed().expect("`who` is a valid `ECDSA` public key; qed")[..],
 			).into(),
 		}
 	}
