@@ -17,8 +17,8 @@
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use std::{
 	clone::Clone,
-	cmp::{Eq, PartialEq},
-	collections::HashMap,
+	cmp::{Eq, Ord, PartialEq},
+	collections::BTreeMap,
 	convert::AsRef,
 	hash::Hash,
 };
@@ -36,7 +36,7 @@ const MAX_NUM_AUTHORITY_CONN: usize = 10;
 // group. To ensure this map doesn't grow indefinitely `purge_old_authorities_from_cache`
 // function is called each time we add a new entry.
 pub(super) struct AddrCache<Id, Addr> {
-	cache: HashMap<Id, Vec<Addr>>,
+	cache: BTreeMap<Id, Vec<Addr>>,
 
 	/// Random number to seed address selection RNG.
 	///
@@ -49,12 +49,12 @@ pub(super) struct AddrCache<Id, Addr> {
 
 impl<Id, Addr> AddrCache<Id, Addr>
 where
-	Id: Eq + Hash,
+	Id: Clone + Eq + Hash + Ord,
 	Addr: Clone + PartialEq + AsRef<[u8]>,
 {
 	pub fn new() -> Self {
 		AddrCache {
-			cache: HashMap::new(),
+			cache: BTreeMap::new(),
 			rand_addr_selection_seed: rand::thread_rng().gen(),
 		}
 	}
@@ -64,10 +64,7 @@ where
 			return;
 		}
 
-		addresses.sort_unstable_by(|a, b| {
-			a.as_ref()
-				.cmp(b.as_ref())
-		});
+		addresses.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
 		self.cache.insert(id, addresses);
 	}
 
@@ -92,10 +89,7 @@ where
 			.collect::<Vec<Addr>>();
 
 		addresses.dedup();
-		addresses.sort_unstable_by(|a, b| {
-			a.as_ref()
-				.cmp(b.as_ref())
-		});
+		addresses.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
 
 		addresses
 			.choose_multiple(&mut rng, MAX_NUM_AUTHORITY_CONN)
@@ -104,7 +98,17 @@ where
 	}
 
 	pub fn retain_ids(&mut self, ids: &Vec<Id>) {
-		self.cache.retain(|id, _addresses| ids.contains(id))
+		let to_remove = self
+			.cache
+			.iter()
+			.filter(|(id, _addresses)| !ids.contains(id))
+			.map(|entry| entry.0)
+			.cloned()
+			.collect::<Vec<Id>>();
+
+		for key in to_remove {
+			self.cache.remove(&key);
+		}
 	}
 }
 
@@ -176,5 +180,21 @@ mod tests {
 
 		// Expect same address of first authority.
 		assert!(second_subset.contains(&first_subset[0]));
+	}
+
+	#[test]
+	fn retains_only_entries_of_provided_ids() {
+		let mut cache = AddrCache::new();
+
+		cache.insert(1, vec![vec![10]]);
+		cache.insert(2, vec![vec![20]]);
+		cache.insert(3, vec![vec![30]]);
+
+		cache.retain_ids(&vec![1, 3]);
+
+		let mut subset = cache.get_subset();
+		subset.sort();
+
+		assert_eq!(vec![vec![10], vec![30]], subset);
 	}
 }
