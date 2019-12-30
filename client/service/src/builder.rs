@@ -1116,11 +1116,15 @@ ServiceBuilder<
 		});
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 4d0686b3f94cc9f4abd2032be06ac75cdc9c112f
 		// prometheus init
 		match config.prometheus_endpoint {
 			None => (),
 			Some(x) => {
 				let _prometheus = sc_prometheus::init_prometheus(x);
+<<<<<<< HEAD
 =======
 		match config.prometheus_endpoint {
 			None => (),
@@ -1134,6 +1138,8 @@ ServiceBuilder<
 			Some(x) => {
 				let _prometheus = sc_prometheus::init_prometheus(x);
 >>>>>>> 78ef39454... Milestone1: Final Version of v0.3
+=======
+>>>>>>> 4d0686b3f94cc9f4abd2032be06ac75cdc9c112f
 			}
 		}
 		// Grafana data source
