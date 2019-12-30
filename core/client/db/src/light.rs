@@ -533,14 +533,9 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	}
 
 	fn proof(&self, id: &BlockId<Block>) -> Option<Proof> {
-		let res = read_db(&*self.db, columns::KEY_LOOKUP, columns::PROOF, *id);
-		if res.is_ok() {
-			match res.unwrap() {
-				Some(proof) => Decode::decode(&mut &proof[..]),
-				None => None
-			}
-		} else {
-			None
+		match read_db(&*self.db, columns::KEY_LOOKUP, columns::PROOF, *id){
+			Ok(Some(proof)) => Decode::decode(&mut &proof[..]),
+			_ => None
 		}
 	}
 }

@@ -301,6 +301,8 @@ decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// Extrinsics nonce for accounts.
 		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
+		/// Relay Extrinsics is already exist.
+		pub RelayExtrinsic get(relay_extrinsic): map T::Hash => u16;
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
 		/// Total length in bytes for all extrinsics put together, for the current block.
@@ -492,6 +494,11 @@ impl<T: Trait> Module<T> {
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_nonce(who: &T::AccountId) {
 		<AccountNonce<T>>::insert(who, Self::account_nonce(who) + T::Index::one());
+	}
+
+	/// Set relay extrinsic exist flag.
+	pub fn set_relay_extrinsic_exist(hash: &T::Hash) {
+		<RelayExtrinsic<T>>::insert(hash, 1u16);
 	}
 
 	/// Note what the extrinsic data of the current extrinsic index is. If this is called, then
