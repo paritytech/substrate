@@ -5207,7 +5207,6 @@ dependencies = [
  "sc-block-builder 2.0.0",
  "sc-client-api 2.0.0",
  "sc-executor 2.0.0",
- "sc-prometheus 2.0.0",
  "sc-telemetry 2.0.0",
  "sp-api 2.0.0",
  "sp-blockchain 2.0.0",

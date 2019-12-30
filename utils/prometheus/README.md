@@ -27,7 +27,7 @@ Start Grafana
 
 Here is the entry point of prometheus core module in Parity Substrate.
 
-client/prometheus/src/lib.rs
+utils/prometheus/src/lib.rs
 ```rust
 #[macro_use]
 extern crate lazy_static;
@@ -137,6 +137,7 @@ lazy_static = "1.0"
 log = "0.4"
 prometheus = { version = "0.7", features = ["nightly", "process"]}
 tokio = "0.1"
+sp-runtime = { package = "sp-runtime",path = "../../primitives/runtime" }
 
 [dev-dependencies]
 reqwest = "0.9"
@@ -146,7 +147,7 @@ reqwest = "0.9"
 client/service/Cargo.toml
 ```toml
 [dependencies]
-sc-prometheus = { package = "sc-prometheus", path="../prometheus"}
+sc-prometheus = { package = "sc-prometheus", path="../../utils/prometheus"}
 ```
 
 **Metrics builder as same as substrate-telemetry**	
@@ -233,7 +234,7 @@ substrate/Cargo.toml
 ```toml
 [workspace]
 members = [
-	"client/prometheus",
+	"utils/prometheus",
 ```
 ### CLI Config
 client/cli/src/lib.rs
@@ -312,7 +313,7 @@ impl<C, G, E> Configuration<C, G, E> where
 ### Metrics Add 
 ex) consensus_FINALITY_HEIGHT
 
-client/prometheus/src/metrics.rs
+utils/prometheus/src/metrics.rs
 
 ```rust
 pub use crate::*;
@@ -344,7 +345,7 @@ lazy_static! {
 client/service/Cargo.toml
 ```rust
 ...
-sc-prometheus = { package = "sc-prometheus", path="../prometheus"}
+sc-prometheus = { package = "sc-prometheus", path="../../utils/prometheus"}
 ...
 ```
 client/service/src/builder.rs
@@ -424,7 +425,6 @@ Consensus metrics, namespace: `substrate`
 | consensus_finality_block_height_number | IntGauge  |          | finality Height of the chain                                    |
 | consensus_best_block_height_number     | IntGauge  |          | best Height of the chain                                        |
 | consensus_target_syn_number            | IntGauge  |          | syning Height target number                                     |
-| consensus_block_interval_seconds(Future)| Histogram |         | Time between this and last block (Block.Header.Time) in seconds |
 | consensus_num_txs                      | Gauge     |          | Number of transactions                                          |
 | consensus_node_memory                  | IntGauge  |          | Node's primary memory                                           |
 | consensus_node_cpu                     | IntGauge  |          | Node's cpu load                                                 |
