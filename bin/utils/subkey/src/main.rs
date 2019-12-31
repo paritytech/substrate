@@ -238,7 +238,7 @@ fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
 					<suri> 'The secret key URI. \
 						If the value is a file, the file content is used as URI. \
 						If not given, you will be prompted for the URI.'
-					<key-type> 'Key type gran/babe/aura/acco/imon/audi'
+					<key-type> 'Key type, examples: \"gran\", or \"imon\" '
 					[node-url] 'Node JSON-RPC endpoint, default \"http:://localhost:9933\"'
 				"),
 		])
@@ -402,7 +402,7 @@ where
 
 			// Just checking
 			let _key_type_id = sp_core::crypto::KeyTypeId::try_from(key_type)
-				.map_err(|_| Error::Static("Unknown keytype - provide gran/babe/aura/acco/imon/audi"))?;
+				.map_err(|_| Error::Static("Cannot convert argument to keytype: argument should be 4-character string"))?;
 
 			let rpc = rpc::RpcClient::new(node_url.to_string());
 

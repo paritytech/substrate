@@ -36,7 +36,7 @@ impl RpcClient {
 	) {
 		let url = self.url.to_string();
 
-		rt::run(rt::lazy(move || {
+		rt::run(
 			http::connect(&url)
 				.and_then(|client: AuthorClient<Hash, Hash>| {
 					client.insert_key(key_type, suri, public).map(|_| ())
@@ -44,6 +44,6 @@ impl RpcClient {
 				.map_err(|e| {
 					println!("Error inserting key: {:?}", e);
 				})
-		}));
+		);
 	}
 }
