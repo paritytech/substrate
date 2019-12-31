@@ -34,7 +34,7 @@ impl RpcClient {
 		suri: String,
 		public: Bytes,
 	) {
-		let url = self.url.to_string();
+		let url = self.url.clone();
 
 		rt::run(
 			http::connect(&url)
