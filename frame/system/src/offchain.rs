@@ -242,6 +242,7 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 	/// for given application crypto.
 	///
 	/// Returns a vector of results and account ids that were supported.
+	/// To be removed.
 	#[must_use]
 	fn submit_signed(
 		call: impl Into<Call> + Clone,
