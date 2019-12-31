@@ -190,6 +190,21 @@ impl<S, Block, H> ClientBackend<Block, H> for Backend<S, H> where
 		None
 	}
 
+	fn usage_info(&self) -> UsageInfo {
+		UsageInfo {
+			memory: MemoryInfo {
+				state_cache: self.used_state_cache_size(),
+				database_cache: 0,
+			},
+			io: IoInfo {
+				transactions: 0,
+				bytes_read: 0,
+				bytes_written: 0,
+				average_transaction_size: 0,
+			}
+		}
+	}
+
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
 		None
 	}

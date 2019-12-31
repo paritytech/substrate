@@ -1484,6 +1484,23 @@ impl<Block> sc_client_api::backend::Backend<Block, Blake2Hasher> for Backend<Blo
 		Some(self.offchain_storage.clone())
 	}
 
+	fn usage_info(&self) -> UsageInfo {
+		let storage_stats = self.storage.io_stats(true);
+
+		UsageInfo {
+			memory: MemoryInfo {
+				state_cache: self.used_state_cache_size(),
+				database_cache: 0,
+			},
+			io: IoInfo {
+				transactions: storage_stats.transactions,
+				bytes_read: storage_stats.bytes_read,
+				bytes_written: storage_stats.bytes_written,
+				average_transaction_size: storage_stats.avg_transaction_size() as u64,
+			}
+		}
+	}
+
 	fn revert(&self, n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
 		let mut best = self.blockchain.info().best_number;
 		let finalized = self.blockchain.info().finalized_number;
