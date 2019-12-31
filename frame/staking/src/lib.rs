@@ -1532,7 +1532,6 @@ impl<T: Trait> Module<T> {
 					// we simulate it in some tests.
 					total,
 				};
-				debug_assert!(total == to_balance(s.total));
 
 				if exposure.total < slot_stake {
 					slot_stake = exposure.total;
