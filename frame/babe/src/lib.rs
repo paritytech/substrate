@@ -20,11 +20,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
 #![deny(unused_imports)]
-pub use timestamp;
-use sp_timestamp;
+pub use pallet_timestamp;
 
 use sp_std::{result, prelude::*};
-use support::{decl_storage, decl_module, traits::FindAuthor, traits::Get};
+use frame_support::{decl_storage, decl_module, traits::FindAuthor, traits::Get};
 use sp_timestamp::OnTimestampSet;
 use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
 use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
@@ -34,12 +33,12 @@ use sp_staking::{
 };
 
 use codec::{Encode, Decode};
-use inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
-use babe_primitives::{
+use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
+use sp_consensus_babe::{
 	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, NextEpochDescriptor, RawBabePreDigest,
 	SlotNumber, inherents::{INHERENT_IDENTIFIER, BabeInherentData}
 };
-pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
+pub use sp_consensus_babe::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
 #[cfg(all(feature = "std", test))]
 mod tests;
@@ -47,7 +46,7 @@ mod tests;
 #[cfg(all(feature = "std", test))]
 mod mock;
 
-pub trait Trait: timestamp::Trait {
+pub trait Trait: pallet_timestamp::Trait {
 	/// The amount of time, in slots, that each epoch should last.
 	type EpochDuration: Get<SlotNumber>;
 
@@ -228,11 +227,11 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 	}
 }
 
-impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
+impl<T: Trait> pallet_session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	fn should_end_session(now: T::BlockNumber) -> bool {
 		// it might be (and it is in current implementation) that session module is calling
 		// should_end_session() from it's own on_initialize() handler
-		// => because session on_initialize() is called earlier than ours, let's ensure
+		// => because pallet_session on_initialize() is called earlier than ours, let's ensure
 		// that we have synced with digest before checking if session should be ended.
 		Self::do_initialize(now);
 
@@ -292,7 +291,7 @@ impl<T: Trait> Module<T> {
 	pub fn slot_duration() -> T::Moment {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of their slot.
-		<T as timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
+		<T as pallet_timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
 	}
 
 	/// Determine whether an epoch change should take place at this block.
@@ -367,7 +366,7 @@ impl<T: Trait> Module<T> {
 
 	fn deposit_consensus<U: Encode>(new: U) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(BABE_ENGINE_ID, new.encode());
-		<system::Module<T>>::deposit_log(log.into())
+		<frame_system::Module<T>>::deposit_log(log.into())
 	}
 
 	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
@@ -393,7 +392,7 @@ impl<T: Trait> Module<T> {
 			return;
 		}
 
-		let maybe_pre_digest = <system::Module<T>>::digest()
+		let maybe_pre_digest = <frame_system::Module<T>>::digest()
 			.logs
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())
@@ -476,7 +475,7 @@ impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -527,8 +526,8 @@ fn compute_randomness(
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {
-	type Call = timestamp::Call<T>;
-	type Error = MakeFatalError<inherents::Error>;
+	type Call = pallet_timestamp::Call<T>;
+	type Error = MakeFatalError<sp_inherents::Error>;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(_: &InherentData) -> Option<Self::Call> {
@@ -537,7 +536,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
 		let timestamp = match call {
-			timestamp::Call::set(ref timestamp) => timestamp.clone(),
+			pallet_timestamp::Call::set(ref timestamp) => timestamp.clone(),
 			_ => return Ok(()),
 		};
 
@@ -547,7 +546,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		if timestamp_based_slot == seal_slot {
 			Ok(())
 		} else {
-			Err(inherents::Error::from("timestamp set in block doesn't match slot in seal").into())
+			Err(sp_inherents::Error::from("timestamp set in block doesn't match slot in seal").into())
 		}
 	}
 }

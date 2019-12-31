@@ -20,7 +20,6 @@ use crate::{
 };
 use crate::{ExHashT, specialization::NetworkSpecialization};
 use crate::protocol::{CustomMessageOutcome, Protocol};
-use consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use futures::prelude::*;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
@@ -28,6 +27,7 @@ use libp2p::kad::record;
 use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
 use log::{debug, warn};
+use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, Justification};
 use std::iter;
 use void;

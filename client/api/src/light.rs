@@ -26,8 +26,8 @@ use sp_runtime::{
     },
     generic::BlockId
 };
-use primitives::ChangesTrieConfiguration;
-use state_machine::StorageProof;
+use sp_core::ChangesTrieConfiguration;
+use sp_state_machine::StorageProof;
 use sp_blockchain::{
 	HeaderMetadata, well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
 	Error as ClientError, Result as ClientResult,
@@ -304,7 +304,7 @@ pub mod tests {
 	use futures::future::Ready;
 	use parking_lot::Mutex;
     use sp_blockchain::Error as ClientError;
-    use test_primitives::{Block, Header, Extrinsic};
+    use sp_test_primitives::{Block, Header, Extrinsic};
 	use super::*;
 
 	pub type OkCallFetcher = Mutex<Vec<u8>>;

@@ -28,8 +28,8 @@
 use std::{collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
-use consensus::import_queue::{ImportQueue, Link};
-use consensus::import_queue::{BlockImportResult, BlockImportError};
+use sp_consensus::import_queue::{ImportQueue, Link};
+use sp_consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, sync::mpsc};
 use futures03::TryFutureExt as _;
 use log::{warn, error, info};
@@ -37,7 +37,7 @@ use libp2p::{PeerId, Multiaddr, kad::record};
 use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::swarm::NetworkBehaviour;
 use parking_lot::Mutex;
-use peerset::PeersetHandle;
+use sc_peerset::PeersetHandle;
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
 use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse_addr}};
@@ -176,7 +176,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			}
 		}
 
-		let peerset_config = peerset::PeersetConfig {
+		let peerset_config = sc_peerset::PeersetConfig {
 			in_peers: params.network_config.in_peers,
 			out_peers: params.network_config.out_peers,
 			bootnodes,
@@ -408,14 +408,20 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			.map(|(id, info)| (id.clone(), info.clone()))
 			.collect()
 	}
+
+	/// Removes a `PeerId` from the list of reserved peers.
+	pub fn remove_reserved_peer(&self, peer: PeerId) {
+		self.service.remove_reserved_peer(peer);
+	}
+
+	/// Adds a `PeerId` and its address as reserved. The string should encode the address
+	/// and peer ID of the remote node.
+	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
+		self.service.add_reserved_peer(peer)
+	}
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkService<B, S, H> {
-	/// Returns the network identity of the node.
-	pub fn local_peer_id(&self) -> PeerId {
-		self.local_peer_id.clone()
-	}
-
 	/// Writes a message on an open notifications channel. Has no effect if the notifications
 	/// channel with this protocol name is closed.
 	///
@@ -553,7 +559,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		self.peerset.remove_reserved_peer(peer);
 	}
 
-	/// Adds a `PeerId` and its address as reserved.
+	/// Adds a `PeerId` and its address as reserved. The string should encode the address
+	/// and peer ID of the remote node.
 	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
 		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
 		self.peerset.add_reserved_peer(peer_id.clone());
@@ -597,14 +604,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	pub fn num_connected(&self) -> usize {
 		self.num_connected.load(Ordering::Relaxed)
 	}
-
-	/// Returns the local external addresses.
-	pub fn external_addresses(&self) -> Vec<Multiaddr> {
-		self.external_addresses.lock().clone()
-	}
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::SyncOracle
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> sp_consensus::SyncOracle
 	for NetworkService<B, S, H>
 {
 	fn is_major_syncing(&mut self) -> bool {
@@ -616,7 +618,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::Sy
 	}
 }
 
-impl<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::SyncOracle
+impl<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> sp_consensus::SyncOracle
 	for &'a NetworkService<B, S, H>
 {
 	fn is_major_syncing(&mut self) -> bool {
@@ -634,7 +636,7 @@ pub trait NetworkStateInfo {
 	fn external_addresses(&self) -> Vec<Multiaddr>;
 
 	/// Returns the local Peer ID.
-	fn peer_id(&self) -> PeerId;
+	fn local_peer_id(&self) -> PeerId;
 }
 
 impl<B, S, H> NetworkStateInfo for NetworkService<B, S, H>
@@ -649,7 +651,7 @@ impl<B, S, H> NetworkStateInfo for NetworkService<B, S, H>
 	}
 
 	/// Returns the local Peer ID.
-	fn peer_id(&self) -> PeerId {
+	fn local_peer_id(&self) -> PeerId {
 		self.local_peer_id.clone()
 	}
 }

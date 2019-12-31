@@ -55,23 +55,23 @@
 use futures::prelude::*;
 use log::{debug, error, info};
 use futures::sync::mpsc;
-use client_api::{BlockchainEvents, CallExecutor, backend::Backend, ExecutionStrategy};
+use sc_client_api::{BlockchainEvents, CallExecutor, backend::Backend, ExecutionStrategy};
 use sp_blockchain::{HeaderBackend, Error as ClientError};
-use client::Client;
-use codec::{Decode, Encode};
+use sc_client::Client;
+use parity_scale_codec::{Decode, Encode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
-use keystore::KeyStorePtr;
-use inherents::InherentDataProviders;
-use consensus_common::SelectChain;
-use primitives::{H256, Blake2Hasher, Pair};
+use sc_keystore::KeyStorePtr;
+use sp_inherents::InherentDataProviders;
+use sp_consensus::SelectChain;
+use sp_core::{H256, Blake2Hasher, Pair};
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
 
 use sp_finality_tracker;
 
-use grandpa::Error as GrandpaError;
-use grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
+use finality_grandpa::Error as GrandpaError;
+use finality_grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
 
 use std::{fmt, io};
 use std::sync::Arc;
@@ -90,7 +90,6 @@ mod observer;
 mod until_imported;
 mod voting_rule;
 
-pub use network_gossip::Network;
 pub use finality_proof::FinalityProofProvider;
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
@@ -103,19 +102,19 @@ use aux_schema::PersistentData;
 use environment::{Environment, VoterSetState};
 use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
-use communication::NetworkBridge;
-use fg_primitives::{AuthorityList, AuthorityPair, AuthoritySignature, SetId};
+use communication::{NetworkBridge, Network as NetworkT};
+use sp_finality_grandpa::{AuthorityList, AuthorityPair, AuthoritySignature, SetId};
 
 // Re-export these two because it's just so damn convenient.
-pub use fg_primitives::{AuthorityId, ScheduledChange};
+pub use sp_finality_grandpa::{AuthorityId, ScheduledChange};
 
 #[cfg(test)]
 mod tests;
 
 /// A GRANDPA message for a substrate chain.
-pub type Message<Block> = grandpa::Message<<Block as BlockT>::Hash, NumberFor<Block>>;
+pub type Message<Block> = finality_grandpa::Message<<Block as BlockT>::Hash, NumberFor<Block>>;
 /// A signed message.
-pub type SignedMessage<Block> = grandpa::SignedMessage<
+pub type SignedMessage<Block> = finality_grandpa::SignedMessage<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
@@ -123,27 +122,27 @@ pub type SignedMessage<Block> = grandpa::SignedMessage<
 >;
 
 /// A primary propose message for this chain's block type.
-pub type PrimaryPropose<Block> = grandpa::PrimaryPropose<<Block as BlockT>::Hash, NumberFor<Block>>;
+pub type PrimaryPropose<Block> = finality_grandpa::PrimaryPropose<<Block as BlockT>::Hash, NumberFor<Block>>;
 /// A prevote message for this chain's block type.
-pub type Prevote<Block> = grandpa::Prevote<<Block as BlockT>::Hash, NumberFor<Block>>;
+pub type Prevote<Block> = finality_grandpa::Prevote<<Block as BlockT>::Hash, NumberFor<Block>>;
 /// A precommit message for this chain's block type.
-pub type Precommit<Block> = grandpa::Precommit<<Block as BlockT>::Hash, NumberFor<Block>>;
+pub type Precommit<Block> = finality_grandpa::Precommit<<Block as BlockT>::Hash, NumberFor<Block>>;
 /// A catch up message for this chain's block type.
-pub type CatchUp<Block> = grandpa::CatchUp<
+pub type CatchUp<Block> = finality_grandpa::CatchUp<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
 	AuthorityId,
 >;
 /// A commit message for this chain's block type.
-pub type Commit<Block> = grandpa::Commit<
+pub type Commit<Block> = finality_grandpa::Commit<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
 	AuthorityId,
 >;
 /// A compact commit message for this chain's block type.
-pub type CompactCommit<Block> = grandpa::CompactCommit<
+pub type CompactCommit<Block> = finality_grandpa::CompactCommit<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
@@ -152,7 +151,7 @@ pub type CompactCommit<Block> = grandpa::CompactCommit<
 /// A global communication input stream for commits and catch up messages. Not
 /// exposed publicly, used internally to simplify types in the communication
 /// layer.
-type CommunicationIn<Block> = grandpa::voter::CommunicationIn<
+type CommunicationIn<Block> = finality_grandpa::voter::CommunicationIn<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
@@ -162,7 +161,7 @@ type CommunicationIn<Block> = grandpa::voter::CommunicationIn<
 /// Global communication input stream for commits and catch up messages, with
 /// the hash type not being derived from the block, useful for forcing the hash
 /// to some type (e.g. `H256`) when the compiler can't do the inference.
-type CommunicationInH<Block, H> = grandpa::voter::CommunicationIn<
+type CommunicationInH<Block, H> = finality_grandpa::voter::CommunicationIn<
 	H,
 	NumberFor<Block>,
 	AuthoritySignature,
@@ -171,7 +170,7 @@ type CommunicationInH<Block, H> = grandpa::voter::CommunicationIn<
 
 /// A global communication sink for commits. Not exposed publicly, used
 /// internally to simplify types in the communication layer.
-type CommunicationOut<Block> = grandpa::voter::CommunicationOut<
+type CommunicationOut<Block> = finality_grandpa::voter::CommunicationOut<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
@@ -181,7 +180,7 @@ type CommunicationOut<Block> = grandpa::voter::CommunicationOut<
 /// Global communication sink for commits with the hash type not being derived
 /// from the block, useful for forcing the hash to some type (e.g. `H256`) when
 /// the compiler can't do the inference.
-type CommunicationOutH<Block, H> = grandpa::voter::CommunicationOut<
+type CommunicationOutH<Block, H> = finality_grandpa::voter::CommunicationOut<
 	H,
 	NumberFor<Block>,
 	AuthoritySignature,
@@ -207,7 +206,7 @@ pub struct Config {
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 	/// The keystore that manages the keys of this node.
-	pub keystore: Option<keystore::KeyStorePtr>,
+	pub keystore: Option<sc_keystore::KeyStorePtr>,
 }
 
 impl Config {
@@ -273,13 +272,14 @@ pub(crate) trait BlockSyncRequester<Block: BlockT> {
 	/// If the given vector of peers is empty then the underlying implementation
 	/// should make a best effort to fetch the block from any peers it is
 	/// connected to (NOTE: this assumption will change in the future #3629).
-	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
+	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
 }
 
-impl<Block> BlockSyncRequester<Block> for NetworkBridge<Block> where
+impl<Block, Network> BlockSyncRequester<Block> for NetworkBridge<Block, Network> where
 	Block: BlockT,
+	Network: NetworkT<Block>,
 {
-	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>) {
+	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: Block::Hash, number: NumberFor<Block>) {
 		NetworkBridge::set_sync_fork_request(self, peers, hash, number)
 	}
 }
@@ -332,8 +332,8 @@ impl<H, N> From<ClientError> for CommandOrError<H, N> {
 	}
 }
 
-impl<H, N> From<grandpa::Error> for CommandOrError<H, N> {
-	fn from(e: grandpa::Error) -> Self {
+impl<H, N> From<finality_grandpa::Error> for CommandOrError<H, N> {
+	fn from(e: finality_grandpa::Error) -> Self {
 		CommandOrError::Error(Error::from(e))
 	}
 }
@@ -446,11 +446,11 @@ where
 	))
 }
 
-fn global_communication<Block: BlockT<Hash=H256>, B, E, RA>(
+fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	set_id: SetId,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
-	network: &NetworkBridge<Block>,
+	network: &NetworkBridge<Block, N>,
 	keystore: &Option<KeyStorePtr>,
 ) -> (
 	impl Stream<
@@ -464,6 +464,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, RA>(
 ) where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	N: NetworkT<Block>,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
@@ -496,7 +497,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, RA>(
 fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H256>, RA>(
 	client: Arc<Client<B, E, Block, RA>>,
 	inherent_data_providers: &InherentDataProviders,
-) -> Result<(), consensus_common::Error> where
+) -> Result<(), sp_consensus::Error> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
@@ -514,7 +515,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 					Ok(info.finalized_number)
 				}
 			}))
-			.map_err(|err| consensus_common::Error::InherentData(err.into()))
+			.map_err(|err| sp_consensus::Error::InherentData(err.into()))
 	} else {
 		Ok(())
 	}
@@ -548,7 +549,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp>(
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network<Block> + Send + Clone + 'static,
+	N: NetworkT<Block> + Send + Sync + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 	NumberFor<Block>: BlockNumberOps,
@@ -641,15 +642,16 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp>(
 
 /// Future that powers the voter.
 #[must_use]
-struct VoterWork<B, E, Block: BlockT, RA, SC, VR> {
+struct VoterWork<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
 	voter: Box<dyn Future<Item = (), Error = CommandOrError<Block::Hash, NumberFor<Block>>> + Send>,
-	env: Arc<Environment<B, E, Block, RA, SC, VR>>,
+	env: Arc<Environment<B, E, Block, N, RA, SC, VR>>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
 
-impl<B, E, Block, RA, SC, VR> VoterWork<B, E, Block, RA, SC, VR>
+impl<B, E, Block, N, RA, SC, VR> VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT<Hash=H256>,
+ 	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -660,7 +662,7 @@ where
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
 		config: Config,
-		network: NetworkBridge<Block>,
+		network: NetworkBridge<Block, N>,
 		select_chain: SC,
 		voting_rule: VR,
 		persistent_data: PersistentData<Block>,
@@ -821,9 +823,10 @@ where
 	}
 }
 
-impl<B, E, Block, RA, SC, VR> Future for VoterWork<B, E, Block, RA, SC, VR>
+impl<B, E, Block, N, RA, SC, VR> Future for VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT<Hash=H256>,
+ 	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -880,7 +883,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp>(
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network<Block> + Send + Clone + 'static,
+	N: NetworkT<Block> + Send + Sync + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
@@ -902,11 +905,11 @@ pub fn setup_disabled_grandpa<B, E, Block: BlockT<Hash=H256>, RA, N>(
 	client: Arc<Client<B, E, Block, RA>>,
 	inherent_data_providers: &InherentDataProviders,
 	network: N,
-) -> Result<(), consensus_common::Error> where
+) -> Result<(), sp_consensus::Error> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
-	N: Network<Block> + Send + Clone + 'static,
+	N: NetworkT<Block> + Send + Clone + 'static,
 {
 	register_finality_tracker_inherent_data_provider(
 		client,

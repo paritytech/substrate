@@ -26,9 +26,9 @@ use sp_std::collections::btree_map::{BTreeMap, Entry};
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Zero};
-use support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
-use support::{storage::child, StorageMap};
-use system;
+use frame_support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
+use frame_support::{storage::child, StorageMap};
+use frame_system;
 
 // Note: we don't provide Option<Contract> because we can't create
 // the trie_id in the overlay, thus we provide an overlay on the fields
@@ -100,7 +100,7 @@ impl<T: Trait> Default for ChangeEntry<T> {
 	}
 }
 
-pub type ChangeSet<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>>;
+pub type ChangeSet<T> = BTreeMap<<T as frame_system::Trait>::AccountId, ChangeEntry<T>>;
 
 pub trait AccountDb<T: Trait> {
 	/// Account is used when overlayed otherwise trie_id must be provided.
@@ -184,7 +184,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 							code_hash,
 							storage_size: T::StorageSizeOffset::get(),
 							trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
-							deduct_block: <system::Module<T>>::block_number(),
+							deduct_block: <frame_system::Module<T>>::block_number(),
 							rent_allowance: <BalanceOf<T>>::max_value(),
 							last_write: None,
 						}
@@ -195,7 +195,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 							code_hash,
 							storage_size: T::StorageSizeOffset::get(),
 							trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
-							deduct_block: <system::Module<T>>::block_number(),
+							deduct_block: <frame_system::Module<T>>::block_number(),
 							rent_allowance: <BalanceOf<T>>::max_value(),
 							last_write: None,
 						}
@@ -213,7 +213,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				}
 
 				if !changed.storage.is_empty() {
-					new_info.last_write = Some(<system::Module<T>>::block_number());
+					new_info.last_write = Some(<frame_system::Module<T>>::block_number());
 				}
 
 				for (k, v) in changed.storage.into_iter() {

@@ -19,29 +19,29 @@ use std::sync::Arc;
 use futures::prelude::*;
 use futures::{future, sync::mpsc};
 
-use grandpa::{
+use finality_grandpa::{
 	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
 };
 use log::{debug, info, warn};
 
-use consensus_common::SelectChain;
-use client_api::{CallExecutor, backend::Backend};
-use client::Client;
+use sp_consensus::SelectChain;
+use sc_client_api::{CallExecutor, backend::Backend};
+use sc_client::Client;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
-use primitives::{H256, Blake2Hasher};
+use sp_core::{H256, Blake2Hasher};
 
 use crate::{
 	global_communication, CommandOrError, CommunicationIn, Config, environment,
-	LinkHalf, Network, Error, aux_schema::PersistentData, VoterCommand, VoterSetState,
+	LinkHalf, Error, aux_schema::PersistentData, VoterCommand, VoterSetState,
 };
 use crate::authorities::SharedAuthoritySet;
-use crate::communication::NetworkBridge;
+use crate::communication::{Network as NetworkT, NetworkBridge};
 use crate::consensus_changes::SharedConsensusChanges;
-use fg_primitives::AuthorityId;
+use sp_finality_grandpa::AuthorityId;
 
 struct ObserverChain<'a, Block: BlockT, B, E, RA>(&'a Client<B, E, Block, RA>);
 
-impl<'a, Block: BlockT<Hash=H256>, B, E, RA> grandpa::Chain<Block::Hash, NumberFor<Block>>
+impl<'a, Block: BlockT<Hash=H256>, B, E, RA> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
 	for ObserverChain<'a, Block, B, E, RA> where
 		B: Backend<Block, Blake2Hasher>,
 		E: CallExecutor<Block, Blake2Hasher>,
@@ -84,7 +84,7 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 	let observer = commits.fold(last_finalized_number, move |last_finalized_number, global| {
 		let (round, commit, callback) = match global {
 			voter::CommunicationIn::Commit(round, commit, callback) => {
-				let commit = grandpa::Commit::from(commit);
+				let commit = finality_grandpa::Commit::from(commit);
 				(round, commit, callback)
 			},
 			voter::CommunicationIn::CatchUp(..) => {
@@ -99,7 +99,7 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 			return future::ok(last_finalized_number);
 		}
 
-		let validation_result = match grandpa::validate_commit(
+		let validation_result = match finality_grandpa::validate_commit(
 			&commit,
 			&voters,
 			&ObserverChain(&*client),
@@ -130,14 +130,14 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 			// and that implies that the next round has started.
 			note_round(round + 1);
 
-			grandpa::process_commit_validation_result(validation_result, callback);
+			finality_grandpa::process_commit_validation_result(validation_result, callback);
 
 			// proceed processing with new finalized block number
 			future::ok(finalized_number)
 		} else {
 			debug!(target: "afg", "Received invalid commit: ({:?}, {:?})", round, commit);
 
-			grandpa::process_commit_validation_result(validation_result, callback);
+			finality_grandpa::process_commit_validation_result(validation_result, callback);
 
 			// commit is invalid, continue processing commits with the current state
 			future::ok(last_finalized_number)
@@ -160,7 +160,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC, Sp>(
 ) -> ::sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network<Block> + Send + Clone + 'static,
+	N: NetworkT<Block> + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: Send + Sync + 'static,
@@ -202,18 +202,19 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC, Sp>(
 
 /// Future that powers the observer.
 #[must_use]
-struct ObserverWork<B: BlockT<Hash=H256>, E, Backend, RA> {
+struct ObserverWork<B: BlockT<Hash=H256>, N: NetworkT<B>, E, Backend, RA> {
 	observer: Box<dyn Future<Item = (), Error = CommandOrError<B::Hash, NumberFor<B>>> + Send>,
 	client: Arc<Client<Backend, E, B, RA>>,
-	network: NetworkBridge<B>,
+	network: NetworkBridge<B, N>,
 	persistent_data: PersistentData<B>,
-	keystore: Option<keystore::KeyStorePtr>,
+	keystore: Option<sc_keystore::KeyStorePtr>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 }
 
-impl<B, E, Bk, RA> ObserverWork<B, E, Bk, RA>
+impl<B, N, E, Bk, RA> ObserverWork<B, N, E, Bk, RA>
 where
 	B: BlockT<Hash=H256>,
+	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<B, Blake2Hasher> + Send + Sync + 'static,
@@ -221,9 +222,9 @@ where
 {
 	fn new(
 		client: Arc<Client<Bk, E, B, RA>>,
-		network: NetworkBridge<B>,
+		network: NetworkBridge<B, N>,
 		persistent_data: PersistentData<B>,
-		keystore: Option<keystore::KeyStorePtr>,
+		keystore: Option<sc_keystore::KeyStorePtr>,
 		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	) -> Self {
 
@@ -325,9 +326,10 @@ where
 	}
 }
 
-impl<B, E, Bk, RA> Future for ObserverWork<B, E, Bk, RA>
+impl<B, N, E, Bk, RA> Future for ObserverWork<B, N, E, Bk, RA>
 where
 	B: BlockT<Hash=H256>,
+	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<B, Blake2Hasher> + Send + Sync + 'static,

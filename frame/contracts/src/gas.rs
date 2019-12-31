@@ -19,8 +19,9 @@ use sp_std::convert::TryFrom;
 use sp_runtime::traits::{
 	CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto,
 };
-use support::{
+use frame_support::{
 	traits::{Currency, ExistenceRequirement, Imbalance, OnUnbalanced, WithdrawReason}, StorageValue,
+	dispatch::DispatchError,
 };
 
 #[cfg(test)]
@@ -201,7 +202,7 @@ impl<T: Trait> GasMeter<T> {
 pub fn buy_gas<T: Trait>(
 	transactor: &T::AccountId,
 	gas_limit: Gas,
-) -> Result<(GasMeter<T>, NegativeImbalanceOf<T>), &'static str> {
+) -> Result<(GasMeter<T>, NegativeImbalanceOf<T>), DispatchError> {
 	// Buy the specified amount of gas.
 	let gas_price = <Module<T>>::gas_price();
 	let cost = if gas_price.is_zero() {

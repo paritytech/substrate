@@ -20,28 +20,28 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use log::{debug, warn, info};
-use codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode};
 use futures::prelude::*;
 use futures03::future::{FutureExt as _, TryFutureExt as _};
 use futures_timer::Delay;
 use parking_lot::RwLock;
 use sp_blockchain::{HeaderBackend, Error as ClientError};
 
-use client_api::{
+use sc_client_api::{
 	BlockchainEvents,
 	backend::{Backend},
 	Finalizer,
 	call_executor::CallExecutor,
 	utils::is_descendent_of,
 };
-use client::{
+use sc_client::{
 	apply_aux, Client,
 };
-use grandpa::{
+use finality_grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
 	voter, voter_set::VoterSet,
 };
-use primitives::{Blake2Hasher, H256, Pair};
+use sp_core::{Blake2Hasher, H256, Pair};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
@@ -53,16 +53,17 @@ use crate::{
 	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
 };
 
-use consensus_common::SelectChain;
+use sp_consensus::SelectChain;
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
+use crate::communication::Network as NetworkT;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
-use fg_primitives::{AuthorityId, AuthoritySignature, SetId, RoundNumber};
+use sp_finality_grandpa::{AuthorityId, AuthoritySignature, SetId, RoundNumber};
 
-type HistoricalVotes<Block> = grandpa::HistoricalVotes<
+type HistoricalVotes<Block> = finality_grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
@@ -105,10 +106,10 @@ impl<Block: BlockT> Encode for CompletedRounds<Block> {
 	}
 }
 
-impl<Block: BlockT> codec::EncodeLike for CompletedRounds<Block> {}
+impl<Block: BlockT> parity_scale_codec::EncodeLike for CompletedRounds<Block> {}
 
 impl<Block: BlockT> Decode for CompletedRounds<Block> {
-	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
+	fn decode<I: parity_scale_codec::Input>(value: &mut I) -> Result<Self, parity_scale_codec::Error> {
 		<(Vec<CompletedRound<Block>>, SetId, Vec<AuthorityId>)>::decode(value)
 			.map(|(rounds, set_id, voters)| CompletedRounds {
 				rounds: rounds.into(),
@@ -376,20 +377,20 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<B, E, Block: BlockT,  RA, SC, VR> {
+pub(crate) struct Environment<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
 	pub(crate) client: Arc<Client<B, E, Block, RA>>,
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-	pub(crate) network: crate::communication::NetworkBridge<Block>,
+	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: SetId,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) voting_rule: VR,
 }
 
-impl<B, E, Block: BlockT, RA, SC, VR> Environment<B, E, Block, RA, SC, VR> {
+impl<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> Environment<B, E, Block, N, RA, SC, VR> {
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
@@ -405,13 +406,14 @@ impl<B, E, Block: BlockT, RA, SC, VR> Environment<B, E, Block, RA, SC, VR> {
 	}
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, RA, SC, VR>
-	grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, RA, SC, VR>
+impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC, VR>
+	finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
+for Environment<B, E, Block, N, RA, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+ 	N: NetworkT<Block> + 'static + Send,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
 	RA: Send + Sync,
@@ -554,13 +556,14 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, SC, VR>
+impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR>
 	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, RA, SC, VR>
+for Environment<B, E, Block, N, RA, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
+ 	N: NetworkT<Block> + 'static + Send,
 	RA: 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
@@ -572,11 +575,11 @@ where
 
 	// regular round message streams
 	type In = Box<dyn Stream<
-		Item = ::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
+		Item = ::finality_grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
 		Error = Self::Error,
 	> + Send>;
 	type Out = Box<dyn Sink<
-		SinkItem = ::grandpa::Message<Block::Hash, NumberFor<Block>>,
+		SinkItem = ::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
 		SinkError = Self::Error,
 	> + Send>;
 
@@ -906,7 +909,7 @@ where
 	fn prevote_equivocation(
 		&self,
 		_round: RoundNumber,
-		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
+		equivocation: ::finality_grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		// nothing yet; this could craft misbehavior reports of some kind.
@@ -1007,8 +1010,8 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			);
 
 			if let Err(e) = write_result {
-				warn!(target: "finality", "Failed to write updated consensus changes to disk. Bailing.");
-				warn!(target: "finality", "Node is in a potentially inconsistent state.");
+				warn!(target: "afg", "Failed to write updated consensus changes to disk. Bailing.");
+				warn!(target: "afg", "Node is in a potentially inconsistent state.");
 
 				return Err(e.into());
 			}
@@ -1060,7 +1063,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
 		client.apply_finality(import_op, BlockId::Hash(hash), justification, true).map_err(|e| {
-			warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+			warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 			e
 		})?;
 		telemetry!(CONSENSUS_INFO; "afg.finalized_blocks_up_to";
@@ -1100,8 +1103,8 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			);
 
 			if let Err(e) = write_result {
-				warn!(target: "finality", "Failed to write updated authority set to disk. Bailing.");
-				warn!(target: "finality", "Node is in a potentially inconsistent state.");
+				warn!(target: "afg", "Failed to write updated authority set to disk. Bailing.");
+				warn!(target: "afg", "Node is in a potentially inconsistent state.");
 
 				return Err(e.into());
 			}

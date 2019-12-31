@@ -1,4 +1,4 @@
-use support::codec::{Encode, Decode, EncodeLike};
+use frame_support::codec::{Encode, Decode, EncodeLike};
 
 pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
@@ -8,9 +8,10 @@ pub trait Trait: 'static + Eq + Clone {
 	type Hash;
 	type AccountId: Encode + EncodeLike + Decode;
 	type Event: From<Event>;
+	type ModuleToIndex: frame_support::traits::ModuleToIndex;
 }
 
-support::decl_module! {
+frame_support::decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 	}
 }
@@ -20,15 +21,15 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-support::decl_event!(
+frame_support::decl_event!(
 	pub enum Event {
 		ExtrinsicSuccess,
 		ExtrinsicFailed,
 	}
 );
 
-support::decl_error! {
-	pub enum Error {
+frame_support::decl_error! {
+	pub enum Error for Module<T: Trait> {
 		/// Test error documentation
 		TestError,
 		/// Error documentation

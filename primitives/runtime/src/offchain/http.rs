@@ -51,8 +51,8 @@ use sp_std::str;
 use sp_std::prelude::Vec;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::vec;
-use primitives::RuntimeDebug;
-use primitives::offchain::{
+use sp_core::RuntimeDebug;
+use sp_core::offchain::{
 	Timestamp,
 	HttpRequestId as RequestId,
 	HttpRequestStatus as RequestStatus,
@@ -516,7 +516,7 @@ impl<'a> HeadersIterator<'a> {
 mod tests {
 	use super::*;
 	use sp_io::TestExternalities;
-	use primitives::offchain::{
+	use sp_core::offchain::{
 		OffchainExt,
 		testing,
 	};

@@ -20,13 +20,13 @@ use std::{marker::PhantomData, pin::Pin, sync::Arc};
 use codec::{Decode, Encode};
 use futures::{channel::oneshot, executor::{ThreadPool, ThreadPoolBuilder}, future::{Future, FutureExt, ready}};
 
-use client_api::{
+use sc_client_api::{
 	blockchain::HeaderBackend,
 	light::{Fetcher, RemoteCallRequest}
 };
-use primitives::{H256, Blake2Hasher, Hasher};
+use sp_core::{H256, Blake2Hasher, Hasher};
 use sp_runtime::{generic::BlockId, traits::{self, Block as BlockT}, transaction_validity::TransactionValidity};
-use txpool_api::runtime_api::TaggedTransactionQueue;
+use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 
 use crate::error::{self, Error};
 
@@ -54,7 +54,7 @@ impl<T, Block> FullChainApi<T, Block> where
 	}
 }
 
-impl<T, Block> txpool::ChainApi for FullChainApi<T, Block> where
+impl<T, Block> sc_transaction_graph::ChainApi for FullChainApi<T, Block> where
 	Block: BlockT<Hash = H256>,
 	T: traits::ProvideRuntimeApi + traits::BlockIdTo<Block> + 'static + Send + Sync,
 	T::Api: TaggedTransactionQueue<Block>,
@@ -68,7 +68,7 @@ impl<T, Block> txpool::ChainApi for FullChainApi<T, Block> where
 	fn validate_transaction(
 		&self,
 		at: &BlockId<Self::Block>,
-		uxt: txpool::ExtrinsicFor<Self>,
+		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		let (tx, rx) = oneshot::channel();
 		let client = self.client.clone();
@@ -93,18 +93,18 @@ impl<T, Block> txpool::ChainApi for FullChainApi<T, Block> where
 	fn block_id_to_number(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<txpool::NumberFor<Self>>> {
+	) -> error::Result<Option<sc_transaction_graph::NumberFor<Self>>> {
 		self.client.to_number(at).map_err(|e| Error::BlockIdConversion(format!("{:?}", e)))
 	}
 
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<txpool::BlockHash<Self>>> {
+	) -> error::Result<Option<sc_transaction_graph::BlockHash<Self>>> {
 		self.client.to_hash(at).map_err(|e| Error::BlockIdConversion(format!("{:?}", e)))
 	}
 
-	fn hash_and_length(&self, ex: &txpool::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+	fn hash_and_length(&self, ex: &sc_transaction_graph::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
 		ex.using_encoded(|x| {
 			(Blake2Hasher::hash(x), x.len())
 		})
@@ -133,7 +133,7 @@ impl<T, F, Block> LightChainApi<T, F, Block> where
 	}
 }
 
-impl<T, F, Block> txpool::ChainApi for LightChainApi<T, F, Block> where
+impl<T, F, Block> sc_transaction_graph::ChainApi for LightChainApi<T, F, Block> where
 	Block: BlockT<Hash=H256>,
 	T: HeaderBackend<Block> + 'static,
 	F: Fetcher<Block> + 'static,
@@ -146,7 +146,7 @@ impl<T, F, Block> txpool::ChainApi for LightChainApi<T, F, Block> where
 	fn validate_transaction(
 		&self,
 		at: &BlockId<Self::Block>,
-		uxt: txpool::ExtrinsicFor<Self>,
+		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		let header_hash = self.client.expect_block_hash_from_id(at);
 		let header_and_hash = header_hash
@@ -177,15 +177,15 @@ impl<T, F, Block> txpool::ChainApi for LightChainApi<T, F, Block> where
 		Box::new(remote_validation_request)
 	}
 
-	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::NumberFor<Self>>> {
+	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> error::Result<Option<sc_transaction_graph::NumberFor<Self>>> {
 		Ok(self.client.block_number_from_id(at)?)
 	}
 
-	fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::BlockHash<Self>>> {
+	fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> error::Result<Option<sc_transaction_graph::BlockHash<Self>>> {
 		Ok(self.client.block_hash_from_id(at)?)
 	}
 
-	fn hash_and_length(&self, ex: &txpool::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+	fn hash_and_length(&self, ex: &sc_transaction_graph::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
 		ex.using_encoded(|x| {
 			(Blake2Hasher::hash(x), x.len())
 		})

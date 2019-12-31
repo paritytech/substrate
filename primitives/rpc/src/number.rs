@@ -18,7 +18,7 @@
 
 use serde::{Serialize, Deserialize};
 use std::{convert::TryFrom, fmt::Debug};
-use primitives::U256;
+use sp_core::U256;
 
 /// RPC Block number type
 ///

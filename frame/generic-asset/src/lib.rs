@@ -114,16 +114,16 @@
 //! The Fees module uses the `Currency` trait to handle fee charge/refund, and its types inherit from `Currency`:
 //!
 //! ```
-//! use support::{
+//! use frame_support::{
 //! 	dispatch,
 //! 	traits::{Currency, ExistenceRequirement, WithdrawReason},
 //! };
-//! # pub trait Trait: system::Trait {
+//! # pub trait Trait: frame_system::Trait {
 //! # 	type Currency: Currency<Self::AccountId>;
 //! # }
-//! type AssetOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+//! type AssetOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 //!
-//! fn charge_fee<T: Trait>(transactor: &T::AccountId, amount: AssetOf<T>) -> dispatch::Result {
+//! fn charge_fee<T: Trait>(transactor: &T::AccountId, amount: AssetOf<T>) -> dispatch::DispatchResult {
 //! 	// ...
 //! 	T::Currency::withdraw(
 //! 		transactor,
@@ -135,7 +135,7 @@
 //! 	Ok(())
 //! }
 //!
-//! fn refund_fee<T: Trait>(transactor: &T::AccountId, amount: AssetOf<T>) -> dispatch::Result {
+//! fn refund_fee<T: Trait>(transactor: &T::AccountId, amount: AssetOf<T>) -> dispatch::DispatchResult {
 //! 	// ...
 //! 	T::Currency::deposit_into_existing(transactor, amount)?;
 //! 	// ...
@@ -151,9 +151,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode, HasCompact, Input, Output, Error};
+use codec::{Decode, Encode, HasCompact, Input, Output, Error as CodecError};
 
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{RuntimeDebug, DispatchResult, DispatchError};
 use sp_runtime::traits::{
 	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, SimpleArithmetic,
 	Zero, Bounded,
@@ -161,22 +161,22 @@ use sp_runtime::traits::{
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, fmt::Debug};
-use support::{
-	decl_event, decl_module, decl_storage, ensure, dispatch,
+use frame_support::{
+	decl_event, decl_module, decl_storage, ensure, dispatch, decl_error,
 	traits::{
 		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
 		SignedImbalance, UpdateBalanceOutcome, WithdrawReason, WithdrawReasons, TryDrop,
 	},
 	Parameter, StorageMap,
 };
-use system::{ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root};
 
 mod mock;
 mod tests;
 
 pub use self::imbalances::{NegativeImbalance, PositiveImbalance};
 
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	type Balance: Parameter
 		+ Member
 		+ SimpleArithmetic
@@ -185,10 +185,10 @@ pub trait Trait: system::Trait {
 		+ MaybeSerializeDeserialize
 		+ Debug;
 	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
-pub trait Subtrait: system::Trait {
+pub trait Subtrait: frame_system::Trait {
 	type Balance: Parameter
 		+ Member
 		+ SimpleArithmetic
@@ -285,7 +285,7 @@ impl<AccountId: Encode> Encode for PermissionVersions<AccountId> {
 impl<AccountId: Encode> codec::EncodeLike for PermissionVersions<AccountId> {}
 
 impl<AccountId: Decode> Decode for PermissionVersions<AccountId> {
-	fn decode<I: Input>(input: &mut I) -> core::result::Result<Self, Error> {
+	fn decode<I: Input>(input: &mut I) -> core::result::Result<Self, CodecError> {
 		let version = PermissionVersionNumber::decode(input)?;
 		Ok(
 			match version {
@@ -320,19 +320,53 @@ impl<AccountId> Into<PermissionVersions<AccountId>> for PermissionLatest<Account
 	}
 }
 
+decl_error! {
+	/// Error for the generic-asset module.
+	pub enum Error for Module<T: Trait> {
+		/// No new assets id available.
+		NoIdAvailable,
+		/// Cannot transfer zero amount.
+		ZeroAmount,
+		/// The origin does not have enough permission to update permissions.
+		NoUpdatePermission,
+		/// The origin does not have permission to mint an asset.
+		NoMintPermission,
+		/// The origin does not have permission to burn an asset.
+		NoBurnPermission,
+		/// Total issuance got overflowed after minting.
+		TotalMintingOverflow,
+		/// Free balance got overflowed after minting.
+		FreeMintingOverflow,
+		/// Total issuance got underflowed after burning.
+		TotalBurningUnderflow,
+		/// Free balance got underflowed after burning.
+		FreeBurningUnderflow,
+		/// Asset id is already taken.
+		IdAlreadyTaken,
+		/// Asset id not available.
+		IdUnavailable,
+		/// The balance is too low to send amount.
+		InsufficientBalance,
+		/// The account liquidity restrictions prevent withdrawal.
+		LiquidityRestrictions,
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		fn deposit_event() = default;
 
 		/// Create a new kind of asset.
-		fn create(origin, options: AssetOptions<T::Balance, T::AccountId>) -> dispatch::Result {
+		fn create(origin, options: AssetOptions<T::Balance, T::AccountId>) -> dispatch::DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let id = Self::next_asset_id();
 
 			let permissions: PermissionVersions<T::AccountId> = options.permissions.clone().into();
 
 			// The last available id serves as the overflow mark and won't be used.
-			let next_id = id.checked_add(&One::one()).ok_or_else(|| "No new assets id available.")?;
+			let next_id = id.checked_add(&One::one()).ok_or_else(|| Error::<T>::NoIdAvailable)?;
 
 			<NextAssetId<T>>::put(next_id);
 			<TotalIssuance<T>>::insert(id, &options.initial_issuance);
@@ -347,7 +381,7 @@ decl_module! {
 		/// Transfer some liquid free balance to another account.
 		pub fn transfer(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, #[compact] amount: T::Balance) {
 			let origin = ensure_signed(origin)?;
-			ensure!(!amount.is_zero(), "cannot transfer zero amount");
+			ensure!(!amount.is_zero(), Error::<T>::ZeroAmount);
 			Self::make_transfer_with_event(&asset_id, &origin, &to, amount)?;
 		}
 
@@ -358,7 +392,7 @@ decl_module! {
 			origin,
 			#[compact] asset_id: T::AssetId,
 			new_permission: PermissionLatest<T::AccountId>
-		) -> dispatch::Result {
+		) -> dispatch::DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			let permissions: PermissionVersions<T::AccountId> = new_permission.into();
@@ -370,23 +404,23 @@ decl_module! {
 
 				Ok(())
 			} else {
-				Err("Origin does not have enough permission to update permissions.")
+				Err(Error::<T>::NoUpdatePermission)?
 			}
 		}
 
 		/// Mints an asset, increases its total issuance.
 		/// The origin must have `mint` permissions.
 		fn mint(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance)
-			-> dispatch::Result
+			-> dispatch::DispatchResult
 		{
 			let origin = ensure_signed(origin)?;
 			if Self::check_permission(&asset_id, &origin, &PermissionType::Mint) {
 				let original_free_balance = Self::free_balance(&asset_id, &to);
 				let current_total_issuance = <TotalIssuance<T>>::get(asset_id);
 				let new_total_issuance = current_total_issuance.checked_add(&amount)
-					.ok_or_else(|| "total_issuance got overflow after minting.")?;
+					.ok_or(Error::<T>::TotalMintingOverflow)?;
 				let value = original_free_balance.checked_add(&amount)
-					.ok_or_else(|| "free balance got overflow after minting.")?;
+					.ok_or(Error::<T>::FreeMintingOverflow)?;
 
 				<TotalIssuance<T>>::insert(asset_id, new_total_issuance);
 				Self::set_free_balance(&asset_id, &to, value);
@@ -395,7 +429,7 @@ decl_module! {
 
 				Ok(())
 			} else {
-				Err("The origin does not have permission to mint an asset.")
+				Err(Error::<T>::NoMintPermission)?
 			}
 		}
 
@@ -403,7 +437,7 @@ decl_module! {
 		///
 		/// The `origin` must have `burn` permissions.
 		fn burn(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance)
-			-> dispatch::Result
+			-> dispatch::DispatchResult
 		{
 			let origin = ensure_signed(origin)?;
 
@@ -412,9 +446,9 @@ decl_module! {
 
 				let current_total_issuance = <TotalIssuance<T>>::get(asset_id);
 				let new_total_issuance = current_total_issuance.checked_sub(&amount)
-					.ok_or_else(|| "total_issuance got underflow after burning")?;
+					.ok_or(Error::<T>::TotalBurningUnderflow)?;
 				let value = original_free_balance.checked_sub(&amount)
-					.ok_or_else(|| "free_balance got underflow after burning")?;
+					.ok_or(Error::<T>::FreeBurningUnderflow)?;
 
 				<TotalIssuance<T>>::insert(asset_id, new_total_issuance);
 
@@ -424,7 +458,7 @@ decl_module! {
 
 				Ok(())
 			} else {
-				Err("The origin does not have permission to burn an asset.")
+				Err(Error::<T>::NoBurnPermission)?
 			}
 		}
 
@@ -434,7 +468,7 @@ decl_module! {
 			origin,
 			asset_id: T::AssetId,
 			options: AssetOptions<T::Balance, T::AccountId>
-		) -> dispatch::Result {
+		) -> dispatch::DispatchResult {
 			ensure_root(origin)?;
 			Self::create_asset(Some(asset_id), None, options)
 		}
@@ -495,10 +529,10 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where
-		<T as system::Trait>::AccountId,
+		<T as frame_system::Trait>::AccountId,
 		<T as Trait>::Balance,
 		<T as Trait>::AssetId,
-		AssetOptions = AssetOptions<<T as Trait>::Balance, <T as system::Trait>::AccountId>
+		AssetOptions = AssetOptions<<T as Trait>::Balance, <T as frame_system::Trait>::AccountId>
 	{
 		/// Asset created (asset_id, creator, asset_options).
 		Created(AssetId, AccountId, AssetOptions),
@@ -543,16 +577,16 @@ impl<T: Trait> Module<T> {
 		asset_id: Option<T::AssetId>,
 		from_account: Option<T::AccountId>,
 		options: AssetOptions<T::Balance, T::AccountId>,
-	) -> dispatch::Result {
+	) -> dispatch::DispatchResult {
 		let asset_id = if let Some(asset_id) = asset_id {
-			ensure!(!<TotalIssuance<T>>::exists(&asset_id), "Asset id already taken.");
-			ensure!(asset_id < Self::next_asset_id(), "Asset id not available.");
+			ensure!(!<TotalIssuance<T>>::exists(&asset_id), Error::<T>::IdAlreadyTaken);
+			ensure!(asset_id < Self::next_asset_id(), Error::<T>::IdUnavailable);
 			asset_id
 		} else {
 			let asset_id = Self::next_asset_id();
 			let next_id = asset_id
 				.checked_add(&One::one())
-				.ok_or_else(|| "No new user asset id available.")?;
+				.ok_or(Error::<T>::NoIdAvailable)?;
 			<NextAssetId<T>>::put(next_id);
 			asset_id
 		};
@@ -576,10 +610,10 @@ impl<T: Trait> Module<T> {
 		from: &T::AccountId,
 		to: &T::AccountId,
 		amount: T::Balance
-	) -> dispatch::Result {
+	) -> dispatch::DispatchResult {
 		let new_balance = Self::free_balance(asset_id, from)
 			.checked_sub(&amount)
-			.ok_or_else(|| "balance too low to send amount")?;
+			.ok_or(Error::<T>::InsufficientBalance)?;
 		Self::ensure_can_withdraw(asset_id, from, amount, WithdrawReason::Transfer.into(), new_balance)?;
 
 		if from != to {
@@ -597,7 +631,7 @@ impl<T: Trait> Module<T> {
 		from: &T::AccountId,
 		to: &T::AccountId,
 		amount: T::Balance,
-	) -> dispatch::Result {
+	) -> dispatch::DispatchResult {
 		Self::make_transfer(asset_id, from, to, amount)?;
 
 		if from != to {
@@ -612,13 +646,13 @@ impl<T: Trait> Module<T> {
 	/// If the free balance is lower than `amount`, then no funds will be moved and an `Err` will
 	/// be returned. This is different behavior than `unreserve`.
 	pub fn reserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance)
-		-> dispatch::Result
+		-> dispatch::DispatchResult
 	{
 		// Do we need to consider that this is an atomic transaction?
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
 		let original_free_balance = Self::free_balance(asset_id, who);
 		if original_free_balance < amount {
-			return Err("not enough free funds");
+			Err(Error::<T>::InsufficientBalance)?
 		}
 		let new_reserve_balance = original_reserve_balance + amount;
 		Self::set_reserved_balance(asset_id, who, new_reserve_balance);
@@ -751,7 +785,7 @@ impl<T: Trait> Module<T> {
 		_amount: T::Balance,
 		reasons: WithdrawReasons,
 		new_balance: T::Balance,
-	) -> dispatch::Result {
+	) -> dispatch::DispatchResult {
 		if asset_id != &Self::staking_asset_id() {
 			return Ok(());
 		}
@@ -760,14 +794,14 @@ impl<T: Trait> Module<T> {
 		if locks.is_empty() {
 			return Ok(());
 		}
-		let now = <system::Module<T>>::block_number();
+		let now = <frame_system::Module<T>>::block_number();
 		if Self::locks(who)
 			.into_iter()
 			.all(|l| now >= l.until || new_balance >= l.amount || !l.reasons.intersects(reasons))
 		{
 			Ok(())
 		} else {
-			Err("account liquidity restrictions prevent withdrawal")
+			Err(Error::<T>::LiquidityRestrictions)?
 		}
 	}
 
@@ -792,7 +826,7 @@ impl<T: Trait> Module<T> {
 		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		let now = <system::Module<T>>::block_number();
+		let now = <frame_system::Module<T>>::block_number();
 		let mut new_lock = Some(BalanceLock {
 			id,
 			amount,
@@ -824,7 +858,7 @@ impl<T: Trait> Module<T> {
 		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		let now = <system::Module<T>>::block_number();
+		let now = <frame_system::Module<T>>::block_number();
 		let mut new_lock = Some(BalanceLock {
 			id,
 			amount,
@@ -855,7 +889,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn remove_lock(id: LockIdentifier, who: &T::AccountId) {
-		let now = <system::Module<T>>::block_number();
+		let now = <frame_system::Module<T>>::block_number();
 		let locks = <Module<T>>::locks(who)
 			.into_iter()
 			.filter_map(|l| if l.until > now && l.id != id { Some(l) } else { None })
@@ -1076,7 +1110,7 @@ impl<T: Subtrait> PartialEq for ElevatedTrait<T> {
 	}
 }
 impl<T: Subtrait> Eq for ElevatedTrait<T> {}
-impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
+impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type Origin = T::Origin;
 	type Call = T::Call;
 	type Index = T::Index;
@@ -1092,6 +1126,7 @@ impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type BlockHashCount = T::BlockHashCount;
 	type Version = T::Version;
+	type ModuleToIndex = ();
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Balance = T::Balance;
@@ -1133,7 +1168,7 @@ where
 		dest: &T::AccountId,
 		value: Self::Balance,
 		_: ExistenceRequirement, // no existential deposit policy for generic asset
-	) -> dispatch::Result {
+	) -> DispatchResult {
 		<Module<T>>::make_transfer(&U::asset_id(), transactor, dest, value)
 	}
 
@@ -1142,7 +1177,7 @@ where
 		amount: Self::Balance,
 		reasons: WithdrawReasons,
 		new_balance: Self::Balance,
-	) -> dispatch::Result {
+	) -> DispatchResult {
 		<Module<T>>::ensure_can_withdraw(&U::asset_id(), who, amount, reasons, new_balance)
 	}
 
@@ -1151,10 +1186,10 @@ where
 		value: Self::Balance,
 		reasons: WithdrawReasons,
 		_: ExistenceRequirement, // no existential deposit policy for generic asset
-	) -> result::Result<Self::NegativeImbalance, &'static str> {
+	) -> result::Result<Self::NegativeImbalance, DispatchError> {
 		let new_balance = Self::free_balance(who)
 			.checked_sub(&value)
-			.ok_or_else(|| "account has too few funds")?;
+			.ok_or(Error::<T>::InsufficientBalance)?;
 		Self::ensure_can_withdraw(who, value, reasons, new_balance)?;
 		<Module<T>>::set_free_balance(&U::asset_id(), who, new_balance);
 		Ok(NegativeImbalance::new(value))
@@ -1163,7 +1198,7 @@ where
 	fn deposit_into_existing(
 		who: &T::AccountId,
 		value: Self::Balance,
-	) -> result::Result<Self::PositiveImbalance, &'static str> {
+	) -> result::Result<Self::PositiveImbalance, DispatchError> {
 		// No existential deposit rule and creation fee in GA. `deposit_into_existing` is same with `deposit_creating`.
 		Ok(Self::deposit_creating(who, value))
 	}
@@ -1248,7 +1283,7 @@ where
 		<Module<T>>::reserved_balance(&U::asset_id(), &who)
 	}
 
-	fn reserve(who: &T::AccountId, value: Self::Balance) -> result::Result<(), &'static str> {
+	fn reserve(who: &T::AccountId, value: Self::Balance) -> DispatchResult {
 		<Module<T>>::reserve(&U::asset_id(), who, value)
 	}
 
@@ -1268,7 +1303,7 @@ where
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
 		value: Self::Balance,
-	) -> result::Result<Self::Balance, &'static str> {
+	) -> result::Result<Self::Balance, DispatchError> {
 		Ok(<Module<T>>::repatriate_reserved(&U::asset_id(), slashed, beneficiary, value))
 	}
 }

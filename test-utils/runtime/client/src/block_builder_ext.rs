@@ -16,15 +16,15 @@
 
 //! Block Builder extensions for tests.
 
-use runtime;
+use substrate_test_runtime;
 use sp_runtime::traits::ProvideRuntimeApi;
 
-use block_builder::BlockBuilderApi;
+use sc_block_builder::BlockBuilderApi;
 
 /// Extension trait for test block builder.
 pub trait BlockBuilderExt {
 	/// Add transfer extrinsic to the block.
-	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), sp_blockchain::Error>;
+	fn push_transfer(&mut self, transfer: substrate_test_runtime::Transfer) -> Result<(), sp_blockchain::Error>;
 	/// Add storage change extrinsic to the block.
 	fn push_storage_change(
 		&mut self,
@@ -33,11 +33,11 @@ pub trait BlockBuilderExt {
 	) -> Result<(), sp_blockchain::Error>;
 }
 
-impl<'a, A> BlockBuilderExt for block_builder::BlockBuilder<'a, runtime::Block, A> where
+impl<'a, A> BlockBuilderExt for sc_block_builder::BlockBuilder<'a, substrate_test_runtime::Block, A> where
 	A: ProvideRuntimeApi + 'a,
-	A::Api: BlockBuilderApi<runtime::Block, Error = sp_blockchain::Error>,
+	A::Api: BlockBuilderApi<substrate_test_runtime::Block, Error = sp_blockchain::Error>,
 {
-	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), sp_blockchain::Error> {
+	fn push_transfer(&mut self, transfer: substrate_test_runtime::Transfer) -> Result<(), sp_blockchain::Error> {
 		self.push(transfer.into_signed_tx())
 	}
 
@@ -46,6 +46,6 @@ impl<'a, A> BlockBuilderExt for block_builder::BlockBuilder<'a, runtime::Block, 
 		key: Vec<u8>,
 		value: Option<Vec<u8>>,
 	) -> Result<(), sp_blockchain::Error> {
-		self.push(runtime::Extrinsic::StorageChange(key, value))
+		self.push(substrate_test_runtime::Extrinsic::StorageChange(key, value))
 	}
 }

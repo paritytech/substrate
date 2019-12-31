@@ -18,11 +18,11 @@
 
 use log::{warn, debug};
 use hash_db::Hasher;
-use trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
-use trie::trie_types::{TrieDB, TrieError, Layout};
+use sp_trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
+use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use crate::Backend;
-use primitives::storage::ChildInfo;
+use sp_core::storage::ChildInfo;
 use codec::{Codec, Decode};
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
@@ -243,9 +243,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 #[cfg(test)]
 pub mod tests {
 	use std::collections::HashSet;
-	use primitives::{Blake2Hasher, H256};
+	use sp_core::{Blake2Hasher, H256};
 	use codec::Encode;
-	use trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut};
+	use sp_trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut};
 	use super::*;
 
 	const CHILD_KEY_1: &[u8] = b":child_storage:default:sub1";

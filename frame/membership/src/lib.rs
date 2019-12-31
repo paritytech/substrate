@@ -23,17 +23,17 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use support::{
-	decl_module, decl_storage, decl_event,
+use frame_support::{
+	decl_module, decl_storage, decl_event, decl_error,
 	traits::{ChangeMembers, InitializeMembers},
 	weights::SimpleDispatchInfo,
 };
-use system::{ensure_root, ensure_signed};
+use frame_system::{self as system, ensure_root, ensure_signed};
 use sp_runtime::traits::EnsureOrigin;
 
-pub trait Trait<I=DefaultInstance>: system::Trait {
+pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// Required origin for adding a member (though can always be Root).
 	type AddOrigin: EnsureOrigin<Self::Origin>;
@@ -75,7 +75,7 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T, I=DefaultInstance> where
-		<T as system::Trait>::AccountId,
+		<T as frame_system::Trait>::AccountId,
 		<T as Trait<I>>::Event,
 	{
 		/// The given member was added; see the transaction for who.
@@ -93,6 +93,16 @@ decl_event!(
 	}
 );
 
+decl_error! {
+	/// Error for the nicks module.
+	pub enum Error for Module<T: Trait<I>, I: Instance> {
+		/// Already a member.
+		AlreadyMember,
+		/// Not a member.
+		NotMember,
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance>
 		for enum Call
@@ -107,11 +117,10 @@ decl_module! {
 		fn add_member(origin, who: T::AccountId) {
 			T::AddOrigin::try_origin(origin)
 				.map(|_| ())
-				.or_else(ensure_root)
-				.map_err(|_| "bad origin")?;
+				.or_else(ensure_root)?;
 
 			let mut members = <Members<T, I>>::get();
-			let location = members.binary_search(&who).err().ok_or("already a member")?;
+			let location = members.binary_search(&who).err().ok_or(Error::<T, I>::AlreadyMember)?;
 			members.insert(location, who.clone());
 			<Members<T, I>>::put(&members);
 
@@ -127,11 +136,10 @@ decl_module! {
 		fn remove_member(origin, who: T::AccountId) {
 			T::RemoveOrigin::try_origin(origin)
 				.map(|_| ())
-				.or_else(ensure_root)
-				.map_err(|_| "bad origin")?;
+				.or_else(ensure_root)?;
 
 			let mut members = <Members<T, I>>::get();
-			let location = members.binary_search(&who).ok().ok_or("not a member")?;
+			let location = members.binary_search(&who).ok().ok_or(Error::<T, I>::NotMember)?;
 			members.remove(location);
 			<Members<T, I>>::put(&members);
 
@@ -147,14 +155,13 @@ decl_module! {
 		fn swap_member(origin, remove: T::AccountId, add: T::AccountId) {
 			T::SwapOrigin::try_origin(origin)
 				.map(|_| ())
-				.or_else(ensure_root)
-				.map_err(|_| "bad origin")?;
+				.or_else(ensure_root)?;
 
 			if remove == add { return Ok(()) }
 
 			let mut members = <Members<T, I>>::get();
-			let location = members.binary_search(&remove).ok().ok_or("not a member")?;
-			let _ = members.binary_search(&add).err().ok_or("already a member")?;
+			let location = members.binary_search(&remove).ok().ok_or(Error::<T, I>::NotMember)?;
+			let _ = members.binary_search(&add).err().ok_or(Error::<T, I>::AlreadyMember)?;
 			members[location] = add.clone();
 			members.sort();
 			<Members<T, I>>::put(&members);
@@ -176,8 +183,7 @@ decl_module! {
 		fn reset_members(origin, members: Vec<T::AccountId>) {
 			T::ResetOrigin::try_origin(origin)
 				.map(|_| ())
-				.or_else(ensure_root)
-				.map_err(|_| "bad origin")?;
+				.or_else(ensure_root)?;
 
 			let mut members = members;
 			members.sort();
@@ -198,8 +204,8 @@ decl_module! {
 
 			if remove != new {
 				let mut members = <Members<T, I>>::get();
-				let location = members.binary_search(&remove).ok().ok_or("not a member")?;
-				let _ = members.binary_search(&new).err().ok_or("already a member")?;
+				let location = members.binary_search(&remove).ok().ok_or(Error::<T, I>::NotMember)?;
+				let _ = members.binary_search(&new).err().ok_or(Error::<T, I>::AlreadyMember)?;
 				members[location] = new.clone();
 				members.sort();
 				<Members<T, I>>::put(&members);
@@ -221,15 +227,15 @@ mod tests {
 	use super::*;
 
 	use std::cell::RefCell;
-	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
-	use primitives::H256;
+	use frame_support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
+	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
-	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-	use system::EnsureSignedBy;
+	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header, traits::BadOrigin};
+	use frame_system::EnsureSignedBy;
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	// For testing the module, we construct most of a mock runtime. This means
@@ -243,7 +249,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -259,6 +265,7 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 	parameter_types! {
 		pub const One: u64 = 1;
@@ -307,7 +314,7 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		GenesisConfig::<Test>{
 			members: vec![10, 20, 30],
@@ -327,8 +334,8 @@ mod tests {
 	#[test]
 	fn add_member_works() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Membership::add_member(Origin::signed(5), 15), "bad origin");
-			assert_noop!(Membership::add_member(Origin::signed(1), 10), "already a member");
+			assert_noop!(Membership::add_member(Origin::signed(5), 15), BadOrigin);
+			assert_noop!(Membership::add_member(Origin::signed(1), 10), Error::<Test, _>::AlreadyMember);
 			assert_ok!(Membership::add_member(Origin::signed(1), 15));
 			assert_eq!(Membership::members(), vec![10, 15, 20, 30]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
@@ -338,8 +345,8 @@ mod tests {
 	#[test]
 	fn remove_member_works() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Membership::remove_member(Origin::signed(5), 20), "bad origin");
-			assert_noop!(Membership::remove_member(Origin::signed(2), 15), "not a member");
+			assert_noop!(Membership::remove_member(Origin::signed(5), 20), BadOrigin);
+			assert_noop!(Membership::remove_member(Origin::signed(2), 15), Error::<Test, _>::NotMember);
 			assert_ok!(Membership::remove_member(Origin::signed(2), 20));
 			assert_eq!(Membership::members(), vec![10, 30]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
@@ -349,9 +356,9 @@ mod tests {
 	#[test]
 	fn swap_member_works() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Membership::swap_member(Origin::signed(5), 10, 25), "bad origin");
-			assert_noop!(Membership::swap_member(Origin::signed(3), 15, 25), "not a member");
-			assert_noop!(Membership::swap_member(Origin::signed(3), 10, 30), "already a member");
+			assert_noop!(Membership::swap_member(Origin::signed(5), 10, 25), BadOrigin);
+			assert_noop!(Membership::swap_member(Origin::signed(3), 15, 25), Error::<Test, _>::NotMember);
+			assert_noop!(Membership::swap_member(Origin::signed(3), 10, 30), Error::<Test, _>::AlreadyMember);
 			assert_ok!(Membership::swap_member(Origin::signed(3), 20, 20));
 			assert_eq!(Membership::members(), vec![10, 20, 30]);
 			assert_ok!(Membership::swap_member(Origin::signed(3), 10, 25));
@@ -372,8 +379,8 @@ mod tests {
 	#[test]
 	fn change_key_works() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Membership::change_key(Origin::signed(3), 25), "not a member");
-			assert_noop!(Membership::change_key(Origin::signed(10), 20), "already a member");
+			assert_noop!(Membership::change_key(Origin::signed(3), 25), Error::<Test, _>::NotMember);
+			assert_noop!(Membership::change_key(Origin::signed(10), 20), Error::<Test, _>::AlreadyMember);
 			assert_ok!(Membership::change_key(Origin::signed(10), 40));
 			assert_eq!(Membership::members(), vec![20, 30, 40]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
@@ -392,7 +399,7 @@ mod tests {
 	#[test]
 	fn reset_members_works() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Membership::reset_members(Origin::signed(1), vec![20, 40, 30]), "bad origin");
+			assert_noop!(Membership::reset_members(Origin::signed(1), vec![20, 40, 30]), BadOrigin);
 			assert_ok!(Membership::reset_members(Origin::signed(4), vec![20, 40, 30]));
 			assert_eq!(Membership::members(), vec![20, 30, 40]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());

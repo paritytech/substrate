@@ -26,7 +26,7 @@ use kvdb_rocksdb::{Database, DatabaseConfig};
 use log::debug;
 
 use codec::Decode;
-use trie::DBValue;
+use sp_trie::DBValue;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Zero,

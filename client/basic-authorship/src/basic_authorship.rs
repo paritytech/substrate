@@ -19,23 +19,23 @@
 // FIXME #1021 move this into sp-consensus
 
 use std::{time, sync::Arc};
-use client_api::CallExecutor;
+use sc_client_api::CallExecutor;
 use sp_blockchain;
-use client::Client as SubstrateClient;
+use sc_client::Client as SubstrateClient;
 use codec::Decode;
-use consensus_common::{evaluation};
-use inherents::InherentData;
+use sp_consensus::{evaluation};
+use sp_inherents::InherentData;
 use log::{error, info, debug, trace};
-use primitives::{H256, Blake2Hasher, ExecutionContext};
+use sp_core::{H256, Blake2Hasher, ExecutionContext};
 use sp_runtime::{
 	traits::{
 		Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, DigestFor, BlakeTwo256
 	},
 	generic::BlockId,
 };
-use txpool_api::{TransactionPool, InPoolTransaction};
+use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
-use block_builder::BlockBuilderApi;
+use sc_block_builder::BlockBuilderApi;
 
 /// Proposer factory.
 pub struct ProposerFactory<C, A> where A: TransactionPool {
@@ -48,7 +48,7 @@ pub struct ProposerFactory<C, A> where A: TransactionPool {
 impl<B, E, Block, RA, A> ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 where
 	A: TransactionPool<Block=Block> + 'static,
-	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
@@ -82,11 +82,11 @@ where
 	}
 }
 
-impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
+impl<B, E, Block, RA, A> sp_consensus::Environment<Block> for
 ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 where
 	A: TransactionPool<Block=Block> + 'static,
-	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
@@ -120,11 +120,11 @@ struct ProposerInner<Block: BlockT, C, A: TransactionPool> {
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 }
 
-impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
+impl<B, E, Block, RA, A> sp_consensus::Proposer<Block> for
 Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
 where
 	A: TransactionPool<Block=Block> + 'static,
-	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
@@ -152,7 +152,7 @@ where
 
 impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, A> where
 	A: TransactionPool<Block=Block> + 'static,
-	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
@@ -201,7 +201,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 			let pending_tx_data = pending_tx.data().clone();
 			let pending_tx_hash = pending_tx.hash().clone();
 			trace!("[{:?}] Pushing to the block.", pending_tx_hash);
-			match block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
+			match sc_block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				}
@@ -266,9 +266,9 @@ mod tests {
 	use super::*;
 
 	use parking_lot::Mutex;
-	use consensus_common::Proposer;
-	use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
-	use txpool::{BasicPool, FullChainApi};
+	use sp_consensus::Proposer;
+	use substrate_test_runtime_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
+	use sc_transaction_pool::{BasicPool, FullChainApi};
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		Transfer {
@@ -282,7 +282,7 @@ mod tests {
 	#[test]
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
-		let client = Arc::new(test_client::new());
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 
 		futures::executor::block_on(
