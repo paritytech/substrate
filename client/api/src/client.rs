@@ -90,6 +90,34 @@ pub struct ClientInfo<Block: BlockT> {
 	pub used_state_cache_size: Option<usize>,
 }
 
+/// Memory statistics for client instance.
+pub struct MemoryInfo {
+	/// Size of state cache.
+	pub state_cache: usize,
+	/// Size of backend database cache.
+	pub database_cache: usize,
+}
+
+/// I/O statistics for client instance.
+pub struct IoInfo {
+	/// Number of transactions.
+	pub transactions: usize,
+	/// Total bytes read from disk.
+	pub bytes_read: usize,
+	/// Total bytes written to disk.
+	pub bytes_written: usize,
+	/// Average size of the transaction.
+	pub average_transaction_size: usize,
+}
+
+/// Usage statistics for running client instance.
+pub struct UsageInfo {
+	/// Memory statistics.
+	pub memory: MemoryInfo,
+	/// I/O statistics.
+	pub io: IoInfo,
+}
+
 /// Summary of an imported block
 #[derive(Clone, Debug)]
 pub struct BlockImportNotification<Block: BlockT> {
