@@ -36,12 +36,10 @@ sp-state-machine = { version = "2.0.0", path = "../../primitives/state-machine" 
 test-case = "0.3.3"
 
 [features]
-default = [ "std", "forced-runtime" ]
-# default = [ "std" ]
+default = [ "std" ]
 # This crate does not have `no_std` support, we just require this for tests
 std = []
 wasm-extern-trace = []
-forced-runtime = []
 wasmtime = [
 	"sc-executor-wasmtime",
 ]
