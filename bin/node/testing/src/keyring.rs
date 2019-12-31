@@ -23,7 +23,9 @@ use sp_runtime::generic::Era;
 use codec::Encode;
 
 /// Alice's account id.
-pub fn alice() -> AccountId { AccountKeyring::Alice.into() }
+pub fn alice() -> AccountId {
+	AccountKeyring::Alice.into()
+}
 
 /// Bob's account id.
 pub fn bob() -> AccountId {
