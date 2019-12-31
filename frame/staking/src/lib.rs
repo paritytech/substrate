@@ -1481,13 +1481,6 @@ impl<T: Trait> Module<T> {
 					let mut staked_assignment
 						: Vec<PhragmenStakedAssignment<T::AccountId>>
 						= Vec::with_capacity(assignment.len());
-
-					// If this is a self vote, then we don't need to equalise it at all. While the
-					// staking system does not allow nomination and validation at the same time,
-					// this must always be 100% support.
-					if assignment.len() == 1 && assignment[0].0 == *n {
-						continue;
-					}
 					for (c, per_thing) in assignment.iter() {
 						let nominator_stake = to_votes(Self::slashable_balance_of(n));
 						let other_stake = *per_thing * nominator_stake;
@@ -1516,18 +1509,31 @@ impl<T: Trait> Module<T> {
 			let mut slot_stake = BalanceOf::<T>::max_value();
 			for (c, s) in supports.into_iter() {
 				// build `struct exposure` from `support`
+				let mut others = Vec::new();
+				let mut own: BalanceOf<T> = Zero::zero();
+				let mut total: BalanceOf<T> = Zero::zero();
+				s.voters
+					.into_iter()
+					.map(|(who, value)| (who, to_balance(value)))
+					.for_each(|(who, value)| {
+						if who == c {
+							own = own.saturating_add(value);
+						} else {
+							others.push(IndividualExposure { who, value });
+						}
+						total = total.saturating_add(value);
+					});
 				let exposure = Exposure {
-					own: to_balance(s.own),
+					own,
+					others,
 					// This might reasonably saturate and we cannot do much about it. The sum of
 					// someone's stake might exceed the balance type if they have the maximum amount
 					// of balance and receive some support. This is super unlikely to happen, yet
 					// we simulate it in some tests.
-					total: to_balance(s.total),
-					others: s.others
-						.into_iter()
-						.map(|(who, value)| IndividualExposure { who, value: to_balance(value) })
-						.collect::<Vec<IndividualExposure<_, _>>>(),
+					total,
 				};
+				debug_assert!(total == to_balance(s.total));
+
 				if exposure.total < slot_stake {
 					slot_stake = exposure.total;
 				}

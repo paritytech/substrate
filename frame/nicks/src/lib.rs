@@ -145,7 +145,7 @@ decl_module! {
 		fn set_name(origin, name: Vec<u8>) {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(name.len() >= T::MinLength::get(), Error::<T>::TooShort,);
+			ensure!(name.len() >= T::MinLength::get(), Error::<T>::TooShort);
 			ensure!(name.len() <= T::MaxLength::get(), Error::<T>::TooLong);
 
 			let deposit = if let Some((_, deposit)) = <NameOf<T>>::get(&sender) {
