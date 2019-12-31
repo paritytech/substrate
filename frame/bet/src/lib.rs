@@ -20,10 +20,11 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_runtime::{traits::{As, One, Zero}};
-use support::{StorageValue, StorageMap, Parameter, dispatch::Result};
-use support::traits::{OnFreeBalanceZero, Currency, LockableCurrency};
-use system::ensure_signed;
+use sp_runtime::{traits::{One, Zero}};
+use frame_support::{decl_event, decl_module, decl_storage, Parameter, dispatch::DispatchResult};
+use frame_support::traits::{OnFreeBalanceZero, Currency, LockableCurrency};
+use frame_system::ensure_signed;
+use codec::{Codec, Encode, Decode};
 
 /// Trait for getting a price.
 pub trait FetchPrice<Balance> {
@@ -205,7 +206,7 @@ bet
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 
 		/// Add the sender to the betting system. At the next period they will be betting
 		/// that the price will go up and their funds locked for at least two periods. If they
@@ -251,7 +252,7 @@ decl_module! {
 
 				b.balance.is_zero()
 			});
-
+			
 			// We've been wiped out: kill entry.
 			if balance_at_stake_is_zero {
 				<Bets<T>>::remove(&sender)
@@ -332,7 +333,7 @@ decl_module! {
 		}
 
 		// The signature could also look like: `fn on_finalise()`
-		fn on_finalise(n: T::BlockNumber) {
+		fn on_finalize(n: T::BlockNumber) {
 			let samples = Self::samples();
 			let samples_bn = T::BlockNumber::sa(samples);
 			let p = Self::period();
@@ -357,7 +358,7 @@ decl_module! {
 
 					let prices = <Prices<T>>::take();
 					if !Self::total().is_zero() {
-						let mean = prices.iter().fold(BalanceOf<T>::default(), |total, &item| total + item) / BalanceOf<T>::sa(samples);
+						let mean = prices.iter().fold(BalanceOf<T>::default(), |total, &item| total + item) / samples.into();
 
 //						println!("prices {:?} mean {:?} target {:?}", prices, mean, Self::target());
 						if mean < Self::target() {
