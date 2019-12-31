@@ -233,7 +233,7 @@ fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
 						If not given, you will be prompted for the URI.'
 				"),
 			SubCommand::with_name("insert")
-				.about("Insert a key to the local node")
+				.about("Insert a key to the keystore of a node")
 				.args_from_usage("
 					<suri> 'The secret key URI. \
 						If the value is a file, the file content is used as URI. \
