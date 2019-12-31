@@ -83,7 +83,7 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 
 	/// Returns given block hash or best block hash if None is passed.
 	fn block_or_best(&self, hash: Option<Block::Hash>) -> ClientResult<Block::Hash> {
-		Ok(hash.unwrap_or_else(|| self.client.info().chain.best_hash))
+		Ok(hash.unwrap_or_else(|| self.client.chain_info().best_hash))
 	}
 
 	/// Splits the `query_storage` block range into 'filtered' and 'unfiltered' subranges.
@@ -403,9 +403,9 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 
 			let stream = stream
 				.filter_map(move |_| {
-					let info = client.info();
+					let info = client.chain_info();
 					let version = client
-						.runtime_version_at(&BlockId::hash(info.chain.best_hash))
+						.runtime_version_at(&BlockId::hash(info.best_hash))
 						.map_err(client_err)
 						.map_err(Into::into);
 					if previous_version != version {
@@ -457,7 +457,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		// initial values
 		let initial = stream::iter_result(keys
 			.map(|keys| {
-				let block = self.client.info().chain.best_hash;
+				let block = self.client.chain_info().best_hash;
 				let changes = keys
 					.into_iter()
 					.map(|key| self.storage(Some(block.clone()).into(), key.clone())

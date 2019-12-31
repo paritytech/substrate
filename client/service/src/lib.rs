@@ -684,7 +684,7 @@ where
 		let encoded = transaction.encode();
 		match Decode::decode(&mut &encoded[..]) {
 			Ok(uxt) => {
-				let best_block_id = BlockId::hash(self.client.info().chain.best_hash);
+				let best_block_id = BlockId::hash(self.client.info().best_hash);
 				let import_future = self.pool.submit_one(&best_block_id, uxt);
 				let import_future = import_future
 					.then(move |import_result| {
