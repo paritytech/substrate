@@ -188,7 +188,7 @@ impl<S, Block, H> ClientBackend<Block, H> for Backend<S, H> where
 	}
 
 	fn usage_info(&self) -> UsageInfo {
-		UsageInfo::default()
+		self.blockchain.storage().usage_info()
 	}
 
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {

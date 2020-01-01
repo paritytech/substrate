@@ -18,7 +18,7 @@
 
 use sc_client_api::BlockchainEvents;
 use futures::{StreamExt, TryStreamExt, FutureExt, future, compat::Stream01CompatExt};
-use log::{info, warn};
+use log::{info, warn, trace};
 use sp_runtime::traits::Header;
 use sc_service::AbstractService;
 use std::time::Duration;
@@ -36,6 +36,7 @@ pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()
 		.compat()
 		.try_for_each(move |(net_status, _)| {
 			let info = client.usage_info();
+			trace!(target: "usage", "Usage statistics: {}", info.usage);
 			display.display(&info, net_status);
 			future::ok(())
 		});

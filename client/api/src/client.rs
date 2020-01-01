@@ -16,7 +16,7 @@
 
 //! A set of APIs supported by the client along with their primitives.
 
-use std::collections::HashMap;
+use std::{fmt, collections::HashMap};
 use futures::channel::mpsc;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
@@ -123,6 +123,19 @@ pub struct UsageInfo {
 	pub memory: MemoryInfo,
 	/// I/O statistics.
 	pub io: IoInfo,
+}
+
+impl fmt::Display for UsageInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "caches: ({} state, {} db overlay), i/o: ({} tx, {} write, {} read, {} tx size)",
+			self.memory.state_cache,
+			self.memory.database_cache,
+			self.io.transactions,
+			self.io.bytes_written,
+			self.io.bytes_read,
+			self.io.average_transaction_size
+		)
+    }
 }
 
 /// Summary of an imported block
