@@ -32,10 +32,10 @@ use sp_core::{H256, Blake2Hasher};
 
 use crate::{
 	global_communication, CommandOrError, CommunicationIn, Config, environment,
-	LinkHalf, Network, Error, aux_schema::PersistentData, VoterCommand, VoterSetState,
+	LinkHalf, Error, aux_schema::PersistentData, VoterCommand, VoterSetState,
 };
 use crate::authorities::SharedAuthoritySet;
-use crate::communication::NetworkBridge;
+use crate::communication::{Network as NetworkT, NetworkBridge};
 use crate::consensus_changes::SharedConsensusChanges;
 use sp_finality_grandpa::AuthorityId;
 
@@ -160,7 +160,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC, Sp>(
 ) -> ::sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network<Block> + Send + Clone + 'static,
+	N: NetworkT<Block> + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: Send + Sync + 'static,
@@ -202,18 +202,19 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC, Sp>(
 
 /// Future that powers the observer.
 #[must_use]
-struct ObserverWork<B: BlockT<Hash=H256>, E, Backend, RA> {
+struct ObserverWork<B: BlockT<Hash=H256>, N: NetworkT<B>, E, Backend, RA> {
 	observer: Box<dyn Future<Item = (), Error = CommandOrError<B::Hash, NumberFor<B>>> + Send>,
 	client: Arc<Client<Backend, E, B, RA>>,
-	network: NetworkBridge<B>,
+	network: NetworkBridge<B, N>,
 	persistent_data: PersistentData<B>,
 	keystore: Option<sc_keystore::KeyStorePtr>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 }
 
-impl<B, E, Bk, RA> ObserverWork<B, E, Bk, RA>
+impl<B, N, E, Bk, RA> ObserverWork<B, N, E, Bk, RA>
 where
 	B: BlockT<Hash=H256>,
+	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<B, Blake2Hasher> + Send + Sync + 'static,
@@ -221,7 +222,7 @@ where
 {
 	fn new(
 		client: Arc<Client<Bk, E, B, RA>>,
-		network: NetworkBridge<B>,
+		network: NetworkBridge<B, N>,
 		persistent_data: PersistentData<B>,
 		keystore: Option<sc_keystore::KeyStorePtr>,
 		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
@@ -325,9 +326,10 @@ where
 	}
 }
 
-impl<B, E, Bk, RA> Future for ObserverWork<B, E, Bk, RA>
+impl<B, N, E, Bk, RA> Future for ObserverWork<B, N, E, Bk, RA>
 where
 	B: BlockT<Hash=H256>,
+	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<B, Blake2Hasher> + Send + Sync + 'static,

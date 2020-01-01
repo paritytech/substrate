@@ -53,7 +53,10 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
 
 pub use self::error::Error;
-pub use self::builder::{ServiceBuilder, ServiceBuilderCommand};
+pub use self::builder::{
+	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
+	TFullCallExecutor, TLightCallExecutor,
+};
 pub use config::{Configuration, Roles, PruningMode};
 pub use sc_chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
 pub use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, error::IntoPoolError};
@@ -428,6 +431,22 @@ fn build_network_future<
 					if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
 						let _ = sender.send(network_state);
 					}
+				}
+				sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
+					let x = network.add_reserved_peer(peer_addr)
+						.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
+					let _ = sender.send(x);
+				}
+				sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender) => {
+					let _ = match peer_id.parse::<PeerId>() {
+						Ok(peer_id) => {
+							network.remove_reserved_peer(peer_id);
+							sender.send(Ok(()))
+						}
+						Err(e) => sender.send(Err(sc_rpc::system::error::Error::MalformattedPeerArg(
+							e.to_string(),
+						))),
+					};
 				}
 				sc_rpc::system::Request::NodeRoles(sender) => {
 					use sc_rpc::system::NodeRole;

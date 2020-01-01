@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,25 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Implementation of a Wasm runtime using the Wasmi interpreter.
+//! This crate provides an implementation of `WasmRuntime` that is baked by wasmi.
 
+use sc_executor_common::{
+	error::{Error, WasmError},
+	sandbox,
+	allocator,
+};
 use std::{str, mem};
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 	memory_units::Pages, RuntimeValue::{I32, I64, self},
 };
-use crate::error::{Error, WasmError};
 use codec::{Encode, Decode};
 use sp_core::{sandbox as sandbox_primitives, traits::Externalities};
-use crate::sandbox;
-use crate::allocator;
-use crate::wasm_utils::interpret_runtime_api_result;
-use crate::wasm_runtime::WasmRuntime;
 use log::{error, trace};
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
 use sp_wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
+use sp_runtime_interface::unpack_ptr_and_len;
+use sc_executor_common::wasm_runtime::WasmRuntime;
 
 struct FunctionExecutor<'a> {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,
@@ -375,7 +377,7 @@ fn call_in_wasm_module(
 
 	match result {
 		Ok(Some(I64(r))) => {
-			let (ptr, length) = interpret_runtime_api_result(r);
+			let (ptr, length) = unpack_ptr_and_len(r as u64);
 			memory.get(ptr.into(), length as usize).map_err(|_| Error::Runtime)
 		},
 		Err(e) => {

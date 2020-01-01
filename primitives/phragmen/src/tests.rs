@@ -354,3 +354,54 @@ fn phragmen_linear_equalize() {
 
 	run_and_compare(candidates, voters, stake_of, 2, 2);
 }
+
+#[test]
+fn elect_has_no_entry_barrier() {
+	let candidates = vec![10, 20, 30];
+	let voters = vec![
+		(1, vec![10]),
+		(2, vec![20]),
+	];
+	let stake_of = create_stake_of(&[
+		(1, 10),
+		(2, 10),
+	]);
+
+	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote>(
+		3,
+		3,
+		candidates,
+		voters,
+		stake_of,
+	).unwrap();
+
+	// 30 is elected with stake 0. The caller is responsible for stripping this.
+	assert_eq_uvec!(winners, vec![
+		(10, 10),
+		(20, 10),
+		(30, 0),
+	]);
+}
+
+#[test]
+fn minimum_to_elect_is_respected() {
+	let candidates = vec![10, 20, 30];
+	let voters = vec![
+		(1, vec![10]),
+		(2, vec![20]),
+	];
+	let stake_of = create_stake_of(&[
+		(1, 10),
+		(2, 10),
+	]);
+
+	let maybe_result = elect::<_, _, _, TestCurrencyToVote>(
+		10,
+		10,
+		candidates,
+		voters,
+		stake_of,
+	);
+
+	assert!(maybe_result.is_none());
+}
