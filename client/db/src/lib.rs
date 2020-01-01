@@ -39,7 +39,7 @@ use std::path::PathBuf;
 use std::io;
 use std::collections::{HashMap, HashSet};
 
-use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks};
+use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks, UsageInfo, MemoryInfo, IoInfo};
 use sc_client_api::backend::NewBlockState;
 use sc_client_api::backend::{StorageCollection, ChildStorageCollection};
 use sp_blockchain::{
@@ -1485,17 +1485,21 @@ impl<Block> sc_client_api::backend::Backend<Block, Blake2Hasher> for Backend<Blo
 	}
 
 	fn usage_info(&self) -> UsageInfo {
-		let storage_stats = self.storage.io_stats(true);
+		let storage_stats = self.storage.db.io_stats(kvdb::IoStatsKind::Overall);
+		let database_cache = parity_util_mem::malloc_size(&*self.storage.db);
+		let state_cache = (*&self.shared_cache).lock().used_storage_cache_size();
 
 		UsageInfo {
 			memory: MemoryInfo {
-				state_cache: self.used_state_cache_size(),
-				database_cache: 0,
+				state_cache,
+				database_cache,
 			},
 			io: IoInfo {
 				transactions: storage_stats.transactions,
 				bytes_read: storage_stats.bytes_read,
 				bytes_written: storage_stats.bytes_written,
+				writes: storage_stats.writes,
+				reads: storage_stats.reads,
 				average_transaction_size: storage_stats.avg_transaction_size() as u64,
 			}
 		}
@@ -1539,11 +1543,6 @@ impl<Block> sc_client_api::backend::Backend<Block, Blake2Hasher> for Backend<Blo
 
 	fn blockchain(&self) -> &BlockchainDb<Block> {
 		&self.blockchain
-	}
-
-	fn used_state_cache_size(&self) -> Option<usize> {
-		let used = (*&self.shared_cache).lock().used_storage_cache_size();
-		Some(used)
 	}
 
 	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {

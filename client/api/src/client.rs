@@ -87,10 +87,11 @@ pub struct ClientInfo<Block: BlockT> {
 	/// Best block hash.
 	pub chain: Info<Block>,
 	/// State Cache Size currently used by the backend
-	pub used_state_cache_size: Option<usize>,
+	pub usage: UsageInfo,
 }
 
 /// Memory statistics for client instance.
+#[derive(Default, Clone, Debug)]
 pub struct MemoryInfo {
 	/// Size of state cache.
 	pub state_cache: usize,
@@ -99,18 +100,24 @@ pub struct MemoryInfo {
 }
 
 /// I/O statistics for client instance.
+#[derive(Default, Clone, Debug)]
 pub struct IoInfo {
 	/// Number of transactions.
-	pub transactions: usize,
+	pub transactions: u64,
 	/// Total bytes read from disk.
-	pub bytes_read: usize,
+	pub bytes_read: u64,
 	/// Total bytes written to disk.
-	pub bytes_written: usize,
+	pub bytes_written: u64,
+	/// Total key writes to disk.
+	pub writes: u64,
+	/// Total key reads from disk.
+	pub reads: u64,
 	/// Average size of the transaction.
-	pub average_transaction_size: usize,
+	pub average_transaction_size: u64,
 }
 
 /// Usage statistics for running client instance.
+#[derive(Default, Clone, Debug)]
 pub struct UsageInfo {
 	/// Memory statistics.
 	pub memory: MemoryInfo,

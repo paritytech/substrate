@@ -262,9 +262,6 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
 
-	/// Returns the used state cache, if existent.
-	fn used_state_cache_size(&self) -> Option<usize>;
-
 	/// Returns current usage statistics.
 	fn usage_info(&self) -> UsageInfo;
 

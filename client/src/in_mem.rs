@@ -37,6 +37,7 @@ use sc_client_api::{
 	blockchain::{
 		self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
 	},
+	UsageInfo,
 };
 use crate::leaves::LeafSet;
 
@@ -681,8 +682,8 @@ where
 		&self.blockchain
 	}
 
-	fn used_state_cache_size(&self) -> Option<usize> {
-		None
+	fn usage_info(&self) -> UsageInfo {
+		UsageInfo::default()
 	}
 
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {

@@ -1094,6 +1094,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethbloom"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "crunchy 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fixed-hash 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "impl-rlp 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "impl-serde 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tiny-keccak 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "ethereum-types"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "ethbloom 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fixed-hash 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "impl-rlp 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "impl-serde 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "primitive-types 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "uint 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "evm"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4168,7 +4193,10 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "cfg-if 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ethereum-types 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "malloc_size_of_derive 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "smallvec 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -5145,6 +5173,7 @@ dependencies = [
  "linked-hash-map 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-util-mem 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "quickcheck 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-client 2.0.0",
@@ -8296,6 +8325,8 @@ dependencies = [
 "checksum erased-serde 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)" = "3beee4bc16478a1b26f2e80ad819a52d24745e292f521a63c16eea5f74b7eb60"
 "checksum errno 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)" = "c2a071601ed01b988f896ab14b95e67335d1eeb50190932a1320f7fe3cadc84e"
 "checksum errno-dragonfly 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "14ca354e36190500e1e1fb267c647932382b54053c50b14970856c0b00a35067"
+"checksum ethbloom 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)" = "32cfe1c169414b709cf28aa30c74060bdb830a03a8ba473314d079ac79d80a5f"
+"checksum ethereum-types 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ba744248e3553a393143d5ebb68939fc3a4ec0c22a269682535f5ffe7fed728c"
 "checksum evm 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)" = "32a2c6961fdc9952371fc5f0416f03a9d90378a9dfb6862f6a7a9a3b8986b8dd"
 "checksum evm-core 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3bcde5af3d542874ddeb53de0919302d57586ea04b3f76f54d865f8a6cdc70ae"
 "checksum evm-gasometer 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b82bc9f275cb59d2bcc05d85c98736ddfaba003a7ef7b73893fa7c1c1fab29dc"
