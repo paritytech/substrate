@@ -28,8 +28,7 @@
 //!
 
 use blocks::BlockCollection;
-use sc_client_api::ClientInfo;
-use sp_blockchain::Error as ClientError;
+use sp_blockchain::{Error as ClientError, Info as BlockchainInfo};
 use sp_consensus::{BlockOrigin, BlockStatus,
 	block_validation::{BlockAnnounceValidator, Validation},
 	import_queue::{IncomingBlock, BlockImportResult, BlockImportError}
@@ -291,7 +290,7 @@ impl<B: BlockT> ChainSync<B> {
 	pub fn new(
 		role: Roles,
 		client: Arc<dyn crate::chain::Client<B>>,
-		info: &ClientInfo<B>,
+		info: &BlockchainInfo<B>,
 		request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		max_parallel_downloads: u32,
@@ -306,9 +305,9 @@ impl<B: BlockT> ChainSync<B> {
 			client,
 			peers: HashMap::new(),
 			blocks: BlockCollection::new(),
-			best_queued_hash: info.chain.best_hash,
-			best_queued_number: info.chain.best_number,
-			best_imported_number: info.chain.best_number,
+			best_queued_hash: info.best_hash,
+			best_queued_number: info.best_number,
+			best_imported_number: info.best_number,
 			extra_finality_proofs: ExtraRequests::new(),
 			extra_justifications: ExtraRequests::new(),
 			role,
@@ -579,7 +578,7 @@ impl<B: BlockT> ChainSync<B> {
 		let attrs = &self.required_block_attributes;
 		let fork_targets = &mut self.fork_targets;
 		let mut have_requests = false;
-		let last_finalized = self.client.info().chain.finalized_number;
+		let last_finalized = self.client.info().finalized_number;
 		let best_queued = self.best_queued_number;
 		let client = &self.client;
 		let queue = &self.queue_blocks;
@@ -1142,8 +1141,8 @@ impl<B: BlockT> ChainSync<B> {
 		self.queue_blocks.clear();
 		self.blocks.clear();
 		let info = self.client.info();
-		self.best_queued_hash = info.chain.best_hash;
-		self.best_queued_number = std::cmp::max(info.chain.best_number, self.best_imported_number);
+		self.best_queued_hash = info.best_hash;
+		self.best_queued_number = std::cmp::max(info.best_number, self.best_imported_number);
 		self.is_idle = false;
 		debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
 		let old_peers = std::mem::replace(&mut self.peers, HashMap::new());
