@@ -1232,6 +1232,9 @@ mod tests {
 		fn contains(n: &u64) -> bool {
 			*n >= 1 && *n <= 5
 		}
+		fn members() -> Vec<u64> {
+			vec![1, 2, 3, 4, 5]
+		}
 	}
 	thread_local! {
 		static PREIMAGE_BYTE_DEPOSIT: RefCell<u64> = RefCell::new(0);

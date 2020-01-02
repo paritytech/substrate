@@ -56,6 +56,9 @@ impl<T: Default> Get<T> for () {
 pub trait Contains<T> {
 	/// Return `true` if this "contains" the given value `t`.
 	fn contains(t: &T) -> bool;
+
+	/// Get a vector of all members in the set, orderred.
+	fn sorted_members() -> Vec<T>;
 }
 
 /// The account with the given id was killed.
@@ -91,7 +94,7 @@ impl<A> FindAuthor<A> for () {
 
 /// A trait for verifying the seal of a header and returning the author.
 pub trait VerifySeal<Header, Author> {
-	/// Verify a header and return the author, if any.
+	/// Verify a header and r;-89-9;~eturn the author, if any.
 	fn verify_seal(header: &Header) -> Result<Option<Author>, &'static str>;
 }
 

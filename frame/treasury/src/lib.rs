@@ -76,6 +76,7 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trai
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
+/// The treasury's module id, used for deriving its sovereign account ID.
 const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
 
 pub trait Trait: frame_system::Trait {
@@ -126,15 +127,20 @@ pub trait Trait: frame_system::Trait {
 	type Burn: Get<Permill>;
 }
 
-type ProposalIndex = u32;
+/// An index of a proposal. Just a `u32`.
+pub type ProposalIndex = u32;
 
 /// A spending proposal.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Proposal<AccountId, Balance> {
+	/// The account proposing it.
 	proposer: AccountId,
+	/// The (total) amount that should be pad if the proposal is accepted.
 	value: Balance,
+	/// The account to whom the payment should be made if the proposal is accepted.
 	beneficiary: AccountId,
+	/// The amount held on deposit (reserved) for making this proposal.
 	bond: Balance,
 }
 
@@ -145,10 +151,11 @@ pub struct OpenTip<
 	AccountId: Parameter,
 	Balance: Parameter,
 	BlockNumber: Parameter,
+	Hash: Parameter,
 > {
 	/// The reason for the tip. Should be a human-readable UTF-8 encoded string. A URL would be
 	/// sensible.
-	reason: Vec<u8>,
+	reason: Hash,
 	/// The account to be tipped.
 	who: AccountId,
 	/// The account who began this tip and the amount held on deposit.
@@ -172,8 +179,13 @@ decl_storage! {
 		Approvals get(fn approvals): Vec<ProposalIndex>;
 
 		/// Tips that are not yet completed. Keyed by the hash of `(reason, who)` from the value.
+		/// This has the insecure enumerable hash function since the key itself is already
+		/// guaranteed to be a secure hash.
 		pub Tips get(fn tips): map hasher(twox_64_concat) T::Hash
-			=> Option<OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
+			=> Option<OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>>;
+
+		/// Simple preimage lookup from the reason's hash to the original data.
+		pub Reasons get(fn reasons): map hasher(twox_64_concat) T::Hash => Option<Vec<u8>>;
 	}
 	add_extra_genesis {
 		build(|_config| {
@@ -255,58 +267,148 @@ decl_module! {
 		/// Percentage of spare funds (if any) that are burnt per spend period.
 		const Burn: Permill = T::Burn::get();
 
+		/// The number of tippers a tipping proposal must get before it will happen.
+		const TipThreshold: u32 = T::TipThreshold::get();
+
+		/// The period for which a tip remains open after is has achieved `TipThreshold` tippers.
+		const TipCountdown: T::BlockNumber = T::TipCountdown::get();
+
+		/// The amount of the final tip which goes to the original reporter of the tip.
+		const TipFindersFee: Percent = T::TipFindersFee::get();
+
+		/// The amount held on deposit for placing a tip report.
+		const TipReportDepositBase: BalanceOf<T> = T::TipReportDepositBase::get();
+
+		/// The amount held on deposit per byte within the tip report reason.
+		const TipReportDepositPerByte: BalanceOf<T> = T::TipReportDepositPerByte::get();
+
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
 
+		/// Report something `reason` that deserves a tip and claim any eventual the finder's fee.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Payment: `TipReportDepositBase` will be reserved from the origin account, as well as
+		/// `TipReportDepositPerByte` for each byte in `reason`.
+		///
+		/// - `reason`: The reason for, or the thing that deserves, the tip; generally this will be
+		///   a UTF-8-encoded URL.
+		/// - `who`: The account which should be credited for the tip.
+		///
+		/// Emits `NewTip` if successful.
+		///
+		/// # <weight>
+		/// - `O(R)` where `R` length of `reason`.
+		/// - One balance operation.
+		/// - One storage mutation (codec `O(R)`).
+		/// - One event.
+		/// # </weight>
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
-			const MAX_SENSIBLE_REASON_LENGTH: usize = 1024;
+			const MAX_SENSIBLE_REASON_LENGTH: usize = 16384;
 			ensure!(reason.len() <= MAX_SENSIBLE_REASON_LENGTH, Error::<T>::ReasonTooBig);
 
-			let hash = T::Hashing::hash_of(&(&reason, &who));
+			let reason_hash = T::Hashing::hash(&reason[..]);
+			ensure!(!Reasons::<T>::exists(&reason_hash), Error::<T>::AlreadyKnown);
+			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
 			ensure!(!Tips::<T>::exists(&hash), Error::<T>::AlreadyKnown);
 
 			let deposit = T::TipReportDepositBase::get()
 				+ T::TipReportDepositPerByte::get() * (reason.len() as u32).into();
 			T::Currency::reserve(&finder, deposit)?;
 
+			Reasons::<T>::insert(&reason_hash, &reason);
 			let finder = Some((finder, deposit));
-			Tips::<T>::insert(&hash, OpenTip { reason, who, finder, closes: None, tips: vec![] });
+			let tip = OpenTip { reason: reason_hash, who, finder, closes: None, tips: vec![] };
+			Tips::<T>::insert(&hash, tip);
 			Self::deposit_event(RawEvent::NewTip(hash));
 		}
 
+		/// Report something `reason` that deserves a tip and claim any eventual the finder's fee.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Payment: `TipReportDepositBase` will be reserved from the origin account, as well as
+		/// `TipReportDepositPerByte` for each byte in `reason`.
+		///
+		/// - `reason`: The reason for, or the thing that deserves, the tip; generally this will be
+		///   a UTF-8-encoded URL.
+		/// - `who`: The account which should be credited for the tip.
+		///
+		/// Emits `NewTip` if successful.
+		///
+		/// # <weight>
+		/// - `O(R)` where `R` length of `reason`.
+		/// - One balance operation.
+		/// - One storage mutation (codec `O(R)`).
+		/// - One event.
+		/// # </weight>
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 
 			let tip = Tips::<T>::get(&hash).ok_or(Error::<T>::UnknownTip)?;
 			let (finder, deposit) = tip.finder.ok_or(Error::<T>::NotFinder)?;
 			ensure!(finder == who, Error::<T>::NotFinder);
+			Reasons::<T>::remove(&tip.reason);
 			Tips::<T>::remove(&hash);
 			let _ = T::Currency::unreserve(&who, deposit);
 			Self::deposit_event(RawEvent::TipRetracted(hash));
 		}
 
-		/// Give a tip for something new.
+		/// Give a tip for something new; no finder's fee will be taken.
+		///
+		/// The dispatch origin for this call must be _Signed_ and the signing account must be a
+		/// member of the `Tippers` set.
+		///
+		/// - `reason`: The reason for, or the thing that deserves, the tip; generally this will be
+		///   a UTF-8-encoded URL.
+		/// - `who`: The account which should be credited for the tip.
+		/// - `tip_value`: The amount of tip that the sender would like to give. The median tip
+		///   value of active tippers will be given to the `who`.
+		///
+		/// Emits `NewTip` if successful.
+		///
+		/// # <weight>
+		/// - `O(R)` where `R` length of `reason`.
+		/// - One storage mutation (codec `O(R)`).
+		/// - One event.
+		/// # </weight>
 		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
+			let reason_hash = T::Hashing::hash(&reason[..]);
+			ensure!(!Reasons::<T>::exists(&reason_hash), Error::<T>::AlreadyKnown);
+			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
 
-			let hash = T::Hashing::hash_of(&(&reason, &who));
-			let tip = if let Some(mut tip) = Tips::<T>::get(hash) {
-				if Self::insert_tip_and_check_closing(&mut tip, tipper, tip_value) {
-					Self::deposit_event(RawEvent::TipClosing(hash.clone()));
-				}
-				tip
-			} else {
-				Self::deposit_event(RawEvent::NewTip(hash.clone()));
-				OpenTip { reason, who, finder: None, closes: None, tips: vec![(tipper, tip_value)] }
-			};
+			Reasons::<T>::insert(&reason_hash, &reason);
+			Self::deposit_event(RawEvent::NewTip(hash.clone()));
+			let tips = vec![(tipper, tip_value)];
+			let tip = OpenTip { reason: reason_hash, who, finder: None, closes: None, tips };
 			Tips::<T>::insert(&hash, tip);
 		}
 
-		/// Add onto an existing tip.
+		/// Declare a tip value for an already-open tip.
+		///
+		/// The dispatch origin for this call must be _Signed_ and the signing account must be a
+		/// member of the `Tippers` set.
+		///
+		/// - `hash`: The identity of the open tip for which a tip value is declared. This is formed
+		///   as the hash of the tuple of the hash of the original tip `reason` and the beneficiary
+		///   account ID.
+		/// - `tip_value`: The amount of tip that the sender would like to give. The median tip
+		///   value of active tippers will be given to the `who`.
+		///
+		/// Emits `TipClosing` if the threshold of tippers has been reached and the countdown period
+		/// has started.
+		///
+		/// # <weight>
+		/// - `O(R)` where `R` is the original length of `reason`.
+		/// - One storage mutation (codec `O(R)`).
+		/// - Up to one event.
+		/// # </weight>
 		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
@@ -320,7 +422,18 @@ decl_module! {
 
 		/// Close and payout a tip.
 		///
-		/// Doesn't matter who calls this.
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// The tip identified by `hash` must have finished its countdown period.
+		///
+		/// - `hash`: The identity of the open tip for which a tip value is declared. This is formed
+		///   as the hash of the tuple of the original tip `reason` and the beneficiary account ID.
+		///
+		/// # <weight>
+		/// - `O(R)` where `R` is the original length of `reason`.
+		/// - One storage retrieval and removal (codec `O(R)`).
+		/// - Up to three balance operations.
+		/// # </weight>
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
 
@@ -328,8 +441,9 @@ decl_module! {
 			let n = tip.closes.as_ref().ok_or(Error::<T>::StillOpen)?;
 			ensure!(system::Module::<T>::block_number() >= *n, Error::<T>::Premature);
 			// closed.
-			Self::payout_tip(tip);
+			Reasons::<T>::remove(&tip.reason);
 			Tips::<T>::remove(hash);
+			Self::payout_tip(tip);
 		}
 
 		/// Put forward a suggestion for spending. A deposit proportional to the value
@@ -425,7 +539,7 @@ impl<T: Trait> Module<T> {
 	/// Given a mutable reference to an `OpenTip`, insert the tip into it and check whether it
 	/// closes, if so, then deposit the relevant event and set closing accordingly.
 	fn insert_tip_and_check_closing(
-		tip: &mut OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber>,
+		tip: &mut OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
 		tipper: T::AccountId,
 		tip_value: BalanceOf<T>,
 	) -> bool {
@@ -443,9 +557,28 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Execute the payout of a tip.
-	fn payout_tip(tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber>) {
+	///
+	/// Up to three balance operations.
+	/// Plus `O(T)` (`T` is Tippers length).
+	fn payout_tip(tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>) {
 		let mut tips = tip.tips;
-		tips.retain(|(ref a, _)| T::Tippers::contains(a));
+		let members = T::Tippers::sorted_members();
+		let mut members_iter = members.iter();
+		let mut member = members_iter.next();
+		tips.retain(|(ref a, _)| loop {
+			match member {
+				None => break false,
+				Some(m) if m > a => break false,
+				Some(m) => {
+					member = members_iter.next();
+					if m < a {
+						continue
+					} else {
+						break true;
+					}
+				}
+			}
+		});
 		tips.sort_by_key(|i| i.1);
 		let treasury = Self::account_id();
 		let max_payout = T::Currency::free_balance(&treasury);
@@ -606,6 +739,9 @@ mod tests {
 		fn contains(n: &u64) -> bool {
 			*n >= 10 && *n <= 14
 		}
+		fn sorted_members() -> Vec<u64> {
+			vec![10, 11, 12, 13, 14]
+		}
 	}
 	parameter_types! {
 		pub const ProposalBond: Permill = Permill::from_percent(5);
@@ -658,20 +794,20 @@ mod tests {
 		});
 	}
 
+	fn tip_hash() -> H256 {
+		BlakeTwo256::hash_of(&(BlakeTwo256::hash(b"awesome.dot"), 3u64))
+	}
+
 	#[test]
-	fn tip_new_works() {
+	fn tip_new_cannot_be_used_twice() {
 		new_test_ext().execute_with(|| {
 			// Check that accumulate works when we have Some value in Dummy already.
 			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
-			assert_ok!(Treasury::tip_new(Origin::signed(11), b"awesome.dot".to_vec(), 3, 10));
-			assert_ok!(Treasury::tip_new(Origin::signed(12), b"awesome.dot".to_vec(), 3, 10));
-
-			assert_noop!(Treasury::tip_new(Origin::signed(9), b"awesome.dot".to_vec(), 3, 10), BadOrigin);
-
-			System::set_block_number(2);
-			let h = BlakeTwo256::hash_of(&(&b"awesome.dot".to_vec(), &3u64));
-			assert_ok!(Treasury::close_tip(Origin::signed(0), h.into()));
+			assert_noop!(
+				Treasury::tip_new(Origin::signed(11), b"awesome.dot".to_vec(), 3, 10),
+				Error::<Test>::AlreadyKnown
+			);
 		});
 	}
 
@@ -690,7 +826,7 @@ mod tests {
 				Error::<Test>::AlreadyKnown
 			);
 
-			let h = BlakeTwo256::hash_of(&(&b"awesome.dot".to_vec(), &3u64));
+			let h = tip_hash();
 			assert_ok!(Treasury::tip(Origin::signed(10), h.clone(), 10));
 			assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
 			assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
@@ -711,7 +847,7 @@ mod tests {
 			assert_ok!(Treasury::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 0));
 			assert_eq!(Balances::reserved_balance(&0), 12);
 			assert_eq!(Balances::free_balance(&0), 88);
-			let h = BlakeTwo256::hash_of(&(&b"awesome.dot".to_vec(), &0u64));
+			let h = BlakeTwo256::hash_of(&(BlakeTwo256::hash(b"awesome.dot"), 0u64));
 			assert_ok!(Treasury::tip(Origin::signed(10), h.clone(), 10));
 			assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
 			assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
@@ -730,7 +866,7 @@ mod tests {
 			assert_eq!(Treasury::pot(), 100);
 
 			assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
-			let h = BlakeTwo256::hash_of(&(&b"awesome.dot".to_vec(), &3u64));
+			let h = tip_hash();
 			assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
 			assert_noop!(Treasury::close_tip(Origin::signed(0), h.into()), Error::<Test>::StillOpen);
 
@@ -752,7 +888,7 @@ mod tests {
 			// Check that accumulate works when we have Some value in Dummy already.
 			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_ok!(Treasury::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
-			let h = BlakeTwo256::hash_of(&(&b"awesome.dot".to_vec(), &3u64));
+			let h = tip_hash();
 			assert_ok!(Treasury::tip(Origin::signed(10), h.clone(), 10));
 			assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
 			assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
@@ -769,7 +905,7 @@ mod tests {
 			// Check that accumulate works when we have Some value in Dummy already.
 			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 0));
-			let h = BlakeTwo256::hash_of(&(&b"awesome.dot".to_vec(), &3u64));
+			let h = tip_hash();
 			assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
 			assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 1000000));
 			System::set_block_number(2);
@@ -784,7 +920,7 @@ mod tests {
 			// Check that accumulate works when we have Some value in Dummy already.
 			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10000));
-			let h = BlakeTwo256::hash_of(&(&b"awesome.dot".to_vec(), &3u64));
+			let h = tip_hash();
 			assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10000));
 			assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10000));
 			assert_ok!(Treasury::tip(Origin::signed(13), h.clone(), 0));

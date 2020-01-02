@@ -771,6 +771,7 @@ impl<T: Trait> Contains<T::AccountId> for Module<T> {
 	fn contains(who: &T::AccountId) -> bool {
 		Self::is_member(who)
 	}
+	fn sorted_members() -> Vec<T::AccountId> { Self::members_ids() }
 }
 
 #[cfg(test)]
