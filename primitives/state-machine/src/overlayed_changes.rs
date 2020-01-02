@@ -23,7 +23,7 @@ use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, OwnedChildInfo, ChildInfo};
 use sp_historical_data::synch_linear_transaction::{
-	History, HistoricalValue, States,
+	History, HistoricalEntry, States,
 };
 use sp_historical_data::CleaningResult;
 use std::ops;
@@ -78,7 +78,7 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 		let mut result = OverlayedChangeSet::default();
 		result.top = iter.into_iter().map(|(k, value)| (k, {
 			let mut history = History::default();
-			history.push_unchecked(HistoricalValue { value, index: State::Committed });
+			history.push_unchecked(HistoricalEntry { value, index: State::Committed });
 			history
 		})).collect();
 		result
@@ -120,7 +120,7 @@ fn set_with_extrinsic_inner_overlayed_value(
 			let mut extrinsics = current.value.extrinsics.clone();
 			extrinsics.get_or_insert_with(Default::default)
 				.insert(extrinsic_index);
-			history.push_unchecked(HistoricalValue {
+			history.push_unchecked(HistoricalEntry {
 				index: state,
 				value: OverlayedValue {
 					value,
@@ -132,7 +132,7 @@ fn set_with_extrinsic_inner_overlayed_value(
 		let mut extrinsics: Option<BTreeSet<u32>> = None;
 		extrinsics.get_or_insert_with(Default::default)
 			.insert(extrinsic_index);
-		history.push_unchecked(HistoricalValue {
+		history.push_unchecked(HistoricalEntry {
 			index: state,
 			value: OverlayedValue {
 				value,

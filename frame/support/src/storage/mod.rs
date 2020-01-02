@@ -25,7 +25,7 @@ pub mod hashed;
 pub mod child;
 pub mod generator;
 
-/// Execute under a transactional layer.
+/// Execute under a new transactional layer.
 ///
 /// If the result of execution is an error,
 /// the transactional layer get reverted; otherwise

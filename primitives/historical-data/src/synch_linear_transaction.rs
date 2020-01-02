@@ -36,6 +36,12 @@
 
 use crate::CleaningResult;
 
+/// An entry at a given history height.
+pub type HistoricalEntry<V> = crate::HistoricalEntry<V, State>;
+
+/// History of value and their state.
+pub type History<V> = crate::History<V, State>;
+
 /// Global state is the current number of overlay layers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct States { current_layer: usize }
@@ -139,7 +145,7 @@ impl States {
 	pub fn apply_discard_transaction<V>(&self, value: &mut History<V>) -> CleaningResult {
 		let init_len = value.0.len();
 		for i in (0 .. value.0.len()).rev() {
-			if let HistoricalValue {
+			if let HistoricalEntry {
 				value: _,
 				index: State::Transaction(ix),
 			} = value.0[i] {
@@ -171,7 +177,7 @@ impl States {
 	pub fn apply_commit_transaction<V>(&self, value: &mut History<V>) -> CleaningResult {
 		let mut new_value = None;
 		for i in (0 .. value.0.len()).rev() {
-			if let HistoricalValue {
+			if let HistoricalEntry {
 				value: _,
 				index: State::Transaction(ix),
 			} = value.0[i] {
@@ -187,7 +193,7 @@ impl States {
 			} else { break }
 		}
 		if let Some(new_value) = new_value {
-			value.0.push(HistoricalValue {
+			value.0.push(HistoricalEntry {
 				value: new_value,
 				index: State::Transaction(self.current_layer),
 			});
@@ -219,12 +225,6 @@ impl State {
 	}
 }
 
-/// An entry at a given history height.
-pub type HistoricalValue<V> = crate::HistoricalValue<V, State>;
-
-/// History of value and their state.
-pub type History<V> = crate::History<V, State>;
-
 impl<V> History<V> {
 
 	/// Set a value, this use a global state as parameter.
@@ -239,7 +239,7 @@ impl<V> History<V> {
 				return;
 			}
 		}
-		self.0.push(HistoricalValue {
+		self.0.push(HistoricalEntry {
 			value,
 			index: State::Transaction(states.current_layer),
 		});
@@ -264,11 +264,11 @@ impl<V> History<V> {
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn get_prospective(&self) -> Option<&V> {
 		match self.0.get(0) {
-			Some(HistoricalValue {
+			Some(HistoricalEntry {
 				value: _,
 				index: State::Committed,
 			}) => {
-				if let Some(HistoricalValue {
+				if let Some(HistoricalEntry {
 					value,
 					index: State::Transaction(_),
 				}) = self.0.get(1) {
@@ -277,7 +277,7 @@ impl<V> History<V> {
 					None
 				}
 			},
-			Some(HistoricalValue {
+			Some(HistoricalEntry {
 				value,
 				index: State::Transaction(_),
 			}) => Some(&value),
@@ -288,7 +288,7 @@ impl<V> History<V> {
 	/// Get latest committed value.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn get_committed(&self) -> Option<&V> {
-		if let Some(HistoricalValue {
+		if let Some(HistoricalEntry {
 					value,
 					index: State::Committed,
 				}) = self.0.get(0) {
@@ -301,7 +301,7 @@ impl<V> History<V> {
 	/// Extracts the committed value if there is one.
 	pub fn into_committed(mut self) -> Option<V> {
 		self.0.truncate(1);
-		if let Some(HistoricalValue {
+		if let Some(HistoricalEntry {
 					value,
 					index: State::Committed,
 				}) = self.0.pop() {
@@ -312,7 +312,7 @@ impl<V> History<V> {
 	}
 
 	/// Returns mutable handle on latest pending historical value.
-	pub fn get_mut(&mut self) -> Option<HistoricalValue<&mut V>> {
+	pub fn get_mut(&mut self) -> Option<HistoricalEntry<&mut V>> {
 		self.0.last_mut().map(|h| h.as_mut())
 	}
 

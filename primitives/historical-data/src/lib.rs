@@ -21,24 +21,37 @@
 
 pub mod synch_linear_transaction;
 
-/// An entry at a given history index.
+/// History of values, this is used to keep trace of all changes
+/// that occures on a value.
+/// The different states for this value, are ordered by change time
+/// in a simple stack.
 #[derive(Debug, Clone, PartialEq)]
-pub struct HistoricalValue<V, I> {
+pub struct History<V, I>(pub(crate) smallvec::SmallVec<[HistoricalEntry<V, I>; ALLOCATED_HISTORY]>);
+
+impl<V, I> Default for History<V, I> {
+	fn default() -> Self {
+		History(Default::default())
+	}
+}
+
+/// An entry of a historical data at a given history point.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HistoricalEntry<V, I> {
 	/// The stored value.
 	pub value: V,
 	/// The moment in history when the value got set.
 	pub index: I,
 }
 
-impl<V, I> From<(V, I)> for HistoricalValue<V, I> {
-	fn from(input: (V, I)) -> HistoricalValue<V, I> {
-		HistoricalValue { value: input.0, index: input.1 }
+impl<V, I> From<(V, I)> for HistoricalEntry<V, I> {
+	fn from(input: (V, I)) -> HistoricalEntry<V, I> {
+		HistoricalEntry { value: input.0, index: input.1 }
 	}
 }
 
-impl<V, I: Clone> HistoricalValue<V, I> {
-	fn as_mut(&mut self) -> HistoricalValue<&mut V, I> {
-		HistoricalValue { value: &mut self.value, index: self.index.clone() }
+impl<V, I: Clone> HistoricalEntry<V, I> {
+	fn as_mut(&mut self) -> HistoricalEntry<&mut V, I> {
+		HistoricalEntry { value: &mut self.value, index: self.index.clone() }
 	}
 }
 
@@ -60,19 +73,6 @@ pub enum CleaningResult {
 	Cleared,
 }
 
-/// History of value, this is used to keep trace of all changes
-/// that occures on a value.
-/// The different states for this value, are ordered by change time
-/// in a simple stack.
-#[derive(Debug, Clone, PartialEq)]
-pub struct History<V, I>(pub(crate) smallvec::SmallVec<[HistoricalValue<V, I>; ALLOCATED_HISTORY]>);
-
-impl<V, I> Default for History<V, I> {
-	fn default() -> Self {
-		History(Default::default())
-	}
-}
-
 /// Size of preallocated history per element.
 /// Current size is set to two, it is related to a use case
 /// where value got two initial state by default (committed and prospective).
@@ -87,7 +87,7 @@ impl<V, I> History<V, I> {
 
 	#[cfg(any(test, feature = "test-helpers"))]
 	/// Create an history from a sequence of historical values.
-	pub fn from_iter(input: impl IntoIterator<Item = HistoricalValue<V, I>>) -> Self {
+	pub fn from_iter(input: impl IntoIterator<Item = HistoricalEntry<V, I>>) -> Self {
 		let mut history = History::default();
 		for v in input {
 			history.push_unchecked(v);
@@ -100,7 +100,7 @@ impl<V, I> History<V, I> {
 	/// This should only use after checking the state is correct
 	/// (last item of historical value got a smaller index than
 	/// the new one).
-	pub fn push_unchecked(&mut self, item: HistoricalValue<V, I>) {
+	pub fn push_unchecked(&mut self, item: HistoricalEntry<V, I>) {
 		self.0.push(item);
 	}
 }

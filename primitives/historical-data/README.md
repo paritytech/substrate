@@ -1,14 +1,19 @@
 ## Historical data
 
-Crate with functionality to manage data that stores its own history.
+Crate for managing data and their associated history.
 
 This covers:
-- linear history driven data, eg. transactional layers for overlay.
+- data with a sequential history, eg. transactional layers and their associated changes.
 
-Design for this crate is to store history of each item in its own container.
-Query and update actions can requires requires a global historical state.
+This crate is storing single historical data, for instance in a sequential list of state.
+Historical collection of data will therefore be preferably a collection of individual historical data.
+For instance with historical data being a list of change, a collection of historical data will
+be a collection of list rather than a list of collection.
 
-This crate is `no_std` compatible as long as the `std` feature is not enabled.
+For multiple individual data, we refer to a global historical state,
+query and update actions are using it as an input parameter.
+
+This crate is `no_std` compatible if the `std` feature is not enabled.
 
 For more information see <https://crates.io/historical-data>
 

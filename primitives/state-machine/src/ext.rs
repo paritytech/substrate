@@ -659,7 +659,7 @@ mod tests {
 		}, backend::InMemory, overlayed_changes::{OverlayedValue, OverlayedChangeSet},
 	};
 	use sp_core::storage::{Storage, StorageChild};
-	use sp_historical_data::synch_linear_transaction::{History, HistoricalValue, State};
+	use sp_historical_data::synch_linear_transaction::{History, HistoricalEntry, State};
 
 	type TestBackend = InMemory<Blake2Hasher>;
 	type TestChangesTrieStorage = InMemoryChangesTrieStorage<Blake2Hasher, u64>;
@@ -681,13 +681,13 @@ mod tests {
 							value: Some(3u32.encode()),
 							extrinsics: Some(vec![1].into_iter().collect())
 						}, State::Committed),
-					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
+					].into_iter().map(|(value, index)| HistoricalEntry { value, index }))),
 					(vec![1], History::from_iter(vec![
 						(OverlayedValue {
 							value: Some(vec![100]),
 							extrinsics: Some(vec![1].into_iter().collect())
 						}, State::Committed),
-					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
+					].into_iter().map(|(value, index)| HistoricalEntry { value, index }))),
 				].into_iter().collect(),
 			},
 		}
