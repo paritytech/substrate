@@ -59,6 +59,9 @@ pub trait Contains<T> {
 
 	/// Get a vector of all members in the set, orderred.
 	fn sorted_members() -> Vec<T>;
+
+	/// Get the number of items in the set.
+	fn count() -> usize { Self::sorted_members().len() }
 }
 
 /// The account with the given id was killed.

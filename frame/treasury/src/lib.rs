@@ -92,10 +92,7 @@ pub trait Trait: frame_system::Trait {
 	/// Origin from which tippers must come.
 	type Tippers: Contains<Self::AccountId>;
 
-	/// The number of tippers a tipping proposal must get before it will happen.
-	type TipThreshold: Get<u32>;
-
-	/// The period for which a tip remains open after is has achieved `TipThreshold` tippers.
+	/// The period for which a tip remains open after is has achieved threshold tippers.
 	type TipCountdown: Get<Self::BlockNumber>;
 
 	/// The amount of the final tip which goes to the original reporter of the tip.
@@ -267,10 +264,7 @@ decl_module! {
 		/// Percentage of spare funds (if any) that are burnt per spend period.
 		const Burn: Permill = T::Burn::get();
 
-		/// The number of tippers a tipping proposal must get before it will happen.
-		const TipThreshold: u32 = T::TipThreshold::get();
-
-		/// The period for which a tip remains open after is has achieved `TipThreshold` tippers.
+		/// The period for which a tip remains open after is has achieved threshold tippers.
 		const TipCountdown: T::BlockNumber = T::TipCountdown::get();
 
 		/// The amount of the final tip which goes to the original reporter of the tip.
@@ -547,8 +541,9 @@ impl<T: Trait> Module<T> {
 			Ok(pos) => tip.tips[pos] = (tipper, tip_value),
 			Err(pos) => tip.tips.insert(pos, (tipper, tip_value)),
 		}
-		tip.tips.retain(|(ref a, _)| T::Tippers::contains(a));
-		if tip.tips.len() >= T::TipThreshold::get() as usize && tip.closes.is_none() {
+		Self::retain_active_tips(&mut tip.tips);
+		let threshold = (T::Tippers::count() + 1) / 2;
+		if tip.tips.len() >= threshold && tip.closes.is_none() {
 			tip.closes = Some(system::Module::<T>::block_number() + T::TipCountdown::get());
 			true
 		} else {
@@ -556,12 +551,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Execute the payout of a tip.
-	///
-	/// Up to three balance operations.
-	/// Plus `O(T)` (`T` is Tippers length).
-	fn payout_tip(tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>) {
-		let mut tips = tip.tips;
+	fn retain_active_tips(tips: &mut Vec<(T::AccountId, BalanceOf<T>)>) {
 		let members = T::Tippers::sorted_members();
 		let mut members_iter = members.iter();
 		let mut member = members_iter.next();
@@ -579,6 +569,15 @@ impl<T: Trait> Module<T> {
 				}
 			}
 		});
+	}
+
+	/// Execute the payout of a tip.
+	///
+	/// Up to three balance operations.
+	/// Plus `O(T)` (`T` is Tippers length).
+	fn payout_tip(tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>) {
+		let mut tips = tip.tips;
+		Self::retain_active_tips(&mut tips);
 		tips.sort_by_key(|i| i.1);
 		let treasury = Self::account_id();
 		let max_payout = T::Currency::free_balance(&treasury);
@@ -748,7 +747,6 @@ mod tests {
 		pub const ProposalBondMinimum: u64 = 1;
 		pub const SpendPeriod: u64 = 2;
 		pub const Burn: Permill = Permill::from_percent(50);
-		pub const TipThreshold: u32 = 3;
 		pub const TipCountdown: u64 = 1;
 		pub const TipFindersFee: Percent = Percent::from_percent(20);
 		pub const TipReportDepositBase: u64 = 1;
@@ -759,7 +757,6 @@ mod tests {
 		type ApproveOrigin = frame_system::EnsureRoot<u64>;
 		type RejectOrigin = frame_system::EnsureRoot<u64>;
 		type Tippers = TenToFourteen;
-		type TipThreshold = TipThreshold;
 		type TipCountdown = TipCountdown;
 		type TipFindersFee = TipFindersFee;
 		type TipReportDepositBase = TipReportDepositBase;
