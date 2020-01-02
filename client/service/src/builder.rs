@@ -251,10 +251,14 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TLightBackend<TBl>,
 	>, Error> {
+		#[cfg(not(target_os = "unknown"))]
 		let keystore = Keystore::open(
 			config.keystore_path.clone().ok_or("No basepath configured")?,
 			config.keystore_password.clone()
 		)?;
+
+		#[cfg(target_os = "unknown")]
+		let keystore = Keystore::new_in_memory();
 
 		let executor = NativeExecutor::<TExecDisp>::new(
 			config.wasm_method,

@@ -55,7 +55,6 @@ where
         allow_private_ipv4: true,
         enable_mdns: false,
     };
-    config.keystore_path = Some(Path::new("/").into());	// dummy path
     config.telemetry_external_transport = Some(transport);
     config.roles = Roles::LIGHT;
     config.name = format!("{} (Browser)", name);
