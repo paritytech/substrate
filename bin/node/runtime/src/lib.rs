@@ -382,7 +382,7 @@ parameter_types! {
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 	pub const TipReportDepositBase: Balance = 1 * DOLLARS;
 	pub const TipReportDepositPerByte: Balance = 1 * CENTS;
-}}
+}
 
 impl pallet_treasury::Trait for Runtime {
 	type Currency = Balances;
