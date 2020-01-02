@@ -1784,11 +1784,13 @@ fn era_is_always_same_length() {
 	// This ensures that the sessions is always of the same length if there is no forcing no
 	// session changes.
 	ExtBuilder::default().build().execute_with(|| {
+		let session_per_era = <SessionsPerEra as Get<SessionIndex>>::get();
+
 		start_era(1);
-		assert_eq!(Staking::current_era_start_session_index(), SessionsPerEra::get());
+		assert_eq!(Staking::current_era_start_session_index(), session_per_era);
 
 		start_era(2);
-		assert_eq!(Staking::current_era_start_session_index(), SessionsPerEra::get() * 2);
+		assert_eq!(Staking::current_era_start_session_index(), session_per_era * 2);
 
 		let session = Session::current_index();
 		ForceEra::put(Forcing::ForceNew);
@@ -1797,7 +1799,7 @@ fn era_is_always_same_length() {
 		assert_eq!(Staking::current_era_start_session_index(), session + 1);
 
 		start_era(4);
-		assert_eq!(Staking::current_era_start_session_index(), session + SessionsPerEra::get() + 1);
+		assert_eq!(Staking::current_era_start_session_index(), session + session_per_era + 1);
 	});
 }
 
@@ -2556,4 +2558,74 @@ fn version_initialized() {
 	ExtBuilder::default().build().execute_with(|| {
 		assert_eq!(<Staking as Store>::StorageVersion::get(), crate::migration::CURRENT_VERSION);
 	});
+}
+
+#[test]
+fn offchain_election_flag_is_triggered() {
+	ExtBuilder::default()
+		.session_per_era(5)
+		.session_length(10)
+		.election_lookahead(3)
+		.build()
+		.execute_with(
+	|| {
+
+		run_to_block(10);
+		assert_eq!(System::block_number(), 10);
+		assert_eq!(Session::current_index(), 1);
+		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Staking::election_status(), OffchainElectionStatus::None);
+
+		run_to_block(20);
+		assert_eq!(Session::current_index(), 2);
+
+		run_to_block(40);
+		assert_eq!(Session::current_index(), 4);
+		assert_eq!(System::block_number(), 40);
+		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Staking::election_status(), OffchainElectionStatus::None);
+
+		run_to_block(46);
+		assert_eq!(Staking::election_status(), OffchainElectionStatus::None);
+		run_to_block(47);
+		assert_eq!(Staking::election_status(), OffchainElectionStatus::Triggered(47));
+
+		run_to_block(50);
+		assert_eq!(Staking::election_status(), OffchainElectionStatus::None);
+	})
+}
+
+#[test]
+fn election_on_chain_fallback_works() {
+	ExtBuilder::default().build().execute_with(|| {
+		start_session(1);
+		start_session(2);
+		assert_eq!(Staking::election_status(), OffchainElectionStatus::None);
+		// some election must have happened by now
+		assert_eq!(
+			System::events()[4].event,
+			MetaEvent::staking(RawEvent::StakingElection(ElectionCompute::OnChain)),
+		);
+	})
+}
+
+#[test]
+fn is_current_session_final_works() {
+	ExtBuilder::default().session_per_era(3).build().execute_with(|| {
+		start_era(1);
+		assert_eq!(Session::current_index(), 4);
+		assert_eq!(Staking::current_era(), 1);
+		assert_eq!(Staking::is_current_session_final(), false);
+
+		start_session(4);
+		assert_eq!(Session::current_index(), 5);
+		assert_eq!(Staking::current_era(), 1);
+		assert_eq!(Staking::is_current_session_final(), true);
+
+		start_session(5);
+		assert_eq!(Session::current_index(), 6);
+		// era changed.
+		assert_eq!(Staking::current_era(), 2);
+		assert_eq!(Staking::is_current_session_final(), false);
+	})
 }

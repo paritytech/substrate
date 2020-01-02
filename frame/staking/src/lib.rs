@@ -262,13 +262,12 @@ use frame_support::{
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
-		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
+		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time, PredictNextSessionChange,
 	}
 };
-use pallet_session::{historical::OnSessionEnding, SelectInitialValidators};
+use pallet_session::{historical, SelectInitialValidators};
 use sp_runtime::{
-	Perbill,
-	RuntimeDebug,
+	Perbill, RuntimeDebug, RuntimeAppPublic,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
@@ -281,13 +280,15 @@ use sp_staking::{
 };
 #[cfg(feature = "std")]
 use sp_runtime::{Serialize, Deserialize};
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root, offchain::SubmitSignedTransaction};
 
 use sp_phragmen::{ExtendedBalance, PhragmenStakedAssignment};
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
 const MAX_UNLOCKING_CHUNKS: usize = 32;
+const ELECTION_TOLERANCE: ExtendedBalance = 0;
+const ELECTION_ITERATIONS: usize = 2;
 const STAKING_ID: LockIdentifier = *b"staking ";
 
 /// Counter for the number of eras that have passed.
@@ -520,6 +521,48 @@ pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
 	payout: Balance,
 }
 
+/// Indicate how an election round was computed.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum ElectionCompute {
+	/// Result was forcefully computed on chain at the end of the session.
+	OnChain,
+	/// Result was submitted and accepted to the chain.
+	Submitted,
+}
+
+/// The result of an election round.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct ElectionResult<AccountId, Balance: HasCompact> {
+	/// Era at which this election has happened.
+	era: EraIndex,
+	/// Type of the result,
+	compute: ElectionCompute,
+	/// The new computed slot stake.
+	slot_stake: Balance,
+	/// Flat list of validators who have been elected.
+	elected_stashes: Vec<AccountId>,
+	/// Flat list of new exposures, to be updated in the [`Exposure`] storage.
+	exposures: Vec<(AccountId, Exposure<AccountId, Balance>)>,
+}
+
+/// The status of the upcoming (offchain) election.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum OffchainElectionStatus<BlockNumber> {
+	/// Nothing has happened yet. An offchain worker might be triggered now.
+	None,
+	/// An offchain worker as been triggered but no result has been observed yet. No further
+	/// offchain workers shall be dispatched now.
+	Triggered(BlockNumber),
+	/// A result has been returned and should be used in the upcoming era.
+	Received,
+}
+
+impl<BlockNumber> Default for OffchainElectionStatus<BlockNumber> {
+	fn default() -> Self {
+		Self::None
+	}
+}
+
 pub type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type PositiveImbalanceOf<T> =
@@ -542,6 +585,8 @@ pub trait SessionInterface<AccountId>: frame_system::Trait {
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
 	fn prune_historical_up_to(up_to: SessionIndex);
+	/// Current session index.
+	fn current_index() -> SessionIndex;
 }
 
 impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T where
@@ -565,6 +610,10 @@ impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T whe
 
 	fn prune_historical_up_to(up_to: SessionIndex) {
 		<pallet_session::historical::Module<T>>::prune_up_to(up_to);
+	}
+
+	fn current_index() -> SessionIndex {
+		<pallet_session::Module<T>>::current_index()
 	}
 }
 
@@ -613,6 +662,24 @@ pub trait Trait: frame_system::Trait {
 
 	/// The NPoS reward curve to use.
 	type RewardCurve: Get<&'static PiecewiseLinear<'static>>;
+
+	/// Something that can predict the next session change.
+	type NextSessionChange: PredictNextSessionChange<Self::BlockNumber>;
+
+	/// How many blocks ahead of the epoch do we try to run the phragmen offchain? Setting this to
+	/// zero will disable the offchain compute and only on-chain seq-phragmen will be used.
+	type ElectionLookahead: Get<Self::BlockNumber>;
+
+	/// A (potentially unknown) key type used to sign the transactions.
+	type SigningKeyType: RuntimeAppPublic + Clone + /*IdentifyAccount<AccountId=Self::AccountId>*/;
+
+	/// The overarching call type.
+	// TODO: This is needed just to bound it to `From<Call<Self>>`. Otherwise could have `Self as system`
+	type Call: From<Call<Self>>;
+
+	/// A transaction submitter.
+	// type SubmitTransaction: SubmitSignedTransaction<Self, <Self as Trait>::Call>;
+	type SubmitTransaction;
 }
 
 /// Mode of era-forcing.
@@ -674,6 +741,14 @@ decl_storage! {
 		/// The currently elected validator set keyed by stash account ID.
 		pub CurrentElected get(fn current_elected): Vec<T::AccountId>;
 
+		/// The next validator set. At the end of an era, if this is available (potentially from the
+		/// result of an offchain worker), it is immediately used. Otherwise, the on-chain election
+		/// is executed.
+		pub QueuedElected get(fn queued_elected): Option<ElectionResult<T::AccountId, BalanceOf<T>>>;
+
+		/// Flag to control the execution of the offchain election.
+		pub ElectionStatus get(fn election_status): OffchainElectionStatus<T::BlockNumber>;
+
 		/// The current era index.
 		pub CurrentEra get(fn current_era) config(): EraIndex;
 
@@ -693,7 +768,7 @@ decl_storage! {
 			config.stakers.iter().map(|&(_, _, value, _)| value).min().unwrap_or_default()
 		}): BalanceOf<T>;
 
-		/// True if the next session change will be a new era regardless of index.
+		/// Mode of era forcing.
 		pub ForceEra get(fn force_era) config(): Forcing;
 
 		/// The percentage of the slash that is distributed to reporters.
@@ -780,6 +855,8 @@ decl_event!(
 		/// An old slashing report from a prior era was discarded because it could
 		/// not be processed.
 		OldSlashingReportDiscarded(SessionIndex),
+		/// A new set of stakers was elected with the given computation method.
+		StakingElection(ElectionCompute),
 	}
 );
 
@@ -819,8 +896,49 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		fn on_initialize() {
-			Self::ensure_storage_upgraded();
+		fn on_initialize(now: T::BlockNumber) {
+			if
+				// if we don't have any ongoing offchain compute.
+				Self::election_status() == OffchainElectionStatus::None &&
+				// and an era is about to be changed.
+				Self::is_current_session_final()
+			{
+				// TODO: maybe we can be naive like im-online and just assume block == slot?
+				let next_session_change =
+					T::NextSessionChange::predict_next_session_change(now);
+				if let Some(remaining) = next_session_change.checked_sub(&now) {
+					if remaining <= T::ElectionLookahead::get() && !remaining.is_zero() {
+						// Set the flag to make sure we don't waste any compute here in the same era
+						// after we have triggered the offline compute.
+						<ElectionStatus<T>>::put(
+							OffchainElectionStatus::<T::BlockNumber>::Triggered(now)
+						);
+						frame_support::print("detected a good block to trigger offchain worker.");
+					}
+				} else {
+					frame_support::print("predicted next authority set change to be in the past.");
+				}
+			}
+		}
+
+		fn offchain_worker(now: T::BlockNumber) {
+			// TODO: add runtime logging.
+			if sp_io::offchain::is_validator() {
+				if Self::election_status() == OffchainElectionStatus::<T::BlockNumber>::Triggered(now) {
+					let era = CurrentEra::get();
+					if let Some(election_result) = Self::do_phragmen(ElectionCompute::Submitted) {
+						if let Some(key) = Self::local_signing_key() {
+							let call: <T as Trait>::Call = Call::submit_election_result().into();
+							use system::offchain::SubmitSignedTransaction;
+							// T::SubmitTransaction::sign_and_submit(call, key);
+						} else {
+							frame_support::print("validator with not signing key...");
+						}
+					}
+				} else {
+					frame_support::print("validator did not start offchain election.");
+				}
+			}
 		}
 
 		fn on_finalize() {
@@ -828,6 +946,11 @@ decl_module! {
 			if !<CurrentEraStart<T>>::exists() {
 				<CurrentEraStart<T>>::put(T::Time::now());
 			}
+		}
+
+		fn submit_election_result(origin) {
+			let who = ensure_signed(origin)?;
+			// TODO: nothing for now, needs encoding.
 		}
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
@@ -1221,6 +1344,41 @@ impl<T: Trait> Module<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
+	/// Make sure that the account corresponding with the given account-id is a validator.
+	// TODO: needs a storage item to keep the most recent validators. ATM this is WRONG.
+	pub fn is_current_validator(who: &T::AccountId) -> bool {
+		Self::current_elected().contains(who)
+	}
+
+	/// Find a local `AccountId` we can sign with.
+	/// TODO: this needs a way to ge from either of account_id <-> public_key. Linked to the
+	/// transaction signing stuff
+	fn local_signing_key() -> Option<T::AccountId> {
+		// Find all local keys accessible to this app through the localised KeyType. Then go through
+		// all keys currently stored on chain and check them against the list of local keys until a
+		// match is found, otherwise return `None`.
+		let local_keys = T::SigningKeyType::all().iter().map(|i|
+			(*i).clone()
+		).collect::<Vec<T::SigningKeyType>>();
+
+		// TODO: this is WRONG. current elected is not accurate and is one behind
+		Self::current_elected().into_iter().find_map(|v| {
+			Some(v)
+		})
+	}
+
+	/// returns true if the end of the current session leads to an era change.
+	fn is_current_session_final() -> bool {
+		let current_index = T::SessionInterface::current_index();
+		let era_length = current_index
+			.checked_sub(Self::current_era_start_session_index())
+			.unwrap_or(0);
+		let session_per_era = T::SessionsPerEra::get()
+			.checked_sub(One::one())
+			.unwrap_or(0);
+		era_length >= session_per_era
+	}
+
 	// MUTABLES (DANGEROUS)
 
 	/// Update the ledger for a controller. This will also update the stash lock. The lock will
@@ -1305,7 +1463,9 @@ impl<T: Trait> Module<T> {
 	fn new_session(session_index: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
-		let era_length = session_index.checked_sub(Self::current_era_start_session_index()).unwrap_or(0);
+		let era_length = session_index
+			.checked_sub(Self::current_era_start_session_index())
+			.unwrap_or(0);
 		match ForceEra::get() {
 			Forcing::ForceNew => ForceEra::kill(),
 			Forcing::ForceAlways => (),
@@ -1325,6 +1485,7 @@ impl<T: Trait> Module<T> {
 	/// NOTE: This always happens immediately before a session change to ensure that new validators
 	/// get a chance to set their session keys.
 	fn new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+		// TODO: further clean this function. Payment stuff can go elsewhere.
 		// Payout
 		let points = CurrentEraPointsEarned::take();
 		let now = T::Time::now();
@@ -1396,7 +1557,7 @@ impl<T: Trait> Module<T> {
 		});
 
 		// Reassign all Stakers.
-		let (_slot_stake, maybe_new_validators) = Self::select_validators();
+		let maybe_new_validators = Self::select_and_update_validators();
 		Self::apply_unapplied_slashes(current_era);
 
 		maybe_new_validators
@@ -1418,12 +1579,72 @@ impl<T: Trait> Module<T> {
 		})
 	}
 
-	/// Select a new validator set from the assembled stakers and their role preferences.
+	/// Runs [`try_do_phragmen`] and updates the following storage items:
+	/// - [`Stakers`]
+	/// - [`SlotStake`]
+	/// - [`CurrentElected]
 	///
-	/// Returns the new `SlotStake` value and a set of newly selected _stash_ IDs.
+	/// If the election has been successful. It passes the new set upwards.
+	fn select_and_update_validators() -> Option<Vec<T::AccountId>> {
+		if let Some(ElectionResult::<T::AccountId, BalanceOf<T>> {
+			elected_stashes,
+			exposures,
+			era,
+			slot_stake,
+			compute,
+		}) = Self::try_do_phragmen() {
+			// Clear Stakers.
+			for v in Self::current_elected().iter() {
+				<Stakers<T>>::remove(v);
+			}
+
+			// Populate Stakers and write slot stake.
+			exposures.into_iter().for_each(|(s, e)| {
+				<Stakers<T>>::insert(s, e);
+			});
+
+			// Update slot stake.
+			<SlotStake<T>>::put(&slot_stake);
+
+			// Set the new validator set in sessions.
+			// Update current elected.
+			<CurrentElected<T>>::put(&elected_stashes);
+
+			// emit event
+			Self::deposit_event(RawEvent::StakingElection(compute));
+
+			Some(elected_stashes)
+		} else {
+			None
+		}
+	}
+
+	/// Select a new validator set from the assembled stakers and their role preferences. It tries
+	/// first to peek into [`QueuedElected`]. Otherwise, it runs a new phragmen.
 	///
-	/// Assumes storage is coherent with the declaration.
-	fn select_validators() -> (BalanceOf<T>, Option<Vec<T::AccountId>>) {
+	/// No storage item is updated.
+	fn try_do_phragmen() -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
+		// a phragmen result from either a stored submission or locally executed one.
+		let somehow_phragmen_results = <QueuedElected<T>>::take().map(|offchain_result| {
+			debug_assert!(
+				Self::election_status() == OffchainElectionStatus::Received,
+				"offchain result exist but should not.",
+			);
+
+			offchain_result
+		}).or_else(|| Self::do_phragmen(ElectionCompute::OnChain));
+
+		// Either way, kill the flag. No more submitted solutions until further notice.
+		<ElectionStatus<T>>::kill();
+
+		somehow_phragmen_results
+	}
+
+	/// Execute phragmen and return the new results.
+	///
+	/// No storage item is updated.
+	fn do_phragmen(compute: ElectionCompute) -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
+		let era = Self::current_era();
 		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
 		let all_validator_candidates_iter = <Validators<T>>::enumerate();
 		let all_validators = all_validator_candidates_iter.map(|(who, _pref)| {
@@ -1464,8 +1685,6 @@ impl<T: Trait> Module<T> {
 
 			let to_votes = |b: BalanceOf<T>|
 				<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
-			let to_balance = |e: ExtendedBalance|
-				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 
 			let mut supports = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
 				&elected_stashes,
@@ -1496,13 +1715,11 @@ impl<T: Trait> Module<T> {
 					staked_assignments.push((n.clone(), staked_assignment));
 				}
 
-				let tolerance = 0_u128;
-				let iterations = 2_usize;
 				sp_phragmen::equalize::<_, _, T::CurrencyToVote, _>(
 					staked_assignments,
 					&mut supports,
-					tolerance,
-					iterations,
+					ELECTION_TOLERANCE,
+					ELECTION_ITERATIONS,
 					Self::slashable_balance_of,
 				);
 			}
@@ -1512,39 +1729,43 @@ impl<T: Trait> Module<T> {
 				<Stakers<T>>::remove(v);
 			}
 
-			// Populate Stakers and figure out the minimum stake behind a slot.
+			let to_balance = |e: ExtendedBalance|
+				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
+
+			// collect exposures and slot stake.
 			let mut slot_stake = BalanceOf::<T>::max_value();
-			for (c, s) in supports.into_iter() {
+			let exposures = supports.into_iter().map(|(staker, support)| {
 				// build `struct exposure` from `support`
 				let exposure = Exposure {
-					own: to_balance(s.own),
+					own: to_balance(support.own),
 					// This might reasonably saturate and we cannot do much about it. The sum of
 					// someone's stake might exceed the balance type if they have the maximum amount
 					// of balance and receive some support. This is super unlikely to happen, yet
 					// we simulate it in some tests.
-					total: to_balance(s.total),
-					others: s.others
+					total: to_balance(support.total),
+					others: support.others
 						.into_iter()
 						.map(|(who, value)| IndividualExposure { who, value: to_balance(value) })
 						.collect::<Vec<IndividualExposure<_, _>>>(),
 				};
+
 				if exposure.total < slot_stake {
 					slot_stake = exposure.total;
 				}
-				<Stakers<T>>::insert(&c, exposure.clone());
-			}
-
-			// Update slot stake.
-			<SlotStake<T>>::put(&slot_stake);
-
-			// Set the new validator set in sessions.
-			<CurrentElected<T>>::put(&elected_stashes);
+				(staker, exposure)
+			}).collect::<Vec<(T::AccountId, Exposure<_, _>)>>();
 
 			// In order to keep the property required by `n_session_ending`
 			// that we must return the new validator set even if it's the same as the old,
 			// as long as any underlying economic conditions have changed, we don't attempt
 			// to do any optimization where we compare against the prior set.
-			(slot_stake, Some(elected_stashes))
+			Some(ElectionResult::<T::AccountId, BalanceOf<T>> {
+				elected_stashes,
+				slot_stake,
+				exposures,
+				era,
+				compute,
+			})
 		} else {
 			// There were not enough candidates for even our minimal level of functionality.
 			// This is bad.
@@ -1552,7 +1773,7 @@ impl<T: Trait> Module<T> {
 			// and let the chain keep producing blocks until we can decide on a sufficiently
 			// substantial set.
 			// TODO: #2494
-			(Self::slot_stake(), None)
+			None
 		}
 	}
 
@@ -1632,7 +1853,7 @@ impl<T: Trait> pallet_session::OnSessionEnding<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
+impl<T: Trait> historical::OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
 	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
@@ -1688,7 +1909,7 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 
 impl<T: Trait> SelectInitialValidators<T::AccountId> for Module<T> {
 	fn select_initial_validators() -> Option<Vec<T::AccountId>> {
-		<Module<T>>::select_validators().1
+		<Module<T>>::select_and_update_validators()
 	}
 }
 

@@ -19,14 +19,17 @@
 use std::{collections::HashSet, cell::RefCell};
 use sp_runtime::{Perbill, KeyTypeId};
 use sp_runtime::curve::PiecewiseLinear;
-use sp_runtime::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion};
-use sp_runtime::testing::{Header, UintAuthorityId};
+use sp_runtime::traits::{
+	IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion, Extrinsic as ExtrinsicT,
+};
+use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
 use sp_core::{H256, crypto::key_types};
 use sp_io;
 use frame_support::{
-	assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap, StorageValue,
-	traits::{Currency, Get, FindAuthor},
+	assert_ok, impl_outer_origin, parameter_types, impl_outer_dispatch, impl_outer_event,
+	StorageLinkedMap, StorageValue,
+	traits::{Currency, Get, FindAuthor, PredictNextSessionChange},
 	weights::Weight,
 };
 use crate::{
@@ -35,9 +38,10 @@ use crate::{
 };
 
 /// The AccountId alias in this test module.
-pub type AccountId = u64;
-pub type BlockNumber = u64;
-pub type Balance = u64;
+type AccountId = u64;
+type AccountIndex = u64;
+type BlockNumber = u64;
+type Balance = u64;
 
 /// Simple structure that exposes how u64 currency can be represented as... u64.
 pub struct CurrencyToVoteHandler;
@@ -50,8 +54,11 @@ impl Convert<u128, u64> for CurrencyToVoteHandler {
 
 thread_local! {
 	static SESSION: RefCell<(Vec<AccountId>, HashSet<AccountId>)> = RefCell::new(Default::default());
+	static SESSION_PER_ERA: RefCell<SessionIndex> = RefCell::new(3);
 	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
 	static SLASH_DEFER_DURATION: RefCell<EraIndex> = RefCell::new(0);
+	static ELECTION_LOOKAHEAD: RefCell<BlockNumber> = RefCell::new(0);
+	static PERIOD: RefCell<BlockNumber> = RefCell::new(1);
 }
 
 pub struct TestSessionHandler;
@@ -91,6 +98,32 @@ impl Get<u64> for ExistentialDeposit {
 	}
 }
 
+pub struct SessionsPerEra;
+impl Get<SessionIndex> for SessionsPerEra {
+	fn get() -> SessionIndex {
+		SESSION_PER_ERA.with(|v| *v.borrow())
+	}
+}
+impl Get<BlockNumber> for SessionsPerEra {
+	fn get() -> BlockNumber {
+		SESSION_PER_ERA.with(|v| *v.borrow() as BlockNumber)
+	}
+}
+
+pub struct ElectionLookahead;
+impl Get<BlockNumber> for ElectionLookahead {
+	fn get() -> BlockNumber {
+		ELECTION_LOOKAHEAD.with(|v| *v.borrow())
+	}
+}
+
+pub struct Period;
+impl Get<BlockNumber> for Period {
+	fn get() -> BlockNumber {
+		PERIOD.with(|v| *v.borrow())
+	}
+}
+
 pub struct SlashDeferDuration;
 impl Get<EraIndex> for SlashDeferDuration {
 	fn get() -> EraIndex {
@@ -100,6 +133,37 @@ impl Get<EraIndex> for SlashDeferDuration {
 
 impl_outer_origin!{
 	pub enum Origin for Test  where system = frame_system {}
+}
+
+impl_outer_dispatch! {
+	pub enum Call for Test where origin: Origin {
+		staking::Staking,
+	}
+}
+
+mod staking {
+	pub use super::super::*;
+	use frame_support::impl_outer_event;
+}
+use pallet_balances as balances;
+use pallet_session as session;
+use frame_system as system;
+
+impl_outer_event! {
+	pub enum MetaEvent for Test {
+		staking<T>, balances<T>, session,
+	}
+}
+
+pub struct PeriodicSessionChange<P>(sp_std::marker::PhantomData<P>);
+impl<P> PredictNextSessionChange<BlockNumber> for PeriodicSessionChange<P>
+	where P: Get<BlockNumber>,
+{
+	fn predict_next_session_change(now: BlockNumber) -> BlockNumber {
+		let period = P::get();
+		let excess = now % period;
+		now - excess + period
+	}
 }
 
 /// Author of block is always 11
@@ -112,9 +176,9 @@ impl FindAuthor<u64> for Author11 {
 	}
 }
 
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: Weight = 1024;
@@ -123,15 +187,15 @@ parameter_types! {
 }
 impl frame_system::Trait for Test {
 	type Origin = Origin;
-	type Index = u64;
+	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
-	type Call = ();
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = MetaEvent;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type AvailableBlockRatio = AvailableBlockRatio;
@@ -147,7 +211,7 @@ impl pallet_balances::Trait for Test {
 	type Balance = Balance;
 	type OnFreeBalanceZero = Staking;
 	type OnNewAccount = ();
-	type Event = ();
+	type Event = MetaEvent;
 	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
@@ -155,7 +219,6 @@ impl pallet_balances::Trait for Test {
 	type CreationFee = CreationFee;
 }
 parameter_types! {
-	pub const Period: BlockNumber = 1;
 	pub const Offset: BlockNumber = 0;
 	pub const UncleGenerations: u64 = 0;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(25);
@@ -165,7 +228,7 @@ impl pallet_session::Trait for Test {
 	type Keys = UintAuthorityId;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
-	type Event = ();
+	type Event = MetaEvent;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
 	type SelectInitialValidators = Staking;
@@ -201,7 +264,6 @@ pallet_staking_reward_curve::build! {
 	);
 }
 parameter_types! {
-	pub const SessionsPerEra: SessionIndex = 3;
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
 }
@@ -210,7 +272,7 @@ impl Trait for Test {
 	type Time = pallet_timestamp::Module<Self>;
 	type CurrencyToVote = CurrencyToVoteHandler;
 	type RewardRemainder = ();
-	type Event = ();
+	type Event = MetaEvent;
 	type Slash = ();
 	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
@@ -219,9 +281,34 @@ impl Trait for Test {
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
+	type NextSessionChange = PeriodicSessionChange<Period>;
+	type SigningKeyType = UintAuthorityId;
+	type ElectionLookahead = ElectionLookahead;
+	type Call = Call;
+	type SubmitTransaction = ();
 }
 
+// impl frame_system::offchain::CreateTransaction<Test, Extrinsic> for Test {
+// 	type Signature = <UintAuthorityId as sp_runtime::RuntimeAppPublic>::Signature;
+// 	type Public = <<UintAuthorityId as sp_core::crypto::CryptoType>::Pair as sp_core::crypto::Pair>::Public;
+// 	fn create_transaction<F: frame_system::offchain::Signer<Self::Public, Self::Signature>>(
+// 		call: Call,
+// 		public: Self::Public,
+// 		account: AccountId,
+// 		_index: AccountIndex,
+// 	) -> Option<(<Extrinsic as ExtrinsicT>::Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
+// 		let extra = ();
+// 		Some((call, (account, extra)))
+// 	}
+// }
+
+// pub type Extrinsic = TestXt<Call, ()>;
+// type SubmitTransaction = frame_system::offchain::TransactionSubmitter<(), Call, Extrinsic>;
+
 pub struct ExtBuilder {
+	session_length: BlockNumber,
+	election_lookahead: BlockNumber,
+	session_per_era: SessionIndex,
 	existential_deposit: u64,
 	validator_pool: bool,
 	nominate: bool,
@@ -236,6 +323,9 @@ pub struct ExtBuilder {
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
+			session_length: 1,
+			election_lookahead: 0,
+			session_per_era: 3,
 			existential_deposit: 0,
 			validator_pool: false,
 			nominate: true,
@@ -286,12 +376,27 @@ impl ExtBuilder {
 		self.invulnerables = invulnerables;
 		self
 	}
-	pub fn set_associated_consts(&self) {
+	pub fn session_per_era(mut self, length: SessionIndex) -> Self {
+		self.session_per_era = length;
+		self
+	}
+	pub fn election_lookahead(mut self, look: BlockNumber) -> Self {
+		self.election_lookahead = look;
+		self
+	}
+	pub fn session_length(mut self, length: BlockNumber) -> Self {
+		self.session_length = length;
+		self
+	}
+	pub fn set_associated_constants(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		SLASH_DEFER_DURATION.with(|v| *v.borrow_mut() = self.slash_defer_duration);
+		SESSION_PER_ERA.with(|v| *v.borrow_mut() = self.session_per_era);
+		ELECTION_LOOKAHEAD.with(|v| *v.borrow_mut() = self.election_lookahead);
+		PERIOD.with(|v| *v.borrow_mut() = self.session_length);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
-		self.set_associated_consts();
+		self.set_associated_constants();
 		let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
 			256
@@ -438,25 +543,34 @@ pub fn bond_nominator(acc: u64, val: u64, target: Vec<u64>) {
 	assert_ok!(Staking::nominate(Origin::signed(acc), target));
 }
 
+pub fn run_to_block(n: BlockNumber) {
+	for b in System::block_number()+1..=n {
+		System::set_block_number(b);
+		Session::on_initialize(b);
+		Staking::on_initialize(b);
+	}
+}
+
 pub fn advance_session() {
 	let current_index = Session::current_index();
 	start_session(current_index + 1);
 }
 
 pub fn start_session(session_index: SessionIndex) {
-	// Compensate for session delay
+	// Compensate for session delay TODO: double check this.
 	let session_index = session_index + 1;
 	for i in Session::current_index()..session_index {
 		System::set_block_number((i + 1).into());
 		Timestamp::set_timestamp(System::block_number() * 1000);
 		Session::on_initialize(System::block_number());
+		Staking::on_initialize(System::block_number());
 	}
 
 	assert_eq!(Session::current_index(), session_index);
 }
 
 pub fn start_era(era_index: EraIndex) {
-	start_session((era_index * 3).into());
+	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into());
 	assert_eq!(Staking::current_era(), era_index);
 }
 

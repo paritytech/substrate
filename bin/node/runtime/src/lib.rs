@@ -439,6 +439,7 @@ impl pallet_sudo::Trait for Runtime {
 type SubmitTransaction = TransactionSubmitter<ImOnlineId, Runtime, UncheckedExtrinsic>;
 
 parameter_types! {
+	// assume 1 slot == 1 block
 	pub const SessionDuration: BlockNumber = EPOCH_DURATION_IN_SLOTS as _;
 }
 

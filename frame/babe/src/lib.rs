@@ -26,7 +26,7 @@ use sp_std::{result, prelude::*};
 use frame_support::{decl_storage, decl_module, traits::FindAuthor, traits::Get};
 use sp_timestamp::OnTimestampSet;
 use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
-use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
+use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, One, Bounded};
 use sp_staking::{
 	SessionIndex,
 	offence::{Offence, Kind},
@@ -305,10 +305,29 @@ impl<T: Trait> Module<T> {
 		// epoch 0 as having started at the slot of block 1. We want to use
 		// the same randomness and validator set as signalled in the genesis,
 		// so we don't rotate the epoch.
-		now != sp_runtime::traits::One::one() && {
+		now != One::one() && {
 			let diff = CurrentSlot::get().saturating_sub(Self::current_epoch_start());
 			diff >= T::EpochDuration::get()
 		}
+	}
+
+	/// Return the _best guess_ block number, at which the next epoch change is predicted to happen.
+	///
+	/// In other word, this is only accurate if no slots are missed. Given missed slots, the slot
+	/// number will grow while the block number will not. Hence, the result can be interpreted as an
+	/// upper bound.
+	///
+	/// -------------- IMPORTANT NOTE --------------
+	/// This implementation is linked to how [`should_epoch_change`] is working. This might need to
+	/// be updated accordingly, if the underlying mechanics of slot and epochs change.
+	pub fn next_epoch_change(now: T::BlockNumber) -> T::BlockNumber {
+		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
+		let slots_remaining = next_slot
+			.checked_sub(CurrentSlot::get())
+			.unwrap_or(Bounded::max_value());
+		// This is a best effort guess. Drifts in the slot/block ratio will cause errors here.
+		let blocks_remaining: T::BlockNumber = slots_remaining.saturated_into();
+		now.saturating_add(blocks_remaining)
 	}
 
 	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change` has returned `true`,
@@ -322,10 +341,7 @@ impl<T: Trait> Module<T> {
 	) {
 		// PRECONDITION: caller has done initialization and is guaranteed
 		// by the session module to be called before this.
-		#[cfg(debug_assertions)]
-		{
-			assert!(Self::initialized().is_some())
-		}
+		debug_assert!(Self::initialized().is_some());
 
 		// Update epoch index
 		let epoch_index = EpochIndex::get()
@@ -469,6 +485,12 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
+}
+
+impl<T: Trait> frame_support::traits::PredictNextSessionChange<T::BlockNumber> for Module<T> {
+	fn predict_next_session_change(now: T::BlockNumber) -> T::BlockNumber {
+		Self::next_epoch_change(now)
+	}
 }
 
 impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {

@@ -23,10 +23,23 @@ use codec::{FullCodec, Codec, Encode, Decode};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	ConsensusEngineId, DispatchResult, DispatchError,
-	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
+	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating, Bounded},
 };
 
 use crate::dispatch::Parameter;
+
+/// Something that can predict at which block number the next era change will happen.
+pub trait PredictNextSessionChange<BlockNumber> {
+	/// Return the block number at which the next era change will happen.
+	fn predict_next_session_change(now: BlockNumber) -> BlockNumber;
+}
+
+impl<BlockNumber: Bounded> PredictNextSessionChange<BlockNumber> for () {
+	fn predict_next_session_change(_: BlockNumber) -> BlockNumber {
+		// practically never
+		Bounded::max_value()
+	}
+}
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
