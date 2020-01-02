@@ -27,6 +27,7 @@ use sp_runtime::ConsensusEngineId;
 pub use sc_network::message::generic::{Message, ConsensusMessage};
 use sc_network::Context;
 use sc_network::config::Roles;
+use wasm_timer::Instant;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
@@ -237,7 +238,7 @@ pub struct ConsensusGossip<B: BlockT> {
 	messages: Vec<MessageEntry<B>>,
 	known_messages: LruCache<B::Hash, ()>,
 	validators: HashMap<ConsensusEngineId, Arc<dyn Validator<B>>>,
-	next_broadcast: wasm_timer::Instant,
+	next_broadcast: Instant,
 }
 
 impl<B: BlockT> ConsensusGossip<B> {
@@ -249,7 +250,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			messages: Default::default(),
 			known_messages: LruCache::new(KNOWN_MESSAGES_CACHE_SIZE),
 			validators: Default::default(),
-			next_broadcast: wasm_timer::Instant::now() + REBROADCAST_INTERVAL,
+			next_broadcast: Instant::now() + REBROADCAST_INTERVAL,
 		}
 	}
 
@@ -337,9 +338,9 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// Perform periodic maintenance
 	pub fn tick(&mut self, protocol: &mut dyn Context<B>) {
 		self.collect_garbage();
-		if wasm_timer::Instant::now() >= self.next_broadcast {
+		if Instant::now() >= self.next_broadcast {
 			self.rebroadcast(protocol);
-			self.next_broadcast = wasm_timer::Instant::now() + REBROADCAST_INTERVAL;
+			self.next_broadcast = Instant::now() + REBROADCAST_INTERVAL;
 		}
 	}
 

@@ -15,10 +15,12 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use futures::prelude::*;
+use futures03::{compat::Compat, future::{NeverError, FutureExt, TryFutureExt}};
 use futures::sync::mpsc;
 use futures::stream::futures_unordered::FuturesUnordered;
 use std::time::Duration;
-use wasm_timer::{Delay, Instant};
+use wasm_timer::Instant;
+use futures_timer::Delay;
 
 /// Holds a list of `UnboundedSender`s, each associated with a certain time period. Every time the
 /// period elapses, we push an element on the sender.
@@ -29,7 +31,7 @@ pub struct StatusSinks<T> {
 }
 
 struct YieldAfter<T> {
-	delay: Delay,
+	delay: Compat<NeverError<Delay>>,
 	interval: Duration,
 	sender: Option<mpsc::UnboundedSender<T>>,
 }
@@ -47,7 +49,7 @@ impl<T> StatusSinks<T> {
 	/// The `interval` is the time period between two pushes on the sender.
 	pub fn push(&mut self, interval: Duration, sender: mpsc::UnboundedSender<T>) {
 		self.entries.push(YieldAfter {
-			delay: Delay::new(Instant::now() + interval),
+			delay: Delay::new(interval).never_error().compat(),
 			interval,
 			sender: Some(sender),
 		})
@@ -74,7 +76,7 @@ impl<T> StatusSinks<T> {
 							// waken up and the moment it is polled, the period is actually not
 							// `interval` but `interval + <delay>`. We ignore this problem in
 							// practice.
-							delay: Delay::new(Instant::now() + interval),
+							delay: Delay::new(interval).never_error().compat(),
 							interval,
 							sender: Some(sender),
 						});

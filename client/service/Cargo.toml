@@ -22,7 +22,7 @@ lazy_static = "1.4.0"
 log = "0.4.8"
 slog = { version = "2.5.2", features = ["nested-values"] }
 tokio-executor = "0.1.8"
-wasm-timer = "0.1"
+wasm-timer = "0.2"
 exit-future = "0.2.0"
 serde = "1.0.101"
 serde_json = "1.0.41"
@@ -54,6 +54,7 @@ parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
 grafana-data-source = { version = "2.0.0", path = "../../utils/grafana-data-source" }
 sc-tracing = { version = "2.0.0", path = "../tracing" }
 tracing = "0.1.10"
+futures-timer = { git = "https://github.com/expenses/futures-timer", branch = "wasm-support" }
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

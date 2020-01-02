@@ -12,6 +12,7 @@ log = "0.4.8"
 sp-core = { path= "../../core" }
 sp-inherents = { version = "2.0.0", path = "../../inherents" }
 futures = { version = "0.3.1", features = ["thread-pool"] }
+futures-timer = { git = "https://github.com/expenses/futures-timer", branch = "wasm-support" }
 wasm-timer = "0.2.0"
 sp-std = { version = "2.0.0", path = "../../std" }
 sp-version = { version = "2.0.0", path = "../../version" }
