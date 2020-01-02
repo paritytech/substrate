@@ -18,7 +18,10 @@ use crate::ChainSpec;
 use log::info;
 use wasm_bindgen::prelude::*;
 use sc_service::Configuration;
-use browser_utils::{Transport, browser_configuration, set_hooks, Client};
+use browser_utils::{
+	Transport, Client,
+	browser_configuration, set_console_error_panic_hook, init_console_log,
+};
 
 /// Starts the client.
 #[wasm_bindgen]
@@ -29,7 +32,8 @@ pub async fn start_client(wasm_ext: Transport) -> Result<Client, JsValue> {
 }
 
 async fn start_inner(wasm_ext: Transport) -> Result<Client, Box<dyn std::error::Error>> {
-	set_hooks(log::Level::Info);
+	set_console_error_panic_hook();
+	init_console_log(log::Level::Info)?;
 
 	let chain_spec = ChainSpec::FlamingFir.load()
 		.map_err(|e| format!("{:?}", e))?;

@@ -16,7 +16,7 @@ js-sys = "0.3.22"
 wasm-bindgen = "0.2.55"
 wasm-bindgen-futures = "0.4.5"
 kvdb-web = "0.1.1"
-service = { package = "sc-service", path = "../../client/service", default-features = false }
+service = { version = "2.0.0", package = "sc-service", path = "../../client/service", default-features = false }
 network = { package = "sc-network", path = "../../client/network" }
 chain-spec = { package = "sc-chain-spec", path = "../../client/chain-spec" }
 
