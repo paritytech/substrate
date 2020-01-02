@@ -20,7 +20,7 @@
 //! [`Codec`](pass_by::Codec), [`Inner`](pass_by::Inner) and [`Enum`](pass_by::Enum) are the
 //! provided strategy implementations.
 
-use crate::{RIType, impls::{pointer_and_len_from_u64, pointer_and_len_to_u64}};
+use crate::{RIType, util::{unpack_ptr_and_len, pack_ptr_and_len}};
 
 #[cfg(feature = "std")]
 use crate::host::*;
@@ -228,14 +228,14 @@ impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
 		let ptr = context.allocate_memory(vec.len() as u32)?;
 		context.write_memory(ptr, &vec)?;
 
-		Ok(pointer_and_len_to_u64(ptr.into(), vec.len() as u32))
+		Ok(pack_ptr_and_len(ptr.into(), vec.len() as u32))
 	}
 
 	fn from_ffi_value(
 		context: &mut dyn FunctionContext,
 		arg: Self::FFIType,
 	) -> Result<T> {
-		let (ptr, len) = pointer_and_len_from_u64(arg);
+		let (ptr, len) = unpack_ptr_and_len(arg);
 		let vec = context.read_memory(Pointer::new(ptr), len)?;
 		T::decode(&mut &vec[..])
 			.map_err(|e| format!("Could not decode value from wasm: {}", e.what()))
@@ -248,12 +248,12 @@ impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
 
 	fn into_ffi_value(instance: &T) -> WrappedFFIValue<Self::FFIType, Self::Owned> {
 		let data = instance.encode();
-		let ffi_value = pointer_and_len_to_u64(data.as_ptr() as u32, data.len() as u32);
+		let ffi_value = pack_ptr_and_len(data.as_ptr() as u32, data.len() as u32);
 		(ffi_value, data).into()
 	}
 
 	fn from_ffi_value(arg: Self::FFIType) -> T {
-		let (ptr, len) = pointer_and_len_from_u64(arg);
+		let (ptr, len) = unpack_ptr_and_len(arg);
 		let len = len as usize;
 
 		let slice = unsafe { slice::from_raw_parts(ptr as *const u8, len) };

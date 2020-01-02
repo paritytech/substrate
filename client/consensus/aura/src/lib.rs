@@ -28,48 +28,42 @@
 //!
 //! NOTE: Aura itself is designed to be generic over the crypto used.
 #![forbid(missing_docs, unsafe_code)]
-use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin};
-
-use codec::{Encode, Decode, Codec};
-use sp_consensus::{
-	self, BlockImport, Environment, Proposer, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
-	BlockOrigin, Error as ConsensusError, SelectChain, SlotData,
+use std::{
+	sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin,
+	collections::HashMap
 };
-use sp_consensus::import_queue::{
-	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
-};
-use sc_client_api::backend::AuxStore;
-use sc_client::{
-	blockchain::ProvideCache, BlockOf
-};
-use sp_blockchain::{
-	Result as CResult, well_known_cache_keys::{self, Id as CacheKeyId},
-};
-
-use sp_block_builder::BlockBuilder as BlockBuilderApi;
-
-use sp_runtime::{generic::{BlockId, OpaqueDigestItemId}, Justification};
-use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
-
-use sp_core::crypto::Pair;
-use sp_inherents::{InherentDataProviders, InherentData};
 
 use futures::prelude::*;
 use parking_lot::Mutex;
 use log::{debug, info, trace};
-use sp_blockchain;
 
+use codec::{Encode, Decode, Codec};
+
+use sp_consensus::{
+	self, BlockImport, Environment, Proposer, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
+	BlockOrigin, Error as ConsensusError, SelectChain, SlotData, BlockCheckParams, ImportResult
+};
+use sp_consensus::import_queue::{
+	Verifier, BasicQueue, BoxJustificationImport, BoxFinalityProofImport,
+};
+use sc_client_api::backend::AuxStore;
+use sc_client::BlockOf;
+use sp_blockchain::{
+	self, Result as CResult, well_known_cache_keys::{self, Id as CacheKeyId},
+	ProvideCache, HeaderBackend,
+};
+use sp_block_builder::BlockBuilder as BlockBuilderApi;
+use sp_runtime::{generic::{BlockId, OpaqueDigestItemId}, Justification};
+use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
+use sp_core::crypto::Pair;
+use sp_inherents::{InherentDataProviders, InherentData};
 use sp_timestamp::{
 	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
 };
-
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
-
 use sc_consensus_slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible};
 use sc_consensus_slots::check_equivocation;
-
 use sc_keystore::KeyStorePtr;
-
 use sp_api::ApiExt;
 
 pub use sp_consensus_aura::{
@@ -220,11 +214,11 @@ impl<H, B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for Au
 	SO: SyncOracle + Send + Clone,
 	Error: ::std::error::Error + Send + From<::sp_consensus::Error> + From<I::Error> + 'static,
 {
-	type EpochData = Vec<AuthorityId<P>>;
-	type Claim = P;
+	type BlockImport = I;
 	type SyncOracle = SO;
 	type Proposer = E::Proposer;
-	type BlockImport = I;
+	type Claim = P;
+	type EpochData = Vec<AuthorityId<P>>;
 
 	fn logging_target(&self) -> &'static str {
 		"aura"
@@ -357,7 +351,7 @@ fn aura_err<B: BlockT>(error: Error<B>) -> Error<B> {
 	error
 }
 
-#[derive(derive_more::Display)]
+#[derive(derive_more::Display, Debug)]
 enum Error<B: BlockT> {
 	#[display(fmt = "Multiple Aura pre-runtime headers")]
 	MultipleHeaders,
@@ -376,6 +370,16 @@ enum Error<B: BlockT> {
 	Client(sp_blockchain::Error),
 	DataProvider(String),
 	Runtime(String),
+	#[display(fmt = "Slot number must increase: parent slot: {}, this slot: {}", _0, _1)]
+	SlotNumberMustIncrease(u64, u64),
+	#[display(fmt = "Parent ({}) of {} unavailable. Cannot import", _0, _1)]
+	ParentUnavailable(B::Hash, B::Hash),
+}
+
+impl<B: BlockT> std::convert::From<Error<B>> for String {
+	fn from(error: Error<B>) -> String {
+		error.to_string()
+	}
 }
 
 fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, Error<B>>
@@ -708,10 +712,93 @@ fn register_aura_inherent_data_provider(
 	}
 }
 
+/// A block-import handler for Aura.
+pub struct AuraBlockImport<Block: BlockT, C, I: BlockImport<Block>, P> {
+	inner: I,
+	client: Arc<C>,
+	_phantom: PhantomData<(Block, P)>,
+}
+
+impl<Block: BlockT, C, I: Clone + BlockImport<Block>, P> Clone for AuraBlockImport<Block, C, I, P> {
+	fn clone(&self) -> Self {
+		AuraBlockImport {
+			inner: self.inner.clone(),
+			client: self.client.clone(),
+			_phantom: PhantomData,
+		}
+	}
+}
+
+impl<Block: BlockT, C, I: BlockImport<Block>, P> AuraBlockImport<Block, C, I, P> {
+	/// New aura block import.
+	pub fn new(
+		inner: I,
+		client: Arc<C>,
+	) -> Self {
+		Self {
+			inner,
+			client,
+			_phantom: PhantomData,
+		}
+	}
+}
+
+impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I, P> where
+	I: BlockImport<Block> + Send + Sync,
+	I::Error: Into<ConsensusError>,
+	C: HeaderBackend<Block>,
+	P: Pair + Send + Sync + 'static,
+	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
+	P::Signature: Encode + Decode,
+{
+	type Error = ConsensusError;
+
+	fn check_block(
+		&mut self,
+		block: BlockCheckParams<Block>,
+	) -> Result<ImportResult, Self::Error> {
+		self.inner.check_block(block).map_err(Into::into)
+	}
+
+	fn import_block(
+		&mut self,
+		block: BlockImportParams<Block>,
+		new_cache: HashMap<CacheKeyId, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
+		let hash = block.post_header().hash();
+		let slot_number = find_pre_digest::<Block, P>(&block.header)
+			.expect("valid Aura headers must contain a predigest; \
+					 header has been already verified; qed");
+
+		let parent_hash = *block.header.parent_hash();
+		let parent_header = self.client.header(BlockId::Hash(parent_hash))
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
+			.ok_or_else(|| ConsensusError::ChainLookup(aura_err(
+				Error::<Block>::ParentUnavailable(parent_hash, hash)
+			).into()))?;
+
+		let parent_slot = find_pre_digest::<Block, P>(&parent_header)
+			.expect("valid Aura headers contain a pre-digest; \
+					parent header has already been verified; qed");
+
+		// make sure that slot number is strictly increasing
+		if slot_number <= parent_slot {
+			return Err(
+				ConsensusError::ClientImport(aura_err(
+					Error::<Block>::SlotNumberMustIncrease(parent_slot, slot_number)
+				).into())
+			);
+		}
+
+		self.inner.import_block(block, new_cache)
+			.map_err(Into::into)
+	}
+}
+
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<B, C, P, T>(
+pub fn import_queue<B, I, C, P, T>(
 	slot_duration: SlotDuration,
-	block_import: BoxBlockImport<B>,
+	block_import: I,
 	justification_import: Option<BoxJustificationImport<B>>,
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	client: Arc<C>,
@@ -719,8 +806,9 @@ pub fn import_queue<B, C, P, T>(
 	transaction_pool: Option<Arc<T>>,
 ) -> Result<AuraImportQueue<B>, sp_consensus::Error> where
 	B: BlockT,
-	C: 'static + ProvideRuntimeApi + BlockOf + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,
+	C: 'static + ProvideRuntimeApi + BlockOf + ProvideCache<B> + Send + Sync + AuxStore + HeaderBackend<B>,
+	I: BlockImport<B,Error=ConsensusError> + Send + Sync + 'static,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
@@ -738,7 +826,7 @@ pub fn import_queue<B, C, P, T>(
 	};
 	Ok(BasicQueue::new(
 		verifier,
-		block_import,
+		Box::new(block_import),
 		justification_import,
 		finality_proof_import,
 	))

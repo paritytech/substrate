@@ -62,7 +62,7 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 	0
 }
 
-pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &str> where
+pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &'static str> where
 		PublicOf<C>: PublicT,
 {
 	if desired.is_empty() {

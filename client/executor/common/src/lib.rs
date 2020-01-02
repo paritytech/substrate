@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::params::SharedParams;
+//! A set of common definitions that are needed for defining execution engines.
 
-/// Supports getting common params.
-pub trait GetSharedParams {
-	/// Returns shared params if any.
-	fn shared_params(&self) -> Option<&SharedParams>;
-}
+#![warn(missing_docs)]
+
+pub mod sandbox;
+pub mod allocator;
+pub mod error;
+pub mod wasm_runtime;

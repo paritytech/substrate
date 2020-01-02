@@ -46,9 +46,14 @@ use secp256k1::{PublicKey, SecretKey};
 #[cfg(feature = "full_crypto")]
 type Seed = [u8; 32];
 
-/// The ECDSA 64-byte raw public key.
+/// The ECDSA public key.
 #[derive(Clone, Encode, Decode)]
-pub struct Public(pub [u8; 64]);
+pub enum Public {
+	/// A full raw ECDSA public key.
+	Full([u8; 64]),
+	/// A compressed ECDSA public key.
+	Compressed([u8; 33]),
+}
 
 impl PartialOrd for Public {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -58,47 +63,113 @@ impl PartialOrd for Public {
 
 impl Ord for Public {
 	fn cmp(&self, other: &Self) -> Ordering {
-		self.0[..].cmp(&other.0[..])
+		self.as_ref().cmp(&other.as_ref())
 	}
 }
 
 impl PartialEq for Public {
 	fn eq(&self, other: &Self) -> bool {
-		&self.0[..] == &other.0[..]
+		self.as_ref() == other.as_ref()
 	}
 }
 
 impl Eq for Public {}
 
-impl Default for Public {
-	fn default() -> Self {
-		Public([0u8; 64])
+/// An error type for SS58 decoding.
+#[cfg(feature = "std")]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub enum PublicError {
+	/// Bad alphabet.
+	BadBase58,
+	/// Bad length.
+	BadLength,
+	/// Unknown version.
+	UnknownVersion,
+	/// Invalid checksum.
+	InvalidChecksum,
+}
+
+impl Public {
+	/// A new instance from the given 64-byte `data`.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
+	pub fn from_raw(data: [u8; 64]) -> Self {
+		Self::Full(data)
+	}
+
+	/// A new instance from the given 65-byte `data`.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
+	pub fn from_full(data: [u8; 65]) -> Self {
+		let raw_key = &data[1..];
+		let mut key = [0u8; 64];
+		key.copy_from_slice(raw_key);
+		Self::Full(key)
+	}
+
+	/// Return in compressed format.
+	///
+	/// Returns an error if `self` is an invalid full public key.
+	pub fn as_compressed(&self) -> Result<[u8; 33], ()> {
+		match self {
+			Self::Full(d) => secp256k1::PublicKey::parse_slice(d, None)
+				.map(|k| k.serialize_compressed())
+				.map_err(|_| ()),
+			Self::Compressed(d) => Ok(*d),
+		}
+	}
+
+	/// Convert `Self` into a compressed public key.
+	///
+	/// Returns an error if `self` is an invalid full public key.
+	pub fn into_compressed(self) -> Result<Self, ()> {
+		self.as_compressed().map(Self::Compressed)
 	}
 }
 
-/// A key pair.
-#[cfg(feature = "full_crypto")]
-#[derive(Clone)]
-pub struct Pair {
-	public: PublicKey,
-	secret: SecretKey,
+impl TraitPublic for Public {
+	/// A new instance from the given slice that should be 33 bytes long.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
+	fn from_slice(data: &[u8]) -> Self {
+		if data.len() == 33 {
+			let mut r = [0u8; 33];
+			r.copy_from_slice(data);
+			Self::Compressed(r)
+		} else {
+			let mut r = [0u8; 64];
+			r.copy_from_slice(data);
+			Self::Full(r)
+		}
+	}
 }
 
-impl AsRef<[u8; 64]> for Public {
-	fn as_ref(&self) -> &[u8; 64] {
-		&self.0
+impl Derive for Public {}
+
+impl Default for Public {
+	fn default() -> Self {
+		Public::Full([0u8; 64])
 	}
 }
 
 impl AsRef<[u8]> for Public {
 	fn as_ref(&self) -> &[u8] {
-		&self.0[..]
+		match self {
+			Self::Full(d) => &d[..],
+			Self::Compressed(d) => &d[..],
+		}
 	}
 }
 
 impl AsMut<[u8]> for Public {
 	fn as_mut(&mut self) -> &mut [u8] {
-		&mut self.0[..]
+		match self {
+			Self::Full(d) => &mut d[..],
+			Self::Compressed(d) => &mut d[..],
+		}
 	}
 }
 
@@ -106,19 +177,11 @@ impl sp_std::convert::TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-		if data.len() == 64 {
-			let mut inner = [0u8; 64];
-			inner.copy_from_slice(data);
-			Ok(Public(inner))
+		if data.len() == 33 || data.len() == 64 {
+			Ok(Self::from_slice(data))
 		} else {
 			Err(())
 		}
-	}
-}
-
-impl From<Public> for [u8; 64] {
-	fn from(x: Public) -> Self {
-		x.0
 	}
 }
 
@@ -131,7 +194,7 @@ impl From<Pair> for Public {
 
 impl UncheckedFrom<[u8; 64]> for Public {
 	fn unchecked_from(x: [u8; 64]) -> Self {
-		Public(x)
+		Public::Full(x)
 	}
 }
 
@@ -146,7 +209,7 @@ impl std::fmt::Display for Public {
 impl std::fmt::Debug for Public {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		let s = self.to_ss58check();
-		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&&self.0[..]), &s[0..8])
+		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.as_ref()), &s[0..8])
 	}
 }
 
@@ -168,7 +231,7 @@ impl<'de> Deserialize<'de> for Public {
 #[cfg(feature = "full_crypto")]
 impl sp_std::hash::Hash for Public {
 	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
-		self.0.hash(state);
+		self.as_ref().hash(state);
 	}
 }
 
@@ -317,60 +380,6 @@ impl<'a> TryFrom<&'a Signature> for (secp256k1::Signature, secp256k1::RecoveryId
 	}
 }
 
-/// An error type for SS58 decoding.
-#[cfg(feature = "std")]
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum PublicError {
-	/// Bad alphabet.
-	BadBase58,
-	/// Bad length.
-	BadLength,
-	/// Unknown version.
-	UnknownVersion,
-	/// Invalid checksum.
-	InvalidChecksum,
-}
-
-impl Public {
-	/// A new instance from the given 64-byte `data`.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_raw(data: [u8; 64]) -> Self {
-		Public(data)
-	}
-
-	/// A new instance from the given 65-byte `data`.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_full(data: [u8; 65]) -> Self {
-		let raw_key = &data[1..];
-		let mut key = [0u8; 64];
-		key.copy_from_slice(raw_key);
-		Public(key)
-	}
-
-	/// Return a slice filled with raw data.
-	pub fn as_array_ref(&self) -> &[u8; 64] {
-		self.as_ref()
-	}
-}
-
-impl TraitPublic for Public {
-	/// A new instance from the given slice that should be 33 bytes long.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 64];
-		r.copy_from_slice(data);
-		Public(r)
-	}
-}
-
-impl Derive for Public {}
-
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
@@ -386,6 +395,14 @@ fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
 pub enum DeriveError {
 	/// A soft key was found in the path (and is unsupported).
 	SoftKeyInPath,
+}
+
+/// A key pair.
+#[cfg(feature = "full_crypto")]
+#[derive(Clone)]
+pub struct Pair {
+	public: PublicKey,
+	secret: SecretKey,
 }
 
 #[cfg(feature = "full_crypto")]
@@ -473,7 +490,9 @@ impl TraitPair for Pair {
 		let message = secp256k1::Message::parse(&blake2_256(message.as_ref()));
 		let sig: (_, _) = match sig.try_into() { Ok(x) => x, _ => return false };
 		match secp256k1::recover(&message, &sig.0, &sig.1) {
-			Ok(actual) => &pubkey.0[..] == &actual.serialize()[1..],
+			Ok(actual) => pubkey.as_compressed()
+								.map(|p| &p[..] == &actual.serialize_compressed()[..])
+								.unwrap_or(false),
 			_ => false,
 		}
 	}
