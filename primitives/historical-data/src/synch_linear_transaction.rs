@@ -14,35 +14,37 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Linear arrangement of historical data with transactional
+//! Linear sequence of historical data with transactional
 //! support.
 //!
-//! This is mainly synchronous, it contains historical,
-//! most operations do not require a separated state and
-//! global state operation do update value synchronously
-//! (to gain time on those operation a different design could
-//! only change global state and apply garbage collection later).
+//! This is mainly synchronous, global transactional state operation
+//! do update value synchronously (to gain time on those operation a
+//! different design could be to switch to only  change global state
+//! and apply garbage collection later if needed).
 //!
 //! # Global state
 //!
-//! The global state is the current numbre of overlayed transaction layer.
-//! Committing or discarding a layer must use this counter.
+//! The global state is the current number of overlayed transaction layers.
+//! Committing or discarding a layer simply change this counter and a
+//! synchronous local state operations should follow to update every
+//! associated historical data.
 //!
 //! # Local state
 //!
-//! Local state is eitheir defined as `Committed` or the index of the number
-//! of layer at the time of creation.
+//! Local state is either defined as `Committed` or `Prospective`.
+//! If in `Prospective` state, the index of the number of layesr at the time
+//! of creation is also needed.
 //! Transaction operation does not interfere with value in `Committed` state.
 
 use crate::CleaningResult;
 
-/// An entry at a given history height.
-pub type HistoricalEntry<V> = crate::HistoricalEntry<V, State>;
-
 /// History of value and their state.
 pub type History<V> = crate::History<V, State>;
 
-/// Global state is the current number of overlay layers.
+/// An entry at a given history height.
+pub type HistoricalEntry<V> = crate::HistoricalEntry<V, State>;
+
+/// Global state contains only the current number of overlay layers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct States { current_layer: usize }
 
@@ -203,14 +205,14 @@ impl States {
 	}
 }
 
-/// Historical value state for multiple transaction
-/// with an additional commited state.
+/// Historical value state of multiple transaction
+/// with an alterantive committed state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum State {
-	/// Committed, transactional action do not
-	/// change this state.
+	/// Committed, in this state no action on transaction
+	/// can modify this value.
 	Committed,
-	/// Value in a transaction, contains the current
+	/// Value relates to a transaction, the state contains the current
 	/// number of transaction when value did change.
 	Transaction(usize),
 }
@@ -315,5 +317,4 @@ impl<V> History<V> {
 	pub fn get_mut(&mut self) -> Option<HistoricalEntry<&mut V>> {
 		self.0.last_mut().map(|h| h.as_mut())
 	}
-
 }

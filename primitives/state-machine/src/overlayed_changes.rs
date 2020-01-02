@@ -54,9 +54,9 @@ pub struct OverlayedValue {
 
 type TreeChangeSet = BTreeMap<Vec<u8>, History<OverlayedValue>>;
 
-/// Overlayed change set, content is keeping trace of its history.
+/// Overlayed change set, content keep trace of its history.
 ///
-/// It uses a map containing a linear history of each values.
+/// Maps containing a linear history of each values are used.
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct OverlayedChangeSet {
@@ -85,8 +85,8 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 	}
 }
 
-/// Variant of historical data `set` value that also update extrinsics.
-/// It avoid accessing two time the historical value item.
+/// Variant of historical data `set` function with internal extrinsics update.
+/// It avoids accessing two times the historical value item.
 /// It does remove latest historical dropped items.
 fn set_with_extrinsic_overlayed_value(
 	history: &mut History<OverlayedValue>,
@@ -198,7 +198,7 @@ impl OverlayedChangeSet {
 		});
 	}
 
-	/// Iterator over current values of a given overlay, including change trie information.
+	/// Iterator over current values for a given overlay, including change trie information.
 	pub fn iter_overlay(
 		&self,
 		storage_key: Option<&[u8]>,
@@ -221,7 +221,7 @@ impl OverlayedChangeSet {
 
 	}
 
-	/// Iterator over current values of a given overlay.
+	/// Iterator over current values for a given overlay.
 	pub fn iter_values(
 		&self,
 		storage_key: Option<&[u8]>,
@@ -252,7 +252,7 @@ impl OverlayedChangeSet {
 	}
 
 	/// Iterator over current values of all children overlays.
-	/// Variant of `children_iter` with owned `Vec<u8>` keys and values.
+	/// This is a variant of `children_iter` with owned `Vec<u8>` keys and values.
 	pub fn owned_children_iter<'a>(
 		&'a self,
 	) -> impl Iterator<Item=(
@@ -303,7 +303,7 @@ impl OverlayedChangeSet {
 		result
 	}
 
-	/// Test only method to access current commited changes.
+	/// Test only method to access current committed changes.
 	/// This method is only here to keep compatibility with previous tests,
 	/// please do not use for new tests.
 	#[cfg(test)]

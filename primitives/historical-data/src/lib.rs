@@ -21,12 +21,18 @@
 
 pub mod synch_linear_transaction;
 
-/// History of values, this is used to keep trace of all changes
-/// that occures on a value.
+/// History of values being used to keep trace of all changes
+/// that occurs (all different state a value can be in depending
+/// on the global state).
 /// The different states for this value, are ordered by change time
 /// in a simple stack.
 #[derive(Debug, Clone, PartialEq)]
 pub struct History<V, I>(pub(crate) smallvec::SmallVec<[HistoricalEntry<V, I>; ALLOCATED_HISTORY]>);
+
+/// Size of preallocated history per element.
+/// Current size is two, that is currently related to the use case
+/// where value got `committed` and `prospective` initial state by default.
+const ALLOCATED_HISTORY: usize = 2;
 
 impl<V, I> Default for History<V, I> {
 	fn default() -> Self {
@@ -56,11 +62,10 @@ impl<V, I: Clone> HistoricalEntry<V, I> {
 }
 
 #[derive(Debug, PartialEq)]
-/// The results from cleaning a historical value.
-/// It should be used to update the calling context,
-/// for instance if the historical value was stored
-/// into a hashmap then it should be removed for
-/// a `Cleared` result.
+/// The results from changing a historical value.
+/// It should be used to apply subsequent update the calling context.
+/// For instance if the historical value was stored into a hashmap,
+/// then it should be removed from it on a `Cleared` result.
 pub enum CleaningResult {
 	/// No inner data was changed, even technical
 	/// data, therefore no update is needed.
@@ -68,15 +73,9 @@ pub enum CleaningResult {
 	/// Any data got modified, therefore an
 	/// update may be needed.
 	Changed,
-	/// No data is stored anymore in this historical
-	/// value, it can be dropped.
+	/// No historical data is stored anymore, it can be dropped.
 	Cleared,
 }
-
-/// Size of preallocated history per element.
-/// Current size is set to two, it is related to a use case
-/// where value got two initial state by default (committed and prospective).
-const ALLOCATED_HISTORY: usize = 2;
 
 impl<V, I> History<V, I> {
 	#[cfg(any(test, feature = "test-helpers"))]
