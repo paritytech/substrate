@@ -69,7 +69,8 @@ use sp_std::prelude::*;
 use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
-use sp_runtime::{DispatchResult, traits::{StaticLookup, EnsureOrigin, Zero}, RuntimeDebug};
+use sp_runtime::{DispatchResult, RuntimeDebug};
+use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
@@ -246,6 +247,7 @@ pub enum IdentityField {
 	Email          = 0b0000000000000000000000000000000000000000000000000000000000010000,
 	PgpFingerprint = 0b0000000000000000000000000000000000000000000000000000000000100000,
 	Image          = 0b0000000000000000000000000000000000000000000000000000000001000000,
+	Twitter        = 0b0000000000000000000000000000000000000000000000000000000010000000,
 }
 
 /// Wrapper type for `BitFlags<IdentityField>` that implements `Codec`.
@@ -296,7 +298,7 @@ pub struct IdentityInfo {
 	/// Stored as UTF-8.
 	pub web: Data,
 
-	/// The Riot handle held by the controller of the account.
+	/// The Riot/Matrix handle held by the controller of the account.
 	///
 	/// Stored as UTF-8.
 	pub riot: Data,
@@ -312,6 +314,9 @@ pub struct IdentityInfo {
 	/// A graphic image representing the controller of the account. Should be a company,
 	/// organization or project logo or a headshot in the case of a human.
 	pub image: Data,
+
+	/// The Twitter identity. The leading `@` character may be elided.
+	pub twitter: Data,
 }
 
 /// Information concerning the identity of the controller of an account.
@@ -344,7 +349,7 @@ impl <
 }
 
 /// Information concerning a registrar.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug)]
 pub struct RegistrarInfo<
 	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
 	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
@@ -358,6 +363,16 @@ pub struct RegistrarInfo<
 	/// Relevant fields for this registrar. Registrar judgements are limited to attestations on
 	/// these fields.
 	pub fields: IdentityFields,
+}
+
+impl<
+	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
+	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
+> Decode for RegistrarInfo<Balance, AccountId> {
+	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
+		let (account, fee, fields) = Decode::decode(&mut AppendZerosInput::new(input))?;
+		Ok(Self { account, fee, fields })
+	}
 }
 
 decl_storage! {
@@ -956,6 +971,16 @@ mod tests {
 			legal: Data::Raw(b"The Right Ordinal Ten, Esq.".to_vec()),
 			.. Default::default()
 		}
+	}
+
+	#[test]
+	fn trailing_zeros_decodes_into_default_data() {
+		let encoded = Data::Raw(b"Hello".to_vec()).encode();
+		assert!(<(Data, Data)>::decode(&mut &encoded[..]).is_err());
+		let input = &mut &encoded[..];
+		let (a, b) = <(Data, Data)>::decode(&mut AppendZerosInput::new(input)).unwrap();
+		assert_eq!(a, Data::Raw(b"Hello".to_vec()));
+		assert_eq!(b, Data::None);
 	}
 
 	#[test]

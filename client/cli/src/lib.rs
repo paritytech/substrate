@@ -48,7 +48,7 @@ use std::{
 
 use names::{Generator, Name};
 use regex::Regex;
-use structopt::{StructOpt, clap::AppSettings};
+use structopt::{StructOpt, StructOptInternal, clap::AppSettings};
 #[doc(hidden)]
 pub use structopt::clap::App;
 use params::{
@@ -57,7 +57,7 @@ use params::{
 	NodeKeyParams, NodeKeyType, Cors, CheckBlockCmd,
 };
 pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy};
-pub use traits::{GetSharedParams, AugmentClap};
+pub use traits::GetSharedParams;
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
@@ -196,7 +196,7 @@ pub fn parse_and_prepare<'a, CC, RP, I>(
 ) -> ParseAndPrepare<'a, CC, RP>
 where
 	CC: StructOpt + Clone + GetSharedParams,
-	RP: StructOpt + Clone + AugmentClap,
+	RP: StructOpt + Clone + StructOptInternal,
 	I: IntoIterator,
 	<I as IntoIterator>::Item: Into<std::ffi::OsString> + Clone,
 {

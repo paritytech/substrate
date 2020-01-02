@@ -75,7 +75,7 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 		let external_addresses = self.network_state.external_addresses();
 
 		let state = NetworkState::new(
-			self.network_state.peer_id(),
+			self.network_state.local_peer_id(),
 			external_addresses,
 		);
 		Ok(OpaqueNetworkState::from(state))
@@ -292,7 +292,7 @@ mod tests {
 			Vec::new()
 		}
 
-		fn peer_id(&self) -> PeerId {
+		fn local_peer_id(&self) -> PeerId {
 			PeerId::random()
 		}
 	}

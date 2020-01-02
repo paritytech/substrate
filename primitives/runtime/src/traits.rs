@@ -102,7 +102,7 @@ impl Verify for sp_core::ecdsa::Signature {
 			self.as_ref(),
 			&sp_io::hashing::blake2_256(msg.get()),
 		) {
-			Ok(pubkey) => <dyn AsRef<[u8]>>::as_ref(signer) == &pubkey[..],
+			Ok(pubkey) => signer.as_compressed().map(|s| &s[..] == &pubkey[..]).unwrap_or(false),
 			_ => false,
 		}
 	}
@@ -117,7 +117,7 @@ pub trait AppVerify {
 }
 
 impl<
-	S: Verify<Signer=<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic> + From<T>,
+	S: Verify<Signer = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic> + From<T>,
 	T: sp_application_crypto::Wraps<Inner=S> + sp_application_crypto::AppKey + sp_application_crypto::AppSignature +
 		AsRef<S> + AsMut<S> + From<S>,
 > AppVerify for T where
@@ -1000,6 +1000,52 @@ pub trait OpaqueKeys: Clone {
 }
 
 /// Input that adds infinite number of zero after wrapped input.
+///
+/// This can add an infinite stream of zeros onto any input, not just a slice as with
+/// `TrailingZerosInput`.
+pub struct AppendZerosInput<'a, T>(&'a mut T);
+
+impl<'a, T> AppendZerosInput<'a, T> {
+	/// Create a new instance from the given byte array.
+	pub fn new(input: &'a mut T) -> Self {
+		Self(input)
+	}
+}
+
+impl<'a, T: codec::Input> codec::Input for AppendZerosInput<'a, T> {
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+		Ok(None)
+	}
+
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+		let remaining = self.0.remaining_len()?;
+		let completed = if let Some(n) = remaining {
+			let readable = into.len().min(n);
+			// this should never fail if `remaining_len` API is implemented correctly.
+			self.0.read(&mut into[..readable])?;
+			readable
+		} else {
+			// Fill it byte-by-byte.
+			let mut i = 0;
+			while i < into.len() {
+				if let Ok(b) = self.0.read_byte() {
+					into[i] = b;
+					i += 1;
+				} else {
+					break;
+				}
+			}
+			i
+		};
+		// Fill the rest with zeros.
+		for i in &mut into[completed..] {
+			*i = 0;
+		}
+		Ok(())
+	}
+}
+
+/// Input that adds infinite number of zero after wrapped input.
 pub struct TrailingZeroInput<'a>(&'a [u8]);
 
 impl<'a> TrailingZeroInput<'a> {
@@ -1261,8 +1307,9 @@ pub trait BlockIdTo<Block: self::Block> {
 
 #[cfg(test)]
 mod tests {
-	use super::AccountIdConversion;
+	use super::*;
 	use crate::codec::{Encode, Decode, Input};
+	use sp_core::{crypto::Pair, ecdsa};
 
 	mod t {
 		use sp_core::crypto::KeyTypeId;
@@ -1341,5 +1388,17 @@ mod tests {
 		assert_eq!(t.read(&mut buffer), Ok(()));
 		assert_eq!(t.remaining_len(), Ok(None));
 		assert_eq!(buffer, [0, 0]);
+	}
+
+	#[test]
+	fn ecdsa_verify_works() {
+		let msg = &b"test-message"[..];
+		let (pair, _) = ecdsa::Pair::generate();
+
+		let signature = pair.sign(&msg);
+		assert!(ecdsa::Pair::verify(&signature, msg, &pair.public()));
+
+		assert!(signature.verify(msg, &pair.public()));
+		assert!(signature.verify(msg, &pair.public().into_compressed().unwrap()));
 	}
 }

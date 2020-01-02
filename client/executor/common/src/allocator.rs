@@ -69,6 +69,9 @@ const MIN_POSSIBLE_ALLOCATION: u32 = 8;
 // to which it belongs.
 const PREFIX_SIZE: u32 = 8;
 
+/// An implementation of freeing bump allocator.
+///
+/// Refer to the module-level documentation for further details.
 pub struct FreeingBumpHeapAllocator {
 	bumper: u32,
 	heads: [u32; N],

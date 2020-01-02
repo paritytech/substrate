@@ -158,7 +158,7 @@ mod tests {
 			Vec::new()
 		}
 
-		fn peer_id(&self) -> PeerId {
+		fn local_peer_id(&self) -> PeerId {
 			PeerId::random()
 		}
 	}
