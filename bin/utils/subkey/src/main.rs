@@ -34,6 +34,7 @@ use std::{
 	convert::{TryInto, TryFrom}, io::{stdin, Read}, str::FromStr, path::PathBuf, fs, fmt,
 };
 
+mod rpc;
 mod vanity;
 
 trait Crypto: Sized {
@@ -231,6 +232,15 @@ fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
 						If the value is a file, the file content is used as URI. \
 						If not given, you will be prompted for the URI.'
 				"),
+			SubCommand::with_name("insert")
+				.about("Insert a key to the keystore of a node")
+				.args_from_usage("
+					<suri> 'The secret key URI. \
+						If the value is a file, the file content is used as URI. \
+						If not given, you will be prompted for the URI.'
+					<key-type> 'Key type, examples: \"gran\", or \"imon\" '
+					[node-url] 'Node JSON-RPC endpoint, default \"http:://localhost:9933\"'
+				"),
 		])
 }
 
@@ -383,6 +393,24 @@ where
 			let extrinsic = create_extrinsic::<C>(function, index, signer, genesis_hash);
 
 			print_extrinsic(extrinsic);
+		}
+		("insert", Some(matches)) => {
+			let suri = get_uri("suri", &matches)?;
+			let pair = read_pair::<C>(Some(&suri), password)?;
+			let node_url = matches.value_of("node-url").unwrap_or("http://localhost:9933");
+			let key_type = matches.value_of("key-type").ok_or(Error::Static("Key type id is required"))?;
+
+			// Just checking
+			let _key_type_id = sp_core::crypto::KeyTypeId::try_from(key_type)
+				.map_err(|_| Error::Static("Cannot convert argument to keytype: argument should be 4-character string"))?;
+
+			let rpc = rpc::RpcClient::new(node_url.to_string());
+
+			rpc.insert_key(
+				key_type.to_string(),
+				suri,
+				sp_core::Bytes(pair.public().as_ref().to_vec()),
+			);
 		}
 		_ => print_usage(&matches),
 	}
