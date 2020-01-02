@@ -102,7 +102,7 @@ impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P,
 	}
 
 	fn rotate_keys(&self) -> Result<Bytes> {
-		let best_block_hash = self.client.info().chain.best_hash;
+		let best_block_hash = self.client.chain_info().best_hash;
 		self.client.runtime_api().generate_session_keys(
 			&generic::BlockId::Hash(best_block_hash),
 			None,
@@ -114,7 +114,7 @@ impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P,
 			Ok(xt) => xt,
 			Err(err) => return Box::new(result(Err(err.into()))),
 		};
-		let best_block_hash = self.client.info().chain.best_hash;
+		let best_block_hash = self.client.chain_info().best_hash;
 		Box::new(self.pool
 			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
 			.compat()
@@ -157,7 +157,7 @@ impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P,
 		xt: Bytes,
 	) {
 		let submit = || -> Result<_> {
-			let best_block_hash = self.client.info().chain.best_hash;
+			let best_block_hash = self.client.chain_info().best_hash;
 			let dxt = TransactionFor::<P>::decode(&mut &xt[..])
 				.map_err(error::Error::from)?;
 			Ok(

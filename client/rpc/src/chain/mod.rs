@@ -63,7 +63,7 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 	/// Tries to unwrap passed block hash, or uses best block hash otherwise.
 	fn unwrap_or_best(&self, hash: Option<Block::Hash>) -> Block::Hash {
 		match hash.into() {
-			None => self.client().info().chain.best_hash,
+			None => self.client().chain_info().best_hash,
 			Some(hash) => hash,
 		}
 	}
@@ -82,7 +82,7 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		number: Option<NumberOrHex<NumberFor<Block>>>,
 	) -> Result<Option<Block::Hash>> {
 		Ok(match number {
-			None => Some(self.client().info().chain.best_hash),
+			None => Some(self.client().chain_info().best_hash),
 			Some(num_or_hex) => self.client()
 				.header(&BlockId::number(num_or_hex.to_number()?))
 				.map_err(client_err)?
@@ -92,7 +92,7 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 
 	/// Get hash of the last finalized block in the canon chain.
 	fn finalized_head(&self) -> Result<Block::Hash> {
-		Ok(self.client().info().chain.finalized_hash)
+		Ok(self.client().chain_info().finalized_hash)
 	}
 
 	/// New head subscription
@@ -105,7 +105,7 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 			self.client(),
 			self.subscriptions(),
 			subscriber,
-			|| self.client().info().chain.best_hash,
+			|| self.client().chain_info().best_hash,
 			|| self.client().import_notification_stream()
 				.filter(|notification| future::ready(notification.is_new_best))
 				.map(|notification| Ok::<_, ()>(notification.header))
@@ -132,7 +132,7 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 			self.client(),
 			self.subscriptions(),
 			subscriber,
-			|| self.client().info().chain.finalized_hash,
+			|| self.client().chain_info().finalized_hash,
 			|| self.client().finality_notification_stream()
 				.map(|notification| Ok::<_, ()>(notification.header))
 				.compat(),
