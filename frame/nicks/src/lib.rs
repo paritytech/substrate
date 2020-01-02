@@ -383,7 +383,10 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_noop!(Nicks::clear_name(Origin::signed(1)), Error::<Test>::Unnamed);
 
-			assert_noop!(Nicks::set_name(Origin::signed(3), b"Dave".to_vec()), "not enough free funds");
+			assert_noop!(
+				Nicks::set_name(Origin::signed(3), b"Dave".to_vec()),
+				pallet_balances::Error::<Test, _>::InsufficientBalance
+			);
 
 			assert_noop!(Nicks::set_name(Origin::signed(1), b"Ga".to_vec()), Error::<Test>::TooShort);
 			assert_noop!(

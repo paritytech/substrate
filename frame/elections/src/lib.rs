@@ -29,7 +29,7 @@ use sp_runtime::{
 	traits::{Zero, One, StaticLookup, Bounded, Saturating},
 };
 use frame_support::{
-	decl_storage, decl_event, ensure, decl_module,
+	decl_storage, decl_event, ensure, decl_module, decl_error,
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier,
@@ -267,8 +267,72 @@ decl_storage! {
 	}
 }
 
+decl_error! {
+	/// Error for the elections module.
+	pub enum Error for Module<T: Trait> {
+		/// Reporter must be a voter.
+		NotVoter,
+		/// Target for inactivity cleanup must be active.
+		InactiveTarget,
+		/// Cannot reap during presentation period.
+		CannotReapPresenting,
+		/// Cannot reap during grace period.
+		ReapGrace,
+		/// Not a proxy.
+		NotProxy,
+		/// Invalid reporter index.
+		InvalidReporterIndex,
+		/// Invalid target index.
+		InvalidTargetIndex,
+		/// Invalid vote index.
+		InvalidVoteIndex,
+		/// Cannot retract when presenting.
+		CannotRetractPresenting,
+		/// Cannot retract non-voter.
+		RetractNonVoter,
+		/// Invalid retraction index.
+		InvalidRetractionIndex,
+		/// Duplicate candidate submission.
+		DuplicatedCandidate,
+		/// Invalid candidate slot.
+		InvalidCandidateSlot,
+		/// Candidate has not enough funds.
+		InsufficientCandidateFunds,
+		/// Presenter must have sufficient slashable funds.
+		InsufficientPresenterFunds,
+		/// Stake deposited to present winner and be added to leaderboard should be non-zero.
+		ZeroDeposit,
+		/// Candidate not worthy of leaderboard.
+		UnworthyCandidate,
+		/// Leaderboard must exist while present phase active.
+		LeaderboardMustExist,
+		/// Cannot present outside of presentation period.
+		NotPresentationPeriod,
+		/// Presented candidate must be current.
+		InvalidCandidate,
+		/// Duplicated presentation.
+		DuplicatedPresentation,
+		/// Incorrect total.
+		IncorrectTotal,
+		/// Invalid voter index.
+		InvalidVoterIndex,
+		/// New voter must have sufficient funds to pay the bond.
+		InsufficientVoterFunds,
+		/// Locked value must be more than limit.
+		InsufficientLockedValue,
+		/// Amount of candidate votes cannot exceed amount of candidates.
+		TooManyVotes,
+		/// Amount of candidates to receive approval votes should be non-zero.
+		ZeroCandidates,
+		/// No approval changes during presentation period.
+		ApprovalPresentation,
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		/// How much should be locked up in order to submit one's candidacy. A reasonable
 		/// default value is 9.
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
@@ -363,7 +427,7 @@ decl_module! {
 			hint: SetIndex,
 			#[compact] value: BalanceOf<T>
 		) -> DispatchResult {
-			let who = Self::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
+			let who = Self::proxy(ensure_signed(origin)?).ok_or(Error::<T>::NotProxy)?;
 			Self::do_set_approvals(who, votes, index, hint, value)
 		}
 
@@ -390,26 +454,25 @@ decl_module! {
 			let reporter = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
-			ensure!(!Self::presentation_active(), "cannot reap during presentation period");
-			ensure!(Self::voter_info(&reporter).is_some(), "reporter must be a voter");
+			ensure!(!Self::presentation_active(), Error::<T>::CannotReapPresenting);
+			ensure!(Self::voter_info(&reporter).is_some(), Error::<T>::NotVoter);
 
-			let info = Self::voter_info(&who)
-				.ok_or("target for inactivity cleanup must be active")?;
+			let info = Self::voter_info(&who).ok_or(Error::<T>::InactiveTarget)?;
 			let last_active = info.last_active;
 
-			ensure!(assumed_vote_index == Self::vote_index(), "vote index not current");
+			ensure!(assumed_vote_index == Self::vote_index(), Error::<T>::InvalidVoteIndex);
 			ensure!(
 				assumed_vote_index > last_active + T::InactiveGracePeriod::get(),
-				"cannot reap during grace period"
+				Error::<T>::ReapGrace,
 			);
 
 			let reporter_index = reporter_index as usize;
 			let who_index = who_index as usize;
-			let assumed_reporter = Self::voter_at(reporter_index).ok_or("invalid reporter index")?;
-			let assumed_who = Self::voter_at(who_index).ok_or("invalid target index")?;
+			let assumed_reporter = Self::voter_at(reporter_index).ok_or(Error::<T>::InvalidReporterIndex)?;
+			let assumed_who = Self::voter_at(who_index).ok_or(Error::<T>::InvalidTargetIndex)?;
 
-			ensure!(assumed_reporter == reporter, "bad reporter index");
-			ensure!(assumed_who == who, "bad target index");
+			ensure!(assumed_reporter == reporter, Error::<T>::InvalidReporterIndex);
+			ensure!(assumed_who == who, Error::<T>::InvalidTargetIndex);
 
 			// will definitely kill one of reporter or who now.
 
@@ -458,11 +521,11 @@ decl_module! {
 		fn retract_voter(origin, #[compact] index: u32) {
 			let who = ensure_signed(origin)?;
 
-			ensure!(!Self::presentation_active(), "cannot retract when presenting");
-			ensure!(<VoterInfoOf<T>>::exists(&who), "cannot retract non-voter");
+			ensure!(!Self::presentation_active(), Error::<T>::CannotRetractPresenting);
+			ensure!(<VoterInfoOf<T>>::exists(&who), Error::<T>::RetractNonVoter);
 			let index = index as usize;
-			let voter = Self::voter_at(index).ok_or("retraction index invalid")?;
-			ensure!(voter == who, "retraction index mismatch");
+			let voter = Self::voter_at(index).ok_or(Error::<T>::InvalidRetractionIndex)?;
+			ensure!(voter == who, Error::<T>::InvalidRetractionIndex);
 
 			Self::remove_voter(&who, index);
 			T::Currency::unreserve(&who, T::VotingBond::get());
@@ -486,18 +549,18 @@ decl_module! {
 		fn submit_candidacy(origin, #[compact] slot: u32) {
 			let who = ensure_signed(origin)?;
 
-			ensure!(!Self::is_a_candidate(&who), "duplicate candidate submission");
+			ensure!(!Self::is_a_candidate(&who), Error::<T>::DuplicatedCandidate);
 			let slot = slot as usize;
 			let count = Self::candidate_count() as usize;
 			let candidates = Self::candidates();
 			ensure!(
 				(slot == count && count == candidates.len()) ||
 					(slot < candidates.len() && candidates[slot] == T::AccountId::default()),
-				"invalid candidate slot"
+				Error::<T>::InvalidCandidateSlot,
 			);
 			// NOTE: This must be last as it has side-effects.
 			T::Currency::reserve(&who, T::CandidacyBond::get())
-				.map_err(|_| "candidate has not enough funds")?;
+				.map_err(|_| Error::<T>::InsufficientCandidateFunds)?;
 
 			<RegisterInfoOf<T>>::insert(&who, (Self::vote_index(), slot as u32));
 			let mut candidates = candidates;
@@ -529,35 +592,35 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(
 				!total.is_zero(),
-				"stake deposited to present winner and be added to leaderboard should be non-zero",
+				Error::<T>::ZeroDeposit,
 			);
 
 			let candidate = T::Lookup::lookup(candidate)?;
-			ensure!(index == Self::vote_index(), "index not current");
+			ensure!(index == Self::vote_index(), Error::<T>::InvalidVoteIndex);
 			let (_, _, expiring) = Self::next_finalize()
-				.ok_or("cannot present outside of presentation period")?;
+				.ok_or(Error::<T>::NotPresentationPeriod)?;
 			let bad_presentation_punishment =
 				T::PresentSlashPerVoter::get()
 				* BalanceOf::<T>::from(Self::voter_count() as u32);
 			ensure!(
 				T::Currency::can_slash(&who, bad_presentation_punishment),
-				"presenter must have sufficient slashable funds"
+				Error::<T>::InsufficientPresenterFunds,
 			);
 
 			let mut leaderboard = Self::leaderboard()
-				.ok_or("leaderboard must exist while present phase active")?;
-			ensure!(total > leaderboard[0].0, "candidate not worthy of leaderboard");
+				.ok_or(Error::<T>::LeaderboardMustExist)?;
+			ensure!(total > leaderboard[0].0, Error::<T>::UnworthyCandidate);
 
 			if let Some(p) = Self::members().iter().position(|&(ref c, _)| c == &candidate) {
 				ensure!(
 					p < expiring.len(),
-					"candidate must not form a duplicated member if elected"
+					Error::<T>::DuplicatedCandidate,
 				);
 			}
 
 			let voters = Self::all_voters();
 			let (registered_since, candidate_index): (VoteIndex, u32) =
-				Self::candidate_reg_info(&candidate).ok_or("presented candidate must be current")?;
+				Self::candidate_reg_info(&candidate).ok_or(Error::<T>::InvalidCandidate)?;
 			let actual_total = voters.iter()
 				.filter_map(|maybe_voter| maybe_voter.as_ref())
 				.filter_map(|voter| match Self::voter_info(voter) {
@@ -586,7 +649,7 @@ decl_module! {
 				// better safe than sorry.
 				let imbalance = T::Currency::slash(&who, bad_presentation_punishment).0;
 				T::BadPresentation::on_unbalanced(imbalance);
-				Err(if dupe { "duplicate presentation" } else { "incorrect total" })?
+				Err(if dupe { Error::<T>::DuplicatedPresentation } else { Error::<T>::IncorrectTotal })?
 			}
 		}
 
@@ -752,11 +815,11 @@ impl<T: Trait> Module<T> {
 	) -> DispatchResult {
 		let candidates_len = <Self as Store>::Candidates::decode_len().unwrap_or(0_usize);
 
-		ensure!(!Self::presentation_active(), "no approval changes during presentation period");
-		ensure!(index == Self::vote_index(), "incorrect vote index");
+		ensure!(!Self::presentation_active(), Error::<T>::ApprovalPresentation);
+		ensure!(index == Self::vote_index(), Error::<T>::InvalidVoteIndex);
 		ensure!(
 			!candidates_len.is_zero(),
-			"amount of candidates to receive approval votes should be non-zero"
+			Error::<T>::ZeroCandidates,
 		);
 		// Prevent a vote from voters that provide a list of votes that exceeds the candidates
 		// length since otherwise an attacker may be able to submit a very long list of `votes` that
@@ -764,9 +827,9 @@ impl<T: Trait> Module<T> {
 		// bond would cover.
 		ensure!(
 			candidates_len >= votes.len(),
-			"amount of candidate votes cannot exceed amount of candidates"
+			Error::<T>::TooManyVotes,
 		);
-		ensure!(value >= T::MinimumVotingLock::get(), "locked value must be more than limit");
+		ensure!(value >= T::MinimumVotingLock::get(), Error::<T>::InsufficientLockedValue);
 
 		// Amount to be locked up.
 		let mut locked_balance = value.min(T::Currency::total_balance(&who));
@@ -775,8 +838,8 @@ impl<T: Trait> Module<T> {
 
 		if let Some(info) = Self::voter_info(&who) {
 			// already a voter. Index must be valid. No fee. update pot. O(1)
-			let voter = Self::voter_at(hint).ok_or("invalid voter index")?;
-			ensure!(voter == who, "wrong voter index");
+			let voter = Self::voter_at(hint).ok_or(Error::<T>::InvalidVoterIndex)?;
+			ensure!(voter == who, Error::<T>::InvalidVoterIndex);
 
 			// write new accumulated offset.
 			let last_win = info.last_win;
@@ -787,7 +850,7 @@ impl<T: Trait> Module<T> {
 			// not yet a voter. Index _could be valid_. Fee might apply. Bond will be reserved O(1).
 			ensure!(
 				T::Currency::free_balance(&who) > T::VotingBond::get(),
-				"new voter must have sufficient funds to pay the bond"
+				Error::<T>::InsufficientVoterFunds,
 			);
 
 			let (set_index, vec_index) = Self::split_index(hint, VOTER_SET_SIZE);

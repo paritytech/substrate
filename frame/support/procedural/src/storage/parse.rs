@@ -31,6 +31,7 @@ mod keyword {
 	syn::custom_keyword!(double_map);
 	syn::custom_keyword!(blake2_256);
 	syn::custom_keyword!(blake2_128);
+	syn::custom_keyword!(blake2_128_concat);
 	syn::custom_keyword!(twox_256);
 	syn::custom_keyword!(twox_128);
 	syn::custom_keyword!(twox_64_concat);
@@ -179,6 +180,7 @@ struct DeclStorageDoubleMap {
 enum Hasher {
 	Blake2_256(keyword::blake2_256),
 	Blake2_128(keyword::blake2_128),
+	Blake2_128Concat(keyword::blake2_128_concat),
 	Twox256(keyword::twox_256),
 	Twox128(keyword::twox_128),
 	Twox64Concat(keyword::twox_64_concat),
@@ -207,6 +209,7 @@ impl From<Hasher> for super::HasherKind {
 		match hasher {
 			Hasher::Blake2_256(_) => super::HasherKind::Blake2_256,
 			Hasher::Blake2_128(_) => super::HasherKind::Blake2_128,
+			Hasher::Blake2_128Concat(_) => super::HasherKind::Blake2_128Concat,
 			Hasher::Twox256(_) => super::HasherKind::Twox256,
 			Hasher::Twox128(_) => super::HasherKind::Twox128,
 			Hasher::Twox64Concat(_) => super::HasherKind::Twox64Concat,
