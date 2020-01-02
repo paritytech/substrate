@@ -25,3 +25,4 @@ clear_on_drop = { version = "0.2.3", features = ["no_cc"] }
 # Imported just for the `wasm-bindgen` feature
 rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"] }
 rand = { version = "0.7", features = ["wasm-bindgen"] }
+#futures-timer = { git = "https://github.com/expenses/futures-timer", branch = "wasm-support", features = ["wasm-bindgen"] }

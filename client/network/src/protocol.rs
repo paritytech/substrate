@@ -53,6 +53,7 @@ use crate::chain::{Client, FinalityProofProvider};
 use sc_client_api::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
 use util::LruHashSet;
+use wasm_timer::Instant;
 
 mod legacy_proto;
 mod util;
@@ -161,7 +162,7 @@ struct PacketStats {
 /// A peer that we are connected to
 /// and from whom we have not yet received a Status message.
 struct HandshakingPeer {
-	timestamp: wasm_timer::Instant,
+	timestamp: Instant,
 }
 
 /// Peer information
@@ -169,9 +170,9 @@ struct HandshakingPeer {
 struct Peer<B: BlockT, H: ExHashT> {
 	info: PeerInfo<B>,
 	/// Current block request, if any.
-	block_request: Option<(wasm_timer::Instant, message::BlockRequest<B>)>,
+	block_request: Option<(Instant, message::BlockRequest<B>)>,
 	/// Requests we are no longer insterested in.
-	obsolete_requests: HashMap<message::RequestId, wasm_timer::Instant>,
+	obsolete_requests: HashMap<message::RequestId, Instant>,
 	/// Holds a set of transactions known to this peer.
 	known_extrinsics: LruHashSet<H>,
 	/// Holds a set of blocks known to this peer.
@@ -463,13 +464,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
 		let behaviour = LegacyProto::new(protocol_id, versions, peerset);
 
-		fn interval(duration: std::time::Duration) -> impl futures03::Stream<Item=()> + Unpin {
-			use futures03::prelude::*;
-			stream::unfold((), move |_| {
-				wasm_timer::Delay::new(duration).map(|_| Some(((), ())))
-			}).map(drop)
-		}
-
 		let protocol = Protocol {
 			tick_timeout: Box::new(interval(TICK_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
 			propagate_timeout: Box::new(interval(PROPAGATE_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
@@ -480,7 +474,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				chain,
 			},
 			light_dispatch: LightDispatch::new(checker),
-			genesis_hash: info.chain.genesis_hash,
+			genesis_hash: info.genesis_hash,
 			sync,
 			specialization,
 			handshaking_peers: HashMap::new(),
@@ -738,7 +732,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Called when a new peer is connected
 	pub fn on_peer_connected(&mut self, who: PeerId) {
 		trace!(target: "sync", "Connecting {}", who);
-		self.handshaking_peers.insert(who.clone(), HandshakingPeer { timestamp: wasm_timer::Instant::now() });
+		self.handshaking_peers.insert(who.clone(), HandshakingPeer { timestamp: Instant::now() });
 		self.send_status(who);
 	}
 
@@ -927,7 +921,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	fn maintain_peers(&mut self) {
-		let tick = wasm_timer::Instant::now();
+		let tick = Instant::now();
 		let mut aborting = Vec::new();
 		{
 			for (who, peer) in self.context_data.peers.iter() {
@@ -1017,7 +1011,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					.context_data
 					.chain
 					.info()
-					.chain.best_number;
+					.best_number;
 				let blocks_difference = self_best_block
 					.checked_sub(&status.best_number)
 					.unwrap_or_else(Zero::zero)
@@ -1239,7 +1233,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			return;
 		}
 
-		let is_best = self.context_data.chain.info().chain.best_hash == hash;
+		let is_best = self.context_data.chain.info().best_hash == hash;
 		debug!(target: "sync", "Reannouncing block {:?}", hash);
 		self.send_announcement(&header, data, is_best, true)
 	}
@@ -1285,10 +1279,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let status = message::generic::Status {
 			version: CURRENT_VERSION,
 			min_supported_version: MIN_VERSION,
-			genesis_hash: info.chain.genesis_hash,
+			genesis_hash: info.genesis_hash,
 			roles: self.config.roles.into(),
-			best_number: info.chain.best_number,
-			best_hash: info.chain.best_hash,
+			best_number: info.best_number,
+			best_hash: info.best_hash,
 			chain_status: self.specialization.status(),
 		};
 
@@ -1843,7 +1837,7 @@ fn send_request<B: BlockT, H: ExHashT>(
 				trace!(target: "sync", "Request {} for {} is now obsolete.", request.id, who);
 				peer.obsolete_requests.insert(request.id, timestamp);
 			}
-			peer.block_request = Some((wasm_timer::Instant::now(), r.clone()));
+			peer.block_request = Some((Instant::now(), r.clone()));
 		}
 	}
 	send_message::<B>(behaviour, stats, who, message)

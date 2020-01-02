@@ -20,7 +20,7 @@ use crate::protocol::legacy_proto::upgrade::RegisteredProtocol;
 use bytes::BytesMut;
 use fnv::FnvHashMap;
 use futures::prelude::*;
-use futures03::{compat::Compat, TryFutureExt as _, StreamExt as _, TryStreamExt as _};
+use futures03::{compat::Compat, future::NeverError, FutureExt as _, TryFutureExt as _, StreamExt as _, TryStreamExt as _};
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use log::{debug, error, trace, warn};
@@ -28,8 +28,8 @@ use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
 use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, pin::Pin};
 use std::time::Duration;
-use tokio_io::{AsyncRead, AsyncWrite};
 use wasm_timer::Instant;
+use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Network behaviour that handles opening substreams for custom protocols with other nodes.
 ///
@@ -104,7 +104,7 @@ enum PeerState {
 	/// The peerset requested that we connect to this peer. We are not connected to this node.
 	PendingRequest {
 		/// When to actually start dialing.
-		timer: Compat<wasm_timer::Delay>,
+		timer: Compat<NeverError<futures_timer::Delay>>,
 		/// When the `timer` will trigger.
 		timer_deadline: Instant,
 	},
@@ -136,7 +136,7 @@ enum PeerState {
 		/// state mismatch.
 		open: bool,
 		/// When to enable this remote.
-		timer: Compat<wasm_timer::Delay>,
+		timer: Compat<NeverError<futures_timer::Delay>>,
 		/// When the `timer` will trigger.
 		timer_deadline: Instant,
 	},
@@ -389,7 +389,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Will start to connect at \
 					until {:?}", occ_entry.key(), until);
 				*occ_entry.into_mut() = PeerState::PendingRequest {
-					timer: wasm_timer::Delay::new_at(until.clone()).compat(),
+					timer: futures_timer::Delay::new(until.clone() - Instant::now()).never_error().compat(),
 					timer_deadline: until.clone(),
 				};
 			},
@@ -408,7 +408,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 				*occ_entry.into_mut() = PeerState::DisabledPendingEnable {
 					connected_point: connected_point.clone(),
 					open,
-					timer: wasm_timer::Delay::new_at(banned.clone()).compat(),
+					timer: futures_timer::Delay::new(banned.clone() - Instant::now()).never_error().compat(),
 					timer_deadline: banned.clone(),
 				};
 			},

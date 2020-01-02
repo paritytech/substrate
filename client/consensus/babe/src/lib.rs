@@ -989,7 +989,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
 
-		let info = self.client.info().chain;
+		let info = self.client.chain_info();
 
 		if let Some(next_epoch_descriptor) = next_epoch_digest {
 			let next_epoch = epoch.increment(next_epoch_descriptor);
@@ -1104,7 +1104,7 @@ fn prune_finalized<B, E, Block, RA>(
 	B: Backend<Block, Blake2Hasher>,
 	RA: Send + Sync,
 {
-	let info = client.info().chain;
+	let info = client.chain_info();
 
 	let finalized_slot = {
 		let finalized_header = client.header(&BlockId::Hash(info.finalized_hash))

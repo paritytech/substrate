@@ -46,8 +46,8 @@
 //!
 
 use futures::prelude::*;
-use wasm_timer::Delay;
-use futures03::{compat::Compat, TryFutureExt as _};
+use futures_timer::Delay;
+use futures03::{compat::Compat, future::NeverError, TryFutureExt as _, FutureExt as _};
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId, PublicKey};
 use libp2p::swarm::{ProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::kad::{Kademlia, KademliaEvent, Quorum, Record};
@@ -76,7 +76,7 @@ pub struct DiscoveryBehaviour<TSubstream> {
 	#[cfg(not(target_os = "unknown"))]
 	mdns: Toggle<Mdns<Substream<StreamMuxerBox>>>,
 	/// Stream that fires when we need to perform the next random Kademlia query.
-	next_kad_random_query: Compat<Delay>,
+	next_kad_random_query: Compat<NeverError<Delay>>,
 	/// After `next_kad_random_query` triggers, the next one triggers after this duration.
 	duration_to_next_kad: Duration,
 	/// Discovered nodes to return.
@@ -115,7 +115,7 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 		DiscoveryBehaviour {
 			user_defined,
 			kademlia,
-			next_kad_random_query: Delay::new(Duration::new(0, 0)).compat(),
+			next_kad_random_query: Delay::new(Duration::new(0, 0)).never_error().compat(),
 			duration_to_next_kad: Duration::from_secs(1),
 			discoveries: VecDeque::new(),
 			local_peer_id: local_public_key.into_peer_id(),
@@ -313,7 +313,7 @@ where
 
 					// Schedule the next random query with exponentially increasing delay,
 					// capped at 60 seconds.
-					self.next_kad_random_query = Delay::new(self.duration_to_next_kad).compat();
+					self.next_kad_random_query = Delay::new(self.duration_to_next_kad).never_error().compat();
 					self.duration_to_next_kad = cmp::min(self.duration_to_next_kad * 2,
 						Duration::from_secs(60));
 				},

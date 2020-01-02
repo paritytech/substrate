@@ -17,8 +17,8 @@
 use super::upgrade::{RegisteredProtocol, RegisteredProtocolEvent, RegisteredProtocolSubstream};
 use bytes::BytesMut;
 use futures::prelude::*;
-use futures03::{compat::Compat, TryFutureExt as _};
-use wasm_timer::Delay;
+use futures03::{compat::Compat, future::NeverError, TryFutureExt as _, FutureExt as _};
+use futures_timer::Delay;
 use libp2p::core::{ConnectedPoint, PeerId, Endpoint};
 use libp2p::core::upgrade::{InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
@@ -125,7 +125,7 @@ where
 			remote_peer_id: remote_peer_id.clone(),
 			state: ProtocolState::Init {
 				substreams: SmallVec::new(),
-				init_deadline: Delay::new(Duration::from_secs(5)).compat()
+				init_deadline: Delay::new(Duration::from_secs(5)).never_error().compat()
 			},
 			events_queue: SmallVec::new(),
 		}
@@ -162,14 +162,14 @@ enum ProtocolState<TSubstream> {
 		/// List of substreams opened by the remote but that haven't been processed yet.
 		substreams: SmallVec<[RegisteredProtocolSubstream<TSubstream>; 6]>,
 		/// Deadline after which the initialization is abnormally long.
-		init_deadline: Compat<Delay>,
+		init_deadline: Compat<NeverError<Delay>>,
 	},
 
 	/// Handler is opening a substream in order to activate itself.
 	/// If we are in this state, we haven't sent any `CustomProtocolOpen` yet.
 	Opening {
 		/// Deadline after which the opening is abnormally long.
-		deadline: Compat<Delay>,
+		deadline: Compat<NeverError<Delay>>,
 	},
 
 	/// Normal operating mode. Contains the substreams that are open.
@@ -280,7 +280,7 @@ where
 						});
 					}
 					ProtocolState::Opening {
-						deadline: Delay::new(Duration::from_secs(60)).compat()
+						deadline: Delay::new(Duration::from_secs(60)).never_error().compat()
 					}
 
 				} else {
@@ -350,7 +350,7 @@ where
 			ProtocolState::Init { substreams, mut init_deadline } => {
 				match init_deadline.poll() {
 					Ok(Async::Ready(())) => {
-						init_deadline = Delay::new(Duration::from_secs(60)).compat();
+						init_deadline = Delay::new(Duration::from_secs(60)).never_error().compat();
 						error!(target: "sub-libp2p", "Handler initialization process is too long \
 							with {:?}", self.remote_peer_id)
 					},
@@ -365,7 +365,7 @@ where
 			ProtocolState::Opening { mut deadline } => {
 				match deadline.poll() {
 					Ok(Async::Ready(())) => {
-						deadline = Delay::new(Duration::from_secs(60)).compat();
+						deadline = Delay::new(Duration::from_secs(60)).never_error().compat();
 						let event = CustomProtoHandlerOut::ProtocolError {
 							is_severe: true,
 							error: "Timeout when opening protocol".to_string().into(),
@@ -379,7 +379,7 @@ where
 					},
 					Err(_) => {
 						error!(target: "sub-libp2p", "Tokio timer has errored");
-						deadline = Delay::new(Duration::from_secs(60)).compat();
+						deadline = Delay::new(Duration::from_secs(60)).never_error().compat();
 						self.state = ProtocolState::Opening { deadline };
 						None
 					},
@@ -448,7 +448,7 @@ where
 				// after all the substreams are closed.
 				if reenable && shutdown.is_empty() {
 					self.state = ProtocolState::Opening {
-						deadline: Delay::new(Duration::from_secs(60)).compat()
+						deadline: Delay::new(Duration::from_secs(60)).never_error().compat()
 					};
 					Some(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 						protocol: SubstreamProtocol::new(self.protocol.clone()),
