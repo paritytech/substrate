@@ -473,7 +473,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				chain,
 			},
 			light_dispatch: LightDispatch::new(checker),
-			genesis_hash: info.chain.genesis_hash,
+			genesis_hash: info.genesis_hash,
 			sync,
 			specialization,
 			handshaking_peers: HashMap::new(),
@@ -1010,7 +1010,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					.context_data
 					.chain
 					.info()
-					.chain.best_number;
+					.best_number;
 				let blocks_difference = self_best_block
 					.checked_sub(&status.best_number)
 					.unwrap_or_else(Zero::zero)
@@ -1232,7 +1232,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			return;
 		}
 
-		let is_best = self.context_data.chain.info().chain.best_hash == hash;
+		let is_best = self.context_data.chain.info().best_hash == hash;
 		debug!(target: "sync", "Reannouncing block {:?}", hash);
 		self.send_announcement(&header, data, is_best, true)
 	}
@@ -1278,10 +1278,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let status = message::generic::Status {
 			version: CURRENT_VERSION,
 			min_supported_version: MIN_VERSION,
-			genesis_hash: info.chain.genesis_hash,
+			genesis_hash: info.genesis_hash,
 			roles: self.config.roles.into(),
-			best_number: info.chain.best_number,
-			best_hash: info.chain.best_hash,
+			best_number: info.best_number,
+			best_hash: info.best_hash,
 			chain_status: self.specialization.status(),
 		};
 

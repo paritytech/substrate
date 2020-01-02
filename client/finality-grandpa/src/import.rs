@@ -87,7 +87,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC> JustificationImport<Block>
 
 	fn on_start(&mut self) -> Vec<(Block::Hash, NumberFor<Block>)> {
 		let mut out = Vec::new();
-		let chain_info = self.inner.info().chain;
+		let chain_info = self.inner.chain_info();
 
 		// request justifications for all pending changes for which change blocks have already been imported
 		let authorities = self.authority_set.inner().read();
@@ -324,7 +324,7 @@ where
 					// for the canon block the new authority set should start
 					// with. we use the minimum between the median and the local
 					// best finalized block.
-					let best_finalized_number = self.inner.info().chain.finalized_number;
+					let best_finalized_number = self.inner.chain_info().finalized_number;
 					let canon_number = best_finalized_number.min(median_last_finalized_number);
 					let canon_hash =
 						self.inner.header(&BlockId::Number(canon_number))
