@@ -53,9 +53,9 @@ impl<T: Default> Get<T> for () {
 /// A trait for querying whether a type can be said to statically "contain" a value. Similar
 /// in nature to `Get`, except it is designed to be lazy rather than active (you can't ask it to
 /// enumerate all values that it contains) and work for multiple values rather than just one.
-pub trait Contains<T> {
+pub trait Contains<T: Ord> {
 	/// Return `true` if this "contains" the given value `t`.
-	fn contains(t: &T) -> bool;
+	fn contains(t: &T) -> bool { Self::sorted_members().binary_search(t).is_ok() }
 
 	/// Get a vector of all members in the set, orderred.
 	fn sorted_members() -> Vec<T>;

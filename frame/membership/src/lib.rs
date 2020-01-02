@@ -228,10 +228,11 @@ mod tests {
 
 	use std::cell::RefCell;
 	use frame_support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::traits::Contains;
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
-	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header, traits::BadOrigin};
+	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
 	use frame_system::EnsureSignedBy;
 
 	impl_outer_origin! {
@@ -273,6 +274,19 @@ mod tests {
 		pub const Three: u64 = 3;
 		pub const Four: u64 = 4;
 		pub const Five: u64 = 5;
+	}
+
+	impl Contains<u64> for One {
+		fn sorted_members() -> Vec<u64> { vec![1] }
+	}
+	impl Contains<u64> for Two {
+		fn sorted_members() -> Vec<u64> { vec![2] }
+	}
+	impl Contains<u64> for Three {
+		fn sorted_members() -> Vec<u64> { vec![3] }
+	}
+	impl Contains<u64> for Four {
+		fn sorted_members() -> Vec<u64> { vec![4] }
 	}
 
 	thread_local! {
