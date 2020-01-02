@@ -27,65 +27,127 @@ Start Grafana
 
 Here is the entry point of prometheus core module in Parity Substrate.
 
+In existing sources, refer to the grapana source due to the issue of the wasm.
+
 utils/prometheus/src/lib.rs
 ```rust
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
-extern crate log;
+use futures_util::{FutureExt,future::{Future}};
 use hyper::http::StatusCode;
-use hyper::rt::Future;
-use hyper::service::service_fn_ok;
-use hyper::{Body, Request, Response, Server};
+use hyper::Server;
+use hyper::{Body, Request, Response, service::{service_fn, make_service_fn}};
 pub use prometheus::{Encoder, HistogramOpts, Opts, TextEncoder};
-pub use prometheus::{Histogram, IntCounter, IntGauge, Result};
+pub use prometheus::{Histogram, IntCounter, IntGauge};
 pub use sp_runtime::traits::SaturatedConversion;
 use std::net::SocketAddr;
-
+#[cfg(not(target_os = "unknown"))]
+mod networking;
 pub mod metrics;
 
+#[derive(Debug, derive_more::Display, derive_more::From)]
+pub enum Error {
+	/// Hyper internal error.
+	Hyper(hyper::Error),
+	/// Http request error.
+	Http(hyper::http::Error),
+	/// i/o error.
+	Io(std::io::Error)
+}
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			Error::Hyper(error) => Some(error),
+			Error::Http(error) => Some(error),
+			Error::Io(error) => Some(error)
+		}
+	}
+}
+
+async fn request_metrics(req: Request<Body>) -> Result<Response<Body>, Error> {
+  if req.uri().path() == "/metrics" {
+    let metric_families = prometheus::gather();
+    let mut buffer = vec![];
+    let encoder = TextEncoder::new();
+    encoder.encode(&metric_families, &mut buffer).unwrap();
+    Response::builder()
+      .status(StatusCode::OK)
+      .header("Content-Type", encoder.format_type())
+      .body(Body::from(buffer))
+      .map_err(Error::Http)
+      //.expect("Sends OK(200) response with one or more data metrics")
+  } else {
+    Response::builder()
+      .status(StatusCode::NOT_FOUND)
+      .body(Body::from("Not found."))
+      .map_err(Error::Http)
+      //.expect("Sends NOT_FOUND(404) message with no data metric")
+  }
+  
+}
+
+#[derive(Clone)]
+pub struct Executor;
+
+#[cfg(not(target_os = "unknown"))]
+impl<T> hyper::rt::Executor<T> for Executor
+	where
+		T: Future + Send + 'static,
+		T::Output: Send + 'static,
+{
+	fn execute(&self, future: T) {
+		async_std::task::spawn(future);
+	}
+}
 /// Initializes the metrics context, and starts an HTTP server
 /// to serve metrics.
-pub fn init_prometheus(prometheus_addr: SocketAddr) {
-  let addr = prometheus_addr;
-  let server = Server::bind(&addr)
-    .serve(|| {
-      // This is the `Service` that will handle the connection.
-      // `service_fn_ok` is a helper to convert a function that
-      // returns a Response into a `Service`.
-      service_fn_ok(move |req: Request<Body>| {
-        if req.uri().path() == "/metrics" {
-          let metric_families = prometheus::gather();
-          let mut buffer = vec![];
-          let encoder = TextEncoder::new();
-          encoder.encode(&metric_families, &mut buffer).unwrap();
-          Response::builder()
-            .status(StatusCode::OK)
-            .header("Content-Type", encoder.format_type())
-            .body(Body::from(buffer))
-            .expect("Sends OK(200) response with one or more data metrics")
-        } else {
-          Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(Body::from("Not found."))
-            .expect("Sends NOT_FOUND(404) message with no data metric")
-        }
-      })
-    })
-    .map_err(|e| error!("server error: {}", e));
+#[cfg(not(target_os = "unknown"))]
+pub  async fn init_prometheus(mut prometheus_addr: SocketAddr) -> Result<(), Error>{
+  use async_std::{net, io};
+  use crate::networking::Incoming;
 
-  info!("Exporting metrics at http://{}/metrics", addr);
+	let listener = loop {
+		let listener = net::TcpListener::bind(&prometheus_addr).await;
+		match listener {
+			Ok(listener) => {
+				log::info!("Prometheus server started at {}", prometheus_addr);
+				break listener
+			},
+			Err(err) => match err.kind() {
+				io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied if prometheus_addr.port() != 0 => {
+					log::warn!(
+						"Prometheus server to already {} port.", prometheus_addr.port()
+					);
+					prometheus_addr.set_port(0);
+					continue;
+				},
+        _ => return Err(err.into())
+      }
+		}
+	};
+  let service = make_service_fn(|_| {
+		async {
+			Ok::<_, Error>(service_fn(request_metrics))
+		}
+	});
 
-  let mut rt = tokio::runtime::Builder::new()
-    .core_threads(1) // one thread is sufficient
-    .build()
-    .expect("Builds one thread of tokio runtime exporter for prometheus");
 
-  std::thread::spawn(move || {
-    rt.spawn(server);
-    rt.shutdown_on_idle().wait().unwrap();
-  });
+	let _server = Server::builder(Incoming(listener.incoming()))
+		.executor(Executor)
+		.serve(service)
+    .boxed();
+  
+  
+	let result = _server.await.map_err(Into::into);
+
+	result
 }
+
+#[cfg(target_os = "unknown")]
+pub async fn init_prometheus(_: SocketAddr) -> Result<(), Error> {
+	Ok(())
+}
+
 
 #[macro_export]
 macro_rules! prometheus_gauge(
@@ -120,9 +182,65 @@ macro_rules! prometheus(
 );
 */
 ```
+utuls/prometheus/src/networking.rs ( grafana-data-source Note)
+```rust
+use async_std::pin::Pin;
+use std::task::{Poll, Context};
+use futures_util::{stream::Stream, io::{AsyncRead, AsyncWrite}};
+
+pub struct Incoming<'a>(pub async_std::net::Incoming<'a>);
+
+impl hyper::server::accept::Accept for Incoming<'_> {
+	type Conn = TcpStream;
+	type Error = async_std::io::Error;
+
+	fn poll_accept(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Result<Self::Conn, Self::Error>>> {
+		Pin::new(&mut Pin::into_inner(self).0)
+			.poll_next(cx)
+			.map(|opt| opt.map(|res| res.map(TcpStream)))
+	}
+}
+
+pub struct TcpStream(pub async_std::net::TcpStream);
+
+impl tokio::io::AsyncRead for TcpStream {
+	fn poll_read(
+		self: Pin<&mut Self>,
+		cx: &mut Context,
+		buf: &mut [u8]
+	) -> Poll<Result<usize, std::io::Error>> {
+		Pin::new(&mut Pin::into_inner(self).0)
+			.poll_read(cx, buf)
+	}
+}
+
+impl tokio::io::AsyncWrite for TcpStream {
+	fn poll_write(
+		self: Pin<&mut Self>,
+		cx: &mut Context,
+		buf: &[u8]
+	) -> Poll<Result<usize, std::io::Error>> {
+		Pin::new(&mut Pin::into_inner(self).0)
+			.poll_write(cx, buf)
+	}
+
+	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), std::io::Error>> {
+		Pin::new(&mut Pin::into_inner(self).0)
+			.poll_flush(cx)
+	}
+
+	fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), std::io::Error>> {
+		Pin::new(&mut Pin::into_inner(self).0)
+			.poll_close(cx)
+	}
+}
+
+```
+
+
 
 Here is the dependancies of the module.	
-client/prometheus/Cargo.toml
+utils/prometheus/Cargo.toml
 ```toml
 [package]
 name = "sc-prometheus"
@@ -132,15 +250,17 @@ description = "prometheus utils"
 edition = "2018"
 
 [dependencies]
-hyper = "0.12"
-lazy_static = "1.0"
-log = "0.4"
+hyper = { version = "0.13.1", default-features = false, features = ["stream"] }
+lazy_static = "1.4"
+log = "0.4.8"
 prometheus = { version = "0.7", features = ["nightly", "process"]}
-tokio = "0.1"
+tokio = "0.2"
+futures-util = { version = "0.3.1", default-features = false, features = ["io"] }
 sp-runtime = { package = "sp-runtime",path = "../../primitives/runtime" }
+derive_more = "0.99"
 
-[dev-dependencies]
-reqwest = "0.9"
+[target.'cfg(not(target_os = "unknown"))'.dependencies]
+async-std = { version = "1.0.1", features = ["unstable"] }
 ```
 
 **Abbreviation of the package in service manager of parity substrate**	
@@ -198,11 +318,15 @@ use sc_prometheus::prometheus_gauge;
 
 ...
 		// prometheus init
-		match config.prometheus_endpoint {
-			None => (),
-			Some(x) => {
-				let _prometheus = sc_prometheus::init_prometheus(x);
-			}
+		if let Some(port) = config.prometheus_port {
+			let future = select(
+					sc_prometheus::init_prometheus(port).boxed()
+					,exit.clone()
+				).map(|either| match either {
+					Either::Left((result, _)) => result.map_err(|_| ()),
+					Either::Right(_) => Ok(())
+				}).compat();
+				let _ = to_spawn_tx.unbounded_send(Box::new(future));
 		}
 		// Grafana data source
 		if let Some(port) = config.grafana_port {
@@ -241,28 +365,13 @@ client/cli/src/lib.rs
 ```rust
 fn crate_run_node_config{
 ...
-	// Override telemetry
-	if cli.no_telemetry {
-		config.telemetry_endpoints = None;
-	} else if !cli.telemetry_endpoints.is_empty() {
-		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
-	}
-
-	config.tracing_targets = cli.tracing_targets.into();
-	config.tracing_receiver = cli.tracing_receiver.into();
-	
-	// Override prometheus
-	match cli.prometheus_endpoint {
-		None => {config.prometheus_endpoint = None;},
-		Some(x) => {
-			config.prometheus_endpoint = Some(parse_address(&format!("{}:{}", x, 33333), cli.prometheus_port)?);
-			}
-	}
-	// Imply forced authoring on --dev
-	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
-
-	Ok(config)
+	let prometheus_interface: &str = if cli.prometheus_external { "0.0.0.0" }
 ...
+		// Override prometheus
+	if cli.prometheus_external {
+			config.prometheus_port = Some(
+		parse_address(&format!("{}:{}", prometheus_interface, 33333), cli.prometheus_port)?
+	)}
 }
 ```
 
@@ -270,12 +379,12 @@ client/cli/src/params.rs
 ```rust
 pub struct RunCmd{
 ...
-/// Prometheus exporter TCP port.
+	/// Prometheus exporter TCP port.
 	#[structopt(long = "prometheus-port", value_name = "PORT")]
 	pub prometheus_port: Option<u16>,
-	/// Prometheus exporter IP addr.
-	#[structopt(long = "prometheus-addr", value_name = "Local IP address")]
-	pub prometheus_endpoint: Option<String>,
+	/// Prometheus exporter on/off external".
+	#[structopt(long = "prometheus-external")]
+	pub prometheus_external: bool,
 ...
 }
 ```
@@ -284,8 +393,8 @@ client/service/src/config.rs
 #[derive(Clone)]
 pub struct Configuration<C, G, E = NoExtension> {
     ...
-	/// Promteheus IP addr. `None` if disabled. and defult port 33333
-	pub prometheus_endpoint: Option<SocketAddr>,
+	/// Promteheus Port. `None` if disabled. and defult port 33333
+	pub prometheus_port: Option<SocketAddr>,
     ...
 }
 impl<C, G, E> Configuration<C, G, E> where
@@ -297,7 +406,7 @@ impl<C, G, E> Configuration<C, G, E> where
 	pub fn default_with_spec(chain_spec: ChainSpec<G, E>) -> Self {
 		let mut configuration = Configuration {
             ...
-            prometheus_endpoints: None,
+            prometheus_prot: None,
             ...
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();

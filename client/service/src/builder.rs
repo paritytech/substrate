@@ -1140,11 +1140,15 @@ ServiceBuilder<
 			telemetry
 		});
 		// prometheus init
-		match config.prometheus_endpoint {
-			None => (),
-			Some(x) => {
-				let _prometheus = sc_prometheus::init_prometheus(x);
-			}
+		if let Some(port) = config.prometheus_port {
+			let future = select(
+					sc_prometheus::init_prometheus(port).boxed()
+					,exit.clone()
+				).map(|either| match either {
+					Either::Left((result, _)) => result.map_err(|_| ()),
+					Either::Right(_) => Ok(())
+				}).compat();
+				let _ = to_spawn_tx.unbounded_send(Box::new(future));
 		}
 		// Grafana data source
 		if let Some(port) = config.grafana_port {
