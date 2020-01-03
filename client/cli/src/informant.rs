@@ -17,7 +17,7 @@
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
 use sc_client_api::BlockchainEvents;
-use futures::{StreamExt, FutureExt, future};
+use futures::prelude::*;
 use log::{info, warn};
 use sp_runtime::traits::Header;
 use sc_service::AbstractService;

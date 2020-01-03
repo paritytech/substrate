@@ -148,7 +148,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error, H>(
 	force_authoring: bool,
 	keystore: KeyStorePtr,
 	can_author_with: CAW,
-) -> Result<impl futures::Future<Output = ()>, sp_consensus::Error> where
+) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
 	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,

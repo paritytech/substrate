@@ -93,13 +93,13 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	/// A receiver for spawned essential-tasks concluding.
 	essential_failed_rx: mpsc::UnboundedReceiver<()>,
 	/// Sender for futures that must be spawned as background tasks.
-	to_spawn_tx: mpsc::UnboundedSender<Box<dyn Future<Output = ()> + Send + Unpin>>,
+	to_spawn_tx: mpsc::UnboundedSender<Pin<Box<dyn Future<Output = ()> + Send>>>,
 	/// Receiver for futures that must be spawned as background tasks.
-	to_spawn_rx: mpsc::UnboundedReceiver<Box<dyn Future<Output = ()> + Send + Unpin>>,
+	to_spawn_rx: mpsc::UnboundedReceiver<Pin<Box<dyn Future<Output = ()> + Send>>>,
 	/// List of futures to poll from `poll`.
 	/// If spawning a background task is not possible, we instead push the task into this `Vec`.
 	/// The elements must then be polled manually.
-	to_poll: Vec<Box<dyn Future<Output = ()> + Send + Unpin>>,
+	to_poll: Vec<Pin<Box<dyn Future<Output = ()> + Send>>>,
 	rpc_handlers: sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<sc_telemetry::Telemetry>,
@@ -115,7 +115,7 @@ pub type TaskExecutor = Arc<dyn Spawn + Send + Sync>;
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
-	sender: mpsc::UnboundedSender<Box<dyn Future<Output = ()> + Send + Unpin>>,
+	sender: mpsc::UnboundedSender<Pin<Box<dyn Future<Output = ()> + Send>>>,
 	on_exit: exit_future::Exit,
 }
 
@@ -123,7 +123,7 @@ impl Spawn for SpawnTaskHandle {
 	fn spawn_obj(&self, future: FutureObj<'static, ()>)
 	-> Result<(), SpawnError> {
 		let future = select(self.on_exit.clone(), future).map(drop);
-		self.sender.unbounded_send(Box::new(future))
+		self.sender.unbounded_send(Box::pin(future))
 			.map_err(|_| SpawnError::shutdown())
 	}
 }
@@ -139,7 +139,7 @@ impl futures01::future::Executor<Boxed01Future01> for SpawnTaskHandle {
 
 /// Abstraction over a Substrate service.
 pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
-	Spawn + Send + Unpin {
+	Spawn + Send {
 	/// Type of block of this chain.
 	type Block: BlockT<Hash = H256>;
 	/// Backend storage for the client.
@@ -185,7 +185,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	///
 	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
 	/// send back spontaneous events.
-	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Output = Option<String>> + Send + Unpin>;
+	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Pin<Box<dyn Future<Output = Option<String>> + Send>>;
 
 	/// Get shared client instance.
 	fn client(&self) -> Arc<sc_client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>>;
@@ -244,7 +244,7 @@ where
 
 	fn spawn_task(&self, task: impl Future<Output = ()> + Send + Unpin + 'static) {
 		let task = select(self.on_exit(), task).map(drop);
-		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
+		let _ = self.to_spawn_tx.unbounded_send(Box::pin(task));
 	}
 
 	fn spawn_essential_task(&self, task: impl Future<Output = ()> + Send + Unpin + 'static) {
@@ -257,7 +257,7 @@ where
 			});
 		let task = select(self.on_exit(), essential_task).map(drop);
 
-		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
+		let _ = self.to_spawn_tx.unbounded_send(Box::pin(task));
 	}
 
 	fn spawn_task_handle(&self) -> SpawnTaskHandle {
@@ -267,8 +267,8 @@ where
 		}
 	}
 
-	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Output = Option<String>> + Send + Unpin> {
-		Box::new(
+	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
+		Box::pin(
 			self.rpc_handlers.handle_request(request, mem.metadata.clone())
 				.compat()
 				.map(|res| res.expect("this should never fail"))
@@ -329,7 +329,7 @@ impl<TBl: Unpin, TCl, TSc: Unpin, TNetStatus, TNet, TTxPool, TOc> Future for
 					"Failed to spawn background task: {:?}; falling back to manual polling",
 					err
 				);
-				this.to_poll.push(Box::new(err.into_future().compat().map(drop)));
+				this.to_poll.push(Box::pin(err.into_future().compat().map(drop)));
 			}
 		}
 
@@ -350,7 +350,7 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Spawn for
 		&self,
 		future: FutureObj<'static, ()>
 	) -> Result<(), SpawnError> {
-		self.to_spawn_tx.unbounded_send(Box::new(future))
+		self.to_spawn_tx.unbounded_send(Box::pin(future))
 			.map_err(|_| SpawnError::shutdown())
 	}
 }

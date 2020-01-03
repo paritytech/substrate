@@ -46,7 +46,7 @@ use sp_runtime::traits::{
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
 	io::{Read, Write, Seek},
-	marker::PhantomData, sync::Arc, time::SystemTime
+	marker::PhantomData, sync::Arc, time::SystemTime, pin::Pin
 };
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
@@ -666,7 +666,7 @@ pub trait ServiceBuilderCommand {
 		self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
-	) -> Box<dyn Future<Output = Result<(), Error>> + Send + Unpin>;
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 
 	/// Performs the blocks export.
 	fn export_blocks(
@@ -675,7 +675,7 @@ pub trait ServiceBuilderCommand {
 		from: NumberFor<Self::Block>,
 		to: Option<NumberFor<Self::Block>>,
 		json: bool
-	) -> Box<dyn Future<Output = Result<(), Error>> + Unpin>;
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>>;
 
 	/// Performs a revert of `blocks` blocks.
 	fn revert_chain(
@@ -687,7 +687,7 @@ pub trait ServiceBuilderCommand {
 	fn check_block(
 		self,
 		block: BlockId<Self::Block>
-	) -> Box<dyn Future<Output = Result<(), Error>> + Send + Unpin>;
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 }
 
 impl<TBl, TRtApi, TCfg, TGen, TCSExt, TBackend, TExec, TSc, TImpQu, TNetP, TExPool, TRpc>
@@ -729,7 +729,6 @@ ServiceBuilder<
 		+ TransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>
 		+ TransactionPoolMaintainer<Block=TBl, Hash = <TBl as BlockT>::Hash>,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata> + Clone,
-	<TBl as BlockT>::Extrinsic: Unpin,
 {
 	/// Builds the service.
 	pub fn build(self) -> Result<Service<
@@ -773,7 +772,7 @@ ServiceBuilder<
 
 		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
 		let (to_spawn_tx, to_spawn_rx) =
-			mpsc::unbounded::<Box<dyn Future<Output = ()> + Send + Unpin>>();
+			mpsc::unbounded::<Pin<Box<dyn Future<Output = ()> + Send>>>();
 
 		// A side-channel for essential tasks to communicate shutdown.
 		let (essential_failed_tx, essential_failed_rx) = mpsc::unbounded();
@@ -866,18 +865,18 @@ ServiceBuilder<
 							&BlockId::hash(notification.hash),
 							&notification.retracted,
 						);
-						let _ = to_spawn_tx_.unbounded_send(Box::new(future));
+						let _ = to_spawn_tx_.unbounded_send(Box::pin(future));
 					}
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
 					if let Some(offchain) = offchain {
 						let future = offchain.on_block_imported(&number, network_state_info.clone(), is_validator);
-						let _ = to_spawn_tx_.unbounded_send(Box::new(future));
+						let _ = to_spawn_tx_.unbounded_send(Box::pin(future));
 					}
 
 					ready(())
 				});
-			let _ = to_spawn_tx.unbounded_send(Box::new(select(events, exit.clone()).map(drop)));
+			let _ = to_spawn_tx.unbounded_send(Box::pin(select(events, exit.clone()).map(drop)));
 		}
 
 		{
@@ -897,7 +896,7 @@ ServiceBuilder<
 					ready(())
 				});
 
-			let _ = to_spawn_tx.unbounded_send(Box::new(select(events, exit.clone()).map(drop)));
+			let _ = to_spawn_tx.unbounded_send(Box::pin(select(events, exit.clone()).map(drop)));
 		}
 
 		// Periodically notify the telemetry.
@@ -960,7 +959,7 @@ ServiceBuilder<
 
 			ready(())
 		});
-		let _ = to_spawn_tx.unbounded_send(Box::new(select(tel_task, exit.clone()).map(drop)));
+		let _ = to_spawn_tx.unbounded_send(Box::pin(select(tel_task, exit.clone()).map(drop)));
 
 		// Periodically send the network state to the telemetry.
 		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
@@ -973,7 +972,7 @@ ServiceBuilder<
 			);
 			ready(())
 		});
-		let _ = to_spawn_tx.unbounded_send(Box::new(select(tel_task_2, exit.clone()).map(drop)));
+		let _ = to_spawn_tx.unbounded_send(Box::pin(select(tel_task_2, exit.clone()).map(drop)));
 
 		// RPC
 		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
@@ -1036,7 +1035,7 @@ ServiceBuilder<
 		let rpc = start_rpc_servers(&config, gen_handler)?;
 
 
-		let _ = to_spawn_tx.unbounded_send(Box::new(select(build_network_future(
+		let _ = to_spawn_tx.unbounded_send(Box::pin(select(build_network_future(
 			config.roles,
 			network_mut,
 			client.clone(),
@@ -1085,7 +1084,7 @@ ServiceBuilder<
 					});
 					ready(())
 				});
-			let _ = to_spawn_tx.unbounded_send(Box::new(select(
+			let _ = to_spawn_tx.unbounded_send(Box::pin(select(
 				future, exit.clone()
 			).map(drop)));
 			telemetry
@@ -1098,7 +1097,7 @@ ServiceBuilder<
 				exit.clone()
 			).map(drop);
 
-			let _ = to_spawn_tx.unbounded_send(Box::new(future));
+			let _ = to_spawn_tx.unbounded_send(Box::pin(future));
     }
 
 		// Instrumentation

@@ -32,9 +32,7 @@ use sc_client::Client;
 use sp_consensus::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};
 use sp_consensus::BlockOrigin;
 
-use std::{
-	io::{Read, Write, Seek},
-};
+use std::{io::{Read, Write, Seek}, pin::Pin};
 
 use sc_network::message;
 
@@ -66,7 +64,7 @@ impl<
 		self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
-	) -> Box<dyn Future<Output = Result<(), Error>> + Send + Unpin> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
 		struct WaitLink {
 			imported_blocks: u64,
 			has_error: bool,
@@ -203,7 +201,7 @@ impl<
 				return std::task::Poll::Pending;
 			}
 		});
-		Box::new(import)
+		Box::pin(import)
 	}
 
 	fn export_blocks(
@@ -212,7 +210,7 @@ impl<
 		from: NumberFor<TBl>,
 		to: Option<NumberFor<TBl>>,
 		json: bool
-	) -> Box<dyn Future<Output = Result<(), Error>> + Unpin> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
 		let client = self.client;
 		let mut block = from;
 
@@ -272,7 +270,7 @@ impl<
 			std::task::Poll::Pending
 		});
 
-		Box::new(export)
+		Box::pin(export)
 	}
 
 	fn revert_chain(
@@ -293,7 +291,7 @@ impl<
 	fn check_block(
 		self,
 		block_id: BlockId<TBl>
-	) -> Box<dyn Future<Output = Result<(), Error>> + Send + Unpin> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
 		match self.client.block(&block_id) {
 			Ok(Some(block)) => {
 				let mut buf = Vec::new();
@@ -302,8 +300,8 @@ impl<
 				let reader = std::io::Cursor::new(buf);
 				self.import_blocks(reader, true)
 			}
-			Ok(None) => Box::new(future::err("Unknown block".into())),
-			Err(e) => Box::new(future::err(format!("Error reading block: {:?}", e).into())),
+			Ok(None) => Box::pin(future::err("Unknown block".into())),
+			Err(e) => Box::pin(future::err(format!("Error reading block: {:?}", e).into())),
 		}
 	}
 }

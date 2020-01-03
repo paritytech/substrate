@@ -74,7 +74,7 @@ impl<T> StatusSinks<T> {
 							// waken up and the moment it is polled, the period is actually not
 							// `interval` but `interval + <delay>`. We ignore this problem in
 							// practice.
-							delay: Delay::new( interval),
+							delay: Delay::new(interval),
 							interval,
 							sender: Some(sender),
 						});
