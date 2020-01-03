@@ -346,11 +346,14 @@ check_warnings:
       fi
   allow_failure:                   true
 
-# Check whether Polkadot 'master' branch builds using this Substrate commit.
+# Nightly check whether Polkadot 'master' branch builds.
 check_polkadot:
   stage:                           build
   <<:                              *docker-env
   allow_failure:                   true
+  only:
+    - master
+    - schedules
   script:
     - SUBSTRATE_PATH=$(pwd)
     # Clone the current Polkadot master branch into ./polkadot.
