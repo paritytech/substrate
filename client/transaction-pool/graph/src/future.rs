@@ -26,7 +26,7 @@ use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };
-use wasm_timer::Instant;
+
 use crate::base_pool::Transaction;
 
 /// Transaction with partially satisfied dependencies.
@@ -36,7 +36,7 @@ pub struct WaitingTransaction<Hash, Ex> {
 	/// Tags that are required and have not been satisfied yet by other transactions in the pool.
 	pub missing_tags: HashSet<Tag>,
 	/// Time of import to the Future Queue.
-	pub imported_at: Instant,
+	pub imported_at: time::Instant,
 }
 
 impl<Hash: fmt::Debug, Ex: fmt::Debug> fmt::Debug for WaitingTransaction<Hash, Ex> {
@@ -90,7 +90,7 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 		WaitingTransaction {
 			transaction: Arc::new(transaction),
 			missing_tags,
-			imported_at: Instant::now(),
+			imported_at: time::Instant::now(),
 		}
 	}
 

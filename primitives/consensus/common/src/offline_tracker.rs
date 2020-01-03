@@ -17,8 +17,7 @@
 //! Tracks offline validators.
 
 use std::collections::HashMap;
-use std::time::Duration;
-use wasm_timer::Instant;
+use std::time::{Instant, Duration};
 
 // time before we report a validator.
 const REPORT_TIME: Duration = Duration::from_secs(60 * 5);
