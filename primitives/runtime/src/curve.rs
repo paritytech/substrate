@@ -20,7 +20,7 @@ use crate::{Perbill, traits::{SimpleArithmetic, SaturatedConversion}};
 use core::ops::Sub;
 
 /// Piecewise Linear function in [0, 1] -> [0, 1].
-#[derive(PartialEq, Eq, primitives::RuntimeDebug)]
+#[derive(PartialEq, Eq, sp_core::RuntimeDebug)]
 pub struct PiecewiseLinear<'a> {
 	/// Array of points. Must be in order from the lowest abscissas to the highest.
 	pub points: &'a [(Perbill, Perbill)],

@@ -471,7 +471,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 #[cfg(test)]
 mod tests {
 	use std::io;
-	use primitives::H256;
+	use sp_core::H256;
 	use crate::{StateDb, PruningMode, Constraints};
 	use crate::test::{make_db, make_changeset, TestDb};
 

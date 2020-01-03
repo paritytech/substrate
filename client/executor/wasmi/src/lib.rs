@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,25 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Implementation of a Wasm runtime using the Wasmi interpreter.
+//! This crate provides an implementation of `WasmRuntime` that is baked by wasmi.
 
+use sc_executor_common::{
+	error::{Error, WasmError},
+	sandbox,
+	allocator,
+};
 use std::{str, mem};
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 	memory_units::Pages, RuntimeValue::{I32, I64, self},
 };
-use crate::error::{Error, WasmError};
 use codec::{Encode, Decode};
-use primitives::{sandbox as sandbox_primitives, traits::Externalities};
-use crate::sandbox;
-use crate::allocator;
-use crate::wasm_utils::interpret_runtime_api_result;
-use crate::wasm_runtime::WasmRuntime;
+use sp_core::{sandbox as sandbox_primitives, traits::Externalities};
 use log::{error, trace};
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
-use wasm_interface::{
+use sp_wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
+use sp_runtime_interface::unpack_ptr_and_len;
+use sc_executor_common::wasm_runtime::WasmRuntime;
 
 struct FunctionExecutor<'a> {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,
@@ -273,7 +275,7 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 	fn resolve_func(&self, name: &str, signature: &wasmi::Signature)
 		-> std::result::Result<wasmi::FuncRef, wasmi::Error>
 	{
-		let signature = wasm_interface::Signature::from(signature);
+		let signature = sp_wasm_interface::Signature::from(signature);
 		for (function_index, function) in self.0.iter().enumerate() {
 			if name == function.name() {
 				if signature == function.signature() {
@@ -364,7 +366,7 @@ fn call_in_wasm_module(
 	let offset = fec.allocate_memory(data.len() as u32)?;
 	fec.write_memory(offset, data)?;
 
-	let result = externalities::set_and_run_with_externalities(
+	let result = sp_externalities::set_and_run_with_externalities(
 		ext,
 		|| module_instance.invoke_export(
 			method,
@@ -375,7 +377,7 @@ fn call_in_wasm_module(
 
 	match result {
 		Ok(Some(I64(r))) => {
-			let (ptr, length) = interpret_runtime_api_result(r);
+			let (ptr, length) = unpack_ptr_and_len(r as u64);
 			memory.get(ptr.into(), length as usize).map_err(|_| Error::Runtime)
 		},
 		Err(e) => {

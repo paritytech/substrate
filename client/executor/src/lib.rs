@@ -31,28 +31,24 @@
 
 #[macro_use]
 mod wasm_utils;
-mod wasmi_execution;
 #[macro_use]
 mod native_executor;
-mod sandbox;
-mod allocator;
 pub mod deprecated_host_interface;
 mod wasm_runtime;
-#[cfg(feature = "wasmtime")]
-mod wasmtime;
 #[cfg(test)]
 mod integration_tests;
 
-pub mod error;
 pub use wasmi;
 pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
-pub use runtime_version::{RuntimeVersion, NativeVersion};
+pub use sp_version::{RuntimeVersion, NativeVersion};
 pub use codec::Codec;
 #[doc(hidden)]
-pub use primitives::traits::Externalities;
+pub use sp_core::traits::Externalities;
 #[doc(hidden)]
-pub use wasm_interface;
+pub use sp_wasm_interface;
 pub use wasm_runtime::WasmExecutionMethod;
+
+pub use sc_executor_common::{error, allocator, sandbox};
 
 /// Call the given `function` in the given wasm `code`.
 ///
@@ -64,7 +60,7 @@ pub use wasm_runtime::WasmExecutionMethod;
 /// - `heap_pages`: The number of heap pages to allocate.
 ///
 /// Returns the `Vec<u8>` that contains the return value of the function.
-pub fn call_in_wasm<E: Externalities, HF: wasm_interface::HostFunctions>(
+pub fn call_in_wasm<E: Externalities, HF: sp_wasm_interface::HostFunctions>(
 	function: &str,
 	call_data: &[u8],
 	execution_method: WasmExecutionMethod,
@@ -93,7 +89,7 @@ pub trait RuntimeInfo {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_test::WASM_BINARY;
+	use sc_runtime_test::WASM_BINARY;
 	use sp_io::TestExternalities;
 
 	#[test]

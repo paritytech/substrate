@@ -20,9 +20,9 @@ use ansi_term::Style;
 use rand::{Rng, distributions::Alphanumeric, rngs::OsRng};
 use structopt::StructOpt;
 
-use keystore::{Store as Keystore};
+use sc_keystore::{Store as Keystore};
 use node_cli::chain_spec::{self, AccountId};
-use primitives::{sr25519, crypto::{Public, Ss58Codec}, traits::BareCryptoStore};
+use sp_core::{sr25519, crypto::{Public, Ss58Codec}, traits::BareCryptoStore};
 
 /// A utility to easily create a testnet chain spec definition with a given set
 /// of authorities and endowed accounts and/or generate random accounts.
@@ -153,22 +153,22 @@ fn generate_authority_keys_and_store(
 		};
 
 		insert_key(
-			primitives::crypto::key_types::BABE,
+			sp_core::crypto::key_types::BABE,
 			babe.as_slice(),
 		)?;
 
 		insert_key(
-			primitives::crypto::key_types::GRANDPA,
+			sp_core::crypto::key_types::GRANDPA,
 			grandpa.as_slice(),
 		)?;
 
 		insert_key(
-			primitives::crypto::key_types::IM_ONLINE,
+			sp_core::crypto::key_types::IM_ONLINE,
 			im_online.as_slice(),
 		)?;
 
 		insert_key(
-			primitives::crypto::key_types::AUTHORITY_DISCOVERY,
+			sp_core::crypto::key_types::AUTHORITY_DISCOVERY,
 			authority_discovery.as_slice(),
 		)?;
 	}

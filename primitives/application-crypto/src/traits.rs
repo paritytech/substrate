@@ -15,10 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[cfg(feature = "full_crypto")]
-use primitives::crypto::Pair;
+use sp_core::crypto::Pair;
 
 use codec::Codec;
-use primitives::crypto::{KeyTypeId, CryptoType, IsWrappedBy, Public};
+use sp_core::crypto::{KeyTypeId, CryptoType, IsWrappedBy, Public};
 use sp_std::{fmt::Debug, vec::Vec};
 
 /// An application-specific key.
@@ -71,7 +71,7 @@ pub trait AppPublic:
 #[cfg(feature = "full_crypto")]
 pub trait AppPair: AppKey + Pair<Public=<Self as AppKey>::Public> {
 	/// The wrapped type which is just a plain instance of `Pair`.
-	type Generic: IsWrappedBy<Self> + Pair<Public=<<Self as AppKey>::Public as AppPublic>::Generic>;
+	type Generic: IsWrappedBy<Self> + Pair<Public = <<Self as AppKey>::Public as AppPublic>::Generic>;
 }
 
 /// A application's signature.

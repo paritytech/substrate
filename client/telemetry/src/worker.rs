@@ -90,7 +90,7 @@ impl TelemetryWorker {
 			libp2p::websocket::framed::WsConfig::new(inner)
 				.and_then(|connec, _| {
 					let connec = connec
-						.with(|item| {
+						.with(|item: BytesMut| {
 							let item = libp2p::websocket::framed::OutgoingData::Binary(item);
 							future::ready(Ok::<_, io::Error>(item))
 						})
@@ -174,7 +174,7 @@ impl TelemetryWorker {
 			}
 
 			// `send_message` returns an error if we're not connected, which we silently ignore.
-			let _ = node.send_message(serialized.clone());
+			let _ = node.send_message(&serialized.clone()[..]);
 		}
 
 		Ok(())

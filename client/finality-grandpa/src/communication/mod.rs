@@ -29,19 +29,17 @@
 
 use std::sync::Arc;
 
-use futures::prelude::*;
-use futures::sync::{oneshot, mpsc};
-use futures03::stream::{StreamExt, TryStreamExt};
-use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
-use grandpa::{voter, voter_set::VoterSet};
+use futures::{prelude::*, future::Executor as _, sync::mpsc};
+use futures03::{compat::Compat, stream::StreamExt, future::FutureExt as _, future::TryFutureExt as _};
+use finality_grandpa::Message::{Prevote, Precommit, PrimaryPropose};
+use finality_grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
-use network::{consensus_gossip as network_gossip, NetworkService, ReputationChange};
-use network_gossip::ConsensusMessage;
-use codec::{Encode, Decode};
-use primitives::Pair;
+use sc_network::{NetworkService, ReputationChange};
+use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
+use parity_scale_codec::{Encode, Decode};
+use sp_core::Pair;
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
-use tokio_executor::Executor;
 
 use crate::{
 	CatchUp, Commit, CommunicationIn, CommunicationOut, CompactCommit, Error,
@@ -51,7 +49,7 @@ use crate::environment::HasVoted;
 use gossip::{
 	GossipMessage, FullCatchUpMessage, FullCommitMessage, VoteMessage, GossipValidator
 };
-use fg_primitives::{
+use sp_finality_grandpa::{
 	AuthorityPair, AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
 };
 
@@ -61,11 +59,11 @@ mod periodic;
 #[cfg(test)]
 mod tests;
 
-pub use fg_primitives::GRANDPA_ENGINE_ID;
+pub use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 
 // cost scalars for reporting peers.
 mod cost {
-	use network::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 	pub(super) const PAST_REJECTION: Rep = Rep::new(-50, "Grandpa: Past message");
 	pub(super) const BAD_SIGNATURE: Rep = Rep::new(-100, "Grandpa: Bad signature");
 	pub(super) const MALFORMED_CATCH_UP: Rep = Rep::new(-1000, "Grandpa: Malformed cath-up");
@@ -89,7 +87,7 @@ mod cost {
 
 // benefit scalars for reporting peers.
 mod benefit {
-	use network::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 	pub(super) const NEIGHBOR_MESSAGE: Rep = Rep::new(100, "Grandpa: Neighbor message");
 	pub(super) const ROUND_MESSAGE: Rep = Rep::new(100, "Grandpa: Round message");
 	pub(super) const BASIC_VALIDATED_CATCH_UP: Rep = Rep::new(200, "Grandpa: Catch-up message");
@@ -97,48 +95,28 @@ mod benefit {
 	pub(super) const PER_EQUIVOCATION: i32 = 10;
 }
 
-/// A handle to the network. This is generally implemented by providing some
-/// handle to a gossip service or similar.
+/// A handle to the network.
 ///
-/// Intended to be a lightweight handle such as an `Arc`.
-pub trait Network<Block: BlockT>: Clone + Send + 'static {
-	/// A stream of input messages for a topic.
-	type In: Stream<Item = network_gossip::TopicNotification, Error = ()>;
-
-	/// Get a stream of messages for a specific gossip topic.
-	fn messages_for(&self, topic: Block::Hash) -> Self::In;
-
-	/// Register a gossip validator.
-	fn register_validator(&self, validator: Arc<dyn network_gossip::Validator<Block>>);
-
-	/// Gossip a message out to all connected peers.
-	///
-	/// Force causes it to be sent to all peers, even if they've seen it already.
-	/// Only should be used in case of consensus stall.
-	fn gossip_message(&self, topic: Block::Hash, data: Vec<u8>, force: bool);
-
-	/// Register a message with the gossip service, it isn't broadcast right
-	/// away to any peers, but may be sent to new peers joining or when asked to
-	/// broadcast the topic. Useful to register previous messages on node
-	/// startup.
-	fn register_gossip_message(&self, topic: Block::Hash, data: Vec<u8>);
-
-	/// Send a message to a bunch of specific peers, even if they've seen it already.
-	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>);
-
-	/// Report a peer's cost or benefit after some action.
-	fn report(&self, who: network::PeerId, cost_benefit: ReputationChange);
-
-	/// Inform peers that a block with given hash should be downloaded.
-	fn announce(&self, block: Block::Hash, associated_data: Vec<u8>);
-
+/// Something that provides both the capabilities needed for the `gossip_network::Network` trait as
+/// well as the ability to set a fork sync request for a particular block.
+pub trait Network<Block: BlockT>: GossipNetwork<Block> + Clone + Send + 'static {
 	/// Notifies the sync service to try and sync the given block from the given
 	/// peers.
 	///
 	/// If the given vector of peers is empty then the underlying implementation
 	/// should make a best effort to fetch the block from any peers it is
 	/// connected to (NOTE: this assumption will change in the future #3629).
-	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
+	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
+}
+
+impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
+	B: BlockT,
+	S: sc_network::specialization::NetworkSpecialization<B>,
+	H: sc_network::ExHashT,
+{
+	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
+		NetworkService::set_sync_fork_request(self, peers, hash, number)
+	}
 }
 
 /// Create a unique topic for a round and set-id combo.
@@ -151,157 +129,33 @@ pub(crate) fn global_topic<B: BlockT>(set_id: SetIdNumber) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-GLOBAL", set_id).as_bytes())
 }
 
-impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
-	B: BlockT,
-	S: network::specialization::NetworkSpecialization<B>,
-	H: network::ExHashT,
-{
-	type In = NetworkStream<
-		Box<dyn Stream<Item = network_gossip::TopicNotification, Error = ()> + Send + 'static>,
-	>;
-
-	fn messages_for(&self, topic: B::Hash) -> Self::In {
-		// Given that one can only communicate with the Substrate network via the `NetworkService` via message-passing,
-		// and given that methods on the network consensus gossip are not exposed but only reachable by passing a
-		// closure into `with_gossip` on the `NetworkService` this function needs to make use of the `NetworkStream`
-		// construction.
-		//
-		// We create a oneshot channel and pass the sender within a closure to the network. At some point in the future
-		// the network passes the message channel back through the oneshot channel. But the consumer of this function
-		// expects a stream, not a stream within a oneshot. This complexity is abstracted within `NetworkStream`,
-		// waiting for the oneshot to resolve and from there on acting like a normal message channel.
-		let (tx, rx) = oneshot::channel();
-		self.with_gossip(move |gossip, _| {
-			let inner_rx: Box<dyn Stream<Item = _, Error = ()> + Send> = Box::new(gossip
-				.messages_for(GRANDPA_ENGINE_ID, topic)
-				.map(|x| Ok(x))
-				.compat()
-			);
-			let _ = tx.send(inner_rx);
-		});
-		NetworkStream::PollingOneshot(rx)
-	}
-
-	fn register_validator(&self, validator: Arc<dyn network_gossip::Validator<B>>) {
-		self.with_gossip(
-			move |gossip, context| gossip.register_validator(context, GRANDPA_ENGINE_ID, validator)
-		)
-	}
-
-	fn gossip_message(&self, topic: B::Hash, data: Vec<u8>, force: bool) {
-		let msg = ConsensusMessage {
-			engine_id: GRANDPA_ENGINE_ID,
-			data,
-		};
-
-		self.with_gossip(
-			move |gossip, ctx| gossip.multicast(ctx, topic, msg, force)
-		)
-	}
-
-	fn register_gossip_message(&self, topic: B::Hash, data: Vec<u8>) {
-		let msg = ConsensusMessage {
-			engine_id: GRANDPA_ENGINE_ID,
-			data,
-		};
-
-		self.with_gossip(move |gossip, _| gossip.register_message(topic, msg))
-	}
-
-	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
-		let msg = ConsensusMessage {
-			engine_id: GRANDPA_ENGINE_ID,
-			data,
-		};
-
-		self.with_gossip(move |gossip, ctx| for who in &who {
-			gossip.send_message(ctx, who, msg.clone())
-		})
-	}
-
-	fn report(&self, who: network::PeerId, cost_benefit: ReputationChange) {
-		self.report_peer(who, cost_benefit)
-	}
-
-	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
-		self.announce_block(block, associated_data)
-	}
-
-	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		NetworkService::set_sync_fork_request(self, peers, hash, number)
-	}
-}
-
-/// A stream used by NetworkBridge in its implementation of Network. Given a oneshot that eventually returns a channel
-/// which eventually returns messages, instead of:
-///
-/// 1. polling the oneshot until it returns a message channel
-///
-/// 2. polling the message channel for messages
-///
-/// `NetworkStream` combines the two steps into one, requiring a consumer to only poll `NetworkStream` to retrieve
-/// messages directly.
-pub enum NetworkStream<R> {
-	PollingOneshot(oneshot::Receiver<R>),
-	PollingTopicNotifications(R),
-}
-
-impl<R> Stream for NetworkStream<R>
-where
-	R: Stream<Item = network_gossip::TopicNotification, Error = ()>,
-{
-	type Item = R::Item;
-	type Error = ();
-
-	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-		match self {
-			NetworkStream::PollingOneshot(oneshot) => {
-				match oneshot.poll() {
-					Ok(futures::Async::Ready(mut stream)) => {
-						let poll_result = stream.poll();
-						*self = NetworkStream::PollingTopicNotifications(stream);
-						poll_result
-					},
-					Ok(futures::Async::NotReady) => Ok(futures::Async::NotReady),
-					Err(_) => Err(())
-				}
-			},
-			NetworkStream::PollingTopicNotifications(stream) => {
-				stream.poll()
-			},
-		}
-	}
-}
-
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
 pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	service: N,
+	gossip_engine: GossipEngine<B>,
 	validator: Arc<GossipValidator<B>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
 }
 
 impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
-	/// handle and a future that must be polled to completion to finish startup.
+	/// handle.
 	/// On creation it will register previous rounds' votes with the gossip
 	/// service taken from the VoterSetState.
 	pub(crate) fn new(
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
+		executor: &impl futures03::task::Spawn,
 		on_exit: impl futures03::Future<Output = ()> + Clone + Send + Unpin + 'static,
-	) -> (
-		Self,
-		impl Future<Item = (), Error = ()> + Send + 'static,
-	) {
-
+	) -> Self {
 		let (validator, report_stream) = GossipValidator::new(
 			config,
 			set_state.clone(),
 		);
 
 		let validator = Arc::new(validator);
-		service.register_validator(validator.clone());
+		let gossip_engine = GossipEngine::new(service.clone(), executor, GRANDPA_ENGINE_ID, validator.clone());
 
 		{
 			// register all previous votes with the gossip service so that they're
@@ -325,7 +179,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 						}
 					);
 
-					service.register_gossip_message(
+					gossip_engine.register_gossip_message(
 						topic,
 						message.encode(),
 					);
@@ -341,34 +195,18 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			}
 		}
 
-		let (rebroadcast_job, neighbor_sender) = periodic::neighbor_packet_worker(service.clone());
-		let reporting_job = report_stream.consume(service.clone());
+		let (rebroadcast_job, neighbor_sender) = periodic::neighbor_packet_worker(gossip_engine.clone());
+		let reporting_job = report_stream.consume(gossip_engine.clone());
 
-		let bridge = NetworkBridge { service, validator, neighbor_sender };
+		let bridge = NetworkBridge { service, gossip_engine, validator, neighbor_sender };
 
-		let startup_work = futures::future::lazy(move || {
-			// lazily spawn these jobs onto their own tasks. the lazy future has access
-			// to tokio globals, which aren't available outside.
-			let mut executor = tokio_executor::DefaultExecutor::current();
+		let executor = Compat::new(executor);
+		executor.execute(Box::new(rebroadcast_job.select(on_exit.clone().map(Ok).compat()).then(|_| Ok(()))))
+			.expect("failed to spawn grandpa rebroadcast job task");
+		executor.execute(Box::new(reporting_job.select(on_exit.clone().map(Ok).compat()).then(|_| Ok(()))))
+			.expect("failed to spawn grandpa reporting job task");
 
-			use futures03::{FutureExt, TryFutureExt};
-
-			let rebroadcast_job = rebroadcast_job
-				.select(on_exit.clone().map(Ok).compat())
-				.then(|_| Ok(()));
-
-			let reporting_job = reporting_job
-				.select(on_exit.clone().map(Ok).compat())
-				.then(|_| Ok(()));
-
-			executor.spawn(Box::new(rebroadcast_job))
-				.expect("failed to spawn grandpa rebroadcast job task");
-			executor.spawn(Box::new(reporting_job))
-				.expect("failed to spawn grandpa reporting job task");
-			Ok(())
-		});
-
-		(bridge, startup_work)
+		bridge
 	}
 
 	/// Note the beginning of a new round to the `GossipValidator`.
@@ -420,7 +258,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		});
 
 		let topic = round_topic::<B>(round.0, set_id.0);
-		let incoming = self.service.messages_for(topic)
+		let incoming = Compat::new(self.gossip_engine.messages_for(topic)
+			.map(|item| Ok::<_, ()>(item)))
 			.filter_map(|notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
 				if let Err(ref e) = decoded {
@@ -473,10 +312,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")));
 
 		let (tx, out_rx) = mpsc::unbounded();
-		let outgoing = OutgoingMessages::<B, N> {
+		let outgoing = OutgoingMessages::<B> {
 			round: round.0,
 			set_id: set_id.0,
-			network: self.service.clone(),
+			network: self.gossip_engine.clone(),
 			locals,
 			sender: tx,
 			has_voted,
@@ -510,7 +349,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 
-		let service = self.service.clone();
+		let service = self.gossip_engine.clone();
 		let topic = global_topic::<B>(set_id.0);
 		let incoming = incoming_global(
 			service,
@@ -520,8 +359,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			self.neighbor_sender.clone(),
 		);
 
-		let outgoing = CommitsOut::<B, N>::new(
-			self.service.clone(),
+		let outgoing = CommitsOut::<B>::new(
+			self.gossip_engine.clone(),
 			set_id.0,
 			is_voter,
 			self.validator.clone(),
@@ -542,13 +381,18 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// If the given vector of peers is empty then the underlying implementation
 	/// should make a best effort to fetch the block from any peers it is
 	/// connected to (NOTE: this assumption will change in the future #3629).
-	pub(crate) fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		self.service.set_sync_fork_request(peers, hash, number)
+	pub(crate) fn set_sync_fork_request(
+		&self,
+		peers: Vec<sc_network::PeerId>,
+		hash: B::Hash,
+		number: NumberFor<B>
+	) {
+		Network::set_sync_fork_request(&self.service, peers, hash, number)
 	}
 }
 
-fn incoming_global<B: BlockT, N: Network<B>>(
-	mut service: N,
+fn incoming_global<B: BlockT>(
+	mut gossip_engine: GossipEngine<B>,
 	topic: B::Hash,
 	voters: Arc<VoterSet<AuthorityId>>,
 	gossip_validator: Arc<GossipValidator<B>>,
@@ -556,8 +400,8 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 ) -> impl Stream<Item = CommunicationIn<B>, Error = Error> {
 	let process_commit = move |
 		msg: FullCommitMessage<B>,
-		mut notification: network_gossip::TopicNotification,
-		service: &mut N,
+		mut notification: sc_network_gossip::TopicNotification,
+		gossip_engine: &mut GossipEngine<B>,
 		gossip_validator: &Arc<GossipValidator<B>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
@@ -579,7 +423,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 			msg.set_id,
 		) {
 			if let Some(who) = notification.sender {
-				service.report(who, cost);
+				gossip_engine.report(who, cost);
 			}
 
 			return None;
@@ -589,7 +433,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		let commit = msg.message;
 		let finalized_number = commit.target_number;
 		let gossip_validator = gossip_validator.clone();
-		let service = service.clone();
+		let gossip_engine = gossip_engine.clone();
 		let neighbor_sender = neighbor_sender.clone();
 		let cb = move |outcome| match outcome {
 			voter::CommitProcessingOutcome::Good(_) => {
@@ -601,12 +445,12 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 					|to, neighbor| neighbor_sender.send(to, neighbor),
 				);
 
-				service.gossip_message(topic, notification.message.clone(), false);
+				gossip_engine.gossip_message(topic, notification.message.clone(), false);
 			}
 			voter::CommitProcessingOutcome::Bad(_) => {
 				// report peer and do not gossip.
 				if let Some(who) = notification.sender.take() {
-					service.report(who, cost::INVALID_COMMIT);
+					gossip_engine.report(who, cost::INVALID_COMMIT);
 				}
 			}
 		};
@@ -618,13 +462,13 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 
 	let process_catch_up = move |
 		msg: FullCatchUpMessage<B>,
-		mut notification: network_gossip::TopicNotification,
-		service: &mut N,
+		mut notification: sc_network_gossip::TopicNotification,
+		gossip_engine: &mut GossipEngine<B>,
 		gossip_validator: &Arc<GossipValidator<B>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
 		let gossip_validator = gossip_validator.clone();
-		let service = service.clone();
+		let gossip_engine = gossip_engine.clone();
 
 		if let Err(cost) = check_catch_up::<B>(
 			&msg.message,
@@ -632,7 +476,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 			msg.set_id,
 		) {
 			if let Some(who) = notification.sender {
-				service.report(who, cost);
+				gossip_engine.report(who, cost);
 			}
 
 			return None;
@@ -642,7 +486,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 			if let voter::CatchUpProcessingOutcome::Bad(_) = outcome {
 				// report peer
 				if let Some(who) = notification.sender.take() {
-					service.report(who, cost::INVALID_CATCH_UP);
+					gossip_engine.report(who, cost::INVALID_CATCH_UP);
 				}
 			}
 
@@ -654,7 +498,8 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		Some(voter::CommunicationIn::CatchUp(msg.message, cb))
 	};
 
-	service.messages_for(topic)
+	Compat::new(gossip_engine.messages_for(topic)
+		.map(|m| Ok::<_, ()>(m)))
 		.filter_map(|notification| {
 			// this could be optimized by decoding piecewise.
 			let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
@@ -666,9 +511,9 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		.filter_map(move |(notification, msg)| {
 			match msg {
 				GossipMessage::Commit(msg) =>
-					process_commit(msg, notification, &mut service, &gossip_validator, &*voters),
+					process_commit(msg, notification, &mut gossip_engine, &gossip_validator, &*voters),
 				GossipMessage::CatchUp(msg) =>
-					process_catch_up(msg, notification, &mut service, &gossip_validator, &*voters),
+					process_catch_up(msg, notification, &mut gossip_engine, &gossip_validator, &*voters),
 				_ => {
 					debug!(target: "afg", "Skipping unknown message type");
 					return None;
@@ -682,6 +527,7 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 	fn clone(&self) -> Self {
 		NetworkBridge {
 			service: self.service.clone(),
+			gossip_engine: self.gossip_engine.clone(),
 			validator: Arc::clone(&self.validator),
 			neighbor_sender: self.neighbor_sender.clone(),
 		}
@@ -725,16 +571,16 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 /// use the same raw message and key to sign. This is currently true for
 /// `ed25519` and `BLS` signatures (which we might use in the future), care must
 /// be taken when switching to different key types.
-struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
+struct OutgoingMessages<Block: BlockT> {
 	round: RoundNumber,
 	set_id: SetIdNumber,
 	locals: Option<(AuthorityPair, AuthorityId)>,
 	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
-	network: N,
+	network: GossipEngine<Block>,
 	has_voted: HasVoted<Block>,
 }
 
-impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
+impl<Block: BlockT> Sink for OutgoingMessages<Block>
 {
 	type SinkItem = Message<Block>;
 	type SinkError = Error;
@@ -742,15 +588,15 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 	fn start_send(&mut self, mut msg: Message<Block>) -> StartSend<Message<Block>, Error> {
 		// if we've voted on this round previously under the same key, send that vote instead
 		match &mut msg {
-			grandpa::Message::PrimaryPropose(ref mut vote) =>
+			finality_grandpa::Message::PrimaryPropose(ref mut vote) =>
 				if let Some(propose) = self.has_voted.propose() {
 					*vote = propose.clone();
 				},
-			grandpa::Message::Prevote(ref mut vote) =>
+			finality_grandpa::Message::Prevote(ref mut vote) =>
 				if let Some(prevote) = self.has_voted.prevote() {
 					*vote = prevote.clone();
 				},
-			grandpa::Message::Precommit(ref mut vote) =>
+			finality_grandpa::Message::Precommit(ref mut vote) =>
 				if let Some(precommit) = self.has_voted.precommit() {
 					*vote = precommit.clone();
 				},
@@ -845,7 +691,7 @@ fn check_compact_commit<Block: BlockT>(
 		.enumerate()
 	{
 		use crate::communication::gossip::Misbehavior;
-		use grandpa::Message as GrandpaMessage;
+		use finality_grandpa::Message as GrandpaMessage;
 
 		if let Err(()) = check_message_sig::<Block>(
 			&GrandpaMessage::Precommit(precommit.clone()),
@@ -957,7 +803,7 @@ fn check_catch_up<Block: BlockT>(
 	// check signatures on all contained prevotes.
 	let signatures_checked = check_signatures::<Block, _>(
 		msg.prevotes.iter().map(|vote| {
-			(grandpa::Message::Prevote(vote.prevote.clone()), &vote.id, &vote.signature)
+			(finality_grandpa::Message::Prevote(vote.prevote.clone()), &vote.id, &vote.signature)
 		}),
 		msg.round_number,
 		set_id.0,
@@ -967,7 +813,7 @@ fn check_catch_up<Block: BlockT>(
 	// check signatures on all contained precommits.
 	let _ = check_signatures::<Block, _>(
 		msg.precommits.iter().map(|vote| {
-			(grandpa::Message::Precommit(vote.precommit.clone()), &vote.id, &vote.signature)
+			(finality_grandpa::Message::Precommit(vote.precommit.clone()), &vote.id, &vote.signature)
 		}),
 		msg.round_number,
 		set_id.0,
@@ -978,18 +824,18 @@ fn check_catch_up<Block: BlockT>(
 }
 
 /// An output sink for commit messages.
-struct CommitsOut<Block: BlockT, N: Network<Block>> {
-	network: N,
+struct CommitsOut<Block: BlockT> {
+	network: GossipEngine<Block>,
 	set_id: SetId,
 	is_voter: bool,
 	gossip_validator: Arc<GossipValidator<Block>>,
 	neighbor_sender: periodic::NeighborPacketSender<Block>,
 }
 
-impl<Block: BlockT, N: Network<Block>> CommitsOut<Block, N> {
+impl<Block: BlockT> CommitsOut<Block> {
 	/// Create a new commit output stream.
 	pub(crate) fn new(
-		network: N,
+		network: GossipEngine<Block>,
 		set_id: SetIdNumber,
 		is_voter: bool,
 		gossip_validator: Arc<GossipValidator<Block>>,
@@ -1005,7 +851,7 @@ impl<Block: BlockT, N: Network<Block>> CommitsOut<Block, N> {
 	}
 }
 
-impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
+impl<Block: BlockT> Sink for CommitsOut<Block> {
 	type SinkItem = (RoundNumber, Commit<Block>);
 	type SinkError = Error;
 

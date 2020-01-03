@@ -39,20 +39,20 @@ use std::sync::Arc;
 use log::{trace, warn};
 
 use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
-use client_api::{
+use sc_client_api::{
 	backend::Backend, CallExecutor, StorageProof,
 	light::{FetchChecker, RemoteReadRequest},
 };
-use client::Client;
-use codec::{Encode, Decode};
-use grandpa::BlockNumberOps;
+use sc_client::Client;
+use parity_scale_codec::{Encode, Decode};
+use finality_grandpa::BlockNumberOps;
 use sp_runtime::{
 	Justification, generic::BlockId,
 	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
 };
-use primitives::{H256, Blake2Hasher, storage::StorageKey};
+use sp_core::{H256, Blake2Hasher, storage::StorageKey};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
-use fg_primitives::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
+use sp_finality_grandpa::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
 
 use crate::justification::GrandpaJustification;
 
@@ -154,7 +154,7 @@ impl<B, Block: BlockT<Hash=H256>> FinalityProofProvider<B, Block>
 	}
 }
 
-impl<B, Block> network::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>
+impl<B, Block> sc_network::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>
 	where
 		Block: BlockT<Hash=H256>,
 		NumberFor<Block>: BlockNumberOps,
@@ -167,7 +167,7 @@ impl<B, Block> network::FinalityProofProvider<Block> for FinalityProofProvider<B
 	) -> Result<Option<Vec<u8>>, ClientError> {
 		let request: FinalityProofRequest<Block::Hash> = Decode::decode(&mut &request[..])
 			.map_err(|e| {
-				warn!(target: "finality", "Unable to decode finality proof request: {}", e.what());
+				warn!(target: "afg", "Unable to decode finality proof request: {}", e.what());
 				ClientError::Backend(format!("Invalid finality proof request"))
 			})?;
 		match request {
@@ -269,7 +269,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 	let info = blockchain.info();
 	if info.finalized_number <= begin_number {
 		trace!(
-			target: "finality",
+			target: "afg",
 			"Requested finality proof for descendant of #{} while we only have finalized #{}. Returning empty proof.",
 			begin_number,
 			info.finalized_number,
@@ -344,7 +344,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 					);
 					if justification_check_result.is_err() {
 						trace!(
-							target: "finality",
+							target: "afg",
 							"Can not provide finality proof with requested set id #{}\
 							(possible forced change?). Returning empty proof.",
 							authorities_set_id,
@@ -387,7 +387,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 
 	if finality_proof.is_empty() {
 		trace!(
-			target: "finality",
+			target: "afg",
 			"No justifications found when making finality proof for {}. Returning empty proof.",
 			end,
 		);
@@ -395,7 +395,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 		Ok(None)
 	} else {
 		trace!(
-			target: "finality",
+			target: "afg",
 			"Built finality proof for {} of {} fragments. Last fragment for {}.",
 			end,
 			finality_proof.len(),
@@ -580,11 +580,11 @@ impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJ
 
 #[cfg(test)]
 pub(crate) mod tests {
-	use test_client::runtime::{Block, Header, H256};
-	use client_api::NewBlockState;
-	use test_client::client::in_mem::Blockchain as InMemoryBlockchain;
+	use substrate_test_runtime_client::runtime::{Block, Header, H256};
+	use sc_client_api::NewBlockState;
+	use substrate_test_runtime_client::sc_client::in_mem::Blockchain as InMemoryBlockchain;
 	use super::*;
-	use primitives::crypto::Public;
+	use sp_core::crypto::Public;
 
 	type FinalityProof = super::FinalityProof<Header>;
 

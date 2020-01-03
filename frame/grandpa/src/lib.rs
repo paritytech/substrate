@@ -31,10 +31,10 @@
 pub use sp_finality_grandpa as fg_primitives;
 
 use sp_std::prelude::*;
-use codec::{self as codec, Encode, Decode, Error};
-use support::{decl_event, decl_storage, decl_module, dispatch, storage};
+use codec::{self as codec, Encode, Decode};
+use frame_support::{decl_event, decl_storage, decl_module, decl_error, storage};
 use sp_runtime::{
-	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
+	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
 };
 use sp_staking::{
 	SessionIndex,
@@ -44,14 +44,14 @@ use fg_primitives::{
 	GRANDPA_AUTHORITIES_KEY, GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog, SetId, RoundNumber,
 };
 pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
-use system::{ensure_signed, DigestOf};
+use frame_system::{self as system, ensure_signed, DigestOf};
 
 mod mock;
 mod tests;
 
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// The event type of this module.
-	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
 }
 
 /// A stored pending change, old format.
@@ -82,7 +82,7 @@ pub struct StoredPendingChange<N> {
 }
 
 impl<N: Decode> Decode for StoredPendingChange<N> {
-	fn decode<I: codec::Input>(value: &mut I) -> core::result::Result<Self, Error> {
+	fn decode<I: codec::Input>(value: &mut I) -> core::result::Result<Self, codec::Error> {
 		let old = OldStoredPendingChange::decode(value)?;
 		let forced = <Option<N>>::decode(value).unwrap_or(None);
 
@@ -123,7 +123,7 @@ pub enum StoredState<N> {
 	},
 }
 
-decl_event!(
+decl_event! {
 	pub enum Event {
 		/// New authority set has been applied.
 		NewAuthorities(AuthorityList),
@@ -132,7 +132,22 @@ decl_event!(
 		/// Current authority set has been resumed.
 		Resumed,
 	}
-);
+}
+
+decl_error! {
+	pub enum Error for Module<T: Trait> {
+		/// Attempt to signal GRANDPA pause when the authority set isn't live
+		/// (either paused or already pending pause).
+		PauseFailed,
+		/// Attempt to signal GRANDPA resume when the authority set isn't paused
+		/// (either live or already pending resume).
+		ResumeFailed,
+		/// Attempt to signal GRANDPA change with one already pending.
+		ChangePending,
+		/// Cannot signal forced change so soon after last.
+		TooSoon,
+	}
+}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
@@ -170,6 +185,8 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		fn deposit_event() = default;
 
 		/// Report some misbehavior.
@@ -264,9 +281,9 @@ impl<T: Trait> Module<T> {
 
 	/// Schedule GRANDPA to pause starting in the given number of blocks.
 	/// Cannot be done when already paused.
-	pub fn schedule_pause(in_blocks: T::BlockNumber) -> dispatch::Result {
+	pub fn schedule_pause(in_blocks: T::BlockNumber) -> DispatchResult {
 		if let StoredState::Live = <State<T>>::get() {
-			let scheduled_at = <system::Module<T>>::block_number();
+			let scheduled_at = <frame_system::Module<T>>::block_number();
 			<State<T>>::put(StoredState::PendingPause {
 				delay: in_blocks,
 				scheduled_at,
@@ -274,15 +291,14 @@ impl<T: Trait> Module<T> {
 
 			Ok(())
 		} else {
-			Err("Attempt to signal GRANDPA pause when the authority set isn't live \
-				(either paused or already pending pause).")
+			Err(Error::<T>::PauseFailed)?
 		}
 	}
 
 	/// Schedule a resume of GRANDPA after pausing.
-	pub fn schedule_resume(in_blocks: T::BlockNumber) -> dispatch::Result {
+	pub fn schedule_resume(in_blocks: T::BlockNumber) -> DispatchResult {
 		if let StoredState::Paused = <State<T>>::get() {
-			let scheduled_at = <system::Module<T>>::block_number();
+			let scheduled_at = <frame_system::Module<T>>::block_number();
 			<State<T>>::put(StoredState::PendingResume {
 				delay: in_blocks,
 				scheduled_at,
@@ -290,8 +306,7 @@ impl<T: Trait> Module<T> {
 
 			Ok(())
 		} else {
-			Err("Attempt to signal GRANDPA resume when the authority set isn't paused \
-				(either live or already pending resume).")
+			Err(Error::<T>::ResumeFailed)?
 		}
 	}
 
@@ -313,13 +328,13 @@ impl<T: Trait> Module<T> {
 		next_authorities: AuthorityList,
 		in_blocks: T::BlockNumber,
 		forced: Option<T::BlockNumber>,
-	) -> dispatch::Result {
+	) -> DispatchResult {
 		if !<PendingChange<T>>::exists() {
-			let scheduled_at = <system::Module<T>>::block_number();
+			let scheduled_at = <frame_system::Module<T>>::block_number();
 
 			if let Some(_) = forced {
 				if Self::next_forced().map_or(false, |next| next > scheduled_at) {
-					return Err("Cannot signal forced change so soon after last.");
+					Err(Error::<T>::TooSoon)?
 				}
 
 				// only allow the next forced change when twice the window has passed since
@@ -336,14 +351,14 @@ impl<T: Trait> Module<T> {
 
 			Ok(())
 		} else {
-			Err("Attempt to signal GRANDPA change with one already pending.")
+			Err(Error::<T>::ChangePending)?
 		}
 	}
 
 	/// Deposit one of this module's logs.
 	fn deposit_log(log: ConsensusLog<T::BlockNumber>) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
-		<system::Module<T>>::deposit_log(log.into());
+		<frame_system::Module<T>>::deposit_log(log.into());
 	}
 
 	fn initialize_authorities(authorities: &AuthorityList) {
@@ -404,8 +419,8 @@ impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T>
-	where T: session::Trait
+impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
+	where T: pallet_session::Trait
 {
 	type Key = AuthorityId;
 
@@ -438,7 +453,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T>
 
 		// if we didn't issue a change, we update the mapping to note that the current
 		// set corresponds to the latest equivalent session (i.e. now).
-		let session_index = <session::Module<T>>::current_index();
+		let session_index = <pallet_session::Module<T>>::current_index();
 		SetIdSession::insert(current_set_id, &session_index);
 	}
 
@@ -447,9 +462,9 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T>
 	}
 }
 
-impl<T: Trait> finality_tracker::OnFinalizationStalled<T::BlockNumber> for Module<T> {
+impl<T: Trait> pallet_finality_tracker::OnFinalizationStalled<T::BlockNumber> for Module<T> {
 	fn on_stalled(further_wait: T::BlockNumber, median: T::BlockNumber) {
-		// when we record old authority sets, we can use `finality_tracker::median`
+		// when we record old authority sets, we can use `pallet_finality_tracker::median`
 		// to figure out _who_ failed. until then, we can't meaningfully guard
 		// against `next == last` the way that normal session changes do.
 		<Stalled<T>>::put((further_wait, median));

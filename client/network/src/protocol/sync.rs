@@ -28,9 +28,8 @@
 //!
 
 use blocks::BlockCollection;
-use client_api::ClientInfo;
-use sp_blockchain::Error as ClientError;
-use consensus::{BlockOrigin, BlockStatus,
+use sp_blockchain::{Error as ClientError, Info as BlockchainInfo};
+use sp_consensus::{BlockOrigin, BlockStatus,
 	block_validation::{BlockAnnounceValidator, Validation},
 	import_queue::{IncomingBlock, BlockImportResult, BlockImportError}
 };
@@ -73,7 +72,7 @@ const MAJOR_SYNC_BLOCKS: u8 = 5;
 const ANNOUNCE_HISTORY_SIZE: usize = 64;
 
 mod rep {
-	use peerset::ReputationChange as Rep;
+	use sc_peerset::ReputationChange as Rep;
 	/// Reputation change when a peer sent us a message that led to a
 	/// database read error.
 	pub const BLOCKCHAIN_READ_ERROR: Rep = Rep::new(-(1 << 16), "DB Error");
@@ -230,7 +229,7 @@ pub struct Status<B: BlockT> {
 
 /// A peer did not behave as expected and should be reported.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BadPeer(pub PeerId, pub peerset::ReputationChange);
+pub struct BadPeer(pub PeerId, pub sc_peerset::ReputationChange);
 
 impl fmt::Display for BadPeer {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -291,7 +290,7 @@ impl<B: BlockT> ChainSync<B> {
 	pub fn new(
 		role: Roles,
 		client: Arc<dyn crate::chain::Client<B>>,
-		info: &ClientInfo<B>,
+		info: &BlockchainInfo<B>,
 		request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		max_parallel_downloads: u32,
@@ -306,9 +305,9 @@ impl<B: BlockT> ChainSync<B> {
 			client,
 			peers: HashMap::new(),
 			blocks: BlockCollection::new(),
-			best_queued_hash: info.chain.best_hash,
-			best_queued_number: info.chain.best_number,
-			best_imported_number: info.chain.best_number,
+			best_queued_hash: info.best_hash,
+			best_queued_number: info.best_number,
+			best_imported_number: info.best_number,
 			extra_finality_proofs: ExtraRequests::new(),
 			extra_justifications: ExtraRequests::new(),
 			role,
@@ -579,7 +578,7 @@ impl<B: BlockT> ChainSync<B> {
 		let attrs = &self.required_block_attributes;
 		let fork_targets = &mut self.fork_targets;
 		let mut have_requests = false;
-		let last_finalized = self.client.info().chain.finalized_number;
+		let last_finalized = self.client.info().finalized_number;
 		let best_queued = self.best_queued_number;
 		let client = &self.client;
 		let queue = &self.queue_blocks;
@@ -1142,8 +1141,8 @@ impl<B: BlockT> ChainSync<B> {
 		self.queue_blocks.clear();
 		self.blocks.clear();
 		let info = self.client.info();
-		self.best_queued_hash = info.chain.best_hash;
-		self.best_queued_number = std::cmp::max(info.chain.best_number, self.best_imported_number);
+		self.best_queued_hash = info.best_hash;
+		self.best_queued_number = std::cmp::max(info.best_number, self.best_imported_number);
 		self.is_idle = false;
 		debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
 		let old_peers = std::mem::replace(&mut self.peers, HashMap::new());

@@ -19,27 +19,27 @@
 use crate::error;
 use crate::builder::{ServiceBuilderCommand, ServiceBuilder};
 use crate::error::Error;
-use chain_spec::{ChainSpec, RuntimeGenesis, Extension};
+use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension};
 use log::{warn, info};
 use futures::{future, prelude::*};
 use futures03::{
 	TryFutureExt as _,
 };
-use primitives::{Blake2Hasher, Hasher};
+use sp_core::{Blake2Hasher, Hasher};
 use sp_runtime::traits::{
 	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
 };
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader};
-use client::Client;
-use consensus_common::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};
-use consensus_common::BlockOrigin;
+use sc_client::Client;
+use sp_consensus::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};
+use sp_consensus::BlockOrigin;
 
 use std::{
 	io::{Read, Write, Seek},
 };
 
-use network::message;
+use sc_network::message;
 
 /// Build a chain spec json
 pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<String> where
@@ -58,8 +58,8 @@ impl<
 	TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend
 > where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	TBackend: 'static + client_api::backend::Backend<TBl, Blake2Hasher> + Send,
-	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
+	TBackend: 'static + sc_client_api::backend::Backend<TBl, Blake2Hasher> + Send,
+	TExec: 'static + sc_client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TRtApi: 'static + Send + Sync,
 {
@@ -198,7 +198,7 @@ impl<
 			}
 
 			if link.imported_blocks >= count {
-				info!("Imported {} blocks. Best: #{}", read_block_count, client.info().chain.best_number);
+				info!("Imported {} blocks. Best: #{}", read_block_count, client.chain_info().best_number);
 				return std::task::Poll::Ready(Ok(()));
 
 			} else {
@@ -222,7 +222,7 @@ impl<
 		let last = match to {
 			Some(v) if v.is_zero() => One::one(),
 			Some(v) => v,
-			None => client.info().chain.best_number,
+			None => client.chain_info().best_number,
 		};
 
 		let mut wrote_header = false;
@@ -283,7 +283,7 @@ impl<
 		blocks: NumberFor<TBl>
 	) -> Result<(), Error> {
 		let reverted = self.client.revert(blocks)?;
-		let info = self.client.info().chain;
+		let info = self.client.chain_info();
 
 		if reverted.is_zero() {
 			info!("There aren't any non-finalized blocks to revert.");

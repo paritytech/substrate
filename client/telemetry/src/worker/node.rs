@@ -109,7 +109,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 	/// Sends a WebSocket frame to the node. Returns an error if we are not connected to the node.
 	///
 	/// After calling this method, you should call `poll` in order for it to be properly processed.
-	pub fn send_message(&mut self, payload: Vec<u8>) -> Result<(), ()> {
+	pub fn send_message(&mut self, payload: impl Into<BytesMut>) -> Result<(), ()> {
 		if let NodeSocket::Connected(NodeSocketConnected { pending, .. }) = &mut self.socket {
 			if pending.len() <= MAX_PENDING {
 				trace!(target: "telemetry", "Adding log entry to queue for {:?}", self.addr);

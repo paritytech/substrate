@@ -18,11 +18,11 @@
 
 use fork_tree::ForkTree;
 use parking_lot::RwLock;
-use grandpa::voter_set::VoterSet;
-use codec::{Encode, Decode};
+use finality_grandpa::voter_set::VoterSet;
+use parity_scale_codec::{Encode, Decode};
 use log::{debug, info};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
-use fg_primitives::{AuthorityId, AuthorityList};
+use sp_finality_grandpa::{AuthorityId, AuthorityList};
 
 use std::cmp::Ord;
 use std::fmt::Debug;
@@ -258,7 +258,7 @@ where
 			// check if the given best block is in the same branch as the block that signaled the change.
 			if is_descendent_of(&change.canon_hash, &best_hash)? {
 				// apply this change: make the set canonical
-				info!(target: "finality", "Applying authority set change forced at block #{:?}",
+				info!(target: "afg", "Applying authority set change forced at block #{:?}",
 					  change.canon_height);
 				telemetry!(CONSENSUS_INFO; "afg.applying_forced_authority_set_change";
 					"block" => ?change.canon_height
@@ -324,7 +324,7 @@ where
 				self.pending_forced_changes.clear();
 
 				if let Some(change) = change {
-					info!(target: "finality", "Applying authority set change scheduled at block #{:?}",
+					info!(target: "afg", "Applying authority set change scheduled at block #{:?}",
 						  change.canon_height);
 					telemetry!(CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
 						"block" => ?change.canon_height
@@ -403,7 +403,7 @@ pub(crate) struct PendingChange<H, N> {
 }
 
 impl<H: Decode, N: Decode> Decode for PendingChange<H, N> {
-	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
+	fn decode<I: parity_scale_codec::Input>(value: &mut I) -> Result<Self, parity_scale_codec::Error> {
 		let next_authorities = Decode::decode(value)?;
 		let delay = Decode::decode(value)?;
 		let canon_height = Decode::decode(value)?;
@@ -431,7 +431,7 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::crypto::Public;
+	use sp_core::crypto::Public;
 
 	fn static_is_descendent_of<A>(value: bool)
 		-> impl Fn(&A, &A) -> Result<bool, std::io::Error>

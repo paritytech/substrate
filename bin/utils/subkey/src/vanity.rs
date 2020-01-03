@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::{PublicOf, PublicT, Crypto};
-use primitives::Pair;
+use sp_core::Pair;
 use rand::{rngs::OsRng, RngCore};
 
 fn good_waypoint(done: u64) -> u64 {
@@ -62,7 +62,7 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 	0
 }
 
-pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &str> where
+pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &'static str> where
 		PublicOf<C>: PublicT,
 {
 	if desired.is_empty() {
@@ -110,7 +110,7 @@ pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &str>
 mod tests {
 	use super::super::Ed25519;
 	use super::*;
-	use primitives::{crypto::Ss58Codec, Pair};
+	use sp_core::{crypto::Ss58Codec, Pair};
 	#[cfg(feature = "bench")]
 	use test::Bencher;
 

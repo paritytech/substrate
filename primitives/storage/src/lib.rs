@@ -40,13 +40,31 @@ pub struct StorageData(
 	pub Vec<u8>,
 );
 
-/// A set of key value pairs for storage.
+/// Map of data to use in a storage, it is a collection of
+/// byte key and values.
 #[cfg(feature = "std")]
-pub type StorageOverlay = std::collections::BTreeMap<Vec<u8>, Vec<u8>>;
+pub type StorageMap = std::collections::BTreeMap<Vec<u8>, Vec<u8>>;
 
-/// A set of key value pairs for children storage;
 #[cfg(feature = "std")]
-pub type ChildrenStorageOverlay = std::collections::HashMap<Vec<u8>, StorageOverlay>;
+#[derive(Debug, PartialEq, Eq, Clone)]
+/// Child trie storage data.
+pub struct StorageChild {
+	/// Child data for storage.
+	pub data: StorageMap,
+	/// Associated child info for a child
+	/// trie.
+	pub child_info: OwnedChildInfo,
+}
+
+#[cfg(feature = "std")]
+#[derive(Default, Debug, Clone)]
+/// Struct containing data needed for a storage.
+pub struct Storage {
+	/// Top trie storage data.
+	pub top: StorageMap,
+	/// Children trie storage data by storage key.
+	pub children: std::collections::HashMap<Vec<u8>, StorageChild>,
+}
 
 /// Storage change set
 #[derive(RuntimeDebug)]
@@ -154,5 +172,134 @@ impl<'a> ChildStorageKey<'a> {
 	/// This key is guaranteed to be correct.
 	pub fn into_owned(self) -> Vec<u8> {
 		self.storage_key.into_owned()
+	}
+}
+
+#[derive(Clone, Copy)]
+/// Information related to a child state.
+pub enum ChildInfo<'a> {
+	Default(ChildTrie<'a>),
+}
+
+/// Owned version of `ChildInfo`.
+/// To be use in persistence layers.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
+pub enum OwnedChildInfo {
+	Default(OwnedChildTrie),
+}
+
+impl<'a> ChildInfo<'a> {
+	/// Instantiates information for a default child trie.
+	pub const fn new_default(unique_id: &'a[u8]) -> Self {
+		ChildInfo::Default(ChildTrie {
+			data: unique_id,
+		})
+	}
+
+	/// Instantiates a owned version of this child info.
+	pub fn to_owned(&self) -> OwnedChildInfo {
+		match self {
+			ChildInfo::Default(ChildTrie { data })
+				=> OwnedChildInfo::Default(OwnedChildTrie {
+					data: data.to_vec(),
+				}),
+		}
+	}
+
+	/// Create child info from a linear byte packed value and a given type. 
+	pub fn resolve_child_info(child_type: u32, data: &'a[u8]) -> Option<Self> {
+		match child_type {
+			x if x == ChildType::CryptoUniqueId as u32 => Some(ChildInfo::new_default(data)),
+			_ => None,
+		}
+	}
+
+	/// Return a single byte vector containing packed child info content and its child info type.
+	/// This can be use as input for `resolve_child_info`.
+	pub fn info(&self) -> (&[u8], u32) {
+		match self {
+			ChildInfo::Default(ChildTrie {
+				data,
+			}) => (data, ChildType::CryptoUniqueId as u32),
+		}
+	}
+
+	/// Return byte sequence (keyspace) that can be use by underlying db to isolate keys.
+	/// This is a unique id of the child trie. The collision resistance of this value
+	/// depends on the type of child info use. For `ChildInfo::Default` it is and need to be.
+	pub fn keyspace(&self) -> &[u8] {
+		match self {
+			ChildInfo::Default(ChildTrie {
+				data,
+			}) => &data[..],
+		}
+	}
+}
+
+/// Type of child.
+/// It does not strictly define different child type, it can also
+/// be related to technical consideration or api variant.
+#[repr(u32)]
+pub enum ChildType {
+	/// Default, it uses a cryptographic strong unique id as input.
+	CryptoUniqueId = 1,
+}
+
+impl OwnedChildInfo {
+	/// Instantiates info for a default child trie.
+	pub fn new_default(unique_id: Vec<u8>) -> Self {
+		OwnedChildInfo::Default(OwnedChildTrie {
+			data: unique_id,
+		})
+	}
+
+	/// Try to update with another instance, return false if both instance
+	/// are not compatible.
+	pub fn try_update(&mut self, other: ChildInfo) -> bool {
+		match self {
+			OwnedChildInfo::Default(owned_child_trie) => owned_child_trie.try_update(other),
+		}
+	}
+
+	/// Get `ChildInfo` reference to this owned child info.
+	pub fn as_ref(&self) -> ChildInfo {
+		match self {
+			OwnedChildInfo::Default(OwnedChildTrie { data })
+				=> ChildInfo::Default(ChildTrie {
+					data: data.as_slice(),
+				}),
+		}
+	}
+}
+
+/// A child trie of default type.
+/// Default is the same implementation as the top trie.
+/// It share its trie node storage with any kind of key,
+/// and its unique id needs to be collision free (eg strong
+/// crypto hash).
+#[derive(Clone, Copy)]
+pub struct ChildTrie<'a> {
+	/// Data containing unique id.
+	/// Unique id must but unique and free of any possible key collision
+	/// (depending on its storage behavior).
+	data: &'a[u8],
+}
+
+/// Owned version of default child trie `ChildTrie`.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
+pub struct OwnedChildTrie {
+	/// See `ChildTrie` reference field documentation.
+	data: Vec<u8>,
+}
+
+impl OwnedChildTrie {
+	/// Try to update with another instance, return false if both instance
+	/// are not compatible.
+	fn try_update(&mut self, other: ChildInfo) -> bool {
+		match other {
+			ChildInfo::Default(other) => self.data[..] == other.data[..],
+		}
 	}
 }

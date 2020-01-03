@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::config::ProtocolId;
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 use futures::prelude::*;
 use futures_codec::Framed;
 use libp2p::core::{Negotiated, Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
@@ -32,7 +32,7 @@ pub struct RegisteredProtocol {
 	id: ProtocolId,
 	/// Base name of the protocol as advertised on the network.
 	/// Ends with `/` so that we can append a version number behind.
-	base_name: Bytes,
+	base_name: Vec<u8>,
 	/// List of protocol versions that we support.
 	/// Ordered in descending order so that the best comes first.
 	supported_versions: Vec<u8>,
@@ -44,7 +44,7 @@ impl RegisteredProtocol {
 	pub fn new(protocol: impl Into<ProtocolId>, versions: &[u8])
 		-> Self {
 		let protocol = protocol.into();
-		let mut base_name = Bytes::from_static(b"/substrate/");
+		let mut base_name = b"/substrate/".to_vec();
 		base_name.extend_from_slice(protocol.as_bytes());
 		base_name.extend_from_slice(b"/");
 
@@ -78,11 +78,11 @@ pub struct RegisteredProtocolSubstream<TSubstream> {
 	/// the remote (listener).
 	endpoint: Endpoint,
 	/// Buffer of packets to send.
-	send_queue: VecDeque<Vec<u8>>,
+	send_queue: VecDeque<BytesMut>,
 	/// If true, we should call `poll_complete` on the inner sink.
 	requires_poll_flush: bool,
 	/// The underlying substream.
-	inner: stream::Fuse<Framed<Negotiated<TSubstream>, UviBytes<Vec<u8>>>>,
+	inner: stream::Fuse<Framed<Negotiated<TSubstream>, UviBytes<BytesMut>>>,
 	/// Version of the protocol that was negotiated.
 	protocol_version: u8,
 	/// If true, we have sent a "remote is clogged" event recently and shouldn't send another one
@@ -119,7 +119,7 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 			return
 		}
 
-		self.send_queue.push_back(data);
+		self.send_queue.push_back(From::from(&data[..]));
 	}
 }
 
@@ -174,7 +174,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin {
 				self.clogged_fuse = true;
 				return Poll::Ready(Some(Ok(RegisteredProtocolEvent::Clogged {
 					messages: self.send_queue.iter()
-						.map(|m| m.clone())
+						.map(|m| m.clone().to_vec())
 						.collect(),
 				})))
 			}
@@ -230,7 +230,7 @@ impl UpgradeInfo for RegisteredProtocol {
 #[derive(Debug, Clone)]
 pub struct RegisteredProtocolName {
 	/// Protocol name, as advertised on the wire.
-	name: Bytes,
+	name: Vec<u8>,
 	/// Version number. Stored in string form in `name`, but duplicated here for easier retrieval.
 	version: u8,
 }
