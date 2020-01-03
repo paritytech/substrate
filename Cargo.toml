@@ -145,6 +145,8 @@ members = [
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
 	"utils/wasm-builder",
+	"primitives/consensus/zigzag",
+	"client/consensus/zigzag",
 ]
 
 [profile.release]

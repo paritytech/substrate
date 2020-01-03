@@ -27,8 +27,8 @@ sp-inherents = { version = "2.0.0", path = "../../primitives/inherents" }
 sc-transaction-pool = { version = "2.0.0", path = "../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
 sc-network = { version = "0.8", path = "../../client/network" }
-sc-consensus-aura = { version = "0.8", path = "../../client/consensus/aura" }
-sp-consensus-aura = { version = "0.8", path = "../../primitives/consensus/aura" }
+# sc-consensus-aura = { version = "0.8", path = "../../client/consensus/aura" }
+# sp-consensus-aura = { version = "0.8", path = "../../primitives/consensus/aura" }
 sp-consensus = { version = "0.8", path = "../../primitives/consensus/common" }
 grandpa = { version = "2.0.0", package = "sc-finality-grandpa", path = "../../client/finality-grandpa" }
 grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
@@ -36,6 +36,8 @@ sc-client = { version = "2.0.0", path = "../../client/" }
 node-template-runtime = { version = "2.0.0", path = "runtime" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sc-basic-authority = { path  = "../../client/basic-authorship" }
+sc-consensus-aura = { package = "sc-consensus-zigzag", version = "0.8", path = "../../client/consensus/zigzag" }
+sp-consensus-aura = { package = "sp-consensus-zigzag", version = "0.8", path = "../../primitives/consensus/zigzag" }
 
 [build-dependencies]
 vergen = "3.0.4"
