@@ -33,6 +33,7 @@ mod children;
 mod cache;
 mod storage_cache;
 mod utils;
+mod stats;
 
 use std::sync::Arc;
 use std::path::PathBuf;
@@ -70,8 +71,10 @@ use sc_client::leaves::{LeafSet, FinalizationDisplaced};
 use sc_state_db::StateDb;
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
+use crate::stats::UsageStats;
 use log::{trace, debug, warn};
 pub use sc_state_db::PruningMode;
+use sp_state_machine::UsageInfo as StateUsageInfo;
 
 #[cfg(feature = "test-helpers")]
 use sc_client::in_mem::Backend as InMemoryBackend;
@@ -895,7 +898,8 @@ pub struct Backend<Block: BlockT> {
 	shared_cache: SharedCache<Block>,
 	import_lock: RwLock<()>,
 	is_archive: bool,
-	io_stats: FrozenForDuration<kvdb::IoStats>,
+	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
+	state_usage: UsageStats,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -963,7 +967,8 @@ impl<Block: BlockT> Backend<Block> {
 			),
 			import_lock: Default::default(),
 			is_archive: is_archive_pruning,
-			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1), kvdb::IoStats::empty()),
+			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1), (kvdb::IoStats::empty(), StateUsageInfo::empty())),
+			state_usage: UsageStats::new(),
 		})
 	}
 
@@ -1257,13 +1262,23 @@ impl<Block: BlockT> Backend<Block> {
 
 			let finalized = if operation.commit_state {
 				let mut changeset: sc_state_db::ChangeSet<Vec<u8>> = sc_state_db::ChangeSet::default();
+				let mut ops: u64 = 0;
+				let mut bytes: u64 = 0;
 				for (key, (val, rc)) in operation.db_updates.drain() {
 					if rc > 0 {
+						ops += 1;
+						bytes += key.len() as u64 + val.len() as u64;
+
 						changeset.inserted.push((key, val.to_vec()));
 					} else if rc < 0 {
+						ops += 1;
+						bytes += key.len() as u64;
+
 						changeset.deleted.push(key);
 					}
 				}
+				self.state_usage.tally_writes(ops, bytes);
+
 				let number_u64 = number.saturated_into::<u64>();
 				let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset)
 					.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
@@ -1495,6 +1510,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn commit_operation(&self, operation: Self::BlockImportOperation)
 		-> ClientResult<()>
 	{
+		let usage = operation.old_state.usage_info();
+		self.state_usage.merge_sm(usage);
+
 		match self.try_commit_operation(operation) {
 			Ok(_) => {
 				self.storage.state_db.apply_pending();
@@ -1548,8 +1566,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Some(self.offchain_storage.clone())
 	}
 
+
 	fn usage_info(&self) -> Option<UsageInfo> {
-		let io_stats = self.io_stats.take_or_else(|| self.storage.db.io_stats(kvdb::IoStatsKind::SincePrevious));
+		let (io_stats, state_stats) = self.io_stats.take_or_else(||
+			(
+				self.storage.db.io_stats(kvdb::IoStatsKind::SincePrevious),
+				self.state_usage.take(),
+			)
+		);
 		let database_cache = parity_util_mem::malloc_size(&*self.storage.db);
 		let state_cache = (*&self.shared_cache).lock().used_storage_cache_size();
 
@@ -1565,6 +1589,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				writes: io_stats.writes,
 				reads: io_stats.reads,
 				average_transaction_size: io_stats.avg_transaction_size() as u64,
+				state_reads: state_stats.reads.ops,
+				state_reads_cache: state_stats.cache_reads.ops,
 			},
 		})
 	}
