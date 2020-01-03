@@ -25,8 +25,9 @@ pub use prometheus::{Encoder, HistogramOpts, Opts, TextEncoder};
 pub use prometheus::{Histogram, IntCounter, IntGauge};
 pub use sp_runtime::traits::SaturatedConversion;
 use std::net::SocketAddr;
-#[cfg(not(target_os = "unknown"))]
-mod networking;
+//#[cfg(not(target_os = "unknown"))]
+//mod networking;
+
 pub mod metrics;
 
 #[derive(Debug, derive_more::Display, derive_more::From)]
@@ -88,8 +89,7 @@ impl<T> hyper::rt::Executor<T> for Executor
 #[cfg(not(target_os = "unknown"))]
 pub  async fn init_prometheus(mut prometheus_addr: SocketAddr) -> Result<(), Error>{
   use async_std::{net, io};
-  use crate::networking::Incoming;
-
+  use grafana_data_source::networking::Incoming;
 	let listener = loop {
 		let listener = net::TcpListener::bind(&prometheus_addr).await;
 		match listener {

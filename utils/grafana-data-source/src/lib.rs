@@ -31,7 +31,7 @@ use parking_lot::RwLock;
 mod types;
 mod server;
 #[cfg(not(target_os = "unknown"))]
-mod networking;
+pub mod networking;
 mod database;
 
 use database::Database;

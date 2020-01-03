@@ -978,7 +978,7 @@ ServiceBuilder<
 				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
 			);
 			prometheus_gauge!(
-				MEMPOOL_SIZE => used_state_cache_size as u64,
+				STATE_CACHE_SIZE => used_state_cache_size as u64,
 				NODE_MEMORY => memory as u64,
 				NODE_CPU => cpu_usage as u64,
 				TX_COUNT => txpool_status.ready as u64,

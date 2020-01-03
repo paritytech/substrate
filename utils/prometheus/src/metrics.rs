@@ -81,9 +81,9 @@ lazy_static! {
         "consensus_node_cpu",
         "node cpu"
     );
-    pub static ref MEMPOOL_SIZE: Result<IntGauge> = try_create_int_gauge(
-        "mempool_size",
-        "Number of uncommitted transactions"
+    pub static ref STATE_CACHE_SIZE: Result<IntGauge> = try_create_int_gauge(
+        "consensus_state_cache_size",
+        "used state cache size"
     );
     pub static ref P2P_NODE_DOWNLOAD: Result<IntGauge> = try_create_int_gauge(
         "p2p_peers_receive_byte_per_sec",

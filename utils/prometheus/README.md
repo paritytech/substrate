@@ -41,8 +41,7 @@ pub use prometheus::{Encoder, HistogramOpts, Opts, TextEncoder};
 pub use prometheus::{Histogram, IntCounter, IntGauge};
 pub use sp_runtime::traits::SaturatedConversion;
 use std::net::SocketAddr;
-#[cfg(not(target_os = "unknown"))]
-mod networking;
+
 pub mod metrics;
 
 #[derive(Debug, derive_more::Display, derive_more::From)]
@@ -104,7 +103,7 @@ impl<T> hyper::rt::Executor<T> for Executor
 #[cfg(not(target_os = "unknown"))]
 pub  async fn init_prometheus(mut prometheus_addr: SocketAddr) -> Result<(), Error>{
   use async_std::{net, io};
-  use crate::networking::Incoming;
+  use grafana_data_source::networking::Incoming;
 
 	let listener = loop {
 		let listener = net::TcpListener::bind(&prometheus_addr).await;
@@ -182,60 +181,6 @@ macro_rules! prometheus(
 );
 */
 ```
-utuls/prometheus/src/networking.rs ( grafana-data-source Note)
-```rust
-use async_std::pin::Pin;
-use std::task::{Poll, Context};
-use futures_util::{stream::Stream, io::{AsyncRead, AsyncWrite}};
-
-pub struct Incoming<'a>(pub async_std::net::Incoming<'a>);
-
-impl hyper::server::accept::Accept for Incoming<'_> {
-	type Conn = TcpStream;
-	type Error = async_std::io::Error;
-
-	fn poll_accept(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Result<Self::Conn, Self::Error>>> {
-		Pin::new(&mut Pin::into_inner(self).0)
-			.poll_next(cx)
-			.map(|opt| opt.map(|res| res.map(TcpStream)))
-	}
-}
-
-pub struct TcpStream(pub async_std::net::TcpStream);
-
-impl tokio::io::AsyncRead for TcpStream {
-	fn poll_read(
-		self: Pin<&mut Self>,
-		cx: &mut Context,
-		buf: &mut [u8]
-	) -> Poll<Result<usize, std::io::Error>> {
-		Pin::new(&mut Pin::into_inner(self).0)
-			.poll_read(cx, buf)
-	}
-}
-
-impl tokio::io::AsyncWrite for TcpStream {
-	fn poll_write(
-		self: Pin<&mut Self>,
-		cx: &mut Context,
-		buf: &[u8]
-	) -> Poll<Result<usize, std::io::Error>> {
-		Pin::new(&mut Pin::into_inner(self).0)
-			.poll_write(cx, buf)
-	}
-
-	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), std::io::Error>> {
-		Pin::new(&mut Pin::into_inner(self).0)
-			.poll_flush(cx)
-	}
-
-	fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), std::io::Error>> {
-		Pin::new(&mut Pin::into_inner(self).0)
-			.poll_close(cx)
-	}
-}
-
-```
 
 
 
@@ -291,7 +236,7 @@ use sc_prometheus::prometheus_gauge;
 				"used_state_cache_size" => used_state_cache_size,
 			);
 			prometheus_gauge!(
-				MEMPOOL_SIZE => used_state_cache_size as u64,
+				STATE_CACHE_SIZE => used_state_cache_size as u64,
 				NODE_MEMORY => memory as u64,
 				NODE_CPU => cpu_usage as u64,
 				TX_COUNT => txpool_status.ready as u64,
@@ -503,7 +448,7 @@ use sc-prometheus::{prometheus_gauge};
 			);
 
 			prometheus_gauge!(
-				  MEMPOOL_SIZE => used_state_cache_size as u64,
+				  STATE_CACHE_SIZE => used_state_cache_size as u64,
 				  NODE_MEMORY => memory as u64,
 				  NODE_CPU => cpu_usage as u64,
 				  TX_COUNT => txpool_status.ready as u64,
@@ -537,14 +482,14 @@ Consensus metrics, namespace: `substrate`
 | consensus_num_txs                      | Gauge     |          | Number of transactions                                          |
 | consensus_node_memory                  | IntGauge  |          | Node's primary memory                                           |
 | consensus_node_cpu                     | IntGauge  |          | Node's cpu load                                                 |
+| consensus_state_cache_size             | IntGauge  |          | used state cache size                             			  |
 | p2p_peers_number                       | IntGauge  |          | Number of peers node's connected to                             |
 | p2p_peer_receive_bytes_per_sec         | IntGauge  |          | number of bytes received from a given peer                      |
 | p2p_peer_send_bytes_per_sec            | IntGauge  |          | number of bytes sent to a given peer                            |
-| mempool_size                           | IntGauge  |          | Number of uncommitted transactions                              |
 | Resource_receive_bytes_per_sec(Future) | IntGauge  |          | Operating System of bytes received                              |
 | Resource_send_bytes_per_sec(Future)    | IntGauge  |          | Operating System of bytes sent                                  |
 | Resource_cpu_use(Future)               | IntGauge  |          | Operating System cpu load                                       |
-| Resource_disk_use(Future)               | IntGauge  |          | Operating System disk use                                      |
+| Resource_disk_use(Future)              | IntGauge  |          | Operating System disk use                                       |
 | validator_sign_prevote(Future)         | IntGauge  | validator addr | validator sign vote list                               	  |
 | validator_sign_precommit(Future)       | IntGauge  | validator addr | validator sign commit list                                |
 

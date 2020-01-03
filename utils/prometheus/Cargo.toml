@@ -14,6 +14,7 @@ tokio = "0.2"
 futures-util = { version = "0.3.1", default-features = false, features = ["io"] }
 sp-runtime = { package = "sp-runtime",path = "../../primitives/runtime" }
 derive_more = "0.99"
+grafana-data-source = { version = "2.0.0", path = "../grafana-data-source" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 async-std = { version = "1.0.1", features = ["unstable"] }
