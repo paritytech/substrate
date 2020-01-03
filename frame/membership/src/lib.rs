@@ -276,19 +276,6 @@ mod tests {
 		pub const Five: u64 = 5;
 	}
 
-	impl Contains<u64> for One {
-		fn sorted_members() -> Vec<u64> { vec![1] }
-	}
-	impl Contains<u64> for Two {
-		fn sorted_members() -> Vec<u64> { vec![2] }
-	}
-	impl Contains<u64> for Three {
-		fn sorted_members() -> Vec<u64> { vec![3] }
-	}
-	impl Contains<u64> for Four {
-		fn sorted_members() -> Vec<u64> { vec![4] }
-	}
-
 	thread_local! {
 		static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	}

@@ -64,6 +64,14 @@ pub trait Contains<T: Ord> {
 	fn count() -> usize { Self::sorted_members().len() }
 }
 
+impl<T: Ord, G: Get<T>> Contains<T> for G {
+	fn contains(t: &T) -> bool { &Self::get() == t }
+	fn sorted_members() -> Vec<T> {
+		vec![Self::get()]
+	}
+	fn count() -> usize { 1 }
+}
+
 /// The account with the given id was killed.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnFreeBalanceZero<AccountId> {
