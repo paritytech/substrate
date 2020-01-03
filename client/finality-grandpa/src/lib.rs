@@ -411,8 +411,8 @@ where
 	RA: Send + Sync,
 	SC: SelectChain<Block>,
 {
-	let chain_info = client.info();
-	let genesis_hash = chain_info.chain.genesis_hash;
+	let chain_info = client.chain_info();
+	let genesis_hash = chain_info.genesis_hash;
 
 	let persistent_data = aux_schema::load_persistent(
 		&*client,
@@ -507,7 +507,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 			.register_provider(sp_finality_tracker::InherentDataProvider::new(move || {
 				#[allow(deprecated)]
 				{
-					let info = client.info().chain;
+					let info = client.chain_info();
 					telemetry!(CONSENSUS_INFO; "afg.finalized";
 						"finalized_number" => ?info.finalized_number,
 						"finalized_hash" => ?info.finalized_hash,
@@ -710,10 +710,10 @@ where
 			"authority_id" => authority_id.to_string(),
 		);
 
-		let chain_info = self.env.client.info();
+		let chain_info = self.env.client.chain_info();
 		telemetry!(CONSENSUS_INFO; "afg.authority_set";
-			"number" => ?chain_info.chain.finalized_number,
-			"hash" => ?chain_info.chain.finalized_hash,
+			"number" => ?chain_info.finalized_number,
+			"hash" => ?chain_info.finalized_hash,
 			"authority_id" => authority_id.to_string(),
 			"authority_set_id" => ?self.env.set_id,
 			"authorities" => {
@@ -727,8 +727,8 @@ where
 		match &*self.env.voter_set_state.read() {
 			VoterSetState::Live { completed_rounds, .. } => {
 				let last_finalized = (
-					chain_info.chain.finalized_hash,
-					chain_info.chain.finalized_number,
+					chain_info.finalized_hash,
+					chain_info.finalized_number,
 				);
 
 				let global_comms = global_communication(

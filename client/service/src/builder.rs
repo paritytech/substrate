@@ -35,7 +35,7 @@ use futures03::{
 };
 use sc_keystore::{Store as Keystore};
 use log::{info, warn, error};
-use sc_network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo, DhtEvent};
+use sc_network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo};
 use sc_network::{config::BoxFinalityProofRequestBuilder, specialization::NetworkSpecialization};
 use parking_lot::{Mutex, RwLock};
 use sp_core::{Blake2Hasher, H256, Hasher};
@@ -90,7 +90,6 @@ pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImp
 	transaction_pool: Arc<TExPool>,
 	rpc_extensions: TRpc,
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
-	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
 	marker: PhantomData<(TBl, TRtApi)>,
 }
 
@@ -225,7 +224,6 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
 			remote_backend: None,
-			dht_event_tx: None,
 			marker: PhantomData,
 		})
 	}
@@ -303,7 +301,6 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
 			remote_backend: Some(remote_blockchain),
-			dht_event_tx: None,
 			marker: PhantomData,
 		})
 	}
@@ -352,7 +349,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -395,7 +391,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -422,7 +417,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -464,7 +458,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -530,7 +523,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -586,7 +578,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			transaction_pool: Arc::new(transaction_pool),
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -626,33 +617,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			transaction_pool: self.transaction_pool,
 			rpc_extensions,
 			remote_backend: self.remote_backend,
-			dht_event_tx: self.dht_event_tx,
-			marker: self.marker,
-		})
-	}
-
-	/// Adds a dht event sender to builder to be used by the network to send dht events to the authority discovery
-	/// module.
-	pub fn with_dht_event_tx(
-		self,
-		dht_event_tx: mpsc::Sender<DhtEvent>,
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
-								TNetP, TExPool, TRpc, Backend>, Error> {
-		Ok(ServiceBuilder {
-			config: self.config,
-			client: self.client,
-			backend: self.backend,
-			keystore: self.keystore,
-			fetcher: self.fetcher,
-			select_chain: self.select_chain,
-			import_queue: self.import_queue,
-			finality_proof_request_builder: self.finality_proof_request_builder,
-			finality_proof_provider: self.finality_proof_provider,
-			network_protocol: self.network_protocol,
-			transaction_pool: self.transaction_pool,
-			rpc_extensions: self.rpc_extensions,
-			remote_backend: self.remote_backend,
-			dht_event_tx: Some(dht_event_tx),
 			marker: self.marker,
 		})
 	}
@@ -761,12 +725,11 @@ ServiceBuilder<
 			transaction_pool,
 			rpc_extensions,
 			remote_backend,
-			dht_event_tx,
 		} = self;
 
 		sp_session::generate_initial_session_keys(
 			client.clone(),
-			&BlockId::Hash(client.info().chain.best_hash),
+			&BlockId::Hash(client.chain_info().best_hash),
 			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 		)?;
 
@@ -780,7 +743,7 @@ ServiceBuilder<
 		let (essential_failed_tx, essential_failed_rx) = mpsc::unbounded();
 
 		let import_queue = Box::new(import_queue);
-		let chain_info = client.info().chain;
+		let chain_info = client.chain_info();
 
 		let version = config.full_version();
 		info!("Highest known block at #{}", chain_info.best_number);
@@ -916,7 +879,7 @@ ServiceBuilder<
 		let (state_tx, state_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
 		network_status_sinks.lock().push(std::time::Duration::from_millis(5000), state_tx);
 		let tel_task = state_rx.for_each(move |(net_status, _)| {
-			let info = client_.info();
+			let info = client_.usage_info();
 			let best_number = info.chain.best_number.saturated_into::<u64>();
 			let best_hash = info.chain.best_hash;
 			let num_peers = net_status.num_connected_peers;
@@ -1051,7 +1014,6 @@ ServiceBuilder<
 			network_status_sinks.clone(),
 			system_rpc_rx,
 			has_bootnodes,
-			dht_event_tx,
 		)
 			.map_err(|_| ())
 			.select(exit.clone().map(Ok).compat())

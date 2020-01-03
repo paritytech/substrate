@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#![warn(missing_docs)]
-
 //! This module implements sandboxing support in the runtime.
+//!
+//! Sandboxing is baked by wasmi at the moment. In future, however, we would like to add/switch to
+//! a compiled execution engine.
 
 use crate::error::{Result, Error};
 use std::{collections::HashMap, rc::Rc};

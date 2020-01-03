@@ -84,13 +84,13 @@ pub trait StorageTransaction<Block: BlockT, T: CacheItemT> {
 #[derive(Debug)]
 pub struct DbColumns {
 	/// Column holding cache meta.
-	pub meta: Option<u32>,
+	pub meta: u32,
 	/// Column holding the mapping of { block number => block hash } for blocks of the best chain.
-	pub key_lookup: Option<u32>,
+	pub key_lookup: u32,
 	/// Column holding the mapping of { block hash => block header }.
-	pub header: Option<u32>,
+	pub header: u32,
 	/// Column holding cache entries.
-	pub cache: Option<u32>,
+	pub cache: u32,
 }
 
 /// Database-backed list cache storage.

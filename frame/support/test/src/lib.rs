@@ -16,3 +16,20 @@
 
 //! Test crate for frame_support. Allow to make use of `frame_support::decl_storage`.
 //! See tests directory.
+
+// Make sure we fail compilation on warnings
+#![warn(missing_docs)]
+#![deny(warnings)]
+
+/// The configuration trait
+pub trait Trait {
+	/// The runtime origin type.
+	type Origin;
+	/// The block number type.
+	type BlockNumber;
+}
+
+frame_support::decl_module! {
+	/// Some test module
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+}

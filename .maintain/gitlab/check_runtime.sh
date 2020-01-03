@@ -27,6 +27,15 @@ github_label () {
 
 
 
+git fetch --depth=${GIT_DEPTH:-100} origin master
+
+# check if master is part of this checkout
+if ! git log -n 1 origin/master
+then
+	echo "unable to check for runtime changes: checkout does not contain origin/master branch"
+	exit 3
+fi
+
 # check if the wasm sources changed
 if ! git diff --name-only origin/master...${CI_COMMIT_SHA} \
 	| grep -q -e '^bin/node/src/runtime' -e '^frame/' -e '^primitives/sr-' | grep -v -e '^primitives/sr-arithmetic/fuzzer'

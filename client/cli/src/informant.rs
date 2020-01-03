@@ -35,14 +35,14 @@ pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()
 		.network_status(Duration::from_millis(5000))
 		.compat()
 		.try_for_each(move |(net_status, _)| {
-			let info = client.info();
+			let info = client.usage_info();
 			display.display(&info, net_status);
 			future::ok(())
 		});
 
 	let client = service.client();
 	let mut last_best = {
-		let info = client.info();
+		let info = client.usage_info();
 		Some((info.chain.best_number, info.chain.best_hash))
 	};
 

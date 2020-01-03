@@ -44,7 +44,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	let client = TestClientBuilder::with_backend(backend.clone()).build();
 	let blockchain = backend.blockchain();
 
-	let genesis_hash = client.info().chain.genesis_hash;
+	let genesis_hash = client.chain_info().genesis_hash;
 
 	assert_eq!(
 		blockchain.leaves().unwrap(),
@@ -224,7 +224,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	let d2 = builder.bake().unwrap();
 	client.import(BlockOrigin::Own, d2.clone()).unwrap();
 
-	let genesis_hash = client.info().chain.genesis_hash;
+	let genesis_hash = client.chain_info().genesis_hash;
 
 	let children1 = blockchain.children(a4.hash()).unwrap();
 	assert_eq!(vec![a5.hash()], children1);
@@ -314,7 +314,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	let d2 = builder.bake().unwrap();
 	client.import(BlockOrigin::Own, d2.clone()).unwrap();
 
-	let genesis_hash = client.info().chain.genesis_hash;
+	let genesis_hash = client.chain_info().genesis_hash;
 
 	assert_eq!(blockchain.header(BlockId::Number(0)).unwrap().unwrap().hash(), genesis_hash);
 	assert_eq!(blockchain.hash(0).unwrap().unwrap(), genesis_hash);
