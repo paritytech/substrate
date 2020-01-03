@@ -139,7 +139,7 @@ impl futures01::future::Executor<Boxed01Future01> for SpawnTaskHandle {
 
 /// Abstraction over a Substrate service.
 pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
-	Spawn + Send {
+	Spawn + Send + Unpin {
 	/// Type of block of this chain.
 	type Block: BlockT<Hash = H256>;
 	/// Backend storage for the client.
