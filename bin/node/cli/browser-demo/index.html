@@ -25,11 +25,11 @@ async function start() {
 	client.rpcSubscribe('{"method":"chain_subscribeNewHead","params":[],"id":1,"jsonrpc":"2.0"}',
 		(r) => log("New chain head: " + r));
 
-	setInterval(() => {
+	/*setInterval(() => {
 		client
 			.rpcSend('{"method":"system_networkState","params":[],"id":1,"jsonrpc":"2.0"}')
 			.then((r) => log("Network state: " + r));
-	}, 20000);
+	}, 20000);*/
 }
 
 start();
