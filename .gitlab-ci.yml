@@ -368,6 +368,17 @@ check_polkadot:
     - cd -
     - sccache -s
 
+trigger-contracts-ci:
+  stage:                           publish
+  needs:
+    - build-linux-substrate
+  trigger:
+    project:                       parity/srml-contracts-waterfall
+    branch:                        "master"
+  only:
+    - master
+    - schedules
+
 #### stage:                        publish
 
 .publish-docker-release:           &publish-docker-release
