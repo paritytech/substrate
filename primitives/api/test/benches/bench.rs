@@ -26,14 +26,14 @@ fn sp_api_benchmark(c: &mut Criterion) {
 	c.bench_function("add one with same runtime api", |b| {
 		let client = substrate_test_runtime_client::new();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		b.iter(|| runtime_api.benchmark_add_one(&block_id, &1))
 	});
 
 	c.bench_function("add one with recreating runtime api", |b| {
 		let client = substrate_test_runtime_client::new();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		b.iter(|| client.runtime_api().benchmark_add_one(&block_id, &1))
 	});
@@ -41,7 +41,7 @@ fn sp_api_benchmark(c: &mut Criterion) {
 	c.bench_function("vector add one with same runtime api", |b| {
 		let client = substrate_test_runtime_client::new();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 		let data = vec![0; 1000];
 
 		b.iter_with_large_drop(|| runtime_api.benchmark_vector_add_one(&block_id, &data))
@@ -49,7 +49,7 @@ fn sp_api_benchmark(c: &mut Criterion) {
 
 	c.bench_function("vector add one with recreating runtime api", |b| {
 		let client = substrate_test_runtime_client::new();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 		let data = vec![0; 1000];
 
 		b.iter_with_large_drop(|| client.runtime_api().benchmark_vector_add_one(&block_id, &data))
@@ -57,13 +57,13 @@ fn sp_api_benchmark(c: &mut Criterion) {
 
 	c.bench_function("calling function by function pointer in wasm", |b| {
 		let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 		b.iter(|| client.runtime_api().benchmark_indirect_call(&block_id).unwrap())
 	});
 
 	c.bench_function("calling function in wasm", |b| {
 		let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 		b.iter(|| client.runtime_api().benchmark_direct_call(&block_id).unwrap())
 	});
 }

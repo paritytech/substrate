@@ -193,7 +193,7 @@ impl<
 			}
 
 			if link.imported_blocks >= count {
-				info!("Imported {} blocks. Best: #{}", read_block_count, client.info().chain.best_number);
+				info!("Imported {} blocks. Best: #{}", read_block_count, client.chain_info().best_number);
 				return std::task::Poll::Ready(Ok(()));
 
 			} else {
@@ -217,7 +217,7 @@ impl<
 		let last = match to {
 			Some(v) if v.is_zero() => One::one(),
 			Some(v) => v,
-			None => client.info().chain.best_number,
+			None => client.chain_info().best_number,
 		};
 
 		let mut wrote_header = false;
@@ -278,7 +278,7 @@ impl<
 		blocks: NumberFor<TBl>
 	) -> Result<(), Error> {
 		let reverted = self.client.revert(blocks)?;
-		let info = self.client.info().chain;
+		let info = self.client.chain_info();
 
 		if reverted.is_zero() {
 			info!("There aren't any non-finalized blocks to revert.");

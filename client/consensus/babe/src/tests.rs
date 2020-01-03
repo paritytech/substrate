@@ -707,7 +707,7 @@ fn importing_epoch_change_block_prunes_tree() {
 	// We finalize block #13 from the canon chain, so on the next epoch
 	// change the tree should be pruned, to not contain F (#7).
 	client.finalize_block(BlockId::Hash(canon_hashes[12]), None, false).unwrap();
-	propose_and_import_blocks(BlockId::Hash(client.info().chain.best_hash), 7);
+	propose_and_import_blocks(BlockId::Hash(client.chain_info().best_hash), 7);
 
 	// at this point no hashes from the first fork must exist on the tree
 	assert!(
@@ -725,7 +725,7 @@ fn importing_epoch_change_block_prunes_tree() {
 
 	// finalizing block #25 from the canon chain should prune out the second fork
 	client.finalize_block(BlockId::Hash(canon_hashes[24]), None, false).unwrap();
-	propose_and_import_blocks(BlockId::Hash(client.info().chain.best_hash), 8);
+	propose_and_import_blocks(BlockId::Hash(client.chain_info().best_hash), 8);
 
 	// at this point no hashes from the second fork must exist on the tree
 	assert!(
