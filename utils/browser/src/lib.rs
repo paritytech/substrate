@@ -16,7 +16,7 @@
 
 use futures01::sync::mpsc as mpsc01;
 use log::{debug, info};
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 use service::{
     AbstractService, RpcSession, Roles, Configuration, config::DatabaseConfig,
     ChainSpec, RuntimeGenesis

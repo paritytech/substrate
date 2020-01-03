@@ -45,8 +45,8 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub network: NetworkConfiguration,
 	/// Path to the base configuration directory.
 	pub config_dir: Option<PathBuf>,
-	/// Path to key files.
-	pub keystore_path: Option<PathBuf>,
+	/// Configuration for the keystore.
+	pub keystore: KeystoreConfig,
 	/// Configuration for the database.
 	pub database: DatabaseConfig,
 	/// Size of internal state cache in Bytes
@@ -92,8 +92,6 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
 	pub disable_grandpa: bool,
-	/// Node keystore's password
-	pub keystore_password: Option<Protected<String>>,
 	/// Development key seed.
 	///
 	/// When running in development mode, the seed will be used to generate authority keys by the keystore.
@@ -104,6 +102,20 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub tracing_targets: Option<String>,
 	/// Tracing receiver
 	pub tracing_receiver: sc_tracing::TracingReceiver,
+}
+
+/// Configuration of the client keystore.
+#[derive(Clone)]
+pub enum KeystoreConfig {
+	/// Keystore at a path on-disk. Recommended for native nodes.
+	Path {
+		/// The path of the keystore. Will panic if no path is specified.
+		path: Option<PathBuf>,
+		/// Node keystore's password.
+		password: Option<Protected<String>>
+	},
+	/// In-memory keystore. Recommended for in-browser nodes.
+	InMemory
 }
 
 /// Configuration of the database of the client.
@@ -138,7 +150,10 @@ impl<C, G, E> Configuration<C, G, E> where
 			roles: Roles::FULL,
 			transaction_pool: Default::default(),
 			network: Default::default(),
-			keystore_path: config_dir.map(|c| c.join("keystore")),
+			keystore: KeystoreConfig::Path {
+				path: config_dir.map(|c| c.join("keystore")),
+				password: None
+			},
 			database: DatabaseConfig::Path {
 				path: Default::default(),
 				cache_size: Default::default(),
@@ -161,7 +176,6 @@ impl<C, G, E> Configuration<C, G, E> where
 			sentry_mode: false,
 			force_authoring: false,
 			disable_grandpa: false,
-			keystore_password: None,
 			dev_key_seed: None,
 			tracing_targets: Default::default(),
 			tracing_receiver: Default::default(),
