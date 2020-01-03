@@ -217,6 +217,26 @@ impl_wasm_host_interface! {
 			Ok(sp_io::storage::set(&key, &value))
 		}
 
+		ext_set_child_storage(
+			_storage_key_data: Pointer<u8>,
+			_storage_key_len: WordSize,
+			_key_data: Pointer<u8>,
+			_key_len: WordSize,
+			_value_data: Pointer<u8>,
+			_value_len: WordSize,
+		) {
+			Err("ext_set_child_storage is obsolete and left for backwards compatibility".into())
+		}
+
+		ext_clear_child_storage(
+			_storage_key_data: Pointer<u8>,
+			_storage_key_len: WordSize,
+			_key_data: Pointer<u8>,
+			_key_len: WordSize,
+		) {
+			Err("ext_clear_child_storage is obsolete and left for backwards compatibility".into())
+		}
+
 		ext_clear_storage(key_data: Pointer<u8>, key_len: WordSize) {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_clear_storage")?;
@@ -229,10 +249,32 @@ impl_wasm_host_interface! {
 			Ok(if sp_io::storage::exists(&key) { 1 } else { 0 })
 		}
 
+		ext_exists_child_storage(
+			_storage_key_data: Pointer<u8>,
+			_storage_key_len: WordSize,
+			_key_data: Pointer<u8>,
+			_key_len: WordSize,
+		) -> u32 {
+			Err("ext_exists_child_storage is obsolete and left for backwards compatibility".into())
+		}
+
 		ext_clear_prefix(prefix_data: Pointer<u8>, prefix_len: WordSize) {
 			let prefix = context.read_memory(prefix_data, prefix_len)
 				.map_err(|_| "Invalid attempt to determine prefix in ext_clear_prefix")?;
 			Ok(sp_io::storage::clear_prefix(&prefix))
+		}
+
+		ext_clear_child_prefix(
+			_storage_key_data: Pointer<u8>,
+			_storage_key_len: WordSize,
+			_prefix_data: Pointer<u8>,
+			_prefix_len: WordSize,
+		) {
+			Err("ext_clear_child_prefix is obsolete and left for backwards compatibility".into())
+		}
+
+		ext_kill_child_storage(_storage_key_data: Pointer<u8>, _storage_key_len: WordSize) {
+			Err("ext_kill_child_storage is obsolete and left for backwards compatibility".into())
 		}
 
 		ext_get_allocated_storage(
@@ -257,6 +299,16 @@ impl_wasm_host_interface! {
 			}
 		}
 
+		ext_get_allocated_child_storage(
+			_storage_key_data: Pointer<u8>,
+			_storage_key_len: WordSize,
+			_key_data: Pointer<u8>,
+			_key_len: WordSize,
+			_written_out: Pointer<u32>,
+		) -> Pointer<u8> {
+			Err("ext_get_allocated_child_storage is obsolete and left for backwards compatibility".into())
+		}
+
 		ext_get_storage_into(
 			key_data: Pointer<u8>,
 			key_len: WordSize,
@@ -278,9 +330,29 @@ impl_wasm_host_interface! {
 			}
 		}
 
+		ext_get_child_storage_into(
+			_storage_key_data: Pointer<u8>,
+			_storage_key_len: WordSize,
+			_key_data: Pointer<u8>,
+			_key_len: WordSize,
+			_value_data: Pointer<u8>,
+			_value_len: WordSize,
+			_value_offset: WordSize,
+		) -> WordSize {
+			Err("ext_get_child_storage_into is obsolete and left for backwards compatibility".into())
+		}
+
 		ext_storage_root(result: Pointer<u8>) {
 			context.write_memory(result, sp_io::storage::root().as_ref())
 				.map_err(|_| "Invalid attempt to set memory in ext_storage_root".into())
+		}
+
+		ext_child_storage_root(
+			_storage_key_data: Pointer<u8>,
+			_storage_key_len: WordSize,
+			_written_out: Pointer<u32>,
+		) -> Pointer<u8> {
+			Err("ext_child_storage_root is obsolete and left for backwards compatibility".into())
 		}
 
 		ext_storage_changes_root(
