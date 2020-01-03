@@ -7,9 +7,9 @@ edition = "2018"
 [dependencies]
 parking_lot = "0.9.0"
 log = "0.4.8"
-kvdb = "0.1.1"
-kvdb-rocksdb = { version = "0.2", optional = true }
-kvdb-memorydb = "0.1.2"
+kvdb = "0.2.0"
+kvdb-rocksdb = { version = "0.3", optional = true }
+kvdb-memorydb = "0.2.0"
 linked-hash-map = "0.5.2"
 hash-db = "0.15.2"
 sc-client-api = { version = "2.0.0", path = "../api" }
