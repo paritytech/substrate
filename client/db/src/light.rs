@@ -44,12 +44,12 @@ use crate::DatabaseSettings;
 use log::{trace, warn, debug};
 
 pub(crate) mod columns {
-	pub const META: Option<u32> = crate::utils::COLUMN_META;
-	pub const KEY_LOOKUP: Option<u32> = Some(1);
-	pub const HEADER: Option<u32> = Some(2);
-	pub const CACHE: Option<u32> = Some(3);
-	pub const CHT: Option<u32> = Some(4);
-	pub const AUX: Option<u32> = Some(5);
+	pub const META: u32 = crate::utils::COLUMN_META;
+	pub const KEY_LOOKUP: u32 = 1;
+	pub const HEADER: u32 = 2;
+	pub const CACHE: u32 = 3;
+	pub const CHT: u32 = 4;
+	pub const AUX: u32 = 5;
 }
 
 /// Prefix for headers CHT.
