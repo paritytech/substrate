@@ -83,6 +83,8 @@ fn discard_values<Key: Hash>(
 					if let Some(ref mut into) = into {
 						into.insert(key, value);
 					}
+				} else if let Some(ref mut into) = into {
+					into.insert(e.key().clone(), e.get().1.clone());
 				}
 			},
 			Entry::Vacant(_) => {
@@ -801,7 +803,7 @@ mod tests {
 	fn keeps_pinned() {
 		let mut db = make_db(&[]);
 
-		// - 1 - 1_1
+		// - 0 - 1_1
 		//     \ 1_2
 
 		let (h_1, c_1) = (H256::random(), make_changeset(&[1], &[]));
@@ -820,5 +822,65 @@ mod tests {
 		assert!(contains(&overlay, 1));
 		overlay.unpin(&h_1);
 		assert!(!contains(&overlay, 1));
+	}
+
+	#[test]
+	fn keeps_pinned_ref_count() {
+		let mut db = make_db(&[]);
+
+		// - 0 - 1_1
+		//     \ 1_2
+		//     \ 1_3
+
+		// 1_1 and 1_2 both make the same change
+		let (h_1, c_1) = (H256::random(), make_changeset(&[1], &[]));
+		let (h_2, c_2) = (H256::random(), make_changeset(&[1], &[]));
+		let (h_3, c_3) = (H256::random(), make_changeset(&[], &[]));
+
+		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
+		db.commit(&overlay.insert::<io::Error>(&h_1, 1, &H256::default(), c_1).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h_2, 1, &H256::default(), c_2).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h_3, 1, &H256::default(), c_3).unwrap());
+
+		overlay.pin(&h_1);
+
+		let mut commit = CommitSet::default();
+		overlay.canonicalize::<io::Error>(&h_3, &mut commit).unwrap();
+		db.commit(&commit);
+		overlay.apply_pending(); // 1_2 should be discarded, 1_1 is pinned
+
+		assert!(contains(&overlay, 1));
+		overlay.unpin(&h_1);
+		assert!(!contains(&overlay, 1));
+	}
+
+	#[test]
+	fn pin_keeps_parent() {
+		let mut db = make_db(&[]);
+
+		// - 0 - 1_1 - 2_1
+		//     \ 1_2
+
+		// 1_1 and 1_2 both make the same change
+		let (h_11, c_11) = (H256::random(), make_changeset(&[1], &[]));
+		let (h_12, c_12) = (H256::random(), make_changeset(&[], &[]));
+		let (h_21, c_21) = (H256::random(), make_changeset(&[], &[]));
+
+		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
+		db.commit(&overlay.insert::<io::Error>(&h_11, 1, &H256::default(), c_11).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h_12, 1, &H256::default(), c_12).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h_21, 2, &h_11, c_21).unwrap());
+
+		overlay.pin(&h_21);
+
+		let mut commit = CommitSet::default();
+		overlay.canonicalize::<io::Error>(&h_12, &mut commit).unwrap();
+		db.commit(&commit);
+		overlay.apply_pending(); // 1_1 and 2_1 should be both pinned
+
+		assert!(contains(&overlay, 1));
+		overlay.unpin(&h_21);
+		assert!(!contains(&overlay, 1));
+		assert!(overlay.pinned.is_empty());
 	}
 }
