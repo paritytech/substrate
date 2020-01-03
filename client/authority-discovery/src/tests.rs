@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::{Arc, Mutex};
+use std::{iter::FromIterator, sync::{Arc, Mutex}};
 
 use futures::channel::mpsc::channel;
 use futures::executor::block_on;
