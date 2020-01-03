@@ -29,7 +29,7 @@ use sc_service::{
 	AbstractService,
 	ChainSpec,
 	Configuration,
-	config::DatabaseConfig,
+	config::{DatabaseConfig, KeystoreConfig},
 	Roles,
 	Error,
 };
@@ -173,8 +173,10 @@ fn node_config<G, E: Clone> (
 		roles: role,
 		transaction_pool: Default::default(),
 		network: network_config,
-		keystore_path: Some(root.join("key")),
-		keystore_password: None,
+		keystore: KeystoreConfig::Path {
+			path: Some(root.join("key")),
+			password: None
+		},
 		config_dir: Some(root.clone()),
 		database: DatabaseConfig::Path {
 			path: root.join("db"),
