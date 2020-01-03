@@ -227,7 +227,10 @@ mod tests {
 	use super::*;
 
 	use std::cell::RefCell;
-	use frame_support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::{
+		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
+		ord_parameter_types
+	};
 	use frame_support::traits::Contains;
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -268,7 +271,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 	}
-	parameter_types! {
+	ord_parameter_types! {
 		pub const One: u64 = 1;
 		pub const Two: u64 = 2;
 		pub const Three: u64 = 3;
