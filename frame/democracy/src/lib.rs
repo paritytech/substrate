@@ -1229,11 +1229,33 @@ mod tests {
 	}
 	pub struct OneToFive;
 	impl Contains<u64> for OneToFive {
-		fn contains(n: &u64) -> bool {
-			*n >= 1 && *n <= 5
-		}
-		fn members() -> Vec<u64> {
+		fn sorted_members() -> Vec<u64> {
 			vec![1, 2, 3, 4, 5]
+		}
+	}
+	impl Contains<u64> for One {
+		fn sorted_members() -> Vec<u64> {
+			vec![1]
+		}
+	}
+	impl Contains<u64> for Two {
+		fn sorted_members() -> Vec<u64> {
+			vec![2]
+		}
+	}
+	impl Contains<u64> for Three {
+		fn sorted_members() -> Vec<u64> {
+			vec![3]
+		}
+	}
+	impl Contains<u64> for Four {
+		fn sorted_members() -> Vec<u64> {
+			vec![4]
+		}
+	}
+	impl Contains<u64> for Five {
+		fn sorted_members() -> Vec<u64> {
+			vec![5]
 		}
 	}
 	thread_local! {
