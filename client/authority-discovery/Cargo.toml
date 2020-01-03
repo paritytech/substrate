@@ -17,7 +17,7 @@ derive_more = "0.99.2"
 futures = "0.3.1"
 futures-timer = "2.0"
 sc-keystore = { version = "2.0.0", path = "../keystore" }
-libp2p = { version = "0.13.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
+libp2p = { version = "0.13.2", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 log = "0.4.8"
 sc-network = { version = "0.8", path = "../network" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }

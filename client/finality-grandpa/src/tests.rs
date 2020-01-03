@@ -469,7 +469,7 @@ fn finalize_3_voters_no_observers() {
 	net.block_until_sync(&mut runtime);
 
 	for i in 0..3 {
-		assert_eq!(net.peer(i).client().info().chain.best_number, 20,
+		assert_eq!(net.peer(i).client().info().best_number, 20,
 			"Peer #{} failed to sync", i);
 	}
 
@@ -602,7 +602,7 @@ fn transition_3_voters_twice_1_full_observer() {
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
 		let full_client = peer.client().as_full().expect("only full clients are used in test");
-		assert_eq!(full_client.info().chain.best_number, 1,
+		assert_eq!(full_client.chain_info().best_number, 1,
 					"Peer #{} failed to sync", i);
 
 		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(&*full_client).unwrap();
@@ -821,7 +821,7 @@ fn sync_justifications_on_change_blocks() {
 	net.block_until_sync(&mut runtime);
 
 	for i in 0..4 {
-		assert_eq!(net.peer(i).client().info().chain.best_number, 25,
+		assert_eq!(net.peer(i).client().info().best_number, 25,
 			"Peer #{} failed to sync", i);
 	}
 
@@ -898,7 +898,7 @@ fn finalizes_multiple_pending_changes_in_order() {
 
 	// all peers imported both change blocks
 	for i in 0..6 {
-		assert_eq!(net.peer(i).client().info().chain.best_number, 30,
+		assert_eq!(net.peer(i).client().info().best_number, 30,
 			"Peer #{} failed to sync", i);
 	}
 
@@ -948,7 +948,7 @@ fn force_change_to_new_set() {
 	net.lock().block_until_sync(&mut runtime);
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
-		assert_eq!(peer.client().info().chain.best_number, 26,
+		assert_eq!(peer.client().info().best_number, 26,
 				"Peer #{} failed to sync", i);
 
 		let full_client = peer.client().as_full().expect("only full clients are used in test");
@@ -1091,7 +1091,7 @@ fn voter_persists_its_votes() {
 	net.peer(0).push_blocks(20, false);
 	net.block_until_sync(&mut runtime);
 
-	assert_eq!(net.peer(0).client().info().chain.best_number, 20,
+	assert_eq!(net.peer(0).client().info().best_number, 20,
 			   "Peer #{} failed to sync", 0);
 
 
@@ -1265,7 +1265,7 @@ fn voter_persists_its_votes() {
 
 				future::Either::A(interval
 					.take_while(move |_| {
-						Ok(net2.lock().peer(1).client().info().chain.best_number != 40)
+						Ok(net2.lock().peer(1).client().info().best_number != 40)
 					})
 					.for_each(|_| Ok(()))
 					.and_then(move |_| {
@@ -1342,7 +1342,7 @@ fn finalize_3_voters_1_light_observer() {
 	net.block_until_sync(&mut runtime);
 
 	for i in 0..4 {
-		assert_eq!(net.peer(i).client().info().chain.best_number, 20,
+		assert_eq!(net.peer(i).client().info().best_number, 20,
 			"Peer #{} failed to sync", i);
 	}
 
@@ -1395,7 +1395,7 @@ fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 
 	// check that the block#1 is finalized on light client
 	runtime.block_on(futures::future::poll_fn(move || -> std::result::Result<_, ()> {
-		if net.lock().peer(1).client().info().chain.finalized_number == 1 {
+		if net.lock().peer(1).client().info().finalized_number == 1 {
 			Ok(Async::Ready(()))
 		} else {
 			net.lock().poll();
@@ -1467,7 +1467,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 
 	// check block, finalized on light client
 	assert_eq!(
-		net.lock().peer(3).client().info().chain.finalized_number,
+		net.lock().peer(3).client().info().finalized_number,
 		if FORCE_CHANGE { 0 } else { 10 },
 	);
 }
@@ -1662,7 +1662,7 @@ fn grandpa_environment_respects_voting_rules() {
 	// the unrestricted environment should just return the best block
 	assert_eq!(
 		unrestricted_env.best_chain_containing(
-			peer.client().info().chain.finalized_hash
+			peer.client().info().finalized_hash
 		).unwrap().1,
 		20,
 	);
@@ -1671,14 +1671,14 @@ fn grandpa_environment_respects_voting_rules() {
 	// way in the unfinalized chain
 	assert_eq!(
 		three_quarters_env.best_chain_containing(
-			peer.client().info().chain.finalized_hash
+			peer.client().info().finalized_hash
 		).unwrap().1,
 		15,
 	);
 
 	assert_eq!(
 		default_env.best_chain_containing(
-			peer.client().info().chain.finalized_hash
+			peer.client().info().finalized_hash
 		).unwrap().1,
 		15,
 	);
@@ -1689,7 +1689,7 @@ fn grandpa_environment_respects_voting_rules() {
 	// the 3/4 environment should propose block 20 for voting
 	assert_eq!(
 		three_quarters_env.best_chain_containing(
-			peer.client().info().chain.finalized_hash
+			peer.client().info().finalized_hash
 		).unwrap().1,
 		20,
 	);
@@ -1698,7 +1698,7 @@ fn grandpa_environment_respects_voting_rules() {
 	// on the best block
 	assert_eq!(
 		default_env.best_chain_containing(
-			peer.client().info().chain.finalized_hash
+			peer.client().info().finalized_hash
 		).unwrap().1,
 		19,
 	);
@@ -1711,7 +1711,7 @@ fn grandpa_environment_respects_voting_rules() {
 	// the given base (#20).
 	assert_eq!(
 		default_env.best_chain_containing(
-			peer.client().info().chain.finalized_hash
+			peer.client().info().finalized_hash
 		).unwrap().1,
 		20,
 	);

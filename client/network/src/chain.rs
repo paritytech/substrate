@@ -17,8 +17,8 @@
 //! Blockchain access trait
 
 use sc_client::Client as SubstrateClient;
-use sp_blockchain::Error;
-use sc_client_api::{ChangesProof, StorageProof, ClientInfo, CallExecutor};
+use sp_blockchain::{Error, Info as BlockchainInfo};
+use sc_client_api::{ChangesProof, StorageProof, CallExecutor};
 use sp_consensus::{BlockImport, BlockStatus, Error as ConsensusError};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_runtime::generic::{BlockId};
@@ -29,7 +29,7 @@ use sp_core::storage::{StorageKey, ChildInfo};
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
 	/// Get blockchain info.
-	fn info(&self) -> ClientInfo<Block>;
+	fn info(&self) -> BlockchainInfo<Block>;
 
 	/// Get block status.
 	fn block_status(&self, id: &BlockId<Block>) -> Result<BlockStatus, Error>;
@@ -99,8 +99,8 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync
 {
-	fn info(&self) -> ClientInfo<Block> {
-		(self as &SubstrateClient<B, E, Block, RA>).info()
+	fn info(&self) -> BlockchainInfo<Block> {
+		(self as &SubstrateClient<B, E, Block, RA>).chain_info()
 	}
 
 	fn block_status(&self, id: &BlockId<Block>) -> Result<BlockStatus, Error> {
