@@ -590,7 +590,7 @@ pub trait Offchain {
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
 		self.extension::<OffchainExt>()
-			.expect("random_seed can be called only in the offchain worker context")
+			.expect("local_storage_set can be called only in the offchain worker context")
 			.local_storage_set(kind, key, value)
 	}
 
@@ -611,7 +611,7 @@ pub trait Offchain {
 		new_value: &[u8],
 	) -> bool {
 		self.extension::<OffchainExt>()
-			.expect("random_seed can be called only in the offchain worker context")
+			.expect("local_storage_compare_and_set can be called only in the offchain worker context")
 			.local_storage_compare_and_set(kind, key, old_value.as_ref().map(|v| v.deref()), new_value)
 	}
 
@@ -622,7 +622,7 @@ pub trait Offchain {
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
 		self.extension::<OffchainExt>()
-			.expect("random_seed can be called only in the offchain worker context")
+			.expect("local_storage_get can be called only in the offchain worker context")
 			.local_storage_get(kind, key)
 	}
 
@@ -637,7 +637,7 @@ pub trait Offchain {
 		meta: &[u8],
 	) -> Result<HttpRequestId, ()> {
 		self.extension::<OffchainExt>()
-			.expect("random_seed can be called only in the offchain worker context")
+			.expect("http_request_start can be called only in the offchain worker context")
 			.http_request_start(method, uri, meta)
 	}
 
@@ -649,7 +649,7 @@ pub trait Offchain {
 		value: &str,
 	) -> Result<(), ()> {
 		self.extension::<OffchainExt>()
-			.expect("random_seed can be called only in the offchain worker context")
+			.expect("http_request_add_header can be called only in the offchain worker context")
 			.http_request_add_header(request_id, name, value)
 	}
 
@@ -666,7 +666,7 @@ pub trait Offchain {
 		deadline: Option<Timestamp>,
 	) -> Result<(), HttpError> {
 		self.extension::<OffchainExt>()
-			.expect("random_seed can be called only in the offchain worker context")
+			.expect("http_request_write_body can be called only in the offchain worker context")
 			.http_request_write_body(request_id, chunk, deadline)
 	}
 
@@ -683,7 +683,7 @@ pub trait Offchain {
 		deadline: Option<Timestamp>,
 	) -> Vec<HttpRequestStatus> {
 		self.extension::<OffchainExt>()
-			.expect("random_seed can be called only in the offchain worker context")
+			.expect("http_response_wait can be called only in the offchain worker context")
 			.http_response_wait(ids, deadline)
 	}
 
@@ -693,7 +693,7 @@ pub trait Offchain {
 	/// NOTE response headers have to be read before response body.
 	fn http_response_headers(&mut self, request_id: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.extension::<OffchainExt>()
-			.expect("random_seed can be called only in the offchain worker context")
+			.expect("http_response_headers can be called only in the offchain worker context")
 			.http_response_headers(request_id)
 	}
 
@@ -712,7 +712,7 @@ pub trait Offchain {
 		deadline: Option<Timestamp>,
 	) -> Result<u32, HttpError> {
 		self.extension::<OffchainExt>()
-			.expect("random_seed can be called only in the offchain worker context")
+			.expect("http_response_read_body can be called only in the offchain worker context")
 			.http_response_read_body(request_id, buffer, deadline)
 			.map(|r| r as u32)
 	}
