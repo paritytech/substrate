@@ -1484,11 +1484,16 @@ impl<Block> sc_client_api::backend::Backend<Block, Blake2Hasher> for Backend<Blo
 		Some(self.offchain_storage.clone())
 	}
 
-	fn revert(&self, n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
+	fn revert(&self, n: NumberFor<Block>, revert_finalized: bool) -> ClientResult<NumberFor<Block>> {
 		let mut best = self.blockchain.info().best_number;
 		let finalized = self.blockchain.info().finalized_number;
+
 		let revertible = best - finalized;
-		let n = if revertible < n { revertible } else { n };
+		let n = if !revert_finalized && revertible < n {
+			revertible
+		} else {
+			n
+		};
 
 		for c in 0 .. n.saturated_into::<u64>() {
 			if best.is_zero() {
@@ -1506,12 +1511,18 @@ impl<Block> sc_client_api::backend::Backend<Block, Blake2Hasher> for Backend<Blo
 					let hash = self.blockchain.hash(best)?.ok_or_else(
 						|| sp_blockchain::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
+
+					let update_finalized = best < finalized;
+
 					let key = utils::number_and_hash_to_lookup_key(best.clone(), &hash)?;
 					transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
+					if update_finalized {
+						transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &key);
+					}
 					transaction.delete(columns::KEY_LOOKUP, removed.hash().as_ref());
 					children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, hash);
 					self.storage.db.write(transaction).map_err(db_err)?;
-					self.blockchain.update_meta(hash, best, true, false);
+					self.blockchain.update_meta(hash, best, true, update_finalized);
 					self.blockchain.leaves.write().revert(removed.hash().clone(), removed.number().clone(), removed.parent_hash().clone());
 				}
 				None => return Ok(c.saturated_into::<NumberFor<Block>>())

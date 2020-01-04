@@ -286,7 +286,11 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// Attempts to revert the chain by `n` blocks.
 	///
 	/// Returns the number of blocks that were successfully reverted.
-	fn revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>>;
+	fn revert(
+		&self,
+		n: NumberFor<Block>,
+		revert_finalized: bool,
+	) -> sp_blockchain::Result<NumberFor<Block>>;
 
 	/// Insert auxiliary data into key-value store.
 	fn insert_aux<
