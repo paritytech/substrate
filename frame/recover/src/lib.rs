@@ -1,5 +1,38 @@
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
+
+use sp_std::prelude::*;
+use sp_runtime::{
+	traits::{StaticLookup, Dispatchable, SaturatedConversion, Zero},
+	DispatchError, DispatchResult
+};
+use codec::{Encode, Decode};
+
+use frame_support::{
+	decl_module, decl_event, decl_storage, decl_error, ensure,
+	Parameter, RuntimeDebug,
+	weights::{SimpleDispatchInfo, GetDispatchInfo, PaysFee, WeighData, Weight, ClassifyDispatch, DispatchClass},
+	traits::{Currency, ReservableCurrency, Get},
+};
+use frame_system::{self as system, ensure_signed, ensure_root};
+
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {
@@ -33,18 +66,9 @@ pub trait Trait: frame_system::Trait {
 	type RecoveryDeposit: Get<BalanceOf<Self>>;
 }
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
-pub enum RecoveryStep {
-	Active,
-	Succeeded,
-	Failed,
-}
-
 /// An open multisig operation.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
 pub struct RecoveryStatus<BlockNumber, Balance, AccountId> {
-	/// Denotes if the recovery process is active.
-	step: RecoveryStep,
 	/// The last block when someone has tried to recover the account
 	last: BlockNumber,
 	/// The amount held in reserve of the `depositor`, to be returned once this setup is closed.
@@ -57,7 +81,7 @@ pub struct RecoveryStatus<BlockNumber, Balance, AccountId> {
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
 pub struct RecoverySetup<BlockNumber, Balance, AccountId> {
 	/// The minimum amount of time between friend approvals.
-	delay_period: BlockNumber
+	delay_period: BlockNumber,
 	/// The amount held in reserve of the `depositor`, to be returned once this setup is closed.
 	deposit: Balance,
 	/// The list of friends which can help recover an account. Always sorted.
@@ -81,7 +105,7 @@ decl_storage! {
 		/// The final list of recovered accounts.
 		///
 		/// Map from the recovered account to the user who can access it.
-		pub Recovered get(fn recovered_account): T::AccountId => Option<T::AccountId>;
+		pub Recovered get(fn recovered_account): map T::AccountId => Option<T::AccountId>;
 	}
 }
 
@@ -104,7 +128,7 @@ decl_event! {
 }
 
 decl_error! {
-	pub enum Error {
+	pub enum Error for Module<T: Trait> {
 		/// User is not allowed to make a call on behalf of this account
 		NotAllowed,
 		/// Threshold must be greater than zero
@@ -140,16 +164,9 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
-
+		
 		/// Send a call through a recovered account.
-		///
-		/// The dispatch origin for this call must be _Signed_.
-		///
-		/// # <weight>
-		/// - The weight of the `call`.
-		/// # </weight>
-		#[weight = <Passthrough<<T as Trait>::Call>>::new()]
-		fn as_recovered(origin, account: AccountId, call: Box<<T as Trait>::Call>) -> DispatchResult {
+		fn as_recovered(origin, account: T::AccountId, call: Box<<T as Trait>::Call>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check `who` is allowed to make a call on behalf of `account`
 			ensure!(Self::recovered_account(&account) == Some(who), Error::<T>::NotAllowed);
@@ -157,45 +174,46 @@ decl_module! {
 		}
 		
 		/// Allow Sudo to bypass the recovery process and set an alias account.
-		fn set_recovered_account(origin, rescuee: AccountId, rescuer: AccountId) {
+		fn set_recovered_account(origin, rescuee: T::AccountId, rescuer: T::AccountId) {
 			ensure_root(origin)?;
 
 			// Create the recovery storage item.
-			<Recovered<T>>::insert(rescuee, rescuer);
+			<Recovered<T>>::insert(&rescuee, &rescuer);
 
 			Self::deposit_event(RawEvent::AccountRecovered(rescuer, rescuee));
 		}
-
+		
 		/// Create a recovery process for your account.
 		fn create_recovery(origin, friends: Vec<T::AccountId>, threshold: u16, delay_period: T::BlockNumber) {
 			let who = ensure_signed(origin)?;
 			// Check account is not already set up for recovery
-			ensure!(<RecoverySetups<T>>::exists(&account), Error::<T>::AlreadySetup);
+			ensure!(<RecoverySetups<T>>::exists(&who), Error::<T>::AlreadySetup);
 			// Check user input is valid
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			ensure!(!friends.is_empty(), Error::<T>::ZeroFriends);
-			ensure!(friends.len() < max_sigs, Error::<T>::MaxFriends);
-			ensure!(Self::is_sorted(friends), Error::<T>::NotSorted);
+			let max_friends = T::MaxFriends::get() as usize;
+			ensure!(friends.len() < max_friends, Error::<T>::MaxFriends);
+			ensure!(Self::is_sorted(&friends), Error::<T>::NotSorted);
 
 			// Total deposit is base fee + number of friends * factor fee
-			let total_deposit = T::SetupDepositBase::get() + T::SetupDepositFactor::get() * friends.len();
+			let total_deposit = T::SetupDepositBase::get() + T::SetupDepositFactor::get() * friends.len().saturated_into();
 			// Reserve the deposit
 			T::Currency::reserve(&who, total_deposit)?;
 
 			// Create the recovery setup
 			let recovery_setup = RecoverySetup {
-				delay_period
+				delay_period,
 				deposit: total_deposit,
 				friends,
 				threshold,
 			};
 
-			<RecoverySetups<T>>::insert(who, recovery_setup);
+			<RecoverySetups<T>>::insert(&who, recovery_setup);
 
 			Self::deposit_event(RawEvent::RecoveryCreated(who));
 		}
-
-		fn initiate_recovery(origin, account: AccountId) {
+		
+		fn initiate_recovery(origin, account: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Check that the account has a recovery setup
 			ensure!(<RecoverySetups<T>>::exists(&account), Error::<T>::NotSetup);
@@ -206,7 +224,6 @@ decl_module! {
 			T::Currency::reserve(&who, recovery_deposit)?;
 			// Create an active recovery status
 			let recovery_status = RecoveryStatus {
-				step: RecoveryStep::Active,
 				last: T::BlockNumber::zero(),
 				deposit: recovery_deposit,
 				friends: vec![],
@@ -216,8 +233,8 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::RecoveryInitiated(who, account));
 		}
-
-		fn vouch_recovery(origin, rescuee: AccountId, rescuer: AccountId) {
+		
+		fn vouch_recovery(origin, rescuee: T::AccountId, rescuer: T::AccountId) {
 			let who = ensure_signed(origin)?;
 
 			// Check that there is a recovery setup for this rescuee
@@ -225,17 +242,17 @@ decl_module! {
 				// Check that the recovery process has been initiated for this rescuer
 				if let Some(mut active_recovery) = Self::active_recovery(&rescuee, &rescuer) {
 					// Make sure the voter is a friend
-					ensure!(Self::is_friend(recovery_setup.friends, &who), Error::<T>::NotFriend);
+					ensure!(Self::is_friend(&recovery_setup.friends, &who), Error::<T>::NotFriend);
 					// Make sure the delay period has passed
 					let current_block_number = <system::Module<T>>::block_number();
 					ensure!(
-						active_recovery.last + recovery_setup.delay_period >= current_block_number),
+						active_recovery.last + recovery_setup.delay_period >= current_block_number,
 						Error::<T>::DelayPeriod
 					);
 					// Either insert the vouch, or return an error that the user already vouched.
 					match active_recovery.friends.binary_search(&who) {
-						Ok(pos) => Err(Error<T>::AlreadyVouched)?,
-						Err(pos) => active_recovery.friends.insert(pos, who),
+						Ok(_pos) => Err(Error::<T>::AlreadyVouched)?,
+						Err(pos) => active_recovery.friends.insert(pos, who.clone()),
 					}
 					// Update the last vote time
 					active_recovery.last = current_block_number;
@@ -250,24 +267,24 @@ decl_module! {
 				Err(Error::<T>::NotSetup)?
 			}
 		}
-
+		
 		/// Allow a rescuer to claim their recovered account.
 		fn claim_recovery(origin, account: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Check that there is a recovery setup for this rescuee
-			if let Some(recovery_setup) = Self::recovery_setup(&rescuee) {
+			if let Some(recovery_setup) = Self::recovery_setup(&account) {
 				// Check that the recovery process has been initiated for this rescuer
-				if let Some(active_recovery) = Self::active_recovery(&rescuee, &rescuer) {
+				if let Some(active_recovery) = Self::active_recovery(&account, &who) {
 					// Make sure the threshold is met
 					ensure!(
-						recovery_setup.threshold <= active_recovery.friends.len(),
+						recovery_setup.threshold as usize <= active_recovery.friends.len(),
 						Error::<T>::Threshold
 					);
 
 					// Create the recovery storage item
-					<Recovered<T>>::insert(&account, &who)
+					<Recovered<T>>::insert(&account, &who);
 
-					Self::deposit_event(RawEvent::AccountRecovered(who, rescuee));
+					Self::deposit_event(RawEvent::AccountRecovered(who, account));
 				} else {
 					Err(Error::<T>::NotStarted)?
 				}
@@ -275,21 +292,21 @@ decl_module! {
 				Err(Error::<T>::NotSetup)?
 			}
 		}
-
+		
 		/// Close an active recovery process.
 		///
 		/// Can only be called by the account trying to be recovered.
-		fn close_recovery(origin, rescuer) {
+		fn close_recovery(origin, rescuer: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			if let Some(active_recovery) = <ActiveRecoveries<T>>::take(&who, &rescuer) {
 				// Move the reserved funds from the rescuer to the rescuee account.
 				// Acts like a slashing mechanism for those who try to maliciously recover accounts.
-				T::Currency::repatriate_reserved(&rescuer, &who, active_recovery.deposit);
+				let _ = T::Currency::repatriate_reserved(&rescuer, &who, active_recovery.deposit);
 			} else {
 				Err(Error::<T>::NotStarted)?
 			}
 		}
-
+		
 		/// Remove the recovery process for your account.
 		///
 		/// The user must make sure to call `close_recovery` on all active recovery attempts
@@ -297,26 +314,26 @@ decl_module! {
 		fn remove_recovery(origin) {
 			let who = ensure_signed(origin)?;
 			// Check there are no active recoveries
-			let active_recoveries = <ActiveRecoveries<T>>::iter_prefix(&who);
+			let mut active_recoveries = <ActiveRecoveries<T>>::iter_prefix(&who);
 			ensure!(active_recoveries.next().is_none(), Error::<T>::StillActive);
 			// Check account has recovery setup
-			if let Some(recovery_setup) = <RecoverySetups<T>>::take(&account) {
+			if let Some(recovery_setup) = <RecoverySetups<T>>::take(&who) {
 				T::Currency::unreserve(&who, recovery_setup.deposit);
 
-				Self::deposit_event(RawEvent::RecoveryRemoved);
+				Self::deposit_event(RawEvent::RecoveryRemoved(who));
 			}
 		}
 	}
 }
 
 impl<T: Trait> Module<T> {
-
 	/// Check that friends list is sorted.
-	fn is_sorted(friends: Vec<T::AccountId>) -> bool {
+	fn is_sorted(friends: &Vec<T::AccountId>) -> bool {
 		friends.windows(2).all(|w| w[0] <= w[1])
 	}
 
-	fn is_friend(friends: Vec<T::AccountId>, friend: T::AccountId) -> bool {
+	/// Check that a user is a friend in the friends list.
+	fn is_friend(friends: &Vec<T::AccountId>, friend: &T::AccountId) -> bool {
 		friends.binary_search(&friend).is_ok()
 	}
 }
