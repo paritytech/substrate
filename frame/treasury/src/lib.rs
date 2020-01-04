@@ -163,7 +163,7 @@ pub type ProposalIndex = u32;
 pub struct Proposal<AccountId, Balance> {
 	/// The account proposing it.
 	proposer: AccountId,
-	/// The (total) amount that should be pad if the proposal is accepted.
+	/// The (total) amount that should be paid if the proposal is accepted.
 	value: Balance,
 	/// The account to whom the payment should be made if the proposal is accepted.
 	beneficiary: AccountId,
