@@ -119,7 +119,7 @@ pub trait Trait: frame_system::Trait {
 	/// Origin from which rejections must come.
 	type RejectOrigin: EnsureOrigin<Self::Origin>;
 
-	/// Origin from which tippers must come. This must be sorted.
+	/// Origin from which tippers must come.
 	type Tippers: Contains<Self::AccountId>;
 
 	/// The period for which a tip remains open after is has achieved threshold tippers.
