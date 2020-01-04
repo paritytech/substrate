@@ -25,11 +25,23 @@
 //! ## Overview
 //!
 //! The Treasury Module itself provides the pot to store funds, and a means for stakeholders to
-//! propose, approve, and deny expenditures.  The chain will need to provide a method (e.g.
+//! propose, approve, and deny expenditures.   The chain will need to provide a method (e.g.
 //! inflation, fees) for collecting funds.
 //!
 //! By way of example, the Council could vote to fund the Treasury with a portion of the block
 //! reward and use the funds to pay developers.
+//!
+//! ### Tipping
+//!
+//! A separate subsystem exists to allow for an agile "tipping" process, whereby a reward may be
+//! given without first having a pre-determined stakeholder group come to consensus on how much
+//! should be paid.
+//!
+//! A group of `Tippers` is determined through the config `Trait`. After half of these have declared
+//! some amount that they believe a particular reported reason deserves, then a countfown period is
+//! entered where any remaining members can declare their tip amounts also. After the close of the
+//! countdown period, the median of all declared tips is paid to the reported beneficiary, along
+//! with any finders fee, in case of a public (and bonded) original report.
 //!
 //! ### Terminology
 //!
@@ -41,15 +53,33 @@
 //! respectively.
 //! - **Pot:** Unspent funds accumulated by the treasury module.
 //!
+//! Tipping protocol:
+//! - **Tipping:** The process of gathering declarations of amounts to tip and taking the median
+//!   amount to be transferred from the treasury to a beneficiary account.
+//! - **Tip Reason:** The reason for a tip; generally a URL which embodies or explains why a
+//!   particular individual (identified by an account ID) is worthy of a recognition by the
+//!   treasury.
+//! - **Finder:** The original public reporter of some reason for tipping.
+//! - **Finders Fee:** Some proportion of the tip amount that is paid to the reporter of the tip,
+//!   rather than the main beneficiary.
+//!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
 //!
+//! General spending/proposal protocol:
 //! - `propose_spend` - Make a spending proposal and stake the required deposit.
 //! - `set_pot` - Set the spendable balance of funds.
 //! - `configure` - Configure the module's proposal requirements.
 //! - `reject_proposal` - Reject a proposal, slashing the deposit.
 //! - `approve_proposal` - Accept the proposal, returning the deposit.
+//!
+//! Tipping protocol:
+//! - `report_awesome` - Report something worthy of a tip and register for a finders fee.
+//! - `retract_tip` - Retract a previous (finders fee registered) report.
+//! - `tip_new` - Report an item worthy of a tip and declare a specific amount to tip.
+//! - `tip` - Declare or redeclare an amount to tip for a particular reason.
+//! - `close_tip` - Close and pay out a tip.
 //!
 //! ## GenesisConfig
 //!
@@ -321,23 +351,23 @@ decl_module! {
 			Self::deposit_event(RawEvent::NewTip(hash));
 		}
 
-		/// Report something `reason` that deserves a tip and claim any eventual the finder's fee.
+		/// Retract a prior tip-report from `report_awesome`, and cancel the process of tipping.
 		///
-		/// The dispatch origin for this call must be _Signed_.
+		/// If successful, the original deposit will be unreserved.
 		///
-		/// Payment: `TipReportDepositBase` will be reserved from the origin account, as well as
-		/// `TipReportDepositPerByte` for each byte in `reason`.
+		/// The dispatch origin for this call must be _Signed_ and the tip identified by `hash`
+		/// must have been reported by the signing account through `report_awesome` (and not
+		/// through `tip_new`).
 		///
-		/// - `reason`: The reason for, or the thing that deserves, the tip; generally this will be
-		///   a UTF-8-encoded URL.
-		/// - `who`: The account which should be credited for the tip.
+		/// - `hash`: The identity of the open tip for which a tip value is declared. This is formed
+		///   as the hash of the tuple of the original tip `reason` and the beneficiary account ID.
 		///
-		/// Emits `NewTip` if successful.
+		/// Emits `TipRetracted` if successful.
 		///
 		/// # <weight>
-		/// - `O(R)` where `R` length of `reason`.
+		/// - `O(T)`
 		/// - One balance operation.
-		/// - One storage mutation (codec `O(R)`).
+		/// - Two storage removals (one read, codec `O(T)`).
 		/// - One event.
 		/// # </weight>
 		fn retract_tip(origin, hash: T::Hash) {
@@ -366,8 +396,9 @@ decl_module! {
 		/// Emits `NewTip` if successful.
 		///
 		/// # <weight>
-		/// - `O(R)` where `R` length of `reason`.
-		/// - One storage mutation (codec `O(R)`).
+		/// - `O(R + T)` where `R` length of `reason`, `T` is the number of tippers. `T` is
+		///   naturally capped as a membership set, `R` is limited through transaction-size.
+		/// - Two storage insertions (codecs `O(R)`, `O(T)`), one read `O(1)`.
 		/// - One event.
 		/// # </weight>
 		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T>) {
@@ -399,8 +430,8 @@ decl_module! {
 		/// has started.
 		///
 		/// # <weight>
-		/// - `O(R)` where `R` is the original length of `reason`.
-		/// - One storage mutation (codec `O(R)`).
+		/// - `O(T)`
+		/// - One storage mutation (codec `O(T)`), one storage read `O(1)`.
 		/// - Up to one event.
 		/// # </weight>
 		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T>) {
@@ -424,8 +455,8 @@ decl_module! {
 		///   as the hash of the tuple of the original tip `reason` and the beneficiary account ID.
 		///
 		/// # <weight>
-		/// - `O(R)` where `R` is the original length of `reason`.
-		/// - One storage retrieval and removal (codec `O(R)`).
+		/// - `O(T)`
+		/// - One storage retrieval (codec `O(T)`) and two removals.
 		/// - Up to three balance operations.
 		/// # </weight>
 		fn close_tip(origin, hash: T::Hash) {
@@ -532,6 +563,8 @@ impl<T: Trait> Module<T> {
 
 	/// Given a mutable reference to an `OpenTip`, insert the tip into it and check whether it
 	/// closes, if so, then deposit the relevant event and set closing accordingly.
+	///
+	/// `O(T)` and one storage access.
 	fn insert_tip_and_check_closing(
 		tip: &mut OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
 		tipper: T::AccountId,
@@ -551,6 +584,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Remove any non-members of `Tippers` from a `tips` vectr. `O(T)`.
 	fn retain_active_tips(tips: &mut Vec<(T::AccountId, BalanceOf<T>)>) {
 		let members = T::Tippers::sorted_members();
 		let mut members_iter = members.iter();
