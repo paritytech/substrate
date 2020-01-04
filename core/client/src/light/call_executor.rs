@@ -133,7 +133,7 @@ where
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
-		let call_result = self.call(id, "version", &[], ExecutionStrategy::NativeElseWasm, NeverOffchainExt::new())?;
+		let call_result = self.call(id, "Core_version", &[], ExecutionStrategy::NativeElseWasm, NeverOffchainExt::new())?;
 		RuntimeVersion::decode(&mut call_result.as_slice())
 			.ok_or_else(|| ClientErrorKind::VersionInvalid.into())
 	}

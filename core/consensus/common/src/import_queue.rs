@@ -420,7 +420,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 		verifier: Arc<V>,
 		block_import: SharedBlockImport<B>,
 	) -> Sender<BlockImportWorkerMsg<B>> {
-		let (sender, port) = channel::bounded(4);
+		let (sender, port) = channel::unbounded();
 		let _ = thread::Builder::new()
 			.name("ImportQueueWorker".into())
 			.spawn(move || {
