@@ -1145,7 +1145,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
 	/// successfully reverted.
 	pub fn revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(self.backend.revert(n)?)
+		Ok(self.backend.revert(n, false)?)
+	}
+
+	/// Attempts to revert the chain by `n` blocks disregarding finality. Returns the number of
+	/// blocks that were successfully reverted.
+	pub fn unsafe_revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
+		Ok(self.backend.revert(n, true)?)
 	}
 
 	/// Get usage info about current client.

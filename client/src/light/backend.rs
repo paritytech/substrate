@@ -213,7 +213,11 @@ impl<S, Block, H> ClientBackend<Block, H> for Backend<S, H> where
 		Ok(GenesisOrUnavailableState::Unavailable)
 	}
 
-	fn revert(&self, _n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
+	fn revert(
+		&self,
+		_n: NumberFor<Block>,
+		_revert_finalized: bool,
+	) -> ClientResult<NumberFor<Block>> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
