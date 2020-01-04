@@ -97,7 +97,7 @@ impl<A> FindAuthor<A> for () {
 
 /// A trait for verifying the seal of a header and returning the author.
 pub trait VerifySeal<Header, Author> {
-	/// Verify a header and r;-89-9;~eturn the author, if any.
+	/// Verify a header and return the author, if any.
 	fn verify_seal(header: &Header) -> Result<Option<Author>, &'static str>;
 }
 
