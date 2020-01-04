@@ -211,7 +211,8 @@ decl_storage! {
 		pub Tips get(fn tips): map hasher(twox_64_concat) T::Hash
 			=> Option<OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>>;
 
-		/// Simple preimage lookup from the reason's hash to the original data.
+		/// Simple preimage lookup from the reason's hash to the original data. Again, has an
+		/// insecure enumerable hash since the key is guaranteed to be the result of a secure hash.
 		pub Reasons get(fn reasons): map hasher(twox_64_concat) T::Hash => Option<Vec<u8>>;
 	}
 	add_extra_genesis {
