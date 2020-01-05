@@ -389,7 +389,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		) -> CallResult<R, Exec::Error>
 	{
 		let changes_tries_enabled = self.changes_trie_state.is_some();
-		self.overlay.collect_extrinsics(changes_tries_enabled);
+		self.overlay.set_collect_extrinsics(changes_tries_enabled);
 
 		let result = {
 			let orig_prospective = self.overlay.prospective.clone();

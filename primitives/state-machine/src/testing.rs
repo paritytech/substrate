@@ -76,7 +76,7 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 		let mut overlay = OverlayedChanges::default();
 		let changes_trie_config = storage.top.get(CHANGES_TRIE_CONFIG)
 			.and_then(|v| Decode::decode(&mut &v[..]).ok());
-		overlay.collect_extrinsics(changes_trie_config.is_some());
+		overlay.set_collect_extrinsics(changes_trie_config.is_some());
 
 		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
 		assert!(storage.children.keys().all(|key| is_child_storage_key(key)));

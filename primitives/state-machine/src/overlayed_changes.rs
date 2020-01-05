@@ -89,7 +89,7 @@ impl OverlayedChanges {
 	}
 
 	/// Ask to collect/not to collect extrinsics indices where key(s) has been changed.
-	pub fn collect_extrinsics(&mut self, collect_extrinsics: bool) {
+	pub fn set_collect_extrinsics(&mut self, collect_extrinsics: bool) {
 		self.collect_extrinsics = collect_extrinsics;
 	}
 
@@ -509,7 +509,7 @@ mod tests {
 	#[test]
 	fn extrinsic_changes_are_collected() {
 		let mut overlay = OverlayedChanges::default();
-		overlay.collect_extrinsics(true);
+		overlay.set_collect_extrinsics(true);
 
 		overlay.set_storage(vec![100], Some(vec![101]));
 
