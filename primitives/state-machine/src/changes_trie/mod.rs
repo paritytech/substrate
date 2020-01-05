@@ -245,7 +245,7 @@ pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 	let config_range = ConfigurationRange {
 		config: &state.config,
 		zero: state.zero.clone(),
-		end: if is_config_changed { Some(parent.number.clone() + One::one()) } else { None },
+		end: if is_config_changed { Some(block.clone()) } else { None },
 	};
 
 	// storage errors are considered fatal (similar to situations when runtime fetches values from storage)
