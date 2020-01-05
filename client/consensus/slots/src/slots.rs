@@ -37,7 +37,6 @@ pub fn duration_now() -> Duration {
 	))
 }
 
-
 /// A `Duration` with a sign (before or after).  Immutable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct SignedDuration {
@@ -63,6 +62,8 @@ impl SignedDuration {
 
 /// Returns the duration until the next slot, based on current duration since
 pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
+	// KUSAMA HOTFIX: poll the slot 10 times as often since we might be in a time warp.
+	let slot_duration = slot_duration / 10;
 	let remaining_full_millis = slot_duration - (now.as_millis() as u64 % slot_duration) - 1;
 	Duration::from_millis(remaining_full_millis)
 }
