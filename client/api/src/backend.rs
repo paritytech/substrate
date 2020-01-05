@@ -328,7 +328,7 @@ pub trait PrunableStateChangesTrieStorage<Block: BlockT, H: Hasher>:
 {
 	/// Get reference to StateChangesTrieStorage.
 	fn storage(&self) -> &dyn StateChangesTrieStorage<H, NumberFor<Block>>;
-	/// Get coniguration at given block.
+	/// Get configuration at given block.
 	fn configuration_at(&self, at: &BlockId<Block>) -> sp_blockchain::Result<ChangesTrieConfigurationRange<Block>>;
 	/// Get end block (inclusive) of oldest pruned max-level (or skewed) digest trie blocks range.
 	/// It is guaranteed that we have no any changes tries before (and including) this block.
