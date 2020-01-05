@@ -288,10 +288,10 @@ decl_module! {
 				if let Some(active_recovery) = Self::active_recovery(&account, &who) {
 					// Make sure the delay period has passed
 					let current_block_number = <system::Module<T>>::block_number();
-					ensure!(
-						active_recovery.created + recovery_config.delay_period >= current_block_number,
-						Error::<T>::DelayPeriod
-					);
+					let recoverable_block_number = active_recovery.created
+						.checked_add(&recovery_config.delay_period)
+						.ok_or(Error::<T>::Overflow)?;
+					ensure!(recoverable_block_number <= current_block_number, Error::<T>::DelayPeriod);
 					// Make sure the threshold is met
 					ensure!(
 						recovery_config.threshold as usize <= active_recovery.friends.len(),
