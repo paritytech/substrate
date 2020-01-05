@@ -373,10 +373,10 @@ decl_module! {
 		/// # </weight>
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
-
 			let tip = Tips::<T>::get(&hash).ok_or(Error::<T>::UnknownTip)?;
 			let (finder, deposit) = tip.finder.ok_or(Error::<T>::NotFinder)?;
 			ensure!(finder == who, Error::<T>::NotFinder);
+
 			Reasons::<T>::remove(&tip.reason);
 			Tips::<T>::remove(&hash);
 			let _ = T::Currency::unreserve(&who, deposit);
