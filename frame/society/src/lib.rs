@@ -704,7 +704,7 @@ decl_module! {
 		fn found(origin, founder: T::AccountId) {
 			T::FounderOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
-			Self::add_member(&founder)?;
+			Self::add_member(&founder);
 			<Head<T, I>>::put(&founder);
 			Self::deposit_event(RawEvent::Founded(founder));
 		}
@@ -741,7 +741,7 @@ decl_module! {
 			
 			if forgive {
 				// Add member back to society.
-				let _ = Self::add_member(&who);
+				Self::add_member(&who);
 			} else {
 				// Cancel a suspended member's membership, remove their payouts.
 				<Payouts<T, I>>::remove(&who);
@@ -821,7 +821,7 @@ decl_module! {
 							+ Self::lock_duration(Self::members().len() as u32);
 						Self::pay_accepted_candidate(&who, value, kind, maturity);
 						// Add user as a member!
-						let _ = Self::add_member(&who);
+						Self::add_member(&who);
 					}
 					Judgement::Reject => {
 						// Founder has rejected this candidate
@@ -1002,16 +1002,16 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			.is_ok()
 	}
 
-	/// Add a member to the sorted members list. Will not add a duplicate member.
-	fn add_member(m: &T::AccountId) -> DispatchResult {
+	/// Add a member to the sorted members list.
+	fn add_member(m: &T::AccountId) {
 		<Members<T, I>>::mutate(|members| {
 			match members.binary_search(m) {
-				Ok(_) => Err(Error::<T, I>::AlreadyMember)?,
 				Err(i) => {
 					members.insert(i, m.clone());
 					T::MembershipChanged::change_members_sorted(&[m.clone()], &[], members);
-					Ok(())
-				}
+				},
+				// User is already a member, do nothing.
+				Ok(_) => (),
 			}
 		})
 	}

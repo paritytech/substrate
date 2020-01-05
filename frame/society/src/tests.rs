@@ -244,7 +244,7 @@ fn slash_payout_multi_works() {
 fn suspended_member_lifecycle_works() {
 	EnvBuilder::new().execute(|| {
 		// Add 20 to members, who is not the head and can be suspended/removed.
-		assert_ok!(Society::add_member(&20));
+		Society::add_member(&20);
 		assert_eq!(<Members<Test>>::get(), vec![10, 20]);
 		assert_eq!(Strikes::<Test>::get(20), 0);
 		assert_eq!(<SuspendedMembers<Test>>::get(20), None);
@@ -500,7 +500,7 @@ fn head_cannot_be_removed() {
 fn challenges_work() {
 	EnvBuilder::new().execute(|| {
 		// Add some members
-		assert_ok!(Society::add_member(&20));
+		Society::add_member(&20);
 		assert_ok!(Society::add_member(&30));
 		assert_ok!(Society::add_member(&40));
 		// Check starting point
@@ -544,7 +544,7 @@ fn challenges_work() {
 fn bad_vote_slash_works() {
 	EnvBuilder::new().execute(|| {
 		// Add some members
-		assert_ok!(Society::add_member(&20));
+		Society::add_member(&20);
 		assert_ok!(Society::add_member(&30));
 		assert_ok!(Society::add_member(&40));
 		// Create some payouts
@@ -598,7 +598,7 @@ fn user_cannot_bid_twice() {
 fn vouching_handles_removed_member_with_bid() {
 	EnvBuilder::new().execute(|| {
 		// Add a member
-		assert_ok!(Society::add_member(&20));
+		Society::add_member(&20);
 		// Have that member vouch for a user
 		assert_ok!(Society::vouch(Origin::signed(20), 30, 1000, 100));
 		// That user is now a bid and the member is vouching
@@ -622,7 +622,7 @@ fn vouching_handles_removed_member_with_bid() {
 fn vouching_handles_removed_member_with_candidate() {
 	EnvBuilder::new().execute(|| {
 		// Add a member
-		assert_ok!(Society::add_member(&20));
+		Society::add_member(&20);
 		// Have that member vouch for a user
 		assert_ok!(Society::vouch(Origin::signed(20), 30, 1000, 100));
 		// That user is now a bid and the member is vouching
