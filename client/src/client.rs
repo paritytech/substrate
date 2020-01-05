@@ -413,7 +413,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			return Err(sp_blockchain::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()));
 		}
 
-		let (storage, configs) = match self.require_changes_trie(first, last_hash, true).ok() {
+		let (storage, configs) = match self.require_changes_trie(first, last_hash, false).ok() {
 			Some((storage, configs)) => (storage, configs),
 			None => return Ok(None),
 		};
@@ -442,7 +442,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> sp_blockchain::Result<Vec<(NumberFor<Block>, u32)>> {
 		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
 		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
-		let (storage, configs) = self.require_changes_trie(first, last_hash, false)?;
+		let (storage, configs) = self.require_changes_trie(first, last_hash, true)?;
 
 		let mut result = Vec::new();
 		let best_number = self.backend.blockchain().info().best_number;
@@ -564,7 +564,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		let first_number = self.backend.blockchain()
 			.expect_block_number_from_id(&BlockId::Hash(first))?;
-		let (storage, configs) = self.require_changes_trie(first_number, last, false)?;
+		let (storage, configs) = self.require_changes_trie(first_number, last, true)?;
 		let min_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(min))?;
 
 		let recording_storage = AccessedRootsRecorder::<Block> {
@@ -660,14 +660,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Returns changes trie storage and all configurations that have been active in the range [first; last].
 	///
 	/// Configurations are returned in descending order (and obviously never overlap).
-	/// If prefer_configs is true, returns maximal consequent configurations ranges, starting from last and
+	/// If fail_if_disabled is false, returns maximal consequent configurations ranges, starting from last and
 	/// stopping on either first, or when CT have been disabled.
-	/// Fails if or an error if it is not supported.
+	/// If fail_if_disabled is true, fails when there's a subrange where CT have been disabled
+	/// inside first..last blocks range.
 	fn require_changes_trie(
 		&self,
 		first: NumberFor<Block>,
 		last: Block::Hash,
-		prefer_configs: bool,
+		fail_if_disabled: bool,
 	) -> sp_blockchain::Result<(
 		&dyn PrunableStateChangesTrieStorage<Block, Blake2Hasher>,
 		Vec<(NumberFor<Block>, Option<(NumberFor<Block>, Block::Hash)>, ChangesTrieConfiguration)>,
@@ -683,7 +684,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			let config_range = storage.configuration_at(&BlockId::Hash(current))?;
 			match config_range.config {
 				Some(config) => configs.push((config_range.zero.0, config_range.end, config)),
-				None if prefer_configs => return Ok((storage, configs)),
+				None if !fail_if_disabled => return Ok((storage, configs)),
 				None => return Err(sp_blockchain::Error::ChangesTriesNotSupported),
 			}
 
