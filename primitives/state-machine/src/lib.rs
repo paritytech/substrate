@@ -1010,4 +1010,38 @@ mod tests {
 			vec![(b"value2".to_vec(), None)],
 		);
 	}
+
+	#[test]
+	fn child_storage_uuid() {
+		const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
+		const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2");
+		use crate::trie_backend::tests::test_trie;
+		let mut overlay = OverlayedChanges::default();
+
+		let subtrie1 = ChildStorageKey::from_slice(b":child_storage:default:sub_test1").unwrap();
+		let subtrie2 = ChildStorageKey::from_slice(b":child_storage:default:sub_test2").unwrap();
+		let mut transaction = {
+			let backend = test_trie();
+			let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
+			let mut ext = Ext::new(
+				&mut overlay,
+				&backend,
+				Some(&changes_trie_storage),
+				None,
+			);
+			ext.set_child_storage(subtrie1, CHILD_INFO_1, b"abc".to_vec(), b"def".to_vec());
+			ext.set_child_storage(subtrie2, CHILD_INFO_2, b"abc".to_vec(), b"def".to_vec());
+			ext.storage_root();
+			(ext.transaction().0).0
+		};
+		let mut duplicate = false;
+		for (k, (value, rc)) in transaction.drain().iter() {
+			// look for a key inserted twice: transaction rc is 2
+			if *rc == 2 {
+				duplicate = true;
+				println!("test duplicate for {:?} {:?}", k, value);
+			}
+		}
+		assert!(!duplicate);
+	}
 }
