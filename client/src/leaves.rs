@@ -158,12 +158,29 @@ impl<H, N> LeafSet<H, N> where
 		Undo { inner: self }
 	}
 
-	/// currently since revert only affects the canonical chain
-	/// we assume that parent has no further children
-	/// and we add it as leaf again
-	pub fn revert(&mut self, hash: H, number: N, parent_hash: H) {
-		self.insert_leaf(Reverse(number.clone() - N::one()), parent_hash);
-		self.remove_leaf(&Reverse(number), &hash);
+	/// Revert to the given block height by dropping all leaves in the leaf set
+	/// with a block number higher than the target.
+	pub fn revert(&mut self, best_hash: H, best_number: N) {
+		let items = self.storage.iter()
+			.flat_map(|(number, hashes)| hashes.iter().map(move |h| (h.clone(), number.clone())))
+			.collect::<Vec<_>>();
+
+		for (hash, number) in &items {
+			if number.0 > best_number {
+				assert!(
+					self.remove_leaf(number, hash),
+					"item comes from an iterator over storage; qed",
+				);
+
+				self.pending_removed.push(hash.clone());
+			}
+		}
+
+		let best_number = Reverse(best_number);
+		if !self.contains(&best_number, &best_hash) {
+			self.insert_leaf(best_number.clone(), best_hash.clone());
+			self.pending_added.push(LeafSetItem { hash: best_hash, number: best_number });
+		}
 	}
 
 	/// returns an iterator over all hashes in the leaf set
@@ -187,9 +204,8 @@ impl<H, N> LeafSet<H, N> where
 		}
 	}
 
-	#[cfg(test)]
-	fn contains(&self, number: N, hash: H) -> bool {
-		self.storage.get(&Reverse(number)).map_or(false, |hashes| hashes.contains(&hash))
+	fn contains(&self, number: &Reverse<N>, hash: &H) -> bool {
+		self.storage.get(&number).map_or(false, |hashes| hashes.contains(hash))
 	}
 
 	fn insert_leaf(&mut self, number: Reverse<N>, hash: H) {
