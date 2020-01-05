@@ -27,12 +27,12 @@
 //! ### User Types
 //! 
 //! At any point, a user in the society can be one of a:
-//! * Bid - A user who has submitted intention of joining the society.
+//! * Bidder - A user who has submitted intention of joining the society.
 //! * Candidate - A user who will be voted on to join the society.
 //! * Suspended Candidate - A user who failed to win a vote.
 //! * Member - A user who is a member of the society.
 //! * Suspended Member - A member of the society who has accumulated too many strikes
-//!                      or failed their membership challenge.
+//! or failed their membership challenge.
 //! 
 //! Of the non-suspended members, there is always a:
 //! * Head - A member who is exempt from suspension.
@@ -80,7 +80,7 @@
 //! +----------------------------------------------+
 //! |         |           |               |        |
 //! |         |           v               |        |
-//! |         |          Bid <------------+        |
+//! |         |        Bidder <-----------+        |
 //! |         |           +               |        |
 //! |         |           |               +        |
 //! |         |           v            Suspended   |
@@ -117,12 +117,12 @@
 //! selects as many bids the Society Pot can support for that period.
 //! 
 //! These selected bids become candidates and move on to the Candidate phase.
-//! Bids that were not selected stay in the bid pool until they are selected or
+//! Bids that were not selected stay in the bidder pool until they are selected or
 //! a user chooses to "unbid".
 //! 
 //! #### Candidate Phase
 //! 
-//! Once a bid becomes a candidate, members vote whether to approve or reject
+//! Once a bidder becomes a candidate, members vote whether to approve or reject
 //! that candidate into society. This voting process also happens during a rotation period.
 //! 
 //! The approval and rejection criteria for candidates are not set on chain,
@@ -207,15 +207,17 @@
 //! * `unvouch` - A member can revoke their vouch for a user.
 //! * `vote` - A member can vote to approve or reject a candidate's request to join the society.
 //! * `defender_vote` - A member can vote to approve or reject a defender's continued membership
-//!                     to the society.
+//! to the society.
 //! * `payout` - A member can claim their first matured payment.
 //! 
 //! #### For Super Users
 //! 
 //! * `found` - The founder origin can initiate this society. Useful for bootstrapping the Society
-//!             pallet on an already running chain.
-//! * `judge_suspended_member` - The founder origin is able to make judgement on a suspended member.
-//! * `judge_suspended_candidate` - The founder origin is able to make judgement on a suspended candidate.
+//! pallet on an already running chain.
+//! * `judge_suspended_member` - The suspension judgement origin is able to make
+//! judgement on a suspended member.
+//! * `judge_suspended_candidate` - The suspension judgement origin is able to
+//! make judgement on a suspended candidate.
 //! 
 
 // Ensure we're `no_std` when compiling for Wasm.
@@ -263,7 +265,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The minimum amount of a deposit required for a bid to be made.
 	type CandidateDeposit: Get<BalanceOf<Self, I>>;
 
-	/// The proportion of the unpaid reward that gets deducted in the case that either a skeptic
+	/// The amount of the unpaid reward that gets deducted in the case that either a skeptic
 	/// doesn't vote or someone votes in the wrong way.
 	type WrongSideDeduction: Get<BalanceOf<Self, I>>;
 
@@ -458,7 +460,6 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// Parameters:
-		///
 		/// - `value`: A one time payment the bid would like to receive when joining the society.
 		///
 		/// # <weight>
@@ -493,15 +494,13 @@ decl_module! {
 			Ok(())
 		}
 
-		/// A bid can remove their bid for entry into society.
-		///
+		/// A bidder can remove their bid for entry into society.
 		/// By doing so, they will have their candidate deposit returned or
 		/// they will unvouch their voucher.
 		///
-		/// The dispatch origin for this call must be _Signed_.
+		/// The dispatch origin for this call must be _Signed_ and a bidder.
 		///
 		/// Parameters:
-		///
 		/// - `pos`: Position in the `Bids` vector of the bid who wants to unbid.
 		///
 		/// # <weight>
@@ -511,7 +510,6 @@ decl_module! {
 		/// - Up to vouching storage removal.
 		/// - One event.
 		/// # </weight>
-		///
 
 		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
 		pub fn unbid(origin, pos: u32) -> DispatchResult {
@@ -558,12 +556,12 @@ decl_module! {
 			Ok(())
 		}
 
-		/// As a vouching member, unvouch a bid. This only works while vouched user is still a bid.
+		/// As a vouching member, unvouch a bid. This only works while vouched user is
+		/// only a bidder (and not a candidate).
 		///
-		/// The dispatch origin for this call must be _Signed_.
+		/// The dispatch origin for this call must be _Signed_ and a vouching member.
 		///
 		/// Parameters:
-		///
 		/// - `pos`: Position in the `Bids` vector of the bid who should be unvouched.
 		///
 		/// # <weight>
@@ -573,7 +571,6 @@ decl_module! {
 		/// - One vouching storage removal.
 		/// - One event.
 		/// # </weight>
-		///
 
 		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
 		pub fn unvouch(origin, pos: u32) -> DispatchResult {
@@ -596,10 +593,9 @@ decl_module! {
 
 		/// As a member, vote on a candidate.
 		///
-		/// The dispatch origin for this call must be _Signed_.
+		/// The dispatch origin for this call must be _Signed_ and a member.
 		///
 		/// Parameters:
-		///
 		/// - `candidate`: The candidate that the member would like to bid on.
 		/// - `approve`: A boolean which says if the candidate should be
 		///              approved (`true`) or rejected (`false`).
@@ -611,7 +607,6 @@ decl_module! {
 		/// - One storage write to add vote to votes.
 		/// - One event.
 		/// # </weight>
-		///
 
 		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
 		pub fn vote(origin, candidate: <T::Lookup as StaticLookup>::Source, approve: bool) {
@@ -628,10 +623,9 @@ decl_module! {
 
 		/// As a member, vote on the defender.
 		///
-		/// The dispatch origin for this call must be _Signed_.
+		/// The dispatch origin for this call must be _Signed_ and a member.
 		///
 		/// Parameters:
-		///
 		/// - `approve`: A boolean which says if the candidate should be
 		///              approved (`true`) or rejected (`false`).
 		///
@@ -640,7 +634,6 @@ decl_module! {
 		/// - One storage write to add vote to votes.
 		/// - One event.
 		/// # </weight>
-		///
 
 		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
 		pub fn defender_vote(origin, approve: bool) {
@@ -657,16 +650,16 @@ decl_module! {
 		///
 		/// This extrinsic can be called multiple times to claim all matured payouts.
 		///
-		/// The dispatch origin for this call must be _Signed_.
+		/// The dispatch origin for this call must be _Signed_ and a member with
+		/// payouts remaining.
 		///
 		/// # <weight>
 		/// - One storage read and O(log M) search to check signer is a member.
 		/// - One storage read to get all payouts for a member.
 		/// - One storage read to get the current block number.
-		/// - Up to one currency transfer call.
+		/// - One currency transfer call.
 		/// - One storage write or removal to update the member's payouts.
 		/// # </weight>
-		///
 
 		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
 		pub fn payout(origin) {
@@ -693,12 +686,11 @@ decl_module! {
 		/// Found the society.
 		///
 		/// This is done as a discrete action in order to allow for the
-		/// module to be included into a running chain.
+		/// module to be included into a running chain and can only be done once.
 		///
 		/// The dispatch origin for this call must be from the _FounderOrigin_.
 		///
 		/// Parameters:
-		///
 		/// - `founder` - The first member and head of the newly founded society.
 		///
 		/// # <weight>
@@ -706,12 +698,9 @@ decl_module! {
 		/// - One storage write to add the first member to society.
 		/// - One storage write to add new Head.
 		/// - One event.
-		///
-		/// This is marked as `Operational` since it is a low level system action.
 		/// # </weight>
-		///
 
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn found(origin, founder: T::AccountId) {
 			T::FounderOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
@@ -720,7 +709,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::Founded(founder));
 		}
 
-		/// Allow founder origin to make judgement on a suspended member.
+		/// Allow suspension judgement origin to make judgement on a suspended member.
 		///
 		/// If a suspended member is forgiven, we simply add them back as a member, not affecting
 		/// any of the existing storage items for that member.
@@ -731,7 +720,6 @@ decl_module! {
 		/// The dispatch origin for this call must be from the _SuspensionJudgementOrigin_.
 		///
 		/// Parameters:
-		///
 		/// - `who` - The suspended member to be judged.
 		/// - `forgive` - A boolean representing whether the suspension judgement origin
 		///               forgives (`true`) or rejects (`false`) a suspended member.
@@ -744,12 +732,9 @@ decl_module! {
 		/// - Up to one additional event if unvouch takes place.
 		/// - One storage removal.
 		/// - One event for the judgement.
-		///
-		/// This is marked as `Operational` since it comes from a privileged origin.
 		/// # </weight>
-		///
 
-		#[weight = SimpleDispatchInfo::FixedOperational(30_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
 		fn judge_suspended_member(origin, who: T::AccountId, forgive: bool) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			ensure!(<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::NotSuspended);
@@ -781,7 +766,7 @@ decl_module! {
 		}
 
 
-		/// Allow founder origin to make judgement on a suspended candidate.
+		/// Allow suspended judgement origin to make judgement on a suspended candidate.
 		///
 		/// If the judgement is `Approve`, we add them to society as a member with the appropriate
 		/// payment for joining society.
@@ -795,7 +780,6 @@ decl_module! {
 		/// The dispatch origin for this call must be from the _SuspensionJudgementOrigin_.
 		///
 		/// Parameters:
-		///
 		/// - `who` - The suspended candidate to be judged.
 		/// - `judgement` - `Approve`, `Reject`, or `Rebid`.
 		///
@@ -818,21 +802,18 @@ decl_module! {
 		/// - Up to one additional event if unvouch takes place.
 		/// - One storage removal.
 		/// - One event for the judgement.
-		///
-		/// This is marked as `Operational` since it comes from a privileged origin.
 		/// # </weight>
-		///
 
-		#[weight = SimpleDispatchInfo::FixedOperational(50_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn judge_suspended_candidate(origin, who: T::AccountId, judgement: Judgement) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			if let Some((value, kind)) = <SuspendedCandidates<T, I>>::get(&who) {
 				match judgement {
 					Judgement::Approve => {
-						// Founder origin has approved this candidate
+						// Suspension Judgement origin has approved this candidate
 						// Make sure we can pay them
 						let pot = Self::pot();
-						ensure!(pot > value, Error::<T, I>::InsufficientPot);
+						ensure!(pot >= value, Error::<T, I>::InsufficientPot);
 						// Reduce next pot by payout
 						<Pot<T, I>>::put(pot - value);
 						// Add payout for new candidate
@@ -869,7 +850,6 @@ decl_module! {
 		}
 
 		fn on_initialize(n: T::BlockNumber) {
-
 			let mut members = vec![];
 
 			// Run a candidate/membership rotation
@@ -1287,13 +1267,13 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				let mut rejection_count = 0;
 				// Tallies total number of approve and reject votes for the defender.
 				members.iter()
-				.filter_map(|m| <DefenderVotes<T, I>>::get(m))
-				.for_each(|v|{
-					match v {
-						Vote::Approve => { approval_count += 1 }
-						_ => {rejection_count += 1}
-					}
-				});
+					.filter_map(|m| <DefenderVotes<T, I>>::get(m))
+					.for_each(|v| {
+						match v {
+							Vote::Approve => approval_count += 1,
+							_ => rejection_count += 1,
+						}
+					});
 
 				if approval_count < rejection_count {
 					// User has failed the challenge
