@@ -47,7 +47,7 @@ use futures::{
 };
 use sc_network::{
 	NetworkService, NetworkState, specialization::NetworkSpecialization,
-	Event, DhtEvent, PeerId, ReportHandle,
+	PeerId, ReportHandle,
 };
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
@@ -370,13 +370,9 @@ fn build_network_future<
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
 	mut rpc_rx: mpsc::UnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
-	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
 ) -> impl Future<Output = ()> {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 	let mut finality_notification_stream = client.finality_notification_stream().fuse();
-
-	// Initializing a stream in order to obtain DHT events from the network.
-	let mut event_stream = network.service().event_stream().compat();
 
 	futures::future::poll_fn(move |cx| {
 		let before_polling = Instant::now();
@@ -469,26 +465,6 @@ fn build_network_future<
 			let state = network.network_state();
 			(status, state)
 		});
-
-		// Processing DHT events.
-		while let Poll::Ready(Some(Ok(event))) = Pin::new(&mut event_stream).poll_next(cx) {
-			match event {
-				Event::Dht(event) => {
-					// Given that client/authority-discovery is the only upper stack consumer of Dht events at the moment, all Dht
-					// events are being passed on to the authority-discovery module. In the future there might be multiple
-					// consumers of these events. In that case this would need to be refactored to properly dispatch the events,
-					// e.g. via a subscriber model.
-					if let Some(Err(e)) = dht_event_tx.as_ref().map(|c| c.clone().try_send(event)) {
-						if e.is_full() {
-							warn!(target: "service", "Dht event channel to authority discovery is full, dropping event.");
-						} else if e.is_disconnected() {
-							warn!(target: "service", "Dht event channel to authority discovery is disconnected, dropping event.");
-						}
-					}
-				}
-				_ => {}
-			}
-		}
 
 		// Main network polling.
 		if let Poll::Ready(Ok(())) = Pin::new(&mut (&mut network).compat()).poll(cx).map_err(|err| {

@@ -17,7 +17,7 @@ sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 hex-literal = { version = "0.2.1" }
 sp-inherents = { version = "2.0.0", default-features = false, path = "../../primitives/inherents" }
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
-kvdb = "0.1.1"
+kvdb = "0.2.0"
 log = { version = "0.4.8" }
 parking_lot = { version = "0.9.0" }
 sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }

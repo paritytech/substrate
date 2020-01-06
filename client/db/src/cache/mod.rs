@@ -77,9 +77,9 @@ impl<T> CacheItemT for T where T: Clone + Decode + Encode + PartialEq {}
 pub struct DbCache<Block: BlockT> {
 	cache_at: HashMap<CacheKeyId, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
 	db: Arc<dyn KeyValueDB>,
-	key_lookup_column: Option<u32>,
-	header_column: Option<u32>,
-	authorities_column: Option<u32>,
+	key_lookup_column: u32,
+	header_column: u32,
+	authorities_column: u32,
 	genesis_hash: Block::Hash,
 	best_finalized_block: ComplexBlockId<Block>,
 }
@@ -88,9 +88,9 @@ impl<Block: BlockT> DbCache<Block> {
 	/// Create new cache.
 	pub fn new(
 		db: Arc<dyn KeyValueDB>,
-		key_lookup_column: Option<u32>,
-		header_column: Option<u32>,
-		authorities_column: Option<u32>,
+		key_lookup_column: u32,
+		header_column: u32,
+		authorities_column: u32,
 		genesis_hash: Block::Hash,
 		best_finalized_block: ComplexBlockId<Block>,
 	) -> Self {
@@ -150,9 +150,9 @@ fn get_cache_helper<'a, Block: BlockT>(
 	cache_at: &'a mut HashMap<CacheKeyId, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
 	name: CacheKeyId,
 	db: &Arc<dyn KeyValueDB>,
-	key_lookup: Option<u32>,
-	header: Option<u32>,
-	cache: Option<u32>,
+	key_lookup: u32,
+	header: u32,
+	cache: u32,
 	best_finalized_block: &ComplexBlockId<Block>,
 ) -> &'a mut ListCache<Block, Vec<u8>, self::list_storage::DbStorage> {
 	cache_at.entry(name).or_insert_with(|| {

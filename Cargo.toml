@@ -153,3 +153,6 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[replace]
+'zstd:0.5.1' = { git = "https://github.com/gyscos/zstd-rs" }
