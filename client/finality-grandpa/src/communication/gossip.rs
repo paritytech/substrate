@@ -790,6 +790,15 @@ impl<Block: BlockT> Inner<Block> {
 			Consider::Accept => {},
 		}
 
+		// KUSAMA HACK: temporarily ignore any commits older than the reset round. we won't be able
+		// to import the blocks they refer to but will keep trying to and accumulating these messages,
+		// leading to a memory leak.
+		if full.set_id == SetId(235) &&
+			full.round < Round(999999)
+		{
+			return Action::Discard(cost::MALFORMED_COMMIT);
+		}
+
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
 			debug!(target: "afg", "Malformed compact commit");
 			telemetry!(CONSENSUS_DEBUG; "afg.malformed_compact_commit";
