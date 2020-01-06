@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -152,4 +152,3 @@ pub fn construct_block(
 	let hash = header.blake2_256();
 	(Block { header, extrinsics }.encode(), hash.into())
 }
-

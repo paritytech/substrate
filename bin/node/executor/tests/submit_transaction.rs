@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -110,7 +110,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		assert_eq!(state.read().transactions.len(), 1);
 
 		// submit another one from the same account. The nonce should be incremented.
-				let call = pallet_balances::Call::transfer(Default::default(), Default::default());
+		let call = pallet_balances::Call::transfer(Default::default(), Default::default());
 		let results =
 			<SubmitTransaction as SubmitSignedTransaction<Runtime, Call>>::submit_signed(call);
 

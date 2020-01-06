@@ -57,7 +57,7 @@ pub trait CreateTransaction<T: crate::Trait, Extrinsic: ExtrinsicT> {
 /// so it's enough to pass an application-specific crypto type.
 ///
 /// To easily create `SignedTransaction`s have a look at the
-/// [`TransactionSubmitter`](frame_system::offchain::TransactionSubmitter) type.
+/// [`TransactionSubmitter`] type.
 pub trait Signer<Public, Signature> {
 	/// Sign any encodable payload with given account and produce a signature.
 	///
@@ -105,7 +105,7 @@ pub type PublicOf<T, Call, X> = <
 ///
 /// NOTE: Most likely you should not implement this trait yourself.
 /// There is an implementation for
-/// [`TransactionSubmitter`](frame_system::offchain::TransactionSubmitter) type, which
+/// [`TransactionSubmitter`] type, which
 /// you should use.
 pub trait SignAndSubmitTransaction<T: crate::Trait, Call> {
 	/// Unchecked extrinsic type.
@@ -151,7 +151,7 @@ pub trait SignAndSubmitTransaction<T: crate::Trait, Call> {
 ///
 /// NOTE: Most likely you should not implement this trait yourself.
 /// There is an implementation for
-/// [`TransactionSubmitter`](frame_system::offchain::TransactionSubmitter) type, which
+/// [`TransactionSubmitter`] type, which
 /// you should use.
 pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 	/// Unchecked extrinsic type.
@@ -172,7 +172,7 @@ pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 ///
 /// NOTE: Most likely you should not implement this trait yourself.
 /// There is an implementation for
-/// [`TransactionSubmitter`](frame_system::offchain::TransactionSubmitter) type, which
+/// [`TransactionSubmitter`] type, which
 /// you should use.
 pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 	/// A `SignAndSubmitTransaction` implementation.
@@ -362,4 +362,3 @@ impl<T, C, E, S, Call> SubmitSignedTransaction<T, Call> for TransactionSubmitter
 		}
 	}
 }
-
