@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -34,6 +34,11 @@ use frame_support::{
 	traits::{Currency, ReservableCurrency, Get},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
+
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
 
 type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -98,7 +103,7 @@ pub struct RecoveryConfig<BlockNumber, Balance, AccountId> {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Utility {
+	trait Store for Module<T: Trait> as Recovery {
 		/// The set of recoverable accounts and their recovery configuration.
 		pub Recoverable get(fn recovery_config):
 			map T::AccountId => Option<RecoveryConfig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;

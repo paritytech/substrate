@@ -3855,7 +3855,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-recover"
+name = "pallet-recovery"
 version = "2.0.0"
 dependencies = [
  "enumflags2 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
