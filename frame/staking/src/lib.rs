@@ -916,8 +916,24 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn rebond(origin, #[compact] value: BalanceOf<T>) {
-			let stash = ensure_signed(origin)?;
-			// TODO
+			let controller = ensure_signed(origin)?;
+			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+
+			let mut unlocking_balance: BalanceOf<T> = Zero::zero();
+
+			while let Some(mut unlock_chunk) = ledger.unlocking.pop() {
+				unlocking_balance += unlock_chunk.value;
+				ledger.active += unlock_chunk.value;
+
+				if unlocking_balance > value {
+					unlock_chunk.value = unlocking_balance - value;
+					ledger.active -= unlocking_balance - value;
+					ledger.unlocking.push(unlock_chunk);
+					break
+				}
+			}
+
+			Self::update_ledger(&controller, &ledger);
 		}
 
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
