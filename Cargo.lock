@@ -8099,30 +8099,24 @@ dependencies = [
 [[package]]
 name = "zstd"
 version = "0.5.1+zstd.1.4.4"
-source = "git+https://github.com/gyscos/zstd-rs#c0e8491d460311117bacd0262374f8b973ec8b69"
-dependencies = [
- "zstd-safe 2.0.3+zstd.1.4.4 (git+https://github.com/gyscos/zstd-rs)",
-]
-
-[[package]]
-name = "zstd"
-version = "0.5.1+zstd.1.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-replace = "zstd 0.5.1+zstd.1.4.4 (git+https://github.com/gyscos/zstd-rs)"
+dependencies = [
+ "zstd-safe 2.0.3+zstd.1.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "zstd-safe"
 version = "2.0.3+zstd.1.4.4"
-source = "git+https://github.com/gyscos/zstd-rs#c0e8491d460311117bacd0262374f8b973ec8b69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)",
- "zstd-sys 1.4.15+zstd.1.4.4 (git+https://github.com/gyscos/zstd-rs)",
+ "zstd-sys 1.4.15+zstd.1.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "zstd-sys"
 version = "1.4.15+zstd.1.4.4"
-source = "git+https://github.com/gyscos/zstd-rs#c0e8491d460311117bacd0262374f8b973ec8b69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "cc 1.0.48 (registry+https://github.com/rust-lang/crates.io-index)",
  "glob 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -8699,7 +8693,6 @@ dependencies = [
 "checksum zeroize 0.9.3 (registry+https://github.com/rust-lang/crates.io-index)" = "45af6a010d13e4cf5b54c94ba5a2b2eba5596b9e46bf5875612d332a1f2b3f86"
 "checksum zeroize 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3cbac2ed2ba24cc90f5e06485ac8c7c1e5449fe8911aef4d8877218af021a5b8"
 "checksum zeroize_derive 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "de251eec69fc7c1bc3923403d18ececb929380e016afe103da75f396704f8ca2"
-"checksum zstd 0.5.1+zstd.1.4.4 (git+https://github.com/gyscos/zstd-rs)" = "<none>"
 "checksum zstd 0.5.1+zstd.1.4.4 (registry+https://github.com/rust-lang/crates.io-index)" = "5c5d978b793ae64375b80baf652919b148f6a496ac8802922d9999f5a553194f"
-"checksum zstd-safe 2.0.3+zstd.1.4.4 (git+https://github.com/gyscos/zstd-rs)" = "<none>"
-"checksum zstd-sys 1.4.15+zstd.1.4.4 (git+https://github.com/gyscos/zstd-rs)" = "<none>"
+"checksum zstd-safe 2.0.3+zstd.1.4.4 (registry+https://github.com/rust-lang/crates.io-index)" = "bee25eac9753cfedd48133fa1736cbd23b774e253d89badbeac7d12b23848d3f"
+"checksum zstd-sys 1.4.15+zstd.1.4.4 (registry+https://github.com/rust-lang/crates.io-index)" = "89719b034dc22d240d5b407fb0a3fe6d29952c181cff9a9f95c0bd40b4f8f7d8"
