@@ -47,6 +47,7 @@ fn call_in_wasm<E: Externalities>(
 		ext,
 		code,
 		heap_pages,
+		true,
 	)
 }
 

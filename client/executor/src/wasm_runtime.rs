@@ -191,8 +191,9 @@ pub fn create_wasm_runtime_with_code(
 	heap_pages: u64,
 	code: &[u8],
 	host_functions: Vec<&'static dyn Function>,
+	enable_stub: bool,
 ) -> Result<Box<dyn WasmRuntime>, WasmError> {
-	match wasm_method {
+	let mut runtime = match wasm_method {
 		WasmExecutionMethod::Interpreted =>
 			sc_executor_wasmi::create_instance(code, heap_pages, host_functions)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
@@ -200,7 +201,13 @@ pub fn create_wasm_runtime_with_code(
 		WasmExecutionMethod::Compiled =>
 			sc_executor_wasmtime::create_instance(code, heap_pages, host_functions)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
+	}?;
+
+	if enable_stub {
+		runtime.enable_stub();
 	}
+
+	Ok(runtime)
 }
 
 fn create_versioned_wasm_runtime<E: Externalities>(
@@ -212,7 +219,7 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 	let code = ext
 		.original_storage(well_known_keys::CODE)
 		.ok_or(WasmError::CodeNotFound)?;
-	let mut runtime = create_wasm_runtime_with_code(wasm_method, heap_pages, &code, host_functions)?;
+	let mut runtime = create_wasm_runtime_with_code(wasm_method, heap_pages, &code, host_functions, false)?;
 
 	// Call to determine runtime version.
 	let version_result = {

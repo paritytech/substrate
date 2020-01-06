@@ -42,6 +42,7 @@ struct FunctionExecutor<'a> {
 	memory: MemoryRef,
 	table: Option<TableRef>,
 	host_functions: &'a [&'static dyn Function],
+	enable_stub: bool,
 }
 
 impl<'a> FunctionExecutor<'a> {
@@ -50,6 +51,7 @@ impl<'a> FunctionExecutor<'a> {
 		heap_base: u32,
 		t: Option<TableRef>,
 		host_functions: &'a [&'static dyn Function],
+		enable_stub: bool,
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
@@ -57,6 +59,7 @@ impl<'a> FunctionExecutor<'a> {
 			memory: m,
 			table: t,
 			host_functions,
+			enable_stub,
 		})
 	}
 }
@@ -269,7 +272,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 	}
 }
 
-struct Resolver<'a>(&'a[&'static dyn Function]);
+struct Resolver<'a>(&'a[&'static dyn Function], bool);
 
 impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 	fn resolve_func(&self, name: &str, signature: &wasmi::Signature)
@@ -296,16 +299,21 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 			}
 		}
 
-		//panic!("boo {} {:?}", name, signature);
-		let (function_index, _) = self.0.iter().enumerate().find(|(_, x)| x.name() == "stub_function").expect("cant find fallback function");
-		Ok(
-			wasmi::FuncInstance::alloc_host(signature.into(), function_index),
-		)
-		/*
-		Err(wasmi::Error::Instantiation(
-			format!("Export {} not found", name),
-		))
-		*/
+		if self.1 {
+			eprintln!("Could not find function {}. The existing functions are: {}",
+				name,
+				self.0.iter()
+					.map(|x|
+					x.name()).collect::<Vec<_>>().join(","));
+
+			Ok(
+				wasmi::FuncInstance::alloc_host(signature.into(), self.0.len()),
+			)
+		} else {
+			Err(wasmi::Error::Instantiation(
+				format!("Export {} not found", name),
+			))
+		}
 	}
 }
 
@@ -314,16 +322,17 @@ impl<'a> wasmi::Externals for FunctionExecutor<'a> {
 		-> Result<Option<wasmi::RuntimeValue>, wasmi::Trap>
 	{
 		let mut args = args.as_ref().iter().copied().map(Into::into);
-		let function = self.host_functions.get(index).ok_or_else(||
-			Error::from(
-				format!("Could not find host function with index: {}", index),
-			)
-		)?;
 
-		function.execute(self, &mut args)
-			.map_err(|msg| Error::FunctionExecution(function.name().to_string(), msg))
-			.map_err(wasmi::Trap::from)
-			.map(|v| v.map(Into::into))
+		if let Some(function) = self.host_functions.get(index) {
+			function.execute(self, &mut args)
+				.map_err(|msg| Error::FunctionExecution(function.name().to_string(), msg))
+				.map_err(wasmi::Trap::from)
+				.map(|v| v.map(Into::into))
+		} else if self.enable_stub {
+			panic!("function does not exist");
+		} else {
+			Err(Error::from(format!("Could not find host function with index: {}", index)).into())
+		}
 	}
 }
 
@@ -359,6 +368,7 @@ fn call_in_wasm_module(
 	method: &str,
 	data: &[u8],
 	host_functions: &[&'static dyn Function],
+	enable_stub: bool,
 ) -> Result<Vec<u8>, Error> {
 	// extract a reference to a linear memory, optional reference to a table
 	// and then initialize FunctionExecutor.
@@ -368,7 +378,8 @@ fn call_in_wasm_module(
 		.and_then(|e| e.as_table().cloned());
 	let heap_base = get_heap_base(module_instance)?;
 
-	let mut fec = FunctionExecutor::new(memory.clone(), heap_base, table, host_functions)?;
+	let mut fec = FunctionExecutor::new(
+		memory.clone(), heap_base, table, host_functions, enable_stub)?;
 
 	// Write the call data
 	let offset = fec.allocate_memory(data.len() as u32)?;
@@ -562,6 +573,7 @@ pub struct WasmiRuntime {
 	state_snapshot: StateSnapshot,
 	/// The host functions registered for this instance.
 	host_functions: Vec<&'static dyn Function>,
+	enable_stub: bool,
 }
 
 impl WasmRuntime for WasmiRuntime {
@@ -587,7 +599,12 @@ impl WasmRuntime for WasmiRuntime {
 				error!(target: "wasm-executor", "snapshot restoration failed: {}", e);
 				e
 			})?;
-		call_in_wasm_module(ext, &self.instance, method, data, &self.host_functions)
+		call_in_wasm_module(
+			ext, &self.instance, method, data, &self.host_functions, self.enable_stub)
+	}
+
+	fn enable_stub(&mut self) {
+		self.enable_stub = true;
 	}
 }
 
@@ -596,8 +613,6 @@ pub fn create_instance(
 	heap_pages: u64,
 	mut host_functions: Vec<&'static dyn Function>,
 ) -> Result<WasmiRuntime, WasmError> {
-	host_functions.push(STUB);
-	eprintln!("{:?}", host_functions.iter().map(|x| x.name()).collect::<Vec<_>>());
 	let module = Module::from_buffer(&code).map_err(|_| WasmError::InvalidModule)?;
 
 	// Extract the data segments from the wasm code.
@@ -623,6 +638,7 @@ pub fn create_instance(
 		instance,
 		state_snapshot,
 		host_functions,
+		enable_stub: false,
 	})
 }
 
