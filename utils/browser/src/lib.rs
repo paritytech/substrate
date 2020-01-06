@@ -18,7 +18,7 @@ use futures01::sync::mpsc as mpsc01;
 use log::{debug, info};
 use std::sync::Arc;
 use service::{
-    AbstractService, RpcSession, Roles, Configuration, config::DatabaseConfig,
+    AbstractService, RpcSession, Roles, Configuration, config::{DatabaseConfig, KeystoreConfig},
     ChainSpec, RuntimeGenesis
 };
 use wasm_bindgen::prelude::*;
@@ -64,6 +64,7 @@ where
             .await?;
         DatabaseConfig::Custom(Arc::new(db))
     };
+    config.keystore = KeystoreConfig::InMemory;
 
     Ok(config)
 }
