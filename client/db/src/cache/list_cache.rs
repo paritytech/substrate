@@ -94,6 +94,12 @@ pub enum CommitOperation<Block: BlockT, T: CacheItemT> {
 	BlockReverted(BTreeMap<usize, Option<Fork<Block, T>>>),
 }
 
+/// A set of commit operations.
+#[derive(Debug)]
+pub struct CommitOperations<Block: BlockT, T: CacheItemT> {
+	operations: Vec<CommitOperation<Block, T>>,
+}
+
 /// Single fork of list-based cache.
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -203,9 +209,89 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 		block: ComplexBlockId<Block>,
 		value: Option<T>,
 		entry_type: EntryType,
-		prev_operation: Option<&CommitOperation<Block, T>>,
+		operations: &mut CommitOperations<Block, T>,
+	) -> ClientResult<()> {
+		Ok(operations.append(self.do_on_block_insert(tx, parent, block, value, entry_type, operations)?))
+	}
+
+	/// When previously inserted block is finalized.
+	pub fn on_block_finalize<Tx: StorageTransaction<Block, T>>(
+		&self,
+		tx: &mut Tx,
+		parent: ComplexBlockId<Block>,
+		block: ComplexBlockId<Block>,
+		operations: &mut CommitOperations<Block, T>,
+	) -> ClientResult<()> {
+		Ok(operations.append(self.do_on_block_finalize(tx, parent, block, operations)?))
+	}
+
+	/// When block is reverted.
+	pub fn on_block_revert<Tx: StorageTransaction<Block, T>>(
+		&self,
+		tx: &mut Tx,
+		reverted_block: &ComplexBlockId<Block>,
+		operations: &mut CommitOperations<Block, T>,
+	) -> ClientResult<()> {
+		Ok(operations.append(Some(self.do_on_block_revert(tx, reverted_block)?)))
+	}
+
+	/// When transaction is committed.
+	pub fn on_transaction_commit(&mut self, ops: CommitOperations<Block, T>) {
+		for op in ops.operations {
+			match op {
+				CommitOperation::AppendNewBlock(index, best_block) => {
+					let mut fork = self.unfinalized.get_mut(index)
+						.expect("ListCache is a crate-private type;
+							internal clients of ListCache are committing transaction while cache is locked;
+							CommitOperation holds valid references while cache is locked; qed");
+					fork.best_block = Some(best_block);
+				},
+				CommitOperation::AppendNewEntry(index, entry) => {
+					let mut fork = self.unfinalized.get_mut(index)
+						.expect("ListCache is a crate-private type;
+							internal clients of ListCache are committing transaction while cache is locked;
+							CommitOperation holds valid references while cache is locked; qed");
+					fork.best_block = Some(entry.valid_from.clone());
+					fork.head = entry;
+				},
+				CommitOperation::AddNewFork(entry) => {
+					self.unfinalized.push(Fork {
+						best_block: Some(entry.valid_from.clone()),
+						head: entry,
+					});
+				},
+				CommitOperation::BlockFinalized(block, finalizing_entry, forks) => {
+					self.best_finalized_block = block;
+					if let Some(finalizing_entry) = finalizing_entry {
+						self.best_finalized_entry = Some(finalizing_entry);
+					}
+					for fork_index in forks.iter().rev() {
+						self.unfinalized.remove(*fork_index);
+					}
+				},
+				CommitOperation::BlockReverted(forks) => {
+					for (fork_index, updated_fork) in forks.into_iter().rev() {
+						match updated_fork {
+							Some(updated_fork) => self.unfinalized[fork_index] = updated_fork,
+							None => { self.unfinalized.remove(fork_index); },
+						}
+					}
+				},
+			}
+		}
+	}
+
+	fn do_on_block_insert<Tx: StorageTransaction<Block, T>>(
+		&self,
+		tx: &mut Tx,
+		parent: ComplexBlockId<Block>,
+		block: ComplexBlockId<Block>,
+		value: Option<T>,
+		entry_type: EntryType,
+		operations: &CommitOperations<Block, T>,
 	) -> ClientResult<Option<CommitOperation<Block, T>>> {
 		// this guarantee is currently provided by LightStorage && we're relying on it here
+		let prev_operation = operations.operations.last();
 		debug_assert!(
 			entry_type != EntryType::Final ||
 			self.best_finalized_block.hash == parent.hash ||
@@ -324,15 +410,15 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 		}
 	}
 
-	/// When previously inserted block is finalized.
-	pub fn on_block_finalize<Tx: StorageTransaction<Block, T>>(
+	fn do_on_block_finalize<Tx: StorageTransaction<Block, T>>(
 		&self,
 		tx: &mut Tx,
 		parent: ComplexBlockId<Block>,
 		block: ComplexBlockId<Block>,
-		prev_operation: Option<&CommitOperation<Block, T>>,
+		operations: &CommitOperations<Block, T>,
 	) -> ClientResult<Option<CommitOperation<Block, T>>> {
 		// this guarantee is currently provided by db backend && we're relying on it here
+		let prev_operation = operations.operations.last();
 		debug_assert!(
 			self.best_finalized_block.hash == parent.hash ||
 			match prev_operation {
@@ -356,8 +442,7 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 		Ok(Some(operation))
 	}
 
-	/// When block is reverted.
-	pub fn on_block_revert<Tx: StorageTransaction<Block, T>>(
+	fn do_on_block_revert<Tx: StorageTransaction<Block, T>>(
 		&self,
 		tx: &mut Tx,
 		reverted_block: &ComplexBlockId<Block>,
@@ -392,52 +477,6 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 		tx.update_meta(self.best_finalized_entry.as_ref(), &self.unfinalized, &operation);
 
 		Ok(operation)
-	}
-
-	/// When transaction is committed.
-	pub fn on_transaction_commit(&mut self, ops: Vec<CommitOperation<Block, T>>) {
-		for op in ops {
-			match op {
-				CommitOperation::AppendNewBlock(index, best_block) => {
-					let mut fork = self.unfinalized.get_mut(index)
-						.expect("ListCache is a crate-private type;
-							internal clients of ListCache are committing transaction while cache is locked;
-							CommitOperation holds valid references while cache is locked; qed");
-					fork.best_block = Some(best_block);
-				},
-				CommitOperation::AppendNewEntry(index, entry) => {
-					let mut fork = self.unfinalized.get_mut(index)
-						.expect("ListCache is a crate-private type;
-							internal clients of ListCache are committing transaction while cache is locked;
-							CommitOperation holds valid references while cache is locked; qed");
-					fork.best_block = Some(entry.valid_from.clone());
-					fork.head = entry;
-				},
-				CommitOperation::AddNewFork(entry) => {
-					self.unfinalized.push(Fork {
-						best_block: Some(entry.valid_from.clone()),
-						head: entry,
-					});
-				},
-				CommitOperation::BlockFinalized(block, finalizing_entry, forks) => {
-					self.best_finalized_block = block;
-					if let Some(finalizing_entry) = finalizing_entry {
-						self.best_finalized_entry = Some(finalizing_entry);
-					}
-					for fork_index in forks.iter().rev() {
-						self.unfinalized.remove(*fork_index);
-					}
-				},
-				CommitOperation::BlockReverted(forks) => {
-					for (fork_index, updated_fork) in forks.into_iter().rev() {
-						match updated_fork {
-							Some(updated_fork) => self.unfinalized[fork_index] = updated_fork,
-							None => { self.unfinalized.remove(fork_index); },
-						}
-					}
-				},
-			}
-		}
 	}
 
 	/// Prune old finalized entries.
@@ -658,34 +697,61 @@ impl<Block: BlockT, T: CacheItemT> Fork<Block, T> {
 	}
 }
 
-impl<Block: BlockT, T: CacheItemT> CommitOperation<Block, T> {
-	/// Try to merge two ops into single one.
-	pub fn merge_with(self, other: CommitOperation<Block, T>) -> (Option<Self>, Option<Self>) {
-		// we only able to merge two consequent block finalization operations
-		match self {
+impl<Block: BlockT, T: CacheItemT> Default for CommitOperations<Block, T> {
+	fn default() -> Self {
+		CommitOperations { operations: Vec::new() }
+	}
+}
+
+// This should never be allowed for non-test code to avoid revealing its internals.
+#[cfg(test)]
+impl<Block: BlockT, T: CacheItemT> From<Vec<CommitOperation<Block, T>>> for CommitOperations<Block, T> {
+	fn from(operations: Vec<CommitOperation<Block, T>>) -> Self {
+		CommitOperations { operations }
+	}
+}
+
+impl<Block: BlockT, T: CacheItemT> CommitOperations<Block, T> {
+	/// Append operation to the set.
+	fn append(&mut self, new_operation: Option<CommitOperation<Block, T>>) {
+		let new_operation = match new_operation {
+			Some(new_operation) => new_operation,
+			None => return,
+		};
+
+		let last_operation = match self.operations.pop() {
+			Some(last_operation) => last_operation,
+			None => {
+				self.operations.push(new_operation);
+				return;
+			},
+		};
+
+		// we are able (and obliged to) to merge two consequent block finalization operations
+		match last_operation {
 			CommitOperation::BlockFinalized(old_finalized_block, old_finalized_entry, old_abandoned_forks) => {
-				match other {
+				match new_operation {
 					CommitOperation::BlockFinalized(new_finalized_block, new_finalized_entry, new_abandoned_forks) => {
-						(
-							Some(CommitOperation::BlockFinalized(
-								new_finalized_block,
-								new_finalized_entry,
-								new_abandoned_forks,
-							)),
-							None,
-						)
+						self.operations.push(CommitOperation::BlockFinalized(
+							new_finalized_block,
+							new_finalized_entry,
+							new_abandoned_forks,
+						));
 					},
-					_ => (
-						Some(CommitOperation::BlockFinalized(
+					_ => {
+						self.operations.push(CommitOperation::BlockFinalized(
 							old_finalized_block,
 							old_finalized_entry,
 							old_abandoned_forks,
-						)),
-						Some(other),
-					),
+						));
+						self.operations.push(new_operation);
+					},
 				}
 			},
-			_ => (Some(self), Some(other)),
+			_ => {
+				self.operations.push(last_operation);
+				self.operations.push(new_operation);
+			},
 		}
 	}
 }
@@ -954,24 +1020,25 @@ pub mod tests {
 		let fin = EntryType::Final;
 
 		// when trying to insert block < finalized number
+		let mut ops = Default::default();
 		assert!(ListCache::new(DummyStorage::new(), PruningStrategy::ByDepth(1024), test_id(100)).unwrap()
-			.on_block_insert(
+			.do_on_block_insert(
 				&mut DummyTransaction::new(),
 				test_id(49),
 				test_id(50),
 				Some(50),
 				nfin,
-				None,
+				&mut ops,
 			).unwrap().is_none());
 		// when trying to insert block @ finalized number
 		assert!(ListCache::new(DummyStorage::new(), PruningStrategy::ByDepth(1024), test_id(100)).unwrap()
-			.on_block_insert(
+			.do_on_block_insert(
 				&mut DummyTransaction::new(),
 				test_id(99),
 				test_id(100),
 				Some(100),
 				nfin,
-				None,
+				&Default::default(),
 			).unwrap().is_none());
 
 		// when trying to insert non-final block AND it appends to the best block of unfinalized fork
@@ -984,16 +1051,20 @@ pub mod tests {
 		).unwrap();
 		cache.unfinalized[0].best_block = Some(test_id(4));
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, test_id(4), test_id(5), Some(4), nfin, None).unwrap(),
-			Some(CommitOperation::AppendNewBlock(0, test_id(5))));
+		assert_eq!(
+			cache.do_on_block_insert(&mut tx, test_id(4), test_id(5), Some(4), nfin, &Default::default()).unwrap(),
+			Some(CommitOperation::AppendNewBlock(0, test_id(5))),
+		);
 		assert!(tx.inserted_entries().is_empty());
 		assert!(tx.removed_entries().is_empty());
 		assert!(tx.updated_meta().is_none());
 		// when trying to insert non-final block AND it appends to the best block of unfinalized fork
 		// AND new value is the same as in the fork' best block
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, test_id(4), test_id(5), Some(5), nfin, None).unwrap(),
-			Some(CommitOperation::AppendNewEntry(0, Entry { valid_from: test_id(5), value: 5 })));
+		assert_eq!(
+			cache.do_on_block_insert(&mut tx, test_id(4), test_id(5), Some(5), nfin, &Default::default()).unwrap(),
+			Some(CommitOperation::AppendNewEntry(0, Entry { valid_from: test_id(5), value: 5 })),
+		);
 		assert_eq!(*tx.inserted_entries(), vec![test_id(5).hash].into_iter().collect());
 		assert!(tx.removed_entries().is_empty());
 		assert_eq!(*tx.updated_meta(), Some(Metadata { finalized: None, unfinalized: vec![test_id(5)] }));
@@ -1008,16 +1079,34 @@ pub mod tests {
 			PruningStrategy::ByDepth(1024), test_id(2)
 		).unwrap();
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(4), correct_id(5), Some(4), nfin, None).unwrap(),
-			Some(CommitOperation::AppendNewBlock(0, correct_id(5))));
+		assert_eq!(
+			cache.do_on_block_insert(
+				&mut tx,
+				correct_id(4),
+				correct_id(5),
+				Some(4),
+				nfin,
+				&Default::default(),
+			).unwrap(),
+			Some(CommitOperation::AppendNewBlock(0, correct_id(5))),
+		);
 		assert!(tx.inserted_entries().is_empty());
 		assert!(tx.removed_entries().is_empty());
 		assert!(tx.updated_meta().is_none());
 		// when trying to insert non-final block AND it is the first block that appends to the best block of unfinalized fork
 		// AND new value is the same as in the fork' best block
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(4), correct_id(5), Some(5), nfin, None).unwrap(),
-			Some(CommitOperation::AppendNewEntry(0, Entry { valid_from: correct_id(5), value: 5 })));
+		assert_eq!(
+			cache.do_on_block_insert(
+				&mut tx,
+				correct_id(4),
+				correct_id(5),
+				Some(5),
+				nfin,
+				&Default::default(),
+			).unwrap(),
+			Some(CommitOperation::AppendNewEntry(0, Entry { valid_from: correct_id(5), value: 5 })),
+		);
 		assert_eq!(*tx.inserted_entries(), vec![correct_id(5).hash].into_iter().collect());
 		assert!(tx.removed_entries().is_empty());
 		assert_eq!(*tx.updated_meta(), Some(Metadata { finalized: None, unfinalized: vec![correct_id(5)] }));
@@ -1034,8 +1123,11 @@ pub mod tests {
 			PruningStrategy::ByDepth(1024), correct_id(2)
 		).unwrap();
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(3), fork_id(0, 3, 4), Some(14), nfin, None).unwrap(),
-			Some(CommitOperation::AddNewFork(Entry { valid_from: fork_id(0, 3, 4), value: 14 })));
+		assert_eq!(
+			cache.do_on_block_insert(&mut tx, correct_id(3), fork_id(0, 3, 4), Some(14), nfin, &Default::default())
+				.unwrap(),
+			Some(CommitOperation::AddNewFork(Entry { valid_from: fork_id(0, 3, 4), value: 14 })),
+		);
 		assert_eq!(*tx.inserted_entries(), vec![fork_id(0, 3, 4).hash].into_iter().collect());
 		assert!(tx.removed_entries().is_empty());
 		assert_eq!(*tx.updated_meta(), Some(Metadata { finalized: Some(correct_id(2)), unfinalized: vec![correct_id(4), fork_id(0, 3, 4)] }));
@@ -1049,7 +1141,11 @@ pub mod tests {
 			PruningStrategy::ByDepth(1024), correct_id(2)
 		).unwrap();
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(2), nfin, None).unwrap(), None);
+		assert_eq!(
+			cache.do_on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(2), nfin, &Default::default())
+				.unwrap(),
+			None,
+		);
 		assert!(tx.inserted_entries().is_empty());
 		assert!(tx.removed_entries().is_empty());
 		assert!(tx.updated_meta().is_none());
@@ -1062,8 +1158,11 @@ pub mod tests {
 			PruningStrategy::ByDepth(1024), correct_id(2)
 		).unwrap();
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), nfin, None).unwrap(),
-			Some(CommitOperation::AddNewFork(Entry { valid_from: correct_id(3), value: 3 })));
+		assert_eq!(
+			cache.do_on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), nfin, &Default::default())
+				.unwrap(),
+			Some(CommitOperation::AddNewFork(Entry { valid_from: correct_id(3), value: 3 })),
+		);
 		assert_eq!(*tx.inserted_entries(), vec![correct_id(3).hash].into_iter().collect());
 		assert!(tx.removed_entries().is_empty());
 		assert_eq!(*tx.updated_meta(), Some(Metadata { finalized: Some(correct_id(2)), unfinalized: vec![correct_id(3)] }));
@@ -1072,7 +1171,8 @@ pub mod tests {
 		let cache = ListCache::new(DummyStorage::new(), PruningStrategy::ByDepth(1024), correct_id(2)).unwrap();
 		let mut tx = DummyTransaction::new();
 		assert_eq!(
-			cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), fin, None).unwrap(),
+			cache.do_on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), fin, &Default::default())
+				.unwrap(),
 			Some(CommitOperation::BlockFinalized(
 				correct_id(3),
 				Some(Entry { valid_from: correct_id(3), value: 3 }),
@@ -1090,15 +1190,17 @@ pub mod tests {
 			PruningStrategy::ByDepth(1024), correct_id(2)
 		).unwrap();
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(2), fin, None).unwrap(),
-			Some(CommitOperation::BlockFinalized(correct_id(3), None, Default::default())));
+		assert_eq!(
+			cache.do_on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(2), fin, &Default::default()).unwrap(),
+			Some(CommitOperation::BlockFinalized(correct_id(3), None, Default::default())),
+		);
 		assert!(tx.inserted_entries().is_empty());
 		assert!(tx.removed_entries().is_empty());
 		assert!(tx.updated_meta().is_none());
 		// when inserting finalized entry AND value differs from previous finalized
 		let mut tx = DummyTransaction::new();
 		assert_eq!(
-			cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), fin, None).unwrap(),
+			cache.do_on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), fin, &Default::default()).unwrap(),
 			Some(CommitOperation::BlockFinalized(
 				correct_id(3),
 				Some(Entry { valid_from: correct_id(3), value: 3 }),
@@ -1118,8 +1220,10 @@ pub mod tests {
 			PruningStrategy::ByDepth(1024), correct_id(2)
 		).unwrap();
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(2), fin, None).unwrap(),
-			Some(CommitOperation::BlockFinalized(correct_id(3), None, vec![0].into_iter().collect())));
+		assert_eq!(
+			cache.do_on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(2), fin, &Default::default()).unwrap(),
+			Some(CommitOperation::BlockFinalized(correct_id(3), None, vec![0].into_iter().collect())),
+		);
 	}
 
 	#[test]
@@ -1133,8 +1237,10 @@ pub mod tests {
 			PruningStrategy::ByDepth(1024), correct_id(2)
 		).unwrap();
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_finalize(&mut tx, correct_id(2), correct_id(3), None).unwrap(),
-			Some(CommitOperation::BlockFinalized(correct_id(3), None, Default::default())));
+		assert_eq!(
+			cache.do_on_block_finalize(&mut tx, correct_id(2), correct_id(3), &Default::default()).unwrap(),
+			Some(CommitOperation::BlockFinalized(correct_id(3), None, Default::default())),
+		);
 		assert!(tx.inserted_entries().is_empty());
 		assert!(tx.removed_entries().is_empty());
 		assert_eq!(*tx.updated_meta(), Some(Metadata { finalized: None, unfinalized: vec![correct_id(5)] }));
@@ -1148,7 +1254,7 @@ pub mod tests {
 		).unwrap();
 		let mut tx = DummyTransaction::new();
 		assert_eq!(
-			cache.on_block_finalize(&mut tx, correct_id(4), correct_id(5), None).unwrap(),
+			cache.do_on_block_finalize(&mut tx, correct_id(4), correct_id(5), &Default::default()).unwrap(),
 			Some(CommitOperation::BlockFinalized(
 				correct_id(5),
 				Some(Entry { valid_from: correct_id(5), value: 5 }),
@@ -1167,8 +1273,10 @@ pub mod tests {
 			PruningStrategy::ByDepth(1024), correct_id(2)
 		).unwrap();
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_finalize(&mut tx, correct_id(2), correct_id(3), None).unwrap(),
-			Some(CommitOperation::BlockFinalized(correct_id(3), None, vec![0].into_iter().collect())));
+		assert_eq!(
+			cache.do_on_block_finalize(&mut tx, correct_id(2), correct_id(3), &Default::default()).unwrap(),
+			Some(CommitOperation::BlockFinalized(correct_id(3), None, vec![0].into_iter().collect())),
+		);
 	}
 
 	#[test]
@@ -1183,18 +1291,18 @@ pub mod tests {
 		).unwrap();
 
 		// when new block is appended to unfinalized fork
-		cache.on_transaction_commit(vec![CommitOperation::AppendNewBlock(0, correct_id(6))]);
+		cache.on_transaction_commit(vec![CommitOperation::AppendNewBlock(0, correct_id(6))].into());
 		assert_eq!(cache.unfinalized[0].best_block, Some(correct_id(6)));
 		// when new entry is appended to unfinalized fork
 		cache.on_transaction_commit(vec![
 			CommitOperation::AppendNewEntry(0, Entry { valid_from: correct_id(7), value: 7 }),
-		]);
+		].into());
 		assert_eq!(cache.unfinalized[0].best_block, Some(correct_id(7)));
 		assert_eq!(cache.unfinalized[0].head, Entry { valid_from: correct_id(7), value: 7 });
 		// when new fork is added
 		cache.on_transaction_commit(vec![
 			CommitOperation::AddNewFork(Entry { valid_from: correct_id(10), value: 10 }),
-		]);
+		].into());
 		assert_eq!(cache.unfinalized[2].best_block, Some(correct_id(10)));
 		assert_eq!(cache.unfinalized[2].head, Entry { valid_from: correct_id(10), value: 10 });
 		// when block is finalized + entry is finalized + unfinalized forks are deleted
@@ -1202,7 +1310,7 @@ pub mod tests {
 			correct_id(20),
 			Some(Entry { valid_from: correct_id(20), value: 20 }),
 			vec![0, 1, 2].into_iter().collect(),
-		)]);
+		)].into());
 		assert_eq!(cache.best_finalized_block, correct_id(20));
 		assert_eq!(cache.best_finalized_entry, Some(Entry { valid_from: correct_id(20), value: 20 }));
 		assert!(cache.unfinalized.is_empty());
@@ -1606,47 +1714,61 @@ pub mod tests {
 		).unwrap();
 
 		// when 5 is reverted: entry 5 is truncated
-		let op = cache.on_block_revert(&mut DummyTransaction::new(), &correct_id(5)).unwrap();
+		let op = cache.do_on_block_revert(&mut DummyTransaction::new(), &correct_id(5)).unwrap();
 		assert_eq!(op, CommitOperation::BlockReverted(vec![
 			(0, Some(Fork { best_block: None, head: Entry { valid_from: correct_id(4), value: 4 } })),
 		].into_iter().collect()));
-		cache.on_transaction_commit(vec![op]);
+		cache.on_transaction_commit(vec![op].into());
 
 		// when 3 is reverted: entries 4+5' are truncated
-		let op = cache.on_block_revert(&mut DummyTransaction::new(), &correct_id(3)).unwrap();
+		let op = cache.do_on_block_revert(&mut DummyTransaction::new(), &correct_id(3)).unwrap();
 		assert_eq!(op, CommitOperation::BlockReverted(vec![
 			(0, None),
 			(2, None),
 		].into_iter().collect()));
-		cache.on_transaction_commit(vec![op]);
+		cache.on_transaction_commit(vec![op].into());
 
 		// when 2 is reverted: entries 4'+5' are truncated
-		let op = cache.on_block_revert(&mut DummyTransaction::new(), &correct_id(2)).unwrap();
+		let op = cache.do_on_block_revert(&mut DummyTransaction::new(), &correct_id(2)).unwrap();
 		assert_eq!(op, CommitOperation::BlockReverted(vec![
 			(0, None),
 		].into_iter().collect()));
-		cache.on_transaction_commit(vec![op]);
+		cache.on_transaction_commit(vec![op].into());
 	}
 
 	#[test]
-	fn merge_commit_operation_works() {
-		let op1 = CommitOperation::BlockFinalized(
+	fn append_commit_operation_works() {
+		let mut ops = CommitOperations::default();
+		ops.append(None);
+		assert_eq!(ops.operations, Vec::new());
+
+		ops.append(Some(CommitOperation::BlockFinalized(
 			test_id(10),
 			Some(Entry { valid_from: test_id(10), value: 10 }),
 			vec![5].into_iter().collect(),
+		)));
+		assert_eq!(
+			ops.operations,
+			vec![CommitOperation::BlockFinalized(
+				test_id(10),
+				Some(Entry { valid_from: test_id(10), value: 10 }),
+				vec![5].into_iter().collect(),
+			)],
 		);
-		let op2 = CommitOperation::BlockFinalized(
+
+		ops.append(Some(CommitOperation::BlockFinalized(
 			test_id(20),
 			Some(Entry { valid_from: test_id(20), value: 20 }),
 			vec![5, 6].into_iter().collect(),
-		);
+		)));
+		
 		assert_eq!(
-			op1.merge_with(op2),
-			(Some(CommitOperation::BlockFinalized(
+			ops.operations,
+			vec![CommitOperation::BlockFinalized(
 				test_id(20),
 				Some(Entry { valid_from: test_id(20), value: 20 }),
 				vec![5, 6].into_iter().collect(),
-			)), None),
+			)],
 		);
 	}
 }

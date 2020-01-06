@@ -198,7 +198,7 @@ fn get_cache_helper<'a, Block: BlockT>(
 /// Cache operations that are to be committed after database transaction is committed.
 #[derive(Default)]
 pub struct DbCacheTransactionOps<Block: BlockT> {
-	cache_at_ops: HashMap<CacheKeyId, Vec<self::list_cache::CommitOperation<Block, Vec<u8>>>>,
+	cache_at_ops: HashMap<CacheKeyId, self::list_cache::CommitOperations<Block, Vec<u8>>>,
 	best_finalized_block: Option<ComplexBlockId<Block>>,
 }
 
@@ -216,7 +216,7 @@ impl<Block: BlockT> DbCacheTransactionOps<Block> {
 pub struct DbCacheTransaction<'a, Block: BlockT> {
 	cache: &'a mut DbCache<Block>,
 	tx: &'a mut DBTransaction,
-	cache_at_ops: HashMap<CacheKeyId, Vec<self::list_cache::CommitOperation<Block, Vec<u8>>>>,
+	cache_at_ops: HashMap<CacheKeyId, self::list_cache::CommitOperations<Block, Vec<u8>>>,
 	best_finalized_block: Option<ComplexBlockId<Block>>,
 }
 
@@ -246,8 +246,8 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 
 		let mut insert_op = |name: CacheKeyId, value: Option<Vec<u8>>| -> Result<(), sp_blockchain::Error> {
 			let cache = self.cache.get_cache(name)?;
-			let mut cache_ops = self.cache_at_ops.remove(&name).unwrap_or_default();
-			let op = cache.on_block_insert(
+			let cache_ops = self.cache_at_ops.entry(name).or_default();
+			cache.on_block_insert(
 				&mut self::list_storage::DbStorageTransaction::new(
 					cache.storage(),
 					&mut self.tx,
@@ -256,11 +256,9 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 				block.clone(),
 				value,
 				entry_type,
-				cache_ops.last(),
+				cache_ops,
 			)?;
 
-			push_cache_op(&mut cache_ops, op);
-			self.cache_at_ops.insert(name, cache_ops);
 			Ok(())
 		};
 
@@ -283,19 +281,16 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 		block: ComplexBlockId<Block>,
 	) -> ClientResult<Self> {
 		for (name, cache) in self.cache.cache_at.iter() {
-			let mut cache_ops = self.cache_at_ops.remove(name).unwrap_or_default();
-			let op = cache.on_block_finalize(
+			let cache_ops = self.cache_at_ops.entry(*name).or_default();
+			cache.on_block_finalize(
 				&mut self::list_storage::DbStorageTransaction::new(
 					cache.storage(),
 					&mut self.tx
 				),
 				parent.clone(),
 				block.clone(),
-				cache_ops.last(),
+				cache_ops,
 			)?;
-
-			push_cache_op(&mut cache_ops, op);
-			self.cache_at_ops.insert(*name, cache_ops);
 		}
 
 		self.best_finalized_block = Some(block);
@@ -309,17 +304,15 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 		reverted_block: &ComplexBlockId<Block>,
 	) -> ClientResult<Self> {
 		for (name, cache) in self.cache.cache_at.iter() {
-			let mut cache_ops = self.cache_at_ops.remove(name).unwrap_or_default();
-			let op = cache.on_block_revert(
+			let cache_ops = self.cache_at_ops.entry(*name).or_default();
+			cache.on_block_revert(
 				&mut self::list_storage::DbStorageTransaction::new(
 					cache.storage(),
 					&mut self.tx
 				),
 				reverted_block,
+				cache_ops,
 			)?;
-
-			cache_ops.push(op);
-			self.cache_at_ops.insert(*name, cache_ops);
 		}
 
 		Ok(self)
@@ -400,28 +393,5 @@ fn cache_pruning_strategy<N: From<u32>>(cache: CacheKeyId) -> PruningStrategy<N>
 		// to old changes tries
 		well_known_cache_keys::CHANGES_TRIE_CONFIG => PruningStrategy::NeverPrune,
 		_ => PruningStrategy::ByDepth(PRUNE_DEPTH.into()),
-	}
-}
-
-/// Push new operation to the operations vec.
-fn push_cache_op<Block: BlockT>(
-	cache_ops: &mut Vec<self::list_cache::CommitOperation<Block, Vec<u8>>>,
-	new_op: Option<self::list_cache::CommitOperation<Block, Vec<u8>>>,
-) {
-	if let Some(new_op) = new_op {
-		if let Some(prev_op) = cache_ops.pop() {
-			match prev_op.merge_with(new_op) {
-				(Some(merged_op), None) => {
-					cache_ops.push(merged_op);
-				},
-				(Some(prev_op), Some(new_op)) => {
-					cache_ops.push(prev_op);
-					cache_ops.push(new_op);
-				},
-				_ => unreachable!("merge of 2 ops can never lead to noop; qed"),
-			}
-		} else {
-			cache_ops.push(new_op);
-		}
 	}
 }
