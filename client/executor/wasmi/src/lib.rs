@@ -276,6 +276,7 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 		-> std::result::Result<wasmi::FuncRef, wasmi::Error>
 	{
 		let signature = sp_wasm_interface::Signature::from(signature);
+		eprintln!("resolve: {}", name);
 		for (function_index, function) in self.0.iter().enumerate() {
 			if name == function.name() {
 				if signature == function.signature() {
@@ -295,9 +296,16 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 			}
 		}
 
+		//panic!("boo {} {:?}", name, signature);
+		let (function_index, _) = self.0.iter().enumerate().find(|(_, x)| x.name() == "stub_function").expect("cant find fallback function");
+		Ok(
+			wasmi::FuncInstance::alloc_host(signature.into(), function_index),
+		)
+		/*
 		Err(wasmi::Error::Instantiation(
 			format!("Export {} not found", name),
 		))
+		*/
 	}
 }
 
@@ -391,6 +399,24 @@ fn call_in_wasm_module(
 		_ => Err(Error::InvalidReturn),
 	}
 }
+
+struct StubFunction;
+
+impl Function for StubFunction {
+	fn name(&self) -> &'static str { "stub_function" }
+
+	fn signature(&self) -> sp_wasm_interface::Signature { sp_wasm_interface::Signature::new_with_args(vec![]) }
+
+	fn execute(
+		&self,
+		context: &mut dyn FunctionContext,
+		args: &mut dyn Iterator<Item = sp_wasm_interface::Value>,
+	) -> sp_wasm_interface::Result<Option<sp_wasm_interface::Value>> {
+		panic!("boo");
+	}
+}
+
+static STUB: &'static StubFunction = &StubFunction;
 
 /// Prepare module instance
 fn instantiate_module(
@@ -568,8 +594,10 @@ impl WasmRuntime for WasmiRuntime {
 pub fn create_instance(
 	code: &[u8],
 	heap_pages: u64,
-	host_functions: Vec<&'static dyn Function>,
+	mut host_functions: Vec<&'static dyn Function>,
 ) -> Result<WasmiRuntime, WasmError> {
+	host_functions.push(STUB);
+	eprintln!("{:?}", host_functions.iter().map(|x| x.name()).collect::<Vec<_>>());
 	let module = Module::from_buffer(&code).map_err(|_| WasmError::InvalidModule)?;
 
 	// Extract the data segments from the wasm code.

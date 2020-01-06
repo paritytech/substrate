@@ -70,6 +70,25 @@ fn returning_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn not_existing_functions_should_return_stub(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+	let test_code = WASM_BINARY;
+
+	let output = call_in_wasm(
+		"test_calling_missing_external",
+		&[],
+		wasm_method,
+		&mut ext,
+		&test_code[..],
+		8,
+	);
+	panic!("{:?}", output);
+	assert!(output.is_err());
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn panicking_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
