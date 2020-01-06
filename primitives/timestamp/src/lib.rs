@@ -104,7 +104,7 @@ impl ProvideInherentData for InherentDataProvider {
 				// KUSAMA HOTFIX: mutate timestamp to make it revert back in time and have slots
 				// happen at 6x their speed from then until we have caught up with the present time.
 
-				const REVIVE_TIMESTAMP: u64 = 1578387600000;
+				const REVIVE_TIMESTAMP: u64 = 1578387600000; // Tuesday, 7 January 2020 09:00:00 GMT
 				const FORK_TIMESTAMP: u64 = 1578139812 * 1000;
 				const WARP_FACTOR: u64 = 6;
 
