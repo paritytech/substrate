@@ -24,7 +24,7 @@ use codec::Decode;
 #[cfg(feature = "std")]
 use sp_inherents::ProvideInherentData;
 #[cfg(feature = "std")]
-use log::debug;
+use log::trace;
 use sp_inherents::{InherentIdentifier, IsFatalError, InherentData};
 
 use sp_runtime::RuntimeString;
@@ -104,14 +104,14 @@ impl ProvideInherentData for InherentDataProvider {
 				// KUSAMA HOTFIX: mutate timestamp to make it revert back in time and have slots happen at
 				// 10x their speed from then until we have caught up with the present time.
 
-				const REVIVE_TIMESTAMP: i64 = 1578266303 * 1000;   // Sun 23:59 UTC
-				const FORK_TIMESTAMP: i64 = 1578139812 * 1000;
-				const WARP_FACTOR: i64 = 10;
+				const REVIVE_TIMESTAMP: u64 = 1578270000 * 1000;   // Sun 23:59 UTC
+				const FORK_TIMESTAMP: u64 = 1578139812 * 1000;
+				const WARP_FACTOR: u64 = 6;
 
-				let time_since_revival = timestamp as i64 - REVIVE_TIMESTAMP;
-				let warped_timestamp = (FORK_TIMESTAMP + WARP_FACTOR * time_since_revival) as u64;
+				let time_since_revival = timestamp.saturating_sub(REVIVE_TIMESTAMP);
+				let warped_timestamp = FORK_TIMESTAMP + WARP_FACTOR * time_since_revival;
 
-				debug!(target: "babe", "timestamp warped: {:?} to {:?} ({:?} since revival)", timestamp, warped_timestamp, time_since_revival);
+				trace!(target: "babe", "timestamp warped: {:?} to {:?} ({:?} since revival)", timestamp, warped_timestamp, time_since_revival);
 
 				// we want to ensure our timestamp is such that slots run monotonically with blocks at
 				// 1/10th of the slot_duration from this slot onwards until we catch up to the wall-clock
