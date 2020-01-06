@@ -897,6 +897,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_initialize(now: T::BlockNumber) {
+			Self::ensure_storage_upgraded();
 			if
 				// if we don't have any ongoing offchain compute.
 				Self::election_status() == OffchainElectionStatus::None &&
