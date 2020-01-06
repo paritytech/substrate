@@ -212,7 +212,7 @@ decl_module! {
 			ensure!(threshold as usize <= friends.len(), Error::<T>::NotEnoughFriends);
 			let max_friends = T::MaxFriends::get() as usize;
 			ensure!(friends.len() <= max_friends, Error::<T>::MaxFriends);
-			ensure!(Self::is_sorted(&friends), Error::<T>::NotSorted);
+			ensure!(Self::is_sorted_and_unique(&friends), Error::<T>::NotSorted);
 
 			// Total deposit is base fee + number of friends * factor fee
 			let friend_deposit = T::FriendDepositFactor::get()
@@ -352,8 +352,8 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	/// Check that friends list is sorted.
-	fn is_sorted(friends: &Vec<T::AccountId>) -> bool {
+	/// Check that friends list is sorted and has no duplicates.
+	fn is_sorted_and_unique(friends: &Vec<T::AccountId>) -> bool {
 		friends.windows(2).all(|w| w[0] < w[1])
 	}
 
