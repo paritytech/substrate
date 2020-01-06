@@ -24,7 +24,6 @@ use sc_executor_common::{
 	error::{Error, Result, WasmError},
 	wasm_runtime::WasmRuntime,
 };
-use sp_core::traits::Externalities;
 use sp_wasm_interface::{Pointer, WordSize, Function};
 use sp_runtime_interface::unpack_ptr_and_len;
 
@@ -70,11 +69,10 @@ impl WasmRuntime for WasmtimeRuntime {
 		&self.host_functions
 	}
 
-	fn call(&mut self, ext: &mut dyn Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>> {
+	fn call(&mut self, method: &str, data: &[u8]) -> Result<Vec<u8>> {
 		call_method(
 			&mut self.context,
 			&mut self.module,
-			ext,
 			method,
 			data,
 			self.heap_pages,
@@ -146,7 +144,6 @@ fn create_compiled_unit(
 fn call_method(
 	context: &mut Context,
 	module: &mut CompiledModule,
-	ext: &mut dyn Externalities,
 	method: &str,
 	data: &[u8],
 	heap_pages: u32,
@@ -176,11 +173,9 @@ fn call_method(
 	let args = [RuntimeValue::I32(u32::from(data_ptr) as i32), RuntimeValue::I32(data_len as i32)];
 
 	// Invoke the function in the runtime.
-	let outcome = sp_externalities::set_and_run_with_externalities(ext, || {
-		context
-			.invoke(&mut instance, method, &args[..])
-			.map_err(|e| Error::Other(format!("error calling runtime: {}", e)))
-	})?;
+	let outcome = context
+		.invoke(&mut instance, method, &args[..])
+		.map_err(|e| Error::Other(format!("error calling runtime: {}", e)))?;
 	let trap_error = reset_env_state_and_take_trap(context, None)?;
 	let (output_ptr, output_len) = match outcome {
 		ActionOutcome::Returned { values } => match values.as_slice() {

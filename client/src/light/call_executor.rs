@@ -205,7 +205,7 @@ pub fn prove_execution<Block, S, E>(
 	where
 		Block: BlockT<Hash=H256>,
 		S: StateBackend<Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher>,
+		E: CallExecutor<Block, Blake2Hasher> + Clone + 'static,
 {
 	let trie_state = state.as_trie_backend()
 		.ok_or_else(|| Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>)?;
@@ -237,7 +237,7 @@ pub fn check_execution_proof<Header, E, H>(
 ) -> ClientResult<Vec<u8>>
 	where
 		Header: HeaderT,
-		E: CodeExecutor,
+		E: CodeExecutor + Clone + 'static,
 		H: Hasher<Out=H256>,
 {
 	check_execution_proof_with_make_header::<Header, E, H, _>(
@@ -262,7 +262,7 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 ) -> ClientResult<Vec<u8>>
 	where
 		Header: HeaderT,
-		E: CodeExecutor,
+		E: CodeExecutor + Clone + 'static,
 		H: Hasher<Out=H256>,
 {
 	let local_state_root = request.header.state_root();

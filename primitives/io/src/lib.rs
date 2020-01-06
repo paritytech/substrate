@@ -36,7 +36,7 @@ use sp_std::ops::Deref;
 #[cfg(feature = "std")]
 use sp_core::{
 	crypto::Pair,
-	traits::KeystoreExt,
+	traits::{KeystoreExt, CallInWasmExt},
 	offchain::{OffchainExt, TransactionPoolExt},
 	hexdisplay::HexDisplay,
 	storage::{ChildStorageKey, ChildInfo},
@@ -50,7 +50,7 @@ use sp_core::{
 };
 
 #[cfg(feature = "std")]
-use ::sp_trie::{TrieConfiguration, trie_types::Layout};
+use sp_trie::{TrieConfiguration, trie_types::Layout};
 
 use sp_runtime_interface::{runtime_interface, Pointer};
 
@@ -350,6 +350,16 @@ pub trait Misc {
 	/// Print any `u8` slice as hex.
 	fn print_hex(data: &[u8]) {
 		log::debug!(target: "runtime", "{}", HexDisplay::from(&data));
+	}
+
+	/// Extract the runtime version of the given wasm blob by calling `Core_version`.
+	///
+	/// Returns the SCALE encoded runtime version and `None` if the call failed.
+	fn runtime_version(&mut self, wasm: &[u8]) -> Option<Vec<u8>> {
+		self.extension::<CallInWasmExt>()
+			.expect("No `CallInWasmExt` associated for the current context!")
+			.call_in_wasm(wasm, "Core_version", &[], None)
+			.ok()
 	}
 }
 

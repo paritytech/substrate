@@ -17,7 +17,6 @@
 //! Definitions for a wasm runtime.
 
 use crate::error::Error;
-use sp_core::traits::Externalities;
 use sp_wasm_interface::Function;
 
 /// A trait that defines an abstract wasm runtime.
@@ -34,6 +33,5 @@ pub trait WasmRuntime {
 	fn host_functions(&self) -> &[&'static dyn Function];
 
 	/// Call a method in the Substrate runtime by name. Returns the encoded result on success.
-	fn call(&mut self, ext: &mut dyn Externalities, method: &str, data: &[u8])
-		-> Result<Vec<u8>, Error>;
+	fn call(&mut self, method: &str, data: &[u8]) -> Result<Vec<u8>, Error>;
 }

@@ -121,6 +121,7 @@ impl<'a, T> Externals for GuestExternals<'a, T> {
 		index: usize,
 		args: RuntimeArgs,
 	) -> Result<Option<RuntimeValue>, Trap> {
+		println!("Lol: {:?}", args);
 		let args = args.as_ref()
 			.iter()
 			.cloned()
@@ -187,9 +188,12 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 			module_name.as_bytes().to_owned(),
 			field_name.as_bytes().to_owned(),
 		);
-		let externval = self.map.get(&key).ok_or_else(|| {
-			wasmi::Error::Instantiation(format!("Export {}:{} not found", module_name, field_name))
-		})?;
+		println!("{} {}", module_name, field_name);
+		let lol = ExternVal::HostFunc(HostFuncIndex(100));
+		let externval = self.map.get(&key).unwrap_or_else(|| {
+			// wasmi::Error::Instantiation(format!("Export {}:{} not found", module_name, field_name))
+			&lol
+		});
 		let host_func_idx = match *externval {
 			ExternVal::HostFunc(ref idx) => idx,
 			_ => {
@@ -262,10 +266,9 @@ impl<T> Instance<T> {
 		env_def_builder: &EnvironmentDefinitionBuilder<T>,
 		state: &mut T,
 	) -> Result<Instance<T>, Error> {
-		let module = Module::from_buffer(code).map_err(|_| Error::Module)?;
+		let module = Module::from_buffer(code).map_err(|e| { println!("{:?}", e); Error::Module})?;
 		let not_started_instance = ModuleInstance::new(&module, env_def_builder)
-			.map_err(|_| Error::Module)?;
-
+			.map_err(|e| { println!("Hello {:?}", e); Error::Module})?;
 
 		let defined_host_functions = env_def_builder.defined_host_functions.clone();
 		let instance = {
@@ -274,7 +277,7 @@ impl<T> Instance<T> {
 				defined_host_functions: &defined_host_functions,
 			};
 			let instance = not_started_instance.run_start(&mut externals)
-				.map_err(|_| Error::Execution)?;
+				.map_err(|e| { println!("Hello {:?}", e); Error::Execution})?;
 			instance
 		};
 
@@ -303,7 +306,10 @@ impl<T> Instance<T> {
 		match result {
 			Ok(None) => Ok(ReturnValue::Unit),
 			Ok(Some(val)) => Ok(ReturnValue::Value(val.into())),
-			Err(_err) => Err(Error::Execution),
+			Err(_err) => {
+				println!("{:?}", _err);
+				Err(Error::Execution)
+			}
 		}
 	}
 }

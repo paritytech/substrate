@@ -22,7 +22,7 @@ use sp_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
 use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
 use log::trace;
-use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}};
+use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}, sync::Arc};
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::WasmRuntime;
 
@@ -80,7 +80,7 @@ pub struct NativeExecutor<D> {
 	/// The number of 64KB pages to allocate for Wasm execution.
 	default_heap_pages: u64,
 	/// The host functions registered with this instance.
-	host_functions: Vec<&'static dyn Function>,
+	host_functions: Arc<Vec<&'static dyn Function>>,
 }
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
@@ -107,7 +107,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			fallback_method,
 			native_version: D::native_version(),
 			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
-			host_functions,
+			host_functions: Arc::new(host_functions),
 		}
 	}
 
@@ -139,7 +139,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 				ext,
 				self.fallback_method,
 				self.default_heap_pages,
-				&self.host_functions,
+				&*self.host_functions,
 			)?;
 
 			let runtime = AssertUnwindSafe(runtime);
@@ -212,13 +212,15 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 						onchain_version,
 					);
 
-					safe_call(
-						move || runtime.call(&mut **ext, method, data).map(NativeOrEncoded::Encoded)
+					with_native_environment(
+						&mut **ext,
+						move || runtime.call(method, data).map(NativeOrEncoded::Encoded)
 					)
 				}
 				(false, _, _) => {
-					safe_call(
-						move || runtime.call(&mut **ext, method, data).map(NativeOrEncoded::Encoded)
+					with_native_environment(
+						&mut **ext,
+						move || runtime.call(method, data).map(NativeOrEncoded::Encoded)
 					)
 				},
 				(true, true, Some(call)) => {
@@ -252,6 +254,32 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 			}
 		});
 		(result, used_native)
+	}
+}
+
+impl<D: NativeExecutionDispatch> sp_core::traits::CallInWasm for NativeExecutor<D> {
+	fn call_in_wasm(
+		&self,
+		wasm_blob: &[u8],
+		method: &str,
+		call_data: &[u8],
+		ext: Option<&mut dyn Externalities>,
+	) -> std::result::Result<Vec<u8>, String> {
+		let instance = crate::wasm_runtime::create_wasm_runtime_with_code(
+			self.fallback_method,
+			self.default_heap_pages,
+			wasm_blob,
+			(*self.host_functions).clone(),
+		).map_err(|e| e.to_string())?;
+
+		let mut instance = AssertUnwindSafe(instance);
+
+		match ext {
+			Some(ext) => with_native_environment(ext, move || instance.call(method, call_data))
+				.and_then(|r| r)
+				.map_err(|e| e.to_string()),
+			None => instance.call(method, call_data).map_err(|e| e.to_string()),
+		}
 	}
 }
 

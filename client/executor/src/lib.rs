@@ -57,14 +57,15 @@ pub use sc_executor_common::{error, allocator, sandbox};
 /// - `call_data`: Will be given as input parameters to `function`
 /// - `execution_method`: The execution method to use.
 /// - `ext`: The externalities that should be set while executing the wasm function.
+///          If `None` is given, no externalities will be set.
 /// - `heap_pages`: The number of heap pages to allocate.
 ///
 /// Returns the `Vec<u8>` that contains the return value of the function.
-pub fn call_in_wasm<E: Externalities, HF: sp_wasm_interface::HostFunctions>(
+pub fn call_in_wasm<HF: sp_wasm_interface::HostFunctions>(
 	function: &str,
 	call_data: &[u8],
 	execution_method: WasmExecutionMethod,
-	ext: &mut E,
+	ext: Option<&mut dyn Externalities>,
 	code: &[u8],
 	heap_pages: u64,
 ) -> error::Result<Vec<u8>> {
@@ -74,7 +75,14 @@ pub fn call_in_wasm<E: Externalities, HF: sp_wasm_interface::HostFunctions>(
 		code,
 		HF::host_functions(),
 	)?;
-	instance.call(ext, function, call_data)
+
+	match ext {
+		Some(ext) => sp_externalities::set_and_run_with_externalities(
+			ext,
+			|| instance.call(function, call_data),
+		),
+		None => instance.call(function, call_data)
+	}
 }
 
 /// Provides runtime information.

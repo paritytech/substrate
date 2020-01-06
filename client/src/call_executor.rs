@@ -65,7 +65,7 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 	where
 		B: backend::Backend<Block, Blake2Hasher>,
-		E: CodeExecutor + RuntimeInfo,
+		E: CodeExecutor + RuntimeInfo + Clone + 'static,
 		Block: BlockT<Hash=H256>,
 {
 	type Error = E::Error;
@@ -272,7 +272,7 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 impl<B, E, Block> sp_version::GetRuntimeVersion<Block> for LocalCallExecutor<B, E>
 	where
 		B: backend::Backend<Block, Blake2Hasher>,
-		E: CodeExecutor + RuntimeInfo,
+		E: CodeExecutor + RuntimeInfo + Clone + 'static,
 		Block: BlockT<Hash=H256>,
 {
 	fn native_version(&self) -> &sp_version::NativeVersion {

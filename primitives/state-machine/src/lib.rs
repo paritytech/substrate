@@ -24,7 +24,7 @@ use hash_db::Hasher;
 use codec::{Decode, Encode, Codec};
 use sp_core::{
 	storage::{well_known_keys, ChildInfo}, NativeOrEncoded, NeverNativeValue,
-	traits::CodeExecutor, hexdisplay::HexDisplay, hash::H256,
+	traits::{CodeExecutor, CallInWasmExt}, hexdisplay::HexDisplay, hash::H256,
 };
 use overlayed_changes::OverlayedChangeSet;
 use sp_externalities::Extensions;
@@ -177,7 +177,7 @@ pub struct StateMachine<'a, B, H, N, T, Exec> where H: Hasher<Out=H256>, B: Back
 
 impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 	H: Hasher<Out=H256>,
-	Exec: CodeExecutor,
+	Exec: CodeExecutor + Clone + 'static,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H, N>,
 	N: crate::changes_trie::BlockNumber,
@@ -190,8 +190,10 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		exec: &'a Exec,
 		method: &'a str,
 		call_data: &'a [u8],
-		extensions: Extensions,
+		mut extensions: Extensions,
 	) -> Self {
+		extensions.register(CallInWasmExt::new(exec.clone()));
+
 		Self {
 			backend,
 			exec,
@@ -456,7 +458,7 @@ pub fn prove_execution<B, H, Exec>(
 where
 	B: Backend<H>,
 	H: Hasher<Out=H256>,
-	Exec: CodeExecutor,
+	Exec: CodeExecutor + Clone + 'static,
 {
 	let trie_backend = backend.as_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
@@ -482,7 +484,7 @@ pub fn prove_execution_on_trie_backend<S, H, Exec>(
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher<Out=H256>,
-	Exec: CodeExecutor,
+	Exec: CodeExecutor + Clone + 'static,
 {
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
 	let mut sm = StateMachine::<_, H, _, InMemoryChangesTrieStorage<H, u64>, Exec>::new(
@@ -509,7 +511,7 @@ pub fn execution_proof_check<H, Exec>(
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
 	H: Hasher<Out=H256>,
-	Exec: CodeExecutor,
+	Exec: CodeExecutor + Clone + 'static,
 	H::Out: Ord + 'static,
 {
 	let trie_backend = create_proof_check_backend::<H>(root.into(), proof)?;
@@ -526,7 +528,7 @@ pub fn execution_proof_check_on_trie_backend<H, Exec>(
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
 	H: Hasher<Out=H256>,
-	Exec: CodeExecutor,
+	Exec: CodeExecutor + Clone + 'static,
 {
 	let mut sm = StateMachine::<_, H, _, InMemoryChangesTrieStorage<H, u64>, Exec>::new(
 		trie_backend, None, overlay, exec, method, call_data, Extensions::default(),
