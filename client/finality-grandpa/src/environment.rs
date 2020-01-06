@@ -199,15 +199,32 @@ impl<Block: BlockT> VoterSetState<Block> {
 	/// Create a new live VoterSetState with round 0 as a completed round using
 	/// the given genesis state and the given authorities. Round 1 is added as a
 	/// current round (with state `HasVoted::No`).
-	pub(crate) fn live(
+	pub fn live(
 		set_id: SetId,
+		authority_set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
+		genesis_state: (Block::Hash, NumberFor<Block>),
+	) -> VoterSetState<Block> {
+		VoterSetState::live_at(
+			set_id,
+			0,
+			authority_set,
+			genesis_state,
+		)
+	}
+
+	/// Create a new live VoterSetState with the given round as a completed
+	/// round using the given genesis state and the given authorities. The
+	/// follow-up round is added as a current round (with state `HasVoted::No`).
+	pub fn live_at(
+		set_id: SetId,
+		round: RoundNumber,
 		authority_set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
 		genesis_state: (Block::Hash, NumberFor<Block>),
 	) -> VoterSetState<Block> {
 		let state = RoundState::genesis((genesis_state.0, genesis_state.1));
 		let completed_rounds = CompletedRounds::new(
 			CompletedRound {
-				number: 0,
+				number: round,
 				state,
 				base: (genesis_state.0, genesis_state.1),
 				votes: Vec::new(),
@@ -217,7 +234,7 @@ impl<Block: BlockT> VoterSetState<Block> {
 		);
 
 		let mut current_rounds = CurrentRounds::new();
-		current_rounds.insert(1, HasVoted::No);
+		current_rounds.insert(round + 1, HasVoted::No);
 
 		VoterSetState::Live {
 			completed_rounds,
@@ -236,7 +253,7 @@ impl<Block: BlockT> VoterSetState<Block> {
 	}
 
 	/// Returns the last completed round.
-	pub(crate) fn last_completed_round(&self) -> CompletedRound<Block> {
+	pub fn last_completed_round(&self) -> CompletedRound<Block> {
 		match self {
 			VoterSetState::Live { completed_rounds, .. } =>
 				completed_rounds.last().clone(),
@@ -349,7 +366,7 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 	}
 
 	/// Read the inner voter set state.
-	pub(crate) fn read(&self) -> parking_lot::RwLockReadGuard<VoterSetState<Block>> {
+	pub fn read(&self) -> parking_lot::RwLockReadGuard<VoterSetState<Block>> {
 		self.inner.read()
 	}
 

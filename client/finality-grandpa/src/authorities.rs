@@ -30,7 +30,7 @@ use std::ops::Add;
 use std::sync::Arc;
 
 /// A shared authority set.
-pub(crate) struct SharedAuthoritySet<H, N> {
+pub struct SharedAuthoritySet<H, N> {
 	inner: Arc<RwLock<AuthoritySet<H, N>>>,
 }
 
@@ -42,7 +42,7 @@ impl<H, N> Clone for SharedAuthoritySet<H, N> {
 
 impl<H, N> SharedAuthoritySet<H, N> {
 	/// Acquire a reference to the inner read-write lock.
-	pub(crate) fn inner(&self) -> &RwLock<AuthoritySet<H, N>> {
+	pub fn inner(&self) -> &RwLock<AuthoritySet<H, N>> {
 		&*self.inner
 	}
 }
@@ -57,12 +57,12 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 	}
 
 	/// Get the current set ID. This is incremented every time the set changes.
-	pub(crate) fn set_id(&self) -> u64 {
+	pub fn set_id(&self) -> u64 {
 		self.inner.read().set_id
 	}
 
 	/// Get the current authorities and their weights (for the current set ID).
-	pub(crate) fn current_authorities(&self) -> VoterSet<AuthorityId> {
+	pub fn current_authorities(&self) -> VoterSet<AuthorityId> {
 		self.inner.read().current_authorities.iter().cloned().collect()
 	}
 }
@@ -85,7 +85,7 @@ pub(crate) struct Status<H, N> {
 
 /// A set of authorities.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
-pub(crate) struct AuthoritySet<H, N> {
+pub struct AuthoritySet<H, N> {
 	pub(crate) current_authorities: AuthorityList,
 	pub(crate) set_id: u64,
 	// Tree of pending standard changes across forks. Standard changes are
@@ -375,7 +375,7 @@ where
 
 /// Kinds of delays for pending changes.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
-pub(crate) enum DelayKind<N> {
+pub enum DelayKind<N> {
 	/// Depth in finalized chain.
 	Finalized,
 	/// Depth in best chain. The median last finalized block is calculated at the time the
@@ -388,7 +388,7 @@ pub(crate) enum DelayKind<N> {
 /// This will be applied when the announcing block is at some depth within
 /// the finalized or unfinalized chain.
 #[derive(Debug, Clone, Encode, PartialEq)]
-pub(crate) struct PendingChange<H, N> {
+pub struct PendingChange<H, N> {
 	/// The new authorities and weights to apply.
 	pub(crate) next_authorities: AuthorityList,
 	/// How deep in the chain the announcing block must be

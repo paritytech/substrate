@@ -118,10 +118,10 @@ pub(crate) fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> Cl
 }
 
 /// Persistent data kept between runs.
-pub(crate) struct PersistentData<Block: BlockT> {
-	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+pub struct PersistentData<Block: BlockT> {
+	pub authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-	pub(crate) set_state: SharedVoterSetState<Block>,
+	pub set_state: SharedVoterSetState<Block>,
 }
 
 fn migrate_from_version0<Block: BlockT, B, G>(
