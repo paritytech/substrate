@@ -181,6 +181,8 @@ impl<H, N> LeafSet<H, N> where
 			.get(&best_number)
 			.map_or(false, |hashes| hashes.contains(&best_hash));
 
+		// we need to make sure that the best block exists in the leaf set as
+		// this is an invariant of regular block import.
 		if !leaves_contains_best {
 			self.insert_leaf(best_number.clone(), best_hash.clone());
 			self.pending_added.push(LeafSetItem { hash: best_hash, number: best_number });
