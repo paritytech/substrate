@@ -36,7 +36,4 @@ pub trait WasmRuntime {
 	/// Call a method in the Substrate runtime by name. Returns the encoded result on success.
 	fn call(&mut self, ext: &mut dyn Externalities, method: &str, data: &[u8])
 		-> Result<Vec<u8>, Error>;
-
-	/// Enable STUB for function called that are missing
-	fn enable_stub(&mut self);
 }

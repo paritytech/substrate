@@ -411,31 +411,14 @@ fn call_in_wasm_module(
 	}
 }
 
-struct StubFunction;
-
-impl Function for StubFunction {
-	fn name(&self) -> &'static str { "stub_function" }
-
-	fn signature(&self) -> sp_wasm_interface::Signature { sp_wasm_interface::Signature::new_with_args(vec![]) }
-
-	fn execute(
-		&self,
-		context: &mut dyn FunctionContext,
-		args: &mut dyn Iterator<Item = sp_wasm_interface::Value>,
-	) -> sp_wasm_interface::Result<Option<sp_wasm_interface::Value>> {
-		panic!("boo");
-	}
-}
-
-static STUB: &'static StubFunction = &StubFunction;
-
 /// Prepare module instance
 fn instantiate_module(
 	heap_pages: usize,
 	module: &Module,
 	host_functions: &[&'static dyn Function],
+	enable_stub: bool,
 ) -> Result<ModuleRef, Error> {
-	let resolver = Resolver(host_functions);
+	let resolver = Resolver(host_functions, enable_stub);
 	// start module instantiation. Don't run 'start' function yet.
 	let intermediate_instance = ModuleInstance::new(
 		module,
@@ -573,6 +556,7 @@ pub struct WasmiRuntime {
 	state_snapshot: StateSnapshot,
 	/// The host functions registered for this instance.
 	host_functions: Vec<&'static dyn Function>,
+	/// Enable STUB for function called that are missing
 	enable_stub: bool,
 }
 
@@ -602,16 +586,13 @@ impl WasmRuntime for WasmiRuntime {
 		call_in_wasm_module(
 			ext, &self.instance, method, data, &self.host_functions, self.enable_stub)
 	}
-
-	fn enable_stub(&mut self) {
-		self.enable_stub = true;
-	}
 }
 
 pub fn create_instance(
 	code: &[u8],
 	heap_pages: u64,
-	mut host_functions: Vec<&'static dyn Function>,
+	host_functions: Vec<&'static dyn Function>,
+	enable_stub: bool,
 ) -> Result<WasmiRuntime, WasmError> {
 	let module = Module::from_buffer(&code).map_err(|_| WasmError::InvalidModule)?;
 
@@ -622,7 +603,7 @@ pub fn create_instance(
 	let data_segments = extract_data_segments(&code)?;
 
 	// Instantiate this module.
-	let instance = instantiate_module(heap_pages as usize, &module, &host_functions)
+	let instance = instantiate_module(heap_pages as usize, &module, &host_functions, enable_stub)
 		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
 	// Take state snapshot before executing anything.
@@ -638,7 +619,7 @@ pub fn create_instance(
 		instance,
 		state_snapshot,
 		host_functions,
-		enable_stub: false,
+		enable_stub,
 	})
 }
 

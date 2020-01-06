@@ -193,21 +193,15 @@ pub fn create_wasm_runtime_with_code(
 	host_functions: Vec<&'static dyn Function>,
 	enable_stub: bool,
 ) -> Result<Box<dyn WasmRuntime>, WasmError> {
-	let mut runtime = match wasm_method {
+	match wasm_method {
 		WasmExecutionMethod::Interpreted =>
-			sc_executor_wasmi::create_instance(code, heap_pages, host_functions)
+			sc_executor_wasmi::create_instance(code, heap_pages, host_functions, enable_stub)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled =>
 			sc_executor_wasmtime::create_instance(code, heap_pages, host_functions)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
-	}?;
-
-	if enable_stub {
-		runtime.enable_stub();
 	}
-
-	Ok(runtime)
 }
 
 fn create_versioned_wasm_runtime<E: Externalities>(
