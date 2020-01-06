@@ -69,7 +69,7 @@ pub use sc_client_api::{
 	},
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
-		ClientInfo, BlockchainEvents, BlockBody, ProvideUncles, ForkBlocks,
+		ClientInfo, BlockchainEvents, BlockBody, ProvideUncles, BadBlocks, ForkBlocks,
 		BlockOf,
 	},
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
@@ -101,6 +101,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	fork_blocks: ForkBlocks<Block>,
+	bad_blocks: BadBlocks<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	_phantom: PhantomData<RA>,
 }
@@ -174,7 +175,14 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
 	let extensions = ExecutionExtensions::new(Default::default(), keystore);
-	Client::new(backend, call_executor, build_genesis_storage, Default::default(), extensions)
+	Client::new(
+		backend,
+		call_executor,
+		build_genesis_storage,
+		Default::default(),
+		Default::default(),
+		extensions,
+	)
 }
 
 impl<B, E, Block, RA> BlockOf for Client<B, E, Block, RA> where
@@ -196,6 +204,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		executor: E,
 		build_genesis_storage: S,
 		fork_blocks: ForkBlocks<Block>,
+		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
@@ -225,6 +234,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			finality_notification_sinks: Default::default(),
 			importing_block: Default::default(),
 			fork_blocks,
+			bad_blocks,
 			execution_extensions,
 			_phantom: Default::default(),
 		})
@@ -1486,6 +1496,8 @@ impl<'a, B, E, Block, RA> sp_consensus::BlockImport<Block> for &'a Client<B, E, 
 	) -> Result<ImportResult, Self::Error> {
 		let BlockCheckParams { hash, number, parent_hash, allow_missing_state, import_existing } = block;
 
+		// Check the block against white and black lists if any are defined
+		// (i.e. fork blocks and bad blocks respectively)
 		let fork_block = self.fork_blocks.as_ref()
 			.and_then(|fs| fs.iter().find(|(n, _)| *n == number));
 
@@ -1499,6 +1511,19 @@ impl<'a, B, E, Block, RA> sp_consensus::BlockImport<Block> for &'a Client<B, E, 
 				);
 				return Ok(ImportResult::KnownBad);
 			}
+		}
+
+		let bad_block = self.bad_blocks.as_ref()
+			.filter(|bs| bs.contains(&hash))
+			.is_some();
+
+		if bad_block {
+			trace!(
+				"Rejecting known bad block: #{} {:?}",
+				number,
+				hash,
+			);
+			return Ok(ImportResult::KnownBad);
 		}
 
 		// Own status must be checked first. If the block and ancestry is pruned
