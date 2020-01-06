@@ -46,6 +46,7 @@ parameter_types! {
 	pub const FounderSetAccount: u64 = 1;
 	pub const SuspensionJudgementSetAccount: u64 = 2;
 	pub const ChallengePeriod: u64 = 8;
+	pub const MaxMembers: u32 = 100;
 
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 1024;
@@ -102,6 +103,7 @@ impl Trait for Test {
 	type FounderOrigin = EnsureSignedBy<FounderSetAccount, u128>;
 	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
 	type ChallengePeriod = ChallengePeriod;
+	type MaxMembers = MaxMembers;
 }
 
 pub type Society = Module<Test>;

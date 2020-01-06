@@ -244,7 +244,7 @@ fn slash_payout_multi_works() {
 fn suspended_member_lifecycle_works() {
 	EnvBuilder::new().execute(|| {
 		// Add 20 to members, who is not the head and can be suspended/removed.
-		Society::add_member(&20);
+		assert_ok!(Society::add_member(&20));
 		assert_eq!(<Members<Test>>::get(), vec![10, 20]);
 		assert_eq!(Strikes::<Test>::get(20), 0);
 		assert_eq!(<SuspendedMembers<Test>>::get(20), None);
@@ -500,9 +500,9 @@ fn head_cannot_be_removed() {
 fn challenges_work() {
 	EnvBuilder::new().execute(|| {
 		// Add some members
-		Society::add_member(&20);
-		Society::add_member(&30);
-		Society::add_member(&40);
+		assert_ok!(Society::add_member(&20));
+		assert_ok!(Society::add_member(&30));
+		assert_ok!(Society::add_member(&40));
 		// Check starting point
 		assert_eq!(Society::members(), vec![10, 20, 30, 40]);
 		assert_eq!(Society::defender(), None);
@@ -544,9 +544,9 @@ fn challenges_work() {
 fn bad_vote_slash_works() {
 	EnvBuilder::new().execute(|| {
 		// Add some members
-		Society::add_member(&20);
-		Society::add_member(&30);
-		Society::add_member(&40);
+		assert_ok!(Society::add_member(&20));
+		assert_ok!(Society::add_member(&30));
+		assert_ok!(Society::add_member(&40));
 		// Create some payouts
 		Society::bump_payout(&10, 5, 100);
 		Society::bump_payout(&20, 5, 100);
@@ -589,7 +589,7 @@ fn user_cannot_bid_twice() {
 		assert_ok!(Society::vouch(Origin::signed(10), 30, 100, 100));
 		assert_noop!(Society::bid(Origin::signed(30), 100), Error::<Test, _>::AlreadyBid);
 		// Cannot vouch when already bid
-		Society::add_member(&50);
+		assert_ok!(Society::add_member(&50));
 		assert_noop!(Society::vouch(Origin::signed(50), 20, 100, 100), Error::<Test, _>::AlreadyBid);
 	});
 }
@@ -598,7 +598,7 @@ fn user_cannot_bid_twice() {
 fn vouching_handles_removed_member_with_bid() {
 	EnvBuilder::new().execute(|| {
 		// Add a member
-		Society::add_member(&20);
+		assert_ok!(Society::add_member(&20));
 		// Have that member vouch for a user
 		assert_ok!(Society::vouch(Origin::signed(20), 30, 1000, 100));
 		// That user is now a bid and the member is vouching
@@ -622,7 +622,7 @@ fn vouching_handles_removed_member_with_bid() {
 fn vouching_handles_removed_member_with_candidate() {
 	EnvBuilder::new().execute(|| {
 		// Add a member
-		Society::add_member(&20);
+		assert_ok!(Society::add_member(&20));
 		// Have that member vouch for a user
 		assert_ok!(Society::vouch(Origin::signed(20), 30, 1000, 100));
 		// That user is now a bid and the member is vouching
@@ -676,5 +676,57 @@ fn votes_are_working() {
 		// Votes are cleaned up
 		assert_eq!(<Votes<Test>>::get(30, 10), None);
 		assert_eq!(<Votes<Test>>::get(40, 10), None);
+	});
+}
+
+#[test]
+fn max_limits_work() {
+	EnvBuilder::new().with_pot(100000).execute(|| {
+		// Max bids is 1000, when extra bids come in, it pops the larger ones off the stack.
+		// Try to put 1010 users into the bid pool
+		for i in (100..1110).rev() {
+			// Give them some funds
+			let _ = Balances::make_free_balance_be(&(i as u128), 1000);
+			assert_ok!(Society::bid(Origin::signed(i as u128), i));
+		}
+		let bids = <Bids<Test>>::get();
+		// Length is 1000
+		assert_eq!(bids.len(), 1000);
+		// First bid is smallest number (100)
+		assert_eq!(bids[0], create_bid(100, 100, BidKind::Deposit(25)));
+		// Last bid is smallest number + 99 (1099)
+		assert_eq!(bids[999], create_bid(1099, 1099, BidKind::Deposit(25)));
+		// Rotate period
+		run_to_block(4);
+		// Max of 10 candidates
+		assert_eq!(Society::candidates().len(), 10);
+		// Fill up membership, max 100, we will do just 95
+		for i in 2000..2095 {
+			assert_ok!(Society::add_member(&(i as u128)));
+		}
+		// Remember there was 1 original member, so 96 total
+		assert_eq!(Society::members().len(), 96);
+		// Rotate period
+		run_to_block(8);
+		// Only of 4 candidates possible now
+		assert_eq!(Society::candidates().len(), 4);
+		// Fill up members with suspended candidates from the first rotation
+		for i in 100..104 {
+			assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), i, Judgement::Approve));
+		}
+		assert_eq!(Society::members().len(), 100);
+		// Can't add any more members
+		assert_noop!(Society::add_member(&98), Error::<Test, _>::MaxMembers);
+		// Eventually members will drop below limit
+		// Rotate period
+		run_to_block(12);
+		// No candidates because full
+		assert_eq!(Society::candidates().len(), 0);
+		// Rotate period
+		run_to_block(100);
+		// Members should be suspended by now, dropping the length well below 100
+		assert_eq!(Society::members().len(), 2);
+		// Candidates are back!
+		assert_eq!(Society::candidates().len(), 10);
 	});
 }

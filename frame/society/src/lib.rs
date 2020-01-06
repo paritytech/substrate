@@ -292,6 +292,9 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 
 	/// The number of blocks between membership challenges.
 	type ChallengePeriod: Get<Self::BlockNumber>;
+
+	/// The max number of members for the society at one time.
+	type MaxMembers: Get<u32>;
 }
 
 /// A vote by a member on a candidate application.
@@ -457,6 +460,9 @@ decl_module! {
 
 		/// The number of blocks between membership challenges.
 		const ChallengePeriod: T::BlockNumber = T::ChallengePeriod::get();
+
+		/// The max number of members for the society at one time.
+		const MaxMembers: u32 = T::MaxMembers::get();
 
 		// Used for handling module events.
 		fn deposit_event() = default;
@@ -792,7 +798,8 @@ decl_module! {
 		fn found(origin, founder: T::AccountId) {
 			T::FounderOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
-			Self::add_member(&founder);
+			// This should never fail in the context of this function...
+			Self::add_member(&founder)?;
 			<Head<T, I>>::put(&founder);
 			Self::deposit_event(RawEvent::Founded(founder));
 		}
@@ -831,8 +838,8 @@ decl_module! {
 			ensure!(<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::NotSuspended);
 			
 			if forgive {
-				// Add member back to society.
-				Self::add_member(&who);
+				// Try to add member back to society. Can fail with `MaxMembers` limit.
+				Self::add_member(&who)?;
 			} else {
 				// Cancel a suspended member's membership, remove their payouts.
 				<Payouts<T, I>>::remove(&who);
@@ -908,14 +915,14 @@ decl_module! {
 						// Make sure we can pay them
 						let pot = Self::pot();
 						ensure!(pot >= value, Error::<T, I>::InsufficientPot);
+						// Try to add user as a member! Can fail with `MaxMember` limit.
+						Self::add_member(&who)?;
 						// Reduce next pot by payout
 						<Pot<T, I>>::put(pot - value);
 						// Add payout for new candidate
 						let maturity = <system::Module<T>>::block_number()
 							+ Self::lock_duration(Self::members().len() as u32);
 						Self::pay_accepted_candidate(&who, value, kind, maturity);
-						// Add user as a member!
-						Self::add_member(&who);
 					}
 					Judgement::Reject => {
 						// Founder has rejected this candidate
@@ -996,6 +1003,8 @@ decl_error! {
 		AlreadyCandidate,
 		/// User is not a candidate
 		NotCandidate,
+		/// Too many members in the society
+		MaxMembers,
 	}
 }
 
@@ -1107,18 +1116,22 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		members.binary_search(who).is_ok()
 	}
 
-	/// Add a member to the sorted members list.
-	fn add_member(who: &T::AccountId) {
-		<Members<T, I>>::mutate(|members| {
-			match members.binary_search(who) {
-				Err(i) => {
-					members.insert(i, who.clone());
-					T::MembershipChanged::change_members_sorted(&[who.clone()], &[], members);
-				},
-				// User is already a member, do nothing.
-				Ok(_) => (),
-			}
-		})
+	/// Add a member to the sorted members list. If the user is already a member, do nothing.
+	/// Can fail when `MaxMember` limit is reached, but has no side-effects.
+	fn add_member(who: &T::AccountId) -> DispatchResult {
+		let mut members = <Members<T, I>>::get();
+		ensure!(members.len() < T::MaxMembers::get() as usize, Error::<T, I>::MaxMembers);
+		match members.binary_search(who) {
+			// Add the new member
+			Err(i) => {
+				members.insert(i, who.clone());
+				T::MembershipChanged::change_members_sorted(&[who.clone()], &[], &members);
+				<Members<T, I>>::put(members);
+				Ok(())
+			},
+			// User is already a member, do nothing.
+			Ok(_) => Ok(()),
+		}
 	}
 
 	/// Remove a member from the members list, except the Head.
@@ -1278,7 +1291,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 
 		// Setup the candidates for the new intake
-		let candidates = Self::take_selected(pot);
+		let candidates = Self::take_selected(members.len(), pot);
 		<Candidates<T, I>>::put(&candidates);
 
 		// Select sqrt(n) random members from the society and make them skeptics.
@@ -1427,13 +1440,15 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		Percent::from_percent(lock_pc as u8) * T::MaxLockDuration::get()
 	}
 
-	/// Get a selection of bidding accounts such that the total bids is no greater than `Pot`.
+	/// Get a selection of bidding accounts such that the total bids is no greater than `Pot` and
+	/// the number of bids would not surpass `MaxMembers` if all were accepted.
 	///
 	/// May be empty.
-	pub fn take_selected(pot: BalanceOf<T, I>) -> Vec<Bid<T::AccountId, BalanceOf<T, I>>>
+	pub fn take_selected(members_len: usize, pot: BalanceOf<T, I>) -> Vec<Bid<T::AccountId, BalanceOf<T, I>>>
 	{
+		let max_members = T::MaxMembers::get() as usize;
 		// No more than 10 will be returned.
-		const MAX_SELECTIONS: usize = 10;
+		let max_selections: usize = 10.min(max_members.saturating_sub(members_len));
 
 		// Get the number of left-most bidders whose bids add up to less than `pot`.
 		let mut bids = <Bids<T, I>>::get();
@@ -1442,7 +1457,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				*total = total.saturating_add(bid.value);
 				Some((*total, bid.who.clone(), bid.kind.clone()))
 			})
-			.take(MAX_SELECTIONS)
+			.take(max_selections)
 			.take_while(|x| pot >= x.0)
 			.count();
 
