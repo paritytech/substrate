@@ -5294,7 +5294,7 @@ dependencies = [
  "sp-block-builder 2.0.0",
  "sp-blockchain 2.0.0",
  "sp-consensus 0.8.0",
- "sp-consensus-aura 0.8.0",
+ "sp-consensus-zigzag 0.8.0",
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-io 2.0.0",
