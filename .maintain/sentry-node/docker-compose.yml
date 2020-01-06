@@ -47,8 +47,8 @@ services:
       - "--reserved-nodes"
       - "/dns4/sentry-a/tcp/30333/p2p/QmV7EhW6J6KgmNdr558RH1mPx2xGGznW7At4BhXzntRFsi"
       # Not only bind to localhost.
-      - "--ws-external"
-      - "--rpc-external"
+      - "--unsafe-ws-external"
+      - "--unsafe-rpc-external"
       # - "--log"
       # - "sub-libp2p=trace"
       # - "--log"
@@ -88,8 +88,8 @@ services:
       - "--rpc-cors"
       - "all"
       # Not only bind to localhost.
-      - "--ws-external"
-      - "--rpc-external"
+      - "--unsafe-ws-external"
+      - "--unsafe-rpc-external"
       - "--log"
       - "sub-authority-discovery=trace"
       - "--sentry"
@@ -121,8 +121,8 @@ services:
       - "--rpc-cors"
       - "all"
       # Not only bind to localhost.
-      - "--ws-external"
-      - "--rpc-external"
+      - "--unsafe-ws-external"
+      - "--unsafe-rpc-external"
       - "--log"
       - "sub-authority-discovery=trace"
 

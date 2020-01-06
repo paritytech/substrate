@@ -9,26 +9,27 @@ build = "build.rs"
 prost-build = "0.5.0"
 
 [dependencies]
-sp-authority-discovery = { version = "2.0.0", path = "../../primitives/authority-discovery" }
 bytes = "0.4.12"
-sc-client-api = { version = "2.0.0", path = "../api" }
 codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
 derive_more = "0.99.2"
 futures = "0.3.1"
 futures-timer = "2.0"
-sc-keystore = { version = "2.0.0", path = "../keystore" }
 libp2p = { version = "0.13.2", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 log = "0.4.8"
-sc-network = { version = "0.8", path = "../network" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 prost = "0.5.0"
+rand = "0.7.2"
+sc-client-api = { version = "2.0.0", path = "../api" }
+sc-keystore = { version = "2.0.0", path = "../keystore" }
+sc-network = { version = "0.8", path = "../network" }
 serde_json = "1.0.41"
+sp-authority-discovery = { version = "2.0.0", path = "../../primitives/authority-discovery" }
+sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 
 [dev-dependencies]
 env_logger = "0.7.0"
-parking_lot = "0.9.0"
+quickcheck = "0.9.0"
 sc-peerset = { version = "2.0.0", path = "../peerset" }
-sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
 sp-api = { version = "2.0.0", path = "../../primitives/api" }
+sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }

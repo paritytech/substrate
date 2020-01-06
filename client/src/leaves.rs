@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -77,7 +77,7 @@ impl<H, N> LeafSet<H, N> where
 	}
 
 	/// Read the leaf list from the DB, using given prefix for keys.
-	pub fn read_from_db(db: &dyn KeyValueDB, column: Option<u32>, prefix: &[u8]) -> Result<Self> {
+	pub fn read_from_db(db: &dyn KeyValueDB, column: u32, prefix: &[u8]) -> Result<Self> {
 		let mut storage = BTreeMap::new();
 
 		for (key, value) in db.iter_from_prefix(column, prefix) {
@@ -177,7 +177,13 @@ impl<H, N> LeafSet<H, N> where
 		}
 
 		let best_number = Reverse(best_number);
-		if !self.contains(&best_number, &best_hash) {
+		let leaves_contains_best = self.storage
+			.get(&best_number)
+			.map_or(false, |hashes| hashes.contains(&best_hash));
+
+		// we need to make sure that the best block exists in the leaf set as
+		// this is an invariant of regular block import.
+		if !leaves_contains_best {
 			self.insert_leaf(best_number.clone(), best_hash.clone());
 			self.pending_added.push(LeafSetItem { hash: best_hash, number: best_number });
 		}
@@ -190,7 +196,7 @@ impl<H, N> LeafSet<H, N> where
 	}
 
 	/// Write the leaf list to the database transaction.
-	pub fn prepare_transaction(&mut self, tx: &mut DBTransaction, column: Option<u32>, prefix: &[u8]) {
+	pub fn prepare_transaction(&mut self, tx: &mut DBTransaction, column: u32, prefix: &[u8]) {
 		let mut buf = prefix.to_vec();
 		for LeafSetItem { hash, number } in self.pending_added.drain(..) {
 			hash.using_encoded(|s| buf.extend(s));
@@ -293,7 +299,7 @@ mod tests {
 	#[test]
 	fn flush_to_disk() {
 		const PREFIX: &[u8] = b"abcdefg";
-		let db = ::kvdb_memorydb::create(0);
+		let db = ::kvdb_memorydb::create(1);
 
 		let mut set = LeafSet::new();
 		set.import(0u32, 0u32, 0u32);
@@ -304,10 +310,10 @@ mod tests {
 
 		let mut tx = DBTransaction::new();
 
-		set.prepare_transaction(&mut tx, None, PREFIX);
+		set.prepare_transaction(&mut tx, 0, PREFIX);
 		db.write(tx).unwrap();
 
-		let set2 = LeafSet::read_from_db(&db, None, PREFIX).unwrap();
+		let set2 = LeafSet::read_from_db(&db, 0, PREFIX).unwrap();
 		assert_eq!(set, set2);
 	}
 
@@ -327,7 +333,7 @@ mod tests {
 	#[test]
 	fn finalization_consistent_with_disk() {
 		const PREFIX: &[u8] = b"prefix";
-		let db = ::kvdb_memorydb::create(0);
+		let db = ::kvdb_memorydb::create(1);
 
 		let mut set = LeafSet::new();
 		set.import(10_1u32, 10u32, 0u32);
@@ -338,12 +344,12 @@ mod tests {
 		assert!(set.contains(10, 10_1));
 
 		let mut tx = DBTransaction::new();
-		set.prepare_transaction(&mut tx, None, PREFIX);
+		set.prepare_transaction(&mut tx, 0, PREFIX);
 		db.write(tx).unwrap();
 
 		let _ = set.finalize_height(11);
 		let mut tx = DBTransaction::new();
-		set.prepare_transaction(&mut tx, None, PREFIX);
+		set.prepare_transaction(&mut tx, 0, PREFIX);
 		db.write(tx).unwrap();
 
 		assert!(set.contains(11, 11_1));
@@ -351,7 +357,7 @@ mod tests {
 		assert!(set.contains(12, 12_1));
 		assert!(!set.contains(10, 10_1));
 
-		let set2 = LeafSet::read_from_db(&db, None, PREFIX).unwrap();
+		let set2 = LeafSet::read_from_db(&db, 0, PREFIX).unwrap();
 		assert_eq!(set, set2);
 	}
 

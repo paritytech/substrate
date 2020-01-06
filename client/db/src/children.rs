@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,12 +21,11 @@ use codec::{Encode, Decode};
 use sp_blockchain;
 use std::hash::Hash;
 
-
 /// Returns the hashes of the children blocks of the block with `parent_hash`.
 pub fn read_children<
 	K: Eq + Hash + Clone + Encode + Decode,
 	V: Eq + Hash + Clone + Encode + Decode,
->(db: &dyn KeyValueDB, column: Option<u32>, prefix: &[u8], parent_hash: K) -> sp_blockchain::Result<Vec<V>> {
+>(db: &dyn KeyValueDB, column: u32, prefix: &[u8], parent_hash: K) -> sp_blockchain::Result<Vec<V>> {
 	let mut buf = prefix.to_vec();
 	parent_hash.using_encoded(|s| buf.extend(s));
 
@@ -55,7 +54,7 @@ pub fn write_children<
 	V: Eq + Hash + Clone + Encode + Decode,
 >(
 	tx: &mut DBTransaction,
-	column: Option<u32>,
+	column: u32,
 	prefix: &[u8],
 	parent_hash: K,
 	children_hashes: V,
@@ -70,7 +69,7 @@ pub fn remove_children<
 	K: Eq + Hash + Clone + Encode + Decode,
 >(
 	tx: &mut DBTransaction,
-	column: Option<u32>,
+	column: u32,
 	prefix: &[u8],
 	parent_hash: K,
 ) {
@@ -87,33 +86,33 @@ mod tests {
 	#[test]
 	fn children_write_read_remove() {
 		const PREFIX: &[u8] = b"children";
-		let db = ::kvdb_memorydb::create(0);
+		let db = ::kvdb_memorydb::create(1);
 
 		let mut tx = DBTransaction::new();
 
 		let mut children1 = Vec::new();
 		children1.push(1_3);
 		children1.push(1_5);
-		write_children(&mut tx, None, PREFIX, 1_1, children1);
+		write_children(&mut tx, 0, PREFIX, 1_1, children1);
 
 		let mut children2 = Vec::new();
 		children2.push(1_4);
 		children2.push(1_6);
-		write_children(&mut tx, None, PREFIX, 1_2, children2);
+		write_children(&mut tx, 0, PREFIX, 1_2, children2);
 
-		db.write(tx.clone()).unwrap();
+		db.write(tx.clone()).expect("(2) Commiting transaction failed");
 
-		let r1: Vec<u32> = read_children(&db, None, PREFIX, 1_1).unwrap();
-		let r2: Vec<u32> = read_children(&db, None, PREFIX, 1_2).unwrap();
+		let r1: Vec<u32> = read_children(&db, 0, PREFIX, 1_1).expect("(1) Getting r1 failed");
+		let r2: Vec<u32> = read_children(&db, 0, PREFIX, 1_2).expect("(1) Getting r2 failed");
 
 		assert_eq!(r1, vec![1_3, 1_5]);
 		assert_eq!(r2, vec![1_4, 1_6]);
 
-		remove_children(&mut tx, None, PREFIX, 1_2);
-		db.write(tx).unwrap();
+		remove_children(&mut tx, 0, PREFIX, 1_2);
+		db.write(tx).expect("(2) Commiting transaction failed");
 
-		let r1: Vec<u32> = read_children(&db, None, PREFIX, 1_1).unwrap();
-		let r2: Vec<u32> = read_children(&db, None, PREFIX, 1_2).unwrap();
+		let r1: Vec<u32> = read_children(&db, 0, PREFIX, 1_1).expect("(2) Getting r1 failed");
+		let r2: Vec<u32> = read_children(&db, 0, PREFIX, 1_2).expect("(2) Getting r2 failed");
 
 		assert_eq!(r1, vec![1_3, 1_5]);
 		assert_eq!(r2.len(), 0);

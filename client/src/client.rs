@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -1142,14 +1142,22 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(())
 	}
 
-	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
-	/// successfully reverted.
+	/// Attempts to revert the chain by `n` blocks guaranteeing that no block is
+	/// reverted past the last finalized block. Returns the number of blocks
+	/// that were successfully reverted.
 	pub fn revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
 		Ok(self.backend.revert(n, false)?)
 	}
 
-	/// Attempts to revert the chain by `n` blocks disregarding finality. Returns the number of
-	/// blocks that were successfully reverted.
+	/// Attempts to revert the chain by `n` blocks disregarding finality. This
+	/// method will revert any finalized blocks as requested and can potentially
+	/// lead the node in an inconsistent state. Other modules in the system that
+	/// persist data and that rely on finality (e.g. consensus parts) will be
+	/// unaffected by the revert. Use this method with caution and making sure
+	/// that no other data needs to be reverted for consistency aside from the
+	/// block data.
+	///
+	/// Returns the number of blocks that were successfully reverted.
 	pub fn unsafe_revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
 		Ok(self.backend.revert(n, true)?)
 	}
@@ -1478,7 +1486,10 @@ impl<'a, B, E, Block, RA> sp_consensus::BlockImport<Block> for &'a Client<B, E, 
 	) -> Result<ImportResult, Self::Error> {
 		let BlockCheckParams { hash, number, parent_hash, allow_missing_state, import_existing } = block;
 
-		if let Some(h) = self.fork_blocks.as_ref().and_then(|x| x.get(&number)) {
+		let fork_block = self.fork_blocks.as_ref()
+			.and_then(|fs| fs.iter().find(|(n, _)| *n == number));
+
+		if let Some((_, h)) = fork_block {
 			if &hash != h  {
 				trace!(
 					"Rejecting block from known invalid fork. Got {:?}, expected: {:?} at height {}",

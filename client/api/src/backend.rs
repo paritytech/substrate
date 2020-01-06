@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -283,7 +283,9 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 		Ok(())
 	}
 
-	/// Attempts to revert the chain by `n` blocks.
+	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set
+	/// it will attempt to revert past any finalized block, this is unsafe and
+	/// can potentially leave the node in an inconsistent state.
 	///
 	/// Returns the number of blocks that were successfully reverted.
 	fn revert(
