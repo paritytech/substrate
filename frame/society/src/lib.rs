@@ -248,9 +248,6 @@ use frame_system::{self as system, ensure_signed};
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
-/// The bid tuple: (value, who, bid_kind)
-type BidsOf<T, I> = Vec<(BalanceOf<T, I>, <T as system::Trait>::AccountId, BidKind<<T as system::Trait>::AccountId, BalanceOf<T, I>>)>;
-
 const MODULE_ID: ModuleId = ModuleId(*b"py/socie");
 
 /// The module's configuration trait.
@@ -345,6 +342,17 @@ pub enum VouchingStatus {
 /// Number of strikes that a member has against them.
 pub type StrikeCount = u32;
 
+/// A bid for entry into society.
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug,)]
+pub struct Bid<AccountId, Balance> {
+	/// The bidder/candidate trying to enter society
+	who: AccountId,
+	/// The kind of bid placed for this bidder/candidate. See `BidKind`.
+	kind: BidKind<AccountId, Balance>,
+	/// The reward that the bidder has requested for successfully joining the society.
+	value: Balance,
+}
+
 /// A vote by a member on a candidate application.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum BidKind<AccountId, Balance> {
@@ -373,7 +381,7 @@ impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
 decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Society {
 		/// The current set of candidates; bidders that are attempting to become members.
-		pub Candidates get(candidates): BidsOf<T, I>;
+		pub Candidates get(candidates): Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
 
 		/// The set of suspended candidates.
 		pub SuspendedCandidates get(suspended_candidate):
@@ -397,7 +405,7 @@ decl_storage! {
 		pub SuspendedMembers get(fn suspended_member): map T::AccountId => Option<()>;
 
 		/// The current bids, stored ordered by the value of the bid.
-		Bids: BidsOf<T, I>;
+		Bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
 
 		/// Members currently vouching or banned from vouching again
 		Vouching get(fn vouching): map T::AccountId => Option<VouchingStatus>;
@@ -531,11 +539,11 @@ decl_module! {
 
 			let pos = pos as usize;
 			<Bids<T, I>>::mutate(|b|
-				if pos < b.len() && b[pos].1 == who {
+				if pos < b.len() && b[pos].who == who {
 					// Either unreserve the deposit or free up the vouching member.
 					// In neither case can we do much if the action isn't completable, but there's
 					// no reason that either should fail.
-					match b.remove(pos).2 {
+					match b.remove(pos).kind {
 						BidKind::Deposit(deposit) => {
 							let _ = T::Currency::unreserve(&who, deposit);
 						}
@@ -643,9 +651,9 @@ decl_module! {
 			let pos = pos as usize;
 			<Bids<T, I>>::mutate(|b|
 				if pos < b.len() {
-					b[pos].2.check_voucher(&voucher)?;
+					b[pos].kind.check_voucher(&voucher)?;
 					<Vouching<T, I>>::remove(&voucher);
-					let who = b.remove(pos).1;
+					let who = b.remove(pos).who;
 					Self::deposit_event(RawEvent::Unvouch(who));
 					Ok(())
 				} else {
@@ -835,9 +843,9 @@ decl_module! {
 					// If their vouch is already a candidate, do nothing.
 					<Bids<T, I>>::mutate(|bids|
 						// Try to find the matching bid
-						if let Some(pos) = bids.iter().position(|b| b.2.check_voucher(&who).is_ok()) {
+						if let Some(pos) = bids.iter().position(|b| b.kind.check_voucher(&who).is_ok()) {
 							// Remove the bid, and emit an event
-							let vouched = bids.remove(pos).1;
+							let vouched = bids.remove(pos).who;
 							Self::deposit_event(RawEvent::Unvouch(vouched));
 						}
 					);
@@ -1048,19 +1056,23 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Puts a bid into storage ordered by smallest to largest value.
 	/// Allows a maximum of 1000 bids in queue, removing largest value people first.
 	fn put_bid(
-		mut bids: BidsOf<T, I>,
+		mut bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>,
 		who: &T::AccountId,
 		value: BalanceOf<T, I>,
 		bid_kind: BidKind<T::AccountId, BalanceOf<T, I>>
 	) {
 		const MAX_BID_COUNT: usize = 1000;
 
-		match bids.binary_search_by(|x| x.0.cmp(&value)) {
-			Ok(pos) | Err(pos) => bids.insert(pos, (value, who.clone(), bid_kind)),
+		match bids.binary_search_by(|bid| bid.value.cmp(&value)) {
+			Ok(pos) | Err(pos) => bids.insert(pos, Bid {
+				value,
+				who: who.clone(),
+				kind: bid_kind,
+			}),
 		}
 		// Keep it reasonably small.
 		if bids.len() > MAX_BID_COUNT {
-			let (_, popped, kind) = bids.pop().expect("b.len() > 1000; qed");
+			let Bid { who: popped, kind, .. } = bids.pop().expect("b.len() > 1000; qed");
 			match kind {
 				BidKind::Deposit(deposit) => {
 					let _ = T::Currency::unreserve(&popped, deposit);
@@ -1076,35 +1088,32 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Check a user is a bid.
-	fn is_bid(
-		bids: &BidsOf<T, I>,
-		m: &T::AccountId
-	) -> bool {
+	fn is_bid(bids: &Vec<Bid<T::AccountId, BalanceOf<T, I>>>, who: &T::AccountId) -> bool {
 		// Bids are ordered by `value`, so we cannot binary search for a user.
-		bids.iter().find(|x| x.1 == *m).is_some()
+		bids.iter().find(|bid| bid.who == *who).is_some()
 	}
 
 	/// Check a user is a candidate.
-	fn is_candidate(m: &T::AccountId) -> bool {
+	fn is_candidate(who: &T::AccountId) -> bool {
 		// Candidates are ordered by `value`, so we cannot binary search for a user.
 		<Candidates<T, I>>::get()
 			.iter()
-			.find(|x| x.1 == *m)
+			.find(|bid| bid.who == *who)
 			.is_some()
 	}
 
 	/// Check a user is a member.
-	fn is_member(members: &Vec<T::AccountId>, m: &T::AccountId) -> bool {
-		members.binary_search(m).is_ok()
+	fn is_member(members: &Vec<T::AccountId>, who: &T::AccountId) -> bool {
+		members.binary_search(who).is_ok()
 	}
 
 	/// Add a member to the sorted members list.
-	fn add_member(m: &T::AccountId) {
+	fn add_member(who: &T::AccountId) {
 		<Members<T, I>>::mutate(|members| {
-			match members.binary_search(m) {
+			match members.binary_search(who) {
 				Err(i) => {
-					members.insert(i, m.clone());
-					T::MembershipChanged::change_members_sorted(&[m.clone()], &[], members);
+					members.insert(i, who.clone());
+					T::MembershipChanged::change_members_sorted(&[who.clone()], &[], members);
 				},
 				// User is already a member, do nothing.
 				Ok(_) => (),
@@ -1157,7 +1166,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			let mut total_slash = <BalanceOf<T, I>>::zero();
 			let mut total_payouts = <BalanceOf<T, I>>::zero();
 
-			let accepted = candidates.into_iter().filter_map(|(value, candidate, kind)| {
+			let accepted = candidates.into_iter().filter_map(|Bid {value, who: candidate, kind }| {
 				let mut approval_count = 0;
 
 				// Creates a vector of (vote, member) for the given candidate
@@ -1275,7 +1284,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		// Select sqrt(n) random members from the society and make them skeptics.
 		let pick_member = |_| pick_item(&mut rng, &members[..]).expect("exited if members empty; qed");
 		for skeptic in (0..members.len().integer_sqrt()).map(pick_member) {
-			for (_, c, _) in candidates.iter() {
+			for Bid{ who: c, .. } in candidates.iter() {
 				<Votes<T, I>>::insert(c, skeptic, Vote::Skeptic);
 			}
 		}
@@ -1421,8 +1430,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Get a selection of bidding accounts such that the total bids is no greater than `Pot`.
 	///
 	/// May be empty.
-	pub fn take_selected(pot: BalanceOf<T, I>)
-		-> BidsOf<T, I>
+	pub fn take_selected(pot: BalanceOf<T, I>) -> Vec<Bid<T::AccountId, BalanceOf<T, I>>>
 	{
 		// No more than 10 will be returned.
 		const MAX_SELECTIONS: usize = 10;
@@ -1430,9 +1438,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		// Get the number of left-most bidders whose bids add up to less than `pot`.
 		let mut bids = <Bids<T, I>>::get();
 		let taken = bids.iter()
-			.scan(<BalanceOf<T, I>>::zero(), |total, &(bid, ref who, ref kind)| {
-				*total = total.saturating_add(bid);
-				Some((*total, who.clone(), kind.clone()))
+			.scan(<BalanceOf<T, I>>::zero(), |total, bid| {
+				*total = total.saturating_add(bid.value);
+				Some((*total, bid.who.clone(), bid.kind.clone()))
 			})
 			.take(MAX_SELECTIONS)
 			.take_while(|x| pot >= x.0)
