@@ -462,6 +462,7 @@ decl_module! {
 		/// - `value`: A one time payment the bid would like to receive when joining the society.
 		///
 		/// # <weight>
+		/// Key: B (len of bids), C (len of candidates), M (len of members), X (balance reserve)
 		/// - Storage Reads:
 		/// 	- One storage read to check for suspended candidate. O(1)
 		/// 	- One storage read to check for suspended member. O(1)
@@ -475,14 +476,15 @@ decl_module! {
 		/// 	- O(B + C + log M) search to check user is not already a part of society.
 		/// 	- O(log B) search to insert the new bid sorted.
 		/// - External Module Operations:
-		/// 	- One balance reserve operation.
+		/// 	- One balance reserve operation. O(X)
 		/// 	- Up to one balance unreserve operation if bids.len() > MAX_BID_COUNT.
 		/// - Events:
 		/// 	- One event for new bid.
 		/// 	- Up to one event for AutoUnbid if bid.len() > MAX_BID_COUNT.
+		///
+		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
 
-		/// Alters Bids (O(N) decode+encode, O(logN) search, <=2*O(N) write).
 		pub fn bid(origin, value: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(!<SuspendedCandidates<T, I>>::exists(&who), Error::<T, I>::Suspended);
@@ -511,9 +513,12 @@ decl_module! {
 		/// - `pos`: Position in the `Bids` vector of the bid who wants to unbid.
 		///
 		/// # <weight>
+		/// Key: B (len of bids), X (balance unreserve)
 		/// - One storage read and write to retrieve and update the bids. O(B)
-		/// - Either one unreserve balance action or one vouching storage removal. O(1)
+		/// - Either one unreserve balance action O(X) or one vouching storage removal. O(1)
 		/// - One event.
+		///
+		/// Total Complexity: O(B + X)
 		/// # </weight>
 
 		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
@@ -542,18 +547,61 @@ decl_module! {
 			)
 		}
 
-		/// As a member, vouch for someone else.
+		/// As a member, vouch for someone to join society by placing a bid on their behalf.
+		///
+		/// There is no deposit required to vouch for a new bid, but a member can only vouch for
+		/// one bid at a time. If the bid becomes a suspended candidate and ultimately rejected by
+		/// the suspension judgement origin, the member will be banned from vouching again.
+		///
+		/// As a vouching member, you can claim a tip if the candidate is accepted. This tip will
+		/// be paid as a portion of the reward the member will receive for joining the society.
+		///
+		/// The dispatch origin for this call must be _Signed_ and a member.
+		///
+		/// Parameters:
+		/// - `who`: The user who you would like to vouch for.
+		/// - `value`: The total reward to be paid between you and the candidate if they become
+		/// a member in the society.
+		/// - `tip`: Your cut of the total `value` payout when the candidate is inducted into
+		/// the society. Tips larger than `value` will be saturated upon payout.
+		///
+		/// # <weight>
+		/// Key: B (len of bids), C (len of candidates), M (len of members)
+		/// - Storage Reads:
+		/// 	- One storage read to retrieve all members. O(M)
+		/// 	- One storage read to check member is not already vouching. O(1)
+		/// 	- One storage read to check for suspended candidate. O(1)
+		/// 	- One storage read to check for suspended member. O(1)
+		/// 	- One storage read to retrieve all current bids. O(B)
+		/// 	- One storage read to retrieve all current candidates. O(C)
+		/// - Storage Writes:
+		/// 	- One storage write to insert vouching status to the member. O(1)
+		/// 	- One storage mutate to add a new bid to the vector O(B) (TODO: possible optimization w/ read)
+		/// 	- Up to one storage removal if bid.len() > MAX_BID_COUNT. O(1)
+		/// - Notable Computation:
+		/// 	- O(log M) search to check sender is a member.
+		/// 	- O(B + C + log M) search to check user is not already a part of society.
+		/// 	- O(log B) search to insert the new bid sorted.
+		/// - External Module Operations:
+		/// 	- One balance reserve operation. O(X)
+		/// 	- Up to one balance unreserve operation if bids.len() > MAX_BID_COUNT.
+		/// - Events:
+		/// 	- One event for vouch.
+		/// 	- Up to one event for AutoUnbid if bid.len() > MAX_BID_COUNT.
+		///
+		/// Total Complexity: O(M + B + C + logM + logB + X)
+		/// # </weight>
 		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			// Check signer can vouch.
 			ensure!(Self::is_member(&voucher), Error::<T, I>::NotMember);
+			ensure!(!Self::is_member(&who), Error::<T, I>::AlreadyMember);
 			ensure!(!<Vouching<T, I>>::exists(&voucher), Error::<T, I>::AlreadyVouching);
 			// Check user is not already part of society.
 			ensure!(!<SuspendedCandidates<T, I>>::exists(&who), Error::<T, I>::Suspended);
 			ensure!(!<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::Suspended);
 			ensure!(!Self::is_bid(&who), Error::<T, I>::AlreadyBid);
 			ensure!(!Self::is_candidate(&who), Error::<T, I>::AlreadyCandidate);
-			ensure!(!Self::is_member(&who), Error::<T, I>::AlreadyMember);
 
 			<Vouching<T, I>>::insert(&voucher, VouchingStatus::Vouching);
 			Self::put_bid(who.clone(), value.clone(), BidKind::Vouch(voucher.clone(), tip));
@@ -570,10 +618,13 @@ decl_module! {
 		/// - `pos`: Position in the `Bids` vector of the bid who should be unvouched.
 		///
 		/// # <weight>
+		/// Key: B (len of bids)
 		/// - One storage read O(1) to check the signer is a vouching member.
 		/// - One storage mutate to retrieve and update the bids. O(B)
 		/// - One vouching storage removal. O(1)
 		/// - One event.
+		///
+		/// Total Complexity: O(B)
 		/// # </weight>
 
 		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
@@ -605,11 +656,14 @@ decl_module! {
 		///              approved (`true`) or rejected (`false`).
 		///
 		/// # <weight>
+		/// Key: C (len of candidates), M (len of members)
 		/// - One storage read O(M) and O(log M) search to check user is a member.
 		/// - One account lookup.
 		/// - One storage read O(C) and O(C) search to check that user is a candidate.
 		/// - One storage write to add vote to votes. O(1)
 		/// - One event.
+		///
+		/// Total Complexity: O(M + logM + C)
 		/// # </weight>
 
 		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
@@ -634,9 +688,12 @@ decl_module! {
 		/// approved (`true`) or rejected (`false`).
 		///
 		/// # <weight>
+		/// - Key: M (len of members)
 		/// - One storage read O(M) and O(log M) search to check user is a member.
 		/// - One storage write to add vote to votes. O(1)
 		/// - One event.
+		///
+		/// Total Complexity: O(M + logM)
 		/// # </weight>
 
 		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
@@ -661,11 +718,14 @@ decl_module! {
 		/// payouts remaining.
 		///
 		/// # <weight>
+		/// Key: M (len of members), P (number of payouts for a particular member)
 		/// - One storage read O(M) and O(log M) search to check signer is a member.
 		/// - One storage read O(P) to get all payouts for a member.
 		/// - One storage read O(1) to get the current block number.
-		/// - One currency transfer call.
+		/// - One currency transfer call. O(X)
 		/// - One storage write or removal to update the member's payouts. O(P)
+		///
+		/// Total Complexity: O(M + logM + P + X)
 		/// # </weight>
 
 		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
@@ -705,6 +765,8 @@ decl_module! {
 		/// - One storage write to add the first member to society. O(1)
 		/// - One storage write to add new Head. O(1)
 		/// - One event.
+		///
+		/// Total Complexity: O(1)
 		/// # </weight>
 
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
@@ -732,6 +794,7 @@ decl_module! {
 		///               forgives (`true`) or rejects (`false`) a suspended member.
 		///
 		/// # <weight>
+		/// Key: B (len of bids), M (len of members)
 		/// - One storage read to check `who` is a suspended member. O(1)
 		/// - Up to one storage write O(M) with O(log M) binary search to add a member back to society.
 		/// - Up to 3 storage removals O(1) to clean up a removed member.
@@ -739,6 +802,8 @@ decl_module! {
 		/// - Up to one additional event if unvouch takes place.
 		/// - One storage removal. O(1)
 		/// - One event for the judgement.
+		///
+		/// Total Complexity: O(M + logM + B)
 		/// # </weight>
 
 		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
@@ -791,6 +856,7 @@ decl_module! {
 		/// - `judgement` - `Approve`, `Reject`, or `Rebid`.
 		///
 		/// # <weight>
+		/// Key: B (len of bids), M (len of members), X (balance action)
 		/// - One storage read to check `who` is a suspended candidate.
 		/// - One storage removal of the suspended candidate.
 		/// - Approve Logic
@@ -802,13 +868,15 @@ decl_module! {
 		/// 	- Up to two new storage writes to payouts.
 		/// 	- Up to one storage write with O(log M) binary search to add a member to society.
 		/// - Reject Logic
-		/// 	- Up to one repatriate reserved currency action.
+		/// 	- Up to one repatriate reserved currency action. O(X)
 		/// 	- Up to one storage write to ban the vouching member from vouching again.
 		/// - Rebid Logic
 		/// 	- Storage mutate with O(log B) binary search to place the user back into bids.
 		/// - Up to one additional event if unvouch takes place.
 		/// - One storage removal.
 		/// - One event for the judgement.
+		///
+		/// Total Complexity: O(M + logM + B + X)
 		/// # </weight>
 
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
