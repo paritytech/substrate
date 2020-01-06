@@ -210,8 +210,9 @@ impl<H, N> LeafSet<H, N> where
 		}
 	}
 
-	fn contains(&self, number: &Reverse<N>, hash: &H) -> bool {
-		self.storage.get(&number).map_or(false, |hashes| hashes.contains(hash))
+	#[cfg(test)]
+	fn contains(&self, number: N, hash: H) -> bool {
+		self.storage.get(&Reverse(number)).map_or(false, |hashes| hashes.contains(&hash))
 	}
 
 	fn insert_leaf(&mut self, number: Reverse<N>, hash: H) {
