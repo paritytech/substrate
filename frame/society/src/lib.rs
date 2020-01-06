@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -249,7 +249,6 @@ use frame_system::{self as system, ensure_signed};
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 const MODULE_ID: ModuleId = ModuleId(*b"py/socie");
-const MAX_BID_COUNT: usize = 1000;
 
 /// The module's configuration trait.
 pub trait Trait<I=DefaultInstance>: system::Trait {
@@ -469,12 +468,18 @@ decl_module! {
 		/// 	- One storage read to retrieve all current bids.
 		/// 	- One storage read to retrieve all current candidates.
 		/// 	- One storage read to retrieve all members.
-		/// - O(B + C + log M) to check user is not already a part of society.
+		/// - Storage Writes:
+		/// 	- One storage mutate to add a new bid to the vector (TODO: possible optimization w/ read)
+		/// 	- Up to one storage removal if bid.len() > MAX_BID_COUNT.
+		/// - Notable Computation:
+		/// 	- O(B + C + log M) search to check user is not already a part of society.
+		/// 	- O(log B) search to insert the new bid sorted.
 		/// - External Module Operations:
 		/// 	- One balance reserve operation.
-		/// - Write Operations:
-		/// 	- 
-		/// - One event.
+		/// 	- Up to one balance unreserve operation if bids.len() > MAX_BID_COUNT.
+		/// - Events:
+		/// 	- One event for new bid.
+		/// 	- Up to one event for AutoUnbid if bid.len() > MAX_BID_COUNT.
 		/// # </weight>
 
 		/// Alters Bids (O(N) decode+encode, O(logN) search, <=2*O(N) write).
@@ -497,6 +502,8 @@ decl_module! {
 		/// A bidder can remove their bid for entry into society.
 		/// By doing so, they will have their candidate deposit returned or
 		/// they will unvouch their voucher.
+		///
+		/// Payment: The bid deposit is unreserved if the user made a bid.
 		///
 		/// The dispatch origin for this call must be _Signed_ and a bidder.
 		///
@@ -566,8 +573,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - One storage read to check the signer is a vouching member.
-		/// - One storage read and write to retrieve and update the bids.
-		/// - A vector lookup to check if the user is at the specified position.
+		/// - One storage mutate to retrieve and update the bids.
 		/// - One vouching storage removal.
 		/// - One event.
 		/// # </weight>
@@ -627,7 +633,7 @@ decl_module! {
 		///
 		/// Parameters:
 		/// - `approve`: A boolean which says if the candidate should be
-		///              approved (`true`) or rejected (`false`).
+		/// approved (`true`) or rejected (`false`).
 		///
 		/// # <weight>
 		/// - One storage read and O(log M) search to check user is a member.
@@ -648,7 +654,10 @@ decl_module! {
 
 		/// Transfer the first matured payout for the sender and remove it from the records.
 		///
-		/// This extrinsic can be called multiple times to claim all matured payouts.
+		/// NOTE: This extrinsic needs to be called multiple times to claim multiple matured payouts.
+		///
+		/// Payment: The member will receive a payment equal to their first matured
+		/// payout to their free balance.
 		///
 		/// The dispatch origin for this call must be _Signed_ and a member with
 		/// payouts remaining.
@@ -961,6 +970,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Puts a bid into storage ordered by smallest to largest value.
 	/// Allows a maximum of 1000 bids in queue, removing largest value people first.
 	fn put_bid(who: T::AccountId, value: BalanceOf<T, I>, bid_kind: BidKind<T::AccountId, BalanceOf<T, I>>) {
+		const MAX_BID_COUNT: usize = 1000;
+
 		<Bids<T, I>>::mutate(|bids| {
 			match bids.binary_search_by(|x| x.0.cmp(&value)) {
 				Ok(pos) | Err(pos) => bids.insert(pos, (value, who, bid_kind)),

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -501,8 +501,8 @@ fn challenges_work() {
 	EnvBuilder::new().execute(|| {
 		// Add some members
 		Society::add_member(&20);
-		assert_ok!(Society::add_member(&30));
-		assert_ok!(Society::add_member(&40));
+		Society::add_member(&30);
+		Society::add_member(&40);
 		// Check starting point
 		assert_eq!(Society::members(), vec![10, 20, 30, 40]);
 		assert_eq!(Society::defender(), None);
@@ -545,8 +545,8 @@ fn bad_vote_slash_works() {
 	EnvBuilder::new().execute(|| {
 		// Add some members
 		Society::add_member(&20);
-		assert_ok!(Society::add_member(&30));
-		assert_ok!(Society::add_member(&40));
+		Society::add_member(&30);
+		Society::add_member(&40);
 		// Create some payouts
 		Society::bump_payout(&10, 5, 100);
 		Society::bump_payout(&20, 5, 100);
@@ -589,7 +589,7 @@ fn user_cannot_bid_twice() {
 		assert_ok!(Society::vouch(Origin::signed(10), 30, 100, 100));
 		assert_noop!(Society::bid(Origin::signed(30), 100), Error::<Test, _>::AlreadyBid);
 		// Cannot vouch when already bid
-		assert_ok!(Society::add_member(&50));
+		Society::add_member(&50);
 		assert_noop!(Society::vouch(Origin::signed(50), 20, 100, 100), Error::<Test, _>::AlreadyBid);
 	});
 }
