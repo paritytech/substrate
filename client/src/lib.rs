@@ -68,6 +68,7 @@
 //! 	<Storage>::default(),
 //! 	Default::default(),
 //! 	Default::default(),
+//! 	Default::default(),
 //! );
 //! ```
 //!
