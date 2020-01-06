@@ -204,10 +204,27 @@ impl<Block: BlockT> VoterSetState<Block> {
 		authority_set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
 		genesis_state: (Block::Hash, NumberFor<Block>),
 	) -> VoterSetState<Block> {
+		VoterSetState::live_at(
+			set_id,
+			0,
+			authority_set,
+			genesis_state,
+		)
+	}
+
+	/// Create a new live VoterSetState with the given round as a completed
+	/// round using the given genesis state and the given authorities. The
+	/// follow-up round is added as a current round (with state `HasVoted::No`).
+	pub fn live_at(
+		set_id: SetId,
+		round: RoundNumber,
+		authority_set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
+		genesis_state: (Block::Hash, NumberFor<Block>),
+	) -> VoterSetState<Block> {
 		let state = RoundState::genesis((genesis_state.0, genesis_state.1));
 		let completed_rounds = CompletedRounds::new(
 			CompletedRound {
-				number: 0,
+				number: round,
 				state,
 				base: (genesis_state.0, genesis_state.1),
 				votes: Vec::new(),
@@ -217,7 +234,7 @@ impl<Block: BlockT> VoterSetState<Block> {
 		);
 
 		let mut current_rounds = CurrentRounds::new();
-		current_rounds.insert(1, HasVoted::No);
+		current_rounds.insert(round + 1, HasVoted::No);
 
 		VoterSetState::Live {
 			completed_rounds,
