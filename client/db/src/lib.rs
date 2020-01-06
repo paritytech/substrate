@@ -1484,40 +1484,71 @@ impl<Block> sc_client_api::backend::Backend<Block, Blake2Hasher> for Backend<Blo
 		Some(self.offchain_storage.clone())
 	}
 
-	fn revert(&self, n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
-		let mut best = self.blockchain.info().best_number;
+	fn revert(&self, n: NumberFor<Block>, revert_finalized: bool) -> ClientResult<NumberFor<Block>> {
+		let mut best_number = self.blockchain.info().best_number;
+		let mut best_hash = self.blockchain.info().best_hash;
 		let finalized = self.blockchain.info().finalized_number;
-		let revertible = best - finalized;
-		let n = if revertible < n { revertible } else { n };
 
-		for c in 0 .. n.saturated_into::<u64>() {
-			if best.is_zero() {
-				return Ok(c.saturated_into::<NumberFor<Block>>())
-			}
-			let mut transaction = DBTransaction::new();
-			match self.storage.state_db.revert_one() {
-				Some(commit) => {
-					apply_state_commit(&mut transaction, commit);
-					let removed = self.blockchain.header(BlockId::Number(best))?.ok_or_else(
-						|| sp_blockchain::Error::UnknownBlock(
-							format!("Error reverting to {}. Block hash not found.", best)))?;
+		let revertible = best_number - finalized;
+		let n = if !revert_finalized && revertible < n {
+			revertible
+		} else {
+			n
+		};
 
-					best -= One::one();	// prev block
-					let hash = self.blockchain.hash(best)?.ok_or_else(
-						|| sp_blockchain::Error::UnknownBlock(
-							format!("Error reverting to {}. Block hash not found.", best)))?;
-					let key = utils::number_and_hash_to_lookup_key(best.clone(), &hash)?;
-					transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
-					transaction.delete(columns::KEY_LOOKUP, removed.hash().as_ref());
-					children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, hash);
-					self.storage.db.write(transaction).map_err(db_err)?;
-					self.blockchain.update_meta(hash, best, true, false);
-					self.blockchain.leaves.write().revert(removed.hash().clone(), removed.number().clone(), removed.parent_hash().clone());
+		let mut revert_blocks = || -> ClientResult<NumberFor<Block>> {
+			for c in 0 .. n.saturated_into::<u64>() {
+				if best_number.is_zero() {
+					return Ok(c.saturated_into::<NumberFor<Block>>())
 				}
-				None => return Ok(c.saturated_into::<NumberFor<Block>>())
+				let mut transaction = DBTransaction::new();
+				match self.storage.state_db.revert_one() {
+					Some(commit) => {
+						apply_state_commit(&mut transaction, commit);
+						let removed = self.blockchain.header(BlockId::Number(best_number))?.ok_or_else(
+							|| sp_blockchain::Error::UnknownBlock(
+								format!("Error reverting to {}. Block hash not found.", best_number)))?;
+
+						best_number -= One::one();	// prev block
+						best_hash = self.blockchain.hash(best_number)?.ok_or_else(
+							|| sp_blockchain::Error::UnknownBlock(
+								format!("Error reverting to {}. Block hash not found.", best_number)))?;
+
+						let update_finalized = best_number < finalized;
+
+						let key = utils::number_and_hash_to_lookup_key(best_number.clone(), &best_hash)?;
+						transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
+						if update_finalized {
+							transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &key);
+						}
+						transaction.delete(columns::KEY_LOOKUP, removed.hash().as_ref());
+						children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, best_hash);
+						self.storage.db.write(transaction).map_err(db_err)?;
+						self.blockchain.update_meta(best_hash, best_number, true, update_finalized);
+					}
+					None => return Ok(c.saturated_into::<NumberFor<Block>>())
+				}
 			}
-		}
-		Ok(n)
+
+			Ok(n)
+		};
+
+		let reverted = revert_blocks()?;
+
+		let revert_leaves = || -> ClientResult<()> {
+			let mut transaction = DBTransaction::new();
+			let mut leaves = self.blockchain.leaves.write();
+
+			leaves.revert(best_hash, best_number);
+			leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
+			self.storage.db.write(transaction).map_err(db_err)?;
+
+			Ok(())
+		};
+
+		revert_leaves()?;
+
+		Ok(reverted)
 	}
 
 	fn blockchain(&self) -> &BlockchainDb<Block> {
