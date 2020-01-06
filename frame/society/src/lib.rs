@@ -128,7 +128,7 @@
 //! The approval and rejection criteria for candidates are not set on chain,
 //! and may change for different societies.
 //! 
-//! At the end of the rotation period, each we collect the votes for a candidate
+//! At the end of the rotation period, we collect the votes for a candidate
 //! and randomly select a vote as the final outcome.
 //! 
 //! ```ignore
@@ -463,14 +463,14 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - Storage Reads:
-		/// 	- One storage read to check for suspended candidate.
-		/// 	- One storage read to check for suspended member.
-		/// 	- One storage read to retrieve all current bids.
-		/// 	- One storage read to retrieve all current candidates.
-		/// 	- One storage read to retrieve all members.
+		/// 	- One storage read to check for suspended candidate. O(1)
+		/// 	- One storage read to check for suspended member. O(1)
+		/// 	- One storage read to retrieve all current bids. O(B)
+		/// 	- One storage read to retrieve all current candidates. O(C)
+		/// 	- One storage read to retrieve all members. O(M)
 		/// - Storage Writes:
-		/// 	- One storage mutate to add a new bid to the vector (TODO: possible optimization w/ read)
-		/// 	- Up to one storage removal if bid.len() > MAX_BID_COUNT.
+		/// 	- One storage mutate to add a new bid to the vector O(B) (TODO: possible optimization w/ read)
+		/// 	- Up to one storage removal if bid.len() > MAX_BID_COUNT. O(1)
 		/// - Notable Computation:
 		/// 	- O(B + C + log M) search to check user is not already a part of society.
 		/// 	- O(log B) search to insert the new bid sorted.
@@ -511,10 +511,8 @@ decl_module! {
 		/// - `pos`: Position in the `Bids` vector of the bid who wants to unbid.
 		///
 		/// # <weight>
-		/// - One storage read and write to retrieve and update the bids.
-		/// - A vector lookup to check if the user is at the specified position.
-		/// - Up to one unreserve balance action.
-		/// - Up to vouching storage removal.
+		/// - One storage read and write to retrieve and update the bids. O(B)
+		/// - Either one unreserve balance action or one vouching storage removal. O(1)
 		/// - One event.
 		/// # </weight>
 
@@ -572,9 +570,9 @@ decl_module! {
 		/// - `pos`: Position in the `Bids` vector of the bid who should be unvouched.
 		///
 		/// # <weight>
-		/// - One storage read to check the signer is a vouching member.
-		/// - One storage mutate to retrieve and update the bids.
-		/// - One vouching storage removal.
+		/// - One storage read O(1) to check the signer is a vouching member.
+		/// - One storage mutate to retrieve and update the bids. O(B)
+		/// - One vouching storage removal. O(1)
 		/// - One event.
 		/// # </weight>
 
@@ -607,10 +605,10 @@ decl_module! {
 		///              approved (`true`) or rejected (`false`).
 		///
 		/// # <weight>
-		/// - One storage read and O(log M) search to check user is a member.
-		/// - One storage read to lookup candidate index.
-		/// - One storage read and O(C) search to check that user is a candidate.
-		/// - One storage write to add vote to votes.
+		/// - One storage read O(M) and O(log M) search to check user is a member.
+		/// - One account lookup.
+		/// - One storage read O(C) and O(C) search to check that user is a candidate.
+		/// - One storage write to add vote to votes. O(1)
 		/// - One event.
 		/// # </weight>
 
@@ -636,8 +634,8 @@ decl_module! {
 		/// approved (`true`) or rejected (`false`).
 		///
 		/// # <weight>
-		/// - One storage read and O(log M) search to check user is a member.
-		/// - One storage write to add vote to votes.
+		/// - One storage read O(M) and O(log M) search to check user is a member.
+		/// - One storage write to add vote to votes. O(1)
 		/// - One event.
 		/// # </weight>
 
@@ -663,11 +661,11 @@ decl_module! {
 		/// payouts remaining.
 		///
 		/// # <weight>
-		/// - One storage read and O(log M) search to check signer is a member.
-		/// - One storage read to get all payouts for a member.
-		/// - One storage read to get the current block number.
+		/// - One storage read O(M) and O(log M) search to check signer is a member.
+		/// - One storage read O(P) to get all payouts for a member.
+		/// - One storage read O(1) to get the current block number.
 		/// - One currency transfer call.
-		/// - One storage write or removal to update the member's payouts.
+		/// - One storage write or removal to update the member's payouts. O(P)
 		/// # </weight>
 
 		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
@@ -703,9 +701,9 @@ decl_module! {
 		/// - `founder` - The first member and head of the newly founded society.
 		///
 		/// # <weight>
-		/// - One storage read to check `Head`.
-		/// - One storage write to add the first member to society.
-		/// - One storage write to add new Head.
+		/// - One storage read to check `Head`. O(1)
+		/// - One storage write to add the first member to society. O(1)
+		/// - One storage write to add new Head. O(1)
 		/// - One event.
 		/// # </weight>
 
@@ -734,12 +732,12 @@ decl_module! {
 		///               forgives (`true`) or rejects (`false`) a suspended member.
 		///
 		/// # <weight>
-		/// - One storage read to check `who` is a suspended member.
-		/// - Up to one storage write with O(log M) binary search to add a member back to society.
-		/// - Up to 3 storage removals to clean up a removed member.
-		/// - Up to one storage write with O(B) search to remove vouched bid from bids.
+		/// - One storage read to check `who` is a suspended member. O(1)
+		/// - Up to one storage write O(M) with O(log M) binary search to add a member back to society.
+		/// - Up to 3 storage removals O(1) to clean up a removed member.
+		/// - Up to one storage write O(B) with O(B) search to remove vouched bid from bids.
 		/// - Up to one additional event if unvouch takes place.
-		/// - One storage removal.
+		/// - One storage removal. O(1)
 		/// - One event for the judgement.
 		/// # </weight>
 
@@ -796,10 +794,10 @@ decl_module! {
 		/// - One storage read to check `who` is a suspended candidate.
 		/// - One storage removal of the suspended candidate.
 		/// - Approve Logic
-		/// 	- One storage read to get the available pot to pay users with.
-		/// 	- One storage write to update the available pot.
-		/// 	- One storage read to get the current block number.
-		/// 	- One storage read to get all members.
+		/// 	- One storage read to get the available pot to pay users with. O(1)
+		/// 	- One storage write to update the available pot. O(1)
+		/// 	- One storage read to get the current block number. O(1)
+		/// 	- One storage read to get all members. O(M)
 		/// 	- Up to one unreserve currency action.
 		/// 	- Up to two new storage writes to payouts.
 		/// 	- Up to one storage write with O(log M) binary search to add a member to society.
