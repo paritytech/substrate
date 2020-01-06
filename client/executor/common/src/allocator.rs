@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ use crate::error::{Error, Result};
 use log::trace;
 use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
-use wasm_interface::{Pointer, WordSize};
+use sp_wasm_interface::{Pointer, WordSize};
 
 // The pointers need to be aligned to 8 bytes. This is because the
 // maximum value type handled by wasm32 is u64.
@@ -69,6 +69,9 @@ const MIN_POSSIBLE_ALLOCATION: u32 = 8;
 // to which it belongs.
 const PREFIX_SIZE: u32 = 8;
 
+/// An implementation of freeing bump allocator.
+///
+/// Refer to the module-level documentation for further details.
 pub struct FreeingBumpHeapAllocator {
 	bumper: u32,
 	heads: [u32; N],

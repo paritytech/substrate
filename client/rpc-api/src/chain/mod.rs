@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@ use jsonrpc_core::Result as RpcResult;
 use jsonrpc_core::futures::Future;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use rpc_primitives::{number::NumberOrHex, list::ListOrValue};
+use sp_rpc::{number::NumberOrHex, list::ListOrValue};
 use self::error::{FutureResult, Result};
 
 pub use self::gen_client::Client as ChainClient;

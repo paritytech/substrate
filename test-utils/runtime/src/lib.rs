@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -25,9 +25,8 @@ pub mod system;
 use sp_std::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
-use primitives::{Blake2Hasher, OpaqueMetadata, RuntimeDebug};
-use app_crypto::{ed25519, sr25519, RuntimeAppPublic};
-pub use app_crypto;
+use sp_core::{Blake2Hasher, OpaqueMetadata, RuntimeDebug};
+use sp_application_crypto::{ed25519, sr25519, RuntimeAppPublic};
 use trie_db::{TrieMut, Trie};
 use sp_trie::PrefixedMemoryDB;
 use sp_trie::trie_types::{TrieDB, TrieDBMut};
@@ -43,17 +42,18 @@ use sp_runtime::{
 		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
 	},
 };
-use runtime_version::RuntimeVersion;
-pub use primitives::{hash::H256};
+use sp_version::RuntimeVersion;
+pub use sp_core::{hash::H256};
 #[cfg(any(feature = "std", test))]
-use runtime_version::NativeVersion;
-use runtime_support::{impl_outer_origin, parameter_types, weights::Weight};
-use inherents::{CheckInherentsResult, InherentData};
+use sp_version::NativeVersion;
+use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
+use sp_core::storage::ChildType;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
-pub use babe_primitives::AuthorityId;
-pub type AuraId = aura_primitives::sr25519::AuthorityId;
+pub use sp_consensus_babe::AuthorityId;
+pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
 // Inlucde the WASM binary
 #[cfg(feature = "std")]
@@ -95,7 +95,7 @@ impl Transfer {
 	/// Convert into a signed extrinsic.
 	#[cfg(feature = "std")]
 	pub fn into_signed_tx(self) -> Extrinsic {
-		let signature = keyring::AccountKeyring::from_public(&self.from)
+		let signature = sp_keyring::AccountKeyring::from_public(&self.from)
 			.expect("Creates keyring from public key.").sign(&self.encode()).into();
 		Extrinsic::Transfer(self, signature)
 	}
@@ -194,8 +194,8 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 }
 
 /// Changes trie configuration (optionally) used in tests.
-pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
-	primitives::ChangesTrieConfiguration {
+pub fn changes_trie_config() -> sp_core::ChangesTrieConfiguration {
+	sp_core::ChangesTrieConfiguration {
 		digest_interval: 4,
 		digest_levels: 2,
 	}
@@ -374,6 +374,7 @@ impl frame_system::Trait for Runtime {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
+	type ModuleToIndex = ();
 }
 
 impl pallet_timestamp::Trait for Runtime {
@@ -405,8 +406,8 @@ fn benchmark_add_one(i: u64) -> u64 {
 
 /// The `benchmark_add_one` function as function pointer.
 #[cfg(not(feature = "std"))]
-static BENCHMARK_ADD_ONE: runtime_interface::wasm::ExchangeableFunction<fn(u64) -> u64> =
-	runtime_interface::wasm::ExchangeableFunction::new(benchmark_add_one);
+static BENCHMARK_ADD_ONE: sp_runtime_interface::wasm::ExchangeableFunction<fn(u64) -> u64> =
+	sp_runtime_interface::wasm::ExchangeableFunction::new(benchmark_add_one);
 
 fn code_using_trie() -> u64 {
 	let pairs = [
@@ -493,7 +494,7 @@ cfg_if! {
 				}
 			}
 
-			impl block_builder_api::BlockBuilder<Block> for Runtime {
+			impl sp_block_builder::BlockBuilder<Block> for Runtime {
 				fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 					system::execute_transaction(extrinsic)
 				}
@@ -597,7 +598,7 @@ cfg_if! {
 				}
 			}
 
-			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
+			impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1000 }
 				fn authorities() -> Vec<AuraId> {
 					system::authorities().into_iter().map(|a| {
@@ -607,9 +608,9 @@ cfg_if! {
 				}
 			}
 
-			impl babe_primitives::BabeApi<Block> for Runtime {
-				fn configuration() -> babe_primitives::BabeConfiguration {
-					babe_primitives::BabeConfiguration {
+			impl sp_consensus_babe::BabeApi<Block> for Runtime {
+				fn configuration() -> sp_consensus_babe::BabeConfiguration {
+					sp_consensus_babe::BabeConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
@@ -621,14 +622,14 @@ cfg_if! {
 				}
 			}
 
-			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
+			impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
 					sp_io::offchain::submit_transaction(ex.encode()).unwrap();
 				}
 			}
 
-			impl session::SessionKeys<Block> for Runtime {
+			impl sp_session::SessionKeys<Block> for Runtime {
 				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
 					SessionKeys::generate(None)
 				}
@@ -678,7 +679,7 @@ cfg_if! {
 				}
 			}
 
-			impl block_builder_api::BlockBuilder<Block> for Runtime {
+			impl sp_block_builder::BlockBuilder<Block> for Runtime {
 				fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 					system::execute_transaction(extrinsic)
 				}
@@ -813,7 +814,7 @@ cfg_if! {
 				}
 			}
 
-			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
+			impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1000 }
 				fn authorities() -> Vec<AuraId> {
 					system::authorities().into_iter().map(|a| {
@@ -823,9 +824,9 @@ cfg_if! {
 				}
 			}
 
-			impl babe_primitives::BabeApi<Block> for Runtime {
-				fn configuration() -> babe_primitives::BabeConfiguration {
-					babe_primitives::BabeConfiguration {
+			impl sp_consensus_babe::BabeApi<Block> for Runtime {
+				fn configuration() -> sp_consensus_babe::BabeConfiguration {
+					sp_consensus_babe::BabeConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
@@ -837,14 +838,14 @@ cfg_if! {
 				}
 			}
 
-			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
+			impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
 					sp_io::offchain::submit_transaction(ex.encode()).unwrap()
 				}
 			}
 
-			impl session::SessionKeys<Block> for Runtime {
+			impl sp_session::SessionKeys<Block> for Runtime {
 				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
 					SessionKeys::generate(None)
 				}
@@ -910,21 +911,37 @@ fn test_read_storage() {
 
 fn test_read_child_storage() {
 	const CHILD_KEY: &[u8] = b":child_storage:default:read_child_storage";
+	const UNIQUE_ID: &[u8] = b":unique_id";
 	const KEY: &[u8] = b":read_child_storage";
-	sp_io::storage::child_set(CHILD_KEY, KEY, b"test");
+	sp_io::storage::child_set(
+		CHILD_KEY,
+		UNIQUE_ID,
+		ChildType::CryptoUniqueId as u32,
+		KEY,
+		b"test",
+	);
 
 	let mut v = [0u8; 4];
 	let r = sp_io::storage::child_read(
 		CHILD_KEY,
+		UNIQUE_ID,
+		ChildType::CryptoUniqueId as u32,
 		KEY,
 		&mut v,
-		0
+		0,
 	);
 	assert_eq!(r, Some(4));
 	assert_eq!(&v, b"test");
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::child_read(CHILD_KEY, KEY, &mut v, 8);
+	let r = sp_io::storage::child_read(
+		CHILD_KEY,
+		UNIQUE_ID,
+		ChildType::CryptoUniqueId as u32,
+		KEY,
+		&mut v,
+		8,
+	);
 	assert_eq!(r, Some(4));
 	assert_eq!(&v, &[0, 0, 0, 0]);
 }
@@ -933,7 +950,7 @@ fn test_read_child_storage() {
 mod tests {
 	use substrate_test_runtime_client::{
 		prelude::*,
-		consensus::BlockOrigin,
+		sp_consensus::BlockOrigin,
 		DefaultTestClientBuilderExt, TestClientBuilder,
 		runtime::TestAPI,
 	};
@@ -941,15 +958,15 @@ mod tests {
 		generic::BlockId,
 		traits::ProvideRuntimeApi,
 	};
-	use primitives::storage::well_known_keys::HEAP_PAGES;
-	use state_machine::ExecutionStrategy;
+	use sp_core::storage::well_known_keys::HEAP_PAGES;
+	use sp_state_machine::ExecutionStrategy;
 	use codec::Encode;
 
 	#[test]
 	fn returns_mutable_static() {
 		let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		let ret = runtime_api.returns_mutable_static(&block_id).unwrap();
 		assert_eq!(ret, 33);
@@ -980,7 +997,7 @@ mod tests {
 			.set_heap_pages(REQUIRED_MEMORY_PAGES)
 			.build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
 		let ret = runtime_api.allocates_huge_stack_array(&block_id, true);
@@ -1001,7 +1018,7 @@ mod tests {
 			.set_heap_pages(8)
 			.build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
@@ -1030,7 +1047,7 @@ mod tests {
 			.set_execution_strategy(ExecutionStrategy::Both)
 			.build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		runtime_api.test_storage(&block_id).unwrap();
 	}

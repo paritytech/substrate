@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 
 use sp_runtime::{traits::Block as BlockT, ApplyExtrinsicResult};
 
-use inherents::{InherentData, CheckInherentsResult};
+use sp_inherents::{InherentData, CheckInherentsResult};
 
 /// Definitions for supporting the older version of API: v3
 ///

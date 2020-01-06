@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,20 +22,20 @@ use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
-use client_api::backend::{AuxStore, NewBlockState};
-use client::blockchain::{
+use sc_client_api::backend::{AuxStore, NewBlockState};
+use sc_client::blockchain::{
 	BlockStatus, Cache as BlockchainCache,Info as BlockchainInfo,
 };
-use client::cht;
+use sc_client::cht;
 use sp_blockchain::{
 	CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache,
 	Error as ClientError, Result as ClientResult,
 	HeaderBackend as BlockchainHeaderBackend, 
 	well_known_cache_keys,
 };
-use client::light::blockchain::Storage as LightBlockchainStorage;
+use sc_client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
-use primitives::Blake2Hasher;
+use sp_core::Blake2Hasher;
 use sp_runtime::generic::{DigestItem, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
@@ -44,12 +44,12 @@ use crate::DatabaseSettings;
 use log::{trace, warn, debug};
 
 pub(crate) mod columns {
-	pub const META: Option<u32> = crate::utils::COLUMN_META;
-	pub const KEY_LOOKUP: Option<u32> = Some(1);
-	pub const HEADER: Option<u32> = Some(2);
-	pub const CACHE: Option<u32> = Some(3);
-	pub const CHT: Option<u32> = Some(4);
-	pub const AUX: Option<u32> = Some(5);
+	pub const META: u32 = crate::utils::COLUMN_META;
+	pub const KEY_LOOKUP: u32 = 1;
+	pub const HEADER: u32 = 2;
+	pub const CACHE: u32 = 3;
+	pub const CHT: u32 = 4;
+	pub const AUX: u32 = 5;
 }
 
 /// Prefix for headers CHT.
@@ -559,14 +559,14 @@ fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-	use client::cht;
+	use sc_client::cht;
 	use sp_runtime::generic::DigestItem;
 	use sp_runtime::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
 	use sp_blockchain::{lowest_common_ancestor, tree_route};
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
-	type AuthorityId = primitives::ed25519::Public;
+	type AuthorityId = sp_core::ed25519::Public;
 
 	pub fn default_header(parent: &Hash, number: u64) -> Header {
 		Header {

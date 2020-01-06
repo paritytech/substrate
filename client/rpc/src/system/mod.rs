@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,12 +19,14 @@
 #[cfg(test)]
 mod tests;
 
+use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use futures::{channel::{mpsc, oneshot}, compat::Compat};
-use api::Receiver;
+use sc_rpc_api::Receiver;
 use sp_runtime::traits::{self, Header as HeaderT};
+
 use self::error::Result;
 
-pub use api::system::*;
+pub use sc_rpc_api::system::*;
 pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo, NodeRole};
 pub use self::gen_client::Client as SystemClient;
 
@@ -42,6 +44,10 @@ pub enum Request<B: traits::Block> {
 	Peers(oneshot::Sender<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>>),
 	/// Must return the state of the network.
 	NetworkState(oneshot::Sender<rpc::Value>),
+	/// Must return any potential parse error.
+	NetworkAddReservedPeer(String, oneshot::Sender<Result<()>>),
+	/// Must return any potential parse error.
+	NetworkRemoveReservedPeer(String, oneshot::Sender<Result<()>>),
 	/// Must return the node role.
 	NodeRoles(oneshot::Sender<Vec<NodeRole>>)
 }
@@ -53,7 +59,7 @@ impl<B: traits::Block> System<B> {
 	/// reading from that channel and answering the requests.
 	pub fn new(
 		info: SystemInfo,
-		send_back: mpsc::UnboundedSender<Request<B>>
+		send_back: mpsc::UnboundedSender<Request<B>>,
 	) -> Self {
 		System {
 			info,
@@ -95,6 +101,34 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NetworkState(tx));
 		Receiver(Compat::new(rx))
+	}
+
+	fn system_add_reserved_peer(&self, peer: String)
+		-> Compat<BoxFuture<'static, std::result::Result<(), rpc::Error>>>
+	{
+		let (tx, rx) = oneshot::channel();
+		let _ = self.send_back.unbounded_send(Request::NetworkAddReservedPeer(peer, tx));
+		async move {
+			match rx.await {
+				Ok(Ok(())) => Ok(()),
+				Ok(Err(e)) => Err(rpc::Error::from(e)),
+				Err(_) => Err(rpc::Error::internal_error()),
+			}
+		}.boxed().compat()
+	}
+
+	fn system_remove_reserved_peer(&self, peer: String)
+		-> Compat<BoxFuture<'static, std::result::Result<(), rpc::Error>>>
+	{
+		let (tx, rx) = oneshot::channel();
+		let _ = self.send_back.unbounded_send(Request::NetworkRemoveReservedPeer(peer, tx));
+		async move {
+			match rx.await {
+				Ok(Ok(())) => Ok(()),
+				Ok(Err(e)) => Err(rpc::Error::from(e)),
+				Err(_) => Err(rpc::Error::internal_error()),
+			}
+		}.boxed().compat()
 	}
 
 	fn system_node_roles(&self) -> Receiver<Vec<NodeRole>> {

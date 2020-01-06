@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,10 +20,10 @@ use crate::{RuntimePublic, KeyTypeId};
 
 use sp_std::vec::Vec;
 
-pub use primitives::ed25519::*;
+pub use sp_core::ed25519::*;
 
 mod app {
-	use primitives::testing::ED25519;
+	use sp_core::testing::ED25519;
 	crate::app_crypto!(super, ED25519);
 
 	impl crate::traits::BoundToRuntimeAppPublic for Public {

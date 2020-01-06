@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,8 +21,8 @@ pub mod hash;
 
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use primitives::Bytes;
-use txpool_api::TransactionStatus;
+use sp_core::Bytes;
+use sp_transaction_pool::TransactionStatus;
 use self::error::{FutureResult, Result};
 
 pub use self::gen_client::Client as AuthorClient;
@@ -60,6 +60,9 @@ pub trait AuthorApi<Hash, BlockHash> {
 	) -> Result<Vec<Hash>>;
 
 	/// Submit an extrinsic to watch.
+	///
+	/// See [`TransactionStatus`](sp_transaction_pool::TransactionStatus) for details on transaction
+	/// lifecycle.
 	#[pubsub(
 		subscription = "author_extrinsicUpdate",
 		subscribe,

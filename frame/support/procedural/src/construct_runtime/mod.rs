@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,6 +23,9 @@ use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{Ident, Result};
+
+/// The fixed name of the system module.
+const SYSTEM_MODULE_NAME: &str = "System";
 
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let definition = syn::parse_macro_input!(input as RuntimeDefinition);
@@ -63,7 +66,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
 	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "frame-support");
 
-	let all_but_system_modules = modules.iter().filter(|module| module.name != "System");
+	let all_but_system_modules = modules.iter().filter(|module| module.name != SYSTEM_MODULE_NAME);
 
 	let outer_event = decl_outer_event_or_origin(
 		&name,
@@ -79,7 +82,8 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 		&scrate,
 		DeclOuterKind::Origin,
 	)?;
-	let all_modules = decl_all_modules(&name, all_but_system_modules);
+	let all_modules = decl_all_modules(&name, modules.iter());
+	let module_to_index = decl_module_to_index(modules.iter(), modules.len(), &scrate);
 
 	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
 	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate);
@@ -105,6 +109,8 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 		#outer_origin
 
 		#all_modules
+
+		#module_to_index
 
 		#dispatch
 
@@ -329,15 +335,42 @@ fn decl_all_modules<'a>(
 		names.push(&module_declaration.name);
 	}
 	// Make nested tuple structure like (((Babe, Consensus), Grandpa), ...)
-	let all_modules = names.iter().fold(
-		TokenStream2::default(),
-		|combined, name| quote!((#name, #combined)),
-	);
+	// But ignore the system module.
+	let all_modules = names.iter()
+		.filter(|n| **n != SYSTEM_MODULE_NAME)
+		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
 
 	quote!(
-		pub type System = system::Module<#runtime>;
 		#types
 		type AllModules = ( #all_modules );
+	)
+}
+
+fn decl_module_to_index<'a>(
+	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	num_modules: usize,
+	scrate: &TokenStream2,
+) -> TokenStream2 {
+	let names = module_declarations.map(|d| &d.name);
+	let indices = 0..num_modules;
+
+	quote!(
+		/// Provides an implementation of `ModuleToIndex` to map a module
+		/// to its index in the runtime.
+		pub struct ModuleToIndex;
+
+		impl #scrate::traits::ModuleToIndex for ModuleToIndex {
+			fn module_to_index<M: 'static>() -> Option<usize> {
+				let type_id = #scrate::sp_std::any::TypeId::of::<M>();
+				#(
+					if type_id == #scrate::sp_std::any::TypeId::of::<#names>() {
+						return Some(#indices)
+					}
+				)*
+
+				None
+			}
+		}
 	)
 }
 
@@ -345,6 +378,6 @@ fn find_system_module<'a>(
 	mut module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
 ) -> Option<&'a Ident> {
 	module_declarations
-		.find(|decl| decl.name == "System")
+		.find(|decl| decl.name == SYSTEM_MODULE_NAME)
 		.map(|decl| &decl.module)
 }

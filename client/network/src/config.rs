@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ use crate::chain::{Client, FinalityProofProvider};
 use crate::on_demand_layer::OnDemand;
 use crate::service::{ExHashT, TransactionPool};
 use bitflags::bitflags;
-use consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
+use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
 use sp_runtime::traits::{Block as BlockT};
 use libp2p::identity::{Keypair, ed25519};
 use libp2p::wasm_ext;

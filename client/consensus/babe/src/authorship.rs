@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,13 +17,13 @@
 //! BABE authority selection and slot claiming.
 
 use merlin::Transcript;
-use babe_primitives::{AuthorityId, BabeAuthorityWeight, BABE_ENGINE_ID, BABE_VRF_PREFIX};
-use babe_primitives::{Epoch, SlotNumber, AuthorityPair, BabePreDigest, BabeConfiguration};
-use primitives::{U256, blake2_256};
+use sp_consensus_babe::{AuthorityId, BabeAuthorityWeight, BABE_ENGINE_ID, BABE_VRF_PREFIX};
+use sp_consensus_babe::{Epoch, SlotNumber, AuthorityPair, BabePreDigest, BabeConfiguration};
+use sp_core::{U256, blake2_256};
 use codec::Encode;
 use schnorrkel::vrf::VRFInOut;
-use primitives::Pair;
-use keystore::KeyStorePtr;
+use sp_core::Pair;
+use sc_keystore::KeyStorePtr;
 
 /// Calculates the primary selection threshold for a given authority, taking
 /// into account `c` (`1 - c` represents the probability of a slot being empty).
@@ -162,8 +162,8 @@ pub(super) fn claim_slot(
 }
 
 fn get_keypair(q: &AuthorityPair) -> &schnorrkel::Keypair {
-	use primitives::crypto::IsWrappedBy;
-	primitives::sr25519::Pair::from_ref(q).as_ref()
+	use sp_core::crypto::IsWrappedBy;
+	sp_core::sr25519::Pair::from_ref(q).as_ref()
 }
 
 /// Claim a primary slot if it is our turn.  Returns `None` if it is not our turn.

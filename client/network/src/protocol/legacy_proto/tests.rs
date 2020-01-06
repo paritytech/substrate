@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -68,7 +68,7 @@ fn build_nodes()
 			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 			.boxed();
 
-		let (peerset, _) = peerset::Peerset::from_config(peerset::PeersetConfig {
+		let (peerset, _) = sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig {
 			in_peers: 25,
 			out_peers: 25,
 			bootnodes: if index == 0 {

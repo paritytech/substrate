@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,9 +19,9 @@
 //! This is used instead of `futures_timer::Interval` because it was unreliable.
 
 use super::SlotCompatible;
-use consensus_common::Error;
+use sp_consensus::Error;
 use futures::{prelude::*, task::Context, task::Poll};
-use inherents::{InherentData, InherentDataProviders};
+use sp_inherents::{InherentData, InherentDataProviders};
 
 use std::{pin::Pin, time::{Duration, Instant}};
 use futures_timer::Delay;
@@ -135,7 +135,7 @@ impl<SC: SlotCompatible + Unpin> Stream for Slots<SC> {
 
 			let inherent_data = match self.inherent_data_providers.create_inherent_data() {
 				Ok(id) => id,
-				Err(err) => return Poll::Ready(Some(Err(consensus_common::Error::InherentData(err)))),
+				Err(err) => return Poll::Ready(Some(Err(sp_consensus::Error::InherentData(err)))),
 			};
 			let result = self.timestamp_extractor.extract_timestamp_and_slot(&inherent_data);
 			let (timestamp, slot_num, offset) = match result {

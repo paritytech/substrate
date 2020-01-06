@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -724,7 +724,7 @@ fn read_forks<Block: BlockT, T: CacheItemT, S: Storage<Block, T>>(
 
 #[cfg(test)]
 pub mod tests {
-	use test_client::runtime::H256;
+	use substrate_test_runtime_client::runtime::H256;
 	use sp_runtime::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use sp_runtime::traits::Header as HeaderT;
 	use crate::cache::list_storage::tests::{DummyStorage, FaultyStorage, DummyTransaction};

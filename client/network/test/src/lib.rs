@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -28,44 +28,44 @@ use libp2p::build_multiaddr;
 use log::trace;
 use sc_network::FinalityProofProvider;
 use sp_blockchain::{
-	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId},
+	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId}, Info as BlockchainInfo,
 };
-use client_api::{
-	ClientInfo, BlockchainEvents, BlockImportNotification,
+use sc_client_api::{
+	BlockchainEvents, BlockImportNotification,
 	FinalityNotifications, ImportNotifications,
 	FinalityNotification,
 	backend::{AuxStore, Backend, Finalizer}
 };
-use block_builder::BlockBuilder;
-use client::LongestChain;
+use sc_block_builder::BlockBuilder;
+use sc_client::LongestChain;
 use sc_network::config::Roles;
-use consensus::block_validation::DefaultBlockAnnounceValidator;
-use consensus::import_queue::BasicQueue;
-use consensus::import_queue::{
+use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
+use sp_consensus::import_queue::BasicQueue;
+use sp_consensus::import_queue::{
 	BoxBlockImport, BoxJustificationImport, Verifier, BoxFinalityProofImport,
 };
-use consensus::block_import::{BlockImport, ImportResult};
-use consensus::Error as ConsensusError;
-use consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
+use sp_consensus::block_import::{BlockImport, ImportResult};
+use sp_consensus::Error as ConsensusError;
+use sp_consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};
-use sc_network::{NetworkWorker, NetworkService, ReportHandle, config::ProtocolId};
+use sc_network::{NetworkWorker, NetworkStateInfo, NetworkService, ReportHandle, config::ProtocolId};
 use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
 use parking_lot::Mutex;
-use primitives::H256;
+use sp_core::H256;
 use sc_network::{Context, ProtocolConfig};
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use sp_runtime::Justification;
 use sc_network::TransactionPool;
 use sc_network::specialization::NetworkSpecialization;
-use test_client::{self, AccountKeyring};
+use substrate_test_runtime_client::{self, AccountKeyring};
 
-pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
-pub use test_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
+pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
+pub use substrate_test_runtime_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
 
-type AuthorityId = babe_primitives::AuthorityId;
+type AuthorityId = sp_consensus_babe::AuthorityId;
 
 /// A Verifier that accepts all blocks and passes them on with the configured
 /// finality to be imported.
@@ -129,14 +129,14 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 }
 
 pub type PeersFullClient =
-	client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>;
+	sc_client::Client<substrate_test_runtime_client::Backend, substrate_test_runtime_client::Executor, Block, substrate_test_runtime_client::runtime::RuntimeApi>;
 pub type PeersLightClient =
-	client::Client<test_client::LightBackend, test_client::LightExecutor, Block, test_client::runtime::RuntimeApi>;
+	sc_client::Client<substrate_test_runtime_client::LightBackend, substrate_test_runtime_client::LightExecutor, Block, substrate_test_runtime_client::runtime::RuntimeApi>;
 
 #[derive(Clone)]
 pub enum PeersClient {
-	Full(Arc<PeersFullClient>, Arc<test_client::Backend>),
-	Light(Arc<PeersLightClient>, Arc<test_client::LightBackend>),
+	Full(Arc<PeersFullClient>, Arc<substrate_test_runtime_client::Backend>),
+	Light(Arc<PeersLightClient>, Arc<substrate_test_runtime_client::LightBackend>),
 }
 
 impl PeersClient {
@@ -161,10 +161,10 @@ impl PeersClient {
 		}
 	}
 
-	pub fn info(&self) -> ClientInfo<Block> {
+	pub fn info(&self) -> BlockchainInfo<Block> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.info(),
-			PeersClient::Light(ref client, ref _backend) => client.info(),
+			PeersClient::Full(ref client, ref _backend) => client.chain_info(),
+			PeersClient::Light(ref client, ref _backend) => client.chain_info(),
 		}
 	}
 
@@ -218,8 +218,8 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	/// We keep a copy of the block_import so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
 	block_import: Box<dyn BlockImport<Block, Error = ConsensusError>>,
-	select_chain: Option<LongestChain<test_client::Backend, Block>>,
-	backend: Option<Arc<test_client::Backend>>,
+	select_chain: Option<LongestChain<substrate_test_runtime_client::Backend, Block>>,
+	backend: Option<Arc<substrate_test_runtime_client::Backend>>,
 	network: NetworkWorker<Block, S, <Block as BlockT>::Hash>,
 	imported_blocks_stream: Box<dyn Stream<Item = BlockImportNotification<Block>, Error = ()> + Send>,
 	finality_notification_stream: Box<dyn Stream<Item = FinalityNotification<Block>, Error = ()> + Send>,
@@ -237,7 +237,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	// Returns a clone of the local SelectChain, only available on full nodes
-	pub fn select_chain(&self) -> Option<LongestChain<test_client::Backend, Block>> {
+	pub fn select_chain(&self) -> Option<LongestChain<substrate_test_runtime_client::Backend, Block>> {
 		self.select_chain.clone()
 	}
 
@@ -270,7 +270,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	pub fn generate_blocks<F>(&mut self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
 		where F: FnMut(BlockBuilder<Block, PeersFullClient>) -> Block
 	{
-		let best_hash = self.client.info().chain.best_hash;
+		let best_hash = self.client.info().best_hash;
 		self.generate_blocks_at(BlockId::Hash(best_hash), count, origin, edit_block)
 	}
 
@@ -320,7 +320,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Push blocks to the peer (simplified: with or without a TX)
 	pub fn push_blocks(&mut self, count: usize, with_tx: bool) -> H256 {
-		let best_hash = self.client.info().chain.best_hash;
+		let best_hash = self.client.info().best_hash;
 		self.push_blocks_at(BlockId::Hash(best_hash), count, with_tx)
 	}
 
@@ -608,7 +608,7 @@ pub trait TestNetFactory: Sized {
 		let mut config = config.clone();
 		config.roles = Roles::LIGHT;
 
-		let (c, backend) = test_client::new_light();
+		let (c, backend) = substrate_test_runtime_client::new_light();
 		let client = Arc::new(c);
 		let (
 			block_import,
@@ -689,7 +689,7 @@ pub trait TestNetFactory: Sized {
 			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
 				return Async::NotReady
 			}
-			match (highest, peer.client.info().chain.best_hash) {
+			match (highest, peer.client.info().best_hash) {
 				(None, b) => highest = Some(b),
 				(Some(ref a), ref b) if a == b => {},
 				(Some(_), _) => return Async::NotReady,

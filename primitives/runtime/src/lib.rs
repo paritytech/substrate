@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -35,14 +35,14 @@ pub use sp_std;
 pub use paste;
 
 #[doc(hidden)]
-pub use app_crypto;
+pub use sp_application_crypto as app_crypto;
 
 #[cfg(feature = "std")]
-pub use primitives::storage::{StorageOverlay, ChildrenStorageOverlay};
+pub use sp_core::storage::{Storage, StorageChild};
 
 use sp_std::prelude::*;
 use sp_std::convert::TryFrom;
-use primitives::{crypto, ed25519, sr25519, ecdsa, hash::{H256, H512}};
+use sp_core::{crypto, ed25519, sr25519, ecdsa, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
 pub mod curve;
@@ -58,18 +58,18 @@ pub mod random_number_generator;
 pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
-pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, AccountId32}};
-pub use app_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
+pub use sp_core::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, AccountId32}};
+pub use sp_application_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
 
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
-pub use primitives::RuntimeDebug;
+pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
-pub use arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64};
+pub use sp_arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64};
 /// Re-export 128 bit helpers.
-pub use arithmetic::helpers_128bit;
+pub use sp_arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
-pub use arithmetic::biguint;
+pub use sp_arithmetic::biguint;
 
 pub use random_number_generator::RandomNumberGenerator;
 
@@ -121,15 +121,15 @@ use crate::traits::IdentifyAccount;
 #[cfg(feature = "std")]
 pub trait BuildStorage: Sized {
 	/// Build the storage out of this builder.
-	fn build_storage(&self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
-		let mut storage = (Default::default(), Default::default());
+	fn build_storage(&self) -> Result<sp_core::storage::Storage, String> {
+		let mut storage = Default::default();
 		self.assimilate_storage(&mut storage)?;
 		Ok(storage)
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
 	fn assimilate_storage(
 		&self,
-		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
+		storage: &mut sp_core::storage::Storage,
 	) -> Result<(), String>;
 }
 
@@ -139,23 +139,26 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.
 	fn build_module_genesis_storage(
 		&self,
-		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
+		storage: &mut sp_core::storage::Storage,
 	) -> Result<(), String>;
 }
 
 #[cfg(feature = "std")]
-impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
+impl BuildStorage for sp_core::storage::Storage {
 	fn assimilate_storage(
 		&self,
-		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
+		storage: &mut sp_core::storage::Storage,
 	)-> Result<(), String> {
-		storage.0.extend(self.0.iter().map(|(k, v)| (k.clone(), v.clone())));
-		for (k, other_map) in self.1.iter() {
+		storage.top.extend(self.top.iter().map(|(k, v)| (k.clone(), v.clone())));
+		for (k, other_map) in self.children.iter() {
 			let k = k.clone();
-			if let Some(map) = storage.1.get_mut(&k) {
-				map.extend(other_map.iter().map(|(k, v)| (k.clone(), v.clone())));
+			if let Some(map) = storage.children.get_mut(&k) {
+				map.data.extend(other_map.data.iter().map(|(k, v)| (k.clone(), v.clone())));
+				if !map.child_info.try_update(other_map.child_info.as_ref()) {
+					return Err("Incompatible child info update".to_string());
+				}
 			} else {
-				storage.1.insert(k, other_map.clone());
+				storage.children.insert(k, other_map.clone());
 			}
 		}
 		Ok(())
@@ -209,7 +212,7 @@ pub enum MultiSigner {
 	Ed25519(ed25519::Public),
 	/// An Sr25519 identity.
 	Sr25519(sr25519::Public),
-	/// An SECP256k1/ECDSA identity (actually, the Blake2 hash of the pub key).
+	/// An SECP256k1/ECDSA identity (actually, the Blake2 hash of the compressed pub key).
 	Ecdsa(ecdsa::Public),
 }
 
@@ -243,7 +246,9 @@ impl traits::IdentifyAccount for MultiSigner {
 		match self {
 			MultiSigner::Ed25519(who) => <[u8; 32]>::from(who).into(),
 			MultiSigner::Sr25519(who) => <[u8; 32]>::from(who).into(),
-			MultiSigner::Ecdsa(who) => sp_io::hashing::blake2_256(who.as_ref()).into(),
+			MultiSigner::Ecdsa(who) => sp_io::hashing::blake2_256(
+				&who.as_compressed().expect("`who` is a valid `ECDSA` public key; qed")[..],
+			).into(),
 		}
 	}
 }
@@ -301,7 +306,7 @@ impl std::fmt::Display for MultiSigner {
 impl Verify for MultiSignature {
 	type Signer = MultiSigner;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
-		use primitives::crypto::Public;
+		use sp_core::crypto::Public;
 		match (self, signer) {
 			(MultiSignature::Ed25519(ref sig), who) => sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
 			(MultiSignature::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
@@ -326,7 +331,7 @@ pub struct AnySignature(H512);
 impl Verify for AnySignature {
 	type Signer = sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sr25519::Public) -> bool {
-		use primitives::crypto::Public;
+		use sp_core::crypto::Public;
 		let msg = msg.get();
 		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
 			.map(|s| s.verify(msg, signer))
@@ -355,26 +360,68 @@ impl From<DispatchError> for DispatchOutcome {
 	}
 }
 
+/// Result of a module function call; either nothing (functions are only called for "side effects")
+/// or an error message.
+pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
+
+/// Reason why a dispatch call failed
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize))]
-/// Reason why a dispatch call failed
-pub struct DispatchError {
-	/// Module index, matching the metadata module index
-	pub module: Option<u8>,
-	/// Module specific error value
-	pub error: u8,
-	/// Optional error message.
-	#[codec(skip)]
-	pub message: Option<&'static str>,
+pub enum DispatchError {
+	/// Some error occurred.
+	Other(#[codec(skip)] &'static str),
+	/// Failed to lookup some data.
+	CannotLookup,
+	/// A bad origin.
+	BadOrigin,
+	/// A custom error in a module
+	Module {
+		/// Module index, matching the metadata module index
+		index: u8,
+		/// Module specific error value
+		error: u8,
+		/// Optional error message.
+		#[codec(skip)]
+		message: Option<&'static str>,
+	},
 }
 
 impl DispatchError {
-	/// Create a new instance of `DispatchError`.
-	pub fn new(module: Option<u8>, error: u8, message: Option<&'static str>) -> Self {
-		Self {
-			module,
-			error,
-			message,
+	/// Return the same error but without the attached message.
+	pub fn stripped(self) -> Self {
+		match self {
+			DispatchError::Module { index, error, message: Some(_) }
+				=> DispatchError::Module { index, error, message: None },
+			m => m,
+		}
+	}
+}
+
+impl From<crate::traits::LookupError> for DispatchError {
+	fn from(_: crate::traits::LookupError) -> Self {
+		Self::CannotLookup
+	}
+}
+
+impl From<crate::traits::BadOrigin> for DispatchError {
+	fn from(_: crate::traits::BadOrigin) -> Self {
+		Self::BadOrigin
+	}
+}
+
+impl From<&'static str> for DispatchError {
+	fn from(err: &'static str) -> DispatchError {
+		DispatchError::Other(err)
+	}
+}
+
+impl Into<&'static str> for DispatchError {
+	fn into(self) -> &'static str {
+		match self {
+			Self::Other(msg) => msg,
+			Self::CannotLookup => "Can not lookup",
+			Self::BadOrigin => "Bad origin",
+			Self::Module { message, .. } => message.unwrap_or("Unknown module error"),
 		}
 	}
 }
@@ -382,29 +429,18 @@ impl DispatchError {
 impl traits::Printable for DispatchError {
 	fn print(&self) {
 		"DispatchError".print();
-		if let Some(module) = self.module {
-			module.print();
+		match self {
+			Self::Other(err) => err.print(),
+			Self::CannotLookup => "Can not lookup".print(),
+			Self::BadOrigin => "Bad origin".print(),
+			Self::Module { index, error, message } => {
+				index.print();
+				error.print();
+				if let Some(msg) = message {
+					msg.print();
+				}
+			}
 		}
-		self.error.print();
-		if let Some(msg) = self.message {
-			msg.print();
-		}
-	}
-}
-
-impl traits::ModuleDispatchError for &'static str {
-	fn as_u8(&self) -> u8 {
-		0
-	}
-
-	fn as_str(&self) -> &'static str {
-		self
-	}
-}
-
-impl From<&'static str> for DispatchError {
-	fn from(err: &'static str) -> DispatchError {
-		DispatchError::new(None, 0, Some(err))
 	}
 }
 
@@ -532,7 +568,7 @@ macro_rules! impl_outer_config {
 			impl $crate::BuildStorage for $main {
 				fn assimilate_storage(
 					&self,
-					storage: &mut ($crate::StorageOverlay, $crate::ChildrenStorageOverlay),
+					storage: &mut $crate::Storage,
 				) -> std::result::Result<(), String> {
 					$(
 						if let Some(ref extra) = self.[< $snake $(_ $instance )? >] {
@@ -616,7 +652,7 @@ pub struct OpaqueExtrinsic(pub Vec<u8>);
 impl sp_std::fmt::Debug for OpaqueExtrinsic {
 	#[cfg(feature = "std")]
 	fn fmt(&self, fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(fmt, "{}", primitives::hexdisplay::HexDisplay::from(&self.0))
+		write!(fmt, "{}", sp_core::hexdisplay::HexDisplay::from(&self.0))
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -629,14 +665,14 @@ impl sp_std::fmt::Debug for OpaqueExtrinsic {
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
-		codec::Encode::using_encoded(&self.0, |bytes| ::primitives::bytes::serialize(bytes, seq))
+		codec::Encode::using_encoded(&self.0, |bytes| ::sp_core::bytes::serialize(bytes, seq))
 	}
 }
 
 #[cfg(feature = "std")]
 impl<'a> ::serde::Deserialize<'a> for OpaqueExtrinsic {
 	fn deserialize<D>(de: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'a> {
-		let r = ::primitives::bytes::deserialize(de)?;
+		let r = ::sp_core::bytes::deserialize(de)?;
 		Decode::decode(&mut &r[..])
 			.map_err(|e| ::serde::de::Error::custom(format!("Decode error: {}", e)))
 	}
@@ -654,8 +690,9 @@ pub fn print(print: impl traits::Printable) {
 
 #[cfg(test)]
 mod tests {
-	use crate::DispatchError;
+	use super::*;
 	use codec::{Encode, Decode};
+	use sp_core::crypto::Pair;
 
 	#[test]
 	fn opaque_extrinsic_serialization() {
@@ -665,21 +702,37 @@ mod tests {
 
 	#[test]
 	fn dispatch_error_encoding() {
-		let error = DispatchError {
-			module: Some(1),
+		let error = DispatchError::Module {
+			index: 1,
 			error: 2,
 			message: Some("error message"),
 		};
 		let encoded = error.encode();
 		let decoded = DispatchError::decode(&mut &encoded[..]).unwrap();
-		assert_eq!(encoded, vec![1, 1, 2]);
+		assert_eq!(encoded, vec![3, 1, 2]);
 		assert_eq!(
 			decoded,
-			DispatchError {
-				module: Some(1),
+			DispatchError::Module {
+				index: 1,
 				error: 2,
 				message: None,
 			},
 		);
+	}
+
+	#[test]
+	fn multi_signature_ecdsa_verify_works() {
+		let msg = &b"test-message"[..];
+		let (pair, _) = ecdsa::Pair::generate();
+
+		let signature = pair.sign(&msg);
+		assert!(ecdsa::Pair::verify(&signature, msg, &pair.public()));
+
+		let multi_sig = MultiSignature::from(signature);
+		let multi_signer = MultiSigner::from(pair.public());
+		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
+
+		let multi_signer = MultiSigner::from(pair.public().into_compressed().unwrap());
+		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
 	}
 }

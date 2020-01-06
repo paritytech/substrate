@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 //! Changes trie pruning-related functions.
 
 use hash_db::Hasher;
-use trie::Recorder;
+use sp_trie::Recorder;
 use log::warn;
 use num_traits::{One, Zero};
 use crate::proving_backend::ProvingBackendRecorder;
@@ -202,8 +202,8 @@ fn max_digest_intervals_to_keep<Number: BlockNumber>(
 #[cfg(test)]
 mod tests {
 	use std::collections::HashSet;
-	use trie::MemoryDB;
-	use primitives::Blake2Hasher;
+	use sp_trie::MemoryDB;
+	use sp_core::Blake2Hasher;
 	use crate::backend::insert_into_memory_db;
 	use crate::changes_trie::storage::InMemoryStorage;
 	use codec::Encode;

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,10 +20,10 @@
 
 use codec::{Encode, Decode};
 
-use app_crypto::sr25519;
-pub use app_crypto;
+use sp_application_crypto::sr25519;
+pub use sp_application_crypto;
 
-pub use primitives::{hash::H256, RuntimeDebug};
+pub use sp_core::{hash::H256, RuntimeDebug};
 use sp_runtime::traits::{BlakeTwo256, Verify, Extrinsic as ExtrinsicT,};
 
 /// Extrinsic for test-runtime.
@@ -79,8 +79,8 @@ pub type Header = sp_runtime::generic::Header<BlockNumber, BlakeTwo256>;
 
 
 /// Changes trie configuration (optionally) used in tests.
-pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
-	primitives::ChangesTrieConfiguration {
+pub fn changes_trie_config() -> sp_core::ChangesTrieConfiguration {
+	sp_core::ChangesTrieConfiguration {
 		digest_interval: 4,
 		digest_levels: 2,
 	}

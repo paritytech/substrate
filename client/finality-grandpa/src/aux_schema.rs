@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,14 +18,14 @@
 
 use std::fmt::Debug;
 use std::sync::Arc;
-use codec::{Encode, Decode};
-use client_api::backend::AuxStore;
+use parity_scale_codec::{Encode, Decode};
+use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use fork_tree::ForkTree;
-use grandpa::round::State as RoundState;
+use finality_grandpa::round::State as RoundState;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use log::{info, warn};
-use fg_primitives::{AuthorityList, SetId, RoundNumber};
+use sp_finality_grandpa::{AuthorityList, SetId, RoundNumber};
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
 use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
@@ -439,14 +439,14 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
 
 #[cfg(test)]
 mod test {
-	use fg_primitives::AuthorityId;
-	use primitives::H256;
-	use test_client;
+	use sp_finality_grandpa::AuthorityId;
+	use sp_core::H256;
+	use substrate_test_runtime_client;
 	use super::*;
 
 	#[test]
 	fn load_decode_from_v0_migrates_data_format() {
-		let client = test_client::new();
+		let client = substrate_test_runtime_client::new();
 
 		let authorities = vec![(AuthorityId::default(), 100)];
 		let set_id = 3;
@@ -482,7 +482,7 @@ mod test {
 		);
 
 		// should perform the migration
-		load_persistent::<test_client::runtime::Block, _, _>(
+		load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
 			&client,
 			H256::random(),
 			0,
@@ -494,7 +494,7 @@ mod test {
 			Some(2),
 		);
 
-		let PersistentData { authority_set, set_state, .. } = load_persistent::<test_client::runtime::Block, _, _>(
+		let PersistentData { authority_set, set_state, .. } = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
 			&client,
 			H256::random(),
 			0,
@@ -534,7 +534,7 @@ mod test {
 
 	#[test]
 	fn load_decode_from_v1_migrates_data_format() {
-		let client = test_client::new();
+		let client = substrate_test_runtime_client::new();
 
 		let authorities = vec![(AuthorityId::default(), 100)];
 		let set_id = 3;
@@ -572,7 +572,7 @@ mod test {
 		);
 
 		// should perform the migration
-		load_persistent::<test_client::runtime::Block, _, _>(
+		load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
 			&client,
 			H256::random(),
 			0,
@@ -584,7 +584,7 @@ mod test {
 			Some(2),
 		);
 
-		let PersistentData { authority_set, set_state, .. } = load_persistent::<test_client::runtime::Block, _, _>(
+		let PersistentData { authority_set, set_state, .. } = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
 			&client,
 			H256::random(),
 			0,
@@ -624,11 +624,11 @@ mod test {
 
 	#[test]
 	fn write_read_concluded_rounds() {
-		let client = test_client::new();
+		let client = substrate_test_runtime_client::new();
 		let hash = H256::random();
 		let round_state = RoundState::genesis((hash, 0));
 
-		let completed_round = CompletedRound::<test_client::runtime::Block> {
+		let completed_round = CompletedRound::<substrate_test_runtime_client::runtime::Block> {
 			number: 42,
 			state: round_state.clone(),
 			base: round_state.prevote_ghost.unwrap(),
@@ -642,7 +642,7 @@ mod test {
 		round_number.using_encoded(|n| key.extend(n));
 
 		assert_eq!(
-			load_decode::<_, CompletedRound::<test_client::runtime::Block>>(&client, &key).unwrap(),
+			load_decode::<_, CompletedRound::<substrate_test_runtime_client::runtime::Block>>(&client, &key).unwrap(),
 			Some(completed_round),
 		);
 	}

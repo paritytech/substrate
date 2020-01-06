@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ pub type Period = u64;
 pub type Phase = u64;
 
 /// An era to describe the longevity of a transaction.
-#[derive(PartialEq, Eq, Clone, Copy, primitives::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Copy, sp_core::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum Era {
 	/// The transaction is valid forever. The genesis hash must be present in the signed content.
@@ -40,6 +40,9 @@ pub enum Era {
 	/// implies which block hash is included in the signature material). If the `period` is
 	/// greater than 1 << 12, then it will be a factor of the times greater than 1<<12 that
 	/// `period` is.
+	///
+	/// When used on `FRAME`-based runtimes, `period` cannot exceed `BlockHashCount` parameter
+	/// of `system` module.
 	Mortal(Period, Phase),
 }
 
@@ -55,6 +58,10 @@ n = Q(current - phase, period) + phase
 impl Era {
 	/// Create a new era based on a period (which should be a power of two between 4 and 65536 inclusive)
 	/// and a block number on which it should start (or, for long periods, be shortly after the start).
+	///
+	/// If using `Era` in the context of `FRAME` runtime, make sure that `period`
+	/// does not exceed `BlockHashCount` parameter passed to `system` module, since that
+	/// prunes old blocks and renders transactions immediately invalid.
 	pub fn mortal(period: u64, current: u64) -> Self {
 		let period = period.checked_next_power_of_two()
 			.unwrap_or(1 << 16)

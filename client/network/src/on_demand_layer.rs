@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ use futures::{prelude::*, sync::mpsc, sync::oneshot};
 use futures03::compat::{Compat01As03, Future01CompatExt as _};
 use parking_lot::Mutex;
 use sp_blockchain::Error as ClientError;
-use client_api::{Fetcher, FetchChecker, RemoteHeaderRequest,
+use sc_client_api::{Fetcher, FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest,
 	RemoteReadChildRequest, RemoteBodyRequest};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};

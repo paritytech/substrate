@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -39,7 +39,7 @@ use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
-use runtime_interface::pass_by::PassByInner;
+use sp_runtime_interface::pass_by::PassByInner;
 use sp_std::ops::Deref;
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys

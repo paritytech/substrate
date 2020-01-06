@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@ mod tests;
 use std::{sync::Arc, convert::TryInto};
 use log::warn;
 
-use client::Client;
+use sc_client::Client;
 use sp_blockchain::Error as ClientError;
 
 use rpc::futures::{
@@ -31,20 +31,20 @@ use rpc::futures::{
 };
 use futures::{StreamExt as _, compat::Compat};
 use futures::future::{ready, FutureExt, TryFutureExt};
-use api::Subscriptions;
+use sc_rpc_api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use codec::{Encode, Decode};
-use primitives::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
+use sp_core::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
 use sp_api::ConstructRuntimeApi;
 use sp_runtime::{generic, traits::{self, ProvideRuntimeApi}};
-use txpool_api::{
+use sp_transaction_pool::{
 	TransactionPool, InPoolTransaction, TransactionStatus,
 	BlockHash, TxHash, TransactionFor, error::IntoPoolError,
 };
-use session::SessionKeys;
+use sp_session::SessionKeys;
 
 /// Re-export the API for backward compatibility.
-pub use api::author::*;
+pub use sc_rpc_api::author::*;
 use self::error::{Error, FutureResult, Result};
 
 /// Authoring API
@@ -78,8 +78,8 @@ impl<B, E, P, Block: traits::Block, RA> Author<B, E, P, Block, RA> {
 
 impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P, Block, RA> where
 	Block: traits::Block<Hash=H256>,
-	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client_api::CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
+	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: sc_client_api::CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
 	P: TransactionPool<Block=Block, Hash=Block::Hash> + Sync + Send + 'static,
 	RA: ConstructRuntimeApi<Block, Client<B, E, Block, RA>> + Send + Sync + 'static,
 	Client<B, E, Block, RA>: ProvideRuntimeApi,
@@ -102,7 +102,7 @@ impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P,
 	}
 
 	fn rotate_keys(&self) -> Result<Bytes> {
-		let best_block_hash = self.client.info().chain.best_hash;
+		let best_block_hash = self.client.chain_info().best_hash;
 		self.client.runtime_api().generate_session_keys(
 			&generic::BlockId::Hash(best_block_hash),
 			None,
@@ -114,7 +114,7 @@ impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P,
 			Ok(xt) => xt,
 			Err(err) => return Box::new(result(Err(err.into()))),
 		};
-		let best_block_hash = self.client.info().chain.best_hash;
+		let best_block_hash = self.client.chain_info().best_hash;
 		Box::new(self.pool
 			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
 			.compat()
@@ -157,7 +157,7 @@ impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P,
 		xt: Bytes,
 	) {
 		let submit = || -> Result<_> {
-			let best_block_hash = self.client.info().chain.best_hash;
+			let best_block_hash = self.client.chain_info().best_hash;
 			let dxt = TransactionFor::<P>::decode(&mut &xt[..])
 				.map_err(error::Error::from)?;
 			Ok(

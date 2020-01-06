@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,19 +21,19 @@
 
 use std::sync::Arc;
 
-use client_api::backend::LocalBackend;
+use sc_client_api::backend::LocalBackend;
 use crate::block_builder_ext::BlockBuilderExt;
-use client_api::blockchain::{Backend as BlockChainBackendT, HeaderBackend};
+use sc_client_api::blockchain::{Backend as BlockChainBackendT, HeaderBackend};
 use crate::{AccountKeyring, ClientExt, TestClientBuilder, TestClientBuilderExt};
-use generic_test_client::consensus::BlockOrigin;
-use primitives::Blake2Hasher;
-use runtime::{self, Transfer};
+use substrate_test_client::sp_consensus::BlockOrigin;
+use sp_core::Blake2Hasher;
+use substrate_test_runtime::{self, Transfer};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::Block as BlockT;
 
 /// helper to test the `leaves` implementation for various backends
 pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
-	B: LocalBackend<runtime::Block, Blake2Hasher>,
+	B: LocalBackend<substrate_test_runtime::Block, Blake2Hasher>,
 {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
@@ -44,7 +44,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	let client = TestClientBuilder::with_backend(backend.clone()).build();
 	let blockchain = backend.blockchain();
 
-	let genesis_hash = client.info().chain.genesis_hash;
+	let genesis_hash = client.chain_info().genesis_hash;
 
 	assert_eq!(
 		blockchain.leaves().unwrap(),
@@ -149,7 +149,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 
 /// helper to test the `children` implementation for various backends
 pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
-	B: LocalBackend<runtime::Block, Blake2Hasher>,
+	B: LocalBackend<substrate_test_runtime::Block, Blake2Hasher>,
 {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
@@ -224,7 +224,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	let d2 = builder.bake().unwrap();
 	client.import(BlockOrigin::Own, d2.clone()).unwrap();
 
-	let genesis_hash = client.info().chain.genesis_hash;
+	let genesis_hash = client.chain_info().genesis_hash;
 
 	let children1 = blockchain.children(a4.hash()).unwrap();
 	assert_eq!(vec![a5.hash()], children1);
@@ -240,7 +240,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 }
 
 pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B>) where
-	B: LocalBackend<runtime::Block, Blake2Hasher>,
+	B: LocalBackend<substrate_test_runtime::Block, Blake2Hasher>,
 {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
@@ -314,7 +314,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	let d2 = builder.bake().unwrap();
 	client.import(BlockOrigin::Own, d2.clone()).unwrap();
 
-	let genesis_hash = client.info().chain.genesis_hash;
+	let genesis_hash = client.chain_info().genesis_hash;
 
 	assert_eq!(blockchain.header(BlockId::Number(0)).unwrap().unwrap().hash(), genesis_hash);
 	assert_eq!(blockchain.hash(0).unwrap().unwrap(), genesis_hash);

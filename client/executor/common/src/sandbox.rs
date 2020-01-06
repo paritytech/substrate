@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,19 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#![warn(missing_docs)]
-
 //! This module implements sandboxing support in the runtime.
+//!
+//! Sandboxing is baked by wasmi at the moment. In future, however, we would like to add/switch to
+//! a compiled execution engine.
 
 use crate::error::{Result, Error};
 use std::{collections::HashMap, rc::Rc};
 use codec::{Decode, Encode};
-use primitives::sandbox as sandbox_primitives;
+use sp_core::sandbox as sandbox_primitives;
 use wasmi::{
 	Externals, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
 	ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages,
 };
-use wasm_interface::{Pointer, WordSize};
+use sp_wasm_interface::{Pointer, WordSize};
 
 /// Index of a function inside the supervisor.
 ///

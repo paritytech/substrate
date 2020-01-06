@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,10 +19,10 @@
 use log::info;
 use codec::{Decode, Encode};
 
-use client_api::backend::AuxStore;
+use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use sp_runtime::traits::Block as BlockT;
-use babe_primitives::BabeBlockWeight;
+use sp_consensus_babe::BabeBlockWeight;
 
 use super::{epoch_changes::EpochChangesFor, SharedEpochChanges};
 

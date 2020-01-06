@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,12 +18,12 @@
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
-	use support::metadata::*;
+	use frame_support::metadata::*;
 	use sp_io::TestExternalities;
 	use std::marker::PhantomData;
 	use codec::{Encode, Decode, EncodeLike};
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
@@ -32,7 +32,7 @@ mod tests {
 		type BlockNumber;
 	}
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as TestStorage {
 			// non-getters: pub / $default
 
@@ -79,7 +79,7 @@ mod tests {
 
 			COMPLEXTYPE1: ::std::vec::Vec<<T as Trait>::Origin>;
 			COMPLEXTYPE2: (Vec<Vec<(u16,Box<(  )>)>>, u32);
-			COMPLEXTYPE3: ([u32;25]);
+			COMPLEXTYPE3: [u32;25];
 		}
 		add_extra_genesis {
 			build(|_| {});
@@ -430,7 +430,7 @@ mod tests {
 				StorageEntryMetadata {
 					name: DecodeDifferent::Encode("COMPLEXTYPE3"),
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("([u32; 25])")),
+					ty: StorageEntryType::Plain(DecodeDifferent::Encode("[u32; 25]")),
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructCOMPLEXTYPE3(PhantomData::<TraitImpl>))
 					),
@@ -478,13 +478,13 @@ mod test2 {
 		type BlockNumber;
 	}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
 	type PairOf<T> = (T, T);
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as TestStorage {
 			SingleDef : u32;
 			PairDef : PairOf<u32>;
@@ -513,10 +513,10 @@ mod test3 {
 		type Origin;
 		type BlockNumber;
 	}
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
 			Foo get(fn foo) config(initial_foo): u32;
 		}
@@ -543,14 +543,14 @@ mod test_append_and_len {
 		type BlockNumber;
 	}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 	struct NoDef(u32);
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
 			NoDefault: Option<NoDef>;
 

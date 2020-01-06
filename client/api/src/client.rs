@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,12 +18,12 @@
 
 use std::collections::HashMap;
 use futures::channel::mpsc;
-use primitives::storage::StorageKey;
+use sp_core::storage::StorageKey;
 use sp_runtime::{
     traits::{Block as BlockT, NumberFor},
     generic::BlockId
 };
-use consensus::BlockOrigin;
+use sp_consensus::BlockOrigin;
 
 use crate::blockchain::Info;
 use crate::notifications::StorageEventStream;

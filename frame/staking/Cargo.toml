@@ -8,23 +8,23 @@ edition = "2018"
 serde = { version = "1.0.101", optional = true }
 safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-keyring = { path = "../../primitives/keyring", optional = true }
-sp-std = { path = "../../primitives/std", default-features = false }
-phragmen = { package = "sp-phragmen", path = "../../primitives/phragmen", default-features = false }
+sp-keyring = { version = "2.0.0", optional = true, path = "../../primitives/keyring" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-phragmen = { version = "2.0.0", default-features = false, path = "../../primitives/phragmen" }
 sp-io ={ path = "../../primitives/io", default-features = false }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
-sp-staking = { path = "../../primitives/staking", default-features = false }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
-session = { package = "pallet-session", path = "../session", default-features = false, features = ["historical"] }
-authorship = { package = "pallet-authorship", path = "../authorship", default-features = false }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+pallet-session = { version = "2.0.0", features = ["historical"], path = "../session", default-features = false }
+pallet-authorship = { version = "2.0.0", default-features = false, path = "../authorship" }
 
 [dev-dependencies]
-primitives = { package = "sp-core",  path = "../../primitives/core" }
-balances = { package = "pallet-balances", path = "../balances" }
-timestamp = { package = "pallet-timestamp", path = "../timestamp" }
-pallet-staking-reward-curve = { path = "../staking/reward-curve"}
-substrate-test-utils = { path = "../../test-utils" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+pallet-balances = { version = "2.0.0", path = "../balances" }
+pallet-timestamp = { version = "2.0.0", path = "../timestamp" }
+pallet-staking-reward-curve = { version = "2.0.0",  path = "../staking/reward-curve" }
+substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
 
 [features]
 equalize = []
@@ -36,12 +36,12 @@ std = [
 	"sp-keyring",
 	"codec/std",
 	"sp-std/std",
-	"phragmen/std",
+	"sp-phragmen/std",
 	"sp-io/std",
-	"support/std",
+	"frame-support/std",
 	"sp-runtime/std",
 	"sp-staking/std",
-	"session/std",
-	"system/std",
-	"authorship/std",
+	"pallet-session/std",
+	"frame-system/std",
+	"pallet-authorship/std",
 ]

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 //! Tests for the generic implementations of Extrinsic/Header/Block.
 
 use crate::codec::{Decode, Encode};
-use primitives::H256;
+use sp_core::H256;
 use super::DigestItem;
 
 #[test]

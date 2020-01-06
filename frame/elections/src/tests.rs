@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@
 use crate::mock::*;
 use crate::*;
 
-use support::{assert_ok, assert_err, assert_noop};
+use frame_support::{assert_ok, assert_err, assert_noop};
 
 #[test]
 fn params_should_work() {
@@ -256,7 +256,7 @@ fn chunking_voter_index_does_not_take_holes_into_account() {
 		// proof: can submit a new approval with the old index.
 		assert_noop!(
 			Elections::set_approvals(Origin::signed(65), vec![], 0, 64 - 2, 10),
-			"wrong voter index"
+			Error::<Test>::InvalidVoterIndex,
 		);
 		assert_ok!(Elections::set_approvals(Origin::signed(65), vec![], 0, 64, 10));
 	})
@@ -338,12 +338,12 @@ fn voting_subsequent_set_approvals_checks_voter_index() {
 		// invalid index
 		assert_noop!(
 			Elections::set_approvals(Origin::signed(4), vec![true], 0, 5, 40),
-			"invalid voter index"
+			Error::<Test>::InvalidVoterIndex,
 		);
 		// wrong index
 		assert_noop!(
 			Elections::set_approvals(Origin::signed(4), vec![true], 0, 0, 40),
-			"wrong voter index"
+			Error::<Test>::InvalidVoterIndex,
 		);
 		// correct
 		assert_ok!(Elections::set_approvals(Origin::signed(4), vec![true], 0, 1, 40));
@@ -357,7 +357,7 @@ fn voting_cannot_lock_less_than_limit() {
 
 		assert_noop!(
 			Elections::set_approvals(Origin::signed(3), vec![], 0, 0, 4),
-			"locked value must be more than limit",
+			Error::<Test>::InsufficientLockedValue,
 		);
 		assert_ok!(Elections::set_approvals(Origin::signed(3), vec![], 0, 0, 5));
 	});
@@ -414,7 +414,7 @@ fn voting_without_any_candidate_count_should_not_work() {
 
 		assert_noop!(
 			Elections::set_approvals(Origin::signed(4), vec![], 0, 0, 40),
-			"amount of candidates to receive approval votes should be non-zero"
+			Error::<Test>::ZeroCandidates,
 		);
 	});
 }
@@ -429,7 +429,7 @@ fn voting_setting_an_approval_vote_count_more_than_candidate_count_should_not_wo
 
 		assert_noop!(
 			Elections::set_approvals(Origin::signed(4),vec![true, true], 0, 0, 40),
-			"amount of candidate votes cannot exceed amount of candidates"
+			Error::<Test>::TooManyVotes,
 		);
 	});
 }
@@ -507,7 +507,7 @@ fn voting_invalid_retraction_index_should_not_work() {
 		assert_ok!(Elections::set_approvals(Origin::signed(1), vec![true], 0, 0, 10));
 		assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true], 0, 0, 20));
 		assert_eq!(voter_ids(), vec![1, 2]);
-		assert_noop!(Elections::retract_voter(Origin::signed(1), 1), "retraction index mismatch");
+		assert_noop!(Elections::retract_voter(Origin::signed(1), 1), Error::<Test>::InvalidRetractionIndex);
 	});
 }
 
@@ -518,7 +518,7 @@ fn voting_overflow_retraction_index_should_not_work() {
 		assert_ok!(Elections::submit_candidacy(Origin::signed(3), 0));
 
 		assert_ok!(Elections::set_approvals(Origin::signed(1), vec![true], 0, 0, 10));
-		assert_noop!(Elections::retract_voter(Origin::signed(1), 1), "retraction index invalid");
+		assert_noop!(Elections::retract_voter(Origin::signed(1), 1), Error::<Test>::InvalidRetractionIndex);
 	});
 }
 
@@ -529,7 +529,7 @@ fn voting_non_voter_retraction_should_not_work() {
 		assert_ok!(Elections::submit_candidacy(Origin::signed(3), 0));
 
 		assert_ok!(Elections::set_approvals(Origin::signed(1), vec![true], 0, 0, 10));
-		assert_noop!(Elections::retract_voter(Origin::signed(2), 0), "cannot retract non-voter");
+		assert_noop!(Elections::retract_voter(Origin::signed(2), 0), Error::<Test>::RetractNonVoter);
 	});
 }
 
@@ -627,7 +627,7 @@ fn retracting_inactive_voter_with_bad_reporter_index_should_not_work() {
 			42,
 			2, (voter_ids().iter().position(|&i| i == 2).unwrap() as u32).into(),
 			2
-		), "invalid reporter index");
+		), Error::<Test>::InvalidReporterIndex);
 	});
 }
 
@@ -656,7 +656,7 @@ fn retracting_inactive_voter_with_bad_target_index_should_not_work() {
 			(voter_ids().iter().position(|&i| i == 2).unwrap() as u32).into(),
 			2, 42,
 			2
-		), "invalid target index");
+		), Error::<Test>::InvalidTargetIndex);
 	});
 }
 
@@ -733,7 +733,7 @@ fn retracting_inactive_voter_by_nonvoter_should_not_work() {
 			0,
 			2, (voter_ids().iter().position(|&i| i == 2).unwrap() as u32).into(),
 			2
-		), "reporter must be a voter");
+		), Error::<Test>::NotVoter);
 	});
 }
 
@@ -803,7 +803,7 @@ fn candidacy_submission_not_using_free_slot_should_not_work() {
 		System::set_block_number(1);
 		assert_noop!(
 			Elections::submit_candidacy(Origin::signed(4), 3),
-			"invalid candidate slot"
+			Error::<Test>::InvalidCandidateSlot
 		);
 	});
 }
@@ -815,7 +815,7 @@ fn candidacy_bad_candidate_slot_submission_should_not_work() {
 		assert_eq!(Elections::candidates(), Vec::<u64>::new());
 		assert_noop!(
 			Elections::submit_candidacy(Origin::signed(1), 1),
-			"invalid candidate slot"
+			Error::<Test>::InvalidCandidateSlot
 		);
 	});
 }
@@ -829,7 +829,7 @@ fn candidacy_non_free_candidate_slot_submission_should_not_work() {
 		assert_eq!(Elections::candidates(), vec![1]);
 		assert_noop!(
 			Elections::submit_candidacy(Origin::signed(2), 0),
-			"invalid candidate slot"
+			Error::<Test>::InvalidCandidateSlot
 		);
 	});
 }
@@ -843,7 +843,7 @@ fn candidacy_dupe_candidate_submission_should_not_work() {
 		assert_eq!(Elections::candidates(), vec![1]);
 		assert_noop!(
 			Elections::submit_candidacy(Origin::signed(1), 1),
-			"duplicate candidate submission"
+			Error::<Test>::DuplicatedCandidate,
 		);
 	});
 }
@@ -855,7 +855,7 @@ fn candidacy_poor_candidate_submission_should_not_work() {
 		assert_eq!(Elections::candidates(), Vec::<u64>::new());
 		assert_noop!(
 			Elections::submit_candidacy(Origin::signed(7), 0),
-			"candidate has not enough funds"
+			Error::<Test>::InsufficientCandidateFunds,
 		);
 	});
 }
@@ -1014,7 +1014,7 @@ fn election_presentations_with_zero_staked_deposit_should_not_work() {
 		System::set_block_number(6);
 		assert_noop!(
 			Elections::present_winner(Origin::signed(4), 2, 0, 0),
-			"stake deposited to present winner and be added to leaderboard should be non-zero"
+			Error::<Test>::ZeroDeposit,
 		);
 	});
 }
@@ -1034,7 +1034,10 @@ fn election_double_presentations_should_be_punished() {
 		System::set_block_number(6);
 		assert_ok!(Elections::present_winner(Origin::signed(4), 2, 20, 0));
 		assert_ok!(Elections::present_winner(Origin::signed(4), 5, 50, 0));
-		assert_eq!(Elections::present_winner(Origin::signed(4), 5, 50, 0), Err("duplicate presentation"));
+		assert_eq!(
+			Elections::present_winner(Origin::signed(4), 5, 50, 0),
+			Err(Error::<Test>::DuplicatedPresentation.into()),
+		);
 		assert_ok!(Elections::end_block(System::block_number()));
 
 		assert_eq!(Elections::members(), vec![(5, 11), (2, 11)]);
@@ -1064,7 +1067,7 @@ fn election_presenting_for_double_election_should_not_work() {
 		System::set_block_number(10);
 		assert_noop!(
 			Elections::present_winner(Origin::signed(4), 2, 20, 1),
-			"candidate must not form a duplicated member if elected"
+			Error::<Test>::DuplicatedCandidate,
 		);
 	});
 }
@@ -1098,7 +1101,7 @@ fn election_presenting_loser_should_not_work() {
 			(60, 1)
 		]));
 
-		assert_noop!(Elections::present_winner(Origin::signed(4), 2, 20, 0), "candidate not worthy of leaderboard");
+		assert_noop!(Elections::present_winner(Origin::signed(4), 2, 20, 0), Error::<Test>::UnworthyCandidate);
 	});
 }
 
@@ -1141,7 +1144,7 @@ fn election_present_outside_of_presentation_period_should_not_work() {
 		assert!(!Elections::presentation_active());
 		assert_noop!(
 			Elections::present_winner(Origin::signed(5), 5, 1, 0),
-			"cannot present outside of presentation period"
+			Error::<Test>::NotPresentationPeriod,
 		);
 	});
 }
@@ -1157,7 +1160,7 @@ fn election_present_with_invalid_vote_index_should_not_work() {
 		assert_ok!(Elections::end_block(System::block_number()));
 
 		System::set_block_number(6);
-		assert_noop!(Elections::present_winner(Origin::signed(4), 2, 20, 1), "index not current");
+		assert_noop!(Elections::present_winner(Origin::signed(4), 2, 20, 1), Error::<Test>::InvalidVoteIndex);
 	});
 }
 
@@ -1187,7 +1190,7 @@ fn election_present_when_presenter_is_poor_should_not_work() {
 				if p > 5 {
 					assert_noop!(Elections::present_winner(
 						Origin::signed(1), 1, 10, 0),
-						"presenter must have sufficient slashable funds"
+						Error::<Test>::InsufficientPresenterFunds,
 					);
 				} else {
 					assert_ok!(Elections::present_winner(Origin::signed(1), 1, 10, 0));
@@ -1212,7 +1215,7 @@ fn election_invalid_present_tally_should_slash() {
 		assert_ok!(Elections::end_block(System::block_number()));
 
 		System::set_block_number(6);
-		assert_err!(Elections::present_winner(Origin::signed(4), 2, 80, 0), "incorrect total");
+		assert_err!(Elections::present_winner(Origin::signed(4), 2, 80, 0), Error::<Test>::IncorrectTotal);
 
 		assert_eq!(Balances::total_balance(&4), 38);
 	});

@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ use serde::Serialize;
 use codec::{Decode, Input, Error};
 use codec::{Encode, Output};
 use sp_std::vec::Vec;
-use primitives::RuntimeDebug;
+use sp_core::RuntimeDebug;
 
 #[cfg(feature = "std")]
 type StringBuf = String;
@@ -273,6 +273,7 @@ impl sp_std::fmt::Debug for DefaultByteGetter {
 pub enum StorageHasher {
 	Blake2_128,
 	Blake2_256,
+	Blake2_128Concat,
 	Twox128,
 	Twox256,
 	Twox64Concat,
@@ -344,8 +345,10 @@ pub enum RuntimeMetadata {
 	V7(RuntimeMetadataDeprecated),
 	/// Version 8 for runtime metadata. No longer used.
 	V8(RuntimeMetadataDeprecated),
-	/// Version 9 for runtime metadata.
-	V9(RuntimeMetadataV9),
+	/// Version 9 for runtime metadata. No longer used.
+	V9(RuntimeMetadataDeprecated),
+	/// Version 10 for runtime metadata.
+	V10(RuntimeMetadataV10),
 }
 
 /// Enum that should fail.
@@ -369,12 +372,12 @@ impl Decode for RuntimeMetadataDeprecated {
 /// The metadata of a runtime.
 #[derive(Eq, Encode, PartialEq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-pub struct RuntimeMetadataV9 {
+pub struct RuntimeMetadataV10 {
 	pub modules: DecodeDifferentArray<ModuleMetadata>,
 }
 
 /// The latest version of the metadata.
-pub type RuntimeMetadataLastVersion = RuntimeMetadataV9;
+pub type RuntimeMetadataLastVersion = RuntimeMetadataV10;
 
 /// All metadata about an runtime module.
 #[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
@@ -391,14 +394,14 @@ pub struct ModuleMetadata {
 type ODFnA<T> = Option<DFnA<T>>;
 type DFnA<T> = DecodeDifferent<FnEncode<&'static [T]>, Vec<T>>;
 
-impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
-	fn into(self) -> primitives::OpaqueMetadata {
-		primitives::OpaqueMetadata::new(self.encode())
+impl Into<sp_core::OpaqueMetadata> for RuntimeMetadataPrefixed {
+	fn into(self) -> sp_core::OpaqueMetadata {
+		sp_core::OpaqueMetadata::new(self.encode())
 	}
 }
 
 impl Into<RuntimeMetadataPrefixed> for RuntimeMetadataLastVersion {
 	fn into(self) -> RuntimeMetadataPrefixed {
-		RuntimeMetadataPrefixed(META_RESERVED, RuntimeMetadata::V9(self))
+		RuntimeMetadataPrefixed(META_RESERVED, RuntimeMetadata::V10(self))
 	}
 }

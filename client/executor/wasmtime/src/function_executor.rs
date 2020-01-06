@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::allocator::FreeingBumpHeapAllocator;
-use crate::error::{Error, Result};
-use crate::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
-use crate::wasmtime::util::{
+use sc_executor_common::allocator::FreeingBumpHeapAllocator;
+use sc_executor_common::error::{Error, Result};
+use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
+use crate::util::{
 	checked_range, cranelift_ir_signature, read_memory_into, write_memory_from,
 };
 
@@ -25,12 +25,12 @@ use codec::{Decode, Encode};
 use cranelift_codegen::ir;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use log::trace;
-use primitives::sandbox as sandbox_primitives;
+use sp_core::sandbox as sandbox_primitives;
 use std::{cmp, mem, ptr};
 use wasmtime_environ::translate_signature;
 use wasmtime_jit::{ActionError, Compiler};
 use wasmtime_runtime::{Export, VMCallerCheckedAnyfunc, VMContext, wasmtime_call_trampoline};
-use wasm_interface::{
+use sp_wasm_interface::{
 	FunctionContext, MemoryId, Pointer, Result as WResult, Sandbox, Signature, Value, ValueType,
 	WordSize,
 };
@@ -173,7 +173,7 @@ impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 		let exec_code_buf = self.compiler
 			.get_published_trampoline(func_ptr, &signature, value_size)
 			.map_err(ActionError::Setup)
-			.map_err(Error::Wasmtime)?;
+			.map_err(|e| Error::Other(e.to_string()))?;
 
 		// Call the trampoline.
 		if let Err(message) = unsafe {
