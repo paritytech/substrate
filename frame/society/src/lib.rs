@@ -1169,6 +1169,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		// we assume there's at least one member or this logic won't work.
 		if !members.is_empty() {
 			let candidates = <Candidates<T, I>>::take();
+			// NOTE: This may cause member length to surpass `MaxMembers`, but results in no consensus
+			// critical issues or side-effects. This is auto-correcting as members fall out of society.
 			members.reserve(candidates.len());
 
 			let maturity = <system::Module<T>>::block_number()
@@ -1275,6 +1277,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 				// Then write everything back out, signal the changed membership and leave an event.
 				members.sort();
+				// NOTE: This may cause member length to surpass `MaxMembers`, but results in no consensus
+				// critical issues or side-effects. This is auto-correcting as members fall out of society.
 				<Members<T, I>>::put(&members[..]);
 				<Head<T, I>>::put(&primary);
 
