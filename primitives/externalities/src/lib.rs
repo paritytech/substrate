@@ -203,14 +203,17 @@ pub trait Externalities: ExtensionStore {
 	/// Returns the SCALE encoded hash.
 	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()>;
 
-	/// Create a new transactional layer.
+	/// Start a new transactional layer.
 	fn storage_start_transaction(&mut self);
 
-	/// Discard a transactional layer, pending changes of every transaction behind this layer are
-	/// Dropped (including committed changes).
+	/// Discard current transactional layer, pending changes of this transaction layer are
+	/// dropped.
+	/// The transactional layer is closed, a new one is started if this was the last layer.
 	fn storage_discard_transaction(&mut self);
 
-	/// Commit a transactional layer. The changes stay attached to parent transaction layer.
+	/// Commit current transactional layer.
+	/// The changes stay attached to parent transaction layer and could still be discarded.
+	/// The transactional layer is closed, a new one is started if this was the last layer.
 	fn storage_commit_transaction(&mut self);
 }
 

@@ -14,29 +14,37 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Linear arrangement of historical data with transactional
+//! Linear sequence of historical data with transactional
 //! support.
 //!
-//! This is mainly synchronous, it contains historical,
-//! most operations do not require a separated state and
-//! global state operation do update value synchronously
-//! (to gain time on those operation a different design could
-//! only change global state and apply garbage collection later).
+//! This is mainly synchronous, global transactional state operation
+//! do update value synchronously (to gain time on those operation a
+//! different design could be to switch to only  change global state
+//! and apply garbage collection later if needed).
 //!
 //! # Global state
 //!
-//! The global state is the current numbre of overlayed transaction layer.
-//! Committing or discarding a layer must use this counter.
+//! The global state is the current number of overlayed transaction layers.
+//! Committing or discarding a layer simply change this counter and a
+//! synchronous local state operations should follow to update every
+//! associated historical data.
 //!
 //! # Local state
 //!
-//! Local state is eitheir defined as `Committed` or the index of the number
-//! of layer at the time of creation.
+//! Local state is either defined as `Committed` or `Prospective`.
+//! If in `Prospective` state, the index of the number of layesr at the time
+//! of creation is also needed.
 //! Transaction operation does not interfere with value in `Committed` state.
 
 use crate::CleaningResult;
 
-/// Global state is the current number of overlay layers.
+/// History of value and their state.
+pub type History<V> = crate::History<V, State>;
+
+/// An entry at a given history height.
+pub type HistoricalEntry<V> = crate::HistoricalEntry<V, State>;
+
+/// Global state contains only the current number of overlay layers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct States { current_layer: usize }
 
@@ -139,7 +147,7 @@ impl States {
 	pub fn apply_discard_transaction<V>(&self, value: &mut History<V>) -> CleaningResult {
 		let init_len = value.0.len();
 		for i in (0 .. value.0.len()).rev() {
-			if let HistoricalValue {
+			if let HistoricalEntry {
 				value: _,
 				index: State::Transaction(ix),
 			} = value.0[i] {
@@ -171,7 +179,7 @@ impl States {
 	pub fn apply_commit_transaction<V>(&self, value: &mut History<V>) -> CleaningResult {
 		let mut new_value = None;
 		for i in (0 .. value.0.len()).rev() {
-			if let HistoricalValue {
+			if let HistoricalEntry {
 				value: _,
 				index: State::Transaction(ix),
 			} = value.0[i] {
@@ -187,7 +195,7 @@ impl States {
 			} else { break }
 		}
 		if let Some(new_value) = new_value {
-			value.0.push(HistoricalValue {
+			value.0.push(HistoricalEntry {
 				value: new_value,
 				index: State::Transaction(self.current_layer),
 			});
@@ -197,14 +205,14 @@ impl States {
 	}
 }
 
-/// Historical value state for multiple transaction
-/// with an additional commited state.
+/// Historical value state of multiple transaction
+/// with an alterantive committed state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum State {
-	/// Committed, transactional action do not
-	/// change this state.
+	/// Committed, in this state no action on transaction
+	/// can modify this value.
 	Committed,
-	/// Value in a transaction, contains the current
+	/// Value relates to a transaction, the state contains the current
 	/// number of transaction when value did change.
 	Transaction(usize),
 }
@@ -218,12 +226,6 @@ impl State {
 		}
 	}
 }
-
-/// An entry at a given history height.
-pub type HistoricalValue<V> = crate::HistoricalValue<V, State>;
-
-/// History of value and their state.
-pub type History<V> = crate::History<V, State>;
 
 impl<V> History<V> {
 
@@ -239,7 +241,7 @@ impl<V> History<V> {
 				return;
 			}
 		}
-		self.0.push(HistoricalValue {
+		self.0.push(HistoricalEntry {
 			value,
 			index: State::Transaction(states.current_layer),
 		});
@@ -264,11 +266,11 @@ impl<V> History<V> {
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn get_prospective(&self) -> Option<&V> {
 		match self.0.get(0) {
-			Some(HistoricalValue {
+			Some(HistoricalEntry {
 				value: _,
 				index: State::Committed,
 			}) => {
-				if let Some(HistoricalValue {
+				if let Some(HistoricalEntry {
 					value,
 					index: State::Transaction(_),
 				}) = self.0.get(1) {
@@ -277,7 +279,7 @@ impl<V> History<V> {
 					None
 				}
 			},
-			Some(HistoricalValue {
+			Some(HistoricalEntry {
 				value,
 				index: State::Transaction(_),
 			}) => Some(&value),
@@ -288,7 +290,7 @@ impl<V> History<V> {
 	/// Get latest committed value.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn get_committed(&self) -> Option<&V> {
-		if let Some(HistoricalValue {
+		if let Some(HistoricalEntry {
 					value,
 					index: State::Committed,
 				}) = self.0.get(0) {
@@ -301,7 +303,7 @@ impl<V> History<V> {
 	/// Extracts the committed value if there is one.
 	pub fn into_committed(mut self) -> Option<V> {
 		self.0.truncate(1);
-		if let Some(HistoricalValue {
+		if let Some(HistoricalEntry {
 					value,
 					index: State::Committed,
 				}) = self.0.pop() {
@@ -312,8 +314,7 @@ impl<V> History<V> {
 	}
 
 	/// Returns mutable handle on latest pending historical value.
-	pub fn get_mut(&mut self) -> Option<HistoricalValue<&mut V>> {
+	pub fn get_mut(&mut self) -> Option<HistoricalEntry<&mut V>> {
 		self.0.last_mut().map(|h| h.as_mut())
 	}
-
 }
