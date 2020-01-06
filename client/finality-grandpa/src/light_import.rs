@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -62,7 +62,7 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA>(
 {
 	let info = client.info();
 	let import_data = load_aux_import_data(
-		info.chain.finalized_hash,
+		info.finalized_hash,
 		&*client,
 		genesis_authorities_provider,
 	)?;
@@ -158,7 +158,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 
 	fn on_start(&mut self) -> Vec<(Block::Hash, NumberFor<Block>)> {
 		let mut out = Vec::new();
-		let chain_info = self.client.info().chain;
+		let chain_info = self.client.chain_info();
 
 		let data = self.data.read();
 		for (pending_number, pending_hash) in data.consensus_changes.pending_changes() {
@@ -263,7 +263,7 @@ fn do_import_block<B, C, Block: BlockT<Hash=H256>, J>(
 	match justification {
 		Some(justification) => {
 			trace!(
-				target: "finality",
+				target: "afg",
 				"Imported block {}{}. Importing justification.",
 				if enacts_consensus_change { " which enacts consensus changes" } else { "" },
 				hash,
@@ -273,7 +273,7 @@ fn do_import_block<B, C, Block: BlockT<Hash=H256>, J>(
 		},
 		None if enacts_consensus_change => {
 			trace!(
-				target: "finality",
+				target: "afg",
 				"Imported block {} which enacts consensus changes. Requesting finality proof.",
 				hash,
 			);
@@ -393,7 +393,7 @@ fn do_import_justification<B, C, Block: BlockT<Hash=H256>, J>(
 	let justification = match justification {
 		Err(ClientError::BadJustification(_)) => {
 			trace!(
-				target: "finality",
+				target: "afg",
 				"Justification for {} is not valid within current authorities set. Requesting finality proof.",
 				hash,
 			);
@@ -404,7 +404,7 @@ fn do_import_justification<B, C, Block: BlockT<Hash=H256>, J>(
 		},
 		Err(e) => {
 			trace!(
-				target: "finality",
+				target: "afg",
 				"Justification for {} is not valid. Bailing.",
 				hash,
 			);
@@ -413,7 +413,7 @@ fn do_import_justification<B, C, Block: BlockT<Hash=H256>, J>(
 		},
 		Ok(justification) => {
 			trace!(
-				target: "finality",
+				target: "afg",
 				"Justification for {} is valid. Finalizing the block.",
 				hash,
 			);
@@ -444,7 +444,7 @@ fn do_finalize_block<B, C, Block: BlockT<Hash=H256>>(
 {
 	// finalize the block
 	client.finalize_block(BlockId::Hash(hash), Some(justification), true).map_err(|e| {
-		warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+		warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 		ConsensusError::ClientImport(e.to_string())
 	})?;
 
@@ -532,8 +532,8 @@ fn require_insert_aux<T: Encode, A: AuxStore>(
 
 /// Display inconsistency warning.
 fn on_post_finalization_error(error: ClientError, value_type: &str) -> ConsensusError {
-	warn!(target: "finality", "Failed to write updated {} to disk. Bailing.", value_type);
-	warn!(target: "finality", "Node is in a potentially inconsistent state.");
+	warn!(target: "afg", "Failed to write updated {} to disk. Bailing.", value_type);
+	warn!(target: "afg", "Node is in a potentially inconsistent state.");
 	ConsensusError::ClientImport(error.to_string())
 }
 
@@ -647,7 +647,7 @@ pub mod tests {
 			origin: BlockOrigin::Own,
 			header: Header {
 				number: 1,
-				parent_hash: client.info().chain.best_hash,
+				parent_hash: client.chain_info().best_hash,
 				state_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),

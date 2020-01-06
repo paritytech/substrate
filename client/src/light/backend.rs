@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -62,7 +62,7 @@ pub struct ImportOperation<Block: BlockT, S, H: Hasher> {
 	finalized_blocks: Vec<BlockId<Block>>,
 	set_head: Option<BlockId<Block>>,
 	storage_update: Option<InMemoryState<H>>,
-	_phantom: ::std::marker::PhantomData<(S)>,
+	_phantom: ::std::marker::PhantomData<S>,
 }
 
 /// Either in-memory genesis state, or locally-unavailable state.

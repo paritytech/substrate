@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -44,7 +44,7 @@ use futures03::{
 };
 use sc_network::{
 	NetworkService, NetworkState, specialization::NetworkSpecialization,
-	Event, DhtEvent, PeerId, ReportHandle,
+	PeerId, ReportHandle,
 };
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
@@ -53,7 +53,10 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
 
 pub use self::error::Error;
-pub use self::builder::{ServiceBuilder, ServiceBuilderCommand};
+pub use self::builder::{
+	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
+	TFullCallExecutor, TLightCallExecutor,
+};
 pub use config::{Configuration, Roles, PruningMode};
 pub use sc_chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
 pub use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, error::IntoPoolError};
@@ -372,7 +375,6 @@ fn build_network_future<
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
 	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
-	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
 ) -> impl Future<Item = (), Error = ()> {
 	// Compatibility shim while we're transitioning to stable Futures.
 	// See https://github.com/paritytech/substrate/issues/3099
@@ -382,9 +384,6 @@ fn build_network_future<
 		.map(|v| Ok::<_, ()>(v)).compat();
 	let mut finality_notification_stream = client.finality_notification_stream().fuse()
 		.map(|v| Ok::<_, ()>(v)).compat();
-
-	// Initializing a stream in order to obtain DHT events from the network.
-	let mut event_stream = network.service().event_stream();
 
 	futures::future::poll_fn(move || {
 		let before_polling = Instant::now();
@@ -429,6 +428,22 @@ fn build_network_future<
 						let _ = sender.send(network_state);
 					}
 				}
+				sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
+					let x = network.add_reserved_peer(peer_addr)
+						.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
+					let _ = sender.send(x);
+				}
+				sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender) => {
+					let _ = match peer_id.parse::<PeerId>() {
+						Ok(peer_id) => {
+							network.remove_reserved_peer(peer_id);
+							sender.send(Ok(()))
+						}
+						Err(e) => sender.send(Err(sc_rpc::system::error::Error::MalformattedPeerArg(
+							e.to_string(),
+						))),
+					};
+				}
 				sc_rpc::system::Request::NodeRoles(sender) => {
 					use sc_rpc::system::NodeRole;
 
@@ -461,26 +476,6 @@ fn build_network_future<
 			let state = network.network_state();
 			(status, state)
 		});
-
-		// Processing DHT events.
-		while let Ok(Async::Ready(Some(event))) = event_stream.poll() {
-			match event {
-				Event::Dht(event) => {
-					// Given that client/authority-discovery is the only upper stack consumer of Dht events at the moment, all Dht
-					// events are being passed on to the authority-discovery module. In the future there might be multiple
-					// consumers of these events. In that case this would need to be refactored to properly dispatch the events,
-					// e.g. via a subscriber model.
-					if let Some(Err(e)) = dht_event_tx.as_ref().map(|c| c.clone().try_send(event)) {
-						if e.is_full() {
-							warn!(target: "service", "Dht event channel to authority discovery is full, dropping event.");
-						} else if e.is_disconnected() {
-							warn!(target: "service", "Dht event channel to authority discovery is disconnected, dropping event.");
-						}
-					}
-				}
-				_ => {}
-			}
-		}
 
 		// Main network polling.
 		if let Ok(Async::Ready(())) = network.poll().map_err(|err| {
@@ -665,7 +660,7 @@ where
 		let encoded = transaction.encode();
 		match Decode::decode(&mut &encoded[..]) {
 			Ok(uxt) => {
-				let best_block_id = BlockId::hash(self.client.info().chain.best_hash);
+				let best_block_id = BlockId::hash(self.client.info().best_hash);
 				let import_future = self.pool.submit_one(&best_block_id, uxt);
 				let import_future = import_future
 					.then(move |import_result| {

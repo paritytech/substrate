@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -153,6 +153,7 @@ use proc_macro::TokenStream;
 /// * `twox_64_concat` - TwoX with 64bit + key concatenated.
 /// * `twox_128` - TwoX with 128bit.
 /// * `twox_256` - TwoX with with 256bit.
+/// * `blake2_128_concat` - Blake2 with 128bit + key concatenated.
 /// * `blake2_128` - Blake2 with 128bit.
 /// * `blake2_256` - Blake2 with 256bit.
 ///

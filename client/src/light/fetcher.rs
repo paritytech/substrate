@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -550,8 +550,8 @@ pub mod tests {
 			local_executor(),
 		);
 		let local_checker = &local_checker as &dyn FetchChecker<Block>;
-		let max = remote_client.info().chain.best_number;
-		let max_hash = remote_client.info().chain.best_hash;
+		let max = remote_client.chain_info().best_number;
+		let max_hash = remote_client.chain_info().best_hash;
 
 		for (index, (begin, end, key, expected_result)) in test_cases.into_iter().enumerate() {
 			let begin_hash = remote_client.block_hash(begin).unwrap().unwrap();
@@ -648,8 +648,8 @@ pub mod tests {
 			local_executor(),
 		);
 		let local_checker = &local_checker as &dyn FetchChecker<Block>;
-		let max = remote_client.info().chain.best_number;
-		let max_hash = remote_client.info().chain.best_hash;
+		let max = remote_client.chain_info().best_number;
+		let max_hash = remote_client.chain_info().best_hash;
 
 		let (begin, end, key, _) = test_cases[0].clone();
 		let begin_hash = remote_client.block_hash(begin).unwrap().unwrap();

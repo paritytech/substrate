@@ -9,7 +9,7 @@ edition = "2018"
 log = "0.4.8"
 parking_lot = "0.9.0"
 hash-db = "0.15.2"
-trie-db = "0.16.0"
+trie-db = "0.18.1"
 trie-root = "0.15.2"
 sp-trie = { version = "2.0.0", path = "../trie" }
 sp-core = { version = "2.0.0", path = "../core" }
