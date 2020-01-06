@@ -282,7 +282,7 @@ use sp_staking::{
 use sp_runtime::{Serialize, Deserialize};
 use frame_system::{self as system, ensure_signed, ensure_root, offchain::SubmitSignedTransaction};
 
-use sp_phragmen::{ExtendedBalance, PhragmenStakedAssignment};
+use sp_phragmen::{ExtendedBalance, PhragmenStakedAssignment, Assignment};
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -1696,23 +1696,23 @@ impl<T: Trait> Module<T> {
 				let mut staked_assignments
 					: Vec<(T::AccountId, Vec<PhragmenStakedAssignment<T::AccountId>>)>
 					= Vec::with_capacity(assignments.len());
-				for (n, assignment) in assignments.iter() {
+				for Assignment { who, distribution } in assignments.iter() {
 					let mut staked_assignment
 						: Vec<PhragmenStakedAssignment<T::AccountId>>
-						= Vec::with_capacity(assignment.len());
+						= Vec::with_capacity(distribution.len());
 
 					// If this is a self vote, then we don't need to equalise it at all. While the
 					// staking system does not allow nomination and validation at the same time,
 					// this must always be 100% support.
-					if assignment.len() == 1 && assignment[0].0 == *n {
+					if distribution.len() == 1 && distribution[0].0 == *who {
 						continue;
 					}
-					for (c, per_thing) in assignment.iter() {
-						let nominator_stake = to_votes(Self::slashable_balance_of(n));
+					for (c, per_thing) in distribution.iter() {
+						let nominator_stake = to_votes(Self::slashable_balance_of(who));
 						let other_stake = *per_thing * nominator_stake;
 						staked_assignment.push((c.clone(), other_stake));
 					}
-					staked_assignments.push((n.clone(), staked_assignment));
+					staked_assignments.push((who.clone(), staked_assignment));
 				}
 
 				sp_phragmen::equalize::<_, _, T::CurrencyToVote, _>(

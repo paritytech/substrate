@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use crate::mock::*;
-use crate::{elect, PhragmenResult};
+use crate::{elect, PhragmenResult, Assignment};
 use substrate_test_utils::assert_eq_uvec;
 use sp_runtime::Perbill;
 
@@ -90,9 +90,21 @@ fn phragmen_poc_works() {
 	assert_eq_uvec!(
 		assignments,
 		vec![
-			(10, vec![(2, Perbill::from_percent(100))]),
-			(20, vec![(3, Perbill::from_percent(100))]),
-			(30, vec![(2, Perbill::from_percent(100/2)), (3, Perbill::from_percent(100/2))]),
+			Assignment {
+				who: 10u64,
+				distribution: vec![(2, Perbill::from_percent(100))],
+			},
+			Assignment {
+				who: 20,
+				distribution: vec![(3, Perbill::from_percent(100))],
+			},
+			Assignment {
+				who: 30,
+				distribution: vec![
+					(2, Perbill::from_percent(100/2)),
+					(3, Perbill::from_percent(100/2)),
+				],
+			},
 		]
 	);
 }
@@ -157,7 +169,7 @@ fn phragmen_accuracy_on_large_scale_only_validators() {
 
 	assert_eq_uvec!(winners, vec![(1, 18446744073709551614u128), (5, 18446744073709551613u128)]);
 	assert_eq!(assignments.len(), 2);
-	check_assignments(assignments);
+	check_assignments_sum(assignments);
 }
 
 #[test]
@@ -190,13 +202,25 @@ fn phragmen_accuracy_on_large_scale_validators_and_nominators() {
 	assert_eq!(
 		assignments,
 		vec![
-			(13, vec![(1, Perbill::one())]),
-			(14, vec![(2, Perbill::one())]),
-			(1, vec![(1, Perbill::one())]),
-			(2, vec![(2, Perbill::one())]),
+			Assignment {
+				who: 13u64,
+				distribution: vec![(1, Perbill::one())],
+			},
+			Assignment {
+				who: 14,
+				distribution: vec![(2, Perbill::one())],
+			},
+			Assignment {
+				who: 1,
+				distribution: vec![(1, Perbill::one())],
+			},
+			Assignment {
+				who: 2,
+				distribution: vec![(2, Perbill::one())],
+			},
 		]
 	);
-	check_assignments(assignments);
+	check_assignments_sum(assignments);
 }
 
 #[test]
@@ -284,7 +308,7 @@ fn phragmen_large_scale_test() {
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(24, 1490000000000200000u128), (22, 1490000000000100000u128)]);
-	check_assignments(assignments);
+	check_assignments_sum(assignments);
 }
 
 #[test]
@@ -314,12 +338,24 @@ fn phragmen_large_scale_test_2() {
 	assert_eq!(
 		assignments,
 		vec![
-			(50, vec![(2, Perbill::from_parts(500000001)), (4, Perbill::from_parts(499999999))]),
-			(2, vec![(2, Perbill::one())]),
-			(4, vec![(4, Perbill::one())]),
+			Assignment {
+				who: 50u64,
+				distribution: vec![
+					(2, Perbill::from_parts(500000001)),
+					(4, Perbill::from_parts(499999999))
+				],
+			},
+			Assignment {
+				who: 2,
+				distribution: vec![(2, Perbill::one())],
+			},
+			Assignment {
+				who: 4,
+				distribution: vec![(4, Perbill::one())],
+			},
 		],
 	);
-	check_assignments(assignments);
+	check_assignments_sum(assignments);
 }
 
 #[test]

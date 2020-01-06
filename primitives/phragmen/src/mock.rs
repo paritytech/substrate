@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use crate::{elect, PhragmenResult, PhragmenAssignment};
+use crate::{elect, PhragmenResult, Assignment};
 use sp_runtime::{
 	assert_eq_error_rate, Perbill,
 	traits::{Convert, Member, SaturatedConversion}
@@ -320,10 +320,10 @@ pub(crate) fn create_stake_of(stakes: &[(AccountId, Balance)])
 }
 
 
-pub fn check_assignments(assignments: Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>) {
-	for (_, a) in assignments {
-		let sum: u32 = a.iter().map(|(_, p)| p.deconstruct()).sum();
-		assert_eq_error_rate!(sum, Perbill::accuracy(), 5);
+pub fn check_assignments_sum(assignments: Vec<Assignment<AccountId>>) {
+	for Assignment { distribution, .. } in assignments {
+		let sum: u32 = distribution.iter().map(|(_, p)| p.deconstruct()).sum();
+		assert_eq_error_rate!(sum, Perbill::accuracy(), 1);
 	}
 }
 
@@ -354,9 +354,9 @@ pub(crate) fn run_and_compare(
 
 	assert_eq!(winners, truth_value.winners);
 
-	for (nominator, assigned) in assignments.clone() {
-		if let Some(float_assignments) = truth_value.assignments.iter().find(|x| x.0 == nominator) {
-			for (candidate, per_thingy) in assigned {
+	for Assignment { who, distribution } in assignments.clone() {
+		if let Some(float_assignments) = truth_value.assignments.iter().find(|x| x.0 == who) {
+			for (candidate, per_thingy) in distribution {
 				if let Some(float_assignment) = float_assignments.1.iter().find(|x| x.0 == candidate ) {
 					assert_eq_error_rate!(
 						Perbill::from_fraction(float_assignment.1).deconstruct(),
@@ -372,7 +372,7 @@ pub(crate) fn run_and_compare(
 		}
 	}
 
-	check_assignments(assignments);
+	check_assignments_sum(assignments);
 }
 
 pub(crate) fn build_support_map<FS>(

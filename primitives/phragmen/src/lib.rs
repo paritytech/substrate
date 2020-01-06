@@ -34,8 +34,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, collections::btree_map::BTreeMap};
-use sp_runtime::RuntimeDebug;
-use sp_runtime::{helpers_128bit::multiply_by_rational, Perbill, Rational128};
+use sp_runtime::{helpers_128bit::multiply_by_rational, Perbill, Rational128, RuntimeDebug};
 use sp_runtime::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating, Bounded};
 
 #[cfg(test)]
@@ -58,11 +57,11 @@ const DEN: u128 = u128::max_value();
 
 /// A candidate entity for phragmen election.
 #[derive(Clone, Default, RuntimeDebug)]
-pub struct Candidate<AccountId> {
+struct Candidate<AccountId> {
 	/// Identifier.
-	pub who: AccountId,
+	who: AccountId,
 	/// Intermediary value used to sort candidates.
-	pub score: Rational128,
+	score: Rational128,
 	/// Sum of the stake of this candidate based on received votes.
 	approval_stake: ExtendedBalance,
 	/// Flag for being elected.
@@ -71,7 +70,7 @@ pub struct Candidate<AccountId> {
 
 /// A voter entity.
 #[derive(Clone, Default, RuntimeDebug)]
-pub struct Voter<AccountId> {
+struct Voter<AccountId> {
 	/// Identifier.
 	who: AccountId,
 	/// List of candidates proposed by this voter.
@@ -84,7 +83,7 @@ pub struct Voter<AccountId> {
 
 /// A candidate being backed by a voter.
 #[derive(Clone, Default, RuntimeDebug)]
-pub struct Edge<AccountId> {
+struct Edge<AccountId> {
 	/// Identifier.
 	who: AccountId,
 	/// Load of this vote.
@@ -107,7 +106,16 @@ pub struct PhragmenResult<AccountId> {
 	pub winners: Vec<(AccountId, ExtendedBalance)>,
 	/// Individual assignments. for each tuple, the first elements is a voter and the second
 	/// is the list of candidates that it supports.
-	pub assignments: Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>
+	pub assignments: Vec<Assignment<AccountId>>
+}
+
+#[derive(RuntimeDebug, Clone)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq))]
+pub struct Assignment<AccountId> {
+	/// Voter's identifier
+	pub who: AccountId,
+	/// The distribution of the voter's stake.
+	pub distribution: Vec<(AccountId, Perbill)>,
 }
 
 /// A structure to demonstrate the phragmen result from the perspective of the candidate, i.e. how
@@ -163,7 +171,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 
 	// return structures
 	let mut elected_candidates: Vec<(AccountId, ExtendedBalance)>;
-	let mut assigned: Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>;
+	let mut assigned: Vec<Assignment<AccountId>>;
 
 	// used to cache and access candidates index.
 	let mut c_idx_cache = BTreeMap::<AccountId, usize>::new();
@@ -271,7 +279,10 @@ pub fn elect<AccountId, Balance, FS, C>(
 
 	// update backing stake of candidates and voters
 	for n in &mut voters {
-		let mut assignment = (n.who.clone(), vec![]);
+		let mut assignment = Assignment {
+			who: n.who.clone(),
+			distribution: vec![],
+		};
 		for e in &mut n.edges {
 			if elected_candidates.iter().position(|(ref c, _)| *c == e.who).is_some() {
 				let per_bill_parts =
@@ -299,16 +310,16 @@ pub fn elect<AccountId, Balance, FS, C>(
 				let per_thing = Perbill::from_parts(
 					per_bill_parts.min(Perbill::accuracy().into()) as u32
 				);
-				assignment.1.push((e.who.clone(), per_thing));
+				assignment.distribution.push((e.who.clone(), per_thing));
 			}
 		}
 
-		if assignment.1.len() > 0 {
+		if assignment.distribution.len() > 0 {
 			// To ensure an assertion indicating: no stake from the nominator going to waste,
 			// we add a minimal post-processing to equally assign all of the leftover stake ratios.
-			let vote_count = assignment.1.len() as u32;
-			let len = assignment.1.len();
-			let sum = assignment.1.iter()
+			let vote_count = assignment.distribution.len() as u32;
+			let len = assignment.distribution.len();
+			let sum = assignment.distribution.iter()
 				.map(|a| a.1.deconstruct())
 				.sum::<u32>();
 			let accuracy = Perbill::accuracy();
@@ -317,10 +328,10 @@ pub fn elect<AccountId, Balance, FS, C>(
 
 			if diff_per_vote > 0 {
 				for i in 0..len {
-					let current_ratio = assignment.1[i % len].1;
+					let current_ratio = assignment.distribution[i % len].1;
 					let next_ratio = current_ratio
 						.saturating_add(Perbill::from_parts(diff_per_vote));
-					assignment.1[i % len].1 = next_ratio;
+					assignment.distribution[i % len].1 = next_ratio;
 				}
 			}
 
@@ -328,9 +339,9 @@ pub fn elect<AccountId, Balance, FS, C>(
 			// safe to cast it to usize.
 			let remainder = diff - diff_per_vote * vote_count;
 			for i in 0..remainder as usize {
-				let current_ratio = assignment.1[i % len].1;
+				let current_ratio = assignment.distribution[i % len].1;
 				let next_ratio = current_ratio.saturating_add(Perbill::from_parts(1));
-				assignment.1[i % len].1 = next_ratio;
+				assignment.distribution[i % len].1 = next_ratio;
 			}
 			assigned.push(assignment);
 		}
@@ -345,7 +356,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 /// Build the support map from the given phragmen result.
 pub fn build_support_map<Balance, AccountId, FS, C>(
 	elected_stashes: &Vec<AccountId>,
-	assignments: &Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>,
+	assignments: &Vec<Assignment<AccountId>>,
 	stake_of: FS,
 ) -> SupportMap<AccountId> where
 	AccountId: Default + Ord + Member,
@@ -361,14 +372,14 @@ pub fn build_support_map<Balance, AccountId, FS, C>(
 		.for_each(|e| { supports.insert(e.clone(), Default::default()); });
 
 	// build support struct.
-	for (n, assignment) in assignments.iter() {
-		for (c, per_thing) in assignment.iter() {
-			let nominator_stake = to_votes(stake_of(n));
+	for Assignment { who, distribution } in assignments.iter() {
+		for (c, per_thing) in distribution.iter() {
+			let nominator_stake = to_votes(stake_of(who));
 			// AUDIT: it is crucially important for the `Mul` implementation of all
 			// per-things to be sound.
 			let other_stake = *per_thing * nominator_stake;
 			if let Some(support) = supports.get_mut(c) {
-				if c == n {
+				if c == who {
 					// This is a nomination from `n` to themselves. This will increase both the
 					// `own` and `total` field.
 					debug_assert!(*per_thing == Perbill::one()); // TODO: deal with this: do we want it?
@@ -380,7 +391,7 @@ pub fn build_support_map<Balance, AccountId, FS, C>(
 					// For an astronomically rich validator with more astronomically rich
 					// set of nominators, this might saturate.
 					support.total = support.total.saturating_add(other_stake);
-					support.others.push((n.clone(), other_stake));
+					support.others.push((who.clone(), other_stake));
 				}
 			}
 		}
