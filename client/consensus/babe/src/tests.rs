@@ -406,10 +406,10 @@ fn run_one_test(
 		}).expect("Starts babe").unit_error().compat());
 	}
 
-	runtime.spawn(futures::future::poll_fn(move |_| {
+	runtime.spawn(futures01::future::poll_fn(move || {
 		net.lock().poll();
-		std::task::Poll::<()>::Pending
-	}).unit_error().compat());
+		Ok::<_, ()>(futures01::Async::NotReady::<()>)
+	}));
 
 	runtime.block_on(future::join_all(import_notifications)
 		.unit_error().compat()).unwrap();
