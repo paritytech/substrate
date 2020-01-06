@@ -39,7 +39,7 @@ use std::path::PathBuf;
 use std::io;
 use std::collections::{HashMap, HashSet};
 
-use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks};
+use sc_client_api::{execution_extensions::ExecutionExtensions, BadBlocks, ForkBlocks};
 use sc_client_api::backend::NewBlockState;
 use sc_client_api::backend::{StorageCollection, ChildStorageCollection};
 use sp_blockchain::{
@@ -276,6 +276,7 @@ pub fn new_client<E, S, Block, RA>(
 	executor: E,
 	genesis_storage: S,
 	fork_blocks: ForkBlocks<Block>,
+	bad_blocks: BadBlocks<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 ) -> Result<(
 		sc_client::Client<
@@ -296,7 +297,14 @@ pub fn new_client<E, S, Block, RA>(
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
 	let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor);
 	Ok((
-		sc_client::Client::new(backend.clone(), executor, genesis_storage, fork_blocks, execution_extensions)?,
+		sc_client::Client::new(
+			backend.clone(),
+			executor,
+			genesis_storage,
+			fork_blocks,
+			bad_blocks,
+			execution_extensions,
+		)?,
 		backend,
 	))
 }
