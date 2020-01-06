@@ -913,6 +913,8 @@ decl_module! {
 		/// Rebond a portion of the stash scheduled to be unlocked.
 		///
 		/// # <weight>
+		/// - Insignificant complexity, bounded by `MAX_UNLOCKING_CHUNKS`.
+		/// - Can't increase storage, only decrease it.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn rebond(origin, #[compact] value: BalanceOf<T>) {
