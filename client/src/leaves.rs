@@ -158,12 +158,35 @@ impl<H, N> LeafSet<H, N> where
 		Undo { inner: self }
 	}
 
-	/// currently since revert only affects the canonical chain
-	/// we assume that parent has no further children
-	/// and we add it as leaf again
-	pub fn revert(&mut self, hash: H, number: N, parent_hash: H) {
-		self.insert_leaf(Reverse(number.clone() - N::one()), parent_hash);
-		self.remove_leaf(&Reverse(number), &hash);
+	/// Revert to the given block height by dropping all leaves in the leaf set
+	/// with a block number higher than the target.
+	pub fn revert(&mut self, best_hash: H, best_number: N) {
+		let items = self.storage.iter()
+			.flat_map(|(number, hashes)| hashes.iter().map(move |h| (h.clone(), number.clone())))
+			.collect::<Vec<_>>();
+
+		for (hash, number) in &items {
+			if number.0 > best_number {
+				assert!(
+					self.remove_leaf(number, hash),
+					"item comes from an iterator over storage; qed",
+				);
+
+				self.pending_removed.push(hash.clone());
+			}
+		}
+
+		let best_number = Reverse(best_number);
+		let leaves_contains_best = self.storage
+			.get(&best_number)
+			.map_or(false, |hashes| hashes.contains(&best_hash));
+
+		// we need to make sure that the best block exists in the leaf set as
+		// this is an invariant of regular block import.
+		if !leaves_contains_best {
+			self.insert_leaf(best_number.clone(), best_hash.clone());
+			self.pending_added.push(LeafSetItem { hash: best_hash, number: best_number });
+		}
 	}
 
 	/// returns an iterator over all hashes in the leaf set

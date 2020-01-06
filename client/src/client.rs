@@ -1142,10 +1142,24 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(())
 	}
 
-	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
-	/// successfully reverted.
+	/// Attempts to revert the chain by `n` blocks guaranteeing that no block is
+	/// reverted past the last finalized block. Returns the number of blocks
+	/// that were successfully reverted.
 	pub fn revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(self.backend.revert(n)?)
+		Ok(self.backend.revert(n, false)?)
+	}
+
+	/// Attempts to revert the chain by `n` blocks disregarding finality. This
+	/// method will revert any finalized blocks as requested and can potentially
+	/// lead the node in an inconsistent state. Other modules in the system that
+	/// persist data and that rely on finality (e.g. consensus parts) will be
+	/// unaffected by the revert. Use this method with caution and making sure
+	/// that no other data needs to be reverted for consistency aside from the
+	/// block data.
+	///
+	/// Returns the number of blocks that were successfully reverted.
+	pub fn unsafe_revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
+		Ok(self.backend.revert(n, true)?)
 	}
 
 	/// Get usage info about current client.
