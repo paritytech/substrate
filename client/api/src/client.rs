@@ -16,12 +16,11 @@
 
 //! A set of APIs supported by the client along with their primitives.
 
-use std::collections::HashMap;
 use futures::channel::mpsc;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
-    traits::{Block as BlockT, NumberFor},
-    generic::BlockId
+	traits::{Block as BlockT, NumberFor},
+	generic::BlockId
 };
 use sp_consensus::BlockOrigin;
 
@@ -38,7 +37,7 @@ pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotifica
 /// Expected hashes of blocks at given heights.
 ///
 /// This may be used as chain spec extension to filter out known, unwanted forks.
-pub type ForkBlocks<Block> = Option<HashMap<NumberFor<Block>, <Block as BlockT>::Hash>>;
+pub type ForkBlocks<Block> = Option<Vec<(NumberFor<Block>, <Block as BlockT>::Hash)>>;
 
 /// Figure out the block type for a given type (for now, just a `Client`).
 pub trait BlockOf {

@@ -1472,7 +1472,10 @@ impl<'a, B, E, Block, RA> sp_consensus::BlockImport<Block> for &'a Client<B, E, 
 	) -> Result<ImportResult, Self::Error> {
 		let BlockCheckParams { hash, number, parent_hash, allow_missing_state, import_existing } = block;
 
-		if let Some(h) = self.fork_blocks.as_ref().and_then(|x| x.get(&number)) {
+		let fork_block = self.fork_blocks.as_ref()
+			.and_then(|fs| fs.iter().find(|(n, _)| *n == number));
+
+		if let Some((_, h)) = fork_block {
 			if &hash != h  {
 				trace!(
 					"Rejecting block from known invalid fork. Got {:?}, expected: {:?} at height {}",
