@@ -145,11 +145,11 @@ decl_error! {
 		NotAllowed,
 		/// Threshold must be greater than zero
 		ZeroThreshold,
-		/// Friends list must be greater than zero
-		ZeroFriends,
+		/// Friends list must be greater than zero and threshold
+		NotEnoughFriends,
 		/// Friends list must be less than max friends
 		MaxFriends,
-		/// Friends list must be sorted
+		/// Friends list must be sorted and free of duplicates
 		NotSorted,
 		/// This account is not set up for recovery
 		NotRecoverable,
@@ -208,7 +208,8 @@ decl_module! {
 			ensure!(!<Recoverable<T>>::exists(&who), Error::<T>::AlreadyRecoverable);
 			// Check user input is valid
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
-			ensure!(!friends.is_empty(), Error::<T>::ZeroFriends);
+			ensure!(!friends.is_empty(), Error::<T>::NotEnoughFriends);
+			ensure!(threshold as usize <= friends.len(), Error::<T>::NotEnoughFriends);
 			let max_friends = T::MaxFriends::get() as usize;
 			ensure!(friends.len() <= max_friends, Error::<T>::MaxFriends);
 			ensure!(Self::is_sorted(&friends), Error::<T>::NotSorted);
@@ -351,7 +352,7 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// Check that friends list is sorted.
 	fn is_sorted(friends: &Vec<T::AccountId>) -> bool {
-		friends.windows(2).all(|w| w[0] <= w[1])
+		friends.windows(2).all(|w| w[0] < w[1])
 	}
 
 	/// Check that a user is a friend in the friends list.

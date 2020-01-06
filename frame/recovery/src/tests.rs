@@ -60,7 +60,7 @@ fn set_recovered_account_works() {
 fn recovery_lifecycle_works() {
 	new_test_ext().execute_with(|| {
 		let friends = vec![2, 3, 4];
-		let threshold = 2;
+		let threshold = 3;
 		let delay_period = 10;
 		// Account 5 sets up a recovery configuration on their account
 		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends, threshold, delay_period));
@@ -71,6 +71,7 @@ fn recovery_lifecycle_works() {
 		// Off chain, the user contacts their friends and asks them to vouch for the recovery attempt
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 1));
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1));
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(4), 5, 1));
 		// We met the threshold, lets try to recover the account...?
 		assert_noop!(Recovery::claim_recovery(Origin::signed(1), 5), Error::<Test>::DelayPeriod);
 		// We need to wait at least the delay_period number of blocks before we can recover
@@ -91,5 +92,45 @@ fn recovery_lifecycle_works() {
 		// All funds have been fully recovered!
 		assert_eq!(Balances::free_balance(1), 200);
 		assert_eq!(Balances::free_balance(5), 0);
+	});
+}
+
+#[test]
+fn create_recovery_handles_basic_errors() {
+	new_test_ext().execute_with(|| {
+		// No friends
+		assert_noop!(Recovery::create_recovery(Origin::signed(5), vec![], 1, 0), Error::<Test>::NotEnoughFriends);
+		// Zero threshold
+		assert_noop!(Recovery::create_recovery(Origin::signed(5), vec![2], 0, 0), Error::<Test>::ZeroThreshold);
+		// Threshold greater than friends length
+		assert_noop!(Recovery::create_recovery(Origin::signed(5), vec![2, 3, 4], 4, 0), Error::<Test>::NotEnoughFriends);
+		// Too many friends
+		assert_noop!(Recovery::create_recovery(Origin::signed(5), vec![1, 2, 3, 4], 4, 0), Error::<Test>::MaxFriends);
+		// Unsorted friends
+		assert_noop!(Recovery::create_recovery(Origin::signed(5), vec![3, 2, 4], 3, 0), Error::<Test>::NotSorted);
+		// No duplicate friends
+		assert_noop!(Recovery::create_recovery(Origin::signed(5), vec![2, 2, 4], 3, 0), Error::<Test>::NotSorted);
+	});
+}
+
+#[test]
+fn create_recovery_works() {
+	new_test_ext().execute_with(|| {
+		let friends = vec![2, 3, 4];
+		let threshold = 3;
+		let delay_period = 10;
+		// Account 5 sets up a recovery configuration on their account
+		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+		// Deposit is taken, and scales with the number of friends they pick
+		// Base 10 + 1 per friends = 13 total reserved
+		assert_eq!(Balances::reserved_balance(5), 13);
+		// Recovery configuration is correctly stored
+		let recovery_config = RecoveryConfig {
+			delay_period,
+			deposit: 13,
+			friends: friends.clone(),
+			threshold,
+		};
+		assert_eq!(Recovery::recovery_config(5), Some(recovery_config));
 	});
 }
