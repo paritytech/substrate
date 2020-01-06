@@ -112,12 +112,14 @@ impl Trait for Test {
 	type RecoveryDeposit = RecoveryDeposit;
 }
 
-use pallet_balances::Call as BalancesCall;
-use pallet_balances::Error as BalancesError;
-
 pub type Recovery = Module<Test>;
 pub type System = frame_system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
+
+pub type BalancesCall = pallet_balances::Call<Test>;
+pub type BalancesError<T, I> = pallet_balances::Error<T, I>;
+
+pub type RecoveryCall = super::Call<Test>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();

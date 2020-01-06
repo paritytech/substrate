@@ -205,12 +205,12 @@ decl_module! {
 		) {
 			let who = ensure_signed(origin)?;
 			// Check account is not already set up for recovery
-			ensure!(<Recoverable<T>>::exists(&who), Error::<T>::AlreadyRecoverable);
+			ensure!(!<Recoverable<T>>::exists(&who), Error::<T>::AlreadyRecoverable);
 			// Check user input is valid
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			ensure!(!friends.is_empty(), Error::<T>::ZeroFriends);
 			let max_friends = T::MaxFriends::get() as usize;
-			ensure!(friends.len() < max_friends, Error::<T>::MaxFriends);
+			ensure!(friends.len() <= max_friends, Error::<T>::MaxFriends);
 			ensure!(Self::is_sorted(&friends), Error::<T>::NotSorted);
 
 			// Total deposit is base fee + number of friends * factor fee
