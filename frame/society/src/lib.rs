@@ -977,10 +977,14 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			// Keep it reasonably small.
 			if bids.len() > MAX_BID_COUNT {
 				let (_, popped, kind) = bids.pop().expect("b.len() > 1000; qed");
-				if let BidKind::Vouch(voucher, _) = kind {
-					<Vouching<T, I>>::remove(&voucher);
+				match kind {
+					BidKind::Deposit(deposit) => {
+						let _ = T::Currency::unreserve(&popped, deposit);
+					}
+					BidKind::Vouch(voucher, _) => {
+						<Vouching<T, I>>::remove(&voucher);
+					}
 				}
-				let _unreserved = T::Currency::unreserve(&popped, T::CandidateDeposit::get());
 				Self::deposit_event(RawEvent::AutoUnbid(popped));
 			}
 		});
