@@ -110,7 +110,7 @@ pub trait ValidatorContext<B: BlockT> {
 
 struct NetworkContext<'g, 'p, B: BlockT> {
 	gossip: &'g mut ConsensusGossip<B>,
-	network: &'p dyn Network<B>,
+	network: &'p mut dyn Network<B>,
 	engine_id: ConsensusEngineId,
 }
 
@@ -142,7 +142,7 @@ impl<'g, 'p, B: BlockT> ValidatorContext<B> for NetworkContext<'g, 'p, B> {
 }
 
 fn propagate<'a, B: BlockT, I>(
-	network: &dyn Network<B>,
+	network: &mut dyn Network<B>,
 	messages: I,
 	intent: MessageIntent,
 	peers: &mut HashMap<PeerId, PeerConsensus<B::Hash>>,
@@ -257,7 +257,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// Register message validator for a message type.
 	pub fn register_validator(
 		&mut self,
-		network: &dyn Network<B>,
+		network: &mut dyn Network<B>,
 		engine_id: ConsensusEngineId,
 		validator: Arc<dyn Validator<B>>
 	) {
@@ -274,7 +274,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	}
 
 	/// Handle new connected peer.
-	pub fn new_peer(&mut self, network: &dyn Network<B>, who: PeerId, roles: Roles) {
+	pub fn new_peer(&mut self, network: &mut dyn Network<B>, who: PeerId, roles: Roles) {
 		// light nodes are not valid targets for consensus gossip messages
 		if !roles.is_full() {
 			return;
@@ -323,7 +323,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	}
 
 	/// Call when a peer has been disconnected to stop tracking gossip status.
-	pub fn peer_disconnected(&mut self, network: &dyn Network<B>, who: PeerId) {
+	pub fn peer_disconnected(&mut self, network: &mut dyn Network<B>, who: PeerId) {
 		for (engine_id, v) in self.validators.clone() {
 			let mut context = NetworkContext { gossip: self, network, engine_id: engine_id.clone() };
 			v.peer_disconnected(&mut context, &who);
@@ -331,7 +331,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	}
 
 	/// Perform periodic maintenance
-	pub fn tick(&mut self, network: &dyn Network<B>) {
+	pub fn tick(&mut self, network: &mut dyn Network<B>) {
 		self.collect_garbage();
 		if time::Instant::now() >= self.next_broadcast {
 			self.rebroadcast(network);
@@ -340,14 +340,14 @@ impl<B: BlockT> ConsensusGossip<B> {
 	}
 
 	/// Rebroadcast all messages to all peers.
-	fn rebroadcast(&mut self, network: &dyn Network<B>) {
+	fn rebroadcast(&mut self, network: &mut dyn Network<B>) {
 		let messages = self.messages.iter()
 			.map(|entry| (&entry.message_hash, &entry.topic, &entry.message));
 		propagate(network, messages, MessageIntent::PeriodicRebroadcast, &mut self.peers, &self.validators);
 	}
 
 	/// Broadcast all messages with given topic.
-	pub fn broadcast_topic(&mut self, network: &dyn Network<B>, topic: B::Hash, force: bool) {
+	pub fn broadcast_topic(&mut self, network: &mut dyn Network<B>, topic: B::Hash, force: bool) {
 		let messages = self.messages.iter()
 			.filter_map(|entry|
 				if entry.topic == topic { Some((&entry.message_hash, &entry.topic, &entry.message)) } else { None }
@@ -421,7 +421,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// in all other cases.
 	pub fn on_incoming(
 		&mut self,
-		network: &dyn Network<B>,
+		network: &mut dyn Network<B>,
 		who: PeerId,
 		messages: Vec<ConsensusMessage>,
 	) {
@@ -491,7 +491,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// Send all messages with given topic to a peer.
 	pub fn send_topic(
 		&mut self,
-		network: &dyn Network<B>,
+		network: &mut dyn Network<B>,
 		who: &PeerId,
 		topic: B::Hash,
 		engine_id: ConsensusEngineId,
@@ -530,7 +530,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// Multicast a message to all peers.
 	pub fn multicast(
 		&mut self,
-		network: &dyn Network<B>,
+		network: &mut dyn Network<B>,
 		topic: B::Hash,
 		message: ConsensusMessage,
 		force: bool,
@@ -545,7 +545,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// later on.
 	pub fn send_message(
 		&mut self,
-		network: &dyn Network<B>,
+		network: &mut dyn Network<B>,
 		who: &PeerId,
 		message: ConsensusMessage,
 	) {

@@ -41,7 +41,7 @@ struct GossipEngineInner<B: BlockT> {
 impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
 	pub fn new<N: Network<B> + Send + Clone + 'static>(
-		network: N,
+		mut network: N,
 		executor: &impl futures::task::Spawn,
 		engine_id: ConsensusEngineId,
 		validator: Arc<dyn Validator<B>>,
@@ -53,7 +53,7 @@ impl<B: BlockT> GossipEngine<B> {
 		let event_stream = network.event_stream();
 
 		network.register_notifications_protocol(engine_id);
-		state_machine.register_validator(&network, engine_id, validator);
+		state_machine.register_validator(&mut network, engine_id, validator);
 
 		let inner = Arc::new(Mutex::new(GossipEngineInner {
 			state_machine,
@@ -73,7 +73,7 @@ impl<B: BlockT> GossipEngine<B> {
 					if let Some(inner) = inner.upgrade() {
 						let mut inner = inner.lock();
 						let inner = &mut *inner;
-						inner.state_machine.tick(&*inner.network);
+						inner.state_machine.tick(&mut *inner.network);
 					} else {
 						// We reach this branch if the `Arc<GossipEngineInner>` has no reference
 						// left. We can now let the task end.
@@ -98,7 +98,7 @@ impl<B: BlockT> GossipEngine<B> {
 						}
 						let mut inner = inner.lock();
 						let inner = &mut *inner;
-						inner.state_machine.new_peer(&*inner.network, remote, roles);
+						inner.state_machine.new_peer(&mut *inner.network, remote, roles);
 					}
 					Event::NotificationsStreamClosed { remote, engine_id: msg_engine_id } => {
 						if msg_engine_id != engine_id {
@@ -106,13 +106,13 @@ impl<B: BlockT> GossipEngine<B> {
 						}
 						let mut inner = inner.lock();
 						let inner = &mut *inner;
-						inner.state_machine.peer_disconnected(&*inner.network, remote);
+						inner.state_machine.peer_disconnected(&mut *inner.network, remote);
 					},
 					Event::NotificationsReceived { remote, messages } => {
 						let mut inner = inner.lock();
 						let inner = &mut *inner;
 						inner.state_machine.on_incoming(
-							&*inner.network,
+							&mut *inner.network,
 							remote,
 							messages.into_iter()
 								.filter_map(|(engine, data)| if engine == engine_id {
@@ -165,7 +165,7 @@ impl<B: BlockT> GossipEngine<B> {
 	pub fn broadcast_topic(&self, topic: B::Hash, force: bool) {
 		let mut inner = self.inner.lock();
 		let inner = &mut *inner;
-		inner.state_machine.broadcast_topic(&*inner.network, topic, force);
+		inner.state_machine.broadcast_topic(&mut *inner.network, topic, force);
 	}
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile).
@@ -184,7 +184,7 @@ impl<B: BlockT> GossipEngine<B> {
 	) {
 		let mut inner = self.inner.lock();
 		let inner = &mut *inner;
-		inner.state_machine.send_topic(&*inner.network, who, topic, self.engine_id, force)
+		inner.state_machine.send_topic(&mut *inner.network, who, topic, self.engine_id, force)
 	}
 
 	/// Multicast a message to all peers.
@@ -201,7 +201,7 @@ impl<B: BlockT> GossipEngine<B> {
 
 		let mut inner = self.inner.lock();
 		let inner = &mut *inner;
-		inner.state_machine.multicast(&*inner.network, topic, message, force)
+		inner.state_machine.multicast(&mut *inner.network, topic, message, force)
 	}
 
 	/// Send addressed message to the given peers. The message is not kept or multicast
@@ -211,7 +211,7 @@ impl<B: BlockT> GossipEngine<B> {
 		let inner = &mut *inner;
 
 		for who in &who {
-			inner.state_machine.send_message(&*inner.network, who, ConsensusMessage {
+			inner.state_machine.send_message(&mut *inner.network, who, ConsensusMessage {
 				engine_id: self.engine_id,
 				data: data.clone(),
 			});
