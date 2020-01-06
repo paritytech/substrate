@@ -98,7 +98,7 @@ pub use voting_rule::{
 	BeforeBestBlock, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };
 
-use aux_schema::PersistentData;
+pub use aux_schema::PersistentData;
 use environment::Environment;
 pub use environment::VoterSetState;
 use import::GrandpaBlockImport;
