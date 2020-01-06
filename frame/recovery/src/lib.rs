@@ -237,6 +237,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::RecoveryCreated(who));
 		}
 		
+		/// Allow a user to start the process for recovering an account.
 		fn initiate_recovery(origin, account: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Check that the account is recoverable
@@ -258,6 +259,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::RecoveryInitiated(who, account));
 		}
 		
+		/// Allow a friend to vouch for an active recovery process.
 		fn vouch_recovery(origin, lost: T::AccountId, rescuer: T::AccountId) {
 			let who = ensure_signed(origin)?;
 

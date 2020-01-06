@@ -96,20 +96,84 @@ fn recovery_lifecycle_works() {
 }
 
 #[test]
+fn malicious_recovery_fails() {
+	new_test_ext().execute_with(|| {
+		let friends = vec![2, 3, 4];
+		let threshold = 3;
+		let delay_period = 10;
+		// Account 5 sets up a recovery configuration on their account
+		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends, threshold, delay_period));
+		// Some time has passed, and account 1 wants to try and attack this account!
+		run_to_block(10);
+		// Using account 1, the malicious user begins the recovery process on account 5
+		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
+		// Off chain, the user **tricks** their friends and asks them to vouch for the recovery
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 1)); // shame on you
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1)); // shame on you
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(4), 5, 1)); // shame on you
+		// We met the threshold, lets try to recover the account...?
+		assert_noop!(Recovery::claim_recovery(Origin::signed(1), 5), Error::<Test>::DelayPeriod);
+		// Account 1 needs to wait...
+		run_to_block(19);
+		// One more block to wait!
+		assert_noop!(Recovery::claim_recovery(Origin::signed(1), 5), Error::<Test>::DelayPeriod);
+		// Account 5 checks their account every `delay_period` and notices the malicious attack!
+		// Account 5 can close the recovery process before account 1 can claim it
+		assert_ok!(Recovery::close_recovery(Origin::signed(5), 1));
+		// By doing so, account 5 has now claimed the deposit originally reserved by account 1
+		assert_eq!(Balances::total_balance(&1), 90);
+		// Thanks for the free money!
+		assert_eq!(Balances::total_balance(&5), 110);
+		// The recovery process has been closed, so account 1 can't make the claim
+		run_to_block(20);
+		assert_noop!(Recovery::claim_recovery(Origin::signed(1), 5), Error::<Test>::NotStarted);
+		// Account 5 can remove their recovery config and pick some better friends
+		assert_ok!(Recovery::remove_recovery(Origin::signed(5)));
+		assert_ok!(Recovery::create_recovery(Origin::signed(5), vec![22, 33, 44], threshold, delay_period));
+	});
+}
+
+#[test]
 fn create_recovery_handles_basic_errors() {
 	new_test_ext().execute_with(|| {
 		// No friends
-		assert_noop!(Recovery::create_recovery(Origin::signed(5), vec![], 1, 0), Error::<Test>::NotEnoughFriends);
+		assert_noop!(
+			Recovery::create_recovery(Origin::signed(5), vec![], 1, 0),
+			Error::<Test>::NotEnoughFriends
+		);
 		// Zero threshold
-		assert_noop!(Recovery::create_recovery(Origin::signed(5), vec![2], 0, 0), Error::<Test>::ZeroThreshold);
+		assert_noop!(
+			Recovery::create_recovery(Origin::signed(5), vec![2], 0, 0),
+			Error::<Test>::ZeroThreshold
+		);
 		// Threshold greater than friends length
-		assert_noop!(Recovery::create_recovery(Origin::signed(5), vec![2, 3, 4], 4, 0), Error::<Test>::NotEnoughFriends);
+		assert_noop!(
+			Recovery::create_recovery(Origin::signed(5), vec![2, 3, 4], 4, 0),
+			Error::<Test>::NotEnoughFriends
+		);
 		// Too many friends
-		assert_noop!(Recovery::create_recovery(Origin::signed(5), vec![1, 2, 3, 4], 4, 0), Error::<Test>::MaxFriends);
+		assert_noop!(
+			Recovery::create_recovery(Origin::signed(5), vec![1, 2, 3, 4], 4, 0),
+			Error::<Test>::MaxFriends
+		);
 		// Unsorted friends
-		assert_noop!(Recovery::create_recovery(Origin::signed(5), vec![3, 2, 4], 3, 0), Error::<Test>::NotSorted);
-		// No duplicate friends
-		assert_noop!(Recovery::create_recovery(Origin::signed(5), vec![2, 2, 4], 3, 0), Error::<Test>::NotSorted);
+		assert_noop!(
+			Recovery::create_recovery(Origin::signed(5), vec![3, 2, 4], 3, 0),
+			Error::<Test>::NotSorted
+		);
+		// Duplicate friends
+		assert_noop!(
+			Recovery::create_recovery(Origin::signed(5), vec![2, 2, 4], 3, 0),
+			Error::<Test>::NotSorted
+		);
+		// Already configured
+		assert_ok!(
+			Recovery::create_recovery(Origin::signed(5), vec![2, 3, 4], 3, 10)
+		);
+		assert_noop!(
+			Recovery::create_recovery(Origin::signed(5), vec![2, 3, 4], 3, 10),
+			Error::<Test>::AlreadyRecoverable
+		);
 	});
 }
 
