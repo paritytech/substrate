@@ -101,10 +101,10 @@ impl ProvideInherentData for InherentDataProvider {
 			}).and_then(|d| {
 				let timestamp: InherentType = d.as_millis() as u64;
 
-				// KUSAMA HOTFIX: mutate timestamp to make it revert back in time and have slots happen at
-				// 10x their speed from then until we have caught up with the present time.
+				// KUSAMA HOTFIX: mutate timestamp to make it revert back in time and have slots
+				// happen at 6x their speed from then until we have caught up with the present time.
 
-				const REVIVE_TIMESTAMP: u64 = 1578270000 * 1000;   // Sun 23:59 UTC
+				const REVIVE_TIMESTAMP: u64 = 1578387600000;
 				const FORK_TIMESTAMP: u64 = 1578139812 * 1000;
 				const WARP_FACTOR: u64 = 6;
 
@@ -113,9 +113,9 @@ impl ProvideInherentData for InherentDataProvider {
 
 				trace!(target: "babe", "timestamp warped: {:?} to {:?} ({:?} since revival)", timestamp, warped_timestamp, time_since_revival);
 
-				// we want to ensure our timestamp is such that slots run monotonically with blocks at
-				// 1/10th of the slot_duration from this slot onwards until we catch up to the wall-clock
-				// time.
+				// we want to ensure our timestamp is such that slots run monotonically with blocks
+				// at 1/6th of the slot_duration from this slot onwards until we catch up to the
+				// wall-clock time.
 				let timestamp = timestamp.min(warped_timestamp);
 
 				inherent_data.put_data(INHERENT_IDENTIFIER, &timestamp)
