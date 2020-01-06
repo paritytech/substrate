@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::Network;
-use crate::state_machine::{ConsensusGossip, Validator, TopicNotification};
+use crate::{Network, Validator};
+use crate::state_machine::{ConsensusGossip, TopicNotification};
 
 use sc_network::message::generic::ConsensusMessage;
 use sc_network::{Event, ReputationChange};

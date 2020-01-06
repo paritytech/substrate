@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::Network;
+use crate::{Network, MessageIntent, Validator, ValidatorContext, ValidationResult};
 
 use std::collections::{HashMap, HashSet, hash_map::Entry};
 use std::sync::Arc;
@@ -68,46 +68,7 @@ struct MessageEntry<B: BlockT> {
 	sender: Option<PeerId>,
 }
 
-/// The reason for sending out the message.
-#[derive(Eq, PartialEq, Copy, Clone)]
-#[cfg_attr(test, derive(Debug))]
-pub enum MessageIntent {
-	/// Requested broadcast.
-	Broadcast,
-	/// Requested broadcast to all peers.
-	ForcedBroadcast,
-	/// Periodic rebroadcast of all messages to all peers.
-	PeriodicRebroadcast,
-}
-
-/// Message validation result.
-pub enum ValidationResult<H> {
-	/// Message should be stored and propagated under given topic.
-	ProcessAndKeep(H),
-	/// Message should be processed, but not propagated.
-	ProcessAndDiscard(H),
-	/// Message should be ignored.
-	Discard,
-}
-
-impl MessageIntent {
-	fn broadcast() -> MessageIntent {
-		MessageIntent::Broadcast
-	}
-}
-
-/// Validation context. Allows reacting to incoming messages by sending out further messages.
-pub trait ValidatorContext<B: BlockT> {
-	/// Broadcast all messages with given topic to peers that do not have it yet.
-	fn broadcast_topic(&mut self, topic: B::Hash, force: bool);
-	/// Broadcast a message to all peers that have not received it previously.
-	fn broadcast_message(&mut self, topic: B::Hash, message: Vec<u8>, force: bool);
-	/// Send addressed message to a peer.
-	fn send_message(&mut self, who: &PeerId, message: Vec<u8>);
-	/// Send all messages with given topic to a peer.
-	fn send_topic(&mut self, who: &PeerId, topic: B::Hash, force: bool);
-}
-
+/// Local implementation of `ValidatorContext`.
 struct NetworkContext<'g, 'p, B: BlockT> {
 	gossip: &'g mut ConsensusGossip<B>,
 	network: &'p mut dyn Network<B>,
@@ -194,35 +155,6 @@ fn propagate<'a, B: BlockT, I>(
 			trace!(target: "gossip", "Propagating to {}: {:?}", id, message);
 			network.write_notification(id.clone(), message.engine_id, message.data.clone());
 		}
-	}
-}
-
-/// Validates consensus messages.
-pub trait Validator<B: BlockT>: Send + Sync {
-	/// New peer is connected.
-	fn new_peer(&self, _context: &mut dyn ValidatorContext<B>, _who: &PeerId, _roles: Roles) {
-	}
-
-	/// New connection is dropped.
-	fn peer_disconnected(&self, _context: &mut dyn ValidatorContext<B>, _who: &PeerId) {
-	}
-
-	/// Validate consensus message.
-	fn validate(
-		&self,
-		context: &mut dyn ValidatorContext<B>,
-		sender: &PeerId,
-		data: &[u8]
-	) -> ValidationResult<B::Hash>;
-
-	/// Produce a closure for validating messages on a given topic.
-	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(B::Hash, &[u8]) -> bool + 'a> {
-		Box::new(move |_topic, _data| false)
-	}
-
-	/// Produce a closure for filtering egress messages.
-	fn message_allowed<'a>(&'a self) -> Box<dyn FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {
-		Box::new(move |_who, _intent, _topic, _data| true)
 	}
 }
 
@@ -352,7 +284,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			.filter_map(|entry|
 				if entry.topic == topic { Some((&entry.message_hash, &entry.topic, &entry.message)) } else { None }
 			);
-		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::broadcast() };
+		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
 		propagate(network, messages, intent, &mut self.peers, &self.validators);
 	}
 
@@ -537,7 +469,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	) {
 		let message_hash = HashFor::<B>::hash(&message.data);
 		self.register_message_hashed(message_hash, topic, message.clone(), None);
-		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::broadcast() };
+		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
 		propagate(network, iter::once((&message_hash, &topic, &message)), intent, &mut self.peers, &self.validators);
 	}
 
@@ -560,28 +492,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		peer.known_messages.insert(message_hash);
 		network.write_notification(who.clone(), message.engine_id, message.data);
-	}
-}
-
-/// A gossip message validator that discards all messages.
-pub struct DiscardAll;
-
-impl<B: BlockT> Validator<B> for DiscardAll {
-	fn validate(
-		&self,
-		_context: &mut dyn ValidatorContext<B>,
-		_sender: &PeerId,
-		_data: &[u8],
-	) -> ValidationResult<B::Hash> {
-		ValidationResult::Discard
-	}
-
-	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(B::Hash, &[u8]) -> bool + 'a> {
-		Box::new(move |_topic, _data| true)
-	}
-
-	fn message_allowed<'a>(&'a self) -> Box<dyn FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {
-		Box::new(move |_who, _intent, _topic, _data| false)
 	}
 }
 
