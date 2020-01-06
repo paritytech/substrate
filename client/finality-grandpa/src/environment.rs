@@ -199,7 +199,7 @@ impl<Block: BlockT> VoterSetState<Block> {
 	/// Create a new live VoterSetState with round 0 as a completed round using
 	/// the given genesis state and the given authorities. Round 1 is added as a
 	/// current round (with state `HasVoted::No`).
-	pub(crate) fn live(
+	pub fn live(
 		set_id: SetId,
 		authority_set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
 		genesis_state: (Block::Hash, NumberFor<Block>),
@@ -236,7 +236,7 @@ impl<Block: BlockT> VoterSetState<Block> {
 	}
 
 	/// Returns the last completed round.
-	pub(crate) fn last_completed_round(&self) -> CompletedRound<Block> {
+	pub fn last_completed_round(&self) -> CompletedRound<Block> {
 		match self {
 			VoterSetState::Live { completed_rounds, .. } =>
 				completed_rounds.last().clone(),
@@ -349,7 +349,7 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 	}
 
 	/// Read the inner voter set state.
-	pub(crate) fn read(&self) -> parking_lot::RwLockReadGuard<VoterSetState<Block>> {
+	pub fn read(&self) -> parking_lot::RwLockReadGuard<VoterSetState<Block>> {
 		self.inner.read()
 	}
 

@@ -99,7 +99,8 @@ pub use voting_rule::{
 };
 
 use aux_schema::PersistentData;
-use environment::{Environment, VoterSetState};
+use environment::Environment;
+pub use environment::VoterSetState;
 use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::{NetworkBridge, Network as NetworkT};
@@ -358,7 +359,7 @@ impl<H, N> fmt::Display for CommandOrError<H, N> {
 pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA, SC> {
 	client: Arc<Client<B, E, Block, RA>>,
 	select_chain: SC,
-	persistent_data: PersistentData<Block>,
+	pub persistent_data: PersistentData<Block>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
 
