@@ -755,7 +755,12 @@ fn fill_config_keystore_password<C, G, E>(
 ) -> Result<(), String> {
 	if let KeystoreConfig::Path { password, .. } = &mut config.keystore {
 		*password = if cli.password_interactive {
-			Some(input_keystore_password()?.into())
+			#[cfg(not(target_os = "unknown"))]
+			{
+				Some(input_keystore_password()?.into())
+			}
+			#[cfg(target_os = "unknown")]
+			None
 		} else if let Some(ref file) = cli.password_filename {
 			Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
 		} else if let Some(ref password) = cli.password {
