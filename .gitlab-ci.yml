@@ -57,7 +57,7 @@ variables:
   dependencies:                    []
   interruptible:                   true
   tags:
-    - ci6
+    - ci3
 
 .build-only:                       &build-only
   only:
