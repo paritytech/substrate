@@ -16,6 +16,7 @@
 
 //! A set of APIs supported by the client along with their primitives.
 
+use std::collections::HashSet;
 use futures::channel::mpsc;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
@@ -36,8 +37,15 @@ pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotifica
 
 /// Expected hashes of blocks at given heights.
 ///
-/// This may be used as chain spec extension to filter out known, unwanted forks.
+/// This may be used as chain spec extension to set trusted checkpoints, i.e.
+/// the client will refuse to import a block with a different hash at the given
+/// height.
 pub type ForkBlocks<Block> = Option<Vec<(NumberFor<Block>, <Block as BlockT>::Hash)>>;
+
+/// Known bad block hashes.
+///
+/// This may be used as chain spec extension to filter out known, unwanted forks.
+pub type BadBlocks<Block> = Option<HashSet<<Block as BlockT>::Hash>>;
 
 /// Figure out the block type for a given type (for now, just a `Client`).
 pub trait BlockOf {

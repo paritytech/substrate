@@ -181,6 +181,12 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 		.cloned()
 		.unwrap_or_default();
 
+	let bad_blocks = config.chain_spec
+		.extensions()
+		.get::<sc_client::BadBlocks<TBl>>()
+		.cloned()
+		.unwrap_or_default();
+
 	let (client, backend) = {
 		let db_config = sc_client_db::DatabaseSettings {
 			state_cache_size: config.state_cache_size,
@@ -208,6 +214,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 			executor,
 			&config.chain_spec,
 			fork_blocks,
+			bad_blocks,
 			extensions,
 		)?
 	};
