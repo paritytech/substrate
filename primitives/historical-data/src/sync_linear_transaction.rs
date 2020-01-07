@@ -138,9 +138,7 @@ impl States {
 	/// Discard a transactional layer.
 	/// A subsequent synchronous update of all related stored history is needed.
 	pub fn discard_transaction(&mut self) {
-		if self.current_layer > 0 {
-			self.current_layer -= 1;
-		}
+		self.current_layer = self.current_layer.saturating_sub(1);
 	}
 
 	/// Apply transaction discard on a historical value.
@@ -153,9 +151,13 @@ impl States {
 				index: State::Transaction(ix),
 			} = value.0[i] {
 				if ix > self.current_layer {
-					let _ = value.0.pop();
-				} else { break }
-			} else { break }
+					value.0.pop();
+				} else {
+					break;
+				}
+			} else {
+				break;
+			}
 		}
 		if value.0.is_empty() {
 			CleaningResult::Cleared
@@ -179,21 +181,29 @@ impl States {
 	/// Committing value removes all unneeded states.
 	pub fn apply_commit_transaction<V>(&self, value: &mut History<V>) -> CleaningResult {
 		let mut new_value = None;
+		// Iterate on history to get current committed value and remove
+		// unused transaction values that are between this new committed
+		// value and the current transaction layer.
 		for i in (0 .. value.0.len()).rev() {
-			if let HistoricalEntry {
-				value: _,
-				index: State::Transaction(ix),
-			} = value.0[i] {
+			if let State::Transaction(ix) = value.0[i].index {
 				if ix > self.current_layer {
+					// Remove value from committed layer
 					if let Some(v) = value.0.pop() {
 						if new_value.is_none() {
 							new_value = Some(v.value);
 						}
 					}
 				} else if ix == self.current_layer && new_value.is_some() {
-					let _ = value.0.pop();
-				} else { break }
-			} else { break }
+					// Remove parent layer value (will be overwritten by `new_value`.
+					value.0.pop();
+				} else {
+					// Do not remove this is already a valid state.
+					break;
+				}
+			} else {
+				// Non transactional layer, stop removing history.
+				break;
+			}
 		}
 		if let Some(new_value) = new_value {
 			value.0.push(HistoricalEntry {
