@@ -17,7 +17,7 @@
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID};
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
-use crate::config::{Configuration, DatabaseConfig};
+use crate::config::{Configuration, DatabaseConfig, KeystoreConfig};
 use sc_client_api::{
 	self,
 	BlockchainEvents,
@@ -165,10 +165,13 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 	TGen: sp_runtime::BuildStorage + serde::Serialize + for<'de> serde::Deserialize<'de>,
 	TCSExt: Extension,
 {
-	let keystore = Keystore::open(
-		config.keystore_path.clone().ok_or("No basepath configured")?,
-		config.keystore_password.clone()
-	)?;
+	let keystore = match &config.keystore {
+		KeystoreConfig::Path { path, password } => Keystore::open(
+			path.clone().ok_or("No basepath configured")?,
+			password.clone()
+		)?,
+		KeystoreConfig::InMemory => Keystore::new_in_memory()
+	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,
@@ -286,10 +289,13 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TLightBackend<TBl>,
 	>, Error> {
-		let keystore = Keystore::open(
-			config.keystore_path.clone().ok_or("No basepath configured")?,
-			config.keystore_password.clone()
-		)?;
+		let keystore = match &config.keystore {
+			KeystoreConfig::Path { path, password } => Keystore::open(
+				path.clone().ok_or("No basepath configured")?,
+				password.clone()
+			)?,
+			KeystoreConfig::InMemory => Keystore::new_in_memory()
+		};
 
 		let executor = NativeExecutor::<TExecDisp>::new(
 			config.wasm_method,
