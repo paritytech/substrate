@@ -926,7 +926,7 @@ impl<B: BlockT> ChainSync<B> {
 				},
 				Err(BlockImportError::BadBlock(who)) => {
 					if let Some(peer) = who {
-						info!("Bad block");
+						info!("Block received from peer has been blacklisted");
 						output.push(Err(BadPeer(peer, rep::BAD_BLOCK)));
 						output.extend(self.restart());
 					}

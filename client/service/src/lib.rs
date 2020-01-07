@@ -57,6 +57,7 @@ use sp_runtime::traits::{NumberFor, Block as BlockT};
 
 pub use self::error::Error;
 pub use self::builder::{
+	new_full_client,
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor,
 };
