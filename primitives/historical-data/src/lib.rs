@@ -19,7 +19,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod synch_linear_transaction;
+pub mod sync_linear_transaction;
 
 /// History of values being used to keep trace of all changes
 /// that occurs (all different state a value can be in depending

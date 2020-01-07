@@ -659,7 +659,7 @@ mod tests {
 		}, backend::InMemory, overlayed_changes::{OverlayedValue, OverlayedChangeSet},
 	};
 	use sp_core::storage::{Storage, StorageChild};
-	use sp_historical_data::synch_linear_transaction::{History, HistoricalEntry, State};
+	use sp_historical_data::sync_linear_transaction::{History, HistoricalEntry, State};
 
 	type TestBackend = InMemory<Blake2Hasher>;
 	type TestChangesTrieStorage = InMemoryChangesTrieStorage<Blake2Hasher, u64>;

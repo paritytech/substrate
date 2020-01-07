@@ -915,8 +915,8 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 }
 
 fn test_historical_data() {
-	let mut states = sp_historical_data::synch_linear_transaction::States::default();
-	let mut value = sp_historical_data::synch_linear_transaction::History::default();
+	let mut states = sp_historical_data::sync_linear_transaction::States::default();
+	let mut value = sp_historical_data::sync_linear_transaction::History::default();
 	if value.get() != None {
 		panic!("Got a value for empty data");
 	}
