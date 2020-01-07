@@ -51,9 +51,10 @@ impl<H: Eq, N> SharedAuthoritySet<H, N>
 where N: Add<Output=N> + Ord + Clone + Debug,
 	  H: Clone + Debug
 {
-	/// Get the earliest limit-block number, if any.
-	pub(crate) fn current_limit(&self) -> Option<N> {
-		self.inner.read().current_limit()
+	/// Get the earliest limit-block number that's higher or equal to the given
+	/// min number, if any.
+	pub(crate) fn current_limit(&self, min: N) -> Option<N> {
+		self.inner.read().current_limit(min)
 	}
 
 	/// Get the current set ID. This is incremented every time the set changes.
@@ -224,10 +225,13 @@ where
 
 	/// Get the earliest limit-block number, if any. If there are pending changes across
 	/// different forks, this method will return the earliest effective number (across the
-	/// different branches). Only standard changes are taken into account for the current
+	/// different branches) that is higher or equal to the given min number.
+	///
+	/// Only standard changes are taken into account for the current
 	/// limit, since any existing forced change should preclude the voter from voting.
-	pub(crate) fn current_limit(&self) -> Option<N> {
+	pub(crate) fn current_limit(&self, min: N) -> Option<N> {
 		self.pending_standard_changes.roots()
+			.filter(|&(_, _, c)| c.effective_number() >= min)
 			.min_by_key(|&(_, _, c)| c.effective_number())
 			.map(|(_, _, c)| c.effective_number())
 	}
@@ -443,6 +447,51 @@ mod tests {
 		where F: Fn(&A, &A) -> bool
 	{
 		move |base, hash| Ok(f(base, hash))
+	}
+
+	#[test]
+	fn current_limit_filters_min() {
+		let mut authorities = AuthoritySet {
+			current_authorities: Vec::new(),
+			set_id: 0,
+			pending_standard_changes: ForkTree::new(),
+			pending_forced_changes: Vec::new(),
+		};
+
+		let change = |height| {
+			PendingChange {
+				next_authorities: Vec::new(),
+				delay: 0,
+				canon_height: height,
+				canon_hash: height.to_string(),
+				delay_kind: DelayKind::Finalized,
+			}
+		};
+
+		let is_descendent_of = static_is_descendent_of(false);
+
+		authorities.add_pending_change(change(1), &is_descendent_of).unwrap();
+		authorities.add_pending_change(change(2), &is_descendent_of).unwrap();
+
+		assert_eq!(
+			authorities.current_limit(0),
+			Some(1),
+		);
+
+		assert_eq!(
+			authorities.current_limit(1),
+			Some(1),
+		);
+
+		assert_eq!(
+			authorities.current_limit(2),
+			Some(2),
+		);
+
+		assert_eq!(
+			authorities.current_limit(3),
+			None,
+		);
 	}
 
 	#[test]
