@@ -692,6 +692,7 @@ pub mod tests {
 	use libp2p::PeerId;
 	use super::{REQUEST_TIMEOUT, LightDispatch, LightDispatchNetwork, RequestData, StorageProof};
 	use sp_test_primitives::{changes_trie_config, Block, Extrinsic, Header};
+	use wasm_timer::Instant;
 
 	struct DummyFetchChecker { ok: bool }
 
