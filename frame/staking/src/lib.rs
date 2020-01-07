@@ -804,6 +804,8 @@ decl_error! {
 		InsufficientValue,
 		/// Can not schedule more unlock chunks.
 		NoMoreChunks,
+		/// Can not rebond without unlocking chunks.
+		NoUnlockChunk,
 	}
 }
 
@@ -920,6 +922,10 @@ decl_module! {
 		fn rebond(origin, #[compact] value: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			ensure!(
+				ledger.unlocking.len() > 0,
+				Error::<T>::NoUnlockChunk,
+			);
 
 			let mut unlocking_balance: BalanceOf<T> = Zero::zero();
 

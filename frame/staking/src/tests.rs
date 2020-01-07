@@ -1232,16 +1232,10 @@ fn rebond_works() {
 			start_era(2);
 			assert_eq!(Staking::current_era(), 2);
 
-			// Try to rebond some funds. Nothing happen since no fund is unbonded.
-			Staking::rebond(Origin::signed(10), 500).unwrap();
-			assert_eq!(
-				Staking::ledger(&10),
-				Some(StakingLedger {
-					stash: 11,
-					total: 1000,
-					active: 1000,
-					unlocking: vec![],
-				})
+			// Try to rebond some funds. We get an error since no fund is unbonded.
+			assert_noop!(
+				Staking::rebond(Origin::signed(10), 500),
+				Error::<Test>::NoUnlockChunk,
 			);
 
 			// Unbond almost all of the funds in stash.
