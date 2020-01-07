@@ -37,7 +37,9 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	pending_canonicalizations: Vec<BlockHash>,
 	pending_insertions: Vec<BlockHash>,
 	values: HashMap<Key, (u32, DBValue)>, //ref counted
-	pinned: HashMap<BlockHash, HashMap<Key, DBValue>>, //would be deleted but kept around because block is pinned
+	//would be deleted but kept around because block is pinned, ref counted.
+	pinned: HashMap<BlockHash, u32>,
+	pinned_insertions: HashMap<BlockHash, Vec<Key>>,
 }
 
 #[derive(Encode, Decode)]
@@ -68,23 +70,14 @@ fn insert_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted:
 	}
 }
 
-fn discard_values<Key: Hash>(
-	values: &mut HashMap<Key, (u32, DBValue)>,
-	inserted: Vec<Key>,
-	mut into: Option<&mut HashMap<Key, DBValue>>,
-) {
+fn discard_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted: Vec<Key>) {
 	for k in inserted {
 		match values.entry(k) {
 			Entry::Occupied(mut e) => {
 				let (ref mut counter, _) = e.get_mut();
 				*counter -= 1;
 				if *counter == 0 {
-					let (key, (_, value)) = e.remove_entry();
-					if let Some(ref mut into) = into {
-						into.insert(key, value);
-					}
-				} else if let Some(ref mut into) = into {
-					into.insert(e.key().clone(), e.get().1.clone());
+					e.remove_entry();
 				}
 			},
 			Entry::Vacant(_) => {
@@ -99,7 +92,8 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	mut values: &mut HashMap<Key, (u32, DBValue)>,
 	index: usize,
 	parents: &mut HashMap<BlockHash, BlockHash>,
-	pinned: &mut HashMap<BlockHash, HashMap<Key, DBValue>>,
+	pinned: &HashMap<BlockHash, u32>,
+	pinned_insertions: &mut HashMap<BlockHash, Vec<Key>>,
 	hash: &BlockHash,
 ) {
 	let mut discarded = Vec::new();
@@ -107,9 +101,15 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 		*level = level.drain(..).filter_map(|overlay| {
 			let parent = parents.get(&overlay.hash).expect("there is a parent entry for each entry in levels; qed").clone();
 			if parent == *hash {
-				parents.remove(&overlay.hash);
-				discarded.push(overlay.hash);
-				discard_values(&mut values, overlay.inserted, pinned.get_mut(hash));
+				discarded.push(overlay.hash.clone());
+				if pinned.contains_key(hash) {
+					// save to be discarded later.
+					pinned_insertions.insert(hash.clone(), overlay.inserted);
+				} else {
+					// discard immediatelly.
+					parents.remove(&overlay.hash);
+					discard_values(&mut values, overlay.inserted);
+				}
 				None
 			} else {
 				Some(overlay)
@@ -117,7 +117,7 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 		}).collect();
 	}
 	for hash in discarded {
-		discard_descendants(levels, values, index + 1, parents, pinned, &hash);
+		discard_descendants(levels, values, index + 1, parents, pinned, pinned_insertions, &hash);
 	}
 }
 
@@ -178,6 +178,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			pending_canonicalizations: Default::default(),
 			pending_insertions: Default::default(),
 			pinned: Default::default(),
+			pinned_insertions: Default::default(),
 			values: values,
 		})
 	}
@@ -341,18 +342,23 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 			// discard unfinalized overlays and values
 			for (i, overlay) in level.into_iter().enumerate() {
-				self.parents.remove(&overlay.hash);
 				if i != index {
 					discard_descendants(
 						&mut self.levels,
 						&mut self.values,
 						0,
 						&mut self.parents,
-						&mut self.pinned,
+						&self.pinned,
+						&mut self.pinned_insertions,
 						&overlay.hash,
 					);
 				}
-				discard_values(&mut self.values, overlay.inserted, self.pinned.get_mut(&overlay.hash));
+				if self.pinned.contains_key(&overlay.hash) {
+					self.pinned_insertions.insert(overlay.hash.clone(), overlay.inserted);
+				} else {
+					self.parents.remove(&overlay.hash);
+					discard_values(&mut self.values, overlay.inserted);
+				}
 			}
 		}
 		if let Some(hash) = last {
@@ -365,11 +371,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	pub fn get(&self, key: &Key) -> Option<DBValue> {
 		if let Some((_, value)) = self.values.get(&key) {
 			return Some(value.clone());
-		}
-		for pinned in self.pinned.values() {
-			if let Some(value) = pinned.get(&key) {
-				return Some(value.clone());
-			}
 		}
 		None
 	}
@@ -387,7 +388,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			for overlay in level.into_iter() {
 				commit.meta.deleted.push(overlay.journal_key);
 				self.parents.remove(&overlay.hash);
-				discard_values(&mut self.values, overlay.inserted, None);
+				discard_values(&mut self.values, overlay.inserted);
 			}
 			commit
 		})
@@ -404,7 +405,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				.expect("Hash is added in insert");
 
 			let	overlay = self.levels[level_index].pop().expect("Empty levels are not allowed in self.levels");
-			discard_values(&mut self.values, overlay.inserted, None);
+			discard_values(&mut self.values, overlay.inserted);
 			if self.levels[level_index].is_empty() {
 				debug_assert_eq!(level_index, self.levels.len() - 1);
 				self.levels.pop_back();
@@ -426,12 +427,39 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 	/// Pin state values in memory
 	pub fn pin(&mut self, hash: &BlockHash) {
-		self.pinned.insert(hash.clone(), HashMap::default());
+		// Also pin all parents
+		let mut parent = Some(hash);
+		while let Some(hash) = parent {
+			let refs = self.pinned.entry(hash.clone()).or_default();
+			if *refs == 0 {
+				trace!(target: "state-db", "Pinned non-canon block: {:?}", hash);
+			}
+			*refs += 1;
+			parent = self.parents.get(hash);
+		}
 	}
 
 	/// Discard pinned state
 	pub fn unpin(&mut self, hash: &BlockHash) {
-		self.pinned.remove(hash);
+		// Also unpin all parents
+		let mut parent = Some(hash.clone());
+		while let Some(hash) = parent {
+			parent = self.parents.get(&hash).cloned();
+			match self.pinned.entry(hash.clone()) {
+				Entry::Occupied(mut entry) => {
+					*entry.get_mut() -= 1;
+					if *entry.get() == 0 {
+						entry.remove();
+						if let Some(inserted) = self.pinned_insertions.remove(&hash) {
+							trace!(target: "state-db", "Discarding unpinned non-canon block: {:?}", hash);
+							discard_values(&mut self.values, inserted);
+							self.parents.remove(&hash);
+						}
+					}
+				},
+				Entry::Vacant(_) => {},
+			}
+		}
 	}
 }
 
