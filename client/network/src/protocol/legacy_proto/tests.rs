@@ -220,7 +220,7 @@ fn two_nodes_transfer_lots_of_packets() {
 	let fut1 = future::poll_fn(move |cx| -> Poll<()> {
 		loop {
 			match ready!(service1.poll_next_unpin(cx)) {
-				Some(Ok(LegacyProtoOut::CustomProtocolOpen { peer_id, .. })) => {
+				Some(LegacyProtoOut::CustomProtocolOpen { peer_id, .. }) => {
 					for n in 0 .. NUM_PACKETS {
 						service1.send_packet(
 							&peer_id,
@@ -237,8 +237,8 @@ fn two_nodes_transfer_lots_of_packets() {
 	let fut2 = future::poll_fn(move |cx| {
 		loop {
 			match ready!(service2.poll_next_unpin(cx)) {
-				Some(Ok(LegacyProtoOut::CustomProtocolOpen { .. })) => {},
-				Some(Ok(LegacyProtoOut::CustomMessage { message, .. })) => {
+				Some(LegacyProtoOut::CustomProtocolOpen { .. }) => {},
+				Some(LegacyProtoOut::CustomMessage { message, .. }) => {
 					match Message::<Block>::decode(&mut &message[..]).unwrap() {
 						Message::<Block>::ChainSpecific(message) => {
 							assert_eq!(message.len(), 1);
@@ -282,7 +282,7 @@ fn basic_two_nodes_requests_in_parallel() {
 	let fut1 = future::poll_fn(move |cx| -> Poll<()> {
 		loop {
 			match ready!(service1.poll_next_unpin(cx)) {
-				Some(Ok(LegacyProtoOut::CustomProtocolOpen { peer_id, .. })) => {
+				Some(LegacyProtoOut::CustomProtocolOpen { peer_id, .. }) => {
 					for msg in to_send.drain(..) {
 						service1.send_packet(&peer_id, msg.encode());
 					}
@@ -295,8 +295,8 @@ fn basic_two_nodes_requests_in_parallel() {
 	let fut2 = future::poll_fn(move |cx| {
 		loop {
 			match ready!(service2.poll_next_unpin(cx)) {
-				Some(Ok(LegacyProtoOut::CustomProtocolOpen { .. })) => {},
-				Some(Ok(LegacyProtoOut::CustomMessage { message, .. })) => {
+				Some(LegacyProtoOut::CustomProtocolOpen { .. }) => {},
+				Some(LegacyProtoOut::CustomMessage { message, .. }) => {
 					let pos = to_receive.iter().position(|m| m.encode() == message).unwrap();
 					to_receive.remove(pos);
 					if to_receive.is_empty() {
@@ -332,7 +332,7 @@ fn reconnect_after_disconnect() {
 			let mut service1_not_ready = false;
 
 			match service1.poll_next_unpin(cx) {
-				Poll::Ready(Some(Ok(LegacyProtoOut::CustomProtocolOpen { .. }))) => {
+				Poll::Ready(Some(LegacyProtoOut::CustomProtocolOpen { .. })) => {
 					match service1_state {
 						ServiceState::NotConnected => {
 							service1_state = ServiceState::FirstConnec;
@@ -344,7 +344,7 @@ fn reconnect_after_disconnect() {
 						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
 					}
 				},
-				Poll::Ready(Some(Ok(LegacyProtoOut::CustomProtocolClosed { .. }))) => {
+				Poll::Ready(Some(LegacyProtoOut::CustomProtocolClosed { .. })) => {
 					match service1_state {
 						ServiceState::FirstConnec => service1_state = ServiceState::Disconnected,
 						ServiceState::ConnectedAgain| ServiceState::NotConnected |
@@ -356,7 +356,7 @@ fn reconnect_after_disconnect() {
 			}
 
 			match service2.poll_next_unpin(cx) {
-				Poll::Ready(Some(Ok(LegacyProtoOut::CustomProtocolOpen { .. }))) => {
+				Poll::Ready(Some(LegacyProtoOut::CustomProtocolOpen { .. })) => {
 					match service2_state {
 						ServiceState::NotConnected => {
 							service2_state = ServiceState::FirstConnec;
@@ -368,7 +368,7 @@ fn reconnect_after_disconnect() {
 						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
 					}
 				},
-				Poll::Ready(Some(Ok(LegacyProtoOut::CustomProtocolClosed { .. }))) => {
+				Poll::Ready(Some(LegacyProtoOut::CustomProtocolClosed { .. })) => {
 					match service2_state {
 						ServiceState::FirstConnec => service2_state = ServiceState::Disconnected,
 						ServiceState::ConnectedAgain| ServiceState::NotConnected |

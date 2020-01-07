@@ -498,7 +498,7 @@ mod tests {
 			'polling: loop {
 				for swarm_n in 0..swarms.len() {
 					match swarms[swarm_n].0.poll_next_unpin(cx) {
-						Poll::Ready(Some(Ok(e))) => {
+						Poll::Ready(Some(e)) => {
 							match e {
 								DiscoveryOut::UnroutablePeer(other) => {
 									// Call `add_self_reported_address` to simulate identify happening.
