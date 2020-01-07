@@ -48,7 +48,7 @@
 /client/consensus/slots/ @andresilva @DemiMarie-parity
 
 # Contracts
-/frame/contracts/ @pepyakin @thiolliere @jimpo
+/frame/contracts/ @pepyakin @thiolliere
 /frame/contracts/src/wasm/runtime.rs @Robbepop
 
 # Inflation points

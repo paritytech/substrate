@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID};
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
-use crate::config::{Configuration, DatabaseConfig};
+use crate::config::{Configuration, DatabaseConfig, KeystoreConfig};
 use sc_client_api::{
 	self,
 	BlockchainEvents,
@@ -35,7 +35,7 @@ use futures03::{
 };
 use sc_keystore::{Store as Keystore};
 use log::{info, warn, error};
-use sc_network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo, DhtEvent};
+use sc_network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo};
 use sc_network::{config::BoxFinalityProofRequestBuilder, specialization::NetworkSpecialization};
 use parking_lot::{Mutex, RwLock};
 use sp_core::{Blake2Hasher, H256, Hasher};
@@ -90,7 +90,6 @@ pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImp
 	transaction_pool: Arc<TExPool>,
 	rpc_extensions: TRpc,
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
-	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
 	marker: PhantomData<(TBl, TRtApi)>,
 }
 
@@ -140,6 +139,92 @@ pub type TLightCallExecutor<TBl, TExecDisp> = sc_client::light::call_executor::G
 	>,
 >;
 
+type TFullParts<TBl, TRtApi, TExecDisp> = (
+	TFullClient<TBl, TRtApi, TExecDisp>,
+	Arc<TFullBackend<TBl>>,
+	Arc<RwLock<sc_keystore::Store>>,
+);
+
+/// Creates a new full client for the given config.
+pub fn new_full_client<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
+	config: &Configuration<TCfg, TGen, TCSExt>,
+) -> Result<TFullClient<TBl, TRtApi, TExecDisp>, Error> where
+	TBl: BlockT<Hash=H256>,
+	TExecDisp: NativeExecutionDispatch,
+	TGen: sp_runtime::BuildStorage + serde::Serialize + for<'de> serde::Deserialize<'de>,
+	TCSExt: Extension,
+{
+	new_full_parts(config).map(|parts| parts.0)
+}
+
+fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
+	config: &Configuration<TCfg, TGen, TCSExt>,
+) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
+	TBl: BlockT<Hash=H256>,
+	TExecDisp: NativeExecutionDispatch,
+	TGen: sp_runtime::BuildStorage + serde::Serialize + for<'de> serde::Deserialize<'de>,
+	TCSExt: Extension,
+{
+	let keystore = match &config.keystore {
+		KeystoreConfig::Path { path, password } => Keystore::open(
+			path.clone().ok_or("No basepath configured")?,
+			password.clone()
+		)?,
+		KeystoreConfig::InMemory => Keystore::new_in_memory()
+	};
+
+	let executor = NativeExecutor::<TExecDisp>::new(
+		config.wasm_method,
+		config.default_heap_pages,
+	);
+
+	let fork_blocks = config.chain_spec
+		.extensions()
+		.get::<sc_client::ForkBlocks<TBl>>()
+		.cloned()
+		.unwrap_or_default();
+
+	let bad_blocks = config.chain_spec
+		.extensions()
+		.get::<sc_client::BadBlocks<TBl>>()
+		.cloned()
+		.unwrap_or_default();
+
+	let (client, backend) = {
+		let db_config = sc_client_db::DatabaseSettings {
+			state_cache_size: config.state_cache_size,
+			state_cache_child_ratio:
+			config.state_cache_child_ratio.map(|v| (v, 100)),
+			pruning: config.pruning.clone(),
+			source: match &config.database {
+				DatabaseConfig::Path { path, cache_size } =>
+					sc_client_db::DatabaseSettingsSrc::Path {
+						path: path.clone(),
+						cache_size: cache_size.clone().map(|u| u as usize),
+					},
+				DatabaseConfig::Custom(db) =>
+					sc_client_db::DatabaseSettingsSrc::Custom(db.clone()),
+			},
+		};
+
+		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
+			config.execution_strategies.clone(),
+			Some(keystore.clone()),
+		);
+
+		sc_client_db::new_client(
+			db_config,
+			executor,
+			&config.chain_spec,
+			fork_blocks,
+			bad_blocks,
+			extensions,
+		)?
+	};
+
+	Ok((client, backend, keystore))
+}
+
 impl<TCfg, TGen, TCSExt> ServiceBuilder<(), (), TCfg, TGen, TCSExt, (), (), (), (), (), (), (), (), (), ()>
 where TGen: RuntimeGenesis, TCSExt: Extension {
 	/// Start the service builder with a configuration.
@@ -162,52 +247,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TFullBackend<TBl>,
 	>, Error> {
-		let keystore = Keystore::open(
-			config.keystore_path.clone().ok_or("No basepath configured")?,
-			config.keystore_password.clone()
-		)?;
-
-		let executor = NativeExecutor::<TExecDisp>::new(
-			config.wasm_method,
-			config.default_heap_pages,
-		);
-
-		let fork_blocks = config.chain_spec
-			.extensions()
-			.get::<sc_client::ForkBlocks<TBl>>()
-			.cloned()
-			.unwrap_or_default();
-
-		let (client, backend) = {
-			let db_config = sc_client_db::DatabaseSettings {
-				state_cache_size: config.state_cache_size,
-				state_cache_child_ratio:
-					config.state_cache_child_ratio.map(|v| (v, 100)),
-				pruning: config.pruning.clone(),
-				source: match &config.database {
-					DatabaseConfig::Path { path, cache_size } =>
-						sc_client_db::DatabaseSettingsSrc::Path {
-							path: path.clone(),
-							cache_size: cache_size.clone().map(|u| u as usize),
-						},
-					DatabaseConfig::Custom(db) =>
-						sc_client_db::DatabaseSettingsSrc::Custom(db.clone()),
-				},
-			};
-
-			let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
-				config.execution_strategies.clone(),
-				Some(keystore.clone()),
-			);
-
-			sc_client_db::new_client(
-				db_config,
-				executor,
-				&config.chain_spec,
-				fork_blocks,
-				extensions,
-			)?
-		};
+		let (client, backend, keystore) = new_full_parts(&config)?;
 
 		let client = Arc::new(client);
 
@@ -225,7 +265,6 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
 			remote_backend: None,
-			dht_event_tx: None,
 			marker: PhantomData,
 		})
 	}
@@ -250,10 +289,13 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TLightBackend<TBl>,
 	>, Error> {
-		let keystore = Keystore::open(
-			config.keystore_path.clone().ok_or("No basepath configured")?,
-			config.keystore_password.clone()
-		)?;
+		let keystore = match &config.keystore {
+			KeystoreConfig::Path { path, password } => Keystore::open(
+				path.clone().ok_or("No basepath configured")?,
+				password.clone()
+			)?,
+			KeystoreConfig::InMemory => Keystore::new_in_memory()
+		};
 
 		let executor = NativeExecutor::<TExecDisp>::new(
 			config.wasm_method,
@@ -303,7 +345,6 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
 			remote_backend: Some(remote_blockchain),
-			dht_event_tx: None,
 			marker: PhantomData,
 		})
 	}
@@ -352,7 +393,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -395,7 +435,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -422,7 +461,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -464,7 +502,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -530,7 +567,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -586,7 +622,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			transaction_pool: Arc::new(transaction_pool),
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -626,33 +661,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			transaction_pool: self.transaction_pool,
 			rpc_extensions,
 			remote_backend: self.remote_backend,
-			dht_event_tx: self.dht_event_tx,
-			marker: self.marker,
-		})
-	}
-
-	/// Adds a dht event sender to builder to be used by the network to send dht events to the authority discovery
-	/// module.
-	pub fn with_dht_event_tx(
-		self,
-		dht_event_tx: mpsc::Sender<DhtEvent>,
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
-								TNetP, TExPool, TRpc, Backend>, Error> {
-		Ok(ServiceBuilder {
-			config: self.config,
-			client: self.client,
-			backend: self.backend,
-			keystore: self.keystore,
-			fetcher: self.fetcher,
-			select_chain: self.select_chain,
-			import_queue: self.import_queue,
-			finality_proof_request_builder: self.finality_proof_request_builder,
-			finality_proof_provider: self.finality_proof_provider,
-			network_protocol: self.network_protocol,
-			transaction_pool: self.transaction_pool,
-			rpc_extensions: self.rpc_extensions,
-			remote_backend: self.remote_backend,
-			dht_event_tx: Some(dht_event_tx),
 			marker: self.marker,
 		})
 	}
@@ -761,7 +769,6 @@ ServiceBuilder<
 			transaction_pool,
 			rpc_extensions,
 			remote_backend,
-			dht_event_tx,
 		} = self;
 
 		sp_session::generate_initial_session_keys(
@@ -1051,7 +1058,6 @@ ServiceBuilder<
 			network_status_sinks.clone(),
 			system_rpc_rx,
 			has_bootnodes,
-			dht_event_tx,
 		)
 			.map_err(|_| ())
 			.select(exit.clone().map(Ok).compat())
