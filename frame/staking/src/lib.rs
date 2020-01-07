@@ -395,7 +395,7 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 
 impl<
 	AccountId,
-	Balance: HasCompact + Copy + Saturating,
+	Balance: HasCompact + Copy + Saturating + SimpleArithmetic,
 > StakingLedger<AccountId, Balance> {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
@@ -412,6 +412,23 @@ impl<
 		Self { total, active: self.active, stash: self.stash, unlocking }
 	}
 
+	fn rebond(mut self, value: Balance) -> Self {
+		let mut unlocking_balance: Balance = Zero::zero();
+
+		while let Some(mut unlock_chunk) = self.unlocking.pop() {
+			unlocking_balance += unlock_chunk.value;
+			self.active += unlock_chunk.value;
+
+			if unlocking_balance > value {
+				unlock_chunk.value = unlocking_balance - value;
+				self.active -= unlocking_balance - value;
+				self.unlocking.push(unlock_chunk);
+				break
+			}
+		}
+
+		self
+	}
 }
 
 impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
@@ -912,38 +929,6 @@ decl_module! {
 			}
 		}
 
-		/// Rebond a portion of the stash scheduled to be unlocked.
-		///
-		/// # <weight>
-		/// - Time complexity: O(1). Bounded by `MAX_UNLOCKING_CHUNKS`.
-		/// - Storage changes: Can't increase storage, only decrease it.
-		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
-		fn rebond(origin, #[compact] value: BalanceOf<T>) {
-			let controller = ensure_signed(origin)?;
-			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(
-				ledger.unlocking.len() > 0,
-				Error::<T>::NoUnlockChunk,
-			);
-
-			let mut unlocking_balance: BalanceOf<T> = Zero::zero();
-
-			while let Some(mut unlock_chunk) = ledger.unlocking.pop() {
-				unlocking_balance += unlock_chunk.value;
-				ledger.active += unlock_chunk.value;
-
-				if unlocking_balance > value {
-					unlock_chunk.value = unlocking_balance - value;
-					ledger.active -= unlocking_balance - value;
-					ledger.unlocking.push(unlock_chunk);
-					break
-				}
-			}
-
-			Self::update_ledger(&controller, &ledger);
-		}
-
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
 		/// period ends. If this leaves an amount actively bonded less than
 		/// T::Currency::minimum_balance(), then it is increased to the full amount.
@@ -991,6 +976,26 @@ decl_module! {
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
 			}
+		}
+
+		/// Rebond a portion of the stash scheduled to be unlocked.
+		///
+		/// # <weight>
+		/// - Time complexity: O(1). Bounded by `MAX_UNLOCKING_CHUNKS`.
+		/// - Storage changes: Can't increase storage, only decrease it.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		fn rebond(origin, #[compact] value: BalanceOf<T>) {
+			let controller = ensure_signed(origin)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			ensure!(
+				ledger.unlocking.len() > 0,
+				Error::<T>::NoUnlockChunk,
+			);
+
+			let ledger = ledger.rebond(value);
+
+			Self::update_ledger(&controller, &ledger);
 		}
 
 		/// Remove any unlocked chunks from the `unlocking` queue from our management.
