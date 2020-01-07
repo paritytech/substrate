@@ -143,11 +143,6 @@ impl<B: BlockT> GossipEngine<B> {
 		gossip_engine
 	}
 
-	/// Closes all notification streams.
-	pub fn abort(&self) {
-		self.inner.lock().state_machine.abort();
-	}
-
 	pub fn report(&self, who: PeerId, reputation: ReputationChange) {
 		self.inner.lock().context.report_peer(who, reputation);
 	}
