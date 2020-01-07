@@ -177,7 +177,9 @@ impl States {
 	/// Commit a transactional layer.
 	/// A subsequent update of all related stored history is needed.
 	pub fn commit_transaction(&mut self) {
-		self.current_layer = self.current_layer.saturating_sub(1);
+		if self.current_layer > COMMITTED_LAYER {
+			self.current_layer -= 1;
+		}
 	}
 
 	/// Apply transaction commit on a historical value.
