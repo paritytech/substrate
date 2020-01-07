@@ -204,6 +204,7 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 			executor,
 			storage,
 			Default::default(),
+			Default::default(),
 			ExecutionExtensions::new(
 				self.execution_strategies,
 				self.keystore.clone(),

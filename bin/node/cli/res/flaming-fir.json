@@ -22,7 +22,8 @@
     "tokenDecimals": 15,
     "tokenSymbol": "FIR"
   },
-  "fork_blocks": null,
+  "forkBlocks": null,
+  "badBlocks": null,
   "consensusEngine": null,
   "genesis": {
     "raw": {
