@@ -285,6 +285,7 @@ use frame_system::{self as system, ensure_signed, ensure_root, offchain::SubmitS
 use sp_phragmen::{ExtendedBalance, PhragmenStakedAssignment, Assignment};
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
+// ------------- IMPORTANT NOTE: must be the same as `generate_compact_solution_type`.
 const MAX_NOMINATIONS: usize = 16;
 const MAX_UNLOCKING_CHUNKS: usize = 32;
 const ELECTION_TOLERANCE: ExtendedBalance = 0;
@@ -522,7 +523,7 @@ pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
 }
 
 /// Indicate how an election round was computed.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum ElectionCompute {
 	/// Result was forcefully computed on chain at the end of the session.
 	OnChain,
@@ -562,6 +563,9 @@ impl<BlockNumber> Default for OffchainElectionStatus<BlockNumber> {
 		Self::None
 	}
 }
+
+// ------------- IMPORTANT NOTE: must be the same as `MAX_NOMINATIONS`.
+sp_phragmen_compact::generate_compact_solution_type!(pub CompactAssignments, 16);
 
 pub type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -929,11 +933,22 @@ decl_module! {
 					let era = CurrentEra::get();
 					if let Some(election_result) = Self::do_phragmen(ElectionCompute::Submitted) {
 						if let Some(key) = Self::local_signing_key() {
-							let call: <T as Trait>::Call = Call::submit_election_result().into();
-							use system::offchain::SubmitSignedTransaction;
-							// T::SubmitTransaction::sign_and_submit(call, key);
+							if let Some(sp_phragmen::PhragmenResult {
+								winners,
+								assignments,
+							}) = Self::do_phragmen(ElectionCompute::Submitted) {
+								let winners = winners.into_iter().map(|(w, _)| w).collect();
+								let compact_assignments: CompactAssignments<T::AccountId> = assignments.into();
+								let call: <T as Trait>::Call = Call::submit_election_result(
+									winners,
+									compact_assignments,
+								).into();
+								// T::SubmitTransaction::sign_and_submit(call, key);
+							} else {
+								frame_support::print("ran phragmen offchain but None was returned.");
+							}
 						} else {
-							frame_support::print("validator with not signing key...");
+							frame_support::print("validator with not signing key.");
 						}
 					}
 				} else {
@@ -949,7 +964,11 @@ decl_module! {
 			}
 		}
 
-		fn submit_election_result(origin) {
+		fn submit_election_result(
+			origin,
+			winners: Vec<T::AccountId>,
+			assignments: CompactAssignments<T::AccountId>,
+		) {
 			let who = ensure_signed(origin)?;
 			// TODO: nothing for now, needs encoding.
 		}
@@ -1633,7 +1652,7 @@ impl<T: Trait> Module<T> {
 			);
 
 			offchain_result
-		}).or_else(|| Self::do_phragmen(ElectionCompute::OnChain));
+		}).or_else(|| Self::do_phragmen_with_post_processing(ElectionCompute::OnChain));
 
 		// Either way, kill the flag. No more submitted solutions until further notice.
 		<ElectionStatus<T>>::kill();
@@ -1641,44 +1660,12 @@ impl<T: Trait> Module<T> {
 		somehow_phragmen_results
 	}
 
-	/// Execute phragmen and return the new results.
+	/// Execute phragmen and return the new results. The edge weights are processed into  support values.
 	///
 	/// No storage item is updated.
-	fn do_phragmen(compute: ElectionCompute) -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
+	fn do_phragmen_with_post_processing(compute: ElectionCompute) -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
 		let era = Self::current_era();
-		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
-		let all_validator_candidates_iter = <Validators<T>>::enumerate();
-		let all_validators = all_validator_candidates_iter.map(|(who, _pref)| {
-			let self_vote = (who.clone(), vec![who.clone()]);
-			all_nominators.push(self_vote);
-			who
-		}).collect::<Vec<T::AccountId>>();
-
-		let nominator_votes = <Nominators<T>>::enumerate().map(|(nominator, nominations)| {
-			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
-
-			// Filter out nomination targets which were nominated before the most recent
-			// slashing span.
-			targets.retain(|stash| {
-				<Self as Store>::SlashingSpans::get(&stash).map_or(
-					true,
-					|spans| submitted_in >= spans.last_start(),
-				)
-			});
-
-			(nominator, targets)
-		});
-		all_nominators.extend(nominator_votes);
-
-		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote>(
-			Self::validator_count() as usize,
-			Self::minimum_validator_count().max(1) as usize,
-			all_validators,
-			all_nominators,
-			Self::slashable_balance_of,
-		);
-
-		if let Some(phragmen_result) = maybe_phragmen_result {
+		if let Some(phragmen_result) = Self::do_phragmen(compute) {
 			let elected_stashes = phragmen_result.winners.iter()
 				.map(|(s, _)| s.clone())
 				.collect::<Vec<T::AccountId>>();
@@ -1776,6 +1763,46 @@ impl<T: Trait> Module<T> {
 			// TODO: #2494
 			None
 		}
+	}
+
+	/// Execute phragmen and return the new results. No post-processing is applied and the raw edge
+	/// weights are returned.
+	///
+	/// No storage item is updated.
+	fn do_phragmen(compute: ElectionCompute) -> Option<sp_phragmen::PhragmenResult<T::AccountId>> {
+		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
+		let all_validator_candidates_iter = <Validators<T>>::enumerate();
+		let all_validators = all_validator_candidates_iter.map(|(who, _pref)| {
+			// append self vote
+			let self_vote = (who.clone(), vec![who.clone()]);
+			all_nominators.push(self_vote);
+
+			who
+		}).collect::<Vec<T::AccountId>>();
+
+		let nominator_votes = <Nominators<T>>::enumerate().map(|(nominator, nominations)| {
+			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
+
+			// Filter out nomination targets which were nominated before the most recent
+			// slashing span.
+			targets.retain(|stash| {
+				<Self as Store>::SlashingSpans::get(&stash).map_or(
+					true,
+					|spans| submitted_in >= spans.last_start(),
+				)
+			});
+
+			(nominator, targets)
+		});
+		all_nominators.extend(nominator_votes);
+
+		sp_phragmen::elect::<_, _, _, T::CurrencyToVote>(
+			Self::validator_count() as usize,
+			Self::minimum_validator_count().max(1) as usize,
+			all_validators,
+			all_nominators,
+			Self::slashable_balance_of,
+		)
 	}
 
 	/// Remove all associated data of a stash account from the staking system.

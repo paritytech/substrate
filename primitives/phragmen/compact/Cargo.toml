@@ -1,5 +1,5 @@
 [package]
-name = "phragmen-compact"
+name = "sp-phragmen-compact"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"

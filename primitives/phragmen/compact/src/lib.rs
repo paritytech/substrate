@@ -90,7 +90,8 @@ pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 	}).collect::<TokenStream2>();
 
 	let compact_def = quote! (
-		#[derive(Default, PartialEq, Eq, sp_runtime::RuntimeDebug)]
+		// TODO: clean imports: how to deal with codec?
+		#[derive(Default, PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, codec::Encode, codec::Decode)]
 		#vis struct #ident<#account_type> {
 			#singles
 			#doubles
@@ -100,19 +101,18 @@ pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 
 	let from_impl_single = {
 		let name = field_name_for(1);
-		quote!(1 => compact.#name.push((who, distribution[0].0)),)
+		quote!(1 => compact.#name.push((who, distribution[0].clone().0)),)
 	};
 	let from_impl_double = {
 		let name = field_name_for(2);
-		quote!(2 => compact.#name.push((who, distribution[0], distribution[1].0)),)
+		quote!(2 => compact.#name.push((who, distribution[0].clone(), distribution[1].clone().0)),)
 	};
 	let from_impl_rest = (3..=count).map(|c| {
-		let inner = (0..c-1).map(|i| quote!(distribution[#i],)).collect::<TokenStream2>();
-		// println!("inner = {}", inner)
+		let inner = (0..c-1).map(|i| quote!(distribution[#i].clone(),)).collect::<TokenStream2>();
 
 		let field_name = field_name_for(c);
 		let last_index = c - 1;
-		let last = quote!(distribution[#last_index].0);
+		let last = quote!(distribution[#last_index].clone().0);
 
 		quote!(
 			#c => compact.#field_name.push((who, [#inner], #last)),
@@ -120,7 +120,7 @@ pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 	}).collect::<TokenStream2>();
 
 	let from_impl = quote!(
-		impl<#account_type: codec::Codec + Default + Copy>
+		impl<#account_type: codec::Codec + Default + Clone>
 		From<Vec<Assignment<#account_type>>>
 		for #ident<#account_type>
 		{
@@ -176,7 +176,7 @@ pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 				let mut sum = Perbill::zero();
 				let mut inners_parsed = inners
 					.into_iter()
-					.map(|(c, p)| {
+					.map(|(ref c, p)| {
 						sum = sum.saturating_add(*p);
 						(c.clone(), *p)
 					}).collect::<Vec<(#account_type, Perbill)>>();
@@ -193,7 +193,7 @@ pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 	}).collect::<TokenStream2>();
 
 	let into_impl = quote!(
-		impl<#account_type: codec::Codec + Default + Copy>
+		impl<#account_type: codec::Codec + Default + Clone>
 		Into<Vec<Assignment<#account_type>>>
 		for #ident<#account_type>
 		{
@@ -209,8 +209,6 @@ pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 	);
 
 	quote!(
-		use sp_runtime::Saturating;
-
 		#compact_def
 		#from_impl
 		#into_impl

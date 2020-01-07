@@ -3920,6 +3920,7 @@ dependencies = [
  "sp-io 2.0.0",
  "sp-keyring 2.0.0",
  "sp-phragmen 2.0.0",
+ "sp-phragmen-compact 2.0.0",
  "sp-runtime 2.0.0",
  "sp-staking 2.0.0",
  "sp-std 2.0.0",
@@ -4285,17 +4286,6 @@ version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "fixedbitset 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "phragmen-compact"
-version = "2.0.0"
-dependencies = [
- "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "proc-macro2 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-runtime 2.0.0",
- "syn 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -6408,13 +6398,24 @@ name = "sp-phragmen"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "phragmen-compact 2.0.0",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-io 2.0.0",
+ "sp-phragmen-compact 2.0.0",
  "sp-runtime 2.0.0",
  "sp-std 2.0.0",
  "substrate-test-utils 2.0.0",
+]
+
+[[package]]
+name = "sp-phragmen-compact"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "proc-macro2 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-runtime 2.0.0",
+ "syn 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

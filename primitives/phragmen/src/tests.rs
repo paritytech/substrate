@@ -21,7 +21,11 @@
 use crate::mock::*;
 use crate::{elect, PhragmenResult, Assignment};
 use substrate_test_utils::assert_eq_uvec;
-use sp_runtime::Perbill;
+use sp_runtime::{Perbill, Saturating};
+use codec::{Encode, Decode};
+use sp_phragmen_compact::generate_compact_solution_type;
+
+generate_compact_solution_type!(TestCompact, 16);
 
 #[test]
 fn float_phragmen_poc_works() {
@@ -441,3 +445,81 @@ fn minimum_to_elect_is_respected() {
 
 	assert!(maybe_result.is_none());
 }
+
+#[test]
+fn compact_struct_is_codec() {
+	let compact = TestCompact {
+		votes1: vec![(2, 20), (4, 40)],
+		votes2: vec![
+			(1, (10, Perbill::from_percent(80)), 11),
+			(5, (50, Perbill::from_percent(85)), 51),
+		],
+		..Default::default()
+	};
+
+	let encoded = compact.encode();
+
+	assert_eq!(
+		compact,
+		Decode::decode(&mut &encoded[..]).unwrap(),
+	);
+}
+
+#[test]
+fn basic_from_and_into_compact_works() {
+	let assignments = vec![
+		Assignment {
+			who: 2u32,
+			distribution: vec![(20, Perbill::from_percent(100))]
+		},
+		Assignment {
+			who: 4u32,
+			distribution: vec![(40, Perbill::from_percent(100))],
+		},
+		Assignment {
+			who: 1u32,
+			distribution: vec![
+				(10, Perbill::from_percent(80)),
+				(11, Perbill::from_percent(20))
+			],
+		},
+		Assignment {
+			who: 5u32, distribution:
+			vec![
+				(50, Perbill::from_percent(85)),
+				(51, Perbill::from_percent(15)),
+			]
+		},
+		Assignment {
+			who: 3u32,
+			distribution: vec![
+				(30, Perbill::from_percent(50)),
+				(31, Perbill::from_percent(25)),
+				(32, Perbill::from_percent(25)),
+			],
+		},
+	];
+
+	let compacted: TestCompact<u32> = assignments.clone().into();
+
+	assert_eq!(
+		compacted,
+		TestCompact {
+			votes1: vec![(2, 20), (4, 40)],
+			votes2: vec![
+				(1, (10, Perbill::from_percent(80)), 11),
+				(5, (50, Perbill::from_percent(85)), 51),
+			],
+			votes3: vec![
+				(3, [(30, Perbill::from_percent(50)), (31, Perbill::from_percent(25))], 32),
+			],
+			..Default::default()
+		}
+	);
+
+	assert_eq!(
+		<TestCompact<u32> as Into<Vec<Assignment<u32>>>>::into(compacted),
+		assignments
+	);
+}
+
