@@ -44,14 +44,17 @@ pub type History<V> = crate::History<V, State>;
 /// An entry at a given history height.
 pub type HistoricalEntry<V> = crate::HistoricalEntry<V, State>;
 
+
+// We use to 1 to be able to discard this transaction.
+const COMMITTED_LAYER: usize = 1;
+
 /// Global state contains only the current number of overlay layers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct States { current_layer: usize }
 
 impl Default for States {
 	fn default() -> Self {
-		// we default to 1 to be able to discard this transaction.
-		States { current_layer: 1 }
+		States { current_layer: COMMITTED_LAYER }
 	}
 }
 
@@ -72,17 +75,8 @@ impl States {
 	/// Update global state for discarding prospective.
 	/// A subsequent update of all related stored history is needed.
 	pub fn discard_prospective(&mut self) {
-		self.current_layer = 1;
-	}
-
-	/// By default the current transaction is at least 1.
-	/// 0 is a transient state used when applying transaction change,
-	/// in this case transaction need to be restored to a valid state afterward.
-	/// This function does restore the state.
-	pub fn finalize_discard(&mut self) {
-		if self.current_layer == 0 {
-			self.current_layer = 1;
-		}
+		// Point to committed layer.
+		self.current_layer = COMMITTED_LAYER;
 	}
 
 	/// After a prospective was discarded, clear prospective history.
@@ -91,10 +85,10 @@ impl States {
 			return CleaningResult::Cleared;
 		}
 		if value.0[0].index == State::Committed {
-			if value.0.len() == 1 {
+			if value.0.len() == COMMITTED_LAYER {
 				CleaningResult::Unchanged
 			} else {
-				value.0.truncate(1);
+				value.0.truncate(COMMITTED_LAYER);
 				CleaningResult::Changed
 			}
 		} else {
@@ -106,7 +100,8 @@ impl States {
 	/// Update global state for committing prospective.
 	/// A subsequent update of all related stored history is needed.
 	pub fn commit_prospective(&mut self) {
-		self.current_layer = 1;
+		// Point to committed layer.
+		self.current_layer = COMMITTED_LAYER;
 	}
 
 	/// After updating states to prospective, this function must be use
@@ -116,7 +111,7 @@ impl States {
 		if value.0.is_empty() {
 			return CleaningResult::Cleared;
 		}
-		if value.0.len() == 1 {
+		if value.0.len() == COMMITTED_LAYER {
 			if value.0[0].index != State::Committed {
 				value.0[0].index = State::Committed;
 			} else {
@@ -168,12 +163,21 @@ impl States {
 		}
 	}
 
+	/// By default the current transaction is at least 1.
+	/// 0 is a transient state used when applying transaction change,
+	/// in this case transaction need to be restored to a valid state afterward.
+	/// This function does restore the state.
+	pub fn finalize_discard(&mut self) {
+		if self.current_layer == 0 {
+			// Point back to committed layer.
+			self.current_layer = COMMITTED_LAYER;
+		}
+	}
+
 	/// Commit a transactional layer.
 	/// A subsequent update of all related stored history is needed.
 	pub fn commit_transaction(&mut self) {
-		if self.current_layer > 1 {
-			self.current_layer -= 1;
-		}
+		self.current_layer = self.current_layer.saturating_sub(1);
 	}
 
 	/// Apply transaction commit on a historical value.
@@ -313,7 +317,7 @@ impl<V> History<V> {
 
 	/// Extracts the committed value if there is one.
 	pub fn into_committed(mut self) -> Option<V> {
-		self.0.truncate(1);
+		self.0.truncate(COMMITTED_LAYER);
 		if let Some(HistoricalEntry {
 					value,
 					index: State::Committed,
