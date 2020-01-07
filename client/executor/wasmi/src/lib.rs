@@ -22,6 +22,7 @@ use sc_executor_common::{
 	allocator,
 };
 use std::{str, mem};
+use std::cell::RefCell;
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 	memory_units::Pages, RuntimeValue::{I32, I64, self},
@@ -43,7 +44,7 @@ struct FunctionExecutor<'a> {
 	table: Option<TableRef>,
 	host_functions: &'a [&'static dyn Function],
 	enable_stub: bool,
-	method: &'a str,
+	missing_functions: &'a Vec<String>,
 }
 
 impl<'a> FunctionExecutor<'a> {
@@ -53,7 +54,7 @@ impl<'a> FunctionExecutor<'a> {
 		t: Option<TableRef>,
 		host_functions: &'a [&'static dyn Function],
 		enable_stub: bool,
-		method: &'a str,
+		missing_functions: &'a Vec<String>,
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
@@ -62,7 +63,7 @@ impl<'a> FunctionExecutor<'a> {
 			table: t,
 			host_functions,
 			enable_stub,
-			method,
+			missing_functions,
 		})
 	}
 }
@@ -278,6 +279,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 struct Resolver<'a> {
 	host_functions: &'a[&'static dyn Function],
 	enable_stub: bool,
+	missing_functions: RefCell<Vec<String>>,
 }
 
 impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
@@ -306,6 +308,7 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 
 		if self.enable_stub {
 			trace!("Could not find function {}, a stub will be provided instead.", name);
+			self.missing_functions.borrow_mut().push(name.to_string());
 
 			// NOTE: provide purposedly an invalid index of the function
 			Ok(wasmi::FuncInstance::alloc_host(signature.into(), self.host_functions.len()))
@@ -329,7 +332,9 @@ impl<'a> wasmi::Externals for FunctionExecutor<'a> {
 				.map_err(wasmi::Trap::from)
 				.map(|v| v.map(Into::into))
 		} else if self.enable_stub {
-			panic!("function {} does not exist", self.method);
+			Err(Error::from(
+				format!("functions do not exist: {}", self.missing_functions.join(", "))
+			).into())
 		} else {
 			Err(Error::from(format!("Could not find host function with index: {}", index)).into())
 		}
@@ -369,6 +374,7 @@ fn call_in_wasm_module(
 	data: &[u8],
 	host_functions: &[&'static dyn Function],
 	enable_stub: bool,
+	missing_functions: &Vec<String>,
 ) -> Result<Vec<u8>, Error> {
 	// extract a reference to a linear memory, optional reference to a table
 	// and then initialize FunctionExecutor.
@@ -379,7 +385,7 @@ fn call_in_wasm_module(
 	let heap_base = get_heap_base(module_instance)?;
 
 	let mut fec = FunctionExecutor::new(
-		memory.clone(), heap_base, table, host_functions, enable_stub, method)?;
+		memory.clone(), heap_base, table, host_functions, enable_stub, missing_functions)?;
 
 	// Write the call data
 	let offset = fec.allocate_memory(data.len() as u32)?;
@@ -417,10 +423,11 @@ fn instantiate_module(
 	module: &Module,
 	host_functions: &[&'static dyn Function],
 	enable_stub: bool,
-) -> Result<ModuleRef, Error> {
+) -> Result<(ModuleRef, Vec<String>), Error> {
 	let resolver = Resolver {
 		host_functions,
 		enable_stub,
+		missing_functions: RefCell::new(Vec::new()),
 	};
 	// start module instantiation. Don't run 'start' function yet.
 	let intermediate_instance = ModuleInstance::new(
@@ -439,7 +446,7 @@ fn instantiate_module(
 		// Runtime is not allowed to have the `start` function.
 		Err(Error::RuntimeHasStartFn)
 	} else {
-		Ok(intermediate_instance.assert_no_start())
+		Ok((intermediate_instance.assert_no_start(), resolver.missing_functions.into_inner()))
 	}
 }
 
@@ -561,6 +568,8 @@ pub struct WasmiRuntime {
 	host_functions: Vec<&'static dyn Function>,
 	/// Enable STUB for function called that are missing
 	enable_stub: bool,
+	/// List of missing functions detected during function resolution
+	missing_functions: Vec<String>,
 }
 
 impl WasmRuntime for WasmiRuntime {
@@ -587,7 +596,8 @@ impl WasmRuntime for WasmiRuntime {
 				e
 			})?;
 		call_in_wasm_module(
-			ext, &self.instance, method, data, &self.host_functions, self.enable_stub)
+			ext, &self.instance, method, data, &self.host_functions, self.enable_stub,
+			&self.missing_functions)
 	}
 }
 
@@ -606,7 +616,8 @@ pub fn create_instance(
 	let data_segments = extract_data_segments(&code)?;
 
 	// Instantiate this module.
-	let instance = instantiate_module(heap_pages as usize, &module, &host_functions, enable_stub)
+	let (instance, missing_functions) = instantiate_module(
+			heap_pages as usize, &module, &host_functions, enable_stub)
 		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
 	// Take state snapshot before executing anything.
@@ -623,6 +634,7 @@ pub fn create_instance(
 		state_snapshot,
 		host_functions,
 		enable_stub,
+		missing_functions,
 	})
 }
 
