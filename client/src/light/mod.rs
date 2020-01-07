@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -77,7 +77,14 @@ pub fn new_light<B, S, GS, RA, E>(
 {
 	let local_executor = LocalCallExecutor::new(backend.clone(), code_executor);
 	let executor = GenesisCallExecutor::new(backend.clone(), local_executor);
-	Client::new(backend, executor, genesis_storage, Default::default(), Default::default())
+	Client::new(
+		backend,
+		executor,
+		genesis_storage,
+		Default::default(),
+		Default::default(),
+		Default::default(),
+	)
 }
 
 /// Create an instance of fetch data checker.

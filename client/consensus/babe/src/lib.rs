@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -507,8 +507,6 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 				slot_lenience, slot_lenience, BACKOFF_STEP);
 		}
 
-		let slot_duration = slot_info.duration << (slot_lenience / BACKOFF_STEP);
-
 		let slot_lenience = Duration::from_secs(slot_duration);
 		Some(slot_lenience + slot_remaining)
 	}
@@ -1011,7 +1009,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
 
-		let info = self.client.info().chain;
+		let info = self.client.chain_info();
 
 		if let Some(next_epoch_descriptor) = next_epoch_digest {
 			let next_epoch = epoch.increment(next_epoch_descriptor);
@@ -1126,7 +1124,7 @@ fn prune_finalized<B, E, Block, RA>(
 	B: Backend<Block>,
 	RA: Send + Sync,
 {
-	let info = client.info().chain;
+	let info = client.chain_info();
 
 	let finalized_slot = {
 		let finalized_header = client.header(&BlockId::Hash(info.finalized_hash))

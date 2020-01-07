@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -45,8 +45,7 @@ struct TestNetwork {
 }
 
 impl sc_network_gossip::Network<Block> for TestNetwork {
-	fn event_stream(&self)
-	-> Box<dyn futures::Stream<Item = NetworkEvent, Error = ()> + Send> {
+	fn event_stream(&self) -> Box<dyn futures::Stream<Item = NetworkEvent, Error = ()> + Send> {
 		let (tx, rx) = mpsc::unbounded();
 		let _ = self.sender.unbounded_send(Event::EventStream(tx));
 		Box::new(rx)

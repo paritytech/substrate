@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Integration tests for runtime interface primitives
+#![cfg(test)]
 
 #![cfg(test)]
 
@@ -25,26 +26,26 @@ use sp_wasm_interface::HostFunctions as HostFunctionsT;
 type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher, u64>;
 
 fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
-    let mut ext = TestExternalities::default();
-    let mut ext_ext = ext.ext();
+	let mut ext = TestExternalities::default();
+	let mut ext_ext = ext.ext();
 
-    sc_executor::call_in_wasm::<
-        _,
-        (
-            HF,
-            sp_io::SubstrateHostFunctions,
-            sc_executor::deprecated_host_interface::SubstrateExternals
-        )
-    >(
-        method,
-        &[],
-        sc_executor::WasmExecutionMethod::Interpreted,
-        &mut ext_ext,
-        &WASM_BINARY[..],
-        8,
-    ).expect(&format!("Executes `{}`", method));
+	sc_executor::call_in_wasm::<
+		_,
+		(
+			HF,
+			sp_io::SubstrateHostFunctions,
+			sc_executor::deprecated_host_interface::SubstrateExternals
+		)
+	>(
+		method,
+		&[],
+		sc_executor::WasmExecutionMethod::Interpreted,
+		&mut ext_ext,
+		&WASM_BINARY[..],
+		8,
+	).expect(&format!("Executes `{}`", method));
 
-    ext
+	ext
 }
 
 #[test]

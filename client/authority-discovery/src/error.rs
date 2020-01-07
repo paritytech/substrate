@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,6 +22,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Error type for the authority discovery module.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
+	/// Received dht value found event with records with different keys.
+	ReceivingDhtValueFoundEventWithDifferentKeys,
+	/// Received dht value found event with no records.
+	ReceivingDhtValueFoundEventWithNoRecords,
 	/// Failed to verify a dht payload with the given signature.
 	VerifyingDhtPayload,
 	/// Failed to hash the authority id to be used as a dht key.

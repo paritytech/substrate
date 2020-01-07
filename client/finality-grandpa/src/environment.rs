@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -965,7 +965,7 @@ pub(crate) fn finalize_block<B, Block: BlockT, E, RA>(
 	//       below.
 	let mut authority_set = authority_set.inner().write();
 
-	let status = client.info().chain;
+	let status = client.chain_info();
 	if number <= status.finalized_number && client.hash(number)? == Some(hash) {
 		// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
 		// the voter will be restarted at the median last finalized block, which can be lower than the local best
@@ -1038,7 +1038,7 @@ pub(crate) fn finalize_block<B, Block: BlockT, E, RA>(
 				// finalization to remote nodes
 				if !justification_required {
 					if let Some(justification_period) = justification_period {
-						let last_finalized_number = client.info().chain.finalized_number;
+						let last_finalized_number = client.chain_info().finalized_number;
 						justification_required =
 							(!last_finalized_number.is_zero() || number - last_finalized_number == justification_period) &&
 							(last_finalized_number / justification_period != number / justification_period);

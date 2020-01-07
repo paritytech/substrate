@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -288,6 +288,7 @@ mod tests {
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_api::Core;
 	use backend::Backend;
+	use sp_blockchain::HeaderBackend;
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		Transfer {
@@ -343,7 +344,7 @@ mod tests {
 			.build_with_backend();
 		let client = Arc::new(client);
 		let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
-		let genesis_hash = client.info().chain.best_hash;
+		let genesis_hash = client.info().best_hash;
 		let block_id = BlockId::Hash(genesis_hash);
 
 		futures::executor::block_on(

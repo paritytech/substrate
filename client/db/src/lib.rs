@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -39,7 +39,7 @@ use std::path::PathBuf;
 use std::io;
 use std::collections::{HashMap, HashSet};
 
-use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks};
+use sc_client_api::{execution_extensions::ExecutionExtensions, BadBlocks, ForkBlocks};
 use sc_client_api::backend::NewBlockState;
 use sc_client_api::backend::{StorageCollection, ChildStorageCollection};
 use sp_blockchain::{
@@ -274,6 +274,7 @@ pub fn new_client<E, S, Block, RA>(
 	executor: E,
 	genesis_storage: S,
 	fork_blocks: ForkBlocks<Block>,
+	bad_blocks: BadBlocks<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 ) -> Result<(
 		sc_client::Client<
@@ -299,6 +300,7 @@ pub fn new_client<E, S, Block, RA>(
 			executor,
 			genesis_storage,
 			fork_blocks,
+			bad_blocks,
 			execution_extensions,
 		)?,
 		backend,
@@ -306,18 +308,18 @@ pub fn new_client<E, S, Block, RA>(
 }
 
 pub(crate) mod columns {
-	pub const META: Option<u32> = crate::utils::COLUMN_META;
-	pub const STATE: Option<u32> = Some(1);
-	pub const STATE_META: Option<u32> = Some(2);
+	pub const META: u32 = crate::utils::COLUMN_META;
+	pub const STATE: u32 = 1;
+	pub const STATE_META: u32 = 2;
 	/// maps hashes to lookup keys and numbers to canon hashes.
-	pub const KEY_LOOKUP: Option<u32> = Some(3);
-	pub const HEADER: Option<u32> = Some(4);
-	pub const BODY: Option<u32> = Some(5);
-	pub const JUSTIFICATION: Option<u32> = Some(6);
-	pub const CHANGES_TRIE: Option<u32> = Some(7);
-	pub const AUX: Option<u32> = Some(8);
+	pub const KEY_LOOKUP: u32 = 3;
+	pub const HEADER: u32 = 4;
+	pub const BODY: u32 = 5;
+	pub const JUSTIFICATION: u32 = 6;
+	pub const CHANGES_TRIE: u32 = 7;
+	pub const AUX: u32 = 8;
 	/// Offchain workers local storage
-	pub const OFFCHAIN: Option<u32> = Some(9);
+	pub const OFFCHAIN: u32 = 9;
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -639,7 +641,7 @@ struct StorageDb<Block: BlockT> {
 impl<Block: BlockT> sp_state_machine::Storage<HasherFor<Block>> for StorageDb<Block> {
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let key = prefixed_key::<HasherFor<Block>>(key, prefix);
-		self.state_db.get(&key, self).map(|r| r.map(|v| DBValue::from_slice(&v)))
+		self.state_db.get(&key, self)
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 }
@@ -1503,49 +1505,71 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Some(self.offchain_storage.clone())
 	}
 
-	fn revert(&self, n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
-		let mut best = self.blockchain.info().best_number;
+	fn revert(&self, n: NumberFor<Block>, revert_finalized: bool) -> ClientResult<NumberFor<Block>> {
+		let mut best_number = self.blockchain.info().best_number;
+		let mut best_hash = self.blockchain.info().best_hash;
 		let finalized = self.blockchain.info().finalized_number;
-		let revertible = best - finalized;
-		let n = if revertible < n { revertible } else { n };
 
-		for c in 0 .. n.saturated_into::<u64>() {
-			if best.is_zero() {
-				return Ok(c.saturated_into::<NumberFor<Block>>())
-			}
-			let mut transaction = DBTransaction::new();
-			match self.storage.state_db.revert_one() {
-				Some(commit) => {
-					apply_state_commit(&mut transaction, commit);
-					let removed = self.blockchain.header(BlockId::Number(best))?.ok_or_else(
-						|| sp_blockchain::Error::UnknownBlock(
-							format!("Error reverting to {}. Block hash not found.", best)))?;
+		let revertible = best_number - finalized;
+		let n = if !revert_finalized && revertible < n {
+			revertible
+		} else {
+			n
+		};
 
-					best -= One::one();	// prev block
-					let hash = self.blockchain.hash(best)?.ok_or_else(
-						|| sp_blockchain::Error::UnknownBlock(
-							format!("Error reverting to {}. Block hash not found.", best)))?;
-					let key = utils::number_and_hash_to_lookup_key(best.clone(), &hash)?;
-					transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
-					transaction.delete(columns::KEY_LOOKUP, removed.hash().as_ref());
-					children::remove_children(
-						&mut transaction,
-						columns::META,
-						meta_keys::CHILDREN_PREFIX,
-						hash,
-					);
-					self.storage.db.write(transaction).map_err(db_err)?;
-					self.blockchain.update_meta(hash, best, true, false);
-					self.blockchain.leaves.write().revert(
-						removed.hash().clone(),
-						removed.number().clone(),
-						removed.parent_hash().clone(),
-					);
+		let mut revert_blocks = || -> ClientResult<NumberFor<Block>> {
+			for c in 0 .. n.saturated_into::<u64>() {
+				if best_number.is_zero() {
+					return Ok(c.saturated_into::<NumberFor<Block>>())
 				}
-				None => return Ok(c.saturated_into::<NumberFor<Block>>())
+				let mut transaction = DBTransaction::new();
+				match self.storage.state_db.revert_one() {
+					Some(commit) => {
+						apply_state_commit(&mut transaction, commit);
+						let removed = self.blockchain.header(BlockId::Number(best_number))?.ok_or_else(
+							|| sp_blockchain::Error::UnknownBlock(
+								format!("Error reverting to {}. Block hash not found.", best_number)))?;
+
+						best_number -= One::one();	// prev block
+						best_hash = self.blockchain.hash(best_number)?.ok_or_else(
+							|| sp_blockchain::Error::UnknownBlock(
+								format!("Error reverting to {}. Block hash not found.", best_number)))?;
+
+						let update_finalized = best_number < finalized;
+
+						let key = utils::number_and_hash_to_lookup_key(best_number.clone(), &best_hash)?;
+						transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
+						if update_finalized {
+							transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &key);
+						}
+						transaction.delete(columns::KEY_LOOKUP, removed.hash().as_ref());
+						children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, best_hash);
+						self.storage.db.write(transaction).map_err(db_err)?;
+						self.blockchain.update_meta(best_hash, best_number, true, update_finalized);
+					}
+					None => return Ok(c.saturated_into::<NumberFor<Block>>())
+				}
 			}
-		}
-		Ok(n)
+
+			Ok(n)
+		};
+
+		let reverted = revert_blocks()?;
+
+		let revert_leaves = || -> ClientResult<()> {
+			let mut transaction = DBTransaction::new();
+			let mut leaves = self.blockchain.leaves.write();
+
+			leaves.revert(best_hash, best_number);
+			leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
+			self.storage.db.write(transaction).map_err(db_err)?;
+
+			Ok(())
+		};
+
+		revert_leaves()?;
+
+		Ok(reverted)
 	}
 
 	fn blockchain(&self) -> &BlockchainDb<Block> {

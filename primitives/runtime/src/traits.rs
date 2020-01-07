@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -102,7 +102,7 @@ impl Verify for sp_core::ecdsa::Signature {
 			self.as_ref(),
 			&sp_io::hashing::blake2_256(msg.get()),
 		) {
-			Ok(pubkey) => <dyn AsRef<[u8]>>::as_ref(signer) == &pubkey[..],
+			Ok(pubkey) => signer.as_compressed().map(|s| &s[..] == &pubkey[..]).unwrap_or(false),
 			_ => false,
 		}
 	}
@@ -117,7 +117,7 @@ pub trait AppVerify {
 }
 
 impl<
-	S: Verify<Signer=<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic> + From<T>,
+	S: Verify<Signer = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic> + From<T>,
 	T: sp_application_crypto::Wraps<Inner=S> + sp_application_crypto::AppKey + sp_application_crypto::AppSignature +
 		AsRef<S> + AsMut<S> + From<S>,
 > AppVerify for T where
@@ -136,11 +136,11 @@ impl<
 
 /// An error type that indicates that the origin is invalid.
 #[derive(Encode, Decode)]
-pub struct InvalidOrigin;
+pub struct BadOrigin;
 
-impl From<InvalidOrigin> for &'static str {
-	fn from(_: InvalidOrigin) -> &'static str {
-		"Invalid origin"
+impl From<BadOrigin> for &'static str {
+	fn from(_: BadOrigin) -> &'static str {
+		"Bad origin"
 	}
 }
 
@@ -149,8 +149,8 @@ pub trait EnsureOrigin<OuterOrigin> {
 	/// A return type.
 	type Success;
 	/// Perform the origin check.
-	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, InvalidOrigin> {
-		Self::try_origin(o).map_err(|_| InvalidOrigin)
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, BadOrigin> {
+		Self::try_origin(o).map_err(|_| BadOrigin)
 	}
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
@@ -670,10 +670,6 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	}
 }
 
-/// Result of a module function call; either nothing (functions are only called for "side effects")
-/// or an error message.
-pub type DispatchResult<Error> = result::Result<(), Error>;
-
 /// A lazy call (module function and argument values) that can be executed via its `dispatch`
 /// method.
 pub trait Dispatchable {
@@ -683,10 +679,8 @@ pub trait Dispatchable {
 	type Origin;
 	/// ...
 	type Trait;
-	/// The error type returned by this dispatchable.
-	type Error: Into<crate::DispatchError>;
 	/// Actually dispatch this call and result the result of it.
-	fn dispatch(self, origin: Self::Origin) -> DispatchResult<Self::Error>;
+	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResult;
 }
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
@@ -789,17 +783,6 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Do any post-flight stuff for a transaction.
 	fn post_dispatch(_pre: Self::Pre, _info: Self::DispatchInfo, _len: usize) { }
-}
-
-/// An error that is returned by a dispatchable function of a module.
-pub trait ModuleDispatchError {
-	/// Convert this error to a `u8`.
-	///
-	/// The `u8` corresponds to the index of the variant in the error enum.
-	fn as_u8(&self) -> u8;
-
-	/// Convert the error to a `&'static str`.
-	fn as_str(&self) -> &'static str;
 }
 
 #[impl_for_tuples(1, 12)]
@@ -972,6 +955,52 @@ pub trait OpaqueKeys: Clone {
 	}
 	/// Verify a proof of ownership for the keys.
 	fn ownership_proof_is_valid(&self, _proof: &[u8]) -> bool { true }
+}
+
+/// Input that adds infinite number of zero after wrapped input.
+///
+/// This can add an infinite stream of zeros onto any input, not just a slice as with
+/// `TrailingZerosInput`.
+pub struct AppendZerosInput<'a, T>(&'a mut T);
+
+impl<'a, T> AppendZerosInput<'a, T> {
+	/// Create a new instance from the given byte array.
+	pub fn new(input: &'a mut T) -> Self {
+		Self(input)
+	}
+}
+
+impl<'a, T: codec::Input> codec::Input for AppendZerosInput<'a, T> {
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+		Ok(None)
+	}
+
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+		let remaining = self.0.remaining_len()?;
+		let completed = if let Some(n) = remaining {
+			let readable = into.len().min(n);
+			// this should never fail if `remaining_len` API is implemented correctly.
+			self.0.read(&mut into[..readable])?;
+			readable
+		} else {
+			// Fill it byte-by-byte.
+			let mut i = 0;
+			while i < into.len() {
+				if let Ok(b) = self.0.read_byte() {
+					into[i] = b;
+					i += 1;
+				} else {
+					break;
+				}
+			}
+			i
+		};
+		// Fill the rest with zeros.
+		for i in &mut into[completed..] {
+			*i = 0;
+		}
+		Ok(())
+	}
 }
 
 /// Input that adds infinite number of zero after wrapped input.
@@ -1236,8 +1265,9 @@ pub trait BlockIdTo<Block: self::Block> {
 
 #[cfg(test)]
 mod tests {
-	use super::AccountIdConversion;
+	use super::*;
 	use crate::codec::{Encode, Decode, Input};
+	use sp_core::{crypto::Pair, ecdsa};
 
 	mod t {
 		use sp_core::crypto::KeyTypeId;
@@ -1316,5 +1346,17 @@ mod tests {
 		assert_eq!(t.read(&mut buffer), Ok(()));
 		assert_eq!(t.remaining_len(), Ok(None));
 		assert_eq!(buffer, [0, 0]);
+	}
+
+	#[test]
+	fn ecdsa_verify_works() {
+		let msg = &b"test-message"[..];
+		let (pair, _) = ecdsa::Pair::generate();
+
+		let signature = pair.sign(&msg);
+		assert!(ecdsa::Pair::verify(&signature, msg, &pair.public()));
+
+		assert!(signature.verify(msg, &pair.public()));
+		assert!(signature.verify(msg, &pair.public().into_compressed().unwrap()));
 	}
 }

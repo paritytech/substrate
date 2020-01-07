@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -71,6 +71,7 @@ pub struct ImportSummary<Block: BlockT> {
 
 /// Import operation wrapper
 pub struct ClientImportOperation<Block: BlockT, B: Backend<Block>> {
+	/// DB Operation.
 	pub op: B::BlockImportOperation,
 	/// Summary of imported block.
 	pub notify_imported: Option<ImportSummary<Block>>,
@@ -300,10 +301,16 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 		Ok(())
 	}
 
-	/// Attempts to revert the chain by `n` blocks.
+	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set
+	/// it will attempt to revert past any finalized block, this is unsafe and
+	/// can potentially leave the node in an inconsistent state.
 	///
 	/// Returns the number of blocks that were successfully reverted.
-	fn revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>>;
+	fn revert(
+		&self,
+		n: NumberFor<Block>,
+		revert_finalized: bool,
+	) -> sp_blockchain::Result<NumberFor<Block>>;
 
 	/// Insert auxiliary data into key-value store.
 	fn insert_aux<
