@@ -255,7 +255,7 @@ mod slashing;
 
 pub mod inflation;
 
-use sp_std::{prelude::*, result};
+use sp_std::{prelude::*, result, collections::btree_map::BTreeMap};
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
@@ -294,29 +294,7 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 pub type EraIndex = u32;
 
 /// Counter for the number of "reward" points earned by a given validator.
-pub type Points = u32;
-
-/// Reward points of an era. Used to split era total payout between validators.
-#[derive(Encode, Decode, Default)]
-pub struct EraPoints {
-	/// Total number of points. Equals the sum of reward points for each validator.
-	total: Points,
-	/// The reward points earned by a given validator. The index of this vec corresponds to the
-	/// index into the current validator set.
-	individual: Vec<Points>,
-}
-
-impl EraPoints {
-	/// Add the reward to the validator at the given index. Index must be valid
-	/// (i.e. `index < current_elected.len()`).
-	fn add_points_to_index(&mut self, index: u32, points: u32) {
-		if let Some(new_total) = self.total.checked_add(points) {
-			self.total = new_total;
-			self.individual.resize((index as usize + 1).max(self.individual.len()), 0);
-			self.individual[index as usize] += points; // Addition is less than total
-		}
-	}
-}
+pub type RewardPoint = u32;
 
 /// Indicates the initial status of the staker.
 #[derive(RuntimeDebug)]
@@ -413,7 +391,14 @@ impl<
 				false
 			})
 			.collect();
-		Self { total, active: self.active, stash: self.stash, unlocking }
+
+		Self {
+			stash: self.stash,
+			total,
+			active: self.active,
+			unlocking,
+			last_reward: self.last_reward
+		}
 	}
 
 }
@@ -504,9 +489,8 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	/// The validator's own stash that is exposed.
 	#[codec(compact)]
 	pub own: Balance,
-	/// The portions of nominators stashes that are exposed.
+	/// The portions of nominators stashes that are exposed. Sorted by AccountId.
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
-	// TODO: Should be ordered by AccountId.
 }
 
 /// A pending slash record. The value of the slash has been computed but not applied yet,
@@ -678,7 +662,7 @@ decl_storage! {
 		/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
 		///
 		/// Is it removed after `HISTORY_DEPTH` eras.
-		pub Stakers get(fn stakers): double_map EraIndex hasher(twox_64_concat),
+		pub Stakers get(fn stakers): double_map hasher(twox_64_concat) EraIndex,
 			twox_64_concat(T::AccountId) => Exposure<T::AccountId, BalanceOf<T>>;
 		// TODO: ^^^ This will need a migration.
 		// TODO: consider switching this to a simple map EraIndex => Vec<Exposure>
@@ -687,8 +671,11 @@ decl_storage! {
 		pub EraValidatorReward: map EraIndex => BalanceOf<T>;
 		/// TODO: Will likely need initialising for the migration.
 
-		/// The currently elected validator set keyed by stash account ID.
-		pub CurrentElected get(fn current_elected): Vec<T::AccountId>;
+		pub CurrentEraTotalStaked get(fn current_era_total_staked): BalanceOf<T>;
+
+		// /// The currently elected validator set keyed by stash account ID.
+		// pub CurrentElected get(fn current_elected): Vec<T::AccountId>;
+		// TODO TODO: clean this!!!
 
 		/// The current era index.
 		pub CurrentEra get(fn current_era) config(): EraIndex;
@@ -696,11 +683,15 @@ decl_storage! {
 		/// The start of the current era.
 		pub CurrentEraStart get(fn current_era_start): MomentOf<T>;
 
-		/// The session index at which the current era started.
-		pub CurrentEraStartSessionIndex get(fn current_era_start_session_index): SessionIndex;
+		/// The session index at which the era started for the last $HISTORY_DEPTH eras
+		pub EraStartSessionIndex get(fn era_start_session_index): Vec<SessionIndex>;
+
+		// /// The session index at which the current era started.
+		// pub CurrentEraStartSessionIndex get(fn current_era_start_session_index): SessionIndex;
+		// TODO TODO: clean this!!
 
 		/// Rewards for the current era. Using indices of current elected set.
-		CurrentEraPointsEarned get(fn current_era_reward): EraPoints;
+		RewardPoints get(fn reward_points): map EraIndex => BTreeMap<T::AccountId, RewardPoint>;
 
 		/// The amount of balance actively at stake for each validator slot, currently.
 		///
@@ -892,7 +883,13 @@ decl_module! {
 
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
-			let item = StakingLedger { stash, total: value, active: value, unlocking: vec![] };
+			let item = StakingLedger {
+				stash,
+				total: value,
+				active: value,
+				unlocking: vec![],
+				last_reward: Self::current_era_start_session_index(),
+			};
 			Self::update_ledger(&controller, &item);
 		}
 
@@ -1268,6 +1265,13 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	// PUBLIC IMMUTABLES
 
+	fn current_era_start_session_index() -> SessionIndex {
+		EraStartSessionIndex::get()
+			.last()
+			.map(|i| *i)
+			.unwrap_or(0)
+	}
+
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
@@ -1297,6 +1301,7 @@ impl<T: Trait> Module<T> {
 	// TODO: at the end of session, ensure that points are accumulated within the correct era.
 	// TODO: currently, validator set changes lag by one session, therefore, in the first session of
 	// TODO:   an era, the points should be accumulated by the validator set of the era before.
+	// TODO TODO: I'm not sure I understand that, staking doesn't rely on delay anymore at all. it just know that after HISTORY_DEPTH it removes the rewards.
 
 	/// Update the ledger for a controller. This will also update the stash lock. The lock will
 	/// will lock the entire funds except paying for further transactions.
@@ -1348,39 +1353,41 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Reward a given validator by a specific amount. Add the reward to the validator's, and its
-	/// nominators' balance, pro-rata based on their exposure, after having removed the validator's
-	/// pre-payout cut.
-	fn reward_validator(stash: &T::AccountId, reward: BalanceOf<T>) -> PositiveImbalanceOf<T> {
-		let commission = Self::validators(stash).commission * reward;
-		let reward = reward.saturating_sub(commission);
-		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
-		let validator_cut = if reward.is_zero() {
-			Zero::zero()
-		} else {
-			let exposure = Self::stakers(stash);
-			let total = exposure.total.max(One::one());
+	// /// Reward a given validator by a specific amount. Add the reward to the validator's, and its
+	// /// nominators' balance, pro-rata based on their exposure, after having removed the validator's
+	// /// pre-payout cut.
+	// fn reward_validator(stash: &T::AccountId, reward: BalanceOf<T>) -> PositiveImbalanceOf<T> {
+	// 	let commission = Self::validators(stash).commission * reward;
+	// 	let reward = reward.saturating_sub(commission);
+	// 	let mut imbalance = <PositiveImbalanceOf<T>>::zero();
+	// 	let validator_cut = if reward.is_zero() {
+	// 		Zero::zero()
+	// 	} else {
+	// 		let exposure = Self::stakers(stash);
+	// 		let total = exposure.total.max(One::one());
 
-			for i in &exposure.others {
-				let per_u64 = Perbill::from_rational_approximation(i.value, total);
-				imbalance.maybe_subsume(Self::make_payout(&i.who, per_u64 * reward));
-			}
+	// 		for i in &exposure.others {
+	// 			let per_u64 = Perbill::from_rational_approximation(i.value, total);
+	// 			imbalance.maybe_subsume(Self::make_payout(&i.who, per_u64 * reward));
+	// 		}
 
-			let per_u64 = Perbill::from_rational_approximation(exposure.own, total);
-			per_u64 * reward
-		};
+	// 		let per_u64 = Perbill::from_rational_approximation(exposure.own, total);
+	// 		per_u64 * reward
+	// 	};
 
-		imbalance.maybe_subsume(Self::make_payout(stash, validator_cut + commission));
+	// 	imbalance.maybe_subsume(Self::make_payout(stash, validator_cut + commission));
 
-		imbalance
-	}
+	// 	imbalance
+	// }
 
 	/// Session has just ended. Provide the validator set for the next session if it's an era-end, along
 	/// with the exposure of the prior validator set.
 	fn new_session(session_index: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
-		let era_length = session_index.checked_sub(Self::current_era_start_session_index()).unwrap_or(0);
+		let era_length = session_index.checked_sub(Self::current_era_start_session_index())
+			.unwrap_or(0);
+
 		match ForceEra::get() {
 			Forcing::ForceNew => ForceEra::kill(),
 			Forcing::ForceAlways => (),
@@ -1389,7 +1396,7 @@ impl<T: Trait> Module<T> {
 		}
 		let validators = T::SessionInterface::validators();
 		let prior = validators.into_iter()
-			.map(|v| { let e = Self::stakers(&v); (v, e) })
+			.map(|v| { let e = Self::stakers(&Self::current_era(), &v); (v, e) })
 			.collect();
 
 		Self::new_era(session_index).map(move |new| (new, prior))
@@ -1400,52 +1407,39 @@ impl<T: Trait> Module<T> {
 	/// NOTE: This always happens immediately before a session change to ensure that new validators
 	/// get a chance to set their session keys.
 	fn new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		// Payout
-		let points = CurrentEraPointsEarned::take();
-		let now = T::Time::now();
-		let previous_era_start = <CurrentEraStart<T>>::mutate(|v| {
-			sp_std::mem::replace(v, now)
-		});
-		let era_duration = now - previous_era_start;
-		if !era_duration.is_zero() {
-			let validators = Self::current_elected();
-
-			let validator_len: BalanceOf<T> = (validators.len() as u32).into();
-			let total_rewarded_stake = Self::slot_stake() * validator_len;
-
-			let (total_payout, max_payout) = inflation::compute_total_payout(
-				&T::RewardCurve::get(),
-				total_rewarded_stake.clone(),
-				T::Currency::total_issuance(),
-				// Duration of era; more than u64::MAX is rewarded as u64::MAX.
-				era_duration.saturated_into::<u64>(),
-			);
-
-			let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
-
-			for (v, p) in validators.iter().zip(points.individual.into_iter()) {
-				if p != 0 {
-					let reward = Perbill::from_rational_approximation(p, points.total) * total_payout;
-					total_imbalance.subsume(Self::reward_validator(v, reward));
-				}
-			}
-
-			// assert!(total_imbalance.peek() == total_payout)
-			let total_payout = total_imbalance.peek();
-
-			let rest = max_payout.saturating_sub(total_payout);
-			Self::deposit_event(RawEvent::Reward(total_payout, rest));
-
-			T::Reward::on_unbalanced(total_imbalance);
-			T::RewardRemainder::on_unbalanced(T::Currency::issue(rest));
-		}
-
 		// Increment current era.
 		let current_era = CurrentEra::mutate(|s| { *s += 1; *s });
 
-		CurrentEraStartSessionIndex::mutate(|v| {
-			*v = start_session_index;
+		let now = T::Time::now();
+
+		// Set new era start
+		let previous_era_start = <CurrentEraStart<T>>::mutate(|v| {
+			sp_std::mem::replace(v, now)
 		});
+
+		let era_duration = now - previous_era_start;
+		let (total_payout, _max_payout) = inflation::compute_total_payout(
+			&T::RewardCurve::get(),
+			Self::current_era_total_staked(),
+			T::Currency::total_issuance(),
+			// Duration of era; more than u64::MAX is rewarded as u64::MAX.
+			era_duration.saturated_into::<u64>(),
+		);
+
+		// Set previous era reward.
+		<EraValidatorReward<T>>::insert(current_era - 1, total_payout);
+
+		if let Some(era) = current_era.checked_sub(HISTORY_DEPTH) { // TODO TODO: +- 1 ???
+			<Stakers<T>>::remove_prefix(era);
+		}
+
+		EraStartSessionIndex::mutate(|starts| {
+			starts.push(start_session_index);
+			if starts.len() > HISTORY_DEPTH as usize {
+				starts.remove(0);
+			}
+		});
+
 		let bonding_duration = T::BondingDuration::get();
 
 		BondedEras::mutate(|bonded| {
@@ -1471,7 +1465,7 @@ impl<T: Trait> Module<T> {
 		});
 
 		// Reassign all Stakers.
-		let (_slot_stake, maybe_new_validators) = Self::select_validators();
+		let maybe_new_validators = Self::select_validators();
 		Self::apply_unapplied_slashes(current_era);
 
 		maybe_new_validators
@@ -1495,10 +1489,10 @@ impl<T: Trait> Module<T> {
 
 	/// Select a new validator set from the assembled stakers and their role preferences.
 	///
-	/// Returns the new `SlotStake` value and a set of newly selected _stash_ IDs.
+	/// Returns a set of newly selected _stash_ IDs.
 	///
 	/// Assumes storage is coherent with the declaration.
-	fn select_validators() -> (BalanceOf<T>, Option<Vec<T::AccountId>>) {
+	fn select_validators() -> Option<Vec<T::AccountId>> {
 		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
 		let all_validator_candidates_iter = <Validators<T>>::enumerate();
 		let all_validators = all_validator_candidates_iter.map(|(who, _pref)| {
@@ -1582,14 +1576,16 @@ impl<T: Trait> Module<T> {
 				);
 			}
 
-			// Clear Stakers.
-			for v in Self::current_elected().iter() {
-				<Stakers<T>>::remove(v);
-			}
-
+			let current_era = Self::current_era();
 			// Populate Stakers and figure out the minimum stake behind a slot.
 			let mut slot_stake = BalanceOf::<T>::max_value();
+			let mut total_staked = BalanceOf::<T>::zero();
 			for (c, s) in supports.into_iter() {
+				let mut others_exposure = s.others.into_iter()
+					.map(|(who, value)| IndividualExposure { who, value: to_balance(value) })
+					.collect::<Vec<IndividualExposure<_, _>>>();
+				others_exposure.sort_by(|a, b| a.who.cmp(&b.who));
+
 				// build `struct exposure` from `support`
 				let exposure = Exposure {
 					own: to_balance(s.own),
@@ -1598,28 +1594,26 @@ impl<T: Trait> Module<T> {
 					// of balance and receive some support. This is super unlikely to happen, yet
 					// we simulate it in some tests.
 					total: to_balance(s.total),
-					others: s.others
-						.into_iter()
-						.map(|(who, value)| IndividualExposure { who, value: to_balance(value) })
-						.collect::<Vec<IndividualExposure<_, _>>>(),
+					others: others_exposure,
 				};
 				if exposure.total < slot_stake {
 					slot_stake = exposure.total;
 				}
-				<Stakers<T>>::insert(&c, exposure.clone());
+				total_staked += exposure.total;
+				<Stakers<T>>::insert(&current_era, &c, exposure.clone());
 			}
 
 			// Update slot stake.
 			<SlotStake<T>>::put(&slot_stake);
 
-			// Set the new validator set in sessions.
-			<CurrentElected<T>>::put(&elected_stashes);
+			// Update current era total staked.
+			<CurrentEraTotalStaked<T>>::put(total_staked);
 
 			// In order to keep the property required by `n_session_ending`
 			// that we must return the new validator set even if it's the same as the old,
 			// as long as any underlying economic conditions have changed, we don't attempt
 			// to do any optimization where we compare against the prior set.
-			(slot_stake, Some(elected_stashes))
+			Some(elected_stashes)
 		} else {
 			// There were not enough candidates for even our minimal level of functionality.
 			// This is bad.
@@ -1627,7 +1621,7 @@ impl<T: Trait> Module<T> {
 			// and let the chain keep producing blocks until we can decide on a sufficiently
 			// substantial set.
 			// TODO: #2494
-			(Self::slot_stake(), None)
+			None
 		}
 	}
 
@@ -1661,45 +1655,26 @@ impl<T: Trait> Module<T> {
 	///
 	/// COMPLEXITY: Complexity is `number_of_validator_to_reward x current_elected_len`.
 	/// If you need to reward lots of validator consider using `reward_by_indices`.
-
+	//
 	// TODO: This is based on a false assumption; that rewarding will always add to a validator
 	// in the current era. It will not, since validator set lags by some amount (currently one
 	// session, but this may be configurable in the future).
-
+	//
 	// TODO: Force the rewarder to pass in the representative era index (or the session index) so
 	// we can figure out which era's reward this should go to and be able to add points to eras that
 	// have already passed.
-
+	//
 	// TODO: We should also ban collecting rewards from an era that may yet have points added to it.
 	// This will likely need an additional API from session to let us know when an era will no
 	// longer have any points added to it (i.e. basically just when the last session whose
 	// validator set is some previous era).
-	pub fn reward_by_ids(validators_points: impl IntoIterator<Item = (T::AccountId, u32)>) {
-		CurrentEraPointsEarned::mutate(|rewards| {
-			let current_elected = <Module<T>>::current_elected();
+	pub fn reward_by_ids(
+		era: EraIndex,
+		validators_points: impl IntoIterator<Item = (T::AccountId, u32)>
+	) {
+		<RewardPoints<T>>::mutate(era, |rewards| {
 			for (validator, points) in validators_points.into_iter() {
-				if let Some(index) = current_elected.iter()
-					.position(|elected| *elected == validator)
-				{
-					rewards.add_points_to_index(index as u32, points);
-				}
-			}
-		});
-	}
-
-	/// Add reward points to validators using their validator index.
-	///
-	/// For each element in the iterator the given number of points in u32 is added to the
-	/// validator, thus duplicates are handled.
-	pub fn reward_by_indices(validators_points: impl IntoIterator<Item = (u32, u32)>) {
-		// TODO: This can be optimised once #3302 is implemented.
-		let current_elected_len = <Module<T>>::current_elected().len() as u32;
-
-		CurrentEraPointsEarned::mutate(|rewards| {
-			for (validator_index, points) in validators_points.into_iter() {
-				if validator_index < current_elected_len {
-					rewards.add_points_to_index(validator_index, points);
-				}
+				*rewards.entry(validator).or_default() += points;
 			}
 		});
 	}
@@ -1714,18 +1689,20 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> pallet_session::OnSessionEnding<T::AccountId> for Module<T> {
-	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex) -> Option<Vec<T::AccountId>> {
-		Self::ensure_storage_upgraded();
-		Self::new_session(start_session - 1).map(|(new, _old)| new)
+	fn on_session_ending(session_ending: SessionIndex, will_apply_at: SessionIndex)
+		-> Option<Vec<T::AccountId>>
+	{
+		<Self as OnSessionEnding<_, _>>::on_session_ending(session_ending, will_apply_at)
+			.map(|(new, _old)| new)
 	}
 }
 
 impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
-	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex)
+	fn on_session_ending(_session_ending: SessionIndex, will_apply_at: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
 		Self::ensure_storage_upgraded();
-		Self::new_session(start_session - 1)
+		Self::new_session(will_apply_at) // TODO TODO: why was it -1 before ?
 	}
 }
 
@@ -1740,15 +1717,21 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 /// * 20 points to the block producer for producing a (non-uncle) block in the relay chain,
 /// * 2 points to the block producer for each reference to a previously unreferenced uncle, and
 /// * 1 point to the producer of each referenced uncle block.
-impl<T: Trait + pallet_authorship::Trait> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Module<T> {
+impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Module<T>
+	where
+		T: Trait + pallet_authorship::Trait + pallet_session::Trait
+{
 	fn note_author(author: T::AccountId) {
-		Self::reward_by_ids(vec![(author, 20)]);
+		Self::reward_by_ids(<pallet_session::Module<T>>::current_index(), vec![(author, 20)]);
 	}
 	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
-		Self::reward_by_ids(vec![
-			(<pallet_authorship::Module<T>>::author(), 2),
-			(author, 1)
-		])
+		Self::reward_by_ids(
+			<pallet_session::Module<T>>::current_index(),
+			vec![
+				(<pallet_authorship::Module<T>>::author(), 2),
+				(author, 1)
+			]
+		)
 	}
 }
 
@@ -1770,13 +1753,14 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 	for ExposureOf<T>
 {
 	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
-		Some(<Module<T>>::stakers(&validator))
+		// TODO TODO: which exposure do we want here ??? the one validating or the one "planned" ?
+		Some(<Module<T>>::stakers(<Module<T>>::current_era_start_session_index(), &validator))
 	}
 }
 
 impl<T: Trait> SelectInitialValidators<T::AccountId> for Module<T> {
 	fn select_initial_validators() -> Option<Vec<T::AccountId>> {
-		<Module<T>>::select_validators().1
+		<Module<T>>::select_validators()
 	}
 }
 
@@ -1803,10 +1787,10 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 
 		let era_now = Self::current_era();
 		let window_start = era_now.saturating_sub(T::BondingDuration::get());
-		let current_era_start_session = CurrentEraStartSessionIndex::get();
+		let current_era_start_session_index = Self::current_era_start_session_index();
 
 		// fast path for current-era report - most likely.
-		let slash_era = if slash_session >= current_era_start_session {
+		let slash_era = if slash_session >= current_era_start_session_index {
 			era_now
 		} else {
 			let eras = BondedEras::get();
