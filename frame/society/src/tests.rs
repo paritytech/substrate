@@ -102,6 +102,7 @@ fn bidding_works() {
 		assert_eq!(Balances::free_balance(Society::account_id()), 8_800);
 		// No more candidates satisfy the requirements
 		assert_eq!(Society::candidates(), vec![]);
+		assert_ok!(Society::defender_vote(Origin::signed(10), true)); // Keep defender around
 		// Next period
 		run_to_block(16);
 		// Same members
@@ -480,6 +481,7 @@ fn head_cannot_be_removed() {
 		assert_ok!(Society::bid(Origin::signed(50), 0));
 		run_to_block(28);
 		assert_ok!(Society::vote(Origin::signed(10), 50, true));
+		assert_ok!(Society::defender_vote(Origin::signed(10), true)); // Keep defender around
 		run_to_block(32);
 		assert_eq!(Society::members(), vec![10, 50]);
 		assert_eq!(Society::head(), Some(50));
@@ -509,25 +511,27 @@ fn challenges_work() {
 		// 20 will be challenged during the challenge rotation
 		run_to_block(8);
 		assert_eq!(Society::defender(), Some(20));
-		// If no one votes, nothing happens
+		// They can always free vote for themselves
+		assert_ok!(Society::defender_vote(Origin::signed(20), true));
+		// If no one else votes, nothing happens
 		run_to_block(16);
 		assert_eq!(Society::members(), vec![10, 20, 30, 40]);
 		// New challenge period
 		assert_eq!(Society::defender(), Some(20));
 		// Non-member cannot challenge
 		assert_noop!(Society::defender_vote(Origin::signed(1), true), Error::<Test, _>::NotMember);
-		// 2 people say accept, 2 reject
+		// 3 people say accept, 1 reject
 		assert_ok!(Society::defender_vote(Origin::signed(10), true));
 		assert_ok!(Society::defender_vote(Origin::signed(20), true));
-		assert_ok!(Society::defender_vote(Origin::signed(30), false));
+		assert_ok!(Society::defender_vote(Origin::signed(30), true));
 		assert_ok!(Society::defender_vote(Origin::signed(40), false));
 		run_to_block(24);
 		// 20 survives
 		assert_eq!(Society::members(), vec![10, 20, 30, 40]);
 		// One more time
 		assert_eq!(Society::defender(), Some(20));
-		// 3 people reject
-		assert_ok!(Society::defender_vote(Origin::signed(10), false));
+		// 2 people say accept, 2 reject
+		assert_ok!(Society::defender_vote(Origin::signed(10), true));
 		assert_ok!(Society::defender_vote(Origin::signed(20), true));
 		assert_ok!(Society::defender_vote(Origin::signed(30), false));
 		assert_ok!(Society::defender_vote(Origin::signed(40), false));

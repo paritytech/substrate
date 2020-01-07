@@ -62,6 +62,16 @@
 //! These skeptics are expected to vote on the current candidates. If they do not vote,
 //! their skeptic status is treated as a rejection vote, the member is deemed
 //! "lazy", and are given a strike per missing vote.
+//!
+//! #### Membership Challenges
+//!
+//! Every challenge rotation period, an existing member will be randomly selected
+//! to defend their membership into society. Then, other members can vote whether
+//! this defender should stay in society. A simple majority wins vote will determine
+//! the outcome of the user. Ties are treated as a failure of the challenge, but
+//! assuming no one else votes, the defender always get a free vote on their
+//! own challenge keeping them in the society. The Head member is exempt from the
+//! negative outcome of a membership challenge.
 //! 
 //! #### Society Treasury
 //!
@@ -193,6 +203,7 @@
 //! There is a challenge period in parallel to the rotation period. During a challenge period,
 //! a random member is selected to defend their membership to the society. Other members
 //! make a traditional majority-wins vote to determine if the member should stay in the society.
+//! Ties are treated as a failure of the challenge.
 //! 
 //! If a member accumulates too many strikes or fails their membership challenge,
 //! they will become suspended. While a member is suspended, they are unable to
@@ -1431,7 +1442,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 						}
 					});
 
-				if approval_count < rejection_count {
+				if approval_count <= rejection_count {
 					// User has failed the challenge
 					Self::suspend_member(&defender);
 					*members = Self::members();
