@@ -61,39 +61,23 @@ impl<V, I: Clone> HistoricalEntry<V, I> {
 	}
 }
 
-#[derive(Debug, PartialEq)]
 /// The results from changing a historical value.
 /// It should be used to apply subsequent update the calling context.
 /// For instance if the historical value was stored into a hashmap,
 /// then it should be removed from it on a `Cleared` result.
+#[derive(Debug, PartialEq)]
 pub enum CleaningResult {
 	/// No inner data was changed, even technical
 	/// data, therefore no update is needed.
 	Unchanged,
-	/// Any data got modified, therefore an
-	/// update may be needed.
+	/// Historical representation did change.
+	/// This includes cleaning of deprecated historic values.
 	Changed,
 	/// No historical data is stored anymore, it can be dropped.
 	Cleared,
 }
 
 impl<V, I> History<V, I> {
-	#[cfg(any(test, feature = "test-helpers"))]
-	/// Get current number of stored historical values.
-	pub fn len(&self) -> usize {
-		self.0.len()
-	}
-
-	#[cfg(any(test, feature = "test-helpers"))]
-	/// Create an history from a sequence of historical values.
-	pub fn from_iter(input: impl IntoIterator<Item = HistoricalEntry<V, I>>) -> Self {
-		let mut history = History::default();
-		for v in input {
-			history.push_unchecked(v);
-		}
-		history
-	}
-
 	/// Push a value without checking if it can overwrite the current
 	/// state.
 	/// This should only use after checking the state is correct
@@ -101,5 +85,22 @@ impl<V, I> History<V, I> {
 	/// the new one).
 	pub fn push_unchecked(&mut self, item: HistoricalEntry<V, I>) {
 		self.0.push(item);
+	}
+}
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl<V, I> History<V, I> {
+	/// Get current number of stored historical values.
+	pub fn len(&self) -> usize {
+		self.0.len()
+	}
+
+	/// Create an history from a sequence of historical values.
+	pub fn from_iter(input: impl IntoIterator<Item = HistoricalEntry<V, I>>) -> Self {
+		let mut history = History::default();
+		for v in input {
+			history.push_unchecked(v);
+		}
+		history
 	}
 }

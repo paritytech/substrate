@@ -56,7 +56,6 @@ impl Default for States {
 }
 
 impl States {
-
 	/// Get corresponding current state.
 	pub fn as_state(&self) -> State {
 		State::Transaction(self.current_layer)
@@ -70,7 +69,7 @@ impl States {
 		States { current_layer }
 	}
 
-	/// Update states when discarding prospective changes.
+	/// Update global state for discarding prospective.
 	/// A subsequent update of all related stored history is needed.
 	pub fn discard_prospective(&mut self) {
 		self.current_layer = 1;
@@ -88,21 +87,23 @@ impl States {
 
 	/// After a prospective was discarded, clear prospective history.
 	pub fn apply_discard_prospective<V>(value: &mut History<V>) -> CleaningResult {
-		if value.0.len() == 0 {
+		if value.0.is_empty() {
 			return CleaningResult::Cleared;
 		}
 		if value.0[0].index == State::Committed {
 			if value.0.len() == 1 {
-				return CleaningResult::Unchanged;
+				CleaningResult::Unchanged
+			} else {
+				value.0.truncate(1);
+				CleaningResult::Changed
 			}
-			value.0.truncate(1);
 		} else {
 			value.0.clear();
+			CleaningResult::Cleared
 		}
-		CleaningResult::Changed
 	}
 
-	/// Update states when committing prospective.
+	/// Update global state for committing prospective.
 	/// A subsequent update of all related stored history is needed.
 	pub fn commit_prospective(&mut self) {
 		self.current_layer = 1;
@@ -112,7 +113,7 @@ impl States {
 	/// on all values from this prospective. It commits pending value and
 	/// clear existing history.
 	pub fn apply_commit_prospective<V>(value: &mut History<V>) -> CleaningResult {
-		if value.0.len() == 0 {
+		if value.0.is_empty() {
 			return CleaningResult::Cleared;
 		}
 		if value.0.len() == 1 {
@@ -156,7 +157,7 @@ impl States {
 				} else { break }
 			} else { break }
 		}
-		if value.0.len() == 0 {
+		if value.0.is_empty() {
 			CleaningResult::Cleared
 		} else if value.0.len() != init_len {
 			CleaningResult::Changed
