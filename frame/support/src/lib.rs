@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -66,7 +66,9 @@ pub mod error;
 pub mod traits;
 pub mod weights;
 
-pub use self::hash::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Hashable};
+pub use self::hash::{
+	Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Blake2_128Concat, Hashable
+};
 pub use self::storage::{
 	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap, StoragePrefixedMap
 };
@@ -124,7 +126,7 @@ pub use frame_support_procedural::{decl_storage, construct_runtime};
 #[macro_export]
 macro_rules! fail {
 	( $y:expr ) => {{
-		return Err($y);
+		return Err($y.into());
 	}}
 }
 
@@ -168,7 +170,7 @@ macro_rules! assert_noop {
 #[cfg(feature = "std")]
 macro_rules! assert_err {
 	( $x:expr , $y:expr $(,)? ) => {
-		assert_eq!($x, Err($y));
+		assert_eq!($x, Err($y.into()));
 	}
 }
 

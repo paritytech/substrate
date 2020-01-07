@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -707,7 +707,11 @@ where
 		}
 	}
 
-	fn revert(&self, _n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
+	fn revert(
+		&self,
+		_n: NumberFor<Block>,
+		_revert_finalized: bool,
+	) -> sp_blockchain::Result<NumberFor<Block>> {
 		Ok(Zero::zero())
 	}
 

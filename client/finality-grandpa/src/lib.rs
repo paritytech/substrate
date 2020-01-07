@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -90,7 +90,6 @@ mod observer;
 mod until_imported;
 mod voting_rule;
 
-pub use sc_network_gossip::Network;
 pub use finality_proof::FinalityProofProvider;
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
@@ -103,7 +102,7 @@ use aux_schema::PersistentData;
 use environment::{Environment, VoterSetState};
 use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
-use communication::NetworkBridge;
+use communication::{NetworkBridge, Network as NetworkT};
 use sp_finality_grandpa::{AuthorityList, AuthorityPair, AuthoritySignature, SetId};
 
 // Re-export these two because it's just so damn convenient.
@@ -276,8 +275,9 @@ pub(crate) trait BlockSyncRequester<Block: BlockT> {
 	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
 }
 
-impl<Block> BlockSyncRequester<Block> for NetworkBridge<Block> where
+impl<Block, Network> BlockSyncRequester<Block> for NetworkBridge<Block, Network> where
 	Block: BlockT,
+	Network: NetworkT<Block>,
 {
 	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: Block::Hash, number: NumberFor<Block>) {
 		NetworkBridge::set_sync_fork_request(self, peers, hash, number)
@@ -411,8 +411,8 @@ where
 	RA: Send + Sync,
 	SC: SelectChain<Block>,
 {
-	let chain_info = client.info();
-	let genesis_hash = chain_info.chain.genesis_hash;
+	let chain_info = client.chain_info();
+	let genesis_hash = chain_info.genesis_hash;
 
 	let persistent_data = aux_schema::load_persistent(
 		&*client,
@@ -446,11 +446,11 @@ where
 	))
 }
 
-fn global_communication<Block: BlockT<Hash=H256>, B, E, RA>(
+fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	set_id: SetId,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
-	network: &NetworkBridge<Block>,
+	network: &NetworkBridge<Block, N>,
 	keystore: &Option<KeyStorePtr>,
 ) -> (
 	impl Stream<
@@ -464,6 +464,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, RA>(
 ) where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	N: NetworkT<Block>,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
@@ -506,7 +507,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 			.register_provider(sp_finality_tracker::InherentDataProvider::new(move || {
 				#[allow(deprecated)]
 				{
-					let info = client.info().chain;
+					let info = client.chain_info();
 					telemetry!(CONSENSUS_INFO; "afg.finalized";
 						"finalized_number" => ?info.finalized_number,
 						"finalized_hash" => ?info.finalized_hash,
@@ -548,7 +549,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp>(
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network<Block> + Send + Clone + 'static,
+	N: NetworkT<Block> + Send + Sync + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 	NumberFor<Block>: BlockNumberOps,
@@ -641,15 +642,16 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp>(
 
 /// Future that powers the voter.
 #[must_use]
-struct VoterWork<B, E, Block: BlockT, RA, SC, VR> {
+struct VoterWork<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
 	voter: Box<dyn Future<Item = (), Error = CommandOrError<Block::Hash, NumberFor<Block>>> + Send>,
-	env: Arc<Environment<B, E, Block, RA, SC, VR>>,
+	env: Arc<Environment<B, E, Block, N, RA, SC, VR>>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
 
-impl<B, E, Block, RA, SC, VR> VoterWork<B, E, Block, RA, SC, VR>
+impl<B, E, Block, N, RA, SC, VR> VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT<Hash=H256>,
+ 	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -660,7 +662,7 @@ where
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
 		config: Config,
-		network: NetworkBridge<Block>,
+		network: NetworkBridge<Block, N>,
 		select_chain: SC,
 		voting_rule: VR,
 		persistent_data: PersistentData<Block>,
@@ -708,10 +710,10 @@ where
 			"authority_id" => authority_id.to_string(),
 		);
 
-		let chain_info = self.env.client.info();
+		let chain_info = self.env.client.chain_info();
 		telemetry!(CONSENSUS_INFO; "afg.authority_set";
-			"number" => ?chain_info.chain.finalized_number,
-			"hash" => ?chain_info.chain.finalized_hash,
+			"number" => ?chain_info.finalized_number,
+			"hash" => ?chain_info.finalized_hash,
 			"authority_id" => authority_id.to_string(),
 			"authority_set_id" => ?self.env.set_id,
 			"authorities" => {
@@ -725,8 +727,8 @@ where
 		match &*self.env.voter_set_state.read() {
 			VoterSetState::Live { completed_rounds, .. } => {
 				let last_finalized = (
-					chain_info.chain.finalized_hash,
-					chain_info.chain.finalized_number,
+					chain_info.finalized_hash,
+					chain_info.finalized_number,
 				);
 
 				let global_comms = global_communication(
@@ -821,9 +823,10 @@ where
 	}
 }
 
-impl<B, E, Block, RA, SC, VR> Future for VoterWork<B, E, Block, RA, SC, VR>
+impl<B, E, Block, N, RA, SC, VR> Future for VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT<Hash=H256>,
+ 	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -880,7 +883,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp>(
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network<Block> + Send + Clone + 'static,
+	N: NetworkT<Block> + Send + Sync + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
@@ -906,7 +909,7 @@ pub fn setup_disabled_grandpa<B, E, Block: BlockT<Hash=H256>, RA, N>(
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
-	N: Network<Block> + Send + Clone + 'static,
+	N: NetworkT<Block> + Send + Clone + 'static,
 {
 	register_finality_tracker_inherent_data_provider(
 		client,

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -121,7 +121,7 @@ impl Datapoint {
 		})
 	}
 
-	fn make_absolute(&self, base_timestamp: i64) -> (f32, i64) {
+	fn make_absolute(self, base_timestamp: i64) -> (f32, i64) {
 		(self.value, base_timestamp + self.delta_timestamp as i64)
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -45,8 +45,7 @@ struct TestNetwork {
 }
 
 impl sc_network_gossip::Network<Block> for TestNetwork {
-	fn event_stream(&self)
-	-> Box<dyn futures::Stream<Item = NetworkEvent, Error = ()> + Send> {
+	fn event_stream(&self) -> Box<dyn futures::Stream<Item = NetworkEvent, Error = ()> + Send> {
 		let (tx, rx) = mpsc::unbounded();
 		let _ = self.sender.unbounded_send(Event::EventStream(tx));
 		Box::new(rx)
@@ -67,7 +66,9 @@ impl sc_network_gossip::Network<Block> for TestNetwork {
 	fn announce(&self, block: Hash, _associated_data: Vec<u8>) {
 		let _ = self.sender.unbounded_send(Event::Announce(block));
 	}
+}
 
+impl super::Network<Block> for TestNetwork {
 	fn set_sync_fork_request(
 		&self,
 		_peers: Vec<sc_network::PeerId>,
@@ -94,7 +95,7 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 }
 
 struct Tester {
-	net_handle: super::NetworkBridge<Block>,
+	net_handle: super::NetworkBridge<Block, TestNetwork>,
 	gossip_validator: Arc<GossipValidator<Block>>,
 	events: mpsc::UnboundedReceiver<Event>,
 }
@@ -272,14 +273,23 @@ fn good_commit_leads_to_relay() {
 			let sender_id = id.clone();
 			let send_message = tester.filter_network_events(move |event| match event {
 				Event::EventStream(sender) => {
+					// Add the sending peer and send the commit
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
 						roles: Roles::FULL,
 					});
+
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id.clone(),
 						messages: vec![(GRANDPA_ENGINE_ID, commit_to_send.clone().into())],
+					});
+
+					// Add a random peer which will be the recipient of this message
+					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
+						remote: sc_network::PeerId::random(),
+						engine_id: GRANDPA_ENGINE_ID,
+						roles: Roles::FULL,
 					});
 
 					true

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -58,7 +58,7 @@ pub trait AsBytesRef {
 	fn as_bytes_ref(&self) -> &[u8];
 }
 
-impl<'a> AsBytesRef for &'a [u8] {
+impl AsBytesRef for &[u8] {
 	fn as_bytes_ref(&self) -> &[u8] { self }
 }
 

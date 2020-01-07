@@ -12,14 +12,14 @@ macro_rules! reserved {
 				pub mod system {
 					use frame_support::dispatch;
 
-					pub fn ensure_root<R>(_: R) -> dispatch::Result {
+					pub fn ensure_root<R>(_: R) -> dispatch::DispatchResult {
 						Ok(())
 					}
 				}
 
 				frame_support::decl_module! {
 					pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-						fn $reserved(_origin) -> dispatch::Result { unreachable!() }
+						fn $reserved(_origin) -> dispatch::DispatchResult { unreachable!() }
 					}
 				}
 			}

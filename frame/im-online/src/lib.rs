@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn is_online(origin, authority_index: u32) -> dispatch::Result {
+//! 		pub fn is_online(origin, authority_index: u32) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _is_online = <im_online::Module<T>>::is_online(authority_index);
 //! 			Ok(())
@@ -89,7 +89,7 @@ use sp_staking::{
 	offence::{ReportOffence, Offence, Kind},
 };
 use frame_support::{
-	decl_module, decl_event, decl_storage, print, Parameter, debug,
+	decl_module, decl_event, decl_storage, print, Parameter, debug, decl_error,
 	traits::Get,
 };
 use frame_system::{self as system, ensure_none};
@@ -243,9 +243,20 @@ decl_storage! {
 	}
 }
 
+decl_error! {
+	/// Error for the im-online module.
+	pub enum Error for Module<T: Trait> {
+		/// Non existent public key.
+		InvalidKey,
+		/// Duplicated heartbeat.
+		DuplicatedHeartbeat,
+	}
+}
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		fn deposit_event() = default;
 
 		fn heartbeat(
@@ -274,9 +285,9 @@ decl_module! {
 					&network_state
 				);
 			} else if exists {
-				Err("Duplicated heartbeat.")?
+				Err(Error::<T>::DuplicatedHeartbeat)?
 			} else {
-				Err("Non existent public key.")?
+				Err(Error::<T>::InvalidKey)?
 			}
 		}
 
