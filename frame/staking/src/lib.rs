@@ -412,17 +412,24 @@ impl<
 		Self { total, active: self.active, stash: self.stash, unlocking }
 	}
 
+	/// Re-bond funds that were scheduled for unlocking.
 	fn rebond(mut self, value: Balance) -> Self {
 		let mut unlocking_balance: Balance = Zero::zero();
 
-		while let Some(mut unlock_chunk) = self.unlocking.pop() {
-			unlocking_balance += unlock_chunk.value;
-			self.active += unlock_chunk.value;
+		while let Some(last) = self.unlocking.last_mut() {
+			if unlocking_balance + last.value <= value {
+				unlocking_balance += last.value;
+				self.active += last.value;
+				self.unlocking.pop();
+			} else {
+				let diff = value - unlocking_balance;
 
-			if unlocking_balance > value {
-				unlock_chunk.value = unlocking_balance - value;
-				self.active -= unlocking_balance - value;
-				self.unlocking.push(unlock_chunk);
+				unlocking_balance += diff;
+				self.active += diff;
+				last.value -= diff;
+			}
+
+			if unlocking_balance >= value {
 				break
 			}
 		}
