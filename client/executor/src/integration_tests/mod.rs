@@ -96,7 +96,7 @@ fn call_not_existing_function_with_stub_enabled(wasm_method: WasmExecutionMethod
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
 
-	let _output = call_in_wasm_with_stub(
+	call_in_wasm_with_stub(
 		"test_calling_missing_external",
 		&[],
 		wasm_method,
