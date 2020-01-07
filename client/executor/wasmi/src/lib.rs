@@ -596,8 +596,14 @@ impl WasmRuntime for WasmiRuntime {
 				e
 			})?;
 		call_in_wasm_module(
-			ext, &self.instance, method, data, &self.host_functions, self.enable_stub,
-			&self.missing_functions)
+			ext,
+			&self.instance,
+			method,
+			data,
+			&self.host_functions,
+			self.enable_stub,
+			&self.missing_functions,
+		)
 	}
 }
 
