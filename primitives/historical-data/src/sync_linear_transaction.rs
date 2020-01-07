@@ -140,20 +140,8 @@ impl States {
 	/// Multiple calls to `discard_transaction` can be applied at once.
 	pub fn apply_discard_transaction<V>(&self, value: &mut History<V>) -> CleaningResult {
 		let init_len = value.0.len();
-		for i in (0 .. value.0.len()).rev() {
-			if let HistoricalEntry {
-				value: _,
-				index: State::Transaction(ix),
-			} = value.0[i] {
-				if ix > self.current_layer {
-					value.0.pop();
-				} else {
-					break;
-				}
-			} else {
-				break;
-			}
-		}
+		// Remove all transactional layers.
+		value.0.truncate(self.current_layer);
 		if value.0.is_empty() {
 			CleaningResult::Cleared
 		} else if value.0.len() != init_len {
