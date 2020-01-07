@@ -368,7 +368,7 @@ dependencies = [
  "console_log 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures-timer 2.0.2 (git+https://github.com/expenses/futures-timer?branch=wasm-support)",
+ "futures-timer 2.0.2 (git+https://github.com/expenses/futures-timer?branch=wasm-support-test)",
  "js-sys 0.3.34 (registry+https://github.com/rust-lang/crates.io-index)",
  "kvdb-web 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p 0.13.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1565,7 +1565,7 @@ dependencies = [
 [[package]]
 name = "futures-timer"
 version = "2.0.2"
-source = "git+https://github.com/expenses/futures-timer?branch=wasm-support#e8e60aa400678699a457806c780b8b4b63a6997c"
+source = "git+https://github.com/expenses/futures-timer?branch=wasm-support-test#94cb27608b641ac726e3cf666eab37e4ab63f113"
 dependencies = [
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasm-bindgen 0.2.57 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5463,7 +5463,7 @@ dependencies = [
  "fork-tree 2.0.0",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures-timer 2.0.2 (git+https://github.com/expenses/futures-timer?branch=wasm-support)",
+ "futures-timer 2.0.2 (git+https://github.com/expenses/futures-timer?branch=wasm-support-test)",
  "libp2p 0.13.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "linked-hash-map 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "linked_hash_set 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5508,7 +5508,7 @@ version = "2.0.0"
 dependencies = [
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures-timer 2.0.2 (git+https://github.com/expenses/futures-timer?branch=wasm-support)",
+ "futures-timer 2.0.2 (git+https://github.com/expenses/futures-timer?branch=wasm-support-test)",
  "libp2p 0.13.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "lru 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5680,7 +5680,7 @@ dependencies = [
  "exit-future 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures-timer 2.0.2 (git+https://github.com/expenses/futures-timer?branch=wasm-support)",
+ "futures-timer 2.0.2 (git+https://github.com/expenses/futures-timer?branch=wasm-support-test)",
  "grafana-data-source 2.0.0",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5762,7 +5762,7 @@ dependencies = [
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures-timer 2.0.2 (git+https://github.com/expenses/futures-timer?branch=wasm-support)",
+ "futures-timer 2.0.2 (git+https://github.com/expenses/futures-timer?branch=wasm-support-test)",
  "libp2p 0.13.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -8368,7 +8368,7 @@ dependencies = [
 "checksum futures-sink-preview 0.3.0-alpha.19 (registry+https://github.com/rust-lang/crates.io-index)" = "86f148ef6b69f75bb610d4f9a2336d4fc88c4b5b67129d1a340dd0fd362efeec"
 "checksum futures-task 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0bae52d6b29cf440e298856fec3965ee6fa71b06aa7495178615953fd669e5f9"
 "checksum futures-timer 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "878f1d2fc31355fa02ed2372e741b0c17e58373341e6a122569b4623a14a7d33"
-"checksum futures-timer 2.0.2 (git+https://github.com/expenses/futures-timer?branch=wasm-support)" = "<none>"
+"checksum futures-timer 2.0.2 (git+https://github.com/expenses/futures-timer?branch=wasm-support-test)" = "<none>"
 "checksum futures-timer 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "a1de7508b218029b0f01662ed8f61b1c964b3ae99d6f25462d0f55a595109df6"
 "checksum futures-util 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "c0d66274fb76985d3c62c886d1da7ac4c0903a8c9f754e8fe0f35a6a6cc39e76"
 "checksum futures-util-preview 0.3.0-alpha.19 (registry+https://github.com/rust-lang/crates.io-index)" = "5ce968633c17e5f97936bd2797b6e38fb56cf16a7422319f7ec2e30d3c470e8d"

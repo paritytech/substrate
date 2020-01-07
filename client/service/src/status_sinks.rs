@@ -19,7 +19,6 @@ use futures03::{compat::Compat, future::{NeverError, FutureExt, TryFutureExt}};
 use futures::sync::mpsc;
 use futures::stream::futures_unordered::FuturesUnordered;
 use std::time::Duration;
-use wasm_timer::Instant;
 use futures_timer::Delay;
 
 /// Holds a list of `UnboundedSender`s, each associated with a certain time period. Every time the
