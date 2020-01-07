@@ -60,6 +60,9 @@ pub trait AuthorApi<Hash, BlockHash> {
 	) -> Result<Vec<Hash>>;
 
 	/// Submit an extrinsic to watch.
+	///
+	/// See [`TransactionStatus`](sp_transaction_pool::TransactionStatus) for details on transaction
+	/// lifecycle.
 	#[pubsub(
 		subscription = "author_extrinsicUpdate",
 		subscribe,

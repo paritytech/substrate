@@ -25,12 +25,11 @@
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	RuntimeDebug,
-	print,
+	RuntimeDebug, DispatchResult, print,
 	traits::{Zero, One, StaticLookup, Bounded, Saturating},
 };
 use frame_support::{
-	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
+	decl_storage, decl_event, ensure, decl_module,
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier,
@@ -346,7 +345,7 @@ decl_module! {
 			#[compact] index: VoteIndex,
 			hint: SetIndex,
 			#[compact] value: BalanceOf<T>
-		) -> Result {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::do_set_approvals(who, votes, index, hint, value)
 		}
@@ -363,7 +362,7 @@ decl_module! {
 			#[compact] index: VoteIndex,
 			hint: SetIndex,
 			#[compact] value: BalanceOf<T>
-		) -> Result {
+		) -> DispatchResult {
 			let who = Self::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
 			Self::do_set_approvals(who, votes, index, hint, value)
 		}
@@ -526,7 +525,7 @@ decl_module! {
 			candidate: <T::Lookup as StaticLookup>::Source,
 			#[compact] total: BalanceOf<T>,
 			#[compact] index: VoteIndex
-		) -> Result {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(
 				!total.is_zero(),
@@ -587,7 +586,7 @@ decl_module! {
 				// better safe than sorry.
 				let imbalance = T::Currency::slash(&who, bad_presentation_punishment).0;
 				T::BadPresentation::on_unbalanced(imbalance);
-				Err(if dupe { "duplicate presentation" } else { "incorrect total" })
+				Err(if dupe { "duplicate presentation" } else { "incorrect total" })?
 			}
 		}
 
@@ -714,7 +713,7 @@ impl<T: Trait> Module<T> {
 
 	// Private
 	/// Check there's nothing to do this block
-	fn end_block(block_number: T::BlockNumber) -> Result {
+	fn end_block(block_number: T::BlockNumber) -> DispatchResult {
 		if (block_number % T::VotingPeriod::get()).is_zero() {
 			if let Some(number) = Self::next_tally() {
 				if block_number == number {
@@ -750,7 +749,7 @@ impl<T: Trait> Module<T> {
 		index: VoteIndex,
 		hint: SetIndex,
 		value: BalanceOf<T>,
-	) -> Result {
+	) -> DispatchResult {
 		let candidates_len = <Self as Store>::Candidates::decode_len().unwrap_or(0_usize);
 
 		ensure!(!Self::presentation_active(), "no approval changes during presentation period");
@@ -873,7 +872,7 @@ impl<T: Trait> Module<T> {
 	/// approved candidates in their place. If the total number of members is less than the desired
 	/// membership a new vote is started. Clears all presented candidates, returning the bond of the
 	/// elected ones.
-	fn finalize_tally() -> Result {
+	fn finalize_tally() -> DispatchResult {
 		let (_, coming, expiring): (T::BlockNumber, u32, Vec<T::AccountId>) =
 			<NextFinalize<T>>::take()
 				.ok_or("finalize can only be called after a tally is started.")?;

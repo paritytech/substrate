@@ -34,9 +34,7 @@ use sp_std::prelude::*;
 use codec::{self as codec, Encode, Decode};
 use frame_support::{decl_event, decl_storage, decl_module, decl_error, storage};
 use sp_runtime::{
-	generic::{DigestItem, OpaqueDigestItemId},
-	traits::{Zero, ModuleDispatchError},
-	Perbill,
+	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
 };
 use sp_staking::{
 	SessionIndex,
@@ -137,7 +135,7 @@ decl_event! {
 }
 
 decl_error! {
-	pub enum Error {
+	pub enum Error for Module<T: Trait> {
 		/// Attempt to signal GRANDPA pause when the authority set isn't live
 		/// (either paused or already pending pause).
 		PauseFailed,
@@ -187,13 +185,13 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		type Error = Error;
+		type Error = Error<T>;
 
 		fn deposit_event() = default;
 
 		/// Report some misbehavior.
 		fn report_misbehavior(origin, _report: Vec<u8>) {
-			ensure_signed(origin).map_err(|e| e.as_str())?;
+			ensure_signed(origin)?;
 			// FIXME: https://github.com/paritytech/substrate/issues/1112
 		}
 
@@ -283,7 +281,7 @@ impl<T: Trait> Module<T> {
 
 	/// Schedule GRANDPA to pause starting in the given number of blocks.
 	/// Cannot be done when already paused.
-	pub fn schedule_pause(in_blocks: T::BlockNumber) -> Result<(), Error> {
+	pub fn schedule_pause(in_blocks: T::BlockNumber) -> DispatchResult {
 		if let StoredState::Live = <State<T>>::get() {
 			let scheduled_at = <frame_system::Module<T>>::block_number();
 			<State<T>>::put(StoredState::PendingPause {
@@ -293,12 +291,12 @@ impl<T: Trait> Module<T> {
 
 			Ok(())
 		} else {
-			Err(Error::PauseFailed)
+			Err(Error::<T>::PauseFailed)?
 		}
 	}
 
 	/// Schedule a resume of GRANDPA after pausing.
-	pub fn schedule_resume(in_blocks: T::BlockNumber) -> Result<(), Error> {
+	pub fn schedule_resume(in_blocks: T::BlockNumber) -> DispatchResult {
 		if let StoredState::Paused = <State<T>>::get() {
 			let scheduled_at = <frame_system::Module<T>>::block_number();
 			<State<T>>::put(StoredState::PendingResume {
@@ -308,7 +306,7 @@ impl<T: Trait> Module<T> {
 
 			Ok(())
 		} else {
-			Err(Error::ResumeFailed)
+			Err(Error::<T>::ResumeFailed)?
 		}
 	}
 
@@ -330,13 +328,13 @@ impl<T: Trait> Module<T> {
 		next_authorities: AuthorityList,
 		in_blocks: T::BlockNumber,
 		forced: Option<T::BlockNumber>,
-	) -> Result<(), Error> {
+	) -> DispatchResult {
 		if !<PendingChange<T>>::exists() {
 			let scheduled_at = <frame_system::Module<T>>::block_number();
 
 			if let Some(_) = forced {
 				if Self::next_forced().map_or(false, |next| next > scheduled_at) {
-					return Err(Error::TooSoon);
+					Err(Error::<T>::TooSoon)?
 				}
 
 				// only allow the next forced change when twice the window has passed since
@@ -353,7 +351,7 @@ impl<T: Trait> Module<T> {
 
 			Ok(())
 		} else {
-			Err(Error::ChangePending)
+			Err(Error::<T>::ChangePending)?
 		}
 	}
 
