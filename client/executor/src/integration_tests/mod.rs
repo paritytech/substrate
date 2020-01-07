@@ -90,7 +90,7 @@ fn returning_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
-#[should_panic(expected = "functions do not exist: missing_external, yet_another_missing_external")]
+#[should_panic(expected = "function missing_external do not exist")]
 fn call_not_existing_function_with_stub_enabled(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -108,7 +108,7 @@ fn call_not_existing_function_with_stub_enabled(wasm_method: WasmExecutionMethod
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
-#[should_panic(expected = "functions do not exist: missing_external, yet_another_missing_external")]
+#[should_panic(expected = "function yet_another_missing_external do not exist")]
 fn call_yet_another_not_existing_function_with_stub_enabled(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();

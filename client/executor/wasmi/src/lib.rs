@@ -280,6 +280,18 @@ struct Resolver<'a> {
 	host_functions: &'a[&'static dyn Function],
 	enable_stub: bool,
 	missing_functions: RefCell<Vec<String>>,
+	missing_function_id: RefCell<usize>,
+}
+
+impl<'a> Resolver<'a> {
+	fn new(host_functions: &'a[&'static dyn Function], enable_stub: bool) -> Resolver<'a> {
+		Resolver {
+			host_functions,
+			enable_stub,
+			missing_functions: RefCell::new(Vec::new()),
+			missing_function_id: RefCell::new(host_functions.len()),
+		}
+	}
 }
 
 impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
@@ -309,9 +321,11 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 		if self.enable_stub {
 			trace!("Could not find function {}, a stub will be provided instead.", name);
 			self.missing_functions.borrow_mut().push(name.to_string());
+			let id = self.missing_function_id.borrow().clone();
+			*self.missing_function_id.borrow_mut() += 1;
 
 			// NOTE: provide purposedly an invalid index of the function
-			Ok(wasmi::FuncInstance::alloc_host(signature.into(), self.host_functions.len()))
+			Ok(wasmi::FuncInstance::alloc_host(signature.into(), id))
 		} else {
 			Err(wasmi::Error::Instantiation(
 				format!("Export {} not found", name),
@@ -333,7 +347,10 @@ impl<'a> wasmi::Externals for FunctionExecutor<'a> {
 				.map(|v| v.map(Into::into))
 		} else if self.enable_stub {
 			Err(Error::from(
-				format!("functions do not exist: {}", self.missing_functions.join(", "))
+				format!(
+					"function {} do not exist",
+					self.missing_functions[index - self.host_functions.len()],
+				)
 			).into())
 		} else {
 			Err(Error::from(format!("Could not find host function with index: {}", index)).into())
@@ -424,11 +441,7 @@ fn instantiate_module(
 	host_functions: &[&'static dyn Function],
 	enable_stub: bool,
 ) -> Result<(ModuleRef, Vec<String>), Error> {
-	let resolver = Resolver {
-		host_functions,
-		enable_stub,
-		missing_functions: RefCell::new(Vec::new()),
-	};
+	let resolver = Resolver::new(host_functions, enable_stub);
 	// start module instantiation. Don't run 'start' function yet.
 	let intermediate_instance = ModuleInstance::new(
 		module,
