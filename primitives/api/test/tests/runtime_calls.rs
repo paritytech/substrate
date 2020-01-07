@@ -131,23 +131,6 @@ fn use_trie_function() {
 }
 
 #[test]
-fn use_history_data() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
-	let runtime_api = client.runtime_api();
-	let block_id = BlockId::Number(client.chain_info().best_number);
-	assert!(runtime_api.use_history_data(&block_id).is_ok());
-}
-
-#[test]
-fn test_transactions() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
-	let runtime_api = client.runtime_api();
-	let block_id = BlockId::Number(client.chain_info().best_number);
-	assert_eq!(runtime_api.use_transactions(&block_id).unwrap(), 1);
-}
-
-
-#[test]
 fn initialize_block_works() {
 	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 	let runtime_api = client.runtime_api();

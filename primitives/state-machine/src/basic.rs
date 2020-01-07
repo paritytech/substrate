@@ -310,7 +310,6 @@ impl Externalities for BasicExternalities {
 	fn storage_commit_transaction(&mut self) {
 		// no need to fail in this case
 	}
-
 }
 
 impl sp_externalities::ExtensionStore for BasicExternalities {

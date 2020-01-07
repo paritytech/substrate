@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Data storage containing multiple states for a value.
+//! Data storage containing multiple states of a value.
 //! This is used to store historical information for an item.
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -24,7 +24,7 @@ pub mod synch_linear_transaction;
 /// History of values being used to keep trace of all changes
 /// that occurs (all different state a value can be in depending
 /// on the global state).
-/// The different states for this value, are ordered by change time
+/// The different states of this value, are ordered by change time
 /// in a simple stack.
 #[derive(Debug, Clone, PartialEq)]
 pub struct History<V, I>(pub(crate) smallvec::SmallVec<[HistoricalEntry<V, I>; ALLOCATED_HISTORY]>);
