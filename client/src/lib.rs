@@ -68,6 +68,7 @@
 //! 	<Storage>::default(),
 //! 	Default::default(),
 //! 	Default::default(),
+//! 	Default::default(),
 //! );
 //! ```
 //!
@@ -98,7 +99,7 @@ pub use crate::{
 		new_in_mem,
 		BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents,
 		BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-		LongestChain, BlockOf, ProvideUncles, ForkBlocks, apply_aux,
+		LongestChain, BlockOf, ProvideUncles, BadBlocks, ForkBlocks, apply_aux,
 	},
 	leaves::LeafSet,
 };
