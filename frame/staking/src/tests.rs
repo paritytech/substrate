@@ -2531,7 +2531,6 @@ fn remove_multi_deferred() {
 			&[Perbill::from_percent(10)],
 		);
 
-
 		on_offence_now(
 			&[
 				OffenceDetails {
@@ -2555,5 +2554,44 @@ fn remove_multi_deferred() {
 fn version_initialized() {
 	ExtBuilder::default().build().execute_with(|| {
 		assert_eq!(<Staking as Store>::StorageVersion::get(), crate::migration::CURRENT_VERSION);
+	});
+}
+
+#[test]
+fn slash_kicks_validators_not_nominators() {
+	ExtBuilder::default().build().execute_with(|| {
+		start_era(1);
+
+		assert_eq!(Balances::free_balance(&11), 1000);
+
+		let exposure = Staking::stakers(&11);
+		assert_eq!(Balances::free_balance(&101), 2000);
+		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
+
+		on_offence_now(
+			&[
+				OffenceDetails {
+					offender: (11, exposure.clone()),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(10)],
+		);
+
+		assert_eq!(Balances::free_balance(&11), 900);
+		assert_eq!(Balances::free_balance(&101), 2000 - (nominated_value / 10));
+
+		// This is the best way to check that the validator was chilled; `get` will
+		// return default value.
+		for (stash, _) in <Staking as Store>::Validators::enumerate() {
+			assert!(stash != 11);
+		}
+
+		let nominations = <Staking as Store>::Nominators::get(&101).unwrap();
+
+		// and make sure that the vote will be ignored even if the validator
+		// re-registers.
+		let last_slash = <Staking as Store>::SlashingSpans::get(&11).unwrap().last_start();
+		assert!(nominations.submitted_in < last_slash);
 	});
 }
