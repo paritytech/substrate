@@ -233,7 +233,6 @@ impl State {
 }
 
 impl<V> History<V> {
-
 	/// Set a value, this use a global state as parameter.
 	pub fn set(&mut self, states: &States, value: V) {
 		if let Some(v) = self.0.last_mut() {
@@ -266,9 +265,29 @@ impl<V> History<V> {
 		}
 	}
 
+	/// Extracts the committed value if there is one.
+	pub fn into_committed(mut self) -> Option<V> {
+		self.0.truncate(COMMITTED_LAYER);
+		if let Some(HistoricalEntry {
+					value,
+					index: State::Committed,
+				}) = self.0.pop() {
+			return Some(value)
+		} else {
+			None
+		}
+	}
+
+	/// Returns mutable handle on latest pending historical value.
+	pub fn get_mut(&mut self) -> Option<HistoricalEntry<&mut V>> {
+		self.0.last_mut().map(|h| h.as_mut())
+	}
+}
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl<V> History<V> {
 	/// Get latest prospective value, excludes
 	/// committed values.
-	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn get_prospective(&self) -> Option<&V> {
 		match self.0.get(0) {
 			Some(HistoricalEntry {
@@ -293,7 +312,6 @@ impl<V> History<V> {
 	}
 
 	/// Get latest committed value.
-	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn get_committed(&self) -> Option<&V> {
 		if let Some(HistoricalEntry {
 					value,
@@ -303,23 +321,5 @@ impl<V> History<V> {
 		} else {
 			None
 		}
-	}
-
-	/// Extracts the committed value if there is one.
-	pub fn into_committed(mut self) -> Option<V> {
-		self.0.truncate(COMMITTED_LAYER);
-		if let Some(HistoricalEntry {
-					value,
-					index: State::Committed,
-				}) = self.0.pop() {
-			return Some(value)
-		} else {
-			None
-		}
-	}
-
-	/// Returns mutable handle on latest pending historical value.
-	pub fn get_mut(&mut self) -> Option<HistoricalEntry<&mut V>> {
-		self.0.last_mut().map(|h| h.as_mut())
 	}
 }
