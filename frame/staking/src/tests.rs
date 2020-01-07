@@ -1229,12 +1229,10 @@ fn rebond_works() {
 				})
 			);
 
-			// trigger next era.
-			Timestamp::set_timestamp(10);
 			start_era(2);
 			assert_eq!(Staking::current_era(), 2);
 
-			// Re-bond all the funds unbonded (none). Nothing should change.
+			// Try to rebond some funds. Nothing happen since no fund is unbonded.
 			Staking::rebond(Origin::signed(10), 500).unwrap();
 			assert_eq!(
 				Staking::ledger(&10),
@@ -1297,7 +1295,7 @@ fn rebond_works() {
 				})
 			);
 
-			// Re-bond all the funds unbonded.
+			// Re-bond the remainder of the funds unbonded.
 			Staking::rebond(Origin::signed(10), 500).unwrap();
 			assert_eq!(
 				Staking::ledger(&10),
@@ -1327,7 +1325,7 @@ fn rebond_works() {
 				})
 			);
 
-			// Re-bond all the funds unbonded.
+			// Re-bond part of the funds unbonded.
 			Staking::rebond(Origin::signed(10), 500).unwrap();
 			assert_eq!(
 				Staking::ledger(&10),
