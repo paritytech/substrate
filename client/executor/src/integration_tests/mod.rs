@@ -108,6 +108,24 @@ fn call_not_existing_function_with_stub_enabled(wasm_method: WasmExecutionMethod
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[should_panic(expected = "function does not exist")]
+fn call_yet_another_not_existing_function_with_stub_enabled(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+	let test_code = WASM_BINARY;
+
+	let _output = call_in_wasm_with_stub(
+		"test_calling_yet_another_missing_external",
+		&[],
+		wasm_method,
+		&mut ext,
+		&test_code[..],
+		8,
+	);
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn call_not_existing_function_without_stub_enabled(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
