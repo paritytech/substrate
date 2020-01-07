@@ -103,7 +103,6 @@ impl Trait for Test {
 	type FounderOrigin = EnsureSignedBy<FounderSetAccount, u128>;
 	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
 	type ChallengePeriod = ChallengePeriod;
-	type MaxMembers = MaxMembers;
 }
 
 pub type Society = Module<Test>;
@@ -115,6 +114,7 @@ pub struct EnvBuilder {
 	balance: u64,
 	balances: Vec<(u128, u64)>,
 	pot: u64,
+	max_members: u32,
 }
 
 impl EnvBuilder {
@@ -131,6 +131,7 @@ impl EnvBuilder {
 				(60, 50),
 			],
 			pot: 0,
+			max_members: 100,
 		}
 	}
 
@@ -144,6 +145,7 @@ impl EnvBuilder {
 		GenesisConfig::<Test>{
 			members: self.members,
 			pot: self.pot,
+			max_members: self.max_members,
 		}.assimilate_storage(&mut t).unwrap();
 		let mut ext: sp_io::TestExternalities = t.into();
 		ext.execute_with(f)
@@ -166,6 +168,11 @@ impl EnvBuilder {
 	#[allow(dead_code)]
 	pub fn with_balance(mut self, b: u64) -> Self {
 		self.balance = b;
+		self
+	}
+	#[allow(dead_code)]
+	pub fn with_max_members(mut self, n: u32) -> Self {
+		self.max_members = n;
 		self
 	}
 }

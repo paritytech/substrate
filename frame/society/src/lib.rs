@@ -68,6 +68,14 @@
 //! The membership society is independently funded by a treasury managed by this
 //! module. Some subset of this treasury is placed in a Society Pot, which is used
 //! to determine the number of accepted bids.
+//!
+//! #### Rate of Growth
+//! 
+//! The membership society can grow at a rate of 10 accepted candidates per rotation period up
+//! to the max membership threshold. Once this threshold is met, candidate selections
+//! are stalled until there is space for new members to join. This can be resolved by
+//! voting out existing members through the random challenges or by using governance
+//! to increase the maximum membership count.
 //! 
 //! ### User Life Cycle
 //! 
@@ -218,7 +226,8 @@
 //! judgement on a suspended member.
 //! * `judge_suspended_candidate` - The suspension judgement origin is able to
 //! make judgement on a suspended candidate.
-//! 
+//! * `set_max_membership` - The ROOT origin can update the maximum member count for the society.
+//! The max membership count must be greater than 1.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -244,7 +253,7 @@ use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers,
 	ExistenceRequirement::{KeepAlive, AllowDeath},
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::{self as system, ensure_signed, ensure_root};
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
@@ -292,9 +301,6 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 
 	/// The number of blocks between membership challenges.
 	type ChallengePeriod: Get<Self::BlockNumber>;
-
-	/// The max number of members for the society at one time.
-	type MaxMembers: Get<u32>;
 }
 
 /// A vote by a member on a candidate application.
@@ -430,6 +436,9 @@ decl_storage! {
 		
 		/// Votes for the defender.
 		DefenderVotes: map hasher(twox_64_concat) T::AccountId => Option<Vote>;
+
+		/// The max number of members for the society at one time.
+		MaxMembers get(fn max_members) config(): u32;
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
@@ -460,9 +469,6 @@ decl_module! {
 
 		/// The number of blocks between membership challenges.
 		const ChallengePeriod: T::BlockNumber = T::ChallengePeriod::get();
-
-		/// The max number of members for the society at one time.
-		const MaxMembers: u32 = T::MaxMembers::get();
 
 		// Used for handling module events.
 		fn deposit_event() = default;
@@ -501,6 +507,7 @@ decl_module! {
 		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
 
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		pub fn bid(origin, value: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(!<SuspendedCandidates<T, I>>::exists(&who), Error::<T, I>::Suspended);
@@ -609,6 +616,8 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
+
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			// Check user is not suspended.
@@ -951,6 +960,29 @@ decl_module! {
 			}
 		}
 
+		/// Allows root origin to change the maximum number of members in society.
+		/// Max membership count must be greater than 1.
+		///
+		/// The dispatch origin for this call must be from _ROOT_.
+		///
+		/// Parameters:
+		/// - `max` - The maximum number of members for the society.
+		///
+		/// # <weight>
+		/// - One storage write to update the max. O(1)
+		/// - One event.
+		///
+		/// Total Complexity: O(1)
+		/// # </weight>
+
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		fn set_max_members(origin, max: u32) {
+			ensure_root(origin)?;
+			ensure!(max > 1, Error::<T, I>::MaxMembers);
+			MaxMembers::<I>::put(max);
+			Self::deposit_event(RawEvent::NewMaxMembers(max));
+		}
+
 		fn on_initialize(n: T::BlockNumber) {
 			let mut members = vec![];
 
@@ -1043,6 +1075,8 @@ decl_event! {
 		Vote(AccountId, AccountId, bool),
 		/// A vote has been placed for a defending member (voter, vote)
 		DefenderVote(AccountId, bool),
+		/// A new max member count has been set
+		NewMaxMembers(u32),
 	}
 }
 
@@ -1120,7 +1154,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Can fail when `MaxMember` limit is reached, but has no side-effects.
 	fn add_member(who: &T::AccountId) -> DispatchResult {
 		let mut members = <Members<T, I>>::get();
-		ensure!(members.len() < T::MaxMembers::get() as usize, Error::<T, I>::MaxMembers);
+		ensure!(members.len() < MaxMembers::<I>::get() as usize, Error::<T, I>::MaxMembers);
 		match members.binary_search(who) {
 			// Add the new member
 			Err(i) => {
@@ -1450,7 +1484,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// May be empty.
 	pub fn take_selected(members_len: usize, pot: BalanceOf<T, I>) -> Vec<Bid<T::AccountId, BalanceOf<T, I>>>
 	{
-		let max_members = T::MaxMembers::get() as usize;
+		let max_members = MaxMembers::<I>::get() as usize;
 		// No more than 10 will be returned.
 		let max_selections: usize = 10.min(max_members.saturating_sub(members_len));
 

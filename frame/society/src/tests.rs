@@ -717,15 +717,23 @@ fn max_limits_work() {
 		assert_eq!(Society::members().len(), 100);
 		// Can't add any more members
 		assert_noop!(Society::add_member(&98), Error::<Test, _>::MaxMembers);
-		// Eventually members will drop below limit
+		// However, a fringe scenario allows for in-progress candidates to increase the membership
+		// pool, but it has no real after-effects.
+		for i in Society::members().iter() {
+			assert_ok!(Society::vote(Origin::signed(*i), 110, true));
+			assert_ok!(Society::vote(Origin::signed(*i), 111, true));
+			assert_ok!(Society::vote(Origin::signed(*i), 112, true));
+		}
 		// Rotate period
 		run_to_block(12);
+		// Members length is over 100, no problem...
+		assert_eq!(Society::members().len(), 103);
 		// No candidates because full
 		assert_eq!(Society::candidates().len(), 0);
+		// Increase member limit
+		assert_ok!(Society::set_max_members(Origin::ROOT, 200));
 		// Rotate period
-		run_to_block(100);
-		// Members should be suspended by now, dropping the length well below 100
-		assert_eq!(Society::members().len(), 2);
+		run_to_block(16);
 		// Candidates are back!
 		assert_eq!(Society::candidates().len(), 10);
 	});
