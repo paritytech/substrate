@@ -1022,11 +1022,10 @@ mod tests {
 		let subtrie2 = ChildStorageKey::from_slice(b":child_storage:default:sub_test2").unwrap();
 		let mut transaction = {
 			let backend = test_trie();
-			let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 			let mut ext = Ext::new(
 				&mut overlay,
 				&backend,
-				Some(&changes_trie_storage),
+				changes_trie::disabled_state::<_, u64>(),
 				None,
 			);
 			ext.set_child_storage(subtrie1, CHILD_INFO_1, b"abc".to_vec(), b"def".to_vec());
