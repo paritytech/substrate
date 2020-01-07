@@ -141,7 +141,7 @@ pub struct UsageInfo {
 }
 
 impl fmt::Display for UsageInfo {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f,
 			"caches: ({} state, {} db overlay), i/o: ({} tx, {} write, {} read, {} avg tx, {}/{} state cache read / total)",
 			self.memory.state_cache,
