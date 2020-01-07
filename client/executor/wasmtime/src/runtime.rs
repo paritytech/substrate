@@ -56,6 +56,10 @@ pub struct WasmtimeRuntime {
 	heap_pages: u32,
 	/// The host functions registered for this instance.
 	host_functions: Vec<&'static dyn Function>,
+	/// Enable STUB for function called that are missing
+	enable_stub: bool,
+	/// List of missing functions detected during function resolution
+	missing_functions: HashMap<usize, String>,
 }
 
 impl WasmRuntime for WasmtimeRuntime {
@@ -83,6 +87,8 @@ impl WasmRuntime for WasmtimeRuntime {
 			method,
 			data,
 			self.heap_pages,
+			self.enable_stub,
+			&self.missing_functions,
 		)
 	}
 }
@@ -106,6 +112,7 @@ pub fn create_instance(
 	code: &[u8],
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
+	enable_stub: bool,
 ) -> std::result::Result<WasmtimeRuntime, WasmError> {
 	let global_exports = Rc::new(RefCell::new(HashMap::new()));
 
@@ -114,6 +121,7 @@ pub fn create_instance(
 		instantiate_env_module(Rc::clone(&global_exports), compiler, &host_functions)?;
 
 	let mut compiler = new_compiler(CompilationStrategy::Cranelift)?;
+	// let (compiled_module, context, missing_functions) = create_compiled_unit(code, &host_functions, enable_stub)?;
 	let compiled_module = create_compiled_unit(
 		&mut compiler,
 		code,
@@ -151,6 +159,8 @@ pub fn create_instance(
 		host_functions,
 		global_exports,
 		env_instance,
+		enable_stub,
+		missing_functions,
 	})
 }
 
@@ -160,7 +170,8 @@ fn create_compiled_unit(
 	resolver: &mut dyn Resolver,
 	global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
 	host_functions: &[&'static dyn Function],
-) -> std::result::Result<CompiledModule, WasmError> {
+	enable_stub: bool,
+) -> std::result::Result<(CompiledModule, HashMap<usize, String>), WasmError> {
 	let debug_info = false;
 	let module = CompiledModule::new(compiler, code, resolver, global_exports, debug_info)
 		.map_err(|e| WasmError::Other(format!("module compile error: {}", e)))?;
@@ -177,6 +188,8 @@ fn call_method(
 	method: &str,
 	data: &[u8],
 	heap_pages: u32,
+	enable_stub: bool,
+	missing_functions: &HashMap<usize, String>,
 ) -> Result<Vec<u8>> {
 	// Old exports get clobbered in `InstanceHandle::new` if we don't explicitly remove them first.
 	//
