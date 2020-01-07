@@ -431,8 +431,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	/// `TV` translates values.
 	///
 	/// Returns `Err` if the map could not be interpreted as the old type, and Ok if it could.
-	/// The `Err` contains the first hashed key which could not be migrated, or `None` if the
-	/// head of the list could not be read.
+	/// The `Err` contains the first hashed key which could not be migrated.
 	///
 	/// # Warning
 	///
@@ -453,8 +452,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 			.filter(|n| n.starts_with(&prefix[..]))
 		{
 			let value: OldValue = unhashed::get(&next_key)
-				// We failed to read the value.
-				// TODO TODO: should we remove all value after this ?
+				// We failed to read the value. Stop the translation and return an error.
 				.ok_or_else(|| next_key.clone())?;
 
 			unhashed::put(&next_key[..], &translate_val(value));
