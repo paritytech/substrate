@@ -253,11 +253,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 		}
 	}
 
-	/// Closes all notification streams.
-	pub fn abort(&mut self) {
-		self.live_message_sinks.clear();
-	}
-
 	/// Register message validator for a message type.
 	pub fn register_validator(
 		&mut self,
