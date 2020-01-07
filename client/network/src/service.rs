@@ -773,20 +773,19 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 			match poll_value {
 				Poll::Pending => break,
-				Poll::Ready(Some(Ok(BehaviourOut::BlockImport(origin, blocks)))) =>
+				Poll::Ready(Some(BehaviourOut::BlockImport(origin, blocks))) =>
 					this.import_queue.import_blocks(origin, blocks),
-				Poll::Ready(Some(Ok(BehaviourOut::JustificationImport(origin, hash, nb, justification)))) =>
+				Poll::Ready(Some(BehaviourOut::JustificationImport(origin, hash, nb, justification))) =>
 					this.import_queue.import_justification(origin, hash, nb, justification),
-				Poll::Ready(Some(Ok(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)))) =>
+				Poll::Ready(Some(BehaviourOut::FinalityProofImport(origin, hash, nb, proof))) =>
 					this.import_queue.import_finality_proof(origin, hash, nb, proof),
-				Poll::Ready(Some(Ok(BehaviourOut::Event(ev)))) => {
+				Poll::Ready(Some(BehaviourOut::Event(ev))) => {
 					this.event_streams.retain(|sender| sender.unbounded_send(ev.clone()).is_ok());
 				},
-				Poll::Ready(None) => {},
-				Poll::Ready(Some(Err(err))) => {
-					error!(target: "sync", "Error in the network: {:?}", err);
-					return Poll::Ready(Err(err))
-				}
+				Poll::Ready(None) => {
+					error!(target: "sync", "Network events stream has returned None");
+					break;
+				},
 			};
 		}
 

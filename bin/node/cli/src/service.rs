@@ -183,19 +183,16 @@ macro_rules! new_full {
 			service.spawn_essential_task(babe);
 
 			let network = service.network();
-			let dht_event_stream = network.event_stream().filter_map(|e| match e {
+			let dht_event_stream = network.event_stream().filter_map(|e| async move { match e {
 				Event::Dht(e) => Some(e),
 				_ => None,
-			});
-			let future03_dht_event_stream = dht_event_stream.compat()
-				.map(|x| x.expect("<mpsc::channel::Receiver as Stream> never returns an error; qed"))
-				.boxed();
+			}}).boxed();
 			let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
 				service.client(),
 				network,
 				sentry_nodes,
 				service.keystore(),
-				future03_dht_event_stream,
+				dht_event_stream,
 			);
 			let future01_authority_discovery = authority_discovery.map(|x| Ok(x)).compat();
 

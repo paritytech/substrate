@@ -33,7 +33,6 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use futures::sync::mpsc;
-use futures03::Future as _;
 use parking_lot::Mutex;
 
 use sc_client::Client;
@@ -387,12 +386,6 @@ fn build_network_future<
 	let mut finality_notification_stream = client.finality_notification_stream().fuse()
 		.map(|v| Ok::<_, ()>(v)).compat();
 
-<<<<<<< HEAD
-	// Initializing a stream in order to obtain DHT events from the network.
-	let mut event_stream = network.service().event_stream().map(|v| Ok::<_, ()>(v)).compat();
-
-=======
->>>>>>> upstream/master
 	futures::future::poll_fn(move || {
 		let before_polling = Instant::now();
 
@@ -486,7 +479,8 @@ fn build_network_future<
 		});
 
 		// Main network polling.
-		let mut net_poll = futures03::future::poll_fn(|cx| Pin::new(&mut network).poll(cx)).compat();
+		let mut net_poll = futures03::future::poll_fn(|cx| futures03::future::Future::poll(Pin::new(&mut network), cx))
+			.compat();
 		if let Ok(Async::Ready(())) = net_poll.poll().map_err(|err| {
 			warn!(target: "service", "Error in network: {:?}", err);
 		}) {
