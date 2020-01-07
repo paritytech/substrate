@@ -28,7 +28,7 @@ pub mod informant;
 
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
-	config::{Configuration, DatabaseConfig},
+	config::{Configuration, DatabaseConfig, KeystoreConfig},
 	ServiceBuilderCommand,
 	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
 };
@@ -754,20 +754,22 @@ fn fill_config_keystore_password<C, G, E>(
 	config: &mut sc_service::Configuration<C, G, E>,
 	cli: &RunCmd,
 ) -> Result<(), String> {
-	config.keystore_password = if cli.password_interactive {
-		#[cfg(not(target_os = "unknown"))]
-		{
-			Some(input_keystore_password()?.into())
-		}
-		#[cfg(target_os = "unknown")]
-		None
-	} else if let Some(ref file) = cli.password_filename {
-		Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
-	} else if let Some(ref password) = cli.password {
-		Some(password.clone().into())
-	} else {
-		None
-	};
+	if let KeystoreConfig::Path { password, .. } = &mut config.keystore {
+		*password = if cli.password_interactive {
+			#[cfg(not(target_os = "unknown"))]
+			{
+				Some(input_keystore_password()?.into())
+			}
+			#[cfg(target_os = "unknown")]
+			None
+		} else if let Some(ref file) = cli.password_filename {
+			Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
+		} else if let Some(ref password) = cli.password {
+			Some(password.clone().into())
+		} else {
+			None
+		};
+	}
 
 	Ok(())
 }
@@ -873,7 +875,11 @@ where
 		)?
 	}
 
-	config.keystore_path = cli.keystore_path.or_else(|| config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH));
+	let default_keystore_path = config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH);
+
+	if let KeystoreConfig::Path { path, ..} = &mut config.keystore {
+		*path = path.clone().or(default_keystore_path);
+	}
 
 	// set sentry mode (i.e. act as an authority but **never** actively participate)
 	config.sentry_mode = cli.sentry;

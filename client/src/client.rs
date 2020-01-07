@@ -1161,7 +1161,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Attempts to revert the chain by `n` blocks disregarding finality. This
 	/// method will revert any finalized blocks as requested and can potentially
-	/// lead the node in an inconsistent state. Other modules in the system that
+	/// leave the node in an inconsistent state. Other modules in the system that
 	/// persist data and that rely on finality (e.g. consensus parts) will be
 	/// unaffected by the revert. Use this method with caution and making sure
 	/// that no other data needs to be reverted for consistency aside from the
