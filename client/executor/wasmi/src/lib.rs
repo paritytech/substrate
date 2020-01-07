@@ -43,6 +43,7 @@ struct FunctionExecutor<'a> {
 	table: Option<TableRef>,
 	host_functions: &'a [&'static dyn Function],
 	enable_stub: bool,
+	method: &'a str,
 }
 
 impl<'a> FunctionExecutor<'a> {
@@ -52,6 +53,7 @@ impl<'a> FunctionExecutor<'a> {
 		t: Option<TableRef>,
 		host_functions: &'a [&'static dyn Function],
 		enable_stub: bool,
+		method: &'a str,
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
@@ -60,6 +62,7 @@ impl<'a> FunctionExecutor<'a> {
 			table: t,
 			host_functions,
 			enable_stub,
+			method,
 		})
 	}
 }
@@ -272,15 +275,17 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 	}
 }
 
-struct Resolver<'a>(&'a[&'static dyn Function], bool);
+struct Resolver<'a> {
+	host_functions: &'a[&'static dyn Function],
+	enable_stub: bool,
+}
 
 impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 	fn resolve_func(&self, name: &str, signature: &wasmi::Signature)
 		-> std::result::Result<wasmi::FuncRef, wasmi::Error>
 	{
 		let signature = sp_wasm_interface::Signature::from(signature);
-		eprintln!("resolve: {}", name);
-		for (function_index, function) in self.0.iter().enumerate() {
+		for (function_index, function) in self.host_functions.iter().enumerate() {
 			if name == function.name() {
 				if signature == function.signature() {
 					return Ok(
@@ -299,16 +304,11 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 			}
 		}
 
-		if self.1 {
-			eprintln!("Could not find function {}. The existing functions are: {}",
-				name,
-				self.0.iter()
-					.map(|x|
-					x.name()).collect::<Vec<_>>().join(","));
+		if self.enable_stub {
+			trace!("Could not find function {}, a stub will be provided instead.", name);
 
-			Ok(
-				wasmi::FuncInstance::alloc_host(signature.into(), self.0.len()),
-			)
+			// NOTE: provide purposedly an invalid index of the function
+			Ok(wasmi::FuncInstance::alloc_host(signature.into(), self.host_functions.len()))
 		} else {
 			Err(wasmi::Error::Instantiation(
 				format!("Export {} not found", name),
@@ -329,7 +329,7 @@ impl<'a> wasmi::Externals for FunctionExecutor<'a> {
 				.map_err(wasmi::Trap::from)
 				.map(|v| v.map(Into::into))
 		} else if self.enable_stub {
-			panic!("function does not exist");
+			panic!("function {} does not exist", self.method);
 		} else {
 			Err(Error::from(format!("Could not find host function with index: {}", index)).into())
 		}
@@ -379,7 +379,7 @@ fn call_in_wasm_module(
 	let heap_base = get_heap_base(module_instance)?;
 
 	let mut fec = FunctionExecutor::new(
-		memory.clone(), heap_base, table, host_functions, enable_stub)?;
+		memory.clone(), heap_base, table, host_functions, enable_stub, method)?;
 
 	// Write the call data
 	let offset = fec.allocate_memory(data.len() as u32)?;
@@ -418,7 +418,10 @@ fn instantiate_module(
 	host_functions: &[&'static dyn Function],
 	enable_stub: bool,
 ) -> Result<ModuleRef, Error> {
-	let resolver = Resolver(host_functions, enable_stub);
+	let resolver = Resolver {
+		host_functions,
+		enable_stub,
+	};
 	// start module instantiation. Don't run 'start' function yet.
 	let intermediate_instance = ModuleInstance::new(
 		module,
