@@ -32,6 +32,67 @@ use crate::WasmExecutionMethod;
 
 pub type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
 
+#[cfg(feature = "wasmtime")]
+mod wasmtime_missing_externals {
+	use sp_wasm_interface::{Function, FunctionContext, HostFunctions, Result, Signature, Value};
+
+	pub struct WasmtimeHostFunctions;
+
+	impl HostFunctions for WasmtimeHostFunctions {
+		fn host_functions() -> Vec<&'static dyn Function> {
+			vec![MISSING_EXTERNAL_FUNCTION, YET_ANOTHER_MISSING_EXTERNAL_FUNCTION]
+		}
+	}
+
+	struct MissingExternalFunction;
+
+	impl Function for MissingExternalFunction {
+		fn name(&self) -> &str { "missing_external" }
+
+		fn signature(&self) -> Signature {
+			Signature::new(vec![], None)
+		}
+
+		fn execute(
+			&self,
+			_context: &mut dyn FunctionContext,
+			_args: &mut dyn Iterator<Item = Value>,
+		) -> Result<Option<Value>> {
+			panic!("should not be called");
+		}
+	}
+
+	static MISSING_EXTERNAL_FUNCTION: &'static MissingExternalFunction = &MissingExternalFunction;
+
+	struct YetAnotherMissingExternalFunction;
+
+	impl Function for YetAnotherMissingExternalFunction {
+		fn name(&self) -> &str { "yet_another_missing_external" }
+
+		fn signature(&self) -> Signature {
+			Signature::new(vec![], None)
+		}
+
+		fn execute(
+			&self,
+			_context: &mut dyn FunctionContext,
+			_args: &mut dyn Iterator<Item = Value>,
+		) -> Result<Option<Value>> {
+			panic!("should not be called");
+		}
+	}
+
+	static YET_ANOTHER_MISSING_EXTERNAL_FUNCTION: &'static YetAnotherMissingExternalFunction =
+		&YetAnotherMissingExternalFunction;
+}
+
+#[cfg(feature = "wasmtime")]
+type HostFunctions =
+	(wasmtime_missing_externals::WasmtimeHostFunctions, sp_io::SubstrateHostFunctions);
+
+#[cfg(not(feature = "wasmtime"))]
+type HostFunctions = sp_io::SubstrateHostFunctions;
+
 fn call_in_wasm<E: Externalities>(
 	function: &str,
 	call_data: &[u8],
@@ -40,7 +101,7 @@ fn call_in_wasm<E: Externalities>(
 	code: &[u8],
 	heap_pages: u64,
 ) -> crate::error::Result<Vec<u8>> {
-	crate::call_in_wasm::<E, sp_io::SubstrateHostFunctions>(
+	crate::call_in_wasm::<E, HostFunctions>(
 		function,
 		call_data,
 		execution_method,
