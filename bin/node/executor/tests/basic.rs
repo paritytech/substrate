@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -45,7 +45,6 @@ use node_testing::keyring::*;
 
 mod common;
 use self::common::{*, sign};
-
 
 /// The wasm runtime binary which hasn't undergone the compacting process.
 ///
