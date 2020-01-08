@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 //
 // Substrate is free software: you can redistribute it and/or modify
@@ -926,7 +926,7 @@ impl<B: BlockT> ChainSync<B> {
 				},
 				Err(BlockImportError::BadBlock(who)) => {
 					if let Some(peer) = who {
-						info!("Bad block");
+						info!("Block received from peer has been blacklisted");
 						output.push(Err(BadPeer(peer, rep::BAD_BLOCK)));
 						output.extend(self.restart());
 					}
