@@ -23,7 +23,6 @@ use sc_executor_common::{
 };
 use std::{str, mem};
 use std::cell::RefCell;
-use std::collections::HashMap;
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 	memory_units::Pages, RuntimeValue::{I32, I64, self},
@@ -45,7 +44,7 @@ struct FunctionExecutor<'a> {
 	table: Option<TableRef>,
 	host_functions: &'a [&'static dyn Function],
 	allow_missing_imports: bool,
-	missing_functions: &'a HashMap<usize, String>,
+	missing_functions: &'a Vec<String>,
 }
 
 impl<'a> FunctionExecutor<'a> {
@@ -55,7 +54,7 @@ impl<'a> FunctionExecutor<'a> {
 		t: Option<TableRef>,
 		host_functions: &'a [&'static dyn Function],
 		allow_missing_imports: bool,
-		missing_functions: &'a HashMap<usize, String>,
+		missing_functions: &'a Vec<String>,
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
@@ -280,7 +279,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 struct Resolver<'a> {
 	host_functions: &'a[&'static dyn Function],
 	allow_missing_imports: bool,
-	missing_functions: RefCell<HashMap<usize, String>>,
+	missing_functions: RefCell<Vec<String>>,
 	missing_function_id: RefCell<usize>,
 }
 
@@ -289,7 +288,7 @@ impl<'a> Resolver<'a> {
 		Resolver {
 			host_functions,
 			allow_missing_imports,
-			missing_functions: RefCell::new(HashMap::new()),
+			missing_functions: RefCell::new(Vec::new()),
 			missing_function_id: RefCell::new(host_functions.len()),
 		}
 	}
@@ -322,7 +321,7 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 		if self.allow_missing_imports {
 			trace!("Could not find function {}, a stub will be provided instead.", name);
 			let id = self.missing_function_id.borrow().clone();
-			self.missing_functions.borrow_mut().insert(id, name.to_string());
+			self.missing_functions.borrow_mut().push(name.to_string());
 			*self.missing_function_id.borrow_mut() += 1;
 
 			// NOTE: provide purposedly an invalid index of the function
@@ -347,9 +346,12 @@ impl<'a> wasmi::Externals for FunctionExecutor<'a> {
 				.map_err(wasmi::Trap::from)
 				.map(|v| v.map(Into::into))
 		} else if self.allow_missing_imports {
-			Err(Error::from(
-				format!("function {} does not exist", self.missing_functions[&index])
-			).into())
+			Err(Error::from(format!(
+				"function {} does not exist",
+				self.missing_functions
+					.get(index - self.host_functions.len())
+					.expect("invalid function index"),
+			)).into())
 		} else {
 			Err(Error::from(format!("Could not find host function with index: {}", index)).into())
 		}
@@ -389,7 +391,7 @@ fn call_in_wasm_module(
 	data: &[u8],
 	host_functions: &[&'static dyn Function],
 	allow_missing_imports: bool,
-	missing_functions: &HashMap<usize, String>,
+	missing_functions: &Vec<String>,
 ) -> Result<Vec<u8>, Error> {
 	// extract a reference to a linear memory, optional reference to a table
 	// and then initialize FunctionExecutor.
@@ -438,7 +440,7 @@ fn instantiate_module(
 	module: &Module,
 	host_functions: &[&'static dyn Function],
 	allow_missing_imports: bool,
-) -> Result<(ModuleRef, HashMap<usize, String>), Error> {
+) -> Result<(ModuleRef, Vec<String>), Error> {
 	let resolver = Resolver::new(host_functions, allow_missing_imports);
 	// start module instantiation. Don't run 'start' function yet.
 	let intermediate_instance = ModuleInstance::new(
@@ -580,7 +582,7 @@ pub struct WasmiRuntime {
 	/// Enable STUB for function called that are missing
 	allow_missing_imports: bool,
 	/// List of missing functions detected during function resolution
-	missing_functions: HashMap<usize, String>,
+	missing_functions: Vec<String>,
 }
 
 impl WasmRuntime for WasmiRuntime {
