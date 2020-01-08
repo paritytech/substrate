@@ -22,7 +22,6 @@ safe-mix = { version = "1.0.0", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-api = { version = "2.0.0", default-features = false, path = "../../../primitives/api" }
 sp-block-builder = { path = "../../../primitives/block-builder", default-features = false}
-# sp-consensus-aura = { version = "0.8", default-features = false, path = "../../../primitives/consensus/aura" }
 sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
 sp-inherents = { path = "../../../primitives/inherents", default-features = false}
 sp-io = { version = "2.0.0", default-features = false, path = "../../../primitives/io" }
@@ -32,7 +31,7 @@ sp-session = { version = "2.0.0", default-features = false, path = "../../../pri
 sp-std = { version = "2.0.0", default-features = false, path = "../../../primitives/std" }
 sp-transaction-pool = { version = "2.0.0", default-features = false, path = "../../../primitives/transaction-pool" }
 sp-version = { version = "2.0.0", default-features = false, path = "../../../primitives/version" }
-sp-consensus-aura = { package = "sp-consensus-zigzag", version = "0.8", default-features = false, path = "../../../primitives/consensus/zigzag" }
+sp-consensus-zigzag = { version = "0.8", default-features = false, path = "../../../primitives/consensus/zigzag" }
 
 [build-dependencies]
 wasm-builder-runner = { version = "1.0.4", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
@@ -52,7 +51,7 @@ std = [
 	"serde",
 	"sp-api/std",
 	"sp-block-builder/std",
-	"sp-consensus-aura/std",
+	"sp-consensus-zigzag/std",
 	"sp-core/std",
 	"sp-inherents/std",
 	"sp-io/std",

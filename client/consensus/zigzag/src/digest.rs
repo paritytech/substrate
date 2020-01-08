@@ -20,7 +20,7 @@
 //! `CompatibleDigestItem` trait to appear in public interfaces.
 
 use sp_core::Pair;
-use sp_consensus_aura::AURA_ENGINE_ID;
+use sp_consensus_zigzag::AURA_ENGINE_ID;
 use sp_runtime::generic::{DigestItem, OpaqueDigestItemId};
 use codec::{Encode, Codec};
 use std::fmt::Debug;

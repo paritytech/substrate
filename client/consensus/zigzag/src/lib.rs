@@ -72,7 +72,7 @@ use sc_keystore::KeyStorePtr;
 
 use sp_api::ApiExt;
 
-pub use sp_consensus_aura::{
+pub use sp_consensus_zigzag::{
 	ConsensusLog, AuraApi, AURA_ENGINE_ID,
 	inherents::{
 		InherentType as AuraInherent,

@@ -2,12 +2,12 @@
 name = "sc-consensus-zigzag"
 version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-description = "Aura consensus algorithm for substrate"
+description = "ZigZag consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
 sp-application-crypto = { version = "2.0.0", path = "../../../primitives/application-crypto" }
-sp-consensus-aura = { package = "sp-consensus-zigzag", version = "0.8", path = "../../../primitives/consensus/zigzag" }
+sp-consensus-zigzag = { version = "0.8", path = "../../../primitives/consensus/zigzag" }
 sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
 sc-client = { version = "2.0.0", path = "../../" }
 sc-client-api = { version = "2.0.0", path = "../../api" }
