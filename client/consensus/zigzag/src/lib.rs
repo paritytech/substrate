@@ -109,6 +109,16 @@ impl SlotDuration {
 	}
 }
 
+// slot | A | B | C
+//    0 | x |   |   \
+//    1 |   | x |    } This part is the zig
+//    2 |   |   | x /
+//    3 |   |   | x \
+//    4 |   | x |    } This part is the zag
+//    5 | x |   |   /
+//    6 | x |   |   \
+//    7 |   | x |    } Another zig
+//    8 |   |   | x /
 /// Get slot author for given block along with authorities.
 fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
 	// slot_num does _not_ start at 0. It is the local time / slot duration
