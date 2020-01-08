@@ -525,7 +525,8 @@ decl_module! {
 			ensure!(!<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::Suspended);
 			let bids = <Bids<T, I>>::get();
 			ensure!(!Self::is_bid(&bids, &who), Error::<T, I>::AlreadyBid);
-			ensure!(!Self::is_candidate(&who), Error::<T, I>::AlreadyCandidate);
+			let candidates = <Candidates<T, I>>::get();
+			ensure!(!Self::is_candidate(&candidates, &who), Error::<T, I>::AlreadyCandidate);
 			let members = <Members<T, I>>::get();
 			ensure!(!Self::is_member(&members ,&who), Error::<T, I>::AlreadyMember);
 
@@ -637,7 +638,8 @@ decl_module! {
 			// Check user is not a bid or candidate.
 			let bids = <Bids<T, I>>::get();
 			ensure!(!Self::is_bid(&bids, &who), Error::<T, I>::AlreadyBid);
-			ensure!(!Self::is_candidate(&who), Error::<T, I>::AlreadyCandidate);
+			let candidates = <Candidates<T, I>>::get();
+			ensure!(!Self::is_candidate(&candidates, &who), Error::<T, I>::AlreadyCandidate);
 			// Check user is not already a member.
 			let members = <Members<T, I>>::get();
 			ensure!(!Self::is_member(&members, &who), Error::<T, I>::AlreadyMember);
@@ -712,7 +714,8 @@ decl_module! {
 		pub fn vote(origin, candidate: <T::Lookup as StaticLookup>::Source, approve: bool) {
 			let voter = ensure_signed(origin)?;
 			let candidate = T::Lookup::lookup(candidate)?;
-			ensure!(Self::is_candidate(&candidate), Error::<T, I>::NotCandidate);
+			let candidates = <Candidates<T, I>>::get();
+			ensure!(Self::is_candidate(&candidates, &candidate), Error::<T, I>::NotCandidate);
 			let members = <Members<T, I>>::get();
 			ensure!(Self::is_member(&members, &voter), Error::<T, I>::NotMember);
 
@@ -1148,12 +1151,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Check a user is a candidate.
-	fn is_candidate(who: &T::AccountId) -> bool {
-		// Candidates are ordered by `value`, so we cannot binary search for a user.
-		<Candidates<T, I>>::get()
-			.iter()
-			.find(|bid| bid.who == *who)
-			.is_some()
+	fn is_candidate(candidates: &Vec<Bid<T::AccountId, BalanceOf<T, I>>>, who: &T::AccountId) -> bool {
+		// Looking up a candidate is the same as looking up a bid
+		Self::is_bid(candidates, who)
 	}
 
 	/// Check a user is a member.
