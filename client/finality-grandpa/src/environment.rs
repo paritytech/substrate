@@ -432,32 +432,26 @@ where
 			return None;
 		}
 
+		let base_header = match self.client.header(&BlockId::Hash(block)).ok()? {
+			Some(h) => h,
+			None => {
+				debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find base block", block);
+				return None;
+			}
+		};
+
 		// we refuse to vote beyond the current limit number where transitions are scheduled to
 		// occur.
 		// once blocks are finalized that make that transition irrelevant or activate it,
 		// we will proceed onwards. most of the time there will be no pending transition.
-		let limit = self.authority_set.current_limit();
+		// the limit, if any, is guaranteed to be higher than or equal to the given base number.
+		let limit = self.authority_set.current_limit(*base_header.number());
 		debug!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
 
 		match self.select_chain.finality_target(block, None) {
 			Ok(Some(best_hash)) => {
-				let base_header = self.client.header(&BlockId::Hash(block)).ok()?
-					.expect("Header known to exist after `best_containing` call; qed");
-
-				if let Some(limit) = limit {
-					// this is a rare case which might cause issues,
-					// might be better to return the header itself.
-					if *base_header.number() > limit {
-						debug!(target: "afg", "Encountered error finding best chain containing {:?} with limit {:?}: target block is after limit",
-							block,
-							limit,
-						);
-						return None;
-					}
-				}
-
 				let best_header = self.client.header(&BlockId::Hash(best_hash)).ok()?
-					.expect("Header known to exist after `best_containing` call; qed");
+					.expect("Header known to exist after `finality_target` call; qed");
 
 				// check if our vote is currently being limited due to a pending change
 				let limit = limit.filter(|limit| limit < best_header.number());
@@ -481,7 +475,7 @@ where
 						}
 
 						target_header = self.client.header(&BlockId::Hash(*target_header.parent_hash())).ok()?
-							.expect("Header known to exist after `best_containing` call; qed");
+							.expect("Header known to exist after `finality_target` call; qed");
 					}
 
 					target = target_header;

@@ -32,7 +32,8 @@ use sp_blockchain::{
 	HeaderMetadata, well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
 	Error as ClientError, Result as ClientResult,
 };
-use crate::backend::{ AuxStore, NewBlockState };
+use crate::{backend::{AuxStore, NewBlockState}, UsageInfo};
+
 /// Remote call request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RemoteCallRequest<Header: HeaderT> {
@@ -274,6 +275,9 @@ pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block> + HeaderMetada
 
 	/// Get storage cache.
 	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>>;
+
+	/// Get storage usage statistics.
+	fn usage_info(&self) -> Option<UsageInfo>;
 }
 
 /// Remote header.

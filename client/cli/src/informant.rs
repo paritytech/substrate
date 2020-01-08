@@ -18,7 +18,7 @@
 
 use sc_client_api::BlockchainEvents;
 use futures::prelude::*;
-use log::{info, warn};
+use log::{info, warn, trace};
 use sp_runtime::traits::Header;
 use sc_service::AbstractService;
 use std::time::Duration;
@@ -35,6 +35,11 @@ pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()
 		.network_status(Duration::from_millis(5000))
 		.for_each(move |(net_status, _)| {
 			let info = client.usage_info();
+			if let Some(ref usage) = info.usage {
+				trace!(target: "usage", "Usage statistics: {}", usage);
+			} else {
+				trace!(target: "usage", "Usage statistics not displayed as backend does not provide it")
+			}
 			display.display(&info, net_status);
 			future::ready(())
 		});
