@@ -221,7 +221,7 @@ decl_module! {
 			let next = current + One::one();
 
 			let balance_at_stake_is_zero = <Bets<T>>::mutate(&sender, |b| {
-				let cs = Self::consolidate(&sender, b);
+				let cs = Self::consolidate(&current, &sender, b);
 
 				// We are now guaranteed that b.state will be one of:
 				// - Idle
@@ -280,7 +280,7 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 
 			let balance_at_stake_is_zero = <Bets<T>>::mutate(&sender, |b| {
-				let cs = Self::consolidate(&sender, b);
+				let cs = Self::consolidate(&Self::index(), &sender, b);
 //				println!("unbet(): CONS {:?}", cs);
 
 				// We are now guaranteed that b.state will be one of:
@@ -326,7 +326,7 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 
 			let is_unlocked = <Bets<T>>::mutate(&sender, |b| {
-				Self::consolidate(&sender, b);
+				Self::consolidate(&Self::index(), &sender, b);
 				b.state == State::Idle && b.locked_until.map_or(true, |l| l <= Self::index())
 			});
 
@@ -409,19 +409,18 @@ impl<T: Trait> Module<T> {
 
 	/// Consolidates the `betting` state of `who` into one of `Idle, BeganAt(Self::index()) and EndingAt(Self::index + 1)`
 	/// Calling this could delete the relevant entry in `Bets`.
-	fn consolidate(who: &T::AccountId, betting: &mut Betting<T::BlockNumber, BalanceOf<T>>) -> ConsolidatedState {
-		let now = Self::index();
+	fn consolidate(now: &T::BlockNumber, who: &T::AccountId, betting: &mut Betting<T::BlockNumber, BalanceOf<T>>) -> ConsolidatedState {
 //		println!("consolidate CONS {:?} now: {}", betting, now);
 		let (new_balance, result) = match betting.state.clone() {
-			State::BeganAt(n) if n < now => {
+			State::BeganAt(n) if n < *now => {
 				// calculate and impose new balance implied by [n ... now)
-				betting.state = State::BeganAt(now);
-				match Self::calculate_new_balance(betting.balance, n, now) {
+				betting.state = State::BeganAt(*now);
+				match Self::calculate_new_balance(betting.balance, n, *now) {
 					BetResult::Success(b) => (b, ConsolidatedState::JustBegan),
 					BetResult::Wipeout(b) => { betting.locked_until = None; (b, ConsolidatedState::Idle) }
 				}
 			}
-			State::EndingAt(n) if n <= now => {
+			State::EndingAt(n) if n <= *now => {
 				// calculate new balance implied by n
 				betting.state = State::Idle;
 				(
@@ -432,7 +431,7 @@ impl<T: Trait> Module<T> {
 					ConsolidatedState::Idle
 				)
 			}
-			State::BeganAt(n) if n == now => return ConsolidatedState::JustBegan,
+			State::BeganAt(n) if n == *now => return ConsolidatedState::JustBegan,
 			State::BeganAt(_) /*if _ > now*/ => return ConsolidatedState::AboutToBegin,
 			State::EndingAt(_) => return ConsolidatedState::AboutToEnd,
 			State::Idle => return ConsolidatedState::Idle,
