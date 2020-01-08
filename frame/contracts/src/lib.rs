@@ -1157,7 +1157,6 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 		_: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
 		Self::perform_pre_dispatch_checks(who, call)
-			.map_err(Into::into)
 	}
 
 	fn validate(
