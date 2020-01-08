@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ pub use digest::{BabePreDigest, CompatibleDigestItem};
 pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest, NextEpochDescriptor};
 
 mod app {
-	use app_crypto::{app_crypto, key_types::BABE, sr25519};
+	use sp_application_crypto::{app_crypto, key_types::BABE, sr25519};
 	app_crypto!(sr25519, BABE);
 }
 

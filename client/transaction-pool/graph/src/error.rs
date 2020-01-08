@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -52,7 +52,7 @@ pub enum Error {
 		/// Transaction entering the pool.
 		new: Priority
 	},
-	/// Deps cycle etected and we couldn't import transaction.
+	/// Deps cycle detected and we couldn't import transaction.
 	#[display(fmt="Cycle Detected")]
 	CycleDetected,
 	/// Transaction was dropped immediately after it got inserted.

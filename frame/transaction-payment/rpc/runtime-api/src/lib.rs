@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use support::weights::{Weight, DispatchClass};
+use frame_support::weights::{Weight, DispatchClass};
 use codec::{Encode, Codec, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};

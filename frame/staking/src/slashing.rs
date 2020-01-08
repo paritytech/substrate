@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -53,7 +53,7 @@ use super::{
 	NegativeImbalanceOf, UnappliedSlash,
 };
 use sp_runtime::traits::{Zero, Saturating};
-use support::{
+use frame_support::{
 	StorageMap, StorageDoubleMap,
 	traits::{Currency, OnUnbalanced, Imbalance},
 };
@@ -392,9 +392,9 @@ fn slash_nominators<T: Trait>(
 			);
 
 			if target_span == Some(spans.span_index()) {
-				// Chill the nominator outright, ending the slashing span.
+				// End the span, but don't chill the nominator. its nomination
+				// on this validator will be ignored in the future.
 				spans.end_span(now);
-				<Module<T>>::chill_stash(stash);
 			}
 		}
 

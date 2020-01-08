@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -108,10 +108,10 @@ pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use primitives::crypto::UncheckedFrom;
+use sp_core::crypto::UncheckedFrom;
 use sp_std::{prelude::*, marker::PhantomData, convert::TryFrom, fmt};
 use codec::{Codec, Encode, Decode};
-use runtime_io::hashing::blake2_256;
+use sp_io::hashing::blake2_256;
 use sp_runtime::{
 	traits::{
 		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension, Convert,
@@ -121,9 +121,9 @@ use sp_runtime::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
 	},
 };
-use support::dispatch::{self, Dispatchable};
-use support::{
-	Parameter, decl_module, decl_event, decl_storage, storage::child,
+use frame_support::dispatch::{DispatchResult, Dispatchable};
+use frame_support::{
+	Parameter, decl_module, decl_event, decl_error, decl_storage, storage::child,
 	parameter_types, IsSubType,
 	weights::{DispatchInfo, Weight},
 	traits::{
@@ -131,10 +131,10 @@ use support::{
 		WithdrawReason, Imbalance,
 	},
 };
-use system::{ensure_signed, RawOrigin, ensure_root};
-use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
+use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
+use sp_core::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 
-pub type CodeHash<T> = <T as system::Trait>::Hash;
+pub type CodeHash<T> = <T as frame_system::Trait>::Hash;
 pub type TrieId = Vec<u8>;
 
 /// A function that generates an `AccountId` for a contract upon instantiation.
@@ -208,7 +208,7 @@ impl<T: Trait> ContractInfo<T> {
 }
 
 pub type AliveContractInfo<T> =
-	RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as system::Trait>::BlockNumber>;
+	RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as frame_system::Trait>::BlockNumber>;
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
@@ -228,8 +228,21 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	pub last_write: Option<BlockNumber>,
 }
 
+impl<CodeHash, Balance, BlockNumber> RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
+	/// Associated child trie unique id is built from the hash part of the trie id.
+	pub fn child_trie_unique_id(&self) -> child::ChildInfo {
+		trie_unique_id(&self.trie_id[..])
+	}
+}
+
+/// Associated child trie unique id is built from the hash part of the trie id.
+pub(crate) fn trie_unique_id(trie_id: &[u8]) -> child::ChildInfo {
+	let start = CHILD_STORAGE_KEY_PREFIX.len() + b"default:".len();
+	child::ChildInfo::new_default(&trie_id[start ..])
+}
+
 pub type TombstoneContractInfo<T> =
-	RawTombstoneContractInfo<<T as system::Trait>::Hash, <T as system::Trait>::Hashing>;
+	RawTombstoneContractInfo<<T as frame_system::Trait>::Hash, <T as frame_system::Trait>::Hashing>;
 
 #[derive(Encode, Decode, PartialEq, Eq, sp_runtime::RuntimeDebug)]
 pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
@@ -295,9 +308,9 @@ where
 	}
 }
 
-pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 pub type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 parameter_types! {
 	/// A reasonable default value for [`Trait::SignedClaimedHandicap`].
@@ -332,16 +345,16 @@ parameter_types! {
 	pub const DefaultMaxValueSize: u32 = 16_384;
 }
 
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	type Currency: Currency<Self::AccountId>;
 	type Time: Time;
 	type Randomness: Randomness<Self::Hash>;
 
 	/// The outer call dispatch type.
-	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin> + IsSubType<Module<Self>, Self>;
+	type Call: Parameter + Dispatchable<Origin=<Self as frame_system::Trait>::Origin> + IsSubType<Module<Self>, Self>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// A function type to get the contract address given the instantiator.
 	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
@@ -457,9 +470,29 @@ impl<T: Trait> ComputeDispatchFee<<T as Trait>::Call, BalanceOf<T>> for DefaultD
 	}
 }
 
+decl_error! {
+	/// Error for the contracts module.
+	pub enum Error for Module<T: Trait> {
+		/// A new schedule must have a greater version than the current one.
+		InvalidScheduleVersion,
+		/// An origin must be signed or inherent and auxiliary sender only provided on inherent.
+		InvalidSurchargeClaim,
+		/// Cannot restore from nonexisting or tombstone contract.
+		InvalidSourceContract,
+		/// Cannot restore to nonexisting or alive contract.
+		InvalidDestinationContract,
+		/// Tombstones don't match.
+		InvalidTombstone,
+		/// An origin TrieId written in the current block.
+		InvalidContractOrigin
+	}
+}
+
 decl_module! {
 	/// Contracts module.
-	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: <T as frame_system::Trait>::Origin {
+		type Error = Error<T>;
+
 		/// Number of block delay an extrinsic claim surcharge has.
 		///
 		/// When claim surcharge is called by an extrinsic the rent is checked
@@ -525,10 +558,10 @@ decl_module! {
 		/// Updates the schedule for metering contracts.
 		///
 		/// The schedule must have a greater version than the stored schedule.
-		pub fn update_schedule(origin, schedule: Schedule) -> dispatch::Result {
+		pub fn update_schedule(origin, schedule: Schedule) -> DispatchResult {
 			ensure_root(origin)?;
 			if <Module<T>>::current_schedule().version >= schedule.version {
-				return Err("new schedule must have a greater version than current");
+				Err(Error::<T>::InvalidScheduleVersion)?
 			}
 
 			Self::deposit_event(RawEvent::ScheduleUpdated(schedule.version));
@@ -542,7 +575,7 @@ decl_module! {
 		pub fn put_code(
 			origin,
 			code: Vec<u8>
-		) -> dispatch::Result {
+		) -> DispatchResult {
 			let _origin = ensure_signed(origin)?;
 
 			let schedule = <Module<T>>::current_schedule();
@@ -551,7 +584,7 @@ decl_module! {
 				Self::deposit_event(RawEvent::CodeStored(code_hash));
 			}
 
-			result.map(|_| ())
+			result.map(|_| ()).map_err(Into::into)
 		}
 
 		/// Makes a call to an account, optionally transferring some balance.
@@ -567,13 +600,13 @@ decl_module! {
 			#[compact] value: BalanceOf<T>,
 			#[compact] gas_limit: Gas,
 			data: Vec<u8>
-		) -> dispatch::Result {
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 
 			Self::bare_call(origin, dest, value, gas_limit, data)
 				.map(|_| ())
-				.map_err(|e| e.reason)
+				.map_err(|e| e.reason.into())
 		}
 
 		/// Instantiates a new contract from the `codehash` generated by `put_code`, optionally transferring some balance.
@@ -592,7 +625,7 @@ decl_module! {
 			#[compact] gas_limit: Gas,
 			code_hash: CodeHash<T>,
 			data: Vec<u8>
-		) -> dispatch::Result {
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			Self::execute_wasm(origin, gas_limit, |ctx, gas_meter| {
@@ -600,7 +633,7 @@ decl_module! {
 					.map(|(_address, output)| output)
 			})
 			.map(|_| ())
-			.map_err(|e| e.reason)
+			.map_err(|e| e.reason.into())
 		}
 
 		/// Allows block producers to claim a small reward for evicting a contract. If a block producer
@@ -611,16 +644,13 @@ decl_module! {
 		fn claim_surcharge(origin, dest: T::AccountId, aux_sender: Option<T::AccountId>) {
 			let origin = origin.into();
 			let (signed, rewarded) = match (origin, aux_sender) {
-				(Ok(system::RawOrigin::Signed(account)), None) => {
+				(Ok(frame_system::RawOrigin::Signed(account)), None) => {
 					(true, account)
 				},
-				(Ok(system::RawOrigin::None), Some(aux_sender)) => {
+				(Ok(frame_system::RawOrigin::None), Some(aux_sender)) => {
 					(false, aux_sender)
 				},
-				_ => return Err(
-					"Invalid surcharge claim: origin must be signed or \
-					inherent and auxiliary sender only provided on inherent"
-				),
+				_ => Err(Error::<T>::InvalidSurchargeClaim)?,
 			};
 
 			// Add some advantage for block producers (who send unsigned extrinsics) by
@@ -695,12 +725,7 @@ impl<T: Trait> Module<T> {
 		// Take the gas price prepared by the signed extension.
 		let gas_price = GasPrice::<T>::take();
 		debug_assert!(gas_price != 0.into());
-		let mut gas_meter =
-			try_or_exec_error!(
-				Ok(GasMeter::<T>::with_limit(gas_limit, gas_price)),
-				// We don't have a spare buffer here in the first place, so create a new empty one.
-				Vec::new()
-			);
+		let mut gas_meter = GasMeter::<T>::with_limit(gas_limit, gas_price);
 
 		let cfg = Config::preload();
 		let vm = WasmVm::new(&cfg.schedule);
@@ -729,7 +754,7 @@ impl<T: Trait> Module<T> {
 				DepositEvent {
 					topics,
 					event,
-				} => <system::Module<T>>::deposit_event_indexed(
+				} => <frame_system::Module<T>>::deposit_event_indexed(
 					&*topics,
 					<T as Trait>::Event::from(event).into(),
 				),
@@ -761,20 +786,20 @@ impl<T: Trait> Module<T> {
 		code_hash: CodeHash<T>,
 		rent_allowance: BalanceOf<T>,
 		delta: Vec<exec::StorageKey>
-	) -> dispatch::Result {
+	) -> DispatchResult {
 		let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
 			.and_then(|c| c.get_alive())
-			.ok_or("Cannot restore from inexisting or tombstone contract")?;
+			.ok_or(Error::<T>::InvalidSourceContract)?;
 
-		let current_block = <system::Module<T>>::block_number();
+		let current_block = <frame_system::Module<T>>::block_number();
 
 		if origin_contract.last_write == Some(current_block) {
-			return Err("Origin TrieId written in the current block");
+			Err(Error::<T>::InvalidContractOrigin)?
 		}
 
 		let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
 			.and_then(|c| c.get_tombstone())
-			.ok_or("Cannot restore to inexisting or alive contract")?;
+			.ok_or(Error::<T>::InvalidDestinationContract)?;
 
 		let last_write = if !delta.is_empty() {
 			Some(current_block)
@@ -784,8 +809,17 @@ impl<T: Trait> Module<T> {
 
 		let key_values_taken = delta.iter()
 			.filter_map(|key| {
-				child::get_raw(&origin_contract.trie_id, &blake2_256(key)).map(|value| {
-					child::kill(&origin_contract.trie_id, &blake2_256(key));
+				child::get_raw(
+					&origin_contract.trie_id,
+					origin_contract.child_trie_unique_id(),
+					&blake2_256(key),
+				).map(|value| {
+					child::kill(
+						&origin_contract.trie_id,
+						origin_contract.child_trie_unique_id(),
+						&blake2_256(key),
+					);
+
 					(key, value)
 				})
 			})
@@ -794,16 +828,23 @@ impl<T: Trait> Module<T> {
 		let tombstone = <TombstoneContractInfo<T>>::new(
 			// This operation is cheap enough because last_write (delta not included)
 			// is not this block as it has been checked earlier.
-			&runtime_io::storage::child_root(&origin_contract.trie_id)[..],
+			&child::child_root(
+				&origin_contract.trie_id,
+			)[..],
 			code_hash,
 		);
 
 		if tombstone != dest_tombstone {
 			for (key, value) in key_values_taken {
-				child::put_raw(&origin_contract.trie_id, &blake2_256(key), &value);
+				child::put_raw(
+					&origin_contract.trie_id,
+					origin_contract.child_trie_unique_id(),
+					&blake2_256(key),
+					&value,
+				);
 			}
 
-			return Err("Tombstones don't match");
+			return Err(Error::<T>::InvalidTombstone.into());
 		}
 
 		origin_contract.storage_size -= key_values_taken.iter()
@@ -832,8 +873,8 @@ decl_event! {
 	pub enum Event<T>
 	where
 		Balance = BalanceOf<T>,
-		<T as system::Trait>::AccountId,
-		<T as system::Trait>::Hash
+		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Trait>::Hash
 	{
 		/// Transfer happened `from` to `to` with given `value` as part of a `call` or `instantiate`.
 		Transfer(AccountId, AccountId, Balance),
@@ -882,7 +923,7 @@ decl_storage! {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::take(who) {
-			child::kill_storage(&info.trie_id);
+			child::kill_storage(&info.trie_id, info.child_trie_unique_id());
 		}
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,10 +20,10 @@ use std::{self, error, result};
 use sp_state_machine;
 use sp_runtime::transaction_validity::TransactionValidityError;
 #[allow(deprecated)]
-use sp_block_builder_runtime_api::compatability_v3;
+use sp_block_builder::compatability_v3;
 use sp_consensus;
 use derive_more::{Display, From};
-use parity_scale_codec::Error as CodecError;
+use codec::Error as CodecError;
 
 /// Client Result type alias
 pub type Result<T> = result::Result<T, Error>;

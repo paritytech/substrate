@@ -1,5 +1,5 @@
 [package]
-name = "sp-transaction-pool-api"
+name = "sp-transaction-pool"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -10,8 +10,8 @@ derive_more = { version = "0.99.2", optional = true }
 futures = { version = "0.3.1", optional = true }
 log = { version = "0.4.8", optional = true }
 serde = { version = "1.0.101", features = ["derive"], optional = true}
-sp-api = { path = "../sr-api", default-features = false }
-sp-runtime = { path = "../runtime", default-features = false }
+sp-api = { version = "2.0.0", default-features = false, path = "../api" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
 
 [features]
 default = [ "std" ]

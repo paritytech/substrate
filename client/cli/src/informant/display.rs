@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -15,11 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use ansi_term::Colour;
-use client_api::ClientInfo;
+use sc_client_api::ClientInfo;
 use log::info;
-use network::SyncState;
+use sc_network::SyncState;
 use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Zero, Saturating};
-use service::NetworkStatus;
+use sc_service::NetworkStatus;
 use std::{convert::{TryFrom, TryInto}, fmt, time};
 
 /// State of the informant display system.

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, ProvideRuntimeApi, UniqueSaturatedInto},
 };
-use primitives::Bytes;
+use sp_core::Bytes;
 use pallet_transaction_payment_rpc_runtime_api::CappedDispatchInfo;
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 pub use self::gen_client::Client as TransactionPaymentClient;

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -130,7 +130,7 @@ fn impl_trait_for_externalities(trait_def: &ItemTrait, is_wasm_only: bool) -> Re
 		});
 
 	let impl_type = if is_wasm_only {
-		quote!( &mut dyn #crate_::wasm_interface::FunctionContext )
+		quote!( &mut dyn #crate_::sp_wasm_interface::FunctionContext )
 	} else {
 		quote!( &mut dyn #crate_::Externalities )
 	};

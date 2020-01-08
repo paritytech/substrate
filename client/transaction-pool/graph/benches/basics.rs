@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,12 +20,12 @@ use futures::executor::block_on;
 use sc_transaction_graph::*;
 use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction};
 use codec::Encode;
-use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
+use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 use sp_runtime::{
 	generic::BlockId,
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
-use primitives::blake2_256;
+use sp_core::blake2_256;
 
 #[derive(Clone, Debug, Default)]
 struct TestApi {
@@ -48,8 +48,8 @@ fn to_tag(nonce: u64, from: AccountId) -> Tag {
 impl ChainApi for TestApi {
 	type Block = Block;
 	type Hash = H256;
-	type Error = txpool_api::error::Error;
-	type ValidationFuture = futures::future::Ready<txpool_api::error::Result<TransactionValidity>>;
+	type Error = sp_transaction_pool::error::Error;
+	type ValidationFuture = futures::future::Ready<sp_transaction_pool::error::Result<TransactionValidity>>;
 
 	fn validate_transaction(
 		&self,

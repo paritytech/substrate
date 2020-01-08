@@ -6,9 +6,9 @@ description = "Authorship primitives"
 edition = "2018"
 
 [dependencies]
-sp-inherents = { path = "../inherents", default-features = false }
-sp-runtime = { path = "../runtime", default-features = false }
-sp-std = { path = "../std", default-features = false }
+sp-inherents = { version = "2.0.0", default-features = false, path = "../inherents" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
+sp-std = { version = "2.0.0", default-features = false, path = "../std" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 
 [features]

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -15,14 +15,12 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Uncles functionality for Substrate.
-//!
-#![deny(warnings)]
 #![forbid(unsafe_code, missing_docs)]
 
-use consensus_common::SelectChain;
-use inherents::{InherentDataProviders};
+use sp_consensus::SelectChain;
+use sp_inherents::{InherentDataProviders};
 use log::warn;
-use client_api::ProvideUncles;
+use sc_client_api::ProvideUncles;
 use sp_runtime::traits::{Block as BlockT, Header};
 use std::sync::Arc;
 use sp_authorship;
@@ -35,7 +33,7 @@ pub fn register_uncles_inherent_data_provider<B, C, SC>(
 	client: Arc<C>,
 	select_chain: SC,
 	inherent_data_providers: &InherentDataProviders,
-) -> Result<(), consensus_common::Error> where
+) -> Result<(), sp_consensus::Error> where
 	B: BlockT,
 	C: ProvideUncles<B> + Send + Sync + 'static,
 	SC: SelectChain<B> + 'static,
@@ -60,7 +58,7 @@ pub fn register_uncles_inherent_data_provider<B, C, SC>(
 					}
 				}
 			}))
-		.map_err(|err| consensus_common::Error::InherentData(err.into()))?;
+		.map_err(|err| sp_consensus::Error::InherentData(err.into()))?;
 	}
 	Ok(())
 }

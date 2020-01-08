@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -26,8 +26,8 @@ use crate::traits::{
 #[allow(deprecated)]
 use crate::traits::ValidateUnsigned;
 use crate::{generic, KeyTypeId, ApplyExtrinsicResult};
-pub use primitives::{H256, sr25519};
-use primitives::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
+pub use sp_core::{H256, sr25519};
+use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::{TransactionValidity, TransactionValidityError};
 
 /// Authority Id
@@ -80,7 +80,7 @@ impl UintAuthorityId {
 	}
 }
 
-impl app_crypto::RuntimeAppPublic for UintAuthorityId {
+impl sp_application_crypto::RuntimeAppPublic for UintAuthorityId {
 	const ID: KeyTypeId = key_types::DUMMY;
 
 	type Signature = u64;

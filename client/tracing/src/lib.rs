@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -293,5 +293,7 @@ fn send_telemetry(span_datum: SpanDatum) {
 
 fn send_grafana(span_datum: SpanDatum) {
 	let name = format!("{}::{}", span_datum.target, span_datum.name);
-	record_metrics!(&name => span_datum.overall_time.as_nanos(),);
+	if let Err(e) = record_metrics!(&name => span_datum.overall_time.as_nanos(),) {
+		log::warn!("Unable to send metrics to grafana: {:?}", e);
+	}
 }

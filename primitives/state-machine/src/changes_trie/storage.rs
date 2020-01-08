@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,8 +18,8 @@
 
 use std::collections::{BTreeMap, HashSet, HashMap};
 use hash_db::{Hasher, Prefix, EMPTY_PREFIX};
-use trie::DBValue;
-use trie::MemoryDB;
+use sp_trie::DBValue;
+use sp_trie::MemoryDB;
 use parking_lot::RwLock;
 use crate::changes_trie::{BuildCache, RootsStorage, Storage, AnchorBlockId, BlockNumber};
 use crate::trie_backend_essence::TrieBackendStorage;

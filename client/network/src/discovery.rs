@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -63,7 +63,7 @@ use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
 use std::{cmp, collections::VecDeque, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
-use primitives::hexdisplay::HexDisplay;
+use sp_core::hexdisplay::HexDisplay;
 
 /// Implementation of `NetworkBehaviour` that discovers the nodes on the network.
 pub struct DiscoveryBehaviour<TSubstream> {

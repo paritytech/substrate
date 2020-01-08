@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -25,18 +25,18 @@ use futures::{Future, Stream, Poll};
 use tempfile::TempDir;
 use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
-use service::{
+use sc_service::{
 	AbstractService,
 	ChainSpec,
 	Configuration,
-	config::DatabaseConfig,
+	config::{DatabaseConfig, KeystoreConfig},
 	Roles,
 	Error,
 };
-use network::{multiaddr, Multiaddr};
-use network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
+use sc_network::{multiaddr, Multiaddr, NetworkStateInfo};
+use sc_network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
-use txpool_api::TransactionPool;
+use sp_transaction_pool::TransactionPool;
 
 /// Maximum duration of single wait call.
 const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
@@ -72,9 +72,9 @@ impl<T> From<T> for SyncService<T> {
 	}
 }
 
-impl<T: Future<Item=(), Error=service::Error>> Future for SyncService<T> {
+impl<T: Future<Item=(), Error=sc_service::Error>> Future for SyncService<T> {
 	type Item = ();
-	type Error = service::Error;
+	type Error = sc_service::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		self.0.lock().unwrap().poll()
@@ -173,8 +173,10 @@ fn node_config<G, E: Clone> (
 		roles: role,
 		transaction_pool: Default::default(),
 		network: network_config,
-		keystore_path: Some(root.join("key")),
-		keystore_password: None,
+		keystore: KeystoreConfig::Path {
+			path: Some(root.join("key")),
+			password: None
+		},
 		config_dir: Some(root.clone()),
 		database: DatabaseConfig::Path {
 			path: root.join("db"),
@@ -186,7 +188,7 @@ fn node_config<G, E: Clone> (
 		chain_spec: (*spec).clone(),
 		custom: Default::default(),
 		name: format!("Node {}", index),
-		wasm_method: service::config::WasmExecutionMethod::Interpreted,
+		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ws: None,
@@ -299,8 +301,6 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	spec: ChainSpec<G, E>,
 	full_builder: Fb,
 	light_builder: Lb,
-	light_node_interconnectivity: bool, // should normally be false, unless the light nodes
-	// aren't actually light.
 ) where
 	E: Clone,
 	Fb: Fn(Configuration<(), G, E>) -> Result<F, Error>,
@@ -312,11 +312,7 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	const NUM_LIGHT_NODES: usize = 5;
 
 	let expected_full_connections = NUM_FULL_NODES - 1 + NUM_LIGHT_NODES;
-	let expected_light_connections = if light_node_interconnectivity {
-		expected_full_connections
-	} else {
-		NUM_FULL_NODES
-	};
+	let expected_light_connections = NUM_FULL_NODES;
 
 	{
 		let temp = tempdir_with_prefix("substrate-connectivity-test");
@@ -452,15 +448,15 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().info().chain.best_number == (NUM_BLOCKS as u32).into(),
+			service.get().client().chain_info().best_number == (NUM_BLOCKS as u32).into(),
 		|_index, service|
-			service.get().client().info().chain.best_number == (NUM_BLOCKS as u32).into(),
+			service.get().client().chain_info().best_number == (NUM_BLOCKS as u32).into(),
 	);
 
 	info!("Checking extrinsic propagation");
 	let first_service = network.full_nodes[0].1.clone();
 	let first_user_data = &network.full_nodes[0].2;
-	let best_block = BlockId::number(first_service.get().client().info().chain.best_number);
+	let best_block = BlockId::number(first_service.get().client().chain_info().best_number);
 	let extrinsic = extrinsic_factory(&first_service.get(), first_user_data);
 	futures03::executor::block_on(first_service.get().transaction_pool().submit_one(&best_block, extrinsic)).unwrap();
 	network.run_until_all_full(
@@ -507,9 +503,9 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().info().chain.finalized_number >= (NUM_BLOCKS as u32 / 2).into(),
+			service.get().client().chain_info().finalized_number >= (NUM_BLOCKS as u32 / 2).into(),
 		|_index, service|
-			service.get().client().info().chain.best_number >= (NUM_BLOCKS as u32 / 2).into(),
+			service.get().client().chain_info().best_number >= (NUM_BLOCKS as u32 / 2).into(),
 	);
 
 	info!("Adding more peers");
@@ -529,8 +525,8 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().info().chain.finalized_number >= (NUM_BLOCKS as u32).into(),
+			service.get().client().chain_info().finalized_number >= (NUM_BLOCKS as u32).into(),
 		|_index, service|
-			service.get().client().info().chain.best_number >= (NUM_BLOCKS as u32).into(),
+			service.get().client().chain_info().best_number >= (NUM_BLOCKS as u32).into(),
 	);
 }

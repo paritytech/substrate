@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,15 +19,12 @@
 use super::*;
 use mock::*;
 
-use support::{assert_ok, assert_noop};
-use sp_runtime::traits::OnInitialize;
+use frame_support::{assert_ok, assert_noop};
+use sp_runtime::traits::{OnInitialize, BadOrigin};
 
 type ScoredPool = Module<Test>;
-type System = system::Module<Test>;
-type Balances = balances::Module<Test>;
-
-const OOB_ERR: &str = "index out of bounds";
-const INDEX_ERR: &str = "index does not match requested account";
+type System = frame_system::Module<Test>;
+type Balances = pallet_balances::Module<Test>;
 
 #[test]
 fn query_membership_works() {
@@ -44,11 +41,11 @@ fn submit_candidacy_must_not_work() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			ScoredPool::submit_candidacy(Origin::signed(99)),
-			"balance too low to submit candidacy"
+			pallet_balances::Error::<Test, _>::InsufficientBalance,
 		);
 		assert_noop!(
 			ScoredPool::submit_candidacy(Origin::signed(40)),
-			"already a member"
+			Error::<Test, _>::AlreadyInPool
 		);
 	});
 }
@@ -111,7 +108,7 @@ fn kicking_works_only_for_authorized() {
 	new_test_ext().execute_with(|| {
 		let who = 40;
 		let index = find_in_pool(who).expect("entity must be in pool") as u32;
-		assert_noop!(ScoredPool::kick(Origin::signed(99), who, index), "bad origin");
+		assert_noop!(ScoredPool::kick(Origin::signed(99), who, index), BadOrigin);
 	});
 }
 
@@ -203,7 +200,7 @@ fn withdraw_candidacy_must_only_work_for_members() {
 	new_test_ext().execute_with(|| {
 		let who = 77;
 		let index = 0;
-		assert_noop!( ScoredPool::withdraw_candidacy(Origin::signed(who), index), INDEX_ERR);
+		assert_noop!( ScoredPool::withdraw_candidacy(Origin::signed(who), index), Error::<Test, _>::WrongAccountIndex);
 	});
 }
 
@@ -212,9 +209,9 @@ fn oob_index_should_abort() {
 	new_test_ext().execute_with(|| {
 		let who = 40;
 		let oob_index = ScoredPool::pool().len() as u32;
-		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), oob_index), OOB_ERR);
-		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, oob_index, 99), OOB_ERR);
-		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, oob_index), OOB_ERR);
+		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), oob_index), Error::<Test, _>::InvalidIndex);
+		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, oob_index, 99), Error::<Test, _>::InvalidIndex);
+		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, oob_index), Error::<Test, _>::InvalidIndex);
 	});
 }
 
@@ -223,9 +220,9 @@ fn index_mismatches_should_abort() {
 	new_test_ext().execute_with(|| {
 		let who = 40;
 		let index = 3;
-		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), index), INDEX_ERR);
-		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99), INDEX_ERR);
-		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index), INDEX_ERR);
+		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), index), Error::<Test, _>::WrongAccountIndex);
+		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99), Error::<Test, _>::WrongAccountIndex);
+		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index), Error::<Test, _>::WrongAccountIndex);
 	});
 }
 

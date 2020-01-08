@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -29,19 +29,19 @@ use super::{
 };
 
 use log::{debug, warn};
-use client_api::{BlockImportNotification, ImportNotifications};
+use sc_client_api::{BlockImportNotification, ImportNotifications};
 use futures::prelude::*;
 use futures::stream::Fuse;
+use futures_timer::Delay;
 use futures03::{StreamExt as _, TryStreamExt as _};
-use grandpa::voter;
+use finality_grandpa::voter;
 use parking_lot::Mutex;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use tokio_timer::Interval;
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
 use std::time::{Duration, Instant};
-use fg_primitives::AuthorityId;
+use sp_finality_grandpa::AuthorityId;
 
 const LOG_PENDING_INTERVAL: Duration = Duration::from_secs(15);
 
@@ -76,7 +76,7 @@ pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, 
 	status_check: BlockStatus,
 	inner: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
-	check_pending: Interval,
+	check_pending: Box<dyn Stream<Item = (), Error = std::io::Error> + Send>,
 	/// Mapping block hashes to their block number, the point in time it was
 	/// first encountered (Instant) and a list of GRANDPA messages referencing
 	/// the block hash.
@@ -104,9 +104,13 @@ impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockSta
 		// the import notifications interval takes care of most of this; this is
 		// used in the event of missed import notifications
 		const CHECK_PENDING_INTERVAL: Duration = Duration::from_secs(5);
-		let now = Instant::now();
 
-		let check_pending = Interval::new(now + CHECK_PENDING_INTERVAL, CHECK_PENDING_INTERVAL);
+		let check_pending = futures03::stream::unfold(Delay::new(CHECK_PENDING_INTERVAL), |delay|
+			Box::pin(async move {
+				delay.await;
+				Some(((), Delay::new(CHECK_PENDING_INTERVAL)))
+			})).map(Ok).compat();
+
 		UntilImported {
 			import_notifications: {
 				let stream = import_notifications.map::<_, fn(_) -> _>(|v| Ok::<_, ()>(v)).compat();
@@ -116,7 +120,7 @@ impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockSta
 			status_check,
 			inner: stream.fuse(),
 			ready: VecDeque::new(),
-			check_pending,
+			check_pending: Box::new(check_pending),
 			pending: HashMap::new(),
 			identifier,
 		}
@@ -471,13 +475,13 @@ mod tests {
 	use super::*;
 	use crate::{CatchUp, CompactCommit};
 	use tokio::runtime::current_thread::Runtime;
-	use tokio_timer::Delay;
-	use test_client::runtime::{Block, Hash, Header};
-	use consensus_common::BlockOrigin;
-	use client_api::BlockImportNotification;
+	use substrate_test_runtime_client::runtime::{Block, Hash, Header};
+	use sp_consensus::BlockOrigin;
+	use sc_client_api::BlockImportNotification;
 	use futures::future::Either;
-	use futures03::channel::mpsc;
-	use grandpa::Precommit;
+	use futures_timer::Delay;
+	use futures03::{channel::mpsc, future::FutureExt as _, future::TryFutureExt as _};
+	use finality_grandpa::Precommit;
 
 	#[derive(Clone)]
 	struct TestChainState {
@@ -539,7 +543,7 @@ mod tests {
 	}
 
 	impl BlockSyncRequesterT<Block> for TestBlockSyncRequester {
-		fn set_sync_fork_request(&self, _peers: Vec<network::PeerId>, hash: Hash, number: NumberFor<Block>) {
+		fn set_sync_fork_request(&self, _peers: Vec<sc_network::PeerId>, hash: Hash, number: NumberFor<Block>) {
 			self.requests.lock().push((hash, number));
 		}
 	}
@@ -628,7 +632,7 @@ mod tests {
 		let inner_chain_state = chain_state.clone();
 		let work = until_imported
 			.into_future()
-			.select2(Delay::new(Instant::now() + Duration::from_millis(100)))
+			.select2(Delay::new(Duration::from_millis(100)).unit_error().compat())
 			.then(move |res| match res {
 				Err(_) => panic!("neither should have had error"),
 				Ok(Either::A(_)) => panic!("timeout should have fired first"),
@@ -737,10 +741,10 @@ mod tests {
 		let h3 = make_header(7);
 
 		let signed_prevote = |header: &Header| {
-			grandpa::SignedPrevote {
+			finality_grandpa::SignedPrevote {
 				id: Default::default(),
 				signature: Default::default(),
-				prevote: grandpa::Prevote {
+				prevote: finality_grandpa::Prevote {
 					target_hash: header.hash(),
 					target_number: *header.number(),
 				},
@@ -748,10 +752,10 @@ mod tests {
 		};
 
 		let signed_precommit = |header: &Header| {
-			grandpa::SignedPrecommit {
+			finality_grandpa::SignedPrecommit {
 				id: Default::default(),
 				signature: Default::default(),
-				precommit: grandpa::Precommit {
+				precommit: finality_grandpa::Precommit {
 					target_hash: header.hash(),
 					target_number: *header.number(),
 				},
@@ -768,7 +772,7 @@ mod tests {
 			signed_precommit(&h2),
 		];
 
-		let unknown_catch_up = grandpa::CatchUp {
+		let unknown_catch_up = finality_grandpa::CatchUp {
 			round_number: 1,
 			prevotes,
 			precommits,
@@ -803,10 +807,10 @@ mod tests {
 		let h3 = make_header(7);
 
 		let signed_prevote = |header: &Header| {
-			grandpa::SignedPrevote {
+			finality_grandpa::SignedPrevote {
 				id: Default::default(),
 				signature: Default::default(),
-				prevote: grandpa::Prevote {
+				prevote: finality_grandpa::Prevote {
 					target_hash: header.hash(),
 					target_number: *header.number(),
 				},
@@ -814,10 +818,10 @@ mod tests {
 		};
 
 		let signed_precommit = |header: &Header| {
-			grandpa::SignedPrecommit {
+			finality_grandpa::SignedPrecommit {
 				id: Default::default(),
 				signature: Default::default(),
-				precommit: grandpa::Precommit {
+				precommit: finality_grandpa::Precommit {
 					target_hash: header.hash(),
 					target_number: *header.number(),
 				},
@@ -834,7 +838,7 @@ mod tests {
 			signed_precommit(&h2),
 		];
 
-		let unknown_catch_up = grandpa::CatchUp {
+		let unknown_catch_up = finality_grandpa::CatchUp {
 			round_number: 1,
 			prevotes,
 			precommits,
@@ -929,7 +933,7 @@ mod tests {
 
 		// the `until_imported` stream doesn't request the blocks immediately,
 		// but it should request them after a small timeout
-		let timeout = Delay::new(Instant::now() + Duration::from_secs(60));
+		let timeout = Delay::new(Duration::from_secs(60)).unit_error().compat();
 		let test = assert.select2(timeout).map(|res| match res {
 			Either::A(_) => {},
 			Either::B(_) => panic!("timed out waiting for block sync request"),

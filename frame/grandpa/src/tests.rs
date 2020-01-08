@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 
 use sp_runtime::{testing::Digest, traits::{Header, OnFinalize}};
 use crate::mock::*;
-use system::{EventRecord, Phase};
+use frame_system::{EventRecord, Phase};
 use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;
 use super::*;

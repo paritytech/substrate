@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 //! Schema for slots in the aux-db.
 
 use codec::{Encode, Decode};
-use client_api::backend::AuxStore;
+use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use sp_runtime::traits::Header;
 
@@ -151,10 +151,10 @@ pub fn check_equivocation<C, H, P>(
 
 #[cfg(test)]
 mod test {
-	use primitives::{sr25519, Pair};
-	use primitives::hash::H256;
+	use sp_core::{sr25519, Pair};
+	use sp_core::hash::H256;
 	use sp_runtime::testing::{Header as HeaderTest, Digest as DigestTest};
-	use test_client;
+	use substrate_test_runtime_client;
 
 	use super::{MAX_SLOT_CAPACITY, PRUNING_BOUND, check_equivocation};
 
@@ -175,7 +175,7 @@ mod test {
 
 	#[test]
 	fn check_equivocation_works() {
-		let client = test_client::new();
+		let client = substrate_test_runtime_client::new();
 		let (pair, _seed) = sr25519::Pair::generate();
 		let public = pair.public();
 

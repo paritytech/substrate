@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,19 +16,20 @@
 
 //! Blockchain access trait
 
-use client::Client as SubstrateClient;
-use sp_blockchain::Error;
-use client_api::{ChangesProof, StorageProof, ClientInfo, CallExecutor};
-use consensus::{BlockImport, BlockStatus, Error as ConsensusError};
+use sc_client::Client as SubstrateClient;
+use sp_blockchain::{Error, Info as BlockchainInfo};
+use sc_client_api::{ChangesProof, StorageProof, CallExecutor};
+use sp_consensus::{BlockImport, BlockStatus, Error as ConsensusError};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_runtime::generic::{BlockId};
 use sp_runtime::Justification;
-use primitives::{H256, Blake2Hasher, storage::StorageKey};
+use sp_core::{H256, Blake2Hasher};
+use sp_core::storage::{StorageKey, ChildInfo};
 
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
 	/// Get blockchain info.
-	fn info(&self) -> ClientInfo<Block>;
+	fn info(&self) -> BlockchainInfo<Block>;
 
 	/// Get block status.
 	fn block_status(&self, id: &BlockId<Block>) -> Result<BlockStatus, Error>;
@@ -57,6 +58,7 @@ pub trait Client<Block: BlockT>: Send + Sync {
 		&self,
 		block: &Block::Hash,
 		storage_key: &[u8],
+		child_info: ChildInfo,
 		keys: &[Vec<u8>],
 	) -> Result<StorageProof, Error>;
 
@@ -91,14 +93,14 @@ impl<Block: BlockT> FinalityProofProvider<Block> for () {
 }
 
 impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
-	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	Self: BlockImport<Block, Error=ConsensusError>,
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync
 {
-	fn info(&self) -> ClientInfo<Block> {
-		(self as &SubstrateClient<B, E, Block, RA>).info()
+	fn info(&self) -> BlockchainInfo<Block> {
+		(self as &SubstrateClient<B, E, Block, RA>).chain_info()
 	}
 
 	fn block_status(&self, id: &BlockId<Block>) -> Result<BlockStatus, Error> {
@@ -135,10 +137,11 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		&self,
 		block: &Block::Hash,
 		storage_key: &[u8],
+		child_info: ChildInfo,
 		keys: &[Vec<u8>],
 	) -> Result<StorageProof, Error> {
 		(self as &SubstrateClient<B, E, Block, RA>)
-			.read_child_proof(&BlockId::Hash(block.clone()), storage_key, keys)
+			.read_child_proof(&BlockId::Hash(block.clone()), storage_key, child_info, keys)
 	}
 
 	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, StorageProof), Error> {

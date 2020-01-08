@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,8 +22,8 @@ use sp_blockchain::HeaderBackend;
 use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use primitives::{H256, Bytes};
-use rpc_primitives::number;
+use sp_core::{H256, Bytes};
+use sp_rpc::number;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	generic::BlockId,

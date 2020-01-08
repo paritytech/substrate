@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -201,7 +201,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 #[cfg(test)]
 mod tests {
 	use super::RefWindow;
-	use primitives::H256;
+	use sp_core::H256;
 	use crate::CommitSet;
 	use crate::test::{make_db, make_commit, TestDb};
 

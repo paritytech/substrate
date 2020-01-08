@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ pub use value::StorageValue;
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
-	use runtime_io::TestExternalities;
+	use sp_io::TestExternalities;
 	use codec::{Encode, Decode};
 	use crate::storage::{unhashed, generator::{StorageValue, StorageLinkedMap}};
 

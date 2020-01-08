@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,13 +20,13 @@
 
 use super::*;
 use crate::mock::*;
-use primitives::offchain::{
+use sp_core::offchain::{
 	OpaquePeerId,
 	OffchainExt,
 	TransactionPoolExt,
 	testing::{TestOffchainExt, TestTransactionPoolExt},
 };
-use support::{dispatch, assert_noop};
+use frame_support::{dispatch, assert_noop};
 use sp_runtime::testing::UintAuthorityId;
 
 #[test]
@@ -111,9 +111,9 @@ fn heartbeat(
 	session_index: u32,
 	authority_index: u32,
 	id: UintAuthorityId,
-) -> dispatch::Result {
+) -> dispatch::DispatchResult {
 	#[allow(deprecated)]
-	use support::unsigned::ValidateUnsigned;
+	use frame_support::unsigned::ValidateUnsigned;
 
 	let heartbeat = Heartbeat {
 		block_number,
@@ -127,9 +127,10 @@ fn heartbeat(
 	let signature = id.sign(&heartbeat.encode()).unwrap();
 
 	#[allow(deprecated)] // Allow ValidateUnsigned
-	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone()))?;
+	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone()))
+		.map_err(|e| <&'static str>::from(e))?;
 	ImOnline::heartbeat(
-		Origin::system(system::RawOrigin::None),
+		Origin::system(frame_system::RawOrigin::None),
 		heartbeat,
 		signature
 	)
@@ -224,7 +225,7 @@ fn should_generate_heartbeats() {
 
 		assert_eq!(heartbeat, Heartbeat {
 			block_number: 2,
-			network_state: runtime_io::offchain::network_state().unwrap(),
+			network_state: sp_io::offchain::network_state().unwrap(),
 			session_index: 2,
 			authority_index: 2,
 		});
@@ -262,7 +263,7 @@ fn should_cleanup_received_heartbeats_on_session_end() {
 
 #[test]
 fn should_mark_online_validator_when_block_is_authored() {
-	use authorship::EventHandler;
+	use pallet_authorship::EventHandler;
 
 	new_test_ext().execute_with(|| {
 		advance_session();
@@ -292,7 +293,7 @@ fn should_mark_online_validator_when_block_is_authored() {
 
 #[test]
 fn should_not_send_a_report_if_already_online() {
-	use authorship::EventHandler;
+	use pallet_authorship::EventHandler;
 
 	let mut ext = new_test_ext();
 	let (offchain, _state) = TestOffchainExt::new();
@@ -313,7 +314,7 @@ fn should_not_send_a_report_if_already_online() {
 		ImOnline::note_uncle(3, 0);
 
 		// when
-		UintAuthorityId::set_all_keys(vec![0]); // all authorities use session key 0
+		UintAuthorityId::set_all_keys(vec![0]); // all authorities use pallet_session key 0
 		ImOnline::offchain(4);
 
 		// then
@@ -329,7 +330,7 @@ fn should_not_send_a_report_if_already_online() {
 
 		assert_eq!(heartbeat, Heartbeat {
 			block_number: 4,
-			network_state: runtime_io::offchain::network_state().unwrap(),
+			network_state: sp_io::offchain::network_state().unwrap(),
 			session_index: 2,
 			authority_index: 0,
 		});

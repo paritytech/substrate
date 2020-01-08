@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 use super::Runtime;
 use crate::exec::Ext;
 
-use sandbox::{self, TypedValue};
+use sp_sandbox::{self, TypedValue};
 use parity_wasm::elements::{FunctionType, ValueType};
 
 #[macro_use]
@@ -69,8 +69,8 @@ impl ConvertibleToWasm for u64 {
 pub(crate) type HostFunc<E> =
 	fn(
 		&mut Runtime<E>,
-		&[sandbox::TypedValue]
-	) -> Result<sandbox::ReturnValue, sandbox::HostError>;
+		&[sp_sandbox::TypedValue]
+	) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError>;
 
 pub(crate) trait FunctionImplProvider<E: Ext> {
 	fn impls<F: FnMut(&[u8], HostFunc<E>)>(f: &mut F);

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -27,19 +27,20 @@ use rpc::{
 	futures::{stream, Future, Sink, Stream, future::result},
 };
 
-use api::Subscriptions;
-use client_api::backend::Backend;
+use sc_rpc_api::Subscriptions;
+use sc_client_api::backend::Backend;
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata
 };
-use client::{
-	Client, CallExecutor, BlockchainEvents, 
+use sc_client::{
+	Client, CallExecutor, BlockchainEvents,
 };
-use primitives::{
-	H256, Blake2Hasher, Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet},
+use sp_core::{
+	H256, Blake2Hasher, Bytes,
+	storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, ChildInfo},
 };
-use runtime_version::RuntimeVersion;
-use state_machine::ExecutionStrategy;
+use sp_version::RuntimeVersion;
+use sp_state_machine::ExecutionStrategy;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor, ProvideRuntimeApi, SaturatedConversion},
@@ -47,7 +48,7 @@ use sp_runtime::{
 
 use sp_api::Metadata;
 
-use super::{StateBackend, error::{FutureResult, Error, Result}, client_err};
+use super::{StateBackend, error::{FutureResult, Error, Result}, client_err, child_resolution_error};
 
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
@@ -82,7 +83,7 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 
 	/// Returns given block hash or best block hash if None is passed.
 	fn block_or_best(&self, hash: Option<Block::Hash>) -> ClientResult<Block::Hash> {
-		Ok(hash.unwrap_or_else(|| self.client.info().chain.best_hash))
+		Ok(hash.unwrap_or_else(|| self.client.chain_info().best_hash))
 	}
 
 	/// Splits the `query_storage` block range into 'filtered' and 'unfiltered' subranges.
@@ -287,11 +288,19 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		&self,
 		block: Option<Block::Hash>,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.child_storage_keys(&BlockId::Hash(block), &child_storage_key, &prefix))
+				.and_then(|block| self.client.child_storage_keys(
+					&BlockId::Hash(block),
+					&child_storage_key,
+					ChildInfo::resolve_child_info(child_type, &child_info.0[..])
+						.ok_or_else(child_resolution_error)?,
+					&prefix,
+				))
 				.map_err(client_err)))
 	}
 
@@ -299,11 +308,19 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		&self,
 		block: Option<Block::Hash>,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.child_storage(&BlockId::Hash(block), &child_storage_key, &key))
+				.and_then(|block| self.client.child_storage(
+					&BlockId::Hash(block),
+					&child_storage_key,
+					ChildInfo::resolve_child_info(child_type, &child_info.0[..])
+						.ok_or_else(child_resolution_error)?,
+					&key,
+				))
 				.map_err(client_err)))
 	}
 
@@ -311,11 +328,19 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		&self,
 		block: Option<Block::Hash>,
 		child_storage_key: StorageKey,
+		child_info: StorageKey,
+		child_type: u32,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.child_storage_hash(&BlockId::Hash(block), &child_storage_key, &key))
+				.and_then(|block| self.client.child_storage_hash(
+					&BlockId::Hash(block),
+					&child_storage_key,
+					ChildInfo::resolve_child_info(child_type, &child_info.0[..])
+						.ok_or_else(child_resolution_error)?,
+					&key,
+				))
 				.map_err(client_err)))
 	}
 
@@ -378,9 +403,9 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 
 			let stream = stream
 				.filter_map(move |_| {
-					let info = client.info();
+					let info = client.chain_info();
 					let version = client
-						.runtime_version_at(&BlockId::hash(info.chain.best_hash))
+						.runtime_version_at(&BlockId::hash(info.best_hash))
 						.map_err(client_err)
 						.map_err(Into::into);
 					if previous_version != version {
@@ -432,7 +457,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		// initial values
 		let initial = stream::iter_result(keys
 			.map(|keys| {
-				let block = self.client.info().chain.best_hash;
+				let block = self.client.chain_info().best_hash;
 				let changes = keys
 					.into_iter()
 					.map(|key| self.storage(Some(block.clone()).into(), key.clone())

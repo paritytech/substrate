@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -96,7 +96,7 @@ macro_rules! unmarshall_then_body {
 #[inline(always)]
 pub fn constrain_closure<R, F>(f: F) -> F
 where
-	F: FnOnce() -> Result<R, sandbox::HostError>,
+	F: FnOnce() -> Result<R, sp_sandbox::HostError>,
 {
 	f
 }
@@ -110,14 +110,14 @@ macro_rules! unmarshall_then_body_then_marshall {
 			unmarshall_then_body!($body, $ctx, $args_iter, $( $names : $params ),*)
 		});
 		let r = body()?;
-		return Ok(sandbox::ReturnValue::Value({ use $crate::wasm::env_def::ConvertibleToWasm; r.to_typed_value() }))
+		return Ok(sp_sandbox::ReturnValue::Value({ use $crate::wasm::env_def::ConvertibleToWasm; r.to_typed_value() }))
 	});
 	( $args_iter:ident, $ctx:ident, ( $( $names:ident : $params:ty ),* ) => $body:tt ) => ({
 		let body = $crate::wasm::env_def::macros::constrain_closure::<(), _>(|| {
 			unmarshall_then_body!($body, $ctx, $args_iter, $( $names : $params ),*)
 		});
 		body()?;
-		return Ok(sandbox::ReturnValue::Unit)
+		return Ok(sp_sandbox::ReturnValue::Unit)
 	})
 }
 
@@ -126,8 +126,8 @@ macro_rules! define_func {
 	( < E: $ext_ty:tt > $name:ident ( $ctx: ident $(, $names:ident : $params:ty)*) $(-> $returns:ty)* => $body:tt ) => {
 		fn $name< E: $ext_ty >(
 			$ctx: &mut $crate::wasm::Runtime<E>,
-			args: &[sandbox::TypedValue],
-		) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+			args: &[sp_sandbox::TypedValue],
+		) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> {
 			#[allow(unused)]
 			let mut args = args.iter();
 
@@ -196,7 +196,7 @@ mod tests {
 	use parity_wasm::elements::FunctionType;
 	use parity_wasm::elements::ValueType;
 	use sp_runtime::traits::Zero;
-	use sandbox::{self, ReturnValue, TypedValue};
+	use sp_sandbox::{self, ReturnValue, TypedValue};
 	use crate::wasm::tests::MockExt;
 	use crate::wasm::Runtime;
 	use crate::exec::Ext;
@@ -206,15 +206,15 @@ mod tests {
 	fn macro_unmarshall_then_body_then_marshall_value_or_trap() {
 		fn test_value(
 			_ctx: &mut u32,
-			args: &[sandbox::TypedValue],
-		) -> Result<ReturnValue, sandbox::HostError> {
+			args: &[sp_sandbox::TypedValue],
+		) -> Result<ReturnValue, sp_sandbox::HostError> {
 			let mut args = args.iter();
 			unmarshall_then_body_then_marshall!(
 				args,
 				_ctx,
 				(a: u32, b: u32) -> u32 => {
 					if b == 0 {
-						Err(sandbox::HostError)
+						Err(sp_sandbox::HostError)
 					} else {
 						Ok(a / b)
 					}
@@ -234,8 +234,8 @@ mod tests {
 	fn macro_unmarshall_then_body_then_marshall_unit() {
 		fn test_unit(
 			ctx: &mut u32,
-			args: &[sandbox::TypedValue],
-		) -> Result<ReturnValue, sandbox::HostError> {
+			args: &[sp_sandbox::TypedValue],
+		) -> Result<ReturnValue, sp_sandbox::HostError> {
 			let mut args = args.iter();
 			unmarshall_then_body_then_marshall!(
 				args,
@@ -260,11 +260,11 @@ mod tests {
 			if !amount.is_zero() {
 				Ok(())
 			} else {
-				Err(sandbox::HostError)
+				Err(sp_sandbox::HostError)
 			}
 		});
-		let _f: fn(&mut Runtime<MockExt>, &[sandbox::TypedValue])
-			-> Result<sandbox::ReturnValue, sandbox::HostError> = ext_gas::<MockExt>;
+		let _f: fn(&mut Runtime<MockExt>, &[sp_sandbox::TypedValue])
+			-> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> = ext_gas::<MockExt>;
 	}
 
 	#[test]
@@ -312,7 +312,7 @@ mod tests {
 				if !amount.is_zero() {
 					Ok(())
 				} else {
-					Err(sandbox::HostError)
+					Err(sp_sandbox::HostError)
 				}
 			},
 		);

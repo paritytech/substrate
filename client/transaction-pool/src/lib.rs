@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ pub mod error;
 #[cfg(test)]
 mod tests;
 
-pub use txpool;
+pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 pub use crate::maintainer::{FullBasicPoolMaintainer, LightBasicPoolMaintainer};
 
@@ -37,7 +37,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::Block as BlockT,
 };
-use txpool_api::{
+use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream,
 	TxHash, TransactionFor, TransactionStatusStreamFor,
 };
@@ -46,25 +46,25 @@ use txpool_api::{
 pub struct BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: txpool::ChainApi<Block=Block, Hash=Block::Hash>,
+		PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
 {
-	pool: Arc<txpool::Pool<PoolApi>>,
+	pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 }
 
 impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: txpool::ChainApi<Block=Block, Hash=Block::Hash>,
+		PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
 {
 	/// Create new basic transaction pool with provided api.
-	pub fn new(options: txpool::Options, pool_api: PoolApi) -> Self {
+	pub fn new(options: sc_transaction_graph::Options, pool_api: PoolApi) -> Self {
 		BasicPool {
-			pool: Arc::new(txpool::Pool::new(options, pool_api)),
+			pool: Arc::new(sc_transaction_graph::Pool::new(options, pool_api)),
 		}
 	}
 
 	/// Gets shared reference to the underlying pool.
-	pub fn pool(&self) -> &Arc<txpool::Pool<PoolApi>> {
+	pub fn pool(&self) -> &Arc<sc_transaction_graph::Pool<PoolApi>> {
 		&self.pool
 	}
 }
@@ -72,11 +72,11 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: 'static + txpool::ChainApi<Block=Block, Hash=Block::Hash, Error=error::Error>,
+		PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash, Error=error::Error>,
 {
 	type Block = PoolApi::Block;
-	type Hash = txpool::ExHash<PoolApi>;
-	type InPoolTransaction = txpool::base_pool::Transaction<TxHash<Self>, TransactionFor<Self>>;
+	type Hash = sc_transaction_graph::ExHash<PoolApi>;
+	type InPoolTransaction = sc_transaction_graph::base_pool::Transaction<TxHash<Self>, TransactionFor<Self>>;
 	type Error = error::Error;
 
 	fn submit_at(

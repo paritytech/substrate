@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,20 +18,21 @@
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use primitives::ChangesTrieConfiguration;
-use primitives::offchain::OffchainStorage;
-use sp_runtime::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
+use sp_core::ChangesTrieConfiguration;
+use sp_core::offchain::OffchainStorage;
+use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use state_machine::backend::Backend as StateBackend;
-use state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction};
+use sp_state_machine::backend::Backend as StateBackend;
+use sp_state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction};
 use crate::{
 	blockchain::{
 		Backend as BlockchainBackend, well_known_cache_keys
 	},
 	light::RemoteBlockchain,
+	UsageInfo,
 };
 use sp_blockchain;
-use consensus::BlockOrigin;
+use sp_consensus::BlockOrigin;
 use hash_db::Hasher;
 use parking_lot::RwLock;
 
@@ -134,7 +135,7 @@ pub trait BlockImportOperation<Block, H> where
 	fn update_db_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> sp_blockchain::Result<()>;
 
 	/// Inject storage data into the database replacing any existing data.
-	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> sp_blockchain::Result<H::Out>;
+	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<H::Out>;
 
 	/// Set storage changes.
 	fn update_storage(
@@ -261,8 +262,8 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
 
-	/// Returns the used state cache, if existent.
-	fn used_state_cache_size(&self) -> Option<usize>;
+	/// Returns current usage statistics.
+	fn usage_info(&self) -> Option<UsageInfo>;
 
 	/// Returns reference to changes trie storage.
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage>;
@@ -283,10 +284,16 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 		Ok(())
 	}
 
-	/// Attempts to revert the chain by `n` blocks.
+	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set
+	/// it will attempt to revert past any finalized block, this is unsafe and
+	/// can potentially leave the node in an inconsistent state.
 	///
 	/// Returns the number of blocks that were successfully reverted.
-	fn revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>>;
+	fn revert(
+		&self,
+		n: NumberFor<Block>,
+		revert_finalized: bool,
+	) -> sp_blockchain::Result<NumberFor<Block>>;
 
 	/// Insert auxiliary data into key-value store.
 	fn insert_aux<

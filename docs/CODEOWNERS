@@ -20,7 +20,7 @@
 
 # Wasm execution and the wasm side of Substrate Runtime Interface
 /client/executor/ @pepyakin
-/primitives/sr-io/ @pepyakin
+/primitives/io/ @pepyakin
 
 # Sandboxing capability of Substrate Runtime
 /primitives/sr-sandbox/ @pepyakin
@@ -48,7 +48,7 @@
 /client/consensus/slots/ @andresilva @DemiMarie-parity
 
 # Contracts
-/frame/contracts/ @pepyakin @thiolliere @jimpo
+/frame/contracts/ @pepyakin @thiolliere
 /frame/contracts/src/wasm/runtime.rs @Robbepop
 
 # Inflation points

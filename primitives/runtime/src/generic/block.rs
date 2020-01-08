@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use sp_std::prelude::*;
-use primitives::RuntimeDebug;
+use sp_core::RuntimeDebug;
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize};
 use crate::Justification;

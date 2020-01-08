@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -36,7 +36,7 @@ use sp_runtime::{
 	traits::{self, SaturatedConversion},
 	transaction_validity::TransactionTag as Tag,
 };
-use txpool_api::{error, PoolStatus};
+use sp_transaction_pool::{error, PoolStatus};
 
 use crate::base_pool::PruneStatus;
 use crate::pool::{EventStream, Options, ChainApi, BlockHash, ExHash, ExtrinsicFor, TransactionFor};

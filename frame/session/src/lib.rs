@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -122,12 +122,12 @@
 use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
 use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
-use support::weights::SimpleDispatchInfo;
+use frame_support::weights::SimpleDispatchInfo;
 use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};
 use sp_staking::SessionIndex;
-use support::{dispatch::Result, ConsensusEngineId, decl_module, decl_event, decl_storage};
-use support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor, ValidatorRegistration}, Parameter};
-use system::{self, ensure_signed};
+use frame_support::{dispatch, ConsensusEngineId, decl_module, decl_event, decl_storage, decl_error};
+use frame_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor, ValidatorRegistration}, Parameter};
+use frame_system::{self as system, ensure_signed};
 
 #[cfg(test)]
 mod mock;
@@ -339,9 +339,9 @@ impl<T: Trait> ValidatorRegistration<T::ValidatorId> for Module<T> {
 	}
 }
 
-pub trait Trait: system::Trait {
+pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// A stable ID for a validator.
 	type ValidatorId: Member + Parameter;
@@ -464,11 +464,25 @@ decl_event!(
 	}
 );
 
+decl_error! {
+	/// Error for the session module.
+	pub enum Error for Module<T: Trait> {
+		/// Invalid ownership proof.
+		InvalidProof,
+		/// No associated validator ID for account.
+		NoAssociatedValidatorId,
+		/// Registered duplicate key.
+		DuplicatedKey,
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Used as first key for `NextKeys` and `KeyOwner` to put all the data into the same branch
 		/// of the trie.
 		const DEDUP_KEY_PREFIX: &[u8] = DEDUP_KEY_PREFIX;
+
+		type Error = Error<T>;
 
 		fn deposit_event() = default;
 
@@ -483,15 +497,12 @@ decl_module! {
 		/// - One extra DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
-		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> Result {
+		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			ensure!(keys.ownership_proof_is_valid(&proof), "invalid ownership proof");
+			ensure!(keys.ownership_proof_is_valid(&proof), Error::<T>::InvalidProof);
 
-			let who = match T::ValidatorIdOf::convert(who) {
-				Some(val_id) => val_id,
-				None => return Err("no associated validator ID for account."),
-			};
+			let who = T::ValidatorIdOf::convert(who).ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
 			Self::do_set_keys(&who, keys)?;
 
@@ -631,7 +642,7 @@ impl<T: Trait> Module<T> {
 
 	// perform the set_key operation, checking for duplicates.
 	// does not set `Changed`.
-	fn do_set_keys(who: &T::ValidatorId, keys: T::Keys) -> Result {
+	fn do_set_keys(who: &T::ValidatorId, keys: T::Keys) -> dispatch::DispatchResult {
 		let old_keys = Self::load_keys(&who);
 
 		for id in T::Keys::key_ids() {
@@ -640,7 +651,7 @@ impl<T: Trait> Module<T> {
 			// ensure keys are without duplication.
 			ensure!(
 				Self::key_owner(*id, key).map_or(true, |owner| &owner == who),
-				"registered duplicate key"
+				Error::<T>::DuplicatedKey,
 			);
 
 			if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(*id)) {
@@ -720,8 +731,8 @@ impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use support::assert_ok;
-	use primitives::crypto::key_types::DUMMY;
+	use frame_support::assert_ok;
+	use sp_core::crypto::key_types::DUMMY;
 	use sp_runtime::{traits::OnInitialize, testing::UintAuthorityId};
 	use mock::{
 		NEXT_VALIDATORS, SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
@@ -729,14 +740,14 @@ mod tests {
 		reset_before_session_end_called, before_session_end_called,
 	};
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	fn new_test_ext() -> sp_io::TestExternalities {
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()
 			),
 		}.assimilate_storage(&mut t).unwrap();
-		runtime_io::TestExternalities::new(t)
+		sp_io::TestExternalities::new(t)
 	}
 
 	fn initialize_block(block: u64) {

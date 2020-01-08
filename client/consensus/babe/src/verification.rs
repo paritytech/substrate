@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,10 +17,10 @@
 //! Verification for BABE headers.
 use schnorrkel::vrf::{VRFOutput, VRFProof};
 use sp_runtime::{traits::Header, traits::DigestItemFor};
-use primitives::{Pair, Public};
-use babe_primitives::{Epoch, BabePreDigest, CompatibleDigestItem, AuthorityId};
-use babe_primitives::{AuthoritySignature, SlotNumber, AuthorityIndex, AuthorityPair};
-use slots::CheckedHeader;
+use sp_core::{Pair, Public};
+use sp_consensus_babe::{Epoch, BabePreDigest, CompatibleDigestItem, AuthorityId};
+use sp_consensus_babe::{AuthoritySignature, SlotNumber, AuthorityIndex, AuthorityPair};
+use sc_consensus_slots::CheckedHeader;
 use log::{debug, trace};
 use super::{find_pre_digest, babe_err, BlockT, Error};
 use super::authorship::{make_transcript, calculate_primary_threshold, check_primary_threshold, secondary_slot_author};

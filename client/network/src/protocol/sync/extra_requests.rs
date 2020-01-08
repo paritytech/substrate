@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -288,7 +288,7 @@ mod tests {
 	use rand::Rng;
 	use std::collections::{HashMap, HashSet};
 	use super::*;
-	use test_client::runtime::{Block, BlockNumber, Hash};
+	use sp_test_primitives::{Block, BlockNumber, Hash};
 
 	#[test]
 	fn requests_are_processed_in_order() {

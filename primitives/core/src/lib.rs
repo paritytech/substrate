@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -84,7 +84,7 @@ pub use hash_db::Hasher;
 // pub use self::hasher::blake::BlakeHasher;
 pub use self::hasher::blake2::Blake2Hasher;
 
-pub use primitives_storage as storage;
+pub use sp_storage as storage;
 
 #[doc(hidden)]
 pub use sp_std;
@@ -235,8 +235,8 @@ pub trait TypeId {
 
 /// A log level matching the one from `log` crate.
 ///
-/// Used internally by `runtime_io::log` method.
-#[derive(Encode, Decode, runtime_interface::pass_by::PassByEnum, Copy, Clone)]
+/// Used internally by `sp_io::log` method.
+#[derive(Encode, Decode, sp_runtime_interface::pass_by::PassByEnum, Copy, Clone)]
 pub enum LogLevel {
 	/// `Error` log level.
 	Error = 1,
