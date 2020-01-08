@@ -324,7 +324,7 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 			self.missing_functions.borrow_mut().push(name.to_string());
 			*self.missing_function_id.borrow_mut() += 1;
 
-			// NOTE: provide purposedly an invalid index of the function
+			// NOTE: provide purposely an invalid index of the function
 			Ok(wasmi::FuncInstance::alloc_host(signature.into(), id))
 		} else {
 			Err(wasmi::Error::Instantiation(
