@@ -405,9 +405,6 @@ decl_storage! {
 		/// Mapping between a topic (represented by T::Hash) and a vector of indexes
 		/// of events in the `<Events<T>>` list.
 		///
-		/// The first key serves no purpose. This field is declared as double_map just
-		/// for convenience of using `remove_prefix`.
-		///
 		/// All topic vectors have deterministic storage locations depending on the topic. This
 		/// allows light-clients to leverage the changes trie storage tracking mechanism and
 		/// in case of changes fetch the list of events of interest.
@@ -415,8 +412,7 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(fn event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
-			=> Vec<(T::BlockNumber, EventIndex)>;
+		EventTopics get(fn event_topics): map T::Hash => Vec<(T::BlockNumber, EventIndex)>;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -583,7 +579,7 @@ impl<T: Trait> Module<T> {
 		let block_no = Self::block_number();
 		for topic in topics {
 			// The same applies here.
-			if <EventTopics<T>>::append(&(), topic, &[(block_no, event_idx)]).is_err() {
+			if <EventTopics<T>>::append(topic, &[(block_no, event_idx)]).is_err() {
 				return;
 			}
 		}
@@ -647,7 +643,7 @@ impl<T: Trait> Module<T> {
 		<ExtrinsicsRoot<T>>::put(txs_root);
 		<Events<T>>::kill();
 		EventCount::kill();
-		<EventTopics<T>>::remove_prefix(&());
+		<EventTopics<T>>::remove_all();
 	}
 
 	/// Remove temporary "environment" entries in storage.
@@ -1302,15 +1298,15 @@ mod tests {
 			// Check that the topic-events mapping reflects the deposited topics.
 			// Note that these are indexes of the events.
 			assert_eq!(
-				System::event_topics(&(), &topics[0]),
+				System::event_topics(&topics[0]),
 				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 1)],
 			);
 			assert_eq!(
-				System::event_topics(&(), &topics[1]),
+				System::event_topics(&topics[1]),
 				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 2)],
 			);
 			assert_eq!(
-				System::event_topics(&(), &topics[2]),
+				System::event_topics(&topics[2]),
 				vec![(BLOCK_NUMBER, 0)],
 			);
 		});
