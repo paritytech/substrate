@@ -67,14 +67,14 @@ pub fn call_in_wasm<E: Externalities, HF: sp_wasm_interface::HostFunctions>(
 	ext: &mut E,
 	code: &[u8],
 	heap_pages: u64,
-	enable_stub: bool,
+	allow_missing_imports: bool,
 ) -> error::Result<Vec<u8>> {
 	let mut instance = wasm_runtime::create_wasm_runtime_with_code(
 		execution_method,
 		heap_pages,
 		code,
 		HF::host_functions(),
-		enable_stub,
+		allow_missing_imports,
 	)?;
 	instance.call(ext, function, call_data)
 }
@@ -105,7 +105,7 @@ mod tests {
 			&mut ext,
 			&WASM_BINARY,
 			8,
-			false,
+			true,
 		).unwrap();
 		assert_eq!(res, vec![0u8; 0]);
 	}

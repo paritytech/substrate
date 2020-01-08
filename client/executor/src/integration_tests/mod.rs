@@ -47,25 +47,6 @@ fn call_in_wasm<E: Externalities>(
 		ext,
 		code,
 		heap_pages,
-		false,
-	)
-}
-
-fn call_in_wasm_with_stub<E: Externalities>(
-	function: &str,
-	call_data: &[u8],
-	execution_method: WasmExecutionMethod,
-	ext: &mut E,
-	code: &[u8],
-	heap_pages: u64,
-) -> crate::error::Result<Vec<u8>> {
-	crate::call_in_wasm::<E, sp_io::SubstrateHostFunctions>(
-		function,
-		call_data,
-		execution_method,
-		ext,
-		code,
-		heap_pages,
 		true,
 	)
 }
@@ -91,12 +72,13 @@ fn returning_should_work(wasm_method: WasmExecutionMethod) {
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 #[should_panic(expected = "function missing_external does not exist")]
-fn call_not_existing_function_with_stub_enabled(wasm_method: WasmExecutionMethod) {
+#[cfg(not(feature = "wasmtime"))]
+fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
 
-	call_in_wasm_with_stub(
+	call_in_wasm(
 		"test_calling_missing_external",
 		&[],
 		wasm_method,
@@ -109,12 +91,13 @@ fn call_not_existing_function_with_stub_enabled(wasm_method: WasmExecutionMethod
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 #[should_panic(expected = "function yet_another_missing_external does not exist")]
-fn call_yet_another_not_existing_function_with_stub_enabled(wasm_method: WasmExecutionMethod) {
+#[cfg(not(feature = "wasmtime"))]
+fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
 
-	call_in_wasm_with_stub(
+	call_in_wasm(
 		"test_calling_yet_another_missing_external",
 		&[],
 		wasm_method,
@@ -122,24 +105,6 @@ fn call_yet_another_not_existing_function_with_stub_enabled(wasm_method: WasmExe
 		&test_code[..],
 		8,
 	).unwrap();
-}
-
-#[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
-fn call_not_existing_function_without_stub_enabled(wasm_method: WasmExecutionMethod) {
-	let mut ext = TestExternalities::default();
-	let mut ext = ext.ext();
-	let test_code = WASM_BINARY;
-
-	let output = call_in_wasm(
-		"test_calling_missing_external",
-		&[],
-		wasm_method,
-		&mut ext,
-		&test_code[..],
-		8,
-	);
-	assert!(output.is_err());
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
