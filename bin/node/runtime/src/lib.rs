@@ -22,7 +22,7 @@
 
 use sp_std::prelude::*;
 use frame_support::{
-	construct_runtime, parameter_types,
+	construct_runtime, parameter_types, debug,
 	weights::Weight,
 	traits::{SplitTwoWays, Currency, Randomness},
 };
@@ -520,7 +520,9 @@ impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for 
 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
 			Default::default(),
 		);
-		let raw_payload = SignedPayload::new(call, extra).ok()?;
+		let raw_payload = SignedPayload::new(call, extra).map_err(|e| {
+			debug::warn!("Unable to create signed payload: {:?}", e);
+		}).ok()?;
 		let signature = TSigner::sign(public, &raw_payload)?;
 		let address = Indices::unlookup(account);
 		let (call, extra, _) = raw_payload.deconstruct();

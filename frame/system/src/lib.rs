@@ -546,6 +546,12 @@ pub enum InitKind {
 	Full,
 }
 
+impl Default for InitKind {
+	fn default() -> Self {
+		InitKind::Full
+	}
+}
+
 impl<T: Trait> Module<T> {
 	/// Deposits an event into this block's event record.
 	pub fn deposit_event(event: impl Into<T::Event>) {

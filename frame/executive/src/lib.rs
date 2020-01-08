@@ -317,12 +317,15 @@ where
 
 	/// Start an offchain worker and generate extrinsics.
 	pub fn offchain_worker(n: System::BlockNumber) {
+		// We need to keep events available for offchain workers,
+		// hence we initialize the block manually.
+		// OffchainWorker RuntimeApi should skip initialization.
 		let parent_hash = Default::default();
 		let txs_root = Default::default();
 		let digest = Default::default();
 
 		<frame_system::Module<System>>::initialize(
-			&n,
+			&(n + 1.into()),
 			&parent_hash,
 			&txs_root,
 			&digest,

@@ -860,6 +860,16 @@ fn storage_size() {
 	});
 }
 
+fn initialize_block(number: u64) {
+	System::initialize(
+		&number,
+		&[0u8; 32].into(),
+		&[0u8; 32].into(),
+		&Default::default(),
+		Default::default(),
+	);
+}
+
 #[test]
 fn deduct_blocks() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
@@ -880,7 +890,7 @@ fn deduct_blocks() {
 		assert_eq!(bob_contract.rent_allowance, 1_000);
 
 		// Advance 4 blocks
-		System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(5);
 
 		// Trigger rent through call
 		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
@@ -895,7 +905,7 @@ fn deduct_blocks() {
 		assert_eq!(Balances::free_balance(BOB), 30_000 - rent);
 
 		// Advance 7 blocks more
-		System::initialize(&12, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(12);
 
 		// Trigger rent through call
 		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
@@ -970,7 +980,7 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) 
 		));
 
 		// Advance blocks
-		System::initialize(&blocks, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(blocks);
 
 		// Trigger rent through call
 		assert!(trigger_call());
@@ -1010,7 +1020,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		assert_eq!(Balances::free_balance(&BOB), 100);
 
 		// Advance blocks
-		System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(10);
 
 		// Trigger rent through call
 		assert!(trigger_call());
@@ -1018,7 +1028,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		assert_eq!(Balances::free_balance(&BOB), subsistence_threshold);
 
 		// Advance blocks
-		System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(20);
 
 		// Trigger rent must have no effect
 		assert!(trigger_call());
@@ -1044,7 +1054,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		assert_eq!(Balances::free_balance(&BOB), 1_000);
 
 		// Advance blocks
-		System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(10);
 
 		// Trigger rent through call
 		assert!(trigger_call());
@@ -1053,7 +1063,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		assert_eq!(Balances::free_balance(&BOB), 900);
 
 		// Advance blocks
-		System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(20);
 
 		// Trigger rent must have no effect
 		assert!(trigger_call());
@@ -1084,7 +1094,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
 
 		// Advance blocks
-		System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(10);
 
 		// Trigger rent through call
 		assert!(trigger_call());
@@ -1092,7 +1102,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
 
 		// Advance blocks
-		System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(20);
 
 		// Trigger rent must have no effect
 		assert!(trigger_call());
@@ -1121,7 +1131,7 @@ fn call_removed_contract() {
 		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
 
 		// Advance blocks
-		System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(10);
 
 		// Calling contract should remove contract and fail.
 		assert_err!(
@@ -1208,7 +1218,7 @@ fn default_rent_allowance_on_instantiate() {
 		assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value());
 
 		// Advance blocks
-		System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(5);
 
 		// Trigger rent through call
 		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
@@ -1354,7 +1364,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		}
 
 		// Advance 4 blocks, to the 5th.
-		System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+		initialize_block(5);
 
 		// Call `BOB`, which makes it pay rent. Since the rent allowance is set to 0
 		// we expect that it will get removed leaving tombstone.
@@ -1383,7 +1393,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 		if !test_restore_to_with_dirty_storage {
 			// Advance 1 block, to the 6th.
-			System::initialize(&6, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+			initialize_block(6);
 		}
 
 		// Perform a call to `DJANGO`. This should either perform restoration successfully or
