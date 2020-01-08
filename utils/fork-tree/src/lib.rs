@@ -19,6 +19,7 @@
 
 #![warn(missing_docs)]
 
+use std::cmp::Reverse;
 use std::fmt;
 use codec::{Decode, Encode};
 
@@ -124,6 +125,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 			self.roots = vec![root];
 		}
 
+		self.rebalance();
+
 		Ok(())
 	}
 }
@@ -137,6 +140,13 @@ impl<H, N, V> ForkTree<H, N, V> where
 		ForkTree {
 			roots: Vec::new(),
 			best_finalized_number: None,
+		}
+	}
+
+	pub fn rebalance(&mut self) {
+		self.roots.sort_by_key(|n| Reverse(n.max_depth()));
+		for root in &mut self.roots {
+			root.rebalance();
 		}
 	}
 
@@ -183,6 +193,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 			number: number,
 			children:  Vec::new(),
 		});
+
+		self.rebalance();
 
 		Ok(true)
 	}
@@ -523,6 +535,23 @@ mod node_implementation {
 	}
 
 	impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
+		pub fn rebalance(&mut self) {
+			self.children.sort_by_key(|n| Reverse(n.max_depth()));
+			for child in &mut self.children {
+				child.rebalance();
+			}
+		}
+
+		pub fn max_depth(&self) -> usize {
+			let mut max = 0;
+
+			for node in &self.children {
+				max = node.max_depth().max(max)
+			}
+
+			max + 1
+		}
+
 		pub fn import<F, E: std::error::Error>(
 			&mut self,
 			mut hash: H,
@@ -638,7 +667,10 @@ impl<'a, H, N, V> Iterator for ForkTreeIterator<'a, H, N, V> {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		self.stack.pop().map(|node| {
-			self.stack.extend(node.children.iter());
+			// child nodes are stored ordered by max branch height (decreasing),
+			// we want to keep this ordering while iterating but since we're
+			// using a stack for iterator state we need to reverse it.
+			self.stack.extend(node.children.iter().rev());
 			node
 		})
 	}

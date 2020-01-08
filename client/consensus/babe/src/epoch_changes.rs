@@ -185,6 +185,10 @@ impl<Hash, Number> EpochChanges<Hash, Number> where
 		EpochChanges { inner: ForkTree::new() }
 	}
 
+	pub fn rebalance(&mut self) {
+		self.inner.rebalance()
+	}
+
 	/// Prune out finalized epochs, except for the ancestor of the finalized
 	/// block. The given slot should be the slot number at which the finalized
 	/// block was authored.
