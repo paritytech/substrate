@@ -111,15 +111,26 @@ impl SlotDuration {
 
 /// Get slot author for given block along with authorities.
 fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
+	// slot_num does _not_ start at 0. It is the local time / slot duration
 	if authorities.is_empty() { return None }
 
-	let idx = slot_num % (authorities.len() as u64);
+	let num_authorities = authorities.len() as u64;
+	let reduced_index = slot_num % (num_authorities * 2);
+
+	let author_index = if reduced_index < num_authorities {
+		// We're on the zig, so just use the reduced index
+		reduced_index
+	} else {
+		// We're on the zag, so count from the right
+		num_authorities * 2 - 1 - reduced_index
+	};
+
 	assert!(
-		idx <= usize::max_value() as u64,
+		author_index <= usize::max_value() as u64,
 		"It is impossible to have a vector with length beyond the address space; qed",
 	);
 
-	let current_author = authorities.get(idx as usize)
+	let current_author = authorities.get(author_index as usize)
 		.expect("authorities not empty; index constrained to list length;\
 				this is a valid index; qed");
 
