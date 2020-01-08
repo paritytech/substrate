@@ -5202,7 +5202,7 @@ dependencies = [
  "sc-executor 2.0.0",
  "sc-keystore 2.0.0",
  "sc-network 0.8.0",
- "sc-network-test 2.0.0",
+ "sc-network-test 0.8.0",
  "sc-service 0.8.0",
  "sc-telemetry 2.0.0",
  "sp-api 2.0.0",
@@ -5250,7 +5250,7 @@ dependencies = [
  "sc-executor 2.0.0",
  "sc-keystore 2.0.0",
  "sc-network 0.8.0",
- "sc-network-test 2.0.0",
+ "sc-network-test 0.8.0",
  "sc-service 0.8.0",
  "sc-telemetry 2.0.0",
  "schnorrkel 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5428,7 +5428,7 @@ dependencies = [
  "sc-keystore 2.0.0",
  "sc-network 0.8.0",
  "sc-network-gossip 0.8.0",
- "sc-network-test 2.0.0",
+ "sc-network-test 0.8.0",
  "sc-telemetry 2.0.0",
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
@@ -5531,7 +5531,7 @@ dependencies = [
 
 [[package]]
 name = "sc-network-test"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
