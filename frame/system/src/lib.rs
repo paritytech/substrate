@@ -665,7 +665,7 @@ impl<T: Trait> Module<T> {
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
 
-		if !is_for_inspection {
+		if let InitKind::Full = kind {
 			<Events<T>>::kill();
 			EventCount::kill();
 			<EventTopics<T>>::remove_prefix(&());

@@ -326,7 +326,7 @@ where
 			&parent_hash,
 			&txs_root,
 			&digest,
-			frame_system::InitKind::Introspection,
+			frame_system::InitKind::Inspection,
 		);
 		<AllModules as OffchainWorker<System::BlockNumber>>::offchain_worker(n)
 	}
