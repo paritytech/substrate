@@ -26,7 +26,7 @@ sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 sc-network = { version = "0.8", path = "../network" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sc-service = { version = "2.0.0", default-features = false, path = "../service" }
+sc-service = { version = "0.8", default-features = false, path = "../service" }
 sp-state-machine = { version = "2.0.0", path = "../../primitives/state-machine" }
 sc-telemetry = { version = "2.0.0", path = "../telemetry" }
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
