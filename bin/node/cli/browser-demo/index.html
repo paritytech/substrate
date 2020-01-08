@@ -19,7 +19,7 @@ async function start() {
 
 	// Build our client.
 	log('Starting client');
-	let client = start_client(ws());
+	let client = await start_client(ws());
 	log('Client started');
 
 	client.rpcSubscribe('{"method":"chain_subscribeNewHead","params":[],"id":1,"jsonrpc":"2.0"}',
@@ -29,7 +29,7 @@ async function start() {
 		client
 			.rpcSend('{"method":"system_networkState","params":[],"id":1,"jsonrpc":"2.0"}')
 			.then((r) => log("Network state: " + r));
-	}, 1000);
+	}, 20000);
 }
 
 start();

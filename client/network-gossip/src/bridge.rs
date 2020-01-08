@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -141,11 +141,6 @@ impl<B: BlockT> GossipEngine<B> {
 		}
 
 		gossip_engine
-	}
-
-	/// Closes all notification streams.
-	pub fn abort(&self) {
-		self.inner.lock().state_machine.abort();
 	}
 
 	pub fn report(&self, who: PeerId, reputation: ReputationChange) {
