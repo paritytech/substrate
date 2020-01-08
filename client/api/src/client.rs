@@ -121,9 +121,9 @@ pub struct IoInfo {
 	pub reads: u64,
 	/// Average size of the transaction.
 	pub average_transaction_size: u64,
-	/// State reads.
+	/// State reads (keys)
 	pub state_reads: u64,
-	/// State reads from cache.
+	/// State reads (keys) from cache.
 	pub state_reads_cache: u64,
 }
 
@@ -143,7 +143,7 @@ pub struct UsageInfo {
 impl fmt::Display for UsageInfo {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f,
-			"caches: ({} state, {} db overlay), i/o: ({} tx, {} write, {} read, {} avg tx, {}/{} state cache read / total)",
+			"caches: ({} state, {} db overlay), i/o: ({} tx, {} write, {} read, {} avg tx, {}/{} key cache reads/total)",
 			self.memory.state_cache,
 			self.memory.database_cache,
 			self.io.transactions,
