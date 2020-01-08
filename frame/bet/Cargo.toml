@@ -15,6 +15,9 @@ frame-system = { version = "2.0.0", path = "../system", default-features = false
 
 [dev-dependencies]
 lazy_static = "1.0"
+sp-io = { version = "2.0.0", path = "../../primitives/io" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+pallet-balances = { version = "2.0.0", path = "../balances" }
 
 [features]
 default = ["std"]

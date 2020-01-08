@@ -20,11 +20,16 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_runtime::{traits::{One, Zero}};
-use frame_support::{decl_event, decl_module, decl_storage, Parameter, dispatch::DispatchResult};
-use frame_support::traits::{OnFreeBalanceZero, Currency, LockableCurrency};
-use frame_system::ensure_signed;
-use codec::{Codec, Encode, Decode};
+use sp_runtime::{traits::{One, Zero, Bounded}};
+use frame_support::{
+	decl_event, decl_module, decl_storage, Parameter,
+	traits::{
+		OnFreeBalanceZero, Currency, LockableCurrency, WithdrawReason, WithdrawReasons,
+		LockIdentifier
+	}
+};
+use frame_system::{self as system, ensure_signed};
+use codec::{Encode, Decode};
 
 /// Trait for getting a price.
 pub trait FetchPrice<Balance> {
@@ -35,10 +40,9 @@ pub trait FetchPrice<Balance> {
 const MODULE_ID: LockIdentifier = *b"py/fun__";
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 /// Our module's configuration trait.
-pub trait Trait: balances::Trait {
+pub trait Trait: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
@@ -46,7 +50,7 @@ pub trait Trait: balances::Trait {
 	type OneEuro: FetchPrice<BalanceOf<Self>>;
 
 	/// The currency type.
-	type Currency: Currency + LockableCurrency;
+	type Currency: Currency<Self::AccountId> + LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 }
 
 // Periods
@@ -100,7 +104,7 @@ pub struct Betting<BlockNumber: Parameter, Balance: Parameter> {
 decl_storage! {
 	trait Store for Module<T: Trait> as Bet {
 		/// Period in which betting happens, measured in blocks.
-		Period get(period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+		Period get(period) config(): T::BlockNumber = 1000.into();
 
 		/// Factor controlling the attenuation speed of the target when missed.
 		/// The price is reduced by a factor of one divided by this. It *must* be greater
@@ -109,7 +113,7 @@ decl_storage! {
 
 		/// The number of times to sample the spot price per period in order to determine the
 		/// average price.
-		Samples get(samples) config(): u64;
+		Samples get(samples) config(): u32;
 
 		/// The target price to beat.
 		Target get(target) config(): BalanceOf<T>;
@@ -143,8 +147,8 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where B = <T as balances::Trait>::Balance {
-		Dummy(B),
+	pub enum Event<T> where Balance = BalanceOf<T> {
+		Dummy(Balance),
 	}
 );
 
@@ -233,7 +237,7 @@ decl_module! {
 				match cs {
 					ConsolidatedState::Idle => {
 						b.state = State::BeganAt(next);
-						b.balance = <balances::Module<T>>::free_balance(&sender);
+						b.balance = T::Currency::free_balance(&sender);
 						<Incoming<T>>::mutate(|total| *total += b.balance);
 					}
 					ConsolidatedState::AboutToBegin | ConsolidatedState::JustBegan => {
@@ -255,8 +259,8 @@ decl_module! {
 			
 			// We've been wiped out: kill entry.
 			if balance_at_stake_is_zero {
-				<Bets<T>>::remove(&sender)
-				T::Currency::remove_lock(MODULE_ID, who);
+				<Bets<T>>::remove(&sender);
+				T::Currency::remove_lock(MODULE_ID, &sender);
 			} else {
 				T::Currency::set_lock(
 					MODULE_ID,
@@ -311,8 +315,8 @@ decl_module! {
 
 			// We've been wiped out: kill entry.
 			if balance_at_stake_is_zero {
-				<Bets<T>>::remove(&sender)
-				T::Currency::remove_lock(MODULE_ID, who);
+				<Bets<T>>::remove(&sender);
+				T::Currency::remove_lock(MODULE_ID, &sender);
 			}
 		}
 
@@ -328,16 +332,16 @@ decl_module! {
 
 			if is_unlocked {
 				<Bets<T>>::remove(&sender);
-				T::Currency::remove_lock(MODULE_ID, who);
+				T::Currency::remove_lock(MODULE_ID, &sender);
 			}
 		}
 
-		// The signature could also look like: `fn on_finalise()`
+		// The signature could also look like: `fn on_finalize()`
 		fn on_finalize(n: T::BlockNumber) {
 			let samples = Self::samples();
-			let samples_bn = T::BlockNumber::sa(samples);
+			let samples_bn = samples.into();
 			let p = Self::period();
-			let mp = Self::period() / T::BlockNumber::sa(samples);
+			let mp = Self::period() / samples.into();
 			let ph = p - One::one() - n % p;
 
 			// For samples = 3, period = 7, mp = 2
@@ -358,7 +362,7 @@ decl_module! {
 
 					let prices = <Prices<T>>::take();
 					if !Self::total().is_zero() {
-						let mean = prices.iter().fold(BalanceOf<T>::default(), |total, &item| total + item) / samples.into();
+						let mean = prices.iter().fold(BalanceOf::<T>::default(), |total, &item| total + item) / samples.into();
 
 //						println!("prices {:?} mean {:?} target {:?}", prices, mean, Self::target());
 						if mean < Self::target() {
@@ -435,11 +439,13 @@ impl<T: Trait> Module<T> {
 		};
 
 		if betting.balance < new_balance {
-			<balances::Module<T>>::increase_free_balance_creating(who, new_balance - betting.balance);
+			// TODO: SHAWN CHECK DEPOSIT_CREATING WORKS HERE
+			T::Currency::deposit_creating(who, new_balance - betting.balance);
 		} else {
 			// this action might delete our entry in Bets (if free_balance is reduced to zero).
 			// it's ok though, since mutate will write it back out with expected values.
-			let _ = <balances::Module<T>>::decrease_free_balance(who, betting.balance - new_balance);
+			// TODO: SHAWN CHECK SLASH WORKS HERE
+			let _ = T::Currency::slash(who, betting.balance - new_balance);
 		}
 
 		betting.balance = new_balance;
@@ -449,7 +455,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Returns the new balance (i.e. old plus the payout reward); will be zero if there was a wipeout.
-	fn calculate_new_balance(balance: BalanceOf<T>, begin: T::BlockNumber, end: T::BlockNumber) -> BetResult<<T as balances::Trait>::Balance> {
+	fn calculate_new_balance(
+		balance: BalanceOf<T>,
+		begin: T::BlockNumber,
+		end: T::BlockNumber
+	) -> BetResult<BalanceOf<T>> {
 //		println!("Calculating new... {:?} {:?} {:?}", balance, begin, end);
 		if balance.is_zero() {
 			// nothing to be done here
@@ -492,13 +502,16 @@ mod tests {
 	use super::*;
 
 	use ::std::cell::Cell;
-	use sr_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
+	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
-	use sr_primitives::{
-		BuildStorage, traits::{BlakeTwo256, OnFinalise}, testing::{Digest, DigestItem, Header}
+	use sp_runtime::{
+		Perbill,
+		traits::{BlakeTwo256, OnFinalize, IdentityLookup},
+		testing::Header,
 	};
+	use frame_support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
+
 
 	thread_local! { static ONE_EURO: Cell<u64> = Cell::new(100); }
 	pub struct StaticOneEuro;
@@ -520,24 +533,45 @@ mod tests {
 	// configuration traits of modules we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
-	impl system::Trait for Test {
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: Weight = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
+	}
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
+		type Call = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
+		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type MaximumBlockLength = MaximumBlockLength;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type Version = ();
+		type ModuleToIndex = ();
 	}
-	impl balances::Trait for Test {
+	parameter_types! {
+		pub const ExistentialDeposit: u64 = 0;
+		pub const TransferFee: u64 = 0;
+		pub const CreationFee: u64 = 0;
+	}
+	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type AccountIndex = u64;
 		type OnFreeBalanceZero = ();
-		type EnsureAccountLiquid = ();
+		type OnNewAccount = ();
 		type Event = ();
+		type TransferPayment = ();
+		type DustRemoval = ();
+		type ExistentialDeposit = ExistentialDeposit;
+		type TransferFee = TransferFee;
+		type CreationFee = CreationFee;
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -545,43 +579,47 @@ mod tests {
 		type Currency = Balances;
 	}
 	type System = system::Module<Test>;
-	type Balances = balances::Module<Test>;
+	type Balances = pallet_balances::Module<Test>;
 	type Bet = Module<Test>;
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> sr_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+	fn new_test_ext() -> sp_io::TestExternalities {
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
-		t.extend(balances::GenesisConfig::<Test>{
+		pallet_balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40)],
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
-			existential_deposit: 0,
-			transfer_fee: 0,
-			creation_fee: 0,
-			reclaim_rebate: 0,		// TODO: remove when merge to master!
-		}.build_storage().unwrap().0);
-		t.extend(GenesisConfig::<Test>{
+			vesting: vec![],
+			//reclaim_rebate: 0,		// TODO: remove when merge to master!
+		}.assimilate_storage(&mut t).unwrap();
+		GenesisConfig::<Test>{
 			period: 5,
 			samples: 2,
 			target_attenuation: 10,
 			target: 120,
-		}.build_storage().unwrap().0);
-		t.into()
+		}.assimilate_storage(&mut t).unwrap();
+		sp_io::TestExternalities::new(t)
 	}
 
 	fn proceed_to_next_index() {
 		let i = Bet::index();
 		while Bet::index() == i {
-			Bet::on_finalise(System::block_number());
+			Bet::on_finalize(System::block_number());
 			System::set_block_number(System::block_number() + 1);
+		}
+	}
+
+	fn ensure_account_liquid(who: &<Test as frame_system::Trait>::AccountId) -> Result<(), &'static str> {
+		if <Bets<Test>>::exists(who) {
+			Err("cannot transfer illiquid funds")
+		} else {
+			Ok(())
 		}
 	}
 
 	#[test]
 	fn config_works() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_eq!(Bet::period(), 5);
 			assert_eq!(Bet::samples(), 2);
 			assert_eq!(Bet::target_attenuation(), 10);
@@ -597,27 +635,27 @@ mod tests {
 
 	#[test]
 	fn price_sampling_works() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			<Total<Test>>::put(1);
 
 			System::set_block_number(1);
 			set_price(120);
-			Bet::on_finalise(System::block_number());
+			Bet::on_finalize(System::block_number());
 			assert_eq!(Bet::prices(), vec![]);
 
 			System::set_block_number(2);
 			set_price(80);
-			Bet::on_finalise(System::block_number());
+			Bet::on_finalize(System::block_number());
 			assert_eq!(Bet::prices(), vec![80]);
 
 			System::set_block_number(3);
 			set_price(140);
-			Bet::on_finalise(System::block_number());
+			Bet::on_finalize(System::block_number());
 			assert_eq!(Bet::prices(), vec![80]);
 
 			System::set_block_number(4);
 			set_price(100);
-			Bet::on_finalise(System::block_number());
+			Bet::on_finalize(System::block_number());
 			assert_eq!(Bet::prices(), vec![]);
 			assert_eq!(Bet::payouts(0), Some((1, 0)));
 			assert_eq!(Bet::index(), 1);
@@ -627,36 +665,36 @@ mod tests {
 
 	#[test]
 	fn bet_unbet_works() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
 			set_price(120);
 			assert_ok!(Bet::bet(Some(1).into()));
 			assert_ok!(Bet::unbet(Some(1).into()));
 			assert_ok!(Bet::collect(Some(1).into()));
-			assert!(Bet::ensure_account_liquid(&1).is_ok());
+			assert!(ensure_account_liquid(&1).is_ok());
 			assert_eq!(Balances::free_balance(&1), 10);
 		});
 	}
 
 	#[test]
 	fn bet_locking_works() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
 			set_price(120);
 			assert_ok!(Bet::bet(Some(1).into()));
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 		});
 	}
 
 	#[test]
 	fn bet_invalid_collect_should_not_work() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
 			set_price(120);
 			assert_ok!(Bet::bet(Some(1).into()));
 
 			assert_eq!(Bet::incoming(), 10);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			proceed_to_next_index();
@@ -666,22 +704,22 @@ mod tests {
 
 			assert_ok!(Bet::unbet(Some(1).into()));
 
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_ok!(Bet::collect(Some(1).into()));
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 		});
 	}
 
 	#[test]
 	fn bet_win_unbet_collect_works() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
 			// index == 0
 			set_price(120);
 			assert_ok!(Bet::bet(Some(1).into()));
 
 			assert_eq!(Bet::incoming(), 10);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			proceed_to_next_index();
@@ -691,7 +729,7 @@ mod tests {
 			assert_eq!(Bet::total(), 10);
 
 			assert_ok!(Bet::unbet(Some(1).into()));
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Bet::outgoing(), 10);
 
 			Bet::contribute(10);
@@ -702,25 +740,25 @@ mod tests {
 
 			assert_ok!(Bet::collect(Some(1).into()));
 			assert_eq!(Balances::free_balance(&1), 20);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 
 			proceed_to_next_index();
 			// index == 3
 			assert_ok!(Bet::collect(Some(1).into()));
-			assert!(Bet::ensure_account_liquid(&1).is_ok());
+			assert!(ensure_account_liquid(&1).is_ok());
 		});
 	}
 
 	#[test]
 	fn bet_lose_unbet_works() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
 			// index == 0
 			set_price(120);
 			assert_ok!(Bet::bet(Some(1).into()));
 
 			assert_eq!(Bet::incoming(), 10);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			proceed_to_next_index();
@@ -730,7 +768,7 @@ mod tests {
 			assert_eq!(Bet::total(), 10);
 
 			assert_ok!(Bet::unbet(Some(1).into()));
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Bet::outgoing(), 10);
 
 			Bet::contribute(10);
@@ -741,14 +779,14 @@ mod tests {
 
 			assert_ok!(Bet::collect(Some(1).into()));
 			assert_eq!(Balances::free_balance(&1), 5);
-			assert!(Bet::ensure_account_liquid(&1).is_ok());
+			assert!(ensure_account_liquid(&1).is_ok());
 			assert_eq!(Bet::total(), 0);
 		});
 	}
 
 	#[test]
 	fn duplicate_bet_is_noop() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
 			// index == 0
 			set_price(120);
@@ -757,7 +795,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 10);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			proceed_to_next_index();
@@ -768,7 +806,7 @@ mod tests {
 			assert_eq!(Bet::total(), 10);
 			assert_eq!(Bet::outgoing(), 0);
 			assert_eq!(Bet::incoming(), 0);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			Bet::contribute(10);
@@ -779,20 +817,20 @@ mod tests {
 
 			assert_ok!(Bet::collect(Some(1).into()));
 			assert_eq!(Balances::free_balance(&1), 20);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 		});
 	}
 
 	#[test]
 	fn duplicate_unbet_is_noop() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
 			// index == 0
 			set_price(120);
 			assert_ok!(Bet::bet(Some(1).into()));
 
 			assert_eq!(Bet::incoming(), 10);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			proceed_to_next_index();
@@ -803,7 +841,7 @@ mod tests {
 
 			assert_ok!(Bet::unbet(Some(1).into()));
 			assert_ok!(Bet::unbet(Some(1).into()));
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Bet::outgoing(), 10);
 			assert_eq!(Bet::incoming(), 0);
 
@@ -818,7 +856,7 @@ mod tests {
 			assert_eq!(Bet::incoming(), 0);
 			assert_ok!(Bet::collect(Some(1).into()));
 			assert_eq!(Balances::free_balance(&1), 20);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 
 			proceed_to_next_index();
 			// index == 3
@@ -826,13 +864,13 @@ mod tests {
 			assert_eq!(Bet::outgoing(), 0);
 			assert_eq!(Bet::incoming(), 0);
 			assert_ok!(Bet::collect(Some(1).into()));
-			assert!(Bet::ensure_account_liquid(&1).is_ok());
+			assert!(ensure_account_liquid(&1).is_ok());
 		});
 	}
 
 	#[test]
 	fn accumulated_bet_works() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
 			// index == 0
 			set_price(120);
@@ -840,7 +878,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 10);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			proceed_to_next_index();
@@ -851,7 +889,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			Bet::contribute(10);
@@ -867,7 +905,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 20);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 20);
 
 			Bet::contribute(10);
@@ -883,7 +921,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 30);
 
 			Bet::contribute(10);
@@ -899,14 +937,14 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(Bet::ensure_account_liquid(&1).is_ok());
+			assert!(ensure_account_liquid(&1).is_ok());
 			assert_eq!(Balances::free_balance(&1), 30);
 		});
 	}
 
 	#[test]
 	fn unbet_bet_is_noop() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
 			// index == 0
 			set_price(120);
@@ -914,7 +952,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 10);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			proceed_to_next_index();
@@ -932,7 +970,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			Bet::contribute(10);
@@ -948,7 +986,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 20);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 20);
 
 			Bet::contribute(10);
@@ -964,7 +1002,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 30);
 
 			proceed_to_next_index();
@@ -977,7 +1015,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(Bet::ensure_account_liquid(&1).is_ok());
+			assert!(ensure_account_liquid(&1).is_ok());
 			assert_eq!(Balances::free_balance(&1), 30);
 		});
 	}
