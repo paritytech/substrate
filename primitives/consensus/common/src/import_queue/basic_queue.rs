@@ -147,8 +147,6 @@ impl<B: BlockT> BlockImportWorker<B> {
 		justification_import: Option<BoxJustificationImport<B>>,
 		finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	) -> (impl Future<Output = ()> + Send, mpsc::UnboundedSender<ToWorkerMsg<B>>) {
-		use std::thread;
-
 		let (sender, mut port) = mpsc::unbounded();
 
 		let mut worker = BlockImportWorker {
@@ -159,19 +157,11 @@ impl<B: BlockT> BlockImportWorker<B> {
 		};
 
 		// Let's initialize `justification_import` and `finality_proof_import`.
-
-		// KUSAMA HACK: request justifications asynchronously to avoid startup hang
-		let justifications = worker.justification_import.as_mut().map(|i| i.on_start());
-		let mut result_sender = worker.result_sender.clone();
-		thread::spawn(move || {
-			if let Some(justifications) = justifications {
-				for (hash, number) in justifications {
-					result_sender.request_justification(&hash, number);
-					thread::sleep(Duration::from_millis(200));
-				}
+		if let Some(justification_import) = worker.justification_import.as_mut() {
+			for (hash, number) in justification_import.on_start() {
+				worker.result_sender.request_justification(&hash, number);
 			}
-		});
-
+		}
 		if let Some(finality_proof_import) = worker.finality_proof_import.as_mut() {
 			for (hash, number) in finality_proof_import.on_start() {
 				worker.result_sender.request_finality_proof(&hash, number);

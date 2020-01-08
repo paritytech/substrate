@@ -452,16 +452,16 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Schedule a justification request for the given block.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		let client = &self.client;
-		self.extra_justifications.schedule((*hash, number), |base, block| {
+		let client = self.client.clone();
+		self.extra_justifications.schedule((*hash, number), move |base, block| {
 			client.is_descendent_of(base, block)
 		})
 	}
 
 	/// Schedule a finality proof request for the given block.
 	pub fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		let client = &self.client;
-		self.extra_finality_proofs.schedule((*hash, number), |base, block| {
+		let client = self.client.clone();
+		self.extra_finality_proofs.schedule((*hash, number), move |base, block| {
 			client.is_descendent_of(base, block)
 		})
 	}
