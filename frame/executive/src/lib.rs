@@ -165,7 +165,13 @@ where
 		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
 	) {
-		<frame_system::Module<System>>::initialize(block_number, parent_hash, extrinsics_root, digest);
+		<frame_system::Module<System>>::initialize(
+			block_number,
+			parent_hash,
+			extrinsics_root,
+			digest,
+			frame_system::InitKind::Full,
+		);
 		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 		<frame_system::Module<System>>::register_extra_weight_unchecked(
 			<AllModules as WeighBlock<System::BlockNumber>>::on_initialize(*block_number)
@@ -311,6 +317,17 @@ where
 
 	/// Start an offchain worker and generate extrinsics.
 	pub fn offchain_worker(n: System::BlockNumber) {
+		let parent_hash = Default::default();
+		let txs_root = Default::default();
+		let digest = Default::default();
+
+		<frame_system::Module<System>>::initialize(
+			&n,
+			&parent_hash,
+			&txs_root,
+			&digest,
+			frame_system::InitKind::Introspection,
+		);
 		<AllModules as OffchainWorker<System::BlockNumber>>::offchain_worker(n)
 	}
 }
