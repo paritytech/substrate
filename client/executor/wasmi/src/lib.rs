@@ -579,7 +579,8 @@ pub struct WasmiRuntime {
 	state_snapshot: StateSnapshot,
 	/// The host functions registered for this instance.
 	host_functions: Vec<&'static dyn Function>,
-	/// Enable STUB for function called that are missing
+	/// Enable stub generation for functions that are not available in `host_functions`.
+	/// These stubs will error when the wasm blob tries to call them.
 	allow_missing_imports: bool,
 	/// List of missing functions detected during function resolution
 	missing_functions: Vec<String>,
