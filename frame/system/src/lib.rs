@@ -649,9 +649,6 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Start the execution of a particular block.
-	///
-	/// Setting `is_for_inspection` flag will not cause the events
-	/// to be removed from the state.
 	pub fn initialize(
 		number: &T::BlockNumber,
 		parent_hash: &T::Hash,
