@@ -54,7 +54,7 @@ parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
 grafana-data-source = { version = "2.0.0", path = "../../utils/grafana-data-source" }
 sc-tracing = { version = "2.0.0", path = "../tracing" }
 tracing = "0.1.10"
-futures-timer = { git = "https://github.com/expenses/futures-timer", branch = "wasm-support-test" }
+futures-timer = { git = "https://github.com/expenses/futures-timer", branch = "wasm-support" }
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

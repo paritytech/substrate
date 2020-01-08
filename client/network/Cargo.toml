@@ -16,7 +16,7 @@ bitflags = "1.2.0"
 fnv = "1.0.6"
 futures = "0.1.29"
 futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
-futures-timer = { git = "https://github.com/expenses/futures-timer", branch = "wasm-support-test" }
+futures-timer = { git = "https://github.com/expenses/futures-timer", branch = "wasm-support" }
 wasm-timer = "0.2"
 linked-hash-map = "0.5.2"
 linked_hash_set = "0.1.3"
