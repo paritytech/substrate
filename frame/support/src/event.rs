@@ -304,7 +304,7 @@ macro_rules! __events_to_metadata {
 	(
 		$( $metadata:expr ),*;
 		$( #[doc = $doc_attr:tt] )*
-		$event:ident $( ( $( $param:path ),* ) )*,
+		$event:ident $( ( $( $param:path ),* $(,)? ) )*,
 		$( $rest:tt )*
 	) => {
 		$crate::__events_to_metadata!(
@@ -704,6 +704,10 @@ mod tests {
 				OriginRenamed = <T as Trait>::Origin,
 			{
 				TestEvent(BalanceRenamed, OriginRenamed),
+				TrailingCommaInArgs(
+					u32,
+					u32,
+				),
 			}
 		);
 	}

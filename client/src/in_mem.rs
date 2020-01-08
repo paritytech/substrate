@@ -39,6 +39,7 @@ use sc_client_api::{
 	blockchain::{
 		self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
 	},
+	UsageInfo,
 };
 use crate::leaves::LeafSet;
 
@@ -451,6 +452,10 @@ impl<Block: BlockT> sc_client_api::light::Storage<Block> for Blockchain<Block>
 	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
 		None
 	}
+
+	fn usage_info(&self) -> Option<sc_client_api::UsageInfo> {
+		None
+	}
 }
 
 /// In-memory operation.
@@ -677,7 +682,7 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		&self.blockchain
 	}
 
-	fn used_state_cache_size(&self) -> Option<usize> {
+	fn usage_info(&self) -> Option<UsageInfo> {
 		None
 	}
 

@@ -39,6 +39,7 @@ use sc_client_api::{
 		HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys,
 	},
 	light::Storage as BlockchainStorage,
+	UsageInfo,
 };
 use crate::light::blockchain::Blockchain;
 use hash_db::Hasher;
@@ -189,8 +190,8 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
 		&self.blockchain
 	}
 
-	fn used_state_cache_size(&self) -> Option<usize> {
-		None
+	fn usage_info(&self) -> Option<UsageInfo> {
+		self.blockchain.storage().usage_info()
 	}
 
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {

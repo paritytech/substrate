@@ -28,6 +28,7 @@ use crate::{
 		Backend as BlockchainBackend, well_known_cache_keys
 	},
 	light::RemoteBlockchain,
+	UsageInfo,
 };
 use sp_blockchain;
 use sp_consensus::BlockOrigin;
@@ -279,8 +280,8 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
 
-	/// Returns the used state cache, if existent.
-	fn used_state_cache_size(&self) -> Option<usize>;
+	/// Returns current usage statistics.
+	fn usage_info(&self) -> Option<UsageInfo>;
 
 	/// Returns reference to changes trie storage.
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage>;

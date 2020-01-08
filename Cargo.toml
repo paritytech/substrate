@@ -143,6 +143,7 @@ members = [
 	"test-utils/client",
 	"test-utils/runtime",
 	"test-utils/runtime/client",
+	"utils/browser",
 	"utils/build-script-utils",
 	"utils/fork-tree",
 	"utils/frame/rpc/support",
