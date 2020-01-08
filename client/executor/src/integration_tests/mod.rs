@@ -44,10 +44,10 @@ mod wasmtime_missing_externals {
 		}
 	}
 
-	struct MissingExternalFunction;
+	struct MissingExternalFunction(&'static str);
 
 	impl Function for MissingExternalFunction {
-		fn name(&self) -> &str { "missing_external" }
+		fn name(&self) -> &str { self.0 }
 
 		fn signature(&self) -> Signature {
 			Signature::new(vec![], None)
@@ -62,28 +62,10 @@ mod wasmtime_missing_externals {
 		}
 	}
 
-	static MISSING_EXTERNAL_FUNCTION: &'static MissingExternalFunction = &MissingExternalFunction;
-
-	struct YetAnotherMissingExternalFunction;
-
-	impl Function for YetAnotherMissingExternalFunction {
-		fn name(&self) -> &str { "yet_another_missing_external" }
-
-		fn signature(&self) -> Signature {
-			Signature::new(vec![], None)
-		}
-
-		fn execute(
-			&self,
-			_context: &mut dyn FunctionContext,
-			_args: &mut dyn Iterator<Item = Value>,
-		) -> Result<Option<Value>> {
-			panic!("should not be called");
-		}
-	}
-
-	static YET_ANOTHER_MISSING_EXTERNAL_FUNCTION: &'static YetAnotherMissingExternalFunction =
-		&YetAnotherMissingExternalFunction;
+	static MISSING_EXTERNAL_FUNCTION: &'static MissingExternalFunction =
+		&MissingExternalFunction("missing_external");
+	static YET_ANOTHER_MISSING_EXTERNAL_FUNCTION: &'static MissingExternalFunction =
+		&MissingExternalFunction("yet_another_missing_external");
 }
 
 #[cfg(feature = "wasmtime")]
