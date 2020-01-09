@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -69,6 +69,9 @@ const MIN_POSSIBLE_ALLOCATION: u32 = 8;
 // to which it belongs.
 const PREFIX_SIZE: u32 = 8;
 
+/// An implementation of freeing bump allocator.
+///
+/// Refer to the module-level documentation for further details.
 pub struct FreeingBumpHeapAllocator {
 	bumper: u32,
 	heads: [u32; N],

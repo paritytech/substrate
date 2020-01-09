@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,7 +20,11 @@ use super::*;
 use mock::*;
 use sp_runtime::{assert_eq_error_rate, traits::{OnInitialize, BadOrigin}};
 use sp_staking::offence::OffenceDetails;
-use frame_support::{assert_ok, assert_noop, traits::{Currency, ReservableCurrency}};
+use frame_support::{
+	assert_ok, assert_noop,
+	traits::{Currency, ReservableCurrency},
+	dispatch::DispatchError,
+};
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]
@@ -32,7 +36,11 @@ fn force_unstake_works() {
 		// Cant transfer
 		assert_noop!(
 			Balances::transfer(Origin::signed(11), 1, 10),
-			"account liquidity restrictions prevent withdrawal"
+			DispatchError::Module {
+				index: 0,
+				error: 1,
+				message: Some("LiquidityRestrictions"),
+			}
 		);
 		// Force unstake requires root.
 		assert_noop!(Staking::force_unstake(Origin::signed(11), 11), BadOrigin);
@@ -326,7 +334,14 @@ fn staking_should_work() {
 				Some(StakingLedger { stash: 3, total: 1500, active: 1500, unlocking: vec![] })
 			);
 			// e.g. it cannot spend more than 500 that it has free from the total 2000
-			assert_noop!(Balances::reserve(&3, 501), "account liquidity restrictions prevent withdrawal");
+			assert_noop!(
+				Balances::reserve(&3, 501),
+				DispatchError::Module {
+					index: 0,
+					error: 1,
+					message: Some("LiquidityRestrictions"),
+				}
+			);
 			assert_ok!(Balances::reserve(&3, 409));
 		});
 }
@@ -817,7 +832,11 @@ fn cannot_transfer_staked_balance() {
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
 			Balances::transfer(Origin::signed(11), 20, 1),
-			"account liquidity restrictions prevent withdrawal",
+			DispatchError::Module {
+				index: 0,
+				error: 1,
+				message: Some("LiquidityRestrictions"),
+			}
 		);
 
 		// Give account 11 extra free balance
@@ -842,7 +861,11 @@ fn cannot_transfer_staked_balance_2() {
 		// Confirm account 21 can transfer at most 1000
 		assert_noop!(
 			Balances::transfer(Origin::signed(21), 20, 1001),
-			"account liquidity restrictions prevent withdrawal",
+			DispatchError::Module {
+				index: 0,
+				error: 1,
+				message: Some("LiquidityRestrictions"),
+			}
 		);
 		assert_ok!(Balances::transfer(Origin::signed(21), 20, 1000));
 	});
@@ -859,7 +882,14 @@ fn cannot_reserve_staked_balance() {
 		// Confirm account 11 (via controller 10) is totally staked
 		assert_eq!(Staking::stakers(&11).own, 1000);
 		// Confirm account 11 cannot transfer as a result
-		assert_noop!(Balances::reserve(&11, 1), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			Balances::reserve(&11, 1),
+			DispatchError::Module {
+				index: 0,
+				error: 1,
+				message: Some("LiquidityRestrictions"),
+			}
+		);
 
 		// Give account 11 extra free balance
 		let _ = Balances::make_free_balance_be(&11, 10000);
@@ -1164,6 +1194,244 @@ fn too_many_unbond_calls_should_not_work() {
 		assert_ok!(Staking::unbond(Origin::signed(10), 1));
 		assert_eq!(Staking::ledger(&10).unwrap().unlocking.len(), 2);
 	})
+}
+
+#[test]
+fn rebond_works() {
+	// * Should test
+	// * Given an account being bonded [and chosen as a validator](not mandatory)
+	// * it can unbond a portion of its funds from the stash account.
+	// * it can re-bond a portion of the funds scheduled to unlock.
+	ExtBuilder::default()
+		.nominate(false)
+		.build()
+		.execute_with(|| {
+			// Set payee to controller. avoids confusion
+			assert_ok!(Staking::set_payee(
+				Origin::signed(10),
+				RewardDestination::Controller
+			));
+
+			// Give account 11 some large free balance greater than total
+			let _ = Balances::make_free_balance_be(&11, 1000000);
+
+			// confirm that 10 is a normal validator and gets paid at the end of the era.
+			start_era(1);
+
+			// Initial state of 10
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 1000,
+					unlocking: vec![],
+				})
+			);
+
+			start_era(2);
+			assert_eq!(Staking::current_era(), 2);
+
+			// Try to rebond some funds. We get an error since no fund is unbonded.
+			assert_noop!(
+				Staking::rebond(Origin::signed(10), 500),
+				Error::<Test>::NoUnlockChunk,
+			);
+
+			// Unbond almost all of the funds in stash.
+			Staking::unbond(Origin::signed(10), 900).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 100,
+					unlocking: vec![UnlockChunk {
+						value: 900,
+						era: 2 + 3
+					},]
+				})
+			);
+
+			// Re-bond all the funds unbonded.
+			Staking::rebond(Origin::signed(10), 900).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 1000,
+					unlocking: vec![],
+				})
+			);
+
+			// Unbond almost all of the funds in stash.
+			Staking::unbond(Origin::signed(10), 900).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 100,
+					unlocking: vec![UnlockChunk { value: 900, era: 5 }],
+				})
+			);
+
+			// Re-bond part of the funds unbonded.
+			Staking::rebond(Origin::signed(10), 500).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 600,
+					unlocking: vec![UnlockChunk { value: 400, era: 5 }],
+				})
+			);
+
+			// Re-bond the remainder of the funds unbonded.
+			Staking::rebond(Origin::signed(10), 500).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 1000,
+					unlocking: vec![]
+				})
+			);
+
+			// Unbond parts of the funds in stash.
+			Staking::unbond(Origin::signed(10), 300).unwrap();
+			Staking::unbond(Origin::signed(10), 300).unwrap();
+			Staking::unbond(Origin::signed(10), 300).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 100,
+					unlocking: vec![
+						UnlockChunk { value: 300, era: 5 },
+						UnlockChunk { value: 300, era: 5 },
+						UnlockChunk { value: 300, era: 5 },
+					]
+				})
+			);
+
+			// Re-bond part of the funds unbonded.
+			Staking::rebond(Origin::signed(10), 500).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 600,
+					unlocking: vec![
+						UnlockChunk { value: 300, era: 5 },
+						UnlockChunk { value: 100, era: 5 },
+					]
+				})
+			);
+		})
+}
+
+#[test]
+fn rebond_is_fifo() {
+	// Rebond should proceed by reversing the most recent bond operations.
+	ExtBuilder::default()
+		.nominate(false)
+		.build()
+		.execute_with(|| {
+			// Set payee to controller. avoids confusion
+			assert_ok!(Staking::set_payee(
+				Origin::signed(10),
+				RewardDestination::Controller
+			));
+
+			// Give account 11 some large free balance greater than total
+			let _ = Balances::make_free_balance_be(&11, 1000000);
+
+			// confirm that 10 is a normal validator and gets paid at the end of the era.
+			start_era(1);
+
+			// Initial state of 10
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 1000,
+					unlocking: vec![],
+				})
+			);
+
+			start_era(2);
+
+			// Unbond some of the funds in stash.
+			Staking::unbond(Origin::signed(10), 400).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 600,
+					unlocking: vec![
+						UnlockChunk { value: 400, era: 2 + 3 },
+					]
+				})
+			);
+
+			start_era(3);
+
+			// Unbond more of the funds in stash.
+			Staking::unbond(Origin::signed(10), 300).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 300,
+					unlocking: vec![
+						UnlockChunk { value: 400, era: 2 + 3 },
+						UnlockChunk { value: 300, era: 3 + 3 },
+					]
+				})
+			);
+
+			start_era(4);
+
+			// Unbond yet more of the funds in stash.
+			Staking::unbond(Origin::signed(10), 200).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 100,
+					unlocking: vec![
+						UnlockChunk { value: 400, era: 2 + 3 },
+						UnlockChunk { value: 300, era: 3 + 3 },
+						UnlockChunk { value: 200, era: 4 + 3 },
+					]
+				})
+			);
+
+			// Re-bond half of the unbonding funds.
+			Staking::rebond(Origin::signed(10), 400).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 500,
+					unlocking: vec![
+						UnlockChunk { value: 400, era: 2 + 3 },
+						UnlockChunk { value: 100, era: 3 + 3 },
+					]
+				})
+			);
+		})
 }
 
 #[test]
@@ -2501,7 +2769,6 @@ fn remove_multi_deferred() {
 			&[Perbill::from_percent(10)],
 		);
 
-
 		on_offence_now(
 			&[
 				OffenceDetails {
@@ -2525,5 +2792,44 @@ fn remove_multi_deferred() {
 fn version_initialized() {
 	ExtBuilder::default().build().execute_with(|| {
 		assert_eq!(<Staking as Store>::StorageVersion::get(), crate::migration::CURRENT_VERSION);
+	});
+}
+
+#[test]
+fn slash_kicks_validators_not_nominators() {
+	ExtBuilder::default().build().execute_with(|| {
+		start_era(1);
+
+		assert_eq!(Balances::free_balance(&11), 1000);
+
+		let exposure = Staking::stakers(&11);
+		assert_eq!(Balances::free_balance(&101), 2000);
+		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
+
+		on_offence_now(
+			&[
+				OffenceDetails {
+					offender: (11, exposure.clone()),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(10)],
+		);
+
+		assert_eq!(Balances::free_balance(&11), 900);
+		assert_eq!(Balances::free_balance(&101), 2000 - (nominated_value / 10));
+
+		// This is the best way to check that the validator was chilled; `get` will
+		// return default value.
+		for (stash, _) in <Staking as Store>::Validators::enumerate() {
+			assert!(stash != 11);
+		}
+
+		let nominations = <Staking as Store>::Nominators::get(&101).unwrap();
+
+		// and make sure that the vote will be ignored even if the validator
+		// re-registers.
+		let last_slash = <Staking as Store>::SlashingSpans::get(&11).unwrap().last_start();
+		assert!(nominations.submitted_in < last_slash);
 	});
 }

@@ -18,7 +18,23 @@ use sp_runtime::{print, traits::{BlakeTwo256, Hash}};
 #[cfg(not(feature = "std"))]
 use sp_core::{ed25519, sr25519};
 
+extern "C" {
+	#[allow(dead_code)]
+	fn missing_external();
+
+	#[allow(dead_code)]
+	fn yet_another_missing_external();
+}
+
 sp_core::wasm_export_functions! {
+	fn test_calling_missing_external() {
+		unsafe { missing_external() }
+	}
+
+	fn test_calling_yet_another_missing_external() {
+		unsafe { yet_another_missing_external() }
+	}
+
 	fn test_data_in(input: Vec<u8>) -> Vec<u8> {
 		print("set_storage");
 		storage::set(b"input", &input);

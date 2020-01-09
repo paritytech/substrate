@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,7 +16,6 @@
 
 use fnv::FnvHashMap;
 use futures::prelude::*;
-use futures03::{StreamExt as _, TryStreamExt as _};
 use libp2p::Multiaddr;
 use libp2p::core::{ConnectedPoint, either::EitherOutput, PeerId, PublicKey};
 use libp2p::swarm::{IntoProtocolsHandler, IntoProtocolsHandlerSelect, ProtocolsHandler};
@@ -25,8 +24,9 @@ use libp2p::identify::{Identify, IdentifyEvent, IdentifyInfo};
 use libp2p::ping::{Ping, PingConfig, PingEvent, PingSuccess};
 use log::{debug, trace, error};
 use std::collections::hash_map::Entry;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
-use tokio_io::{AsyncRead, AsyncWrite};
 use crate::utils::interval;
 
 /// Time after we disconnect from a node before we purge its information from the cache.
@@ -44,7 +44,7 @@ pub struct DebugInfoBehaviour<TSubstream> {
 	/// Information that we know about all nodes.
 	nodes_info: FnvHashMap<PeerId, NodeInfo>,
 	/// Interval at which we perform garbage collection in `nodes_info`.
-	garbage_collect: Box<dyn Stream<Item = (), Error = ()> + Send>,
+	garbage_collect: Pin<Box<dyn Stream<Item = ()> + Send>>,
 }
 
 /// Information about a node we're connected to.
@@ -76,7 +76,7 @@ impl<TSubstream> DebugInfoBehaviour<TSubstream> {
 			ping: Ping::new(PingConfig::new()),
 			identify,
 			nodes_info: FnvHashMap::default(),
-			garbage_collect: Box::new(interval(GARBAGE_COLLECT_INTERVAL).map(|()| Ok(())).compat()),
+			garbage_collect: Box::pin(interval(GARBAGE_COLLECT_INTERVAL)),
 		}
 	}
 
@@ -149,7 +149,7 @@ pub enum DebugInfoEvent {
 }
 
 impl<TSubstream> NetworkBehaviour for DebugInfoBehaviour<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite {
+where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	type ProtocolsHandler = IntoProtocolsHandlerSelect<
 		<Ping<TSubstream> as NetworkBehaviour>::ProtocolsHandler,
 		<Identify<TSubstream> as NetworkBehaviour>::ProtocolsHandler
@@ -253,70 +253,71 @@ where TSubstream: AsyncRead + AsyncWrite {
 
 	fn poll(
 		&mut self,
+		cx: &mut Context,
 		params: &mut impl PollParameters
-	) -> Async<
+	) -> Poll<
 		NetworkBehaviourAction<
 			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
 			Self::OutEvent
 		>
 	> {
 		loop {
-			match self.ping.poll(params) {
-				Async::NotReady => break,
-				Async::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => {
+			match self.ping.poll(cx, params) {
+				Poll::Pending => break,
+				Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => {
 					if let PingEvent { peer, result: Ok(PingSuccess::Ping { rtt }) } = ev {
 						self.handle_ping_report(&peer, rtt)
 					}
 				},
-				Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
-					return Async::Ready(NetworkBehaviourAction::DialAddress { address }),
-				Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
-					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-				Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
-					return Async::Ready(NetworkBehaviourAction::SendEvent {
+				Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
+					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
+				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
+					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
+				Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
+					return Poll::Ready(NetworkBehaviourAction::SendEvent {
 						peer_id,
 						event: EitherOutput::First(event)
 					}),
-				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
-					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
+					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 			}
 		}
 
 		loop {
-			match self.identify.poll(params) {
-				Async::NotReady => break,
-				Async::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
+			match self.identify.poll(cx, params) {
+				Poll::Pending => break,
+				Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
 					match event {
 						IdentifyEvent::Received { peer_id, info, .. } => {
 							self.handle_identify_report(&peer_id, &info);
 							let event = DebugInfoEvent::Identified { peer_id, info };
-							return Async::Ready(NetworkBehaviourAction::GenerateEvent(event));
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
 						}
 						IdentifyEvent::Error { peer_id, error } =>
 							debug!(target: "sub-libp2p", "Identification with peer {:?} failed => {}", peer_id, error),
 						IdentifyEvent::Sent { .. } => {}
 					}
 				},
-				Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
-					return Async::Ready(NetworkBehaviourAction::DialAddress { address }),
-				Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
-					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-				Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
-					return Async::Ready(NetworkBehaviourAction::SendEvent {
+				Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
+					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
+				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
+					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
+				Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
+					return Poll::Ready(NetworkBehaviourAction::SendEvent {
 						peer_id,
 						event: EitherOutput::Second(event)
 					}),
-				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
-					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
+					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 			}
 		}
 
-		while let Ok(Async::Ready(Some(_))) = self.garbage_collect.poll() {
+		while let Poll::Ready(Some(())) = self.garbage_collect.poll_next_unpin(cx) {
 			self.nodes_info.retain(|_, node| {
 				node.info_expire.as_ref().map(|exp| *exp >= Instant::now()).unwrap_or(true)
 			});
 		}
 
-		Async::NotReady
+		Poll::Pending
 	}
 }

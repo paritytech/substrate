@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -168,7 +168,7 @@ impl<Block: BlockT, F: Fetcher<Block> + 'static, B, E, RA> LightState<Block, F, 
 
 	/// Returns given block hash or best block hash if None is passed.
 	fn block_or_best(&self, hash: Option<Block::Hash>) -> Block::Hash {
-		hash.unwrap_or_else(|| self.client.info().chain.best_hash)
+		hash.unwrap_or_else(|| self.client.chain_info().best_hash)
 	}
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -66,7 +66,9 @@ pub mod error;
 pub mod traits;
 pub mod weights;
 
-pub use self::hash::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Hashable};
+pub use self::hash::{
+	Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Blake2_128Concat, Hashable
+};
 pub use self::storage::{
 	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap, StoragePrefixedMap
 };
@@ -111,6 +113,31 @@ macro_rules! parameter_types {
 			fn get() -> I {
 				I::from($value)
 			}
+		}
+	}
+}
+
+/// Macro for easily creating a new implementation of both the `Get` and `Contains` traits. Use
+/// exactly as with `parameter_types`, only the type must be `Ord`.
+#[macro_export]
+macro_rules! ord_parameter_types {
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis const $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
+		$crate::parameter_types!{IMPL $name , $type , $value}
+		$crate::ord_parameter_types!{IMPL $name , $type , $value}
+		$crate::ord_parameter_types!{ $( $rest )* }
+	);
+	() => ();
+	(IMPL $name:ident , $type:ty , $value:expr) => {
+		impl $crate::traits::Contains<$type> for $name {
+			fn contains(t: &$type) -> bool { &$value == t }
+			fn sorted_members() -> $crate::sp_std::prelude::Vec<$type> { vec![$value] }
+			fn count() -> usize { 1 }
 		}
 	}
 }

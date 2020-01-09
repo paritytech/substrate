@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -395,7 +395,7 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 
 impl<
 	AccountId,
-	Balance: HasCompact + Copy + Saturating,
+	Balance: HasCompact + Copy + Saturating + SimpleArithmetic,
 > StakingLedger<AccountId, Balance> {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
@@ -412,6 +412,30 @@ impl<
 		Self { total, active: self.active, stash: self.stash, unlocking }
 	}
 
+	/// Re-bond funds that were scheduled for unlocking.
+	fn rebond(mut self, value: Balance) -> Self {
+		let mut unlocking_balance: Balance = Zero::zero();
+
+		while let Some(last) = self.unlocking.last_mut() {
+			if unlocking_balance + last.value <= value {
+				unlocking_balance += last.value;
+				self.active += last.value;
+				self.unlocking.pop();
+			} else {
+				let diff = value - unlocking_balance;
+
+				unlocking_balance += diff;
+				self.active += diff;
+				last.value -= diff;
+			}
+
+			if unlocking_balance >= value {
+				break
+			}
+		}
+
+		self
+	}
 }
 
 impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
@@ -784,7 +808,7 @@ decl_event!(
 );
 
 decl_error! {
-	/// Error for the stacking module.
+	/// Error for the staking module.
 	pub enum Error for Module<T: Trait> {
 		/// Not a controller account.
 		NotController,
@@ -794,8 +818,6 @@ decl_error! {
 		AlreadyBonded,
 		/// Controller is already paired.
 		AlreadyPaired,
-		/// Should be the root origin or the `T::SlashCancelOrigin`.
-		BadOrigin,
 		/// Targets cannot be empty.
 		EmptyTargets,
 		/// Duplicate index.
@@ -806,6 +828,8 @@ decl_error! {
 		InsufficientValue,
 		/// Can not schedule more unlock chunks.
 		NoMoreChunks,
+		/// Can not rebond without unlocking chunks.
+		NoUnlockChunk,
 	}
 }
 
@@ -959,6 +983,26 @@ decl_module! {
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
 			}
+		}
+
+		/// Rebond a portion of the stash scheduled to be unlocked.
+		///
+		/// # <weight>
+		/// - Time complexity: O(1). Bounded by `MAX_UNLOCKING_CHUNKS`.
+		/// - Storage changes: Can't increase storage, only decrease it.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		fn rebond(origin, #[compact] value: BalanceOf<T>) {
+			let controller = ensure_signed(origin)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			ensure!(
+				ledger.unlocking.len() > 0,
+				Error::<T>::NoUnlockChunk,
+			);
+
+			let ledger = ledger.rebond(value);
+
+			Self::update_ledger(&controller, &ledger);
 		}
 
 		/// Remove any unlocked chunks from the `unlocking` queue from our management.
@@ -1190,8 +1234,7 @@ decl_module! {
 		fn cancel_deferred_slash(origin, era: EraIndex, slash_indices: Vec<u32>) {
 			T::SlashCancelOrigin::try_origin(origin)
 				.map(|_| ())
-				.or_else(ensure_root)
-				.map_err(|_| Error::<T>::BadOrigin)?;
+				.or_else(ensure_root)?;
 
 			let mut slash_indices = slash_indices;
 			slash_indices.sort_unstable();
