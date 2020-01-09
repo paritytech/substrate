@@ -319,7 +319,7 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 		}
 
 		if self.allow_missing_imports {
-			trace!("Could not find function {}, a stub will be provided instead.", name);
+			trace!(target: "wasm-executor", "Could not find function `{}`, a stub will be provided instead.", name);
 			let id = self.missing_function_id.borrow().clone();
 			self.missing_functions.borrow_mut().push(name.to_string());
 			*self.missing_function_id.borrow_mut() += 1;
