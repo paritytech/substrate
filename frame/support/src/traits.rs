@@ -78,7 +78,6 @@ pub trait OnReapAccount<AccountId> {
 	fn on_reap_account(who: &AccountId);
 }
 
-
 /// Outcome of a balance update.
 pub enum UpdateBalanceOutcome {
 	/// Account balance was simply updated.
