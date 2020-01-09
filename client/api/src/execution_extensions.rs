@@ -62,6 +62,18 @@ impl Default for ExecutionStrategies {
 	}
 }
 
+/// Generate the starting set of ExternalitiesExtensions based upon the given capabilities
+pub trait ExtensionsMaker: Send + Sync {
+	/// Make `Extensions` for given Capapbilities
+	fn extensions_for(&self, capabilities: offchain::Capabilities) -> Extensions;
+}
+
+impl ExtensionsMaker for () {
+	fn extensions_for(&self, _capabilities: offchain::Capabilities) -> Extensions {
+		Extensions::new()
+	}
+}
+
 /// A producer of execution extensions for offchain calls.
 ///
 /// This crate aggregates extensions available for the offchain calls
@@ -71,6 +83,7 @@ pub struct ExecutionExtensions<Block: traits::Block> {
 	strategies: ExecutionStrategies,
 	keystore: Option<BareCryptoStorePtr>,
 	transaction_pool: RwLock<Option<Weak<dyn sp_transaction_pool::OffchainSubmitTransaction<Block>>>>,
+	extensions_maker: Box<dyn ExtensionsMaker>,
 }
 
 impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
@@ -79,6 +92,7 @@ impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
 			strategies: Default::default(),
 			keystore: None,
 			transaction_pool: RwLock::new(None),
+			extensions_maker: Box::new(()),
 		}
 	}
 }
@@ -90,12 +104,18 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 		keystore: Option<BareCryptoStorePtr>,
 	) -> Self {
 		let transaction_pool = RwLock::new(None);
-		Self { strategies, keystore, transaction_pool }
+		let extensions_maker = Box::new(());
+		Self { strategies, keystore, extensions_maker, transaction_pool }
 	}
 
 	/// Get a reference to the execution strategies.
 	pub fn strategies(&self) -> &ExecutionStrategies {
 		&self.strategies
+	}
+
+	/// Set the new extensions_maker
+	pub fn set_extensions_maker(&mut self, maker: Box<dyn ExtensionsMaker>) {
+		self.extensions_maker = maker;
 	}
 
 	/// Register transaction pool extension.
@@ -135,7 +155,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 
 		let capabilities = context.capabilities();
 
-		let mut extensions = Extensions::new();
+		let mut extensions = self.extensions_maker.extensions_for(capabilities);
 
 		if capabilities.has(offchain::Capability::Keystore) {
 			if let Some(keystore) = self.keystore.as_ref() {

@@ -212,6 +212,10 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 			Some(keystore.clone()),
 		);
 
+
+		let backend = Arc::new(sc_client_db::Backend::new(db_config, CANONICALIZATION_DELAY)?);
+		let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor);
+
 		sc_client_db::new_client(
 			db_config,
 			executor,
