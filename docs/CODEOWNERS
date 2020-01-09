@@ -56,13 +56,13 @@
 
 # NPoS and Governance
 /frame/staking/ @kianenigma
-/frame/election/ @kianenigma
+/frame/elections/ @kianenigma
 
 # End to end testing of substrate node
 /bin/node/executor/ @kianenigma
 
 # Transaction weight stuff
-/primitives/runtime/src/weights.rs @kianenigma
+/frame/support/src/weights.rs @kianenigma
 
 # Support crates
 /frame/support/ @thiolliere @kianenigma
