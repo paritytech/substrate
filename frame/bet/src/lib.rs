@@ -362,20 +362,17 @@ decl_module! {
 //					println!("Ending period: {:?} block #{:?}", Self::index(), n);
 
 					let prices = <Prices<T>>::take();
-					if !Self::total().is_zero() {
-						let mean = prices.iter().fold(BalanceOf::<T>::default(), |total, &item| total + item) / samples.into();
+					let total = <Total<T>>::get();
+
+					if !total.is_zero() {
+						let mean = prices.iter().fold(BalanceOf::<T>::default(), |sum, &item| sum + item) / samples.into();
 
 //						println!("prices {:?} mean {:?} target {:?}", prices, mean, Self::target());
 						if mean < Self::target() {
 							// payout
 							let pot = <Pot<T>>::take();
-							let total = Self::total();
 							<Target<T>>::put(mean);
-							let accrued_outgoing = if !total.is_zero() {
-								<Outgoing<T>>::take() * (total + pot) / total
-							} else {
-								Zero::zero()
-							};
+							let accrued_outgoing = <Outgoing<T>>::take() * (total + pot) / total;
 							<Total<T>>::put(total + pot + <Incoming<T>>::take() - accrued_outgoing);
 							// This is where the total should be expanded for contiguous betters.
 							<Payouts<T>>::insert(Self::index(), (total, pot));
