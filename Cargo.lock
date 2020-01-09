@@ -3046,7 +3046,7 @@ dependencies = [
  "sc-authority-discovery 0.8.0",
  "sc-basic-authority 0.8.0",
  "sc-chain-spec 2.0.0",
- "sc-cli 2.0.0",
+ "sc-cli 0.8.0",
  "sc-client 0.8.0",
  "sc-client-api 2.0.0",
  "sc-client-db 0.8.0",
@@ -3220,7 +3220,7 @@ dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-basic-authority 0.8.0",
- "sc-cli 2.0.0",
+ "sc-cli 0.8.0",
  "sc-client 0.8.0",
  "sc-consensus-aura 0.8.0",
  "sc-executor 2.0.0",
@@ -3310,7 +3310,7 @@ version = "2.0.0"
 dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-cli 2.0.0",
+ "sc-cli 0.8.0",
  "sc-client 0.8.0",
  "sc-client-api 2.0.0",
  "sc-service 0.8.0",
@@ -5054,7 +5054,7 @@ dependencies = [
 
 [[package]]
 name = "sc-cli"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "ansi_term 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "app_dirs 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5110,7 +5110,7 @@ dependencies = [
  "sp-blockchain 2.0.0",
  "sp-consensus 0.8.0",
  "sp-core 2.0.0",
- "sp-externalities 2.0.0",
+ "sp-externalities 0.8.0",
  "sp-inherents 2.0.0",
  "sp-keyring 2.0.0",
  "sp-panic-handler 2.0.0",
@@ -5143,7 +5143,7 @@ dependencies = [
  "sp-blockchain 2.0.0",
  "sp-consensus 0.8.0",
  "sp-core 2.0.0",
- "sp-externalities 2.0.0",
+ "sp-externalities 0.8.0",
  "sp-inherents 2.0.0",
  "sp-keyring 2.0.0",
  "sp-runtime 2.0.0",
@@ -5341,7 +5341,7 @@ dependencies = [
  "sc-executor-wasmtime 2.0.0",
  "sc-runtime-test 2.0.0",
  "sp-core 2.0.0",
- "sp-externalities 2.0.0",
+ "sp-externalities 0.8.0",
  "sp-io 2.0.0",
  "sp-panic-handler 2.0.0",
  "sp-runtime-interface 2.0.0",
@@ -5379,7 +5379,7 @@ dependencies = [
  "parity-wasm 0.41.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-executor-common 2.0.0",
  "sp-core 2.0.0",
- "sp-externalities 2.0.0",
+ "sp-externalities 0.8.0",
  "sp-runtime-interface 2.0.0",
  "sp-wasm-interface 2.0.0",
  "wasmi 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5400,7 +5400,7 @@ dependencies = [
  "parity-wasm 0.41.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-executor-common 2.0.0",
  "sp-core 2.0.0",
- "sp-externalities 2.0.0",
+ "sp-externalities 0.8.0",
  "sp-runtime-interface 2.0.0",
  "sp-wasm-interface 2.0.0",
  "wasmi 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6340,7 +6340,7 @@ dependencies = [
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-debug-derive 2.0.0",
- "sp-externalities 2.0.0",
+ "sp-externalities 0.8.0",
  "sp-runtime-interface 2.0.0",
  "sp-serializer 2.0.0",
  "sp-std 2.0.0",
@@ -6364,7 +6364,7 @@ dependencies = [
 
 [[package]]
 name = "sp-externalities"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "environmental 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-std 2.0.0",
@@ -6412,7 +6412,7 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-core 2.0.0",
- "sp-externalities 2.0.0",
+ "sp-externalities 0.8.0",
  "sp-runtime-interface 2.0.0",
  "sp-state-machine 2.0.0",
  "sp-std 2.0.0",
@@ -6494,7 +6494,7 @@ dependencies = [
  "primitive-types 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustversion 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-core 2.0.0",
- "sp-externalities 2.0.0",
+ "sp-externalities 0.8.0",
  "sp-io 2.0.0",
  "sp-runtime-interface-proc-macro 2.0.0",
  "sp-runtime-interface-test-wasm 2.0.0",
@@ -6590,7 +6590,7 @@ dependencies = [
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-core 2.0.0",
- "sp-externalities 2.0.0",
+ "sp-externalities 0.8.0",
  "sp-panic-handler 2.0.0",
  "sp-trie 2.0.0",
  "trie-db 0.18.1 (registry+https://github.com/rust-lang/crates.io-index)",
