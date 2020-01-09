@@ -126,7 +126,7 @@ use frame_support::weights::SimpleDispatchInfo;
 use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};
 use sp_staking::SessionIndex;
 use frame_support::{dispatch, ConsensusEngineId, decl_module, decl_event, decl_storage, decl_error};
-use frame_support::{ensure, traits::{OnFreeBalanceZero, OnReapAccount, Get, FindAuthor, ValidatorRegistration}, Parameter};
+use frame_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor, ValidatorRegistration}, Parameter};
 use frame_system::{self as system, ensure_signed};
 
 #[cfg(test)]
