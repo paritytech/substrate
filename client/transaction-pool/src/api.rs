@@ -25,23 +25,27 @@ use sc_client_api::{
 	light::{Fetcher, RemoteCallRequest}
 };
 use sp_core::{H256, Blake2Hasher, Hasher};
-use sp_runtime::{generic::BlockId, traits::{self, Block as BlockT}, transaction_validity::TransactionValidity};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, BlockIdTo, ProvideRuntimeApi},
+	transaction_validity::TransactionValidity,
+};
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 
 use crate::error::{self, Error};
 
 /// The transaction pool logic for full client.
-pub struct FullChainApi<T, Block> {
-	client: Arc<T>,
+pub struct FullChainApi<Client, Block> {
+	client: Arc<Client>,
 	pool: ThreadPool,
 	_marker: PhantomData<Block>,
 }
 
-impl<T, Block> FullChainApi<T, Block> where
+impl<Client, Block> FullChainApi<Client, Block> where
 	Block: BlockT,
-	T: traits::ProvideRuntimeApi + traits::BlockIdTo<Block> {
+	Client: ProvideRuntimeApi + BlockIdTo<Block> {
 	/// Create new transaction pool logic.
-	pub fn new(client: Arc<T>) -> Self {
+	pub fn new(client: Arc<Client>) -> Self {
 		FullChainApi {
 			client,
 			pool: ThreadPoolBuilder::new()
@@ -54,11 +58,11 @@ impl<T, Block> FullChainApi<T, Block> where
 	}
 }
 
-impl<T, Block> sc_transaction_graph::ChainApi for FullChainApi<T, Block> where
+impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block> where
 	Block: BlockT<Hash = H256>,
-	T: traits::ProvideRuntimeApi + traits::BlockIdTo<Block> + 'static + Send + Sync,
-	T::Api: TaggedTransactionQueue<Block>,
-	sp_api::ApiErrorFor<T, Block>: Send,
+	Client: ProvideRuntimeApi + BlockIdTo<Block> + 'static + Send + Sync,
+	Client::Api: TaggedTransactionQueue<Block>,
+	sp_api::ApiErrorFor<Client, Block>: Send,
 {
 	type Block = Block;
 	type Hash = H256;
@@ -112,19 +116,19 @@ impl<T, Block> sc_transaction_graph::ChainApi for FullChainApi<T, Block> where
 }
 
 /// The transaction pool logic for light client.
-pub struct LightChainApi<T, F, Block> {
-	client: Arc<T>,
+pub struct LightChainApi<Client, F, Block> {
+	client: Arc<Client>,
 	fetcher: Arc<F>,
 	_phantom: PhantomData<Block>,
 }
 
-impl<T, F, Block> LightChainApi<T, F, Block> where
+impl<Client, F, Block> LightChainApi<Client, F, Block> where
 	Block: BlockT,
-	T: HeaderBackend<Block>,
+	Client: HeaderBackend<Block>,
 	F: Fetcher<Block>,
 {
 	/// Create new transaction pool logic.
-	pub fn new(client: Arc<T>, fetcher: Arc<F>) -> Self {
+	pub fn new(client: Arc<Client>, fetcher: Arc<F>) -> Self {
 		LightChainApi {
 			client,
 			fetcher,
@@ -133,9 +137,9 @@ impl<T, F, Block> LightChainApi<T, F, Block> where
 	}
 }
 
-impl<T, F, Block> sc_transaction_graph::ChainApi for LightChainApi<T, F, Block> where
+impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, F, Block> where
 	Block: BlockT<Hash=H256>,
-	T: HeaderBackend<Block> + 'static,
+	Client: HeaderBackend<Block> + 'static,
 	F: Fetcher<Block> + 'static,
 {
 	type Block = Block;
