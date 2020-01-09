@@ -22,7 +22,6 @@ use sc_executor_common::{
 	allocator,
 };
 use std::{str, mem, cell::RefCell};
-use std::cell::RefCell;
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 	memory_units::Pages, RuntimeValue::{I32, I64, self},
