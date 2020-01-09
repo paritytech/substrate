@@ -4,7 +4,19 @@ Substrate is a next-generation framework for blockchain innovation.
 
 ## Trying it out
 
-Simply go to [substrate.dev](https://substrate.dev) and follow the [getting started](https://substrate.dev/docs/en/getting-started/) instructions.
+To set up your computer to use Substrate, run the following in your terminal:
+
+```bash
+curl https://getsubstrate.io -sSf | bash
+```
+
+You can then start a local Substrate development chain with:
+
+```
+substrate --dev
+```
+
+For more comprehensive installation instructions and guides to get started, go to [substrate.dev](https://substrate.dev) and follow the [getting started](https://substrate.dev/docs/en/overview/getting-started) instructions.
 
 ## Contributions & Code of Conduct
 
