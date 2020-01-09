@@ -395,7 +395,13 @@ fn call_in_wasm_module(
 	let heap_base = get_heap_base(module_instance)?;
 
 	let mut fec = FunctionExecutor::new(
-		memory.clone(), heap_base, table, host_functions, allow_missing_imports, missing_functions)?;
+		memory.clone(),
+		heap_base,
+		table,
+		host_functions,
+		allow_missing_imports,
+		missing_functions,
+	)?;
 
 	// Write the call data
 	let offset = fec.allocate_memory(data.len() as u32)?;
@@ -630,7 +636,11 @@ pub fn create_instance(
 
 	// Instantiate this module.
 	let (instance, missing_functions) = instantiate_module(
-			heap_pages as usize, &module, &host_functions, allow_missing_imports)
+		heap_pages as usize,
+		&module,
+		&host_functions,
+		allow_missing_imports,
+	)
 		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
 	// Take state snapshot before executing anything.
