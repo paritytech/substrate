@@ -25,13 +25,13 @@ use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
 use sp_core::{H256, crypto::key_types};
 use sp_io;
 use frame_support::{
-	assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap, StorageValue,
+	assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap, StorageValue, StorageMap,
 	traits::{Currency, Get, FindAuthor},
 	weights::Weight,
 };
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
-	Nominators, inflation
+	Nominators, inflation, SessionInterface, Exposure,
 };
 
 /// The AccountId alias in this test module.
@@ -373,48 +373,55 @@ pub type Session = pallet_session::Module<Test>;
 pub type Timestamp = pallet_timestamp::Module<Test>;
 pub type Staking = Module<Test>;
 
-pub fn check_exposure_all() {
-	Staking::current_elected().into_iter().for_each(|acc| check_exposure(acc));
+pub fn check_exposure_all(era: EraIndex) {
+	// TODO TODO:
+	// Staking::validator_for_era(era).into_iter().for_each(|info| check_exposure(info));
 }
 
-pub fn check_nominator_all() {
-	<Nominators<Test>>::enumerate().for_each(|(acc, _)| check_nominator_exposure(acc));
+pub fn check_nominator_all(era: EraIndex) {
+	<Nominators<Test>>::enumerate()
+		.for_each(|(acc, _)| check_nominator_exposure(era, acc));
 }
 
 /// Check for each selected validator: expo.total = Sum(expo.other) + expo.own
-pub fn check_exposure(stash: u64) {
-	assert_is_stash(stash);
-	let expo = Staking::stakers(&stash);
-	assert_eq!(
-		expo.total as u128, expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>(),
-		"wrong total exposure for {:?}: {:?}", stash, expo,
-	);
+pub fn check_exposure(stash: AccountId) {
+	// TODO TODO: impl
+	// let stash = val_info.stash;
+	// let expo = val_info.exposure;
+
+	// assert_is_stash(stash);
+	// assert_eq!(
+	// 	expo.total as u128, expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>(),
+	// 	"wrong total exposure for {:?}: {:?}", stash, expo,
+	// );
 }
 
 /// Check that for each nominator: slashable_balance > sum(used_balance)
 /// Note: we might not consume all of a nominator's balance, but we MUST NOT over spend it.
-pub fn check_nominator_exposure(stash: u64) {
-	assert_is_stash(stash);
-	let mut sum = 0;
-	Staking::current_elected()
-		.iter()
-		.map(|v| Staking::stakers(v))
-		.for_each(|e| e.others.iter()
-			.filter(|i| i.who == stash)
-			.for_each(|i| sum += i.value));
-	let nominator_stake = Staking::slashable_balance_of(&stash);
-	// a nominator cannot over-spend.
-	assert!(
-		nominator_stake >= sum,
-		"failed: Nominator({}) stake({}) >= sum divided({})", stash, nominator_stake, sum,
-	);
+pub fn check_nominator_exposure(era: EraIndex, stash: AccountId) {
+	// TODO TODO: impl
+	// assert_is_stash(stash);
+	// let mut sum = 0;
+	// Staking::validator_for_era(era)
+	// 	.iter()
+	// 	.for_each(|e| {
+	// 		e.exposure.others.iter()
+	// 			.filter(|i| i.who == stash)
+	// 			.for_each(|i| sum += i.value)
+	// 	});
+	// let nominator_stake = Staking::slashable_balance_of(&stash);
+	// // a nominator cannot over-spend.
+	// assert!(
+	// 	nominator_stake >= sum,
+	// 	"failed: Nominator({}) stake({}) >= sum divided({})", stash, nominator_stake, sum,
+	// );
 }
 
-pub fn assert_is_stash(acc: u64) {
+pub fn assert_is_stash(acc: AccountId) {
 	assert!(Staking::bonded(&acc).is_some(), "Not a stash.");
 }
 
-pub fn assert_ledger_consistent(stash: u64) {
+pub fn assert_ledger_consistent(stash: AccountId) {
 	assert_is_stash(stash);
 	let ledger = Staking::ledger(stash - 1).unwrap();
 
@@ -444,8 +451,6 @@ pub fn advance_session() {
 }
 
 pub fn start_session(session_index: SessionIndex) {
-	// Compensate for session delay
-	let session_index = session_index + 1;
 	for i in Session::current_index()..session_index {
 		System::set_block_number((i + 1).into());
 		Timestamp::set_timestamp(System::block_number() * 1000);
@@ -457,22 +462,21 @@ pub fn start_session(session_index: SessionIndex) {
 
 pub fn start_era(era_index: EraIndex) {
 	start_session((era_index * 3).into());
-	assert_eq!(Staking::current_era(), era_index);
+	assert_eq!(Staking::active_era(), era_index);
 }
 
 pub fn current_total_payout_for_duration(duration: u64) -> u64 {
 	inflation::compute_total_payout(
 		<Test as Trait>::RewardCurve::get(),
-		<Module<Test>>::slot_stake() * 2,
+		Staking::eras_total_stake(Staking::active_era()),
 		Balances::total_issuance(),
 		duration,
 	).0
 }
 
 pub fn reward_all_elected() {
-	let rewards = <Module<Test>>::current_elected().iter()
-		.map(|v| (*v, 1))
-		.collect::<Vec<_>>();
+	let rewards = <Test as Trait>::SessionInterface::validators().into_iter()
+		.map(|v| (v, 1));
 
 	<Module<Test>>::reward_by_ids(rewards)
 }
@@ -496,8 +500,8 @@ pub fn on_offence_in_era(
 		}
 	}
 
-	if Staking::current_era() == era {
-		Staking::on_offence(offenders, slash_fraction, Staking::current_era_start_session_index());
+	if Staking::active_era() == era {
+		Staking::on_offence(offenders, slash_fraction, Staking::eras_start_session_index(era));
 	} else {
 		panic!("cannot slash in era {}", era);
 	}
@@ -507,6 +511,21 @@ pub fn on_offence_now(
 	offenders: &[OffenceDetails<AccountId, pallet_session::historical::IdentificationTuple<Test>>],
 	slash_fraction: &[Perbill],
 ) {
-	let now = Staking::current_era();
+	let now = Staking::active_era();
 	on_offence_in_era(offenders, slash_fraction, now)
+}
+
+pub fn validator_current_exposure(stash: AccountId) -> Exposure<AccountId, Balance> {
+	Staking::eras_stakers(Staking::active_era(), stash)
+}
+
+pub fn bypass_logic_change_current_exposure(stash: AccountId, exposure: Exposure<AccountId, Balance>) {
+	// TODO TODO: we can actually probably remove this function or just upgrade it.
+	// <ValidatorForEra<Test>>::mutate(Staking::active_era(), |infos| {
+	// 	for info in infos {
+	// 		if info.stash == stash {
+	// 			info.exposure = exposure.clone();
+	// 		}
+	// 	}
+	// });
 }
