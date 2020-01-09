@@ -103,8 +103,6 @@ macro_rules! new_full_start {
 				Ok(node_rpc::create(client, pool, node_rpc::LightDeps::none(fetcher)))
 			})?;
 
-		builder.client().execution_extensions().set_extensions_maker(Box::new(()));
-
 		(builder, import_setup, inherent_data_providers)
 	}}
 }
