@@ -17,6 +17,7 @@
 // TODO TODO:
 // * migration
 // * upgrade test
+// * update doc
 // * new test
 //! # Staking Module
 //!
@@ -311,9 +312,6 @@ pub struct EraRewardPoints<AccountId: Ord> {
 	/// The reward points earned by a given validator.
 	individual: BTreeMap<AccountId, RewardPoint>,
 }
-// TODO TODO: when does this rewards can be spend: we need a mecanism to tell when reward can be
-// spend, either by asking session or by just saying only reward from finished session can be spend
-// but then we are following sessions delay
 
 /// Indicates the initial status of the staker.
 #[derive(RuntimeDebug)]
@@ -345,7 +343,6 @@ impl Default for RewardDestination {
 }
 
 /// Preference of what happens regarding validation.
-// TODO TODO: put this into the Exposure!
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct ValidatorPrefs {
 	/// Reward that validator takes up-front; only the rest is split between themselves and
@@ -700,8 +697,6 @@ decl_storage! {
 		/// Direct storage APIs can still bypass this protection.
 		Nominators get(fn nominators): linked_map T::AccountId => Option<Nominations<T::AccountId>>;
 
-		/// TODO: Will likely need initialising for the migration.
-
 		// /// The currently elected validator set keyed by stash account ID.
 		// pub CurrentElected get(fn current_elected): Vec<T::AccountId>;
 		// TODO TODO: migration: clean this!!!
@@ -711,7 +706,6 @@ decl_storage! {
 
 		// /// The start of the current era.
 		// // TODO TODO: actually no this doesn't match the start of the era at index CurrentEra.
-		// // TODO TODO: rename ActiveEra
 		// pub CurrentEraStart get(fn current_era_start): MomentOf<T>;
 		// TODO TODO: clean this!!
 
@@ -758,7 +752,7 @@ decl_storage! {
 		//pub SlotStake get(fn slot_stake) build(|config: &GenesisConfig<T>| {
 		//	config.stakers.iter().map(|&(_, _, value, _)| value).min().unwrap_or_default()
 		//}): BalanceOf<T>;
-		//TODO TODO: clean this!!
+		//TODO TODO: Slot stake is not longer used. clean this!!
 
 		/// True if the next session change will be a new era regardless of index.
 		pub ForceEra get(fn force_era) config(): Forcing;
@@ -1443,8 +1437,6 @@ impl<T: Trait> Module<T> {
 	// TODO: at the end of session, ensure that points are accumulated within the correct era.
 	// TODO: currently, validator set changes lag by one session, therefore, in the first session of
 	// TODO:   an era, the points should be accumulated by the validator set of the era before.
-	// TODO TODO: I'm not sure I understand that, staking doesn't rely on delay anymore at all. it just know that after HISTORY_DEPTH it removes the rewards.
-	// TODO TODO: either we make the reward giving the era to reward, or we follow what is the current era used in session!
 
 	/// Update the ledger for a controller. This will also update the stash lock. The lock will
 	/// will lock the entire funds except paying for further transactions.
@@ -1552,6 +1544,7 @@ impl<T: Trait> Module<T> {
 		// Increment current era.
 		let current_era = CurrentEra::mutate(|s| { *s += 1; *s });
 		// TODO TODO: either start_session_index strictly increase or we must remove old era overriden
+		// TODO TODO: update doc or code to make this correct
 		ErasStartSessionIndex::insert(&current_era, &start_session_index);
 
 		// Clean old era information.
@@ -1615,7 +1608,6 @@ impl<T: Trait> Module<T> {
 	/// Returns a set of newly selected _stash_ IDs.
 	///
 	/// Assumes storage is coherent with the declaration.
-	// TODO TODO: maybe remove storage alteration here and return types!!!
 	fn select_validators() -> Option<Vec<T::AccountId>> {
 		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
 		let all_validator_candidates_iter = <Validators<T>>::enumerate();
@@ -1833,7 +1825,7 @@ impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
 		Self::ensure_storage_upgraded();
-		let maybe_validator_sets = Self::new_session(will_apply_at); // TODO TODO: why was it -1 before ?
+		let maybe_validator_sets = Self::new_session(will_apply_at);
 		Self::end_session(session_ending);
 		maybe_validator_sets
 	}
@@ -1883,7 +1875,7 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 	for ExposureOf<T>
 {
 	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
-		// TODO TODO: which exposure do we want here ??? active era or current era ??
+		// TODO TODO: which exposure do we want here ? active era or current era ?
 		Some(<Module<T>>::eras_stakers(<Module<T>>::current_era(), &validator))
 	}
 }
