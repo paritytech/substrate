@@ -69,7 +69,7 @@ macro_rules! implement_per_thing {
 				Self::from_rational_approximation(p, q)
 			}
 
-			/// Converts a fraction into `Permill`.
+			/// Converts from a fraction.
 			#[cfg(feature = "std")]
 			pub fn from_fraction(x: f64) -> Self { Self((x * ($max as f64)) as $type) }
 
