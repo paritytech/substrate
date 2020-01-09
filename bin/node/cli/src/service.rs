@@ -56,7 +56,7 @@ macro_rules! new_full_start {
 		let mut import_setup = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
-		let mut builder = sc_service::ServiceBuilder::new_full::<
+		let builder = sc_service::ServiceBuilder::new_full::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
 		>($config)?
 			.with_select_chain(|_config, backend| {

@@ -22,6 +22,7 @@ use sc_client_api::{
 	self,
 	BlockchainEvents,
 	backend::RemoteBackend, light::RemoteBlockchain,
+	execution_extensions::ExtensionsMaker,
 };
 use sc_client::Client;
 use sc_chain_spec::{RuntimeGenesis, Extension};
@@ -211,10 +212,6 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 			config.execution_strategies.clone(),
 			Some(keystore.clone()),
 		);
-
-
-		let backend = Arc::new(sc_client_db::Backend::new(db_config, CANONICALIZATION_DELAY)?);
-		let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor);
 
 		sc_client_db::new_client(
 			db_config,
@@ -744,6 +741,46 @@ ServiceBuilder<
 		+ TransactionPoolMaintainer<Block=TBl, Hash = <TBl as BlockT>::Hash>,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata> + Clone,
 {
+
+	/// Set an ExecutionExtensionsMaker
+	pub fn with_execution_extensions_maker(self, execution_extensions_maker: Box<dyn ExtensionsMaker>) -> Result<Self, Error> {
+		let ServiceBuilder {
+			config,
+			client,
+			backend,
+			keystore,
+			fetcher,
+			select_chain,
+			import_queue,
+			finality_proof_request_builder,
+			finality_proof_provider,
+			network_protocol,
+			transaction_pool,
+			rpc_extensions,
+			remote_backend,
+			marker
+		} = self;
+
+		client.execution_extensions().set_extensions_maker(execution_extensions_maker);
+
+		Ok(ServiceBuilder {
+			config,
+			client,
+			backend,
+			keystore,
+			fetcher,
+			select_chain,
+			import_queue,
+			finality_proof_request_builder,
+			finality_proof_provider,
+			network_protocol,
+			transaction_pool,
+			rpc_extensions,
+			remote_backend,
+			marker,
+		})
+	}
+
 	/// Builds the service.
 	pub fn build(self) -> Result<Service<
 		TBl,

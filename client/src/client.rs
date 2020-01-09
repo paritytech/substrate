@@ -243,7 +243,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Get a reference to the execution extensions.
 	pub fn execution_extensions(&self) -> &ExecutionExtensions<Block> {
 		&self.execution_extensions
-    }
+	}
 
 	/// Get a reference to the state at a given block.
 	pub fn state_at(&self, block: &BlockId<Block>) -> sp_blockchain::Result<B::State> {
