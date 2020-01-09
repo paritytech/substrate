@@ -251,14 +251,115 @@ fn initiate_recovery_works() {
 fn vouch_recovery_handles_basic_errors() {
 	new_test_ext().execute_with(|| {
 		// Cannot vouch for non-recoverable account
+		assert_noop!(Recovery::vouch_recovery(Origin::signed(2), 5, 1), Error::<Test>::NotRecoverable);
 
+		// Create a recovery process for next tests
+		let friends = vec![2, 3, 4];
+		let threshold = 3;
+		let delay_period = 10;
+		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+		// Cannot vouch a recovery process that has not started
+		assert_noop!(Recovery::vouch_recovery(Origin::signed(2), 5, 1), Error::<Test>::NotStarted);
+		
+		// Initiate a recovery process
+		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
+		// Cannot vouch if you are not a friend
+		assert_noop!(Recovery::vouch_recovery(Origin::signed(22), 5, 1), Error::<Test>::NotFriend);
+		// Cannot vouch twice
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 1));
+		assert_noop!(Recovery::vouch_recovery(Origin::signed(2), 5, 1), Error::<Test>::AlreadyVouched);
+	});
+}
 
-		// Create and initiate a recovery process for next tests
+#[test]
+fn vouch_recovery_works() {
+	new_test_ext().execute_with(|| {
+		// Create and initiate a recovery process for the test
 		let friends = vec![2, 3, 4];
 		let threshold = 3;
 		let delay_period = 10;
 		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
+		// Vouching works
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 1));
+		// Handles out of order vouches
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(4), 5, 1));
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1));
 
+		// Final recovery status object is updated correctly
+		let recovery_status = ActiveRecovery {
+			created: 1,
+			deposit: 10,
+			friends: vec![2, 3, 4],
+		};
+		assert_eq!(<ActiveRecoveries<Test>>::get(&5, &1), Some(recovery_status));
+	});
+}
+
+#[test]
+fn claim_recovery_handles_basic_errors() {
+	new_test_ext().execute_with(|| {
+		// Cannot claim a non-recoverable account
+		assert_noop!(Recovery::claim_recovery(Origin::signed(1), 5), Error::<Test>::NotRecoverable);
+
+		// Create a recovery process for the test
+		let friends = vec![2, 3, 4];
+		let threshold = 3;
+		let delay_period = 10;
+		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+		// Cannot claim an account which has not started the recovery process
+		assert_noop!(Recovery::claim_recovery(Origin::signed(1), 5), Error::<Test>::NotStarted);
+		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
+		// Cannot claim an account which has not passed the delay period
+		assert_noop!(Recovery::claim_recovery(Origin::signed(1), 5), Error::<Test>::DelayPeriod);
+		run_to_block(11);
+		// Cannot claim an account which has not passed the threshold number of votes
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 1));
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1));
+		// Only 2/3 is not good enough
+		assert_noop!(Recovery::claim_recovery(Origin::signed(1), 5), Error::<Test>::Threshold);
+	});
+}
+
+#[test]
+fn claim_recovery_works() {
+	new_test_ext().execute_with(|| {
+		// Create, initiate, and vouch recovery process for the test
+		let friends = vec![2, 3, 4];
+		let threshold = 3;
+		let delay_period = 10;
+		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 1));
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1));
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(4), 5, 1));
+
+		run_to_block(11);
+
+		// Account can be recovered.
+		assert_ok!(Recovery::claim_recovery(Origin::signed(1), 5));
+		// Recovered storage item is correctly created
+		assert_eq!(<Recovered<Test>>::get(&5), Some(1));
+
+		// Account could be re-recovered in the case that the recoverer account also gets lost.
+		assert_ok!(Recovery::initiate_recovery(Origin::signed(4), 5));
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 4));
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 4));
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(4), 5, 4));
+
+		run_to_block(21);
+
+		// Account is re-recovered.
+		assert_ok!(Recovery::claim_recovery(Origin::signed(4), 5));
+		// Recovered storage item is correctly updated
+		assert_eq!(<Recovered<Test>>::get(&5), Some(4));
+	});
+}
+
+#[test]
+fn close_recovery_works() {
+	new_test_ext().execute_with(|| {
+		// Cannot close a non-active recovery
+		
 	});
 }

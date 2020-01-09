@@ -133,7 +133,7 @@ decl_event! {
 		RecoveryVouched(AccountId, AccountId, AccountId),
 		/// A recovery process for account_1 by account_2 has been closed
 		RecoveryClosed(AccountId, AccountId),
-		/// Account_1 has been recovered by account_2
+		/// Account_1 has been successfully recovered by account_2
 		AccountRecovered(AccountId, AccountId),
 		/// A recovery process has been removed for an account
 		RecoveryRemoved(AccountId),
