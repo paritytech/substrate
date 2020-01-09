@@ -31,6 +31,7 @@ use crate::blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as Bloc
 use crate::cht;
 use crate::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use crate::light::fetcher::{Fetcher, RemoteHeaderRequest};
+use state_machine::backend::InMemory;
 
 /// Light client blockchain storage.
 pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
@@ -67,6 +68,12 @@ pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 
 	/// Get proof of block.
 	fn proof(&self, id: &BlockId<Block>) -> Option<Proof>;
+
+	/// Update genesis state
+	fn update_genesis_state<H>(&self, genesis_state: &InMemory<H>);
+
+	/// Get genesis sate
+	fn genesis_state<H>(&self) -> Option<InMemory<H>>;
 }
 
 /// Light client blockchain.

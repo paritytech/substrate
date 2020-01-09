@@ -137,7 +137,7 @@ impl error::Error for Void {
 /// tests.
 #[derive(Eq)]
 pub struct InMemory<H> {
-	inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>,
+	pub inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>,
 	_hasher: PhantomData<H>,
 }
 

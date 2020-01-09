@@ -35,13 +35,16 @@ use hash_db::Hasher;
 use trie::MemoryDB;
 use heapsize::HeapSizeOf;
 use consensus::well_known_cache_keys;
+use std::marker::PhantomData;
+use log::info;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always suceeds; qed";
 
 /// Light client backend.
-pub struct Backend<S, F, H> {
+pub struct Backend<S, F, H, Block> {
 	blockchain: Arc<Blockchain<S, F>>,
 	genesis_state: RwLock<Option<InMemoryState<H>>>,
+	phantom: PhantomData<Block>,
 }
 
 /// Light block (header and justification) import operation.
@@ -73,12 +76,20 @@ pub enum OnDemandOrGenesisState<Block: BlockT, S, F, H> {
 	Genesis(InMemoryState<H>),
 }
 
-impl<S, F, H> Backend<S, F, H> {
+impl<S, F, H, Block> Backend<S, F, H, Block> where
+	S: BlockchainStorage<Block>,
+	Block: BlockT,
+{
 	/// Create new light backend.
 	pub fn new(blockchain: Arc<Blockchain<S, F>>) -> Self {
+
+		let genesis_state = blockchain.storage().genesis_state();
+		info!("New light backend: genesis_state is_some: {}", genesis_state.is_some());
+
 		Self {
 			blockchain,
-			genesis_state: RwLock::new(None),
+			genesis_state: RwLock::new(genesis_state),
+			phantom: Default::default(),
 		}
 	}
 
@@ -88,7 +99,7 @@ impl<S, F, H> Backend<S, F, H> {
 	}
 }
 
-impl<S: AuxStore, F, H> AuxStore for Backend<S, F, H> {
+impl<S: AuxStore, F, H, B> AuxStore for Backend<S, F, H, B> {
 	fn insert_aux<
 		'a,
 		'b: 'a,
@@ -104,7 +115,7 @@ impl<S: AuxStore, F, H> AuxStore for Backend<S, F, H> {
 	}
 }
 
-impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
+impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H, Block> where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
@@ -157,7 +168,11 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 
 			// when importing genesis block => remember its state
 			if is_genesis_import {
-				*self.genesis_state.write() = operation.storage_update.take();
+				let genesis_state = operation.storage_update.take();
+				genesis_state.as_ref().map(|x|{
+					self.blockchain.storage().update_genesis_state(x);
+				});
+				*self.genesis_state.write() = genesis_state;
 			}
 		} else {
 			for (key, maybe_val) in operation.aux_ops {
@@ -215,7 +230,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	}
 }
 
-impl<S, F, Block, H> RemoteBackend<Block, H> for Backend<S, F, H>
+impl<S, F, Block, H> RemoteBackend<Block, H> for Backend<S, F, H, Block>
 where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,

@@ -453,6 +453,14 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
             StoredBlock::Full(_, _, proof) => (*proof).clone(),
         }))
     }
+
+	fn update_genesis_state<H>(&self, genesis_state: &InMemory<H>) {
+
+	}
+
+	fn genesis_state<H>(&self) -> Option<InMemory<H>>{
+		None
+	}
 }
 
 /// In-memory operation.

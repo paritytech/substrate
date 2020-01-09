@@ -39,6 +39,8 @@ use crate::utils::{self, meta_keys, Meta, db_err, open_database,
 	read_db, block_id_to_lookup_key, read_meta};
 use crate::DatabaseSettings;
 use log::{trace, warn, debug};
+use state_machine::backend::InMemory;
+use parity_codec::alloc::collections::BTreeMap;
 
 pub(crate) mod columns {
 	pub const META: Option<u32> = crate::utils::COLUMN_META;
@@ -48,6 +50,7 @@ pub(crate) mod columns {
 	pub const CHT: Option<u32> = Some(4);
 	pub const AUX: Option<u32> = Some(5);
 	pub const PROOF: Option<u32> = Some(6);
+	pub const GENESIS_STATE: Option<u32> = Some(7);
 }
 
 /// Prefix for headers CHT.
@@ -537,6 +540,24 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			Ok(Some(proof)) => Decode::decode(&mut &proof[..]),
 			_ => None
 		}
+	}
+
+	fn update_genesis_state<H>(&self, genesis_state: &InMemory<H>){
+
+		let genesis_state : GenesisState = genesis_state.to_owned().into();
+		let value = genesis_state.encode();
+		let mut transaction = DBTransaction::new();
+		transaction.put_vec(columns::GENESIS_STATE, &[], value);
+
+		self.db.write(transaction);
+	}
+
+	fn genesis_state<H>(&self) -> Option<InMemory<H>>{
+
+		let genesis_state : Option<GenesisState> = self.db.get(columns::GENESIS_STATE, &[])
+			.unwrap_or_default().and_then(|x|Decode::decode(&mut &x[..]));
+
+		genesis_state.map(Into::into)
 	}
 }
 
@@ -1052,5 +1073,33 @@ pub(crate) mod tests {
 
 		// leaves at same height stay. Leaves at lower heights pruned.
 		assert_eq!(db.leaves.read().hashes(), vec![block2_a, block2_b, block2_c]);
+	}
+}
+
+#[derive(Encode, Decode)]
+struct GenesisState {
+	inner: BTreeMap<Option<Vec<u8>>, BTreeMap<Vec<u8>, Vec<u8>>>,
+}
+
+impl<H> From<InMemory<H>> for GenesisState{
+
+	fn from(t: InMemory<H>) -> Self{
+		let inner = t.inner.into_iter()
+			.map(|(k, v)|{
+				(k, v.into_iter().collect::<BTreeMap<_, _>>())
+			}).collect::<BTreeMap<_, _>>();
+		GenesisState{
+			inner,
+		}
+	}
+}
+
+impl<H> Into<InMemory<H>> for GenesisState{
+
+	fn into(self) -> InMemory<H>{
+		let inner = self.inner.into_iter().map(|(k, v)|{
+			(k, v.into_iter().collect::<HashMap<_, _>>())
+		}).collect::<HashMap<_, _>>();
+		inner.into()
 	}
 }
