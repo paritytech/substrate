@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use sp_core::ChangesTrieConfiguration;
+use sp_core::ChangesTrieConfigurationRange;
 use sp_core::offchain::OffchainStorage;
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -311,17 +311,6 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	fn get_import_lock(&self) -> &RwLock<()>;
 }
 
-/// Changes trie configuration range.
-#[derive(Debug)]
-pub struct ChangesTrieConfigurationRange<Block: BlockT> {
-	/// Zero block of this configuration. First trie that uses this configuration is build at the next block.
-	pub zero: (NumberFor<Block>, Block::Hash),
-	/// End block where last trie that uses this configuration has been build. None if configuration is active.
-	pub end: Option<(NumberFor<Block>, Block::Hash)>,
-	/// Configuration itself. None if changes tries are disabled within this range.
-	pub config: Option<ChangesTrieConfiguration>,
-}
-
 /// Changes trie storage that supports pruning.
 pub trait PrunableStateChangesTrieStorage<Block: BlockT, H: Hasher>:
 	StateChangesTrieStorage<H, NumberFor<Block>>
@@ -329,7 +318,9 @@ pub trait PrunableStateChangesTrieStorage<Block: BlockT, H: Hasher>:
 	/// Get reference to StateChangesTrieStorage.
 	fn storage(&self) -> &dyn StateChangesTrieStorage<H, NumberFor<Block>>;
 	/// Get configuration at given block.
-	fn configuration_at(&self, at: &BlockId<Block>) -> sp_blockchain::Result<ChangesTrieConfigurationRange<Block>>;
+	fn configuration_at(&self, at: &BlockId<Block>) -> sp_blockchain::Result<
+		ChangesTrieConfigurationRange<NumberFor<Block>, Block::Hash>
+	>;
 	/// Get end block (inclusive) of oldest pruned max-level (or skewed) digest trie blocks range.
 	/// It is guaranteed that we have no any changes tries before (and including) this block.
 	/// It is guaranteed that all existing changes tries after this block are not yet pruned (if created).

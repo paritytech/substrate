@@ -24,9 +24,9 @@ use codec::{Decode, Encode};
 use parking_lot::RwLock;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_trie::MemoryDB;
-use sc_client_api::backend::{PrunableStateChangesTrieStorage, ChangesTrieConfigurationRange};
+use sc_client_api::backend::PrunableStateChangesTrieStorage;
 use sp_blockchain::{well_known_cache_keys, Cache as BlockchainCache};
-use sp_core::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
+use sp_core::{H256, Blake2Hasher, ChangesTrieConfiguration, ChangesTrieConfigurationRange, convert_hash};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, CheckedSub,
 };
@@ -385,7 +385,9 @@ where
 		self
 	}
 
-	fn configuration_at(&self, at: &BlockId<Block>) -> ClientResult<ChangesTrieConfigurationRange<Block>> {
+	fn configuration_at(&self, at: &BlockId<Block>) -> ClientResult<
+		ChangesTrieConfigurationRange<NumberFor<Block>, Block::Hash>
+	> {
 		self.cache
 			.get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, at)?
 			.and_then(|(zero, end, encoded)| Decode::decode(&mut &encoded[..]).ok()

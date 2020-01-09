@@ -1092,7 +1092,11 @@ pub mod tests {
 
 		let (tx, response) = oneshot::channel();
 		light_dispatch.add_request(&mut network_interface, RequestData::RemoteChanges(RemoteChangesRequest {
-			changes_trie_configs: vec![(0, None, sp_core::ChangesTrieConfiguration::new(4, 2))],
+			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
+				zero: (0, Default::default()),
+				end: None,
+				config: Some(sp_core::ChangesTrieConfiguration::new(4, 2)),
+			}],
 			first_block: (1, Default::default()),
 			last_block: (100, Default::default()),
 			max_block: (100, Default::default()),

@@ -116,14 +116,13 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 		// and now check the key changes proof + get the changes
 		let mut result = Vec::new();
 		let proof_storage = InMemoryChangesTrieStorage::with_proof(remote_proof);
-		for (config_zero, config_end, config) in &request.changes_trie_configs {
-			let config_range = ChangesTrieConfigurationRange {
-				config,
-				zero: config_zero.clone(),
-				end: config_end.clone(),
-			};
+		for config_range in &request.changes_trie_configs {
 			let result_range = key_changes_proof_check_with_db::<H, _>(
-				config_range,
+				ChangesTrieConfigurationRange {
+					config: config_range.config.as_ref().ok_or(ClientError::ChangesTriesNotSupported)?,
+					zero: config_range.zero.0,
+					end: config_range.end.map(|(n, _)| n),
+				},
 				&RootsStorage {
 					roots: (request.tries_roots.0, &request.tries_roots.2),
 					prev_roots: &remote_roots,
@@ -572,7 +571,11 @@ pub mod tests {
 			let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
 			let config = ChangesTrieConfiguration::new(4, 2);
 			let request = RemoteChangesRequest::<Header> {
-				changes_trie_configs: vec![(0, None, config)],
+				changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
+					zero: (0, Default::default()),
+					end: None,
+					config: Some(config),
+				}],
 				first_block: (begin, begin_hash),
 				last_block: (end, end_hash),
 				max_block: (max, max_hash),
@@ -628,7 +631,11 @@ pub mod tests {
 		// check proof on local client
 		let config = ChangesTrieConfiguration::new(4, 2);
 		let request = RemoteChangesRequest::<Header> {
-			changes_trie_configs: vec![(0, None, config)],
+			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
+				zero: (0, Default::default()),
+				end: None,
+				config: Some(config),
+			}],
 			first_block: (1, b1),
 			last_block: (4, b4),
 			max_block: (4, b4),
@@ -670,7 +677,11 @@ pub mod tests {
 		let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
 		let config = ChangesTrieConfiguration::new(4, 2);
 		let request = RemoteChangesRequest::<Header> {
-			changes_trie_configs: vec![(0, None, config)],
+			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
+				zero: (0, Default::default()),
+				end: None,
+				config: Some(config),
+			}],
 			first_block: (begin, begin_hash),
 			last_block: (end, end_hash),
 			max_block: (max, max_hash),
