@@ -1,0 +1,27 @@
+[package]
+name = "sp-consensus-sassafras"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Primitives for Sassafras consensus"
+edition = "2018"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
+schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"], optional = true }
+sp-std = { path = "../../std", default-features = false }
+sp-inherents = { path = "../../inherents", default-features = false }
+sp-timestamp = { path = "../../timestamp", default-features = false }
+sp-runtime = {  path = "../../runtime", default-features = false }
+sp-application-crypto = { path = "../../application-crypto", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"schnorrkel/std",
+	"sp-std/std",
+	"sp-inherents/std",
+	"sp-timestamp/std",
+	"sp-runtime/std",
+	"sp-application-crypto/std",
+]

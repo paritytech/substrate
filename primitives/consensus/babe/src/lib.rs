@@ -19,7 +19,7 @@
 #![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod digest;
+pub mod digest;
 pub mod inherents;
 
 use codec::{Encode, Decode};
@@ -34,6 +34,9 @@ mod app {
 	use sp_application_crypto::{app_crypto, key_types::BABE, sr25519};
 	app_crypto!(sr25519, BABE);
 }
+
+/// The prefix used by BABE for its VRF keys.
+pub const BABE_VRF_PREFIX: &[u8] = b"substrate-babe-vrf";
 
 /// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.

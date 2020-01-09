@@ -6203,6 +6203,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-consensus-sassafras"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "schnorrkel 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-application-crypto 2.0.0",
+ "sp-inherents 2.0.0",
+ "sp-runtime 2.0.0",
+ "sp-std 2.0.0",
+ "sp-timestamp 2.0.0",
+]
+
+[[package]]
 name = "sp-core"
 version = "2.0.0"
 dependencies = [

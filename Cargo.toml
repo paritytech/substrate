@@ -103,6 +103,7 @@ members = [
 	"primitives/consensus/babe",
 	"primitives/consensus/common",
 	"primitives/consensus/pow",
+	"primitives/consensus/sassafras",
 	"primitives/core",
 	"primitives/debug-derive",
 	"primitives/storage",

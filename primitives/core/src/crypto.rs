@@ -917,9 +917,11 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 pub mod key_types {
 	use super::KeyTypeId;
 
-	/// Key type for Babe module, build-in.
+	/// Key type for Babe module, built-in.
 	pub const BABE: KeyTypeId = KeyTypeId(*b"babe");
-	/// Key type for Grandpa module, build-in.
+	/// Key type for Sassafras module, built-in.
+	pub const SASSAFRAS: KeyTypeId = KeyTypeId(*b"sass");
+	/// Key type for Grandpa module, built-in.
 	pub const GRANDPA: KeyTypeId = KeyTypeId(*b"gran");
 	/// Key type for controlling an account in a Substrate runtime, built-in.
 	pub const ACCOUNT: KeyTypeId = KeyTypeId(*b"acco");

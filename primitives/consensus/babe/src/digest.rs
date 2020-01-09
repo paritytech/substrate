@@ -41,7 +41,7 @@ use sp_std::vec::Vec;
 /// (VRF based) and to a secondary (slot number based).
 #[cfg(feature = "std")]
 #[derive(Clone, Debug)]
-pub enum BabePreDigest {
+pub enum PreDigest {
 	/// A primary VRF-based slot assignment.
 	Primary {
 		/// VRF output
@@ -63,7 +63,7 @@ pub enum BabePreDigest {
 }
 
 #[cfg(feature = "std")]
-impl BabePreDigest {
+impl PreDigest {
 	/// Returns the slot number of the pre digest.
 	pub fn authority_index(&self) -> AuthorityIndex {
 		match self {
@@ -90,12 +90,9 @@ impl BabePreDigest {
 	}
 }
 
-/// The prefix used by BABE for its VRF keys.
-pub const BABE_VRF_PREFIX: &[u8] = b"substrate-babe-vrf";
-
 /// A raw version of `BabePreDigest`, usable on `no_std`.
 #[derive(Copy, Clone, Encode, Decode)]
-pub enum RawBabePreDigest {
+pub enum RawPreDigest {
 	/// A primary VRF-based slot assignment.
 	#[codec(index = "1")]
 	Primary {
@@ -123,7 +120,7 @@ pub enum RawBabePreDigest {
 	},
 }
 
-impl RawBabePreDigest {
+impl RawPreDigest {
 	/// Returns the slot number of the pre digest.
 	pub fn slot_number(&self) -> SlotNumber {
 		match self {
@@ -134,27 +131,27 @@ impl RawBabePreDigest {
 }
 
 #[cfg(feature = "std")]
-impl Encode for BabePreDigest {
+impl Encode for PreDigest {
 	fn encode(&self) -> Vec<u8> {
 		let raw = match self {
-			BabePreDigest::Primary {
+			PreDigest::Primary {
 				vrf_output,
 				vrf_proof,
 				authority_index,
 				slot_number,
 			} => {
-				RawBabePreDigest::Primary {
+				RawPreDigest::Primary {
 					vrf_output: *vrf_output.as_bytes(),
 					vrf_proof: vrf_proof.to_bytes(),
 					authority_index: *authority_index,
 					slot_number: *slot_number,
 				}
 			},
-			BabePreDigest::Secondary {
+			PreDigest::Secondary {
 				authority_index,
 				slot_number,
 			} => {
-				RawBabePreDigest::Secondary {
+				RawPreDigest::Secondary {
 					authority_index: *authority_index,
 					slot_number: *slot_number,
 				}
@@ -166,10 +163,10 @@ impl Encode for BabePreDigest {
 }
 
 #[cfg(feature = "std")]
-impl codec::EncodeLike for BabePreDigest {}
+impl codec::EncodeLike for PreDigest {}
 
 #[cfg(feature = "std")]
-impl Decode for BabePreDigest {
+impl Decode for PreDigest {
 	fn decode<R: Input>(i: &mut R) -> Result<Self, Error> {
 		let pre_digest = match Decode::decode(i)? {
 			RawBabePreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number } => {
@@ -208,10 +205,10 @@ pub struct NextEpochDescriptor {
 #[cfg(feature = "std")]
 pub trait CompatibleDigestItem: Sized {
 	/// Construct a digest item which contains a BABE pre-digest.
-	fn babe_pre_digest(seal: BabePreDigest) -> Self;
+	fn babe_pre_digest(seal: PreDigest) -> Self;
 
 	/// If this item is an BABE pre-digest, return it.
-	fn as_babe_pre_digest(&self) -> Option<BabePreDigest>;
+	fn as_babe_pre_digest(&self) -> Option<PreDigest>;
 
 	/// Construct a digest item which contains a BABE seal.
 	fn babe_seal(signature: AuthoritySignature) -> Self;
