@@ -433,18 +433,20 @@ impl<Block: BlockT> sc_client_api::light::Storage<Block> for Blockchain<Block>
 		&self,
 		_cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
-	) -> sp_blockchain::Result<Block::Hash> {
+	) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.storage.read().header_cht_roots.get(&block).cloned()
 			.ok_or_else(|| sp_blockchain::Error::Backend(format!("Header CHT for block {} not exists", block)))
+			.map(Some)
 	}
 
 	fn changes_trie_cht_root(
 		&self,
 		_cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
-	) -> sp_blockchain::Result<Block::Hash> {
+	) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.storage.read().changes_trie_cht_roots.get(&block).cloned()
 			.ok_or_else(|| sp_blockchain::Error::Backend(format!("Changes trie CHT for block {} not exists", block)))
+			.map(Some)
 	}
 
 	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
