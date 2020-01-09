@@ -319,7 +319,6 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 			trace!(target: "wasm-executor", "Could not find function `{}`, a stub will be provided instead.", name);
 			let id = self.missing_functions.borrow().len() + self.host_functions.len();
 			self.missing_functions.borrow_mut().push(name.to_string());
-			*self.missing_function_id.borrow_mut() += 1;
 
 			// NOTE: provide purposely an invalid index of the function
 			Ok(wasmi::FuncInstance::alloc_host(signature.into(), id))
