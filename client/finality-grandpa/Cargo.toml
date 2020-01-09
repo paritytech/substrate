@@ -36,7 +36,7 @@ sc-network-test = { version = "0.8.0", path = "../network/test" }
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0",  path = "../../test-utils/runtime/client" }
 sp-consensus-babe = { version = "0.8", path = "../../primitives/consensus/babe" }
-sp-state-machine = { version = "2.0.0", path = "../../primitives/state-machine" }
+sp-state-machine = { version = "0.8", path = "../../primitives/state-machine" }
 env_logger = "0.7.0"
 tokio = "0.1.22"
 tempfile = "3.1.0"

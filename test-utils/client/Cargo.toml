@@ -17,4 +17,4 @@ codec = { package = "parity-scale-codec", version = "1.0.0" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
-sp-state-machine = { version = "2.0.0", path = "../../primitives/state-machine" }
+sp-state-machine = { version = "0.8", path = "../../primitives/state-machine" }

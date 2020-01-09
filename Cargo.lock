@@ -1335,7 +1335,7 @@ dependencies = [
  "sp-inherents 2.0.0",
  "sp-io 2.0.0",
  "sp-runtime 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
  "sp-std 2.0.0",
  "tracing 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1382,7 +1382,7 @@ dependencies = [
  "sp-inherents 2.0.0",
  "sp-io 2.0.0",
  "sp-runtime 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
  "trybuild 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -3105,7 +3105,7 @@ dependencies = [
  "sp-core 2.0.0",
  "sp-io 2.0.0",
  "sp-runtime 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
  "sp-trie 2.0.0",
  "substrate-test-client 2.0.0",
  "trie-root 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5025,7 +5025,7 @@ dependencies = [
  "sp-blockchain 2.0.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
 ]
 
 [[package]]
@@ -5080,7 +5080,7 @@ dependencies = [
  "sp-keyring 2.0.0",
  "sp-panic-handler 2.0.0",
  "sp-runtime 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
  "structopt 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5115,7 +5115,7 @@ dependencies = [
  "sp-keyring 2.0.0",
  "sp-panic-handler 2.0.0",
  "sp-runtime 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
  "sp-std 2.0.0",
  "sp-trie 2.0.0",
  "sp-version 2.0.0",
@@ -5147,7 +5147,7 @@ dependencies = [
  "sp-inherents 2.0.0",
  "sp-keyring 2.0.0",
  "sp-runtime 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
  "sp-std 2.0.0",
  "sp-test-primitives 2.0.0",
  "sp-transaction-pool 2.0.0",
@@ -5179,7 +5179,7 @@ dependencies = [
  "sp-core 2.0.0",
  "sp-keyring 2.0.0",
  "sp-runtime 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
  "sp-trie 2.0.0",
  "substrate-test-runtime-client 2.0.0",
 ]
@@ -5346,7 +5346,7 @@ dependencies = [
  "sp-panic-handler 2.0.0",
  "sp-runtime-interface 2.0.0",
  "sp-serializer 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
  "sp-trie 2.0.0",
  "sp-version 2.0.0",
  "sp-wasm-interface 2.0.0",
@@ -5441,7 +5441,7 @@ dependencies = [
  "sp-inherents 2.0.0",
  "sp-keyring 2.0.0",
  "sp-runtime 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
  "substrate-test-runtime-client 2.0.0",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5628,7 +5628,7 @@ dependencies = [
  "sp-rpc 2.0.0",
  "sp-runtime 2.0.0",
  "sp-session 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
  "sp-transaction-pool 2.0.0",
  "sp-version 2.0.0",
  "substrate-test-runtime-client 2.0.0",
@@ -6135,7 +6135,7 @@ dependencies = [
  "sp-api-proc-macro 2.0.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
  "sp-std 2.0.0",
  "sp-test-primitives 2.0.0",
  "sp-version 2.0.0",
@@ -6163,7 +6163,7 @@ dependencies = [
  "sp-blockchain 2.0.0",
  "sp-consensus 0.8.0",
  "sp-runtime 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
  "sp-version 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "trybuild 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6249,7 +6249,7 @@ dependencies = [
  "sp-block-builder 2.0.0",
  "sp-consensus 0.8.0",
  "sp-runtime 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
 ]
 
 [[package]]
@@ -6414,7 +6414,7 @@ dependencies = [
  "sp-core 2.0.0",
  "sp-externalities 0.8.0",
  "sp-runtime-interface 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
  "sp-std 2.0.0",
  "sp-trie 2.0.0",
 ]
@@ -6498,7 +6498,7 @@ dependencies = [
  "sp-io 2.0.0",
  "sp-runtime-interface-proc-macro 2.0.0",
  "sp-runtime-interface-test-wasm 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
  "sp-std 2.0.0",
  "sp-wasm-interface 2.0.0",
  "static_assertions 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6525,7 +6525,7 @@ dependencies = [
  "sp-io 2.0.0",
  "sp-runtime-interface 2.0.0",
  "sp-runtime-interface-test-wasm 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
 ]
 
 [[package]]
@@ -6580,7 +6580,7 @@ dependencies = [
 
 [[package]]
 name = "sp-state-machine"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6864,7 +6864,7 @@ dependencies = [
  "sp-core 2.0.0",
  "sp-keyring 2.0.0",
  "sp-runtime 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
 ]
 
 [[package]]
@@ -6897,7 +6897,7 @@ dependencies = [
  "sp-runtime 2.0.0",
  "sp-runtime-interface 2.0.0",
  "sp-session 2.0.0",
- "sp-state-machine 2.0.0",
+ "sp-state-machine 0.8.0",
  "sp-std 2.0.0",
  "sp-transaction-pool 2.0.0",
  "sp-trie 2.0.0",
