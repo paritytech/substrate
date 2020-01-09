@@ -340,7 +340,7 @@ impl<'a> wasmi::Externals for FunctionExecutor<'a> {
 				.map_err(|msg| Error::FunctionExecution(function.name().to_string(), msg))
 				.map_err(wasmi::Trap::from)
 				.map(|v| v.map(Into::into))
-		} else if self.allow_missing_imports {
+		} else if self.allow_missing_imports && index >= self.host_functions.len() && index < self.host_functions.len() + self.missing_functions.len() {
 			Err(Error::from(format!(
 				"Function `{}` is only a stub. Calling a stub is not allowed.",
 				self.missing_functions
