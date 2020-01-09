@@ -279,7 +279,6 @@ struct Resolver<'a> {
 	host_functions: &'a[&'static dyn Function],
 	allow_missing_imports: bool,
 	missing_functions: RefCell<Vec<String>>,
-	missing_function_id: RefCell<usize>,
 }
 
 impl<'a> Resolver<'a> {
