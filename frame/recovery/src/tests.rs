@@ -94,7 +94,7 @@ fn recovery_lifecycle_works() {
 		// All storage items are removed from the module
 		assert!(!<ActiveRecoveries<Test>>::exists(&5, &1));
 		assert!(!<Recoverable<Test>>::exists(&5));
-		//assert!(!<Recovered<Test>>::exists(&5));
+		assert!(!<Recovered<Test>>::exists(&5));
 	});
 }
 
