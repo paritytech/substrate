@@ -127,11 +127,13 @@ decl_event! {
 	{
 		/// A recovery process has been set up for an account
 		RecoveryCreated(AccountId),
-		/// A recovery process has been initiated by account_1 for account_2
+		/// A recovery process has been initiated for account_1 by account_2
 		RecoveryInitiated(AccountId, AccountId),
-		/// A recovery process by account_1 for account_2 has been vouched for by account_3
+		/// A recovery process for account_1 by account_2 has been vouched for by account_3
 		RecoveryVouched(AccountId, AccountId, AccountId),
-		/// Account_1 has recovered account_2
+		/// A recovery process for account_1 by account_2 has been closed
+		RecoveryClosed(AccountId, AccountId),
+		/// Account_1 has been recovered by account_2
 		AccountRecovered(AccountId, AccountId),
 		/// A recovery process has been removed for an account
 		RecoveryRemoved(AccountId),
@@ -193,7 +195,7 @@ decl_module! {
 			// Create the recovery storage item.
 			<Recovered<T>>::insert(&lost, &rescuer);
 
-			Self::deposit_event(RawEvent::AccountRecovered(rescuer, lost));
+			Self::deposit_event(RawEvent::AccountRecovered(lost, rescuer));
 		}
 		
 		/// Create a recovery process for your account.
@@ -255,66 +257,55 @@ decl_module! {
 
 			<ActiveRecoveries<T>>::insert(&account, &who, recovery_status);
 
-			Self::deposit_event(RawEvent::RecoveryInitiated(who, account));
+			Self::deposit_event(RawEvent::RecoveryInitiated(account, who));
 		}
 		
 		/// Allow a friend to vouch for an active recovery process.
 		fn vouch_recovery(origin, lost: T::AccountId, rescuer: T::AccountId) {
 			let who = ensure_signed(origin)?;
 
-			// Check that the lost account is recoverable
-			if let Some(recovery_config) = Self::recovery_config(&lost) {
-				// Check that the recovery process has been initiated for this rescuer
-				if let Some(mut active_recovery) = Self::active_recovery(&lost, &rescuer) {
-					// Make sure the voter is a friend
-					ensure!(Self::is_friend(&recovery_config.friends, &who), Error::<T>::NotFriend);
-					// Either insert the vouch, or return an error that the user already vouched.
-					match active_recovery.friends.binary_search(&who) {
-						Ok(_pos) => Err(Error::<T>::AlreadyVouched)?,
-						Err(pos) => active_recovery.friends.insert(pos, who.clone()),
-					}
+			// Get the recovery configuration for the lost account.
+			let recovery_config = Self::recovery_config(&lost).ok_or(Error::<T>::NotRecoverable)?;
+			// Get the active recovery process for the rescuer.
+			let mut active_recovery = Self::active_recovery(&lost, &rescuer).ok_or(Error::<T>::NotStarted)?;
+			// Make sure the voter is a friend
+			ensure!(Self::is_friend(&recovery_config.friends, &who), Error::<T>::NotFriend);
 
-					// Update storage with the latest details
-					<ActiveRecoveries<T>>::insert(&lost, &rescuer, active_recovery);
-
-					Self::deposit_event(RawEvent::RecoveryVouched(rescuer, lost, who));
-				} else {
-					Err(Error::<T>::NotStarted)?
-				}
-			} else {
-				Err(Error::<T>::NotRecoverable)?
+			// Either insert the vouch, or return an error that the user already vouched.
+			match active_recovery.friends.binary_search(&who) {
+				Ok(_pos) => Err(Error::<T>::AlreadyVouched)?,
+				Err(pos) => active_recovery.friends.insert(pos, who.clone()),
 			}
+
+			// Update storage with the latest details
+			<ActiveRecoveries<T>>::insert(&lost, &rescuer, active_recovery);
+
+			Self::deposit_event(RawEvent::RecoveryVouched(lost, rescuer, who));
 		}
 		
 		/// Allow a rescuer to claim their recovered account.
 		fn claim_recovery(origin, account: T::AccountId) {
 			let who = ensure_signed(origin)?;
-			// Check that the lost account is recoverable
-			if let Some(recovery_config) = Self::recovery_config(&account) {
-				// Check that the recovery process has been initiated for this rescuer
-				if let Some(active_recovery) = Self::active_recovery(&account, &who) {
-					// Make sure the delay period has passed
-					let current_block_number = <system::Module<T>>::block_number();
-					let recoverable_block_number = active_recovery.created
-						.checked_add(&recovery_config.delay_period)
-						.ok_or(Error::<T>::Overflow)?;
-					ensure!(recoverable_block_number <= current_block_number, Error::<T>::DelayPeriod);
-					// Make sure the threshold is met
-					ensure!(
-						recovery_config.threshold as usize <= active_recovery.friends.len(),
-						Error::<T>::Threshold
-					);
+			// Get the recovery configuration for the lost account
+			let recovery_config = Self::recovery_config(&account).ok_or(Error::<T>::NotRecoverable)?;
+			// Get the active recovery process for the rescuer
+			let active_recovery = Self::active_recovery(&account, &who).ok_or(Error::<T>::NotStarted)?;
+			// Make sure the delay period has passed
+			let current_block_number = <system::Module<T>>::block_number();
+			let recoverable_block_number = active_recovery.created
+				.checked_add(&recovery_config.delay_period)
+				.ok_or(Error::<T>::Overflow)?;
+			ensure!(recoverable_block_number <= current_block_number, Error::<T>::DelayPeriod);
+			// Make sure the threshold is met
+			ensure!(
+				recovery_config.threshold as usize <= active_recovery.friends.len(),
+				Error::<T>::Threshold
+			);
 
-					// Create the recovery storage item
-					<Recovered<T>>::insert(&account, &who);
+			// Create the recovery storage item
+			<Recovered<T>>::insert(&account, &who);
 
-					Self::deposit_event(RawEvent::AccountRecovered(who, account));
-				} else {
-					Err(Error::<T>::NotStarted)?
-				}
-			} else {
-				Err(Error::<T>::NotRecoverable)?
-			}
+			Self::deposit_event(RawEvent::AccountRecovered(account, who));
 		}
 		
 		/// Close an active recovery process.
@@ -322,13 +313,12 @@ decl_module! {
 		/// Can only be called by the account trying to be recovered.
 		fn close_recovery(origin, rescuer: T::AccountId) {
 			let who = ensure_signed(origin)?;
-			if let Some(active_recovery) = <ActiveRecoveries<T>>::take(&who, &rescuer) {
-				// Move the reserved funds from the rescuer to the rescued account.
-				// Acts like a slashing mechanism for those who try to maliciously recover accounts.
-				let _ = T::Currency::repatriate_reserved(&rescuer, &who, active_recovery.deposit);
-			} else {
-				Err(Error::<T>::NotStarted)?
-			}
+			// Take the active recovery process by the rescuer for this account.
+			let active_recovery = <ActiveRecoveries<T>>::take(&who, &rescuer).ok_or(Error::<T>::NotStarted)?;
+			// Move the reserved funds from the rescuer to the rescued account.
+			// Acts like a slashing mechanism for those who try to maliciously recover accounts.
+			let _ = T::Currency::repatriate_reserved(&rescuer, &who, active_recovery.deposit);
+			Self::deposit_event(RawEvent::RecoveryClosed(who, rescuer));
 		}
 		
 		/// Remove the recovery process for your account.
@@ -340,12 +330,11 @@ decl_module! {
 			// Check there are no active recoveries
 			let mut active_recoveries = <ActiveRecoveries<T>>::iter_prefix(&who);
 			ensure!(active_recoveries.next().is_none(), Error::<T>::StillActive);
-			// Check account is recoverable
-			if let Some(recovery_config) = <Recoverable<T>>::take(&who) {
-				T::Currency::unreserve(&who, recovery_config.deposit);
-
-				Self::deposit_event(RawEvent::RecoveryRemoved(who));
-			}
+			// Take the recovery configuration for this account.
+			let recovery_config = <Recoverable<T>>::take(&who).ok_or(Error::<T>::NotRecoverable)?;
+			// Unreserve the initial deposit for the recovery configuration.
+			T::Currency::unreserve(&who, recovery_config.deposit);
+			Self::deposit_event(RawEvent::RecoveryRemoved(who));
 		}
 	}
 }
