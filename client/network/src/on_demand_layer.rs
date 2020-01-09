@@ -17,10 +17,8 @@
 //! On-demand requests service.
 
 use crate::protocol::light_dispatch::RequestData;
-use std::collections::HashMap;
-use std::sync::Arc;
-use futures::{prelude::*, sync::mpsc, sync::oneshot};
-use futures03::compat::{Compat01As03, Future01CompatExt as _};
+use std::{collections::HashMap, pin::Pin, sync::Arc, task::Context, task::Poll};
+use futures::{prelude::*, channel::mpsc, channel::oneshot};
 use parking_lot::Mutex;
 use sp_blockchain::Error as ClientError;
 use sc_client_api::{Fetcher, FetchChecker, RemoteHeaderRequest,
@@ -84,22 +82,22 @@ impl<B> Fetcher<B> for OnDemand<B> where
 	B: BlockT,
 	B::Header: HeaderT,
 {
-	type RemoteHeaderResult = Compat01As03<RemoteResponse<B::Header>>;
-	type RemoteReadResult = Compat01As03<RemoteResponse<HashMap<Vec<u8>, Option<Vec<u8>>>>>;
-	type RemoteCallResult = Compat01As03<RemoteResponse<Vec<u8>>>;
-	type RemoteChangesResult = Compat01As03<RemoteResponse<Vec<(NumberFor<B>, u32)>>>;
-	type RemoteBodyResult = Compat01As03<RemoteResponse<Vec<B::Extrinsic>>>;
+	type RemoteHeaderResult = RemoteResponse<B::Header>;
+	type RemoteReadResult = RemoteResponse<HashMap<Vec<u8>, Option<Vec<u8>>>>;
+	type RemoteCallResult = RemoteResponse<Vec<u8>>;
+	type RemoteChangesResult = RemoteResponse<Vec<(NumberFor<B>, u32)>>;
+	type RemoteBodyResult = RemoteResponse<Vec<B::Extrinsic>>;
 
 	fn remote_header(&self, request: RemoteHeaderRequest<B::Header>) -> Self::RemoteHeaderResult {
 		let (sender, receiver) = oneshot::channel();
 		let _ = self.requests_send.unbounded_send(RequestData::RemoteHeader(request, sender));
-		RemoteResponse { receiver }.compat()
+		RemoteResponse { receiver }
 	}
 
 	fn remote_read(&self, request: RemoteReadRequest<B::Header>) -> Self::RemoteReadResult {
 		let (sender, receiver) = oneshot::channel();
 		let _ = self.requests_send.unbounded_send(RequestData::RemoteRead(request, sender));
-		RemoteResponse { receiver }.compat()
+		RemoteResponse { receiver }
 	}
 
 	fn remote_read_child(
@@ -108,25 +106,25 @@ impl<B> Fetcher<B> for OnDemand<B> where
 	) -> Self::RemoteReadResult {
 		let (sender, receiver) = oneshot::channel();
 		let _ = self.requests_send.unbounded_send(RequestData::RemoteReadChild(request, sender));
-		RemoteResponse { receiver }.compat()
+		RemoteResponse { receiver }
 	}
 
 	fn remote_call(&self, request: RemoteCallRequest<B::Header>) -> Self::RemoteCallResult {
 		let (sender, receiver) = oneshot::channel();
 		let _ = self.requests_send.unbounded_send(RequestData::RemoteCall(request, sender));
-		RemoteResponse { receiver }.compat()
+		RemoteResponse { receiver }
 	}
 
 	fn remote_changes(&self, request: RemoteChangesRequest<B::Header>) -> Self::RemoteChangesResult {
 		let (sender, receiver) = oneshot::channel();
 		let _ = self.requests_send.unbounded_send(RequestData::RemoteChanges(request, sender));
-		RemoteResponse { receiver }.compat()
+		RemoteResponse { receiver }
 	}
 
 	fn remote_body(&self, request: RemoteBodyRequest<B::Header>) -> Self::RemoteBodyResult {
 		let (sender, receiver) = oneshot::channel();
 		let _ = self.requests_send.unbounded_send(RequestData::RemoteBody(request, sender));
-		RemoteResponse { receiver }.compat()
+		RemoteResponse { receiver }
 	}
 }
 
@@ -136,16 +134,13 @@ pub struct RemoteResponse<T> {
 }
 
 impl<T> Future for RemoteResponse<T> {
-	type Item = T;
-	type Error = ClientError;
+	type Output = Result<T, ClientError>;
 
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		self.receiver.poll()
-			.map_err(|_| ClientError::RemoteFetchCancelled.into())
-			.and_then(|r| match r {
-				Async::Ready(Ok(ready)) => Ok(Async::Ready(ready)),
-				Async::Ready(Err(error)) => Err(error),
-				Async::NotReady => Ok(Async::NotReady),
-			})
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		match self.receiver.poll_unpin(cx) {
+			Poll::Ready(Ok(res)) => Poll::Ready(res),
+			Poll::Ready(Err(_)) => Poll::Ready(Err(From::from(ClientError::RemoteFetchCancelled))),
+			Poll::Pending => Poll::Pending,
+		}
 	}
 }

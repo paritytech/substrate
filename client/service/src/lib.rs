@@ -27,7 +27,7 @@ pub mod error;
 mod builder;
 mod status_sinks;
 
-use std::io;
+use std::{io, pin::Pin};
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
@@ -479,7 +479,9 @@ fn build_network_future<
 		});
 
 		// Main network polling.
-		if let Ok(Async::Ready(())) = network.poll().map_err(|err| {
+		let mut net_poll = futures03::future::poll_fn(|cx| futures03::future::Future::poll(Pin::new(&mut network), cx))
+			.compat();
+		if let Ok(Async::Ready(())) = net_poll.poll().map_err(|err| {
 			warn!(target: "service", "Error in network: {:?}", err);
 		}) {
 			return Ok(Async::Ready(()));

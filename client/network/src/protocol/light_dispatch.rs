@@ -23,7 +23,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Instant, Duration};
 use log::{trace, info};
-use futures::sync::oneshot::{Sender as OneShotSender};
+use futures::channel::oneshot::{Sender as OneShotSender};
 use linked_hash_map::{Entry, LinkedHashMap};
 use sp_blockchain::Error as ClientError;
 use sc_client_api::{FetchChecker, RemoteHeaderRequest,
@@ -680,7 +680,7 @@ pub mod tests {
 	use std::collections::{HashMap, HashSet};
 	use std::sync::Arc;
 	use std::time::Instant;
-	use futures::{Future, sync::oneshot};
+	use futures::channel::oneshot;
 	use sp_core::storage::ChildInfo;
 	use sp_runtime::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use sp_blockchain::{Error as ClientError, Result as ClientResult};
@@ -999,7 +999,7 @@ pub mod tests {
 		}, tx));
 
 		receive_call_response(&mut network_interface, &mut light_dispatch, peer0.clone(), 0);
-		assert_eq!(response.wait().unwrap().unwrap(), vec![42]);
+		assert_eq!(futures::executor::block_on(response).unwrap().unwrap(), vec![42]);
 	}
 
 	#[test]
@@ -1021,7 +1021,10 @@ pub mod tests {
 			id: 0,
 			proof: StorageProof::empty(),
 		});
-		assert_eq!(response.wait().unwrap().unwrap().remove(b":key".as_ref()).unwrap(), Some(vec![42]));
+		assert_eq!(
+			futures::executor::block_on(response).unwrap().unwrap().remove(b":key".as_ref()).unwrap(),
+			Some(vec![42])
+		);
 	}
 
 	#[test]
@@ -1049,7 +1052,7 @@ pub mod tests {
 				id: 0,
 				proof: StorageProof::empty(),
 		});
-		assert_eq!(response.wait().unwrap().unwrap().remove(b":key".as_ref()).unwrap(), Some(vec![42]));
+		assert_eq!(futures::executor::block_on(response).unwrap().unwrap().remove(b":key".as_ref()).unwrap(), Some(vec![42]));
 	}
 
 	#[test]
@@ -1078,7 +1081,7 @@ pub mod tests {
 			proof: StorageProof::empty(),
 		});
 		assert_eq!(
-			response.wait().unwrap().unwrap().hash(),
+			futures::executor::block_on(response).unwrap().unwrap().hash(),
 			"6443a0b46e0412e626363028115a9f2cf963eeed526b8b33e5316f08b50d0dc3".parse().unwrap(),
 		);
 	}
@@ -1109,7 +1112,7 @@ pub mod tests {
 			roots: vec![],
 			roots_proof: StorageProof::empty(),
 		});
-		assert_eq!(response.wait().unwrap().unwrap(), vec![(100, 2)]);
+		assert_eq!(futures::executor::block_on(response).unwrap().unwrap(), vec![(100, 2)]);
 	}
 
 	#[test]
