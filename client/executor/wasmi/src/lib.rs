@@ -43,7 +43,7 @@ struct FunctionExecutor<'a> {
 	table: Option<TableRef>,
 	host_functions: &'a [&'static dyn Function],
 	allow_missing_imports: bool,
-	missing_functions: &'a Vec<String>,
+	missing_functions: &'a [String],
 }
 
 impl<'a> FunctionExecutor<'a> {
