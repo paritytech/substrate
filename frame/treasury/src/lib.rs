@@ -330,6 +330,7 @@ decl_module! {
 		/// - One storage mutation (codec `O(R)`).
 		/// - One event.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
@@ -371,6 +372,7 @@ decl_module! {
 		/// - Two storage removals (one read, codec `O(T)`).
 		/// - One event.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 			let tip = Tips::<T>::get(&hash).ok_or(Error::<T>::UnknownTip)?;
@@ -402,6 +404,7 @@ decl_module! {
 		/// - Two storage insertions (codecs `O(R)`, `O(T)`), one read `O(1)`.
 		/// - One event.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
 		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
@@ -435,6 +438,7 @@ decl_module! {
 		/// - One storage mutation (codec `O(T)`), one storage read `O(1)`.
 		/// - Up to one event.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
@@ -460,6 +464,7 @@ decl_module! {
 		/// - One storage retrieval (codec `O(T)`) and two removals.
 		/// - Up to three balance operations.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
 
