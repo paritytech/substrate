@@ -687,9 +687,12 @@ mod tests {
 			run_to_block(1);
 			set_price(120);
 
+			// User makes a bet, funds are locked
 			assert_ok!(Bet::bet(Some(1).into()));
+			// User can unbet and collect right away
 			assert_ok!(Bet::unbet(Some(1).into()));
 			assert_ok!(Bet::collect(Some(1).into()));
+			// Regains liquidity
 			assert!(account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 10);
 		});
@@ -698,9 +701,12 @@ mod tests {
 	#[test]
 	fn bet_locking_works() {
 		new_test_ext().execute_with(|| {
-			System::set_block_number(1);
+			run_to_block(1);
 			set_price(120);
+
+			// User makes a bet
 			assert_ok!(Bet::bet(Some(1).into()));
+			// Funds are locked
 			assert!(!account_is_liquid(&1));
 		});
 	}
@@ -708,45 +714,59 @@ mod tests {
 	#[test]
 	fn bet_invalid_collect_should_not_work() {
 		new_test_ext().execute_with(|| {
-			System::set_block_number(1);
+			run_to_block(1);
 			set_price(120);
-			assert_ok!(Bet::bet(Some(1).into()));
 
+			// User makes a bet
+			assert_eq!(Balances::free_balance(&1), 10);
+			assert_ok!(Bet::bet(Some(1).into()));
 			assert_eq!(Bet::incoming(), 10);
 			assert!(!account_is_liquid(&1));
-			assert_eq!(Balances::free_balance(&1), 10);
 
 			run_to_next_index();
-
 			assert_eq!(Bet::index(), 1);
 			assert_eq!(Bet::total(), 10);
 
+			// User unbets, but is locked for an additional index.
 			assert_ok!(Bet::unbet(Some(1).into()));
 
+			// Cannot retrieve funds
 			assert!(!account_is_liquid(&1));
 			assert_ok!(Bet::collect(Some(1).into()));
 			assert!(!account_is_liquid(&1));
+
+			run_to_next_index();
+			
+			// But the next index they can
+			assert!(!account_is_liquid(&1));
+			assert_ok!(Bet::collect(Some(1).into()));
+			assert!(account_is_liquid(&1));
 		});
 	}
 
 	#[test]
 	fn bet_win_unbet_collect_works() {
 		new_test_ext().execute_with(|| {
-			System::set_block_number(1);
+			run_to_block(1);
 			// index == 0
 			set_price(120);
-			assert_ok!(Bet::bet(Some(1).into()));
 
-			assert_eq!(Bet::incoming(), 10);
-			assert!(!account_is_liquid(&1));
+			// User makes a bet
 			assert_eq!(Balances::free_balance(&1), 10);
+			assert_ok!(Bet::bet(Some(1).into()));
+			assert!(!account_is_liquid(&1));
+			assert_eq!(Bet::incoming(), 10);
+			assert_eq!(Bet::total(), 0);
 
 			run_to_next_index();
 			// index == 1
 
+			// The next index captures the bet
 			assert_eq!(Bet::index(), 1);
+			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::total(), 10);
 
+			// The user chooses to unbet
 			assert_ok!(Bet::unbet(Some(1).into()));
 			assert!(!account_is_liquid(&1));
 			assert_eq!(Bet::outgoing(), 10);
