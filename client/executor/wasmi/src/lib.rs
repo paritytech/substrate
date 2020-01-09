@@ -347,7 +347,7 @@ impl<'a> wasmi::Externals for FunctionExecutor<'a> {
 				.map(|v| v.map(Into::into))
 		} else if self.allow_missing_imports {
 			Err(Error::from(format!(
-				"function {} does not exist",
+				"Function `{}` is only a stub. Calling a stub is not allowed.",
 				self.missing_functions
 					.get(index - self.host_functions.len())
 					.expect("invalid function index"),
