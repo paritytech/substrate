@@ -54,7 +54,7 @@ impl<'a> FunctionExecutor<'a> {
 		t: Option<TableRef>,
 		host_functions: &'a [&'static dyn Function],
 		allow_missing_imports: bool,
-		missing_functions: &'a Vec<String>,
+		missing_functions: &'a [String],
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
