@@ -80,7 +80,7 @@ fn recovery_lifecycle_works() {
 		// funds used to initiate the recovery process into account 5.
 		let call = Box::new(Call::Recovery(RecoveryCall::close_recovery(1)));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
-		// Account 1 can then use account 5 to close the recovery configuration, claiming the
+		// Account 1 can then use account 5 to remove the recovery configuration, claiming the
 		// deposited funds used to create the recovery configuration into account 5.
 		let call = Box::new(Call::Recovery(RecoveryCall::remove_recovery()));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
@@ -91,6 +91,10 @@ fn recovery_lifecycle_works() {
 		// All funds have been fully recovered!
 		assert_eq!(Balances::free_balance(1), 200);
 		assert_eq!(Balances::free_balance(5), 0);
+		// All storage items are removed from the module
+		assert!(!<ActiveRecoveries<Test>>::exists(&5, &1));
+		assert!(!<Recoverable<Test>>::exists(&5));
+		//assert!(!<Recovered<Test>>::exists(&5));
 	});
 }
 
@@ -357,9 +361,37 @@ fn claim_recovery_works() {
 }
 
 #[test]
-fn close_recovery_works() {
+fn close_recovery_handles_basic_errors() {
 	new_test_ext().execute_with(|| {
 		// Cannot close a non-active recovery
-		
+		assert_noop!(Recovery::close_recovery(Origin::signed(5), 1), Error::<Test>::NotStarted);
+	});
+}
+
+#[test]
+fn remove_recovery_works() {
+	new_test_ext().execute_with(|| {
+		// Cannot remove an unrecoverable account
+		assert_noop!(Recovery::remove_recovery(Origin::signed(5)), Error::<Test>::NotRecoverable);
+
+		// Create and initiate a recovery process for the test
+		let friends = vec![2, 3, 4];
+		let threshold = 3;
+		let delay_period = 10;
+		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
+		assert_ok!(Recovery::initiate_recovery(Origin::signed(2), 5));
+		// Cannot remove a recovery when there are active recoveries.
+		assert_noop!(Recovery::remove_recovery(Origin::signed(5)), Error::<Test>::StillActive);
+		assert_ok!(Recovery::close_recovery(Origin::signed(5), 1));
+		// Still need to remove one more!
+		assert_noop!(Recovery::remove_recovery(Origin::signed(5)), Error::<Test>::StillActive);
+		assert_ok!(Recovery::close_recovery(Origin::signed(5), 2));
+		// Finally removed
+		assert_ok!(Recovery::remove_recovery(Origin::signed(5)));
+
+		// Storage items are cleaned up at the end of this process
+		assert!(!<ActiveRecoveries<Test>>::exists(&5, &1));
+		assert!(!<Recoverable<Test>>::exists(&5));
 	});
 }

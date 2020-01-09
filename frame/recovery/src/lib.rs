@@ -30,7 +30,7 @@ use frame_support::{
 	weights::{
 		GetDispatchInfo,
 	},
-	traits::{Currency, ReservableCurrency, Get},
+	traits::{Currency, ReservableCurrency, Get, OnFreeBalanceZero},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -313,7 +313,7 @@ decl_module! {
 		/// Can only be called by the account trying to be recovered.
 		fn close_recovery(origin, rescuer: T::AccountId) {
 			let who = ensure_signed(origin)?;
-			// Take the active recovery process by the rescuer for this account.
+			// Take the active recovery process started by the rescuer for this account.
 			let active_recovery = <ActiveRecoveries<T>>::take(&who, &rescuer).ok_or(Error::<T>::NotStarted)?;
 			// Move the reserved funds from the rescuer to the rescued account.
 			// Acts like a slashing mechanism for those who try to maliciously recover accounts.
@@ -348,5 +348,13 @@ impl<T: Trait> Module<T> {
 	/// Check that a user is a friend in the friends list.
 	fn is_friend(friends: &Vec<T::AccountId>, friend: &T::AccountId) -> bool {
 		friends.binary_search(&friend).is_ok()
+	}
+}
+
+impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
+	/// Remove any existing access another account might have when the account's free balance becomes zero.
+	/// This removes the final storage item managed by this module for any given account.
+	fn on_free_balance_zero(who: &T::AccountId) {
+		<Recovered<T>>::remove(who);
 	}
 }
