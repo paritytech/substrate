@@ -344,7 +344,6 @@ impl<'a> wasmi::Externals for FunctionExecutor<'a> {
 			Err(Error::from(format!(
 				"Function `{}` is only a stub. Calling a stub is not allowed.",
 				self.missing_functions[index - self.host_functions.len()]
-					.expect("invalid function index"),
 			)).into())
 		} else {
 			Err(Error::from(format!("Could not find host function with index: {}", index)).into())
