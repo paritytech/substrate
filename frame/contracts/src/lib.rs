@@ -125,7 +125,7 @@ use frame_support::{
 	parameter_types, IsSubType,
 	weights::DispatchInfo,
 };
-use frame_support::traits::{OnFreeBalanceZero, OnReapAccount, OnUnbalanced, Currency, Get, Time, Randomness};
+use frame_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get, Time, Randomness};
 use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
 use sp_core::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 

@@ -146,6 +146,7 @@ parameter_types! {
 impl pallet_balances::Trait for Test {
 	type Balance = Balance;
 	type OnFreeBalanceZero = Staking;
+	type OnReapAccount = System;
 	type OnNewAccount = ();
 	type Event = ();
 	type TransferPayment = ();
