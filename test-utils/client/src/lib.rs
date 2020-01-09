@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -203,6 +203,7 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 			self.backend.clone(),
 			executor,
 			storage,
+			Default::default(),
 			Default::default(),
 			ExecutionExtensions::new(
 				self.execution_strategies,

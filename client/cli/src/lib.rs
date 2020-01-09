@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ pub mod informant;
 
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
-	config::{Configuration, DatabaseConfig},
+	config::{Configuration, DatabaseConfig, KeystoreConfig},
 	ServiceBuilderCommand,
 	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
 };
@@ -48,7 +48,7 @@ use std::{
 
 use names::{Generator, Name};
 use regex::Regex;
-use structopt::{StructOpt, clap::AppSettings};
+use structopt::{StructOpt, StructOptInternal, clap::AppSettings};
 #[doc(hidden)]
 pub use structopt::clap::App;
 use params::{
@@ -57,7 +57,7 @@ use params::{
 	NodeKeyParams, NodeKeyType, Cors, CheckBlockCmd,
 };
 pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy};
-pub use traits::{GetLogFilter, AugmentClap};
+pub use traits::GetSharedParams;
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
@@ -128,7 +128,8 @@ fn generate_node_name() -> String {
 	result
 }
 
-fn load_spec<F, G, E>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec<G, E>> where
+/// Load spec give shared params and spec factory.
+pub fn load_spec<F, G, E>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec<G, E>> where
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
@@ -195,8 +196,8 @@ pub fn parse_and_prepare<'a, CC, RP, I>(
 	args: I,
 ) -> ParseAndPrepare<'a, CC, RP>
 where
-	CC: StructOpt + Clone + GetLogFilter,
-	RP: StructOpt + Clone + AugmentClap,
+	CC: StructOpt + Clone + GetSharedParams,
+	RP: StructOpt + Clone + StructOptInternal,
 	I: IntoIterator,
 	<I as IntoIterator>::Item: Into<std::ffi::OsString> + Clone,
 {
@@ -216,10 +217,9 @@ where
 		.setting(AppSettings::SubcommandsNegateReqs)
 		.get_matches_from(args);
 	let cli_args = CoreParams::<CC, RP>::from_clap(&matches);
-	init_logger(cli_args.get_log_filter().as_ref().map(|v| v.as_ref()).unwrap_or(""));
 	fdlimit::raise_fd_limit();
 
-	match cli_args {
+	let args = match cli_args {
 		params::CoreParams::Run(params) => ParseAndPrepare::Run(
 			ParseAndPrepareRun { params, impl_name, version }
 		),
@@ -242,7 +242,9 @@ where
 			ParseAndPrepareRevert { params, version }
 		),
 		params::CoreParams::Custom(params) => ParseAndPrepare::CustomCommand(params),
-	}
+	};
+	init_logger(args.shared_params().and_then(|p| p.log.as_ref()).map(|v| v.as_ref()).unwrap_or(""));
+	args
 }
 
 /// Returns a string displaying the node role, special casing the sentry mode
@@ -275,6 +277,22 @@ pub enum ParseAndPrepare<'a, CC, RP> {
 	RevertChain(ParseAndPrepareRevert<'a>),
 	/// An additional custom command passed to `parse_and_prepare`.
 	CustomCommand(CC),
+}
+
+impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> where CC: GetSharedParams {
+	/// Return common set of parameters shared by all commands.
+	pub fn shared_params(&self) -> Option<&SharedParams> {
+		match self {
+			ParseAndPrepare::Run(c) => Some(&c.params.left.shared_params),
+			ParseAndPrepare::BuildSpec(c) => Some(&c.params.shared_params),
+			ParseAndPrepare::ExportBlocks(c) => Some(&c.params.shared_params),
+			ParseAndPrepare::ImportBlocks(c) => Some(&c.params.shared_params),
+			ParseAndPrepare::CheckBlock(c) => Some(&c.params.shared_params),
+			ParseAndPrepare::PurgeChain(c) => Some(&c.params.shared_params),
+			ParseAndPrepare::RevertChain(c) => Some(&c.params.shared_params),
+			ParseAndPrepare::CustomCommand(c) => c.shared_params(),
+		}
+	}
 }
 
 /// Command ready to run the main client.
@@ -736,20 +754,22 @@ fn fill_config_keystore_password<C, G, E>(
 	config: &mut sc_service::Configuration<C, G, E>,
 	cli: &RunCmd,
 ) -> Result<(), String> {
-	config.keystore_password = if cli.password_interactive {
-		#[cfg(not(target_os = "unknown"))]
-		{
-			Some(input_keystore_password()?.into())
-		}
-		#[cfg(target_os = "unknown")]
-		None
-	} else if let Some(ref file) = cli.password_filename {
-		Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
-	} else if let Some(ref password) = cli.password {
-		Some(password.clone().into())
-	} else {
-		None
-	};
+	if let KeystoreConfig::Path { password, .. } = &mut config.keystore {
+		*password = if cli.password_interactive {
+			#[cfg(not(target_os = "unknown"))]
+			{
+				Some(input_keystore_password()?.into())
+			}
+			#[cfg(target_os = "unknown")]
+			None
+		} else if let Some(ref file) = cli.password_filename {
+			Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
+		} else if let Some(ref password) = cli.password {
+			Some(password.clone().into())
+		} else {
+			None
+		};
+	}
 
 	Ok(())
 }
@@ -855,7 +875,11 @@ where
 		)?
 	}
 
-	config.keystore_path = cli.keystore_path.or_else(|| config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH));
+	let default_keystore_path = config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH);
+
+	if let KeystoreConfig::Path { path, ..} = &mut config.keystore {
+		*path = cli.keystore_path.or(default_keystore_path);
+	}
 
 	// set sentry mode (i.e. act as an authority but **never** actively participate)
 	config.sentry_mode = cli.sentry;
@@ -890,8 +914,8 @@ where
 			}
 		});
 
-	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
-	let ws_interface: &str = if cli.ws_external { "0.0.0.0" } else { "127.0.0.1" };
+	let rpc_interface: &str = interface_str(cli.rpc_external, cli.unsafe_rpc_external, cli.validator)?;
+	let ws_interface: &str = interface_str(cli.ws_external, cli.unsafe_ws_external, cli.validator)?;
 	let grafana_interface: &str = if cli.grafana_external { "0.0.0.0" } else { "127.0.0.1" };
 
 	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
@@ -929,6 +953,27 @@ where
 	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
 
 	Ok(config)
+}
+
+fn interface_str(
+	is_external: bool,
+	is_unsafe_external: bool,
+	is_validator: bool,
+) -> Result<&'static str, error::Error> {
+	if is_external && is_validator {
+		return Err(error::Error::Input("--rpc-external and --ws-external options shouldn't be \
+		used if the node is running as a validator. Use `--unsafe-rpc-external` if you understand \
+		the risks. See the options description for more information.".to_owned()));
+	}
+
+	if is_external || is_unsafe_external {
+		log::warn!("It isn't safe to expose RPC publicly without a proxy server that filters \
+		available set of RPC methods.");
+
+		Ok("0.0.0.0")
+	} else {
+		Ok("127.0.0.1")
+	}
 }
 
 /// Creates a configuration including the database path.

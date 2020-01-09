@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -29,11 +29,11 @@ use sc_service::{
 	AbstractService,
 	ChainSpec,
 	Configuration,
-	config::DatabaseConfig,
+	config::{DatabaseConfig, KeystoreConfig},
 	Roles,
 	Error,
 };
-use sc_network::{multiaddr, Multiaddr};
+use sc_network::{multiaddr, Multiaddr, NetworkStateInfo};
 use sc_network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_transaction_pool::TransactionPool;
@@ -173,8 +173,10 @@ fn node_config<G, E: Clone> (
 		roles: role,
 		transaction_pool: Default::default(),
 		network: network_config,
-		keystore_path: Some(root.join("key")),
-		keystore_password: None,
+		keystore: KeystoreConfig::Path {
+			path: Some(root.join("key")),
+			password: None
+		},
 		config_dir: Some(root.clone()),
 		database: DatabaseConfig::Path {
 			path: root.join("db"),
@@ -446,15 +448,15 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().info().chain.best_number == (NUM_BLOCKS as u32).into(),
+			service.get().client().chain_info().best_number == (NUM_BLOCKS as u32).into(),
 		|_index, service|
-			service.get().client().info().chain.best_number == (NUM_BLOCKS as u32).into(),
+			service.get().client().chain_info().best_number == (NUM_BLOCKS as u32).into(),
 	);
 
 	info!("Checking extrinsic propagation");
 	let first_service = network.full_nodes[0].1.clone();
 	let first_user_data = &network.full_nodes[0].2;
-	let best_block = BlockId::number(first_service.get().client().info().chain.best_number);
+	let best_block = BlockId::number(first_service.get().client().chain_info().best_number);
 	let extrinsic = extrinsic_factory(&first_service.get(), first_user_data);
 	futures03::executor::block_on(first_service.get().transaction_pool().submit_one(&best_block, extrinsic)).unwrap();
 	network.run_until_all_full(
@@ -501,9 +503,9 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().info().chain.finalized_number >= (NUM_BLOCKS as u32 / 2).into(),
+			service.get().client().chain_info().finalized_number >= (NUM_BLOCKS as u32 / 2).into(),
 		|_index, service|
-			service.get().client().info().chain.best_number >= (NUM_BLOCKS as u32 / 2).into(),
+			service.get().client().chain_info().best_number >= (NUM_BLOCKS as u32 / 2).into(),
 	);
 
 	info!("Adding more peers");
@@ -523,8 +525,8 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().info().chain.finalized_number >= (NUM_BLOCKS as u32).into(),
+			service.get().client().chain_info().finalized_number >= (NUM_BLOCKS as u32).into(),
 		|_index, service|
-			service.get().client().info().chain.best_number >= (NUM_BLOCKS as u32).into(),
+			service.get().client().chain_info().best_number >= (NUM_BLOCKS as u32).into(),
 	);
 }

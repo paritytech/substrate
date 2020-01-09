@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -78,8 +78,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 198,
-	impl_version: 198,
+	spec_version: 200,
+	impl_version: 200,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -125,11 +125,24 @@ impl frame_system::Trait for Runtime {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = Version;
+	type ModuleToIndex = ModuleToIndex;
+}
+
+parameter_types! {
+	// One storage item; value is size 4+4+16+32 bytes = 56 bytes.
+	pub const MultisigDepositBase: Balance = 30 * CENTS;
+	// Additional storage item size of 32 bytes.
+	pub const MultisigDepositFactor: Balance = 5 * CENTS;
+	pub const MaxSignatories: u16 = 100;
 }
 
 impl pallet_utility::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
+	type Currency = Balances;
+	type MultisigDepositBase = MultisigDepositBase;
+	type MultisigDepositFactor = MultisigDepositFactor;
+	type MaxSignatories = MaxSignatories;
 }
 
 parameter_types! {
@@ -487,7 +500,11 @@ impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for 
 		account: AccountId,
 		index: Index,
 	) -> Option<(Call, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
-		let period = 1 << 8;
+		// take the biggest period possible.
+		let period = BlockHashCount::get()
+			.checked_next_power_of_two()
+			.map(|c| c / 2)
+			.unwrap_or(2) as u64;
 		let current_block = System::block_number().saturated_into::<u64>();
 		let tip = 0;
 		let extra: SignedExtra = (
@@ -514,14 +531,14 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: frame_system::{Module, Call, Storage, Config, Event},
-		Utility: pallet_utility::{Module, Call, Event},
+		Utility: pallet_utility::{Module, Call, Storage, Event<T>},
 		Babe: pallet_babe::{Module, Call, Storage, Config, Inherent(Timestamp)},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
 		Indices: pallet_indices,
-		Balances: pallet_balances::{default, Error},
+		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
-		Staking: pallet_staking::{default, OfflineWorker},
+		Staking: pallet_staking,
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 		Democracy: pallet_democracy::{Module, Call, Storage, Config, Event<T>},
 		Council: pallet_collective::<Instance1>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},

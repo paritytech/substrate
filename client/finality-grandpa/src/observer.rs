@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -258,7 +258,7 @@ where
 			&self.keystore,
 		);
 
-		let last_finalized_number = self.client.info().chain.finalized_number;
+		let last_finalized_number = self.client.chain_info().finalized_number;
 
 		// NOTE: since we are not using `round_communication` we have to
 		// manually note the round with the gossip validator, otherwise we won't
