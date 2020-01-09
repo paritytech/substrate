@@ -795,6 +795,7 @@ impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
 		<AccountNonce<T>>::remove(who);
 	}
 }
+
 /// resource limit check.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
