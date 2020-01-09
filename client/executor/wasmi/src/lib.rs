@@ -288,7 +288,6 @@ impl<'a> Resolver<'a> {
 			host_functions,
 			allow_missing_imports,
 			missing_functions: RefCell::new(Vec::new()),
-			missing_function_id: RefCell::new(host_functions.len()),
 		}
 	}
 }
