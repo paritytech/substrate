@@ -180,7 +180,7 @@ pub struct OpenTip<
 	BlockNumber: Parameter,
 	Hash: Parameter,
 > {
-	/// The reason for the tip. Should be a human-readable UTF-8 encoded string. A URL would be
+	/// The hash of the reason for the tip. The reason should be a human-readable UTF-8 encoded string. A URL would be
 	/// sensible.
 	reason: Hash,
 	/// The account to be tipped.
