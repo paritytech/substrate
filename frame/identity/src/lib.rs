@@ -868,7 +868,10 @@ mod tests {
 	use super::*;
 
 	use sp_runtime::traits::BadOrigin;
-	use frame_support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::{
+		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
+		ord_parameter_types
+	};
 	use sp_core::H256;
 	use frame_system::EnsureSignedBy;
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -931,6 +934,8 @@ mod tests {
 		pub const FieldDeposit: u64 = 10;
 		pub const SubAccountDeposit: u64 = 10;
 		pub const MaximumSubAccounts: u32 = 2;
+	}
+	ord_parameter_types! {
 		pub const One: u64 = 1;
 		pub const Two: u64 = 2;
 	}
