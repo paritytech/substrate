@@ -55,9 +55,8 @@
 //! used to inform peers of a current view of protocol state.
 
 pub use self::bridge::GossipEngine;
-pub use self::state_machine::{TopicNotification, MessageIntent};
-pub use self::state_machine::{Validator, ValidatorContext, ValidationResult};
-pub use self::state_machine::DiscardAll;
+pub use self::state_machine::TopicNotification;
+pub use self::validator::{DiscardAll, MessageIntent, Validator, ValidatorContext, ValidationResult};
 
 use futures::prelude::*;
 use sc_network::{specialization::NetworkSpecialization, Event, ExHashT, NetworkService, PeerId, ReputationChange};
@@ -66,6 +65,7 @@ use std::sync::Arc;
 
 mod bridge;
 mod state_machine;
+mod validator;
 
 /// Abstraction over a network.
 pub trait Network<B: BlockT> {
