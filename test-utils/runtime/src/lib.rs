@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -369,6 +369,7 @@ impl frame_system::Trait for Runtime {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
+	type ModuleToIndex = ();
 }
 
 impl pallet_timestamp::Trait for Runtime {
@@ -960,7 +961,7 @@ mod tests {
 	fn returns_mutable_static() {
 		let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		let ret = runtime_api.returns_mutable_static(&block_id).unwrap();
 		assert_eq!(ret, 33);
@@ -991,7 +992,7 @@ mod tests {
 			.set_heap_pages(REQUIRED_MEMORY_PAGES)
 			.build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
 		let ret = runtime_api.allocates_huge_stack_array(&block_id, true);
@@ -1012,7 +1013,7 @@ mod tests {
 			.set_heap_pages(8)
 			.build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
@@ -1041,7 +1042,7 @@ mod tests {
 			.set_execution_strategy(ExecutionStrategy::Both)
 			.build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		runtime_api.test_storage(&block_id).unwrap();
 	}

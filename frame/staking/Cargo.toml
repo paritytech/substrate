@@ -8,23 +8,23 @@ edition = "2018"
 serde = { version = "1.0.101", optional = true }
 safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-keyring = { path = "../../primitives/keyring", optional = true }
-sp-std = { path = "../../primitives/std", default-features = false }
-sp-phragmen = { path = "../../primitives/phragmen", default-features = false }
+sp-keyring = { version = "2.0.0", optional = true, path = "../../primitives/keyring" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-phragmen = { version = "2.0.0", default-features = false, path = "../../primitives/phragmen" }
 sp-io ={ path = "../../primitives/io", default-features = false }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
-sp-staking = { path = "../../primitives/staking", default-features = false }
-frame-support = { path = "../support", default-features = false }
-frame-system = { path = "../system", default-features = false }
-pallet-session = { path = "../session", default-features = false, features = ["historical"] }
-pallet-authorship = { path = "../authorship", default-features = false }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+pallet-session = { version = "2.0.0", features = ["historical"], path = "../session", default-features = false }
+pallet-authorship = { version = "2.0.0", default-features = false, path = "../authorship" }
 
 [dev-dependencies]
-sp-core = { path = "../../primitives/core" }
-pallet-balances = { path = "../balances" }
-pallet-timestamp = { path = "../timestamp" }
-pallet-staking-reward-curve = { path = "../staking/reward-curve"}
-substrate-test-utils = { path = "../../test-utils" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+pallet-balances = { version = "2.0.0", path = "../balances" }
+pallet-timestamp = { version = "2.0.0", path = "../timestamp" }
+pallet-staking-reward-curve = { version = "2.0.0",  path = "../staking/reward-curve" }
+substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
 
 [features]
 equalize = []

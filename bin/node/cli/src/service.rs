@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -113,13 +113,13 @@ macro_rules! new_full_start {
 /// concrete types instead.
 macro_rules! new_full {
 	($config:expr, $with_startup_data: expr) => {{
-		use futures01::sync::mpsc;
-		use sc_network::DhtEvent;
+		use futures01::Stream;
 		use futures::{
 			compat::Stream01CompatExt,
 			stream::StreamExt,
 			future::{FutureExt, TryFutureExt},
 		};
+		use sc_network::Event;
 
 		let (
 			is_authority,
@@ -142,18 +142,10 @@ macro_rules! new_full {
 
 		let (builder, mut import_setup, inherent_data_providers) = new_full_start!($config);
 
-		// Dht event channel from the network to the authority discovery module. Use bounded channel to ensure
-		// back-pressure. Authority discovery is triggering one event per authority within the current authority set.
-		// This estimates the authority set size to be somewhere below 10 000 thereby setting the channel buffer size to
-		// 10 000.
-		let (dht_event_tx, dht_event_rx) =
-			mpsc::channel::<DhtEvent>(10_000);
-
 		let service = builder.with_network_protocol(|_| Ok(crate::service::NodeProtocol::new()))?
 			.with_finality_proof_provider(|client, backend|
 				Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, client)) as _)
 			)?
-			.with_dht_event_tx(dht_event_tx)?
 			.build()?;
 
 		let (block_import, grandpa_link, babe_link) = import_setup.take()
@@ -190,15 +182,20 @@ macro_rules! new_full {
 			let babe = sc_consensus_babe::start_babe(babe_config)?;
 			service.spawn_essential_task(babe);
 
-			let future03_dht_event_rx = dht_event_rx.compat()
+			let network = service.network();
+			let dht_event_stream = network.event_stream().filter_map(|e| match e {
+				Event::Dht(e) => Some(e),
+				_ => None,
+			});
+			let future03_dht_event_stream = dht_event_stream.compat()
 				.map(|x| x.expect("<mpsc::channel::Receiver as Stream> never returns an error; qed"))
 				.boxed();
 			let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
 				service.client(),
-				service.network(),
+				network,
 				sentry_nodes,
 				service.keystore(),
-				future03_dht_event_rx,
+				future03_dht_event_stream,
 			);
 			let future01_authority_discovery = authority_discovery.map(|x| Ok(x)).compat();
 
@@ -408,8 +405,8 @@ mod tests {
 	use sp_timestamp;
 	use sp_finality_tracker;
 	use sp_keyring::AccountKeyring;
-	use sc_service::{AbstractService, Roles};
-	use crate::service::new_full;
+	use sc_service::AbstractService;
+	use crate::service::{new_full, new_light};
 	use sp_runtime::traits::IdentifyAccount;
 
 	type AccountPublic = <Signature as Verify>::Signer;
@@ -427,7 +424,7 @@ mod tests {
 		let keys: Vec<&ed25519::Pair> = vec![&*alice, &*bob];
 		let dummy_runtime = ::tokio::runtime::Runtime::new().unwrap();
 		let block_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
-			let block_id = BlockId::number(service.client().info().chain.best_number);
+			let block_id = BlockId::number(service.client().chain_info().best_number);
 			let parent_header = service.client().header(&block_id).unwrap().unwrap();
 			let consensus_net = ConsensusNetwork::new(service.network(), service.client().clone());
 			let proposer_factory = consensus::ProposerFactory {
@@ -470,11 +467,7 @@ mod tests {
 		sc_service_test::sync(
 			sc_chain_spec::integration_test_config(),
 			|config| new_full(config),
-			|mut config| {
-				// light nodes are unsupported
-				config.roles = Roles::FULL;
-				new_full(config)
-			},
+			|mut config| new_light(config),
 			block_factory,
 			extrinsic_factory,
 		);
@@ -510,18 +503,14 @@ mod tests {
 					setup_handles = Some((block_import.clone(), babe_link.clone()));
 				}).map(move |(node, x)| (node, (x, setup_handles.unwrap())))
 			},
-			|mut config| {
-				// light nodes are unsupported
-				config.roles = Roles::FULL;
-				new_full(config)
-			},
+			|config| new_light(config),
 			|service, &mut (ref inherent_data_providers, (ref mut block_import, ref babe_link))| {
 				let mut inherent_data = inherent_data_providers
 					.create_inherent_data()
 					.expect("Creates inherent data.");
 				inherent_data.replace_data(sp_finality_tracker::INHERENT_IDENTIFIER, &1u64);
 
-				let parent_id = BlockId::number(service.client().info().chain.best_number);
+				let parent_id = BlockId::number(service.client().chain_info().best_number);
 				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
 				let mut proposer_factory = sc_basic_authority::ProposerFactory {
 					client: service.client(),
@@ -588,7 +577,7 @@ mod tests {
 				let to: Address = AccountPublic::from(bob.public()).into_account().into();
 				let from: Address = AccountPublic::from(charlie.public()).into_account().into();
 				let genesis_hash = service.client().block_hash(0).unwrap().unwrap();
-				let best_block_id = BlockId::number(service.client().info().chain.best_number);
+				let best_block_id = BlockId::number(service.client().chain_info().best_number);
 				let version = service.client().runtime_version_at(&best_block_id).unwrap().spec_version;
 				let signer = charlie.clone();
 
@@ -638,11 +627,7 @@ mod tests {
 		sc_service_test::consensus(
 			crate::chain_spec::tests::integration_test_config_with_two_authorities(),
 			|config| new_full(config),
-			|mut config| {
-				// light nodes are unsupported
-				config.roles = Roles::FULL;
-				new_full(config)
-			},
+			|config| new_light(config),
 			vec![
 				"//Alice".into(),
 				"//Bob".into(),

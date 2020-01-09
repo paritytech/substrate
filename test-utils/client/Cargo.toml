@@ -5,16 +5,16 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sc-client-api = { path = "../../client/api" }
-sc-client = { path = "../../client/" }
-sc-client-db = { path = "../../client/db", features = ["test-helpers"] }
-sp-consensus = { path = "../../primitives/consensus/common" }
-sc-executor = { path = "../../client/executor" }
+sc-client-api = { version = "2.0.0", path = "../../client/api" }
+sc-client = { version = "2.0.0", path = "../../client/" }
+sc-client-db = { version = "2.0.0", features = ["test-helpers"], path = "../../client/db" }
+sp-consensus = { version = "0.8", path = "../../primitives/consensus/common" }
+sc-executor = { version = "2.0.0", path = "../../client/executor" }
 futures = "0.3.1"
 hash-db = "0.15.2"
-sp-keyring = { path = "../../primitives/keyring" }
+sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sp-core = { path = "../../primitives/core" }
-sp-runtime = {  path = "../../primitives/runtime" }
-sp-blockchain = {  path = "../../primitives/blockchain" }
-sp-state-machine = { path = "../../primitives/state-machine" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
+sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
+sp-state-machine = { version = "2.0.0", path = "../../primitives/state-machine" }

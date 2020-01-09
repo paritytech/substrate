@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -77,7 +77,7 @@ impl<H, N> LeafSet<H, N> where
 	}
 
 	/// Read the leaf list from the DB, using given prefix for keys.
-	pub fn read_from_db(db: &dyn KeyValueDB, column: Option<u32>, prefix: &[u8]) -> Result<Self> {
+	pub fn read_from_db(db: &dyn KeyValueDB, column: u32, prefix: &[u8]) -> Result<Self> {
 		let mut storage = BTreeMap::new();
 
 		for (key, value) in db.iter_from_prefix(column, prefix) {
@@ -158,12 +158,35 @@ impl<H, N> LeafSet<H, N> where
 		Undo { inner: self }
 	}
 
-	/// currently since revert only affects the canonical chain
-	/// we assume that parent has no further children
-	/// and we add it as leaf again
-	pub fn revert(&mut self, hash: H, number: N, parent_hash: H) {
-		self.insert_leaf(Reverse(number.clone() - N::one()), parent_hash);
-		self.remove_leaf(&Reverse(number), &hash);
+	/// Revert to the given block height by dropping all leaves in the leaf set
+	/// with a block number higher than the target.
+	pub fn revert(&mut self, best_hash: H, best_number: N) {
+		let items = self.storage.iter()
+			.flat_map(|(number, hashes)| hashes.iter().map(move |h| (h.clone(), number.clone())))
+			.collect::<Vec<_>>();
+
+		for (hash, number) in &items {
+			if number.0 > best_number {
+				assert!(
+					self.remove_leaf(number, hash),
+					"item comes from an iterator over storage; qed",
+				);
+
+				self.pending_removed.push(hash.clone());
+			}
+		}
+
+		let best_number = Reverse(best_number);
+		let leaves_contains_best = self.storage
+			.get(&best_number)
+			.map_or(false, |hashes| hashes.contains(&best_hash));
+
+		// we need to make sure that the best block exists in the leaf set as
+		// this is an invariant of regular block import.
+		if !leaves_contains_best {
+			self.insert_leaf(best_number.clone(), best_hash.clone());
+			self.pending_added.push(LeafSetItem { hash: best_hash, number: best_number });
+		}
 	}
 
 	/// returns an iterator over all hashes in the leaf set
@@ -173,7 +196,7 @@ impl<H, N> LeafSet<H, N> where
 	}
 
 	/// Write the leaf list to the database transaction.
-	pub fn prepare_transaction(&mut self, tx: &mut DBTransaction, column: Option<u32>, prefix: &[u8]) {
+	pub fn prepare_transaction(&mut self, tx: &mut DBTransaction, column: u32, prefix: &[u8]) {
 		let mut buf = prefix.to_vec();
 		for LeafSetItem { hash, number } in self.pending_added.drain(..) {
 			hash.using_encoded(|s| buf.extend(s));
@@ -277,7 +300,7 @@ mod tests {
 	#[test]
 	fn flush_to_disk() {
 		const PREFIX: &[u8] = b"abcdefg";
-		let db = ::kvdb_memorydb::create(0);
+		let db = ::kvdb_memorydb::create(1);
 
 		let mut set = LeafSet::new();
 		set.import(0u32, 0u32, 0u32);
@@ -288,10 +311,10 @@ mod tests {
 
 		let mut tx = DBTransaction::new();
 
-		set.prepare_transaction(&mut tx, None, PREFIX);
+		set.prepare_transaction(&mut tx, 0, PREFIX);
 		db.write(tx).unwrap();
 
-		let set2 = LeafSet::read_from_db(&db, None, PREFIX).unwrap();
+		let set2 = LeafSet::read_from_db(&db, 0, PREFIX).unwrap();
 		assert_eq!(set, set2);
 	}
 
@@ -311,7 +334,7 @@ mod tests {
 	#[test]
 	fn finalization_consistent_with_disk() {
 		const PREFIX: &[u8] = b"prefix";
-		let db = ::kvdb_memorydb::create(0);
+		let db = ::kvdb_memorydb::create(1);
 
 		let mut set = LeafSet::new();
 		set.import(10_1u32, 10u32, 0u32);
@@ -322,12 +345,12 @@ mod tests {
 		assert!(set.contains(10, 10_1));
 
 		let mut tx = DBTransaction::new();
-		set.prepare_transaction(&mut tx, None, PREFIX);
+		set.prepare_transaction(&mut tx, 0, PREFIX);
 		db.write(tx).unwrap();
 
 		let _ = set.finalize_height(11);
 		let mut tx = DBTransaction::new();
-		set.prepare_transaction(&mut tx, None, PREFIX);
+		set.prepare_transaction(&mut tx, 0, PREFIX);
 		db.write(tx).unwrap();
 
 		assert!(set.contains(11, 11_1));
@@ -335,7 +358,7 @@ mod tests {
 		assert!(set.contains(12, 12_1));
 		assert!(!set.contains(10, 10_1));
 
-		let set2 = LeafSet::read_from_db(&db, None, PREFIX).unwrap();
+		let set2 = LeafSet::read_from_db(&db, 0, PREFIX).unwrap();
 		assert_eq!(set, set2);
 	}
 

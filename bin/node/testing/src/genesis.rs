@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ use sp_runtime::Perbill;
 /// Create genesis runtime configuration for tests.
 pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig {
 	GenesisConfig {
-		system: Some(SystemConfig {
+		frame_system: Some(SystemConfig {
 			changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
 				digest_interval: 2,
 				digest_levels: 2,

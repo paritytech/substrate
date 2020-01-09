@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -251,11 +251,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 			validators: Default::default(),
 			next_broadcast: time::Instant::now() + REBROADCAST_INTERVAL,
 		}
-	}
-
-	/// Closes all notification streams.
-	pub fn abort(&mut self) {
-		self.live_message_sinks.clear();
 	}
 
 	/// Register message validator for a message type.

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -68,6 +68,7 @@
 //! 	<Storage>::default(),
 //! 	Default::default(),
 //! 	Default::default(),
+//! 	Default::default(),
 //! );
 //! ```
 //!
@@ -98,7 +99,7 @@ pub use crate::{
 		new_in_mem,
 		BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents,
 		BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-		LongestChain, BlockOf, ProvideUncles, ForkBlocks, apply_aux,
+		LongestChain, BlockOf, ProvideUncles, BadBlocks, ForkBlocks, apply_aux,
 	},
 	leaves::LeafSet,
 };

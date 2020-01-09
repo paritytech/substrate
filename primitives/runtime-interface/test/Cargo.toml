@@ -6,9 +6,9 @@ edition = "2018"
 publish = false
 
 [dependencies]
-sp-runtime-interface = { path = "../" }
-sc-executor = { path = "../../../client/executor" }
-sp-runtime-interface-test-wasm = { path = "../test-wasm" }
-sp-state-machine = { path = "../../../primitives/state-machine"  }
-sp-core = { path = "../../core" }
-sp-io = { path = "../../io" }
+sp-runtime-interface = { version = "2.0.0", path = "../" }
+sc-executor = { version = "2.0.0", path = "../../../client/executor" }
+sp-runtime-interface-test-wasm = { version = "2.0.0", path = "../test-wasm" }
+sp-state-machine = { version = "2.0.0", path = "../../../primitives/state-machine" }
+sp-core = { version = "2.0.0", path = "../../core" }
+sp-io = { version = "2.0.0", path = "../../io" }

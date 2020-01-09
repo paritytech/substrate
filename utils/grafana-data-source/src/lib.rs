@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -71,10 +71,15 @@ pub fn record_metrics_slice(metrics: &[(&str, f32)]) -> Result<(), Error> {
 /// Error type that can be returned by either `record_metrics` or `run_server`.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
+	/// Hyper internal error.
 	Hyper(hyper::Error),
+	/// Serialization/deserialization error.
 	Serde(serde_json::Error),
+	/// Http request error.
 	Http(hyper::http::Error),
+	/// Timestamp error.
 	Timestamp(TryFromIntError),
+	/// i/o error.
 	Io(std::io::Error)
 }
 

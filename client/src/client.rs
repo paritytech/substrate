@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -69,7 +69,7 @@ pub use sc_client_api::{
 	},
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
-		ClientInfo, BlockchainEvents, BlockBody, ProvideUncles, ForkBlocks,
+		ClientInfo, BlockchainEvents, BlockBody, ProvideUncles, BadBlocks, ForkBlocks,
 		BlockOf,
 	},
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
@@ -101,6 +101,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	fork_blocks: ForkBlocks<Block>,
+	bad_blocks: BadBlocks<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	_phantom: PhantomData<RA>,
 }
@@ -174,7 +175,14 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
 	let extensions = ExecutionExtensions::new(Default::default(), keystore);
-	Client::new(backend, call_executor, build_genesis_storage, Default::default(), extensions)
+	Client::new(
+		backend,
+		call_executor,
+		build_genesis_storage,
+		Default::default(),
+		Default::default(),
+		extensions,
+	)
 }
 
 impl<B, E, Block, RA> BlockOf for Client<B, E, Block, RA> where
@@ -196,6 +204,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		executor: E,
 		build_genesis_storage: S,
 		fork_blocks: ForkBlocks<Block>,
+		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
@@ -225,6 +234,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			finality_notification_sinks: Default::default(),
 			importing_block: Default::default(),
 			fork_blocks,
+			bad_blocks,
 			execution_extensions,
 			_phantom: Default::default(),
 		})
@@ -708,11 +718,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Self: ProvideRuntimeApi,
 		<Self as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, Error = Error>
 	{
-		let info = self.info();
+		let info = self.chain_info();
 		sc_block_builder::BlockBuilder::new(
 			self,
-			info.chain.best_hash,
-			info.chain.best_number,
+			info.best_hash,
+			info.best_number,
 			false,
 			inherent_digests,
 		)
@@ -1198,19 +1208,37 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(())
 	}
 
-	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
-	/// successfully reverted.
+	/// Attempts to revert the chain by `n` blocks guaranteeing that no block is
+	/// reverted past the last finalized block. Returns the number of blocks
+	/// that were successfully reverted.
 	pub fn revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(self.backend.revert(n)?)
+		Ok(self.backend.revert(n, false)?)
+	}
+
+	/// Attempts to revert the chain by `n` blocks disregarding finality. This
+	/// method will revert any finalized blocks as requested and can potentially
+	/// leave the node in an inconsistent state. Other modules in the system that
+	/// persist data and that rely on finality (e.g. consensus parts) will be
+	/// unaffected by the revert. Use this method with caution and making sure
+	/// that no other data needs to be reverted for consistency aside from the
+	/// block data.
+	///
+	/// Returns the number of blocks that were successfully reverted.
+	pub fn unsafe_revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
+		Ok(self.backend.revert(n, true)?)
+	}
+
+	/// Get usage info about current client.
+	pub fn usage_info(&self) -> ClientInfo<Block> {
+		ClientInfo {
+			chain: self.chain_info(),
+			usage: self.backend.usage_info(),
+		}
 	}
 
 	/// Get blockchain info.
-	pub fn info(&self) -> ClientInfo<Block> {
-		let info = self.backend.blockchain().info();
-		ClientInfo {
-			chain: info,
-			used_state_cache_size: self.backend.used_state_cache_size(),
-		}
+	pub fn chain_info(&self) -> blockchain::Info<Block> {
+		self.backend.blockchain().info()
 	}
 
 	/// Get block status.
@@ -1517,7 +1545,12 @@ impl<'a, B, E, Block, RA> sp_consensus::BlockImport<Block> for &'a Client<B, E, 
 	) -> Result<ImportResult, Self::Error> {
 		let BlockCheckParams { hash, number, parent_hash, allow_missing_state, import_existing } = block;
 
-		if let Some(h) = self.fork_blocks.as_ref().and_then(|x| x.get(&number)) {
+		// Check the block against white and black lists if any are defined
+		// (i.e. fork blocks and bad blocks respectively)
+		let fork_block = self.fork_blocks.as_ref()
+			.and_then(|fs| fs.iter().find(|(n, _)| *n == number));
+
+		if let Some((_, h)) = fork_block {
 			if &hash != h  {
 				trace!(
 					"Rejecting block from known invalid fork. Got {:?}, expected: {:?} at height {}",
@@ -1527,6 +1560,19 @@ impl<'a, B, E, Block, RA> sp_consensus::BlockImport<Block> for &'a Client<B, E, 
 				);
 				return Ok(ImportResult::KnownBad);
 			}
+		}
+
+		let bad_block = self.bad_blocks.as_ref()
+			.filter(|bs| bs.contains(&hash))
+			.is_some();
+
+		if bad_block {
+			trace!(
+				"Rejecting known bad block: #{} {:?}",
+				number,
+				hash,
+			);
+			return Ok(ImportResult::KnownBad);
 		}
 
 		// Own status must be checked first. If the block and ancestry is pruned
@@ -1912,14 +1958,14 @@ pub(crate) mod tests {
 
 		assert_eq!(
 			client.runtime_api().balance_of(
-				&BlockId::Number(client.info().chain.best_number),
+				&BlockId::Number(client.chain_info().best_number),
 				AccountKeyring::Alice.into()
 			).unwrap(),
 			1000
 		);
 		assert_eq!(
 			client.runtime_api().balance_of(
-				&BlockId::Number(client.info().chain.best_number),
+				&BlockId::Number(client.chain_info().best_number),
 				AccountKeyring::Ferdie.into()
 			).unwrap(),
 			0
@@ -1934,7 +1980,7 @@ pub(crate) mod tests {
 
 		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
-		assert_eq!(client.info().chain.best_number, 1);
+		assert_eq!(client.chain_info().best_number, 1);
 	}
 
 	#[test]
@@ -1952,21 +1998,21 @@ pub(crate) mod tests {
 
 		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
-		assert_eq!(client.info().chain.best_number, 1);
+		assert_eq!(client.chain_info().best_number, 1);
 		assert_ne!(
 			client.state_at(&BlockId::Number(1)).unwrap().pairs(),
 			client.state_at(&BlockId::Number(0)).unwrap().pairs()
 		);
 		assert_eq!(
 			client.runtime_api().balance_of(
-				&BlockId::Number(client.info().chain.best_number),
+				&BlockId::Number(client.chain_info().best_number),
 				AccountKeyring::Alice.into()
 			).unwrap(),
 			958
 		);
 		assert_eq!(
 			client.runtime_api().balance_of(
-				&BlockId::Number(client.info().chain.best_number),
+				&BlockId::Number(client.chain_info().best_number),
 				AccountKeyring::Ferdie.into()
 			).unwrap(),
 			42
@@ -1995,7 +2041,7 @@ pub(crate) mod tests {
 
 		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
-		assert_eq!(client.info().chain.best_number, 1);
+		assert_eq!(client.chain_info().best_number, 1);
 		assert_ne!(
 			client.state_at(&BlockId::Number(1)).unwrap().pairs(),
 			client.state_at(&BlockId::Number(0)).unwrap().pairs()
@@ -2010,7 +2056,7 @@ pub(crate) mod tests {
 
 		let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
-		let genesis_hash = client.info().chain.genesis_hash;
+		let genesis_hash = client.chain_info().genesis_hash;
 
 		assert_eq!(
 			genesis_hash.clone(),
@@ -2123,7 +2169,7 @@ pub(crate) mod tests {
 		let d2 = builder.bake().unwrap();
 		client.import(BlockOrigin::Own, d2.clone()).unwrap();
 
-		let genesis_hash = client.info().chain.genesis_hash;
+		let genesis_hash = client.chain_info().genesis_hash;
 
 		let uncles1 = client.uncles(a4.hash(), 10).unwrap();
 		assert_eq!(vec![b2.hash(), d2.hash()], uncles1);
@@ -2159,7 +2205,7 @@ pub(crate) mod tests {
 		let a2 = client.new_block(Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
-		let genesis_hash = client.info().chain.genesis_hash;
+		let genesis_hash = client.chain_info().genesis_hash;
 
 		assert_eq!(a2.hash(), longest_chain_select.finality_target(genesis_hash, None).unwrap().unwrap());
 		assert_eq!(a2.hash(), longest_chain_select.finality_target(a1.hash(), None).unwrap().unwrap());
@@ -2239,9 +2285,9 @@ pub(crate) mod tests {
 		let d2 = builder.bake().unwrap();
 		client.import(BlockOrigin::Own, d2.clone()).unwrap();
 
-		assert_eq!(client.info().chain.best_hash, a5.hash());
+		assert_eq!(client.chain_info().best_hash, a5.hash());
 
-		let genesis_hash = client.info().chain.genesis_hash;
+		let genesis_hash = client.chain_info().genesis_hash;
 		let leaves = longest_chain_select.leaves().unwrap();
 
 		assert!(leaves.contains(&a5.hash()));
@@ -2467,7 +2513,7 @@ pub(crate) mod tests {
 		let a2 = client.new_block(Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
-		let genesis_hash = client.info().chain.genesis_hash;
+		let genesis_hash = client.chain_info().genesis_hash;
 
 		assert_eq!(a2.hash(), longest_chain_select.finality_target(genesis_hash, Some(10)).unwrap().unwrap());
 	}
@@ -2510,7 +2556,7 @@ pub(crate) mod tests {
 		client.import_justified(BlockOrigin::Own, a3.clone(), justification.clone()).unwrap();
 
 		assert_eq!(
-			client.info().chain.finalized_hash,
+			client.chain_info().finalized_hash,
 			a3.hash(),
 		);
 
@@ -2557,7 +2603,7 @@ pub(crate) mod tests {
 
 		// A2 is the current best since it's the longest chain
 		assert_eq!(
-			client.info().chain.best_hash,
+			client.chain_info().best_hash,
 			a2.hash(),
 		);
 
@@ -2566,12 +2612,12 @@ pub(crate) mod tests {
 		client.import_justified(BlockOrigin::Own, b1.clone(), justification).unwrap();
 
 		assert_eq!(
-			client.info().chain.best_hash,
+			client.chain_info().best_hash,
 			b1.hash(),
 		);
 
 		assert_eq!(
-			client.info().chain.finalized_hash,
+			client.chain_info().finalized_hash,
 			b1.hash(),
 		);
 	}
@@ -2606,7 +2652,7 @@ pub(crate) mod tests {
 
 		// A2 is the current best since it's the longest chain
 		assert_eq!(
-			client.info().chain.best_hash,
+			client.chain_info().best_hash,
 			a2.hash(),
 		);
 
@@ -2616,14 +2662,14 @@ pub(crate) mod tests {
 
 		// B1 should now be the latest finalized
 		assert_eq!(
-			client.info().chain.finalized_hash,
+			client.chain_info().finalized_hash,
 			b1.hash(),
 		);
 
 		// and B1 should be the new best block (`finalize_block` as no way of
 		// knowing about B2)
 		assert_eq!(
-			client.info().chain.best_hash,
+			client.chain_info().best_hash,
 			b1.hash(),
 		);
 
@@ -2642,7 +2688,7 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, b3.clone()).unwrap();
 
 		assert_eq!(
-			client.info().chain.best_hash,
+			client.chain_info().best_hash,
 			b3.hash(),
 		);
 	}
@@ -2664,7 +2710,7 @@ pub(crate) mod tests {
 
 		let current_balance = ||
 			client.runtime_api().balance_of(
-				&BlockId::number(client.info().chain.best_number), AccountKeyring::Alice.into()
+				&BlockId::number(client.chain_info().best_number), AccountKeyring::Alice.into()
 			).unwrap();
 
 		// G -> A1 -> A2

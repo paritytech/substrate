@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -56,6 +56,7 @@ use crate::{
 use sp_consensus::SelectChain;
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
+use crate::communication::Network as NetworkT;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
@@ -376,20 +377,20 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<B, E, Block: BlockT,  RA, SC, VR> {
+pub(crate) struct Environment<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
 	pub(crate) client: Arc<Client<B, E, Block, RA>>,
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-	pub(crate) network: crate::communication::NetworkBridge<Block>,
+	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: SetId,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) voting_rule: VR,
 }
 
-impl<B, E, Block: BlockT, RA, SC, VR> Environment<B, E, Block, RA, SC, VR> {
+impl<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> Environment<B, E, Block, N, RA, SC, VR> {
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
@@ -405,13 +406,14 @@ impl<B, E, Block: BlockT, RA, SC, VR> Environment<B, E, Block, RA, SC, VR> {
 	}
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, RA, SC, VR>
+impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC, VR>
 	finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, RA, SC, VR>
+for Environment<B, E, Block, N, RA, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+ 	N: NetworkT<Block> + 'static + Send,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
 	RA: Send + Sync,
@@ -430,32 +432,26 @@ where
 			return None;
 		}
 
+		let base_header = match self.client.header(&BlockId::Hash(block)).ok()? {
+			Some(h) => h,
+			None => {
+				debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find base block", block);
+				return None;
+			}
+		};
+
 		// we refuse to vote beyond the current limit number where transitions are scheduled to
 		// occur.
 		// once blocks are finalized that make that transition irrelevant or activate it,
 		// we will proceed onwards. most of the time there will be no pending transition.
-		let limit = self.authority_set.current_limit();
+		// the limit, if any, is guaranteed to be higher than or equal to the given base number.
+		let limit = self.authority_set.current_limit(*base_header.number());
 		debug!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
 
 		match self.select_chain.finality_target(block, None) {
 			Ok(Some(best_hash)) => {
-				let base_header = self.client.header(&BlockId::Hash(block)).ok()?
-					.expect("Header known to exist after `best_containing` call; qed");
-
-				if let Some(limit) = limit {
-					// this is a rare case which might cause issues,
-					// might be better to return the header itself.
-					if *base_header.number() > limit {
-						debug!(target: "afg", "Encountered error finding best chain containing {:?} with limit {:?}: target block is after limit",
-							block,
-							limit,
-						);
-						return None;
-					}
-				}
-
 				let best_header = self.client.header(&BlockId::Hash(best_hash)).ok()?
-					.expect("Header known to exist after `best_containing` call; qed");
+					.expect("Header known to exist after `finality_target` call; qed");
 
 				// check if our vote is currently being limited due to a pending change
 				let limit = limit.filter(|limit| limit < best_header.number());
@@ -479,7 +475,7 @@ where
 						}
 
 						target_header = self.client.header(&BlockId::Hash(*target_header.parent_hash())).ok()?
-							.expect("Header known to exist after `best_containing` call; qed");
+							.expect("Header known to exist after `finality_target` call; qed");
 					}
 
 					target = target_header;
@@ -554,13 +550,14 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, SC, VR>
+impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR>
 	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, RA, SC, VR>
+for Environment<B, E, Block, N, RA, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
+ 	N: NetworkT<Block> + 'static + Send,
 	RA: 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
@@ -961,7 +958,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	//       below.
 	let mut authority_set = authority_set.inner().write();
 
-	let status = client.info().chain;
+	let status = client.chain_info();
 	if number <= status.finalized_number && client.hash(number)? == Some(hash) {
 		// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
 		// the voter will be restarted at the median last finalized block, which can be lower than the local best
@@ -1007,8 +1004,8 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			);
 
 			if let Err(e) = write_result {
-				warn!(target: "finality", "Failed to write updated consensus changes to disk. Bailing.");
-				warn!(target: "finality", "Node is in a potentially inconsistent state.");
+				warn!(target: "afg", "Failed to write updated consensus changes to disk. Bailing.");
+				warn!(target: "afg", "Node is in a potentially inconsistent state.");
 
 				return Err(e.into());
 			}
@@ -1034,7 +1031,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 				// finalization to remote nodes
 				if !justification_required {
 					if let Some(justification_period) = justification_period {
-						let last_finalized_number = client.info().chain.finalized_number;
+						let last_finalized_number = client.chain_info().finalized_number;
 						justification_required =
 							(!last_finalized_number.is_zero() || number - last_finalized_number == justification_period) &&
 							(last_finalized_number / justification_period != number / justification_period);
@@ -1060,7 +1057,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
 		client.apply_finality(import_op, BlockId::Hash(hash), justification, true).map_err(|e| {
-			warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+			warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 			e
 		})?;
 		telemetry!(CONSENSUS_INFO; "afg.finalized_blocks_up_to";
@@ -1100,8 +1097,8 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			);
 
 			if let Err(e) = write_result {
-				warn!(target: "finality", "Failed to write updated authority set to disk. Bailing.");
-				warn!(target: "finality", "Node is in a potentially inconsistent state.");
+				warn!(target: "afg", "Failed to write updated authority set to disk. Bailing.");
+				warn!(target: "afg", "Node is in a potentially inconsistent state.");
 
 				return Err(e.into());
 			}

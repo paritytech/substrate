@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -806,7 +806,7 @@ mod tests {
 			// then
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
 			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-			assert_eq!(stream.next(), Some(TransactionStatus::Finalized(H256::from_low_u64_be(2).into())));
+			assert_eq!(stream.next(), Some(TransactionStatus::InBlock(H256::from_low_u64_be(2).into())));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -831,7 +831,7 @@ mod tests {
 			// then
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
 			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-			assert_eq!(stream.next(), Some(TransactionStatus::Finalized(H256::from_low_u64_be(2).into())));
+			assert_eq!(stream.next(), Some(TransactionStatus::InBlock(H256::from_low_u64_be(2).into())));
 			assert_eq!(stream.next(), None);
 		}
 

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -56,7 +56,7 @@ impl<Public, Signature, AppPublic> Signer<Public, Signature> for AppPublic where
 	}
 }
 
-/// Creates runtime-specific signed transaction.
+/// Creates a runtime-specific signed transaction.
 pub trait CreateTransaction<T: crate::Trait, Extrinsic: ExtrinsicT> {
 	/// A `Public` key representing a particular `AccountId`.
 	type Public: IdentifyAccount<AccountId=T::AccountId> + Clone;
@@ -115,7 +115,7 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 	}
 }
 
-/// A trait to submit unsigned transactions in offchain calls.
+/// A trait to submit unsigned transactions in off-chain calls.
 pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 	/// Unchecked extrinsic type.
 	type Extrinsic: ExtrinsicT<Call=Call> + codec::Encode;
