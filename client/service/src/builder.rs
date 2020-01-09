@@ -17,7 +17,7 @@
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID};
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
-use crate::config::{Configuration, DatabaseConfig};
+use crate::config::{Configuration, DatabaseConfig, KeystoreConfig};
 use sc_client_api::{
 	self,
 	BlockchainEvents,
@@ -165,10 +165,13 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 	TGen: sp_runtime::BuildStorage + serde::Serialize + for<'de> serde::Deserialize<'de>,
 	TCSExt: Extension,
 {
-	let keystore = Keystore::open(
-		config.keystore_path.clone().ok_or("No basepath configured")?,
-		config.keystore_password.clone()
-	)?;
+	let keystore = match &config.keystore {
+		KeystoreConfig::Path { path, password } => Keystore::open(
+			path.clone().ok_or("No basepath configured")?,
+			password.clone()
+		)?,
+		KeystoreConfig::InMemory => Keystore::new_in_memory()
+	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,
@@ -286,10 +289,13 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TLightBackend<TBl>,
 	>, Error> {
-		let keystore = Keystore::open(
-			config.keystore_path.clone().ok_or("No basepath configured")?,
-			config.keystore_password.clone()
-		)?;
+		let keystore = match &config.keystore {
+			KeystoreConfig::Path { path, password } => Keystore::open(
+				path.clone().ok_or("No basepath configured")?,
+				password.clone()
+			)?,
+			KeystoreConfig::InMemory => Keystore::new_in_memory()
+		};
 
 		let executor = NativeExecutor::<TExecDisp>::new(
 			config.wasm_method,
@@ -926,11 +932,6 @@ ServiceBuilder<
 			let bandwidth_download = net_status.average_download_per_sec;
 			let bandwidth_upload = net_status.average_upload_per_sec;
 
-			let used_state_cache_size = match info.used_state_cache_size {
-				Some(size) => size,
-				None => 0,
-			};
-
 			// get cpu usage and memory usage of this process
 			let (cpu_usage, memory) = if let Some(self_pid) = self_pid {
 				if sys.refresh_process(self_pid) {
@@ -953,7 +954,10 @@ ServiceBuilder<
 				"finalized_hash" => ?info.chain.finalized_hash,
 				"bandwidth_download" => bandwidth_download,
 				"bandwidth_upload" => bandwidth_upload,
-				"used_state_cache_size" => used_state_cache_size,
+				"used_state_cache_size" => info.usage.as_ref().map(|usage| usage.memory.state_cache).unwrap_or(0),
+				"used_db_cache_size" => info.usage.as_ref().map(|usage| usage.memory.database_cache).unwrap_or(0),
+				"disk_read_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_read).unwrap_or(0),
+				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
 			);
 			let _ = record_metrics!(
 				"peers" => num_peers,
@@ -964,7 +968,10 @@ ServiceBuilder<
 				"finalized_height" => finalized_number,
 				"bandwidth_download" => bandwidth_download,
 				"bandwidth_upload" => bandwidth_upload,
-				"used_state_cache_size" => used_state_cache_size,
+				"used_state_cache_size" => info.usage.as_ref().map(|usage| usage.memory.state_cache).unwrap_or(0),
+				"used_db_cache_size" => info.usage.as_ref().map(|usage| usage.memory.database_cache).unwrap_or(0),
+				"disk_read_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_read).unwrap_or(0),
+				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
 			);
 
 			Ok(())

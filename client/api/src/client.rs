@@ -16,7 +16,7 @@
 
 //! A set of APIs supported by the client along with their primitives.
 
-use std::collections::HashSet;
+use std::{fmt, collections::HashSet};
 use futures::channel::mpsc;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
@@ -93,8 +93,61 @@ pub trait ProvideUncles<Block: BlockT> {
 pub struct ClientInfo<Block: BlockT> {
 	/// Best block hash.
 	pub chain: Info<Block>,
-	/// State Cache Size currently used by the backend
-	pub used_state_cache_size: Option<usize>,
+	/// Usage info, if backend supports this.
+	pub usage: Option<UsageInfo>,
+}
+
+/// Memory statistics for client instance.
+#[derive(Default, Clone, Debug)]
+pub struct MemoryInfo {
+	/// Size of state cache.
+	pub state_cache: usize,
+	/// Size of backend database cache.
+	pub database_cache: usize,
+}
+
+/// I/O statistics for client instance.
+#[derive(Default, Clone, Debug)]
+pub struct IoInfo {
+	/// Number of transactions.
+	pub transactions: u64,
+	/// Total bytes read from disk.
+	pub bytes_read: u64,
+	/// Total bytes written to disk.
+	pub bytes_written: u64,
+	/// Total key writes to disk.
+	pub writes: u64,
+	/// Total key reads from disk.
+	pub reads: u64,
+	/// Average size of the transaction.
+	pub average_transaction_size: u64,
+}
+
+/// Usage statistics for running client instance.
+///
+/// Returning backend determines the scope of these stats,
+/// but usually it is either from service start or from previous
+/// gathering of the statistics.
+#[derive(Default, Clone, Debug)]
+pub struct UsageInfo {
+	/// Memory statistics.
+	pub memory: MemoryInfo,
+	/// I/O statistics.
+	pub io: IoInfo,
+}
+
+impl fmt::Display for UsageInfo {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f,
+			"caches: ({} state, {} db overlay), i/o: ({} tx, {} write, {} read, {} tx size)",
+			self.memory.state_cache,
+			self.memory.database_cache,
+			self.io.transactions,
+			self.io.bytes_written,
+			self.io.bytes_read,
+			self.io.average_transaction_size,
+		)
+	}
 }
 
 /// Summary of an imported block
