@@ -1144,8 +1144,7 @@ mod tests {
 	use std::cell::RefCell;
 	use frame_support::{
 		impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
-		traits::Contains,
-		weights::Weight,
+		ord_parameter_types, traits::Contains, weights::Weight,
 	};
 	use sp_core::H256;
 	use sp_runtime::{
@@ -1221,6 +1220,8 @@ mod tests {
 		pub const MinimumDeposit: u64 = 1;
 		pub const EnactmentPeriod: u64 = 2;
 		pub const CooloffPeriod: u64 = 2;
+	}
+	ord_parameter_types! {
 		pub const One: u64 = 1;
 		pub const Two: u64 = 2;
 		pub const Three: u64 = 3;
@@ -1229,8 +1230,8 @@ mod tests {
 	}
 	pub struct OneToFive;
 	impl Contains<u64> for OneToFive {
-		fn contains(n: &u64) -> bool {
-			*n >= 1 && *n <= 5
+		fn sorted_members() -> Vec<u64> {
+			vec![1, 2, 3, 4, 5]
 		}
 	}
 	thread_local! {

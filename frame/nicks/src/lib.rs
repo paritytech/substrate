@@ -241,7 +241,10 @@ decl_module! {
 mod tests {
 	use super::*;
 
-	use frame_support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::{
+		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
+		ord_parameter_types
+	};
 	use sp_core::H256;
 	use frame_system::EnsureSignedBy;
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -303,6 +306,8 @@ mod tests {
 		pub const ReservationFee: u64 = 2;
 		pub const MinLength: usize = 3;
 		pub const MaxLength: usize = 16;
+	}
+	ord_parameter_types! {
 		pub const One: u64 = 1;
 	}
 	impl Trait for Test {

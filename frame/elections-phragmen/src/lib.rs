@@ -88,7 +88,7 @@ use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error, weights::SimpleDispatchInfo,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
-		ChangeMembers, OnUnbalanced, WithdrawReason
+		ChangeMembers, OnUnbalanced, WithdrawReason, Contains
 	}
 };
 use sp_phragmen::ExtendedBalance;
@@ -765,6 +765,13 @@ impl<T: Trait> Module<T> {
 
 		ElectionRounds::mutate(|v| *v += 1);
 	}
+}
+
+impl<T: Trait> Contains<T::AccountId> for Module<T> {
+	fn contains(who: &T::AccountId) -> bool {
+		Self::is_member(who)
+	}
+	fn sorted_members() -> Vec<T::AccountId> { Self::members_ids() }
 }
 
 #[cfg(test)]
