@@ -113,7 +113,6 @@
 //!
 //! ## Related Modules
 //!
-//! - [Consensus](../frame_consensus/index.html)
 //! - [Staking](../pallet_staking/index.html)
 //! - [Timestamp](../pallet_timestamp/index.html)
 

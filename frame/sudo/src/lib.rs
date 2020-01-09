@@ -77,7 +77,6 @@
 //!
 //! ## Related Modules
 //!
-//! * [Consensus](../frame_consensus/index.html)
 //! * [Democracy](../pallet_democracy/index.html)
 //!
 //! [`Call`]: ./enum.Call.html
