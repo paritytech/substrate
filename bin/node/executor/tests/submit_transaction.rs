@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use node_runtime::{
-	Call, Executive, Indices, Balances, Runtime, SubmitTransaction, UncheckedExtrinsic,
+	Call, Executive, Indices, Runtime, SubmitTransaction, UncheckedExtrinsic,
 };
 use sp_application_crypto::AppKey;
 use sp_core::testing::KeyStore;
@@ -139,7 +139,7 @@ fn submitted_transaction_should_be_valid() {
 	use codec::Encode;
 	use frame_support::storage::StorageMap;
 	use sp_runtime::transaction_validity::ValidTransaction;
-	use sp_runtime::traits::{Dispatchable, StaticLookup};
+	use sp_runtime::traits::StaticLookup;
 
 	let mut t = new_test_ext(COMPACT_CODE, false);
 	let (pool, state) = TestTransactionPoolExt::new();

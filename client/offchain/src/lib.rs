@@ -98,11 +98,18 @@ impl<Client, Storage, Block> OffchainWorkers<
 	) -> impl Future<Output = ()> {
 		let runtime = self.client.runtime_api();
 		let at = BlockId::number(*header.number());
-		// TODO [ToDr] Use has_api_with to support old versions too
-		let has_api = runtime.has_api::<dyn OffchainWorkerApi<Block, Error = ()>>(&at);
-		debug!("Checking offchain workers at {:?}: {:?}", at, has_api);
+		let has_api_v1 = runtime.has_api_with::<dyn OffchainWorkerApi<Block, Error = ()>, _>(
+			&at, |v| v == 1
+		);
+		let has_api_v2 = runtime.has_api::<dyn OffchainWorkerApi<Block, Error = ()>>(&at);
+		let version = match (has_api_v1, has_api_v2) {
+			(_, Ok(true)) => 2,
+			(Ok(true), _) => 1,
+			_ => 0,
+		};
 
-		if has_api.unwrap_or(false) {
+		debug!("Checking offchain workers at {:?}: version:{}", at, version);
+		if version > 0 {
 			let (api, runner) = api::AsyncApi::new(
 				self.db.clone(),
 				network_state.clone(),
@@ -115,11 +122,17 @@ impl<Client, Storage, Block> OffchainWorkers<
 				let runtime = client.runtime_api();
 				let api = Box::new(api);
 				debug!("Running offchain workers at {:?}", at);
-				let run = runtime.offchain_worker_with_context(
-					&at,
-					ExecutionContext::OffchainCall(Some((api, offchain::Capabilities::all()))),
-					&header,
-				);
+				let context = ExecutionContext::OffchainCall(Some(
+					(api, offchain::Capabilities::all())
+				));
+				let run = if version == 2 {
+					runtime.offchain_worker_with_context(&at, context, &header)
+				} else {
+					#[allow(deprecated)]
+					runtime.offchain_worker_before_version_2_with_context(
+						&at, context, *header.number()
+					)
+				};
 				if let Err(e) =	run {
 					log::error!("Error running offchain workers at {:?}: {:?}", at, e);
 				}

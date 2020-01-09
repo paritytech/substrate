@@ -508,10 +508,9 @@ impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for 
 			.unwrap_or(2) as u64;
 		let current_block = System::block_number()
 			.saturated_into::<u64>()
-			// The `System::block_number` is initialized with `n+1`, so the actual block number is
-			// `n`, but in offchain worker context this block does not have correct `parent_hash` set,
-			// so we need to fall back to `n-1`.
-			.saturating_sub(2);
+			// The `System::block_number` is initialized with `n+1`,
+			// so the actual block number is `n`.
+			.saturating_sub(1);
 		let tip = 0;
 		let extra: SignedExtra = (
 			frame_system::CheckVersion::<Runtime>::new(),
