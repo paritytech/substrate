@@ -21,7 +21,7 @@ trie-root = "0.15.2"
 sp-io = { version = "2.0.0", path = "../../primitives/io" }
 sc-cli = { version = "0.8.0", path = "../../client/cli" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sc-executor = { version = "2.0.0", path = "../../client/executor" }
+sc-executor = { version = "0.8", path = "../../client/executor" }
 sc-service = { version = "0.8", path = "../../client/service" }
 sp-inherents = { version = "2.0.0", path = "../../primitives/inherents" }
 sc-transaction-pool = { version = "2.0.0", path = "../../client/transaction-pool" }

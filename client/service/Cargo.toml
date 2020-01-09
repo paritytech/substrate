@@ -43,7 +43,7 @@ sc-client = { version = "0.8", path = "../" }
 sp-api = { version = "2.0.0", path = "../../primitives/api" }
 sc-client-db = { version = "0.8", path = "../db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sc-executor = { version = "2.0.0", path = "../executor" }
+sc-executor = { version = "0.8", path = "../executor" }
 sc-transaction-pool = { version = "2.0.0", path = "../transaction-pool" }
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
 sc-rpc-server = { version = "2.0.0", path = "../rpc-servers" }

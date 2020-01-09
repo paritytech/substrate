@@ -21,7 +21,7 @@ sp-session = { version = "2.0.0", path = "../../primitives/session" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sp-rpc = { version = "2.0.0", path = "../../primitives/rpc" }
 sp-state-machine = { version = "2.0.0", path = "../../primitives/state-machine" }
-sc-executor = { version = "2.0.0", path = "../executor" }
+sc-executor = { version = "0.8", path = "../executor" }
 sc-keystore = { version = "2.0.0", path = "../keystore" }
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
