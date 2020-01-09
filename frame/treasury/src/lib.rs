@@ -249,7 +249,7 @@ decl_event!(
 		Deposit(Balance),
 		/// A new tip suggestion has been opened.
 		NewTip(Hash),
-		/// A tip suggestion has reached threshold and .
+		/// A tip suggestion has reached threshold and is closing.
 		TipClosing(Hash),
 		/// A new tip suggestion has been opened.
 		TipClosed(Hash, AccountId, Balance),
