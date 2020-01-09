@@ -766,6 +766,7 @@ mod tests {
 		type Balance = u64;
 		type OnNewAccount = ();
 		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type Event = ();
 		type TransferPayment = ();
 		type DustRemoval = ();

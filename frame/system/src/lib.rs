@@ -113,7 +113,7 @@ use sp_runtime::{
 use sp_core::storage::well_known_keys;
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
-	traits::{Contains, Get, ModuleToIndex},
+	traits::{Contains, Get, ModuleToIndex, OnReapAccount},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
 };
 use codec::{Encode, Decode};
@@ -789,6 +789,12 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
+	/// Remove the nonce for the account. Account is considered fully removed from the system.
+	fn on_reap_account(who: &T::AccountId) {
+		<AccountNonce<T>>::remove(who);
+	}
+}
 /// resource limit check.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
