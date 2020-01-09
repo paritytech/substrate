@@ -22,7 +22,7 @@ use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
-use sc_client_api::backend::{AuxStore, NewBlockState};
+use sc_client_api::{backend::{AuxStore, NewBlockState}, UsageInfo};
 use sc_client::blockchain::{
 	BlockStatus, Cache as BlockchainCache,Info as BlockchainInfo,
 };
@@ -30,7 +30,7 @@ use sc_client::cht;
 use sp_blockchain::{
 	CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache,
 	Error as ClientError, Result as ClientResult,
-	HeaderBackend as BlockchainHeaderBackend, 
+	HeaderBackend as BlockchainHeaderBackend,
 	well_known_cache_keys,
 };
 use sc_client::light::blockchain::Storage as LightBlockchainStorage;
@@ -40,7 +40,7 @@ use sp_runtime::generic::{DigestItem, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
-use crate::DatabaseSettings;
+use crate::{DatabaseSettings, FrozenForDuration};
 use log::{trace, warn, debug};
 
 pub(crate) mod columns {
@@ -64,6 +64,7 @@ pub struct LightStorage<Block: BlockT> {
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	cache: Arc<DbCacheSync<Block>>,
 	header_metadata_cache: HeaderMetadataCache<Block>,
+	io_stats: FrozenForDuration<kvdb::IoStats>,
 }
 
 impl<Block> LightStorage<Block>
@@ -102,6 +103,7 @@ impl<Block> LightStorage<Block>
 			meta: RwLock::new(meta),
 			cache: Arc::new(DbCacheSync(RwLock::new(cache))),
 			header_metadata_cache: HeaderMetadataCache::default(),
+			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1), kvdb::IoStats::empty()),
 		})
 	}
 
@@ -547,6 +549,28 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>> {
 		Some(self.cache.clone())
+	}
+
+	fn usage_info(&self) -> Option<UsageInfo> {
+		use sc_client_api::{MemoryInfo, IoInfo};
+
+		let database_cache = parity_util_mem::malloc_size(&*self.db);
+		let io_stats = self.io_stats.take_or_else(|| self.db.io_stats(kvdb::IoStatsKind::SincePrevious));
+
+		Some(UsageInfo {
+			memory: MemoryInfo {
+				database_cache,
+				state_cache: 0,
+			},
+			io: IoInfo {
+				transactions: io_stats.transactions,
+				bytes_read: io_stats.bytes_read,
+				bytes_written: io_stats.bytes_written,
+				writes: io_stats.writes,
+				reads: io_stats.reads,
+				average_transaction_size: io_stats.avg_transaction_size() as u64,
+			}
+		})
 	}
 }
 

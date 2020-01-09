@@ -1176,7 +1176,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn usage_info(&self) -> ClientInfo<Block> {
 		ClientInfo {
 			chain: self.chain_info(),
-			used_state_cache_size: self.backend.used_state_cache_size(),
+			usage: self.backend.usage_info(),
 		}
 	}
 
