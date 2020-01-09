@@ -59,6 +59,7 @@ pub use self::state_machine::{TopicNotification, MessageIntent};
 pub use self::state_machine::{Validator, ValidatorContext, ValidationResult};
 pub use self::state_machine::DiscardAll;
 
+use futures::prelude::*;
 use sc_network::{specialization::NetworkSpecialization, Event, ExHashT, NetworkService, PeerId, ReputationChange};
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::sync::Arc;
@@ -97,7 +98,7 @@ pub trait Network<B: BlockT> {
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network<B> for Arc<NetworkService<B, S, H>> {
 	fn event_stream(&self) -> Box<dyn futures01::Stream<Item = Event, Error = ()> + Send> {
-		Box::new(NetworkService::event_stream(self))
+		Box::new(NetworkService::event_stream(self).map(|v| Ok::<_, ()>(v)).compat())
 	}
 
 	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange) {
