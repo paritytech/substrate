@@ -1197,6 +1197,146 @@ fn too_many_unbond_calls_should_not_work() {
 }
 
 #[test]
+fn rebond_works() {
+	// * Should test
+	// * Given an account being bonded [and chosen as a validator](not mandatory)
+	// * it can unbond a portion of its funds from the stash account.
+	// * it can re-bond a portion of the funds scheduled to unlock.
+	ExtBuilder::default()
+		.nominate(false)
+		.build()
+		.execute_with(|| {
+			// Set payee to controller. avoids confusion
+			assert_ok!(Staking::set_payee(
+				Origin::signed(10),
+				RewardDestination::Controller
+			));
+
+			// Give account 11 some large free balance greater than total
+			let _ = Balances::make_free_balance_be(&11, 1000000);
+
+			// confirm that 10 is a normal validator and gets paid at the end of the era.
+			start_era(1);
+
+			// Initial state of 10
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 1000,
+					unlocking: vec![],
+				})
+			);
+
+			start_era(2);
+			assert_eq!(Staking::current_era(), 2);
+
+			// Try to rebond some funds. We get an error since no fund is unbonded.
+			assert_noop!(
+				Staking::rebond(Origin::signed(10), 500),
+				Error::<Test>::NoUnlockChunk,
+			);
+
+			// Unbond almost all of the funds in stash.
+			Staking::unbond(Origin::signed(10), 900).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 100,
+					unlocking: vec![UnlockChunk {
+						value: 900,
+						era: 2 + 3
+					},]
+				})
+			);
+
+			// Re-bond all the funds unbonded.
+			Staking::rebond(Origin::signed(10), 900).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 1000,
+					unlocking: vec![],
+				})
+			);
+
+			// Unbond almost all of the funds in stash.
+			Staking::unbond(Origin::signed(10), 900).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 100,
+					unlocking: vec![UnlockChunk { value: 900, era: 5 }],
+				})
+			);
+
+			// Re-bond part of the funds unbonded.
+			Staking::rebond(Origin::signed(10), 500).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 600,
+					unlocking: vec![UnlockChunk { value: 400, era: 5 }],
+				})
+			);
+
+			// Re-bond the remainder of the funds unbonded.
+			Staking::rebond(Origin::signed(10), 500).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 1000,
+					unlocking: vec![]
+				})
+			);
+
+			// Unbond parts of the funds in stash.
+			Staking::unbond(Origin::signed(10), 300).unwrap();
+			Staking::unbond(Origin::signed(10), 300).unwrap();
+			Staking::unbond(Origin::signed(10), 300).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 100,
+					unlocking: vec![
+						UnlockChunk { value: 300, era: 5 },
+						UnlockChunk { value: 300, era: 5 },
+						UnlockChunk { value: 300, era: 5 },
+					]
+				})
+			);
+
+			// Re-bond part of the funds unbonded.
+			Staking::rebond(Origin::signed(10), 500).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 600,
+					unlocking: vec![
+						UnlockChunk { value: 300, era: 5 },
+						UnlockChunk { value: 100, era: 5 },
+					]
+				})
+			);
+		})
+}
+
+#[test]
 fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment() {
 	// Test that slot_stake is determined by the least staked validator
 	// Test that slot_stake is the maximum punishment that can happen to a validator
