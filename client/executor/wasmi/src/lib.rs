@@ -21,7 +21,7 @@ use sc_executor_common::{
 	sandbox,
 	allocator,
 };
-use std::{str, mem};
+use std::{str, mem, cell::RefCell};
 use std::cell::RefCell;
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
