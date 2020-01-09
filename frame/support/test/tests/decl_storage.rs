@@ -562,9 +562,9 @@ mod test_append_and_len {
 			MapVecWithDefault: map u32 => Vec<u32> = vec![6, 9];
 			OptionMapVec: map u32 => Option<Vec<u32>>;
 
-			DoubleMapVec: double_map u32, blake2_256(u32) => Vec<u32>;
-			DoubleMapVecWithDefault: double_map u32, blake2_256(u32) => Vec<u32> = vec![6, 9];
-			OptionDoubleMapVec: double_map u32, blake2_256(u32) => Option<Vec<u32>>;
+			DoubleMapVec: double_map u32, u32 => Vec<u32>;
+			DoubleMapVecWithDefault: double_map u32, u32 => Vec<u32> = vec![6, 9];
+			OptionDoubleMapVec: double_map u32, u32 => Option<Vec<u32>>;
 
 			LinkedMapVec: linked_map u32 => Vec<u32>;
 			LinkedMapVecWithDefault: linked_map u32 => Vec<u32> = vec![6, 9];

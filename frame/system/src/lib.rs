@@ -415,8 +415,8 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(fn event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
-			=> Vec<(T::BlockNumber, EventIndex)>;
+		EventTopics get(fn event_topics): double_map
+			hasher(blake2_256) (), hasher(blake2_256) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
