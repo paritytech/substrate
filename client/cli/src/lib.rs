@@ -878,7 +878,7 @@ where
 	let default_keystore_path = config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH);
 
 	if let KeystoreConfig::Path { path, ..} = &mut config.keystore {
-		*path = path.clone().or(default_keystore_path);
+		*path = cli.keystore_path.or(default_keystore_path);
 	}
 
 	// set sentry mode (i.e. act as an authority but **never** actively participate)
