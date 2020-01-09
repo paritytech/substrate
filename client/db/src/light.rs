@@ -64,6 +64,7 @@ pub struct LightStorage<Block: BlockT> {
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	cache: Arc<DbCacheSync<Block>>,
 	header_metadata_cache: HeaderMetadataCache<Block>,
+	#[cfg(not(target_os = "unknown"))]
 	io_stats: FrozenForDuration<kvdb::IoStats>,
 }
 
@@ -103,6 +104,7 @@ impl<Block> LightStorage<Block>
 			meta: RwLock::new(meta),
 			cache: Arc::new(DbCacheSync(RwLock::new(cache))),
 			header_metadata_cache: HeaderMetadataCache::default(),
+			#[cfg(not(target_os = "unknown"))]
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1), kvdb::IoStats::empty()),
 		})
 	}
@@ -552,25 +554,33 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	}
 
 	fn usage_info(&self) -> Option<UsageInfo> {
-		use sc_client_api::{MemoryInfo, IoInfo};
+		#[cfg(target_os = "unknown")]
+		{
+			None
+		}
 
-		let database_cache = parity_util_mem::malloc_size(&*self.db);
-		let io_stats = self.io_stats.take_or_else(|| self.db.io_stats(kvdb::IoStatsKind::SincePrevious));
+		#[cfg(not(target_os = "unknown"))]
+		{
+			use sc_client_api::{MemoryInfo, IoInfo};
 
-		Some(UsageInfo {
-			memory: MemoryInfo {
-				database_cache,
-				state_cache: 0,
-			},
-			io: IoInfo {
-				transactions: io_stats.transactions,
-				bytes_read: io_stats.bytes_read,
-				bytes_written: io_stats.bytes_written,
-				writes: io_stats.writes,
-				reads: io_stats.reads,
-				average_transaction_size: io_stats.avg_transaction_size() as u64,
-			}
-		})
+			let database_cache = parity_util_mem::malloc_size(&*self.db);
+			let io_stats = self.io_stats.take_or_else(|| self.db.io_stats(kvdb::IoStatsKind::SincePrevious));
+
+			Some(UsageInfo {
+				memory: MemoryInfo {
+					database_cache,
+					state_cache: 0,
+				},
+				io: IoInfo {
+					transactions: io_stats.transactions,
+					bytes_read: io_stats.bytes_read,
+					bytes_written: io_stats.bytes_written,
+					writes: io_stats.writes,
+					reads: io_stats.reads,
+					average_transaction_size: io_stats.avg_transaction_size() as u64,
+				}
+			})
+		}
 	}
 }
 
