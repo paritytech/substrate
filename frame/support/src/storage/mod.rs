@@ -526,20 +526,25 @@ mod test {
 			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![]);
 
 			// test migration
-			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u128);
-			unhashed::put(&[&k[..], &vec![8][..]].concat(), &2u128);
+			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u32);
+			unhashed::put(&[&k[..], &vec![8][..]].concat(), &2u32);
 
+			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![]);
 			MyStorage::translate_values(|v: u32| v as u64).unwrap();
 			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![1, 2]);
+			MyStorage::remove_all();
 
 			// test migration 2
 			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u128);
-			unhashed::put(&[&k[..], &vec![1, 1][..]].concat(), &3u64);
-			unhashed::put(&[&k[..], &vec![8][..]].concat(), &2u128);
+			unhashed::put(&[&k[..], &vec![1, 1][..]].concat(), &2u64);
+			unhashed::put(&[&k[..], &vec![8][..]].concat(), &3u128);
+			unhashed::put(&[&k[..], &vec![10][..]].concat(), &4u32);
 
-			assert_eq!(MyStorage::translate_values(|v: u128| v as u64), Err(1));
-			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![1, 2]);
-
+			// (contains some value that successfully decoded to u64)
+			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![1, 2, 3]);
+			assert_eq!(MyStorage::translate_values(|v: u128| v as u64), Err(2));
+			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![1, 3]);
+			MyStorage::remove_all();
 
 			// test that other values are not modified.
 			assert_eq!(unhashed::get(&key_before[..]), Some(32u64));
