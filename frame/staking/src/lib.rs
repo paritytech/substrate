@@ -710,6 +710,10 @@ decl_storage! {
 		// TODO: ^^^ This will need a migration.
 		// TODO: consider switching this to a simple map EraIndex => Vec<Exposure>
 
+		pub ErasValidatorPrefs get(fn eras_validator_prefs):
+			double_map hasher(twox_64_concat) EraIndex, twox_64_concat(T::AccountId)
+			=> ValidatorPrefs;
+
 		/// The per-validator era payout for one in the last `HISTORY_DEPTH` eras.
 		///
 		/// Eras that haven't finished yet doesn't have reward.
@@ -1321,7 +1325,7 @@ impl<T: Trait> Module<T> {
 		let mut reward = Perbill::zero();
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
 		for validator in validators {
-			let commission = Self::validators(&validator).commission;
+			let commission = Self::eras_validator_prefs(&era, &validator).commission;
 			let validator_exposure = <ErasStakers<T>>::get(&era, &validator);
 			
 			if let Ok(nominator_exposure) = validator_exposure.others
@@ -1569,11 +1573,14 @@ impl<T: Trait> Module<T> {
 	fn select_validators() -> Option<Vec<T::AccountId>> {
 		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
 		let all_validator_candidates_iter = <Validators<T>>::enumerate();
-		let all_validators = all_validator_candidates_iter.map(|(who, _pref)| {
+		let all_validators_and_prefs = all_validator_candidates_iter.map(|(who, pref)| {
 			let self_vote = (who.clone(), vec![who.clone()]);
 			all_nominators.push(self_vote);
-			who
-		}).collect::<Vec<T::AccountId>>();
+			(who, pref)
+		}).collect::<BTreeMap<T::AccountId, ValidatorPrefs>>();
+		let all_validators = all_validators_and_prefs.iter()
+			.map(|(who, _pref)| who.clone())
+			.collect::<Vec<T::AccountId>>();
 
 		let nominator_votes = <Nominators<T>>::enumerate().map(|(nominator, nominations)| {
 			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
@@ -1677,8 +1684,15 @@ impl<T: Trait> Module<T> {
 				<ErasStakers<T>>::insert(&current_era, &c, exposure.clone());
 			}
 
-			// Update current era total staked.
+			// Insert current era informations
 			<ErasTotalStake<T>>::insert(&current_era, total_staked);
+			let default_pref = ValidatorPrefs::default();
+			for stash in &elected_stashes {
+				let pref = all_validators_and_prefs.get(stash)
+					// This should always succeed but better to be safe
+					.unwrap_or(&default_pref);
+				<ErasValidatorPrefs<T>>::insert(&current_era, stash, pref);
+			}
 
 			// In order to keep the property required by `n_session_ending`
 			// that we must return the new validator set even if it's the same as the old,
