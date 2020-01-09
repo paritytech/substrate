@@ -47,7 +47,6 @@ mod tests {
 		Fixed64, traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyExtrinsicResult,
 		transaction_validity::InvalidTransaction,
 	};
-	use pallet_contracts::ContractAddressFor;
 	use sc_executor::{NativeExecutor, WasmExecutionMethod};
 	use frame_system::{EventRecord, Phase};
 	use node_runtime::{
@@ -735,6 +734,8 @@ mod tests {
 
 	#[test]
 	fn deploying_wasm_contract_should_work() {
+		use pallet_contracts::ContractAddressFor;
+
 		let transfer_code = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 		let transfer_ch = <Runtime as frame_system::Trait>::Hashing::hash(&transfer_code);
 
@@ -756,7 +757,7 @@ mod tests {
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(0, 0))),
 					function: Call::Contracts(
-						pallet_contracts::Call::put_code::<Runtime>(10_000, transfer_code)
+						pallet_contracts::Call::put_code::<Runtime>(transfer_code)
 					),
 				},
 				CheckedExtrinsic {
@@ -771,7 +772,7 @@ mod tests {
 						pallet_contracts::Call::call::<Runtime>(
 							pallet_indices::address::Address::Id(addr.clone()),
 							10,
-							10_000_000_000,
+							100_000_000,
 							vec![0x00, 0x01, 0x02, 0x03]
 						)
 					),

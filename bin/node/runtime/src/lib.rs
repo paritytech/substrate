@@ -391,11 +391,21 @@ impl pallet_treasury::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const ContractTransferFee: Balance = 1 * CENTS;
-	pub const ContractCreationFee: Balance = 1 * CENTS;
+	// NOTE Those are significantly lower than than corresponding fees for transferring funds.
+	// Since if we charge the fee in gas there is basically not enough gas even to make one simple
+	// transfer.
+	//
+	// This basically means that in order to transfer funds it would make more sense to use the
+	// contracts module rather than balances module.
+	//
+	// This should be fixed in nearest future by using the synchronous transfer directly. It will
+	// cut fees from the senders account balance directly.
+	pub const ContractTransferFee: Balance = 1000;
+	pub const ContractCreationFee: Balance = 1000;
+	pub const ContractFee: Balance = 1000;
+
 	pub const ContractTransactionBaseFee: Balance = 1 * CENTS;
 	pub const ContractTransactionByteFee: Balance = 10 * MILLICENTS;
-	pub const ContractFee: Balance = 1 * CENTS;
 	pub const TombstoneDeposit: Balance = 1 * DOLLARS;
 	pub const RentByteFee: Balance = 1 * DOLLARS;
 	pub const RentDepositOffset: Balance = 1000 * DOLLARS;
@@ -548,7 +558,7 @@ construct_runtime!(
 		FinalityTracker: pallet_finality_tracker::{Module, Call, Inherent},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Treasury: pallet_treasury::{Module, Call, Storage, Config, Event<T>},
-		Contracts: pallet_contracts,
+		Contracts: pallet_contracts::{Module, Call, Storage, Config, Event<T>},
 		Sudo: pallet_sudo,
 		ImOnline: pallet_im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
 		AuthorityDiscovery: pallet_authority_discovery::{Module, Call, Config},
