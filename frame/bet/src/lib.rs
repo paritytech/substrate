@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -104,45 +104,45 @@ pub struct Betting<BlockNumber: Parameter, Balance: Parameter> {
 decl_storage! {
 	trait Store for Module<T: Trait> as Bet {
 		/// Period in which betting happens, measured in blocks.
-		Period get(period) config(): T::BlockNumber = 1000.into();
+		Period get(fn period) config(): T::BlockNumber = 1000.into();
 
 		/// Factor controlling the attenuation speed of the target when missed.
 		/// The price is reduced by a factor of one divided by this. It *must* be greater
 		/// than one.
-		TargetAttenuation get(target_attenuation) config(): BalanceOf<T>;
+		TargetAttenuation get(fn target_attenuation) config(): BalanceOf<T>;
 
 		/// The number of times to sample the spot price per period in order to determine the
 		/// average price.
-		Samples get(samples) config(): u32;
+		Samples get(fn samples) config(): u32;
 
 		/// The target price to beat.
-		Target get(target) config(): BalanceOf<T>;
+		Target get(fn target) config(): BalanceOf<T>;
 
 		/// Index of current period.
-		Index get(index): T::BlockNumber;
+		Index get(fn index): T::BlockNumber;
 
 		/// Betting information.
-		Bets get(bets): map T::AccountId => Betting<T::BlockNumber, BalanceOf<T>>;
+		Bets get(fn bets): map T::AccountId => Betting<T::BlockNumber, BalanceOf<T>>;
 
 		/// This period's prices.
-		Prices get(prices): Vec<BalanceOf<T>>;
+		Prices get(fn prices): Vec<BalanceOf<T>>;
 
 		/// The pot.
-		Pot get(pot): BalanceOf<T>;
+		Pot get(fn pot): BalanceOf<T>;
 
 		/// The cumulative amount that is staked for reward or wipeout at the end of the current index.
-		Total get(total): BalanceOf<T>;
+		Total get(fn total): BalanceOf<T>;
 
 		/// The cumulative amount that will become additionally staked at the next index.
-		Incoming get(incoming): BalanceOf<T>;
+		Incoming get(fn incoming): BalanceOf<T>;
 
 		/// The cumulative amount that will become unstaked at the next index iff it isn't a wipeout.
-		Outgoing get(outgoing): BalanceOf<T>;
+		Outgoing get(fn outgoing): BalanceOf<T>;
 
 		/// Payout history. Some is when there's a payout (the first parameter is the total amount
 		/// that was at stake at the point of payout, the second was the pot). None is when
 		/// it's a wipeout.
-		Payouts get(payouts): map T::BlockNumber => Option<(BalanceOf<T>, BalanceOf<T>)>;
+		Payouts get(fn payouts): map T::BlockNumber => Option<(BalanceOf<T>, BalanceOf<T>)>;
 	}
 }
 
@@ -339,18 +339,19 @@ decl_module! {
 		// The signature could also look like: `fn on_finalize()`
 		fn on_finalize(n: T::BlockNumber) {
 			let samples = Self::samples();
-			let samples_bn = samples.into();
 			let p = Self::period();
-			let mp = Self::period() / samples.into();
+
+			let mp = p / samples.into();
 			let ph = p - One::one() - n % p;
 
 			// For samples = 3, period = 7, mp = 2
 			// n:   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6
 			// n%p: 0 1 2 3 4 5 6 0 1 2 3 4 5 6 0 1 2
 			// ph:  6 5 4 3 2 1 0 6 5 4 3 2 1 0 6 5 4
-			//          +   +   *     +   +   *     +	[+: take sample, *: take sample, end period]
+			//          +   +   *     +   +   *     +
+			// [+: take sample, *: take sample, end period]
 
-			if (ph % mp).is_zero() && ph / mp < samples_bn {
+			if (ph % mp).is_zero() && ph / mp < samples.into() {
 				// end of segment
 				let one_euro = T::OneEuro::fetch_price();
 
@@ -506,7 +507,7 @@ mod tests {
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use sp_runtime::{
 		Perbill,
-		traits::{BlakeTwo256, OnFinalize, IdentityLookup},
+		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
 		testing::Header,
 	};
 	use frame_support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
@@ -600,19 +601,34 @@ mod tests {
 		sp_io::TestExternalities::new(t)
 	}
 
-	fn proceed_to_next_index() {
-		let i = Bet::index();
-		while Bet::index() == i {
-			Bet::on_finalize(System::block_number());
-			System::set_block_number(System::block_number() + 1);
-		}
-	}
-
 	fn ensure_account_liquid(who: &<Test as frame_system::Trait>::AccountId) -> Result<(), &'static str> {
 		if <Bets<Test>>::exists(who) {
 			Err("cannot transfer illiquid funds")
 		} else {
 			Ok(())
+		}
+	}
+
+	// Run until a particular block.
+	fn run_to_block(n: u64) {
+		while System::block_number() < n {
+			if System::block_number() > 1 {
+				System::on_finalize(System::block_number());
+				Bet::on_finalize(System::block_number());
+			}
+			System::set_block_number(System::block_number() + 1);
+			System::on_initialize(System::block_number());
+		}
+	}
+
+	// Run until the next bet index.
+	fn run_to_next_index() {
+		let i = Bet::index();
+		while Bet::index() == i {
+			System::on_finalize(System::block_number());
+			Bet::on_finalize(System::block_number());
+			System::set_block_number(System::block_number() + 1);
+			System::on_initialize(System::block_number());
 		}
 	}
 
@@ -632,33 +648,40 @@ mod tests {
 		});
 	}
 
+	// For samples = 2, period = 5, mp = 2
+	// n:   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4
+	// n%p: 0 1 2 3 4 0 1 2 3 4 0 1 2 3 4
+	// ph:  4 3 2 1 0 4 3 2 1 0 4 3 2 1 0
+	//          +   *     +   *     +   *
+	// [+: take sample, *: take sample, end period]
+
 	#[test]
 	fn price_sampling_works() {
 		new_test_ext().execute_with(|| {
 			<Total<Test>>::put(1);
-
-			System::set_block_number(1);
 			set_price(120);
-			Bet::on_finalize(System::block_number());
-			assert_eq!(Bet::prices(), vec![]);
 
-			System::set_block_number(2);
+			run_to_block(2);
+			assert_eq!(Bet::prices(), vec![]);
 			set_price(80);
-			Bet::on_finalize(System::block_number());
-			assert_eq!(Bet::prices(), vec![80]);
 
-			System::set_block_number(3);
+			// Take sample at the end of block 2
+			run_to_block(3);
+			assert_eq!(Bet::prices(), vec![80]);
 			set_price(140);
-			Bet::on_finalize(System::block_number());
-			assert_eq!(Bet::prices(), vec![80]);
 
-			System::set_block_number(4);
+			run_to_block(4);
+			assert_eq!(Bet::prices(), vec![80]);
 			set_price(100);
-			Bet::on_finalize(System::block_number());
-			assert_eq!(Bet::prices(), vec![]);
-			assert_eq!(Bet::payouts(0), Some((1, 0)));
-			assert_eq!(Bet::index(), 1);
+			
+			// Take sample at the end of block 4
+			run_to_block(5);
+			// Target set
 			assert_eq!(Bet::target(), 90);
+			assert_eq!(Bet::payouts(0), Some((1, 0)));
+			// Beginning of a new index.
+			assert_eq!(Bet::index(), 1);
+			assert_eq!(Bet::prices(), vec![]);
 		});
 	}
 
@@ -696,7 +719,7 @@ mod tests {
 			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
-			proceed_to_next_index();
+			run_to_next_index();
 
 			assert_eq!(Bet::index(), 1);
 			assert_eq!(Bet::total(), 10);
@@ -721,7 +744,7 @@ mod tests {
 			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 1
 
 			assert_eq!(Bet::index(), 1);
@@ -734,14 +757,14 @@ mod tests {
 			Bet::contribute(10);
 			set_price(100);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 2
 
 			assert_ok!(Bet::collect(Some(1).into()));
 			assert_eq!(Balances::free_balance(&1), 20);
 			assert!(ensure_account_liquid(&1).is_err());
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 3
 			assert_ok!(Bet::collect(Some(1).into()));
 			assert!(ensure_account_liquid(&1).is_ok());
@@ -760,7 +783,7 @@ mod tests {
 			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 1
 
 			assert_eq!(Bet::index(), 1);
@@ -773,7 +796,7 @@ mod tests {
 			Bet::contribute(10);
 			set_price(140);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 2
 
 			assert_ok!(Bet::collect(Some(1).into()));
@@ -797,7 +820,7 @@ mod tests {
 			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 1
 
 			assert_ok!(Bet::bet(Some(1).into()));
@@ -811,7 +834,7 @@ mod tests {
 			Bet::contribute(10);
 			set_price(100);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 2
 
 			assert_ok!(Bet::collect(Some(1).into()));
@@ -832,7 +855,7 @@ mod tests {
 			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 1
 
 			assert_eq!(Bet::index(), 1);
@@ -847,7 +870,7 @@ mod tests {
 			Bet::contribute(10);
 			set_price(100);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 2
 
 			assert_ok!(Bet::unbet(Some(1).into()));
@@ -857,7 +880,7 @@ mod tests {
 			assert_eq!(Balances::free_balance(&1), 20);
 			assert!(ensure_account_liquid(&1).is_err());
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 3
 			assert_ok!(Bet::unbet(Some(1).into()));
 			assert_eq!(Bet::outgoing(), 0);
@@ -880,7 +903,7 @@ mod tests {
 			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 1
 
 			assert_eq!(Bet::index(), 1);
@@ -894,7 +917,7 @@ mod tests {
 			Bet::contribute(10);
 			set_price(100);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 2
 
 			assert_eq!(Bet::index(), 2);
@@ -910,7 +933,7 @@ mod tests {
 			Bet::contribute(10);
 			set_price(80);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 3
 
 			assert_eq!(Bet::index(), 3);
@@ -926,7 +949,7 @@ mod tests {
 			Bet::contribute(10);
 			set_price(60);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 4
 
 			assert_eq!(Bet::index(), 4);
@@ -954,7 +977,7 @@ mod tests {
 			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 10);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 1
 
 			assert_eq!(Bet::index(), 1);
@@ -975,7 +998,7 @@ mod tests {
 			Bet::contribute(10);
 			set_price(100);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 2
 
 			assert_eq!(Bet::index(), 2);
@@ -991,7 +1014,7 @@ mod tests {
 			Bet::contribute(10);
 			set_price(80);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 3
 
 			assert_eq!(Bet::index(), 3);
@@ -1004,7 +1027,7 @@ mod tests {
 			assert!(ensure_account_liquid(&1).is_err());
 			assert_eq!(Balances::free_balance(&1), 30);
 
-			proceed_to_next_index();
+			run_to_next_index();
 			// index == 4
 
 			assert_eq!(Bet::index(), 4);
