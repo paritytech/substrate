@@ -46,7 +46,7 @@ mod no_instance {
 
 			pub TestGenericValue get(fn test_generic_value) config(): Option<T::BlockNumber>;
 			pub TestGenericDoubleMap get(fn foo2) config(test_generic_double_map):
-				double_map u32, hasher(blake2_256) T::BlockNumber => Option<u32>;
+				double_map u32, T::BlockNumber => Option<u32>;
 		}
 	}
 }
@@ -76,7 +76,7 @@ mod instance {
 
 			pub TestGenericValue get(fn test_generic_value) config(): Option<T::BlockNumber>;
 			pub TestGenericDoubleMap get(fn foo2) config(test_generic_double_map):
-				double_map u32, hasher(blake2_256) T::BlockNumber => Option<u32>;
+				double_map u32, T::BlockNumber => Option<u32>;
 		}
 		add_extra_genesis {
 			// See `decl_storage` limitation.
