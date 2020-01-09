@@ -165,7 +165,7 @@ use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error,
 	traits::{
-		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced, TryDrop,
+		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnReapAccount, OnUnbalanced, TryDrop,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, VestingCurrency,
 	},

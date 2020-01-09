@@ -261,7 +261,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	weights::SimpleDispatchInfo,
 	traits::{
-		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
+		Currency, OnFreeBalanceZero, OnReapAccount, LockIdentifier, LockableCurrency,
 		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };

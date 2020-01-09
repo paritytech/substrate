@@ -30,7 +30,7 @@ use frame_support::{
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
-		OnFreeBalanceZero, OnUnbalanced
+		OnFreeBalanceZero, OnReapAccount, OnUnbalanced
 	}
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
