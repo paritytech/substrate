@@ -1,0 +1,24 @@
+[package]
+name = "sc-consensus-sassafras"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "SASSAFRAS consensus algorithm for substrate"
+edition = "2018"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+log = "0.4.8"
+schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"] }
+derive_more = "0.99.2"
+parking_lot = "0.9.0"
+sp-core = { path = "../../../primitives/core" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
+sp-consensus = { path = "../../../primitives/consensus/common" }
+sp-consensus-sassafras = { path = "../../../primitives/consensus/sassafras" }
+sp-runtime = {  path = "../../../primitives/runtime" }
+sp-block-builder = { path = "../../../primitives/block-builder" }
+sp-inherents = { path = "../../../primitives/inherents" }
+sp-timestamp = { path = "../../../primitives/timestamp" }
+sc-client = { path = "../../" }
+sc-client-api = { path = "../../api" }
+sc-consensus-slots = { path = "../slots"  }

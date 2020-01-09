@@ -18,7 +18,7 @@ sp-application-crypto = { path = "../../application-crypto", default-features = 
 default = ["std"]
 std = [
 	"codec/std",
-	"schnorrkel/std",
+	"schnorrkel",
 	"sp-std/std",
 	"sp-inherents/std",
 	"sp-timestamp/std",
