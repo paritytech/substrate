@@ -722,9 +722,15 @@ impl<T: Trait> Module<T> {
 		gas_limit: Gas,
 		func: impl FnOnce(&mut ExecutionContext<T, WasmVm, WasmLoader>, &mut GasMeter<T>) -> ExecResult
 	) -> ExecResult {
+		//
 		// Take the gas price prepared by the signed extension.
+		//
 		let gas_price = GasPrice::<T>::take();
-		debug_assert!(gas_price != 0.into());
+		debug_assert!(
+			gas_price != 0.into(),
+			"gas price should have been set by the signed extension",
+		);
+
 		let mut gas_meter = GasMeter::<T>::with_limit(gas_limit, gas_price);
 
 		let cfg = Config::preload();
@@ -740,9 +746,6 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Save the gas usage report.
-		//
-		// NOTE: This should go after the commit to the storage, since the storage changes
-		// can alter the balance of the caller.
 		let gas_spent = gas_meter.spent();
 		let gas_left = gas_meter.gas_left();
 		GasUsageReport::put((gas_left, gas_spent));
@@ -915,7 +918,7 @@ decl_storage! {
 		pub ContractInfoOf: map T::AccountId => Option<ContractInfo<T>>;
 		/// The price of one unit of gas.
 		///
-		/// This value is transint and remove before block finalization.
+		/// This value is set in the signed extension and is removed after the execution.
 		GasPrice: BalanceOf<T> = 1.into();
 	}
 }
@@ -1094,9 +1097,9 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 						.unwrap_or(1.into())
 				};
 
-				// gas_weight_limit is Gas/Weight which is u64
-				// fee is balance.
-				// GasPrice has to be Balance
+				//
+				// The place where we set GasPrice for the execution of this transaction.
+				//
 				<GasPrice<T>>::put(gas_price);
 
 				let imbalance = match T::Currency::withdraw(
