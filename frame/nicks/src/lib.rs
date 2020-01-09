@@ -320,6 +320,7 @@ mod tests {
 		type MinLength = MinLength;
 		type MaxLength = MaxLength;
 	}
+	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
 	type Nicks = Module<Test>;
 
