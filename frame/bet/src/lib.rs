@@ -598,12 +598,8 @@ mod tests {
 		sp_io::TestExternalities::new(t)
 	}
 
-	fn ensure_account_liquid(who: &<Test as frame_system::Trait>::AccountId) -> Result<(), &'static str> {
-		if <Bets<Test>>::exists(who) {
-			Err("cannot transfer illiquid funds")
-		} else {
-			Ok(())
-		}
+	fn account_is_liquid(who: &<Test as frame_system::Trait>::AccountId) -> bool {
+		Balances::locks(who).is_empty()
 	}
 
 	// Run until a particular block.
@@ -656,13 +652,16 @@ mod tests {
 	fn price_sampling_works() {
 		new_test_ext().execute_with(|| {
 			<Total<Test>>::put(1);
+
+			run_to_block(1);
+			assert_eq!(Bet::prices(), vec![]);
 			set_price(120);
 
 			run_to_block(2);
 			assert_eq!(Bet::prices(), vec![]);
 			set_price(80);
+			// Take sample at the end of block 2: 80
 
-			// Take sample at the end of block 2
 			run_to_block(3);
 			assert_eq!(Bet::prices(), vec![80]);
 			set_price(140);
@@ -670,10 +669,10 @@ mod tests {
 			run_to_block(4);
 			assert_eq!(Bet::prices(), vec![80]);
 			set_price(100);
-			
-			// Take sample at the end of block 4
+			// Take sample at the end of block 4: 100
+
 			run_to_block(5);
-			// Target set
+			// Target set: Average of 80 and 100 is 90
 			assert_eq!(Bet::target(), 90);
 			assert_eq!(Bet::payouts(0), Some((1, 0)));
 			// Beginning of a new index.
@@ -685,12 +684,13 @@ mod tests {
 	#[test]
 	fn bet_unbet_works() {
 		new_test_ext().execute_with(|| {
-			System::set_block_number(1);
+			run_to_block(1);
 			set_price(120);
+
 			assert_ok!(Bet::bet(Some(1).into()));
 			assert_ok!(Bet::unbet(Some(1).into()));
 			assert_ok!(Bet::collect(Some(1).into()));
-			assert!(ensure_account_liquid(&1).is_ok());
+			assert!(account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 10);
 		});
 	}
@@ -701,7 +701,7 @@ mod tests {
 			System::set_block_number(1);
 			set_price(120);
 			assert_ok!(Bet::bet(Some(1).into()));
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 		});
 	}
 
@@ -713,7 +713,7 @@ mod tests {
 			assert_ok!(Bet::bet(Some(1).into()));
 
 			assert_eq!(Bet::incoming(), 10);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			run_to_next_index();
@@ -723,9 +723,9 @@ mod tests {
 
 			assert_ok!(Bet::unbet(Some(1).into()));
 
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_ok!(Bet::collect(Some(1).into()));
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 		});
 	}
 
@@ -738,7 +738,7 @@ mod tests {
 			assert_ok!(Bet::bet(Some(1).into()));
 
 			assert_eq!(Bet::incoming(), 10);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			run_to_next_index();
@@ -748,7 +748,7 @@ mod tests {
 			assert_eq!(Bet::total(), 10);
 
 			assert_ok!(Bet::unbet(Some(1).into()));
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Bet::outgoing(), 10);
 
 			Bet::contribute(10);
@@ -759,12 +759,12 @@ mod tests {
 
 			assert_ok!(Bet::collect(Some(1).into()));
 			assert_eq!(Balances::free_balance(&1), 20);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 
 			run_to_next_index();
 			// index == 3
 			assert_ok!(Bet::collect(Some(1).into()));
-			assert!(ensure_account_liquid(&1).is_ok());
+			assert!(account_is_liquid(&1));
 		});
 	}
 
@@ -777,7 +777,7 @@ mod tests {
 			assert_ok!(Bet::bet(Some(1).into()));
 
 			assert_eq!(Bet::incoming(), 10);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			run_to_next_index();
@@ -787,7 +787,7 @@ mod tests {
 			assert_eq!(Bet::total(), 10);
 
 			assert_ok!(Bet::unbet(Some(1).into()));
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Bet::outgoing(), 10);
 
 			Bet::contribute(10);
@@ -798,7 +798,7 @@ mod tests {
 
 			assert_ok!(Bet::collect(Some(1).into()));
 			assert_eq!(Balances::free_balance(&1), 5);
-			assert!(ensure_account_liquid(&1).is_ok());
+			assert!(account_is_liquid(&1));
 			assert_eq!(Bet::total(), 0);
 		});
 	}
@@ -814,7 +814,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 10);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			run_to_next_index();
@@ -825,7 +825,7 @@ mod tests {
 			assert_eq!(Bet::total(), 10);
 			assert_eq!(Bet::outgoing(), 0);
 			assert_eq!(Bet::incoming(), 0);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			Bet::contribute(10);
@@ -836,7 +836,7 @@ mod tests {
 
 			assert_ok!(Bet::collect(Some(1).into()));
 			assert_eq!(Balances::free_balance(&1), 20);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 		});
 	}
 
@@ -849,7 +849,7 @@ mod tests {
 			assert_ok!(Bet::bet(Some(1).into()));
 
 			assert_eq!(Bet::incoming(), 10);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			run_to_next_index();
@@ -860,7 +860,7 @@ mod tests {
 
 			assert_ok!(Bet::unbet(Some(1).into()));
 			assert_ok!(Bet::unbet(Some(1).into()));
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Bet::outgoing(), 10);
 			assert_eq!(Bet::incoming(), 0);
 
@@ -875,7 +875,7 @@ mod tests {
 			assert_eq!(Bet::incoming(), 0);
 			assert_ok!(Bet::collect(Some(1).into()));
 			assert_eq!(Balances::free_balance(&1), 20);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 
 			run_to_next_index();
 			// index == 3
@@ -883,7 +883,7 @@ mod tests {
 			assert_eq!(Bet::outgoing(), 0);
 			assert_eq!(Bet::incoming(), 0);
 			assert_ok!(Bet::collect(Some(1).into()));
-			assert!(ensure_account_liquid(&1).is_ok());
+			assert!(account_is_liquid(&1));
 		});
 	}
 
@@ -897,7 +897,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 10);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			run_to_next_index();
@@ -908,7 +908,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			Bet::contribute(10);
@@ -924,7 +924,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 20);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 20);
 
 			Bet::contribute(10);
@@ -940,7 +940,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 30);
 
 			Bet::contribute(10);
@@ -956,7 +956,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(ensure_account_liquid(&1).is_ok());
+			assert!(account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 30);
 		});
 	}
@@ -971,7 +971,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 10);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			run_to_next_index();
@@ -989,7 +989,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 10);
 
 			Bet::contribute(10);
@@ -1005,7 +1005,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 20);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 20);
 
 			Bet::contribute(10);
@@ -1021,7 +1021,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(ensure_account_liquid(&1).is_err());
+			assert!(!account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 30);
 
 			run_to_next_index();
@@ -1034,7 +1034,7 @@ mod tests {
 
 			assert_eq!(Bet::incoming(), 0);
 			assert_eq!(Bet::outgoing(), 0);
-			assert!(ensure_account_liquid(&1).is_ok());
+			assert!(account_is_liquid(&1));
 			assert_eq!(Balances::free_balance(&1), 30);
 		});
 	}
