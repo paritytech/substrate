@@ -42,7 +42,7 @@ use futures::future::Future;
 use log::{debug, warn};
 use sc_network::NetworkStateInfo;
 use sp_core::{offchain::{self, OffchainStorage}, ExecutionContext};
-use sp_runtime::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
+use sp_runtime::{generic::BlockId, traits::{self, ProvideRuntimeApi, Header}};
 
 mod api;
 
@@ -92,12 +92,13 @@ impl<Client, Storage, Block> OffchainWorkers<
 	#[must_use]
 	pub fn on_block_imported(
 		&self,
-		number: &<Block::Header as traits::Header>::Number,
+		header: &Block::Header,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 		is_validator: bool,
 	) -> impl Future<Output = ()> {
 		let runtime = self.client.runtime_api();
-		let at = BlockId::number(*number);
+		let at = BlockId::number(*header.number());
+		// TODO [ToDr] Use has_api_with to support old versions too
 		let has_api = runtime.has_api::<dyn OffchainWorkerApi<Block, Error = ()>>(&at);
 		debug!("Checking offchain workers at {:?}: {:?}", at, has_api);
 
@@ -108,7 +109,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 				is_validator,
 			);
 			debug!("Spawning offchain workers at {:?}", at);
-			let number = *number;
+			let header = header.clone();
 			let client = self.client.clone();
 			self.spawn_worker(move || {
 				let runtime = client.runtime_api();
@@ -117,7 +118,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 				let run = runtime.offchain_worker_with_context(
 					&at,
 					ExecutionContext::OffchainCall(Some((api, offchain::Capabilities::all()))),
-					number,
+					&header,
 				);
 				if let Err(e) =	run {
 					log::error!("Error running offchain workers at {:?}: {:?}", at, e);
@@ -150,6 +151,7 @@ mod tests {
 	use substrate_test_runtime_client::runtime::Block;
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_transaction_pool::{TransactionPool, InPoolTransaction};
+	use sp_runtime::{generic::Header, traits::Header as _};
 
 	struct MockNetworkStateInfo();
 
@@ -169,7 +171,7 @@ mod tests {
 		fn submit_at(
 			&self,
 			at: &BlockId<Block>,
-			extrinsic: <Block as sp_runtime::traits::Block>::Extrinsic,
+			extrinsic: <Block as traits::Block>::Extrinsic,
 		) -> Result<(), ()> {
 			futures::executor::block_on(self.0.submit_one(&at, extrinsic))
 				.map(|_| ())
@@ -187,10 +189,17 @@ mod tests {
 			.register_transaction_pool(Arc::downgrade(&pool.clone()) as _);
 		let db = sc_client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
+		let header = Header::new(
+			0u64,
+			Default::default(),
+			Default::default(),
+			Default::default(),
+			Default::default(),
+		);
 
 		// when
 		let offchain = OffchainWorkers::new(client, db);
-		futures::executor::block_on(offchain.on_block_imported(&0u64, network_state, false));
+		futures::executor::block_on(offchain.on_block_imported(&header, network_state, false));
 
 		// then
 		assert_eq!(pool.0.status().ready, 1);

@@ -33,7 +33,7 @@ use sp_runtime::{Permill, Perbill, ApplyExtrinsicResult, impl_opaque_keys, gener
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::TransactionValidity;
 use sp_runtime::traits::{
-	self, BlakeTwo256, Block as BlockT, NumberFor, StaticLookup, SaturatedConversion,
+	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion,
 	OpaqueKeys,
 };
 use sp_version::RuntimeVersion;
@@ -645,8 +645,8 @@ impl_runtime_apis! {
 	}
 
 	impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
-		fn offchain_worker(number: NumberFor<Block>) {
-			Executive::offchain_worker(number)
+		fn offchain_worker(header: &<Block as BlockT>::Header) {
+			Executive::offchain_worker(header)
 		}
 	}
 
