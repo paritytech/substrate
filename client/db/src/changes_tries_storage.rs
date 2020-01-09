@@ -77,10 +77,10 @@ impl<Block: BlockT> From<DbCacheTransactionOps<Block>> for DbChangesTrieStorageT
 /// Lock order: meta, tries_meta, cache, build_cache.
 pub struct DbChangesTrieStorage<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
-	meta_column: Option<u32>,
-	changes_tries_column: Option<u32>,
-	key_lookup_column: Option<u32>,
-	header_column: Option<u32>,
+	meta_column: u32,
+	changes_tries_column: u32,
+	key_lookup_column: u32,
+	header_column: u32,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	tries_meta: RwLock<ChangesTriesMeta<Block>>,
 	min_blocks_to_keep: Option<u32>,
@@ -112,11 +112,11 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	/// Create new changes trie storage.
 	pub fn new(
 		db: Arc<dyn KeyValueDB>,
-		meta_column: Option<u32>,
-		changes_tries_column: Option<u32>,
-		key_lookup_column: Option<u32>,
-		header_column: Option<u32>,
-		cache_column: Option<u32>,
+		meta_column: u32,
+		changes_tries_column: u32,
+		key_lookup_column: u32,
+		header_column: u32,
+		cache_column: u32,
 		meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 		min_blocks_to_keep: Option<u32>,
 	) -> ClientResult<Self> {
@@ -493,7 +493,7 @@ where
 /// Read changes tries metadata from database.
 fn read_tries_meta<Block: BlockT>(
 	db: &dyn KeyValueDB,
-	meta_column: Option<u32>,
+	meta_column: u32,
 ) -> ClientResult<ChangesTriesMeta<Block>> {
 	match db.get(meta_column, meta_keys::CHANGES_TRIES_META).map_err(db_err)? {
 		Some(h) => match Decode::decode(&mut &h[..]) {
@@ -510,7 +510,7 @@ fn read_tries_meta<Block: BlockT>(
 /// Write changes tries metadata from database.
 fn write_tries_meta<Block: BlockT>(
 	tx: &mut DBTransaction,
-	meta_column: Option<u32>,
+	meta_column: u32,
 	meta: &ChangesTriesMeta<Block>,
 ) {
 	tx.put(meta_column, meta_keys::CHANGES_TRIES_META, &meta.encode());
@@ -970,7 +970,7 @@ mod tests {
 		);
 
 		// after truncating block2_3 - there are 2 unfinalized forks - block2_1+block2_2
-		backend.revert(1).unwrap();
+		backend.revert(1, false).unwrap();
 		assert_eq!(
 			backend.changes_tries_storage.cache.0.write()
 				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
@@ -984,7 +984,7 @@ mod tests {
 
 		// after truncating block2_1 && block2_2 - there are still two unfinalized forks (cache impl specifics),
 		// the 1st one points to the block #3 because it isn't truncated
-		backend.revert(1).unwrap();
+		backend.revert(1, false).unwrap();
 		assert_eq!(
 			backend.changes_tries_storage.cache.0.write()
 				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
@@ -997,7 +997,7 @@ mod tests {
 		);
 
 		// after truncating block2 - there are no unfinalized forks
-		backend.revert(1).unwrap();
+		backend.revert(1, false).unwrap();
 		assert!(
 			backend.changes_tries_storage.cache.0.write()
 				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
