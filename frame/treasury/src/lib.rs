@@ -125,7 +125,7 @@ pub trait Trait: frame_system::Trait {
 	/// The period for which a tip remains open after is has achieved threshold tippers.
 	type TipCountdown: Get<Self::BlockNumber>;
 
-	/// The amount of the final tip which goes to the original reporter of the tip.
+	/// The percent of the final tip which goes to the original reporter of the tip.
 	type TipFindersFee: Get<Percent>;
 
 	/// The amount held on deposit for placing a tip report.
