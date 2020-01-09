@@ -689,6 +689,9 @@ pub trait TestNetFactory: Sized {
 			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
 				return Async::NotReady
 			}
+			if peer.network.num_sync_requests() != 0 {
+				return Async::NotReady
+			}
 			match (highest, peer.client.info().best_hash) {
 				(None, b) => highest = Some(b),
 				(Some(ref a), ref b) if a == b => {},
