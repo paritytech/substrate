@@ -343,7 +343,7 @@ impl<'a> wasmi::Externals for FunctionExecutor<'a> {
 		} else if self.allow_missing_imports && index >= self.host_functions.len() && index < self.host_functions.len() + self.missing_functions.len() {
 			Err(Error::from(format!(
 				"Function `{}` is only a stub. Calling a stub is not allowed.",
-				self.missing_functions[index - self.host_functions.len()]
+				self.missing_functions[index - self.host_functions.len()],
 			)).into())
 		} else {
 			Err(Error::from(format!("Could not find host function with index: {}", index)).into())
@@ -640,8 +640,7 @@ pub fn create_instance(
 		&module,
 		&host_functions,
 		allow_missing_imports,
-	)
-		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
+	).map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
 	// Take state snapshot before executing anything.
 	let state_snapshot = StateSnapshot::take(&instance, data_segments, heap_pages)
