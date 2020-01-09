@@ -540,6 +540,7 @@ decl_module! {
 		/// - At most O(2 * S + 1) storage mutations; codec complexity `O(1 * S + S * 1)`);
 		///   one storage-exists.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn set_subs(origin, subs: Vec<(T::AccountId, Data)>) {
 			let sender = ensure_signed(origin)?;
 			ensure!(<IdentityOf<T>>::exists(&sender), Error::<T>::NotFound);
@@ -586,6 +587,7 @@ decl_module! {
 		/// - `S + 2` storage deletions.
 		/// - One event.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn clear_identity(origin) {
 			let sender = ensure_signed(origin)?;
 
