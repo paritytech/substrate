@@ -343,7 +343,7 @@ impl<'a> wasmi::Externals for FunctionExecutor<'a> {
 		} else if self.allow_missing_imports && index >= self.host_functions.len() && index < self.host_functions.len() + self.missing_functions.len() {
 			Err(Error::from(format!(
 				"Function `{}` is only a stub. Calling a stub is not allowed.",
-				self.missing_functions
+				self.missing_functions[index - self.host_functions.len()]
 					.get(index - self.host_functions.len())
 					.expect("invalid function index"),
 			)).into())
