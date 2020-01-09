@@ -251,9 +251,9 @@ decl_event!(
 		NewTip(Hash),
 		/// A tip suggestion has reached threshold and is closing.
 		TipClosing(Hash),
-		/// A new tip suggestion has been opened.
+		/// A tip suggestion has been closed.
 		TipClosed(Hash, AccountId, Balance),
-		/// A new tip suggestion has been opened.
+		/// A tip suggestion has been retracted.
 		TipRetracted(Hash),
 	}
 );
@@ -265,7 +265,7 @@ decl_error! {
 		InsufficientProposersBalance,
 		/// No proposal at that index.
 		InvalidProposalIndex,
-		/// The reason give is just too big.
+		/// The reason given is just too big.
 		ReasonTooBig,
 		/// The tip was already found/started.
 		AlreadyKnown,
@@ -833,7 +833,6 @@ mod tests {
 	#[test]
 	fn tip_new_cannot_be_used_twice() {
 		new_test_ext().execute_with(|| {
-			// Check that accumulate works when we have Some value in Dummy already.
 			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
 			assert_noop!(
@@ -846,7 +845,6 @@ mod tests {
 	#[test]
 	fn report_awesome_and_tip_works() {
 		new_test_ext().execute_with(|| {
-			// Check that accumulate works when we have Some value in Dummy already.
 			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_ok!(Treasury::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
 			assert_eq!(Balances::reserved_balance(&0), 12);
@@ -874,7 +872,6 @@ mod tests {
 	#[test]
 	fn report_awesome_from_beneficiary_and_tip_works() {
 		new_test_ext().execute_with(|| {
-			// Check that accumulate works when we have Some value in Dummy already.
 			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_ok!(Treasury::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 0));
 			assert_eq!(Balances::reserved_balance(&0), 12);
@@ -893,7 +890,6 @@ mod tests {
 	#[test]
 	fn close_tip_works() {
 		new_test_ext().execute_with(|| {
-			// Check that accumulate works when we have Some value in Dummy already.
 			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_eq!(Treasury::pot(), 100);
 
@@ -917,7 +913,6 @@ mod tests {
 	#[test]
 	fn retract_tip_works() {
 		new_test_ext().execute_with(|| {
-			// Check that accumulate works when we have Some value in Dummy already.
 			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_ok!(Treasury::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
 			let h = tip_hash();
@@ -934,7 +929,6 @@ mod tests {
 	#[test]
 	fn tip_median_calculation_works() {
 		new_test_ext().execute_with(|| {
-			// Check that accumulate works when we have Some value in Dummy already.
 			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 0));
 			let h = tip_hash();
@@ -949,7 +943,6 @@ mod tests {
 	#[test]
 	fn tip_changing_works() {
 		new_test_ext().execute_with(|| {
-			// Check that accumulate works when we have Some value in Dummy already.
 			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10000));
 			let h = tip_hash();
