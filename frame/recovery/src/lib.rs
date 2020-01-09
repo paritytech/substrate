@@ -19,8 +19,8 @@
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	traits::{StaticLookup, Dispatchable, SaturatedConversion, Zero, CheckedAdd, CheckedMul},
-	DispatchError, DispatchResult
+	traits::{Dispatchable, SaturatedConversion, CheckedAdd, CheckedMul},
+	DispatchResult
 };
 use codec::{Encode, Decode};
 
@@ -28,8 +28,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, ensure,
 	Parameter, RuntimeDebug,
 	weights::{
-		SimpleDispatchInfo, GetDispatchInfo, PaysFee, WeighData, Weight,
-		ClassifyDispatch, DispatchClass
+		GetDispatchInfo,
 	},
 	traits::{Currency, ReservableCurrency, Get},
 };
@@ -188,7 +187,7 @@ decl_module! {
 		}
 		
 		/// Allow Sudo to bypass the recovery process and set an alias account.
-		fn set_recovered_account(origin, lost: T::AccountId, rescuer: T::AccountId) {
+		fn set_recovered(origin, lost: T::AccountId, rescuer: T::AccountId) {
 			ensure_root(origin)?;
 
 			// Create the recovery storage item.

@@ -18,14 +18,13 @@
 
 use super::*;
 use mock::{
-	Recovery, Balances, Test, System, Origin, Call, BalancesCall, RecoveryCall,
+	Recovery, Balances, Test, Origin, Call, BalancesCall, RecoveryCall,
 	new_test_ext, run_to_block
 };
-use sp_runtime::traits::{SignedExtension, BadOrigin};
+use sp_runtime::traits::{BadOrigin};
 use frame_support::{
-	assert_noop, assert_ok, assert_err,
-	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
-	Currency, ReservableCurrency, ExistenceRequirement::AllowDeath}
+	assert_noop, assert_ok,
+	traits::{Currency},
 };
 
 #[test]
@@ -41,12 +40,12 @@ fn basic_setup_works() {
 }
 
 #[test]
-fn set_recovered_account_works() {
+fn set_recovered_works() {
 	new_test_ext().execute_with(|| {
 		// Not accessible by a normal user
-		assert_noop!(Recovery::set_recovered_account(Origin::signed(1), 5, 1), DispatchError::BadOrigin);
+		assert_noop!(Recovery::set_recovered(Origin::signed(1), 5, 1), BadOrigin);
 		// Root can set a recovered account though
-		assert_ok!(Recovery::set_recovered_account(Origin::ROOT, 5, 1));
+		assert_ok!(Recovery::set_recovered(Origin::ROOT, 5, 1));
 		// Account 1 should now be able to make a call through account 5
 		let call = Box::new(Call::Balances(BalancesCall::transfer(1, 100)));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
@@ -196,5 +195,70 @@ fn create_recovery_works() {
 			threshold,
 		};
 		assert_eq!(Recovery::recovery_config(5), Some(recovery_config));
+	});
+}
+
+#[test]
+fn initiate_recovery_handles_basic_errors() {
+	new_test_ext().execute_with(|| {
+		// No recovery process set up for the account
+		assert_noop!(
+			Recovery::initiate_recovery(Origin::signed(1), 5),
+			Error::<Test>::NotRecoverable
+		);
+		// Create a recovery process for next test
+		let friends = vec![2, 3, 4];
+		let threshold = 3;
+		let delay_period = 10;
+		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+
+		// Same user cannot recover same account twice
+		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
+		assert_noop!(Recovery::initiate_recovery(Origin::signed(1), 5), Error::<Test>::AlreadyStarted);
+
+		// No double deposit
+		assert_eq!(Balances::reserved_balance(&1), 10);
+	});
+}
+
+#[test]
+fn initiate_recovery_works() {
+	new_test_ext().execute_with(|| {
+		// Create a recovery process for the test
+		let friends = vec![2, 3, 4];
+		let threshold = 3;
+		let delay_period = 10;
+		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+
+		// Recovery can be initiated
+		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
+		// Deposit is reserved
+		assert_eq!(Balances::reserved_balance(&1), 10);
+		// Recovery status object is created correctly
+		let recovery_status = ActiveRecovery {
+			created: 1,
+			deposit: 10,
+			friends: vec![],
+		};
+		assert_eq!(<ActiveRecoveries<Test>>::get(&5, &1), Some(recovery_status));
+
+		// Multiple users can attempt to recover the same account
+		assert_ok!(Recovery::initiate_recovery(Origin::signed(2), 5));
+	});
+}
+
+#[test]
+fn vouch_recovery_handles_basic_errors() {
+	new_test_ext().execute_with(|| {
+		// Cannot vouch for non-recoverable account
+
+
+		// Create and initiate a recovery process for next tests
+		let friends = vec![2, 3, 4];
+		let threshold = 3;
+		let delay_period = 10;
+		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
+
 	});
 }
