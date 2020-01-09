@@ -707,6 +707,7 @@ mod tests {
 	impl Trait for Test {
 		type Event = ();
 	}
+	type System = frame_system::Module<Test>;
 	type Example = Module<Test>;
 
 	// This function basically just builds a genesis storage key/value store according to

@@ -951,6 +951,7 @@ mod tests {
 		type RegistrarOrigin = EnsureSignedBy<One, u64>;
 		type ForceOrigin = EnsureSignedBy<Two, u64>;
 	}
+	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
 	type Identity = Module<Test>;
 

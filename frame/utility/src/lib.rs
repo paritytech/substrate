@@ -720,6 +720,7 @@ mod tests {
 		type MultisigDepositFactor = MultisigDepositFactor;
 		type MaxSignatories = MaxSignatories;
 	}
+	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
 	type Utility = Module<Test>;
 
