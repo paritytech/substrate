@@ -118,7 +118,7 @@
 //!
 //! ## Assumptions
 //!
-//! Below are assumptions that must be held when using this module.  If any of
+//! Below are assumptions that must be upheld when using this module.  If any of
 //! them are violated, the behavior of this module is undefined.
 //!
 //! * The total count of assets should be less than
@@ -157,6 +157,8 @@ decl_module! {
 		/// Issue a new class of fungible assets. There are, and will only ever be, `total`
 		/// such assets and they'll all belong to the `origin` initially. It will have an
 		/// identifier `AssetId` instance: this will be specified in the `Issued` event.
+		///
+		/// `O(1)`
 		fn issue(origin, #[compact] total: T::Balance) {
 			let origin = ensure_signed(origin)?;
 
@@ -170,6 +172,8 @@ decl_module! {
 		}
 
 		/// Move some assets from one holder to another.
+		///
+		/// `O(1)`
 		fn transfer(origin,
 			#[compact] id: T::AssetId,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -188,6 +192,8 @@ decl_module! {
 		}
 
 		/// Destroy any assets of `id` owned by `origin`.
+		///
+		/// `O(1)`.
 		fn destroy(origin, #[compact] id: T::AssetId) {
 			let origin = ensure_signed(origin)?;
 			let balance = <Balances<T>>::take((id, &origin));
@@ -241,11 +247,15 @@ impl<T: Trait> Module<T> {
 	// Public immutables
 
 	/// Get the asset `id` balance of `who`.
+	///
+	/// `O(1)`
 	pub fn balance(id: T::AssetId, who: T::AccountId) -> T::Balance {
 		<Balances<T>>::get((id, who))
 	}
 
 	/// Get the total supply of an asset `id`.
+	///
+	/// `O(1)`
 	pub fn total_supply(id: T::AssetId) -> T::Balance {
 		<TotalSupply<T>>::get(id)
 	}
