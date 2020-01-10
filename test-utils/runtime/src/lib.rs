@@ -255,8 +255,6 @@ cfg_if! {
 				fn fail_on_wasm() -> u64;
 				/// Trie no_std testing.
 				fn use_trie() -> u64;
-				/// History data no_std testing.
-				fn use_history_data();
 				/// Transactional tests.
 				fn use_transactions() -> u64;
 				fn benchmark_indirect_call() -> u64;
@@ -912,30 +910,6 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 	let signature = public0.sign(&"sr25519").expect("Generates a valid `sr25519` signature.");
 	assert!(public0.verify(&"sr25519", &signature));
 	(signature, public0)
-}
-
-fn test_historical_data() {
-	let mut states = sp_historical_data::sync_linear_transaction::States::default();
-	let mut value = sp_historical_data::sync_linear_transaction::History::default();
-	if value.get() != None {
-		panic!("Got a value for empty data");
-	}
-
-	value.set(&states, 42u64);
-	states.start_transaction();
-	if value.get() != Some(&42) {
-		panic!("Got a wrong result accessing a one element data");
-	}
-	value.set(&states, 43u64);
-	if value.get() != Some(&43) {
-		panic!("Got a wrong result accessing a two element data");
-	}
-	states.discard_transaction();
-	states.apply_discard_transaction(&mut value);
-	states.finalize_discard();
-	if value.get() != Some(&42) {
-		panic!("Got a wrong result accessing a one element data after a discard");
-	}
 }
 
 fn test_read_storage() {

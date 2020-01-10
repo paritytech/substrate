@@ -23,9 +23,9 @@ use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, OwnedChildInfo, ChildInfo};
 use sp_historical_data::sync_linear_transaction::{
-	History, HistoricalEntry, States,
+	Layers, LayerEntry,
 };
-use sp_historical_data::CleaningResult;
+use sp_historical_data::LayeredOpsResult;
 use std::ops;
 
 /// The overlayed changes to state to be queried on top of the backend.
@@ -52,7 +52,7 @@ pub struct OverlayedValue {
 	pub extrinsics: Option<BTreeSet<u32>>,
 }
 
-type TreeChangeSet = BTreeMap<Vec<u8>, History<OverlayedValue>>;
+type TreeChangeSet = BTreeMap<Vec<u8>, Layers<OverlayedValue>>;
 
 /// Overlayed change set, content keep trace of its history.
 ///
@@ -61,13 +61,13 @@ type TreeChangeSet = BTreeMap<Vec<u8>, History<OverlayedValue>>;
 #[cfg_attr(test, derive(PartialEq))]
 pub struct OverlayedChangeSet {
 	/// Indexed state history.
-	pub(crate) states: States,
+	pub(crate) number_transaction: usize,
 	/// Top level storage changes.
 	pub(crate) top: TreeChangeSet,
 	/// Child storage changes.
 	/// OwnedChildInfo is currently an absolute value, for some child trie
 	/// operations (eg full deletion) it will need to change
-	/// to `History<OwnedChildInfo>`.
+	/// to `Layers<OwnedChildInfo>`.
 	pub(crate) children: HashMap<Vec<u8>, (TreeChangeSet, OwnedChildInfo)>,
 }
 
@@ -77,8 +77,8 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 		use sp_historical_data::sync_linear_transaction::State;
 		let mut result = OverlayedChangeSet::default();
 		result.top = iter.into_iter().map(|(k, value)| (k, {
-			let mut history = History::default();
-			history.push_unchecked(HistoricalEntry { value, index: State::Committed });
+			let mut history = Layers::default();
+			history.push_unchecked(LayerEntry { value, index: State::Committed });
 			history
 		})).collect();
 		result
@@ -89,15 +89,15 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 /// It avoids accessing two times the historical value item.
 /// It does remove latest historical dropped items.
 fn set_with_extrinsic_overlayed_value(
-	history: &mut History<OverlayedValue>,
-	states: &States,
+	history: &mut Layers<OverlayedValue>,
+	number_transaction: usize,
 	value: Option<Vec<u8>>,
 	extrinsic_index: Option<u32>,
 ) {
 	if let Some(extrinsic) = extrinsic_index {
-		set_with_extrinsic_inner_overlayed_value(history, states, value, extrinsic)
+		set_with_extrinsic_inner_overlayed_value(history, number_transaction, value, extrinsic)
 	} else {
-		history.set(states, OverlayedValue {
+		history.set(number_transaction, OverlayedValue {
 			value,
 			extrinsics: None,
 		})
@@ -105,12 +105,12 @@ fn set_with_extrinsic_overlayed_value(
 }
 
 fn set_with_extrinsic_inner_overlayed_value(
-	history: &mut History<OverlayedValue>,
-	states: &States,
+	history: &mut Layers<OverlayedValue>,
+	number_transaction: usize,
 	value: Option<Vec<u8>>,
 	extrinsic_index: u32,
 ) {
-	let state = states.as_state();
+	let state = number_transaction.as_state();
 	if let Some(current) = history.get_mut() {
 		if current.index == state {
 			current.value.value = value;
@@ -120,7 +120,7 @@ fn set_with_extrinsic_inner_overlayed_value(
 			let mut extrinsics = current.value.extrinsics.clone();
 			extrinsics.get_or_insert_with(Default::default)
 				.insert(extrinsic_index);
-			history.push_unchecked(HistoricalEntry {
+			history.push_unchecked(LayerEntry {
 				index: state,
 				value: OverlayedValue {
 					value,
@@ -132,7 +132,7 @@ fn set_with_extrinsic_inner_overlayed_value(
 		let mut extrinsics: Option<BTreeSet<u32>> = None;
 		extrinsics.get_or_insert_with(Default::default)
 			.insert(extrinsic_index);
-		history.push_unchecked(HistoricalEntry {
+		history.push_unchecked(LayerEntry {
 			index: state,
 			value: OverlayedValue {
 				value,
@@ -150,50 +150,50 @@ impl OverlayedChangeSet {
 
 	/// Discard prospective changes from the change set.
 	pub fn discard_prospective(&mut self) {
-		self.states.discard_prospective();
-		retain(&mut self.top, |_, history| States::apply_discard_prospective(history) != CleaningResult::Cleared);
+		self.number_transaction.discard_prospective();
+		retain(&mut self.top, |_, history| States::apply_discard_prospective(history) != LayeredOpsResult::Cleared);
 		self.children.retain(|_, (map, _child_info)| {
-			retain(map, |_, history| States::apply_discard_prospective(history) != CleaningResult::Cleared);
+			retain(map, |_, history| States::apply_discard_prospective(history) != LayeredOpsResult::Cleared);
 			!map.is_empty()
 		});
 	}
 
 	/// Commit prospective changes into the change set.
 	pub fn commit_prospective(&mut self) {
-		self.states.commit_prospective();
-		retain(&mut self.top, |_, history| States::apply_commit_prospective(history) != CleaningResult::Cleared);
+		self.number_transaction.commit_prospective();
+		retain(&mut self.top, |_, history| States::apply_commit_prospective(history) != LayeredOpsResult::Cleared);
 		self.children.retain(|_, (map, _child_info)| {
-			retain(map, |_, history| States::apply_commit_prospective(history) != CleaningResult::Cleared);
+			retain(map, |_, history| States::apply_commit_prospective(history) != LayeredOpsResult::Cleared);
 			!map.is_empty()
 		});
 	}
 
 	/// Create a new transactional layer.
 	pub fn start_transaction(&mut self) {
-		self.states.start_transaction();
+		self.number_transaction.start_transaction();
 	}
 
 	/// Discard a transactional layer.
 	/// There is always a transactional layer running
 	/// (discarding the last trasactional layer open a new one).
 	pub fn discard_transaction(&mut self) {
-		self.states.discard_transaction();
-		let states = &self.states;
-		retain(&mut self.top, |_, history| states.apply_discard_transaction(history) != CleaningResult::Cleared);
+		self.number_transaction.discard_transaction();
+		let number_transaction = &self.number_transaction;
+		retain(&mut self.top, |_, history| number_transaction.apply_discard_transaction(history) != LayeredOpsResult::Cleared);
 		self.children.retain(|_, (map, _child_info)| {
-			retain(map, |_, history| states.apply_discard_transaction(history) != CleaningResult::Cleared);
+			retain(map, |_, history| number_transaction.apply_discard_transaction(history) != LayeredOpsResult::Cleared);
 			!map.is_empty()
 		});
-		self.states.finalize_discard();
+		self.number_transaction.finalize_discard();
 	}
 
 	/// Commit a transactional layer into previous transaction layer.
 	pub fn commit_transaction(&mut self) {
-		self.states.commit_transaction();
-		let states = &self.states;
-		retain(&mut self.top, |_, history| states.apply_commit_transaction(history) != CleaningResult::Cleared);
+		self.number_transaction.commit_transaction();
+		let number_transaction = &self.number_transaction;
+		retain(&mut self.top, |_, history| number_transaction.apply_commit_transaction(history) != LayeredOpsResult::Cleared);
 		self.children.retain(|_, (map, _child_info)| {
-			retain(map, |_, history| states.apply_commit_transaction(history) != CleaningResult::Cleared);
+			retain(map, |_, history| number_transaction.apply_commit_transaction(history) != LayeredOpsResult::Cleared);
 			!map.is_empty()
 		});
 	}
@@ -372,7 +372,7 @@ impl OverlayedChanges {
 	pub fn set_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.changes.top.entry(key).or_default();
-		set_with_extrinsic_overlayed_value(entry, &self.changes.states, value, extrinsic_index);
+		set_with_extrinsic_overlayed_value(entry, &self.changes.number_transaction, value, extrinsic_index);
 	}
 
 	/// Inserts the given key-value pair into the prospective child change set.
@@ -394,7 +394,7 @@ impl OverlayedChanges {
 		let entry = map_entry.0.entry(key).or_default();
 		set_with_extrinsic_overlayed_value(
 			entry,
-			&self.changes.states,
+			&self.changes.number_transaction,
 			value,
 			extrinsic_index,
 		);
@@ -412,14 +412,14 @@ impl OverlayedChanges {
 		child_info: ChildInfo,
 	) {
 		let extrinsic_index = self.extrinsic_index();
-		let states = &self.changes.states;
+		let number_transaction = &self.changes.number_transaction;
 		let map_entry = self.changes.children.entry(storage_key.to_vec())
 			.or_insert_with(|| (Default::default(), child_info.to_owned()));
 		let updatable = map_entry.1.try_update(child_info);
 		debug_assert!(updatable);
 
 		map_entry.0.values_mut()
-			.for_each(|e| set_with_extrinsic_overlayed_value(e, states, None, extrinsic_index));
+			.for_each(|e| set_with_extrinsic_overlayed_value(e, number_transaction, None, extrinsic_index));
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
@@ -433,7 +433,7 @@ impl OverlayedChanges {
 
 		for (key, entry) in self.changes.top.iter_mut() {
 			if key.starts_with(prefix) {
-				set_with_extrinsic_overlayed_value(entry, &self.changes.states, None, extrinsic_index);
+				set_with_extrinsic_overlayed_value(entry, &self.changes.number_transaction, None, extrinsic_index);
 			}
 		}
 	}
@@ -451,7 +451,7 @@ impl OverlayedChanges {
 
 			for (key, entry) in child_change.0.iter_mut() {
 				if key.starts_with(prefix) {
-					set_with_extrinsic_overlayed_value(entry, &self.changes.states, None, extrinsic_index);
+					set_with_extrinsic_overlayed_value(entry, &self.changes.number_transaction, None, extrinsic_index);
 				}
 			}
 		}
@@ -556,7 +556,7 @@ impl OverlayedChanges {
 	}
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	/// Count the number of key value pairs, at every history states.
+	/// Count the number of key value pairs, at every history number_transaction.
 	/// Should only be use for debugging or testing, this is slow
 	/// and technical.
 	pub fn top_count_keyvalue_pair(&self) -> usize {

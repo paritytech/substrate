@@ -36,93 +36,64 @@
 //! of creation is also needed.
 //! Transaction operation does not interfere with value in `Committed` state.
 
-use crate::CleaningResult;
+use crate::{LayeredOpsResult, Layers, LayerEntry};
 
-/// History of value and their state.
-pub type History<V> = crate::History<V, State>;
+/// Index of commited layer, this is reserved.
+const COMMITTED_LAYER: usize = 0;
 
-/// An entry at a given history height.
-pub type HistoricalEntry<V> = crate::HistoricalEntry<V, State>;
-
-
-// We use to 1 to be able to discard this transaction.
-const COMMITTED_LAYER: usize = 1;
-
-/// Global state contains only the current number of overlay layers.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct States { current_layer: usize }
-
-impl Default for States {
-	fn default() -> Self {
-		States { current_layer: COMMITTED_LAYER }
-	}
-}
-
+/*
 impl States {
-	/// Get corresponding current state.
-	pub fn as_state(&self) -> State {
-		State::Transaction(self.current_layer)
-	}
-
-	/// Instantiate a random state, only for testing.
-	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn test_state(
-		current_layer: usize,
-	) -> Self {
-		States { current_layer }
-	}
-
 	/// Update global state for discarding prospective.
 	/// A subsequent update of all related stored history is needed.
 	pub fn discard_prospective(&mut self) {
-		// Point to committed layer.
-		self.current_layer = COMMITTED_LAYER;
+		// Point to prospective layer.
+		self.current_layer = COMMITTED_LAYER + 1;
 	}
 
 	/// After a prospective was discarded, clear prospective history.
-	pub fn apply_discard_prospective<V>(value: &mut History<V>) -> CleaningResult {
+	pub fn apply_discard_prospective<V>(value: &mut Layers<V>) -> LayeredOpsResult {
 		if value.0.is_empty() {
-			return CleaningResult::Cleared;
+			return LayeredOpsResult::Cleared;
 		}
 		if value.0[0].index == State::Committed {
-			if value.0.len() == COMMITTED_LAYER {
-				CleaningResult::Unchanged
+			if value.0.len() == COMMITTED_LAYER + 1 {
+				LayeredOpsResult::Unchanged
 			} else {
-				value.0.truncate(COMMITTED_LAYER);
-				CleaningResult::Changed
+				value.0.truncate(COMMITTED_LAYER + 1);
+				LayeredOpsResult::Changed
 			}
 		} else {
 			value.0.clear();
-			CleaningResult::Cleared
+			LayeredOpsResult::Cleared
 		}
 	}
 
 	/// Update global state for committing prospective.
 	/// A subsequent update of all related stored history is needed.
 	pub fn commit_prospective(&mut self) {
-		// Point to committed layer.
-		self.current_layer = COMMITTED_LAYER;
+		// Point to prospective layer.
+		self.current_layer = COMMITTED_LAYER + 1;
 	}
 
 	/// After updating states to prospective, this function must be use
 	/// on all values from this prospective. It commits pending value and
 	/// clear existing history.
-	pub fn apply_commit_prospective<V>(value: &mut History<V>) -> CleaningResult {
+	pub fn apply_commit_prospective<V>(value: &mut Layers<V>) -> LayeredOpsResult {
 		if value.0.is_empty() {
-			return CleaningResult::Cleared;
+			return LayeredOpsResult::Cleared;
 		}
-		if value.0.len() == COMMITTED_LAYER {
+		if value.0.len() == COMMITTED_LAYER + 1 {
 			if value.0[0].index != State::Committed {
 				value.0[0].index = State::Committed;
 			} else {
-				return CleaningResult::Unchanged;
+				return LayeredOpsResult::Unchanged;
 			}
 		} else if let Some(mut v) = value.0.pop() {
 			v.index = State::Committed;
 			value.0.clear();
 			value.0.push(v);
 		}
-		CleaningResult::Changed
+		LayeredOpsResult::Changed
 	}
 
 	/// Create a new transactional layer.
@@ -138,16 +109,16 @@ impl States {
 
 	/// Apply transaction discard on a historical value.
 	/// Multiple calls to `discard_transaction` can be applied at once.
-	pub fn apply_discard_transaction<V>(&self, value: &mut History<V>) -> CleaningResult {
+	pub fn apply_discard_transaction<V>(&self, value: &mut Layers<V>) -> LayeredOpsResult {
 		let init_len = value.0.len();
 		// Remove all transactional layers.
 		value.0.truncate(self.current_layer);
 		if value.0.is_empty() {
-			CleaningResult::Cleared
+			LayeredOpsResult::Cleared
 		} else if value.0.len() != init_len {
-			CleaningResult::Changed
+			LayeredOpsResult::Changed
 		} else {
-			CleaningResult::Unchanged
+			LayeredOpsResult::Unchanged
 		}
 	}
 
@@ -158,14 +129,14 @@ impl States {
 	pub fn finalize_discard(&mut self) {
 		if self.current_layer == 0 {
 			// Point back to committed layer.
-			self.current_layer = COMMITTED_LAYER;
+			self.current_layer = COMMITTED_LAYER + 1;
 		}
 	}
 
 	/// Commit a transactional layer.
 	/// A subsequent update of all related stored history is needed.
 	pub fn commit_transaction(&mut self) {
-		if self.current_layer > COMMITTED_LAYER {
+		if self.current_layer > COMMITTED_LAYER + 1 {
 			self.current_layer -= 1;
 		}
 	}
@@ -173,7 +144,7 @@ impl States {
 	/// Apply transaction commit on a historical value.
 	/// Multiple calls to `commit_transaction` can be applied at once.
 	/// Committing value removes all unneeded states.
-	pub fn apply_commit_transaction<V>(&self, value: &mut History<V>) -> CleaningResult {
+	pub fn apply_commit_transaction<V>(&self, value: &mut Layers<V>) -> LayeredOpsResult {
 		let mut new_value = None;
 		// Iterate on history to get current committed value and remove
 		// unused transaction values that are between this new committed
@@ -200,26 +171,14 @@ impl States {
 			}
 		}
 		if let Some(new_value) = new_value {
-			value.0.push(HistoricalEntry {
+			value.0.push(LayerEntry {
 				value: new_value,
 				index: State::Transaction(self.current_layer),
 			});
-			return CleaningResult::Changed;
+			return LayeredOpsResult::Changed;
 		}
-		CleaningResult::Unchanged
+		LayeredOpsResult::Unchanged
 	}
-}
-
-/// Historical value state of multiple transaction
-/// with an alterantive committed state.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum State {
-	/// Committed, in this state no action on transaction
-	/// can modify this value.
-	Committed,
-	/// Value relates to a transaction, the state contains the current
-	/// number of transaction when value did change.
-	Transaction(usize),
 }
 
 impl State {
@@ -231,23 +190,24 @@ impl State {
 		}
 	}
 }
+*/
 
-impl<V> History<V> {
+impl<V> Layers<V> {
 	/// Set a value, this use a global state as parameter.
-	pub fn set(&mut self, states: &States, value: V) {
+	pub fn set(&mut self, number_transactions: usize, value: V) {
 		if let Some(v) = self.0.last_mut() {
-			debug_assert!(v.index.transaction_index().unwrap_or(0) <= states.current_layer,
-				"History expects \
-				only new values at the latest state, some state has not \
-				synchronized properly");
-			if v.index.transaction_index() == Some(states.current_layer) {
+			debug_assert!(v.index <= number_transactions,
+				"Layers expects \
+				only new values at the latest transaction \
+				this indicates some unsynchronized layer value.");
+			if v.index == number_transactions {
 				v.value = value;
 				return;
 			}
 		}
-		self.0.push(HistoricalEntry {
+		self.0.push(LayerEntry {
 			value,
-			index: State::Transaction(states.current_layer),
+			index: number_transactions,
 		});
 	}
 
@@ -267,10 +227,10 @@ impl<V> History<V> {
 
 	/// Extracts the committed value if there is one.
 	pub fn into_committed(mut self) -> Option<V> {
-		self.0.truncate(COMMITTED_LAYER);
-		if let Some(HistoricalEntry {
+		self.0.truncate(COMMITTED_LAYER + 1);
+		if let Some(LayerEntry {
 					value,
-					index: State::Committed,
+					index: COMMITTED_LAYER,
 				}) = self.0.pop() {
 			return Some(value)
 		} else {
@@ -279,45 +239,41 @@ impl<V> History<V> {
 	}
 
 	/// Returns mutable handle on latest pending historical value.
-	pub fn get_mut(&mut self) -> Option<HistoricalEntry<&mut V>> {
+	pub fn get_mut(&mut self) -> Option<LayerEntry<&mut V>> {
 		self.0.last_mut().map(|h| h.as_mut())
 	}
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
-impl<V> History<V> {
+impl<V> Layers<V> {
 	/// Get latest prospective value, excludes
 	/// committed values.
 	pub fn get_prospective(&self) -> Option<&V> {
 		match self.0.get(0) {
-			Some(HistoricalEntry {
-				value: _,
-				index: State::Committed,
-			}) => {
-				if let Some(HistoricalEntry {
-					value,
-					index: State::Transaction(_),
-				}) = self.0.get(1) {
-					Some(&value)
+			Some(entry) if entry.index == COMMITTED_LAYER => {
+				if let Some(entry) = self.0.get(1) {
+					if entry.index > COMMITTED_LAYER {
+						Some(&entry.value)
+					} else {
+						None
+					}
 				} else {
 					None
 				}
 			},
-			Some(HistoricalEntry {
-				value,
-				index: State::Transaction(_),
-			}) => Some(&value),
+			Some(entry) => Some(&entry.value),
 			None => None,
 		}
 	}
 
 	/// Get latest committed value.
 	pub fn get_committed(&self) -> Option<&V> {
-		if let Some(HistoricalEntry {
-					value,
-					index: State::Committed,
-				}) = self.0.get(0) {
-			return Some(&value)
+		if let Some(entry) = self.0.get(0) {
+			if entry.index == COMMITTED_LAYER {
+				return Some(&entry.value)
+			} else {
+				None
+			}
 		} else {
 			None
 		}

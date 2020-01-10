@@ -21,43 +21,39 @@
 
 pub mod sync_linear_transaction;
 
-/// History of values being used to keep trace of all changes
-/// that occurs (all different state a value can be in depending
-/// on the global state).
-/// The different states of this value, are ordered by change time
-/// in a simple stack.
+/// Stack of values in different transactional layers.
 #[derive(Debug, Clone, PartialEq)]
-pub struct History<V, I>(pub(crate) smallvec::SmallVec<[HistoricalEntry<V, I>; ALLOCATED_HISTORY]>);
+pub struct Layers<V>(pub(crate) smallvec::SmallVec<[LayerEntry<V>; ALLOCATED_HISTORY]>);
 
 /// Size of preallocated history per element.
 /// Current size is two, that is currently related to the use case
 /// where value got `committed` and `prospective` initial state by default.
 const ALLOCATED_HISTORY: usize = 2;
 
-impl<V, I> Default for History<V, I> {
+impl<V> Default for Layers<V> {
 	fn default() -> Self {
-		History(Default::default())
+		Layers(Default::default())
 	}
 }
 
-/// An entry of a historical data at a given history point.
+/// An value entry in a given indexed transactional layer.
 #[derive(Debug, Clone, PartialEq)]
-pub struct HistoricalEntry<V, I> {
+pub struct LayerEntry<V> {
 	/// The stored value.
 	pub value: V,
-	/// The moment in history when the value got set.
-	pub index: I,
+	/// The transactional layer index.
+	pub index: usize,
 }
 
-impl<V, I> From<(V, I)> for HistoricalEntry<V, I> {
-	fn from(input: (V, I)) -> HistoricalEntry<V, I> {
-		HistoricalEntry { value: input.0, index: input.1 }
+impl<V> From<(V, usize)> for LayerEntry<V> {
+	fn from(input: (V, usize)) -> LayerEntry<V> {
+		LayerEntry { value: input.0, index: input.1 }
 	}
 }
 
-impl<V, I: Clone> HistoricalEntry<V, I> {
-	fn as_mut(&mut self) -> HistoricalEntry<&mut V, I> {
-		HistoricalEntry { value: &mut self.value, index: self.index.clone() }
+impl<V> LayerEntry<V> {
+	fn as_mut(&mut self) -> LayerEntry<&mut V> {
+		LayerEntry { value: &mut self.value, index: self.index }
 	}
 }
 
@@ -66,7 +62,7 @@ impl<V, I: Clone> HistoricalEntry<V, I> {
 /// For instance if the historical value was stored into a hashmap,
 /// then it should be removed from it on a `Cleared` result.
 #[derive(Debug, PartialEq)]
-pub enum CleaningResult {
+pub enum LayeredOpsResult {
 	/// No inner data was changed, even technical
 	/// data, therefore no update is needed.
 	Unchanged,
@@ -77,27 +73,27 @@ pub enum CleaningResult {
 	Cleared,
 }
 
-impl<V, I> History<V, I> {
+impl<V> Layers<V> {
 	/// Push a value without checking if it can overwrite the current
 	/// state.
 	/// This should only use after checking the state is correct
 	/// (last item of historical value got a smaller index than
 	/// the new one).
-	pub fn push_unchecked(&mut self, item: HistoricalEntry<V, I>) {
+	pub fn push_unchecked(&mut self, item: LayerEntry<V>) {
 		self.0.push(item);
 	}
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
-impl<V, I> History<V, I> {
+impl<V> Layers<V> {
 	/// Get current number of stored historical values.
 	pub fn len(&self) -> usize {
 		self.0.len()
 	}
 
 	/// Create an history from a sequence of historical values.
-	pub fn from_iter(input: impl IntoIterator<Item = HistoricalEntry<V, I>>) -> Self {
-		let mut history = History::default();
+	pub fn from_iter(input: impl IntoIterator<Item = LayerEntry<V>>) -> Self {
+		let mut history = Layers::default();
 		for v in input {
 			history.push_unchecked(v);
 		}
