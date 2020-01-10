@@ -18,7 +18,7 @@
 
 use super::*;
 
-use frame_support::{impl_outer_origin, parameter_types};
+use frame_support::{impl_outer_origin, parameter_types, ord_parameter_types};
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
@@ -43,8 +43,6 @@ parameter_types! {
 	pub const RotationPeriod: u64 = 4;
 	pub const PeriodSpend: u64 = 1000;
 	pub const MaxLockDuration: u64 = 100;
-	pub const FounderSetAccount: u64 = 1;
-	pub const SuspensionJudgementSetAccount: u64 = 2;
 	pub const ChallengePeriod: u64 = 8;
 	pub const MaxMembers: u32 = 100;
 
@@ -56,6 +54,11 @@ parameter_types! {
 	pub const ExistentialDeposit: u64 = 0;
 	pub const TransferFee: u64 = 0;
 	pub const CreationFee: u64 = 0;
+}
+
+ord_parameter_types! {
+	pub const FounderSetAccount: u128 = 1;
+	pub const SuspensionJudgementSetAccount: u128 = 2;
 }
 
 impl frame_system::Trait for Test {
@@ -87,6 +90,7 @@ impl pallet_balances::Trait for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
+	type OnReapAccount = System;
 }
 
 impl Trait for Test {
@@ -201,4 +205,4 @@ pub fn create_bid<AccountId, Balance>(
 		kind,
 		value
 	}
-} 
+}
