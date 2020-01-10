@@ -163,6 +163,8 @@ pub trait TransactionPool: Send + Sync {
 	/// Error type.
 	type Error: From<crate::error::Error> + crate::error::IntoPoolError;
 
+	// Networking
+
 	/// Returns a future that imports a bunch of unverified transactions to the pool.
 	fn submit_at(
 		&self,
@@ -183,6 +185,8 @@ pub trait TransactionPool: Send + Sync {
 		Self::Error
 	>> + Send + Unpin>;
 
+	// RPC
+
 	/// Returns a future that import a single transaction and starts to watch their progress in the pool.
 	fn submit_and_watch(
 		&self,
@@ -190,23 +194,35 @@ pub trait TransactionPool: Send + Sync {
 		xt: TransactionFor<Self>,
 	) -> Box<dyn Future<Output=Result<Box<TransactionStatusStreamFor<Self>>, Self::Error>> + Send + Unpin>;
 
-	/// Remove transactions identified by given hashes (and dependent transactions) from the pool.
-	fn remove_invalid(&self, hashes: &[TxHash<Self>]) -> Vec<Arc<Self::InPoolTransaction>>;
 
-	/// Returns pool status.
-	fn status(&self) -> PoolStatus;
+	// Block production / Networking
 
 	/// Get an iterator for ready transactions ordered by priority
 	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>>>;
 
+
+	// Block production
+
+	/// Remove transactions identified by given hashes (and dependent transactions) from the pool.
+	fn remove_invalid(&self, hashes: &[TxHash<Self>]) -> Vec<Arc<Self::InPoolTransaction>>;
+
+	// logging
+
+	/// Returns pool status.
+	fn status(&self) -> PoolStatus;
+
+	// logging / RPC / networking
+
 	/// Return an event stream of transactions imported to the pool.
 	fn import_notification_stream(&self) -> ImportNotificationStream;
 
-	/// Returns transaction hash
-	fn hash_of(&self, xt: &TransactionFor<Self>) -> TxHash<Self>;
+	// networking
 
 	/// Notify the pool about transactions broadcast.
 	fn on_broadcasted(&self, propagations: HashMap<TxHash<Self>, Vec<String>>);
+
+	/// Returns transaction hash
+	fn hash_of(&self, xt: &TransactionFor<Self>) -> TxHash<Self>;
 }
 
 /// An abstraction for transaction pool.

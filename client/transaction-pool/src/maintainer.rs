@@ -30,14 +30,13 @@ use sc_client_api::{
 	client::BlockBody,
 	light::{Fetcher, RemoteBodyRequest},
 };
-use sp_core::{Blake2Hasher, H256};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Extrinsic, Header, NumberFor, ProvideRuntimeApi, SimpleArithmetic},
+	traits::{Block as BlockT, Extrinsic, Header, NumberFor, SimpleArithmetic},
 };
 use sp_blockchain::HeaderBackend;
-use sp_transaction_pool::TransactionPoolMaintainer;
-use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
+use sp_transaction_pool::{TransactionPoolMaintainer, runtime_api::TaggedTransactionQueue};
+use sp_api::ProvideRuntimeApi;
 
 use sc_transaction_graph::{self, ChainApi};
 
@@ -61,10 +60,10 @@ impl<Block, Client, PoolApi> TransactionPoolMaintainer
 for
 	FullBasicPoolMaintainer<Client, PoolApi>
 where
-	Block: BlockT<Hash = <Blake2Hasher as sp_core::Hasher>::Out>,
-	Client: ProvideRuntimeApi + HeaderBackend<Block> + BlockBody<Block> + 'static,
+	Block: BlockT,
+	Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + BlockBody<Block> + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
-	PoolApi: ChainApi<Block = Block, Hash = H256> + 'static,
+	PoolApi: ChainApi<Block = Block, Hash = Block::Hash> + 'static,
 {
 	type Block = Block;
 	type Hash = Block::Hash;
@@ -154,10 +153,10 @@ pub struct LightBasicPoolMaintainer<Block: BlockT, Client, PoolApi: ChainApi, F>
 
 impl<Block, Client, PoolApi, F> LightBasicPoolMaintainer<Block, Client, PoolApi, F>
 	where
-		Block: BlockT<Hash = <Blake2Hasher as sp_core::Hasher>::Out>,
-		Client: ProvideRuntimeApi + HeaderBackend<Block> + BlockBody<Block> + 'static,
+		Block: BlockT,
+		Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + BlockBody<Block> + 'static,
 		Client::Api: TaggedTransactionQueue<Block>,
-		PoolApi: ChainApi<Block = Block, Hash = H256> + 'static,
+		PoolApi: ChainApi<Block = Block, Hash = Block::Hash> + 'static,
 		F: Fetcher<Block> + 'static,
 {
 	/// Create light pool maintainer with default constants.
@@ -261,10 +260,10 @@ impl<Block, Client, PoolApi, F> TransactionPoolMaintainer
 for
 	LightBasicPoolMaintainer<Block, Client, PoolApi, F>
 where
-	Block: BlockT<Hash = <Blake2Hasher as sp_core::Hasher>::Out>,
-	Client: ProvideRuntimeApi + HeaderBackend<Block> + BlockBody<Block> + 'static,
+	Block: BlockT,
+	Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + BlockBody<Block> + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
-	PoolApi: ChainApi<Block = Block, Hash = H256> + 'static,
+	PoolApi: ChainApi<Block = Block, Hash = Block::Hash> + 'static,
 	F: Fetcher<Block> + 'static,
 {
 	type Block = Block;
@@ -362,7 +361,7 @@ mod tests {
 	#[test]
 	fn should_remove_transactions_from_the_full_pool() {
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
-		let client = Arc::new(client);
+		let mut client = Arc::new(client);
 		let pool = sc_transaction_graph::Pool::new(Default::default(), FullChainApi::new(client.clone()));
 		let pool = Arc::new(pool);
 		let transaction = Transfer {
@@ -379,7 +378,7 @@ mod tests {
 		// import the block
 		let mut builder = client.new_block(Default::default()).unwrap();
 		builder.push(transaction.clone()).unwrap();
-		let block = builder.bake().unwrap();
+		let block = builder.build().unwrap().block;
 		let id = BlockId::hash(block.header().hash());
 		client.import(BlockOrigin::Own, block).unwrap();
 
@@ -562,7 +561,7 @@ mod tests {
 	#[test]
 	fn should_add_reverted_transactions_to_the_pool() {
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
-		let client = Arc::new(client);
+		let mut client = Arc::new(client);
 		let pool = sc_transaction_graph::Pool::new(Default::default(), FullChainApi::new(client.clone()));
 		let pool = Arc::new(pool);
 		let transaction = Transfer {
@@ -579,7 +578,7 @@ mod tests {
 		// import the block
 		let mut builder = client.new_block(Default::default()).unwrap();
 		builder.push(transaction.clone()).unwrap();
-		let block = builder.bake().unwrap();
+		let block = builder.build().unwrap().block;
 		let block1_hash = block.header().hash();
 		let id = BlockId::hash(block1_hash.clone());
 		client.import(BlockOrigin::Own, block).unwrap();
@@ -593,8 +592,12 @@ mod tests {
 		assert_eq!(pool.status().future, 0);
 
 		// import second block
-		let builder = client.new_block_at(&BlockId::hash(best.hash()), Default::default()).unwrap();
-		let block = builder.bake().unwrap();
+		let builder = client.new_block_at(
+			&BlockId::hash(best.hash()),
+			Default::default(),
+			false,
+		).unwrap();
+		let block = builder.build().unwrap().block;
 		let id = BlockId::hash(block.header().hash());
 		client.import(BlockOrigin::Own, block).unwrap();
 

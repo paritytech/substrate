@@ -24,8 +24,6 @@ use serde::{Serialize, Deserialize};
 use std::fmt;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
-#[cfg(feature = "std")]
-use sp_runtime::traits::RuntimeApiInfo;
 
 use codec::Encode;
 #[cfg(feature = "std")]
@@ -42,7 +40,7 @@ pub type ApiId = [u8; 8];
 /// A vector of pairs of `ApiId` and a `u32` for version. For `"std"` builds, this
 /// is a `Cow`.
 #[cfg(feature = "std")]
-pub type ApisVec = ::std::borrow::Cow<'static, [(ApiId, u32)]>;
+pub type ApisVec = std::borrow::Cow<'static, [(ApiId, u32)]>;
 /// A vector of pairs of `ApiId` and a `u32` for version. For `"no-std"` builds, this
 /// is just a reference.
 #[cfg(not(feature = "std"))]
@@ -131,21 +129,14 @@ impl RuntimeVersion {
 		self.authoring_version == other.authoring_version
 	}
 
-	/// Check if this version supports a particular API.
-	pub fn has_api<A: RuntimeApiInfo + ?Sized>(&self) -> bool {
-		self.apis.iter().any(|(s, v)| {
-			s == &A::ID && *v == A::VERSION
-		})
-	}
-
-	/// Check if the given api is implemented and the version passes a predicate.
-	pub fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
+	/// Check if the given api with `api_id` is implemented and the version passes the given
+	/// `predicate`.
+	pub fn has_api_with<P: Fn(u32) -> bool>(
 		&self,
-		pred: P,
+		id: &ApiId,
+		predicate: P,
 	) -> bool {
-		self.apis.iter().any(|(s, v)| {
-			s == &A::ID && pred(*v)
-		})
+		self.apis.iter().any(|(s, v)| s == id && predicate(*v))
 	}
 }
 

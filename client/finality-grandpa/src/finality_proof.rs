@@ -50,7 +50,7 @@ use sp_runtime::{
 	Justification, generic::BlockId,
 	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
 };
-use sp_core::{H256, Blake2Hasher, storage::StorageKey};
+use sp_core::storage::StorageKey;
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sp_finality_grandpa::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
 
@@ -68,10 +68,10 @@ pub trait AuthoritySetForFinalityProver<Block: BlockT>: Send + Sync {
 }
 
 /// Client-based implementation of AuthoritySetForFinalityProver.
-impl<B, E, Block: BlockT<Hash=H256>, RA> AuthoritySetForFinalityProver<Block> for Client<B, E, Block, RA>
+impl<B, E, Block: BlockT, RA> AuthoritySetForFinalityProver<Block> for Client<B, E, Block, RA>
 	where
-		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		B: Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 		RA: Send + Sync,
 {
 	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<AuthorityList> {
@@ -134,13 +134,13 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 }
 
 /// Finality proof provider for serving network requests.
-pub struct FinalityProofProvider<B,  Block: BlockT<Hash=H256>> {
+pub struct FinalityProofProvider<B,  Block: BlockT> {
 	backend: Arc<B>,
 	authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
 }
 
-impl<B, Block: BlockT<Hash=H256>> FinalityProofProvider<B, Block>
-	where B: Backend<Block, Blake2Hasher> + Send + Sync + 'static
+impl<B, Block: BlockT> FinalityProofProvider<B, Block>
+	where B: Backend<Block> + Send + Sync + 'static
 {
 	/// Create new finality proof provider using:
 	///
@@ -156,9 +156,9 @@ impl<B, Block: BlockT<Hash=H256>> FinalityProofProvider<B, Block>
 
 impl<B, Block> sc_network::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>
 	where
-		Block: BlockT<Hash=H256>,
+		Block: BlockT,
 		NumberFor<Block>: BlockNumberOps,
-		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		B: Backend<Block> + Send + Sync + 'static,
 {
 	fn prove_finality(
 		&self,
@@ -252,7 +252,7 @@ pub(crate) fn make_finality_proof_request<H: Encode + Decode>(last_finalized: H,
 /// It is assumed that the caller already knows all blocks in the range (begin; end].
 ///
 /// Returns None if there are no finalized blocks unknown to the caller.
-pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Block>, J>(
+pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 	blockchain: &B,
 	authorities_provider: &dyn AuthoritySetForFinalityProver<Block>,
 	authorities_set_id: u64,
@@ -410,7 +410,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 ///
 /// Returns the vector of headers that MUST be validated + imported
 /// AND if at least one of those headers is invalid, all other MUST be considered invalid.
-pub(crate) fn check_finality_proof<Block: BlockT<Hash=H256>, B>(
+pub(crate) fn check_finality_proof<Block: BlockT, B>(
 	blockchain: &B,
 	current_set_id: u64,
 	current_authorities: AuthorityList,
@@ -429,7 +429,7 @@ pub(crate) fn check_finality_proof<Block: BlockT<Hash=H256>, B>(
 		remote_proof)
 }
 
-fn do_check_finality_proof<Block: BlockT<Hash=H256>, B, J>(
+fn do_check_finality_proof<Block: BlockT, B, J>(
 	blockchain: &B,
 	current_set_id: u64,
 	current_authorities: AuthorityList,
@@ -484,7 +484,7 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, B, J>(
 }
 
 /// Check finality proof for the single block.
-fn check_finality_proof_fragment<Block: BlockT<Hash=H256>, B, J>(
+fn check_finality_proof_fragment<Block: BlockT, B, J>(
 	blockchain: &B,
 	authority_set: AuthoritiesOrEffects<Block::Header>,
 	authorities_provider: &dyn AuthoritySetForFinalityChecker<Block>,
@@ -569,7 +569,7 @@ pub(crate) trait ProvableJustification<Header: HeaderT>: Encode + Decode {
 	}
 }
 
-impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJustification<Block>
+impl<Block: BlockT> ProvableJustification<Block::Header> for GrandpaJustification<Block>
 	where
 		NumberFor<Block>: BlockNumberOps,
 {

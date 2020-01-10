@@ -93,6 +93,7 @@ impl pallet_transaction_payment::Trait for Test {
 impl Trait for Test {
 	type Balance = u64;
 	type OnFreeBalanceZero = ();
+	type OnReapAccount = System;
 	type OnNewAccount = ();
 	type Event = ();
 	type DustRemoval = ();

@@ -294,6 +294,7 @@ mod tests {
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
 		type TransferPayment = ();
@@ -319,6 +320,7 @@ mod tests {
 		type MinLength = MinLength;
 		type MaxLength = MaxLength;
 	}
+	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
 	type Nicks = Module<Test>;
 

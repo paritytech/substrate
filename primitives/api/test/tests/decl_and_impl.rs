@@ -90,16 +90,16 @@ type TestClient = substrate_test_runtime_client::sc_client::Client<
 
 #[test]
 fn test_client_side_function_signature() {
-	let _test: fn(&RuntimeApiImpl<TestClient>, &BlockId<Block>, u64) -> Result<()> =
-		RuntimeApiImpl::<TestClient>::test;
+	let _test: fn(&RuntimeApiImpl<Block, TestClient>, &BlockId<Block>, u64) -> Result<()> =
+		RuntimeApiImpl::<Block, TestClient>::test;
 	let _something_with_block:
-		fn(&RuntimeApiImpl<TestClient>, &BlockId<Block>, Block) -> Result<Block> =
-			RuntimeApiImpl::<TestClient>::something_with_block;
+		fn(&RuntimeApiImpl<Block, TestClient>, &BlockId<Block>, Block) -> Result<Block> =
+			RuntimeApiImpl::<Block, TestClient>::something_with_block;
 
 	#[allow(deprecated)]
 	let _same_name_before_version_2:
-		fn(&RuntimeApiImpl<TestClient>, &BlockId<Block>) -> Result<String> =
-			RuntimeApiImpl::<TestClient>::same_name_before_version_2;
+		fn(&RuntimeApiImpl<Block, TestClient>, &BlockId<Block>) -> Result<String> =
+			RuntimeApiImpl::<Block, TestClient>::same_name_before_version_2;
 }
 
 #[test]

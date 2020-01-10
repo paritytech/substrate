@@ -27,7 +27,6 @@ use sp_runtime::traits::{Block as BlockT, NumberFor, One, Zero};
 use codec::{Encode, Decode};
 use sc_client_api::utils::is_descendent_of;
 use sp_blockchain::{HeaderMetadata, HeaderBackend, Error as ClientError};
-use sp_core::H256;
 use std::ops::Add;
 
 /// A builder for `is_descendent_of` functions.
@@ -57,17 +56,15 @@ pub(crate) fn descendent_query<H, Block>(client: &H) -> HeaderBackendDescendentB
 /// `IsDescendentOfBuilder` for header backends.
 pub(crate) struct HeaderBackendDescendentBuilder<H, Block>(H, std::marker::PhantomData<Block>);
 
-// TODO: relying on Hash = H256 is awful.
-// https://github.com/paritytech/substrate/issues/3624
-impl<'a, H, Block> IsDescendentOfBuilder<H256>
+impl<'a, H, Block> IsDescendentOfBuilder<Block::Hash>
 	for HeaderBackendDescendentBuilder<&'a H, Block> where
 	H: HeaderBackend<Block> + HeaderMetadata<Block, Error=ClientError>,
-	Block: BlockT<Hash = H256>,
+	Block: BlockT,
 {
 	type Error = ClientError;
-	type IsDescendentOf = Box<dyn Fn(&H256, &H256) -> Result<bool, ClientError> + 'a>;
+	type IsDescendentOf = Box<dyn Fn(&Block::Hash, &Block::Hash) -> Result<bool, ClientError> + 'a>;
 
-	fn build_is_descendent_of(&self, current: Option<(H256, H256)>)
+	fn build_is_descendent_of(&self, current: Option<(Block::Hash, Block::Hash)>)
 		-> Self::IsDescendentOf
 	{
 		Box::new(is_descendent_of(self.0, current))
