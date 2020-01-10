@@ -1425,7 +1425,11 @@ impl<T: Trait> Module<T> {
 			validator_point,
 			era_reward_points.total,
 		);
-		let reward = validator_point_part.saturating_mul(commission.saturating_add(exposure_part));
+		let reward = validator_point_part.saturating_mul(
+			commission.saturating_add(
+				Perbill::one().saturating_sub(commission).saturating_mul(exposure_part)
+			)
+		);
 		// This is zero if the era is not finished yet.
 		let era_payout = <ErasValidatorReward<T>>::get(&era);
 		println!("do_payout_validator: {:?}, reward: {:?}, era_payout: {:?}", who, reward, era_payout);
