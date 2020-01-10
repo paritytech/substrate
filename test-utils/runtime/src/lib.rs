@@ -301,8 +301,6 @@ cfg_if! {
 				fn fail_on_wasm() -> u64;
 				/// trie no_std testing
 				fn use_trie() -> u64;
-				/// History data no_std testing.
-				fn use_history_data();
 				/// Transactional tests.
 				fn use_transactions() -> u64;
 				fn benchmark_indirect_call() -> u64;
@@ -558,10 +556,6 @@ cfg_if! {
 					code_using_trie()
 				}
 
-				fn use_history_data() {
-					test_historical_data()
-				}
-
 				fn use_transactions() -> u64 {
 					system::test_transactions()
 				}
@@ -753,10 +747,6 @@ cfg_if! {
 
 				fn use_trie() -> u64 {
 					code_using_trie()
-				}
-
-				fn use_history_data() {
-					test_historical_data()
 				}
 
 				fn use_transactions() -> u64 {
@@ -1072,16 +1062,6 @@ mod tests {
 		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		runtime_api.test_storage(&block_id).unwrap();
-	}
-
-	#[test]
-	fn use_history_data() {
-		let client = TestClientBuilder::new()
-			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
-			.build();
-		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.chain_info().best_number);
-		assert!(runtime_api.use_history_data(&block_id).is_ok());
 	}
 
 	#[test]

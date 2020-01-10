@@ -659,35 +659,34 @@ mod tests {
 		}, backend::InMemory, overlayed_changes::{OverlayedValue, OverlayedChangeSet},
 	};
 	use sp_core::storage::{Storage, StorageChild};
-	use sp_historical_data::sync_linear_transaction::{History, HistoricalEntry, State};
+	use crate::{Layers, LayerEntry, COMMITTED_LAYER};
 
 	type TestBackend = InMemory<Blake2Hasher>;
 	type TestChangesTrieStorage = InMemoryChangesTrieStorage<Blake2Hasher, u64>;
 	type TestExt<'a> = Ext<'a, Blake2Hasher, u64, TestBackend, TestChangesTrieStorage>;
 
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
-
 		OverlayedChanges {
 			changes_trie_config: Some(ChangesTrieConfiguration {
 				digest_interval: 0,
 				digest_levels: 0,
 			}),
 			changes: OverlayedChangeSet {
-				states: Default::default(),
+				number_transactions: crate::COMMITTED_LAYER + 1,
 				children: Default::default(),
 				top: vec![
-					(EXTRINSIC_INDEX.to_vec(), History::from_iter(vec![
+					(EXTRINSIC_INDEX.to_vec(), Layers::from_iter(vec![
 						(OverlayedValue {
 							value: Some(3u32.encode()),
 							extrinsics: Some(vec![1].into_iter().collect())
-						}, State::Committed),
-					].into_iter().map(|(value, index)| HistoricalEntry { value, index }))),
-					(vec![1], History::from_iter(vec![
+						}, COMMITTED_LAYER),
+					].into_iter().map(|(value, index)| LayerEntry { value, index }))),
+					(vec![1], Layers::from_iter(vec![
 						(OverlayedValue {
 							value: Some(vec![100]),
 							extrinsics: Some(vec![1].into_iter().collect())
-						}, State::Committed),
-					].into_iter().map(|(value, index)| HistoricalEntry { value, index }))),
+						}, COMMITTED_LAYER),
+					].into_iter().map(|(value, index)| LayerEntry { value, index }))),
 				].into_iter().collect(),
 			},
 		}

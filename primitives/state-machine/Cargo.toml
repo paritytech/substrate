@@ -11,11 +11,11 @@ parking_lot = "0.9.0"
 hash-db = "0.15.2"
 trie-db = "0.18.1"
 trie-root = "0.15.2"
+smallvec = "0.6"
 sp-trie = { version = "2.0.0", path = "../trie" }
 sp-core = { version = "2.0.0", path = "../core" }
 sp-panic-handler = { version = "2.0.0", path = "../panic-handler" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sp-historical-data = { path = "../historical-data" }
 num-traits = "0.2.8"
 rand = "0.7.2"
 sp-externalities = { version = "2.0.0", path = "../externalities" }
@@ -24,7 +24,6 @@ sp-externalities = { version = "2.0.0", path = "../externalities" }
 hex-literal = "0.2.1"
 criterion = "0.2"
 rand = { version = "0.7.1", features = ["small_rng"] }
-sp-historical-data = { path = "../historical-data", features = [ "test-helpers" ] }
 
 [[bench]]
 name = "bench"
@@ -32,6 +31,4 @@ harness = false
 
 [features]
 default = []
-test-helpers = [
-	"sp-historical-data/test-helpers",
-]
+test-helpers = []

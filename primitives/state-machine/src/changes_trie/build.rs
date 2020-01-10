@@ -329,7 +329,7 @@ mod test {
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
-	use sp_historical_data::sync_linear_transaction::{States, State, History, HistoricalEntry};
+	use crate::{COMMITTED_LAYER, Layers, LayerEntry};
 	use super::*;
 
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
@@ -403,57 +403,57 @@ mod test {
 		]);
 		let changes = OverlayedChanges {
 			changes: OverlayedChangeSet {
-				states: States::test_state(0),
+				number_transactions: COMMITTED_LAYER + 1,
 				top: vec![
-					(EXTRINSIC_INDEX.to_vec(), History::from_iter(vec![
+					(EXTRINSIC_INDEX.to_vec(), Layers::from_iter(vec![
 						(OverlayedValue {
 							value: Some(3u32.encode()),
 							extrinsics: None,
-						}, State::Committed),
-					].into_iter().map(|(value, index)| HistoricalEntry { value, index }))),
-					(vec![100], History::from_iter(vec![
+						}, COMMITTED_LAYER),
+					].into_iter().map(|(value, index)| LayerEntry { value, index }))),
+					(vec![100], Layers::from_iter(vec![
 						(OverlayedValue {
 							value: Some(vec![202]),
 							extrinsics: Some(vec![3].into_iter().collect())
-						}, State::Committed),
+						}, COMMITTED_LAYER),
 						(OverlayedValue {
 							value: Some(vec![200]),
 							extrinsics: Some(vec![3, 0, 2].into_iter().collect())
-						}, State::Transaction(0)),
-					].into_iter().map(|(value, index)| HistoricalEntry { value, index }))),
-					(vec![101], History::from_iter(vec![
+						}, COMMITTED_LAYER + 1),
+					].into_iter().map(|(value, index)| LayerEntry { value, index }))),
+					(vec![101], Layers::from_iter(vec![
 						(OverlayedValue {
 						value: Some(vec![203]),
 						extrinsics: Some(vec![1].into_iter().collect())
-						}, State::Committed),
-					].into_iter().map(|(value, index)| HistoricalEntry { value, index }))),
-					(vec![103], History::from_iter(vec![
+						}, COMMITTED_LAYER),
+					].into_iter().map(|(value, index)| LayerEntry { value, index }))),
+					(vec![103], Layers::from_iter(vec![
 						(OverlayedValue {
 						value: None,
 						extrinsics: Some(vec![0, 1].into_iter().collect())
-						}, State::Transaction(0)),
-					].into_iter().map(|(value, index)| HistoricalEntry { value, index }))),
+						}, COMMITTED_LAYER + 1),
+					].into_iter().map(|(value, index)| LayerEntry { value, index }))),
 				].into_iter().collect(),
 				children: vec![
 					(child_trie_key1, (vec![
-						(vec![100], History::from_iter(vec![
+						(vec![100], Layers::from_iter(vec![
 							(OverlayedValue {
 								value: Some(vec![202]),
 								extrinsics: Some(vec![3].into_iter().collect())
-							}, State::Committed),
+							}, COMMITTED_LAYER),
 							(OverlayedValue {
 								value: Some(vec![200]),
 								extrinsics: Some(vec![3, 0, 2].into_iter().collect())
-							}, State::Transaction(0)),
-						].into_iter().map(|(value, index)| HistoricalEntry { value, index }))),
+							}, COMMITTED_LAYER + 1),
+						].into_iter().map(|(value, index)| LayerEntry { value, index }))),
 					].into_iter().collect(), CHILD_INFO_1.to_owned())),
 					(child_trie_key2, (vec![
-						(vec![100], History::from_iter(vec![
+						(vec![100], Layers::from_iter(vec![
 							(OverlayedValue {
 								value: Some(vec![200]),
 								extrinsics: Some(vec![0, 2].into_iter().collect())
-							}, State::Transaction(0)),
-						].into_iter().map(|(value, index)| HistoricalEntry { value, index }))),
+							}, COMMITTED_LAYER + 1),
+						].into_iter().map(|(value, index)| LayerEntry { value, index }))),
 					].into_iter().collect(), CHILD_INFO_2.to_owned())),
 				].into_iter().collect(),
 			},
@@ -649,12 +649,12 @@ mod test {
 			let (backend, storage, mut changes, config) = prepare_for_build(zero);
 
 			// 110: missing from backend, set to None in overlay
-			changes.changes.top.insert(vec![110], History::from_iter(vec![
+			changes.changes.top.insert(vec![110], Layers::from_iter(vec![
 				(OverlayedValue {
 					value: None,
 					extrinsics: Some(vec![1].into_iter().collect()),
-				}, State::Transaction(0)),
-			].into_iter().map(|(value, index)| HistoricalEntry { value, index })));
+				}, COMMITTED_LAYER + 1),
+			].into_iter().map(|(value, index)| LayerEntry { value, index })));
 
 			let parent = AnchorBlockId { hash: Default::default(), number: zero + 3 };
 			let changes_trie_nodes = prepare_input(

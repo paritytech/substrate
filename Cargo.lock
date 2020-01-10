@@ -6338,13 +6338,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-historical-data"
-version = "2.0.0"
-dependencies = [
- "smallvec 0.6.13 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "sp-inherents"
 version = "2.0.0"
 dependencies = [
@@ -6542,9 +6535,9 @@ dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "smallvec 0.6.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-core 2.0.0",
  "sp-externalities 2.0.0",
- "sp-historical-data 2.0.0",
  "sp-panic-handler 2.0.0",
  "sp-trie 2.0.0",
  "trie-db 0.18.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6844,7 +6837,6 @@ dependencies = [
  "sp-consensus-aura 0.8.0",
  "sp-consensus-babe 0.8.0",
  "sp-core 2.0.0",
- "sp-historical-data 2.0.0",
  "sp-inherents 2.0.0",
  "sp-io 2.0.0",
  "sp-keyring 2.0.0",
