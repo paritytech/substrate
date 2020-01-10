@@ -14,6 +14,7 @@ sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-rpc = { version = "2.0.0", path = "../../../primitives/rpc" }
 serde = { version = "1.0.101", features = ["derive"] }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
+sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 pallet-contracts-rpc-runtime-api = { version = "2.0.0", path = "./runtime-api" }
 
 [dev-dependencies]

@@ -81,7 +81,13 @@ fn first_block_epoch_zero_start() {
 		);
 
 		assert_eq!(Babe::genesis_slot(), 0);
-		System::initialize(&1, &Default::default(), &Default::default(), &pre_digest);
+		System::initialize(
+			&1,
+			&Default::default(),
+			&Default::default(),
+			&pre_digest,
+			Default::default(),
+		);
 
 		// see implementation of the function for details why: we issue an
 		// epoch-change digest but don't do it via the normal session mechanism.

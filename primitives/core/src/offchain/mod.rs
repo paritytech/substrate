@@ -174,6 +174,7 @@ impl TryFrom<u32> for HttpRequestStatus {
 /// A blob to hold information about the local node's network state
 /// without committing to its format.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByCodec)]
+#[cfg_attr(feature = "std", derive(Default))]
 pub struct OpaqueNetworkState {
 	/// PeerId of the local node.
 	pub peer_id: OpaquePeerId,

@@ -22,7 +22,7 @@ use std::marker::PhantomData;
 
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use codec::{Decode, Encode};
-use sp_core::{convert_hash, traits::CodeExecutor, H256};
+use sp_core::{convert_hash, traits::CodeExecutor};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	SimpleArithmetic, CheckedConversion, Zero,
@@ -153,7 +153,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 		// all the checks are sharing the same storage
 		let storage = create_proof_check_backend_storage(remote_roots_proof);
 
-		// we remote_roots.keys() are sorted => we can use this to group changes tries roots
+		// remote_roots.keys() are sorted => we can use this to group changes tries roots
 		// that are belongs to the same CHT
 		let blocks = remote_roots.keys().cloned();
 		cht::for_each_cht_group::<B::Header, _, _, _>(cht_size, blocks, |mut storage, _, cht_blocks| {
@@ -162,7 +162,8 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 			// when required header has been pruned (=> replaced with CHT)
 			let first_block = cht_blocks.first().cloned()
 				.expect("for_each_cht_group never calls callback with empty groups");
-			let local_cht_root = self.blockchain.storage().changes_trie_cht_root(cht_size, first_block)?;
+			let local_cht_root = self.blockchain.storage().changes_trie_cht_root(cht_size, first_block)?
+				.ok_or(ClientError::InvalidCHTProof)?;
 
 			// check changes trie root for every block within CHT range
 			for block in cht_blocks {
@@ -197,7 +198,8 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 	where
 		Block: BlockT,
 		E: CodeExecutor,
-		H: Hasher<Out=H256>,
+		H: Hasher,
+		H::Out: Ord + codec::Codec + 'static,
 		S: BlockchainStorage<Block>,
 {
 	fn check_header_proof(
@@ -213,8 +215,8 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 			request.cht_root,
 			request.block,
 			remote_header_hash,
-			remote_proof)
-			.map(|_| remote_header)
+			remote_proof,
+		).map(|_| remote_header)
 	}
 
 	fn check_read_proof(
@@ -330,7 +332,7 @@ pub mod tests {
 	use sp_blockchain::Error as ClientError;
 	use sc_client_api::backend::NewBlockState;
 	use substrate_test_runtime_client::{
-		self, ClientExt, blockchain::HeaderBackend, AccountKeyring,
+		blockchain::HeaderBackend, AccountKeyring, ClientBlockImportExt,
 		runtime::{self, Hash, Block, Header, Extrinsic}
 	};
 	use sp_consensus::BlockOrigin;
@@ -441,13 +443,15 @@ pub mod tests {
 
 	fn prepare_for_header_proof_check(insert_cht: bool) -> (TestChecker, Hash, Header, StorageProof) {
 		// prepare remote client
-		let remote_client = substrate_test_runtime_client::new();
+		let mut remote_client = substrate_test_runtime_client::new();
 		let mut local_headers_hashes = Vec::new();
 		for i in 0..4 {
-			let builder = remote_client.new_block(Default::default()).unwrap();
-			remote_client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
-			local_headers_hashes.push(remote_client.block_hash(i + 1)
-				.map_err(|_| ClientError::Backend("TestError".into())));
+			let block = remote_client.new_block(Default::default()).unwrap().build().unwrap().block;
+			remote_client.import(BlockOrigin::Own, block).unwrap();
+			local_headers_hashes.push(
+				remote_client.block_hash(i + 1)
+					.map_err(|_| ClientError::Backend("TestError".into()))
+			);
 		}
 
 		// 'fetch' header proof from remote node
