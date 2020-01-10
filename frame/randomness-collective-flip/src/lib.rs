@@ -210,7 +210,13 @@ mod tests {
 		let mut parent_hash = System::parent_hash();
 
 		for i in 1 .. (blocks + 1) {
-			System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
+			System::initialize(
+				&i,
+				&parent_hash,
+				&Default::default(),
+				&Default::default(),
+				frame_system::InitKind::Full,
+			);
 			CollectiveFlip::on_initialize(i);
 
 			let header = System::finalize();

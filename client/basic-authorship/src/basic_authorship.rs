@@ -19,23 +19,21 @@
 // FIXME #1021 move this into sp-consensus
 
 use std::{time, sync::Arc};
-use sc_client_api::CallExecutor;
-use sp_blockchain;
+use sc_client_api::{CallExecutor, backend};
 use sc_client::Client as SubstrateClient;
 use codec::Decode;
-use sp_consensus::{evaluation};
+use sp_consensus::{evaluation, Proposal, RecordProof};
 use sp_inherents::InherentData;
 use log::{error, info, debug, trace};
-use sp_core::{H256, Blake2Hasher, ExecutionContext};
+use sp_core::ExecutionContext;
 use sp_runtime::{
-	traits::{
-		Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, DigestFor, BlakeTwo256
-	},
+	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, DigestFor, BlakeTwo256},
 	generic::BlockId,
 };
 use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sc_block_builder::BlockBuilderApi;
+use sp_api::{ProvideRuntimeApi, ApiExt};
 
 /// Proposer factory.
 pub struct ProposerFactory<C, A> where A: TransactionPool {
@@ -46,15 +44,16 @@ pub struct ProposerFactory<C, A> where A: TransactionPool {
 }
 
 impl<B, E, Block, RA, A> ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
-where
-	A: TransactionPool<Block=Block> + 'static,
-	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-	Block: BlockT<Hash=H256>,
-	RA: Send + Sync + 'static,
-	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-		BlockBuilderApi<Block, Error = sp_blockchain::Error>,
+	where
+		A: TransactionPool<Block = Block> + 'static,
+		B: backend::Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + Clone + 'static,
+		Block: BlockT,
+		RA: Send + Sync + 'static,
+		SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi<Block>,
+		<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
+			BlockBuilderApi<Block, Error = sp_blockchain::Error> +
+			ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
 {
 	pub fn init_with_now(
 		&mut self,
@@ -83,16 +82,17 @@ where
 }
 
 impl<B, E, Block, RA, A> sp_consensus::Environment<Block> for
-ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
-where
-	A: TransactionPool<Block=Block> + 'static,
-	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-	Block: BlockT<Hash=H256>,
-	RA: Send + Sync + 'static,
-	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-		BlockBuilderApi<Block, Error = sp_blockchain::Error>,
+	ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
+		where
+			A: TransactionPool<Block = Block> + 'static,
+			B: backend::Backend<Block> + Send + Sync + 'static,
+			E: CallExecutor<Block> + Send + Sync + Clone + 'static,
+			Block: BlockT,
+			RA: Send + Sync + 'static,
+			SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi<Block>,
+			<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
+				BlockBuilderApi<Block, Error = sp_blockchain::Error> +
+				ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
 {
 	type Proposer = Proposer<Block, SubstrateClient<B, E, Block, RA>, A>;
 	type Error = sp_blockchain::Error;
@@ -121,18 +121,22 @@ struct ProposerInner<Block: BlockT, C, A: TransactionPool> {
 }
 
 impl<B, E, Block, RA, A> sp_consensus::Proposer<Block> for
-Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
-where
-	A: TransactionPool<Block=Block> + 'static,
-	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-	Block: BlockT<Hash=H256>,
-	RA: Send + Sync + 'static,
-	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-		BlockBuilderApi<Block, Error = sp_blockchain::Error>,
+	Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
+		where
+			A: TransactionPool<Block = Block> + 'static,
+			B: backend::Backend<Block> + Send + Sync + 'static,
+			E: CallExecutor<Block> + Send + Sync + Clone + 'static,
+			Block: BlockT,
+			RA: Send + Sync + 'static,
+			SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi<Block>,
+			<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
+				BlockBuilderApi<Block, Error = sp_blockchain::Error> +
+				ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
 {
-	type Create = tokio_executor::blocking::Blocking<Result<Block, sp_blockchain::Error>>;
+	type Transaction = backend::TransactionFor<B, Block>;
+	type Proposal = tokio_executor::blocking::Blocking<
+		Result<Proposal<Block, Self::Transaction>, Self::Error>
+	>;
 	type Error = sp_blockchain::Error;
 
 	fn propose(
@@ -140,38 +144,45 @@ where
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		max_duration: time::Duration,
-	) -> Self::Create {
+		record_proof: RecordProof,
+	) -> Self::Proposal {
 		let inner = self.inner.clone();
 		tokio_executor::blocking::run(move || {
 			// leave some time for evaluation and block finalization (33%)
 			let deadline = (inner.now)() + max_duration - max_duration / 3;
-			inner.propose_with(inherent_data, inherent_digests, deadline)
+			inner.propose_with(inherent_data, inherent_digests, deadline, record_proof)
 		})
 	}
 }
 
-impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, A> where
-	A: TransactionPool<Block=Block> + 'static,
-	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-	Block: BlockT<Hash=H256>,
+impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, A>	where
+	A: TransactionPool<Block = Block>,
+	B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
+	E: CallExecutor<Block> + Send + Sync + Clone + 'static,
+	Block: BlockT,
 	RA: Send + Sync + 'static,
-	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-		BlockBuilderApi<Block, Error = sp_blockchain::Error>,
+	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi<Block>,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
+		BlockBuilderApi<Block, Error = sp_blockchain::Error> +
+		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
 {
 	fn propose_with(
 		&self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		deadline: time::Instant,
-	) -> Result<Block, sp_blockchain::Error> {
+		record_proof: RecordProof,
+	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>>, sp_blockchain::Error> {
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
 		/// It allows us to increase block utilization.
 		const MAX_SKIPPED_TRANSACTIONS: usize = 8;
 
-		let mut block_builder = self.client.new_block_at(&self.parent_id, inherent_digests)?;
+		let mut block_builder = self.client.new_block_at(
+			&self.parent_id,
+			inherent_digests,
+			record_proof,
+		)?;
 
 		// We don't check the API versions any further here since the dispatch compatibility
 		// check should be enough.
@@ -194,7 +205,10 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 		debug!("Attempting to push transactions from the pool.");
 		for pending_tx in pending_iterator {
 			if (self.now)() > deadline {
-				debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
+				debug!(
+					"Consensus deadline reached when pushing block transactions, \
+					proceeding with proposing."
+				);
 				break;
 			}
 
@@ -232,7 +246,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
-		let block = block_builder.bake()?;
+		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
 
 		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
 			block.header().number(),
@@ -257,7 +271,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 			error!("Failed to evaluate authored block: {:?}", err);
 		}
 
-		Ok(block)
+		Ok(Proposal { block, proof, storage_changes })
 	}
 }
 
@@ -267,8 +281,14 @@ mod tests {
 
 	use parking_lot::Mutex;
 	use sp_consensus::Proposer;
-	use substrate_test_runtime_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
+	use substrate_test_runtime_client::{
+		runtime::{Extrinsic, Transfer}, AccountKeyring, DefaultTestClientBuilderExt,
+		TestClientBuilderExt,
+	};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
+	use sp_api::Core;
+	use backend::Backend;
+	use sp_blockchain::HeaderBackend;
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		Transfer {
@@ -308,12 +328,58 @@ mod tests {
 
 		// when
 		let deadline = time::Duration::from_secs(3);
-		let block = futures::executor::block_on(proposer.propose(Default::default(), Default::default(), deadline))
-			.unwrap();
+		let block = futures::executor::block_on(
+			proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No)
+		).map(|r| r.block).unwrap();
 
 		// then
 		// block should have some extrinsics although we have some more in the pool.
 		assert_eq!(block.extrinsics().len(), 1);
 		assert_eq!(txpool.ready().count(), 2);
+	}
+
+	#[test]
+	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
+		let (client, backend) = substrate_test_runtime_client::TestClientBuilder::new()
+			.build_with_backend();
+		let client = Arc::new(client);
+		let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
+		let genesis_hash = client.info().best_hash;
+		let block_id = BlockId::Hash(genesis_hash);
+
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0)]),
+		).unwrap();
+
+		let mut proposer_factory = ProposerFactory {
+			client: client.clone(),
+			transaction_pool: txpool.clone(),
+		};
+
+		let mut proposer = proposer_factory.init_with_now(
+			&client.header(&block_id).unwrap().unwrap(),
+			Box::new(move || time::Instant::now()),
+		).unwrap();
+
+		let deadline = time::Duration::from_secs(9);
+		let proposal = futures::executor::block_on(
+			proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No),
+		).unwrap();
+
+		assert_eq!(proposal.block.extrinsics().len(), 1);
+
+		let api = client.runtime_api();
+		api.execute_block(&block_id, proposal.block).unwrap();
+
+		let state = backend.state_at(block_id).unwrap();
+		let changes_trie_storage = backend.changes_trie_storage();
+
+		let storage_changes = api.into_storage_changes(&state, changes_trie_storage, genesis_hash)
+			.unwrap();
+
+		assert_eq!(
+			proposal.storage_changes.transaction_storage_root,
+			storage_changes.transaction_storage_root,
+		);
 	}
 }

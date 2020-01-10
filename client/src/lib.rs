@@ -57,7 +57,7 @@
 //! // from your runtime.
 //! use substrate_test_runtime_client::{LocalExecutor, runtime::Block, runtime::RuntimeApi};
 //!
-//! let backend = Arc::new(Backend::<Block, Blake2Hasher>::new());
+//! let backend = Arc::new(Backend::<Block>::new());
 //! let client = Client::<_, _, _, RuntimeApi>::new(
 //! 	backend.clone(),
 //! 	LocalCallExecutor::new(
@@ -66,6 +66,7 @@
 //!		),
 //! 	// This parameter provides the storage for the chain genesis.
 //! 	<Storage>::default(),
+//! 	Default::default(),
 //! 	Default::default(),
 //! 	Default::default(),
 //! );
@@ -98,7 +99,7 @@ pub use crate::{
 		new_in_mem,
 		BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents,
 		BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-		LongestChain, BlockOf, ProvideUncles, ForkBlocks, apply_aux,
+		LongestChain, BlockOf, ProvideUncles, BadBlocks, ForkBlocks, apply_aux,
 	},
 	leaves::LeafSet,
 };

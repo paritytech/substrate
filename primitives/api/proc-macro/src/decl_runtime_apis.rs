@@ -16,7 +16,7 @@
 
 use crate::utils::{
 	generate_crate_access, generate_hidden_includes, generate_runtime_mod_name_for_trait,
-	fold_fn_decl_for_client_side, unwrap_or_error, extract_parameter_names_types_and_borrows,
+	fold_fn_decl_for_client_side, extract_parameter_names_types_and_borrows,
 	generate_native_call_generator_fn_name, return_type_extract_type,
 	generate_method_runtime_api_impl_name, generate_call_api_at_fn_name, prefix_function_with_trait,
 	replace_wild_card_parameter_names,
@@ -399,7 +399,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				R: #crate_::Encode + #crate_::Decode + PartialEq,
 				NC: FnOnce() -> std::result::Result<R, String> + std::panic::UnwindSafe,
 				Block: #crate_::BlockT,
-				T: #crate_::CallRuntimeAt<Block>,
+				T: #crate_::CallApiAt<Block>,
 				C: #crate_::Core<Block, Error = T::Error>,
 			>(
 				call_runtime_at: &T,
@@ -407,6 +407,9 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				at: &#crate_::BlockId<Block>,
 				args: Vec<u8>,
 				changes: &std::cell::RefCell<#crate_::OverlayedChanges>,
+				storage_transaction_cache: &std::cell::RefCell<
+					#crate_::StorageTransactionCache<Block, T::StateBackend>
+				>,
 				initialized_block: &std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 				native_call: Option<NC>,
 				context: #crate_::ExecutionContext,
@@ -426,34 +429,40 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 					if version.apis.iter().any(|(s, v)| {
 						s == &ID && *v < #versions
 					}) {
-						let ret = call_runtime_at.call_api_at::<R, fn() -> _, _>(
+						let params = #crate_::CallApiAtParams::<_, _, fn() -> _, _> {
 							core_api,
 							at,
-							#old_names,
-							args,
-							changes,
+							function: #old_names,
+							native_call: None,
+							arguments: args,
+							overlayed_changes: changes,
+							storage_transaction_cache,
 							initialize_block,
-							None,
 							context,
 							recorder,
-						)?;
+						};
+
+						let ret = call_runtime_at.call_api_at(params)?;
 
 						update_initialized_block();
-						return Ok(ret);
+						return Ok(ret)
 					}
 				)*
 
-				let ret = call_runtime_at.call_api_at(
+				let params = #crate_::CallApiAtParams {
 					core_api,
 					at,
-					#trait_fn_name,
-					args,
-					changes,
-					initialize_block,
+					function: #trait_fn_name,
 					native_call,
+					arguments: args,
+					overlayed_changes: changes,
+					storage_transaction_cache,
+					initialize_block,
 					context,
 					recorder,
-				)?;
+				};
+
+				let ret = call_runtime_at.call_api_at(params)?;
 
 				update_initialized_block();
 				Ok(ret)
@@ -465,7 +474,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 }
 
 /// Generate the declaration of the trait for the runtime.
-fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
+fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 	let mut result = Vec::new();
 
 	for decl in decls {
@@ -473,12 +482,12 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 		extend_generics_with_block(&mut decl.generics);
 		let mod_name = generate_runtime_mod_name_for_trait(&decl.ident);
 		let found_attributes = remove_supported_attributes(&mut decl.attrs);
-		let api_version = unwrap_or_error(get_api_version(&found_attributes).map(|v| {
+		let api_version = get_api_version(&found_attributes).map(|v| {
 			generate_runtime_api_version(v as u32)
-		}));
+		})?;
 		let id = generate_runtime_api_id(&decl.ident.to_string());
 
-		let call_api_at_calls = unwrap_or_error(generate_call_api_at_calls(&decl));
+		let call_api_at_calls = generate_call_api_at_calls(&decl)?;
 
 		// Remove methods that have the `changed_in` attribute as they are not required for the
 		// runtime anymore.
@@ -495,7 +504,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 			r => Some(r.clone()),
 		}).collect();
 
-		let native_call_generators = unwrap_or_error(generate_native_call_generators(&decl));
+		let native_call_generators = generate_native_call_generators(&decl)?;
 
 		result.push(quote!(
 			#[doc(hidden)]
@@ -517,7 +526,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 		));
 	}
 
-	quote!( #( #result )* )
+	Ok(quote!( #( #result )* ))
 }
 
 /// Modify the given runtime api declaration to be usable on the client side.
@@ -722,7 +731,7 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 				'static
 				+ Send
 				+ Sync
-				+ #crate_::ApiExt<#block_ident>
+				+ #crate_::ApiErrorExt
 			);
 		} else {
 			// Add the `Core` runtime api as super trait.
@@ -823,7 +832,7 @@ fn get_api_version(found_attributes: &HashMap<&'static str, Attribute>) -> Resul
 }
 
 /// Generate the declaration of the trait for the client side.
-fn generate_client_side_decls(decls: &[ItemTrait]) -> TokenStream {
+fn generate_client_side_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 	let mut result = Vec::new();
 
 	for decl in decls {
@@ -848,14 +857,12 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> TokenStream {
 
 		let api_version = get_api_version(&found_attributes);
 
-		let runtime_info = unwrap_or_error(
-			api_version.map(|v| generate_runtime_info_impl(&decl, v))
-		);
+		let runtime_info = api_version.map(|v| generate_runtime_info_impl(&decl, v))?;
 
 		result.push(quote!( #decl #runtime_info #( #errors )* ));
 	}
 
-	quote!( #( #result )* )
+	Ok(quote!( #( #result )* ))
 }
 
 /// Checks that a trait declaration is in the format we expect.
@@ -908,15 +915,17 @@ impl<'ast> Visit<'ast> for CheckTraitDecl {
 }
 
 /// Check that the trait declarations are in the format we expect.
-fn check_trait_decls(decls: &[ItemTrait]) -> Option<TokenStream> {
+fn check_trait_decls(decls: &[ItemTrait]) -> Result<()> {
 	let mut checker = CheckTraitDecl { errors: Vec::new() };
 	decls.iter().for_each(|decl| visit::visit_item_trait(&mut checker, &decl));
 
-	if checker.errors.is_empty() {
-		None
+	if let Some(err) = checker.errors.pop() {
+		Err(checker.errors.into_iter().fold(err, |mut err, other| {
+			err.combine(other);
+			err
+		}))
 	} else {
-		let errors = checker.errors.into_iter().map(|e| e.to_compile_error());
-		Some(quote!( #( #errors )* ))
+		Ok(())
 	}
 }
 
@@ -925,19 +934,23 @@ pub fn decl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	// Parse all trait declarations
 	let RuntimeApiDecls { decls: api_decls } = parse_macro_input!(input as RuntimeApiDecls);
 
-	if let Some(errors) = check_trait_decls(&api_decls) {
-		return errors.into();
-	}
+	decl_runtime_apis_impl_inner(&api_decls).unwrap_or_else(|e| e.to_compile_error()).into()
+}
+
+fn decl_runtime_apis_impl_inner(api_decls: &[ItemTrait]) -> Result<TokenStream> {
+	check_trait_decls(&api_decls)?;
 
 	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
-	let runtime_decls = generate_runtime_decls(&api_decls);
-	let client_side_decls = generate_client_side_decls(&api_decls);
+	let runtime_decls = generate_runtime_decls(api_decls)?;
+	let client_side_decls = generate_client_side_decls(api_decls)?;
 
-	quote!(
-		#hidden_includes
+	Ok(
+		quote!(
+			#hidden_includes
 
-		#runtime_decls
+			#runtime_decls
 
-		#client_side_decls
-	).into()
+			#client_side_decls
+		)
+	)
 }

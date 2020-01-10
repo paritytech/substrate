@@ -41,12 +41,12 @@ mod no_instance {
 			pub LinkedMap: linked_map u32 => u32;
 			pub LinkedMap2: linked_map hasher(twox_128) u32 => u32;
 
-			pub DoubleMap: double_map u32, blake2_256(u32) => u32;
-			pub DoubleMap2: double_map hasher(twox_128) u32, blake2_128(u32) => u32;
+			pub DoubleMap: double_map u32, u32 => u32;
+			pub DoubleMap2: double_map hasher(twox_128) u32, hasher(blake2_128) u32 => u32;
 
 			pub TestGenericValue get(fn test_generic_value) config(): Option<T::BlockNumber>;
 			pub TestGenericDoubleMap get(fn foo2) config(test_generic_double_map):
-				double_map u32, blake2_256(T::BlockNumber) => Option<u32>;
+				double_map u32, T::BlockNumber => Option<u32>;
 		}
 	}
 }
@@ -71,12 +71,12 @@ mod instance {
 			pub LinkedMap: linked_map u32 => u32;
 			pub LinkedMap2: linked_map hasher(twox_128) u32 => u32;
 
-			pub DoubleMap: double_map u32, blake2_256(u32) => u32;
-			pub DoubleMap2: double_map hasher(twox_128) u32, blake2_128(u32) => u32;
+			pub DoubleMap: double_map u32, u32 => u32;
+			pub DoubleMap2: double_map hasher(twox_128) u32, hasher(blake2_128) u32 => u32;
 
 			pub TestGenericValue get(fn test_generic_value) config(): Option<T::BlockNumber>;
 			pub TestGenericDoubleMap get(fn foo2) config(test_generic_double_map):
-				double_map u32, blake2_256(T::BlockNumber) => Option<u32>;
+				double_map u32, T::BlockNumber => Option<u32>;
 		}
 		add_extra_genesis {
 			// See `decl_storage` limitation.

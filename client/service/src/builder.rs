@@ -17,7 +17,7 @@
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID};
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
-use crate::config::{Configuration, DatabaseConfig};
+use crate::config::{Configuration, DatabaseConfig, KeystoreConfig};
 use sc_client_api::{
 	self,
 	BlockchainEvents,
@@ -38,13 +38,11 @@ use log::{info, warn, error};
 use sc_network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo};
 use sc_network::{config::BoxFinalityProofRequestBuilder, specialization::NetworkSpecialization};
 use parking_lot::{Mutex, RwLock};
-use sp_core::{Blake2Hasher, H256, Hasher};
-use sc_rpc;
-use sp_api::ConstructRuntimeApi;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, ProvideRuntimeApi, NumberFor, Header, SaturatedConversion,
+	Block as BlockT, NumberFor, SaturatedConversion, HasherFor,
 };
+use sp_api::ProvideRuntimeApi;
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
 	io::{Read, Write, Seek},
@@ -121,19 +119,19 @@ pub type TLightClient<TBl, TRtApi, TExecDisp> = Client<
 /// Light client backend type.
 pub type TLightBackend<TBl> = sc_client::light::backend::Backend<
 	sc_client_db::light::LightStorage<TBl>,
-	Blake2Hasher,
+	HasherFor<TBl>,
 >;
 
 /// Light call executor type.
 pub type TLightCallExecutor<TBl, TExecDisp> = sc_client::light::call_executor::GenesisCallExecutor<
 	sc_client::light::backend::Backend<
 		sc_client_db::light::LightStorage<TBl>,
-		Blake2Hasher
+		HasherFor<TBl>
 	>,
 	sc_client::LocalCallExecutor<
 		sc_client::light::backend::Backend<
 			sc_client_db::light::LightStorage<TBl>,
-			Blake2Hasher
+			HasherFor<TBl>
 		>,
 		NativeExecutor<TExecDisp>
 	>,
@@ -149,7 +147,7 @@ type TFullParts<TBl, TRtApi, TExecDisp> = (
 pub fn new_full_client<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 	config: &Configuration<TCfg, TGen, TCSExt>,
 ) -> Result<TFullClient<TBl, TRtApi, TExecDisp>, Error> where
-	TBl: BlockT<Hash=H256>,
+	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch,
 	TGen: sp_runtime::BuildStorage + serde::Serialize + for<'de> serde::Deserialize<'de>,
 	TCSExt: Extension,
@@ -160,15 +158,18 @@ pub fn new_full_client<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 	config: &Configuration<TCfg, TGen, TCSExt>,
 ) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
-	TBl: BlockT<Hash=H256>,
+	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch,
 	TGen: sp_runtime::BuildStorage + serde::Serialize + for<'de> serde::Deserialize<'de>,
 	TCSExt: Extension,
 {
-	let keystore = Keystore::open(
-		config.keystore_path.clone().ok_or("No basepath configured")?,
-		config.keystore_password.clone()
-	)?;
+	let keystore = match &config.keystore {
+		KeystoreConfig::Path { path, password } => Keystore::open(
+			path.clone().ok_or("No basepath configured")?,
+			password.clone()
+		)?,
+		KeystoreConfig::InMemory => Keystore::new_in_memory()
+	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,
@@ -178,6 +179,12 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 	let fork_blocks = config.chain_spec
 		.extensions()
 		.get::<sc_client::ForkBlocks<TBl>>()
+		.cloned()
+		.unwrap_or_default();
+
+	let bad_blocks = config.chain_spec
+		.extensions()
+		.get::<sc_client::BadBlocks<TBl>>()
 		.cloned()
 		.unwrap_or_default();
 
@@ -208,6 +215,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 			executor,
 			&config.chain_spec,
 			fork_blocks,
+			bad_blocks,
 			extensions,
 		)?
 	};
@@ -218,7 +226,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 impl<TCfg, TGen, TCSExt> ServiceBuilder<(), (), TCfg, TGen, TCSExt, (), (), (), (), (), (), (), (), (), ()>
 where TGen: RuntimeGenesis, TCSExt: Extension {
 	/// Start the service builder with a configuration.
-	pub fn new_full<TBl: BlockT<Hash=H256>, TRtApi, TExecDisp: NativeExecutionDispatch>(
+	pub fn new_full<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch>(
 		config: Configuration<TCfg, TGen, TCSExt>
 	) -> Result<ServiceBuilder<
 		TBl,
@@ -260,7 +268,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 	}
 
 	/// Start the service builder with a configuration.
-	pub fn new_light<TBl: BlockT<Hash=H256>, TRtApi, TExecDisp: NativeExecutionDispatch + 'static>(
+	pub fn new_light<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch + 'static>(
 		config: Configuration<TCfg, TGen, TCSExt>
 	) -> Result<ServiceBuilder<
 		TBl,
@@ -279,10 +287,13 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TLightBackend<TBl>,
 	>, Error> {
-		let keystore = Keystore::open(
-			config.keystore_path.clone().ok_or("No basepath configured")?,
-			config.keystore_password.clone()
-		)?;
+		let keystore = match &config.keystore {
+			KeystoreConfig::Path { path, password } => Keystore::open(
+				path.clone().ok_or("No basepath configured")?,
+				password.clone()
+			)?,
+			KeystoreConfig::InMemory => Keystore::new_in_memory()
+		};
 
 		let executor = NativeExecutor::<TExecDisp>::new(
 			config.wasm_method,
@@ -308,7 +319,12 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			sc_client_db::light::LightStorage::new(db_settings)?
 		};
 		let light_blockchain = sc_client::light::new_light_blockchain(db_storage);
-		let fetch_checker = Arc::new(sc_client::light::new_fetch_checker(light_blockchain.clone(), executor.clone()));
+		let fetch_checker = Arc::new(
+			sc_client::light::new_fetch_checker::<_, TBl, _>(
+				light_blockchain.clone(),
+				executor.clone(),
+			),
+		);
 		let fetcher = Arc::new(sc_network::OnDemand::new(fetch_checker));
 		let backend = sc_client::light::new_light_backend(light_blockchain);
 		let remote_blockchain = backend.remote_blockchain();
@@ -705,20 +721,21 @@ ServiceBuilder<
 	TRpc,
 	TBackend,
 > where
-	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi,
-	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi>::Api:
+	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi<TBl>,
+	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi<TBl>>::Api:
 		sp_api::Metadata<TBl> +
 		sc_offchain::OffchainWorkerApi<TBl> +
 		sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl> +
 		sp_session::SessionKeys<TBl> +
-		sp_api::ApiExt<TBl, Error = sp_blockchain::Error>,
-	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	TRtApi: ConstructRuntimeApi<TBl, Client<TBackend, TExec, TBl, TRtApi>> + 'static + Send + Sync,
+		sp_api::ApiErrorExt<Error = sp_blockchain::Error> +
+		sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
+	TBl: BlockT,
+	TRtApi: 'static + Send + Sync,
 	TCfg: Default,
 	TGen: RuntimeGenesis,
 	TCSExt: Extension,
-	TBackend: 'static + sc_client_api::backend::Backend<TBl, Blake2Hasher> + Send,
-	TExec: 'static + sc_client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
+	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
+	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
 	TSc: Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TNetP: NetworkSpecialization<TBl>,
@@ -837,7 +854,7 @@ ServiceBuilder<
 				Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone(), db)))
 			},
 			(true, None) => {
-				log::warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
+				warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
 				None
 			},
 			_ => None,
@@ -854,7 +871,6 @@ ServiceBuilder<
 			let events = client.import_notification_stream()
 				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |notification| {
-					let number = *notification.header.number();
 					let txpool = txpool.upgrade();
 
 					if let Some(txpool) = txpool.as_ref() {
@@ -867,8 +883,11 @@ ServiceBuilder<
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
 					if let Some(offchain) = offchain {
-						let future = offchain.on_block_imported(&number, network_state_info.clone(), is_validator)
-							.map(|()| Ok(()));
+						let future = offchain.on_block_imported(
+							&notification.header,
+							network_state_info.clone(),
+							is_validator
+						).map(|()| Ok(()));
 						let _ = to_spawn_tx_.unbounded_send(Box::new(Compat::new(future)));
 					}
 
@@ -919,11 +938,6 @@ ServiceBuilder<
 			let bandwidth_download = net_status.average_download_per_sec;
 			let bandwidth_upload = net_status.average_upload_per_sec;
 
-			let used_state_cache_size = match info.used_state_cache_size {
-				Some(size) => size,
-				None => 0,
-			};
-
 			// get cpu usage and memory usage of this process
 			let (cpu_usage, memory) = if let Some(self_pid) = self_pid {
 				if sys.refresh_process(self_pid) {
@@ -946,7 +960,10 @@ ServiceBuilder<
 				"finalized_hash" => ?info.chain.finalized_hash,
 				"bandwidth_download" => bandwidth_download,
 				"bandwidth_upload" => bandwidth_upload,
-				"used_state_cache_size" => used_state_cache_size,
+				"used_state_cache_size" => info.usage.as_ref().map(|usage| usage.memory.state_cache).unwrap_or(0),
+				"used_db_cache_size" => info.usage.as_ref().map(|usage| usage.memory.database_cache).unwrap_or(0),
+				"disk_read_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_read).unwrap_or(0),
+				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
 			);
 			let _ = record_metrics!(
 				"peers" => num_peers,
@@ -957,7 +974,10 @@ ServiceBuilder<
 				"finalized_height" => finalized_number,
 				"bandwidth_download" => bandwidth_download,
 				"bandwidth_upload" => bandwidth_upload,
-				"used_state_cache_size" => used_state_cache_size,
+				"used_state_cache_size" => info.usage.as_ref().map(|usage| usage.memory.state_cache).unwrap_or(0),
+				"used_db_cache_size" => info.usage.as_ref().map(|usage| usage.memory.database_cache).unwrap_or(0),
+				"disk_read_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_read).unwrap_or(0),
+				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
 			);
 
 			Ok(())
@@ -1108,7 +1128,7 @@ ServiceBuilder<
 			}).compat();
 
 			let _ = to_spawn_tx.unbounded_send(Box::new(future));
-    }
+		}
 
 		// Instrumentation
 		if let Some(tracing_targets) = config.tracing_targets.as_ref() {

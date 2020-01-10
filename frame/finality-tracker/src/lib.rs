@@ -291,7 +291,13 @@ mod tests {
 		TestExternalities::new(t).execute_with(|| {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
-				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
+				System::initialize(
+					&i,
+					&parent_hash,
+					&Default::default(),
+					&Default::default(),
+					Default::default()
+				);
 				FinalityTracker::on_finalize(i);
 				let hdr = System::finalize();
 				parent_hash = hdr.hash();
@@ -310,7 +316,13 @@ mod tests {
 		TestExternalities::new(t).execute_with(|| {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
-				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
+				System::initialize(
+					&i,
+					&parent_hash,
+					&Default::default(),
+					&Default::default(),
+					Default::default(),
+				);
 				assert_ok!(FinalityTracker::dispatch(
 					Call::final_hint(i-1),
 					Origin::NONE,

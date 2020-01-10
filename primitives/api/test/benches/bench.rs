@@ -19,8 +19,9 @@ use substrate_test_runtime_client::{
 	DefaultTestClientBuilderExt, TestClientBuilder,
 	TestClientBuilderExt, runtime::TestAPI,
 };
-use sp_runtime::{generic::BlockId, traits::ProvideRuntimeApi};
+use sp_runtime::generic::BlockId;
 use sp_state_machine::ExecutionStrategy;
+use sp_api::ProvideRuntimeApi;
 
 fn sp_api_benchmark(c: &mut Criterion) {
 	c.bench_function("add one with same runtime api", |b| {
