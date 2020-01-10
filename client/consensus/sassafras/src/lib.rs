@@ -7,7 +7,9 @@ use sp_inherents::InherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
 use sp_consensus::{Error as ConsensusError, BlockImportParams, BlockOrigin};
 use sp_consensus::import_queue::{Verifier, CacheKeyId, BasicQueue};
-use sp_consensus_sassafras::digest::{NextEpochDescriptor, PostBlockDescriptor, PreDigest};
+use sp_consensus_sassafras::digest::{
+	NextEpochDescriptor, PostBlockDescriptor, PreDigest, CompatibleDigestItem
+};
 use sp_consensus_sassafras::inherents::SassafrasInherentData;
 use sp_runtime::{generic::BlockId, Justification};
 use sp_runtime::traits::{Block as BlockT, Header, ProvideRuntimeApi};
@@ -28,6 +30,10 @@ enum Error<B: BlockT> {
 	ParentUnavailable(B::Hash, B::Hash),
 	#[display(fmt = "Could not fetch parent header: {:?}", _0)]
 	FetchParentHeader(sp_blockchain::Error),
+	MultiplePreRuntimeDigest,
+	NoPreRuntimeDigest,
+	MultipleNextEpochDescriptor,
+	MultiplePostBlockDescriptor,
 	Runtime(sp_inherents::Error),
 	Client(sp_blockchain::Error),
 }
@@ -123,17 +129,41 @@ impl SlotCompatible for TimeSource {
 fn find_pre_digest<B: BlockT>(
 	header: &B::Header,
 ) -> Result<PreDigest, Error<B>> {
-	unimplemented!()
+	let mut pre_digest = None;
+	for log in header.digest().logs() {
+		match (log.as_sassafras_pre_digest(), pre_digest.is_some()) {
+			(Some(_), true) => return Err(Error::MultiplePreRuntimeDigest),
+			(None, _) => (),
+			(s, false) => pre_digest = s,
+		}
+	}
+	pre_digest.ok_or_else(|| Error::NoPreRuntimeDigest)
 }
 
 fn find_post_block_descriptor<B: BlockT>(
 	header: &B::Header,
 ) -> Result<Option<PostBlockDescriptor>, Error<B>> {
-	unimplemented!()
+	let mut desc = None;
+	for log in header.digest().logs() {
+		match (log.as_sassafras_post_block_descriptor(), desc.is_some()) {
+			(Some(_), true) => return Err(Error::MultiplePostBlockDescriptor),
+			(None, _) => (),
+			(s, false) => desc = s,
+		}
+	}
+	Ok(desc)
 }
 
 fn find_next_epoch_descriptor<B: BlockT>(
 	header: &B::Header,
 ) -> Result<Option<NextEpochDescriptor>, Error<B>> {
-	unimplemented!()
+	let mut desc = None;
+	for log in header.digest().logs() {
+		match (log.as_sassafras_next_epoch_descriptor(), desc.is_some()) {
+			(Some(_), true) => return Err(Error::MultipleNextEpochDescriptor),
+			(None, _) => (),
+			(s, false) => desc = s,
+		}
+	}
+	Ok(desc)
 }
