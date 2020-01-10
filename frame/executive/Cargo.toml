@@ -1,0 +1,33 @@
+[package]
+name = "frame-executive"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+serde = { version = "1.0.101", optional = true }
+sp-io ={ path = "../../primitives/io", default-features = false }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+
+[dev-dependencies]
+hex-literal = "0.2.1"
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+pallet-indices = { version = "2.0.0", path = "../indices" }
+pallet-balances = { version = "2.0.0", path = "../balances" }
+pallet-transaction-payment = { version = "2.0.0", path = "../transaction-payment" }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"frame-support/std",
+	"frame-system/std",
+	"serde",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-std/std",
+]

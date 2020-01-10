@@ -1,0 +1,5 @@
+error: Taking `Self` by value is not allowed.
+ --> $DIR/take_self_by_value.rs:5:10
+  |
+5 |     fn test(self) {}
+  |             ^^^^

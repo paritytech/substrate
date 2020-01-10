@@ -1,0 +1,5 @@
+error: Expected `,` or `{`
+ --> $DIR/no_comma_after_where.rs:6:3
+  |
+6 |         Block = Block,
+  |         ^^^^^

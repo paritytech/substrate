@@ -1,0 +1,5 @@
+error: `PassByEnum` only supports enums as input type.
+ --> $DIR/pass_by_enum_with_struct.rs:3:10
+  |
+3 | #[derive(PassByEnum)]
+  |          ^^^^^^^^^^

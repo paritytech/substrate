@@ -1,0 +1,7 @@
+error: `System` module declaration is missing. Please add this line: `System: system::{Module, Call, Storage, Config, Event},`
+ --> $DIR/missing_system_module.rs:8:2
+  |
+8 |       {
+  |  _____^
+9 | |     }
+  | |_____^

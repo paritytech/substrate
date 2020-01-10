@@ -1,0 +1,63 @@
+[package]
+name = "sc-service"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[features]
+default = ["rocksdb"]
+# The RocksDB feature activates the RocksDB database backend. If it is not activated, and you pass
+# a path to a database, an error will be produced at runtime.
+rocksdb = ["sc-client-db/kvdb-rocksdb"]
+wasmtime = [
+	"sc-executor/wasmtime",
+]
+
+[dependencies]
+derive_more = "0.99.2"
+futures = "0.1.29"
+futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
+parking_lot = "0.9.0"
+lazy_static = "1.4.0"
+log = "0.4.8"
+slog = { version = "2.5.2", features = ["nested-values"] }
+tokio-executor = "0.1.8"
+tokio-timer = "0.2.11"
+exit-future = "0.2.0"
+serde = "1.0.101"
+serde_json = "1.0.41"
+sysinfo = "0.9.5"
+target_info = "0.1.0"
+sc-keystore = { version = "2.0.0", path = "../keystore" }
+sp-io = { version = "2.0.0", path = "../../primitives/io" }
+sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
+sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+sp-session = { version = "2.0.0", path = "../../primitives/session" }
+sp-application-crypto = { version = "2.0.0", path = "../../primitives/application-crypto" }
+sp-consensus = { version = "0.8", path = "../../primitives/consensus/common" }
+sc-network = { version = "0.8", path = "../network" }
+sc-chain-spec = { version = "2.0.0", path = "../chain-spec" }
+sc-client-api = { version = "2.0.0", path = "../api" }
+sc-client = { version = "2.0.0", path = "../" }
+sp-api = { version = "2.0.0", path = "../../primitives/api" }
+sc-client-db = { version = "2.0.0", path = "../db" }
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+sc-executor = { version = "2.0.0", path = "../executor" }
+sc-transaction-pool = { version = "2.0.0", path = "../transaction-pool" }
+sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
+sc-rpc-server = { version = "2.0.0", path = "../rpc-servers" }
+sc-rpc = { version = "2.0.0", path = "../rpc" }
+sc-telemetry = { version = "2.0.0", path = "../telemetry" }
+sc-offchain = { version = "2.0.0", path = "../offchain" }
+parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
+grafana-data-source = { version = "2.0.0", path = "../../utils/grafana-data-source" }
+sc-tracing = { version = "2.0.0", path = "../tracing" }
+tracing = "0.1.10"
+
+[dev-dependencies]
+substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
+sp-consensus-babe = { version = "0.8", path = "../../primitives/consensus/babe" }
+grandpa = { version = "2.0.0", package = "sc-finality-grandpa", path = "../finality-grandpa" }
+grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
+tokio = "0.1"

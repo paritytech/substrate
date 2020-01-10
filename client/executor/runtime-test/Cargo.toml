@@ -1,0 +1,20 @@
+[package]
+name = "sc-runtime-test"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+build = "build.rs"
+
+[dependencies]
+sp-std = { version = "2.0.0", default-features = false, path = "../../../primitives/std" }
+sp-io = { version = "2.0.0", default-features = false, path = "../../../primitives/io" }
+sp-sandbox = { version = "2.0.0", default-features = false, path = "../../../primitives/sandbox" }
+sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
+
+[build-dependencies]
+wasm-builder-runner = { version = "1.0.4", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
+
+[features]
+default = [ "std" ]
+std = ["sp-io/std", "sp-sandbox/std", "sp-std/std"]
