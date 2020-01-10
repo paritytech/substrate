@@ -96,7 +96,7 @@ pub struct PreDigest {
 	/// Validator index.
 	pub authority_index: AuthorityIndex,
 	/// Corresponding slot number.
-	pub slot_number: SlotNumber,
+	pub slot: SlotNumber,
 	/// Secondary "Post Block VRF" proof.
 	pub post_vrf_proof: VRFProof,
 	/// Secondary "Post Block VRF" output.

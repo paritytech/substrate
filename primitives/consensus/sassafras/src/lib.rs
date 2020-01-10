@@ -43,6 +43,8 @@ pub const SASSAFRAS_TICKET_VRF_PREFIX: &[u8] = b"substrate-sassafras-ticket-vrf"
 /// The prefix used by Sassafras for its post-block VRF keys.
 pub const SASSAFRAS_POST_VRF_PREFIX: &[u8] = b"substrate-sassafras-post-vrf";
 
+pub type EpochNumber = u64;
+
 /// A Sassafras authority keypair, used by both ticket VRF and post-block VRF.
 #[cfg(feature = "std")]
 pub type AuthorityPair = app::Pair;

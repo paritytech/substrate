@@ -1,48 +1,31 @@
 use codec::{Encode, Decode};
 use sp_core::H256;
-use sp_consensus_sassafras::{SlotNumber, SassafrasBlockWeight, VRFProof};
+use sp_consensus_sassafras::{
+	EpochNumber, SlotNumber, SassafrasBlockWeight, SassafrasAuthorityWeight,
+	VRFProof, Randomness, AuthorityId
+};
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use sc_client_api::AuxStore;
 
-#[derive(Clone, Debug, Encode, Decode)]
-pub struct PublishingAuxiliary {
+#[derive(Clone, Debug, Encode, Decode, Default)]
+pub struct PoolAuxiliary {
 	pub proofs: Vec<VRFProof>,
-	pub start_slot: SlotNumber,
+	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
+	pub randomness: Randomness,
+	pub epoch: EpochNumber,
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
-pub struct ValidatingAuxiliary {
-	pub proofs: Vec<VRFProof>,
-	pub start_slot: SlotNumber,
-}
-
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode, Default)]
 pub struct Auxiliary {
 	pub total_weight: SassafrasBlockWeight,
 	pub weight: SassafrasBlockWeight,
+	pub slot: SlotNumber,
 
-	pub publishing: PublishingAuxiliary,
-	pub validating: ValidatingAuxiliary,
+	pub publishing: PoolAuxiliary,
+	pub validating: PoolAuxiliary,
 }
 
-impl Default for Auxiliary {
-	fn default() -> Self {
-		Self {
-			total_weight: 0,
-			weight: 0,
-			publishing: PublishingAuxiliary {
-				proofs: Vec::new(),
-				start_slot: 0,
-			},
-			validating: ValidatingAuxiliary {
-				proofs: Vec::new(),
-				start_slot: 0,
-			}
-		}
-	}
-}
-
-const AUXILIARY_KEY: &[u8] = b"sassafras_auxiliary";
+pub const AUXILIARY_KEY: &[u8] = b"sassafras_auxiliary";
 
 fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 	where
