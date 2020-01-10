@@ -171,10 +171,14 @@ pub type AuthIndex = u32;
 pub struct Heartbeat<BlockNumber>
 	where BlockNumber: PartialEq + Eq + Decode + Encode,
 {
-	block_number: BlockNumber,
-	network_state: OpaqueNetworkState,
-	session_index: SessionIndex,
-	authority_index: AuthIndex,
+	/// Block number at the time heartbeat is created..
+	pub block_number: BlockNumber,
+	/// A state of local network (peer id and external addresses)
+	pub network_state: OpaqueNetworkState,
+	/// Index of the current session.
+	pub session_index: SessionIndex,
+	/// An index of the authority on the list of validators.
+	pub authority_index: AuthIndex,
 }
 
 pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {

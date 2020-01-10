@@ -43,7 +43,7 @@ use sc_rpc;
 use sp_api::ConstructRuntimeApi;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, ProvideRuntimeApi, NumberFor, Header, SaturatedConversion,
+	Block as BlockT, ProvideRuntimeApi, NumberFor, SaturatedConversion,
 };
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
@@ -867,7 +867,6 @@ ServiceBuilder<
 			let events = client.import_notification_stream()
 				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |notification| {
-					let number = *notification.header.number();
 					let txpool = txpool.upgrade();
 
 					if let Some(txpool) = txpool.as_ref() {
@@ -880,8 +879,11 @@ ServiceBuilder<
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
 					if let Some(offchain) = offchain {
-						let future = offchain.on_block_imported(&number, network_state_info.clone(), is_validator)
-							.map(|()| Ok(()));
+						let future = offchain.on_block_imported(
+							&notification.header,
+							network_state_info.clone(),
+							is_validator
+						).map(|()| Ok(()));
 						let _ = to_spawn_tx_.unbounded_send(Box::new(Compat::new(future)));
 					}
 

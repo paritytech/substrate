@@ -82,7 +82,7 @@ use sp_runtime::{
 	generic::Digest, ApplyExtrinsicResult,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
-		NumberFor, Block as BlockT, OffchainWorker, Dispatchable,
+		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating,
 	},
 	transaction_validity::TransactionValidity,
 };
@@ -154,9 +154,23 @@ where
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
-		let mut digests = <DigestOf<System>>::default();
-		header.digest().logs().iter().for_each(|d| if d.as_pre_runtime().is_some() { digests.push(d.clone()) });
-		Self::initialize_block_impl(header.number(), header.parent_hash(), header.extrinsics_root(), &digests);
+		let digests = Self::extract_pre_digest(&header);
+		Self::initialize_block_impl(
+			header.number(),
+			header.parent_hash(),
+			header.extrinsics_root(),
+			&digests
+		);
+	}
+
+	fn extract_pre_digest(header: &System::Header) -> DigestOf<System> {
+		let mut digest = <DigestOf<System>>::default();
+		header.digest().logs()
+			.iter()
+			.for_each(|d| if d.as_pre_runtime().is_some() {
+				digest.push(d.clone())
+			});
+		digest
 	}
 
 	fn initialize_block_impl(
@@ -165,7 +179,13 @@ where
 		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
 	) {
-		<frame_system::Module<System>>::initialize(block_number, parent_hash, extrinsics_root, digest);
+		<frame_system::Module<System>>::initialize(
+			block_number,
+			parent_hash,
+			extrinsics_root,
+			digest,
+			frame_system::InitKind::Full,
+		);
 		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 		<frame_system::Module<System>>::register_extra_weight_unchecked(
 			<AllModules as WeighBlock<System::BlockNumber>>::on_initialize(*block_number)
@@ -310,8 +330,24 @@ where
 	}
 
 	/// Start an offchain worker and generate extrinsics.
-	pub fn offchain_worker(n: System::BlockNumber) {
-		<AllModules as OffchainWorker<System::BlockNumber>>::offchain_worker(n)
+	pub fn offchain_worker(header: &System::Header) {
+		// We need to keep events available for offchain workers,
+		// hence we initialize the block manually.
+		// OffchainWorker RuntimeApi should skip initialization.
+		let digests = Self::extract_pre_digest(header);
+
+		<frame_system::Module<System>>::initialize(
+			header.number(),
+			header.parent_hash(),
+			header.extrinsics_root(),
+			&digests,
+			frame_system::InitKind::Inspection,
+		);
+		<AllModules as OffchainWorker<System::BlockNumber>>::offchain_worker(
+			// to maintain backward compatibility we call module offchain workers
+			// with parent block number.
+			header.number().saturating_sub(1.into())
+		)
 	}
 }
 
