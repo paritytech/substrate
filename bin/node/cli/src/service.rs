@@ -112,10 +112,7 @@ macro_rules! new_full_start {
 /// concrete types instead.
 macro_rules! new_full {
 	($config:expr, $with_startup_data: expr) => {{
-		use futures::{
-			prelude::*,
-			compat::Future01CompatExt
-		};
+		use futures::prelude::*;
 		use sc_network::Event;
 
 		let (
@@ -222,7 +219,7 @@ macro_rules! new_full {
 					service.network(),
 					service.on_exit(),
 					service.spawn_task_handle(),
-				)?.compat().map(drop));
+				)?);
 			},
 			(true, false) => {
 				// start the full GRANDPA voter
@@ -239,7 +236,7 @@ macro_rules! new_full {
 				// the GRANDPA voter task is considered infallible, i.e.
 				// if it fails we take down the service with it.
 				service.spawn_essential_task(
-					grandpa::run_grandpa_voter(grandpa_config)?.compat().map(drop)
+					grandpa::run_grandpa_voter(grandpa_config)?
 				);
 			},
 			(_, true) => {
