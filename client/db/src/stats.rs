@@ -19,7 +19,7 @@
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 
 /// Accumulated usage statistics for state queries.
-pub struct UsageStats {
+pub struct StateUsageStats {
 	started: std::time::Instant,
 	reads: AtomicU64,
 	bytes_read: AtomicU64,
@@ -29,7 +29,7 @@ pub struct UsageStats {
 	bytes_read_cache: AtomicU64,
 }
 
-impl UsageStats {
+impl StateUsageStats {
 	/// New empty usage stats.
 	pub fn new() -> Self {
 		Self {
@@ -92,7 +92,10 @@ impl UsageStats {
 			reads: unit(&self.reads, &self.bytes_read),
 			writes: unit(&self.writes, &self.bytes_written),
 			cache_reads: unit(&self.reads_cache, &self.bytes_read_cache),
-			memory: 0, // TODO:
+			// TODO: Proper tracking state of memory footprint here requires
+			//       imposing `MallocSizeOf` requirement on half of the codebase,
+			//       so it is an open question how to do it better
+			memory: 0,
 			started: self.started,
 			span: self.started.elapsed(),
 		}

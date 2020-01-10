@@ -64,17 +64,16 @@ use sp_runtime::traits::{
 use sc_executor::RuntimeInfo;
 use sp_state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, ChangesTrieBuildCache,
-	backend::Backend as StateBackend,
+	backend::Backend as StateBackend, UsageInfo as StateUsageInfo,
 };
 use crate::utils::{Meta, db_err, meta_keys, read_db, read_meta};
 use sc_client::leaves::{LeafSet, FinalizationDisplaced};
 use sc_state_db::StateDb;
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
-use crate::stats::UsageStats;
+use crate::stats::StateUsageStats;
 use log::{trace, debug, warn};
 pub use sc_state_db::PruningMode;
-use sp_state_machine::UsageInfo as StateUsageInfo;
 
 #[cfg(feature = "test-helpers")]
 use sc_client::in_mem::Backend as InMemoryBackend;
@@ -899,7 +898,7 @@ pub struct Backend<Block: BlockT> {
 	import_lock: RwLock<()>,
 	is_archive: bool,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
-	state_usage: UsageStats,
+	state_usage: StateUsageStats,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -968,7 +967,7 @@ impl<Block: BlockT> Backend<Block> {
 			import_lock: Default::default(),
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1), (kvdb::IoStats::empty(), StateUsageInfo::empty())),
-			state_usage: UsageStats::new(),
+			state_usage: StateUsageStats::new(),
 		})
 	}
 
