@@ -32,6 +32,49 @@ use crate::WasmExecutionMethod;
 
 pub type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
 
+#[cfg(feature = "wasmtime")]
+mod wasmtime_missing_externals {
+	use sp_wasm_interface::{Function, FunctionContext, HostFunctions, Result, Signature, Value};
+
+	pub struct WasmtimeHostFunctions;
+
+	impl HostFunctions for WasmtimeHostFunctions {
+		fn host_functions() -> Vec<&'static dyn Function> {
+			vec![MISSING_EXTERNAL_FUNCTION, YET_ANOTHER_MISSING_EXTERNAL_FUNCTION]
+		}
+	}
+
+	struct MissingExternalFunction(&'static str);
+
+	impl Function for MissingExternalFunction {
+		fn name(&self) -> &str { self.0 }
+
+		fn signature(&self) -> Signature {
+			Signature::new(vec![], None)
+		}
+
+		fn execute(
+			&self,
+			_context: &mut dyn FunctionContext,
+			_args: &mut dyn Iterator<Item = Value>,
+		) -> Result<Option<Value>> {
+			panic!("should not be called");
+		}
+	}
+
+	static MISSING_EXTERNAL_FUNCTION: &'static MissingExternalFunction =
+		&MissingExternalFunction("missing_external");
+	static YET_ANOTHER_MISSING_EXTERNAL_FUNCTION: &'static MissingExternalFunction =
+		&MissingExternalFunction("yet_another_missing_external");
+}
+
+#[cfg(feature = "wasmtime")]
+type HostFunctions =
+	(wasmtime_missing_externals::WasmtimeHostFunctions, sp_io::SubstrateHostFunctions);
+
+#[cfg(not(feature = "wasmtime"))]
+type HostFunctions = sp_io::SubstrateHostFunctions;
+
 fn call_in_wasm<E: Externalities>(
 	function: &str,
 	call_data: &[u8],
@@ -40,13 +83,14 @@ fn call_in_wasm<E: Externalities>(
 	code: &[u8],
 	heap_pages: u64,
 ) -> crate::error::Result<Vec<u8>> {
-	crate::call_in_wasm::<E, sp_io::SubstrateHostFunctions>(
+	crate::call_in_wasm::<E, HostFunctions>(
 		function,
 		call_data,
 		execution_method,
 		ext,
 		code,
 		heap_pages,
+		true,
 	)
 }
 
@@ -66,6 +110,44 @@ fn returning_should_work(wasm_method: WasmExecutionMethod) {
 		8,
 	).unwrap();
 	assert_eq!(output, vec![0u8; 0]);
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[should_panic(expected = "Function `missing_external` is only a stub. Calling a stub is not allowed.")]
+#[cfg(not(feature = "wasmtime"))]
+fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+	let test_code = WASM_BINARY;
+
+	call_in_wasm(
+		"test_calling_missing_external",
+		&[],
+		wasm_method,
+		&mut ext,
+		&test_code[..],
+		8,
+	).unwrap();
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[should_panic(expected = "Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.")]
+#[cfg(not(feature = "wasmtime"))]
+fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+	let test_code = WASM_BINARY;
+
+	call_in_wasm(
+		"test_calling_yet_another_missing_external",
+		&[],
+		wasm_method,
+		&mut ext,
+		&test_code[..],
+		8,
+	).unwrap();
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]

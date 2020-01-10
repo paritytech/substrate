@@ -22,7 +22,7 @@ use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
-use sc_client_api::backend::{AuxStore, NewBlockState};
+use sc_client_api::{backend::{AuxStore, NewBlockState}, UsageInfo};
 use sc_client::blockchain::{
 	BlockStatus, Cache as BlockchainCache,Info as BlockchainInfo,
 };
@@ -30,7 +30,7 @@ use sc_client::cht;
 use sp_blockchain::{
 	CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache,
 	Error as ClientError, Result as ClientResult,
-	HeaderBackend as BlockchainHeaderBackend, 
+	HeaderBackend as BlockchainHeaderBackend,
 	well_known_cache_keys,
 };
 use sc_client::light::blockchain::Storage as LightBlockchainStorage;
@@ -40,7 +40,7 @@ use sp_runtime::generic::{DigestItem, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
-use crate::DatabaseSettings;
+use crate::{DatabaseSettings, FrozenForDuration};
 use log::{trace, warn, debug};
 
 pub(crate) mod columns {
@@ -64,6 +64,7 @@ pub struct LightStorage<Block: BlockT> {
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	cache: Arc<DbCacheSync<Block>>,
 	header_metadata_cache: HeaderMetadataCache<Block>,
+	io_stats: FrozenForDuration<kvdb::IoStats>,
 }
 
 impl<Block> LightStorage<Block>
@@ -102,6 +103,7 @@ impl<Block> LightStorage<Block>
 			meta: RwLock::new(meta),
 			cache: Arc::new(DbCacheSync(RwLock::new(cache))),
 			header_metadata_cache: HeaderMetadataCache::default(),
+			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1), kvdb::IoStats::empty()),
 		})
 	}
 
@@ -363,14 +365,22 @@ impl<Block: BlockT> LightStorage<Block> {
 		cht_type: u8,
 		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>
-	) -> ClientResult<Block::Hash> {
-		let no_cht_for_block = || ClientError::Backend(format!("CHT for block {} not exists", block));
+	) -> ClientResult<Option<Block::Hash>> {
+		let no_cht_for_block = || ClientError::Backend(format!("Missing CHT for block {}", block));
 
+		let meta = self.meta.read();
+		let max_cht_number = cht::max_cht_number(cht_size, meta.finalized_number);
 		let cht_number = cht::block_to_cht_number(cht_size, block).ok_or_else(no_cht_for_block)?;
+		match max_cht_number {
+			Some(max_cht_number) if cht_number <= max_cht_number => (),
+			_ => return Ok(None),
+		}
+
 		let cht_start = cht::start_number(cht_size, cht_number);
 		self.db.get(columns::CHT, &cht_key(cht_type, cht_start)?).map_err(db_err)?
 			.ok_or_else(no_cht_for_block)
 			.and_then(|hash| Block::Hash::decode(&mut &*hash).map_err(|_| no_cht_for_block()))
+			.map(Some)
 	}
 }
 
@@ -503,7 +513,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		&self,
 		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
-	) -> ClientResult<Block::Hash> {
+	) -> ClientResult<Option<Block::Hash>> {
 		self.read_cht_root(HEADER_CHT_PREFIX, cht_size, block)
 	}
 
@@ -511,7 +521,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		&self,
 		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
-	) -> ClientResult<Block::Hash> {
+	) -> ClientResult<Option<Block::Hash>> {
 		self.read_cht_root(CHANGES_TRIE_CHT_PREFIX, cht_size, block)
 	}
 
@@ -547,6 +557,28 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>> {
 		Some(self.cache.clone())
+	}
+
+	fn usage_info(&self) -> Option<UsageInfo> {
+		use sc_client_api::{MemoryInfo, IoInfo};
+
+		let database_cache = parity_util_mem::malloc_size(&*self.db);
+		let io_stats = self.io_stats.take_or_else(|| self.db.io_stats(kvdb::IoStatsKind::SincePrevious));
+
+		Some(UsageInfo {
+			memory: MemoryInfo {
+				database_cache,
+				state_cache: 0,
+			},
+			io: IoInfo {
+				transactions: io_stats.transactions,
+				bytes_read: io_stats.bytes_read,
+				bytes_written: io_stats.bytes_written,
+				writes: io_stats.writes,
+				reads: io_stats.reads,
+				average_transaction_size: io_stats.avg_transaction_size() as u64,
+			}
+		})
 	}
 }
 
@@ -739,20 +771,20 @@ pub(crate) mod tests {
 		assert_eq!(db.db.iter(columns::KEY_LOOKUP).count(), (2 * (1 + cht_size + 1)) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 1);
 		assert!((0..cht_size as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
-		assert!(db.header_cht_root(cht_size, cht_size / 2).is_ok());
-		assert!(db.header_cht_root(cht_size, cht_size + cht_size / 2).is_err());
+		assert!(db.header_cht_root(cht_size, cht_size / 2).unwrap().is_some());
+		assert!(db.header_cht_root(cht_size, cht_size + cht_size / 2).unwrap().is_none());
 		assert!(db.changes_trie_cht_root(cht_size, cht_size / 2).is_err());
-		assert!(db.changes_trie_cht_root(cht_size, cht_size + cht_size / 2).is_err());
+		assert!(db.changes_trie_cht_root(cht_size, cht_size + cht_size / 2).unwrap().is_none());
 
 		// when headers are created with changes tries roots
 		let db = insert_headers(header_with_changes_trie);
 		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht_size + 1) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 2);
 		assert!((0..cht_size as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
-		assert!(db.header_cht_root(cht_size, cht_size / 2).is_ok());
-		assert!(db.header_cht_root(cht_size, cht_size + cht_size / 2).is_err());
-		assert!(db.changes_trie_cht_root(cht_size, cht_size / 2).is_ok());
-		assert!(db.changes_trie_cht_root(cht_size, cht_size + cht_size / 2).is_err());
+		assert!(db.header_cht_root(cht_size, cht_size / 2).unwrap().is_some());
+		assert!(db.header_cht_root(cht_size, cht_size + cht_size / 2).unwrap().is_none());
+		assert!(db.changes_trie_cht_root(cht_size, cht_size / 2).unwrap().is_some());
+		assert!(db.changes_trie_cht_root(cht_size, cht_size + cht_size / 2).unwrap().is_none());
 	}
 
 	#[test]
@@ -763,7 +795,7 @@ pub(crate) mod tests {
 	#[test]
 	fn get_cht_fails_for_non_existant_cht() {
 		let cht_size: u64 = cht::size();
-		assert!(LightStorage::<Block>::new_test().header_cht_root(cht_size, cht_size / 2).is_err());
+		assert!(LightStorage::<Block>::new_test().header_cht_root(cht_size, cht_size / 2).unwrap().is_none());
 	}
 
 	#[test]
@@ -779,15 +811,18 @@ pub(crate) mod tests {
 			db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
 		}
 
-		let cht_root_1 = db.header_cht_root(cht_size, cht::start_number(cht_size, 0)).unwrap();
-		let cht_root_2 = db.header_cht_root(cht_size, cht::start_number(cht_size, 0) + cht_size / 2).unwrap();
-		let cht_root_3 = db.header_cht_root(cht_size, cht::end_number(cht_size, 0)).unwrap();
+		let cht_root_1 = db.header_cht_root(cht_size, cht::start_number(cht_size, 0)).unwrap().unwrap();
+		let cht_root_2 = db.header_cht_root(cht_size, cht::start_number(cht_size, 0) + cht_size / 2).unwrap().unwrap();
+		let cht_root_3 = db.header_cht_root(cht_size, cht::end_number(cht_size, 0)).unwrap().unwrap();
 		assert_eq!(cht_root_1, cht_root_2);
 		assert_eq!(cht_root_2, cht_root_3);
 
-		let cht_root_1 = db.changes_trie_cht_root(cht_size, cht::start_number(cht_size, 0)).unwrap();
-		let cht_root_2 = db.changes_trie_cht_root(cht_size, cht::start_number(cht_size, 0) + cht_size / 2).unwrap();
-		let cht_root_3 = db.changes_trie_cht_root(cht_size, cht::end_number(cht_size, 0)).unwrap();
+		let cht_root_1 = db.changes_trie_cht_root(cht_size, cht::start_number(cht_size, 0)).unwrap().unwrap();
+		let cht_root_2 = db.changes_trie_cht_root(
+			cht_size,
+			cht::start_number(cht_size, 0) + cht_size / 2,
+		).unwrap().unwrap();
+		let cht_root_3 = db.changes_trie_cht_root(cht_size, cht::end_number(cht_size, 0)).unwrap().unwrap();
 		assert_eq!(cht_root_1, cht_root_2);
 		assert_eq!(cht_root_2, cht_root_3);
 	}

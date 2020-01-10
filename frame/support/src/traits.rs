@@ -53,22 +53,29 @@ impl<T: Default> Get<T> for () {
 /// A trait for querying whether a type can be said to statically "contain" a value. Similar
 /// in nature to `Get`, except it is designed to be lazy rather than active (you can't ask it to
 /// enumerate all values that it contains) and work for multiple values rather than just one.
-pub trait Contains<T> {
+pub trait Contains<T: Ord> {
 	/// Return `true` if this "contains" the given value `t`.
-	fn contains(t: &T) -> bool;
-}
+	fn contains(t: &T) -> bool { Self::sorted_members().binary_search(t).is_ok() }
 
-impl<V: PartialEq, T: Get<V>> Contains<V> for T {
-	fn contains(t: &V) -> bool {
-		&Self::get() == t
-	}
+	/// Get a vector of all members in the set, ordered.
+	fn sorted_members() -> Vec<T>;
+
+	/// Get the number of items in the set.
+	fn count() -> usize { Self::sorted_members().len() }
 }
 
 /// The account with the given id was killed.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnFreeBalanceZero<AccountId> {
-	/// The account was the given id was killed.
+	/// The account with the given id was killed.
 	fn on_free_balance_zero(who: &AccountId);
+}
+
+/// The account with the given id was reaped.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+pub trait OnReapAccount<AccountId> {
+	/// The account with the given id was reaped.
+	fn on_reap_account(who: &AccountId);
 }
 
 /// Outcome of a balance update.

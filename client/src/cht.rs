@@ -62,6 +62,19 @@ pub fn is_build_required<N>(cht_size: N, block_num: N) -> Option<N>
 	Some(block_cht_num - two)
 }
 
+/// Returns Some(max_cht_number) if CHT has ever been built given maximal canonical block number.
+pub fn max_cht_number<N>(cht_size: N, max_canonical_block: N) -> Option<N>
+	where
+		N: Clone + SimpleArithmetic,
+{
+	let max_cht_number = block_to_cht_number(cht_size, max_canonical_block)?;
+	let two = N::one() + N::one();
+	if max_cht_number < two {
+		return None;
+	}
+	Some(max_cht_number - two)
+}
+
 /// Compute a CHT root from an iterator of block hashes. Fails if shorter than
 /// SIZE items. The items are assumed to proceed sequentially from `start_number(cht_num)`.
 /// Discards the trie's nodes.
@@ -329,8 +342,24 @@ mod tests {
 		assert_eq!(is_build_required(SIZE, SIZE + 1), None);
 		assert_eq!(is_build_required(SIZE, 2 * SIZE), None);
 		assert_eq!(is_build_required(SIZE, 2 * SIZE + 1), Some(0));
+		assert_eq!(is_build_required(SIZE, 2 * SIZE + 2), None);
 		assert_eq!(is_build_required(SIZE, 3 * SIZE), None);
 		assert_eq!(is_build_required(SIZE, 3 * SIZE + 1), Some(1));
+		assert_eq!(is_build_required(SIZE, 3 * SIZE + 2), None);
+	}
+
+	#[test]
+	fn max_cht_number_works() {
+		assert_eq!(max_cht_number(SIZE, 0u32.into()), None);
+		assert_eq!(max_cht_number(SIZE, 1u32.into()), None);
+		assert_eq!(max_cht_number(SIZE, SIZE), None);
+		assert_eq!(max_cht_number(SIZE, SIZE + 1), None);
+		assert_eq!(max_cht_number(SIZE, 2 * SIZE), None);
+		assert_eq!(max_cht_number(SIZE, 2 * SIZE + 1), Some(0));
+		assert_eq!(max_cht_number(SIZE, 2 * SIZE + 2), Some(0));
+		assert_eq!(max_cht_number(SIZE, 3 * SIZE), Some(0));
+		assert_eq!(max_cht_number(SIZE, 3 * SIZE + 1), Some(1));
+		assert_eq!(max_cht_number(SIZE, 3 * SIZE + 2), Some(1));
 	}
 
 	#[test]
