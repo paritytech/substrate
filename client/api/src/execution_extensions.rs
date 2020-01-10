@@ -63,12 +63,12 @@ impl Default for ExecutionStrategies {
 }
 
 /// Generate the starting set of ExternalitiesExtensions based upon the given capabilities
-pub trait ExtensionsMaker: Send + Sync {
+pub trait ExtensionsFactory: Send + Sync {
 	/// Make `Extensions` for given Capapbilities
 	fn extensions_for(&self, capabilities: offchain::Capabilities) -> Extensions;
 }
 
-impl ExtensionsMaker for () {
+impl ExtensionsFactory for () {
 	fn extensions_for(&self, _capabilities: offchain::Capabilities) -> Extensions {
 		Extensions::new()
 	}
@@ -83,7 +83,7 @@ pub struct ExecutionExtensions<Block: traits::Block> {
 	strategies: ExecutionStrategies,
 	keystore: Option<BareCryptoStorePtr>,
 	transaction_pool: RwLock<Option<Weak<dyn sp_transaction_pool::OffchainSubmitTransaction<Block>>>>,
-	extensions_maker: RwLock<Box<dyn ExtensionsMaker>>,
+	extensions_factory: RwLock<Box<dyn ExtensionsFactory>>,
 }
 
 impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
@@ -92,7 +92,7 @@ impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
 			strategies: Default::default(),
 			keystore: None,
 			transaction_pool: RwLock::new(None),
-			extensions_maker: RwLock::new(Box::new(())),
+			extensions_factory: RwLock::new(Box::new(())),
 		}
 	}
 }
@@ -104,8 +104,8 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 		keystore: Option<BareCryptoStorePtr>,
 	) -> Self {
 		let transaction_pool = RwLock::new(None);
-		let extensions_maker = Box::new(());
-		Self { strategies, keystore, extensions_maker: RwLock::new(extensions_maker), transaction_pool }
+		let extensions_factory = Box::new(());
+		Self { strategies, keystore, extensions_factory: RwLock::new(extensions_factory), transaction_pool }
 	}
 
 	/// Get a reference to the execution strategies.
@@ -113,9 +113,9 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 		&self.strategies
 	}
 
-	/// Set the new extensions_maker
-	pub fn set_extensions_maker(&self, maker: Box<dyn ExtensionsMaker>) {
-		*self.extensions_maker.write() = maker;
+	/// Set the new extensions_factory
+	pub fn set_extensions_factory(&self, maker: Box<dyn ExtensionsFactory>) {
+		*self.extensions_factory.write() = maker;
 	}
 
 	/// Register transaction pool extension.
@@ -155,7 +155,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 
 		let capabilities = context.capabilities();
 
-		let mut extensions = self.extensions_maker.read().extensions_for(capabilities);
+		let mut extensions = self.extensions_factory.read().extensions_for(capabilities);
 
 		if capabilities.has(offchain::Capability::Keystore) {
 			if let Some(keystore) = self.keystore.as_ref() {
