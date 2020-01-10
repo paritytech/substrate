@@ -54,9 +54,8 @@ impl StateUsageStats {
 	}
 
 	/// Tally one key read.
-	pub fn tally_key_read(&self, key: &[u8], val: Option<Vec<u8>>, cache: bool) -> Option<Vec<u8>> {
+	pub fn tally_key_read(&self, key: &[u8], val: Option<&Vec<u8>>, cache: bool) {
 		self.tally_read(key.len() as u64 + val.as_ref().map(|x| x.len() as u64).unwrap_or(0), cache);
-		val
 	}
 
 	/// Tally one child key read.

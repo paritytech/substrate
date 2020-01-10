@@ -40,7 +40,7 @@ mod overlayed_changes;
 mod proving_backend;
 mod trie_backend;
 mod trie_backend_essence;
-mod usage;
+mod stats;
 
 pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB};
 pub use testing::TestExternalities;

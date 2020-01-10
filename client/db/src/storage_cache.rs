@@ -499,25 +499,23 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		// Note that local cache makes that lru is not refreshed
 		if let Some(entry) = local_cache.storage.get(key).cloned() {
 			trace!("Found in local cache: {:?}", HexDisplay::from(&key));
-			return Ok(
-				self.usage.tally_key_read(key, entry, true)
-			)
+			self.usage.tally_key_read(key, entry.as_ref(), true);
+
+			return Ok(entry)
 		}
 		let mut cache = self.cache.shared_cache.lock();
 		if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
 			if let Some(entry) = cache.lru_storage.get(key).map(|a| a.clone()) {
 				trace!("Found in shared cache: {:?}", HexDisplay::from(&key));
-				return Ok(
-					self.usage.tally_key_read(key, entry, true)
-				)
+				self.usage.tally_key_read(key, entry.as_ref(), true);
+				return Ok(entry)
 			}
 		}
 		trace!("Cache miss: {:?}", HexDisplay::from(&key));
 		let value = self.state.storage(key)?;
 		RwLockUpgradableReadGuard::upgrade(local_cache).storage.insert(key.to_vec(), value.clone());
-		Ok(
-			self.usage.tally_key_read(key, value, false)
-		)
+		self.usage.tally_key_read(key, value.as_ref(), false);
+		Ok(value)
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<B::Hash>, Self::Error> {
