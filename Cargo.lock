@@ -3033,7 +3033,7 @@ dependencies = [
  "node-primitives 2.0.0",
  "node-rpc 2.0.0",
  "node-runtime 2.0.0",
- "node-transaction-factory 2.0.0",
+ "node-transaction-factory 0.8.0",
  "pallet-authority-discovery 2.0.0",
  "pallet-balances 2.0.0",
  "pallet-contracts 0.8.0",
@@ -3306,7 +3306,7 @@ dependencies = [
 
 [[package]]
 name = "node-transaction-factory"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
