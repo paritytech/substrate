@@ -74,10 +74,10 @@ pub trait Trait: pallet_timestamp::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Aura {
-		/// The last timestamp.
+		/// The last timestamp.  O(1).
 		LastTimestamp get(fn last) build(|_| 0.into()): T::Moment;
 
-		/// The current authorities
+		/// The current authorities.  O(1)
 		pub Authorities get(fn authorities): Vec<T::AuthorityId>;
 	}
 	add_extra_genesis {
@@ -91,6 +91,7 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+	/// O(new.len())
 	fn change_authorities(new: Vec<T::AuthorityId>) {
 		<Authorities<T>>::put(&new);
 
@@ -101,6 +102,7 @@ impl<T: Trait> Module<T> {
 		<frame_system::Module<T>>::deposit_log(log.into());
 	}
 
+	/// O(authorities.len())
 	fn initialize_authorities(authorities: &[T::AuthorityId]) {
 		if !authorities.is_empty() {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
@@ -123,6 +125,8 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 		Self::initialize_authorities(&authorities);
 	}
 
+	/// O(validators.len() + last_authorities.len()) if and only if `changed` is true.
+	/// O(1) otherwise.
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
 	{
@@ -136,6 +140,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 		}
 	}
 
+	/// O(1)
 	fn on_disabled(i: usize) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
 			AURA_ENGINE_ID,
@@ -147,6 +152,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 }
 
 impl<T: Trait> FindAuthor<u32> for Module<T> {
+	/// O(digests.len())
 	fn find_author<'a, I>(digests: I) -> Option<u32> where
 		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
 	{
@@ -164,6 +170,8 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 }
 
 impl<T: Trait> IsMember<T::AuthorityId> for Module<T> {
+	/// O(Self::authorities().len())
+	// FIXME use a binary search
 	fn is_member(authority_id: &T::AuthorityId) -> bool {
 		Self::authorities()
 			.iter()
@@ -173,12 +181,14 @@ impl<T: Trait> IsMember<T::AuthorityId> for Module<T> {
 
 impl<T: Trait> Module<T> {
 	/// Determine the Aura slot-duration based on the Timestamp module configuration.
+	/// O(1).
 	pub fn slot_duration() -> T::Moment {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of its slot.
 		<T as pallet_timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
 	}
 
+	/// Called when a timestamp is set. O(1).
 	fn on_timestamp_set(now: T::Moment, slot_duration: T::Moment) {
 		let last = Self::last();
 		<Self as Store>::LastTimestamp::put(now);
@@ -199,6 +209,7 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
+	/// Called when a timestamp is set. O(1).
 	fn on_timestamp_set(moment: T::Moment) {
 		Self::on_timestamp_set(moment, Self::slot_duration())
 	}
@@ -209,11 +220,12 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	type Error = MakeFatalError<sp_inherents::Error>;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
+	/// Called when a timestamp is set. O(1).
 	fn create_inherent(_: &InherentData) -> Option<Self::Call> {
 		None
 	}
 
-	/// Verify the validity of the inherent using the timestamp.
+	/// Verify the validity of the inherent using the timestamp. O(1).
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
 		let timestamp = match call {
 			pallet_timestamp::Call::set(ref timestamp) => timestamp.clone(),
