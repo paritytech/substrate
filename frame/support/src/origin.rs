@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -178,8 +178,8 @@ macro_rules! impl_outer_origin {
 				$name::system(x)
 			}
 		}
-		impl Into<$crate::rstd::result::Result<$system::Origin<$runtime>, $name>> for $name {
-			fn into(self) -> $crate::rstd::result::Result<$system::Origin<$runtime>, Self> {
+		impl Into<$crate::sp_std::result::Result<$system::Origin<$runtime>, $name>> for $name {
+			fn into(self) -> $crate::sp_std::result::Result<$system::Origin<$runtime>, Self> {
 				if let $name::system(l) = self {
 					Ok(l)
 				} else {
@@ -200,12 +200,12 @@ macro_rules! impl_outer_origin {
 					}
 				}
 				impl Into<
-					$crate::rstd::result::Result<
+					$crate::sp_std::result::Result<
 						$module::Origin < $( $generic )? $(, $module::$generic_instance )? >,
 						$name,
 					>>
 				for $name {
-					fn into(self) -> $crate::rstd::result::Result<
+					fn into(self) -> $crate::sp_std::result::Result<
 						$module::Origin < $( $generic )? $(, $module::$generic_instance )? >,
 						Self,
 					> {

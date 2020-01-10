@@ -20,7 +20,7 @@
 
 # Wasm execution and the wasm side of Substrate Runtime Interface
 /client/executor/ @pepyakin
-/primitives/sr-io/ @pepyakin
+/primitives/io/ @pepyakin
 
 # Sandboxing capability of Substrate Runtime
 /primitives/sr-sandbox/ @pepyakin
@@ -28,6 +28,7 @@
 
 # Transaction pool
 /client/transaction-pool/ @tomusdrw
+/primitives/transaction-pool/ @tomusdrw
 
 # Offchain
 /client/offchain/ @tomusdrw
@@ -47,7 +48,7 @@
 /client/consensus/slots/ @andresilva @DemiMarie-parity
 
 # Contracts
-/frame/contracts/ @pepyakin @thiolliere @jimpo
+/frame/contracts/ @pepyakin @thiolliere
 /frame/contracts/src/wasm/runtime.rs @Robbepop
 
 # Inflation points
@@ -55,13 +56,17 @@
 
 # NPoS and Governance
 /frame/staking/ @kianenigma
-/frame/election/ @kianenigma
+/frame/elections/ @kianenigma
 
 # End to end testing of substrate node
 /bin/node/executor/ @kianenigma
 
 # Transaction weight stuff
-/primitives/sr-primitives/src/weights.rs @kianenigma
+/frame/support/src/weights.rs @kianenigma
 
 # Support crates
 /frame/support/ @thiolliere @kianenigma
+
+# Authority discovery
+/client/authority-discovery/ @mxinden
+/frame/authority-discovery/ @mxinden

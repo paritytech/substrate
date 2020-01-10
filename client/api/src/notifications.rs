@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,8 +23,8 @@ use std::{
 
 use fnv::{FnvHashSet, FnvHashMap};
 use futures::channel::mpsc;
-use primitives::storage::{StorageKey, StorageData};
-use sr_primitives::traits::Block as BlockT;
+use sp_core::storage::{StorageKey, StorageData};
+use sp_runtime::traits::Block as BlockT;
 
 /// Storage change set
 #[derive(Debug)]
@@ -307,7 +307,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 
 #[cfg(test)]
 mod tests {
-	use sr_primitives::testing::{H256 as Hash, Block as RawBlock, ExtrinsicWrapper};
+	use sp_runtime::testing::{H256 as Hash, Block as RawBlock, ExtrinsicWrapper};
 	use super::*;
 	use std::iter::{empty, Empty};
 

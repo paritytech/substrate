@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,12 +18,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 
 #[cfg(feature = "std")]
-use sr_primitives::{generic::BlockId, traits::{ProvideRuntimeApi, Block as BlockT}};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+#[cfg(feature = "std")]
+use sp_api::ProvideRuntimeApi;
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// Session keys runtime api.
 	pub trait SessionKeys {
 		/// Generate a set of session keys with optionally using the given seed.
@@ -44,11 +46,11 @@ pub fn generate_initial_session_keys<Block, T>(
 	client: std::sync::Arc<T>,
 	at: &BlockId<Block>,
 	seeds: Vec<String>,
-) -> Result<(), <<T as ProvideRuntimeApi>::Api as sr_api::ApiExt<Block>>::Error>
+) -> Result<(), sp_api::ApiErrorFor<T, Block>>
 where
 	Block: BlockT,
-	T: ProvideRuntimeApi,
-	<T as ProvideRuntimeApi>::Api: SessionKeys<Block>,
+	T: ProvideRuntimeApi<Block>,
+	T::Api: SessionKeys<Block>,
 {
 	let runtime_api = client.runtime_api();
 

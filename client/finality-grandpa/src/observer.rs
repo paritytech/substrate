@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,32 +19,31 @@ use std::sync::Arc;
 use futures::prelude::*;
 use futures::{future, sync::mpsc};
 
-use grandpa::{
+use finality_grandpa::{
 	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
 };
 use log::{debug, info, warn};
 
-use consensus_common::SelectChain;
-use client_api::{CallExecutor, backend::Backend};
-use client::Client;
-use sr_primitives::traits::{NumberFor, Block as BlockT};
-use primitives::{H256, Blake2Hasher};
+use sp_consensus::SelectChain;
+use sc_client_api::{CallExecutor, backend::{Backend, AuxStore}};
+use sc_client::Client;
+use sp_runtime::traits::{NumberFor, Block as BlockT};
 
 use crate::{
 	global_communication, CommandOrError, CommunicationIn, Config, environment,
-	LinkHalf, Network, Error, aux_schema::PersistentData, VoterCommand, VoterSetState,
+	LinkHalf, Error, aux_schema::PersistentData, VoterCommand, VoterSetState,
 };
 use crate::authorities::SharedAuthoritySet;
-use crate::communication::NetworkBridge;
+use crate::communication::{Network as NetworkT, NetworkBridge};
 use crate::consensus_changes::SharedConsensusChanges;
-use fg_primitives::AuthorityId;
+use sp_finality_grandpa::AuthorityId;
 
 struct ObserverChain<'a, Block: BlockT, B, E, RA>(&'a Client<B, E, Block, RA>);
 
-impl<'a, Block: BlockT<Hash=H256>, B, E, RA> grandpa::Chain<Block::Hash, NumberFor<Block>>
+impl<'a, Block: BlockT, B, E, RA> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
 	for ObserverChain<'a, Block, B, E, RA> where
-		B: Backend<Block, Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher>,
+		B: Backend<Block>,
+		E: CallExecutor<Block>,
 		NumberFor<Block>: BlockNumberOps,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
@@ -57,7 +56,7 @@ impl<'a, Block: BlockT<Hash=H256>, B, E, RA> grandpa::Chain<Block::Hash, NumberF
 	}
 }
 
-fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
+fn grandpa_observer<B, E, Block: BlockT, RA, S, F>(
 	client: &Arc<Client<B, E, Block, RA>>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
@@ -65,10 +64,10 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 	last_finalized_number: NumberFor<Block>,
 	commits: S,
 	note_round: F,
-) -> impl Future<Item=(), Error=CommandOrError<H256, NumberFor<Block>>> where
+) -> impl Future<Item=(), Error=CommandOrError<Block::Hash, NumberFor<Block>>> where
 	NumberFor<Block>: BlockNumberOps,
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	B: Backend<Block>,
+	E: CallExecutor<Block> + Send + Sync,
 	RA: Send + Sync,
 	S: Stream<
 		Item = CommunicationIn<Block>,
@@ -84,7 +83,7 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 	let observer = commits.fold(last_finalized_number, move |last_finalized_number, global| {
 		let (round, commit, callback) = match global {
 			voter::CommunicationIn::Commit(round, commit, callback) => {
-				let commit = grandpa::Commit::from(commit);
+				let commit = finality_grandpa::Commit::from(commit);
 				(round, commit, callback)
 			},
 			voter::CommunicationIn::CatchUp(..) => {
@@ -99,7 +98,7 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 			return future::ok(last_finalized_number);
 		}
 
-		let validation_result = match grandpa::validate_commit(
+		let validation_result = match finality_grandpa::validate_commit(
 			&commit,
 			&voters,
 			&ObserverChain(&*client),
@@ -130,14 +129,14 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 			// and that implies that the next round has started.
 			note_round(round + 1);
 
-			grandpa::process_commit_validation_result(validation_result, callback);
+			finality_grandpa::process_commit_validation_result(validation_result, callback);
 
 			// proceed processing with new finalized block number
 			future::ok(finalized_number)
 		} else {
 			debug!(target: "afg", "Received invalid commit: ({:?}, {:?})", round, commit);
 
-			grandpa::process_commit_validation_result(validation_result, callback);
+			finality_grandpa::process_commit_validation_result(validation_result, callback);
 
 			// commit is invalid, continue processing commits with the current state
 			future::ok(last_finalized_number)
@@ -151,19 +150,21 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 /// listening for and validating GRANDPA commits instead of following the full
 /// protocol. Provide configuration and a link to a block import worker that has
 /// already been instantiated with `block_import`.
-pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
+pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA, SC>,
 	network: N,
-	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
-) -> ::sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network<Block> + Send + Sync + 'static,
-	N::In: Send + 'static,
+	on_exit: impl futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
+	executor: Sp,
+) -> sp_blockchain::Result<impl Future<Item=(), Error=()> + Send + 'static> where
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
+	N: NetworkT<Block> + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: Send + Sync + 'static,
+	Sp: futures03::task::Spawn + 'static,
+	Client<B, E, Block, RA>: AuxStore,
 {
 	let LinkHalf {
 		client,
@@ -172,10 +173,11 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 		voter_commands_rx,
 	} = link;
 
-	let (network, network_startup) = NetworkBridge::new(
+	let network = NetworkBridge::new(
 		network,
 		config.clone(),
 		persistent_data.set_state.clone(),
+		&executor,
 		on_exit.clone(),
 	);
 
@@ -193,37 +195,37 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 			warn!("GRANDPA Observer failed: {:?}", e);
 		});
 
-	let observer_work = network_startup.and_then(move |()| observer_work);
+	use futures03::{FutureExt, TryFutureExt};
 
-	Ok(observer_work.select(on_exit).map(|_| ()).map_err(|_| ()))
+	Ok(observer_work.select(on_exit.map(Ok).compat()).map(|_| ()).map_err(|_| ()))
 }
 
 /// Future that powers the observer.
 #[must_use]
-struct ObserverWork<B: BlockT<Hash=H256>, N: Network<B>, E, Backend, RA> {
+struct ObserverWork<B: BlockT, N: NetworkT<B>, E, Backend, RA> {
 	observer: Box<dyn Future<Item = (), Error = CommandOrError<B::Hash, NumberFor<B>>> + Send>,
 	client: Arc<Client<Backend, E, B, RA>>,
 	network: NetworkBridge<B, N>,
 	persistent_data: PersistentData<B>,
-	keystore: Option<keystore::KeyStorePtr>,
+	keystore: Option<sc_keystore::KeyStorePtr>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 }
 
 impl<B, N, E, Bk, RA> ObserverWork<B, N, E, Bk, RA>
 where
-	B: BlockT<Hash=H256>,
-	N: Network<B>,
-	N::In: Send + 'static,
+	B: BlockT,
+	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
-	E: CallExecutor<B, Blake2Hasher> + Send + Sync + 'static,
-	Bk: Backend<B, Blake2Hasher> + 'static,
+	E: CallExecutor<B> + Send + Sync + 'static,
+	Bk: Backend<B> + 'static,
+	Client<Bk, E, B, RA>: AuxStore,
 {
 	fn new(
 		client: Arc<Client<Bk, E, B, RA>>,
 		network: NetworkBridge<B, N>,
 		persistent_data: PersistentData<B>,
-		keystore: Option<keystore::KeyStorePtr>,
+		keystore: Option<sc_keystore::KeyStorePtr>,
 		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	) -> Self {
 
@@ -257,7 +259,7 @@ where
 			&self.keystore,
 		);
 
-		let last_finalized_number = self.client.info().chain.finalized_number;
+		let last_finalized_number = self.client.chain_info().finalized_number;
 
 		// NOTE: since we are not using `round_communication` we have to
 		// manually note the round with the gossip validator, otherwise we won't
@@ -327,13 +329,13 @@ where
 
 impl<B, N, E, Bk, RA> Future for ObserverWork<B, N, E, Bk, RA>
 where
-	B: BlockT<Hash=H256>,
-	N: Network<B>,
-	N::In: Send + 'static,
+	B: BlockT,
+	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
-	E: CallExecutor<B, Blake2Hasher> + Send + Sync + 'static,
-	Bk: Backend<B, Blake2Hasher> + 'static,
+	E: CallExecutor<B> + Send + Sync + 'static,
+	Bk: Backend<B> + 'static,
+	Client<Bk, E, B, RA>: AuxStore,
 {
 	type Item = ();
 	type Error = Error;

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -33,10 +33,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, collections::btree_map::BTreeMap};
-use sr_primitives::RuntimeDebug;
-use sr_primitives::{helpers_128bit::multiply_by_rational, Perbill, Rational128};
-use sr_primitives::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating, Bounded};
+use sp_std::{prelude::*, collections::btree_map::BTreeMap};
+use sp_runtime::RuntimeDebug;
+use sp_runtime::{helpers_128bit::multiply_by_rational, Perbill, Rational128};
+use sp_runtime::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating, Bounded};
 
 #[cfg(test)]
 mod mock;

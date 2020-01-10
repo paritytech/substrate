@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -15,11 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[cfg(feature = "full_crypto")]
-use primitives::crypto::Pair;
+use sp_core::crypto::Pair;
 
 use codec::Codec;
-use primitives::crypto::{KeyTypeId, CryptoType, IsWrappedBy, Public};
-use rstd::{fmt::Debug, vec::Vec};
+use sp_core::crypto::{KeyTypeId, CryptoType, IsWrappedBy, Public};
+use sp_std::{fmt::Debug, vec::Vec};
 
 /// An application-specific key.
 pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
@@ -42,9 +42,9 @@ pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
 
 /// Type which implements Hash in std, not when no-std (std variant).
 #[cfg(any(feature = "std", feature = "full_crypto"))]
-pub trait MaybeHash: rstd::hash::Hash {}
+pub trait MaybeHash: sp_std::hash::Hash {}
 #[cfg(any(feature = "std", feature = "full_crypto"))]
-impl<T: rstd::hash::Hash> MaybeHash for T {}
+impl<T: sp_std::hash::Hash> MaybeHash for T {}
 
 /// Type which implements Hash in std, not when no-std (no-std variant).
 #[cfg(all(not(feature = "std"), not(feature = "full_crypto")))]
@@ -54,9 +54,9 @@ impl<T> MaybeHash for T {}
 
 /// Type which implements Debug and Hash in std, not when no-std (no-std variant with crypto).
 #[cfg(all(not(feature = "std"), feature = "full_crypto"))]
-pub trait MaybeDebugHash: rstd::hash::Hash  {}
+pub trait MaybeDebugHash: sp_std::hash::Hash  {}
 #[cfg(all(not(feature = "std"), feature = "full_crypto"))]
-impl<T: rstd::hash::Hash> MaybeDebugHash for T {}
+impl<T: sp_std::hash::Hash> MaybeDebugHash for T {}
 
 /// A application's public key.
 pub trait AppPublic:
@@ -71,7 +71,7 @@ pub trait AppPublic:
 #[cfg(feature = "full_crypto")]
 pub trait AppPair: AppKey + Pair<Public=<Self as AppKey>::Public> {
 	/// The wrapped type which is just a plain instance of `Pair`.
-	type Generic: IsWrappedBy<Self> + Pair<Public=<<Self as AppKey>::Public as AppPublic>::Generic>;
+	type Generic: IsWrappedBy<Self> + Pair<Public = <<Self as AppKey>::Public as AppPublic>::Generic>;
 }
 
 /// A application's signature.

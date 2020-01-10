@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ pub fn convert_hash<H1: Default + AsMut<[u8]>, H2: AsRef<[u8]>>(src: &H2) -> H1 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use substrate_serializer as ser;
+	use sp_serializer as ser;
 
 	#[test]
 	fn test_h160() {

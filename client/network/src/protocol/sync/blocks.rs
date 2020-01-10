@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@ use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use log::trace;
 use libp2p::PeerId;
-use sr_primitives::traits::{Block as BlockT, NumberFor, One};
+use sp_runtime::traits::{Block as BlockT, NumberFor, One};
 use crate::message;
 
 /// Block data with origin.
@@ -215,8 +215,8 @@ impl<B: BlockT> BlockCollection<B> {
 mod test {
 	use super::{BlockCollection, BlockData, BlockRangeState};
 	use crate::{message, PeerId};
-	use sr_primitives::testing::{Block as RawBlock, ExtrinsicWrapper};
-	use primitives::H256;
+	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
+	use sp_core::H256;
 
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 

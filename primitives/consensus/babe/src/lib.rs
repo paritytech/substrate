@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,15 +23,15 @@ mod digest;
 pub mod inherents;
 
 use codec::{Encode, Decode};
-use rstd::vec::Vec;
-use sr_primitives::{ConsensusEngineId, RuntimeDebug};
+use sp_std::vec::Vec;
+use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 
 #[cfg(feature = "std")]
 pub use digest::{BabePreDigest, CompatibleDigestItem};
 pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest, NextEpochDescriptor};
 
 mod app {
-	use app_crypto::{app_crypto, key_types::BABE, sr25519};
+	use sp_application_crypto::{app_crypto, key_types::BABE, sr25519};
 	app_crypto!(sr25519, BABE);
 }
 
@@ -157,7 +157,7 @@ pub struct BabeConfiguration {
 }
 
 #[cfg(feature = "std")]
-impl slots::SlotData for BabeConfiguration {
+impl sp_consensus::SlotData for BabeConfiguration {
 	fn slot_duration(&self) -> u64 {
 		self.slot_duration
 	}
@@ -165,7 +165,7 @@ impl slots::SlotData for BabeConfiguration {
 	const SLOT_KEY: &'static [u8] = b"babe_configuration";
 }
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
 	pub trait BabeApi {
 		/// Return the configuration for BABE. Currently,

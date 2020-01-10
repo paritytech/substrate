@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,14 +18,14 @@
 
 use std::fmt::Debug;
 use std::sync::Arc;
-use codec::{Encode, Decode};
-use client_api::backend::AuxStore;
+use parity_scale_codec::{Encode, Decode};
+use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use fork_tree::ForkTree;
-use grandpa::round::State as RoundState;
-use sr_primitives::traits::{Block as BlockT, NumberFor};
+use finality_grandpa::round::State as RoundState;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use log::{info, warn};
-use fg_primitives::{AuthorityList, SetId, RoundNumber};
+use sp_finality_grandpa::{AuthorityList, SetId, RoundNumber};
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
 use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
@@ -36,6 +36,7 @@ use crate::NewAuthoritySet;
 
 const VERSION_KEY: &[u8] = b"grandpa_schema_version";
 const SET_STATE_KEY: &[u8] = b"grandpa_completed_round";
+const CONCLUDED_ROUNDS: &[u8] = b"grandpa_concluded_rounds";
 const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 const CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 
@@ -405,6 +406,18 @@ pub(crate) fn write_voter_set_state<Block: BlockT, B: AuxStore>(
 	)
 }
 
+/// Write concluded round.
+pub(crate) fn write_concluded_round<Block: BlockT, B: AuxStore>(
+	backend: &B,
+	round_data: &CompletedRound<Block>,
+) -> ClientResult<()> {
+	let mut key = CONCLUDED_ROUNDS.to_vec();
+	let round_number = round_data.number;
+	round_number.using_encoded(|n| key.extend(n));
+
+	backend.insert_aux(&[(&key[..], round_data.encode().as_slice())], &[])
+}
+
 /// Update the consensus changes.
 pub(crate) fn update_consensus_changes<H, N, F, R>(
 	set: &ConsensusChanges<H, N>,
@@ -426,14 +439,14 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
 
 #[cfg(test)]
 mod test {
-	use fg_primitives::AuthorityId;
-	use primitives::H256;
-	use test_client;
+	use sp_finality_grandpa::AuthorityId;
+	use sp_core::H256;
+	use substrate_test_runtime_client;
 	use super::*;
 
 	#[test]
 	fn load_decode_from_v0_migrates_data_format() {
-		let client = test_client::new();
+		let client = substrate_test_runtime_client::new();
 
 		let authorities = vec![(AuthorityId::default(), 100)];
 		let set_id = 3;
@@ -469,7 +482,7 @@ mod test {
 		);
 
 		// should perform the migration
-		load_persistent::<test_client::runtime::Block, _, _>(
+		load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
 			&client,
 			H256::random(),
 			0,
@@ -481,7 +494,7 @@ mod test {
 			Some(2),
 		);
 
-		let PersistentData { authority_set, set_state, .. } = load_persistent::<test_client::runtime::Block, _, _>(
+		let PersistentData { authority_set, set_state, .. } = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
 			&client,
 			H256::random(),
 			0,
@@ -521,7 +534,7 @@ mod test {
 
 	#[test]
 	fn load_decode_from_v1_migrates_data_format() {
-		let client = test_client::new();
+		let client = substrate_test_runtime_client::new();
 
 		let authorities = vec![(AuthorityId::default(), 100)];
 		let set_id = 3;
@@ -559,7 +572,7 @@ mod test {
 		);
 
 		// should perform the migration
-		load_persistent::<test_client::runtime::Block, _, _>(
+		load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
 			&client,
 			H256::random(),
 			0,
@@ -571,7 +584,7 @@ mod test {
 			Some(2),
 		);
 
-		let PersistentData { authority_set, set_state, .. } = load_persistent::<test_client::runtime::Block, _, _>(
+		let PersistentData { authority_set, set_state, .. } = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
 			&client,
 			H256::random(),
 			0,
@@ -606,6 +619,31 @@ mod test {
 				),
 				current_rounds,
 			},
+		);
+	}
+
+	#[test]
+	fn write_read_concluded_rounds() {
+		let client = substrate_test_runtime_client::new();
+		let hash = H256::random();
+		let round_state = RoundState::genesis((hash, 0));
+
+		let completed_round = CompletedRound::<substrate_test_runtime_client::runtime::Block> {
+			number: 42,
+			state: round_state.clone(),
+			base: round_state.prevote_ghost.unwrap(),
+			votes: vec![],
+		};
+
+		assert!(write_concluded_round(&client, &completed_round).is_ok());
+
+		let round_number = completed_round.number;
+		let mut key = CONCLUDED_ROUNDS.to_vec();
+		round_number.using_encoded(|n| key.extend(n));
+
+		assert_eq!(
+			load_decode::<_, CompletedRound::<substrate_test_runtime_client::runtime::Block>>(&client, &key).unwrap(),
+			Some(completed_round),
 		);
 	}
 }

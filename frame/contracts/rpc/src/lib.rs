@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,13 +22,11 @@ use sp_blockchain::HeaderBackend;
 use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use primitives::{H256, Bytes};
-use rpc_primitives::number;
+use sp_core::{H256, Bytes};
+use sp_rpc::number;
 use serde::{Deserialize, Serialize};
-use sr_primitives::{
-	generic::BlockId,
-	traits::{Block as BlockT, ProvideRuntimeApi},
-};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_api::ProvideRuntimeApi;
 
 pub use self::gen_client::Client as ContractsClient;
 pub use pallet_contracts_rpc_runtime_api::{
@@ -39,7 +37,16 @@ const RUNTIME_ERROR: i64 = 1;
 const CONTRACT_DOESNT_EXIST: i64 = 2;
 const CONTRACT_IS_A_TOMBSTONE: i64 = 3;
 
-// A private newtype for converting `GetStorageError` into an RPC error.
+/// A rough estimate of how much gas a decent hardware consumes per second,
+/// using native execution.
+/// This value is used to set the upper bound for maximal contract calls to
+/// prevent blocking the RPC for too long.
+///
+/// Based on W3F research spreadsheet:
+/// https://docs.google.com/spreadsheets/d/1h0RqncdqiWI4KgxO0z9JIpZEJESXjX_ZCK6LFX6veDo/view
+const GAS_PER_SECOND: u64 = 1_000_000_000;
+
+/// A private newtype for converting `GetStorageError` into an RPC error.
 struct GetStorageError(runtime_api::GetStorageError);
 impl From<GetStorageError> for Error {
 	fn from(e: GetStorageError) -> Error {
@@ -71,6 +78,35 @@ pub struct CallRequest<AccountId, Balance> {
 	input_data: Bytes,
 }
 
+/// An RPC serializable result of contract execution
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+pub enum RpcContractExecResult {
+	/// Successful execution
+	Success {
+		/// Status code
+		status: u8,
+		/// Output data
+		data: Bytes,
+	},
+	/// Error execution
+	Error(()),
+}
+
+impl From<ContractExecResult> for RpcContractExecResult {
+	fn from(r: ContractExecResult) -> Self {
+		match r {
+			ContractExecResult::Success { status, data } => {
+				RpcContractExecResult::Success { status, data: data.into() }
+			},
+			ContractExecResult::Error => {
+				RpcContractExecResult::Error(())
+			},
+		}
+	}
+}
+
 /// Contracts RPC methods.
 #[rpc]
 pub trait ContractsApi<BlockHash, AccountId, Balance> {
@@ -85,7 +121,7 @@ pub trait ContractsApi<BlockHash, AccountId, Balance> {
 		&self,
 		call_request: CallRequest<AccountId, Balance>,
 		at: Option<BlockHash>,
-	) -> Result<ContractExecResult>;
+	) -> Result<RpcContractExecResult>;
 
 	/// Returns the value under a specified storage `key` in a contract given by `address` param,
 	/// or `None` if it is not set.
@@ -118,9 +154,7 @@ impl<C, Block, AccountId, Balance> ContractsApi<<Block as BlockT>::Hash, Account
 	for Contracts<C, Block>
 where
 	Block: BlockT,
-	C: Send + Sync + 'static,
-	C: ProvideRuntimeApi,
-	C: HeaderBackend<Block>,
+	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 	C::Api: ContractsRuntimeApi<Block, AccountId, Balance>,
 	AccountId: Codec,
 	Balance: Codec,
@@ -129,7 +163,7 @@ where
 		&self,
 		call_request: CallRequest<AccountId, Balance>,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<ContractExecResult> {
+	) -> Result<RpcContractExecResult> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
@@ -148,6 +182,19 @@ where
 			data: None,
 		})?;
 
+		let max_gas_limit = 5 * GAS_PER_SECOND;
+		if gas_limit > max_gas_limit {
+			return Err(Error {
+				code: ErrorCode::InvalidParams,
+				message: format!(
+					"Requested gas limit is greater than maximum allowed: {} > {}",
+					gas_limit,
+					max_gas_limit
+				),
+				data: None,
+			});
+		}
+
 		let exec_result = api
 			.call(&at, origin, dest, value, gas_limit, input_data.to_vec())
 			.map_err(|e| Error {
@@ -156,7 +203,7 @@ where
 				data: Some(format!("{:?}", e).into()),
 			})?;
 
-		Ok(exec_result)
+		Ok(exec_result.into())
 	}
 
 	fn get_storage(
@@ -183,5 +230,22 @@ where
 			.map(Bytes);
 
 		Ok(get_storage_result)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn should_serialize_deserialize_properly() {
+		fn test(expected: &str) {
+			let res: RpcContractExecResult  = serde_json::from_str(expected).unwrap();
+			let actual = serde_json::to_string(&res).unwrap();
+			assert_eq!(actual, expected);
+		}
+
+		test(r#"{"success":{"status":5,"data":"0x1234"}}"#);
+		test(r#"{"error":null}"#);
 	}
 }

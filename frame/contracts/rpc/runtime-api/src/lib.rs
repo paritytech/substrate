@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,13 +22,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 use codec::{Encode, Decode, Codec};
-use sr_primitives::RuntimeDebug;
+use sp_runtime::RuntimeDebug;
 
 /// A result of execution of a contract.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum ContractExecResult {
 	/// The contract returned successfully.
 	///
@@ -59,7 +58,7 @@ pub enum GetStorageError {
 	IsTombstone,
 }
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// The API to interact with contracts without using executive.
 	pub trait ContractsApi<AccountId, Balance> where
 		AccountId: Codec,

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,12 +21,10 @@ use codec::{Codec, Decode};
 use sp_blockchain::HeaderBackend;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use sr_primitives::{
-	generic::BlockId,
-	traits::{Block as BlockT, ProvideRuntimeApi},
-};
-use primitives::Bytes;
-use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+use sp_runtime::{generic::BlockId, traits::{Block as BlockT, UniqueSaturatedInto}};
+use sp_api::ProvideRuntimeApi;
+use sp_core::Bytes;
+use pallet_transaction_payment_rpc_runtime_api::CappedDispatchInfo;
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 pub use self::gen_client::Client as TransactionPaymentClient;
 
@@ -37,7 +35,7 @@ pub trait TransactionPaymentApi<BlockHash, Balance> {
 		&self,
 		encoded_xt: Bytes,
 		at: Option<BlockHash>
-	) -> Result<RuntimeDispatchInfo<Balance>>;
+	) -> Result<CappedDispatchInfo>;
 }
 
 /// A struct that implements the [`TransactionPaymentApi`].
@@ -74,18 +72,16 @@ impl<C, Block, Balance, Extrinsic> TransactionPaymentApi<<Block as BlockT>::Hash
 	for TransactionPayment<C, (Block, Extrinsic)>
 where
 	Block: BlockT,
-	C: Send + Sync + 'static,
-	C: ProvideRuntimeApi,
-	C: HeaderBackend<Block>,
+	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 	C::Api: TransactionPaymentRuntimeApi<Block, Balance, Extrinsic>,
-	Balance: Codec,
+	Balance: Codec + UniqueSaturatedInto<u64>,
 	Extrinsic: Codec + Send + Sync + 'static,
 {
 	fn query_info(
 		&self,
 		encoded_xt: Bytes,
 		at: Option<<Block as BlockT>::Hash>
-	) -> Result<RuntimeDispatchInfo<Balance>> {
+	) -> Result<CappedDispatchInfo> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
@@ -103,6 +99,6 @@ where
 			code: ErrorCode::ServerError(Error::RuntimeError.into()),
 			message: "Unable to query dispatch info.".into(),
 			data: Some(format!("{:?}", e).into()),
-		})
+		}).map(CappedDispatchInfo::new)
 	}
 }

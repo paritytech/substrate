@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -32,11 +32,9 @@ mod rotator;
 mod validated_pool;
 
 pub mod base_pool;
-pub mod error;
 pub mod watcher;
 
-pub use self::error::IntoPoolError;
-pub use self::base_pool::{Transaction, Status};
+pub use self::base_pool::Transaction;
 pub use self::pool::{
 	Pool,
 	Options, ChainApi, EventStream, ExtrinsicFor,

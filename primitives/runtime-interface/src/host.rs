@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 
 use crate::RIType;
 
-use wasm_interface::{FunctionContext, Result};
+use sp_wasm_interface::{FunctionContext, Result};
 
 /// Something that can be converted into a ffi value.
 pub trait IntoFFIValue: RIType {

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,8 +18,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::vec::Vec;
-use sr_primitives::ConsensusEngineId;
+use sp_std::vec::Vec;
+use sp_runtime::ConsensusEngineId;
 use codec::Decode;
 
 /// The `ConsensusEngineId` of PoW.
@@ -33,7 +33,7 @@ pub trait TotalDifficulty {
 	fn increment(&mut self, other: Self);
 }
 
-impl TotalDifficulty for primitives::U256 {
+impl TotalDifficulty for sp_core::U256 {
 	fn increment(&mut self, other: Self) {
 		let ret = self.saturating_add(other);
 		*self = ret;
@@ -47,7 +47,7 @@ impl TotalDifficulty for u128 {
 	}
 }
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// API necessary for timestamp-based difficulty adjustment algorithms.
 	pub trait TimestampApi<Moment: Decode> {
 		/// Return the timestamp in the current block.

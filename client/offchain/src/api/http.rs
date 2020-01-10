@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ use bytes::Buf as _;
 use fnv::FnvHashMap;
 use futures::{prelude::*, channel::mpsc, compat::Compat01As03};
 use log::error;
-use primitives::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
+use sp_core::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
 use std::{fmt, io::Read as _, mem, pin::Pin, task::Context, task::Poll};
 
 /// Creates a pair of [`HttpApi`] and [`HttpWorker`].
@@ -696,7 +696,7 @@ mod tests {
 	use super::http;
 	use futures::prelude::*;
 	use futures01::Future as _;
-	use primitives::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Duration};
+	use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Duration};
 
 	// Returns an `HttpApi` whose worker is ran in the background, and a `SocketAddr` to an HTTP
 	// server that runs in the background as well.

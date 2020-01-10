@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-sr_api::decl_runtime_apis! {
+sp_api::decl_runtime_apis! {
 	/// The API to query account nonce (aka transaction index).
 	pub trait AccountNonceApi<AccountId, Index> where
 		AccountId: codec::Codec,

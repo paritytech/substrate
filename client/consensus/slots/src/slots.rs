@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,9 +19,9 @@
 //! This is used instead of `futures_timer::Interval` because it was unreliable.
 
 use super::SlotCompatible;
-use consensus_common::Error;
+use sp_consensus::Error;
 use futures::{prelude::*, task::Context, task::Poll};
-use inherents::{InherentData, InherentDataProviders};
+use sp_inherents::{InherentData, InherentDataProviders};
 
 use std::{pin::Pin, time::{Duration, Instant}};
 use futures_timer::Delay;
@@ -71,6 +71,8 @@ pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
 pub struct SlotInfo {
 	/// The slot number.
 	pub number: u64,
+	/// The last slot number produced.
+	pub last_number: u64,
 	/// Current timestamp.
 	pub timestamp: u64,
 	/// The instant at which the slot ends.
@@ -79,18 +81,6 @@ pub struct SlotInfo {
 	pub inherent_data: InherentData,
 	/// Slot duration.
 	pub duration: u64,
-}
-
-impl SlotInfo {
-	/// Yields the remaining duration in the slot.
-	pub fn remaining_duration(&self) -> Duration {
-		let now = Instant::now();
-		if now < self.ends_at {
-			self.ends_at.duration_since(now)
-		} else {
-			Duration::from_millis(0)
-		}
-	}
 }
 
 /// A stream that returns every time there is a new slot.
@@ -145,7 +135,7 @@ impl<SC: SlotCompatible + Unpin> Stream for Slots<SC> {
 
 			let inherent_data = match self.inherent_data_providers.create_inherent_data() {
 				Ok(id) => id,
-				Err(err) => return Poll::Ready(Some(Err(consensus_common::Error::InherentData(err)))),
+				Err(err) => return Poll::Ready(Some(Err(sp_consensus::Error::InherentData(err)))),
 			};
 			let result = self.timestamp_extractor.extract_timestamp_and_slot(&inherent_data);
 			let (timestamp, slot_num, offset) = match result {
@@ -160,11 +150,13 @@ impl<SC: SlotCompatible + Unpin> Stream for Slots<SC> {
 
 			// never yield the same slot twice.
 			if slot_num > self.last_slot {
+				let last_slot = self.last_slot;
 				self.last_slot = slot_num;
 
 				break Poll::Ready(Some(Ok(SlotInfo {
 					number: slot_num,
 					duration: self.slot_duration,
+					last_number: last_slot,
 					timestamp,
 					ends_at,
 					inherent_data,

@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@ use crate::protocol::sync::{PeerSync, PeerSyncState};
 use fork_tree::ForkTree;
 use libp2p::PeerId;
 use log::{debug, warn};
-use sr_primitives::traits::{Block as BlockT, NumberFor, Zero};
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
@@ -288,7 +288,7 @@ mod tests {
 	use rand::Rng;
 	use std::collections::{HashMap, HashSet};
 	use super::*;
-	use test_client::runtime::{Block, BlockNumber, Hash};
+	use sp_test_primitives::{Block, BlockNumber, Hash};
 
 	#[test]
 	fn requests_are_processed_in_order() {

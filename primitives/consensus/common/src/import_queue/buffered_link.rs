@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,9 +21,9 @@
 //! # Example
 //!
 //! ```
-//! use substrate_consensus_common::import_queue::Link;
-//! # use substrate_consensus_common::import_queue::buffered_link::buffered_link;
-//! # use test_client::runtime::Block;
+//! use sp_consensus::import_queue::Link;
+//! # use sp_consensus::import_queue::buffered_link::buffered_link;
+//! # use sp_test_primitives::Block;
 //! # struct DummyLink; impl Link<Block> for DummyLink {}
 //! # let mut my_link = DummyLink;
 //! let (mut tx, mut rx) = buffered_link::<Block>();
@@ -38,7 +38,7 @@
 //!
 
 use futures::{prelude::*, channel::mpsc};
-use sr_primitives::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{pin::Pin, task::Context, task::Poll};
 use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 
@@ -161,7 +161,7 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 
 #[cfg(test)]
 mod tests {
-	use test_client::runtime::Block;
+	use sp_test_primitives::Block;
 
 	#[test]
 	fn is_closed() {

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,10 +22,10 @@ use codec::Encode;
 #[cfg(feature = "std")]
 use codec::Decode;
 #[cfg(feature = "std")]
-use inherents::ProvideInherentData;
-use inherents::{InherentIdentifier, IsFatalError, InherentData};
+use sp_inherents::ProvideInherentData;
+use sp_inherents::{InherentIdentifier, IsFatalError, InherentData};
 
-use sr_primitives::RuntimeString;
+use sp_runtime::RuntimeString;
 
 /// The identifier for the `timestamp` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
@@ -33,7 +33,7 @@ pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
 pub type InherentType = u64;
 
 /// Errors that can occur while checking the timestamp inherent.
-#[derive(Encode, sr_primitives::RuntimeDebug)]
+#[derive(Encode, sp_runtime::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode))]
 pub enum InherentError {
 	/// The timestamp is valid in the future.
@@ -67,11 +67,11 @@ impl InherentError {
 /// Auxiliary trait to extract timestamp inherent data.
 pub trait TimestampInherentData {
 	/// Get timestamp inherent data.
-	fn timestamp_inherent_data(&self) -> Result<InherentType, inherents::Error>;
+	fn timestamp_inherent_data(&self) -> Result<InherentType, sp_inherents::Error>;
 }
 
 impl TimestampInherentData for InherentData {
-	fn timestamp_inherent_data(&self) -> Result<InherentType, inherents::Error> {
+	fn timestamp_inherent_data(&self) -> Result<InherentType, sp_inherents::Error> {
 		self.get_data(&INHERENT_IDENTIFIER)
 			.and_then(|r| r.ok_or_else(|| "Timestamp inherent data not found".into()))
 	}
@@ -89,7 +89,7 @@ impl ProvideInherentData for InherentDataProvider {
 	fn provide_inherent_data(
 		&self,
 		inherent_data: &mut InherentData,
-	) -> Result<(), inherents::Error> {
+	) -> Result<(), sp_inherents::Error> {
 		use std::time::SystemTime;
 
 		let now = SystemTime::now();

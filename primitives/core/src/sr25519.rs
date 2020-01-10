@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@
 //! for this to work.
 // end::description[]
 #[cfg(feature = "full_crypto")]
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 #[cfg(feature = "full_crypto")]
 use schnorrkel::{signing_context, ExpansionMode, Keypair, SecretKey, MiniSecretKey, PublicKey,
 	derive::{Derivation, ChainCode, CHAIN_CODE_LENGTH}
@@ -42,13 +42,13 @@ use crate::crypto::Ss58Codec;
 use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
 use crate::hash::{H256, H512};
 use codec::{Encode, Decode};
-use rstd::ops::Deref;
+use sp_std::ops::Deref;
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(feature = "full_crypto")]
 use schnorrkel::keys::{MINI_SECRET_KEY_LENGTH, SECRET_KEY_LENGTH};
-use runtime_interface::pass_by::PassByInner;
+use sp_runtime_interface::pass_by::PassByInner;
 
 // signing context
 #[cfg(feature = "full_crypto")]
@@ -121,7 +121,7 @@ impl std::str::FromStr for Public {
 	}
 }
 
-impl rstd::convert::TryFrom<&[u8]> for Public {
+impl sp_std::convert::TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
@@ -154,15 +154,15 @@ impl std::fmt::Display for Public {
 	}
 }
 
-impl rstd::fmt::Debug for Public {
+impl sp_std::fmt::Debug for Public {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
@@ -188,7 +188,7 @@ impl<'de> Deserialize<'de> for Public {
 #[derive(Encode, Decode, PassByInner)]
 pub struct Signature(pub [u8; 64]);
 
-impl rstd::convert::TryFrom<&[u8]> for Signature {
+impl sp_std::convert::TryFrom<&[u8]> for Signature {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
@@ -278,22 +278,22 @@ impl From<schnorrkel::Signature> for Signature {
 	}
 }
 
-impl rstd::fmt::Debug for Signature {
+impl sp_std::fmt::Debug for Signature {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
 
 #[cfg(feature = "full_crypto")]
-impl rstd::hash::Hash for Signature {
-	fn hash<H: rstd::hash::Hasher>(&self, state: &mut H) {
-		rstd::hash::Hash::hash(&self.0[..], state);
+impl sp_std::hash::Hash for Signature {
+	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
+		sp_std::hash::Hash::hash(&self.0[..], state);
 	}
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,31 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::traits::{AugmentClap, GetLogFilter};
+use crate::traits::GetSharedParams;
 
-use std::path::PathBuf;
-use structopt::{StructOpt, clap::{arg_enum, App, AppSettings, SubCommand, Arg}};
+use std::{str::FromStr, path::PathBuf};
+use structopt::{StructOpt, StructOptInternal, clap::{arg_enum, App, AppSettings, SubCommand, Arg}};
 
 pub use crate::execution_strategy::ExecutionStrategy;
 
-/// Auxiliary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
-macro_rules! impl_get_log_filter {
-	( $type:ident ) => {
-		impl $crate::GetLogFilter for $type {
-			fn get_log_filter(&self) -> Option<String> {
-				self.shared_params.get_log_filter()
-			}
-		}
-	}
-}
-
-impl Into<client_api::ExecutionStrategy> for ExecutionStrategy {
-	fn into(self) -> client_api::ExecutionStrategy {
+impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
+	fn into(self) -> sc_client_api::ExecutionStrategy {
 		match self {
-			ExecutionStrategy::Native => client_api::ExecutionStrategy::NativeWhenPossible,
-			ExecutionStrategy::Wasm => client_api::ExecutionStrategy::AlwaysWasm,
-			ExecutionStrategy::Both => client_api::ExecutionStrategy::Both,
-			ExecutionStrategy::NativeElseWasm => client_api::ExecutionStrategy::NativeElseWasm,
+			ExecutionStrategy::Native => sc_client_api::ExecutionStrategy::NativeWhenPossible,
+			ExecutionStrategy::Wasm => sc_client_api::ExecutionStrategy::AlwaysWasm,
+			ExecutionStrategy::Both => sc_client_api::ExecutionStrategy::Both,
+			ExecutionStrategy::NativeElseWasm => sc_client_api::ExecutionStrategy::NativeElseWasm,
 		}
 	}
 }
@@ -46,7 +35,7 @@ impl Into<client_api::ExecutionStrategy> for ExecutionStrategy {
 arg_enum! {
 	/// How to execute Wasm runtime code
 	#[allow(missing_docs)]
-	#[derive(Debug, Clone)]
+	#[derive(Debug, Clone, Copy)]
 	pub enum WasmExecutionMethod {
 		// Uses an interpreter.
 		Interpreted,
@@ -66,12 +55,12 @@ impl WasmExecutionMethod {
 	}
 }
 
-impl Into<service::config::WasmExecutionMethod> for WasmExecutionMethod {
-	fn into(self) -> service::config::WasmExecutionMethod {
+impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
+	fn into(self) -> sc_service::config::WasmExecutionMethod {
 		match self {
-			WasmExecutionMethod::Interpreted => service::config::WasmExecutionMethod::Interpreted,
+			WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
 			#[cfg(feature = "wasmtime")]
-			WasmExecutionMethod::Compiled => service::config::WasmExecutionMethod::Compiled,
+			WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled,
 			#[cfg(not(feature = "wasmtime"))]
 			WasmExecutionMethod::Compiled => panic!(
 				"Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
@@ -111,10 +100,46 @@ pub struct SharedParams {
 	pub log: Option<String>,
 }
 
-impl GetLogFilter for SharedParams {
-	fn get_log_filter(&self) -> Option<String> {
-		self.log.clone()
-	}
+/// Parameters for block import.
+#[derive(Debug, StructOpt, Clone)]
+pub struct ImportParams {
+	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
+	///
+	/// Default is to keep all block states if the node is running as a
+	/// validator (i.e. 'archive'), otherwise state is only kept for the last
+	/// 256 blocks.
+	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
+	pub pruning: Option<String>,
+
+	/// Force start with unsafe pruning settings.
+	///
+	/// When running as a validator it is highly recommended to disable state
+	/// pruning (i.e. 'archive') which is the default. The node will refuse to
+	/// start as a validator if pruning is enabled unless this option is set.
+	#[structopt(long = "unsafe-pruning")]
+	pub unsafe_pruning: bool,
+
+	/// Method for executing Wasm runtime code.
+	#[structopt(
+		long = "wasm-execution",
+		value_name = "METHOD",
+		possible_values = &WasmExecutionMethod::enabled_variants(),
+		case_insensitive = true,
+		default_value = "Interpreted"
+	)]
+	pub wasm_method: WasmExecutionMethod,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub execution_strategies: ExecutionStrategies,
+
+	/// Limit the memory the database cache can use.
+	#[structopt(long = "db-cache", value_name = "MiB", default_value = "1024")]
+	pub database_cache_size: u32,
+
+	/// Specify the state cache size.
+	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
+	pub state_cache_size: usize,
 }
 
 /// Parameters used to create the network configuration.
@@ -134,6 +159,14 @@ pub struct NetworkConfigurationParams {
 	/// nodes regardless of whether they are defined as reserved nodes.
 	#[structopt(long = "reserved-only")]
 	pub reserved_only: bool,
+
+	/// Specify a list of sentry node public addresses.
+	#[structopt(
+		long = "sentry-nodes",
+		value_name = "URL",
+		conflicts_with_all = &[ "sentry" ]
+	)]
+	pub sentry_nodes: Vec<String>,
 
 	/// Listen on this multiaddress.
 	#[structopt(long = "listen-addr", value_name = "LISTEN_ADDR")]
@@ -175,7 +208,7 @@ pub struct NetworkConfigurationParams {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub node_key_params: NodeKeyParams
+	pub node_key_params: NodeKeyParams,
 }
 
 arg_enum! {
@@ -245,7 +278,7 @@ pub struct NodeKeyParams {
 	/// If the file does not exist, it is created with a newly generated secret key of
 	/// the chosen type.
 	#[structopt(long = "node-key-file", value_name = "FILE")]
-	pub node_key_file: Option<PathBuf>
+	pub node_key_file: Option<PathBuf>,
 }
 
 /// Parameters used to create the pool configuration.
@@ -269,12 +302,12 @@ arg_enum! {
 	}
 }
 
-impl Into<substrate_tracing::TracingReceiver> for TracingReceiver {
-	fn into(self) -> substrate_tracing::TracingReceiver {
+impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
+	fn into(self) -> sc_tracing::TracingReceiver {
 		match self {
-			TracingReceiver::Log => substrate_tracing::TracingReceiver::Log,
-			TracingReceiver::Telemetry => substrate_tracing::TracingReceiver::Telemetry,
-			TracingReceiver::Grafana => substrate_tracing::TracingReceiver::Grafana,
+			TracingReceiver::Log => sc_tracing::TracingReceiver::Log,
+			TracingReceiver::Telemetry => sc_tracing::TracingReceiver::Telemetry,
+			TracingReceiver::Grafana => sc_tracing::TracingReceiver::Grafana,
 		}
 	}
 }
@@ -386,25 +419,33 @@ pub struct RunCmd {
 	#[structopt(long = "light")]
 	pub light: bool,
 
-	/// Limit the memory the database cache can use.
-	#[structopt(long = "db-cache", value_name = "MiB", default_value = "1024")]
-	pub database_cache_size: u32,
-
-	/// Specify the state cache size.
-	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
-	pub state_cache_size: usize,
-
 	/// Listen to all RPC interfaces.
 	///
-	/// Default is local.
+	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use a RPC proxy
+	/// server to filter out dangerous methods. More details: https://github.com/paritytech/substrate/wiki/Public-RPC.
+	/// Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "rpc-external")]
 	pub rpc_external: bool,
 
+	/// Listen to all RPC interfaces.
+	///
+	/// Same as `--rpc-external`.
+	#[structopt(long = "unsafe-rpc-external")]
+	pub unsafe_rpc_external: bool,
+
 	/// Listen to all Websocket interfaces.
 	///
-	/// Default is local.
+	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use a RPC proxy
+	/// server to filter out dangerous methods. More details: https://github.com/paritytech/substrate/wiki/Public-RPC.
+	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "ws-external")]
 	pub ws_external: bool,
+
+	/// Listen to all Websocket interfaces.
+	///
+	/// Same as `--ws-external`.
+	#[structopt(long = "unsafe-ws-external")]
+	pub unsafe_ws_external: bool,
 
 	/// Listen to all Grafana data source interfaces.
 	///
@@ -437,22 +478,6 @@ pub struct RunCmd {
 	/// Specify Grafana data source server TCP Port.
 	#[structopt(long = "grafana-port", value_name = "PORT")]
 	pub grafana_port: Option<u16>,
-
-	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
-	///
-	/// Default is to keep all block states if the node is running as a
-	/// validator (i.e. 'archive'), otherwise state is only kept for the last
-	/// 256 blocks.
-	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
-	pub pruning: Option<String>,
-
-	/// Force start with unsafe pruning settings.
-	///
-	/// When running as a validator it is highly recommended to disable state
-	/// pruning (i.e. 'archive') which is the default. The node will refuse to
-	/// start as a validator if pruning is enabled unless this option is set.
-	#[structopt(long = "unsafe-pruning")]
-	pub unsafe_pruning: bool,
 
 	/// The human-readable name for this node.
 	///
@@ -487,23 +512,13 @@ pub struct RunCmd {
 	)]
 	pub offchain_worker: OffchainWorkerEnabled,
 
-	/// Method for executing Wasm runtime code.
-	#[structopt(
-		long = "wasm-execution",
-		value_name = "METHOD",
-		possible_values = &WasmExecutionMethod::enabled_variants(),
-		case_insensitive = true,
-		default_value = "Interpreted"
-	)]
-	pub wasm_method: WasmExecutionMethod,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub execution_strategies: ExecutionStrategies,
-
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub import_params: ImportParams,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -568,19 +583,19 @@ struct KeyringTestAccountCliValues {
 	help: String,
 	conflicts_with: Vec<String>,
 	name: String,
-	variant: keyring::Sr25519Keyring,
+	variant: sp_keyring::Sr25519Keyring,
 }
 
 lazy_static::lazy_static! {
 	/// The Cli values for all test accounts.
 	static ref TEST_ACCOUNTS_CLI_VALUES: Vec<KeyringTestAccountCliValues> = {
-		keyring::Sr25519Keyring::iter().map(|a| {
+		sp_keyring::Sr25519Keyring::iter().map(|a| {
 			let help = format!(
 				"Shortcut for `--name {} --validator` with session keys for `{}` added to keystore.",
 				a,
 				a,
 			);
-			let conflicts_with = keyring::Sr25519Keyring::iter()
+			let conflicts_with = sp_keyring::Sr25519Keyring::iter()
 				.filter(|b| a != *b)
 				.map(|b| b.to_string().to_lowercase())
 				.chain(std::iter::once("name".to_string()))
@@ -600,7 +615,7 @@ lazy_static::lazy_static! {
 /// Wrapper for exposing the keyring test accounts into the Cli.
 #[derive(Debug, Clone)]
 pub struct Keyring {
-	pub account: Option<keyring::Sr25519Keyring>,
+	pub account: Option<sp_keyring::Sr25519Keyring>,
 }
 
 impl StructOpt for Keyring {
@@ -608,14 +623,14 @@ impl StructOpt for Keyring {
 		unimplemented!("Should not be called for `TestAccounts`.")
 	}
 
-	fn from_clap(m: &::structopt::clap::ArgMatches) -> Self {
+	fn from_clap(m: &structopt::clap::ArgMatches) -> Self {
 		Keyring {
 			account: TEST_ACCOUNTS_CLI_VALUES.iter().find(|a| m.is_present(&a.name)).map(|a| a.variant),
 		}
 	}
 }
 
-impl AugmentClap for Keyring {
+impl StructOptInternal for Keyring {
 	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
 		TEST_ACCOUNTS_CLI_VALUES.iter().fold(app, |app, a| {
 			let conflicts_with_strs = a.conflicts_with.iter().map(|s| s.as_str()).collect::<Vec<_>>();
@@ -628,12 +643,6 @@ impl AugmentClap for Keyring {
 					.takes_value(false)
 			)
 		})
-	}
-}
-
-impl Keyring {
-	fn is_subcommand() -> bool {
-		false
 	}
 }
 
@@ -690,9 +699,6 @@ fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
 	Ok(if is_all { Cors::All } else { Cors::List(origins) })
 }
 
-impl_augment_clap!(RunCmd);
-impl_get_log_filter!(RunCmd);
-
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt, Clone)]
 pub struct BuildSpecCmd {
@@ -716,7 +722,40 @@ pub struct BuildSpecCmd {
 	pub node_key_params: NodeKeyParams,
 }
 
-impl_get_log_filter!(BuildSpecCmd);
+/// Wrapper type of `String` which holds an arbitary sized unsigned integer formatted as decimal.
+#[derive(Debug, Clone)]
+pub struct BlockNumber(String);
+
+impl FromStr for BlockNumber {
+	type Err = String;
+
+	fn from_str(block_number: &str) -> Result<Self, Self::Err> {
+		if block_number.chars().any(|d| !d.is_digit(10)) {
+			Err(format!(
+				"Invalid block number: {}, expected decimal formatted unsigned integer",
+				block_number
+			))
+		} else {
+			Ok(Self(block_number.to_owned()))
+		}
+	}
+}
+
+impl BlockNumber {
+	/// Wrapper on top of `std::str::parse<N>` but with `Error` as a `String`
+	///
+	/// See `https://doc.rust-lang.org/std/primitive.str.html#method.parse` for more elaborate
+	/// documentation.
+	pub fn parse<N>(&self) -> Result<N, String>
+	where
+		N: FromStr,
+		N::Err: std::fmt::Debug,
+	{
+		self.0
+			.parse()
+			.map_err(|e| format!("BlockNumber: {} parsing failed because of {:?}", self.0, e))
+	}
+}
 
 /// The `export-blocks` command used to export blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -729,13 +768,13 @@ pub struct ExportBlocksCmd {
 	///
 	/// Default is 1.
 	#[structopt(long = "from", value_name = "BLOCK")]
-	pub from: Option<u32>,
+	pub from: Option<BlockNumber>,
 
 	/// Specify last block number.
 	///
 	/// Default is best block.
 	#[structopt(long = "to", value_name = "BLOCK")]
-	pub to: Option<u32>,
+	pub to: Option<BlockNumber>,
 
 	/// Use JSON output rather than binary.
 	#[structopt(long = "json")]
@@ -745,8 +784,6 @@ pub struct ExportBlocksCmd {
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 }
-
-impl_get_log_filter!(ExportBlocksCmd);
 
 /// The `import-blocks` command used to import blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -765,42 +802,44 @@ pub struct ImportBlocksCmd {
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 
-	/// Method for executing Wasm runtime code.
-	#[structopt(
-		long = "wasm-execution",
-		value_name = "METHOD",
-		possible_values = &WasmExecutionMethod::variants(),
-		case_insensitive = true,
-		default_value = "Interpreted"
-	)]
-	pub wasm_method: WasmExecutionMethod,
-
-	/// The means of execution used when calling into the runtime while importing blocks.
-	#[structopt(
-		long = "execution",
-		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategy::variants(),
-		case_insensitive = true,
-		default_value = "NativeElseWasm"
-	)]
-	pub execution: ExecutionStrategy,
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub import_params: ImportParams,
 }
 
-impl_get_log_filter!(ImportBlocksCmd);
+/// The `check-block` command used to validate blocks.
+#[derive(Debug, StructOpt, Clone)]
+pub struct CheckBlockCmd {
+	/// Block hash or number
+	#[structopt(value_name = "HASH or NUMBER")]
+	pub input: String,
+
+	/// The default number of 64KB pages to ever allocate for Wasm execution.
+	///
+	/// Don't alter this unless you know what you're doing.
+	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
+	pub default_heap_pages: Option<u32>,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub import_params: ImportParams,
+}
 
 /// The `revert` command used revert the chain to a previous state.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RevertCmd {
 	/// Number of blocks to revert.
 	#[structopt(default_value = "256")]
-	pub num: u32,
+	pub num: BlockNumber,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 }
-
-impl_get_log_filter!(RevertCmd);
 
 /// The `purge-chain` command used to remove the whole chain.
 #[derive(Debug, StructOpt, Clone)]
@@ -813,8 +852,6 @@ pub struct PurgeChainCmd {
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 }
-
-impl_get_log_filter!(PurgeChainCmd);
 
 /// All core commands that are provided by default.
 ///
@@ -835,6 +872,9 @@ pub enum CoreParams<CC, RP> {
 	/// Import blocks from file.
 	ImportBlocks(ImportBlocksCmd),
 
+	/// Validte a single block.
+	CheckBlock(CheckBlockCmd),
+
 	/// Revert chain to the previous state.
 	Revert(RevertCmd),
 
@@ -846,8 +886,8 @@ pub enum CoreParams<CC, RP> {
 }
 
 impl<CC, RP> StructOpt for CoreParams<CC, RP> where
-	CC: StructOpt + GetLogFilter,
-	RP: StructOpt + AugmentClap
+	CC: StructOpt + GetSharedParams,
+	RP: StructOpt + StructOptInternal,
 {
 	fn clap<'a, 'b>() -> App<'a, 'b> {
 		RP::augment_clap(
@@ -869,6 +909,10 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 				.about("Import blocks from file.")
 		)
 		.subcommand(
+			CheckBlockCmd::augment_clap(SubCommand::with_name("check-block"))
+				.about("Re-validate a known block.")
+		)
+		.subcommand(
 			RevertCmd::augment_clap(SubCommand::with_name("revert"))
 				.about("Revert chain to the previous state.")
 		)
@@ -886,25 +930,13 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 				CoreParams::ExportBlocks(ExportBlocksCmd::from_clap(matches)),
 			("import-blocks", Some(matches)) =>
 				CoreParams::ImportBlocks(ImportBlocksCmd::from_clap(matches)),
+			("check-block", Some(matches)) =>
+				CoreParams::CheckBlock(CheckBlockCmd::from_clap(matches)),
 			("revert", Some(matches)) => CoreParams::Revert(RevertCmd::from_clap(matches)),
 			("purge-chain", Some(matches)) =>
 				CoreParams::PurgeChain(PurgeChainCmd::from_clap(matches)),
 			(_, None) => CoreParams::Run(MergeParameters::from_clap(matches)),
 			_ => CoreParams::Custom(CC::from_clap(matches)),
-		}
-	}
-}
-
-impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
-	fn get_log_filter(&self) -> Option<String> {
-		match self {
-			CoreParams::Run(c) => c.left.get_log_filter(),
-			CoreParams::BuildSpec(c) => c.get_log_filter(),
-			CoreParams::ExportBlocks(c) => c.get_log_filter(),
-			CoreParams::ImportBlocks(c) => c.get_log_filter(),
-			CoreParams::PurgeChain(c) => c.get_log_filter(),
-			CoreParams::Revert(c) => c.get_log_filter(),
-			CoreParams::Custom(c) => c.get_log_filter(),
 		}
 	}
 }
@@ -924,14 +956,14 @@ impl StructOpt for NoCustom {
 	}
 }
 
-impl AugmentClap for NoCustom {
+impl StructOptInternal for NoCustom {
 	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
 		app
 	}
 }
 
-impl GetLogFilter for NoCustom {
-	fn get_log_filter(&self) -> Option<String> {
+impl GetSharedParams for NoCustom {
+	fn shared_params(&self) -> Option<&SharedParams> {
 		None
 	}
 }
@@ -945,7 +977,7 @@ pub struct MergeParameters<L, R> {
 	pub right: R,
 }
 
-impl<L, R> StructOpt for MergeParameters<L, R> where L: StructOpt + AugmentClap, R: StructOpt {
+impl<L, R> StructOpt for MergeParameters<L, R> where L: StructOpt + StructOptInternal, R: StructOpt {
 	fn clap<'a, 'b>() -> App<'a, 'b> {
 		L::augment_clap(R::clap())
 	}

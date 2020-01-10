@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,10 +19,10 @@
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, Codec};
 use hash_db::Hasher;
 use num_traits::Zero;
-use trie::Recorder;
+use sp_trie::Recorder;
 use crate::changes_trie::{AnchorBlockId, ConfigurationRange, RootsStorage, Storage, BlockNumber};
 use crate::changes_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, ExtrinsicIndexValue};
 use crate::changes_trie::storage::{TrieBackendAdapter, InMemoryStorage};
@@ -81,7 +81,7 @@ pub fn key_changes_proof<'a, H: Hasher, Number: BlockNumber>(
 	max: Number,
 	storage_key: Option<&[u8]>,
 	key: &[u8],
-) -> Result<Vec<Vec<u8>>, String> {
+) -> Result<Vec<Vec<u8>>, String> where H::Out: Codec {
 	// we can't query any roots before root
 	let max = ::std::cmp::min(max.clone(), end.number.clone());
 
@@ -129,7 +129,7 @@ pub fn key_changes_proof_check<'a, H: Hasher, Number: BlockNumber>(
 	max: Number,
 	storage_key: Option<&[u8]>,
 	key: &[u8]
-) -> Result<Vec<(Number, u32)>, String> {
+) -> Result<Vec<(Number, u32)>, String> where H::Out: Encode {
 	key_changes_proof_check_with_db(
 		config,
 		roots_storage,
@@ -152,7 +152,7 @@ pub fn key_changes_proof_check_with_db<'a, H: Hasher, Number: BlockNumber>(
 	max: Number,
 	storage_key: Option<&[u8]>,
 	key: &[u8]
-) -> Result<Vec<(Number, u32)>, String> {
+) -> Result<Vec<(Number, u32)>, String> where H::Out: Encode {
 	// we can't query any roots before root
 	let max = ::std::cmp::min(max.clone(), end.number.clone());
 
@@ -316,8 +316,8 @@ pub struct DrilldownIterator<'a, H, Number>
 	essence: DrilldownIteratorEssence<'a, H, Number>,
 }
 
-impl<'a, H: Hasher, Number: BlockNumber> Iterator
-	for DrilldownIterator<'a, H, Number>
+impl<'a, H: Hasher, Number: BlockNumber> Iterator for DrilldownIterator<'a, H, Number>
+	where H::Out: Encode
 {
 	type Item = Result<(Number, u32), String>;
 
@@ -358,7 +358,7 @@ impl<'a, H, Number> Iterator for ProvingDrilldownIterator<'a, H, Number>
 	where
 		Number: BlockNumber,
 		H: Hasher,
-		H::Out: 'a,
+		H::Out: 'a + Codec,
 {
 	type Item = Result<(Number, u32), String>;
 
@@ -376,7 +376,7 @@ impl<'a, H, Number> Iterator for ProvingDrilldownIterator<'a, H, Number>
 #[cfg(test)]
 mod tests {
 	use std::iter::FromIterator;
-	use primitives::Blake2Hasher;
+	use sp_core::Blake2Hasher;
 	use crate::changes_trie::Configuration;
 	use crate::changes_trie::input::InputPair;
 	use crate::changes_trie::storage::InMemoryStorage;

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -174,8 +174,8 @@ fn generate_host_functions_struct(trait_def: &ItemTrait, is_wasm_only: bool) -> 
 			pub struct HostFunctions;
 
 			#[cfg(feature = "std")]
-			impl #crate_::wasm_interface::HostFunctions for HostFunctions {
-				fn host_functions() -> Vec<&'static dyn #crate_::wasm_interface::Function> {
+			impl #crate_::sp_wasm_interface::HostFunctions for HostFunctions {
+				fn host_functions() -> Vec<&'static dyn #crate_::sp_wasm_interface::Function> {
 					vec![ #( #host_functions ),* ]
 				}
 			}
@@ -212,20 +212,20 @@ fn generate_host_function_implementation(
 				struct #struct_name;
 
 				#[allow(unused)]
-				impl #crate_::wasm_interface::Function for #struct_name {
+				impl #crate_::sp_wasm_interface::Function for #struct_name {
 					fn name(&self) -> &str {
 						#name
 					}
 
-					fn signature(&self) -> #crate_::wasm_interface::Signature {
+					fn signature(&self) -> #crate_::sp_wasm_interface::Signature {
 						#signature
 					}
 
 					fn execute(
 						&self,
-						__function_context__: &mut dyn #crate_::wasm_interface::FunctionContext,
-						args: &mut dyn Iterator<Item = #crate_::wasm_interface::Value>,
-					) -> std::result::Result<Option<#crate_::wasm_interface::Value>, String> {
+						__function_context__: &mut dyn #crate_::sp_wasm_interface::FunctionContext,
+						args: &mut dyn Iterator<Item = #crate_::sp_wasm_interface::Value>,
+					) -> std::result::Result<Option<#crate_::sp_wasm_interface::Value>, String> {
 						#( #wasm_to_ffi_values )*
 						#( #ffi_to_host_values )*
 						#host_function_call
@@ -234,7 +234,7 @@ fn generate_host_function_implementation(
 					}
 				}
 
-				&#struct_name as &dyn #crate_::wasm_interface::Function
+				&#struct_name as &dyn #crate_::sp_wasm_interface::Function
 			}
 		}
 	)
@@ -246,18 +246,18 @@ fn generate_wasm_interface_signature_for_host_function(sig: &Signature) -> Resul
 	let return_value = match &sig.output {
 		ReturnType::Type(_, ty) =>
 			quote! {
-				Some( <<#ty as #crate_::RIType>::FFIType as #crate_::wasm_interface::IntoValue>::VALUE_TYPE )
+				Some( <<#ty as #crate_::RIType>::FFIType as #crate_::sp_wasm_interface::IntoValue>::VALUE_TYPE )
 			},
 		ReturnType::Default => quote!( None ),
 	};
 	let arg_types = get_function_argument_types_without_ref(sig)
 		.map(|ty| quote! {
-			<<#ty as #crate_::RIType>::FFIType as #crate_::wasm_interface::IntoValue>::VALUE_TYPE
+			<<#ty as #crate_::RIType>::FFIType as #crate_::sp_wasm_interface::IntoValue>::VALUE_TYPE
 		});
 
 	Ok(
 		quote! {
-			#crate_::wasm_interface::Signature {
+			#crate_::sp_wasm_interface::Signature {
 				args: std::borrow::Cow::Borrowed(&[ #( #arg_types ),* ][..]),
 				return_value: #return_value,
 			}
@@ -292,7 +292,7 @@ fn generate_wasm_to_ffi_values<'a>(
 			Ok(quote! {
 				let val = args.next().ok_or_else(|| #error_message)?;
 				let #var_name = <
-					<#ty as #crate_::RIType>::FFIType as #crate_::wasm_interface::TryFromValue
+					<#ty as #crate_::RIType>::FFIType as #crate_::sp_wasm_interface::TryFromValue
 				>::try_from_value(val).ok_or_else(|| #try_from_error)?;
 			})
 		})
@@ -408,7 +408,7 @@ fn generate_return_value_into_wasm_value(sig: &Signature) -> TokenStream {
 				<#ty as #crate_::host::IntoFFIValue>::into_ffi_value(
 					#result_var_name,
 					__function_context__,
-				).map(#crate_::wasm_interface::IntoValue::into_value).map(Some)
+				).map(#crate_::sp_wasm_interface::IntoValue::into_value).map(Some)
 			}
 		}
 	}

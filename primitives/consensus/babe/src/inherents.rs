@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ use sp_timestamp::TimestampInherentData;
 
 #[cfg(feature = "std")]
 use codec::Decode;
-use rstd::result::Result;
+use sp_std::result::Result;
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
@@ -32,59 +32,59 @@ pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
 pub type InherentType = u64;
 /// Auxiliary trait to extract BABE inherent data.
 pub trait BabeInherentData {
-    /// Get BABE inherent data.
-    fn babe_inherent_data(&self) -> Result<InherentType, Error>;
-    /// Replace BABE inherent data.
-    fn babe_replace_inherent_data(&mut self, new: InherentType);
+	/// Get BABE inherent data.
+	fn babe_inherent_data(&self) -> Result<InherentType, Error>;
+	/// Replace BABE inherent data.
+	fn babe_replace_inherent_data(&mut self, new: InherentType);
 }
 
 impl BabeInherentData for InherentData {
-    fn babe_inherent_data(&self) -> Result<InherentType, Error> {
-        self.get_data(&INHERENT_IDENTIFIER)
-            .and_then(|r| r.ok_or_else(|| "BABE inherent data not found".into()))
-    }
+	fn babe_inherent_data(&self) -> Result<InherentType, Error> {
+		self.get_data(&INHERENT_IDENTIFIER)
+			.and_then(|r| r.ok_or_else(|| "BABE inherent data not found".into()))
+	}
 
-    fn babe_replace_inherent_data(&mut self, new: InherentType) {
-        self.replace_data(INHERENT_IDENTIFIER, &new);
-    }
+	fn babe_replace_inherent_data(&mut self, new: InherentType) {
+		self.replace_data(INHERENT_IDENTIFIER, &new);
+	}
 }
 
 /// Provides the slot duration inherent data for BABE.
 #[cfg(feature = "std")]
 pub struct InherentDataProvider {
-    slot_duration: u64,
+	slot_duration: u64,
 }
 
 #[cfg(feature = "std")]
 impl InherentDataProvider {
-    /// Constructs `Self`
-    pub fn new(slot_duration: u64) -> Self {
-        Self { slot_duration }
-    }
+	/// Constructs `Self`
+	pub fn new(slot_duration: u64) -> Self {
+		Self { slot_duration }
+	}
 }
 
 #[cfg(feature = "std")]
 impl ProvideInherentData for InherentDataProvider {
-    fn on_register(&self, providers: &InherentDataProviders) -> Result<(), Error> {
-        if !providers.has_provider(&sp_timestamp::INHERENT_IDENTIFIER) {
-            // Add the timestamp inherent data provider, as we require it.
-            providers.register_provider(sp_timestamp::InherentDataProvider)
-        } else {
-            Ok(())
-        }
-    }
+	fn on_register(&self, providers: &InherentDataProviders) -> Result<(), Error> {
+		if !providers.has_provider(&sp_timestamp::INHERENT_IDENTIFIER) {
+			// Add the timestamp inherent data provider, as we require it.
+			providers.register_provider(sp_timestamp::InherentDataProvider)
+		} else {
+			Ok(())
+		}
+	}
 
-    fn inherent_identifier(&self) -> &'static InherentIdentifier {
-        &INHERENT_IDENTIFIER
-    }
+	fn inherent_identifier(&self) -> &'static InherentIdentifier {
+		&INHERENT_IDENTIFIER
+	}
 
-    fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
-        let timestamp = inherent_data.timestamp_inherent_data()?;
-        let slot_number = timestamp / self.slot_duration;
-        inherent_data.put_data(INHERENT_IDENTIFIER, &slot_number)
-    }
+	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
+		let timestamp = inherent_data.timestamp_inherent_data()?;
+		let slot_number = timestamp / self.slot_duration;
+		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_number)
+	}
 
-    fn error_to_string(&self, error: &[u8]) -> Option<String> {
-        Error::decode(&mut &error[..]).map(|e| e.into_string()).ok()
-    }
+	fn error_to_string(&self, error: &[u8]) -> Option<String> {
+		Error::decode(&mut &error[..]).map(|e| e.into_string()).ok()
+	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,28 +16,26 @@
 
 //! Utilities for defining the wasm host environment.
 
-use wasm_interface::{Pointer, WordSize};
-
 /// Converts arguments into respective WASM types.
 #[macro_export]
 macro_rules! convert_args {
 	() => ([]);
-	( $( $t:ty ),* ) => ( [ $( <$t as $crate::wasm_interface::IntoValue>::VALUE_TYPE, )* ] );
+	( $( $t:ty ),* ) => ( [ $( <$t as $crate::sp_wasm_interface::IntoValue>::VALUE_TYPE, )* ] );
 }
 
 /// Generates a WASM signature for given list of parameters.
 #[macro_export]
 macro_rules! gen_signature {
 	( ( $( $params: ty ),* ) ) => (
-		$crate::wasm_interface::Signature {
+		$crate::sp_wasm_interface::Signature {
 			args: std::borrow::Cow::Borrowed(&convert_args!( $( $params ),* )[..]),
 			return_value: None,
 		}
 	);
 	( ( $( $params: ty ),* ) -> $returns:ty ) => (
-		$crate::wasm_interface::Signature {
+		$crate::sp_wasm_interface::Signature {
 			args: std::borrow::Cow::Borrowed(&convert_args!( $( $params ),* )[..]),
-			return_value: Some(<$returns as $crate::wasm_interface::IntoValue>::VALUE_TYPE),
+			return_value: Some(<$returns as $crate::sp_wasm_interface::IntoValue>::VALUE_TYPE),
 		}
 	);
 }
@@ -63,18 +61,18 @@ macro_rules! gen_functions {
 					struct $name;
 
 					#[allow(unused)]
-					impl $crate::wasm_interface::Function for $name {
+					impl $crate::sp_wasm_interface::Function for $name {
 						fn name(&self) -> &str {
 							stringify!($name)
 						}
-						fn signature(&self) -> $crate::wasm_interface::Signature {
+						fn signature(&self) -> $crate::sp_wasm_interface::Signature {
 							gen_signature!( ( $( $params ),* ) $( -> $returns )? )
 						}
 						fn execute(
 							&self,
-							context: &mut dyn $crate::wasm_interface::FunctionContext,
-							args: &mut dyn Iterator<Item=$crate::wasm_interface::Value>,
-						) -> ::std::result::Result<Option<$crate::wasm_interface::Value>, String> {
+							context: &mut dyn $crate::sp_wasm_interface::FunctionContext,
+							args: &mut dyn Iterator<Item=$crate::sp_wasm_interface::Value>,
+						) -> ::std::result::Result<Option<$crate::sp_wasm_interface::Value>, String> {
 							let mut $context = context;
 							marshall! {
 								args,
@@ -83,7 +81,7 @@ macro_rules! gen_functions {
 						}
 					}
 
-					&$name as &dyn $crate::wasm_interface::Function
+					&$name as &dyn $crate::sp_wasm_interface::Function
 				},
 			}
 			$context,
@@ -103,7 +101,7 @@ macro_rules! unmarshall_args {
 		$(
 			let $names : $params =
 				$args_iter.next()
-					.and_then(|val| <$params as $crate::wasm_interface::TryFromValue>::try_from_value(val))
+					.and_then(|val| <$params as $crate::sp_wasm_interface::TryFromValue>::try_from_value(val))
 					.expect(
 						"`$args_iter` comes from an argument of Externals::execute_function;
 						args to an external call always matches the signature of the external;
@@ -140,7 +138,7 @@ macro_rules! marshall {
 			unmarshall_args!($body, $args_iter, $( $names : $params ),*)
 		});
 		let r = body()?;
-		return Ok(Some($crate::wasm_interface::IntoValue::into_value(r)))
+		return Ok(Some($crate::sp_wasm_interface::IntoValue::into_value(r)))
 	});
 	( $args_iter:ident, ( $( $names:ident : $params:ty ),* ) => $body:tt ) => ({
 		let body = $crate::wasm_utils::constrain_closure::<(), _>(|| {
@@ -162,9 +160,9 @@ macro_rules! impl_wasm_host_interface {
 			)*
 		}
 	) => (
-		impl $crate::wasm_interface::HostFunctions for $interface_name {
+		impl $crate::sp_wasm_interface::HostFunctions for $interface_name {
 			#[allow(non_camel_case_types)]
-			fn host_functions() -> Vec<&'static dyn $crate::wasm_interface::Function> {
+			fn host_functions() -> Vec<&'static dyn $crate::sp_wasm_interface::Function> {
 				gen_functions!(
 					$context,
 					$( $name( $( $names: $params ),* ) $( -> $returns )? { $( $body )* } )*
@@ -173,14 +171,3 @@ macro_rules! impl_wasm_host_interface {
 		}
 	);
 }
-
-/// Runtime API functions return an i64 which encodes a pointer in the least-significant 32 bits
-/// and a length in the most-significant 32 bits. This interprets the returned value as a pointer,
-/// length tuple.
-pub fn interpret_runtime_api_result(retval: i64) -> (Pointer<u8>, WordSize) {
-	let ptr = <Pointer<u8>>::new(retval as u32);
-	// The first cast to u64 is necessary so that the right shift does not sign-extend.
-	let len = ((retval as u64) >> 32) as WordSize;
-	(ptr, len)
-}
-

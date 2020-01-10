@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 //! Changes trie pruning-related functions.
 
 use hash_db::Hasher;
-use trie::Recorder;
+use sp_trie::Recorder;
 use log::warn;
 use num_traits::{One, Zero};
 use crate::proving_backend::ProvingBackendRecorder;
@@ -25,7 +25,7 @@ use crate::trie_backend_essence::TrieBackendEssence;
 use crate::changes_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
 use crate::changes_trie::storage::TrieBackendAdapter;
 use crate::changes_trie::input::{ChildIndex, InputKey};
-use codec::Decode;
+use codec::{Decode, Codec};
 
 /// Get number of oldest block for which changes trie is not pruned
 /// given changes trie configuration, pruning parameter and number of
@@ -55,7 +55,7 @@ pub fn prune<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H::
 	min_blocks_to_keep: Number,
 	current_block: &AnchorBlockId<H::Out, Number>,
 	mut remove_trie_node: F,
-) {
+) where H::Out: Codec {
 
 	// select range for pruning
 	let (first, last) = match pruning_range(config, min_blocks_to_keep, current_block.number.clone()) {
@@ -116,7 +116,7 @@ fn prune_trie<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H:
 	storage: &S,
 	root: H::Out,
 	remove_trie_node: &mut F,
-) {
+) where H::Out: Codec {
 
 	// enumerate all changes trie' keys, recording all nodes that have been 'touched'
 	// (effectively - all changes trie nodes)
@@ -202,8 +202,8 @@ fn max_digest_intervals_to_keep<Number: BlockNumber>(
 #[cfg(test)]
 mod tests {
 	use std::collections::HashSet;
-	use trie::MemoryDB;
-	use primitives::Blake2Hasher;
+	use sp_trie::MemoryDB;
+	use sp_core::Blake2Hasher;
 	use crate::backend::insert_into_memory_db;
 	use crate::changes_trie::storage::InMemoryStorage;
 	use codec::Encode;
@@ -221,13 +221,15 @@ mod tests {
 		storage: &S,
 		min_blocks_to_keep: u64,
 		current_block: u64,
-	) -> HashSet<H::Out> {
+	) -> HashSet<H::Out> where H::Out: Codec {
 		let mut pruned_trie_nodes = HashSet::new();
-		prune(config,
+		prune(
+			config,
 			storage,
 			min_blocks_to_keep,
 			&AnchorBlockId { hash: Default::default(), number: current_block },
-			|node| { pruned_trie_nodes.insert(node); });
+			|node| { pruned_trie_nodes.insert(node); },
+		);
 		pruned_trie_nodes
 	}
 

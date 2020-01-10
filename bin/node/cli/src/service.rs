@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,27 +20,25 @@
 
 use std::sync::Arc;
 
-use babe;
-use client::{self, LongestChain};
+use sc_consensus_babe;
+use sc_client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
 use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
-use substrate_service::{
+use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
 };
-use transaction_pool::{self, txpool::{Pool as TransactionPool}};
-use inherents::InherentDataProviders;
-use network::construct_simple_protocol;
+use sp_inherents::InherentDataProviders;
+use sc_network::construct_simple_protocol;
 
-use substrate_service::{Service, NetworkStatus};
-use client::{Client, LocalCallExecutor};
-use client_db::Backend;
-use sr_primitives::traits::Block as BlockT;
+use sc_service::{Service, NetworkStatus};
+use sc_client::{Client, LocalCallExecutor};
+use sc_client_db::Backend;
+use sp_runtime::traits::Block as BlockT;
 use node_executor::NativeExecutor;
-use network::NetworkService;
-use offchain::OffchainWorkers;
-use primitives::Blake2Hasher;
+use sc_network::NetworkService;
+use sc_offchain::OffchainWorkers;
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
@@ -53,22 +51,26 @@ construct_simple_protocol! {
 /// be able to perform chain operations.
 macro_rules! new_full_start {
 	($config:expr) => {{
-		type RpcExtension = jsonrpc_core::IoHandler<substrate_rpc::Metadata>;
+		type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 		let mut import_setup = None;
-		let inherent_data_providers = inherents::InherentDataProviders::new();
+		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
-		let builder = substrate_service::ServiceBuilder::new_full::<
+		let builder = sc_service::ServiceBuilder::new_full::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
 		>($config)?
 			.with_select_chain(|_config, backend| {
-				Ok(client::LongestChain::new(backend.clone()))
+				Ok(sc_client::LongestChain::new(backend.clone()))
 			})?
-			.with_transaction_pool(|config, client|
-				Ok(transaction_pool::txpool::Pool::new(config, transaction_pool::FullChainApi::new(client)))
-			)?
+			.with_transaction_pool(|config, client, _fetcher| {
+				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
+				let pool = sc_transaction_pool::BasicPool::new(config, pool_api);
+				let maintainer = sc_transaction_pool::FullBasicPoolMaintainer::new(pool.pool().clone(), client);
+				let maintainable_pool = sp_transaction_pool::MaintainableTransactionPool::new(pool, maintainer);
+				Ok(maintainable_pool)
+			})?
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
-					.ok_or_else(|| substrate_service::Error::SelectChainRequired)?;
+					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
 					client.clone(),
 					&*client,
@@ -76,14 +78,14 @@ macro_rules! new_full_start {
 				)?;
 				let justification_import = grandpa_block_import.clone();
 
-				let (block_import, babe_link) = babe::block_import(
-					babe::Config::get_or_compute(&*client)?,
+				let (block_import, babe_link) = sc_consensus_babe::block_import(
+					sc_consensus_babe::Config::get_or_compute(&*client)?,
 					grandpa_block_import,
 					client.clone(),
 					client.clone(),
 				)?;
 
-				let import_queue = babe::import_queue(
+				let import_queue = sc_consensus_babe::import_queue(
 					babe_link.clone(),
 					block_import.clone(),
 					Some(Box::new(justification_import)),
@@ -96,8 +98,8 @@ macro_rules! new_full_start {
 				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
-			.with_rpc_extensions(|client, pool, _backend| -> RpcExtension {
-				node_rpc::create(client, pool)
+			.with_rpc_extensions(|client, pool, _backend, fetcher, _remote_blockchain| -> Result<RpcExtension, _> {
+				Ok(node_rpc::create(client, pool, node_rpc::LightDeps::none(fetcher)))
 			})?;
 
 		(builder, import_setup, inherent_data_providers)
@@ -110,24 +112,24 @@ macro_rules! new_full_start {
 /// concrete types instead.
 macro_rules! new_full {
 	($config:expr, $with_startup_data: expr) => {{
-		use futures01::sync::mpsc;
-		use network::DhtEvent;
 		use futures::{
-			compat::Stream01CompatExt,
 			stream::StreamExt,
 			future::{FutureExt, TryFutureExt},
 		};
+		use sc_network::Event;
 
 		let (
 			is_authority,
 			force_authoring,
 			name,
-			disable_grandpa
+			disable_grandpa,
+			sentry_nodes,
 		) = (
 			$config.roles.is_authority(),
 			$config.force_authoring,
 			$config.name.clone(),
-			$config.disable_grandpa
+			$config.disable_grandpa,
+			$config.network.sentry_nodes.clone(),
 		);
 
 		// sentry nodes announce themselves as authorities to the network
@@ -137,18 +139,10 @@ macro_rules! new_full {
 
 		let (builder, mut import_setup, inherent_data_providers) = new_full_start!($config);
 
-		// Dht event channel from the network to the authority discovery module. Use bounded channel to ensure
-		// back-pressure. Authority discovery is triggering one event per authority within the current authority set.
-		// This estimates the authority set size to be somewhere below 10 000 thereby setting the channel buffer size to
-		// 10 000.
-		let (dht_event_tx, dht_event_rx) =
-			mpsc::channel::<DhtEvent>(10_000);
-
 		let service = builder.with_network_protocol(|_| Ok(crate::service::NodeProtocol::new()))?
 			.with_finality_proof_provider(|client, backend|
 				Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, client)) as _)
 			)?
-			.with_dht_event_tx(dht_event_tx)?
 			.build()?;
 
 		let (block_import, grandpa_link, babe_link) = import_setup.take()
@@ -157,16 +151,19 @@ macro_rules! new_full {
 		($with_startup_data)(&block_import, &babe_link);
 
 		if participates_in_consensus {
-			let proposer = substrate_basic_authorship::ProposerFactory {
+			let proposer = sc_basic_authority::ProposerFactory {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
 			};
 
 			let client = service.client();
 			let select_chain = service.select_chain()
-				.ok_or(substrate_service::Error::SelectChainRequired)?;
+				.ok_or(sc_service::Error::SelectChainRequired)?;
 
-			let babe_config = babe::BabeParams {
+			let can_author_with =
+				sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
+
+			let babe_config = sc_consensus_babe::BabeParams {
 				keystore: service.keystore(),
 				client,
 				select_chain,
@@ -176,19 +173,23 @@ macro_rules! new_full {
 				inherent_data_providers: inherent_data_providers.clone(),
 				force_authoring,
 				babe_link,
+				can_author_with,
 			};
 
-			let babe = babe::start_babe(babe_config)?;
+			let babe = sc_consensus_babe::start_babe(babe_config)?;
 			service.spawn_essential_task(babe);
 
-			let future03_dht_event_rx = dht_event_rx.compat()
-				.map(|x| x.expect("<mpsc::channel::Receiver as Stream> never returns an error; qed"))
-				.boxed();
-			let authority_discovery = authority_discovery::AuthorityDiscovery::new(
+			let network = service.network();
+			let dht_event_stream = network.event_stream().filter_map(|e| async move { match e {
+				Event::Dht(e) => Some(e),
+				_ => None,
+			}}).boxed();
+			let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
 				service.client(),
-				service.network(),
+				network,
+				sentry_nodes,
 				service.keystore(),
-				future03_dht_event_rx,
+				dht_event_stream,
 			);
 			let future01_authority_discovery = authority_discovery.map(|x| Ok(x)).compat();
 
@@ -221,6 +222,7 @@ macro_rules! new_full {
 					grandpa_link,
 					service.network(),
 					service.on_exit(),
+					service.spawn_task_handle(),
 				)?);
 			},
 			(true, false) => {
@@ -233,6 +235,7 @@ macro_rules! new_full {
 					on_exit: service.on_exit(),
 					telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 					voting_rule: grandpa::VotingRulesBuilder::default().build(),
+					executor: service.spawn_task_handle(),
 				};
 				// the GRANDPA voter task is considered infallible, i.e.
 				// if it fails we take down the service with it.
@@ -267,6 +270,17 @@ type ConcreteClient =
 	>;
 #[allow(dead_code)]
 type ConcreteBackend = Backend<ConcreteBlock>;
+#[allow(dead_code)]
+type ConcreteTransactionPool = sp_transaction_pool::MaintainableTransactionPool<
+	sc_transaction_pool::BasicPool<
+		sc_transaction_pool::FullChainApi<ConcreteClient, ConcreteBlock>,
+		ConcreteBlock
+	>,
+	sc_transaction_pool::FullBasicPoolMaintainer<
+		ConcreteClient,
+		sc_transaction_pool::FullChainApi<ConcreteClient, Block>
+	>
+>;
 
 /// A specialized configuration object for setting up the node..
 pub type NodeConfiguration<C> = Configuration<C, GenesisConfig, crate::chain_spec::Extensions>;
@@ -280,10 +294,10 @@ pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 		LongestChain<ConcreteBackend, ConcreteBlock>,
 		NetworkStatus<ConcreteBlock>,
 		NetworkService<ConcreteBlock, crate::service::NodeProtocol, <ConcreteBlock as BlockT>::Hash>,
-		TransactionPool<transaction_pool::FullChainApi<ConcreteClient, ConcreteBlock>>,
+		ConcreteTransactionPool,
 		OffchainWorkers<
 			ConcreteClient,
-			<ConcreteBackend as client_api::backend::Backend<Block, Blake2Hasher>>::OffchainStorage,
+			<ConcreteBackend as sc_client_api::backend::Backend<Block>>::OffchainStorage,
 			ConcreteBlock,
 		>
 	>,
@@ -296,16 +310,22 @@ pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 /// Builds a new service for a light client.
 pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 -> Result<impl AbstractService, ServiceError> {
-	type RpcExtension = jsonrpc_core::IoHandler<substrate_rpc::Metadata>;
+	type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 	let inherent_data_providers = InherentDataProviders::new();
 
 	let service = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
 		.with_select_chain(|_config, backend| {
 			Ok(LongestChain::new(backend.clone()))
 		})?
-		.with_transaction_pool(|config, client|
-			Ok(TransactionPool::new(config, transaction_pool::FullChainApi::new(client)))
-		)?
+		.with_transaction_pool(|config, client, fetcher| {
+			let fetcher = fetcher
+				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
+			let pool_api = sc_transaction_pool::LightChainApi::new(client.clone(), fetcher.clone());
+			let pool = sc_transaction_pool::BasicPool::new(config, pool_api);
+			let maintainer = sc_transaction_pool::LightBasicPoolMaintainer::with_defaults(pool.pool().clone(), client, fetcher);
+			let maintainable_pool = sp_transaction_pool::MaintainableTransactionPool::new(pool, maintainer);
+			Ok(maintainable_pool)
+		})?
 		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
@@ -321,14 +341,14 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 			let finality_proof_request_builder =
 				finality_proof_import.create_finality_proof_request_builder();
 
-			let (babe_block_import, babe_link) = babe::block_import(
-				babe::Config::get_or_compute(&*client)?,
+			let (babe_block_import, babe_link) = sc_consensus_babe::block_import(
+				sc_consensus_babe::Config::get_or_compute(&*client)?,
 				grandpa_block_import,
 				client.clone(),
 				client.clone(),
 			)?;
 
-			let import_queue = babe::import_queue(
+			let import_queue = sc_consensus_babe::import_queue(
 				babe_link,
 				babe_block_import,
 				None,
@@ -344,8 +364,14 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?
-		.with_rpc_extensions(|client, pool, _backend| -> RpcExtension {
-			node_rpc::create(client, pool)
+		.with_rpc_extensions(|client, pool, _backend, fetcher, remote_blockchain| -> Result<RpcExtension, _> {
+			let fetcher = fetcher
+				.ok_or_else(|| "Trying to start node RPC without active fetcher")?;
+			let remote_blockchain = remote_blockchain
+				.ok_or_else(|| "Trying to start node RPC without active remote blockchain")?;
+
+			let light_deps = node_rpc::LightDeps { remote_blockchain, fetcher };
+			Ok(node_rpc::create(client, pool, Some(light_deps)))
 		})?
 		.build()?;
 
@@ -355,16 +381,17 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 #[cfg(test)]
 mod tests {
 	use std::sync::Arc;
-	use babe::CompatibleDigestItem;
-	use consensus_common::{
+	use sc_consensus_babe::CompatibleDigestItem;
+	use sp_consensus::{
 		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy, BlockImport,
+		RecordProof,
 	};
 	use node_primitives::{Block, DigestItem, Signature};
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
 	use codec::{Encode, Decode};
-	use primitives::{crypto::Pair as CryptoPair, H256};
-	use sr_primitives::{
+	use sp_core::{crypto::Pair as CryptoPair, H256};
+	use sp_runtime::{
 		generic::{BlockId, Era, Digest, SignedPayload},
 		traits::Block as BlockT,
 		traits::Verify,
@@ -372,19 +399,19 @@ mod tests {
 	};
 	use sp_timestamp;
 	use sp_finality_tracker;
-	use keyring::AccountKeyring;
-	use substrate_service::{AbstractService, Roles};
-	use crate::service::new_full;
-	use sr_primitives::traits::IdentifyAccount;
+	use sp_keyring::AccountKeyring;
+	use sc_service::AbstractService;
+	use crate::service::{new_full, new_light};
+	use sp_runtime::traits::IdentifyAccount;
 
 	type AccountPublic = <Signature as Verify>::Signer;
 
 	#[cfg(feature = "rhd")]
 	fn test_sync() {
-		use primitives::ed25519::Pair;
+		use sp_core::ed25519::Pair;
 
 		use {service_test, Factory};
-		use client::{BlockImportParams, BlockOrigin};
+		use sc_client::{BlockImportParams, BlockOrigin};
 
 		let alice: Arc<ed25519::Pair> = Arc::new(Keyring::Alice.into());
 		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());
@@ -392,7 +419,7 @@ mod tests {
 		let keys: Vec<&ed25519::Pair> = vec![&*alice, &*bob];
 		let dummy_runtime = ::tokio::runtime::Runtime::new().unwrap();
 		let block_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
-			let block_id = BlockId::number(service.client().info().chain.best_number);
+			let block_id = BlockId::number(service.client().chain_info().best_number);
 			let parent_header = service.client().header(&block_id).unwrap().unwrap();
 			let consensus_net = ConsensusNetwork::new(service.network(), service.client().clone());
 			let proposer_factory = consensus::ProposerFactory {
@@ -410,6 +437,7 @@ mod tests {
 				internal_justification: Vec::new(),
 				finalized: false,
 				body: Some(block.extrinsics),
+				storage_changes: None,
 				header: block.header,
 				auxiliary: Vec::new(),
 			}
@@ -432,14 +460,10 @@ mod tests {
 			let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();
 			OpaqueExtrinsic(v)
 		};
-		service_test::sync(
-			chain_spec::integration_test_config(),
+		sc_service_test::sync(
+			sc_chain_spec::integration_test_config(),
 			|config| new_full(config),
-			|mut config| {
-				// light nodes are unsupported
-				config.roles = Roles::FULL;
-				new_full(config)
-			},
+			|mut config| new_light(config),
 			block_factory,
 			extrinsic_factory,
 		);
@@ -449,9 +473,9 @@ mod tests {
 	#[ignore]
 	fn test_sync() {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore = keystore::Store::open(keystore_path.path(), None)
+		let keystore = sc_keystore::Store::open(keystore_path.path(), None)
 			.expect("Creates keystore");
-		let alice = keystore.write().insert_ephemeral_from_seed::<babe::AuthorityPair>("//Alice")
+		let alice = keystore.write().insert_ephemeral_from_seed::<sc_consensus_babe::AuthorityPair>("//Alice")
 			.expect("Creates authority pair");
 
 		let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();
@@ -464,31 +488,27 @@ mod tests {
 		let charlie = Arc::new(AccountKeyring::Charlie.pair());
 		let mut index = 0;
 
-		service_test::sync(
+		sc_service_test::sync(
 			chain_spec,
 			|config| {
 				let mut setup_handles = None;
 				new_full!(config, |
-					block_import: &babe::BabeBlockImport<_, _, Block, _, _, _>,
-					babe_link: &babe::BabeLink<Block>,
+					block_import: &sc_consensus_babe::BabeBlockImport<_, _, Block, _, _, _>,
+					babe_link: &sc_consensus_babe::BabeLink<Block>,
 				| {
 					setup_handles = Some((block_import.clone(), babe_link.clone()));
 				}).map(move |(node, x)| (node, (x, setup_handles.unwrap())))
 			},
-			|mut config| {
-				// light nodes are unsupported
-				config.roles = Roles::FULL;
-				new_full(config)
-			},
+			|config| new_light(config),
 			|service, &mut (ref inherent_data_providers, (ref mut block_import, ref babe_link))| {
 				let mut inherent_data = inherent_data_providers
 					.create_inherent_data()
 					.expect("Creates inherent data.");
 				inherent_data.replace_data(sp_finality_tracker::INHERENT_IDENTIFIER, &1u64);
 
-				let parent_id = BlockId::number(service.client().info().chain.best_number);
+				let parent_id = BlockId::number(service.client().chain_info().best_number);
 				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
-				let mut proposer_factory = substrate_basic_authorship::ProposerFactory {
+				let mut proposer_factory = sc_basic_authority::ProposerFactory {
 					client: service.client(),
 					transaction_pool: service.transaction_pool(),
 				};
@@ -499,7 +519,7 @@ mod tests {
 				// so we must keep trying the next slots until we can claim one.
 				let babe_pre_digest = loop {
 					inherent_data.replace_data(sp_timestamp::INHERENT_IDENTIFIER, &(slot_num * SLOT_DURATION));
-					if let Some(babe_pre_digest) = babe::test_helpers::claim_slot(
+					if let Some(babe_pre_digest) = sc_consensus_babe::test_helpers::claim_slot(
 						slot_num,
 						&parent_header,
 						&*service.client(),
@@ -519,7 +539,8 @@ mod tests {
 					inherent_data,
 					digest,
 					std::time::Duration::from_secs(1),
-				)).expect("Error making test block");
+					RecordProof::Yes,
+				)).expect("Error making test block").block;
 
 				let (new_header, new_body) = new_block.deconstruct();
 				let pre_hash = new_header.hash();
@@ -538,10 +559,12 @@ mod tests {
 					justification: None,
 					post_digests: vec![item],
 					body: Some(new_body),
+					storage_changes: None,
 					finalized: false,
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
 					allow_missing_state: false,
+					import_existing: false,
 				};
 
 				block_import.import_block(params, Default::default())
@@ -552,18 +575,18 @@ mod tests {
 				let to: Address = AccountPublic::from(bob.public()).into_account().into();
 				let from: Address = AccountPublic::from(charlie.public()).into_account().into();
 				let genesis_hash = service.client().block_hash(0).unwrap().unwrap();
-				let best_block_id = BlockId::number(service.client().info().chain.best_number);
+				let best_block_id = BlockId::number(service.client().chain_info().best_number);
 				let version = service.client().runtime_version_at(&best_block_id).unwrap().spec_version;
 				let signer = charlie.clone();
 
 				let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
-				let check_version = system::CheckVersion::new();
-				let check_genesis = system::CheckGenesis::new();
-				let check_era = system::CheckEra::from(Era::Immortal);
-				let check_nonce = system::CheckNonce::from(index);
-				let check_weight = system::CheckWeight::new();
-				let payment = transaction_payment::ChargeTransactionPayment::from(0);
+				let check_version = frame_system::CheckVersion::new();
+				let check_genesis = frame_system::CheckGenesis::new();
+				let check_era = frame_system::CheckEra::from(Era::Immortal);
+				let check_nonce = frame_system::CheckNonce::from(index);
+				let check_weight = frame_system::CheckWeight::new();
+				let payment = pallet_transaction_payment::ChargeTransactionPayment::from(0);
 				let extra = (
 					check_version,
 					check_genesis,
@@ -599,14 +622,10 @@ mod tests {
 	#[test]
 	#[ignore]
 	fn test_consensus() {
-		service_test::consensus(
+		sc_service_test::consensus(
 			crate::chain_spec::tests::integration_test_config_with_two_authorities(),
 			|config| new_full(config),
-			|mut config| {
-				// light nodes are unsupported
-				config.roles = Roles::FULL;
-				new_full(config)
-			},
+			|config| new_light(config),
 			vec![
 				"//Alice".into(),
 				"//Bob".into(),

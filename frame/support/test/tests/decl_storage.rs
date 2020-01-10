@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,11 +18,12 @@
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
-	use support::metadata::*;
+	use frame_support::metadata::*;
+	use sp_io::TestExternalities;
 	use std::marker::PhantomData;
 	use codec::{Encode, Decode, EncodeLike};
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
@@ -31,7 +32,7 @@ mod tests {
 		type BlockNumber;
 	}
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as TestStorage {
 			// non-getters: pub / $default
 
@@ -44,7 +45,7 @@ mod tests {
 			// getters: pub / $default
 			// we need at least one type which uses T, otherwise GenesisConfig will complain.
 			GETU32 get(fn u32_getter): T::Origin;
-			pub PUBGETU32 get(fn pub_u32_getter) build(|config: &GenesisConfig| config.u32_getter_with_config): u32;
+			pub PUBGETU32 get(fn pub_u32_getter): u32;
 			GETU32WITHCONFIG get(fn u32_getter_with_config) config(): u32;
 			pub PUBGETU32WITHCONFIG get(fn pub_u32_getter_with_config) config(): u32;
 			GETU32MYDEF get(fn u32_getter_mydef): Option<u32>;
@@ -52,6 +53,10 @@ mod tests {
 			GETU32WITHCONFIGMYDEF get(fn u32_getter_with_config_mydef) config(): u32 = 2;
 			pub PUBGETU32WITHCONFIGMYDEF get(fn pub_u32_getter_with_config_mydef) config(): u32 = 1;
 			PUBGETU32WITHCONFIGMYDEFOPT get(fn pub_u32_getter_with_config_mydef_opt) config(): Option<u32>;
+
+			GetU32WithBuilder get(fn u32_with_builder) build(|_| 1): u32;
+			GetOptU32WithBuilderSome get(fn opt_u32_with_builder_some) build(|_| Some(1)): Option<u32>;
+			GetOptU32WithBuilderNone get(fn opt_u32_with_builder_none) build(|_| None): Option<u32>;
 
 			// map non-getters: pub / $default
 			MAPU32 : map u32 => Option<String>;
@@ -74,7 +79,7 @@ mod tests {
 
 			COMPLEXTYPE1: ::std::vec::Vec<<T as Trait>::Origin>;
 			COMPLEXTYPE2: (Vec<Vec<(u16,Box<(  )>)>>, u32);
-			COMPLEXTYPE3: ([u32;25]);
+			COMPLEXTYPE3: [u32;25];
 		}
 		add_extra_genesis {
 			build(|_| {});
@@ -209,7 +214,33 @@ mod tests {
 					),
 					documentation: DecodeDifferent::Encode(&[]),
 				},
-
+				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("GetU32WithBuilder"),
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructGetU32WithBuilder(PhantomData::<TraitImpl>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("GetOptU32WithBuilderSome"),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructGetOptU32WithBuilderSome(PhantomData::<TraitImpl>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("GetOptU32WithBuilderNone"),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructGetOptU32WithBuilderNone(PhantomData::<TraitImpl>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
 				StorageEntryMetadata {
 					name: DecodeDifferent::Encode("MAPU32"),
 					modifier: StorageEntryModifier::Optional,
@@ -399,7 +430,7 @@ mod tests {
 				StorageEntryMetadata {
 					name: DecodeDifferent::Encode("COMPLEXTYPE3"),
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("([u32; 25])")),
+					ty: StorageEntryType::Plain(DecodeDifferent::Encode("[u32; 25]")),
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructCOMPLEXTYPE3(PhantomData::<TraitImpl>))
 					),
@@ -412,7 +443,7 @@ mod tests {
 	#[test]
 	fn store_metadata() {
 		let metadata = Module::<TraitImpl>::storage_metadata();
-		assert_eq!(EXPECTED_METADATA, metadata);
+		pretty_assertions::assert_eq!(EXPECTED_METADATA, metadata);
 	}
 
 	#[test]
@@ -427,6 +458,16 @@ mod tests {
 		assert_eq!(config.pub_u32_getter_with_config_mydef_opt, 0u32);
 	}
 
+	#[test]
+	fn check_builder_config() {
+		let config = GenesisConfig::default();
+		let storage = config.build_storage().unwrap();
+		TestExternalities::from(storage).execute_with(|| {
+			assert_eq!(Module::<TraitImpl>::u32_with_builder(), 1);
+			assert_eq!(Module::<TraitImpl>::opt_u32_with_builder_some(), Some(1));
+			assert_eq!(Module::<TraitImpl>::opt_u32_with_builder_none(), None);
+		})
+	}
 }
 
 #[cfg(test)]
@@ -437,13 +478,13 @@ mod test2 {
 		type BlockNumber;
 	}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
 	type PairOf<T> = (T, T);
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as TestStorage {
 			SingleDef : u32;
 			PairDef : PairOf<u32>;
@@ -472,10 +513,10 @@ mod test3 {
 		type Origin;
 		type BlockNumber;
 	}
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
 			Foo get(fn foo) config(initial_foo): u32;
 		}
@@ -494,7 +535,7 @@ mod test3 {
 #[cfg(test)]
 #[allow(dead_code)]
 mod test_append_and_len {
-	use runtime_io::TestExternalities;
+	use sp_io::TestExternalities;
 	use codec::{Encode, Decode};
 
 	pub trait Trait {
@@ -502,14 +543,14 @@ mod test_append_and_len {
 		type BlockNumber;
 	}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 	struct NoDef(u32);
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
 			NoDefault: Option<NoDef>;
 
@@ -520,6 +561,10 @@ mod test_append_and_len {
 			MapVec: map u32 => Vec<u32>;
 			MapVecWithDefault: map u32 => Vec<u32> = vec![6, 9];
 			OptionMapVec: map u32 => Option<Vec<u32>>;
+
+			DoubleMapVec: double_map u32, u32 => Vec<u32>;
+			DoubleMapVecWithDefault: double_map u32, u32 => Vec<u32> = vec![6, 9];
+			OptionDoubleMapVec: double_map u32, u32 => Option<Vec<u32>>;
 
 			LinkedMapVec: linked_map u32 => Vec<u32>;
 			LinkedMapVecWithDefault: linked_map u32 => Vec<u32> = vec![6, 9];
@@ -596,11 +641,13 @@ mod test_append_and_len {
 			OptionVec::put(&vec![1, 2, 3, 4, 5]);
 			MapVec::insert(1, &vec![1, 2, 3, 4, 5, 6]);
 			LinkedMapVec::insert(2, &vec![1, 2, 3]);
+			DoubleMapVec::insert(0, 1, &vec![1, 2]);
 
 			assert_eq!(JustVec::decode_len().unwrap(), 4);
 			assert_eq!(OptionVec::decode_len().unwrap(), 5);
 			assert_eq!(MapVec::decode_len(1).unwrap(), 6);
 			assert_eq!(LinkedMapVec::decode_len(2).unwrap(), 3);
+			assert_eq!(DoubleMapVec::decode_len(0, 1).unwrap(), 2);
 		});
 	}
 
@@ -636,6 +683,16 @@ mod test_append_and_len {
 
 			assert_eq!(OptionLinkedMapVec::get(0), None);
 			assert_eq!(OptionLinkedMapVec::decode_len(0), Ok(0));
+
+			// Double map
+			assert_eq!(DoubleMapVec::get(0, 0), vec![]);
+			assert_eq!(DoubleMapVec::decode_len(0, 1), Ok(0));
+
+			assert_eq!(DoubleMapVecWithDefault::get(0, 0), vec![6, 9]);
+			assert_eq!(DoubleMapVecWithDefault::decode_len(0, 1), Ok(2));
+
+			assert_eq!(OptionDoubleMapVec::get(0, 0), None);
+			assert_eq!(OptionDoubleMapVec::decode_len(0, 1), Ok(0));
 		});
 	}
 }

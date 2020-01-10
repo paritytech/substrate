@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -82,13 +82,13 @@
 //!
 //! We only send polite messages to peers,
 
-use sr_primitives::traits::{NumberFor, Block as BlockT, Zero};
-use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
-use network::{config::Roles, PeerId};
-use codec::{Encode, Decode};
-use fg_primitives::AuthorityId;
+use sp_runtime::traits::{NumberFor, Block as BlockT, Zero};
+use sc_network_gossip::{GossipEngine, MessageIntent, ValidatorContext};
+use sc_network::{config::Roles, PeerId, ReputationChange};
+use parity_scale_codec::{Encode, Decode};
+use sp_finality_grandpa::AuthorityId;
 
-use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
+use sc_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug, warn};
 use futures::prelude::*;
 use futures::sync::mpsc;
@@ -114,7 +114,7 @@ const ROUND_DURATION: u32 = 4; // measured in gossip durations
 
 const MIN_LUCKY: usize = 5;
 
-type Report = (PeerId, i32);
+type Report = (PeerId, ReputationChange);
 
 /// An outcome of examining a message.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -384,14 +384,19 @@ pub(super) enum Misbehavior {
 }
 
 impl Misbehavior {
-	pub(super) fn cost(&self) -> i32 {
+	pub(super) fn cost(&self) -> ReputationChange {
 		use Misbehavior::*;
 
 		match *self {
 			InvalidViewChange => cost::INVALID_VIEW_CHANGE,
-			UndecodablePacket(bytes) => bytes.saturating_mul(cost::PER_UNDECODABLE_BYTE),
-			BadCatchUpMessage { signatures_checked } =>
+			UndecodablePacket(bytes) => ReputationChange::new(
+				bytes.saturating_mul(cost::PER_UNDECODABLE_BYTE),
+				"Grandpa: Bad packet",
+			),
+			BadCatchUpMessage { signatures_checked } => ReputationChange::new(
 				cost::PER_SIGNATURE_CHECKED.saturating_mul(signatures_checked),
+				"Grandpa: Bad cath-up message",
+			),
 			BadCommitMessage { signatures_checked, blocks_loaded, equivocations_caught } => {
 				let cost = cost::PER_SIGNATURE_CHECKED
 					.saturating_mul(signatures_checked)
@@ -399,7 +404,7 @@ impl Misbehavior {
 
 				let benefit = equivocations_caught.saturating_mul(benefit::PER_EQUIVOCATION);
 
-				(benefit as i32).saturating_add(cost as i32)
+				ReputationChange::new((benefit as i32).saturating_add(cost as i32), "Grandpa: Bad commit")
 			},
 			FutureMessage => cost::FUTURE_MESSAGE,
 			OutOfScopeMessage => cost::OUT_OF_SCOPE_MESSAGE,
@@ -517,7 +522,7 @@ impl<N: Ord> Peers<N> {
 	}
 
 	fn reshuffle(&mut self) {
-		let mut lucky_peers : Vec<_> = self.inner
+		let mut lucky_peers: Vec<_> = self.inner
 			.iter()
 			.filter_map(|(id, info)| if !info.roles.is_authority() { Some(id.clone()) } else { None })
 			.collect();
@@ -551,11 +556,11 @@ impl<N: Ord> Peers<N> {
 #[derive(Debug, PartialEq)]
 pub(super) enum Action<H>  {
 	// repropagate under given topic, to the given peers, applying cost/benefit to originator.
-	Keep(H, i32),
+	Keep(H, ReputationChange),
 	// discard and process.
-	ProcessAndDiscard(H, i32),
+	ProcessAndDiscard(H, ReputationChange),
 	// discard, applying cost/benefit to originator.
-	Discard(i32),
+	Discard(ReputationChange),
 }
 
 /// State of catch up request handling.
@@ -670,7 +675,7 @@ impl<Block: BlockT> Inner<Block> {
 			let set_id = local_view.set_id;
 
 			debug!(target: "afg", "Voter {} noting beginning of round {:?} to network.",
-				self.config.name(), (round,set_id));
+				self.config.name(), (round, set_id));
 
 			local_view.round = round;
 
@@ -731,7 +736,7 @@ impl<Block: BlockT> Inner<Block> {
 			.unwrap_or(Consider::RejectOutOfScope)
 	}
 
-	fn cost_past_rejection(&self, _who: &PeerId, _round: Round, _set_id: SetId) -> i32 {
+	fn cost_past_rejection(&self, _who: &PeerId, _round: Round, _set_id: SetId) -> ReputationChange {
 		// hardcoded for now.
 		cost::PAST_REJECTION
 	}
@@ -783,7 +788,6 @@ impl<Block: BlockT> Inner<Block> {
 				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
 			Consider::RejectOutOfScope => return Action::Discard(Misbehavior::OutOfScopeMessage.cost()),
 			Consider::Accept => {},
-
 		}
 
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
@@ -904,15 +908,15 @@ impl<Block: BlockT> Inner<Block> {
 		// too many equivocations (we exceed the fault-tolerance bound).
 		for vote in last_completed_round.votes {
 			match vote.message {
-				grandpa::Message::Prevote(prevote) => {
-					prevotes.push(grandpa::SignedPrevote {
+				finality_grandpa::Message::Prevote(prevote) => {
+					prevotes.push(finality_grandpa::SignedPrevote {
 						prevote,
 						signature: vote.signature,
 						id: vote.id,
 					});
 				},
-				grandpa::Message::Precommit(precommit) => {
-					precommits.push(grandpa::SignedPrecommit {
+				finality_grandpa::Message::Precommit(precommit) => {
+					precommits.push(finality_grandpa::SignedPrecommit {
 						precommit,
 						signature: vote.signature,
 						id: vote.id,
@@ -1221,7 +1225,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		self.inner.write().note_catch_up_message_processed();
 	}
 
-	fn report(&self, who: PeerId, cost_benefit: i32) {
+	fn report(&self, who: PeerId, cost_benefit: ReputationChange) {
 		let _ = self.report_sender.unbounded_send(PeerReport { who, cost_benefit });
 	}
 
@@ -1276,7 +1280,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 }
 
-impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
+impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Block> {
 	fn new_peer(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, roles: Roles) {
 		let packet = {
 			let mut inner = self.inner.write();
@@ -1302,7 +1306,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	}
 
 	fn validate(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, data: &[u8])
-		-> network_gossip::ValidationResult<Block::Hash>
+		-> sc_network_gossip::ValidationResult<Block::Hash>
 	{
 		let (action, broadcast_topics, peer_reply) = self.do_validate(who, data);
 
@@ -1319,15 +1323,15 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			Action::Keep(topic, cb) => {
 				self.report(who.clone(), cb);
 				context.broadcast_message(topic, data.to_vec(), false);
-				network_gossip::ValidationResult::ProcessAndKeep(topic)
+				sc_network_gossip::ValidationResult::ProcessAndKeep(topic)
 			}
 			Action::ProcessAndDiscard(topic, cb) => {
 				self.report(who.clone(), cb);
-				network_gossip::ValidationResult::ProcessAndDiscard(topic)
+				sc_network_gossip::ValidationResult::ProcessAndDiscard(topic)
 			}
 			Action::Discard(cb) => {
 				self.report(who.clone(), cb);
-				network_gossip::ValidationResult::Discard
+				sc_network_gossip::ValidationResult::Discard
 			}
 		}
 	}
@@ -1443,7 +1447,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 
 struct PeerReport {
 	who: PeerId,
-	cost_benefit: i32,
+	cost_benefit: ReputationChange,
 }
 
 // wrapper around a stream of reports.
@@ -1455,29 +1459,26 @@ pub(super) struct ReportStream {
 impl ReportStream {
 	/// Consume the report stream, converting it into a future that
 	/// handles all reports.
-	pub(super) fn consume<B, N>(self, net: N)
+	pub(super) fn consume<B>(self, net: GossipEngine<B>)
 		-> impl Future<Item=(),Error=()> + Send + 'static
 	where
 		B: BlockT,
-		N: super::Network<B> + Send + 'static,
 	{
 		ReportingTask {
 			reports: self.reports,
 			net,
-			_marker: Default::default(),
 		}
 	}
 }
 
 /// A future for reporting peers.
 #[must_use = "Futures do nothing unless polled"]
-struct ReportingTask<B, N> {
+struct ReportingTask<B: BlockT> {
 	reports: mpsc::UnboundedReceiver<PeerReport>,
-	net: N,
-	_marker: std::marker::PhantomData<B>,
+	net: GossipEngine<B>,
 }
 
-impl<B: BlockT, N: super::Network<B>> Future for ReportingTask<B, N> {
+impl<B: BlockT> Future for ReportingTask<B> {
 	type Item = ();
 	type Error = ();
 
@@ -1501,9 +1502,9 @@ impl<B: BlockT, N: super::Network<B>> Future for ReportingTask<B, N> {
 mod tests {
 	use super::*;
 	use super::environment::SharedVoterSetState;
-	use network_gossip::Validator as GossipValidatorT;
-	use network::test::Block;
-	use primitives::{crypto::Public, H256};
+	use sc_network_gossip::Validator as GossipValidatorT;
+	use sc_network_test::Block;
+	use sp_core::{crypto::Public, H256};
 
 	// some random config (not really needed)
 	fn config() -> crate::Config {
@@ -1725,7 +1726,7 @@ mod tests {
 			round: Round(1),
 			set_id: SetId(set_id),
 			message: SignedMessage::<Block> {
-				message: grandpa::Message::Prevote(grandpa::Prevote {
+				message: finality_grandpa::Message::Prevote(finality_grandpa::Prevote {
 					target_hash: Default::default(),
 					target_number: 10,
 				}),
@@ -1738,7 +1739,7 @@ mod tests {
 			round: Round(1),
 			set_id: SetId(set_id),
 			message: SignedMessage::<Block> {
-				message: grandpa::Message::Prevote(grandpa::Prevote {
+				message: finality_grandpa::Message::Prevote(finality_grandpa::Prevote {
 					target_hash: Default::default(),
 					target_number: 10,
 				}),
@@ -1769,7 +1770,7 @@ mod tests {
 			let mut inner = val.inner.write();
 			inner.validate_catch_up_message(&peer, &FullCatchUpMessage {
 				set_id: SetId(set_id),
-				message: grandpa::CatchUp {
+				message: finality_grandpa::CatchUp {
 					round_number: 10,
 					prevotes: Default::default(),
 					precommits: Default::default(),
@@ -1805,7 +1806,7 @@ mod tests {
 
 			completed_rounds.push(environment::CompletedRound {
 				number: 2,
-				state: grandpa::round::State::genesis(Default::default()),
+				state: finality_grandpa::round::State::genesis(Default::default()),
 				base: Default::default(),
 				votes: Default::default(),
 			});

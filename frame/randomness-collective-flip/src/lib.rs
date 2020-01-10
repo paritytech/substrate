@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -35,13 +35,13 @@
 //! ### Example - Get random seed for the current block
 //!
 //! ```
-//! use support::{decl_module, dispatch::Result, traits::Randomness};
+//! use frame_support::{decl_module, dispatch, traits::Randomness};
 //!
-//! pub trait Trait: system::Trait {}
+//! pub trait Trait: frame_system::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn random_module_example(origin) -> Result {
+//! 		pub fn random_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _random_seed = <pallet_randomness_collective_flip::Module<T>>::random_seed();
 //! 			Ok(())
 //! 		}
@@ -52,12 +52,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, convert::TryInto};
-use sr_primitives::traits::Hash;
-use support::{decl_module, decl_storage, traits::Randomness};
+use sp_std::{prelude::*, convert::TryInto};
+use sp_runtime::traits::Hash;
+use frame_support::{decl_module, decl_storage, traits::Randomness};
 use safe_mix::TripletMix;
 use codec::Encode;
-use system::Trait;
+use frame_system::Trait;
 
 const RANDOM_MATERIAL_LEN: u32 = 81;
 
@@ -70,7 +70,7 @@ fn block_number_to_index<T: Trait>(block_number: T::BlockNumber) -> usize {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn on_initialize(block_number: T::BlockNumber) {
-			let parent_hash = <system::Module<T>>::parent_hash();
+			let parent_hash = <frame_system::Module<T>>::parent_hash();
 
 			<RandomMaterial<T>>::mutate(|ref mut values| if values.len() < RANDOM_MATERIAL_LEN as usize {
 				values.push(parent_hash)
@@ -130,7 +130,7 @@ impl<T: Trait> Randomness<T::Hash> for Module<T> {
 	/// and mean that all bits of the resulting value are entirely manipulatable by the author of
 	/// the parent block, who can determine the value of `parent_hash`.
 	fn random(subject: &[u8]) -> T::Hash {
-		let block_number = <system::Module<T>>::block_number();
+		let block_number = <frame_system::Module<T>>::block_number();
 		let index = block_number_to_index::<T>(block_number);
 
 		let hash_series = <RandomMaterial<T>>::get();
@@ -152,27 +152,27 @@ impl<T: Trait> Randomness<T::Hash> for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::H256;
-	use sr_primitives::{
+	use sp_core::H256;
+	use sp_runtime::{
 		Perbill, traits::{BlakeTwo256, OnInitialize, Header as _, IdentityLookup}, testing::Header,
 	};
-	use support::{impl_outer_origin, parameter_types, traits::Randomness};
+	use frame_support::{impl_outer_origin, parameter_types, weights::Weight, traits::Randomness};
 
 	#[derive(Clone, PartialEq, Eq)]
 	pub struct Test;
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 
-	impl system::Trait for Test {
+	impl frame_system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -188,13 +188,14 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 
-	type System = system::Module<Test>;
+	type System = frame_system::Module<Test>;
 	type CollectiveFlip = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	fn new_test_ext() -> sp_io::TestExternalities {
+		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		t.into()
 	}
 
@@ -209,7 +210,13 @@ mod tests {
 		let mut parent_hash = System::parent_hash();
 
 		for i in 1 .. (blocks + 1) {
-			System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
+			System::initialize(
+				&i,
+				&parent_hash,
+				&Default::default(),
+				&Default::default(),
+				frame_system::InitKind::Full,
+			);
 			CollectiveFlip::on_initialize(i);
 
 			let header = System::finalize();

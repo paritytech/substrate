@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -41,7 +41,7 @@ pub trait Extension: Send + Any {
 ///
 /// # Example
 /// ```
-/// # use substrate_externalities::decl_extension;
+/// # use sp_externalities::decl_extension;
 /// decl_extension! {
 ///     /// Some test extension
 ///     struct TestExt(String);

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,8 +16,8 @@
 
 #![recursion_limit="128"]
 
-use sr_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};
-use support::{
+use sp_runtime::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};
+use frame_support::{
 	Parameter, traits::Get, parameter_types,
 	metadata::{
 		DecodeDifferent, StorageMetadata, StorageEntryModifier, StorageEntryType, DefaultByteGetter,
@@ -25,8 +25,8 @@ use support::{
 	},
 	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap,
 };
-use inherents::{ProvideInherent, InherentData, InherentIdentifier, MakeFatalError};
-use primitives::{H256, sr25519};
+use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier, MakeFatalError};
+use sp_core::{H256, sr25519};
 
 mod system;
 
@@ -46,7 +46,7 @@ mod module1 {
 		type GenericType: Default + Clone + codec::Codec + codec::EncodeLike;
 	}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: InstantiableThing> for enum Call where
 			origin: <T as system::Trait>::Origin,
 			T::BlockNumber: From<u32>
@@ -62,7 +62,7 @@ mod module1 {
 		}
 	}
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait<I>, I: InstantiableThing> as Module1 where
 			T::BlockNumber: From<u32> + std::fmt::Display
 		{
@@ -79,14 +79,14 @@ mod module1 {
 		}
 	}
 
-	support::decl_event! {
+	frame_support::decl_event! {
 		pub enum Event<T, I> where Phantom = std::marker::PhantomData<T> {
 			_Phantom(Phantom),
 			AnotherVariant(u32),
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
+	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
 	pub enum Origin<T: Trait<I>, I> where T::BlockNumber: From<u32> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
@@ -98,7 +98,7 @@ mod module1 {
 		T::BlockNumber: From<u32>
 	{
 		type Call = Call<T, I>;
-		type Error = MakeFatalError<inherents::Error>;
+		type Error = MakeFatalError<sp_inherents::Error>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
@@ -125,7 +125,7 @@ mod module2 {
 
 	impl<T: Trait<I>, I: Instance> Currency for Module<T, I> {}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where
 			origin: <T as system::Trait>::Origin
 		{
@@ -133,22 +133,22 @@ mod module2 {
 		}
 	}
 
-	support::decl_storage! {
+	frame_support::decl_storage! {
 		trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Module2 {
 			pub Value config(value): T::Amount;
 			pub Map config(map): map u64 => u64;
 			pub LinkedMap config(linked_map): linked_map u64 => Vec<u8>;
-			pub DoubleMap config(double_map): double_map u64, blake2_256(u64) => u64;
+			pub DoubleMap config(double_map): double_map u64, u64 => u64;
 		}
 	}
 
-	support::decl_event! {
+	frame_support::decl_event! {
 		pub enum Event<T, I=DefaultInstance> where Amount = <T as Trait<I>>::Amount {
 			Variant(Amount),
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
+	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
 	pub enum Origin<T: Trait<I>, I=DefaultInstance> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
@@ -158,7 +158,7 @@ mod module2 {
 
 	impl<T: Trait<I>, I: Instance> ProvideInherent for Module<T, I> {
 		type Call = Call<T, I>;
-		type Error = MakeFatalError<inherents::Error>;
+		type Error = MakeFatalError<sp_inherents::Error>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
@@ -181,7 +181,7 @@ mod module3 {
 		type Currency2: Currency;
 	}
 
-	support::decl_module! {
+	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {}
 	}
 }
@@ -238,9 +238,10 @@ impl system::Trait for Runtime {
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
+	type ModuleToIndex = ();
 }
 
-support::construct_runtime!(
+frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
@@ -271,7 +272,7 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
-fn new_test_ext() -> runtime_io::TestExternalities {
+fn new_test_ext() -> sp_io::TestExternalities {
 	GenesisConfig{
 		module1_Instance1: Some(module1::GenesisConfig {
 			value: 3,
@@ -300,8 +301,11 @@ fn new_test_ext() -> runtime_io::TestExternalities {
 
 #[test]
 fn storage_instance_independance() {
-	let mut storage = (std::collections::HashMap::new(), std::collections::HashMap::new());
-	state_machine::BasicExternalities::execute_with_storage(&mut storage, || {
+	let mut storage = sp_core::storage::Storage {
+		top: std::collections::BTreeMap::new(),
+		children: std::collections::HashMap::new()
+	};
+	sp_state_machine::BasicExternalities::execute_with_storage(&mut storage, || {
 		module2::Value::<Runtime>::put(0);
 		module2::Value::<Runtime, module2::Instance1>::put(0);
 		module2::Value::<Runtime, module2::Instance2>::put(0);
@@ -320,7 +324,7 @@ fn storage_instance_independance() {
 		module2::DoubleMap::<module2::Instance3>::insert(&0, &0, &0);
 	});
 	// 16 storage values + 4 linked_map head.
-	assert_eq!(storage.0.len(), 16 + 4);
+	assert_eq!(storage.top.len(), 16 + 4);
 }
 
 #[test]
@@ -471,15 +475,4 @@ const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
 fn test_instance_storage_metadata() {
 	let metadata = Module2_2::storage_metadata();
 	pretty_assertions::assert_eq!(EXPECTED_METADATA, metadata);
-}
-
-#[test]
-fn instance_prefix_is_prefix_of_entries() {
-	use module2::Instance;
-
-	let prefix = module2::Instance2::PREFIX;
-	assert!(module2::Instance2::PREFIX_FOR_Value.starts_with(prefix));
-	assert!(module2::Instance2::PREFIX_FOR_Map.starts_with(prefix));
-	assert!(module2::Instance2::PREFIX_FOR_LinkedMap.starts_with(prefix));
-	assert!(module2::Instance2::PREFIX_FOR_DoubleMap.starts_with(prefix));
 }

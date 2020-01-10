@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -25,8 +25,8 @@ use crate::Schedule;
 use parity_wasm::elements::{self, Internal, External, MemoryType, Type, ValueType};
 use pwasm_utils;
 use pwasm_utils::rules;
-use rstd::prelude::*;
-use sr_primitives::traits::{SaturatedConversion};
+use sp_std::prelude::*;
+use sp_runtime::traits::{SaturatedConversion};
 
 struct ContractModule<'a> {
 	/// A deserialized module. The module is valid (this is Guaranteed by `new` method).

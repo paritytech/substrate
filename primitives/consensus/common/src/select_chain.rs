@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate Consensus Common.
 
 // Substrate Demo is free software: you can redistribute it and/or modify
@@ -15,7 +15,7 @@
 // along with Substrate Consensus Common.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::error::Error;
-use sr_primitives::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 
 /// The SelectChain trait defines the strategy upon which the head is chosen

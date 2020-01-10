@@ -1,11 +1,11 @@
 [package]
-name = "substrate-keyring"
+name = "sp-keyring"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-primitives = { package = "substrate-primitives",  path = "../core" }
-sr-primitives = { path = "../sr-primitives" }
+sp-core = { version = "2.0.0", path = "../core" }
+sp-runtime = { version = "2.0.0", path = "../runtime" }
 lazy_static = "1.4.0"
 strum = { version = "0.16.0", features = ["derive"] }

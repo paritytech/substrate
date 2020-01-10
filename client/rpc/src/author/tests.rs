@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,19 +19,16 @@ use super::*;
 use std::sync::Arc;
 use assert_matches::assert_matches;
 use codec::Encode;
-use primitives::{
+use sp_core::{
 	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore}, traits::BareCryptoStorePtr, ed25519,
 	crypto::Pair,
 };
 use rpc::futures::Stream as _;
-use test_client::{
-	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys, RuntimeApi, Block}, DefaultTestClientBuilderExt,
-	TestClientBuilderExt, Backend, Client, Executor
+use substrate_test_runtime_client::{
+	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys, RuntimeApi, Block},
+	DefaultTestClientBuilderExt, TestClientBuilderExt, Backend, Client, Executor,
 };
-use transaction_pool::{
-	txpool::Pool,
-	FullChainApi,
-};
+use sc_transaction_pool::{BasicPool, FullChainApi};
 use tokio::runtime;
 
 fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
@@ -44,18 +41,23 @@ fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 	tx.into_signed_tx()
 }
 
+type FullTransactionPool = BasicPool<
+	FullChainApi<Client<Backend>, Block>,
+	Block,
+>;
+
 struct TestSetup {
 	pub runtime: runtime::Runtime,
 	pub client: Arc<Client<Backend>>,
 	pub keystore: BareCryptoStorePtr,
-	pub pool: Arc<Pool<FullChainApi<Client<Backend>, Block>>>,
+	pub pool: Arc<FullTransactionPool>,
 }
 
 impl Default for TestSetup {
 	fn default() -> Self {
 		let keystore = KeyStore::new();
-		let client = Arc::new(test_client::TestClientBuilder::new().set_keystore(keystore.clone()).build());
-		let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
+		let client = Arc::new(substrate_test_runtime_client::TestClientBuilder::new().set_keystore(keystore.clone()).build());
+		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 		TestSetup {
 			runtime: runtime::Runtime::new().expect("Failed to create runtime in test setup"),
 			client,
@@ -66,7 +68,7 @@ impl Default for TestSetup {
 }
 
 impl TestSetup {
-	fn author(&self) -> Author<Backend, Executor, FullChainApi<Client<Backend>, Block>, RuntimeApi> {
+	fn author(&self) -> Author<Backend, Executor, FullTransactionPool, Block, RuntimeApi> {
 		Author {
 			client: self.client.clone(),
 			pool: self.pool.clone(),

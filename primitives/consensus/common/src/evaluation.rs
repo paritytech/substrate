@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 use super::MAX_BLOCK_SIZE;
 
 use codec::Encode;
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, One, CheckedConversion};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, One, CheckedConversion};
 
 // This is just a best effort to encode the number. None indicated that it's too big to encode
 // in a u128.

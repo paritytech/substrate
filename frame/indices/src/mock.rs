@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,36 +18,34 @@
 
 #![cfg(test)]
 
-use std::collections::HashSet;
-use ref_thread_local::{ref_thread_local, RefThreadLocal};
-use sr_primitives::testing::Header;
-use sr_primitives::Perbill;
-use primitives::H256;
-use support::{impl_outer_origin, parameter_types};
-use {runtime_io, system};
+use std::{cell::RefCell, collections::HashSet};
+use sp_runtime::testing::Header;
+use sp_runtime::Perbill;
+use sp_core::H256;
+use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
 
 impl_outer_origin!{
-	pub enum Origin for Runtime {}
+	pub enum Origin for Runtime where system = frame_system {}
 }
 
-ref_thread_local! {
-	static managed ALIVE: HashSet<u64> = HashSet::new();
+thread_local! {
+	static ALIVE: RefCell<HashSet<u64>> = Default::default();
 }
 
 pub fn make_account(who: u64) {
-	ALIVE.borrow_mut().insert(who);
+	ALIVE.with(|a| a.borrow_mut().insert(who));
 	Indices::on_new_account(&who);
 }
 
 pub fn kill_account(who: u64) {
-	ALIVE.borrow_mut().remove(&who);
+	ALIVE.with(|a| a.borrow_mut().remove(&who));
 }
 
 pub struct TestIsDeadAccount {}
 impl IsDeadAccount<u64> for TestIsDeadAccount {
 	fn is_dead_account(who: &u64) -> bool {
-		!ALIVE.borrow_mut().contains(who)
+		!ALIVE.with(|a| a.borrow_mut().contains(who))
 	}
 }
 
@@ -67,17 +65,18 @@ impl ResolveHint<u64, u64> for TestResolveHint {
 pub struct Runtime;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl system::Trait for Runtime {
+
+impl frame_system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Call = ();
 	type Hash = H256;
-	type Hashing = ::sr_primitives::traits::BlakeTwo256;
+	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = Indices;
 	type Header = Header;
@@ -87,7 +86,9 @@ impl system::Trait for Runtime {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
+	type ModuleToIndex = ();
 }
+
 impl Trait for Runtime {
 	type AccountIndex = u64;
 	type IsDeadAccount = TestIsDeadAccount;
@@ -95,14 +96,16 @@ impl Trait for Runtime {
 	type Event = ();
 }
 
-pub fn new_test_ext() -> runtime_io::TestExternalities {
+pub fn new_test_ext() -> sp_io::TestExternalities {
 	{
-		let mut h = ALIVE.borrow_mut();
-		h.clear();
-		for i in 1..5 { h.insert(i); }
+		ALIVE.with(|a| {
+			let mut h = a.borrow_mut();
+			h.clear();
+			for i in 1..5 { h.insert(i); }
+		});
 	}
 
-	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	GenesisConfig::<Runtime> {
 		ids: vec![1, 2, 3, 4]
 	}.assimilate_storage(&mut t).unwrap();

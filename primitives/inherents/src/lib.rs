@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@
 
 use codec::{Encode, Decode};
 
-use rstd::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
+use sp_std::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
 
 #[cfg(feature = "std")]
 use parking_lot::RwLock;
@@ -64,7 +64,7 @@ impl Error {
 }
 
 /// An error that can occur within the inherent data system.
-#[derive(Encode, primitives::RuntimeDebug)]
+#[derive(Encode, sp_core::RuntimeDebug)]
 #[cfg(not(feature = "std"))]
 pub struct Error(&'static str);
 

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,9 +16,9 @@
 
 #[doc(hidden)]
 #[allow(deprecated)]
-pub use crate::sr_primitives::traits::ValidateUnsigned;
+pub use crate::sp_runtime::traits::ValidateUnsigned;
 #[doc(hidden)]
-pub use crate::sr_primitives::transaction_validity::{
+pub use crate::sp_runtime::transaction_validity::{
 	TransactionValidity, UnknownTransaction, TransactionValidityError,
 };
 

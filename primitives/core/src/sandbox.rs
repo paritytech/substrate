@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 //! Definition of a sandbox environment.
 
 use codec::{Encode, Decode};
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 
 /// Error error that can be returned from host function.
 #[derive(Encode, Decode)]

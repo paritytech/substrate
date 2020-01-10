@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,19 +16,19 @@
 
 use super::*;
 use assert_matches::assert_matches;
-use test_client::{
+use substrate_test_runtime_client::{
 	prelude::*,
-	consensus::BlockOrigin,
+	sp_consensus::BlockOrigin,
 	runtime::{H256, Block, Header},
 };
-use rpc_primitives::list::ListOrValue;
+use sp_rpc::list::ListOrValue;
 
 #[test]
 fn should_return_header() {
-	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let core = tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let client = Arc::new(test_client::new());
+	let client = Arc::new(substrate_test_runtime_client::new());
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 	assert_matches!(
@@ -37,7 +37,8 @@ fn should_return_header() {
 			parent_hash: H256::from_low_u64_be(0),
 			number: 0,
 			state_root: x.state_root.clone(),
-			extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
+			extrinsics_root:
+				"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
 			digest: Default::default(),
 		}
 	);
@@ -48,26 +49,24 @@ fn should_return_header() {
 			parent_hash: H256::from_low_u64_be(0),
 			number: 0,
 			state_root: x.state_root.clone(),
-			extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
+			extrinsics_root:
+				"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
 			digest: Default::default(),
 		}
 	);
 
-	assert_matches!(
-		api.header(Some(H256::from_low_u64_be(5)).into()).wait(),
-		Ok(None)
-	);
+	assert_matches!(api.header(Some(H256::from_low_u64_be(5)).into()).wait(), Ok(None));
 }
 
 #[test]
 fn should_return_a_block() {
-	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let core = tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let client = Arc::new(test_client::new());
+	let mut client = Arc::new(substrate_test_runtime_client::new());
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
-	let block = client.new_block(Default::default()).unwrap().bake().unwrap();
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	let block_hash = block.hash();
 	client.import(BlockOrigin::Own, block).unwrap();
 
@@ -84,7 +83,8 @@ fn should_return_a_block() {
 				parent_hash: client.genesis_hash(),
 				number: 1,
 				state_root: x.block.header.state_root.clone(),
-				extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
+				extrinsics_root:
+					"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
 				digest: Default::default(),
 			},
 			extrinsics: vec![],
@@ -98,7 +98,8 @@ fn should_return_a_block() {
 				parent_hash: client.genesis_hash(),
 				number: 1,
 				state_root: x.block.header.state_root.clone(),
-				extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
+				extrinsics_root:
+					"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
 				digest: Default::default(),
 			},
 			extrinsics: vec![],
@@ -116,7 +117,7 @@ fn should_return_block_hash() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let client = Arc::new(test_client::new());
+	let mut client = Arc::new(substrate_test_runtime_client::new());
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 	assert_matches!(
@@ -135,7 +136,7 @@ fn should_return_block_hash() {
 		Ok(ListOrValue::Value(None))
 	);
 
-	let block = client.new_block(Default::default()).unwrap().bake().unwrap();
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	client.import(BlockOrigin::Own, block.clone()).unwrap();
 
 	assert_matches!(
@@ -147,7 +148,7 @@ fn should_return_block_hash() {
 		Ok(ListOrValue::Value(Some(ref x))) if x == &block.hash()
 	);
 	assert_matches!(
-		api.block_hash(Some(ListOrValue::Value(primitives::U256::from(1u64).into())).into()),
+		api.block_hash(Some(ListOrValue::Value(sp_core::U256::from(1u64).into())).into()),
 		Ok(ListOrValue::Value(Some(ref x))) if x == &block.hash()
 	);
 
@@ -163,7 +164,7 @@ fn should_return_finalized_hash() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let client = Arc::new(test_client::new());
+	let mut client = Arc::new(substrate_test_runtime_client::new());
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 	assert_matches!(
@@ -172,8 +173,8 @@ fn should_return_finalized_hash() {
 	);
 
 	// import new block
-	let builder = client.new_block(Default::default()).unwrap();
-	client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::Own, block).unwrap();
 	// no finalization yet
 	assert_matches!(
 		api.finalized_head(),
@@ -195,7 +196,7 @@ fn should_notify_about_latest_block() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let client = Arc::new(test_client::new());
+		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		api.subscribe_new_heads(Default::default(), subscriber);
@@ -203,8 +204,8 @@ fn should_notify_about_latest_block() {
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
-		let builder = client.new_block(Default::default()).unwrap();
-		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		client.import(BlockOrigin::Own, block).unwrap();
 	}
 
 	// assert initial head sent.
@@ -224,7 +225,7 @@ fn should_notify_about_finalized_block() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let client = Arc::new(test_client::new());
+		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		api.subscribe_finalized_heads(Default::default(), subscriber);
@@ -232,8 +233,8 @@ fn should_notify_about_finalized_block() {
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
-		let builder = client.new_block(Default::default()).unwrap();
-		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		client.import(BlockOrigin::Own, block).unwrap();
 		client.finalize_block(BlockId::number(1), None).unwrap();
 	}
 

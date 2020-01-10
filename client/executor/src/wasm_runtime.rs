@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,35 +19,15 @@
 //! The primary means of accessing the runtimes is through a cache which saves the reusable
 //! components of the runtime that are expensive to initialize.
 
-use crate::{wasmi_execution, error::{Error, WasmError}};
-#[cfg(feature = "wasmtime")]
-use crate::wasmtime;
+use crate::error::{Error, WasmError};
 use log::{trace, warn};
-
 use codec::Decode;
-
-use primitives::{storage::well_known_keys, traits::Externalities, H256};
-
-use runtime_version::RuntimeVersion;
+use sp_core::{storage::well_known_keys, traits::Externalities};
+use sp_version::RuntimeVersion;
 use std::{collections::hash_map::{Entry, HashMap}, panic::AssertUnwindSafe};
+use sc_executor_common::wasm_runtime::WasmRuntime;
 
-use wasm_interface::Function;
-
-/// The Substrate Wasm runtime.
-pub trait WasmRuntime {
-	/// Attempt to update the number of heap pages available during execution.
-	///
-	/// Returns false if the update cannot be applied. The function is guaranteed to return true if
-	/// the heap pages would not change from its current value.
-	fn update_heap_pages(&mut self, heap_pages: u64) -> bool;
-
-	/// Return the host functions that are registered for this Wasm runtime.
-	fn host_functions(&self) -> &[&'static dyn Function];
-
-	/// Call a method in the Substrate runtime by name. Returns the encoded result on success.
-	fn call(&mut self, ext: &mut dyn Externalities, method: &str, data: &[u8])
-		-> Result<Vec<u8>, Error>;
-}
+use sp_wasm_interface::Function;
 
 /// Specification of different methods of executing the runtime Wasm code.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
@@ -82,7 +62,7 @@ pub struct RuntimesCache {
 	/// A cache of runtime instances along with metadata, ready to be reused.
 	///
 	/// Instances are keyed by the Wasm execution method and the hash of their code.
-	instances: HashMap<(WasmExecutionMethod, [u8; 32]), Result<VersionedRuntime, WasmError>>,
+	instances: HashMap<(WasmExecutionMethod, Vec<u8>), Result<VersionedRuntime, WasmError>>,
 }
 
 impl RuntimesCache {
@@ -128,7 +108,7 @@ impl RuntimesCache {
 		wasm_method: WasmExecutionMethod,
 		default_heap_pages: u64,
 		host_functions: &[&'static dyn Function],
-	) -> Result<(&mut (dyn WasmRuntime + 'static), &RuntimeVersion, H256), Error> {
+	) -> Result<(&mut (dyn WasmRuntime + 'static), &RuntimeVersion, Vec<u8>), Error> {
 		let code_hash = ext
 			.original_storage_hash(well_known_keys::CODE)
 			.ok_or(Error::InvalidCode("`CODE` not found in storage.".into()))?;
@@ -138,7 +118,7 @@ impl RuntimesCache {
 			.and_then(|pages| u64::decode(&mut &pages[..]).ok())
 			.unwrap_or(default_heap_pages);
 
-		let result = match self.instances.entry((wasm_method, code_hash.into())) {
+		let result = match self.instances.entry((wasm_method, code_hash.clone())) {
 			Entry::Occupied(o) => {
 				let result = o.into_mut();
 				if let Ok(ref mut cached_runtime) = result {
@@ -198,10 +178,10 @@ impl RuntimesCache {
 	pub fn invalidate_runtime(
 		&mut self,
 		wasm_method: WasmExecutionMethod,
-		code_hash: H256,
+		code_hash: Vec<u8>,
 	) {
 		// Just remove the instance, it will be re-created the next time it is requested.
-		self.instances.remove(&(wasm_method, code_hash.into()));
+		self.instances.remove(&(wasm_method, code_hash));
 	}
 }
 
@@ -211,14 +191,15 @@ pub fn create_wasm_runtime_with_code(
 	heap_pages: u64,
 	code: &[u8],
 	host_functions: Vec<&'static dyn Function>,
+	allow_missing_imports: bool,
 ) -> Result<Box<dyn WasmRuntime>, WasmError> {
 	match wasm_method {
 		WasmExecutionMethod::Interpreted =>
-			wasmi_execution::create_instance(code, heap_pages, host_functions)
+			sc_executor_wasmi::create_instance(code, heap_pages, host_functions, allow_missing_imports)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled =>
-			wasmtime::create_instance(code, heap_pages, host_functions)
+			sc_executor_wasmtime::create_instance(code, heap_pages, host_functions)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 	}
 }
@@ -232,7 +213,7 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 	let code = ext
 		.original_storage(well_known_keys::CODE)
 		.ok_or(WasmError::CodeNotFound)?;
-	let mut runtime = create_wasm_runtime_with_code(wasm_method, heap_pages, &code, host_functions)?;
+	let mut runtime = create_wasm_runtime_with_code(wasm_method, heap_pages, &code, host_functions, false)?;
 
 	// Call to determine runtime version.
 	let version_result = {
@@ -259,11 +240,11 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 
 #[cfg(test)]
 mod tests {
-	use wasm_interface::HostFunctions;
+	use sp_wasm_interface::HostFunctions;
 
 	#[test]
 	fn host_functions_are_equal() {
-		let host_functions = runtime_io::SubstrateHostFunctions::host_functions();
+		let host_functions = sp_io::SubstrateHostFunctions::host_functions();
 
 		let equal = &host_functions[..] == &host_functions[..];
 		assert!(equal, "Host functions are not equal");

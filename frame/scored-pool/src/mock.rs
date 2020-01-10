@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,17 +19,17 @@
 use super::*;
 
 use std::cell::RefCell;
-use support::{impl_outer_origin, parameter_types};
-use primitives::H256;
+use frame_support::{impl_outer_origin, parameter_types, weights::Weight, ord_parameter_types};
+use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
-use sr_primitives::{
+use sp_runtime::{
 	Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 };
-use system::EnsureSignedBy;
+use frame_system::EnsureSignedBy;
 
 impl_outer_origin! {
-	pub enum Origin for Test {}
+	pub enum Origin for Test  where system = frame_system {}
 }
 
 // For testing the module, we construct most of a mock runtime. This means
@@ -41,11 +41,8 @@ parameter_types! {
 	pub const CandidateDeposit: u64 = 25;
 	pub const Period: u64 = 4;
 
-	pub const KickOrigin: u64 = 2;
-	pub const ScoreOrigin: u64 = 3;
-
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 
@@ -53,8 +50,12 @@ parameter_types! {
 	pub const TransferFee: u64 = 0;
 	pub const CreationFee: u64 = 0;
 }
+ord_parameter_types! {
+	pub const KickOrigin: u64 = 2;
+	pub const ScoreOrigin: u64 = 3;
+}
 
-impl system::Trait for Test {
+impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -70,11 +71,13 @@ impl system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
+	type ModuleToIndex = ();
 }
 
-impl balances::Trait for Test {
+impl pallet_balances::Trait for Test {
 	type Balance = u64;
 	type OnFreeBalanceZero = ();
+	type OnReapAccount = System;
 	type OnNewAccount = ();
 	type Event = ();
 	type TransferPayment = ();
@@ -116,19 +119,22 @@ impl Trait for Test {
 	type KickOrigin = EnsureSignedBy<KickOrigin, u64>;
 	type MembershipInitialized = TestChangeMembers;
 	type MembershipChanged = TestChangeMembers;
-	type Currency = balances::Module<Self>;
+	type Currency = Balances;
 	type CandidateDeposit = CandidateDeposit;
 	type Period = Period;
 	type Score = u64;
 	type ScoreOrigin = EnsureSignedBy<ScoreOrigin, u64>;
 }
 
+type System = frame_system::Module<Test>;
+type Balances = pallet_balances::Module<Test>;
+
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
-pub fn new_test_ext() -> runtime_io::TestExternalities {
-	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+pub fn new_test_ext() -> sp_io::TestExternalities {
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	// We use default for brevity, but you can configure as desired if needed.
-	balances::GenesisConfig::<Test> {
+	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![
 			(5, 500_000),
 			(10, 500_000),

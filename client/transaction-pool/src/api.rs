@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,31 +17,38 @@
 //! Chain api required for the transaction pool.
 
 use std::{marker::PhantomData, pin::Pin, sync::Arc};
+use codec::{Decode, Encode};
+use futures::{
+	channel::oneshot, executor::{ThreadPool, ThreadPoolBuilder}, future::{Future, FutureExt, ready},
+};
 
-use codec::Encode;
-
-use futures::{channel::oneshot, executor::{ThreadPool, ThreadPoolBuilder}, future::Future};
-
-use primitives::{H256, Blake2Hasher, Hasher};
-
-use sr_primitives::{generic::BlockId, traits, transaction_validity::TransactionValidity};
-
-use tx_runtime_api::TaggedTransactionQueue;
+use sc_client_api::{
+	blockchain::HeaderBackend,
+	light::{Fetcher, RemoteCallRequest}
+};
+use sp_core::Hasher;
+use sp_runtime::{
+	generic::BlockId, traits::{self, Block as BlockT, BlockIdTo, Header as HeaderT, Hash as HashT},
+	transaction_validity::TransactionValidity,
+};
+use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
+use sp_api::ProvideRuntimeApi;
 
 use crate::error::{self, Error};
 
-/// The transaction pool logic
-pub struct FullChainApi<T, Block> {
-	client: Arc<T>,
+/// The transaction pool logic for full client.
+pub struct FullChainApi<Client, Block> {
+	client: Arc<Client>,
 	pool: ThreadPool,
 	_marker: PhantomData<Block>,
 }
 
-impl<T, Block> FullChainApi<T, Block> where
-	Block: traits::Block,
-	T: traits::ProvideRuntimeApi + traits::BlockIdTo<Block> {
+impl<Client, Block> FullChainApi<Client, Block> where
+	Block: BlockT,
+	Client: ProvideRuntimeApi<Block> + BlockIdTo<Block>,
+{
 	/// Create new transaction pool logic.
-	pub fn new(client: Arc<T>) -> Self {
+	pub fn new(client: Arc<Client>) -> Self {
 		FullChainApi {
 			client,
 			pool: ThreadPoolBuilder::new()
@@ -54,21 +61,21 @@ impl<T, Block> FullChainApi<T, Block> where
 	}
 }
 
-impl<T, Block> txpool::ChainApi for FullChainApi<T, Block> where
-	Block: traits::Block<Hash = H256>,
-	T: traits::ProvideRuntimeApi + traits::BlockIdTo<Block> + 'static + Send + Sync,
-	T::Api: TaggedTransactionQueue<Block>,
-	sr_api::ApiErrorFor<T, Block>: Send,
+impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block> where
+	Block: BlockT,
+	Client: ProvideRuntimeApi<Block> + BlockIdTo<Block> + 'static + Send + Sync,
+	Client::Api: TaggedTransactionQueue<Block>,
+	sp_api::ApiErrorFor<Client, Block>: Send,
 {
 	type Block = Block;
-	type Hash = H256;
+	type Hash = Block::Hash;
 	type Error = error::Error;
 	type ValidationFuture = Pin<Box<dyn Future<Output = error::Result<TransactionValidity>> + Send>>;
 
 	fn validate_transaction(
 		&self,
 		at: &BlockId<Self::Block>,
-		uxt: txpool::ExtrinsicFor<Self>,
+		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		let (tx, rx) = oneshot::channel();
 		let client = self.client.clone();
@@ -93,20 +100,101 @@ impl<T, Block> txpool::ChainApi for FullChainApi<T, Block> where
 	fn block_id_to_number(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<txpool::NumberFor<Self>>> {
+	) -> error::Result<Option<sc_transaction_graph::NumberFor<Self>>> {
 		self.client.to_number(at).map_err(|e| Error::BlockIdConversion(format!("{:?}", e)))
 	}
 
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<txpool::BlockHash<Self>>> {
+	) -> error::Result<Option<sc_transaction_graph::BlockHash<Self>>> {
 		self.client.to_hash(at).map_err(|e| Error::BlockIdConversion(format!("{:?}", e)))
 	}
 
-	fn hash_and_length(&self, ex: &txpool::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+	fn hash_and_length(&self, ex: &sc_transaction_graph::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
 		ex.using_encoded(|x| {
-			(Blake2Hasher::hash(x), x.len())
+			(traits::HasherFor::<Block>::hash(x), x.len())
+		})
+	}
+}
+
+/// The transaction pool logic for light client.
+pub struct LightChainApi<Client, F, Block> {
+	client: Arc<Client>,
+	fetcher: Arc<F>,
+	_phantom: PhantomData<Block>,
+}
+
+impl<Client, F, Block> LightChainApi<Client, F, Block> where
+	Block: BlockT,
+	Client: HeaderBackend<Block>,
+	F: Fetcher<Block>,
+{
+	/// Create new transaction pool logic.
+	pub fn new(client: Arc<Client>, fetcher: Arc<F>) -> Self {
+		LightChainApi {
+			client,
+			fetcher,
+			_phantom: Default::default(),
+		}
+	}
+}
+
+impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, F, Block> where
+	Block: BlockT,
+	Client: HeaderBackend<Block> + 'static,
+	F: Fetcher<Block> + 'static,
+{
+	type Block = Block;
+	type Hash = Block::Hash;
+	type Error = error::Error;
+	type ValidationFuture = Box<dyn Future<Output = error::Result<TransactionValidity>> + Send + Unpin>;
+
+	fn validate_transaction(
+		&self,
+		at: &BlockId<Self::Block>,
+		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
+	) -> Self::ValidationFuture {
+		let header_hash = self.client.expect_block_hash_from_id(at);
+		let header_and_hash = header_hash
+			.and_then(|header_hash| self.client.expect_header(BlockId::Hash(header_hash))
+				.map(|header| (header_hash, header)));
+		let (block, header) = match header_and_hash {
+			Ok((header_hash, header)) => (header_hash, header),
+			Err(err) => return Box::new(ready(Err(err.into()))),
+		};
+		let remote_validation_request = self.fetcher.remote_call(RemoteCallRequest {
+			block,
+			header,
+			method: "TaggedTransactionQueue_validate_transaction".into(),
+			call_data: uxt.encode(),
+			retry_count: None,
+		});
+		let remote_validation_request = remote_validation_request.then(move |result| {
+			let result: error::Result<TransactionValidity> = result
+				.map_err(Into::into)
+				.and_then(|result| Decode::decode(&mut &result[..])
+					.map_err(|e| Error::RuntimeApi(
+						format!("Error decoding tx validation result: {:?}", e)
+					))
+				);
+			ready(result)
+		});
+
+		Box::new(remote_validation_request)
+	}
+
+	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> error::Result<Option<sc_transaction_graph::NumberFor<Self>>> {
+		Ok(self.client.block_number_from_id(at)?)
+	}
+
+	fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> error::Result<Option<sc_transaction_graph::BlockHash<Self>>> {
+		Ok(self.client.block_hash_from_id(at)?)
+	}
+
+	fn hash_and_length(&self, ex: &sc_transaction_graph::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+		ex.using_encoded(|x| {
+			(<<Block::Header as HeaderT>::Hashing as HashT>::hash(x), x.len())
 		})
 	}
 }

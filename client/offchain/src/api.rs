@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,16 +21,16 @@ use std::{
 	thread::sleep,
 };
 
-use primitives::offchain::OffchainStorage;
+use sp_core::offchain::OffchainStorage;
 use futures::Future;
 use log::error;
-use network::{PeerId, Multiaddr, NetworkStateInfo};
+use sc_network::{PeerId, Multiaddr, NetworkStateInfo};
 use codec::{Encode, Decode};
-use primitives::offchain::{
+use sp_core::offchain::{
 	Externalities as OffchainExt, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
-pub use offchain_primitives::STORAGE_PREFIX;
+pub use sp_offchain::STORAGE_PREFIX;
 
 #[cfg(not(target_os = "unknown"))]
 mod http;
@@ -75,7 +75,7 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 		let external_addresses = self.network_state.external_addresses();
 
 		let state = NetworkState::new(
-			self.network_state.peer_id(),
+			self.network_state.local_peer_id(),
 			external_addresses,
 		);
 		Ok(OpaqueNetworkState::from(state))
@@ -282,8 +282,8 @@ impl AsyncApi {
 mod tests {
 	use super::*;
 	use std::{convert::{TryFrom, TryInto}, time::SystemTime};
-	use client_db::offchain::LocalStorage;
-	use network::PeerId;
+	use sc_client_db::offchain::LocalStorage;
+	use sc_network::PeerId;
 
 	struct MockNetworkStateInfo();
 
@@ -292,7 +292,7 @@ mod tests {
 			Vec::new()
 		}
 
-		fn peer_id(&self) -> PeerId {
+		fn local_peer_id(&self) -> PeerId {
 			PeerId::random()
 		}
 	}
@@ -331,7 +331,7 @@ mod tests {
 
 		// Arrange.
 		let now = api.timestamp();
-		let delta = primitives::offchain::Duration::from_millis(100);
+		let delta = sp_core::offchain::Duration::from_millis(100);
 		let deadline = now.add(delta);
 
 		// Act.

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 //
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 //! Block announcement validation.
 
 use crate::BlockStatus;
-use sr_primitives::{generic::BlockId, traits::Block};
+use sp_runtime::{generic::BlockId, traits::Block};
 use std::{error::Error, sync::Arc};
 
 /// A type which provides access to chain information.

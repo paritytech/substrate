@@ -1,4 +1,4 @@
-// Copyright 2015-2019 Parity Technologies (UK) Ltd.
+// Copyright 2015-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 use hash_db::Hasher;
 use trie_root;
 use codec::Encode;
-use rstd::vec::Vec;
+use sp_std::vec::Vec;
 use crate::trie_constants;
 use crate::node_header::{NodeKind, size_and_prefix_iterator};
 use crate::node_codec::Bitmap;
@@ -51,7 +51,7 @@ fn branch_node_bit_mask(has_children: impl Iterator<Item = bool>) -> (u8, u8) {
 
 /// Create a leaf/branch node, encoding a number of nibbles.
 fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Item = u8> + 'a {
-	let size = rstd::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibbles.len());
+	let size = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibbles.len());
 
 	let iter_start = match kind {
 		NodeKind::Leaf => size_and_prefix_iterator(size, trie_constants::LEAF_PREFIX_MASK),
@@ -125,7 +125,7 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 	result
 }
 
-fn branch_node_buffered<I>(has_value: bool, has_children: I, output: &mut[u8]) 
+fn branch_node_buffered<I>(has_value: bool, has_children: I, output: &mut[u8])
 	where
 		I: Iterator<Item = bool>,
 {

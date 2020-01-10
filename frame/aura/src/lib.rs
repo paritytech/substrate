@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -40,26 +40,26 @@
 //!
 //! If you're interested in hacking on this module, it is useful to understand the interaction with
 //! `substrate/primitives/inherents/src/lib.rs` and, specifically, the required implementation of
-//! [`ProvideInherent`](../substrate_inherents/trait.ProvideInherent.html) and
-//! [`ProvideInherentData`](../substrate_inherents/trait.ProvideInherentData.html) to create and check inherents.
+//! [`ProvideInherent`](../sp_inherents/trait.ProvideInherent.html) and
+//! [`ProvideInherentData`](../sp_inherents/trait.ProvideInherentData.html) to create and check inherents.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use pallet_timestamp;
 
-use rstd::{result, prelude::*};
+use sp_std::{result, prelude::*};
 use codec::{Encode, Decode};
-use support::{
+use frame_support::{
 	decl_storage, decl_module, Parameter, traits::{Get, FindAuthor},
 	ConsensusEngineId,
 };
-use sr_primitives::{
+use sp_runtime::{
 	RuntimeAppPublic,
 	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
 };
 use sp_timestamp::OnTimestampSet;
-use inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
-use substrate_consensus_aura_primitives::{
+use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
+use sp_consensus_aura::{
 	AURA_ENGINE_ID, ConsensusLog, AuthorityIndex,
 	inherents::{INHERENT_IDENTIFIER, AuraInherentData},
 };
@@ -98,7 +98,7 @@ impl<T: Trait> Module<T> {
 			AURA_ENGINE_ID,
 			ConsensusLog::AuthoritiesChange(new).encode()
 		);
-		<system::Module<T>>::deposit_log(log.into());
+		<frame_system::Module<T>>::deposit_log(log.into());
 	}
 
 	fn initialize_authorities(authorities: &[T::AuthorityId]) {
@@ -109,11 +109,11 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = T::AuthorityId;
 }
 
-impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -142,7 +142,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			ConsensusLog::<T::AuthorityId>::OnDisabled(i as AuthorityIndex).encode(),
 		);
 
-		<system::Module<T>>::deposit_log(log.into());
+		<frame_system::Module<T>>::deposit_log(log.into());
 	}
 }
 
@@ -206,7 +206,7 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = pallet_timestamp::Call<T>;
-	type Error = MakeFatalError<inherents::Error>;
+	type Error = MakeFatalError<sp_inherents::Error>;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(_: &InherentData) -> Option<Self::Call> {
@@ -227,7 +227,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		if timestamp_based_slot == seal_slot {
 			Ok(())
 		} else {
-			Err(inherents::Error::from("timestamp set in block doesn't match slot in seal").into())
+			Err(sp_inherents::Error::from("timestamp set in block doesn't match slot in seal").into())
 		}
 	}
 }

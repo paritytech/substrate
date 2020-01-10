@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -24,7 +24,7 @@
 use futures::Future;
 use hyper::rt;
 use node_primitives::Hash;
-use substrate_rpc::author::{
+use sc_rpc::author::{
 	AuthorClient,
 	hash::ExtrinsicOrHash,
 };

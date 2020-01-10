@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 use std::{fs, env, path::Path};
 use structopt::{StructOpt, clap::Shell};
-use substrate_cli::{NoCustom, CoreParams};
+use sc_cli::{NoCustom, CoreParams};
 use vergen::{ConstantsFlags, generate_cargo_keys};
 
 fn main() {

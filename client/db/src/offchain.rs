@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -56,7 +56,7 @@ impl LocalStorage {
 	}
 }
 
-impl primitives::offchain::OffchainStorage for LocalStorage {
+impl sp_core::offchain::OffchainStorage for LocalStorage {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		let mut tx = self.db.transaction();
@@ -117,7 +117,7 @@ impl primitives::offchain::OffchainStorage for LocalStorage {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::offchain::OffchainStorage;
+	use sp_core::offchain::OffchainStorage;
 
 	#[test]
 	fn should_compare_and_set_and_clear_the_locks_map() {

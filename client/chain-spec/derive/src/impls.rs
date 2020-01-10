@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@ use quote::quote;
 use syn::{DeriveInput, Ident, Error};
 use proc_macro_crate::crate_name;
 
-const CRATE_NAME: &str = "substrate-chain-spec";
+const CRATE_NAME: &str = "sc-chain-spec";
 const ATTRIBUTE_NAME: &str = "forks";
 
 /// Implements `Extension's` `Group` accessor.

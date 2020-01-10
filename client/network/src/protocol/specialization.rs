@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ pub use crate::protocol::event::{DhtEvent, Event};
 
 use crate::protocol::Context;
 use libp2p::PeerId;
-use sr_primitives::traits::Block as BlockT;
+use sp_runtime::traits::Block as BlockT;
 
 /// A specialization of the substrate network protocol. Handles events and sends messages.
 pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {

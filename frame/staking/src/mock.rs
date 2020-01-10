@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,15 +17,18 @@
 //! Test utilities
 
 use std::{collections::HashSet, cell::RefCell};
-use sr_primitives::{Perbill, KeyTypeId};
-use sr_primitives::curve::PiecewiseLinear;
-use sr_primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion};
-use sr_primitives::testing::{Header, UintAuthorityId};
-use sr_staking_primitives::SessionIndex;
-use primitives::{H256, crypto::key_types};
-use runtime_io;
-use support::{assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap};
-use support::traits::{Currency, Get, FindAuthor};
+use sp_runtime::{Perbill, KeyTypeId};
+use sp_runtime::curve::PiecewiseLinear;
+use sp_runtime::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion};
+use sp_runtime::testing::{Header, UintAuthorityId};
+use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
+use sp_core::{H256, crypto::key_types};
+use sp_io;
+use frame_support::{
+	assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap, StorageValue,
+	traits::{Currency, Get, FindAuthor},
+	weights::Weight,
+};
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
 	Nominators, inflation
@@ -48,10 +51,11 @@ impl Convert<u128, u64> for CurrencyToVoteHandler {
 thread_local! {
 	static SESSION: RefCell<(Vec<AccountId>, HashSet<AccountId>)> = RefCell::new(Default::default());
 	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
+	static SLASH_DEFER_DURATION: RefCell<EraIndex> = RefCell::new(0);
 }
 
 pub struct TestSessionHandler;
-impl session::SessionHandler<AccountId> for TestSessionHandler {
+impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[key_types::DUMMY];
 
 	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
@@ -87,15 +91,22 @@ impl Get<u64> for ExistentialDeposit {
 	}
 }
 
+pub struct SlashDeferDuration;
+impl Get<EraIndex> for SlashDeferDuration {
+	fn get() -> EraIndex {
+		SLASH_DEFER_DURATION.with(|v| *v.borrow())
+	}
+}
+
 impl_outer_origin!{
-	pub enum Origin for Test {}
+	pub enum Origin for Test  where system = frame_system {}
 }
 
 /// Author of block is always 11
 pub struct Author11;
 impl FindAuthor<u64> for Author11 {
 	fn find_author<'a, I>(_digests: I) -> Option<u64>
-		where I: 'a + IntoIterator<Item=(support::ConsensusEngineId, &'a [u8])>
+		where I: 'a + IntoIterator<Item=(frame_support::ConsensusEngineId, &'a [u8])>
 	{
 		Some(11)
 	}
@@ -106,17 +117,17 @@ impl FindAuthor<u64> for Author11 {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl system::Trait for Test {
+impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = BlockNumber;
 	type Call = ();
 	type Hash = H256;
-	type Hashing = ::sr_primitives::traits::BlakeTwo256;
+	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
@@ -126,14 +137,16 @@ impl system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
+	type ModuleToIndex = ();
 }
 parameter_types! {
 	pub const TransferFee: Balance = 0;
 	pub const CreationFee: Balance = 0;
 }
-impl balances::Trait for Test {
+impl pallet_balances::Trait for Test {
 	type Balance = Balance;
 	type OnFreeBalanceZero = Staking;
+	type OnReapAccount = System;
 	type OnNewAccount = ();
 	type Event = ();
 	type TransferPayment = ();
@@ -148,10 +161,10 @@ parameter_types! {
 	pub const UncleGenerations: u64 = 0;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(25);
 }
-impl session::Trait for Test {
-	type OnSessionEnding = session::historical::NoteHistoricalRoot<Test, Staking>;
+impl pallet_session::Trait for Test {
+	type OnSessionEnding = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = UintAuthorityId;
-	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
+	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
 	type Event = ();
 	type ValidatorId = AccountId;
@@ -160,11 +173,11 @@ impl session::Trait for Test {
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }
 
-impl session::historical::Trait for Test {
+impl pallet_session::historical::Trait for Test {
 	type FullIdentification = crate::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = crate::ExposureOf<Test>;
 }
-impl authorship::Trait for Test {
+impl pallet_authorship::Trait for Test {
 	type FindAuthor = Author11;
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
@@ -173,7 +186,7 @@ impl authorship::Trait for Test {
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
 }
-impl timestamp::Trait for Test {
+impl pallet_timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
@@ -194,14 +207,16 @@ parameter_types! {
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
 }
 impl Trait for Test {
-	type Currency = balances::Module<Self>;
-	type Time = timestamp::Module<Self>;
+	type Currency = pallet_balances::Module<Self>;
+	type Time = pallet_timestamp::Module<Self>;
 	type CurrencyToVote = CurrencyToVoteHandler;
 	type RewardRemainder = ();
 	type Event = ();
 	type Slash = ();
 	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
+	type SlashDeferDuration = SlashDeferDuration;
+	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
@@ -213,6 +228,7 @@ pub struct ExtBuilder {
 	nominate: bool,
 	validator_count: u32,
 	minimum_validator_count: u32,
+	slash_defer_duration: EraIndex,
 	fair: bool,
 	num_validators: Option<u32>,
 	invulnerables: Vec<u64>,
@@ -226,6 +242,7 @@ impl Default for ExtBuilder {
 			nominate: true,
 			validator_count: 2,
 			minimum_validator_count: 0,
+			slash_defer_duration: 0,
 			fair: true,
 			num_validators: None,
 			invulnerables: vec![],
@@ -254,6 +271,10 @@ impl ExtBuilder {
 		self.minimum_validator_count = count;
 		self
 	}
+	pub fn slash_defer_duration(mut self, eras: EraIndex) -> Self {
+		self.slash_defer_duration = eras;
+		self
+	}
 	pub fn fair(mut self, is_fair: bool) -> Self {
 		self.fair = is_fair;
 		self
@@ -268,10 +289,11 @@ impl ExtBuilder {
 	}
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
+		SLASH_DEFER_DURATION.with(|v| *v.borrow_mut() = self.slash_defer_duration);
 	}
-	pub fn build(self) -> runtime_io::TestExternalities {
+	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
-		let mut storage = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
 			256
 		} else {
@@ -283,7 +305,7 @@ impl ExtBuilder {
 			.map(|x| ((x + 1) * 10 + 1) as u64)
 			.collect::<Vec<_>>();
 
-		let _ = balances::GenesisConfig::<Test>{
+		let _ = pallet_balances::GenesisConfig::<Test>{
 			balances: vec![
 					(1, 10 * balance_factor),
 					(2, 20 * balance_factor),
@@ -331,11 +353,11 @@ impl ExtBuilder {
 			..Default::default()
 		}.assimilate_storage(&mut storage);
 
-		let _ = session::GenesisConfig::<Test> {
+		let _ = pallet_session::GenesisConfig::<Test> {
 			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
 		}.assimilate_storage(&mut storage);
 
-		let mut ext = runtime_io::TestExternalities::from(storage);
+		let mut ext = sp_io::TestExternalities::from(storage);
 		ext.execute_with(|| {
 			let validators = Session::validators();
 			SESSION.with(|x|
@@ -346,10 +368,10 @@ impl ExtBuilder {
 	}
 }
 
-pub type System = system::Module<Test>;
-pub type Balances = balances::Module<Test>;
-pub type Session = session::Module<Test>;
-pub type Timestamp = timestamp::Module<Test>;
+pub type System = frame_system::Module<Test>;
+pub type Balances = pallet_balances::Module<Test>;
+pub type Session = pallet_session::Module<Test>;
+pub type Timestamp = pallet_timestamp::Module<Test>;
 pub type Staking = Module<Test>;
 
 pub fn check_exposure_all() {
@@ -391,6 +413,14 @@ pub fn check_nominator_exposure(stash: u64) {
 
 pub fn assert_is_stash(acc: u64) {
 	assert!(Staking::bonded(&acc).is_some(), "Not a stash.");
+}
+
+pub fn assert_ledger_consistent(stash: u64) {
+	assert_is_stash(stash);
+	let ledger = Staking::ledger(stash - 1).unwrap();
+
+	let real_total: Balance = ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
+	assert_eq!(real_total, ledger.total);
 }
 
 pub fn bond_validator(acc: u64, val: u64) {
@@ -450,4 +480,34 @@ pub fn reward_all_elected() {
 
 pub fn validator_controllers() -> Vec<AccountId> {
 	Session::validators().into_iter().map(|s| Staking::bonded(&s).expect("no controller for validator")).collect()
+}
+
+pub fn on_offence_in_era(
+	offenders: &[OffenceDetails<AccountId, pallet_session::historical::IdentificationTuple<Test>>],
+	slash_fraction: &[Perbill],
+	era: EraIndex,
+) {
+	let bonded_eras = crate::BondedEras::get();
+	for &(bonded_era, start_session) in bonded_eras.iter() {
+		if bonded_era == era {
+			Staking::on_offence(offenders, slash_fraction, start_session);
+			return
+		} else if bonded_era > era {
+			break
+		}
+	}
+
+	if Staking::current_era() == era {
+		Staking::on_offence(offenders, slash_fraction, Staking::current_era_start_session_index());
+	} else {
+		panic!("cannot slash in era {}", era);
+	}
+}
+
+pub fn on_offence_now(
+	offenders: &[OffenceDetails<AccountId, pallet_session::historical::IdentificationTuple<Test>>],
+	slash_fraction: &[Perbill],
+) {
+	let now = Staking::current_era();
+	on_offence_in_era(offenders, slash_fraction, now)
 }

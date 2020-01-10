@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -24,8 +24,8 @@ impl<'a> HexDisplay<'a> {
 	pub fn from<R: AsBytesRef>(d: &'a R) -> Self { HexDisplay(d.as_bytes_ref()) }
 }
 
-impl<'a> rstd::fmt::Display for HexDisplay<'a> {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> Result<(), rstd::fmt::Error> {
+impl<'a> sp_std::fmt::Display for HexDisplay<'a> {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> Result<(), sp_std::fmt::Error> {
 		if self.0.len() < 1027 {
 			for byte in self.0 {
 				f.write_fmt(format_args!("{:02x}", byte))?;
@@ -43,8 +43,8 @@ impl<'a> rstd::fmt::Display for HexDisplay<'a> {
 	}
 }
 
-impl<'a> rstd::fmt::Debug for HexDisplay<'a> {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> Result<(), rstd::fmt::Error> {
+impl<'a> sp_std::fmt::Debug for HexDisplay<'a> {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> Result<(), sp_std::fmt::Error> {
 		for byte in self.0 {
 			f.write_fmt(format_args!("{:02x}", byte))?;
 		}
@@ -58,7 +58,7 @@ pub trait AsBytesRef {
 	fn as_bytes_ref(&self) -> &[u8];
 }
 
-impl<'a> AsBytesRef for &'a [u8] {
+impl AsBytesRef for &[u8] {
 	fn as_bytes_ref(&self) -> &[u8] { self }
 }
 

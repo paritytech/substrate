@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -118,7 +118,7 @@
 //! if necessary and open a unique substream for Substrate-based communications. If the PSM decides
 //! that we should disconnect a node, then that substream is closed.
 //!
-//! For more information about the PSM, see the *substrate-peerset* crate.
+//! For more information about the PSM, see the *sc-peerset* crate.
 //!
 //! Note that at the moment there is no mechanism in place to solve the issues that arise where the
 //! two sides of a connection open the unique substream simultaneously. In order to not run into
@@ -151,7 +151,7 @@
 //!
 //! # Usage
 //!
-//! Using the `substrate-network` crate is done through the [`NetworkWorker`] struct. Create this
+//! Using the `sc-network` crate is done through the [`NetworkWorker`] struct. Create this
 //! struct by passing a [`config::Params`], then poll it as if it was a `Future`. You can extract an
 //! `Arc<NetworkService>` from the `NetworkWorker`, which can be shared amongst multiple places
 //! in order to give orders to the networking.
@@ -170,7 +170,6 @@
 
 mod behaviour;
 mod chain;
-mod legacy_proto;
 mod debug_info;
 mod discovery;
 mod on_demand_layer;
@@ -182,15 +181,12 @@ mod utils;
 pub mod config;
 pub mod error;
 
-#[cfg(any(test, feature = "test-helpers"))]
-pub mod test;
-
 pub use chain::{Client as ClientHandle, FinalityProofProvider};
 pub use service::{
 	NetworkService, NetworkWorker, TransactionPool, ExHashT, ReportHandle,
 	NetworkStateInfo,
 };
-pub use protocol::{PeerInfo, Context, consensus_gossip, message, specialization};
+pub use protocol::{PeerInfo, Context, ProtocolConfig, message, specialization};
 pub use protocol::event::{Event, DhtEvent};
 pub use protocol::sync::SyncState;
 pub use libp2p::{Multiaddr, PeerId};
@@ -199,10 +195,11 @@ pub use libp2p::multiaddr;
 
 pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
 pub use on_demand_layer::{OnDemand, RemoteResponse};
+pub use sc_peerset::ReputationChange;
 
 // Used by the `construct_simple_protocol!` macro.
 #[doc(hidden)]
-pub use sr_primitives::traits::Block as BlockT;
+pub use sp_runtime::traits::Block as BlockT;
 
 use libp2p::core::ConnectedPoint;
 use serde::{Deserialize, Serialize};

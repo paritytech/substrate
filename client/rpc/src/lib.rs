@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@
 
 mod metadata;
 
-pub use api::Subscriptions;
+pub use sc_rpc_api::Subscriptions;
 pub use self::metadata::Metadata;
 pub use rpc::IoHandlerExtension as RpcExtension;
 

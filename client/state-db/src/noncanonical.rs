@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -436,7 +436,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 #[cfg(test)]
 mod tests {
 	use std::io;
-	use primitives::H256;
+	use sp_core::H256;
 	use super::{NonCanonicalOverlay, to_journal_key};
 	use crate::{ChangeSet, CommitSet};
 	use crate::test::{make_db, make_changeset};

@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@ use super::{TestExternalities, call_in_wasm};
 use crate::WasmExecutionMethod;
 
 use codec::Encode;
-use runtime_test::WASM_BINARY;
+use sc_runtime_test::WASM_BINARY;
 use test_case::test_case;
 use wabt;
 

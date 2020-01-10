@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -119,15 +119,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
+use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
-use sr_primitives::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
-use support::weights::SimpleDispatchInfo;
-use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
-use sr_staking_primitives::SessionIndex;
-use support::{dispatch::Result, ConsensusEngineId, decl_module, decl_event, decl_storage};
-use support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter};
-use system::{self, ensure_signed};
+use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
+use frame_support::weights::SimpleDispatchInfo;
+use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};
+use sp_staking::SessionIndex;
+use frame_support::{dispatch, ConsensusEngineId, decl_module, decl_event, decl_storage, decl_error};
+use frame_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor, ValidatorRegistration}, Parameter};
+use frame_system::{self as system, ensure_signed};
 
 #[cfg(test)]
 mod mock;
@@ -307,7 +307,7 @@ impl<AId> SessionHandler<AId> for Tuple {
 /// `SessionHandler` for tests that use `UintAuthorityId` as `Keys`.
 pub struct TestSessionHandler;
 impl<AId> SessionHandler<AId> for TestSessionHandler {
-	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[sr_primitives::key_types::DUMMY];
+	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[sp_runtime::key_types::DUMMY];
 
 	fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
 
@@ -333,9 +333,15 @@ impl<V> SelectInitialValidators<V> for () {
 	}
 }
 
-pub trait Trait: system::Trait {
+impl<T: Trait> ValidatorRegistration<T::ValidatorId> for Module<T> {
+	fn is_registered(id: &T::ValidatorId) -> bool {
+		Self::load_keys(id).is_some()
+	}
+}
+
+pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// A stable ID for a validator.
 	type ValidatorId: Member + Parameter;
@@ -392,13 +398,15 @@ decl_storage! {
 		///
 		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
 		/// the trie. Having all data in the same branch should prevent slowing down other queries.
-		NextKeys: double_map hasher(twox_64_concat) Vec<u8>, blake2_256(T::ValidatorId) => Option<T::Keys>;
+		NextKeys: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) T::ValidatorId
+			=> Option<T::Keys>;
 
 		/// The owner of a key. The second key is the `KeyTypeId` + the encoded key.
 		///
 		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
 		/// the trie. Having all data in the same branch should prevent slowing down other queries.
-		KeyOwner: double_map hasher(twox_64_concat) Vec<u8>, blake2_256((KeyTypeId, Vec<u8>)) => Option<T::ValidatorId>;
+		KeyOwner: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) (KeyTypeId, Vec<u8>)
+			=> Option<T::ValidatorId>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
@@ -458,11 +466,25 @@ decl_event!(
 	}
 );
 
+decl_error! {
+	/// Error for the session module.
+	pub enum Error for Module<T: Trait> {
+		/// Invalid ownership proof.
+		InvalidProof,
+		/// No associated validator ID for account.
+		NoAssociatedValidatorId,
+		/// Registered duplicate key.
+		DuplicatedKey,
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Used as first key for `NextKeys` and `KeyOwner` to put all the data into the same branch
 		/// of the trie.
 		const DEDUP_KEY_PREFIX: &[u8] = DEDUP_KEY_PREFIX;
+
+		type Error = Error<T>;
 
 		fn deposit_event() = default;
 
@@ -477,15 +499,12 @@ decl_module! {
 		/// - One extra DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
-		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> Result {
+		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			ensure!(keys.ownership_proof_is_valid(&proof), "invalid ownership proof");
+			ensure!(keys.ownership_proof_is_valid(&proof), Error::<T>::InvalidProof);
 
-			let who = match T::ValidatorIdOf::convert(who) {
-				Some(val_id) => val_id,
-				None => return Err("no associated validator ID for account."),
-			};
+			let who = T::ValidatorIdOf::convert(who).ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
 			Self::do_set_keys(&who, keys)?;
 
@@ -619,13 +638,13 @@ impl<T: Trait> Module<T> {
 	/// Returns `Ok(true)` if more than `DisabledValidatorsThreshold` validators in current
 	/// session is already disabled.
 	/// If used with the staking module it allows to force a new era in such case.
-	pub fn disable(c: &T::ValidatorId) -> rstd::result::Result<bool, ()> {
+	pub fn disable(c: &T::ValidatorId) -> sp_std::result::Result<bool, ()> {
 		Self::validators().iter().position(|i| i == c).map(Self::disable_index).ok_or(())
 	}
 
 	// perform the set_key operation, checking for duplicates.
 	// does not set `Changed`.
-	fn do_set_keys(who: &T::ValidatorId, keys: T::Keys) -> Result {
+	fn do_set_keys(who: &T::ValidatorId, keys: T::Keys) -> dispatch::DispatchResult {
 		let old_keys = Self::load_keys(&who);
 
 		for id in T::Keys::key_ids() {
@@ -634,7 +653,7 @@ impl<T: Trait> Module<T> {
 			// ensure keys are without duplication.
 			ensure!(
 				Self::key_owner(*id, key).map_or(true, |owner| &owner == who),
-				"registered duplicate key"
+				Error::<T>::DuplicatedKey,
 			);
 
 			if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(*id)) {
@@ -696,7 +715,7 @@ impl<T: Trait> OnFreeBalanceZero<T::ValidatorId> for Module<T> {
 /// Wraps the author-scraping logic for consensus engines that can recover
 /// the canonical index of an author. This then transforms it into the
 /// registering account-ID of that session key index.
-pub struct FindAccountFromAuthorIndex<T, Inner>(rstd::marker::PhantomData<(T, Inner)>);
+pub struct FindAccountFromAuthorIndex<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
 
 impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 	for FindAccountFromAuthorIndex<T, Inner>
@@ -714,23 +733,23 @@ impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use support::assert_ok;
-	use primitives::crypto::key_types::DUMMY;
-	use sr_primitives::{traits::OnInitialize, testing::UintAuthorityId};
+	use frame_support::assert_ok;
+	use sp_core::crypto::key_types::DUMMY;
+	use sp_runtime::{traits::OnInitialize, testing::UintAuthorityId};
 	use mock::{
 		NEXT_VALIDATORS, SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
 		set_next_validators, set_session_length, session_changed, Test, Origin, System, Session,
 		reset_before_session_end_called, before_session_end_called,
 	};
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	fn new_test_ext() -> sp_io::TestExternalities {
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()
 			),
 		}.assimilate_storage(&mut t).unwrap();
-		runtime_io::TestExternalities::new(t)
+		sp_io::TestExternalities::new(t)
 	}
 
 	fn initialize_block(block: u64) {

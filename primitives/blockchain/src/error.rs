@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,16 +18,15 @@
 
 use std::{self, error, result};
 use sp_state_machine;
-use sr_primitives::transaction_validity::TransactionValidityError;
+use sp_runtime::transaction_validity::TransactionValidityError;
 #[allow(deprecated)]
-use sp_block_builder_runtime_api::compatability_v3;
+use sp_block_builder::compatability_v3;
 use sp_consensus;
 use derive_more::{Display, From};
-use parity_scale_codec::Error as CodecError;
+use codec::Error as CodecError;
 
 /// Client Result type alias
 pub type Result<T> = result::Result<T, Error>;
-
 
 /// Error when the runtime failed to apply an extrinsic.
 #[derive(Debug, Display)]
@@ -72,8 +71,9 @@ pub enum Error {
 	#[display(fmt = "Current state of blockchain has invalid authorities set")]
 	InvalidAuthoritiesSet,
 	/// Could not get runtime version.
-	#[display(fmt = "On-chain runtime does not specify version")]
-	VersionInvalid,
+	#[display(fmt = "Failed to get runtime version: {}", _0)]
+	#[from(ignore)]
+	VersionInvalid(String),
 	/// Genesis config is invalid.
 	#[display(fmt = "Genesis config provided is invalid")]
 	GenesisInvalid,
@@ -125,7 +125,6 @@ pub enum Error {
 	InvalidStateRoot,
 	/// A convenience variant for String
 	#[display(fmt = "{}", _0)]
-	#[from(ignore)]
 	Msg(String),
 }
 
@@ -136,12 +135,6 @@ impl error::Error for Error {
 			Error::Blockchain(e) => Some(e),
 			_ => None,
 		}
-	}
-}
-
-impl From<String> for Error {
-	fn from(s: String) -> Self {
-		Error::Msg(s)
 	}
 }
 

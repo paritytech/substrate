@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,16 +18,17 @@
 
 #![cfg(test)]
 
-use sr_primitives::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
-use runtime_io;
-use support::{impl_outer_origin, impl_outer_event, parameter_types};
-use primitives::H256;
+use sp_runtime::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
+use sp_io;
+use frame_support::{impl_outer_origin, impl_outer_event, parameter_types, weights::Weight};
+use sp_core::H256;
 use codec::{Encode, Decode};
 use crate::{AuthorityId, AuthorityList, GenesisConfig, Trait, Module, ConsensusLog};
-use substrate_finality_grandpa_primitives::GRANDPA_ENGINE_ID;
+use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 
+use frame_system as system;
 impl_outer_origin!{
-	pub enum Origin for Test {}
+	pub enum Origin for Test  where system = frame_system {}
 }
 
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
@@ -43,17 +44,17 @@ impl Trait for Test {
 }
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl system::Trait for Test {
+impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Call = ();
 	type Hash = H256;
-	type Hashing = sr_primitives::traits::BlakeTwo256;
+	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
@@ -63,6 +64,7 @@ impl system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
+	type ModuleToIndex = ();
 }
 
 mod grandpa {
@@ -81,13 +83,13 @@ pub fn to_authorities(vec: Vec<(u64, u64)>) -> AuthorityList {
 		.collect()
 }
 
-pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternalities {
-	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> sp_io::TestExternalities {
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig {
 		authorities: to_authorities(authorities),
 	}.assimilate_storage::<Test>(&mut t).unwrap();
 	t.into()
 }
 
-pub type System = system::Module<Test>;
+pub type System = frame_system::Module<Test>;
 pub type Grandpa = Module<Test>;
