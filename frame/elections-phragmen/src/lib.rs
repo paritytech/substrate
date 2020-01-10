@@ -2080,4 +2080,23 @@ mod tests {
 			);
 		})
 	}
+
+	#[test]
+	fn behavior_with_dupe_candidate() {
+		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
+			<Candidates<Test>>::put(vec![1, 1, 2, 3, 4]);
+
+			assert_ok!(Elections::vote(Origin::signed(5), vec![1], 50));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
+			assert_ok!(Elections::vote(Origin::signed(2), vec![2], 20));
+
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members_ids(), vec![1, 1]);
+			assert_eq!(Elections::runners_up_ids(), vec![4, 3]);
+			assert_eq!(Elections::candidates(), vec![]);
+		})
+	}
 }
