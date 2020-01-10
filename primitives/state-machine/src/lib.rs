@@ -39,7 +39,8 @@ mod transaction_layers;
 mod proving_backend;
 mod trie_backend;
 mod trie_backend_essence;
-
+#[cfg(feature = "test-helpers")]
+pub use transaction_layers::fuzz as transaction_layers_fuzz;
 pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
