@@ -161,7 +161,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, ensure,
 	Parameter, RuntimeDebug,
 	weights::{
-		GetDispatchInfo,
+		GetDispatchInfo, PaysFee, DispatchClass, ClassifyDispatch, Weight, WeighData,
 	},
 	traits::{Currency, ReservableCurrency, Get, OnReapAccount},
 };
@@ -189,12 +189,12 @@ pub trait Trait: frame_system::Trait {
 	/// The base amount of currency needed to reserve for creating a recovery configuration.
 	///
 	/// This is held for an additional storage item whose value size is
-	/// TODO bytes.
+	/// `2 + sizeof(BlockNumber, Balance)` bytes.
 	type ConfigDepositBase: Get<BalanceOf<Self>>;
 
 	/// The amount of currency needed per additional user when creating a recovery configuration.
 	///
-	/// This is held for adding TODO bytes more into a pre-existing storage value.
+	/// This is held for adding `sizeof(AccountId)` bytes more into a pre-existing storage value.
 	type FriendDepositFactor: Get<BalanceOf<Self>>;
 
 	/// The maximum amount of friends allowed in a recovery configuration.
@@ -202,8 +202,11 @@ pub trait Trait: frame_system::Trait {
 
 	/// The base amount of currency needed to reserve for starting a recovery.
 	///
-	/// This is held for an additional storage item whose value size is
-	/// TODO bytes.
+	/// This is primarily held for deterring malicious recovery attempts, and should
+	/// have a value large enough that a bad actor would choose not to place this
+	/// deposit. It also acts to fund additional storage item whose value size is
+	/// `sizeof(BlockNumber, Balance + T * AccountId)` bytes. Where T is a configurable
+	/// threshold.
 	type RecoveryDeposit: Get<BalanceOf<Self>>;
 }
 
@@ -314,14 +317,42 @@ decl_module! {
 		fn deposit_event() = default;
 		
 		/// Send a call through a recovered account.
-		fn as_recovered(origin, account: T::AccountId, call: Box<<T as Trait>::Call>) -> DispatchResult {
+		///
+		/// The dispatch origin for this call must be _Signed_ and registered to
+		/// be able to make calls on behalf of the recovered account.
+		///
+		/// Parameters:
+		/// - `account`: The recovered account you want to make a call on-behalf-of.
+		/// - `call`: The call you want to make with the recovered account.
+		///
+		/// # <weight>
+		/// - The weight of the `call`.
+		/// # </weight>
+		#[weight = <Passthrough<T::AccountId, <T as Trait>::Call>>::new()]
+		fn as_recovered(origin,
+			account: T::AccountId,
+			call: Box<<T as Trait>::Call>
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check `who` is allowed to make a call on behalf of `account`
 			ensure!(Self::recovered_account(&account) == Some(who), Error::<T>::NotAllowed);
 			call.dispatch(frame_system::RawOrigin::Signed(account).into())
 		}
 		
-		/// Allow Sudo to bypass the recovery process and set an alias account.
+		/// Allow ROOT to bypass the recovery process and set an a rescuer account
+		/// for a lost account directly.
+		///
+		/// The dispatch origin for this call must be _ROOT_.
+		///
+		/// Parameters:
+		/// - `lost`: The "lost account" to be recovered.
+		/// - `rescuer`: The "rescuer account" which can call as the lost account.
+		///
+		/// # <weight>
+		/// - One storage write O(1)
+		/// - One event
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn set_recovered(origin, lost: T::AccountId, rescuer: T::AccountId) {
 			ensure_root(origin)?;
 			// Create the recovery storage item.
@@ -329,7 +360,34 @@ decl_module! {
 			Self::deposit_event(RawEvent::AccountRecovered(lost, rescuer));
 		}
 		
-		/// Create a recovery process for your account.
+		/// Create a recovery configuration for your account. This makes your account recoverable.
+		///
+		/// Payment: `ConfigDepositBase` + `FriendDepositFactor` * #_of_friends balance
+		/// will be reserved for storing the recovery configuration. This deposit is returned
+		/// in full when the user calls `remove_recovery`.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Parameters:
+		/// - `friends`: A list of friends you trust to vouch for recovery attempts.
+		///   Should be ordered and contain no duplicate values.
+		/// - `threshold`: The number of friends that must vouch for a recovery attempt
+		///   before the account can be recovered. Should be less than or equal to
+		///   the length of the list of friends.
+		/// - `delay_period`: The number of blocks after a recovery attempt is initialized
+		///   that needs to pass before the account can be recovered.
+		///
+		/// # <weight>
+		/// - Key: F (len of friends)
+		/// - One storage read to check that account is not already recoverable. O(1).
+		/// - A check that the friends list is sorted and unique. O(F)
+		/// - One currency reserve operation. O(X)
+		/// - One storage write. O(1). Codec O(F).
+		/// - One event.
+		///
+		/// Total Complexity: O(F + X)
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn create_recovery(origin,
 			friends: Vec<T::AccountId>,
 			threshold: u16,
@@ -366,7 +424,29 @@ decl_module! {
 			Self::deposit_event(RawEvent::RecoveryCreated(who));
 		}
 		
-		/// Allow a user to start the process for recovering an account.
+		/// Initiate the process for recovering a recoverable account.
+		///
+		/// Payment: `RecoveryDeposit` balance will be reserved for initiating the
+		/// recovery process. This deposit will always be repatriated to the account
+		/// trying to be recovered. See `close_recovery`.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Parameters:
+		/// - `account`: The lost account that you want to recover. This account
+		///   needs to be recoverable (i.e. have a recovery configuration).
+		///
+		/// # <weight>
+		/// - One storage read to check that account is recoverable. O(F)
+		/// - One storage read to check that this recovery process hasn't already started. O(1)
+		/// - One currency reserve operation. O(X)
+		/// - One storage read to get the current block number. O(1)
+		/// - One storage write. O(1).
+		/// - One event.
+		///
+		/// Total Complexity: O(F + X)
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn initiate_recovery(origin, account: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Check that the account is recoverable
@@ -387,7 +467,32 @@ decl_module! {
 			Self::deposit_event(RawEvent::RecoveryInitiated(account, who));
 		}
 		
-		/// Allow a friend to vouch for an active recovery process.
+		/// Allow a "friend" of a recoverable account to vouch for an active recovery
+		/// process for that account.
+		///
+		/// The dispatch origin for this call must be _Signed_ and must be a "friend"
+		/// for the recoverable account.
+		///
+		/// Parameters:
+		/// - `lost`: The lost account that you want to recover.
+		/// - `rescuer`: The account trying to rescue the lost account that you
+		///   want to vouch for.
+		///
+		/// The combination of these two parameters must point to an active recovery
+		/// process.
+		///
+		/// # <weight>
+		/// Key: F (len of friends in config), V (len of vouching friends)
+		/// - One storage read to get the recovery configuration. O(1), Codec O(F)
+		/// - One storage read to get the active recovery process. O(1), Codec O(V)
+		/// - One binary search to confirm caller is a friend. O(logF)
+		/// - One binary search to confirm caller has not already vouched. O(logV)
+		/// - One storage write. O(1), Codec O(V).
+		/// - One event.
+		///
+		/// Total Complexity: O(F + logF + V + logV)
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn vouch_recovery(origin, lost: T::AccountId, rescuer: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Get the recovery configuration for the lost account.
@@ -406,7 +511,27 @@ decl_module! {
 			Self::deposit_event(RawEvent::RecoveryVouched(lost, rescuer, who));
 		}
 		
-		/// Allow a rescuer to claim their recovered account.
+		/// Allow a successful rescuer to claim their recovered account.
+		///
+		/// The dispatch origin for this call must be _Signed_ and must be a "rescuer"
+		/// who has successfully completed the account recovery process: collected
+		/// `threshold` or more vouches, waited `delay_period` blocks since initiation.
+		///
+		/// Parameters:
+		/// - `account`: The lost account that you want to claim has been successfully
+		///   recovered by you.
+		///
+		/// # <weight>
+		/// Key: F (len of friends in config), V (len of vouching friends)
+		/// - One storage read to get the recovery configuration. O(1), Codec O(F)
+		/// - One storage read to get the active recovery process. O(1), Codec O(V)
+		/// - One storage read to get the current block number. O(1)
+		/// - One storage write. O(1), Codec O(V).
+		/// - One event.
+		///
+		/// Total Complexity: O(F + V)
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn claim_recovery(origin, account: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Get the recovery configuration for the lost account
@@ -429,9 +554,27 @@ decl_module! {
 			Self::deposit_event(RawEvent::AccountRecovered(account, who));
 		}
 		
-		/// Close an active recovery process.
+		/// As the controller of a recoverable account, close an active recovery
+		/// process for your account.
 		///
-		/// Can only be called by the account trying to be recovered.
+		/// Payment: By calling this function, the recoverable account will receive
+		/// the recovery deposit `RecoveryDeposit` placed by the rescuer.
+		///
+		/// The dispatch origin for this call must be _Signed_ and must be a
+		/// recoverable account with an active recovery process for it.
+		///
+		/// Parameters:
+		/// - `rescuer`: The account trying to rescue this recoverable account.
+		///
+		/// # <weight>
+		/// Key: V (len of vouching friends)
+		/// - One storage read/remove to get the active recovery process. O(1), Codec O(V)
+		/// - One balance call to repatriate reserved. O(X)
+		/// - One event.
+		///
+		/// Total Complexity: O(V + X)
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
 		fn close_recovery(origin, rescuer: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Take the active recovery process started by the rescuer for this account.
@@ -444,8 +587,26 @@ decl_module! {
 		
 		/// Remove the recovery process for your account.
 		///
-		/// The user must make sure to call `close_recovery` on all active recovery attempts
-		/// before calling this function.
+		/// NOTE: The user must make sure to call `close_recovery` on all active
+		/// recovery attempts before calling this function else it will fail.
+		///
+		/// Payment: By calling this function the recoverable account will unreserve
+		/// their recovery configuration deposit.
+		/// (`ConfigDepositBase` + `FriendDepositFactor` * #_of_friends)
+		///
+		/// The dispatch origin for this call must be _Signed_ and must be a
+		/// recoverable account (i.e. has a recovery configuration).
+		///
+		/// # <weight>
+		/// Key: F (len of friends)
+		/// - One storage read to get the prefix iterator for active recoveries. O(1)
+		/// - One storage read/remove to get the recovery configuration. O(1), Codec O(F)
+		/// - One balance call to unreserved. O(X)
+		/// - One event.
+		///
+		/// Total Complexity: O(F + X)
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
 		fn remove_recovery(origin) {
 			let who = ensure_signed(origin)?;
 			// Check there are no active recoveries
@@ -477,5 +638,27 @@ impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
 	/// This removes the final storage item managed by this module for any given account.
 	fn on_reap_account(who: &T::AccountId) {
 		<Recovered<T>>::remove(who);
+	}
+}
+
+/// Simple pass through for the weight functions.
+struct Passthrough<AccountId, Call>(sp_std::marker::PhantomData<(AccountId, Call)>);
+
+impl<AccountId, Call> Passthrough<AccountId, Call> {
+	fn new() -> Self { Self(Default::default()) }
+}
+impl<AccountId, Call: GetDispatchInfo> WeighData<(&AccountId, &Box<Call>)> for Passthrough<AccountId, Call> {
+	fn weigh_data(&self, (_, call): (&AccountId, &Box<Call>)) -> Weight {
+		call.get_dispatch_info().weight + 10_000
+	}
+}
+impl<AccountId, Call: GetDispatchInfo> ClassifyDispatch<(&AccountId, &Box<Call>)> for Passthrough<AccountId, Call> {
+	fn classify_dispatch(&self, (_, call): (&AccountId, &Box<Call>)) -> DispatchClass {
+		call.get_dispatch_info().class
+	}
+}
+impl<AccountId, Call: GetDispatchInfo> PaysFee for Passthrough<AccountId, Call> {
+	fn pays_fee(&self) -> bool {
+		true
 	}
 }
