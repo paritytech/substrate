@@ -79,7 +79,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA
 
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		let mut auxiliary = aux_schema::read_auxiliary(&parent_hash, self.api.as_ref())
+		let mut auxiliary = aux_schema::load_auxiliary(&parent_hash, self.api.as_ref())
 			.map_err(Error::<Block>::Client)?;
 
 		let parent_header_metadata = self.client.header_metadata(parent_hash)

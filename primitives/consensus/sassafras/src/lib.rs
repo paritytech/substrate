@@ -22,7 +22,14 @@
 
 pub mod digest;
 pub mod inherents;
+mod vrf;
 
+pub use crate::vrf::{
+	VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH, RawVRFOutput, VRFOutput,
+	RawVRFProof, VRFProof, Randomness,
+};
+
+use core::ops::{Deref, DerefMut};
 use sp_runtime::ConsensusEngineId;
 
 mod app {

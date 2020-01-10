@@ -1,37 +1,82 @@
-use schnorrkel::vrf::VRFProof;
+use codec::{Encode, Decode};
 use sp_core::H256;
-use sp_consensus_sassafras::{SlotNumber, SassafrasBlockWeight};
-use sp_blockchain::Result as ClientResult;
+use sp_consensus_sassafras::{SlotNumber, SassafrasBlockWeight, VRFProof};
+use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use sc_client_api::AuxStore;
 
+#[derive(Clone, Debug, Encode, Decode)]
 pub struct PublishingAuxiliary {
 	pub proofs: Vec<VRFProof>,
 	pub start_slot: SlotNumber,
 }
 
-pub struct GeneratingAuxiliary {
+#[derive(Clone, Debug, Encode, Decode)]
+pub struct ValidatingAuxiliary {
 	pub proofs: Vec<VRFProof>,
 	pub start_slot: SlotNumber,
 }
 
+#[derive(Clone, Debug, Encode, Decode)]
 pub struct Auxiliary {
 	pub total_weight: SassafrasBlockWeight,
 	pub weight: SassafrasBlockWeight,
 
 	pub publishing: PublishingAuxiliary,
-	pub validating: GeneratingAuxiliary,
+	pub validating: ValidatingAuxiliary,
 }
 
-pub(crate) fn read_auxiliary<B: AuxStore>(
+impl Default for Auxiliary {
+	fn default() -> Self {
+		Self {
+			total_weight: 0,
+			weight: 0,
+			publishing: PublishingAuxiliary {
+				proofs: Vec::new(),
+				start_slot: 0,
+			},
+			validating: ValidatingAuxiliary {
+				proofs: Vec::new(),
+				start_slot: 0,
+			}
+		}
+	}
+}
+
+const AUXILIARY_KEY: &[u8] = b"sassafras_auxiliary";
+
+fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
+	where
+		B: AuxStore,
+		T: Decode,
+{
+	let corrupt = |e: codec::Error| {
+		ClientError::Backend(format!("Sassafras DB is corrupted. Decode error: {}", e.what()))
+	};
+	match backend.get_aux(key)? {
+		None => Ok(None),
+		Some(t) => T::decode(&mut &t[..]).map(Some).map_err(corrupt)
+	}
+}
+
+pub(crate) fn load_auxiliary<B: AuxStore>(
 	hash: &H256,
 	backend: &B
 ) -> ClientResult<Auxiliary> {
-	unimplemented!()
+	let auxiliary = load_decode::<_, Auxiliary>(backend, AUXILIARY_KEY)?
+		.map(Into::into)
+		.unwrap_or_default();
+
+	Ok(auxiliary)
 }
 
-pub(crate) fn write_auxiliary<B: AuxStore>(
+pub(crate) fn write_auxiliary<F, R>(
 	auxiliary: &Auxiliary,
-	backend: &B
-) -> ClientResult<()> {
-	unimplemented!()
+	write_aux: F,
+) -> R where
+	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
+{
+	let encoded_auxiliary = auxiliary.encode();
+	write_aux(
+		&[(AUXILIARY_KEY, encoded_auxiliary.as_slice())],
+	)
 }
