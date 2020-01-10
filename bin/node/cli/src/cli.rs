@@ -36,12 +36,20 @@ pub enum CustomSubcommands {
 		Only supported for development or local testnet."
 	)]
 	Factory(FactoryCmd),
+
+	/// The custom inspect subcommmand for decoding blocks and extrinsics.
+	#[structopt(
+		name = "inspect",
+		about = "Decode given block or extrinsic using current native runtime."
+	)]
+	Inspect(InspectCmd),
 }
 
 impl GetSharedParams for CustomSubcommands {
 	fn shared_params(&self) -> Option<&SharedParams> {
 		match self {
 			CustomSubcommands::Factory(cmd) => Some(&cmd.shared_params),
+			CustomSubcommands::Inspect(cmd) => Some(&cmd.shared_params),
 		}
 	}
 }
@@ -88,6 +96,32 @@ pub struct FactoryCmd {
 	pub import_params: ImportParams,
 }
 
+/// The `inspect` command used to print decoded chain data.
+#[derive(Debug, StructOpt, Clone)]
+pub struct InspectCmd {
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub command: InspectSubCmd,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub shared_params: SharedParams,
+}
+
+#[derive(Debug, StructOpt, Clone)]
+pub enum InspectSubCmd {
+	/// Decode block with native version of runtime and print out the details.
+	Block {
+		#[structopt(value_name = "HASH or NUMBER or BYTES")]
+		input: String,
+	},
+	/// Decode extrinsic with native version of runtime and print out the details.
+	Extrinsic {
+		#[structopt(value_name = "BYTES")]
+		input: String,
+	},
+}
+
 /// Parse command line arguments into service configuration.
 pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
@@ -130,6 +164,33 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 		ParseAndPrepare::PurgeChain(cmd) => cmd.run(load_spec),
 		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder(|config: Config<_, _>|
 			Ok(new_full_start!(config).0), load_spec),
+		ParseAndPrepare::CustomCommand(CustomSubcommands::Inspect(cmd)) => {
+			let mut config: Config<_, _> = sc_cli::create_config_with_db_path(
+				load_spec,
+				&cmd.shared_params,
+				&version,
+			)?;
+			let service_builder = new_full_start!(config).0;
+			let inspect = node_inspect::Inspector::<node_runtime::Block>::new(
+				service_builder.client()
+			);
+			match cmd.command {
+				InspectSubCmd::Block { input } => {
+					let input = input.parse()?;
+					let res = inspect.block(input)
+						.map_err(|e| format!("{}", e))?;
+					println!("{}", res);
+					Ok(())
+				},
+				InspectSubCmd::Extrinsic { input } => {
+					let input = input.parse()?;
+					let res = inspect.extrinsic(input)
+						.map_err(|e| format!("{}", e))?;
+					println!("{}", res);
+					Ok(())
+				},
+			}
+		},
 		ParseAndPrepare::CustomCommand(CustomSubcommands::Factory(cli_args)) => {
 			let mut config: Config<_, _> = sc_cli::create_config_with_db_path(
 				load_spec,
@@ -159,7 +220,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 			).map_err(|e| format!("Error in transaction factory: {}", e))?;
 
 			Ok(())
-		}
+		},
 	}
 }
 

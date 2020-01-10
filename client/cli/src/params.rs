@@ -872,7 +872,7 @@ pub enum CoreParams<CC, RP> {
 	/// Import blocks from file.
 	ImportBlocks(ImportBlocksCmd),
 
-	/// Validte a single block.
+	/// Validate a single block.
 	CheckBlock(CheckBlockCmd),
 
 	/// Revert chain to the previous state.
@@ -932,7 +932,8 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 				CoreParams::ImportBlocks(ImportBlocksCmd::from_clap(matches)),
 			("check-block", Some(matches)) =>
 				CoreParams::CheckBlock(CheckBlockCmd::from_clap(matches)),
-			("revert", Some(matches)) => CoreParams::Revert(RevertCmd::from_clap(matches)),
+			("revert", Some(matches)) =>
+				CoreParams::Revert(RevertCmd::from_clap(matches)),
 			("purge-chain", Some(matches)) =>
 				CoreParams::PurgeChain(PurgeChainCmd::from_clap(matches)),
 			(_, None) => CoreParams::Run(MergeParameters::from_clap(matches)),

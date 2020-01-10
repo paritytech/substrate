@@ -1,0 +1,12 @@
+[package]
+name = "node-inspect"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+log = "0.4.8"
+sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
+sp-core = { version = "2.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }

@@ -153,3 +153,6 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.crates-io]
+impl-serde = { git = "https://github.com/paritytech/parity-common.git", branch = "td-hex2" }
