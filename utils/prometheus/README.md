@@ -2,12 +2,12 @@
 ![grants](./photo_2019-12-13_16-32-53.jpg)
 ## Introduction
 
-Prometheus is one of the most widely used monitoring tool for managing high availability services supported by [Cloud Native Computing Foundation](https://www.cncf.io/). By providing Prometheus exporter in substrate, node operators can easily adopt widely used display/alert tool such as Grafana without seting-up/operating external Prometheus agent through RPC connections. Easy access to such monitoring tools will benefit parachain develepers/operators and validators to have much higher availability quality of their services.
+Prometheus is one of the most widely used monitoring tool for managing high availability services supported by [Cloud Native Computing Foundation](https://www.cncf.io/). By providing Prometheus metrics in Substrate, node operators can easily adopt widely used display/alert tools such as Grafana and Alertmanager without setting-up/operating external Prometheus push gateways (which is an antipattern in the first place) through RPC connections. Easy access to such monitoring tools will benefit parachain developers/operators and validators to have much higher availability of their services.
 
-## List of Contents
+## Table of Contents
 
 Hack Prometheus in Substrate
- - Prometheus starter
+ - Prometheus primer
  - CLI Config
  - Metrics Add
 
@@ -23,11 +23,11 @@ Start Grafana
  - Install Grafana
 
 ## Substrate Dev hack
-### Prometheus starter
+### Prometheus primer
 
 Here is the entry point of prometheus core module in Parity Substrate.
 
-In existing sources, refer to the grapana source due to the issue of the wasm.
+In existing sources, refer to the Grafana source due to the issue of the wasm.
 
 utils/prometheus/src/lib.rs
 ```rust
@@ -74,13 +74,11 @@ async fn request_metrics(req: Request<Body>) -> Result<Response<Body>, Error> {
       .header("Content-Type", encoder.format_type())
       .body(Body::from(buffer))
       .map_err(Error::Http)
-      //.expect("Sends OK(200) response with one or more data metrics")
   } else {
     Response::builder()
       .status(StatusCode::NOT_FOUND)
       .body(Body::from("Not found."))
       .map_err(Error::Http)
-      //.expect("Sends NOT_FOUND(404) message with no data metric")
   }
   
 }
@@ -168,18 +166,7 @@ macro_rules! prometheus_histogram(
   }
 );
 
-/*
-TODO: Make abstract type for all metrics(e.g. Gauge, Histogram, Counter) with generic traits so that all metrics can be set up with one function `set`
-#[macro_export]
-macro_rules! prometheus(
-  ($($a: expr; $metric:expr => $value:expr),*) => {
-    use $crate::{metrics::*};
-    $(
-        metrics::set(#$a, &$metric, $value);
-    )*
-  }
-);
-*/
+
 ```
 
 
@@ -338,7 +325,7 @@ client/service/src/config.rs
 #[derive(Clone)]
 pub struct Configuration<C, G, E = NoExtension> {
     ...
-	/// Promteheus Port. `None` if disabled. and defult port 33333
+	/// Prometheus Port.`None` if disabled and port 33333 by default.
 	pub prometheus_port: Option<SocketAddr>,
     ...
 }
@@ -392,7 +379,6 @@ lazy_static! {
     pub static ref FINALITY_HEIGHT: Result<IntGauge> = try_create_int_gauge(
         "consensus_finality_block_height_number",
         "block is finality HEIGHT"
-
     );
 }
 ```
