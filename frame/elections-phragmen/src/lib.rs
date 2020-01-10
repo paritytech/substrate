@@ -161,8 +161,8 @@ decl_storage! {
 		/// Locked stake of a voter.
 		pub StakeOf get(fn stake_of): map T::AccountId => BalanceOf<T>;
 
-		/// The present candidate list. Sorted based on account id. A current member can never enter
-		/// this vector and is always implicitly assumed to be a candidate.
+		/// The present candidate list. Sorted based on account-id. A current member or a runner can
+		/// never enter this vector and is always implicitly assumed to be a candidate.
 		pub Candidates get(fn candidates): Vec<T::AccountId>;
 	}
 }
@@ -535,7 +535,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// Limited number of runners-up. Binary search. Constant time factor. O(1)
 	fn is_runner(who: &T::AccountId) -> bool {
-		Self::runners_up().binary_search_by(|(a, _b)| a.cmp(who)).is_ok()
+		Self::runners_up().iter().position(|(a, _b)| a == who).is_some()
 	}
 
 	/// Returns number of desired members.
