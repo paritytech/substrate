@@ -88,7 +88,7 @@ use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error, weights::SimpleDispatchInfo,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
-		ChangeMembers, OnUnbalanced, WithdrawReason
+		ChangeMembers, OnUnbalanced, WithdrawReason, Contains
 	}
 };
 use sp_phragmen::ExtendedBalance;
@@ -767,6 +767,13 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+impl<T: Trait> Contains<T::AccountId> for Module<T> {
+	fn contains(who: &T::AccountId) -> bool {
+		Self::is_member(who)
+	}
+	fn sorted_members() -> Vec<T::AccountId> { Self::members_ids() }
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -817,6 +824,7 @@ mod tests {
 		type Balance = u64;
 		type OnNewAccount = ();
 		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type Event = Event;
 		type TransferPayment = ();
 		type DustRemoval = ();

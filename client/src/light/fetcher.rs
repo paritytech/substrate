@@ -153,7 +153,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 		// all the checks are sharing the same storage
 		let storage = create_proof_check_backend_storage(remote_roots_proof);
 
-		// we remote_roots.keys() are sorted => we can use this to group changes tries roots
+		// remote_roots.keys() are sorted => we can use this to group changes tries roots
 		// that are belongs to the same CHT
 		let blocks = remote_roots.keys().cloned();
 		cht::for_each_cht_group::<B::Header, _, _, _>(cht_size, blocks, |mut storage, _, cht_blocks| {
@@ -162,7 +162,8 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 			// when required header has been pruned (=> replaced with CHT)
 			let first_block = cht_blocks.first().cloned()
 				.expect("for_each_cht_group never calls callback with empty groups");
-			let local_cht_root = self.blockchain.storage().changes_trie_cht_root(cht_size, first_block)?;
+			let local_cht_root = self.blockchain.storage().changes_trie_cht_root(cht_size, first_block)?
+				.ok_or(ClientError::InvalidCHTProof)?;
 
 			// check changes trie root for every block within CHT range
 			for block in cht_blocks {

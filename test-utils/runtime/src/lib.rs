@@ -39,7 +39,7 @@ use sp_runtime::{
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup, NumberFor,
+		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
 	},
 };
 use sp_version::RuntimeVersion;
@@ -623,8 +623,8 @@ cfg_if! {
 			}
 
 			impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
-				fn offchain_worker(block: NumberFor<Block>) {
-					let ex = Extrinsic::IncludeData(block.encode());
+				fn offchain_worker(header: &<Block as BlockT>::Header) {
+					let ex = Extrinsic::IncludeData(header.number.encode());
 					sp_io::offchain::submit_transaction(ex.encode()).unwrap();
 				}
 			}
@@ -839,8 +839,8 @@ cfg_if! {
 			}
 
 			impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
-				fn offchain_worker(block: NumberFor<Block>) {
-					let ex = Extrinsic::IncludeData(block.encode());
+				fn offchain_worker(header: &<Block as BlockT>::Header) {
+					let ex = Extrinsic::IncludeData(header.number.encode());
 					sp_io::offchain::submit_transaction(ex.encode()).unwrap()
 				}
 			}

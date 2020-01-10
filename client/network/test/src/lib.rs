@@ -21,7 +21,7 @@ mod block_import;
 #[cfg(test)]
 mod sync;
 
-use std::{collections::HashMap, sync::Arc, marker::PhantomData};
+use std::{collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData};
 
 use libp2p::build_multiaddr;
 use log::trace;
@@ -46,7 +46,7 @@ use sp_consensus::block_import::{BlockImport, ImportResult};
 use sp_consensus::Error as ConsensusError;
 use sp_consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
-use futures03::{StreamExt as _, TryStreamExt as _};
+use futures03::{Future as _, FutureExt as _, TryFutureExt as _, StreamExt as _, TryStreamExt as _};
 use sc_network::{NetworkWorker, NetworkStateInfo, NetworkService, ReportHandle, config::ProtocolId};
 use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
@@ -764,6 +764,9 @@ pub trait TestNetFactory: Sized {
 			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
 				return Async::NotReady
 			}
+			if peer.network.num_sync_requests() != 0 {
+				return Async::NotReady
+			}
 			match (highest, peer.client.info().best_hash) {
 				(None, b) => highest = Some(b),
 				(Some(ref a), ref b) if a == b => {},
@@ -785,7 +788,9 @@ pub trait TestNetFactory: Sized {
 		self.mut_peers(|peers| {
 			for peer in peers {
 				trace!(target: "sync", "-- Polling {}", peer.id());
-				peer.network.poll().unwrap();
+				futures03::future::poll_fn(|cx| Pin::new(&mut peer.network).poll(cx))
+					.map(|item| Ok::<_, ()>(item))
+					.compat().poll().unwrap();
 				trace!(target: "sync", "-- Polling complete {}", peer.id());
 
 				// We poll `imported_blocks_stream`.
