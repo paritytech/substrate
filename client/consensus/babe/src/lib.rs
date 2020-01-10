@@ -69,14 +69,14 @@ use sp_consensus::{ImportResult, CanAuthorWith};
 use sp_consensus::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
-use sp_runtime::{generic::{BlockId, OpaqueDigestItemId}, Justification};
-use sp_runtime::traits::{
-	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi,
-	Zero,
+use sp_runtime::{
+	generic::{BlockId, OpaqueDigestItemId}, Justification,
+	traits::{Block as BlockT, Header, DigestItemFor, Zero},
 };
+use sp_api::ProvideRuntimeApi;
 use sc_keystore::KeyStorePtr;
 use parking_lot::Mutex;
-use sp_core::{Blake2Hasher, H256, Pair};
+use sp_core::Pair;
 use sp_inherents::{InherentDataProviders, InherentData};
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use sp_consensus::{
@@ -96,10 +96,11 @@ use sc_client::Client;
 
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
-use sc_consensus_slots::{CheckedHeader, check_equivocation};
 use futures::prelude::*;
 use log::{warn, debug, info, trace};
-use sc_consensus_slots::{SlotWorker, SlotInfo, SlotCompatible};
+use sc_consensus_slots::{
+	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
+};
 use epoch_changes::descendent_query;
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
@@ -207,7 +208,7 @@ impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
 	pub fn get_or_compute<B: BlockT, C>(client: &C) -> ClientResult<Self> where
-		C: AuxStore + ProvideRuntimeApi, C::Api: BabeApi<B, Error = sp_blockchain::Error>,
+		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B, Error = sp_blockchain::Error>,
 	{
 		trace!(target: "babe", "Getting slot duration");
 		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self) {
@@ -291,16 +292,16 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	impl futures01::Future<Item=(), Error=()>,
 	sp_consensus::Error,
 > where
-	B: BlockT<Hash=H256>,
-	C: ProvideRuntimeApi + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
-		+ HeaderBackend<B> + HeaderMetadata<B, Error=ClientError> + Send + Sync + 'static,
+	B: BlockT,
+	C: ProvideRuntimeApi<B> + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
+		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError> + Send + Sync + 'static,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
-	E: Environment<B, Error=Error> + Send + Sync,
-	E::Proposer: Proposer<B, Error=Error>,
-	<E::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
-	I: BlockImport<B,Error=ConsensusError> + Send + Sync + 'static,
-	Error: std::error::Error + Send + From<::sp_consensus::Error> + From<I::Error> + 'static,
+	E: Environment<B, Error = Error> + Send + Sync,
+	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
+	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<C, B>> + Send
+		+ Sync + 'static,
+	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 	CAW: CanAuthorWith<B> + Send,
 {
@@ -349,15 +350,17 @@ struct BabeWorker<B: BlockT, C, E, I, SO> {
 }
 
 impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I, SO> where
-	B: BlockT<Hash=H256>,
-	C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + HeaderMetadata<B, Error=ClientError>,
+	B: BlockT,
+	C: ProvideRuntimeApi<B> +
+		ProvideCache<B> +
+		HeaderBackend<B> +
+		HeaderMetadata<B, Error = ClientError>,
 	C::Api: BabeApi<B>,
-	E: Environment<B, Error=Error>,
-	E::Proposer: Proposer<B, Error=Error>,
-	<E::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
-	I: BlockImport<B> + Send + Sync + 'static,
+	E: Environment<B, Error = Error>,
+	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
+	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
-	Error: std::error::Error + Send + From<::sp_consensus::Error> + From<I::Error> + 'static,
+	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
 	type EpochData = Epoch;
 	type Claim = (BabePreDigest, AuthorityPair);
@@ -373,7 +376,11 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		self.block_import.clone()
 	}
 
-	fn epoch_data(&self, parent: &B::Header, slot_number: u64) -> Result<Self::EpochData, sp_consensus::Error> {
+	fn epoch_data(
+		&self,
+		parent: &B::Header,
+		slot_number: u64,
+	) -> Result<Self::EpochData, ConsensusError> {
 		self.epoch_changes.lock().epoch_for_child_of(
 			descendent_query(&*self.client),
 			&parent.hash(),
@@ -411,7 +418,11 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		s
 	}
 
-	fn pre_digest_data(&self, _slot_number: u64, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem<B::Hash>> {
+	fn pre_digest_data(
+		&self,
+		_slot_number: u64,
+		claim: &Self::Claim,
+	) -> Vec<sp_runtime::DigestItem<B::Hash>> {
 		vec![
 			<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(claim.0.clone()),
 		]
@@ -421,20 +432,22 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		B::Header,
 		&B::Hash,
 		Vec<B::Extrinsic>,
+		StorageChanges<I::Transaction, B>,
 		Self::Claim,
-	) -> sp_consensus::BlockImportParams<B> + Send> {
-		Box::new(|header, header_hash, body, (_, pair)| {
+	) -> sp_consensus::BlockImportParams<B, I::Transaction> + Send> {
+		Box::new(|header, header_hash, body, storage_changes, (_, pair)| {
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
 			let signature = pair.sign(header_hash.as_ref());
-			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem>::babe_seal(signature);
+			let digest_item = <DigestItemFor<B> as CompatibleDigestItem>::babe_seal(signature);
 
 			BlockImportParams {
 				origin: BlockOrigin::Own,
 				header,
 				justification: None,
-				post_digests: vec![signature_digest_item],
+				post_digests: vec![digest_item],
 				body: Some(body),
+				storage_changes: Some(storage_changes),
 				finalized: false,
 				auxiliary: Vec::new(), // block-weight is written in block import.
 				// TODO: block-import handles fork choice and this shouldn't even have the
@@ -500,15 +513,17 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 }
 
 impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
-	B: BlockT<Hash=H256>,
-	C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + HeaderMetadata<B, Error=ClientError> + Send + Sync,
+	B: BlockT,
+	C: ProvideRuntimeApi<B> +
+		ProvideCache<B> +
+		HeaderBackend<B> +
+		HeaderMetadata<B, Error = ClientError> + Send + Sync,
 	C::Api: BabeApi<B>,
-	E: Environment<B, Error=Error> + Send + Sync,
-	E::Proposer: Proposer<B, Error=Error>,
-	<E::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
-	I: BlockImport<B> + Send + Sync + 'static,
+	E: Environment<B, Error = Error> + Send + Sync,
+	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
+	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
-	Error: std::error::Error + Send + From<::sp_consensus::Error> + From<I::Error> + 'static,
+	Error: std::error::Error + Send + From<sp_consensus::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Pin<Box<dyn Future<Output = Result<(), sp_consensus::Error>> + Send>>;
 
@@ -603,7 +618,9 @@ impl<B, E, Block: BlockT, RA, PRA> BabeVerifier<B, E, Block, RA, PRA> {
 		block_id: BlockId<Block>,
 		inherent_data: InherentData,
 	) -> Result<(), Error<Block>>
-		where PRA: ProvideRuntimeApi, PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
+		where
+			PRA: ProvideRuntimeApi<Block>,
+			PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
 	{
 		let inherent_res = self.api.runtime_api().check_inherents(
 			&block_id,
@@ -667,11 +684,11 @@ fn median_algorithm(
 }
 
 impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA> where
-	Block: BlockT<Hash=H256>,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	Block: BlockT,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
-	PRA: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<Block>,
+	PRA: ProvideRuntimeApi<Block> + Send + Sync + AuxStore + ProvideCache<Block>,
 	PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
 		+ BabeApi<Block, Error = sp_blockchain::Error>,
 {
@@ -681,7 +698,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 		header: Block::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<Block::Extrinsic>>,
-	) -> Result<(BlockImportParams<Block>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		trace!(
 			target: "babe",
 			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
@@ -785,6 +802,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					header: pre_header,
 					post_digests: vec![verified_info.seal],
 					body,
+					storage_changes: None,
 					finalized: false,
 					justification,
 					auxiliary: Vec::new(),
@@ -810,7 +828,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 }
 
 /// The BABE import queue type.
-pub type BabeImportQueue<B> = BasicQueue<B>;
+pub type BabeImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
 
 /// Register the babe inherent data provider, if not registered already.
 fn register_babe_inherent_data_provider(
@@ -875,20 +893,22 @@ impl<B, E, Block: BlockT, I, RA, PRA> BabeBlockImport<B, E, Block, I, RA, PRA> {
 }
 
 impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, RA, PRA> where
-	Block: BlockT<Hash=H256>,
-	I: BlockImport<Block> + Send + Sync,
+	Block: BlockT,
+	I: BlockImport<Block, Transaction = sp_api::TransactionFor<PRA, Block>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
+	Client<B, E, Block, RA>: AuxStore,
 	RA: Send + Sync,
-	PRA: ProvideRuntimeApi + ProvideCache<Block>,
-	PRA::Api: BabeApi<Block>,
+	PRA: ProvideRuntimeApi<Block> + ProvideCache<Block>,
+	PRA::Api: BabeApi<Block> + ApiExt<Block, StateBackend = B::State>,
 {
 	type Error = ConsensusError;
+	type Transaction = sp_api::TransactionFor<PRA, Block>;
 
 	fn import_block(
 		&mut self,
-		mut block: BlockImportParams<Block>,
+		mut block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_header().hash();
@@ -1099,9 +1119,9 @@ fn prune_finalized<B, E, Block, RA>(
 	client: &Client<B, E, Block, RA>,
 	epoch_changes: &mut EpochChangesFor<Block>,
 ) -> Result<(), ConsensusError> where
-	Block: BlockT<Hash=H256>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-	B: Backend<Block, Blake2Hasher>,
+	Block: BlockT,
+	E: CallExecutor<Block> + Send + Sync,
+	B: Backend<Block>,
 	RA: Send + Sync,
 {
 	let info = client.chain_info();
@@ -1133,15 +1153,16 @@ fn prune_finalized<B, E, Block, RA>(
 ///
 /// Also returns a link object used to correctly instantiate the import queue
 /// and background worker.
-pub fn block_import<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
+pub fn block_import<B, E, Block: BlockT, I, RA, PRA>(
 	config: Config,
 	wrapped_block_import: I,
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 ) -> ClientResult<(BabeBlockImport<B, E, Block, I, RA, PRA>, BabeLink<Block>)> where
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	B: Backend<Block>,
+	E: CallExecutor<Block> + Send + Sync,
 	RA: Send + Sync,
+	Client<B, E, Block, RA>: AuxStore,
 {
 	let epoch_changes = aux_schema::load_epoch_changes(&*client)?;
 	let link = BabeLink {
@@ -1178,7 +1199,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 ///
 /// The block import object provided must be the `BabeBlockImport` or a wrapper
 /// of it, otherwise crucial import logic will be omitted.
-pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
+pub fn import_queue<B, E, Block: BlockT, I, RA, PRA>(
 	babe_link: BabeLink<Block>,
 	block_import: I,
 	justification_import: Option<BoxJustificationImport<Block>>,
@@ -1186,12 +1207,13 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 	inherent_data_providers: InherentDataProviders,
-) -> ClientResult<BabeImportQueue<Block>> where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	I: BlockImport<Block,Error=ConsensusError> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
+) -> ClientResult<BabeImportQueue<Block, sp_api::TransactionFor<PRA, Block>>> where
+	B: Backend<Block> + 'static,
+	I: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<PRA, Block>>
+		+ Send + Sync + 'static,
+	E: CallExecutor<Block> + Clone + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
-	PRA: ProvideRuntimeApi + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
+	PRA: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
 	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = sp_blockchain::Error>,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
@@ -1227,8 +1249,11 @@ pub mod test_helpers {
 		keystore: &KeyStorePtr,
 		link: &BabeLink<B>,
 	) -> Option<BabePreDigest> where
-		B: BlockT<Hash=H256>,
-		C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + HeaderMetadata<B, Error=ClientError>,
+		B: BlockT,
+		C: ProvideRuntimeApi<B> +
+			ProvideCache<B> +
+			HeaderBackend<B> +
+			HeaderMetadata<B, Error = ClientError>,
 		C::Api: BabeApi<B>,
 	{
 		let epoch = link.epoch_changes.lock().epoch_for_child_of(
