@@ -60,13 +60,11 @@ async fn request_metrics(req: Request<Body>) -> Result<Response<Body>, Error> {
       .header("Content-Type", encoder.format_type())
       .body(Body::from(buffer))
       .map_err(Error::Http)
-      //.expect("Sends OK(200) response with one or more data metrics")
   } else {
     Response::builder()
       .status(StatusCode::NOT_FOUND)
       .body(Body::from("Not found."))
       .map_err(Error::Http)
-      //.expect("Sends NOT_FOUND(404) message with no data metric")
   }
   
 }
@@ -152,16 +150,3 @@ macro_rules! prometheus_histogram(
     )*
   }
 );
-
-/*
-TODO: Make abstract type for all metrics(e.g. Gauge, Histogram, Counter) with generic traits so that all metrics can be set up with one function `set`
-#[macro_export]
-macro_rules! prometheus(
-  ($($a: expr; $metric:expr => $value:expr),*) => {
-    use $crate::{metrics::*};
-    $(
-        metrics::set(#$a, &$metric, $value);
-    )*
-  }
-);
-*/
