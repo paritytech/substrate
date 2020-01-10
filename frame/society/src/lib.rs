@@ -517,7 +517,6 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
-
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		pub fn bid(origin, value: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -557,7 +556,6 @@ decl_module! {
 		///
 		/// Total Complexity: O(B + X)
 		/// # </weight>
-
 		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
 		pub fn unbid(origin, pos: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -628,7 +626,6 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
-
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
@@ -670,7 +667,6 @@ decl_module! {
 		///
 		/// Total Complexity: O(B)
 		/// # </weight>
-
 		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
 		pub fn unvouch(origin, pos: u32) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
@@ -709,7 +705,6 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + C)
 		/// # </weight>
-
 		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
 		pub fn vote(origin, candidate: <T::Lookup as StaticLookup>::Source, approve: bool) {
 			let voter = ensure_signed(origin)?;
@@ -741,7 +736,6 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM)
 		/// # </weight>
-
 		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
 		pub fn defender_vote(origin, approve: bool) {
 			let voter = ensure_signed(origin)?;
@@ -774,7 +768,6 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + P + X)
 		/// # </weight>
-
 		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
 		pub fn payout(origin) {
 			let who = ensure_signed(origin)?;
@@ -816,7 +809,6 @@ decl_module! {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
-
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn found(origin, founder: T::AccountId) {
 			T::FounderOrigin::ensure_origin(origin)?;
@@ -826,7 +818,6 @@ decl_module! {
 			<Head<T, I>>::put(&founder);
 			Self::deposit_event(RawEvent::Founded(founder));
 		}
-
 		/// Allow suspension judgement origin to make judgement on a suspended member.
 		///
 		/// If a suspended member is forgiven, we simply add them back as a member, not affecting
@@ -854,7 +845,6 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + B)
 		/// # </weight>
-
 		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
 		fn judge_suspended_member(origin, who: T::AccountId, forgive: bool) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
@@ -885,7 +875,6 @@ decl_module! {
 			<SuspendedMembers<T, I>>::remove(&who);
 			Self::deposit_event(RawEvent::SuspendedMemberJudgement(who, forgive));
 		}
-
 
 		/// Allow suspended judgement origin to make judgement on a suspended candidate.
 		///
@@ -927,7 +916,6 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + B + X)
 		/// # </weight>
-
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn judge_suspended_candidate(origin, who: T::AccountId, judgement: Judgement) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
@@ -988,7 +976,6 @@ decl_module! {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
-
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn set_max_members(origin, max: u32) {
 			ensure_root(origin)?;
