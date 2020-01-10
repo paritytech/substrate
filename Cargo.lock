@@ -3178,7 +3178,7 @@ dependencies = [
  "pallet-offences 2.0.0",
  "pallet-randomness-collective-flip 2.0.0",
  "pallet-session 2.0.0",
- "pallet-staking 2.0.0",
+ "pallet-staking 0.8.0",
  "pallet-staking-reward-curve 2.0.0",
  "pallet-sudo 2.0.0",
  "pallet-timestamp 2.0.0",
@@ -3289,7 +3289,7 @@ dependencies = [
  "pallet-grandpa 2.0.0",
  "pallet-indices 2.0.0",
  "pallet-session 2.0.0",
- "pallet-staking 2.0.0",
+ "pallet-staking 0.8.0",
  "pallet-timestamp 2.0.0",
  "pallet-transaction-payment 2.0.0",
  "pallet-treasury 2.0.0",
@@ -3927,7 +3927,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-staking"
-version = "2.0.0"
+version = "0.8.0"
 dependencies = [
  "frame-support 2.0.0",
  "frame-system 2.0.0",
