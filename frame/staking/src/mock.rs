@@ -515,17 +515,6 @@ pub fn validator_current_exposure(stash: AccountId) -> Exposure<AccountId, Balan
 	Staking::eras_stakers(Staking::active_era(), stash)
 }
 
-pub fn bypass_logic_change_current_exposure(stash: AccountId, exposure: Exposure<AccountId, Balance>) {
-	// TODO TODO: we can actually probably remove this function or just upgrade it.
-	// <ValidatorForEra<Test>>::mutate(Staking::active_era(), |infos| {
-	// 	for info in infos {
-	// 		if info.stash == stash {
-	// 			info.exposure = exposure.clone();
-	// 		}
-	// 	}
-	// });
-}
-
 /// Make all validator and nominator request their payment
 pub fn make_all_reward_payment(era: EraIndex) {
 	let validators_with_reward = ErasRewardPoints::<Test>::get(era).individual.keys()

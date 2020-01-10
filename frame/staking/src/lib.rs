@@ -16,7 +16,6 @@
 
 // TODO TODO:
 // * migration
-// * upgrade test
 // * update doc
 // * new test
 // * make commission updatable only one for next future era. not current_era.
@@ -698,25 +697,12 @@ decl_storage! {
 		/// Direct storage APIs can still bypass this protection.
 		Nominators get(fn nominators): linked_map T::AccountId => Option<Nominations<T::AccountId>>;
 
-		// /// The currently elected validator set keyed by stash account ID.
-		// pub CurrentElected get(fn current_elected): Vec<T::AccountId>;
-		// TODO TODO: migration: clean this!!!
-
 		/// The current era index.
 		pub CurrentEra get(fn current_era) config(): EraIndex;
-
-		// /// The start of the current era.
-		// // TODO TODO: actually no this doesn't match the start of the era at index CurrentEra.
-		// pub CurrentEraStart get(fn current_era_start): MomentOf<T>;
-		// TODO TODO: clean this!!
 
 		pub ActiveEra get(fn active_era) config(): EraIndex;
 
 		pub ActiveEraStart get(fn active_era_start): MomentOf<T>;
-
-		// /// The session index at which the current era started.
-		// pub CurrentEraStartSessionIndex get(fn current_era_start_session_index): SessionIndex;
-		// TODO TODO: clean this!!
 
 		/// Nominators for a particular account that is in action right now. You can't iterate
 		/// through validators here, but you can find them in the Session module.
@@ -746,14 +732,6 @@ decl_storage! {
 
 		/// The total amount staked for the last $HISTORY_DEPTH eras.
 		pub ErasTotalStake get(fn eras_total_stake): map EraIndex => BalanceOf<T>;
-
-		///// The amount of balance actively at stake for each validator slot, currently.
-		/////
-		///// This is used to derive punishments.
-		//pub SlotStake get(fn slot_stake) build(|config: &GenesisConfig<T>| {
-		//	config.stakers.iter().map(|&(_, _, value, _)| value).min().unwrap_or_default()
-		//}): BalanceOf<T>;
-		//TODO TODO: Slot stake is not longer used. clean this!!
 
 		/// True if the next session change will be a new era regardless of index.
 		pub ForceEra get(fn force_era) config(): Forcing;
@@ -795,6 +773,22 @@ decl_storage! {
 
 		/// The version of storage for upgrade.
 		StorageVersion: u32;
+
+		/// Deprecated.
+		SlotStake: BalanceOf<T>;
+
+		/// Deprecated.
+		// The currently elected validator set keyed by stash account ID.
+		CurrentElected: Vec<T::AccountId>;
+
+		/// Deprecated
+		// The start of the current era.
+		CurrentEraStart: MomentOf<T>;
+
+		/// Deprecated
+		// The session index at which the current era started.
+		CurrentEraStartSessionIndex: SessionIndex;
+
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -886,7 +880,6 @@ decl_module! {
 
 		fn on_initialize() {
 			Self::ensure_storage_upgraded();
-			// TODO: Remove old `ErasValidatorReward` and `ErasStakers` entries.
 		}
 
 		fn on_finalize() {
@@ -1432,16 +1425,13 @@ impl<T: Trait> Module<T> {
 		);
 		// This is zero if the era is not finished yet.
 		let era_payout = <ErasValidatorReward<T>>::get(&era);
+		println!("payout_validator {:?} at {:?}: era payout {:?}", who, era, era_payout);
 		if let Some(imbalance) = Self::make_payout(&ledger.stash, reward * era_payout) {
 			Self::deposit_event(RawEvent::Reward(who, imbalance.peek()));
 		}
 
 		Ok(())
 	}
-
-	// TODO: at the end of session, ensure that points are accumulated within the correct era.
-	// TODO: currently, validator set changes lag by one session, therefore, in the first session of
-	// TODO:   an era, the points should be accumulated by the validator set of the era before.
 
 	/// Update the ledger for a controller. This will also update the stash lock. The lock will
 	/// will lock the entire funds except paying for further transactions.
@@ -1481,7 +1471,8 @@ impl<T: Trait> Module<T> {
 				),
 			RewardDestination::Stash =>
 				T::Currency::deposit_into_existing(stash, amount).ok(),
-			RewardDestination::Staked => Self::bonded(stash)
+			RewardDestination::Staked => {
+				Self::bonded(stash)
 				.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
 				.and_then(|(controller, mut l)| {
 					l.active += amount;
@@ -1489,7 +1480,7 @@ impl<T: Trait> Module<T> {
 					let r = T::Currency::deposit_into_existing(stash, amount).ok();
 					Self::update_ledger(&controller, &l);
 					r
-				}),
+				})},
 		}
 	}
 
@@ -1550,6 +1541,7 @@ impl<T: Trait> Module<T> {
 		let current_era = CurrentEra::mutate(|s| { *s += 1; *s });
 		// TODO TODO: either start_session_index strictly increase or we must remove old era overriden
 		// TODO TODO: update doc or code to make this correct
+		// TODO TODO: this should be closed by pallet-session API change.
 		ErasStartSessionIndex::insert(&current_era, &start_session_index);
 
 		// Clean old era information.
@@ -1782,19 +1774,6 @@ impl<T: Trait> Module<T> {
 	///
 	/// COMPLEXITY: Complexity is `number_of_validator_to_reward x current_elected_len`.
 	/// If you need to reward lots of validator consider using `reward_by_indices`.
-	//
-	// TODO: This is based on a false assumption; that rewarding will always add to a validator
-	// in the current era. It will not, since validator set lags by some amount (currently one
-	// session, but this may be configurable in the future).
-	//
-	// TODO: Force the rewarder to pass in the representative era index (or the session index) so
-	// we can figure out which era's reward this should go to and be able to add points to eras that
-	// have already passed.
-	//
-	// TODO: We should also ban collecting rewards from an era that may yet have points added to it.
-	// This will likely need an additional API from session to let us know when an era will no
-	// longer have any points added to it (i.e. basically just when the last session whose
-	// validator set is some previous era).
 	pub fn reward_by_ids(
 		validators_points: impl IntoIterator<Item = (T::AccountId, u32)>
 	) {
@@ -1879,7 +1858,6 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 	for ExposureOf<T>
 {
 	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
-		// TODO TODO: which exposure do we want here ? active era or current era ?
 		Some(<Module<T>>::eras_stakers(<Module<T>>::current_era(), &validator))
 	}
 }

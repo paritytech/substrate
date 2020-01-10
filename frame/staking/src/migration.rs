@@ -60,6 +60,20 @@ mod inner {
 		frame_support::print("Finished migrating Staking storage to v1.");
 	}
 
+	pub fn from_v1_to_v2<T: Trait>(version: &mut VersionNumber) {
+		if *version != 1 { return }
+		*version += 1;
+
+
+
+		crate::SlotStake::<T>::kill();
+		crate::CurrentElected::<T>::kill();
+		crate::CurrentEraStart::<T>::kill();
+		crate::CurrentEraStartSessionIndex::kill();
+
+		frame_support::print("Finished migrating Staking storage to v2.");
+	}
+
 	pub(super) fn perform_migrations<T: Trait>() {
 		<Module<T> as Store>::StorageVersion::mutate(|version| {
 			if *version < MIN_SUPPORTED_VERSION {
@@ -72,6 +86,7 @@ mod inner {
 			if *version == CURRENT_VERSION { return }
 
 			to_v1::<T>(version);
+			from_v1_to_v2::<T>(version);
 		});
 	}
 }
