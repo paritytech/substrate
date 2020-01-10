@@ -205,6 +205,8 @@ impl balances::Trait for Runtime {
 	type Balance = Balance;
 	/// What to do if an account's free balance gets zeroed.
 	type OnFreeBalanceZero = ();
+	/// What to do if an account is fully reaped from the system.
+	type OnReapAccount = System;
 	/// What to do if a new account is created.
 	type OnNewAccount = Indices;
 	/// The ubiquitous event type.

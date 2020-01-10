@@ -113,7 +113,7 @@ use sp_runtime::{
 use sp_core::storage::well_known_keys;
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
-	traits::{Contains, Get, ModuleToIndex},
+	traits::{Contains, Get, ModuleToIndex, OnReapAccount},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
 };
 use codec::{Encode, Decode};
@@ -786,6 +786,13 @@ impl<T: Trait> Module<T> {
 			.map(ExtrinsicData::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
+	}
+}
+
+impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
+	/// Remove the nonce for the account. Account is considered fully removed from the system.
+	fn on_reap_account(who: &T::AccountId) {
+		<AccountNonce<T>>::remove(who);
 	}
 }
 
