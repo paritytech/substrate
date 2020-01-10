@@ -46,8 +46,8 @@ mod tests {
 	use sc_executor::native_executor_instance;
 	use sp_state_machine::{
 		StateMachine, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage,
+		InMemoryBackend,
 	};
-	use sp_state_machine::backend::InMemory;
 	use substrate_test_runtime_client::{
 		runtime::genesismap::{GenesisConfig, insert_genesis_block},
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
@@ -67,7 +67,7 @@ mod tests {
 	}
 
 	fn construct_block(
-		backend: &InMemory<Blake2Hasher>,
+		backend: &InMemoryBackend<Blake2Hasher>,
 		number: BlockNumber,
 		parent_hash: Hash,
 		state_root: Hash,
@@ -116,7 +116,7 @@ mod tests {
 			).unwrap();
 		}
 
-		let (ret_data, _, _) = StateMachine::new(
+		let ret_data = StateMachine::new(
 			backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
 			&mut overlay,
@@ -132,7 +132,7 @@ mod tests {
 		(vec![].and(&Block { header, extrinsics: transactions }), hash)
 	}
 
-	fn block1(genesis_hash: Hash, backend: &InMemory<Blake2Hasher>) -> (Vec<u8>, Hash) {
+	fn block1(genesis_hash: Hash, backend: &InMemoryBackend<Blake2Hasher>) -> (Vec<u8>, Hash) {
 		construct_block(
 			backend,
 			1,
@@ -149,7 +149,8 @@ mod tests {
 
 	#[test]
 	fn construct_genesis_should_work_with_native() {
-		let mut storage = GenesisConfig::new(false,
+		let mut storage = GenesisConfig::new(
+			false,
 			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
@@ -158,7 +159,7 @@ mod tests {
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
-		let backend = InMemory::from(storage);
+		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
@@ -186,7 +187,7 @@ mod tests {
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
-		let backend = InMemory::from(storage);
+		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
@@ -214,7 +215,7 @@ mod tests {
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
-		let backend = InMemory::from(storage);
+		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();

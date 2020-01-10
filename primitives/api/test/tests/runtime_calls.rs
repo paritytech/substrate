@@ -14,15 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use sp_api::ProvideRuntimeApi;
 use substrate_test_runtime_client::{
 	prelude::*,
 	DefaultTestClientBuilderExt, TestClientBuilder,
 	runtime::{TestAPI, DecodeFails, Transfer, Header},
 };
-use sp_runtime::{
-	generic::BlockId,
-	traits::{ProvideRuntimeApi, Header as HeaderT, Hash as HashT},
-};
+use sp_runtime::{generic::BlockId, traits::{Header as HeaderT, Hash as HashT}};
 use sp_state_machine::{
 	ExecutionStrategy, create_proof_check_backend,
 	execution_proof_check_on_trie_backend,
@@ -174,10 +172,10 @@ fn record_proof_works() {
 
 	// Build the block and record proof
 	let mut builder = client
-		.new_block_at_with_proof_recording(&block_id, Default::default())
+		.new_block_at(&block_id, Default::default(), true)
 		.expect("Creates block builder");
 	builder.push(transaction.clone()).unwrap();
-	let (block, proof) = builder.bake_and_extract_proof().expect("Bake block");
+	let (block, _, proof) = builder.build().expect("Bake block").into_inner();
 
 	let backend = create_proof_check_backend::<<<Header as HeaderT>::Hashing as HashT>::Hasher>(
 		storage_root,

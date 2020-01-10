@@ -35,9 +35,8 @@ use sp_blockchain::{
 };
 use sc_client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
-use sp_core::Blake2Hasher;
 use sp_runtime::generic::{DigestItem, BlockId};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor, HasherFor};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
 use crate::{DatabaseSettings, FrozenForDuration};
@@ -306,7 +305,7 @@ impl<Block: BlockT> LightStorage<Block> {
 				Some(old_current_num)
 			});
 
-			let new_header_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
+			let new_header_cht_root = cht::compute_root::<Block::Header, HasherFor<Block>, _>(
 				cht::size(), new_cht_number, cht_range.map(|num| self.hash(num))
 			)?;
 			transaction.put(
@@ -323,7 +322,7 @@ impl<Block: BlockT> LightStorage<Block> {
 					current_num = current_num + One::one();
 					Some(old_current_num)
 				});
-				let new_changes_trie_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
+				let new_changes_trie_cht_root = cht::compute_root::<Block::Header, HasherFor<Block>, _>(
 					cht::size(), new_cht_number, cht_range
 						.map(|num| self.changes_trie_root(BlockId::Number(num)))
 				)?;

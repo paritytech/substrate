@@ -261,12 +261,12 @@ mod tests {
 			pub GetterNoFnKeyword get(no_fn): Option<u32>;
 
 			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]):
-				double_map hasher(twox_64_concat) u32, blake2_256(u32) => u64;
+				double_map hasher(twox_64_concat) u32, hasher(blake2_256) u32 => u64;
 			pub GenericDataDM:
-				double_map T::BlockNumber, twox_128(T::BlockNumber) => T::BlockNumber;
+				double_map T::BlockNumber, hasher(twox_128) T::BlockNumber => T::BlockNumber;
 			pub GenericData2DM:
-				double_map T::BlockNumber, twox_256(T::BlockNumber) => Option<T::BlockNumber>;
-			pub AppendableDM: double_map u32, blake2_256(T::BlockNumber) => Vec<u32>;
+				double_map T::BlockNumber, hasher(twox_256) T::BlockNumber => Option<T::BlockNumber>;
+			pub AppendableDM: double_map u32, T::BlockNumber => Vec<u32>;
 		}
 	}
 

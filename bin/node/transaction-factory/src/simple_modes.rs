@@ -38,9 +38,8 @@ use std::sync::Arc;
 use log::info;
 use sc_client::Client;
 use sp_block_builder::BlockBuilder;
-use sp_api::ConstructRuntimeApi;
-use sp_core::{Blake2Hasher, Hasher};
-use sp_runtime::traits::{Block as BlockT, ProvideRuntimeApi, One};
+use sp_api::{ConstructRuntimeApi, ProvideRuntimeApi};
+use sp_runtime::traits::{Block as BlockT, One};
 use sp_runtime::generic::BlockId;
 
 use crate::{Mode, RuntimeAdapter, create_block};
@@ -54,12 +53,13 @@ pub fn next<RA, Backend, Exec, Block, RtApi>(
 	prior_block_id: BlockId<Block>,
 ) -> Option<Block>
 where
-	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	Exec: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	Backend: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send,
-	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
-	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
-		BlockBuilder<Block, Error = sp_blockchain::Error>,
+	Block: BlockT,
+	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
+	Backend: sc_client_api::backend::Backend<Block> + Send,
+	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
+	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
+		BlockBuilder<Block, Error = sp_blockchain::Error> +
+		sp_api::ApiExt<Block, StateBackend = Backend::State>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	RA: RuntimeAdapter,
 {

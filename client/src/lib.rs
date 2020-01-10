@@ -57,7 +57,7 @@
 //! // from your runtime.
 //! use substrate_test_runtime_client::{LocalExecutor, runtime::Block, runtime::RuntimeApi};
 //!
-//! let backend = Arc::new(Backend::<Block, Blake2Hasher>::new());
+//! let backend = Arc::new(Backend::<Block>::new());
 //! let client = Client::<_, _, _, RuntimeApi>::new(
 //! 	backend.clone(),
 //! 	LocalCallExecutor::new(
