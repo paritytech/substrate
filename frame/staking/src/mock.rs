@@ -375,9 +375,7 @@ pub type Timestamp = pallet_timestamp::Module<Test>;
 pub type Staking = Module<Test>;
 
 pub fn check_exposure_all(era: EraIndex) {
-	// TODO TODO: and test order of nominators
-	// TODO TODO:
-	// Staking::validator_for_era(era).into_iter().for_each(|info| check_exposure(info));
+	ErasStakers::<Test>::iter_prefix(era).for_each(check_exposure)
 }
 
 pub fn check_nominator_all(era: EraIndex) {
@@ -386,37 +384,33 @@ pub fn check_nominator_all(era: EraIndex) {
 }
 
 /// Check for each selected validator: expo.total = Sum(expo.other) + expo.own
-pub fn check_exposure(stash: AccountId) {
-	// TODO TODO: impl
-	// let stash = val_info.stash;
-	// let expo = val_info.exposure;
-
-	// assert_is_stash(stash);
-	// assert_eq!(
-	// 	expo.total as u128, expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>(),
-	// 	"wrong total exposure for {:?}: {:?}", stash, expo,
-	// );
+pub fn check_exposure(expo: Exposure<AccountId, Balance>) {
+	assert_eq!(
+		expo.total as u128, expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>(),
+		"wrong total exposure {:?}", expo,
+	);
+	let mut sorted = expo.others.clone();
+	sorted.sort_by_key(|e| e.who);
+	assert_eq!(sorted, expo.others);
 }
 
 /// Check that for each nominator: slashable_balance > sum(used_balance)
 /// Note: we might not consume all of a nominator's balance, but we MUST NOT over spend it.
 pub fn check_nominator_exposure(era: EraIndex, stash: AccountId) {
-	// TODO TODO: impl
-	// assert_is_stash(stash);
-	// let mut sum = 0;
-	// Staking::validator_for_era(era)
-	// 	.iter()
-	// 	.for_each(|e| {
-	// 		e.exposure.others.iter()
-	// 			.filter(|i| i.who == stash)
-	// 			.for_each(|i| sum += i.value)
-	// 	});
-	// let nominator_stake = Staking::slashable_balance_of(&stash);
-	// // a nominator cannot over-spend.
-	// assert!(
-	// 	nominator_stake >= sum,
-	// 	"failed: Nominator({}) stake({}) >= sum divided({})", stash, nominator_stake, sum,
-	// );
+	assert_is_stash(stash);
+	let mut sum = 0;
+	ErasStakers::<Test>::iter_prefix(era)
+		.for_each(|exposure| {
+			exposure.others.iter()
+				.filter(|i| i.who == stash)
+				.for_each(|i| sum += i.value)
+		});
+	let nominator_stake = Staking::slashable_balance_of(&stash);
+	// a nominator cannot over-spend.
+	assert!(
+		nominator_stake >= sum,
+		"failed: Nominator({}) stake({}) >= sum divided({})", stash, nominator_stake, sum,
+	);
 }
 
 pub fn assert_is_stash(acc: AccountId) {

@@ -2705,6 +2705,7 @@ fn version_initialized() {
 	});
 }
 
+// TODO TODO: impl
 // // If on_session_ending is called with a decreasing will_apply_at and some era are force then some
 // // planned era should be overriden
 // #[test]
