@@ -14,24 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-
-#[macro_use]
 extern crate lazy_static;
-use futures_util::{FutureExt,future::{Future}};
+
+use futures_util::{FutureExt, future::Future};
 use hyper::http::StatusCode;
-use hyper::Server;
-use hyper::{Body, Request, Response, service::{service_fn, make_service_fn}};
-pub use prometheus::{Encoder, HistogramOpts, Opts, TextEncoder};
-pub use prometheus::{Histogram, IntCounter};
-pub use prometheus::IntGauge as Gauge;
-pub use sp_runtime::traits::SaturatedConversion;
+use hyper::{Server, Body, Request, Response, service::{service_fn, make_service_fn}};
+use prometheus::{Encoder, Opts, TextEncoder, core::Atomic};
 use std::net::SocketAddr;
 #[cfg(not(target_os = "unknown"))]
 mod networking;
 
+pub use prometheus::core::{
+	GenericGauge as Gauge, AtomicF64 as F64, AtomicI64 as I64, AtomicU64 as U64
+};
 pub use lazy_static::lazy_static;
 
-pub fn create_gauge(name: &str, description: &str) -> Gauge {
+pub fn create_gauge<T: Atomic + 'static>(name: &str, description: &str) -> Gauge<T> {
 	let opts = Opts::new(name, description);
 	let gauge = Gauge::with_opts(opts).expect("Creating Gauge Failed");
 	prometheus::register(Box::new(gauge.clone())).expect("Registering gauge failed");
@@ -58,22 +56,16 @@ impl std::error::Error for Error {
 }
 
 async fn request_metrics(req: Request<Body>) -> Result<Response<Body>, Error> {
-	if req.uri().path() == "/metrics" {
-		let metric_families = prometheus::gather();
-		let mut buffer = vec![];
-		let encoder = TextEncoder::new();
-		encoder.encode(&metric_families, &mut buffer).unwrap();
-		Response::builder()
-			.status(StatusCode::OK)
-			.header("Content-Type", encoder.format_type())
-			.body(Body::from(buffer))
-			.map_err(Error::Http)
-	} else {
-		Response::builder()
-			.status(StatusCode::NOT_FOUND)
-			.body(Body::from("Not found."))
-			.map_err(Error::Http)
-	}
+	let metric_families = prometheus::gather();
+	let mut buffer = vec![];
+	let encoder = TextEncoder::new();
+	encoder.encode(&metric_families, &mut buffer).unwrap();
+
+	Response::builder()
+		.status(StatusCode::OK)
+		.header("Content-Type", encoder.format_type())
+		.body(Body::from(buffer))
+		.map_err(Error::Http)
 }
 
 #[derive(Clone)]

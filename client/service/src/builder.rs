@@ -54,46 +54,38 @@ use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer};
 use sp_blockchain;
-use prometheus_endpoint::{create_gauge, Gauge};
+use prometheus_endpoint::{create_gauge, Gauge, U64, F64};
 
 prometheus_endpoint::lazy_static! {
-	pub static ref FINALITY_HEIGHT: Gauge = create_gauge(
+	pub static ref FINALITY_HEIGHT: Gauge<U64> = create_gauge(
 		"consensus_finality_block_height_number",
 		"block is finality HEIGHT"
 	);
-	pub static ref BEST_HEIGHT: Gauge = create_gauge(
+	pub static ref BEST_HEIGHT: Gauge<U64> = create_gauge(
 		"consensus_best_block_height_number",
 		"block is best HEIGHT"
 	);
-	pub static ref BLOCK_INTERVAL_SECONDS: Gauge = create_gauge(
-		"consensus_block_interval_seconds",
-		"Time between this and last block(Block.Header.Time) in seconds"
-	);
-	pub static ref P2P_PEERS_NUM: Gauge = create_gauge(
+	pub static ref P2P_PEERS_NUM: Gauge<U64> = create_gauge(
 		"p2p_peers_number",
 		"network gosip peers number"
 	);
-	pub static ref TX_COUNT: Gauge = create_gauge(
+	pub static ref TX_COUNT: Gauge<U64> = create_gauge(
 		"consensus_num_txs",
 		"Number of transactions"
 	);
-	pub static ref NODE_MEMORY: Gauge = create_gauge(
+	pub static ref NODE_MEMORY: Gauge<U64> = create_gauge(
 		"consensus_node_memory",
 		"node memory"
 	);
-	pub static ref NODE_CPU: Gauge = create_gauge(
+	pub static ref NODE_CPU: Gauge<F64> = create_gauge(
 		"consensus_node_cpu",
 		"node cpu"
 	);
-	pub static ref STATE_CACHE_SIZE: Gauge = create_gauge(
-		"consensus_state_cache_size",
-		"used state cache size"
-	);
-	pub static ref P2P_NODE_DOWNLOAD: Gauge = create_gauge(
+	pub static ref P2P_NODE_DOWNLOAD: Gauge<U64> = create_gauge(
 		"p2p_peers_receive_byte_per_sec",
 		"p2p_node_download_per_sec_byte"
 	);
-	pub static ref P2P_NODE_UPLOAD: Gauge = create_gauge(
+	pub static ref P2P_NODE_UPLOAD: Gauge<U64> = create_gauge(
 		"p2p_peers_send_byte_per_sec",
 		"p2p_node_upload_per_sec_byte"
 	);
@@ -996,14 +988,14 @@ ServiceBuilder<
 				"bandwidth_upload" => bandwidth_upload,
 				"used_state_cache_size" => used_state_cache_size,
 			);
-			NODE_MEMORY.set(memory as i64);
-			NODE_CPU.set(cpu_usage as i64);
-			TX_COUNT.set(txpool_status.ready as i64);
-			FINALITY_HEIGHT.set(finalized_number as i64);
-			BEST_HEIGHT.set(best_number as i64);
-			P2P_PEERS_NUM.set(num_peers as i64);
-			P2P_NODE_DOWNLOAD.set(net_status.average_download_per_sec as i64);
-			P2P_NODE_UPLOAD.set(net_status.average_upload_per_sec as i64);
+			NODE_MEMORY.set(memory);
+			NODE_CPU.set(f64::from(cpu_usage));
+			TX_COUNT.set(txpool_status.ready as u64);
+			FINALITY_HEIGHT.set(finalized_number);
+			BEST_HEIGHT.set(best_number);
+			P2P_PEERS_NUM.set(num_peers as u64);
+			P2P_NODE_DOWNLOAD.set(net_status.average_download_per_sec);
+			P2P_NODE_UPLOAD.set(net_status.average_upload_per_sec);
 			Ok(())
 		}).select(exit.clone().map(Ok).compat()).then(|_| Ok(()));
 		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
