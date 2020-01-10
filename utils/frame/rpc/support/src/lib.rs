@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -67,7 +67,7 @@ use sc_rpc_api::state::StateClient;
 ///         pub LastActionId: u64;
 ///         pub Voxels: map Loc => Block;
 ///         pub Actions: linked_map u64 => Loc;
-///         pub Prefab: double_map u128, blake2_256((i8, i8, i8)) => Block;
+///         pub Prefab: double_map u128, (i8, i8, i8) => Block;
 ///     }
 /// }
 ///

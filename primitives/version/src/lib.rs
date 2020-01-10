@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -24,10 +24,6 @@ use serde::{Serialize, Deserialize};
 use std::fmt;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
-#[cfg(feature = "std")]
-use sp_runtime::traits::RuntimeApiInfo;
-#[doc(hidden)]
-pub use sp_std;
 
 use codec::{Encode, Decode};
 use sp_runtime::RuntimeString;
@@ -119,21 +115,14 @@ impl RuntimeVersion {
 		self.authoring_version == other.authoring_version
 	}
 
-	/// Check if this version supports a particular API.
-	pub fn has_api<A: RuntimeApiInfo + ?Sized>(&self) -> bool {
-		self.apis.iter().any(|(s, v)| {
-			s == &A::ID && *v == A::VERSION
-		})
-	}
-
-	/// Check if the given api is implemented and the version passes a predicate.
-	pub fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
+	/// Check if the given api with `api_id` is implemented and the version passes the given
+	/// `predicate`.
+	pub fn has_api_with<P: Fn(u32) -> bool>(
 		&self,
-		pred: P,
+		id: &ApiId,
+		predicate: P,
 	) -> bool {
-		self.apis.iter().any(|(s, v)| {
-			s == &A::ID && pred(*v)
-		})
+		self.apis.iter().any(|(s, v)| s == id && predicate(*v))
 	}
 }
 

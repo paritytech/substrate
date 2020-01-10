@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -290,7 +290,8 @@ pub trait Storage {
 	///
 	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn changes_root(&mut self, parent_hash: &[u8]) -> Option<Vec<u8>> {
-		self.storage_changes_root(parent_hash).ok().and_then(|h| h)
+		self.storage_changes_root(parent_hash)
+			.expect("Invalid `parent_hash` given to `changes_root`.")
 	}
 
 	/// Get the next key in storage after the given one in lexicographic order.

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::time::Duration;
-use futures03::{FutureExt, Stream, StreamExt, stream::unfold};
+use futures::{FutureExt, Stream, StreamExt, stream::unfold};
 use futures_timer::Delay;
 
 pub fn interval(duration: Duration) -> impl Stream<Item=()> + Unpin {

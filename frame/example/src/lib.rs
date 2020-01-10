@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -695,6 +695,7 @@ mod tests {
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
 		type TransferPayment = ();
@@ -706,6 +707,7 @@ mod tests {
 	impl Trait for Test {
 		type Event = ();
 	}
+	type System = frame_system::Module<Test>;
 	type Example = Module<Test>;
 
 	// This function basically just builds a genesis storage key/value store according to

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -15,6 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Integration tests for runtime interface primitives
+#![cfg(test)]
+
 #![cfg(test)]
 
 use sp_runtime_interface::*;
@@ -40,6 +42,7 @@ fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
 		&mut ext_ext,
 		&WASM_BINARY[..],
 		8,
+		false,
 	).expect(&format!("Executes `{}`", method));
 
 	ext
