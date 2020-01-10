@@ -1432,7 +1432,6 @@ impl<T: Trait> Module<T> {
 		);
 		// This is zero if the era is not finished yet.
 		let era_payout = <ErasValidatorReward<T>>::get(&era);
-		println!("do_payout_validator: {:?}, reward: {:?}, era_payout: {:?}", who, reward, era_payout);
 		if let Some(imbalance) = Self::make_payout(&ledger.stash, reward * era_payout) {
 			Self::deposit_event(RawEvent::Reward(who, imbalance.peek()));
 		}
@@ -1723,7 +1722,7 @@ impl<T: Trait> Module<T> {
 				if exposure.total < slot_stake {
 					slot_stake = exposure.total;
 				}
-				total_staked += exposure.total;
+				total_staked = total_staked.saturating_add(exposure.total);
 				<ErasStakers<T>>::insert(&current_era, &c, exposure.clone());
 			}
 
