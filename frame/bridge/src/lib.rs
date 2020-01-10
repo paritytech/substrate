@@ -41,10 +41,11 @@ use codec::{Encode, Decode};
 use fg_primitives::{AuthorityId, AuthorityWeight};
 use sp_runtime::traits::Header;
 use state_machine::StorageProof;
-use support::{
+use frame_support::{
 	decl_error, decl_module, decl_storage,
 };
-use system::{ensure_signed};
+use frame_system::{self as system, ensure_signed};
+use storage_proof::Error as StorageError;
 
 #[derive(Encode, Decode, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -90,6 +91,8 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		fn initialize_bridge(
 			origin,
 			block_header: T::Header,
@@ -121,7 +124,7 @@ decl_module! {
 
 decl_error! {
 	// Error for the Bridge module
-	pub enum Error {
+	pub enum Error for Module<T: Trait> {
 		InvalidStorageProof,
 		StorageRootMismatch,
 		StorageValueUnavailable,
@@ -131,12 +134,21 @@ decl_error! {
 	}
 }
 
+impl<T: Trait> From<StorageError> for Error<T> {
+	fn from(error: StorageError) -> Self {
+		match error {
+			StorageError::StorageRootMismatch => Error::<T>::StorageRootMismatch,
+			StorageError::StorageValueUnavailable => Error::<T>::StorageValueUnavailable,
+		}
+	}
+}
+
 impl<T: Trait> Module<T> {
 	fn check_validator_set_proof(
 		state_root: &T::Hash,
 		proof: StorageProof,
 		validator_set: &Vec<(AuthorityId, AuthorityWeight)>,
-	) -> Result<(), Error> {
+	) -> Result<(), Error<T>> {
 
 		let checker = <StorageProofChecker<<T::Hashing as sp_runtime::traits::Hash>::Hasher>>::new(
 			*state_root,
@@ -148,12 +160,12 @@ impl<T: Trait> Module<T> {
 		let encoded_validator_set = validator_set.encode();
 		let actual_validator_set = checker
 			.read_value(b":grandpa_authorities")?
-			.ok_or(Error::StorageValueUnavailable)?;
+			.ok_or(Error::<T>::StorageValueUnavailable)?;
 
 		if encoded_validator_set == actual_validator_set {
 			Ok(())
 		} else {
-			Err(Error::ValidatorSetMismatch)
+			Err(Error::<T>::ValidatorSetMismatch)
 		}
 	}
 }
@@ -163,9 +175,10 @@ impl<T: Trait> Module<T> {
 // is a chain of headers between (but not including) the `child`
 // and `ancestor`. This could be updated to use something like
 // Log2 Ancestors (#2053) in the future.
-fn verify_ancestry<H>(proof: Vec<H>, ancestor_hash: H::Hash, child: H) -> Result<(), Error>
+fn verify_ancestry<H, T>(proof: Vec<H>, ancestor_hash: H::Hash, child: H) -> Result<(), Error<T>>
 where
-	H: Header
+	H: Header,
+	T: Trait,
 {
 	let mut parent_hash = child.parent_hash();
 

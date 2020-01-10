@@ -20,7 +20,7 @@ use hash_db::{Hasher, HashDB, EMPTY_PREFIX};
 use state_machine::StorageProof;
 use sp_trie::{MemoryDB, Trie, trie_types::TrieDB};
 
-use crate::Error;
+// use crate::Error;
 
 /// This struct is used to read storage values from a subset of a Merklized database. The "proof"
 /// is a subset of the nodes in the Merkle structure of the database, so that it provides
@@ -57,7 +57,7 @@ impl<H> StorageProofChecker<H>
 	pub fn read_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Error> {
 		self.trie()?
 			.get(key)
-			.map(|value| value.map(|value| value.into_vec()))
+			.map(|value| value.map(|value| value.to_vec()))
 			.map_err(|_| Error::StorageValueUnavailable)
 	}
 
@@ -65,6 +65,11 @@ impl<H> StorageProofChecker<H>
 		TrieDB::new(&self.db, &self.root)
 			.map_err(|_| Error::StorageRootMismatch)
 	}
+}
+
+pub enum Error {
+	StorageRootMismatch,
+	StorageValueUnavailable,
 }
 
 #[cfg(test)]

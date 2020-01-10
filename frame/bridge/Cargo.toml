@@ -9,28 +9,28 @@ edition = "2018"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 fg_primitives = { package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { package = "frame-system", path = "../system", default-features = false }
 hash-db = { version = "0.15.2", default-features = false }
 primitives = { package = "sp-core",  path = "../../primitives/core", default-features = false }
 session = { package = "pallet-session", path = "../session", default-features = false }
 serde = { version = "1.0", optional = true }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 state-machine = { package = "sp-state-machine", path = "../../primitives/state-machine" }
-support = { package = "frame-support", path = "../support", default-features = false }
-system = { package = "frame-system", path = "../system", default-features = false }
-sp-trie = { path = "../../primitives/trie", default-features = false }
+sp-trie = { version = "2.0.0", path = "../../primitives/trie", default-features = false }
 
 [dev-dependencies]
-sp-io = { path = "../../primitives/io", default-features = false }
+sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
 
 [features]
 default = ["std"]
 std = [
 	"serde",
 	"codec/std",
-	"session/std",
+	"frame-support/std",
+	"frame-system/std",
 	"primitives/std",
-	"support/std",
-	"system/std",
+	"session/std",
 	"sp-runtime/std",
 	"sp-trie/std",
 	"sp-io/std",
