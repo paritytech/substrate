@@ -439,7 +439,7 @@ decl_storage! {
 		/// Double map from Candidate -> Voter -> (Maybe) Vote.
 		Votes: double_map
 			hasher(twox_64_concat) T::AccountId,
-			twox_64_concat(T::AccountId)
+			hasher(twox_64_concat) T::AccountId
 		=> Option<Vote>;
 
 		/// The defending member currently being challenged.
