@@ -738,11 +738,11 @@ decl_storage! {
 		/// All slashing events on validators, mapped by era to the highest slash proportion
 		/// and slash value of the era.
 		ValidatorSlashInEra:
-			double_map EraIndex, twox_128(T::AccountId) => Option<(Perbill, BalanceOf<T>)>;
+			double_map EraIndex, hasher(twox_128) T::AccountId => Option<(Perbill, BalanceOf<T>)>;
 
 		/// All slashing events on nominators, mapped by era to the highest slash value of the era.
 		NominatorSlashInEra:
-			double_map EraIndex, twox_128(T::AccountId) => Option<BalanceOf<T>>;
+			double_map EraIndex, hasher(twox_128) T::AccountId => Option<BalanceOf<T>>;
 
 		/// Slashing spans for stash accounts.
 		SlashingSpans: map T::AccountId => Option<slashing::SlashingSpans>;

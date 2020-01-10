@@ -37,7 +37,7 @@ use node_runtime::impls::LinearWeightToFee;
 use node_primitives::Balance;
 use node_testing::keyring::*;
 
-mod common;
+pub mod common;
 use self::common::{*, sign};
 
 #[test]

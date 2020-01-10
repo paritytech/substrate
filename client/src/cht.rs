@@ -29,9 +29,10 @@ use sp_trie;
 
 use sp_core::{H256, convert_hash};
 use sp_runtime::traits::{Header as HeaderT, SimpleArithmetic, Zero, One};
-use sp_state_machine::backend::InMemory as InMemoryState;
-use sp_state_machine::{MemoryDB, TrieBackend, Backend as StateBackend, StorageProof,
-	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend};
+use sp_state_machine::{
+	MemoryDB, TrieBackend, Backend as StateBackend, StorageProof, InMemoryBackend,
+	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend
+};
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
@@ -113,7 +114,7 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 		.into_iter()
 		.map(|(k, v)| (k, Some(v)))
 		.collect::<Vec<_>>();
-	let mut storage = InMemoryState::<Hasher>::default().update(vec![(None, transaction)]);
+	let mut storage = InMemoryBackend::<Hasher>::default().update(vec![(None, transaction)]);
 	let trie_storage = storage.as_trie_backend()
 		.expect("InMemoryState::as_trie_backend always returns Some; qed");
 	prove_read_on_trie_backend(
@@ -330,7 +331,7 @@ pub fn decode_cht_value(value: &[u8]) -> Option<H256> {
 
 #[cfg(test)]
 mod tests {
-	use sp_core::{Blake2Hasher};
+	use sp_core::Blake2Hasher;
 	use substrate_test_runtime_client::runtime::Header;
 	use super::*;
 

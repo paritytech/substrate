@@ -370,7 +370,7 @@ fn own_blocks_are_announced() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(3);
 	net.block_until_sync(&mut runtime); // connect'em
-	net.peer(0).generate_blocks(1, BlockOrigin::Own, |builder| builder.bake().unwrap());
+	net.peer(0).generate_blocks(1, BlockOrigin::Own, |builder| builder.build().unwrap().block);
 
 	net.block_until_sync(&mut runtime);
 

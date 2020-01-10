@@ -81,6 +81,7 @@ members = [
 	"frame/recovery",
 	"frame/scored-pool",
 	"frame/session",
+	"frame/society",
 	"frame/staking",
 	"frame/staking/reward-curve",
 	"frame/sudo",

@@ -34,9 +34,9 @@ use futures::future::{ready, FutureExt, TryFutureExt};
 use sc_rpc_api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use codec::{Encode, Decode};
-use sp_core::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
-use sp_api::ConstructRuntimeApi;
-use sp_runtime::{generic, traits::{self, ProvideRuntimeApi}};
+use sp_core::{Bytes, traits::BareCryptoStorePtr};
+use sp_api::ProvideRuntimeApi;
+use sp_runtime::{generic, traits};
 use sp_transaction_pool::{
 	TransactionPool, InPoolTransaction, TransactionStatus,
 	BlockHash, TxHash, TransactionFor, error::IntoPoolError,
@@ -76,15 +76,18 @@ impl<B, E, P, Block: traits::Block, RA> Author<B, E, P, Block, RA> {
 	}
 }
 
-impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P, Block, RA> where
-	Block: traits::Block<Hash=H256>,
-	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: sc_client_api::CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
-	P: TransactionPool<Block=Block, Hash=Block::Hash> + Sync + Send + 'static,
-	RA: ConstructRuntimeApi<Block, Client<B, E, Block, RA>> + Send + Sync + 'static,
-	Client<B, E, Block, RA>: ProvideRuntimeApi,
-	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-		SessionKeys<Block, Error = ClientError>,
+impl<B, E, P, RA> AuthorApi<TxHash<P>, BlockHash<P>>
+	for Author<B, E, P, <P as TransactionPool>::Block, RA>
+where
+	B: sc_client_api::backend::Backend<<P as TransactionPool>::Block> + Send + Sync + 'static,
+	E: sc_client::CallExecutor<<P as TransactionPool>::Block> + Send + Sync + 'static,
+	P: TransactionPool + Sync + Send + 'static,
+	P::Block: traits::Block,
+	P::Error: 'static,
+	RA: Send + Sync + 'static,
+	Client<B, E, P::Block, RA>: ProvideRuntimeApi<P::Block>,
+	<Client<B, E, P::Block, RA> as ProvideRuntimeApi<P::Block>>::Api:
+		SessionKeys<P::Block, Error = ClientError>,
 {
 	type Metadata = crate::metadata::Metadata;
 
