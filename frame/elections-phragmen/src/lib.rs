@@ -2095,7 +2095,7 @@ mod tests {
 			assert_ok!(Elections::end_block(System::block_number()));
 
 			assert_eq!(Elections::members_ids(), vec![1, 4]);
-			assert_eq!(Elections::runners_up_ids(), vec![3, 2]);
+			assert_eq!(Elections::runners_up_ids(), vec![2, 3]);
 			assert_eq!(Elections::candidates(), vec![]);
 		})
 	}
