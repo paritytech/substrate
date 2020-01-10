@@ -97,7 +97,7 @@ impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
 			extensions_factory: RwLock::new(Box::new(())),
 		}
 	}
-}https://github.com/paritytech/substrate/issues/4587
+}
 
 impl<Block: traits::Block> ExecutionExtensions<Block> {
 	/// Create new `ExecutionExtensions` given a `keystore` and `ExecutionStrategies`.
