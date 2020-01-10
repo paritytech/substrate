@@ -82,6 +82,8 @@ impl ExtensionsFactory for () {
 pub struct ExecutionExtensions<Block: traits::Block> {
 	strategies: ExecutionStrategies,
 	keystore: Option<BareCryptoStorePtr>,
+	// FIXME: these two are only RwLock because of https://github.com/paritytech/substrate/issues/4587
+	//        remove when fixed.
 	transaction_pool: RwLock<Option<Weak<dyn sp_transaction_pool::OffchainSubmitTransaction<Block>>>>,
 	extensions_factory: RwLock<Box<dyn ExtensionsFactory>>,
 }
@@ -95,7 +97,7 @@ impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
 			extensions_factory: RwLock::new(Box::new(())),
 		}
 	}
-}
+}https://github.com/paritytech/substrate/issues/4587
 
 impl<Block: traits::Block> ExecutionExtensions<Block> {
 	/// Create new `ExecutionExtensions` given a `keystore` and `ExecutionStrategies`.
