@@ -110,7 +110,7 @@
 //!
 //! The following examples show how to use the Generic Asset module in your custom module.
 //!
-//! ### Examples from the SRML
+//! ### Examples from the frame module
 //!
 //! The Fees module uses the `Currency` trait to handle fee charge/refund, and its types inherit from `Currency`:
 //!
