@@ -14,12 +14,74 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, Codec};
 use sp_core::RuntimeDebug;
+#[cfg(feature = "std")]
+use sp_runtime::{DigestItem, generic::OpaqueDigestItemId};
 use crate::{
-	Randomness, VRFProof, VRFOutput, VRFIndex,
-	AuthorityIndex, SlotNumber, AuthorityId, SassafrasAuthorityWeight
+	SASSAFRAS_ENGINE_ID, Randomness, VRFProof, VRFOutput, VRFIndex,
+	AuthorityIndex, SlotNumber, AuthorityId, SassafrasAuthorityWeight,
+	AuthoritySignature,
 };
+
+/// A digest item which is usable with Sassafras consensus.
+#[cfg(feature = "std")]
+pub trait CompatibleDigestItem: Sized {
+	/// Construct a digest item which contains a Sassafras `PreDigest`.
+	fn sassafras_pre_digest(seal: PreDigest) -> Self;
+
+	/// Construct a digest item which contains a Sassafras seal.
+	fn sassafras_seal(signature: AuthoritySignature) -> Self;
+
+	/// If this item is a Sassafras `PreDigest`, return it.
+	fn as_sassafras_pre_digest(&self) -> Option<PreDigest>;
+
+	/// If this item is a Sassafras `NextEpochDescriptor`, return it.
+	fn as_sassafras_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor>;
+
+	/// If this item is a Sassafras `PostBlockDescriptor`, return it.
+	fn as_sassafras_post_block_descriptor(&self) -> Option<PostBlockDescriptor>;
+
+	/// If this item is a Sassafras seal, return it.
+	fn as_sassafras_seal(&self) -> Option<AuthoritySignature>;
+}
+
+#[cfg(feature = "std")]
+impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
+	Hash: core::fmt::Debug + Send + Sync + Eq + Clone + Codec + 'static
+{
+	fn sassafras_pre_digest(seal: PreDigest) -> Self {
+		DigestItem::PreRuntime(SASSAFRAS_ENGINE_ID, seal.encode())
+	}
+
+	fn sassafras_seal(signature: AuthoritySignature) -> Self {
+		DigestItem::Seal(SASSAFRAS_ENGINE_ID, signature.encode())
+	}
+
+	fn as_sassafras_pre_digest(&self) -> Option<PreDigest> {
+		self.try_to(OpaqueDigestItemId::PreRuntime(&SASSAFRAS_ENGINE_ID))
+	}
+
+	fn as_sassafras_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor> {
+		self.try_to(OpaqueDigestItemId::Consensus(&SASSAFRAS_ENGINE_ID))
+			.and_then(|x: ConsensusDigest| match x {
+				ConsensusDigest::NextEpoch(n) => Some(n),
+				_ => None,
+			})
+	}
+
+	fn as_sassafras_post_block_descriptor(&self) -> Option<PostBlockDescriptor> {
+		self.try_to(OpaqueDigestItemId::Consensus(&SASSAFRAS_ENGINE_ID))
+			.and_then(|x: ConsensusDigest| match x {
+				ConsensusDigest::PostBlock(p) => Some(p),
+				_ => None,
+			})
+	}
+
+	fn as_sassafras_seal(&self) -> Option<AuthoritySignature> {
+		self.try_to(OpaqueDigestItemId::Seal(&SASSAFRAS_ENGINE_ID))
+	}
+}
 
 /// A Sassafras pre-digest. The validator pre-commit a VRF proof at `vrf_index`, and now reveal it
 /// as `vrf_output`.
@@ -39,6 +101,15 @@ pub struct PreDigest {
 	pub post_vrf_proof: VRFProof,
 	/// Secondary "Post Block VRF" output.
 	pub post_vrf_output: VRFOutput,
+}
+
+/// Consensus logs.
+#[derive(Clone, RuntimeDebug, Encode, Decode)]
+pub enum ConsensusDigest {
+	/// Next epoch descriptor digest.
+	NextEpoch(NextEpochDescriptor),
+	/// Post block descriptor digest.
+	PostBlock(PostBlockDescriptor),
 }
 
 /// Post-digest about next epoch information.
