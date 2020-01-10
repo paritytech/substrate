@@ -161,8 +161,8 @@ decl_storage! {
 		/// Locked stake of a voter.
 		pub StakeOf get(fn stake_of): map T::AccountId => BalanceOf<T>;
 
-		/// The present candidate list. Sorted based on account id. A current member can never enter
-		/// this vector and is always implicitly assumed to be a candidate.
+		/// The present candidate list. Sorted based on account-id. A current member or a runner can
+		/// never enter this vector and is always implicitly assumed to be a candidate.
 		pub Candidates get(fn candidates): Vec<T::AccountId>;
 	}
 }
@@ -535,7 +535,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// Limited number of runners-up. Binary search. Constant time factor. O(1)
 	fn is_runner(who: &T::AccountId) -> bool {
-		Self::runners_up().binary_search_by(|(a, _b)| a.cmp(who)).is_ok()
+		Self::runners_up().iter().position(|(a, _b)| a == who).is_some()
 	}
 
 	/// Returns number of desired members.
@@ -2078,6 +2078,25 @@ mod tests {
 				Elections::renounce_candidacy(Origin::signed(5)),
 				Error::<Test>::InvalidOrigin,
 			);
+		})
+	}
+
+	#[test]
+	fn behavior_with_dupe_candidate() {
+		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
+			<Candidates<Test>>::put(vec![1, 1, 2, 3, 4]);
+
+			assert_ok!(Elections::vote(Origin::signed(5), vec![1], 50));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
+			assert_ok!(Elections::vote(Origin::signed(2), vec![2], 20));
+
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members_ids(), vec![1, 1]);
+			assert_eq!(Elections::runners_up_ids(), vec![4, 3]);
+			assert_eq!(Elections::candidates(), vec![]);
 		})
 	}
 }
