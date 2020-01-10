@@ -163,7 +163,7 @@ use sp_runtime::traits::{
 use sp_std::prelude::*;
 use sp_std::{cmp, result, fmt::Debug};
 use frame_support::{
-	decl_event, decl_module, decl_storage, ensure, dispatch, decl_error,
+	decl_event, decl_module, decl_storage, ensure, decl_error,
 	traits::{
 		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
 		SignedImbalance, UpdateBalanceOutcome, WithdrawReason, WithdrawReasons, TryDrop,
@@ -360,7 +360,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Create a new kind of asset.
-		fn create(origin, options: AssetOptions<T::Balance, T::AccountId>) -> dispatch::DispatchResult {
+		fn create(origin, options: AssetOptions<T::Balance, T::AccountId>) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let id = Self::next_asset_id();
 
@@ -393,7 +393,7 @@ decl_module! {
 			origin,
 			#[compact] asset_id: T::AssetId,
 			new_permission: PermissionLatest<T::AccountId>
-		) -> dispatch::DispatchResult {
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			let permissions: PermissionVersions<T::AccountId> = new_permission.into();
@@ -411,7 +411,7 @@ decl_module! {
 
 		/// Mints an asset, increases its total issuance.
 		/// The origin must have `mint` permissions.
-		fn mint(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance) -> dispatch::DispatchResult {
+		fn mint(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::mint_free(&asset_id, &who, &to, &amount)?;
 			Self::deposit_event(RawEvent::Minted(asset_id, to, amount));
@@ -433,7 +433,7 @@ decl_module! {
 			origin,
 			asset_id: T::AssetId,
 			options: AssetOptions<T::Balance, T::AccountId>
-		) -> dispatch::DispatchResult {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::create_asset(Some(asset_id), None, options)
 		}
@@ -536,7 +536,7 @@ impl<T: Trait> Module<T> {
 		who: &T::AccountId,
 		to: &T::AccountId,
 		amount: &T::Balance,
-	) -> Result {
+	) -> DispatchResult {
 		if Self::check_permission(asset_id, who, &PermissionType::Mint) {
 			let original_free_balance = Self::free_balance(&asset_id, &to);
 			let current_total_issuance = <TotalIssuance<T>>::get(asset_id);
@@ -559,7 +559,7 @@ impl<T: Trait> Module<T> {
 		who: &T::AccountId,
 		to: &T::AccountId,
 		amount: &T::Balance,
-	) -> dispatch::DispatchResult {
+	) -> DispatchResult {
 		if Self::check_permission(asset_id, who, &PermissionType::Burn) {
 			let original_free_balance = Self::free_balance(asset_id, to);
 
@@ -589,7 +589,7 @@ impl<T: Trait> Module<T> {
 		asset_id: Option<T::AssetId>,
 		from_account: Option<T::AccountId>,
 		options: AssetOptions<T::Balance, T::AccountId>,
-	) -> dispatch::DispatchResult {
+	) -> DispatchResult {
 		let asset_id = if let Some(asset_id) = asset_id {
 			ensure!(!<TotalIssuance<T>>::exists(&asset_id), Error::<T>::IdAlreadyTaken);
 			ensure!(asset_id < Self::next_asset_id(), Error::<T>::IdUnavailable);
@@ -622,7 +622,7 @@ impl<T: Trait> Module<T> {
 		from: &T::AccountId,
 		to: &T::AccountId,
 		amount: T::Balance
-	) -> dispatch::DispatchResult {
+	) -> DispatchResult {
 		let new_balance = Self::free_balance(asset_id, from)
 			.checked_sub(&amount)
 			.ok_or(Error::<T>::InsufficientBalance)?;
@@ -643,7 +643,7 @@ impl<T: Trait> Module<T> {
 		from: &T::AccountId,
 		to: &T::AccountId,
 		amount: T::Balance,
-	) -> dispatch::DispatchResult {
+	) -> DispatchResult {
 		Self::make_transfer(asset_id, from, to, amount)?;
 
 		if from != to {
@@ -658,7 +658,7 @@ impl<T: Trait> Module<T> {
 	/// If the free balance is lower than `amount`, then no funds will be moved and an `Err` will
 	/// be returned. This is different behavior than `unreserve`.
 	pub fn reserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance)
-		-> dispatch::DispatchResult
+		-> DispatchResult
 	{
 		// Do we need to consider that this is an atomic transaction?
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
@@ -797,7 +797,7 @@ impl<T: Trait> Module<T> {
 		_amount: T::Balance,
 		reasons: WithdrawReasons,
 		new_balance: T::Balance,
-	) -> dispatch::DispatchResult {
+	) -> DispatchResult {
 		if asset_id != &Self::staking_asset_id() {
 			return Ok(());
 		}
