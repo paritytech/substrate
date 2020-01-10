@@ -18,6 +18,7 @@ use proc_macro2::{TokenStream, Span};
 
 use syn::{
 	Result, Ident, Signature, parse_quote, Type, Pat, spanned::Spanned, FnArg, Error, token::And,
+	ImplItem, ReturnType,
 };
 
 use quote::quote;
@@ -25,11 +26,6 @@ use quote::quote;
 use std::env;
 
 use proc_macro_crate::crate_name;
-
-/// Unwrap the given result, if it is an error, `compile_error!` will be generated.
-pub fn unwrap_or_error(res: Result<TokenStream>) -> TokenStream {
-	res.unwrap_or_else(|e| e.to_compile_error())
-}
 
 fn generate_hidden_includes_mod_name(unique_id: &'static str) -> Ident {
 	Ident::new(&format!("sp_api_hidden_includes_{}", unique_id), Span::call_site())
@@ -81,10 +77,10 @@ pub fn generate_method_runtime_api_impl_name(trait_: &Ident, method: &Ident) -> 
 }
 
 /// Get the type of a `syn::ReturnType`.
-pub fn return_type_extract_type(rt: &syn::ReturnType) -> Type {
+pub fn return_type_extract_type(rt: &ReturnType) -> Type {
 	match rt {
-		syn::ReturnType::Default => parse_quote!( () ),
-		syn::ReturnType::Type(_, ref ty) => *ty.clone(),
+		ReturnType::Default => parse_quote!( () ),
+		ReturnType::Type(_, ref ty) => *ty.clone(),
 	}
 }
 
@@ -175,4 +171,31 @@ pub fn generate_call_api_at_fn_name(fn_name: &Ident) -> Ident {
 /// Prefix the given function with the trait name.
 pub fn prefix_function_with_trait<F: ToString>(trait_: &Ident, function: &F) -> String {
 	format!("{}_{}", trait_.to_string(), function.to_string())
+}
+
+/// Extract all types that appear in signatures in the given `ImplItem`'s.
+///
+/// If a type is a reference, the inner type is extracted (without the reference).
+pub fn extract_all_signature_types(items: &[ImplItem]) -> Vec<Type> {
+	items.iter()
+		.filter_map(|i| match i {
+			ImplItem::Method(method) => Some(&method.sig),
+			_ => None,
+		})
+		.map(|sig| {
+			let ret_ty = match &sig.output {
+				ReturnType::Default => None,
+				ReturnType::Type(_, ty) => Some((**ty).clone()),
+			};
+
+			sig.inputs.iter().filter_map(|i| match i {
+				FnArg::Typed(arg) => Some(&arg.ty),
+				_ => None,
+			}).map(|ty| match &**ty {
+				Type::Reference(t) => (*t.elem).clone(),
+				_ => (**ty).clone(),
+			}).chain(ret_ty)
+		})
+		.flatten()
+		.collect()
 }

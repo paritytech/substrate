@@ -571,14 +571,22 @@ mod tests {
 				inner: vec![seal_header(create_header(0, Default::default(), Default::default()), 999)],
 			};
 
+			let initialize_block = |number, hash: H256| System::initialize(
+				&number,
+				&hash,
+				&Default::default(),
+				&Default::default(),
+				Default::default()
+			);
+
 			for number in 1..8 {
-				System::initialize(&number, &canon_chain.best_hash(), &Default::default(), &Default::default());
+				initialize_block(number, canon_chain.best_hash());
 				let header = seal_header(System::finalize(), author_a);
 				canon_chain.push(header);
 			}
 
 			// initialize so system context is set up correctly.
-			System::initialize(&8, &canon_chain.best_hash(), &Default::default(), &Default::default());
+			initialize_block(8, canon_chain.best_hash());
 
 			// 2 of the same uncle at once
 			{
@@ -663,7 +671,13 @@ mod tests {
 			);
 
 			header.digest_mut().pop(); // pop the seal off.
-			System::initialize(&1, &Default::default(), &Default::default(), header.digest());
+			System::initialize(
+				&1,
+				&Default::default(),
+				&Default::default(),
+				header.digest(),
+				Default::default(),
+			);
 
 			assert_eq!(Authorship::author(), author);
 		});

@@ -12,6 +12,7 @@ sp-std = { version = "2.0.0", default-features = false, path = "../std" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
 sp-version = { version = "2.0.0", default-features = false, path = "../version" }
 sp-state-machine = { version = "2.0.0", optional = true, path = "../../primitives/state-machine" }
+hash-db = { version = "0.15.2", optional = true }
 
 [dev-dependencies]
 sp-test-primitives = { version = "2.0.0", path = "../test-primitives" }
@@ -25,4 +26,5 @@ std = [
 	"sp-runtime/std",
 	"sp-state-machine",
 	"sp-version/std",
+	"hash-db",
 ]

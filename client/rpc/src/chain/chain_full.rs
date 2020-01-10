@@ -22,11 +22,7 @@ use rpc::futures::future::result;
 use sc_rpc_api::Subscriptions;
 use sc_client_api::{CallExecutor, backend::Backend};
 use sc_client::Client;
-use sp_core::{H256, Blake2Hasher};
-use sp_runtime::{
-	generic::{BlockId, SignedBlock},
-	traits::{Block as BlockT},
-};
+use sp_runtime::{generic::{BlockId, SignedBlock}, traits::{Block as BlockT}};
 
 use super::{ChainBackend, client_err, error::FutureResult};
 
@@ -49,9 +45,9 @@ impl<B, E, Block: BlockT, RA> FullChain<B, E, Block, RA> {
 }
 
 impl<B, E, Block, RA> ChainBackend<B, E, Block, RA> for FullChain<B, E, Block, RA> where
-	Block: BlockT<Hash=H256> + 'static,
-	B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	Block: BlockT + 'static,
+	B: Backend<Block> + Send + Sync + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 {
 	fn client(&self) -> &Arc<Client<B, E, Block, RA>> {
