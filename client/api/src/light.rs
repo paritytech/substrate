@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -32,7 +32,8 @@ use sp_blockchain::{
 	HeaderMetadata, well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
 	Error as ClientError, Result as ClientResult,
 };
-use crate::backend::{ AuxStore, NewBlockState };
+use crate::{backend::{AuxStore, NewBlockState}, UsageInfo};
+
 /// Remote call request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RemoteCallRequest<Header: HeaderT> {
@@ -258,22 +259,25 @@ pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block> + HeaderMetada
 	/// Get last finalized header.
 	fn last_finalized(&self) -> ClientResult<Block::Hash>;
 
-	/// Get headers CHT root for given block. Fails if the block is not pruned (not a part of any CHT).
+	/// Get headers CHT root for given block. Returns None if the block is not pruned (not a part of any CHT).
 	fn header_cht_root(
 		&self,
 		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
-	) -> ClientResult<Block::Hash>;
+	) -> ClientResult<Option<Block::Hash>>;
 
-	/// Get changes trie CHT root for given block. Fails if the block is not pruned (not a part of any CHT).
+	/// Get changes trie CHT root for given block. Returns None if the block is not pruned (not a part of any CHT).
 	fn changes_trie_cht_root(
 		&self,
 		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
-	) -> ClientResult<Block::Hash>;
+	) -> ClientResult<Option<Block::Hash>>;
 
 	/// Get storage cache.
 	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>>;
+
+	/// Get storage usage statistics.
+	fn usage_info(&self) -> Option<UsageInfo>;
 }
 
 /// Remote header.

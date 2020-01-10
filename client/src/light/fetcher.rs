@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -153,7 +153,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 		// all the checks are sharing the same storage
 		let storage = create_proof_check_backend_storage(remote_roots_proof);
 
-		// we remote_roots.keys() are sorted => we can use this to group changes tries roots
+		// remote_roots.keys() are sorted => we can use this to group changes tries roots
 		// that are belongs to the same CHT
 		let blocks = remote_roots.keys().cloned();
 		cht::for_each_cht_group::<B::Header, _, _, _>(cht_size, blocks, |mut storage, _, cht_blocks| {
@@ -162,7 +162,8 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 			// when required header has been pruned (=> replaced with CHT)
 			let first_block = cht_blocks.first().cloned()
 				.expect("for_each_cht_group never calls callback with empty groups");
-			let local_cht_root = self.blockchain.storage().changes_trie_cht_root(cht_size, first_block)?;
+			let local_cht_root = self.blockchain.storage().changes_trie_cht_root(cht_size, first_block)?
+				.ok_or(ClientError::InvalidCHTProof)?;
 
 			// check changes trie root for every block within CHT range
 			for block in cht_blocks {
@@ -550,8 +551,8 @@ pub mod tests {
 			local_executor(),
 		);
 		let local_checker = &local_checker as &dyn FetchChecker<Block>;
-		let max = remote_client.info().chain.best_number;
-		let max_hash = remote_client.info().chain.best_hash;
+		let max = remote_client.chain_info().best_number;
+		let max_hash = remote_client.chain_info().best_hash;
 
 		for (index, (begin, end, key, expected_result)) in test_cases.into_iter().enumerate() {
 			let begin_hash = remote_client.block_hash(begin).unwrap().unwrap();
@@ -648,8 +649,8 @@ pub mod tests {
 			local_executor(),
 		);
 		let local_checker = &local_checker as &dyn FetchChecker<Block>;
-		let max = remote_client.info().chain.best_number;
-		let max_hash = remote_client.info().chain.best_hash;
+		let max = remote_client.chain_info().best_number;
+		let max_hash = remote_client.chain_info().best_hash;
 
 		let (begin, end, key, _) = test_cases[0].clone();
 		let begin_hash = remote_client.block_hash(begin).unwrap().unwrap();

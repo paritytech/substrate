@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -176,7 +176,7 @@ impl<'a, T> Request<'a, T> {
 }
 
 impl<'a, T: Default> Request<'a, T> {
-	/// Create new Request builder with given URL and body.
+	/// Create a new Request builder with the given URL.
 	pub fn new(url: &'a str) -> Self {
 		Request::default().url(url)
 	}

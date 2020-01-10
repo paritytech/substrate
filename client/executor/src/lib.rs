@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -31,19 +31,13 @@
 
 #[macro_use]
 mod wasm_utils;
-mod wasmi_execution;
 #[macro_use]
 mod native_executor;
-mod sandbox;
-mod allocator;
 pub mod deprecated_host_interface;
 mod wasm_runtime;
-#[cfg(feature = "wasmtime")]
-mod wasmtime;
 #[cfg(test)]
 mod integration_tests;
 
-pub mod error;
 pub use wasmi;
 pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
 pub use sp_version::{RuntimeVersion, NativeVersion};
@@ -53,6 +47,8 @@ pub use sp_core::traits::Externalities;
 #[doc(hidden)]
 pub use sp_wasm_interface;
 pub use wasm_runtime::WasmExecutionMethod;
+
+pub use sc_executor_common::{error, allocator, sandbox};
 
 /// Call the given `function` in the given wasm `code`.
 ///
@@ -71,12 +67,14 @@ pub fn call_in_wasm<E: Externalities, HF: sp_wasm_interface::HostFunctions>(
 	ext: &mut E,
 	code: &[u8],
 	heap_pages: u64,
+	allow_missing_imports: bool,
 ) -> error::Result<Vec<u8>> {
 	let mut instance = wasm_runtime::create_wasm_runtime_with_code(
 		execution_method,
 		heap_pages,
 		code,
 		HF::host_functions(),
+		allow_missing_imports,
 	)?;
 	instance.call(ext, function, call_data)
 }
@@ -107,6 +105,7 @@ mod tests {
 			&mut ext,
 			&WASM_BINARY,
 			8,
+			true,
 		).unwrap();
 		assert_eq!(res, vec![0u8; 0]);
 	}

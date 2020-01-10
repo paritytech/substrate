@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -111,7 +111,7 @@ fn heartbeat(
 	session_index: u32,
 	authority_index: u32,
 	id: UintAuthorityId,
-) -> dispatch::Result {
+) -> dispatch::DispatchResult {
 	#[allow(deprecated)]
 	use frame_support::unsigned::ValidateUnsigned;
 
@@ -127,7 +127,8 @@ fn heartbeat(
 	let signature = id.sign(&heartbeat.encode()).unwrap();
 
 	#[allow(deprecated)] // Allow ValidateUnsigned
-	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone()))?;
+	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone()))
+		.map_err(|e| <&'static str>::from(e))?;
 	ImOnline::heartbeat(
 		Origin::system(frame_system::RawOrigin::None),
 		heartbeat,

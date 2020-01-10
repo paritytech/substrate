@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -240,6 +240,10 @@ pub mod host;
 #[cfg(not(feature = "std"))]
 pub mod wasm;
 pub mod pass_by;
+
+mod util;
+
+pub use util::unpack_ptr_and_len;
 
 /// Something that can be used by the runtime interface as type to communicate between wasm and the
 /// host.
