@@ -21,8 +21,7 @@ use crate::builder::{ServiceBuilderCommand, ServiceBuilder};
 use crate::error::Error;
 use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension};
 use log::{warn, info};
-use futures::{future, Future};
-use sp_core::{Blake2Hasher, Hasher};
+use futures::{future, prelude::*};
 use sp_runtime::traits::{
 	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
 };
@@ -52,9 +51,9 @@ impl<
 	TBl, TRtApi, TCfg, TGen, TCSExt, Client<TBackend, TExec, TBl, TRtApi>,
 	TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend
 > where
-	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	TBackend: 'static + sc_client_api::backend::Backend<TBl, Blake2Hasher> + Send,
-	TExec: 'static + sc_client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
+	TBl: BlockT,
+	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
+	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TRtApi: 'static + Send + Sync,
 {
@@ -305,4 +304,3 @@ impl<
 		}
 	}
 }
-

@@ -39,7 +39,6 @@ use sp_runtime::traits::Block as BlockT;
 use node_executor::NativeExecutor;
 use sc_network::NetworkService;
 use sc_offchain::OffchainWorkers;
-use sp_core::Blake2Hasher;
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
@@ -114,7 +113,6 @@ macro_rules! new_full_start {
 macro_rules! new_full {
 	($config:expr, $with_startup_data: expr) => {{
 		use futures::{
-			compat::{Future01CompatExt, Stream01CompatExt},
 			stream::StreamExt,
 			future::{self, FutureExt},
 		};
@@ -182,13 +180,10 @@ macro_rules! new_full {
 			service.spawn_essential_task(babe);
 
 			let network = service.network();
-			let dht_event_stream = network.event_stream().compat()
-				.map(|x| x.expect("<mpsc::channel::Receiver as Stream> never returns an error; qed"))
-				.filter_map(|e| match e {
-					Event::Dht(e) => future::ready(Some(e)),
-					_ => future::ready(None),
-				})
-				.boxed();
+			let dht_event_stream = network.event_stream().filter_map(|e| async move { match e {
+				Event::Dht(e) => Some(e),
+				_ => None,
+			}}).boxed();
 			let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
 				service.client(),
 				network,
@@ -303,7 +298,7 @@ pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 		ConcreteTransactionPool,
 		OffchainWorkers<
 			ConcreteClient,
-			<ConcreteBackend as sc_client_api::backend::Backend<Block, Blake2Hasher>>::OffchainStorage,
+			<ConcreteBackend as sc_client_api::backend::Backend<Block>>::OffchainStorage,
 			ConcreteBlock,
 		>
 	>,
@@ -390,6 +385,7 @@ mod tests {
 	use sc_consensus_babe::CompatibleDigestItem;
 	use sp_consensus::{
 		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy, BlockImport,
+		RecordProof,
 	};
 	use node_primitives::{Block, DigestItem, Signature};
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
@@ -442,6 +438,7 @@ mod tests {
 				internal_justification: Vec::new(),
 				finalized: false,
 				body: Some(block.extrinsics),
+				storage_changes: None,
 				header: block.header,
 				auxiliary: Vec::new(),
 			}
@@ -543,7 +540,8 @@ mod tests {
 					inherent_data,
 					digest,
 					std::time::Duration::from_secs(1),
-				)).expect("Error making test block");
+					RecordProof::Yes,
+				)).expect("Error making test block").block;
 
 				let (new_header, new_body) = new_block.deconstruct();
 				let pre_hash = new_header.hash();
@@ -562,6 +560,7 @@ mod tests {
 					justification: None,
 					post_digests: vec![item],
 					body: Some(new_body),
+					storage_changes: None,
 					finalized: false,
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,

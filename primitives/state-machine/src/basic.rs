@@ -19,7 +19,7 @@
 use std::{
 	collections::BTreeMap, any::{TypeId, Any}, iter::FromIterator, ops::Bound
 };
-use crate::backend::{Backend, InMemory};
+use crate::{Backend, InMemoryBackend};
 use hash_db::Hasher;
 use sp_trie::{TrieConfiguration, default_child_trie_root};
 use sp_trie::trie_types::Layout;
@@ -288,7 +288,7 @@ impl Externalities for BasicExternalities {
 		if let Some(child) = self.inner.children.get(storage_key.as_ref()) {
 			let delta = child.data.clone().into_iter().map(|(k, v)| (k, Some(v)));
 
-			InMemory::<Blake2Hasher>::default()
+			InMemoryBackend::<Blake2Hasher>::default()
 				.child_storage_root(storage_key.as_ref(), child.child_info.as_ref(), delta).0
 		} else {
 			default_child_trie_root::<Layout<Blake2Hasher>>(storage_key.as_ref())

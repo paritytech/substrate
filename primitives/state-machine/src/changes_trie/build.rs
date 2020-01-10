@@ -339,9 +339,9 @@ fn prepare_digest_input<'a, H, Number>(
 mod test {
 	use codec::Encode;
 	use sp_core::Blake2Hasher;
-	use sp_core::storage::well_known_keys::{EXTRINSIC_INDEX};
+	use sp_core::storage::well_known_keys::EXTRINSIC_INDEX;
 	use sp_core::storage::ChildInfo;
-	use crate::backend::InMemory;
+	use crate::InMemoryBackend;
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
@@ -351,20 +351,20 @@ mod test {
 	const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2");
 
 	fn prepare_for_build(zero: u64) -> (
-		InMemory<Blake2Hasher>,
+		InMemoryBackend<Blake2Hasher>,
 		InMemoryStorage<Blake2Hasher, u64>,
 		OverlayedChanges,
 		Configuration,
 	) {
 		let config = Configuration { digest_interval: 4, digest_levels: 2 };
-		let backend: InMemory<_> = vec![
+		let backend: InMemoryBackend<_> = vec![
 			(vec![100], vec![255]),
 			(vec![101], vec![255]),
 			(vec![102], vec![255]),
 			(vec![103], vec![255]),
 			(vec![104], vec![255]),
 			(vec![105], vec![255]),
-		].into_iter().collect::<::std::collections::BTreeMap<_, _>>().into();
+		].into_iter().collect::<std::collections::BTreeMap<_, _>>().into();
 		let child_trie_key1 = b"1".to_vec();
 		let child_trie_key2 = b"2".to_vec();
 		let storage = InMemoryStorage::with_inputs(vec![

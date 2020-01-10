@@ -165,7 +165,7 @@ use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error,
 	traits::{
-		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced, TryDrop,
+		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnReapAccount, OnUnbalanced, TryDrop,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, VestingCurrency,
 	},
@@ -198,6 +198,12 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// Gives a chance to clean up resources associated with the given account.
 	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
 
+	/// A function that is invoked when the free-balance and the reserved-balance has fallen below
+	/// the existential deposit and both have been reduced to zero.
+	///
+	/// All resources should be cleaned up all resources associated with the given account.
+	type OnReapAccount: OnReapAccount<Self::AccountId>;
+
 	/// Handler for when a new account is created.
 	type OnNewAccount: OnNewAccount<Self::AccountId>;
 
@@ -221,6 +227,12 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	///
 	/// Gives a chance to clean up resources associated with the given account.
 	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
+
+	/// A function that is invoked when the free-balance and the reserved-balance has fallen below
+	/// the existential deposit and both have been reduced to zero.
+	///
+	/// All resources should be cleaned up all resources associated with the given account.
+	type OnReapAccount: OnReapAccount<Self::AccountId>;
 
 	/// Handler for when a new account is created.
 	type OnNewAccount: OnNewAccount<Self::AccountId>;
@@ -248,6 +260,7 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type Balance = T::Balance;
 	type OnFreeBalanceZero = T::OnFreeBalanceZero;
+	type OnReapAccount = T::OnReapAccount;
 	type OnNewAccount = T::OnNewAccount;
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type TransferFee = T::TransferFee;
@@ -597,7 +610,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// This just removes the nonce and leaves an event.
 	fn reap_account(who: &T::AccountId, dust: T::Balance) {
-		<frame_system::AccountNonce<T>>::remove(who);
+		T::OnReapAccount::on_reap_account(who);
 		Self::deposit_event(RawEvent::ReapedAccount(who.clone(), dust));
 	}
 
@@ -850,6 +863,7 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
 	type OnFreeBalanceZero = T::OnFreeBalanceZero;
+	type OnReapAccount = T::OnReapAccount;
 	type OnNewAccount = T::OnNewAccount;
 	type Event = ();
 	type TransferPayment = ();

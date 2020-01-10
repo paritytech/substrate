@@ -540,6 +540,7 @@ decl_module! {
 		/// - At most O(2 * S + 1) storage mutations; codec complexity `O(1 * S + S * 1)`);
 		///   one storage-exists.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn set_subs(origin, subs: Vec<(T::AccountId, Data)>) {
 			let sender = ensure_signed(origin)?;
 			ensure!(<IdentityOf<T>>::exists(&sender), Error::<T>::NotFound);
@@ -586,6 +587,7 @@ decl_module! {
 		/// - `S + 2` storage deletions.
 		/// - One event.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn clear_identity(origin) {
 			let sender = ensure_signed(origin)?;
 
@@ -866,7 +868,10 @@ mod tests {
 	use super::*;
 
 	use sp_runtime::traits::BadOrigin;
-	use frame_support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::{
+		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
+		ord_parameter_types
+	};
 	use sp_core::H256;
 	use frame_system::EnsureSignedBy;
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -916,6 +921,7 @@ mod tests {
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
 		type TransferPayment = ();
@@ -929,6 +935,8 @@ mod tests {
 		pub const FieldDeposit: u64 = 10;
 		pub const SubAccountDeposit: u64 = 10;
 		pub const MaximumSubAccounts: u32 = 2;
+	}
+	ord_parameter_types! {
 		pub const One: u64 = 1;
 		pub const Two: u64 = 2;
 	}
@@ -943,6 +951,7 @@ mod tests {
 		type RegistrarOrigin = EnsureSignedBy<One, u64>;
 		type ForceOrigin = EnsureSignedBy<Two, u64>;
 	}
+	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
 	type Identity = Module<Test>;
 

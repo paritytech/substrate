@@ -127,7 +127,8 @@ pub struct Multisig<BlockNumber, Balance, AccountId> {
 decl_storage! {
 	trait Store for Module<T: Trait> as Utility {
 		/// The set of open multisig operations.
-		pub Multisigs: double_map hasher(twox_64_concat) T::AccountId, blake2_128_concat([u8; 32])
+		pub Multisigs: double_map
+			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) [u8; 32]
 			=> Option<Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
 	}
 }
@@ -698,6 +699,7 @@ mod tests {
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = TestEvent;
 		type TransferPayment = ();
@@ -719,6 +721,7 @@ mod tests {
 		type MultisigDepositFactor = MultisigDepositFactor;
 		type MaxSignatories = MaxSignatories;
 	}
+	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
 	type Utility = Module<Test>;
 

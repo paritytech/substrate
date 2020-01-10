@@ -38,7 +38,7 @@ pub struct InMemoryStorage<H: Hasher, Number: BlockNumber> {
 /// Adapter for using changes trie storage as a TrieBackendEssence' storage.
 pub struct TrieBackendAdapter<'a, H: Hasher, Number: BlockNumber> {
 	storage: &'a dyn Storage<H, Number>,
-	_hasher: ::std::marker::PhantomData<(H, Number)>,
+	_hasher: std::marker::PhantomData<(H, Number)>,
 }
 
 struct InMemoryStorageData<H: Hasher, Number: BlockNumber> {

@@ -19,7 +19,7 @@
 use super::*;
 
 use std::cell::RefCell;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{impl_outer_origin, parameter_types, weights::Weight, ord_parameter_types};
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
@@ -41,9 +41,6 @@ parameter_types! {
 	pub const CandidateDeposit: u64 = 25;
 	pub const Period: u64 = 4;
 
-	pub const KickOrigin: u64 = 2;
-	pub const ScoreOrigin: u64 = 3;
-
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
@@ -52,6 +49,10 @@ parameter_types! {
 	pub const ExistentialDeposit: u64 = 0;
 	pub const TransferFee: u64 = 0;
 	pub const CreationFee: u64 = 0;
+}
+ord_parameter_types! {
+	pub const KickOrigin: u64 = 2;
+	pub const ScoreOrigin: u64 = 3;
 }
 
 impl frame_system::Trait for Test {
@@ -76,6 +77,7 @@ impl frame_system::Trait for Test {
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
 	type OnFreeBalanceZero = ();
+	type OnReapAccount = System;
 	type OnNewAccount = ();
 	type Event = ();
 	type TransferPayment = ();
@@ -117,12 +119,15 @@ impl Trait for Test {
 	type KickOrigin = EnsureSignedBy<KickOrigin, u64>;
 	type MembershipInitialized = TestChangeMembers;
 	type MembershipChanged = TestChangeMembers;
-	type Currency = pallet_balances::Module<Self>;
+	type Currency = Balances;
 	type CandidateDeposit = CandidateDeposit;
 	type Period = Period;
 	type Score = u64;
 	type ScoreOrigin = EnsureSignedBy<ScoreOrigin, u64>;
 }
+
+type System = frame_system::Module<Test>;
+type Balances = pallet_balances::Module<Test>;
 
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.

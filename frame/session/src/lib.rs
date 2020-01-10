@@ -398,13 +398,15 @@ decl_storage! {
 		///
 		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
 		/// the trie. Having all data in the same branch should prevent slowing down other queries.
-		NextKeys: double_map hasher(twox_64_concat) Vec<u8>, blake2_256(T::ValidatorId) => Option<T::Keys>;
+		NextKeys: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) T::ValidatorId
+			=> Option<T::Keys>;
 
 		/// The owner of a key. The second key is the `KeyTypeId` + the encoded key.
 		///
 		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
 		/// the trie. Having all data in the same branch should prevent slowing down other queries.
-		KeyOwner: double_map hasher(twox_64_concat) Vec<u8>, blake2_256((KeyTypeId, Vec<u8>)) => Option<T::ValidatorId>;
+		KeyOwner: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) (KeyTypeId, Vec<u8>)
+			=> Option<T::ValidatorId>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
