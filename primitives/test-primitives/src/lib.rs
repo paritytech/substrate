@@ -40,7 +40,6 @@ impl serde::Serialize for Extrinsic {
 	}
 }
 
-
 impl ExtrinsicT for Extrinsic {
 	type Call = Extrinsic;
 	type SignaturePayload = ();
@@ -76,7 +75,6 @@ pub type Digest = sp_runtime::generic::Digest<H256>;
 pub type Block = sp_runtime::generic::Block<Header, Extrinsic>;
 /// A test block's header.
 pub type Header = sp_runtime::generic::Header<BlockNumber, BlakeTwo256>;
-
 
 /// Changes trie configuration (optionally) used in tests.
 pub fn changes_trie_config() -> sp_core::ChangesTrieConfiguration {

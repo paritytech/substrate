@@ -22,8 +22,8 @@ use codec::{Decode, Encode, Codec};
 use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
-	MemoryDB, PrefixedMemoryDB, default_child_trie_root,
-	read_trie_value_with, read_child_trie_value_with, record_all_keys
+	MemoryDB, default_child_trie_root, read_trie_value_with, read_child_trie_value_with,
+	record_all_keys
 };
 pub use sp_trie::Recorder;
 pub use sp_trie::trie_types::{Layout, TrieError};
@@ -136,7 +136,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 			&eph,
 			self.backend.root(),
 			key,
-			&mut *self.proof_recorder
+			&mut *self.proof_recorder,
 		).map_err(map_e)
 	}
 
@@ -238,7 +238,9 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H> for ProofRecorderBackend<'a, S, H> {
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
+	for ProofRecorderBackend<'a, S, H>
+{
 	type Overlay = S::Overlay;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
@@ -251,7 +253,9 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H> fo
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> std::fmt::Debug for ProvingBackend<'a, S, H> {
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> std::fmt::Debug
+	for ProvingBackend<'a, S, H>
+{
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "ProvingBackend")
 	}
@@ -265,7 +269,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 {
 	type Error = String;
 	type Transaction = S::Overlay;
-	type TrieBackendStorage = PrefixedMemoryDB<H>;
+	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.0.storage(key)
@@ -391,11 +395,12 @@ where
 
 #[cfg(test)]
 mod tests {
-	use crate::backend::{InMemory};
+	use crate::InMemoryBackend;
 	use crate::trie_backend::tests::test_trie;
 	use super::*;
 	use sp_core::{Blake2Hasher, storage::ChildStorageKey};
 	use crate::proving_backend::create_proof_check_backend;
+	use sp_trie::PrefixedMemoryDB;
 
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 	const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2");
@@ -446,7 +451,7 @@ mod tests {
 	#[test]
 	fn proof_recorded_and_checked() {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
-		let in_memory = InMemory::<Blake2Hasher>::default();
+		let in_memory = InMemoryBackend::<Blake2Hasher>::default();
 		let mut in_memory = in_memory.update(vec![(None, contents)]);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
@@ -478,7 +483,7 @@ mod tests {
 			(Some((own2.clone(), CHILD_INFO_2.to_owned())),
 				(10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
-		let in_memory = InMemory::<Blake2Hasher>::default();
+		let in_memory = InMemoryBackend::<Blake2Hasher>::default();
 		let mut in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _>(
 			::std::iter::empty(),
@@ -533,5 +538,4 @@ mod tests {
 			vec![64]
 		);
 	}
-
 }

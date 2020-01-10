@@ -28,18 +28,16 @@ use log::info;
 
 use sc_client::Client;
 use sp_block_builder::BlockBuilder;
-use sp_api::ConstructRuntimeApi;
+use sp_api::{ConstructRuntimeApi, ProvideRuntimeApi, ApiExt};
 use sp_consensus::{
 	BlockOrigin, BlockImportParams, InherentData, ForkChoiceStrategy,
 	SelectChain
 };
 use sp_consensus::block_import::BlockImport;
 use codec::{Decode, Encode};
-use sp_core::{Blake2Hasher, Hasher};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, ProvideRuntimeApi, SimpleArithmetic,
-	One, Zero,
+	Block as BlockT, Header as HeaderT, SimpleArithmetic, One, Zero,
 };
 pub use crate::modes::Mode;
 
@@ -100,16 +98,17 @@ pub fn factory<RA, Backend, Exec, Block, RtApi, Sc>(
 	select_chain: &Sc,
 ) -> sc_cli::error::Result<()>
 where
-	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	Exec: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	Backend: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send,
-	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
-	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
-		BlockBuilder<Block, Error = sp_blockchain::Error>,
+	Block: BlockT,
+	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
+	Backend: sc_client_api::backend::Backend<Block> + Send,
+	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
+	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
+		BlockBuilder<Block, Error = sp_blockchain::Error> +
+		ApiExt<Block, StateBackend = Backend::State>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	Sc: SelectChain<Block>,
-	RA: RuntimeAdapter,
-	<<RA as RuntimeAdapter>::Block as BlockT>::Hash: From<sp_core::H256>,
+	RA: RuntimeAdapter<Block = Block>,
+	Block::Hash: From<sp_core::H256>,
 {
 	if *factory_state.mode() != Mode::MasterToNToM && factory_state.rounds() > RA::Number::one() {
 		let msg = "The factory can only be used with rounds set to 1 in this mode.".into();
@@ -144,7 +143,7 @@ where
 	} {
 		best_hash = block.header().hash();
 		best_block_id = BlockId::<Block>::hash(best_hash);
-		import_block(&client, block);
+		import_block(client.clone(), block);
 
 		info!("Imported block at {}", factory_state.block_no());
 	}
@@ -159,13 +158,14 @@ pub fn create_block<RA, Backend, Exec, Block, RtApi>(
 	inherent_extrinsics: Vec<<Block as BlockT>::Extrinsic>,
 ) -> Block
 where
-	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	Exec: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	Backend: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send,
-	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
+	Block: BlockT,
+	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
+	Backend: sc_client_api::backend::Backend<Block> + Send,
+	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
-	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
-		BlockBuilder<Block, Error = sp_blockchain::Error>,
+	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
+		BlockBuilder<Block, Error = sp_blockchain::Error> +
+		ApiExt<Block, StateBackend = Backend::State>,
 	RA: RuntimeAdapter,
 {
 	let mut block = client.new_block(Default::default()).expect("Failed to create new block");
@@ -178,22 +178,27 @@ where
 		block.push(inherent).expect("Failed ...");
 	}
 
-	block.bake().expect("Failed to bake block")
+	block.build().expect("Failed to bake block").block
 }
 
 fn import_block<Backend, Exec, Block, RtApi>(
-	client: &Arc<Client<Backend, Exec, Block, RtApi>>,
+	mut client: Arc<Client<Backend, Exec, Block, RtApi>>,
 	block: Block
 ) -> () where
-	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	Exec: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	Backend: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send,
+	Block: BlockT,
+	Exec: sc_client::CallExecutor<Block> + Send + Sync + Clone,
+	Backend: sc_client_api::backend::Backend<Block> + Send,
+	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
+	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
+		sp_api::Core<Block, Error = sp_blockchain::Error> +
+		ApiExt<Block, StateBackend = Backend::State>,
 {
 	let import = BlockImportParams {
 		origin: BlockOrigin::File,
 		header: block.header().clone(),
 		post_digests: Vec::new(),
 		body: Some(block.extrinsics().to_vec()),
+		storage_changes: None,
 		finalized: false,
 		justification: None,
 		auxiliary: Vec::new(),
@@ -201,5 +206,5 @@ fn import_block<Backend, Exec, Block, RtApi>(
 		allow_missing_state: false,
 		import_existing: false,
 	};
-	(&**client).import_block(import, HashMap::new()).expect("Failed to import block");
+	client.import_block(import, HashMap::new()).expect("Failed to import block");
 }

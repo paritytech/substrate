@@ -21,22 +21,19 @@ use std::{
 };
 
 use codec::{Encode, Decode};
-use sp_core::{
-	H256, Blake2Hasher, convert_hash, NativeOrEncoded,
-	traits::CodeExecutor,
-};
+use sp_core::{convert_hash, NativeOrEncoded, traits::CodeExecutor};
 use sp_runtime::{
-	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, NumberFor},
+	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HasherFor},
 };
 use sp_externalities::Extensions;
 use sp_state_machine::{
 	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
-	execution_proof_check_on_trie_backend, ExecutionManager, ChangesTrieTransaction, StorageProof,
+	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof,
 	merge_storage_proofs,
 };
 use hash_db::Hasher;
 
-use sp_api::{ProofRecorder, InitializeBlock};
+use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
@@ -71,14 +68,16 @@ impl<B, L: Clone> Clone for GenesisCallExecutor<B, L> {
 	}
 }
 
-impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
+impl<Block, B, Local> CallExecutor<Block> for
 	GenesisCallExecutor<B, Local>
 	where
-		Block: BlockT<Hash=H256>,
-		B: RemoteBackend<Block, Blake2Hasher>,
-		Local: CallExecutor<Block, Blake2Hasher>,
+		Block: BlockT,
+		B: RemoteBackend<Block>,
+		Local: CallExecutor<Block>,
 {
 	type Error = ClientError;
+
+	type Backend = B;
 
 	fn call(
 		&self,
@@ -110,6 +109,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
+		_: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
 		initialize_block: InitializeBlock<'a, Block>,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
@@ -135,6 +135,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 				method,
 				call_data,
 				changes,
+				None,
 				initialize_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
@@ -152,36 +153,12 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		}
 	}
 
-	fn call_at_state<
-		S: StateBackend<Blake2Hasher>,
-		FF: FnOnce(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-	>(&self,
-		_state: &S,
+	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HasherFor<Block>>>(
+		&self,
+		_state: &sp_state_machine::TrieBackend<S, HasherFor<Block>>,
 		_changes: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8],
-		_manager: ExecutionManager<FF>,
-		_native_call: Option<NC>,
-		_extensions: Option<Extensions>,
-	) -> ClientResult<(
-		NativeOrEncoded<R>,
-		(S::Transaction, <Blake2Hasher as Hasher>::Out),
-		Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
-	)> {
-		Err(ClientError::NotAvailableOnLightClient)
-	}
-
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<Blake2Hasher>>(
-		&self,
-		_state: &sp_state_machine::TrieBackend<S, Blake2Hasher>,
-		_changes: &mut OverlayedChanges,
-		_method: &str,
-		_call_data: &[u8]
 	) -> ClientResult<(Vec<u8>, StorageProof)> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
@@ -203,12 +180,15 @@ pub fn prove_execution<Block, S, E>(
 	call_data: &[u8],
 ) -> ClientResult<(Vec<u8>, StorageProof)>
 	where
-		Block: BlockT<Hash=H256>,
-		S: StateBackend<Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher>,
+		Block: BlockT,
+		S: StateBackend<HasherFor<Block>>,
+		E: CallExecutor<Block>,
 {
 	let trie_state = state.as_trie_backend()
-		.ok_or_else(|| Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>)?;
+		.ok_or_else(||
+			Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as
+				Box<dyn sp_state_machine::Error>
+		)?;
 
 	// prepare execution environment + record preparation proof
 	let mut changes = Default::default();
@@ -220,7 +200,12 @@ pub fn prove_execution<Block, S, E>(
 	)?;
 
 	// execute method + record execution proof
-	let (result, exec_proof) = executor.prove_at_trie_state(&trie_state, &mut changes, method, call_data)?;
+	let (result, exec_proof) = executor.prove_at_trie_state(
+		&trie_state,
+		&mut changes,
+		method,
+		call_data,
+	)?;
 	let total_proof = merge_storage_proofs(vec![init_proof, exec_proof]);
 
 	Ok((result, total_proof))
@@ -238,7 +223,8 @@ pub fn check_execution_proof<Header, E, H>(
 	where
 		Header: HeaderT,
 		E: CodeExecutor,
-		H: Hasher<Out=H256>,
+		H: Hasher,
+		H::Out: Ord + codec::Codec + 'static,
 {
 	check_execution_proof_with_make_header::<Header, E, H, _>(
 		executor,
@@ -263,7 +249,8 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 	where
 		Header: HeaderT,
 		E: CodeExecutor,
-		H: Hasher<Out=H256>,
+		H: Hasher,
+		H::Out: Ord + codec::Codec + 'static,
 {
 	let local_state_root = request.header.state_root();
 	let root: H::Out = convert_hash(&local_state_root);
@@ -294,16 +281,20 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 mod tests {
 	use super::*;
 	use sp_consensus::BlockOrigin;
-	use substrate_test_runtime_client::{self, runtime::{Header, Digest, Block}, ClientExt, TestClient};
+	use substrate_test_runtime_client::{
+		runtime::{Header, Digest, Block}, TestClient, ClientBlockImportExt,
+	};
 	use sc_executor::{NativeExecutor, WasmExecutionMethod};
-	use sp_core::Blake2Hasher;
+	use sp_core::{Blake2Hasher, H256};
 	use sc_client_api::backend::{Backend, NewBlockState};
 	use crate::in_mem::Backend as InMemBackend;
 
 	struct DummyCallExecutor;
 
-	impl CallExecutor<Block, Blake2Hasher> for DummyCallExecutor {
+	impl CallExecutor<Block> for DummyCallExecutor {
 		type Error = ClientError;
+
+		type Backend = substrate_test_runtime_client::Backend;
 
 		fn call(
 			&self,
@@ -332,6 +323,12 @@ mod tests {
 			_method: &str,
 			_call_data: &[u8],
 			_changes: &RefCell<OverlayedChanges>,
+			_storage_transaction_cache: Option<&RefCell<
+				StorageTransactionCache<
+					Block,
+					<Self::Backend as sc_client_api::backend::Backend<Block>>::State,
+				>
+			>>,
 			_initialize_block: InitializeBlock<'a, Block>,
 			_execution_manager: ExecutionManager<EM>,
 			_native_call: Option<NC>,
@@ -345,36 +342,9 @@ mod tests {
 			unreachable!()
 		}
 
-		fn call_at_state<
-			S: sp_state_machine::Backend<Blake2Hasher>,
-			F: FnOnce(
-				Result<NativeOrEncoded<R>, Self::Error>,
-				Result<NativeOrEncoded<R>, Self::Error>
-			) -> Result<NativeOrEncoded<R>, Self::Error>,
-			R: Encode + Decode + PartialEq,
-			NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-		>(&self,
-			_state: &S,
-			_overlay: &mut OverlayedChanges,
-			_method: &str,
-			_call_data: &[u8],
-			_manager: ExecutionManager<F>,
-			_native_call: Option<NC>,
-			_extensions: Option<Extensions>,
-		) -> Result<
-			(
-				NativeOrEncoded<R>,
-				(S::Transaction, H256),
-				Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
-			),
-			ClientError,
-		> {
-			unreachable!()
-		}
-
-		fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<Blake2Hasher>>(
+		fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HasherFor<Block>>>(
 			&self,
-			_trie_state: &sp_state_machine::TrieBackend<S, Blake2Hasher>,
+			_trie_state: &sp_state_machine::TrieBackend<S, HasherFor<Block>>,
 			_overlay: &mut OverlayedChanges,
 			_method: &str,
 			_call_data: &[u8]
@@ -457,13 +427,13 @@ mod tests {
 		}
 
 		// prepare remote client
-		let remote_client = substrate_test_runtime_client::new();
+		let mut remote_client = substrate_test_runtime_client::new();
 		for i in 1u32..3u32 {
 			let mut digest = Digest::default();
 			digest.push(sp_runtime::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
 			remote_client.import_justified(
 				BlockOrigin::Own,
-				remote_client.new_block(digest).unwrap().bake().unwrap(),
+				remote_client.new_block(digest).unwrap().build().unwrap().block,
 				Default::default(),
 			).unwrap();
 		}
@@ -494,7 +464,7 @@ mod tests {
 
 	#[test]
 	fn code_is_executed_at_genesis_only() {
-		let backend = Arc::new(InMemBackend::<Block, Blake2Hasher>::new());
+		let backend = Arc::new(InMemBackend::<Block>::new());
 		let def = H256::default();
 		let header0 = substrate_test_runtime_client::runtime::Header::new(0, def, def, def, Default::default());
 		let hash0 = header0.hash();

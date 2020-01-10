@@ -3135,6 +3135,7 @@ dependencies = [
  "pallet-contracts-rpc 2.0.0",
  "pallet-transaction-payment-rpc 2.0.0",
  "sc-client 2.0.0",
+ "sp-api 2.0.0",
  "sp-runtime 2.0.0",
  "sp-transaction-pool 2.0.0",
  "substrate-frame-rpc-system 2.0.0",
@@ -3632,6 +3633,7 @@ dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-api 2.0.0",
  "sp-blockchain 2.0.0",
  "sp-core 2.0.0",
  "sp-rpc 2.0.0",
@@ -4019,6 +4021,7 @@ dependencies = [
  "pallet-transaction-payment-rpc-runtime-api 2.0.0",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-api 2.0.0",
  "sp-blockchain 2.0.0",
  "sp-core 2.0.0",
  "sp-rpc 2.0.0",
@@ -4998,7 +5001,7 @@ dependencies = [
  "sp-blockchain 2.0.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
- "sp-test-primitives 2.0.0",
+ "substrate-test-runtime-client 2.0.0",
 ]
 
 [[package]]
@@ -5014,6 +5017,7 @@ dependencies = [
  "sc-client-api 2.0.0",
  "sc-telemetry 2.0.0",
  "sc-transaction-pool 2.0.0",
+ "sp-api 2.0.0",
  "sp-blockchain 2.0.0",
  "sp-consensus 0.8.0",
  "sp-core 2.0.0",
@@ -5029,9 +5033,11 @@ name = "sc-block-builder"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sc-client-api 2.0.0",
  "sp-api 2.0.0",
  "sp-block-builder 2.0.0",
  "sp-blockchain 2.0.0",
+ "sp-consensus 0.8.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
  "sp-state-machine 2.0.0",
@@ -5290,6 +5296,7 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-client-api 2.0.0",
+ "sp-api 2.0.0",
  "sp-block-builder 2.0.0",
  "sp-blockchain 2.0.0",
  "sp-consensus 0.8.0",
@@ -5311,11 +5318,13 @@ dependencies = [
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-client-api 2.0.0",
  "sc-telemetry 2.0.0",
+ "sp-api 2.0.0",
  "sp-blockchain 2.0.0",
  "sp-consensus 0.8.0",
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-runtime 2.0.0",
+ "sp-state-machine 2.0.0",
  "substrate-test-runtime-client 2.0.0",
 ]
 
@@ -6137,6 +6146,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "sp-api"
 version = "2.0.0"
 dependencies = [
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api-proc-macro 2.0.0",
  "sp-core 2.0.0",
@@ -6190,6 +6200,7 @@ dependencies = [
 name = "sp-application-crypto-test"
 version = "2.0.0"
 dependencies = [
+ "sp-api 2.0.0",
  "sp-application-crypto 2.0.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
@@ -6272,6 +6283,7 @@ dependencies = [
  "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-runtime 2.0.0",
+ "sp-state-machine 2.0.0",
  "sp-std 2.0.0",
  "sp-test-primitives 2.0.0",
  "sp-version 2.0.0",
@@ -6847,6 +6859,7 @@ dependencies = [
  "sc-client 2.0.0",
  "sc-transaction-pool 2.0.0",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-api 2.0.0",
  "sp-blockchain 2.0.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",
@@ -6922,6 +6935,7 @@ dependencies = [
  "sc-block-builder 2.0.0",
  "sc-client 2.0.0",
  "sc-client-api 2.0.0",
+ "sp-api 2.0.0",
  "sp-blockchain 2.0.0",
  "sp-core 2.0.0",
  "sp-runtime 2.0.0",

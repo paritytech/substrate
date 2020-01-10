@@ -22,13 +22,8 @@ use rpc::futures::future::{result, Future, Either};
 
 use sc_rpc_api::Subscriptions;
 use sc_client::{
-	self, Client,
-	light::{
-		fetcher::{Fetcher, RemoteBodyRequest},
-		blockchain::RemoteBlockchain,
-	},
+	Client, light::{fetcher::{Fetcher, RemoteBodyRequest}, blockchain::RemoteBlockchain},
 };
-use sp_core::{H256, Blake2Hasher};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT},
@@ -67,9 +62,9 @@ impl<B, E, Block: BlockT, RA, F: Fetcher<Block>> LightChain<B, E, Block, RA, F> 
 }
 
 impl<B, E, Block, RA, F> ChainBackend<B, E, Block, RA> for LightChain<B, E, Block, RA, F> where
-	Block: BlockT<Hash=H256> + 'static,
-	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	Block: BlockT + 'static,
+	B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
+	E: sc_client::CallExecutor<Block> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 	F: Fetcher<Block> + Send + Sync + 'static,
 {

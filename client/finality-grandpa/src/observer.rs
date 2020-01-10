@@ -25,10 +25,9 @@ use finality_grandpa::{
 use log::{debug, info, warn};
 
 use sp_consensus::SelectChain;
-use sc_client_api::{CallExecutor, backend::Backend};
+use sc_client_api::{CallExecutor, backend::{Backend, AuxStore}};
 use sc_client::Client;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
-use sp_core::{H256, Blake2Hasher};
 
 use crate::{
 	global_communication, CommandOrError, CommunicationIn, Config, environment,
@@ -41,10 +40,10 @@ use sp_finality_grandpa::AuthorityId;
 
 struct ObserverChain<'a, Block: BlockT, B, E, RA>(&'a Client<B, E, Block, RA>);
 
-impl<'a, Block: BlockT<Hash=H256>, B, E, RA> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
+impl<'a, Block: BlockT, B, E, RA> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
 	for ObserverChain<'a, Block, B, E, RA> where
-		B: Backend<Block, Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher>,
+		B: Backend<Block>,
+		E: CallExecutor<Block>,
 		NumberFor<Block>: BlockNumberOps,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
@@ -57,7 +56,7 @@ impl<'a, Block: BlockT<Hash=H256>, B, E, RA> finality_grandpa::Chain<Block::Hash
 	}
 }
 
-fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
+fn grandpa_observer<B, E, Block: BlockT, RA, S, F>(
 	client: &Arc<Client<B, E, Block, RA>>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
@@ -65,10 +64,10 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 	last_finalized_number: NumberFor<Block>,
 	commits: S,
 	note_round: F,
-) -> impl Future<Item=(), Error=CommandOrError<H256, NumberFor<Block>>> where
+) -> impl Future<Item=(), Error=CommandOrError<Block::Hash, NumberFor<Block>>> where
 	NumberFor<Block>: BlockNumberOps,
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	B: Backend<Block>,
+	E: CallExecutor<Block> + Send + Sync,
 	RA: Send + Sync,
 	S: Stream<
 		Item = CommunicationIn<Block>,
@@ -151,20 +150,21 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 /// listening for and validating GRANDPA commits instead of following the full
 /// protocol. Provide configuration and a link to a block import worker that has
 /// already been instantiated with `block_import`.
-pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC, Sp>(
+pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA, SC>,
 	network: N,
 	on_exit: impl futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
 	executor: Sp,
-) -> ::sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+) -> sp_blockchain::Result<impl Future<Item=(), Error=()> + Send + 'static> where
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
 	N: NetworkT<Block> + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: Send + Sync + 'static,
 	Sp: futures03::task::Spawn + 'static,
+	Client<B, E, Block, RA>: AuxStore,
 {
 	let LinkHalf {
 		client,
@@ -202,7 +202,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC, Sp>(
 
 /// Future that powers the observer.
 #[must_use]
-struct ObserverWork<B: BlockT<Hash=H256>, N: NetworkT<B>, E, Backend, RA> {
+struct ObserverWork<B: BlockT, N: NetworkT<B>, E, Backend, RA> {
 	observer: Box<dyn Future<Item = (), Error = CommandOrError<B::Hash, NumberFor<B>>> + Send>,
 	client: Arc<Client<Backend, E, B, RA>>,
 	network: NetworkBridge<B, N>,
@@ -213,12 +213,13 @@ struct ObserverWork<B: BlockT<Hash=H256>, N: NetworkT<B>, E, Backend, RA> {
 
 impl<B, N, E, Bk, RA> ObserverWork<B, N, E, Bk, RA>
 where
-	B: BlockT<Hash=H256>,
+	B: BlockT,
 	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
-	E: CallExecutor<B, Blake2Hasher> + Send + Sync + 'static,
-	Bk: Backend<B, Blake2Hasher> + 'static,
+	E: CallExecutor<B> + Send + Sync + 'static,
+	Bk: Backend<B> + 'static,
+	Client<Bk, E, B, RA>: AuxStore,
 {
 	fn new(
 		client: Arc<Client<Bk, E, B, RA>>,
@@ -328,12 +329,13 @@ where
 
 impl<B, N, E, Bk, RA> Future for ObserverWork<B, N, E, Bk, RA>
 where
-	B: BlockT<Hash=H256>,
+	B: BlockT,
 	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
-	E: CallExecutor<B, Blake2Hasher> + Send + Sync + 'static,
-	Bk: Backend<B, Blake2Hasher> + 'static,
+	E: CallExecutor<B> + Send + Sync + 'static,
+	Bk: Backend<B> + 'static,
+	Client<Bk, E, B, RA>: AuxStore,
 {
 	type Item = ();
 	type Error = Error;
