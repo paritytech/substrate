@@ -323,7 +323,7 @@ pub struct IdentityInfo {
 ///
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
 /// backwards compatible way through a specialized `Decode` impl.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug)]
 pub struct Registration<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
 > {
@@ -358,7 +358,7 @@ impl<
 }
 
 /// Information concerning a registrar.
-#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct RegistrarInfo<
 	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
 	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
