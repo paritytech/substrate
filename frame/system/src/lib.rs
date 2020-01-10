@@ -531,6 +531,27 @@ pub fn ensure_none<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), BadOrig
 	}
 }
 
+/// A type of block initialization to perform.
+pub enum InitKind {
+	/// Leave inspectable storage entries in state.
+	///
+	/// i.e. `Events` are not being reset.
+	/// Should only be used for off-chain calls,
+	/// regular block execution should clear those.
+	Inspection,
+
+	/// Reset also inspectable storage entries.
+	///
+	/// This should be used for regular block execution.
+	Full,
+}
+
+impl Default for InitKind {
+	fn default() -> Self {
+		InitKind::Full
+	}
+}
+
 impl<T: Trait> Module<T> {
 	/// Deposits an event into this block's event record.
 	pub fn deposit_event(event: impl Into<T::Event>) {
@@ -633,6 +654,7 @@ impl<T: Trait> Module<T> {
 		parent_hash: &T::Hash,
 		txs_root: &T::Hash,
 		digest: &DigestOf<T>,
+		kind: InitKind,
 	) {
 		// populate environment
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
@@ -641,9 +663,12 @@ impl<T: Trait> Module<T> {
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
-		<Events<T>>::kill();
-		EventCount::kill();
-		<EventTopics<T>>::remove_all();
+
+		if let InitKind::Full = kind {
+			<Events<T>>::kill();
+			EventCount::kill();
+			<EventTopics<T>>::remove_all();
+		}
 	}
 
 	/// Remove temporary "environment" entries in storage.
@@ -1220,7 +1245,13 @@ mod tests {
 	#[test]
 	fn deposit_event_should_work() {
 		new_test_ext().execute_with(|| {
-			System::initialize(&1, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+			System::initialize(
+				&1,
+				&[0u8; 32].into(),
+				&[0u8; 32].into(),
+				&Default::default(),
+				InitKind::Full,
+			);
 			System::note_finished_extrinsics();
 			System::deposit_event(1u16);
 			System::finalize();
@@ -1235,7 +1266,13 @@ mod tests {
 				]
 			);
 
-			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+			System::initialize(
+				&2,
+				&[0u8; 32].into(),
+				&[0u8; 32].into(),
+				&Default::default(),
+				InitKind::Full,
+			);
 			System::deposit_event(42u16);
 			System::note_applied_extrinsic(&Ok(()), 0, Default::default());
 			System::note_applied_extrinsic(&Err(DispatchError::BadOrigin), 0, Default::default());
@@ -1264,6 +1301,7 @@ mod tests {
 				&[0u8; 32].into(),
 				&[0u8; 32].into(),
 				&Default::default(),
+				InitKind::Full,
 			);
 			System::note_finished_extrinsics();
 
@@ -1329,6 +1367,7 @@ mod tests {
 					&[n as u8 - 1; 32].into(),
 					&[0u8; 32].into(),
 					&Default::default(),
+					InitKind::Full,
 				);
 
 				System::finalize();
