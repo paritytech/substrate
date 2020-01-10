@@ -17,6 +17,8 @@
 //! Integration tests for runtime interface primitives
 #![cfg(test)]
 
+#![cfg(test)]
+
 use sp_runtime_interface::*;
 use sp_runtime_interface_test_wasm::{WASM_BINARY, test_api::HostFunctions};
 use sp_wasm_interface::HostFunctions as HostFunctionsT;

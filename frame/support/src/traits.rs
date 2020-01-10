@@ -23,7 +23,7 @@ use codec::{FullCodec, Codec, Encode, Decode};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	ConsensusEngineId, DispatchResult, DispatchError,
-	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
+	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating, TrailingZeroInput},
 };
 
 use crate::dispatch::Parameter;
@@ -67,8 +67,15 @@ pub trait Contains<T: Ord> {
 /// The account with the given id was killed.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnFreeBalanceZero<AccountId> {
-	/// The account was the given id was killed.
+	/// The account with the given id was killed.
 	fn on_free_balance_zero(who: &AccountId);
+}
+
+/// The account with the given id was reaped.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+pub trait OnReapAccount<AccountId> {
+	/// The account with the given id was reaped.
+	fn on_reap_account(who: &AccountId);
 }
 
 /// Outcome of a balance update.
@@ -767,6 +774,12 @@ pub trait Randomness<Output> {
 	/// from any other such seeds.
 	fn random_seed() -> Output {
 		Self::random(&[][..])
+	}
+}
+
+impl<Output: Decode + Default> Randomness<Output> for () {
+	fn random(subject: &[u8]) -> Output {
+		Output::decode(&mut TrailingZeroInput::new(subject)).unwrap_or_default()
 	}
 }
 

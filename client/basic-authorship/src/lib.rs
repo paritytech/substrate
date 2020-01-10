@@ -20,7 +20,7 @@
 //!
 //! ```
 //! # use sc_basic_authority::ProposerFactory;
-//! # use sp_consensus::{Environment, Proposer};
+//! # use sp_consensus::{Environment, Proposer, RecordProof};
 //! # use sp_runtime::generic::BlockId;
 //! # use std::{sync::Arc, time::Duration};
 //! # use substrate_test_runtime_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
@@ -43,12 +43,13 @@
 //! let future = proposer.propose(
 //! 	Default::default(),
 //! 	Default::default(),
-//! 	Duration::from_secs(2)
+//! 	Duration::from_secs(2),
+//! 	RecordProof::Yes,
 //! );
 //!
 //! // We wait until the proposition is performed.
 //! let block = futures::executor::block_on(future).unwrap();
-//! println!("Generated block: {:?}", block);
+//! println!("Generated block: {:?}", block.block);
 //! ```
 //!
 

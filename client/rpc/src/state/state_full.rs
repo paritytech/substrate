@@ -22,10 +22,7 @@ use std::ops::Range;
 use futures::{future, StreamExt as _, TryStreamExt as _};
 use log::warn;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use rpc::{
-	Result as RpcResult,
-	futures::{stream, Future, Sink, Stream, future::result},
-};
+use rpc::{Result as RpcResult, futures::{stream, Future, Sink, Stream, future::result}};
 
 use sc_rpc_api::Subscriptions;
 use sc_client_api::backend::Backend;
@@ -36,17 +33,15 @@ use sc_client::{
 	Client, CallExecutor, BlockchainEvents,
 };
 use sp_core::{
-	H256, Blake2Hasher, Bytes,
-	storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, ChildInfo},
+	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, ChildInfo},
 };
 use sp_version::RuntimeVersion;
 use sp_state_machine::ExecutionStrategy;
 use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, NumberFor, ProvideRuntimeApi, SaturatedConversion},
+	generic::BlockId, traits::{Block as BlockT, NumberFor, SaturatedConversion},
 };
 
-use sp_api::Metadata;
+use sp_api::{Metadata, ProvideRuntimeApi};
 
 use super::{StateBackend, error::{FutureResult, Error, Result}, client_err, child_resolution_error};
 
@@ -72,9 +67,9 @@ pub struct FullState<B, E, Block: BlockT, RA> {
 
 impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+		Block: BlockT + 'static,
+		B: Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 {
 	/// Create new state API backend for full nodes.
 	pub fn new(client: Arc<Client<B, E, Block, RA>>, subscriptions: Subscriptions) -> Self {
@@ -220,12 +215,12 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 
 impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, RA>
 	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+		Block: BlockT + 'static,
+		B: Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
-		Client<B, E, Block, RA>: ProvideRuntimeApi,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
+		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
 			Metadata<Block, Error = sp_blockchain::Error>,
 {
 	fn call(
