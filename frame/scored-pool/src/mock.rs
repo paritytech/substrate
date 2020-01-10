@@ -77,6 +77,7 @@ impl frame_system::Trait for Test {
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
 	type OnFreeBalanceZero = ();
+	type OnReapAccount = System;
 	type OnNewAccount = ();
 	type Event = ();
 	type TransferPayment = ();
@@ -118,12 +119,15 @@ impl Trait for Test {
 	type KickOrigin = EnsureSignedBy<KickOrigin, u64>;
 	type MembershipInitialized = TestChangeMembers;
 	type MembershipChanged = TestChangeMembers;
-	type Currency = pallet_balances::Module<Self>;
+	type Currency = Balances;
 	type CandidateDeposit = CandidateDeposit;
 	type Period = Period;
 	type Score = u64;
 	type ScoreOrigin = EnsureSignedBy<ScoreOrigin, u64>;
 }
+
+type System = frame_system::Module<Test>;
+type Balances = pallet_balances::Module<Test>;
 
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.

@@ -67,8 +67,15 @@ pub trait Contains<T: Ord> {
 /// The account with the given id was killed.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnFreeBalanceZero<AccountId> {
-	/// The account was the given id was killed.
+	/// The account with the given id was killed.
 	fn on_free_balance_zero(who: &AccountId);
+}
+
+/// The account with the given id was reaped.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+pub trait OnReapAccount<AccountId> {
+	/// The account with the given id was reaped.
+	fn on_reap_account(who: &AccountId);
 }
 
 /// Outcome of a balance update.
