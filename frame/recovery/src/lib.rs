@@ -162,6 +162,7 @@ use frame_support::{
 	Parameter, RuntimeDebug,
 	weights::{
 		GetDispatchInfo, PaysFee, DispatchClass, ClassifyDispatch, Weight, WeighData,
+		SimpleDispatchInfo,
 	},
 	traits::{Currency, ReservableCurrency, Get, OnReapAccount},
 };
@@ -247,7 +248,7 @@ decl_storage! {
 		/// First account is the account to be recovered, and the second account
 		/// is the user trying to recover the account.
 		pub ActiveRecoveries get(fn active_recovery):
-			double_map hasher(twox_64_concat) T::AccountId, twox_64_concat(T::AccountId) =>
+			double_map hasher(twox_64_concat) T::AccountId, hasher(twox_64_concat) T::AccountId =>
 			Option<ActiveRecovery<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
 		/// The final list of recovered accounts.
 		///
