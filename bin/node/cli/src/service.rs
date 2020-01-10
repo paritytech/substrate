@@ -113,8 +113,8 @@ macro_rules! new_full_start {
 macro_rules! new_full {
 	($config:expr, $with_startup_data: expr) => {{
 		use futures::{
-			stream::StreamExt,
-			future::{self, FutureExt},
+			prelude::*,
+			compat::Future01CompatExt
 		};
 		use sc_network::Event;
 
