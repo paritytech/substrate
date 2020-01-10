@@ -15,11 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 // TODO TODO:
-// * fix: can someone make a new Ledger so it can claim old rewards ?
 // * migration
 // * upgrade test
 // * update doc
 // * new test
+// * make commission updatable only one for next future era. not current_era.
 //! # Staking Module
 //!
 //! The Staking module is used to manage funds at stake by network maintainers.

@@ -229,7 +229,6 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
 
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
-		// <Module<Test>>::reward_by_indices(vec![(0, 1)]); TODO TODO THis has been removed
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		// Compute total payout now for whole duration as other parameter won't change
