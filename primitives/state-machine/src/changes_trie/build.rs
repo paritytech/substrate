@@ -329,7 +329,7 @@ mod test {
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
-	use crate::{COMMITTED_LAYER, Layers, LayerEntry};
+	use crate::transaction_layers::{COMMITTED_LAYER, Layers, LayerEntry};
 	use super::*;
 
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");

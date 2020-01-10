@@ -659,7 +659,7 @@ mod tests {
 		}, backend::InMemory, overlayed_changes::{OverlayedValue, OverlayedChangeSet},
 	};
 	use sp_core::storage::{Storage, StorageChild};
-	use crate::{Layers, LayerEntry, COMMITTED_LAYER};
+	use crate::transaction_layers::{Layers, LayerEntry, COMMITTED_LAYER};
 
 	type TestBackend = InMemory<Blake2Hasher>;
 	type TestChangesTrieStorage = InMemoryChangesTrieStorage<Blake2Hasher, u64>;
@@ -672,7 +672,7 @@ mod tests {
 				digest_levels: 0,
 			}),
 			changes: OverlayedChangeSet {
-				number_transactions: crate::COMMITTED_LAYER + 1,
+				number_transactions: COMMITTED_LAYER + 1,
 				children: Default::default(),
 				top: vec![
 					(EXTRINSIC_INDEX.to_vec(), Layers::from_iter(vec![

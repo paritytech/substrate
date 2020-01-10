@@ -22,7 +22,7 @@ use std::collections::{HashMap, BTreeMap, BTreeSet};
 use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, OwnedChildInfo, ChildInfo};
-use crate::{Layers, LayerEntry, LayeredOpsResult};
+use crate::transaction_layers::{Layers, LayerEntry, LayeredOpsResult, COMMITTED_LAYER};
 use std::ops;
 
 /// The overlayed changes to state to be queried on top of the backend.
@@ -71,7 +71,7 @@ pub struct OverlayedChangeSet {
 impl Default for OverlayedChangeSet {
 	fn default() -> Self {
 		OverlayedChangeSet {
-			number_transactions: crate::COMMITTED_LAYER + 1,
+			number_transactions: COMMITTED_LAYER + 1,
 			top: Default::default(),
 			children: Default::default(),
 		}
@@ -84,7 +84,7 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 		let mut result = OverlayedChangeSet::default();
 		result.top = iter.into_iter().map(|(k, value)| (k, {
 			let mut history = Layers::default();
-			history.push_unchecked(LayerEntry { value, index: crate::COMMITTED_LAYER });
+			history.push_unchecked(LayerEntry { value, index: COMMITTED_LAYER });
 			history
 		})).collect();
 		result
@@ -189,8 +189,8 @@ impl OverlayedChangeSet {
 			retain(map, |_, history| history.discard_transaction(number_transactions) != LayeredOpsResult::Cleared);
 			!map.is_empty()
 		});
-		if number_transactions == crate::COMMITTED_LAYER {
-			self.number_transactions = crate::COMMITTED_LAYER + 1;
+		if number_transactions == COMMITTED_LAYER {
+			self.number_transactions = COMMITTED_LAYER + 1;
 		} else {
 			self.number_transactions = number_transactions;
 		}
@@ -198,7 +198,7 @@ impl OverlayedChangeSet {
 
 	/// Commit a transactional layer into previous transaction layer.
 	pub fn commit_transaction(&mut self) {
-		if self.number_transactions > crate::COMMITTED_LAYER + 1 {
+		if self.number_transactions > COMMITTED_LAYER + 1 {
 			self.number_transactions -= 1;
 		}
 
