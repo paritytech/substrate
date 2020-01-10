@@ -122,17 +122,6 @@ impl Default for DispatchClass {
 	}
 }
 
-// Utility implementation to provide numbers instead of the full enum.
-impl From<u8> for DispatchClass {
-	fn from(x: u8) -> Self {
-		match x {
-			0 => DispatchClass::Normal,
-			1 => DispatchClass::Operational,
-			_ => panic!("Reserved for other dispatch classes."),
-		}
-	}
-}
-
 impl From<SimpleDispatchInfo> for DispatchClass {
 	fn from(tx: SimpleDispatchInfo) -> Self {
 		match tx {
@@ -247,11 +236,15 @@ impl SimpleDispatchInfo {
 	}
 }
 
-/// A struct to represent a weight which is a function of the input arguments. The given closure's
-/// arguments must match the dispatch's argument types, given as a tuple.
-pub struct FunctionOf<F, Class>(pub F, pub Class, pub bool);
+/// A struct to represent a weight which is a function of the input arguments. The given items have
+/// the following types:
+///
+/// - `F`: a closure with the same argument list as the dispatched, wrapped in a tuple.
+/// - `DispatchClass`: class of the dispatch.
+/// - `bool`: weather this dispatch pays fee or not.
+pub struct FunctionOf<F>(pub F, pub DispatchClass, pub bool);
 
-impl<Args, F, Class> WeighData<Args> for FunctionOf<F, Class>
+impl<Args, F> WeighData<Args> for FunctionOf<F>
 where
 	F : Fn(Args) -> Weight
 {
@@ -260,16 +253,13 @@ where
 	}
 }
 
-impl<Args, F, Class> ClassifyDispatch<Args> for FunctionOf<F, Class>
-where
-	Class: Into<DispatchClass> + Clone,
-{
+impl<Args, F> ClassifyDispatch<Args> for FunctionOf<F> {
 	fn classify_dispatch(&self, _: Args) -> DispatchClass {
-		self.1.clone().into()
+		self.1.clone()
 	}
 }
 
-impl<F, Class> PaysFee for FunctionOf<F, Class> {
+impl<F> PaysFee for FunctionOf<F> {
 	fn pays_fee(&self) -> bool {
 		self.2
 	}
@@ -342,7 +332,7 @@ mod tests {
 			#[weight = FunctionOf(|args: (&u32, &u32)| args.0 * 10 + args.1, DispatchClass::Normal, true)]
 			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
-			#[weight = FunctionOf(|_: (&u32, &u32)| 0, 1u8, true)]
+			#[weight = FunctionOf(|_: (&u32, &u32)| 0, DispatchClass::Operational, true)]
 			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 		}
 	}
@@ -352,17 +342,5 @@ mod tests {
 		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().weight, 120);
 		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().class, DispatchClass::Normal);
 		assert_eq!(Call::<TraitImpl>::f0().get_dispatch_info().weight, 1000);
-	}
-
-	#[test]
-	fn can_use_number_as_class() {
-		assert_eq!(
-			Call::<TraitImpl>::f11(0, 0).get_dispatch_info().class,
-			DispatchClass::Normal,
-		);
-		assert_eq!(
-			Call::<TraitImpl>::f12(0, 0).get_dispatch_info().class,
-			DispatchClass::Operational,
-		);
 	}
 }
