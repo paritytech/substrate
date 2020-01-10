@@ -349,7 +349,7 @@ impl <
 }
 
 impl<
-	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
+	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq,
 > Decode for Registration<Balance> {
 	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
 		let (judgements, deposit, info) = Decode::decode(&mut AppendZerosInput::new(input))?;
