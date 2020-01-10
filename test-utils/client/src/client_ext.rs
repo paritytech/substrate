@@ -65,7 +65,7 @@ pub trait ClientExt<Block: BlockT>: Sized {
 impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 	where
 		B: sc_client_api::backend::Backend<Block, Blake2Hasher>,
-		E: sc_client::CallExecutor<Block, Blake2Hasher>,
+		E: sc_client::CallExecutor<Block, Blake2Hasher> + 'static,
 		for<'r> &'r Self: BlockImport<Block, Error=ConsensusError>,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 {

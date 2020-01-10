@@ -80,7 +80,7 @@ sp_externalities::decl_extension! {
 }
 
 /// Code execution engine.
-pub trait CodeExecutor: Sized + Send + Sync + CallInWasm {
+pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone {
 	/// Externalities error type.
 	type Error: Display + Debug + Send + 'static;
 
@@ -111,7 +111,7 @@ pub trait CallInWasm: Send + Sync {
 		wasm_blob: &[u8],
 		method: &str,
 		call_data: &[u8],
-		ext: Option<&mut dyn Externalities>,
+		ext: &mut dyn Externalities,
 	) -> Result<Vec<u8>, String>;
 }
 

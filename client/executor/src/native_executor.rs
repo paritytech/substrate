@@ -33,22 +33,21 @@ thread_local! {
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
 
-pub(crate) fn safe_call<F, U>(f: F) -> Result<U>
-	where F: UnwindSafe + FnOnce() -> U
-{
-	// Substrate uses custom panic hook that terminates process on panic. Disable
-	// termination for the native call.
-	let _guard = sp_panic_handler::AbortGuard::force_unwind();
-	std::panic::catch_unwind(f).map_err(|_| Error::Runtime)
-}
-
-/// Set up the externalities and safe calling environment to execute calls to a native runtime.
+/// Set up the externalities and safe calling environment to execute runtime calls.
 ///
 /// If the inner closure panics, it will be caught and return an error.
-pub fn with_native_environment<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U>
+pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	sp_externalities::set_and_run_with_externalities(ext, move || safe_call(f))
+	sp_externalities::set_and_run_with_externalities(
+		ext,
+		move || {
+			// Substrate uses custom panic hook that terminates process on panic. Disable
+			// termination for the native call.
+			let _guard = sp_panic_handler::AbortGuard::force_unwind();
+			std::panic::catch_unwind(f).map_err(|_| Error::Runtime)
+		},
+	)
 }
 
 /// Delegate for dispatching a CodeExecutor call.
@@ -212,13 +211,13 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 						onchain_version,
 					);
 
-					with_native_environment(
+					with_externalities_safe(
 						&mut **ext,
 						move || runtime.call(method, data).map(NativeOrEncoded::Encoded)
 					)
 				}
 				(false, _, _) => {
-					with_native_environment(
+					with_externalities_safe(
 						&mut **ext,
 						move || runtime.call(method, data).map(NativeOrEncoded::Encoded)
 					)
@@ -232,7 +231,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 					);
 
 					used_native = true;
-					let res = with_native_environment(&mut **ext, move || (call)())
+					let res = with_externalities_safe(&mut **ext, move || (call)())
 						.and_then(|r| r
 							.map(NativeOrEncoded::Native)
 							.map_err(|s| Error::ApiError(s.to_string()))
@@ -263,23 +262,17 @@ impl<D: NativeExecutionDispatch> sp_core::traits::CallInWasm for NativeExecutor<
 		wasm_blob: &[u8],
 		method: &str,
 		call_data: &[u8],
-		ext: Option<&mut dyn Externalities>,
+		ext: &mut dyn Externalities,
 	) -> std::result::Result<Vec<u8>, String> {
-		let instance = crate::wasm_runtime::create_wasm_runtime_with_code(
+		crate::call_in_wasm_with_host_functions(
+			method,
+			call_data,
 			self.fallback_method,
-			self.default_heap_pages,
+			ext,
 			wasm_blob,
+			self.default_heap_pages,
 			(*self.host_functions).clone(),
-		).map_err(|e| e.to_string())?;
-
-		let mut instance = AssertUnwindSafe(instance);
-
-		match ext {
-			Some(ext) => with_native_environment(ext, move || instance.call(method, call_data))
-				.and_then(|r| r)
-				.map_err(|e| e.to_string()),
-			None => instance.call(method, call_data).map_err(|e| e.to_string()),
-		}
+		).map_err(|e| e.to_string())
 	}
 }
 
@@ -346,7 +339,7 @@ macro_rules! native_executor_instance {
 				method: &str,
 				data: &[u8]
 			) -> $crate::error::Result<Vec<u8>> {
-				$crate::with_native_environment(ext, move || $dispatcher(method, data))?
+				$crate::with_externalities_safe(ext, move || $dispatcher(method, data))?
 					.ok_or_else(|| $crate::error::Error::MethodNotFound(method.to_owned()))
 			}
 

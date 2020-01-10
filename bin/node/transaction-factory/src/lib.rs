@@ -101,7 +101,7 @@ pub fn factory<RA, Backend, Exec, Block, RtApi, Sc>(
 ) -> sc_cli::error::Result<()>
 where
 	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	Exec: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	Exec: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Backend: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
@@ -160,7 +160,7 @@ pub fn create_block<RA, Backend, Exec, Block, RtApi>(
 ) -> Block
 where
 	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	Exec: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	Exec: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 	Backend: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
@@ -186,7 +186,7 @@ fn import_block<Backend, Exec, Block, RtApi>(
 	block: Block
 ) -> () where
 	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	Exec: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	Exec: sc_client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	Backend: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send,
 {
 	let import = BlockImportParams {

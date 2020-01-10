@@ -290,7 +290,7 @@ pub fn new_client<E, S, Block, RA>(
 >
 	where
 		Block: BlockT<Hash=H256>,
-		E: CodeExecutor + RuntimeInfo,
+		E: CodeExecutor + RuntimeInfo + 'static,
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);

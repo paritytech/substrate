@@ -151,7 +151,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	Block,
 	RA
 >> where
-	E: CodeExecutor + RuntimeInfo + Clone + 'static,
+	E: CodeExecutor + RuntimeInfo + 'static,
 	S: BuildStorage,
 	Block: BlockT<Hash=H256>,
 {
@@ -167,7 +167,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
-		E: CodeExecutor + RuntimeInfo + Clone + 'static,
+		E: CodeExecutor + RuntimeInfo + 'static,
 		S: BuildStorage,
 		Block: BlockT<Hash=H256>,
 		B: backend::LocalBackend<Block, Blake2Hasher> + 'static,
@@ -179,7 +179,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 
 impl<B, E, Block, RA> BlockOf for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static,
 	Block: BlockT<Hash=H256>,
 {
 	type Type = Block;
@@ -187,7 +187,7 @@ impl<B, E, Block, RA> BlockOf for Client<B, E, Block, RA> where
 
 impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static,
 	Block: BlockT<Hash=H256>,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
@@ -750,7 +750,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_block: BlockImportParams<Block>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> sp_blockchain::Result<ImportResult> where
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+		E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	{
 		let BlockImportParams {
 			origin,
@@ -838,7 +838,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		enact_state: bool,
 		import_existing: bool,
 	) -> sp_blockchain::Result<ImportResult> where
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+		E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	{
 		let parent_hash = import_headers.post().parent_hash().clone();
 		let status = self.backend.blockchain().status(BlockId::Hash(hash))?;
@@ -968,7 +968,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		)>
 	)>
 		where
-			E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+			E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	{
 		match transaction.state()? {
 			Some(transaction_state) => {
@@ -1284,7 +1284,7 @@ impl<B, E, Block, RA> HeaderMetadata<Block> for Client<B, E, Block, RA> where
 
 impl<B, E, Block, RA> ProvideUncles<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static,
 	Block: BlockT<Hash=H256>,
 {
 	fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> sp_blockchain::Result<Vec<Block::Header>> {
@@ -1378,7 +1378,7 @@ impl<B, E, Block, RA> ProvideCache<Block> for Client<B, E, Block, RA> where
 
 impl<B, E, Block, RA> ProvideRuntimeApi for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	Block: BlockT<Hash=H256>,
 	RA: ConstructRuntimeApi<Block, Self>
 {
@@ -1391,7 +1391,7 @@ impl<B, E, Block, RA> ProvideRuntimeApi for Client<B, E, Block, RA> where
 
 impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
@@ -1438,7 +1438,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 /// important verification work.
 impl<'a, B, E, Block, RA> sp_consensus::BlockImport<Block> for &'a Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + Clone + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	Block: BlockT<Hash=H256>,
 {
 	type Error = ConsensusError;
@@ -1513,7 +1513,7 @@ impl<'a, B, E, Block, RA> sp_consensus::BlockImport<Block> for &'a Client<B, E, 
 
 impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + Clone + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	Block: BlockT<Hash=H256>,
 {
 	type Error = ConsensusError;
@@ -1536,7 +1536,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, R
 
 impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static,
 	Block: BlockT<Hash=H256>,
 {
 	fn apply_finality(
@@ -1560,7 +1560,7 @@ impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for Client<B, E, Block, 
 
 impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for &Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static,
 	Block: BlockT<Hash=H256>,
 {
 	fn apply_finality(
@@ -1580,7 +1580,7 @@ impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for &Client<B, E, Block,
 
 impl<B, E, Block, RA> BlockchainEvents<Block> for Client<B, E, Block, RA>
 where
-	E: CallExecutor<Block, Blake2Hasher> + Clone + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static,
 	Block: BlockT<Hash=H256>,
 {
 	/// Get block import event stream.
@@ -1683,7 +1683,7 @@ where
 impl<B, E, Block, RA> BlockBody<Block> for Client<B, E, Block, RA>
 	where
 		B: backend::Backend<Block, Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher> + Clone + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static,
 		Block: BlockT<Hash=H256>,
 {
 	fn block_body(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
@@ -1694,7 +1694,7 @@ impl<B, E, Block, RA> BlockBody<Block> for Client<B, E, Block, RA>
 impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 	where
 		B: backend::Backend<Block, Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher> + Clone + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static,
 		Block: BlockT<Hash=H256>,
 {
 	/// Insert auxiliary data into key-value store.
@@ -1723,7 +1723,7 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 	where
 		B: backend::Backend<Block, Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher> + Clone + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static,
 		Block: BlockT<Hash=H256>,
 {
 
@@ -1765,7 +1765,7 @@ where
 impl<BE, E, B, RA> sp_consensus::block_validation::Chain<B> for Client<BE, E, B, RA>
 	where
 		BE: backend::Backend<B, Blake2Hasher>,
-		E: CallExecutor<B, Blake2Hasher> + Clone + 'static,
+		E: CallExecutor<B, Blake2Hasher> + 'static,
 		B: BlockT<Hash = H256>,
 {
 	fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn std::error::Error + Send>> {

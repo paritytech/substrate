@@ -205,7 +205,7 @@ pub fn prove_execution<Block, S, E>(
 	where
 		Block: BlockT<Hash=H256>,
 		S: StateBackend<Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher> + Clone + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static,
 {
 	let trie_state = state.as_trie_backend()
 		.ok_or_else(|| Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>)?;

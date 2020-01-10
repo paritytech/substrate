@@ -1100,7 +1100,7 @@ fn prune_finalized<B, E, Block, RA>(
 	epoch_changes: &mut EpochChangesFor<Block>,
 ) -> Result<(), ConsensusError> where
 	Block: BlockT<Hash=H256>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	B: Backend<Block, Blake2Hasher>,
 	RA: Send + Sync,
 {
@@ -1140,7 +1140,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	api: Arc<PRA>,
 ) -> ClientResult<(BabeBlockImport<B, E, Block, I, RA, PRA>, BabeLink<Block>)> where
 	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	RA: Send + Sync,
 {
 	let epoch_changes = aux_schema::load_epoch_changes(&*client)?;

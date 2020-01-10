@@ -463,7 +463,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	>,
 ) where
 	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	N: NetworkT<Block>,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,

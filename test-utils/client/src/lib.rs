@@ -177,7 +177,7 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		>,
 		sc_client::LongestChain<Backend, Block>,
 	) where
-		Executor: sc_client::CallExecutor<Block, Blake2Hasher>,
+		Executor: sc_client::CallExecutor<Block, Blake2Hasher> + 'static,
 		Backend: sc_client_api::backend::Backend<Block, Blake2Hasher>,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 	{
@@ -235,8 +235,8 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 		sc_client::LongestChain<Backend, Block>,
 	) where
 		I: Into<Option<NativeExecutor<E>>>,
-		E: sc_executor::NativeExecutionDispatch,
-		Backend: sc_client_api::backend::Backend<Block, Blake2Hasher>,
+		E: sc_executor::NativeExecutionDispatch + 'static,
+		Backend: sc_client_api::backend::Backend<Block, Blake2Hasher> + 'static,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 	{
 		let executor = executor.into().unwrap_or_else(||

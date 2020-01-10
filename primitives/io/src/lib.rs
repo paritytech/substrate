@@ -356,9 +356,12 @@ pub trait Misc {
 	///
 	/// Returns the SCALE encoded runtime version and `None` if the call failed.
 	fn runtime_version(&mut self, wasm: &[u8]) -> Option<Vec<u8>> {
+		// Create some dummy externalities, `Core_version` should not write data anyway.
+		let mut ext = sp_state_machine::BasicExternalities::default();
+
 		self.extension::<CallInWasmExt>()
 			.expect("No `CallInWasmExt` associated for the current context!")
-			.call_in_wasm(wasm, "Core_version", &[], None)
+			.call_in_wasm(wasm, "Core_version", &[], &mut ext)
 			.ok()
 	}
 }

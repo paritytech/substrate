@@ -40,7 +40,7 @@ fn call_in_wasm<E: Externalities>(
 	code: &[u8],
 	heap_pages: u64,
 ) -> crate::error::Result<Vec<u8>> {
-	crate::call_in_wasm::<E, sp_io::SubstrateHostFunctions>(
+	crate::call_in_wasm::<sp_io::SubstrateHostFunctions>(
 		function,
 		call_data,
 		execution_method,

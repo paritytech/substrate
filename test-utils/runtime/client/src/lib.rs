@@ -215,7 +215,7 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	sc_client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
 	B
 > where
-	B: sc_client_api::backend::Backend<substrate_test_runtime::Block, Blake2Hasher>,
+	B: sc_client_api::backend::Backend<substrate_test_runtime::Block, Blake2Hasher> + 'static,
 {
 	fn set_heap_pages(mut self, heap_pages: u64) -> Self {
 		self.genesis_init_mut().heap_pages_override = Some(heap_pages);

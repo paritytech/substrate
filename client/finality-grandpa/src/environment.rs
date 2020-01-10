@@ -956,7 +956,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	justification_or_commit: JustificationOrCommit<Block>,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
 	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	RA: Send + Sync,
 {
 	// NOTE: lock must be held through writing to DB to avoid race. this lock

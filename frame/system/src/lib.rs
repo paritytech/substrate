@@ -1584,7 +1584,7 @@ mod tests {
 				_: &[u8],
 				_: &str,
 				_: &[u8],
-				_: Option<&mut dyn sp_externalities::Externalities>,
+				_: &mut dyn sp_externalities::Externalities,
 			) -> Result<Vec<u8>, String> {
 				Ok(self.0.clone())
 			}
@@ -1623,33 +1623,18 @@ mod tests {
 
 	#[test]
 	fn set_code_with_real_wasm_blob() {
-		struct CallInWasm;
+		sc_executor::native_executor_instance!(
+			Executor,
+			substrate_test_runtime::api::dispatch,
+			substrate_test_runtime::native_version,
+		);
 
-		impl sp_core::traits::CallInWasm for CallInWasm {
-			fn call_in_wasm(
-				&self,
-				blob: &[u8],
-				method: &str,
-				call_data: &[u8],
-				ext: Option<&mut dyn sp_externalities::Externalities>,
-			) -> Result<Vec<u8>, String> {
-				type HostFunctions = (
-					sp_io::SubstrateHostFunctions,
-					sc_executor::deprecated_host_interface::SubstrateExternals
-				);
-				sc_executor::call_in_wasm::<HostFunctions>(
-					method,
-					call_data,
-					sc_executor::WasmExecutionMethod::Interpreted,
-					ext,
-					blob,
-					8,
-				).map_err(|e| { println!("{:?}", e); e.to_string() })
-			}
+		fn executor() -> sc_executor::NativeExecutor<Executor> {
+			sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None)
 		}
 
 		let mut ext = new_test_ext();
-		ext.register_extension(sp_core::traits::CallInWasmExt::new(CallInWasm));
+		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor()));
 		ext.execute_with(|| {
 			System::set_code(
 				RawOrigin::Root.into(),

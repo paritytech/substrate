@@ -749,6 +749,7 @@ mod tests {
 	};
 	use sp_core::{Blake2Hasher, map, traits::Externalities, storage::ChildStorageKey};
 
+	#[derive(Clone)]
 	struct DummyCodeExecutor {
 		change_changes_trie_config: bool,
 		native_available: bool,
@@ -802,6 +803,18 @@ mod tests {
 				},
 				_ => (Err(0), using_native),
 			}
+		}
+	}
+
+	impl sp_core::traits::CallInWasm for DummyCodeExecutor {
+		fn call_in_wasm(
+			&self,
+			_: &[u8],
+			_: &str,
+			_: &[u8],
+			_: &mut dyn Externalities,
+		) -> std::result::Result<Vec<u8>, String> {
+			unimplemented!("Not required in tests.")
 		}
 	}
 
