@@ -193,7 +193,6 @@ fn node_config<G, E: Clone> (
 		rpc_ws_max_connections: None,
 		rpc_cors: None,
 		prometheus_port: None,
-		grafana_port: None,
 		telemetry_endpoints: None,
 		telemetry_external_transport: None,
 		default_heap_pages: None,

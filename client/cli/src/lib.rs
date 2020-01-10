@@ -909,13 +909,12 @@ where
 
 	let rpc_interface: &str = interface_str(cli.rpc_external, cli.unsafe_rpc_external, cli.validator)?;
 	let ws_interface: &str = interface_str(cli.ws_external, cli.unsafe_ws_external, cli.validator)?;
-	let grafana_interface: &str = if cli.grafana_external { "0.0.0.0" } else { "127.0.0.1" };
 	let prometheus_interface: &str = if cli.prometheus_external { "0.0.0.0" } else { "127.0.0.1" };
 
 	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
 	config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
-	config.grafana_port = Some(
-		parse_address(&format!("{}:{}", grafana_interface, 9955), cli.grafana_port)?
+	config.prometheus_port = Some(
+		parse_address(&format!("{}:{}", prometheus_interface, 9955), cli.prometheus_port)?
 	);
 
 	config.rpc_ws_max_connections = cli.ws_max_connections;
@@ -942,12 +941,7 @@ where
 
 	config.tracing_targets = cli.tracing_targets.into();
 	config.tracing_receiver = cli.tracing_receiver.into();
-	
-	// Override prometheus
-	if cli.prometheus_external {
-			config.prometheus_port = Some(
-		parse_address(&format!("{}:{}", prometheus_interface, 33333), cli.prometheus_port)?
-	)}
+
 	// Imply forced authoring on --dev
 	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
 

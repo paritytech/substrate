@@ -73,9 +73,7 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub rpc_ws_max_connections: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
-	/// Grafana data source http port. `None` if disabled.
-	pub grafana_port: Option<SocketAddr>,
-	/// Prometheus Port.`None` if disabled and port 33333 by default.
+	/// Prometheus endpoint Port. `None` if disabled.
 	pub prometheus_port: Option<SocketAddr>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
@@ -156,7 +154,6 @@ impl<C, G, E> Configuration<C, G, E> where
 			rpc_ws_max_connections: None,
 			rpc_cors: Some(vec![]),
 			prometheus_port: None,
-			grafana_port: None,
 			telemetry_endpoints: None,
 			telemetry_external_transport: None,
 			default_heap_pages: None,

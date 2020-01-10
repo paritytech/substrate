@@ -22,13 +22,21 @@ use hyper::http::StatusCode;
 use hyper::Server;
 use hyper::{Body, Request, Response, service::{service_fn, make_service_fn}};
 pub use prometheus::{Encoder, HistogramOpts, Opts, TextEncoder};
-pub use prometheus::{Histogram, IntCounter, IntGauge};
+pub use prometheus::{Histogram, IntCounter};
+pub use prometheus::IntGauge as Gauge;
 pub use sp_runtime::traits::SaturatedConversion;
 use std::net::SocketAddr;
-//#[cfg(not(target_os = "unknown"))]
-//mod networking;
+#[cfg(not(target_os = "unknown"))]
+mod networking;
 
-pub mod metrics;
+pub use lazy_static::lazy_static;
+
+pub fn create_gauge(name: &str, description: &str) -> Gauge {
+	let opts = Opts::new(name, description);
+	let gauge = Gauge::with_opts(opts).expect("Creating Gauge Failed");
+	prometheus::register(Box::new(gauge.clone())).expect("Registering gauge failed");
+	gauge
+}
 
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
@@ -50,23 +58,22 @@ impl std::error::Error for Error {
 }
 
 async fn request_metrics(req: Request<Body>) -> Result<Response<Body>, Error> {
-  if req.uri().path() == "/metrics" {
-    let metric_families = prometheus::gather();
-    let mut buffer = vec![];
-    let encoder = TextEncoder::new();
-    encoder.encode(&metric_families, &mut buffer).unwrap();
-    Response::builder()
-      .status(StatusCode::OK)
-      .header("Content-Type", encoder.format_type())
-      .body(Body::from(buffer))
-      .map_err(Error::Http)
-  } else {
-    Response::builder()
-      .status(StatusCode::NOT_FOUND)
-      .body(Body::from("Not found."))
-      .map_err(Error::Http)
-  }
-  
+	if req.uri().path() == "/metrics" {
+		let metric_families = prometheus::gather();
+		let mut buffer = vec![];
+		let encoder = TextEncoder::new();
+		encoder.encode(&metric_families, &mut buffer).unwrap();
+		Response::builder()
+			.status(StatusCode::OK)
+			.header("Content-Type", encoder.format_type())
+			.body(Body::from(buffer))
+			.map_err(Error::Http)
+	} else {
+		Response::builder()
+			.status(StatusCode::NOT_FOUND)
+			.body(Body::from("Not found."))
+			.map_err(Error::Http)
+	}
 }
 
 #[derive(Clone)]
@@ -86,8 +93,8 @@ impl<T> hyper::rt::Executor<T> for Executor
 /// to serve metrics.
 #[cfg(not(target_os = "unknown"))]
 pub  async fn init_prometheus(mut prometheus_addr: SocketAddr) -> Result<(), Error>{
-  use async_std::{net, io};
-  use grafana_data_source::networking::Incoming;
+	use async_std::{net, io};
+	use networking::Incoming;
 	let listener = loop {
 		let listener = net::TcpListener::bind(&prometheus_addr).await;
 		match listener {
@@ -103,23 +110,21 @@ pub  async fn init_prometheus(mut prometheus_addr: SocketAddr) -> Result<(), Err
 					prometheus_addr.set_port(0);
 					continue;
 				},
-        _ => return Err(err.into())
-      }
+				_ => return Err(err.into())
+			}
 		}
 	};
-  let service = make_service_fn(|_| {
+	let service = make_service_fn(|_| {
 		async {
 			Ok::<_, Error>(service_fn(request_metrics))
 		}
 	});
 
-
 	let _server = Server::builder(Incoming(listener.incoming()))
 		.executor(Executor)
 		.serve(service)
-    .boxed();
-  
-  
+		.boxed();
+
 	let result = _server.await.map_err(Into::into);
 
 	result
@@ -129,24 +134,3 @@ pub  async fn init_prometheus(mut prometheus_addr: SocketAddr) -> Result<(), Err
 pub async fn init_prometheus(_: SocketAddr) -> Result<(), Error> {
 	Ok(())
 }
-
-
-#[macro_export]
-macro_rules! prometheus_gauge(
-  ($($metric:expr => $value:expr),*) => {
-    use $crate::{metrics::*};
-    $(
-        metrics::set_gauge(&$metric, $value);
-    )*
-  }
-);
-
-#[macro_export]
-macro_rules! prometheus_histogram(
-  ($($metric:expr => $value:expr),*) => {
-    use $crate::{metrics::*};
-    $(
-        metrics::set_histogram(&$metric, $value);
-    )*
-  }
-);

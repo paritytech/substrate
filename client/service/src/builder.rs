@@ -53,11 +53,51 @@ use std::{
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer};
-use sc_prometheus::prometheus_gauge;
-
 use sp_blockchain;
-use grafana_data_source::{self, record_metrics};
+use prometheus_endpoint::{create_gauge, Gauge};
 
+prometheus_endpoint::lazy_static! {
+	pub static ref FINALITY_HEIGHT: Gauge = create_gauge(
+		"consensus_finality_block_height_number",
+		"block is finality HEIGHT"
+	);
+	pub static ref BEST_HEIGHT: Gauge = create_gauge(
+		"consensus_best_block_height_number",
+		"block is best HEIGHT"
+	);
+	pub static ref BLOCK_INTERVAL_SECONDS: Gauge = create_gauge(
+		"consensus_block_interval_seconds",
+		"Time between this and last block(Block.Header.Time) in seconds"
+	);
+	pub static ref P2P_PEERS_NUM: Gauge = create_gauge(
+		"p2p_peers_number",
+		"network gosip peers number"
+	);
+	pub static ref TX_COUNT: Gauge = create_gauge(
+		"consensus_num_txs",
+		"Number of transactions"
+	);
+	pub static ref NODE_MEMORY: Gauge = create_gauge(
+		"consensus_node_memory",
+		"node memory"
+	);
+	pub static ref NODE_CPU: Gauge = create_gauge(
+		"consensus_node_cpu",
+		"node cpu"
+	);
+	pub static ref STATE_CACHE_SIZE: Gauge = create_gauge(
+		"consensus_state_cache_size",
+		"used state cache size"
+	);
+	pub static ref P2P_NODE_DOWNLOAD: Gauge = create_gauge(
+		"p2p_peers_receive_byte_per_sec",
+		"p2p_node_download_per_sec_byte"
+	);
+	pub static ref P2P_NODE_UPLOAD: Gauge = create_gauge(
+		"p2p_peers_send_byte_per_sec",
+		"p2p_node_upload_per_sec_byte"
+	);
+}
 /// Aggregator for the components required to build a service.
 ///
 /// # Usage
@@ -956,28 +996,14 @@ ServiceBuilder<
 				"bandwidth_upload" => bandwidth_upload,
 				"used_state_cache_size" => used_state_cache_size,
 			);
-			prometheus_gauge!(
-				STATE_CACHE_SIZE => used_state_cache_size as u64,
-				NODE_MEMORY => memory as u64,
-				NODE_CPU => cpu_usage as u64,
-				TX_COUNT => txpool_status.ready as u64,
-				FINALITY_HEIGHT => finalized_number as u64,
-				BEST_HEIGHT => best_number as u64,
-				P2P_PEERS_NUM => num_peers as u64,
-				P2P_NODE_DOWNLOAD => net_status.average_download_per_sec as u64,
-				P2P_NODE_UPLOAD => net_status.average_upload_per_sec as u64
-			  );
-			let _ = record_metrics!(
-				"peers" => num_peers,
-				"height" => best_number,
-				"txcount" => txpool_status.ready,
-				"cpu" => cpu_usage,
-				"memory" => memory,
-				"finalized_height" => finalized_number,
-				"bandwidth_download" => bandwidth_download,
-				"bandwidth_upload" => bandwidth_upload,
-				"used_state_cache_size" => used_state_cache_size,
-			  );
+			NODE_MEMORY.set(memory as i64);
+			NODE_CPU.set(cpu_usage as i64);
+			TX_COUNT.set(txpool_status.ready as i64);
+			FINALITY_HEIGHT.set(finalized_number as i64);
+			BEST_HEIGHT.set(best_number as i64);
+			P2P_PEERS_NUM.set(num_peers as i64);
+			P2P_NODE_DOWNLOAD.set(net_status.average_download_per_sec as i64);
+			P2P_NODE_UPLOAD.set(net_status.average_upload_per_sec as i64);
 			Ok(())
 		}).select(exit.clone().map(Ok).compat()).then(|_| Ok(()));
 		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
@@ -1115,21 +1141,10 @@ ServiceBuilder<
 				.then(|_| Ok(()))));
 			telemetry
 		});
-		// prometheus init
+		// Prometheus endpoint
 		if let Some(port) = config.prometheus_port {
 			let future = select(
-					sc_prometheus::init_prometheus(port).boxed()
-					,exit.clone()
-				).map(|either| match either {
-					Either::Left((result, _)) => result.map_err(|_| ()),
-					Either::Right(_) => Ok(())
-				}).compat();
-				let _ = to_spawn_tx.unbounded_send(Box::new(future));
-		}
-		// Grafana data source
-		if let Some(port) = config.grafana_port {
-			let future = select(
-				grafana_data_source::run_server(port).boxed(),
+				prometheus_endpoint::init_prometheus(port).boxed(),
 				exit.clone()
 			).map(|either| match either {
 				Either::Left((result, _)) => result.map_err(|_| ()),
@@ -1137,7 +1152,7 @@ ServiceBuilder<
 			}).compat();
 
 			let _ = to_spawn_tx.unbounded_send(Box::new(future));
-    }
+		}
 
 		// Instrumentation
 		if let Some(tracing_targets) = config.tracing_targets.as_ref() {
