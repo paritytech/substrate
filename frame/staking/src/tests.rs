@@ -67,12 +67,12 @@ fn basic_setup_works() {
 		// Account 10 controls the stash from account 11, which is 100 * balance_factor units
 		assert_eq!(
 			Staking::ledger(&10),
-			Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![], last_reward: 0 })
+			Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![], next_reward: 0 })
 		);
 		// Account 20 controls the stash from account 21, which is 200 * balance_factor units
 		assert_eq!(
 			Staking::ledger(&20),
-			Some(StakingLedger { stash: 21, total: 1000, active: 1000, unlocking: vec![], last_reward: 0 })
+			Some(StakingLedger { stash: 21, total: 1000, active: 1000, unlocking: vec![], next_reward: 0 })
 		);
 		// Account 1 does not control any stash
 		assert_eq!(Staking::ledger(&1), None);
@@ -86,7 +86,7 @@ fn basic_setup_works() {
 
 		assert_eq!(
 			Staking::ledger(100),
-			Some(StakingLedger { stash: 101, total: 500, active: 500, unlocking: vec![], last_reward: 0 })
+			Some(StakingLedger { stash: 101, total: 500, active: 500, unlocking: vec![], next_reward: 0 })
 		);
 		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 
@@ -196,8 +196,6 @@ fn rewards_should_work() {
 		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
 		// This is the second validator of the current elected set.
 		<Module<Test>>::reward_by_ids(vec![(21, 50)]);
-		// This must be no-op as it is not an elected validator.
-		<Module<Test>>::reward_by_ids(vec![(1001, 10_000)]);
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3 * 1000);
@@ -211,7 +209,7 @@ fn rewards_should_work() {
 		assert_eq!(Balances::total_balance(&21), init_balance_21);
 		assert_eq!(Balances::total_balance(&100), init_balance_100);
 		assert_eq!(Balances::total_balance(&101), init_balance_101);
-		assert_eq!(Session::validators(), vec![11, 21]);
+		assert_eq_uvec!(Session::validators(), vec![11, 21]);
 		assert_eq!(Staking::eras_reward_points(Staking::active_era()), EraRewardPoints {
 			total: 50*3,
 			individual: vec![(11, 100), (21, 50)].into_iter().collect(),
@@ -221,6 +219,7 @@ fn rewards_should_work() {
 		start_session(3);
 
 		assert_eq!(Staking::active_era(), 1);
+		mock::make_all_reward_payment(0);
 
 		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + total_payout_0*2/3*1000/1250, 2);
 		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
@@ -229,7 +228,7 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&100), init_balance_100 + total_payout_0*250/1250, 2);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
 
-		assert_eq!(Session::validators(), vec![11, 21]);
+		assert_eq_uvec!(Session::validators(), vec![11, 21]);
 		// <Module<Test>>::reward_by_indices(vec![(0, 1)]); TODO TODO THis has been removed
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
@@ -238,6 +237,7 @@ fn rewards_should_work() {
 		assert!(total_payout_1 > 10); // Test is meaningful if reward something
 
 		start_era(2);
+		mock::make_all_reward_payment(1);
 
 		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + (total_payout_0*2/3 + total_payout_1)*1000/1250, 2);
 		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
@@ -315,7 +315,7 @@ fn staking_should_work() {
 			// Note: the stashed value of 4 is still lock
 			assert_eq!(
 				Staking::ledger(&4),
-				Some(StakingLedger { stash: 3, total: 1500, active: 1500, unlocking: vec![], last_reward: 0 })
+				Some(StakingLedger { stash: 3, total: 1500, active: 1500, unlocking: vec![], next_reward: 1 })
 			);
 			// e.g. it cannot spend more than 500 that it has free from the total 2000
 			assert_noop!(
@@ -381,7 +381,7 @@ fn no_candidate_emergency_condition() {
 
 			// Previous ones are elected. chill is invalidates. TODO: #2494
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
-			assert_eq!(Session::validators(), vec![11, 21, 31, 41]);
+			assert_eq_uvec!(Session::validators(), vec![11, 21, 31, 41]);
 		});
 }
 
@@ -455,8 +455,6 @@ fn nominating_and_rewards_should_work() {
 			assert!(total_payout_0 > 100); // Test is meaningfull if reward something
 			<Module<Test>>::reward_by_ids(vec![(41, 1)]);
 			<Module<Test>>::reward_by_ids(vec![(31, 1)]);
-			<Module<Test>>::reward_by_ids(vec![(21, 10)]); // must be no-op
-			<Module<Test>>::reward_by_ids(vec![(11, 10)]); // must be no-op
 
 			start_era(1);
 
@@ -464,6 +462,7 @@ fn nominating_and_rewards_should_work() {
 			assert_eq_uvec!(validator_controllers(), vec![20, 10]);
 
 			// OLD validators must have already received some rewards.
+			mock::make_all_reward_payment(0);
 			assert_eq!(Balances::total_balance(&40), 1 + total_payout_0 / 2);
 			assert_eq!(Balances::total_balance(&30), 1 + total_payout_0 / 2);
 
@@ -478,8 +477,8 @@ fn nominating_and_rewards_should_work() {
 						total: 1000 + 1000,
 						own: 1000,
 						others: vec![
-							IndividualExposure { who: 3, value: 600 },
 							IndividualExposure { who: 1, value: 400 },
+							IndividualExposure { who: 3, value: 600 },
 						]
 					},
 				);
@@ -489,8 +488,8 @@ fn nominating_and_rewards_should_work() {
 						total: 1000 + 1000,
 						own: 1000,
 						others: vec![
-							IndividualExposure { who: 3, value: 400 },
 							IndividualExposure { who: 1, value: 600 },
+							IndividualExposure { who: 3, value: 400 },
 						]
 					},
 				);
@@ -503,8 +502,8 @@ fn nominating_and_rewards_should_work() {
 						total: 1000 + 800,
 						own: 1000,
 						others: vec![
-							IndividualExposure { who: 3, value: 400 },
 							IndividualExposure { who: 1, value: 400 },
+							IndividualExposure { who: 3, value: 400 },
 						]
 					},
 				);
@@ -514,8 +513,8 @@ fn nominating_and_rewards_should_work() {
 						total: 1000 + 1200,
 						own: 1000,
 						others: vec![
-							IndividualExposure { who: 3, value: 600 },
 							IndividualExposure { who: 1, value: 600 },
+							IndividualExposure { who: 3, value: 600 },
 						]
 					},
 				);
@@ -524,8 +523,6 @@ fn nominating_and_rewards_should_work() {
 			// the total reward for era 1
 			let total_payout_1 = current_total_payout_for_duration(3000);
 			assert!(total_payout_1 > 100); // Test is meaningfull if reward something
-			<Module<Test>>::reward_by_ids(vec![(41, 10)]); // must be no-op
-			<Module<Test>>::reward_by_ids(vec![(31, 10)]); // must be no-op
 			<Module<Test>>::reward_by_ids(vec![(21, 2)]);
 			<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
@@ -534,6 +531,7 @@ fn nominating_and_rewards_should_work() {
 			// nothing else will happen, era ends and rewards are paid again,
 			// it is expected that nominators will also be paid. See below
 
+			mock::make_all_reward_payment(1);
 			let payout_for_10 = total_payout_1 / 3;
 			let payout_for_20 = 2 * total_payout_1 / 3;
 			if cfg!(feature = "equalize") {
@@ -904,7 +902,7 @@ fn reward_destination_works() {
 			total: 1000,
 			active: 1000,
 			unlocking: vec![],
-			last_reward: 0,
+			next_reward: 0,
 		}));
 
 		// Compute total payout now for whole duration as other parameter won't change
@@ -913,6 +911,7 @@ fn reward_destination_works() {
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(1);
+		mock::make_all_reward_payment(0);
 
 		// Check that RewardDestination is Staked (default)
 		assert_eq!(Staking::payee(&11), RewardDestination::Staked);
@@ -924,7 +923,7 @@ fn reward_destination_works() {
 			total: 1000 + total_payout_0,
 			active: 1000 + total_payout_0,
 			unlocking: vec![],
-			last_reward: 0,
+			next_reward: 1,
 		}));
 
 		//Change RewardDestination to Stash
@@ -936,6 +935,7 @@ fn reward_destination_works() {
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(2);
+		mock::make_all_reward_payment(1);
 
 		// Check that RewardDestination is Stash
 		assert_eq!(Staking::payee(&11), RewardDestination::Stash);
@@ -949,7 +949,7 @@ fn reward_destination_works() {
 			total: 1000 + total_payout_0,
 			active: 1000 + total_payout_0,
 			unlocking: vec![],
-			last_reward: 0,
+			next_reward: 2,
 		}));
 
 		// Change RewardDestination to Controller
@@ -964,6 +964,7 @@ fn reward_destination_works() {
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(3);
+		mock::make_all_reward_payment(2);
 
 		// Check that RewardDestination is Controller
 		assert_eq!(Staking::payee(&11), RewardDestination::Controller);
@@ -975,7 +976,7 @@ fn reward_destination_works() {
 			total: 1000 + total_payout_0,
 			active: 1000 + total_payout_0,
 			unlocking: vec![],
-			last_reward: 0,
+			next_reward: 3,
 		}));
 		// Check that amount in staked account is NOT increased.
 		assert_eq!(Balances::free_balance(&11), recorded_stash_balance);
@@ -998,6 +999,7 @@ fn validator_payment_prefs_work() {
 		<Payee<Test>>::insert(&101, RewardDestination::Controller);
 
 		start_era(1);
+		mock::make_all_reward_payment(0);
 
 		let balance_era_1_10 = Balances::total_balance(&10);
 		let balance_era_1_100 = Balances::total_balance(&100);
@@ -1009,6 +1011,7 @@ fn validator_payment_prefs_work() {
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_era(2);
+		mock::make_all_reward_payment(1);
 
 		let taken_cut = commission * total_payout_1;
 		let shared_cut = total_payout_1 - taken_cut;
@@ -1039,7 +1042,7 @@ fn bond_extra_works() {
 			total: 1000,
 			active: 1000,
 			unlocking: vec![],
-			last_reward: 0,
+			next_reward: 0,
 		}));
 
 		// Give account 11 some large free balance greater than total
@@ -1053,7 +1056,7 @@ fn bond_extra_works() {
 			total: 1000 + 100,
 			active: 1000 + 100,
 			unlocking: vec![],
-			last_reward: 0,
+			next_reward: 0,
 		}));
 
 		// Call the bond_extra function with a large number, should handle it
@@ -1064,7 +1067,7 @@ fn bond_extra_works() {
 			total: 1000000,
 			active: 1000000,
 			unlocking: vec![],
-			last_reward: 0,
+			next_reward: 0,
 		}));
 	});
 }
@@ -1099,7 +1102,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			total: 1000,
 			active: 1000,
 			unlocking: vec![],
-			last_reward: 0,
+			next_reward: 0,
 		}));
 		assert_eq!(mock::validator_current_exposure(11), Exposure { total: 1000, own: 1000, others: vec![] });
 
@@ -1111,7 +1114,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			total: 1000 + 100,
 			active: 1000 + 100,
 			unlocking: vec![],
-			last_reward: 0,
+			next_reward: 0,
 		}));
 		// Exposure is a snapshot! only updated after the next era update.
 		assert_ne!(mock::validator_current_exposure(11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
@@ -1127,7 +1130,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			total: 1000 + 100,
 			active: 1000 + 100,
 			unlocking: vec![],
-			last_reward: 0,
+			next_reward: 0,
 		}));
 		// Exposure is now updated.
 		assert_eq!(mock::validator_current_exposure(11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
@@ -1135,13 +1138,13 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		// Unbond almost all of the funds in stash.
 		Staking::unbond(Origin::signed(10), 1000).unwrap();
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], last_reward: 0 })
+			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], next_reward: 0 })
 		);
 
 		// Attempting to free the balances now will fail. 2 eras need to pass.
 		Staking::withdraw_unbonded(Origin::signed(10)).unwrap();
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], last_reward: 0 }));
+			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], next_reward: 0 }));
 
 		// trigger next era.
 		start_era(3);
@@ -1149,7 +1152,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		// nothing yet
 		Staking::withdraw_unbonded(Origin::signed(10)).unwrap();
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], last_reward: 0 }));
+			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], next_reward: 0 }));
 
 		// trigger next era.
 		start_era(5);
@@ -1157,7 +1160,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		Staking::withdraw_unbonded(Origin::signed(10)).unwrap();
 		// Now the value is free and the staking ledger is updated.
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11, total: 100, active: 100, unlocking: vec![], last_reward: 0 }));
+			stash: 11, total: 100, active: 100, unlocking: vec![], next_reward: 0 }));
 	})
 }
 
@@ -1218,7 +1221,7 @@ fn rebond_works() {
 					total: 1000,
 					active: 1000,
 					unlocking: vec![],
-					last_reward: 0,
+					next_reward: 0,
 				})
 			);
 
@@ -1243,7 +1246,7 @@ fn rebond_works() {
 						value: 900,
 						era: 2 + 3,
 					}],
-					last_reward: 0,
+					next_reward: 0,
 				})
 			);
 
@@ -1256,7 +1259,7 @@ fn rebond_works() {
 					total: 1000,
 					active: 1000,
 					unlocking: vec![],
-					last_reward: 0,
+					next_reward: 0,
 				})
 			);
 
@@ -1269,7 +1272,7 @@ fn rebond_works() {
 					total: 1000,
 					active: 100,
 					unlocking: vec![UnlockChunk { value: 900, era: 5 }],
-					last_reward: 0,
+					next_reward: 0,
 				})
 			);
 
@@ -1282,7 +1285,7 @@ fn rebond_works() {
 					total: 1000,
 					active: 600,
 					unlocking: vec![UnlockChunk { value: 400, era: 5 }],
-					last_reward: 0,
+					next_reward: 0,
 				})
 			);
 
@@ -1295,7 +1298,7 @@ fn rebond_works() {
 					total: 1000,
 					active: 1000,
 					unlocking: vec![],
-					last_reward: 0,
+					next_reward: 0,
 				})
 			);
 
@@ -1314,7 +1317,7 @@ fn rebond_works() {
 						UnlockChunk { value: 300, era: 5 },
 						UnlockChunk { value: 300, era: 5 },
 					],
-					last_reward: 0,
+					next_reward: 0,
 				})
 			);
 
@@ -1330,7 +1333,7 @@ fn rebond_works() {
 						UnlockChunk { value: 300, era: 5 },
 						UnlockChunk { value: 100, era: 5 },
 					],
-					last_reward: 0,
+					next_reward: 0,
 				})
 			);
 		})
@@ -1360,7 +1363,7 @@ fn rebond_works() {
 // 		// Now lets lower account 20 stake
 // 		mock::bypass_logic_change_current_exposure(21, Exposure { total: 69, own: 69, others: vec![] });
 // 		assert_eq!(mock::validator_current_exposure(21).total, 69);
-// 		<Ledger<Test>>::insert(&20, StakingLedger { stash: 22, total: 69, active: 69, unlocking: vec![], last_reward: 0 });
+// 		<Ledger<Test>>::insert(&20, StakingLedger { stash: 22, total: 69, active: 69, unlocking: vec![], next_reward: 0 });
 
 // 		// Compute total payout now for whole duration as other parameter won't change
 // 		let total_payout_0 = current_total_payout_for_duration(3000);
@@ -1592,7 +1595,7 @@ fn bond_with_no_staked_value() {
 					active: 0,
 					total: 5,
 					unlocking: vec![UnlockChunk {value: 5, era: 3}],
-					last_reward: 0,
+					next_reward: 0,
 				})
 			);
 
@@ -1857,22 +1860,19 @@ fn reward_from_authorship_event_handler_works() {
 
 		<Module<Test>>::note_author(11);
 		<Module<Test>>::note_uncle(21, 1);
-		// An uncle author that is not currently elected doesn't get rewards,
-		// but the block producer does get reward for referencing it.
-		<Module<Test>>::note_uncle(31, 1);
 		// Rewarding the same two times works.
 		<Module<Test>>::note_uncle(11, 1);
 
 		// Not mandatory but must be coherent with rewards
-		assert_eq!(Session::validators(), vec![11, 21]);
+		assert_eq_uvec!(Session::validators(), vec![11, 21]);
 
 		// 21 is rewarded as an uncle producer
 		// 11 is rewarded as a block producer and uncle referencer and uncle producer
 		assert_eq!(
 			ErasRewardPoints::<Test>::get(ActiveEra::get()),
 			EraRewardPoints {
-				individual: vec![(11, 20 + 2 * 3 + 1), (21, 1)].into_iter().collect(),
-				total: 28,
+				individual: vec![(11, 20 + 2 * 2 + 1), (21, 1)].into_iter().collect(),
+				total: 26,
 			},
 		);
 	})
@@ -1882,15 +1882,8 @@ fn reward_from_authorship_event_handler_works() {
 fn add_reward_points_fns_works() {
 	ExtBuilder::default().build().execute_with(|| {
 		// Not mandatory but must be coherent with rewards
-		assert_eq!(Session::validators(), vec![11, 21]);
+		assert_eq!(Session::validators(), vec![21, 11]);
 
-		// TODO TODO: no longer reward_by_indices
-		// <Module<Test>>::reward_by_indices(vec![
-		// 	(1, 1),
-		// 	(0, 1),
-		// 	(2, 1),
-		// 	(0, 1),
-		// ]);
 		<Module<Test>>::reward_by_ids(vec![
 			(21, 1),
 			(11, 1),

@@ -26,12 +26,13 @@ use sp_core::{H256, crypto::key_types};
 use sp_io;
 use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap, StorageValue, StorageMap,
+	StorageDoubleMap,
 	traits::{Currency, Get, FindAuthor},
 	weights::Weight,
 };
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
-	Nominators, inflation, SessionInterface, Exposure,
+	Nominators, inflation, SessionInterface, Exposure, ErasStakers, ErasRewardPoints
 };
 
 /// The AccountId alias in this test module.
@@ -374,6 +375,7 @@ pub type Timestamp = pallet_timestamp::Module<Test>;
 pub type Staking = Module<Test>;
 
 pub fn check_exposure_all(era: EraIndex) {
+	// TODO TODO: and test order of nominators
 	// TODO TODO:
 	// Staking::validator_for_era(era).into_iter().for_each(|info| check_exposure(info));
 }
@@ -528,4 +530,31 @@ pub fn bypass_logic_change_current_exposure(stash: AccountId, exposure: Exposure
 	// 		}
 	// 	}
 	// });
+}
+
+/// Make all validator and nominator request their payment
+pub fn make_all_reward_payment(era: EraIndex) {
+	let validators_with_reward = ErasRewardPoints::<Test>::get(era).individual.keys()
+		.cloned()
+		.collect::<Vec<_>>();
+
+	// reward nominators
+	let mut nominator_controllers = HashSet::new();
+	for exposure in ErasStakers::<Test>::iter_prefix(era) {
+		for controller in exposure.others.iter().filter_map(|other| Staking::bonded(other.who)) {
+			nominator_controllers.insert(controller);
+		}
+	}
+	for nominator_controller in nominator_controllers {
+		assert_ok!(Staking::payout_nominator(
+			Origin::signed(nominator_controller),
+			era,
+			validators_with_reward.clone()
+		));
+	}
+
+	// reward validators
+	for validator_controller in validators_with_reward.iter().filter_map(Staking::bonded) {
+		assert_ok!(Staking::payout_validator(Origin::signed(validator_controller), era));
+	}
 }

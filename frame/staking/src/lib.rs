@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 // TODO TODO:
+// * fix: can someone make a new Ledger so it can claim old rewards ?
 // * migration
 // * upgrade test
 // * update doc
@@ -386,8 +387,8 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// Any balance that is becoming free, which may eventually be transferred out
 	/// of the stash (assuming it doesn't get slashed first).
 	pub unlocking: Vec<UnlockChunk<Balance>>,
-	/// The era up until which this staker had their reward paid.
-	pub last_reward: EraIndex,
+	/// The next era at which the staker can claim reward.
+	pub next_reward: EraIndex,
 	// TODO: ^^^ this will need migration logic.
 }
 
@@ -414,7 +415,7 @@ impl<
 			total,
 			active: self.active,
 			unlocking,
-			last_reward: self.last_reward
+			next_reward: self.next_reward
 		}
 	}
 
@@ -945,7 +946,7 @@ decl_module! {
 				total: value,
 				active: value,
 				unlocking: vec![],
-				last_reward: Self::eras_start_session_index(Self::current_era()),
+				next_reward: Self::current_era(),
 			};
 			Self::update_ledger(&controller, &item);
 		}
@@ -1355,11 +1356,11 @@ impl<T: Trait> Module<T> {
 		-> DispatchResult
 	{
 		let mut nominator_ledger = <Ledger<T>>::get(&who).ok_or_else(|| Error::<T>::NotController)?;
-		if nominator_ledger.last_reward >= era {
+		if nominator_ledger.next_reward > era {
 			return Err(Error::<T>::InvalidEraToReward.into());
 		}
 
-		nominator_ledger.last_reward = era;
+		nominator_ledger.next_reward = era + 1;
 		<Ledger<T>>::insert(&who, &nominator_ledger);
 
 		let mut reward = Perbill::zero();
@@ -1402,11 +1403,11 @@ impl<T: Trait> Module<T> {
 
 	fn do_payout_validator(who: T::AccountId, era: EraIndex) -> DispatchResult {
 		let mut ledger = <Ledger<T>>::get(&who).ok_or_else(|| Error::<T>::NotController)?;
-		if ledger.last_reward >= era {
+		if ledger.next_reward > era {
 			return Err(Error::<T>::InvalidEraToReward.into());
 		}
 
-		ledger.last_reward = era;
+		ledger.next_reward = era + 1;
 		<Ledger<T>>::insert(&who, &ledger);
 
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
@@ -1427,6 +1428,7 @@ impl<T: Trait> Module<T> {
 		let reward = validator_point_part.saturating_mul(commission.saturating_add(exposure_part));
 		// This is zero if the era is not finished yet.
 		let era_payout = <ErasValidatorReward<T>>::get(&era);
+		println!("do_payout_validator: {:?}, reward: {:?}, era_payout: {:?}", who, reward, era_payout);
 		if let Some(imbalance) = Self::make_payout(&ledger.stash, reward * era_payout) {
 			Self::deposit_event(RawEvent::Reward(who, imbalance.peek()));
 		}
@@ -1610,15 +1612,14 @@ impl<T: Trait> Module<T> {
 	/// Assumes storage is coherent with the declaration.
 	fn select_validators() -> Option<Vec<T::AccountId>> {
 		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
-		let all_validator_candidates_iter = <Validators<T>>::enumerate();
-		let all_validators_and_prefs = all_validator_candidates_iter.map(|(who, pref)| {
-			let self_vote = (who.clone(), vec![who.clone()]);
+		let mut all_validators_and_prefs = BTreeMap::new();
+		let mut all_validators = Vec::new();
+		for (validator, preference) in <Validators<T>>::enumerate() {
+			let self_vote = (validator.clone(), vec![validator.clone()]);
 			all_nominators.push(self_vote);
-			(who, pref)
-		}).collect::<BTreeMap<T::AccountId, ValidatorPrefs>>();
-		let all_validators = all_validators_and_prefs.iter()
-			.map(|(who, _pref)| who.clone())
-			.collect::<Vec<T::AccountId>>();
+			all_validators_and_prefs.insert(validator.clone(), preference);
+			all_validators.push(validator);
+		}
 
 		let nominator_votes = <Nominators<T>>::enumerate().map(|(nominator, nominations)| {
 			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
