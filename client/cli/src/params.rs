@@ -298,7 +298,7 @@ arg_enum! {
 	pub enum TracingReceiver {
 		Log,
 		Telemetry,
-		Grafana,
+		Prometheus,
 	}
 }
 
@@ -307,7 +307,7 @@ impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
 		match self {
 			TracingReceiver::Log => sc_tracing::TracingReceiver::Log,
 			TracingReceiver::Telemetry => sc_tracing::TracingReceiver::Telemetry,
-			TracingReceiver::Grafana => sc_tracing::TracingReceiver::Grafana,
+			TracingReceiver::Prometheus => sc_tracing::TracingReceiver::Prometheus,
 		}
 	}
 }
@@ -440,12 +440,6 @@ pub struct RunCmd {
 	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "ws-external")]
 	pub ws_external: bool,
-	/// Prometheus exporter TCP port.
-	#[structopt(long = "prometheus-port", value_name = "PORT")]
-	pub prometheus_port: Option<u16>,
-	/// Prometheus exporter on/off external".
-	#[structopt(long = "prometheus-external")]
-	pub prometheus_external: bool,
 
 	/// Listen to all Websocket interfaces.
 	///
@@ -453,11 +447,11 @@ pub struct RunCmd {
 	#[structopt(long = "unsafe-ws-external")]
 	pub unsafe_ws_external: bool,
 
-	/// Listen to all Grafana data source interfaces.
+	/// Listen to all Prometheus endpoint interfaces.
 	///
 	/// Default is local.
-	#[structopt(long = "grafana-external")]
-	pub grafana_external: bool,
+	#[structopt(long = "prometheus-external")]
+	pub prometheus_external: bool,
 
 	/// Specify HTTP RPC server TCP port.
 	#[structopt(long = "rpc-port", value_name = "PORT")]
@@ -481,9 +475,9 @@ pub struct RunCmd {
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
 
-	/// Specify Grafana data source server TCP Port.
-	#[structopt(long = "grafana-port", value_name = "PORT")]
-	pub grafana_port: Option<u16>,
+	/// Specify Prometheus endpoint TCP Port.
+	#[structopt(long = "prometheus-port", value_name = "PORT")]
+	pub prometheus_port: Option<u16>,
 
 	/// The human-readable name for this node.
 	///

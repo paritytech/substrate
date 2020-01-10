@@ -18,10 +18,20 @@ use ansi_term::Colour;
 use sc_client_api::ClientInfo;
 use log::info;
 use sc_network::SyncState;
-use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Zero, Saturating};
+use sp_runtime::traits::{
+	Block as BlockT, CheckedDiv, NumberFor, Zero, Saturating, UniqueSaturatedInto
+};
 use sc_service::NetworkStatus;
 use std::{convert::{TryFrom, TryInto}, fmt, time};
-use sc_prometheus::prometheus_gauge;
+use prometheus_endpoint::{create_gauge, Gauge};
+
+prometheus_endpoint::lazy_static! {
+	pub static ref SYNC_TARGET: Gauge = create_gauge(
+		"sync_target_number",
+		"block sync target number"
+	);
+}
+
 /// State of the informant display system.
 ///
 /// This is the system that handles the line that gets regularly printed and that looks something
@@ -64,7 +74,7 @@ impl<B: BlockT> InformantDisplay<B> {
 			(SyncState::Idle, _) => ("Idle".into(), "".into()),
 			(SyncState::Downloading, None) => (format!("Syncing{}", speed), "".into()),
 			(SyncState::Downloading, Some(n)) => {
-				prometheus_gauge!(TARGET_NUM => n.saturated_into().try_into().unwrap());
+				SYNC_TARGET.set(n.unique_saturated_into() as i64);
 				(format!("Syncing{}", speed), format!(", target=#{}", n))
 			}
 		};
