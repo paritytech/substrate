@@ -354,9 +354,51 @@ mod tests {
 	use super::*;
 	use futures::executor::block_on;
 	use codec::Encode;
-	use substrate_test_runtime_client::{prelude::*, runtime::{Block, Transfer}, sp_consensus::{BlockOrigin, SelectChain}};
+	use substrate_test_runtime_client::{
+		prelude::*, Client, runtime::{Block, Transfer}, sp_consensus::{BlockOrigin, SelectChain}
+	};
 	use sp_transaction_pool::PoolStatus;
 	use crate::api::{FullChainApi, LightChainApi};
+
+	struct TestSetup<Api: ChainApi> {
+		client: Arc<Client<Backend>>,
+		longest_chain: sc_client::LongestChain<Backend, Block>,
+		pool: Arc<sc_transaction_graph::Pool<Api>>,
+
+	}
+
+	impl<Api: ChainApi> TestSetup<Api> {
+		fn new() -> TestSetup<FullChainApi<Client<Backend>, Block>> {
+			let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+			let client = Arc::new(client);
+			let pool = Arc::new(
+				sc_transaction_graph::Pool::new(Default::default(), FullChainApi::new(client.clone())),
+			);
+			TestSetup {
+				client,
+				longest_chain,
+				pool,
+			}
+		}
+
+		fn new_light<F>(fetcher: Arc<F>) -> TestSetup<LightChainApi<Client<Backend>, F, Block>>
+		where F: Fetcher<Block> + 'static,
+		{
+			let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+			let client = Arc::new(client);
+			let pool = Arc::new(
+				sc_transaction_graph::Pool::new(
+					Default::default(),
+					LightChainApi::new(client.clone(), fetcher)
+				),
+			);
+			TestSetup {
+				client,
+				longest_chain,
+				pool,
+			}
+		}
+	}
 
 	#[test]
 	fn should_remove_transactions_from_the_full_pool() {

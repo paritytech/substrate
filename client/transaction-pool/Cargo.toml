@@ -21,3 +21,4 @@ sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 [dev-dependencies]
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
+sc-client = { version = "2.0.0", path = "../../client"}
