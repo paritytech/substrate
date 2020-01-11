@@ -19,6 +19,7 @@
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX};
 use state_machine::StorageProof;
 use sp_trie::{MemoryDB, Trie, trie_types::TrieDB};
+use sp_runtime::RuntimeDebug;
 
 // use crate::Error;
 
@@ -67,6 +68,7 @@ impl<H> StorageProofChecker<H>
 	}
 }
 
+#[derive(RuntimeDebug, PartialEq)]
 pub enum Error {
 	StorageRootMismatch,
 	StorageValueUnavailable,

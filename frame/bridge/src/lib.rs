@@ -42,6 +42,7 @@ use fg_primitives::{AuthorityId, AuthorityWeight};
 use sp_runtime::traits::Header;
 use state_machine::StorageProof;
 use frame_support::{
+	dispatch::{DispatchResult, DispatchError},
 	decl_error, decl_module, decl_storage,
 };
 use frame_system::{self as system, ensure_signed};
@@ -134,11 +135,11 @@ decl_error! {
 	}
 }
 
-impl<T: Trait> From<StorageError> for Error<T> {
+impl<T: Trait> From<StorageError> for DispatchError {
 	fn from(error: StorageError) -> Self {
 		match error {
-			StorageError::StorageRootMismatch => Error::<T>::StorageRootMismatch,
-			StorageError::StorageValueUnavailable => Error::<T>::StorageValueUnavailable,
+			StorageError::StorageRootMismatch => Error::<T>::StorageRootMismatch.into(),
+			StorageError::StorageValueUnavailable => Error::<T>::StorageValueUnavailable.into(),
 		}
 	}
 }
@@ -148,7 +149,7 @@ impl<T: Trait> Module<T> {
 		state_root: &T::Hash,
 		proof: StorageProof,
 		validator_set: &Vec<(AuthorityId, AuthorityWeight)>,
-	) -> Result<(), Error<T>> {
+	) -> DispatchResult {
 
 		let checker = <StorageProofChecker<<T::Hashing as sp_runtime::traits::Hash>::Hasher>>::new(
 			*state_root,
@@ -158,44 +159,43 @@ impl<T: Trait> Module<T> {
 		// By encoding the given set we should have an easy way to compare
 		// with the stuff we get out of storage via `read_value`
 		let encoded_validator_set = validator_set.encode();
-		let actual_validator_set = checker
+		let actual_validator_set: Vec<u8> = checker
 			.read_value(b":grandpa_authorities")?
-			.ok_or(Error::<T>::StorageValueUnavailable)?;
+			.ok_or(Error::<T>::StorageValueUnavailable.into())?;
 
 		if encoded_validator_set == actual_validator_set {
 			Ok(())
 		} else {
-			Err(Error::<T>::ValidatorSetMismatch)
-		}
-	}
-}
-
-// A naive way to check whether a `child` header is a decendent
-// of an `ancestor` header. For this it requires a proof which
-// is a chain of headers between (but not including) the `child`
-// and `ancestor`. This could be updated to use something like
-// Log2 Ancestors (#2053) in the future.
-fn verify_ancestry<H, T>(proof: Vec<H>, ancestor_hash: H::Hash, child: H) -> Result<(), Error<T>>
-where
-	H: Header,
-	T: Trait,
-{
-	let mut parent_hash = child.parent_hash();
-
-	// If we find that the header's parent hash matches our ancestor's hash we're done
-	for header in proof.iter() {
-		// Need to check that blocks are actually related
-		if header.hash() != *parent_hash {
-			break;
-		}
-
-		parent_hash = header.parent_hash();
-		if *parent_hash == ancestor_hash {
-			return Ok(())
+			Err(Error::<T>::ValidatorSetMismatch.into())
 		}
 	}
 
-	Err(Error::InvalidAncestryProof)
+	// A naive way to check whether a `child` header is a decendent
+	// of an `ancestor` header. For this it requires a proof which
+	// is a chain of headers between (but not including) the `child`
+	// and `ancestor`. This could be updated to use something like
+	// Log2 Ancestors (#2053) in the future.
+	fn verify_ancestry<H>(proof: Vec<H>, ancestor_hash: H::Hash, child: H) -> DispatchResult
+	where
+		H: Header,
+	{
+		let mut parent_hash = child.parent_hash();
+
+		// If we find that the header's parent hash matches our ancestor's hash we're done
+		for header in proof.iter() {
+			// Need to check that blocks are actually related
+			if header.hash() != *parent_hash {
+				break;
+			}
+
+			parent_hash = header.parent_hash();
+			if *parent_hash == ancestor_hash {
+				return Ok(())
+			}
+		}
+
+		Err(Error::<T>::InvalidAncestryProof.into())
+	}
 }
 
 #[cfg(test)]
@@ -206,10 +206,10 @@ mod tests {
 	use sp_runtime::{
 		Perbill, traits::{Header as HeaderT, IdentityLookup}, testing::Header, generic::Digest,
 	};
-	use support::{assert_ok, assert_err, impl_outer_origin, parameter_types};
+	use frame_support::{assert_ok, assert_err, impl_outer_origin, parameter_types};
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	#[derive(Clone, PartialEq, Eq, Debug)]
@@ -245,6 +245,7 @@ mod tests {
 		type AvailableBlockRatio = ();
 		type MaximumBlockLength = ();
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 
 	impl Trait for Test {}
@@ -308,7 +309,7 @@ mod tests {
 
 		assert_err!(
 			MockBridge::check_validator_set_proof(&root, proof, &invalid_authorities),
-			Error::ValidatorSetMismatch
+			Error::<Test>::ValidatorSetMismatch
 		);
 	}
 
@@ -387,7 +388,7 @@ mod tests {
 		let mut proof = build_header_chain(ancestor.clone(), 10);
 		let child = proof.remove(0);
 
-		assert_ok!(verify_ancestry(proof, ancestor.hash(), child));
+		assert_ok!(MockBridge::verify_ancestry(proof, ancestor.hash(), child));
 	}
 
 	#[test]
@@ -413,7 +414,7 @@ mod tests {
 		};
 
 		assert_err!(
-			verify_ancestry(proof, fake_ancestor.hash(), child),
+			MockBridge::verify_ancestry(proof, fake_ancestor.hash(), child),
 			Error::InvalidAncestryProof
 		);
 	}
@@ -443,7 +444,7 @@ mod tests {
 		invalid_proof.insert(5, fake_ancestor);
 
 		assert_err!(
-			verify_ancestry(invalid_proof, ancestor.hash(), child),
+			MockBridge::verify_ancestry(invalid_proof, ancestor.hash(), child),
 			Error::InvalidAncestryProof
 		);
 	}
