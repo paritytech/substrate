@@ -5859,7 +5859,6 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-client 2.0.0",
  "sc-client-api 2.0.0",
  "sc-transaction-graph 2.0.0",
  "sp-api 2.0.0",
