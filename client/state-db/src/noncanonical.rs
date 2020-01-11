@@ -102,9 +102,9 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 			let parent = parents.get(&overlay.hash).expect("there is a parent entry for each entry in levels; qed").clone();
 			if parent == *hash {
 				discarded.push(overlay.hash.clone());
-				if pinned.contains_key(hash) {
+				if pinned.contains_key(&overlay.hash) {
 					// save to be discarded later.
-					pinned_insertions.insert(hash.clone(), overlay.inserted);
+					pinned_insertions.insert(overlay.hash.clone(), overlay.inserted);
 				} else {
 					// discard immediatelly.
 					parents.remove(&overlay.hash);
@@ -427,6 +427,10 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 	/// Pin state values in memory
 	pub fn pin(&mut self, hash: &BlockHash) {
+		if self.pending_insertions.contains(hash) {
+			debug_assert!(false, "Trying to pin pending state");
+			return;
+		}
 		// Also pin all parents
 		let mut parent = Some(hash);
 		while let Some(hash) = parent {
@@ -840,6 +844,7 @@ mod tests {
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(&overlay.insert::<io::Error>(&h_1, 1, &H256::default(), c_1).unwrap());
 		db.commit(&overlay.insert::<io::Error>(&h_2, 1, &H256::default(), c_2).unwrap());
+		overlay.apply_pending();
 
 		overlay.pin(&h_1);
 
@@ -869,6 +874,7 @@ mod tests {
 		db.commit(&overlay.insert::<io::Error>(&h_1, 1, &H256::default(), c_1).unwrap());
 		db.commit(&overlay.insert::<io::Error>(&h_2, 1, &H256::default(), c_2).unwrap());
 		db.commit(&overlay.insert::<io::Error>(&h_3, 1, &H256::default(), c_3).unwrap());
+		overlay.apply_pending();
 
 		overlay.pin(&h_1);
 
@@ -889,7 +895,6 @@ mod tests {
 		// - 0 - 1_1 - 2_1
 		//     \ 1_2
 
-		// 1_1 and 1_2 both make the same change
 		let (h_11, c_11) = (H256::random(), make_changeset(&[1], &[]));
 		let (h_12, c_12) = (H256::random(), make_changeset(&[], &[]));
 		let (h_21, c_21) = (H256::random(), make_changeset(&[], &[]));
@@ -898,6 +903,7 @@ mod tests {
 		db.commit(&overlay.insert::<io::Error>(&h_11, 1, &H256::default(), c_11).unwrap());
 		db.commit(&overlay.insert::<io::Error>(&h_12, 1, &H256::default(), c_12).unwrap());
 		db.commit(&overlay.insert::<io::Error>(&h_21, 2, &h_11, c_21).unwrap());
+		overlay.apply_pending();
 
 		overlay.pin(&h_21);
 
