@@ -1108,7 +1108,14 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		const MAX_BID_COUNT: usize = 1000;
 
 		match bids.binary_search_by(|bid| bid.value.cmp(&value)) {
-			Ok(pos) | Err(pos) => bids.insert(pos, Bid {
+			// Insert new elements after the existing ones. This ensures new bids
+			// with the same bid value are further down the list than existing ones.
+			Ok(pos) => bids.insert(pos + 1, Bid {
+				value,
+				who: who.clone(),
+				kind: bid_kind,
+			}),
+			Err(pos) => bids.insert(pos, Bid {
 				value,
 				who: who.clone(),
 				kind: bid_kind,
@@ -1484,24 +1491,57 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	{
 		let max_members = MaxMembers::<I>::get() as usize;
 		// No more than 10 will be returned.
-		let max_selections: usize = 10.min(max_members.saturating_sub(members_len));
+		let mut max_selections: usize = 10.min(max_members.saturating_sub(members_len));
 
-		// Get the number of left-most bidders whose bids add up to less than `pot`.
-		let mut bids = <Bids<T, I>>::get();
-		let taken = bids.iter()
-			.scan(<BalanceOf<T, I>>::zero(), |total, bid| {
-				*total = total.saturating_add(bid.value);
-				Some((*total, bid.who.clone(), bid.kind.clone()))
-			})
-			.take(max_selections)
-			.take_while(|x| pot >= x.0)
-			.count();
+		if max_selections > 0 {
+			// Get the number of left-most bidders whose bids add up to less than `pot`.
+			let mut bids = <Bids<T, I>>::get();
 
-		// No need to reset Bids if we're not taking anything.
-		if taken > 0 {
-			<Bids<T, I>>::put(&bids[taken..]);
+			// The list of selected candidates
+			let mut selected = Vec::new();
+			
+			if bids.len() > 0 {
+				// Can only select at most the length of bids
+				max_selections = max_selections.min(bids.len());
+				// Number of selected bids so far
+				let mut count = 0;
+				// Check if we have already selected a candidate with zero bid
+				let mut zero_selected = false;
+				// A running total of the cost to onboard these bids
+				let mut total_cost: BalanceOf<T, I> = Zero::zero();
+
+				bids.retain(|bid| {
+					if count < max_selections {
+						// Handle zero bids. We only want one of them.
+						if bid.value.is_zero() {
+							// Select only the first zero bid
+							if !zero_selected {
+								selected.push(bid.clone());
+								zero_selected = true;
+								count += 1;
+								return false
+							}
+						} else {
+							total_cost += bid.value;
+							// Select only as many users as the pot can support.
+							if total_cost <= pot {
+								selected.push(bid.clone());
+								count += 1;
+								return false
+							}
+						}
+					}
+					true
+				});
+
+				// No need to reset Bids if we're not taking anything.
+				if count > 0 {
+					<Bids<T, I>>::put(bids);
+				}
+			}
+			selected
+		} else {
+			vec![]
 		}
-		bids.truncate(taken);
-		bids
 	}
 }

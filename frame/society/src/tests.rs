@@ -742,3 +742,29 @@ fn max_limits_work() {
 		assert_eq!(Society::candidates().len(), 10);
 	});
 }
+
+#[test]
+fn one_zero_bid() {
+	EnvBuilder::new().execute(|| {
+		// Users make bids of various amounts
+		assert_ok!(Society::bid(Origin::signed(60), 400));
+		assert_ok!(Society::bid(Origin::signed(50), 300));
+		assert_ok!(Society::bid(Origin::signed(30), 0));
+		assert_ok!(Society::bid(Origin::signed(20), 0));
+		assert_ok!(Society::bid(Origin::signed(40), 0));
+
+		println!("{:?}", <Bids<Test>>::get());
+
+		// Rotate period
+		run_to_block(4);
+		// Pot is 1000 after "PeriodSpend"
+		assert_eq!(Society::pot(), 1000);
+		assert_eq!(Balances::free_balance(Society::account_id()), 10_000);
+		// Choose smallest bidding users whose total is less than pot, with only one zero bid.
+		assert_eq!(Society::candidates(), vec![
+			create_bid(0, 30, BidKind::Deposit(25)),
+			create_bid(300, 50, BidKind::Deposit(25)),
+			create_bid(400, 60, BidKind::Deposit(25)),
+		]);
+	});
+}
