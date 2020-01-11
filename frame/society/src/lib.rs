@@ -1306,7 +1306,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				// select one as primary, randomly chosen from the accepted, weighted by approvals. 
 				// Choose a random number between 0 and `total_approvals`
 				let primary_point = pick_usize(&mut rng, total_approvals - 1);
-				// Find the user who falls on that point
+				// Find the zero bid or the user who falls on that point
 				let primary = accepted.iter().find(|e| e.2.is_zero() || e.1 > primary_point)
 					.expect("e.1 of final item == total_approvals; \
 						worst case find will always return that item; qed")
