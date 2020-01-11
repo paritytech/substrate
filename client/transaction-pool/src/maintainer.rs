@@ -354,41 +354,91 @@ mod tests {
 	use super::*;
 	use futures::executor::block_on;
 	use codec::Encode;
-	use substrate_test_runtime_client::{prelude::*, runtime::{Block, Transfer}, sp_consensus::{BlockOrigin, SelectChain}};
+	use substrate_test_runtime_client::{
+		prelude::*, Client, runtime::{Block, Transfer}, sp_consensus::{BlockOrigin, SelectChain},
+		LongestChain,
+	};
 	use sp_transaction_pool::PoolStatus;
 	use crate::api::{FullChainApi, LightChainApi};
 
+	struct TestSetup<Api: ChainApi> {
+		client: Arc<Client<Backend>>,
+		longest_chain: LongestChain<Backend, Block>,
+		pool: Arc<sc_transaction_graph::Pool<Api>>,
+	}
+
+	impl<Api: ChainApi> TestSetup<Api> {
+		fn new() -> TestSetup<FullChainApi<Client<Backend>, Block>> {
+			let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+			let client = Arc::new(client);
+			let pool = Arc::new(
+				sc_transaction_graph::Pool::new(Default::default(), FullChainApi::new(client.clone())),
+			);
+			TestSetup {
+				client,
+				longest_chain,
+				pool,
+			}
+		}
+
+		fn new_light<F>(fetcher: Arc<F>) -> TestSetup<LightChainApi<Client<Backend>, F, Block>>
+		where F: Fetcher<Block> + 'static,
+		{
+			let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+			let client = Arc::new(client);
+			let pool = Arc::new(
+				sc_transaction_graph::Pool::new(
+					Default::default(),
+					LightChainApi::new(client.clone(), fetcher)
+				),
+			);
+			TestSetup {
+				client,
+				longest_chain,
+				pool,
+			}
+		}
+	}
+
+	fn setup() -> TestSetup<FullChainApi<Client<Backend>, Block>> {
+		TestSetup::<FullChainApi<Client<Backend>, Block>>::new()
+	}
+
+	fn setup_light<F>(fetcher: Arc<F>) -> TestSetup<LightChainApi<Client<Backend>, F, Block>>
+	where F: Fetcher<Block> + 'static,
+	{
+		TestSetup::<LightChainApi<Client<Backend>, F, Block>>::new_light(fetcher)
+	}
+
 	#[test]
 	fn should_remove_transactions_from_the_full_pool() {
-		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
-		let mut client = Arc::new(client);
-		let pool = sc_transaction_graph::Pool::new(Default::default(), FullChainApi::new(client.clone()));
-		let pool = Arc::new(pool);
+		let mut setup = setup();
+
 		let transaction = Transfer {
 			amount: 5,
 			nonce: 0,
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		}.into_signed_tx();
-		let best = longest_chain.best_chain().unwrap();
+		let best = setup.longest_chain.best_chain().unwrap();
 
 		// store the transaction in the pool
-		block_on(pool.submit_one(&BlockId::hash(best.hash()), transaction.clone())).unwrap();
+		block_on(setup.pool.submit_one(&BlockId::hash(best.hash()), transaction.clone())).unwrap();
 
 		// import the block
-		let mut builder = client.new_block(Default::default()).unwrap();
+		let mut builder = setup.client.new_block(Default::default()).unwrap();
 		builder.push(transaction.clone()).unwrap();
 		let block = builder.build().unwrap().block;
 		let id = BlockId::hash(block.header().hash());
-		client.import(BlockOrigin::Own, block).unwrap();
+		setup.client.import(BlockOrigin::Own, block).unwrap();
 
 		// fire notification - this should clean up the queue
-		assert_eq!(pool.status().ready, 1);
-		block_on(FullBasicPoolMaintainer::new(pool.clone(), client).maintain(&id, &[]));
+		assert_eq!(setup.pool.status().ready, 1);
+		block_on(FullBasicPoolMaintainer::new(setup.pool.clone(), setup.client.clone()).maintain(&id, &[]));
 
 		// then
-		assert_eq!(pool.status().ready, 0);
-		assert_eq!(pool.status().future, 0);
+		assert_eq!(setup.pool.status().ready, 0);
+		assert_eq!(setup.pool.status().future, 0);
 	}
 
 	#[test]
@@ -414,28 +464,22 @@ mod tests {
 				Ok(validity.encode())
 			}))));
 
-		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
-		let client = Arc::new(client);
-		let pool = sc_transaction_graph::Pool::new(Default::default(), LightChainApi::new(
-			client.clone(),
-			fetcher.clone(),
-		));
-		let pool = Arc::new(pool);
-		let best = longest_chain.best_chain().unwrap();
+		let setup = setup_light(fetcher.clone());
+		let best = setup.longest_chain.best_chain().unwrap();
 
 		// store the transaction in the pool
-		block_on(pool.submit_one(&BlockId::hash(best.hash()), transaction.clone())).unwrap();
+		block_on(setup.pool.submit_one(&BlockId::hash(best.hash()), transaction.clone())).unwrap();
 
 		// fire notification - this should clean up the queue
-		assert_eq!(pool.status().ready, 1);
-		block_on(LightBasicPoolMaintainer::with_defaults(pool.clone(), client.clone(), fetcher).maintain(
+		assert_eq!(setup.pool.status().ready, 1);
+		block_on(LightBasicPoolMaintainer::with_defaults(setup.pool.clone(), setup.client.clone(), fetcher).maintain(
 			&BlockId::Number(0),
 			&[],
 		));
 
 		// then
-		assert_eq!(pool.status().ready, 0);
-		assert_eq!(pool.status().future, 0);
+		assert_eq!(setup.pool.status().ready, 0);
+		assert_eq!(setup.pool.status().future, 0);
 	}
 
 	#[test]
@@ -499,21 +543,13 @@ mod tests {
 			revalidate_block_period: Option<u64>,
 			prepare_maintainer: impl Fn(&Mutex<TxPoolRevalidationStatus<u64>>),
 		) -> PoolStatus {
-			let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
-			let client = Arc::new(client);
-
-			// now let's prepare pool
-			let pool = sc_transaction_graph::Pool::new(Default::default(), LightChainApi::new(
-				client.clone(),
-				fetcher.clone(),
-			));
-			let pool = Arc::new(pool);
-			let best = longest_chain.best_chain().unwrap();
+			let setup = setup_light(fetcher.clone());
+			let best = setup.longest_chain.best_chain().unwrap();
 
 			// let's prepare maintainer
 			let maintainer = LightBasicPoolMaintainer::new(
-				pool.clone(),
-				client,
+				setup.pool.clone(),
+				setup.client.clone(),
 				fetcher,
 				revalidate_time_period,
 				revalidate_block_period,
@@ -521,7 +557,7 @@ mod tests {
 			prepare_maintainer(&*maintainer.revalidation_status);
 
 			// store the transaction in the pool
-			block_on(pool.submit_one(
+			block_on(setup.pool.submit_one(
 				&BlockId::hash(best.hash()),
 				Transfer {
 					amount: 5,
@@ -534,7 +570,7 @@ mod tests {
 			// and run maintain procedures
 			block_on(maintainer.maintain(&BlockId::Number(0), &[]));
 
-			pool.status()
+			setup.pool.status()
 		}
 
 		// when revalidation is never required - nothing happens
@@ -560,52 +596,50 @@ mod tests {
 
 	#[test]
 	fn should_add_reverted_transactions_to_the_pool() {
-		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
-		let mut client = Arc::new(client);
-		let pool = sc_transaction_graph::Pool::new(Default::default(), FullChainApi::new(client.clone()));
-		let pool = Arc::new(pool);
+		let mut setup = setup();
+
 		let transaction = Transfer {
 			amount: 5,
 			nonce: 0,
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		}.into_signed_tx();
-		let best = longest_chain.best_chain().unwrap();
+		let best = setup.longest_chain.best_chain().unwrap();
 
 		// store the transaction in the pool
-		block_on(pool.submit_one(&BlockId::hash(best.hash()), transaction.clone())).unwrap();
+		block_on(setup.pool.submit_one(&BlockId::hash(best.hash()), transaction.clone())).unwrap();
 
 		// import the block
-		let mut builder = client.new_block(Default::default()).unwrap();
+		let mut builder = setup.client.new_block(Default::default()).unwrap();
 		builder.push(transaction.clone()).unwrap();
 		let block = builder.build().unwrap().block;
 		let block1_hash = block.header().hash();
 		let id = BlockId::hash(block1_hash.clone());
-		client.import(BlockOrigin::Own, block).unwrap();
+		setup.client.import(BlockOrigin::Own, block).unwrap();
 
 		// fire notification - this should clean up the queue
-		assert_eq!(pool.status().ready, 1);
-		block_on(FullBasicPoolMaintainer::new(pool.clone(), client.clone()).maintain(&id, &[]));
+		assert_eq!(setup.pool.status().ready, 1);
+		block_on(FullBasicPoolMaintainer::new(setup.pool.clone(), setup.client.clone()).maintain(&id, &[]));
 
 		// then
-		assert_eq!(pool.status().ready, 0);
-		assert_eq!(pool.status().future, 0);
+		assert_eq!(setup.pool.status().ready, 0);
+		assert_eq!(setup.pool.status().future, 0);
 
 		// import second block
-		let builder = client.new_block_at(
+		let builder = setup.client.new_block_at(
 			&BlockId::hash(best.hash()),
 			Default::default(),
 			false,
 		).unwrap();
 		let block = builder.build().unwrap().block;
 		let id = BlockId::hash(block.header().hash());
-		client.import(BlockOrigin::Own, block).unwrap();
+		setup.client.import(BlockOrigin::Own, block).unwrap();
 
 		// fire notification - this should add the transaction back to the pool.
-		block_on(FullBasicPoolMaintainer::new(pool.clone(), client).maintain(&id, &[block1_hash]));
+		block_on(FullBasicPoolMaintainer::new(setup.pool.clone(), setup.client.clone()).maintain(&id, &[block1_hash]));
 
 		// then
-		assert_eq!(pool.status().ready, 1);
-		assert_eq!(pool.status().future, 0);
+		assert_eq!(setup.pool.status().ready, 1);
+		assert_eq!(setup.pool.status().future, 0);
 	}
 }
