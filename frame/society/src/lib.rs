@@ -1271,7 +1271,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 					// We track here the total_approvals so that every candidate has a unique range
 					// of numbers from 0 to `total_approvals` with length `approval_count` so each
 					// candidate is proportionally represented when selecting a "primary" below.
-					Some((candidate, total_approvals))
+					Some((candidate, total_approvals, value))
 				} else {
 					// Suspend Candidate
 					<SuspendedCandidates<T, I>>::insert(&candidate, (value, kind));
@@ -1307,7 +1307,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				// Choose a random number between 0 and `total_approvals`
 				let primary_point = pick_usize(&mut rng, total_approvals - 1);
 				// Find the user who falls on that point
-				let primary = accepted.iter().find(|e| e.1 > primary_point)
+				let primary = accepted.iter().find(|e| e.2.is_zero() || e.1 > primary_point)
 					.expect("e.1 of final item == total_approvals; \
 						worst case find will always return that item; qed")
 					.0.clone();

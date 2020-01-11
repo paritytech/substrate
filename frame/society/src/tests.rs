@@ -744,7 +744,10 @@ fn max_limits_work() {
 }
 
 #[test]
-fn one_zero_bid() {
+fn zero_bid_works() {
+	// This tests:
+	// * Only one zero bid is selected.
+	// * That zero bid is places as head when accepted.
 	EnvBuilder::new().execute(|| {
 		// Users make bids of various amounts
 		assert_ok!(Society::bid(Origin::signed(60), 400));
@@ -766,5 +769,18 @@ fn one_zero_bid() {
 			create_bid(300, 50, BidKind::Deposit(25)),
 			create_bid(400, 60, BidKind::Deposit(25)),
 		]);
+		assert_eq!(<Bids<Test>>::get(), vec![
+			create_bid(0, 20, BidKind::Deposit(25)),
+			create_bid(0, 40, BidKind::Deposit(25)),
+		]);
+		// A member votes for these candidates to join the society
+		assert_ok!(Society::vote(Origin::signed(10), 30, true));
+		assert_ok!(Society::vote(Origin::signed(10), 50, true));
+		assert_ok!(Society::vote(Origin::signed(10), 60, true));
+		run_to_block(8);
+		// Candidates become members after a period rotation
+		assert_eq!(Society::members(), vec![10, 30, 50, 60]);
+		// The zero bid is selected as head
+		assert_eq!(Society::head(), Some(30));
 	});
 }
