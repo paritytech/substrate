@@ -35,12 +35,35 @@ use futures::{Future, FutureExt};
 
 use sp_runtime::{
 	generic::BlockId,
-	traits::Block as BlockT,
+	traits::{Block as BlockT, BlockIdTo},
 };
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream,
 	TxHash, TransactionFor, TransactionStatusStreamFor,
 };
+use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
+use sp_api::ProvideRuntimeApi;
+use sp_blockchain::HeaderBackend;
+use sc_client_api::client::BlockBody;
+
+/// Client meta trait to be used with transaction pool.
+pub trait TransactionPoolClient<Block: BlockT> :
+	ProvideRuntimeApi<Block> + HeaderBackend<Block> + BlockBody<Block> + BlockIdTo<Block> + Send + Sync
+{
+}
+
+impl<
+	Block: BlockT,
+	T: ProvideRuntimeApi<Block> +
+	HeaderBackend<Block> +
+	BlockBody<Block> +
+	BlockIdTo<Block> +
+	Send +
+	Sync,
+> TransactionPoolClient<Block> for T
+where T::Api: TaggedTransactionQueue<Block>
+{
+}
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
 pub struct BasicPool<PoolApi, Block>

@@ -28,13 +28,12 @@ use sc_client_api::{
 };
 use sp_core::Hasher;
 use sp_runtime::{
-	generic::BlockId, traits::{self, Block as BlockT, BlockIdTo, Header as HeaderT, Hash as HashT},
+	generic::BlockId, traits::{self, Block as BlockT, Header as HeaderT, Hash as HashT},
 	transaction_validity::TransactionValidity,
 };
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
-use sp_api::ProvideRuntimeApi;
 
-use crate::error::{self, Error};
+use crate::{TransactionPoolClient, error::{self, Error}};
 
 /// The transaction pool logic for full client.
 pub struct FullChainApi<Client, Block> {
@@ -45,7 +44,7 @@ pub struct FullChainApi<Client, Block> {
 
 impl<Client, Block> FullChainApi<Client, Block> where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockIdTo<Block>,
+	Client: TransactionPoolClient<Block>,
 {
 	/// Create new transaction pool logic.
 	pub fn new(client: Arc<Client>) -> Self {
@@ -63,7 +62,7 @@ impl<Client, Block> FullChainApi<Client, Block> where
 
 impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block> where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockIdTo<Block> + 'static + Send + Sync,
+	Client: TransactionPoolClient<Block> + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 	sp_api::ApiErrorFor<Client, Block>: Send,
 {

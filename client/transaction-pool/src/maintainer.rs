@@ -26,19 +26,14 @@ use futures::{
 use log::{warn, debug, trace};
 use parking_lot::Mutex;
 
-use sc_client_api::{
-	client::BlockBody,
-	light::{Fetcher, RemoteBodyRequest},
-};
+use sc_client_api::light::{Fetcher, RemoteBodyRequest};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Extrinsic, Header, NumberFor, SimpleArithmetic},
 };
-use sp_blockchain::HeaderBackend;
-use sp_transaction_pool::{TransactionPoolMaintainer, runtime_api::TaggedTransactionQueue};
-use sp_api::ProvideRuntimeApi;
-
+use sp_transaction_pool::TransactionPoolMaintainer;
 use sc_transaction_graph::{self, ChainApi};
+use crate::TransactionPoolClient;
 
 /// Basic transaction pool maintainer for full clients.
 pub struct FullBasicPoolMaintainer<Client, PoolApi: ChainApi> {
@@ -61,8 +56,7 @@ for
 	FullBasicPoolMaintainer<Client, PoolApi>
 where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + BlockBody<Block> + 'static,
-	Client::Api: TaggedTransactionQueue<Block>,
+	Client: TransactionPoolClient<Block> + 'static,
 	PoolApi: ChainApi<Block = Block, Hash = Block::Hash> + 'static,
 {
 	type Block = Block;
@@ -154,8 +148,7 @@ pub struct LightBasicPoolMaintainer<Block: BlockT, Client, PoolApi: ChainApi, F>
 impl<Block, Client, PoolApi, F> LightBasicPoolMaintainer<Block, Client, PoolApi, F>
 	where
 		Block: BlockT,
-		Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + BlockBody<Block> + 'static,
-		Client::Api: TaggedTransactionQueue<Block>,
+		Client: TransactionPoolClient<Block> + 'static,
 		PoolApi: ChainApi<Block = Block, Hash = Block::Hash> + 'static,
 		F: Fetcher<Block> + 'static,
 {
@@ -261,8 +254,7 @@ for
 	LightBasicPoolMaintainer<Block, Client, PoolApi, F>
 where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + BlockBody<Block> + 'static,
-	Client::Api: TaggedTransactionQueue<Block>,
+	Client: TransactionPoolClient<Block> + 'static,
 	PoolApi: ChainApi<Block = Block, Hash = Block::Hash> + 'static,
 	F: Fetcher<Block> + 'static,
 {
