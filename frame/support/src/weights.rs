@@ -241,7 +241,7 @@ impl SimpleDispatchInfo {
 ///
 /// - `F`: a closure with the same argument list as the dispatched, wrapped in a tuple.
 /// - `DispatchClass`: class of the dispatch.
-/// - `bool`: weather this dispatch pays fee or not.
+/// - `bool`: whether this dispatch pays fee or not.
 pub struct FunctionOf<F>(pub F, pub DispatchClass, pub bool);
 
 impl<Args, F> WeighData<Args> for FunctionOf<F>
