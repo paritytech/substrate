@@ -143,6 +143,14 @@ impl<H, N, V> ForkTree<H, N, V> where
 		}
 	}
 
+	/// Rebalance the tree, i.e. sort child nodes by max branch depth
+	/// (decreasing).
+	///
+	/// Most operations in the tree are performed with depth-search starting
+	/// from the leftmost node, since this tree is meant to be used in a
+	/// blockchain context, a good heuristic is that the node we'll be looking
+	/// for at any point will likely be in one of the deepest chains (i.e. the
+	/// longest ones).
 	pub fn rebalance(&mut self) {
 		self.roots.sort_by_key(|n| Reverse(n.max_depth()));
 		for root in &mut self.roots {
@@ -535,6 +543,7 @@ mod node_implementation {
 	}
 
 	impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
+		/// Rebalance the tree, i.e. sort child nodes by max branch depth (decreasing).
 		pub fn rebalance(&mut self) {
 			self.children.sort_by_key(|n| Reverse(n.max_depth()));
 			for child in &mut self.children {
@@ -542,6 +551,7 @@ mod node_implementation {
 			}
 		}
 
+		/// Finds the max depth among all branches descendent from this node.
 		pub fn max_depth(&self) -> usize {
 			let mut max = 0;
 
