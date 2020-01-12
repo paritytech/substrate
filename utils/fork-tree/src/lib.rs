@@ -146,9 +146,10 @@ impl<H, N, V> ForkTree<H, N, V> where
 	/// Rebalance the tree, i.e. sort child nodes by max branch depth
 	/// (decreasing).
 	///
-	/// Most operations in the tree are performed with depth-search starting
-	/// from the leftmost node, since this tree is meant to be used in a
-	/// blockchain context, a good heuristic is that the node we'll be looking
+	/// Most operations in the tree are performed with depth-first search
+	/// starting from the leftmost node at every level, since this tree is meant
+	/// to be used in a blockchain context, a good heuristic is that the node
+	/// we'll be looking
 	/// for at any point will likely be in one of the deepest chains (i.e. the
 	/// longest ones).
 	pub fn rebalance(&mut self) {
