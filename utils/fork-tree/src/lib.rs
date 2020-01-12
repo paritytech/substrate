@@ -1303,4 +1303,24 @@ mod test {
 
 		assert_eq!(node.unwrap().hash, "B");
 	}
+
+	#[test]
+	fn tree_rebalance() {
+		let (mut tree, _) = test_fork_tree();
+
+		assert_eq!(
+			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
+			vec!["A", "B", "C", "D", "E", "F", "G", "H", "I", "L", "M", "O", "J", "K"],
+		);
+
+		// after rebalancing the tree we should iterate in preorder exploring
+		// the longest forks first. check the ascii art above to understand the
+		// expected output below.
+		tree.rebalance();
+
+		assert_eq!(
+			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
+			["A", "B", "C", "D", "E", "F", "H", "L", "M", "O", "I", "G", "J", "K"]
+		);
+	}
 }
