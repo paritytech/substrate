@@ -306,9 +306,6 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	CAW: CanAuthorWith<B> + Send,
 {
 	let config = babe_link.config;
-
-	babe_link.epoch_changes.lock().rebalance();
-
 	let worker = BabeWorker {
 		client: client.clone(),
 		block_import: Arc::new(Mutex::new(block_import)),
@@ -1220,8 +1217,6 @@ pub fn import_queue<B, E, Block: BlockT, I, RA, PRA>(
 	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = sp_blockchain::Error>,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
-
-	babe_link.epoch_changes.lock().rebalance();
 
 	let verifier = BabeVerifier {
 		client: client.clone(),
