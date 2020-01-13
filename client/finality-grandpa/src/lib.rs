@@ -371,7 +371,7 @@ pub trait GenesisAuthoritySetProvider<Block: BlockT> {
 impl<B, E, Block: BlockT, RA> GenesisAuthoritySetProvider<Block> for Client<B, E, Block, RA>
 	where
 		B: Backend<Block> + Send + Sync + 'static,
-		E: CallExecutor<Block> + 'static + Clone + Send + Sync,
+		E: CallExecutor<Block> + Send + Sync,
 		RA: Send + Sync,
 {
 	fn get(&self) -> Result<AuthorityList, ClientError> {
@@ -407,7 +407,7 @@ pub fn block_import<B, E, Block: BlockT, RA, SC>(
 	), ClientError>
 where
 	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
+	E: CallExecutor<Block> + Send + Sync,
 	RA: Send + Sync,
 	SC: SelectChain<Block>,
 	Client<B, E, Block, RA>: AuxStore,
@@ -464,7 +464,7 @@ fn global_communication<Block: BlockT, B, E, N, RA>(
 	>,
 ) where
 	B: Backend<Block>,
-	E: CallExecutor<Block> + Send + Sync + 'static,
+	E: CallExecutor<Block> + Send + Sync,
 	N: NetworkT<Block>,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,

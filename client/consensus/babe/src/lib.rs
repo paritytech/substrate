@@ -1120,7 +1120,7 @@ fn prune_finalized<B, E, Block, RA>(
 	epoch_changes: &mut EpochChangesFor<Block>,
 ) -> Result<(), ConsensusError> where
 	Block: BlockT,
-	E: CallExecutor<Block> + Send + Sync + 'static,
+	E: CallExecutor<Block> + Send + Sync,
 	B: Backend<Block>,
 	RA: Send + Sync,
 {
@@ -1160,7 +1160,7 @@ pub fn block_import<B, E, Block: BlockT, I, RA, PRA>(
 	api: Arc<PRA>,
 ) -> ClientResult<(BabeBlockImport<B, E, Block, I, RA, PRA>, BabeLink<Block>)> where
 	B: Backend<Block>,
-	E: CallExecutor<Block> + Send + Sync + 'static,
+	E: CallExecutor<Block> + Send + Sync,
 	RA: Send + Sync,
 	Client<B, E, Block, RA>: AuxStore,
 {

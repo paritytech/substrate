@@ -99,7 +99,7 @@ pub fn factory<RA, Backend, Exec, Block, RtApi, Sc>(
 ) -> sc_cli::error::Result<()>
 where
 	Block: BlockT,
-	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone + 'static,
+	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
 	Backend: sc_client_api::backend::Backend<Block> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
@@ -159,7 +159,7 @@ pub fn create_block<RA, Backend, Exec, Block, RtApi>(
 ) -> Block
 where
 	Block: BlockT,
-	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone + 'static,
+	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
 	Backend: sc_client_api::backend::Backend<Block> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
@@ -186,7 +186,7 @@ fn import_block<Backend, Exec, Block, RtApi>(
 	block: Block
 ) -> () where
 	Block: BlockT,
-	Exec: sc_client::CallExecutor<Block> + Send + Sync + Clone + 'static,
+	Exec: sc_client::CallExecutor<Block> + Send + Sync + Clone,
 	Backend: sc_client_api::backend::Backend<Block> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:

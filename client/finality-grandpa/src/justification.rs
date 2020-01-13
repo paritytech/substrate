@@ -53,7 +53,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 		commit: Commit<Block>,
 	) -> Result<GrandpaJustification<Block>, Error> where
 		B: Backend<Block>,
-		E: CallExecutor<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync,
 		RA: Send + Sync,
 	{
 		let mut votes_ancestries_hashes = HashSet::new();

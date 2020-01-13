@@ -412,7 +412,7 @@ for Environment<B, E, Block, N, RA, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + Send + Sync + 'static,
+	E: CallExecutor<Block> + Send + Sync,
  	N: NetworkT<Block> + 'static + Send,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
@@ -951,7 +951,7 @@ pub(crate) fn finalize_block<B, Block: BlockT, E, RA>(
 	justification_or_commit: JustificationOrCommit<Block>,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
 	B: Backend<Block>,
-	E: CallExecutor<Block> + Send + Sync + 'static,
+	E: CallExecutor<Block> + Send + Sync,
 	RA: Send + Sync,
 {
 	// NOTE: lock must be held through writing to DB to avoid race. this lock
