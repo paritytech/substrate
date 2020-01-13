@@ -100,12 +100,9 @@ where
 	factory_state.set_block_no(factory_state.block_no() + RA::Number::one());
 
 	info!(
-		"Created block {} with hash {}. Transferring {} from {} to {}.",
+		"Created block {} with hash {}.",
 		factory_state.block_no(),
 		prior_block_hash,
-		amount,
-		from.0,
-		to
 	);
 
 	Some(block)

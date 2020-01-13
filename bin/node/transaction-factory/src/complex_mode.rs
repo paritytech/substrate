@@ -109,9 +109,6 @@ where
 		"Created block {} with hash {}.",
 		factory_state.block_no() + RA::Number::one(),
 		prior_block_hash,
-		amount,
-		from.0,
-		to
 	);
 
 	factory_state.set_block_no(factory_state.block_no() + RA::Number::one());

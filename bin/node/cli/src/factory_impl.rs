@@ -181,6 +181,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 				Call::Authorship(AuthorshipCall::set_uncles(uncles))
 			},
 			"staking_bond" => {
+				// TODO: only first tx gets fully executed, so probably I'd play with unbond.
 				Call::Staking(StakingCall::bond(
 					pallet_indices::address::Address::Id(destination.clone().into()),
 					(*amount).into(),
