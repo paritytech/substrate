@@ -20,7 +20,7 @@ impl-trait-for-tuples = "0.1.3"
 criterion = "0.2.11"
 sp-externalities = { version = "2.0.0", path = "../../primitives/externalities" }
 sc-executor = { version = "2.0.0", path = "../../client/executor" }
-substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 
 [features]
 default = ["std"]

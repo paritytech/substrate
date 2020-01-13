@@ -1665,22 +1665,13 @@ mod tests {
 
 	#[test]
 	fn set_code_with_real_wasm_blob() {
-		sc_executor::native_executor_instance!(
-			Executor,
-			substrate_test_runtime::api::dispatch,
-			substrate_test_runtime::native_version,
-		);
-
-		fn executor() -> sc_executor::NativeExecutor<Executor> {
-			sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None)
-		}
-
+		let executor = substrate_test_runtime_client::new_native_executor();
 		let mut ext = new_test_ext();
-		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor()));
+		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor));
 		ext.execute_with(|| {
 			System::set_code(
 				RawOrigin::Root.into(),
-				substrate_test_runtime::WASM_BINARY.to_vec(),
+				substrate_test_runtime_client::runtime::WASM_BINARY.to_vec(),
 			).unwrap();
 		});
 	}
