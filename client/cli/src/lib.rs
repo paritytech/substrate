@@ -1309,4 +1309,40 @@ mod tests {
 			assert_eq!(expected_path, node_config.keystore.path().unwrap().to_owned());
 		}
 	}
+
+	#[test]
+	fn parse_and_prepare_into_configuration() {
+		let chain_spec = ChainSpec::from_genesis(
+			"test",
+			"test-id",
+			|| (),
+			Vec::new(),
+			None,
+			None,
+			None,
+			None,
+		);
+		let version = VersionInfo {
+			name: "test",
+			version: "42",
+			commit: "234234",
+			executable_name: "test",
+			description: "cool test",
+			author: "universe",
+			support_url: "com",
+		};
+		let spec_factory = |_: &str| Ok(Some(chain_spec.clone()));
+
+		let args = vec!["substrate", "--dev", "--state-cache-size=42"];
+		let pnp = parse_and_prepare::<NoCustom, NoCustom, _>(&version, "test", args);
+		let config = pnp.into_configuration::<(), _, _, _>(spec_factory).unwrap().unwrap();
+		assert_eq!(config.roles, sc_service::Roles::AUTHORITY);
+		assert_eq!(config.state_cache_size, 42);
+
+		let args = vec!["substrate", "import-blocks", "--dev"];
+		let pnp = parse_and_prepare::<NoCustom, NoCustom, _>(&version, "test", args);
+		let config = pnp.into_configuration::<(), _, _, _>(spec_factory).unwrap().unwrap();
+		// NOTE: only RunCmd (no subcommand) knows --dev
+		assert_eq!(config.roles, sc_service::Roles::FULL);
+	}
 }
