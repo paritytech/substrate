@@ -22,6 +22,7 @@ use sc_client_api::{
 	self,
 	BlockchainEvents,
 	backend::RemoteBackend, light::RemoteBlockchain,
+	execution_extensions::ExtensionsFactory,
 };
 use sc_client::Client;
 use sc_chain_spec::{RuntimeGenesis, Extension};
@@ -746,6 +747,13 @@ ServiceBuilder<
 		+ TransactionPoolMaintainer<Block=TBl, Hash = <TBl as BlockT>::Hash>,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata> + Clone,
 {
+
+	/// Set an ExecutionExtensionsFactory
+	pub fn with_execution_extensions_factory(self, execution_extensions_factory: Box<dyn ExtensionsFactory>) -> Result<Self, Error> {
+		self.client.execution_extensions().set_extensions_factory(execution_extensions_factory);
+		Ok(self)
+	}
+
 	/// Builds the service.
 	pub fn build(self) -> Result<Service<
 		TBl,
