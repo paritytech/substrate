@@ -1,0 +1,34 @@
+[package]
+name = "pallet-elections"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0.101", optional = true }
+safe-mix = { version = "1.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+
+[dev-dependencies]
+hex-literal = "0.2.1"
+pallet-balances = { version = "2.0.0", path = "../balances" }
+
+[features]
+default = ["std"]
+std = [
+	"safe-mix/std",
+	"codec/std",
+	"sp-core/std",
+	"sp-std/std",
+	"serde",
+	"sp-io/std",
+	"frame-support/std",
+	"sp-runtime/std",
+	"frame-system/std",
+]

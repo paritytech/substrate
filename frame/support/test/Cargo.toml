@@ -1,0 +1,30 @@
+[package]
+name = "frame-support-test"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0.101", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+sp-io ={ path = "../../../primitives/io", default-features = false }
+sp-state-machine = { version = "2.0.0", optional = true, path = "../../../primitives/state-machine" }
+frame-support = { version = "2.0.0", default-features = false, path = "../" }
+sp-inherents = { version = "2.0.0", default-features = false, path = "../../../primitives/inherents" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
+trybuild = "1.0.17"
+pretty_assertions = "0.6.1"
+
+[features]
+default = ["std"]
+std = [
+	"serde/std",
+	"codec/std",
+	"sp-io/std",
+	"frame-support/std",
+	"sp-inherents/std",
+	"sp-core/std",
+	"sp-runtime/std",
+	"sp-state-machine",
+]

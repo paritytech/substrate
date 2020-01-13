@@ -1,0 +1,5 @@
+error: `self` as argument not supported.
+ --> $DIR/adding_self_parameter.rs:3:11
+  |
+3 |         fn test(&self);
+  |                 ^

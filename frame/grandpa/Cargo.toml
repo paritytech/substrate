@@ -1,0 +1,38 @@
+[package]
+name = "pallet-grandpa"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0.101", optional = true, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
+sp-finality-grandpa = { version = "2.0.0", default-features = false, path = "../../primitives/finality-grandpa" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+pallet-session = { version = "2.0.0", default-features = false, path = "../session" }
+pallet-finality-tracker = { version = "2.0.0", default-features = false, path = "../finality-tracker" }
+
+[dev-dependencies]
+sp-io ={ version = "2.0.0", path = "../../primitives/io" }
+
+[features]
+default = ["std"]
+std = [
+	"serde",
+	"codec/std",
+	"sp-core/std",
+	"sp-finality-grandpa/std",
+	"sp-std/std",
+	"frame-support/std",
+	"sp-runtime/std",
+	"sp-staking/std",
+	"frame-system/std",
+	"pallet-session/std",
+	"pallet-finality-tracker/std",
+]
+migrate-authorities = []

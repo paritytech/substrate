@@ -1,0 +1,5 @@
+error: The implemented trait has to be referenced with a path, e.g. `impl client::Core for Runtime`.
+  --> $DIR/missing_path_for_trait.rs:18:7
+   |
+18 |     impl Api<Block> for Runtime {
+   |          ^^^

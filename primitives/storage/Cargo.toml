@@ -1,0 +1,16 @@
+[package]
+name = "sp-storage"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+description = "Storage related primitives"
+
+[dependencies]
+sp-std = { version = "2.0.0", default-features = false, path = "../std" }
+serde = { version = "1.0.101", optional = true, features = ["derive"] }
+impl-serde = { version = "0.2.3", optional = true }
+sp-debug-derive = { version = "2.0.0", path = "../debug-derive" }
+
+[features]
+default = [ "std" ]
+std = [ "sp-std/std", "serde", "impl-serde" ]

@@ -1,0 +1,42 @@
+[package]
+name = "sp-runtime-interface"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+sp-wasm-interface = { version = "2.0.0", optional = true, path = "../wasm-interface" }
+sp-std = { version = "2.0.0", default-features = false, path = "../std" }
+sp-runtime-interface-proc-macro = { version = "2.0.0", path = "proc-macro" }
+sp-externalities = { version = "2.0.0", optional = true, path = "../externalities" }
+codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false }
+environmental = { version = "1.0.2", optional = true }
+static_assertions = "1.0.0"
+primitive-types = { version = "0.6.1", default-features = false }
+
+[dev-dependencies]
+sp-runtime-interface-test-wasm = { version = "2.0.0", path = "test-wasm" }
+sp-state-machine = { version = "2.0.0", path = "../../primitives/state-machine" }
+sp-core = { version = "2.0.0", path = "../core" }
+sp-io = { version = "2.0.0", path = "../io" }
+rustversion = "1.0.0"
+trybuild = "1.0.17"
+
+[features]
+default = [ "std" ]
+std = [
+	"sp-wasm-interface",
+	"sp-std/std",
+	"codec/std",
+	"sp-externalities",
+	"environmental",
+	"primitive-types/std",
+]
+
+# ATTENTION
+#
+# Only use when you know what you are doing.
+#
+# Disables static assertions in `impls.rs` that checks the word size. To prevent any footgun, the
+# check is changed into a runtime check.
+disable_target_static_assertions = []

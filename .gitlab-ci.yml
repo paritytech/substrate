@@ -15,6 +15,7 @@ stages:
 
 variables:
   GIT_STRATEGY:                    fetch
+  GIT_DEPTH:                       100
   CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
   SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
   CARGO_INCREMENTAL:               0
@@ -49,6 +50,14 @@ variables:
     - schedules
     - web
     - /^[0-9]+$/                   # PRs
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+      - api_failure
+  dependencies:                    []
+  interruptible:                   true
   tags:
     - linux-docker
 
@@ -72,7 +81,8 @@ check-runtime:
     GITLAB_API:                    "https://gitlab.parity.io/api/v4"
     GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
   script:
-    - ./scripts/gitlab/check_runtime.sh
+    - ./.maintain/gitlab/check_runtime.sh
+  interruptible:                   true
   allow_failure:                   true
 
 
@@ -83,7 +93,8 @@ check-line-width:
   only:
     - /^[0-9]+$/
   script:
-    - ./scripts/gitlab/check_line_width.sh
+    - ./.maintain/gitlab/check_line_width.sh
+  interruptible:                   true
   allow_failure:                   true
 
 
@@ -111,7 +122,7 @@ cargo-check-subkey:
   except:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
-    - cd ./subkey
+    - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
 
@@ -127,7 +138,7 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
-    - time cargo test --all --release --verbose --locked |
+    - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked |
         tee output.log
     - sccache -s
   after_script:
@@ -139,8 +150,16 @@ test-linux-stable:                 &test-linux
     paths:
       - ${CI_COMMIT_SHORT_SHA}_warnings.log
 
+test-dependency-rules:
+  stage:                           test
+  <<:                              *docker-env
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - .maintain/ensure-deps.sh
 
-test-srml-staking:                 &test-srml-staking
+test-frame-staking:
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -152,14 +171,25 @@ test-srml-staking:                 &test-srml-staking
     variables:
       - $DEPLOY_TAG
   script:
-    - cd srml/staking/
-    - time cargo test --release --verbose --no-default-features --features std
+    - cd frame/staking/
+    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features std
     - sccache -s
 
-
-
-
-
+test-wasmtime:
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - cd client/executor
+    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features wasmtime
+    - sccache -s
 
 test-linux-stable-int:
   <<:                              *test-linux
@@ -171,8 +201,8 @@ test-linux-stable-int:
   script:
     - echo "___Logs will be partly shown at the end in case of failure.___"
     - echo "___Full log will be saved to the job artifacts only in case of failure.___"
-    - RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
-        time cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
+    - WASM_BUILD_NO_COLOR=1 RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
+        time cargo test -p node-cli --release --verbose --locked -- --ignored
         &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
     - sccache -s
   after_script:
@@ -193,27 +223,16 @@ check-web-wasm:
   script:
     # WASM support is in progress. As more and more crates support WASM, we
     # should add entries here. See https://github.com/paritytech/substrate/issues/2416
-    - time cargo web build -p sr-io
-    - time cargo web build -p sr-primitives
-    - time cargo web build -p sr-std
-    - time cargo web build -p substrate-client
-    - time cargo web build -p substrate-consensus-aura
-    - time cargo web build -p substrate-consensus-babe
-    - time cargo web build -p substrate-consensus-common
-    - time cargo web build -p substrate-keyring
-    - time cargo web build -p substrate-keystore
-    - time cargo web build -p substrate-executor
-    - time cargo web build -p substrate-network
-    - time cargo web build -p substrate-panic-handler
-    - time cargo web build -p substrate-peerset
-    - time cargo web build -p substrate-primitives
-    # TODO: we can't use cargo web until https://github.com/paritytech/jsonrpc/pull/436 is deployed
-    - time cargo build -p substrate-rpc-servers --target wasm32-unknown-unknown
-    - time cargo web build -p substrate-serializer
-    - time cargo web build -p substrate-state-db
-    - time cargo web build -p substrate-state-machine
-    - time cargo web build -p substrate-telemetry
-    - time cargo web build -p substrate-trie
+    - time cargo build --target=wasm32-unknown-unknown -p sp-io
+    - time cargo build --target=wasm32-unknown-unknown -p sp-runtime
+    - time cargo build --target=wasm32-unknown-unknown -p sp-std
+    - time cargo build --target=wasm32-unknown-unknown -p sc-client
+    - time cargo build --target=wasm32-unknown-unknown -p sc-consensus-aura
+    - time cargo build --target=wasm32-unknown-unknown -p sc-consensus-babe
+    - time cargo build --target=wasm32-unknown-unknown -p sp-consensus
+    - time cargo build --target=wasm32-unknown-unknown -p sc-telemetry
+    # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
+    - time cargo build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
     - sccache -s
 
 node-exits:
@@ -222,21 +241,42 @@ node-exits:
   except:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
-    - ./ci/check_for_exit.sh
+    - ./.maintain/check_for_exit.sh
 
-#### stage:                        build
 
-build-linux-substrate:
-  stage:                           build
-  <<:                              *collect-artifacts
+test-full-crypto-feature:
+  stage:                           test
   <<:                              *docker-env
-  <<:                              *build-only
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    RUST_BACKTRACE: 1
   except:
     variables:
       - $DEPLOY_TAG
   script:
-    - time cargo build --release --verbose
+    - cd primitives/core/
+    - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - cd ../application-crypto
+    - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - sccache -s
+
+
+#### stage:                        build
+
+build-linux-substrate:             &build-binary
+  stage:                           build
+  <<:                              *collect-artifacts
+  <<:                              *docker-env
+  <<:                              *build-only
+  before_script:
     - mkdir -p ./artifacts/substrate/
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
     - mv ./target/release/substrate ./artifacts/substrate/.
     - echo -n "Substrate version = "
     - if [ "${CI_COMMIT_TAG}" ]; then
@@ -248,31 +288,25 @@ build-linux-substrate:
       fi
     - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
     - printf '\n# building node-template\n\n'
-    - ./scripts/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
-    - cp -r scripts/docker/substrate.Dockerfile ./artifacts/substrate/
+    - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
+    - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
     - sccache -s
 
 build-linux-subkey:
-  stage:                           build
-  <<:                              *collect-artifacts
-  <<:                              *docker-env
-  <<:                              *build-only
-  except:
-    variables:
-      - $DEPLOY_TAG
-  script:
-    - cd ./subkey
-    - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
-    - cd ..
-    - sccache -s
+  <<:                              *build-binary
+  before_script:
     - mkdir -p ./artifacts/subkey
+  script:
+    - cd ./bin/utils/subkey
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
+    - cd -
     - mv ./target/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
     - ./artifacts/subkey/subkey --version |
         sed -n -r 's/^subkey ([0-9.]+.*)/\1/p' |
           tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
-    - cp -r scripts/docker/subkey.Dockerfile ./artifacts/subkey/
+    - cp -r .maintain/docker/subkey.Dockerfile ./artifacts/subkey/
     - sccache -s
 
 build-rust-doc-release:
@@ -288,9 +322,9 @@ build-rust-doc-release:
   <<:                              *build-only
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
-    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/rustdoc-header.html" time cargo +nightly doc --release --all --verbose
+    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html" time cargo +nightly doc --release --all --verbose
     - cp -R ./target/doc ./crate-docs
-    - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
+    - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
 
 check_warnings:
@@ -311,6 +345,42 @@ check_warnings:
         echo "___No warnings___";
       fi
   allow_failure:                   true
+
+# Nightly check whether Polkadot 'master' branch builds.
+check_polkadot:
+  stage:                           build
+  <<:                              *docker-env
+  allow_failure:                   true
+  only:
+    - master
+    - schedules
+  script:
+    - SUBSTRATE_PATH=$(pwd)
+    # Clone the current Polkadot master branch into ./polkadot.
+    - git clone --depth 1 https://gitlab.parity.io/parity/polkadot.git
+    - cd polkadot
+    # Make sure we override the crates in native and wasm build
+    - mkdir .cargo
+    - echo "paths = [ \"$SUBSTRATE_PATH\" ]" > .cargo/config
+    - mkdir -p target/debug/wbuild/.cargo
+    - echo "paths = [ \"$SUBSTRATE_PATH\" ]" > target/debug/wbuild/.cargo/config
+    # package, others are updated along the way.
+    - cargo update
+    # Check whether Polkadot 'master' branch builds with this Substrate commit.
+    - time cargo check
+    - cd -
+    - sccache -s
+
+trigger-contracts-ci:
+  stage:                           publish
+  needs:
+    - build-linux-substrate
+  trigger:
+    project:                       parity/srml-contracts-waterfall
+    branch:                        "master"
+  only:
+    - master
+    - schedules
 
 #### stage:                        publish
 
@@ -478,10 +548,10 @@ publish-gh-doc:
     - echo "Substrate version = ${DEPLOY_TAG}"
     # or use helm to render the template
     - helm template
-      --values ./scripts/kubernetes/values.yaml
+      --values ./.maintain/kubernetes/values.yaml
       --set image.tag=${DEPLOY_TAG}
       --set validator.keys=${VALIDATOR_KEYS}
-      ./scripts/kubernetes | kubectl apply -f - --dry-run=false
+      ./.maintain/kubernetes | kubectl apply -f - --dry-run=false
     - echo "# substrate namespace ${KUBE_NAMESPACE}"
     - kubectl -n ${KUBE_NAMESPACE} get all
     - echo "# substrate's nodes' external ip addresses:"
@@ -543,16 +613,16 @@ deploy-ue1-tag:
 validator 1 4:
   <<:                              *validator-deploy
   script:
-    - ./scripts/flamingfir-deploy.sh flamingfir-validator1
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator1
 validator 2 4:
   <<:                              *validator-deploy
   script:
-    - ./scripts/flamingfir-deploy.sh flamingfir-validator2
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator2
 validator 3 4:
   <<:                              *validator-deploy
   script:
-    - ./scripts/flamingfir-deploy.sh flamingfir-validator3
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator3
 validator 4 4:
   <<:                              *validator-deploy
   script:
-    - ./scripts/flamingfir-deploy.sh flamingfir-validator4
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator4

@@ -1,0 +1,31 @@
+[package]
+name = "pallet-balances"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0.101", optional = true }
+safe-mix = { version = "1.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+
+[dev-dependencies]
+sp-io = { version = "2.0.0", path = "../../primitives/io" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+pallet-transaction-payment = { version = "2.0.0", path = "../transaction-payment" }
+
+[features]
+default = ["std"]
+std = [
+	"serde",
+	"safe-mix/std",
+	"codec/std",
+	"sp-std/std",
+	"frame-support/std",
+	"sp-runtime/std",
+	"frame-system/std",
+]

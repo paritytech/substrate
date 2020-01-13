@@ -1,5 +1,0 @@
-error: `changed_in` version can not be greater than the `api_version`
-  --> $DIR/changed_in_unknown_version.rs:15:3
-   |
-15 |         fn test(data: u64);
-   |         ^^

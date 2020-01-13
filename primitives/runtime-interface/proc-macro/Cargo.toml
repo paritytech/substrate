@@ -1,0 +1,15 @@
+[package]
+name = "sp-runtime-interface-proc-macro"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0.5", features = ["full", "visit", "fold", "extra-traits"] }
+quote = "1.0.2"
+proc-macro2 = "1.0.3"
+Inflector = "0.11.4"
+proc-macro-crate = "0.1.4"

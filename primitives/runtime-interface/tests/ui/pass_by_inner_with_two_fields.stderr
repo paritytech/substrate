@@ -1,0 +1,5 @@
+error: Only newtype/one field structs are supported by `PassByInner`!
+ --> $DIR/pass_by_inner_with_two_fields.rs:3:10
+  |
+3 | #[derive(PassByInner)]
+  |          ^^^^^^^^^^^

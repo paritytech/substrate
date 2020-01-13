@@ -1,0 +1,5 @@
+error: Missing `Block` generic parameter.
+  --> $DIR/missing_block_generic_parameter.rs:18:13
+   |
+18 |     impl self::Api for Runtime {
+   |                ^^^

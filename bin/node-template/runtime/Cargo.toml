@@ -1,0 +1,68 @@
+[package]
+name = "node-template-runtime"
+version = "2.0.0"
+authors = ["Anonymous"]
+edition = "2018"
+
+[dependencies]
+aura = { version = "2.0.0", default-features = false, package = "pallet-aura", path = "../../../frame/aura" }
+balances = { version = "2.0.0", default-features = false, package = "pallet-balances", path = "../../../frame/balances" }
+frame-support = { version = "2.0.0", default-features = false, path = "../../../frame/support" }
+grandpa = { version = "2.0.0", default-features = false, package = "pallet-grandpa", path = "../../../frame/grandpa" }
+indices = { version = "2.0.0", default-features = false, package = "pallet-indices", path = "../../../frame/indices" }
+randomness-collective-flip = { version = "2.0.0", default-features = false, package = "pallet-randomness-collective-flip", path = "../../../frame/randomness-collective-flip" }
+sudo = { version = "2.0.0", default-features = false, package = "pallet-sudo", path = "../../../frame/sudo" }
+system = { version = "2.0.0", default-features = false, package = "frame-system", path = "../../../frame/system" }
+timestamp = { version = "2.0.0", default-features = false, package = "pallet-timestamp", path = "../../../frame/timestamp" }
+transaction-payment = { version = "2.0.0", default-features = false, package = "pallet-transaction-payment", path = "../../../frame/transaction-payment" }
+
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+frame-executive = { version = "2.0.0", default-features = false, path = "../../../frame/executive" }
+safe-mix = { version = "1.0.0", default-features = false }
+serde = { version = "1.0.101", optional = true, features = ["derive"] }
+sp-api = { version = "2.0.0", default-features = false, path = "../../../primitives/api" }
+sp-block-builder = { path = "../../../primitives/block-builder", default-features = false}
+sp-consensus-aura = { version = "0.8", default-features = false, path = "../../../primitives/consensus/aura" }
+sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
+sp-inherents = { path = "../../../primitives/inherents", default-features = false}
+sp-io = { version = "2.0.0", default-features = false, path = "../../../primitives/io" }
+sp-offchain = { version = "2.0.0", default-features = false, path = "../../../primitives/offchain" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-session = { version = "2.0.0", default-features = false, path = "../../../primitives/session" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../../primitives/std" }
+sp-transaction-pool = { version = "2.0.0", default-features = false, path = "../../../primitives/transaction-pool" }
+sp-version = { version = "2.0.0", default-features = false, path = "../../../primitives/version" }
+
+[build-dependencies]
+wasm-builder-runner = { version = "1.0.4", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
+
+[features]
+default = ["std"]
+std = [
+	"aura/std",
+	"balances/std",
+	"codec/std",
+	"frame-executive/std",
+	"frame-support/std",
+	"grandpa/std",
+	"indices/std",
+	"randomness-collective-flip/std",
+	"safe-mix/std",
+	"serde",
+	"sp-api/std",
+	"sp-block-builder/std",
+	"sp-consensus-aura/std",
+	"sp-core/std",
+	"sp-inherents/std",
+	"sp-io/std",
+	"sp-offchain/std",
+	"sp-runtime/std",
+	"sp-session/std",
+	"sp-std/std",
+	"sp-transaction-pool/std",
+	"sp-version/std",
+	"sudo/std",
+	"system/std",
+	"timestamp/std",
+	"transaction-payment/std",
+]

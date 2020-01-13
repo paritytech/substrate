@@ -1,0 +1,27 @@
+[package]
+name = "sc-basic-authority"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+log = "0.4.8"
+futures = "0.3.1"
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+sp-api = { version = "2.0.0", path = "../../primitives/api" }
+sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
+sc-client = { version = "2.0.0", path = "../" }
+sc-client-api = { version = "2.0.0", path = "../api" }
+sp-consensus = { version = "0.8", path = "../../primitives/consensus/common" }
+sp-inherents = { version = "2.0.0", path = "../../primitives/inherents" }
+sc-telemetry = { version = "2.0.0", path = "../telemetry" }
+sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
+sc-block-builder = { version = "2.0.0", path = "../block-builder" }
+tokio-executor = { version = "0.2.0-alpha.6", features = ["blocking"] }
+
+[dev-dependencies]
+sc-transaction-pool = { version = "2.0.0", path = "../../client/transaction-pool" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
+parking_lot = "0.9"
