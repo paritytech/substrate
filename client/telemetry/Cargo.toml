@@ -6,18 +6,17 @@ description = "Telemetry utils"
 edition = "2018"
 
 [dependencies]
-bytes = "0.4.12"
+bytes = "0.5"
 parking_lot = "0.9.0"
-futures01 = { package = "futures", version = "0.1" }
-futures = { version = "0.3.1", features = ["compat"] }
+futures = "0.3.1"
 futures-timer = "2.0.0"
-libp2p = { version = "0.13.0", default-features = false, features = ["libp2p-websocket"] }
+libp2p = { version = "0.14.0-alpha.1", default-features = false, features = ["libp2p-websocket"] }
 log = "0.4.8"
+pin-project = "0.4.6"
 rand = "0.7.2"
 serde = { version = "1.0.101", features = ["derive"] }
 slog = { version = "2.5.2", features = ["nested-values"] }
 slog-json = { version = "2.3.0", features = ["nested-values"] }
 slog-scope = "4.1.2"
-tokio-io = "0.1.12"
 take_mut = "0.2.2"
 void = "1.0.2"

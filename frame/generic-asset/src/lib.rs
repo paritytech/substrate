@@ -1,4 +1,4 @@
-// Copyright 2019
+// Copyright 2019-2020
 //     by  Centrality Investments Ltd.
 //     and Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
@@ -492,10 +492,10 @@ decl_storage! {
 		}): map T::AssetId => T::Balance;
 
 		/// The free balance of a given asset under an account.
-		pub FreeBalance: double_map T::AssetId, twox_128(T::AccountId) => T::Balance;
+		pub FreeBalance: double_map T::AssetId, hasher(twox_128) T::AccountId => T::Balance;
 
 		/// The reserved balance of a given asset under an account.
-		pub ReservedBalance: double_map T::AssetId, twox_128(T::AccountId) => T::Balance;
+		pub ReservedBalance: double_map T::AssetId, hasher(twox_128) T::AccountId => T::Balance;
 
 		/// Next available ID for user-created asset.
 		pub NextAssetId get(fn next_asset_id) config(): T::AssetId;

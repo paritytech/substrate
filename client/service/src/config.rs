@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@ pub use sc_client_db::{kvdb::KeyValueDB, PruningMode};
 pub use sc_network::config::{ExtTransport, NetworkConfiguration, Roles};
 pub use sc_executor::WasmExecutionMethod;
 
-use std::{path::PathBuf, net::SocketAddr, sync::Arc};
+use std::{path::{PathBuf, Path}, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension, NoExtension};
 use sp_core::crypto::Protected;
@@ -45,8 +45,8 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub network: NetworkConfiguration,
 	/// Path to the base configuration directory.
 	pub config_dir: Option<PathBuf>,
-	/// Path to key files.
-	pub keystore_path: Option<PathBuf>,
+	/// Configuration for the keystore.
+	pub keystore: KeystoreConfig,
 	/// Configuration for the database.
 	pub database: DatabaseConfig,
 	/// Size of internal state cache in Bytes
@@ -92,8 +92,6 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
 	pub disable_grandpa: bool,
-	/// Node keystore's password
-	pub keystore_password: Option<Protected<String>>,
 	/// Development key seed.
 	///
 	/// When running in development mode, the seed will be used to generate authority keys by the keystore.
@@ -104,6 +102,32 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub tracing_targets: Option<String>,
 	/// Tracing receiver
 	pub tracing_receiver: sc_tracing::TracingReceiver,
+}
+
+/// Configuration of the client keystore.
+#[derive(Clone)]
+pub enum KeystoreConfig {
+	/// No config supplied.
+	None,
+	/// Keystore at a path on-disk. Recommended for native nodes.
+	Path {
+		/// The path of the keystore.
+		path: PathBuf,
+		/// Node keystore's password.
+		password: Option<Protected<String>>
+	},
+	/// In-memory keystore. Recommended for in-browser nodes.
+	InMemory
+}
+
+impl KeystoreConfig {
+	/// Returns the path for the keystore.
+	pub fn path(&self) -> Option<&Path> {
+		match self {
+			Self::Path { path, .. } => Some(&path),
+			Self::None | Self::InMemory => None,
+		}
+	}
 }
 
 /// Configuration of the database of the client.
@@ -138,7 +162,7 @@ impl<C, G, E> Configuration<C, G, E> where
 			roles: Roles::FULL,
 			transaction_pool: Default::default(),
 			network: Default::default(),
-			keystore_path: config_dir.map(|c| c.join("keystore")),
+			keystore: KeystoreConfig::None,
 			database: DatabaseConfig::Path {
 				path: Default::default(),
 				cache_size: Default::default(),
@@ -161,7 +185,6 @@ impl<C, G, E> Configuration<C, G, E> where
 			sentry_mode: false,
 			force_authoring: false,
 			disable_grandpa: false,
-			keystore_password: None,
 			dev_key_seed: None,
 			tracing_targets: Default::default(),
 			tracing_receiver: Default::default(),

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -165,7 +165,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Example {
 		Accounts get(fn accounts) config(): map H160 => Account;
 		AccountCodes: map H160 => Vec<u8>;
-		AccountStorages: double_map H160, blake2_256(H256) => H256;
+		AccountStorages: double_map H160, H256 => H256;
 	}
 }
 

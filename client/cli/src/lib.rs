@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ pub mod informant;
 
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
-	config::{Configuration, DatabaseConfig},
+	config::{Configuration, DatabaseConfig, KeystoreConfig},
 	ServiceBuilderCommand,
 	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
 };
@@ -128,7 +128,8 @@ fn generate_node_name() -> String {
 	result
 }
 
-fn load_spec<F, G, E>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec<G, E>> where
+/// Load spec give shared params and spec factory.
+pub fn load_spec<F, G, E>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec<G, E>> where
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
@@ -350,7 +351,10 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 
 		if spec.boot_nodes().is_empty() && !self.params.disable_default_bootnode {
 			let base_path = base_path(&self.params.shared_params, self.version);
-			let cfg = sc_service::Configuration::<C,_,_>::default_with_spec_and_base_path(spec.clone(), Some(base_path));
+			let cfg = sc_service::Configuration::<C,_,_>::default_with_spec_and_base_path(
+				spec.clone(),
+				Some(base_path),
+			);
 			let node_key = node_key_config(
 				self.params.node_key_params,
 				&Some(cfg.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a base_path"))
@@ -749,11 +753,11 @@ fn input_keystore_password() -> Result<String, String> {
 }
 
 /// Fill the password field of the given config instance.
-fn fill_config_keystore_password<C, G, E>(
+fn fill_config_keystore_password_and_path<C, G, E>(
 	config: &mut sc_service::Configuration<C, G, E>,
 	cli: &RunCmd,
 ) -> Result<(), String> {
-	config.keystore_password = if cli.password_interactive {
+	let password = if cli.password_interactive {
 		#[cfg(not(target_os = "unknown"))]
 		{
 			Some(input_keystore_password()?.into())
@@ -766,6 +770,15 @@ fn fill_config_keystore_password<C, G, E>(
 		Some(password.clone().into())
 	} else {
 		None
+	};
+
+	let path = cli.keystore_path.clone().or(
+		config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH)
+	);
+
+	config.keystore = KeystoreConfig::Path {
+		path: path.ok_or_else(|| "No `base_path` provided to create keystore path!")?,
+		password,
 	};
 
 	Ok(())
@@ -837,7 +850,7 @@ where
 {
 	let mut config = create_config_with_db_path(spec_factory, &cli.shared_params, &version)?;
 
-	fill_config_keystore_password(&mut config, &cli)?;
+	fill_config_keystore_password_and_path(&mut config, &cli)?;
 
 	let is_dev = cli.shared_params.dev;
 	let is_authority = cli.validator || cli.sentry || is_dev || cli.keyring.account.is_some();
@@ -871,8 +884,6 @@ where
 			)
 		)?
 	}
-
-	config.keystore_path = cli.keystore_path.or_else(|| config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH));
 
 	// set sentry mode (i.e. act as an authority but **never** actively participate)
 	config.sentry_mode = cli.sentry;
@@ -1197,5 +1208,49 @@ mod tests {
 
 		assert!(no_config_dir().is_ok());
 		assert!(some_config_dir("x".to_string()).is_ok());
+	}
+
+	#[test]
+	fn keystore_path_is_generated_correctly() {
+		let chain_spec = ChainSpec::from_genesis(
+			"test",
+			"test-id",
+			|| (),
+			Vec::new(),
+			None,
+			None,
+			None,
+			None,
+		);
+
+		let version_info = VersionInfo {
+			name: "test",
+			version: "42",
+			commit: "234234",
+			executable_name: "test",
+			description: "cool test",
+			author: "universe",
+			support_url: "com",
+		};
+
+		for keystore_path in vec![None, Some("/keystore/path")] {
+			let mut run_cmds = RunCmd::from_args();
+			run_cmds.shared_params.base_path = Some(PathBuf::from("/test/path"));
+			run_cmds.keystore_path = keystore_path.clone().map(PathBuf::from);
+
+			let node_config = create_run_node_config::<(), _, _, _>(
+				run_cmds.clone(),
+				|_| Ok(Some(chain_spec.clone())),
+				"test",
+				&version_info,
+			).unwrap();
+
+			let expected_path = match keystore_path {
+				Some(path) => PathBuf::from(path),
+				None => PathBuf::from("/test/path/chains/test-id/keystore"),
+			};
+
+			assert_eq!(expected_path, node_config.keystore.path().unwrap().to_owned());
+		}
 	}
 }

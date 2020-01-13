@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,7 +23,9 @@ use sp_runtime::generic::Era;
 use codec::Encode;
 
 /// Alice's account id.
-pub fn alice() -> AccountId { AccountKeyring::Alice.into() }
+pub fn alice() -> AccountId {
+	AccountKeyring::Alice.into()
+}
 
 /// Bob's account id.
 pub fn bob() -> AccountId {
