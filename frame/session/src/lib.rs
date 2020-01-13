@@ -69,8 +69,6 @@
 //! ### Dispatchable Functions
 //!
 //! - `set_keys` - Set a validator's session keys for upcoming sessions.
-//! - `on_initialize` - Called when a block is initialized. Will rotate session if it is the first
-//! block of the new session.
 //!
 //! ### Public Functions
 //!
