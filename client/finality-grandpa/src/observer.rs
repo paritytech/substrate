@@ -165,8 +165,6 @@ pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
 	RA: Send + Sync + 'static,
 	Sp: futures::task::Spawn + 'static,
 	Client<B, E, Block, RA>: AuxStore,
-	<Block as BlockT>::Hash: Unpin,
-	<<Block as BlockT>::Header as HeaderT>::Number: Unpin,
 {
 	let LinkHalf {
 		client,
@@ -220,8 +218,6 @@ where
 	E: CallExecutor<B> + Send + Sync + 'static,
 	Bk: Backend<B> + 'static,
 	Client<Bk, E, B, RA>: AuxStore,
-	B::Hash: Unpin,
-	<<B as BlockT>::Header as HeaderT>::Number: Unpin,
 {
 	fn new(
 		client: Arc<Client<Bk, E, B, RA>>,
@@ -338,8 +334,6 @@ where
 	E: CallExecutor<B> + Send + Sync + 'static,
 	Bk: Backend<B> + 'static,
 	Client<Bk, E, B, RA>: AuxStore,
-	B::Hash: Unpin,
-	<<B as BlockT>::Header as HeaderT>::Number: Unpin,
 {
 	type Output = Result<(), Error>;
 

@@ -563,8 +563,6 @@ where
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
 	NumberFor<Block>: BlockNumberOps,
 	Client<B, E, Block, RA>: AuxStore,
-	Block::Hash: Unpin,
-	<<Block as BlockT>::Header as HeaderT>::Number: Unpin,
 {
 	type Timer = Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>>;
 	type Id = AuthorityId;

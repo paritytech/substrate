@@ -1233,7 +1233,7 @@ dependencies = [
 [[package]]
 name = "finality-grandpa"
 version = "0.11.0"
-source = "git+https://github.com/expenses/finality-grandpa?branch=future#2abf691f4ceadaa7f65b6713ad2d16cf87445bd9"
+source = "git+https://github.com/expenses/finality-grandpa?branch=future#23a36a211d3268852b4532228450786444c1dcb9"
 dependencies = [
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-timer 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",

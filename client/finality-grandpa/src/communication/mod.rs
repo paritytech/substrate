@@ -136,11 +136,7 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	neighbor_sender: periodic::NeighborPacketSender<B>,
 }
 
-impl<B: BlockT, N: Network<B>> NetworkBridge<B, N>
-	where
-		B::Hash: Unpin,
-		<<B as BlockT>::Header as HeaderT>::Number: Unpin,
-{
+impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle.
 	/// On creation it will register previous rounds' votes with the gossip
@@ -581,11 +577,9 @@ struct OutgoingMessages<Block: BlockT> {
 	has_voted: HasVoted<Block>,
 }
 
-impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
-	where
-		Block::Hash: Unpin,
-		<<Block as BlockT>::Header as HeaderT>::Number: Unpin,
-{
+impl<Block: BlockT> Unpin for OutgoingMessages<Block> {}
+
+impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block> {
 	type Error = Error;
 
 	fn poll_ready(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {

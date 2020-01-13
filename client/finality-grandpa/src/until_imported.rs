@@ -86,14 +86,16 @@ pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, 
 	identifier: &'static str,
 }
 
+impl<Block: BlockT, BlockStatus, BlockSyncRequester, I, M: BlockUntilImported<Block>> Unpin for
+UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> {
+}
+
 impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> where
 	Block: BlockT,
 	BlockStatus: BlockStatusT<Block> + Unpin,
 	BlockSyncRequester: BlockSyncRequesterT<Block> + Unpin,
 	I: Stream<Item = Result<M::Blocked, Error>> + Unpin,
 	M: BlockUntilImported<Block> + Unpin,
-	Block::Hash: Unpin,
-	<<Block as BlockT>::Header as HeaderT>::Number: Unpin,
 	M::Blocked: Unpin,
 {
 	/// Create a new `UntilImported` wrapper.
@@ -136,8 +138,6 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 	BSyncRequester: BlockSyncRequesterT<Block> + Unpin,
 	I: Stream<Item = Result<M::Blocked, Error>> + Unpin,
 	M: BlockUntilImported<Block> + Unpin,
-	Block::Hash: Unpin,
-	<<Block as BlockT>::Header as HeaderT>::Number: Unpin,
 	M::Blocked: Unpin,
 {
 	type Item = Result<M::Blocked, Error>;
@@ -316,6 +316,8 @@ pub(crate) struct BlockGlobalMessage<Block: BlockT> {
 	inner: Arc<(AtomicUsize, Mutex<Option<CommunicationIn<Block>>>)>,
 	target_number: NumberFor<Block>,
 }
+
+impl<Block: BlockT> Unpin for BlockGlobalMessage<Block> {}
 
 impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 	type Blocked = CommunicationIn<Block>;
