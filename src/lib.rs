@@ -141,8 +141,8 @@ impl<T> ClassifyDispatch<T> for WeightForCallCreate {
 	}
 }
 
-impl PaysFee for WeightForCallCreate {
-	fn pays_fee(&self) -> bool {
+impl<T> PaysFee<T> for WeightForCallCreate {
+	fn pays_fee(&self, _: T) -> bool {
 		true
 	}
 }
