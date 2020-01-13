@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -39,13 +39,17 @@ mod basic_queue;
 pub mod buffered_link;
 
 /// Shared block import struct used by the queue.
-pub type BoxBlockImport<B> = Box<dyn BlockImport<B, Error = ConsensusError> + Send + Sync>;
+pub type BoxBlockImport<B, Transaction> = Box<
+	dyn BlockImport<B, Error = ConsensusError, Transaction = Transaction> + Send + Sync
+>;
 
 /// Shared justification import struct used by the queue.
 pub type BoxJustificationImport<B> = Box<dyn JustificationImport<B, Error=ConsensusError> + Send + Sync>;
 
 /// Shared finality proof import struct used by the queue.
-pub type BoxFinalityProofImport<B> = Box<dyn FinalityProofImport<B, Error=ConsensusError> + Send + Sync>;
+pub type BoxFinalityProofImport<B> = Box<
+	dyn FinalityProofImport<B, Error = ConsensusError> + Send + Sync
+>;
 
 /// Maps to the Origin used by the network.
 pub type Origin = libp2p::PeerId;
@@ -83,7 +87,7 @@ pub trait Verifier<B: BlockT>: Send + Sync {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
+	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
 }
 
 /// Blocks import queue API.
@@ -176,8 +180,8 @@ pub enum BlockImportError {
 }
 
 /// Single block import function.
-pub fn import_single_block<B: BlockT, V: Verifier<B>>(
-	import_handle: &mut dyn BlockImport<B, Error = ConsensusError>,
+pub fn import_single_block<B: BlockT, V: Verifier<B>, Transaction>(
+	import_handle: &mut dyn BlockImport<B, Transaction = Transaction, Error = ConsensusError>,
 	block_origin: BlockOrigin,
 	block: IncomingBlock<B>,
 	verifier: &mut V,
@@ -254,5 +258,5 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 	}
 	import_block.allow_missing_state = block.allow_missing_state;
 
-	import_error(import_handle.import_block(import_block, cache))
+	import_error(import_handle.import_block(import_block.convert_transaction(), cache))
 }

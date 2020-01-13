@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -210,6 +210,7 @@ parameter_types! {
 impl pallet_balances::Trait for Test {
 	type Balance = Balance;
 	type OnFreeBalanceZero = Staking;
+	type OnReapAccount = System;
 	type OnNewAccount = ();
 	type Event = MetaEvent;
 	type TransferPayment = ();

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,7 +19,10 @@
 #![cfg(test)]
 
 use crate::mock::*;
-use crate::{elect, reduce, reduce_4, reduce_all, PhragmenResult, Assignment, StakedAssignment};
+use crate::{
+	elect, reduce, reduce_4, reduce_all, build_support_map, equalize,
+	Support, StakedAssignment, Assignment, PhragmenResult,
+};
 use substrate_test_utils::assert_eq_uvec;
 use sp_runtime::{Perbill, Saturating};
 use codec::{Encode, Decode};
@@ -730,4 +733,83 @@ fn basic_reduce_works() {
 		},
 		],
 	)
+}
+
+#[test]
+fn self_votes_should_be_kept() {
+	let candidates = vec![5, 10, 20, 30];
+	let voters = vec![
+		(5, vec![5]),
+		(10, vec![10]),
+		(20, vec![20]),
+		(1, vec![10, 20])
+	];
+	let stake_of = create_stake_of(&[
+		(5, 5),
+		(10, 10),
+		(20, 20),
+		(1, 8),
+	]);
+
+	let result = elect::<_, _, _, TestCurrencyToVote>(
+		2,
+		2,
+		candidates,
+		voters,
+		&stake_of,
+	).unwrap();
+
+	assert_eq!(result.winners, vec![(20, 28), (10, 18)]);
+	assert_eq!(
+		result.assignments,
+		vec![
+			Assignment { who: 10, distribution: vec![(10, Perbill::from_percent(100))] },
+			Assignment { who: 20, distribution: vec![(20, Perbill::from_percent(100))] },
+			Assignment { who: 1, distribution: vec![
+					(10, Perbill::from_percent(50)),
+					(20, Perbill::from_percent(50))
+				]
+			},
+		],
+	);
+
+	let staked_assignments: Vec<StakedAssignment<AccountId>> = result.assignments
+		.into_iter()
+		.map(|a| a.into_staked::<_, TestCurrencyToVote, _>(&stake_of))
+		.collect();
+
+	let mut supports = build_support_map::<
+		Balance,
+		AccountId,
+		>(
+			&result.winners.into_iter().map(|(who, _)| who).collect(),
+			&staked_assignments,
+		);
+
+	assert_eq!(supports.get(&5u64), None);
+	assert_eq!(
+		supports.get(&10u64).unwrap(),
+		&Support { total: 14u128, voters: vec![(10u64, 10u128), (1u64, 4u128)] },
+	);
+	assert_eq!(
+		supports.get(&20u64).unwrap(),
+		&Support { total: 24u128, voters: vec![(20u64, 20u128), (1u64, 4u128)] },
+	);
+
+	equalize::<Balance, AccountId, TestCurrencyToVote, _>(
+		staked_assignments,
+		&mut supports,
+		0,
+		2usize,
+		&stake_of,
+	);
+
+	assert_eq!(
+		supports.get(&10u64).unwrap(),
+		&Support { total: 18u128, voters: vec![(10u64, 10u128), (1u64, 8u128)] },
+	);
+	assert_eq!(
+		supports.get(&20u64).unwrap(),
+		&Support { total: 20u128, voters: vec![(20u64, 20u128)] },
+	);
 }

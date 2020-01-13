@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -38,7 +38,7 @@ pub struct InMemoryStorage<H: Hasher, Number: BlockNumber> {
 /// Adapter for using changes trie storage as a TrieBackendEssence' storage.
 pub struct TrieBackendAdapter<'a, H: Hasher, Number: BlockNumber> {
 	storage: &'a dyn Storage<H, Number>,
-	_hasher: ::std::marker::PhantomData<(H, Number)>,
+	_hasher: std::marker::PhantomData<(H, Number)>,
 }
 
 struct InMemoryStorageData<H: Hasher, Number: BlockNumber> {

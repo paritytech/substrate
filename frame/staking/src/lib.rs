@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -282,7 +282,7 @@ use sp_staking::{
 use sp_runtime::{Serialize, Deserialize};
 use frame_system::{self as system, ensure_signed, ensure_root, offchain::SubmitSignedTransaction};
 
-use sp_phragmen::{ExtendedBalance, PhragmenStakedAssignment, Assignment};
+use sp_phragmen::{ExtendedBalance, Assignment};
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 // ------------- IMPORTANT NOTE: must be the same as `generate_compact_solution_type`.
@@ -397,7 +397,7 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 
 impl<
 	AccountId,
-	Balance: HasCompact + Copy + Saturating,
+	Balance: HasCompact + Copy + Saturating + SimpleArithmetic,
 > StakingLedger<AccountId, Balance> {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
@@ -414,6 +414,30 @@ impl<
 		Self { total, active: self.active, stash: self.stash, unlocking }
 	}
 
+	/// Re-bond funds that were scheduled for unlocking.
+	fn rebond(mut self, value: Balance) -> Self {
+		let mut unlocking_balance: Balance = Zero::zero();
+
+		while let Some(last) = self.unlocking.last_mut() {
+			if unlocking_balance + last.value <= value {
+				unlocking_balance += last.value;
+				self.active += last.value;
+				self.unlocking.pop();
+			} else {
+				let diff = value - unlocking_balance;
+
+				unlocking_balance += diff;
+				self.active += diff;
+				last.value -= diff;
+			}
+
+			if unlocking_balance >= value {
+				break
+			}
+		}
+
+		self
+	}
 }
 
 impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
@@ -793,11 +817,11 @@ decl_storage! {
 		/// All slashing events on validators, mapped by era to the highest slash proportion
 		/// and slash value of the era.
 		ValidatorSlashInEra:
-			double_map EraIndex, twox_128(T::AccountId) => Option<(Perbill, BalanceOf<T>)>;
+			double_map EraIndex, hasher(twox_128) T::AccountId => Option<(Perbill, BalanceOf<T>)>;
 
 		/// All slashing events on nominators, mapped by era to the highest slash value of the era.
 		NominatorSlashInEra:
-			double_map EraIndex, twox_128(T::AccountId) => Option<BalanceOf<T>>;
+			double_map EraIndex, hasher(twox_128) T::AccountId => Option<BalanceOf<T>>;
 
 		/// Slashing spans for stash accounts.
 		SlashingSpans: map T::AccountId => Option<slashing::SlashingSpans>;
@@ -885,6 +909,8 @@ decl_error! {
 		InsufficientValue,
 		/// Can not schedule more unlock chunks.
 		NoMoreChunks,
+		/// Can not rebond without unlocking chunks.
+		NoUnlockChunk,
 	}
 }
 
@@ -1353,6 +1379,26 @@ decl_module! {
 
 			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
 		}
+
+		/// Rebond a portion of the stash scheduled to be unlocked.
+		///
+		/// # <weight>
+		/// - Time complexity: O(1). Bounded by `MAX_UNLOCKING_CHUNKS`.
+		/// - Storage changes: Can't increase storage, only decrease it.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		fn rebond(origin, #[compact] value: BalanceOf<T>) {
+			let controller = ensure_signed(origin)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			ensure!(
+				ledger.unlocking.len() > 0,
+				Error::<T>::NoUnlockChunk,
+			);
+
+			let ledger = ledger.rebond(value);
+
+			Self::update_ledger(&controller, &ledger);
+		}
 	}
 }
 
@@ -1680,38 +1726,6 @@ impl<T: Trait> Module<T> {
 				Self::slashable_balance_of,
 			);
 
-			if cfg!(feature = "equalize") {
-				let mut staked_assignments
-					: Vec<(T::AccountId, Vec<PhragmenStakedAssignment<T::AccountId>>)>
-					= Vec::with_capacity(assignments.len());
-				for Assignment { who, distribution } in assignments.iter() {
-					let mut staked_assignment
-						: Vec<PhragmenStakedAssignment<T::AccountId>>
-						= Vec::with_capacity(distribution.len());
-
-					// If this is a self vote, then we don't need to equalise it at all. While the
-					// staking system does not allow nomination and validation at the same time,
-					// this must always be 100% support.
-					if distribution.len() == 1 && distribution[0].0 == *who {
-						continue;
-					}
-					for (c, per_thing) in distribution.iter() {
-						let nominator_stake = to_votes(Self::slashable_balance_of(who));
-						let other_stake = *per_thing * nominator_stake;
-						staked_assignment.push((c.clone(), other_stake));
-					}
-					staked_assignments.push((who.clone(), staked_assignment));
-				}
-
-				sp_phragmen::equalize::<_, _, T::CurrencyToVote, _>(
-					staked_assignments,
-					&mut supports,
-					ELECTION_TOLERANCE,
-					ELECTION_ITERATIONS,
-					Self::slashable_balance_of,
-				);
-			}
-
 			// Clear Stakers.
 			for v in Self::current_elected().iter() {
 				<Stakers<T>>::remove(v);
@@ -1724,17 +1738,28 @@ impl<T: Trait> Module<T> {
 			let mut slot_stake = BalanceOf::<T>::max_value();
 			let exposures = supports.into_iter().map(|(staker, support)| {
 				// build `struct exposure` from `support`
+				let mut others = Vec::new();
+				let mut own: BalanceOf<T> = Zero::zero();
+				let mut total: BalanceOf<T> = Zero::zero();
+				s.voters
+					.into_iter()
+					.map(|(who, value)| (who, to_balance(value)))
+					.for_each(|(who, value)| {
+						if who == c {
+							own = own.saturating_add(value);
+						} else {
+							others.push(IndividualExposure { who, value });
+						}
+						total = total.saturating_add(value);
+					});
 				let exposure = Exposure {
-					own: to_balance(support.own),
+					own,
+					others,
 					// This might reasonably saturate and we cannot do much about it. The sum of
 					// someone's stake might exceed the balance type if they have the maximum amount
 					// of balance and receive some support. This is super unlikely to happen, yet
 					// we simulate it in some tests.
-					total: to_balance(support.total),
-					others: support.others
-						.into_iter()
-						.map(|(who, value)| IndividualExposure { who, value: to_balance(value) })
-						.collect::<Vec<IndividualExposure<_, _>>>(),
+					total,
 				};
 
 				if exposure.total < slot_stake {

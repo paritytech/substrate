@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -150,14 +150,12 @@ pub struct StakedAssignment<AccountId> {
 /// This, at the current version, resembles the `Exposure` defined in the staking SRML module, yet
 /// they do not necessarily have to be the same.
 #[derive(Default, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Eq, PartialEq))]
 pub struct Support<AccountId> {
-	/// The amount of support as the effect of self-vote.
-	pub own: ExtendedBalance,
 	/// Total support.
 	pub total: ExtendedBalance,
 	/// Support from voters.
-	pub others: Vec<(AccountId, ExtendedBalance)>,
+	pub voters: Vec<(AccountId, ExtendedBalance)>,
 }
 
 /// A linkage from a candidate and its [`Support`].
@@ -420,18 +418,8 @@ pub fn build_support_map<Balance, AccountId>(
 	for StakedAssignment { who, distribution } in assignments.iter() {
 		for (c, weight_extended) in distribution.iter() {
 			if let Some(support) = supports.get_mut(c) {
-				if c == who {
-					// This is a nomination from `n` to themselves. This will increase both the
-					// `own` and `total` field.
-					support.own = support.own.saturating_add(*weight_extended);
-					support.total = support.total.saturating_add(*weight_extended);
-				} else {
-					// This is a nomination from `n` to someone else. Increase `total` and add an
-					// entry inside `others`. For an astronomically rich validator with more
-					// astronomically rich set of nominators, this might saturate.
-					support.total = support.total.saturating_add(*weight_extended);
-					support.others.push((who.clone(), *weight_extended));
-				}
+				support.total = support.total.saturating_add(*weight_extended);
+				support.voters.push((who.clone(), *weight_extended));
 			}
 		}
 	}
@@ -933,7 +921,7 @@ pub fn reduce<
 /// * `iterations`: maximum number of iterations that will be processed.
 /// * `stake_of`: something that can return the stake stake of a particular candidate or voter.
 pub fn equalize<Balance, AccountId, C, FS>(
-	mut assignments: Vec<(AccountId, Vec<(AccountId, ExtendedBalance)>)>,
+	mut assignments: Vec<StakedAssignment<AccountId>>,
 	supports: &mut SupportMap<AccountId>,
 	tolerance: ExtendedBalance,
 	iterations: usize,
@@ -947,13 +935,13 @@ pub fn equalize<Balance, AccountId, C, FS>(
 	for _i in 0..iterations {
 		let mut max_diff = 0;
 
-		for (voter, assignment) in assignments.iter_mut() {
-			let voter_budget = stake_of(&voter);
+		for StakedAssignment { who, distribution } in assignments.iter_mut() {
+			let voter_budget = stake_of(&who);
 
 			let diff = do_equalize::<_, _, C>(
-				voter,
+				who,
 				voter_budget,
-				assignment,
+				distribution,
 				supports,
 				tolerance,
 			);
@@ -983,8 +971,8 @@ fn do_equalize<Balance, AccountId, C>(
 	let budget = to_votes(budget_balance);
 
 	// Nothing to do. This voter had nothing useful.
-	// Defensive only. Assignment list should always be populated.
-	if elected_edges.is_empty() { return 0; }
+	// Defensive only. Assignment list should always be populated. 1 might happen for self vote.
+	if elected_edges.is_empty() || elected_edges.len() == 1 { return 0; }
 
 	let stake_used = elected_edges
 		.iter()
@@ -1025,7 +1013,7 @@ fn do_equalize<Balance, AccountId, C>(
 	elected_edges.iter_mut().for_each(|e| {
 		if let Some(support) = support_map.get_mut(&e.0) {
 			support.total = support.total.saturating_sub(e.1);
-			support.others.retain(|i_support| i_support.0 != *voter);
+			support.voters.retain(|i_support| i_support.0 != *voter);
 		}
 		e.1 = 0;
 	});
@@ -1062,7 +1050,7 @@ fn do_equalize<Balance, AccountId, C>(
 				.saturating_add(last_stake)
 				.saturating_sub(support.total);
 			support.total = support.total.saturating_add(e.1);
-			support.others.push((voter.clone(), e.1));
+			support.voters.push((voter.clone(), e.1));
 		}
 	});
 

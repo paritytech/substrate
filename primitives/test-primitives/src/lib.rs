@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -40,7 +40,6 @@ impl serde::Serialize for Extrinsic {
 	}
 }
 
-
 impl ExtrinsicT for Extrinsic {
 	type Call = Extrinsic;
 	type SignaturePayload = ();
@@ -76,7 +75,6 @@ pub type Digest = sp_runtime::generic::Digest<H256>;
 pub type Block = sp_runtime::generic::Block<Header, Extrinsic>;
 /// A test block's header.
 pub type Header = sp_runtime::generic::Header<BlockNumber, BlakeTwo256>;
-
 
 /// Changes trie configuration (optionally) used in tests.
 pub fn changes_trie_config() -> sp_core::ChangesTrieConfiguration {

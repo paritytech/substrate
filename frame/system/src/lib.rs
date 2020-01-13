@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -113,7 +113,7 @@ use sp_runtime::{
 use sp_core::storage::well_known_keys;
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
-	traits::{Contains, Get, ModuleToIndex},
+	traits::{Contains, Get, ModuleToIndex, OnReapAccount},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
 };
 use codec::{Encode, Decode};
@@ -178,7 +178,7 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// The output of the `Hashing` function.
 	type Hash:
-		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps
+		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps + Ord
 		+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
@@ -405,9 +405,6 @@ decl_storage! {
 		/// Mapping between a topic (represented by T::Hash) and a vector of indexes
 		/// of events in the `<Events<T>>` list.
 		///
-		/// The first key serves no purpose. This field is declared as double_map just
-		/// for convenience of using `remove_prefix`.
-		///
 		/// All topic vectors have deterministic storage locations depending on the topic. This
 		/// allows light-clients to leverage the changes trie storage tracking mechanism and
 		/// in case of changes fetch the list of events of interest.
@@ -415,8 +412,7 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(fn event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
-			=> Vec<(T::BlockNumber, EventIndex)>;
+		EventTopics get(fn event_topics): map T::Hash => Vec<(T::BlockNumber, EventIndex)>;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -471,7 +467,7 @@ pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, Acco
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	Who: Contains<AccountId>,
-	AccountId: PartialEq + Clone,
+	AccountId: PartialEq + Clone + Ord,
 > EnsureOrigin<O> for EnsureSignedBy<Who, AccountId> {
 	type Success = AccountId;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
@@ -535,6 +531,27 @@ pub fn ensure_none<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), BadOrig
 	}
 }
 
+/// A type of block initialization to perform.
+pub enum InitKind {
+	/// Leave inspectable storage entries in state.
+	///
+	/// i.e. `Events` are not being reset.
+	/// Should only be used for off-chain calls,
+	/// regular block execution should clear those.
+	Inspection,
+
+	/// Reset also inspectable storage entries.
+	///
+	/// This should be used for regular block execution.
+	Full,
+}
+
+impl Default for InitKind {
+	fn default() -> Self {
+		InitKind::Full
+	}
+}
+
 impl<T: Trait> Module<T> {
 	/// Deposits an event into this block's event record.
 	pub fn deposit_event(event: impl Into<T::Event>) {
@@ -583,7 +600,7 @@ impl<T: Trait> Module<T> {
 		let block_no = Self::block_number();
 		for topic in topics {
 			// The same applies here.
-			if <EventTopics<T>>::append(&(), topic, &[(block_no, event_idx)]).is_err() {
+			if <EventTopics<T>>::append(topic, &[(block_no, event_idx)]).is_err() {
 				return;
 			}
 		}
@@ -637,6 +654,7 @@ impl<T: Trait> Module<T> {
 		parent_hash: &T::Hash,
 		txs_root: &T::Hash,
 		digest: &DigestOf<T>,
+		kind: InitKind,
 	) {
 		// populate environment
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
@@ -645,9 +663,12 @@ impl<T: Trait> Module<T> {
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
-		<Events<T>>::kill();
-		EventCount::kill();
-		<EventTopics<T>>::remove_prefix(&());
+
+		if let InitKind::Full = kind {
+			<Events<T>>::kill();
+			EventCount::kill();
+			<EventTopics<T>>::remove_all();
+		}
 	}
 
 	/// Remove temporary "environment" entries in storage.
@@ -790,6 +811,13 @@ impl<T: Trait> Module<T> {
 			.map(ExtrinsicData::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
+	}
+}
+
+impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
+	/// Remove the nonce for the account. Account is considered fully removed from the system.
+	fn on_reap_account(who: &T::AccountId) {
+		<AccountNonce<T>>::remove(who);
 	}
 }
 
@@ -1217,7 +1245,13 @@ mod tests {
 	#[test]
 	fn deposit_event_should_work() {
 		new_test_ext().execute_with(|| {
-			System::initialize(&1, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+			System::initialize(
+				&1,
+				&[0u8; 32].into(),
+				&[0u8; 32].into(),
+				&Default::default(),
+				InitKind::Full,
+			);
 			System::note_finished_extrinsics();
 			System::deposit_event(1u16);
 			System::finalize();
@@ -1232,7 +1266,13 @@ mod tests {
 				]
 			);
 
-			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+			System::initialize(
+				&2,
+				&[0u8; 32].into(),
+				&[0u8; 32].into(),
+				&Default::default(),
+				InitKind::Full,
+			);
 			System::deposit_event(42u16);
 			System::note_applied_extrinsic(&Ok(()), 0, Default::default());
 			System::note_applied_extrinsic(&Err(DispatchError::BadOrigin), 0, Default::default());
@@ -1261,6 +1301,7 @@ mod tests {
 				&[0u8; 32].into(),
 				&[0u8; 32].into(),
 				&Default::default(),
+				InitKind::Full,
 			);
 			System::note_finished_extrinsics();
 
@@ -1302,15 +1343,15 @@ mod tests {
 			// Check that the topic-events mapping reflects the deposited topics.
 			// Note that these are indexes of the events.
 			assert_eq!(
-				System::event_topics(&(), &topics[0]),
+				System::event_topics(&topics[0]),
 				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 1)],
 			);
 			assert_eq!(
-				System::event_topics(&(), &topics[1]),
+				System::event_topics(&topics[1]),
 				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 2)],
 			);
 			assert_eq!(
-				System::event_topics(&(), &topics[2]),
+				System::event_topics(&topics[2]),
 				vec![(BLOCK_NUMBER, 0)],
 			);
 		});
@@ -1326,6 +1367,7 @@ mod tests {
 					&[n as u8 - 1; 32].into(),
 					&[0u8; 32].into(),
 					&Default::default(),
+					InitKind::Full,
 				);
 
 				System::finalize();

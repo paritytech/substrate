@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -423,7 +423,7 @@ pub fn assert_assignments_equal(
 
 	for (who, support) in support_1.iter() {
 		assert_eq!(support.total, support_2.get(who).unwrap().total);
-		assert_eq!(support.others, support_2.get(who).unwrap().others);
+		assert_eq!(support.voters, support_2.get(who).unwrap().voters);
 
 	}
 }

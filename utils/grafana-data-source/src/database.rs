@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -140,7 +140,6 @@ fn now_millis() -> i64 {
 #[test]
 fn test() {
 	let mut database = Database::new();
-	let start = now_millis();
 
 	database.push("test", 1.0).unwrap();
 	database.push("test", 2.5).unwrap();
@@ -152,19 +151,4 @@ fn test() {
 
 	assert_eq!(keys, ["test", "test 2"]);
 	assert_eq!(database.keys_starting_with("test ").collect::<Vec<_>>(), ["test 2"]);
-
-	assert_eq!(
-		database.datapoints_between("test", start - 1000, start + 1000, 4),
-		Some(vec![(1.0, start), (2.5, start), (2.0, start)])
-	);
-
-	assert_eq!(
-		database.datapoints_between("test", start - 1000, start + 1000, 3),
-		Some(vec![(1.0, start), (2.5, start), (2.0, start)])
-	);
-
-	assert_eq!(
-		database.datapoints_between("test", start - 1000, start + 1000, 2),
-		Some(vec![(1.0, start), (2.0, start)])
-	);
 }

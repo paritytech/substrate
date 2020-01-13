@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -165,6 +165,16 @@ impl BuildStorage for sp_core::storage::Storage {
 			}
 		}
 		Ok(())
+	}
+}
+
+#[cfg(feature = "std")]
+impl BuildStorage for () {
+	fn assimilate_storage(
+		&self,
+		_: &mut sp_core::storage::Storage,
+	)-> Result<(), String> {
+		Err("`assimilate_storage` not implemented for `()`".into())
 	}
 }
 
