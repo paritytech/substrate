@@ -547,7 +547,7 @@ pub struct GrandpaParams<B, E, Block: BlockT, N, RA, SC, VR, X, Sp> {
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X, Sp>,
-) -> sp_blockchain::Result<impl futures03::Future<Output=()> + Send + 'static> where
+) -> sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
@@ -639,9 +639,9 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	let telemetry_task = telemetry_task
 		.then(|_| futures::future::empty::<(), ()>());
 
-	use futures03::{FutureExt, TryFutureExt, future::select, compat::Future01CompatExt};
+	use futures03::{FutureExt, TryFutureExt};
 
-	Ok(select(select(voter_work.compat(), telemetry_task.compat()), on_exit).map(drop))
+	Ok(voter_work.select(on_exit.map(Ok).compat()).select2(telemetry_task).then(|_| Ok(())))
 }
 
 /// Future that powers the voter.
@@ -885,7 +885,7 @@ where
 #[deprecated(since = "1.1.0", note = "Please switch to run_grandpa_voter.")]
 pub fn run_grandpa<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X, Sp>,
-) -> sp_blockchain::Result<impl futures03::Future<Output=()> + Send + 'static> where
+) -> sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,

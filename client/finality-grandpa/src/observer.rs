@@ -156,7 +156,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
 	network: N,
 	on_exit: impl futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
 	executor: Sp,
-) -> sp_blockchain::Result<impl futures03::Future<Output=()> + Send + 'static> where
+) -> sp_blockchain::Result<impl Future<Item=(), Error=()> + Send + 'static> where
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
 	N: NetworkT<Block> + Send + Clone + 'static,
@@ -195,9 +195,9 @@ pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
 			warn!("GRANDPA Observer failed: {:?}", e);
 		});
 
-	use futures03::{FutureExt, future::select, compat::Future01CompatExt};
+	use futures03::{FutureExt, TryFutureExt};
 
-	Ok(select(observer_work.compat(), on_exit).map(drop))
+	Ok(observer_work.select(on_exit.map(Ok).compat()).map(|_| ()).map_err(|_| ()))
 }
 
 /// Future that powers the observer.
@@ -359,12 +359,12 @@ where
 		}
 
 		match self.voter_commands_rx.poll() {
-			Ok(Async::No{
+			Ok(Async::NotReady) => {}
+			Err(_) => {
 				// the `voter_commands_rx` stream should not fail.
 				return Ok(Async::Ready(()))
 			}
-			Ok(Async::Ready(None)) => tReady) => {}
-			Err(_) => {
+			Ok(Async::Ready(None)) => {
 				// the `voter_commands_rx` stream should never conclude since it's never closed.
 				return Ok(Async::Ready(()))
 			}
