@@ -188,7 +188,7 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 	type Error = Error;
 
 	fn call

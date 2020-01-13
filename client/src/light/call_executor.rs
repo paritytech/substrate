@@ -182,7 +182,7 @@ pub fn prove_execution<Block, S, E>(
 	where
 		Block: BlockT,
 		S: StateBackend<HasherFor<Block>>,
-		E: CallExecutor<Block> + 'static,
+		E: CallExecutor<Block>,
 {
 	let trie_state = state.as_trie_backend()
 		.ok_or_else(||

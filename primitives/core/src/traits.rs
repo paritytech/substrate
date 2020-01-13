@@ -80,7 +80,7 @@ sp_externalities::decl_extension! {
 }
 
 /// Code execution engine.
-pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone {
+pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
 	/// Externalities error type.
 	type Error: Display + Debug + Send + 'static;
 
