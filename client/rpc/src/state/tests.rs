@@ -143,7 +143,7 @@ fn should_notify_about_storage_changes() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let client = Arc::new(substrate_test_runtime_client::new());
+		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		api.subscribe_storage(Default::default(), subscriber, None.into());
@@ -158,7 +158,8 @@ fn should_notify_about_storage_changes() {
 			amount: 42,
 			nonce: 0,
 		}).unwrap();
-		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		let block = builder.build().unwrap().block;
+		client.import(BlockOrigin::Own, block).unwrap();
 	}
 
 	// assert notification sent to transport
@@ -175,7 +176,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let client = Arc::new(substrate_test_runtime_client::new());
+		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
@@ -194,7 +195,8 @@ fn should_send_initial_storage_changes_and_notifications() {
 			amount: 42,
 			nonce: 0,
 		}).unwrap();
-		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		let block = builder.build().unwrap().block;
+		client.import(BlockOrigin::Own, block).unwrap();
 	}
 
 	// assert initial values sent to transport
@@ -209,11 +211,11 @@ fn should_send_initial_storage_changes_and_notifications() {
 
 #[test]
 fn should_query_storage() {
-	fn run_tests(client: Arc<TestClient>) {
+	fn run_tests(mut client: Arc<TestClient>) {
 		let core = tokio::runtime::Runtime::new().unwrap();
 		let api = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
-		let add_block = |nonce| {
+		let mut add_block = |nonce| {
 			let mut builder = client.new_block(Default::default()).unwrap();
 			// fake change: None -> None -> None
 			builder.push_storage_change(vec![1], None).unwrap();
@@ -225,7 +227,7 @@ fn should_query_storage() {
 			builder.push_storage_change(vec![4], if nonce == 0 { None } else { Some(vec![4]) }).unwrap();
 			// actual change: Some(value1) -> Some(value2)
 			builder.push_storage_change(vec![5], Some(vec![nonce as u8])).unwrap();
-			let block = builder.bake().unwrap();
+			let block = builder.build().unwrap().block;
 			let hash = block.header.hash();
 			client.import(BlockOrigin::Own, block).unwrap();
 			hash
@@ -400,7 +402,7 @@ fn should_return_runtime_version() {
 		\"specVersion\":1,\"implVersion\":1,\"apis\":[[\"0xdf6acb689907609b\",2],\
 		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",1],[\"0x40fe3ad401f8959a\",4],\
 		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",1],\
-		[\"0xf78b278be53f454c\",1],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]]}";
+		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]]}";
 
 	let runtime_version = api.runtime_version(None.into()).wait().unwrap();
 	let serialized = serde_json::to_string(&runtime_version).unwrap();

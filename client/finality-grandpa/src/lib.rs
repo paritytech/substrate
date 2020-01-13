@@ -55,7 +55,7 @@
 use futures::prelude::*;
 use log::{debug, error, info};
 use futures::sync::mpsc;
-use sc_client_api::{BlockchainEvents, CallExecutor, backend::Backend, ExecutionStrategy};
+use sc_client_api::{BlockchainEvents, CallExecutor, backend::{AuxStore, Backend}, ExecutionStrategy};
 use sp_blockchain::{HeaderBackend, Error as ClientError};
 use sc_client::Client;
 use parity_scale_codec::{Decode, Encode};
@@ -64,7 +64,7 @@ use sp_runtime::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
 use sc_keystore::KeyStorePtr;
 use sp_inherents::InherentDataProviders;
 use sp_consensus::SelectChain;
-use sp_core::{H256, Blake2Hasher, Pair};
+use sp_core::Pair;
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
 
@@ -252,9 +252,9 @@ pub(crate) trait BlockStatus<Block: BlockT> {
 	fn block_number(&self, hash: Block::Hash) -> Result<Option<NumberFor<Block>>, Error>;
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA> BlockStatus<Block> for Arc<Client<B, E, Block, RA>> where
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+impl<B, E, Block: BlockT, RA> BlockStatus<Block> for Arc<Client<B, E, Block, RA>> where
+	B: Backend<Block>,
+	E: CallExecutor<Block> + Send + Sync,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
@@ -355,7 +355,7 @@ impl<H, N> fmt::Display for CommandOrError<H, N> {
 	}
 }
 
-pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA, SC> {
+pub struct LinkHalf<B, E, Block: BlockT, RA, SC> {
 	client: Arc<Client<B, E, Block, RA>>,
 	select_chain: SC,
 	persistent_data: PersistentData<Block>,
@@ -368,10 +368,10 @@ pub trait GenesisAuthoritySetProvider<Block: BlockT> {
 	fn get(&self) -> Result<AuthorityList, ClientError>;
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA> GenesisAuthoritySetProvider<Block> for Client<B, E, Block, RA>
+impl<B, E, Block: BlockT, RA> GenesisAuthoritySetProvider<Block> for Client<B, E, Block, RA>
 	where
-		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		B: Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 		RA: Send + Sync,
 {
 	fn get(&self) -> Result<AuthorityList, ClientError> {
@@ -397,7 +397,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> GenesisAuthoritySetProvider<Block> for 
 
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
-pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, SC>(
+pub fn block_import<B, E, Block: BlockT, RA, SC>(
 	client: Arc<Client<B, E, Block, RA>>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
@@ -406,10 +406,11 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, SC>(
 		LinkHalf<B, E, Block, RA, SC>
 	), ClientError>
 where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
 	SC: SelectChain<Block>,
+	Client<B, E, Block, RA>: AuxStore,
 {
 	let chain_info = client.chain_info();
 	let genesis_hash = chain_info.genesis_hash;
@@ -446,7 +447,7 @@ where
 	))
 }
 
-fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
+fn global_communication<Block: BlockT, B, E, N, RA>(
 	set_id: SetId,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
@@ -454,16 +455,16 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	keystore: &Option<KeyStorePtr>,
 ) -> (
 	impl Stream<
-		Item = CommunicationInH<Block, H256>,
-		Error = CommandOrError<H256, NumberFor<Block>>,
+		Item = CommunicationInH<Block, Block::Hash>,
+		Error = CommandOrError<Block::Hash, NumberFor<Block>>,
 	>,
 	impl Sink<
-		SinkItem = CommunicationOutH<Block, H256>,
-		SinkError = CommandOrError<H256, NumberFor<Block>>,
+		SinkItem = CommunicationOutH<Block, Block::Hash>,
+		SinkError = CommandOrError<Block::Hash, NumberFor<Block>>,
 	>,
 ) where
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	B: Backend<Block>,
+	E: CallExecutor<Block> + Send + Sync,
 	N: NetworkT<Block>,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
@@ -494,12 +495,12 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 
 /// Register the finality tracker inherent data provider (which is used by
 /// GRANDPA), if not registered already.
-fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H256>, RA>(
+fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT, RA>(
 	client: Arc<Client<B, E, Block, RA>>,
 	inherent_data_providers: &InherentDataProviders,
 ) -> Result<(), sp_consensus::Error> where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 {
 	if !inherent_data_providers.has_provider(&sp_finality_tracker::INHERENT_IDENTIFIER) {
@@ -522,7 +523,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 }
 
 /// Parameters used to run Grandpa.
-pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp> {
+pub struct GrandpaParams<B, E, Block: BlockT, N, RA, SC, VR, X, Sp> {
 	/// Configuration for the GRANDPA service.
 	pub config: Config,
 	/// A link to the block import worker.
@@ -543,12 +544,12 @@ pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp> {
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp>(
+pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X, Sp>,
 ) -> sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
 	N: NetworkT<Block> + Send + Sync + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
@@ -556,6 +557,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp>(
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
 	X: futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
+	Client<B, E, Block, RA>: AuxStore,
 	Sp: futures03::task::Spawn + 'static,
 {
 	let GrandpaParams {
@@ -650,14 +652,15 @@ struct VoterWork<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
 
 impl<B, E, Block, N, RA, SC, VR> VoterWork<B, E, Block, N, RA, SC, VR>
 where
-	Block: BlockT<Hash=H256>,
+	Block: BlockT,
  	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
+	B: Backend<Block> + 'static,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
+	Client<B, E, Block, RA>: AuxStore,
 {
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
@@ -825,14 +828,15 @@ where
 
 impl<B, E, Block, N, RA, SC, VR> Future for VoterWork<B, E, Block, N, RA, SC, VR>
 where
-	Block: BlockT<Hash=H256>,
+	Block: BlockT,
  	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
+	B: Backend<Block> + 'static,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
+	Client<B, E, Block, RA>: AuxStore,
 {
 	type Item = ();
 	type Error = Error;
@@ -877,12 +881,12 @@ where
 }
 
 #[deprecated(since = "1.1.0", note = "Please switch to run_grandpa_voter.")]
-pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp>(
+pub fn run_grandpa<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X, Sp>,
-) -> ::sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+) -> sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
 	N: NetworkT<Block> + Send + Sync + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
@@ -890,6 +894,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp>(
 	RA: Send + Sync + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 	X: futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
+	Client<B, E, Block, RA>: AuxStore,
 	Sp: futures03::task::Spawn + 'static,
 {
 	run_grandpa_voter(grandpa_params)
@@ -901,13 +906,13 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X, Sp>(
 /// discards all GRANDPA messages (otherwise, we end up banning nodes that send
 /// us a `Neighbor` message, since there is no registered gossip validator for
 /// the engine id defined in the message.)
-pub fn setup_disabled_grandpa<B, E, Block: BlockT<Hash=H256>, RA, N>(
+pub fn setup_disabled_grandpa<B, E, Block: BlockT, RA, N>(
 	client: Arc<Client<B, E, Block, RA>>,
 	inherent_data_providers: &InherentDataProviders,
 	network: N,
 ) -> Result<(), sp_consensus::Error> where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 	N: NetworkT<Block> + Send + Clone + 'static,
 {

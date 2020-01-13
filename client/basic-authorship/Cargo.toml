@@ -8,6 +8,7 @@ edition = "2018"
 log = "0.4.8"
 futures = "0.3.1"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
+sp-api = { version = "2.0.0", path = "../../primitives/api" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }

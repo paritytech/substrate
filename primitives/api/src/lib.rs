@@ -26,7 +26,7 @@
 //! functionality that every runtime needs to export.
 //!
 //! Besides the macros and the [`Core`] runtime api, this crates provides the [`Metadata`] runtime
-//! api, the [`ApiExt`] trait, the [`CallRuntimeAt`] trait and the [`ConstructRuntimeApi`] trait.
+//! api, the [`ApiExt`] trait, the [`CallApiAt`] trait and the [`ConstructRuntimeApi`] trait.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -35,18 +35,23 @@ extern crate self as sp_api;
 
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use sp_state_machine::{OverlayedChanges, StorageProof};
+pub use sp_state_machine::{
+	OverlayedChanges, StorageProof, Backend as StateBackend, ChangesTrieStorage,
+};
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_core::NativeOrEncoded;
+#[doc(hidden)]
+#[cfg(feature = "std")]
+pub use hash_db::Hasher;
 #[doc(hidden)]
 #[cfg(not(feature = "std"))]
 pub use sp_core::to_substrate_wasm_fn_return_value;
 #[doc(hidden)]
 pub use sp_runtime::{
 	traits::{
-		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType,
-		Header as HeaderT, ApiRef, RuntimeApiInfo, Hash as HashT,
+		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, HasherFor, NumberFor,
+		Header as HeaderT, Hash as HashT,
 	},
 	generic::BlockId, transaction_validity::TransactionValidity,
 };
@@ -157,8 +162,8 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// ```rust
 /// use sp_version::create_runtime_str;
 /// #
-/// # use sp_runtime::traits::GetNodeBlockType;
-/// # use sp_test_primitives::{Block, Header};
+/// # use sp_runtime::traits::{GetNodeBlockType, Block as BlockT};
+/// # use sp_test_primitives::Block;
 /// #
 /// # /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
 /// # /// trait are done by the `construct_runtime!` macro in a real runtime.
@@ -187,7 +192,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// #           unimplemented!()
 /// #       }
 /// #       fn execute_block(_block: Block) {}
-/// #       fn initialize_block(_header: &Header) {}
+/// #       fn initialize_block(_header: &<Block as BlockT>::Header) {}
 /// #   }
 ///
 ///     impl self::Balance<Block> for Runtime {
@@ -221,27 +226,60 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// ```
 pub use sp_api_proc_macro::impl_runtime_apis;
 
-#[cfg(feature = "std")]
 /// A type that records all accessed trie nodes and generates a proof out of it.
+#[cfg(feature = "std")]
 pub type ProofRecorder<B> = sp_state_machine::ProofRecorder<
 	<<<B as BlockT>::Header as HeaderT>::Hashing as HashT>::Hasher
 >;
 
+/// A type that is used as cache for the storage transactions.
+#[cfg(feature = "std")]
+pub type StorageTransactionCache<Block, Backend> =
+	sp_state_machine::StorageTransactionCache<
+		<Backend as StateBackend<HasherFor<Block>>>::Transaction, HasherFor<Block>, NumberFor<Block>
+	>;
+
+#[cfg(feature = "std")]
+pub type StorageChanges<SBackend, Block> =
+	sp_state_machine::StorageChanges<
+		<SBackend as StateBackend<HasherFor<Block>>>::Transaction,
+		HasherFor<Block>,
+		NumberFor<Block>
+	>;
+
+/// Extract the state backend type for a type that implements `ProvideRuntimeApi`.
+#[cfg(feature = "std")]
+pub type StateBackendFor<P, Block> =
+	<<P as ProvideRuntimeApi<Block>>::Api as ApiExt<Block>>::StateBackend;
+
+/// Extract the state backend transaction type for a type that implements `ProvideRuntimeApi`.
+#[cfg(feature = "std")]
+pub type TransactionFor<P, Block> =
+	<StateBackendFor<P, Block> as StateBackend<HasherFor<Block>>>::Transaction;
+
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
-pub trait ConstructRuntimeApi<Block: BlockT, C: CallRuntimeAt<Block>> {
+pub trait ConstructRuntimeApi<Block: BlockT, C: CallApiAt<Block>> {
 	/// The actual runtime api that will be constructed.
-	type RuntimeApi;
+	type RuntimeApi: ApiExt<Block>;
 
 	/// Construct an instance of the runtime api.
 	fn construct_runtime_api<'a>(call: &'a C) -> ApiRef<'a, Self::RuntimeApi>;
 }
 
-/// An extension for the `RuntimeApi`.
+/// Extends the runtime api traits with an associated error type. This trait is given as super
+/// trait to every runtime api trait.
 #[cfg(feature = "std")]
-pub trait ApiExt<Block: BlockT> {
-	/// Error type used by the interface.
+pub trait ApiErrorExt {
+	/// Error type used by the runtime apis.
 	type Error: std::fmt::Debug + From<String>;
+}
+
+/// Extends the runtime api implementation with some common functionality.
+#[cfg(feature = "std")]
+pub trait ApiExt<Block: BlockT>: ApiErrorExt {
+	/// The state backend that is used to store the block states.
+	type StateBackend: StateBackend<HasherFor<Block>>;
 
 	/// The given closure will be called with api instance. Inside the closure any api call is
 	/// allowed. After doing the api call, the closure is allowed to map the `Result` to a
@@ -250,15 +288,15 @@ pub trait ApiExt<Block: BlockT> {
 	/// On `Ok`, the structure commits the changes to an internal buffer.
 	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
 		&self,
-		map_call: F
+		map_call: F,
 	) -> result::Result<R, E> where Self: Sized;
 
 	/// Checks if the given api is implemented and versions match.
 	fn has_api<A: RuntimeApiInfo + ?Sized>(
 		&self,
-		at: &BlockId<Block>
+		at: &BlockId<Block>,
 	) -> Result<bool, Self::Error> where Self: Sized {
-		self.runtime_version_at(at).map(|v| v.has_api::<A>())
+		self.runtime_version_at(at).map(|v| v.has_api_with(&A::ID, |v| v == A::VERSION))
 	}
 
 	/// Check if the given api is implemented and the version passes a predicate.
@@ -267,7 +305,7 @@ pub trait ApiExt<Block: BlockT> {
 		at: &BlockId<Block>,
 		pred: P,
 	) -> Result<bool, Self::Error> where Self: Sized {
-		self.runtime_version_at(at).map(|v| v.has_api_with::<A, _>(pred))
+		self.runtime_version_at(at).map(|v| v.has_api_with(&A::ID, pred))
 	}
 
 	/// Returns the runtime version at the given block id.
@@ -277,8 +315,22 @@ pub trait ApiExt<Block: BlockT> {
 	fn record_proof(&mut self);
 
 	/// Extract the recorded proof.
+	///
 	/// This stops the proof recording.
+	///
+	/// If `record_proof` was not called before, this will return `None`.
 	fn extract_proof(&mut self) -> Option<StorageProof>;
+
+	/// Convert the api object into the storage changes that were done while executing runtime
+	/// api functions.
+	///
+	/// After executing this function, all collected changes are reset.
+	fn into_storage_changes<T: ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>>(
+		&self,
+		backend: &Self::StateBackend,
+		changes_trie_storage: Option<&T>,
+		parent_hash: Block::Hash,
+	) -> Result<StorageChanges<Self::StateBackend, Block>, String> where Self: Sized;
 }
 
 /// Before calling any runtime api function, the runtime need to be initialized
@@ -301,11 +353,43 @@ pub enum InitializeBlock<'a, Block: BlockT> {
 	Do(&'a RefCell<Option<BlockId<Block>>>),
 }
 
-/// Something that can call into the runtime at a given block.
+/// Parameters for [`CallApiAt::call_api_at`].
 #[cfg(feature = "std")]
-pub trait CallRuntimeAt<Block: BlockT> {
-	/// Error type used by the interface.
+pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HasherFor<Block>>> {
+	/// A reference to something that implements the [`Core`] api.
+	pub core_api: &'a C,
+	/// The block id that determines the state that should be setup when calling the function.
+	pub at: &'a BlockId<Block>,
+	/// The name of the function that should be called.
+	pub function: &'static str,
+	/// An optional native call that calls the `function`. This is an optimization to call into a
+	/// native runtime without requiring to encode/decode the parameters. The native runtime can
+	/// still be called when this value is `None`, we then just fallback to encoding/decoding the
+	/// parameters.
+	pub native_call: Option<NC>,
+	/// The encoded arguments of the function.
+	pub arguments: Vec<u8>,
+	/// The overlayed changes that are on top of the state.
+	pub overlayed_changes: &'a RefCell<OverlayedChanges>,
+	/// The cache for storage transactions.
+	pub storage_transaction_cache: &'a RefCell<StorageTransactionCache<Block, Backend>>,
+	/// Determines if the function requires that `initialize_block` should be called before calling
+	/// the actual function.
+	pub initialize_block: InitializeBlock<'a, Block>,
+	/// The context this function is executed in.
+	pub context: ExecutionContext,
+	/// The optional proof recorder for recording storage accesses.
+	pub recorder: &'a Option<ProofRecorder<Block>>,
+}
+
+/// Something that can call into the an api at a given block.
+#[cfg(feature = "std")]
+pub trait CallApiAt<Block: BlockT> {
+	/// Error type used by the implementation.
 	type Error: std::fmt::Debug + From<String>;
+
+	/// The state backend that is used to store the block states.
+	type StateBackend: StateBackend<HasherFor<Block>>;
 
 	/// Calls the given api function with the given encoded arguments at the given block and returns
 	/// the encoded result.
@@ -316,26 +400,66 @@ pub trait CallRuntimeAt<Block: BlockT> {
 		C: Core<Block, Error = Self::Error>,
 	>(
 		&self,
-		core_api: &C,
-		at: &BlockId<Block>,
-		function: &'static str,
-		args: Vec<u8>,
-		changes: &RefCell<OverlayedChanges>,
-		initialize_block: InitializeBlock<'a, Block>,
-		native_call: Option<NC>,
-		context: ExecutionContext,
-		recorder: &Option<ProofRecorder<Block>>,
+		params: CallApiAtParams<'a, Block, C, NC, Self::StateBackend>,
 	) -> Result<NativeOrEncoded<R>, Self::Error>;
 
 	/// Returns the runtime version at the given block.
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, Self::Error>;
 }
 
+/// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
+#[cfg(feature = "std")]
+pub struct ApiRef<'a, T>(T, std::marker::PhantomData<&'a ()>);
+
+#[cfg(feature = "std")]
+impl<'a, T> From<T> for ApiRef<'a, T> {
+	fn from(api: T) -> Self {
+		ApiRef(api, Default::default())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a, T> std::ops::Deref for ApiRef<'a, T> {
+	type Target = T;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a, T> std::ops::DerefMut for ApiRef<'a, T> {
+	fn deref_mut(&mut self) -> &mut T {
+		&mut self.0
+	}
+}
+
+/// Something that provides a runtime api.
+#[cfg(feature = "std")]
+pub trait ProvideRuntimeApi<Block: BlockT> {
+	/// The concrete type that provides the api.
+	type Api: ApiExt<Block>;
+
+	/// Returns the runtime api.
+	/// The returned instance will keep track of modifications to the storage. Any successful
+	/// call to an api function, will `commit` its changes to an internal buffer. Otherwise,
+	/// the modifications will be `discarded`. The modifications will not be applied to the
+	/// storage, even on a `commit`.
+	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
+}
+
+/// Something that provides information about a runtime api.
+#[cfg(feature = "std")]
+pub trait RuntimeApiInfo {
+	/// The identifier of the runtime api.
+	const ID: [u8; 8];
+	/// The version of the runtime api.
+	const VERSION: u32;
+}
+
 /// Extracts the `Api::Error` for a type that provides a runtime api.
 #[cfg(feature = "std")]
-pub type ApiErrorFor<T, Block> = <
-	<T as sp_runtime::traits::ProvideRuntimeApi>::Api as ApiExt<Block>
->::Error;
+pub type ApiErrorFor<T, Block> = <<T as ProvideRuntimeApi<Block>>::Api as ApiErrorExt>::Error;
 
 decl_runtime_apis! {
 	/// The `Core` runtime api that every Substrate runtime needs to implement.

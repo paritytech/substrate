@@ -33,7 +33,7 @@ use std::sync::Arc;
 
 use node_primitives::{Block, AccountId, Index, Balance};
 use node_runtime::UncheckedExtrinsic;
-use sp_runtime::traits::ProvideRuntimeApi;
+use sp_api::ProvideRuntimeApi;
 use sp_transaction_pool::TransactionPool;
 
 /// Light client extra dependencies.
@@ -62,7 +62,7 @@ pub fn create<C, P, M, F>(
 	pool: Arc<P>,
 	light_deps: Option<LightDeps<F>>,
 ) -> jsonrpc_core::IoHandler<M> where
-	C: ProvideRuntimeApi,
+	C: ProvideRuntimeApi<Block>,
 	C: sc_client::blockchain::HeaderBackend<Block>,
 	C: Send + Sync + 'static,
 	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,

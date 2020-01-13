@@ -54,7 +54,7 @@ macro_rules! implement_per_thing {
 				Self([parts, $max][(parts > $max) as usize])
 			}
 
-			/// Converts from a percent. Equal to `x / 100`.
+			/// Converts a percent into `Self`. Equal to `x / 100`.
 			///
 			/// This can be created at compile time.
 			pub const fn from_percent(x: $type) -> Self {
@@ -69,7 +69,7 @@ macro_rules! implement_per_thing {
 				Self::from_rational_approximation(p, q)
 			}
 
-			/// Converts a fraction into `Permill`.
+			/// Converts a fraction into `Self`.
 			#[cfg(feature = "std")]
 			pub fn from_fraction(x: f64) -> Self { Self((x * ($max as f64)) as $type) }
 
@@ -298,7 +298,6 @@ macro_rules! implement_per_thing {
 				assert_eq!($name::from_percent(33) * 10u64, 3);
 				assert_eq!($name::from_percent(34) * 10u64, 3);
 				assert_eq!($name::from_percent(35) * 10u64, 3);
-				assert_eq!($name::from_percent(36) * 10u64, 4);
 				assert_eq!($name::from_percent(36) * 10u64, 4);
 			}
 
