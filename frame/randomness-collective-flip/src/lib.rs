@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -210,7 +210,13 @@ mod tests {
 		let mut parent_hash = System::parent_hash();
 
 		for i in 1 .. (blocks + 1) {
-			System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
+			System::initialize(
+				&i,
+				&parent_hash,
+				&Default::default(),
+				&Default::default(),
+				frame_system::InitKind::Full,
+			);
 			CollectiveFlip::on_initialize(i);
 
 			let header = System::finalize();

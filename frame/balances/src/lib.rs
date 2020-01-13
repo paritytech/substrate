@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -163,9 +163,9 @@ use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
-	StorageValue, Parameter, decl_event, decl_storage, decl_module,
+	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error,
 	traits::{
-		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced, TryDrop,
+		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnReapAccount, OnUnbalanced, TryDrop,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, VestingCurrency,
 	},
@@ -198,6 +198,12 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// Gives a chance to clean up resources associated with the given account.
 	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
 
+	/// A function that is invoked when the free-balance and the reserved-balance has fallen below
+	/// the existential deposit and both have been reduced to zero.
+	///
+	/// All resources should be cleaned up all resources associated with the given account.
+	type OnReapAccount: OnReapAccount<Self::AccountId>;
+
 	/// Handler for when a new account is created.
 	type OnNewAccount: OnNewAccount<Self::AccountId>;
 
@@ -221,6 +227,12 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	///
 	/// Gives a chance to clean up resources associated with the given account.
 	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
+
+	/// A function that is invoked when the free-balance and the reserved-balance has fallen below
+	/// the existential deposit and both have been reduced to zero.
+	///
+	/// All resources should be cleaned up all resources associated with the given account.
+	type OnReapAccount: OnReapAccount<Self::AccountId>;
 
 	/// Handler for when a new account is created.
 	type OnNewAccount: OnNewAccount<Self::AccountId>;
@@ -248,6 +260,7 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type Balance = T::Balance;
 	type OnFreeBalanceZero = T::OnFreeBalanceZero;
+	type OnReapAccount = T::OnReapAccount;
 	type OnNewAccount = T::OnNewAccount;
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type TransferFee = T::TransferFee;
@@ -271,6 +284,27 @@ decl_event!(
 		Deposit(AccountId, Balance),
 	}
 );
+
+decl_error! {
+	pub enum Error for Module<T: Trait<I>, I: Instance> {
+		/// Vesting balance too high to send value
+		VestingBalance,
+		/// Account liquidity restrictions prevent withdrawal
+		LiquidityRestrictions,
+		/// Got an overflow after adding
+		Overflow,
+		/// Balance too low to send value
+		InsufficientBalance,
+		/// Value too low to create account due to existential deposit
+		ExistentialDeposit,
+		/// Transfer/payment would kill account
+		KeepAlive,
+		/// A vesting schedule already exists for this account
+		ExistingVestingSchedule,
+		/// Beneficiary account must pre-exist
+		DeadAccount,
+	}
+}
 
 /// Struct to encode the vesting schedule of an individual account.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -390,6 +424,8 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
+		type Error = Error<T, I>;
+
 		/// The minimum amount required to keep an account open.
 		const ExistentialDeposit: T::Balance = T::ExistentialDeposit::get();
 
@@ -574,7 +610,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// This just removes the nonce and leaves an event.
 	fn reap_account(who: &T::AccountId, dust: T::Balance) {
-		<frame_system::AccountNonce<T>>::remove(who);
+		T::OnReapAccount::on_reap_account(who);
 		Self::deposit_event(RawEvent::ReapedAccount(who.clone(), dust));
 	}
 
@@ -827,6 +863,7 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
 	type OnFreeBalanceZero = T::OnFreeBalanceZero;
+	type OnReapAccount = T::OnReapAccount;
 	type OnNewAccount = T::OnNewAccount;
 	type Event = ();
 	type TransferPayment = ();
@@ -897,7 +934,7 @@ where
 		if reasons.intersects(WithdrawReason::Reserve | WithdrawReason::Transfer)
 			&& Self::vesting_balance(who) > new_balance
 		{
-			Err("vesting balance too high to send value")?
+			Err(Error::<T, I>::VestingBalance)?
 		}
 		let locks = Self::locks(who);
 		if locks.is_empty() {
@@ -914,7 +951,7 @@ where
 		{
 			Ok(())
 		} else {
-			Err("account liquidity restrictions prevent withdrawal".into())
+			Err(Error::<T, I>::LiquidityRestrictions.into())
 		}
 	}
 
@@ -928,31 +965,22 @@ where
 		let to_balance = Self::free_balance(dest);
 		let would_create = to_balance.is_zero();
 		let fee = if would_create { T::CreationFee::get() } else { T::TransferFee::get() };
-		let liability = match value.checked_add(&fee) {
-			Some(l) => l,
-			None => Err("got overflow after adding a fee to value")?,
-		};
+		let liability = value.checked_add(&fee).ok_or(Error::<T, I>::Overflow)?;
+		let new_from_balance = from_balance.checked_sub(&liability).ok_or(Error::<T, I>::InsufficientBalance)?;
 
-		let new_from_balance = match from_balance.checked_sub(&liability) {
-			None => Err("balance too low to send value")?,
-			Some(b) => b,
-		};
 		if would_create && value < T::ExistentialDeposit::get() {
-			Err("value too low to create account")?
+			Err(Error::<T, I>::ExistentialDeposit)?
 		}
 		Self::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer.into(), new_from_balance)?;
 
 		// NOTE: total stake being stored in the same type means that this could never overflow
 		// but better to be safe than sorry.
-		let new_to_balance = match to_balance.checked_add(&value) {
-			Some(b) => b,
-			None => Err("destination balance too high to receive value")?,
-		};
+		let new_to_balance = to_balance.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
 
 		if transactor != dest {
 			if existence_requirement == ExistenceRequirement::KeepAlive {
 				if new_from_balance < Self::minimum_balance() {
-					Err("transfer would kill account")?
+					Err(Error::<T, I>::KeepAlive)?
 				}
 			}
 
@@ -988,13 +1016,13 @@ where
 				// ...yet is was alive before
 				&& old_balance >= T::ExistentialDeposit::get()
 			{
-				Err("payment would kill account")?
+				Err(Error::<T, I>::KeepAlive)?
 			}
 			Self::ensure_can_withdraw(who, value, reasons, new_balance)?;
 			Self::set_free_balance(who, new_balance);
 			Ok(NegativeImbalance::new(value))
 		} else {
-			Err("too few free funds in account")?
+			Err(Error::<T, I>::InsufficientBalance)?
 		}
 	}
 
@@ -1026,7 +1054,7 @@ where
 		value: Self::Balance
 	) -> result::Result<Self::PositiveImbalance, DispatchError> {
 		if Self::total_balance(who).is_zero() {
-			Err("beneficiary account must pre-exist")?
+			Err(Error::<T, I>::DeadAccount)?
 		}
 		Self::set_free_balance(who, Self::free_balance(who) + value);
 		Ok(PositiveImbalance::new(value))
@@ -1109,7 +1137,7 @@ where
 	fn reserve(who: &T::AccountId, value: Self::Balance) -> result::Result<(), DispatchError> {
 		let b = Self::free_balance(who);
 		if b < value {
-			Err("not enough free funds")?
+			Err(Error::<T, I>::InsufficientBalance)?
 		}
 		let new_balance = b - value;
 		Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), new_balance)?;
@@ -1143,7 +1171,7 @@ where
 		value: Self::Balance,
 	) -> result::Result<Self::Balance, DispatchError> {
 		if Self::total_balance(beneficiary).is_zero() {
-			Err("beneficiary account must pre-exist")?
+			Err(Error::<T, I>::DeadAccount)?
 		}
 		let b = Self::reserved_balance(slashed);
 		let slash = cmp::min(b, value);
@@ -1254,7 +1282,7 @@ where
 		starting_block: T::BlockNumber
 	) -> DispatchResult {
 		if <Vesting<T, I>>::exists(who) {
-			Err("A vesting schedule already exists for this account.")?
+			Err(Error::<T, I>::ExistingVestingSchedule)?
 		}
 		let vesting_schedule = VestingSchedule {
 			locked,

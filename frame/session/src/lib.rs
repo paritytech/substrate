@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -125,7 +125,7 @@ use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
 use frame_support::weights::SimpleDispatchInfo;
 use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};
 use sp_staking::SessionIndex;
-use frame_support::{dispatch, ConsensusEngineId, decl_module, decl_event, decl_storage};
+use frame_support::{dispatch, ConsensusEngineId, decl_module, decl_event, decl_storage, decl_error};
 use frame_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor, ValidatorRegistration}, Parameter};
 use frame_system::{self as system, ensure_signed};
 
@@ -398,13 +398,15 @@ decl_storage! {
 		///
 		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
 		/// the trie. Having all data in the same branch should prevent slowing down other queries.
-		NextKeys: double_map hasher(twox_64_concat) Vec<u8>, blake2_256(T::ValidatorId) => Option<T::Keys>;
+		NextKeys: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) T::ValidatorId
+			=> Option<T::Keys>;
 
 		/// The owner of a key. The second key is the `KeyTypeId` + the encoded key.
 		///
 		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
 		/// the trie. Having all data in the same branch should prevent slowing down other queries.
-		KeyOwner: double_map hasher(twox_64_concat) Vec<u8>, blake2_256((KeyTypeId, Vec<u8>)) => Option<T::ValidatorId>;
+		KeyOwner: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) (KeyTypeId, Vec<u8>)
+			=> Option<T::ValidatorId>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
@@ -464,11 +466,25 @@ decl_event!(
 	}
 );
 
+decl_error! {
+	/// Error for the session module.
+	pub enum Error for Module<T: Trait> {
+		/// Invalid ownership proof.
+		InvalidProof,
+		/// No associated validator ID for account.
+		NoAssociatedValidatorId,
+		/// Registered duplicate key.
+		DuplicatedKey,
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Used as first key for `NextKeys` and `KeyOwner` to put all the data into the same branch
 		/// of the trie.
 		const DEDUP_KEY_PREFIX: &[u8] = DEDUP_KEY_PREFIX;
+
+		type Error = Error<T>;
 
 		fn deposit_event() = default;
 
@@ -486,12 +502,9 @@ decl_module! {
 		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			ensure!(keys.ownership_proof_is_valid(&proof), "invalid ownership proof");
+			ensure!(keys.ownership_proof_is_valid(&proof), Error::<T>::InvalidProof);
 
-			let who = match T::ValidatorIdOf::convert(who) {
-				Some(val_id) => val_id,
-				None => Err("no associated validator ID for account.")?,
-			};
+			let who = T::ValidatorIdOf::convert(who).ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
 			Self::do_set_keys(&who, keys)?;
 
@@ -640,7 +653,7 @@ impl<T: Trait> Module<T> {
 			// ensure keys are without duplication.
 			ensure!(
 				Self::key_owner(*id, key).map_or(true, |owner| &owner == who),
-				"registered duplicate key"
+				Error::<T>::DuplicatedKey,
 			);
 
 			if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(*id)) {

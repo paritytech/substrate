@@ -7,8 +7,10 @@ edition = "2018"
 [dependencies]
 sp-state-machine = { version = "2.0.0", path = "../../primitives/state-machine" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
+sp-api = { version = "2.0.0", path = "../../primitives/api" }
+sp-consensus = { version = "0.8.0", path = "../../primitives/consensus/common" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
-codec = { package = "parity-scale-codec", version = "1.0.6", features = ["derive"] }
 sp-block-builder = { version = "2.0.0", path = "../../primitives/block-builder" }
-sp-api = { version = "2.0.0", path = "../../primitives/api" }
+sc-client-api = { version = "2.0.0", path = "../api" }
+codec = { package = "parity-scale-codec", version = "1.0.6", features = ["derive"] }

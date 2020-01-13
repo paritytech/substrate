@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -1144,15 +1144,14 @@ mod tests {
 	use std::cell::RefCell;
 	use frame_support::{
 		impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
-		traits::Contains,
-		weights::Weight,
+		ord_parameter_types, traits::Contains, weights::Weight,
 	};
 	use sp_core::H256;
 	use sp_runtime::{
 		traits::{BlakeTwo256, IdentityLookup, Bounded, BadOrigin},
 		testing::Header, Perbill,
 	};
-	use pallet_balances::BalanceLock;
+	use pallet_balances::{BalanceLock, Error as BalancesError};
 	use frame_system::EnsureSignedBy;
 
 	const AYE: Vote = Vote{ aye: true, conviction: Conviction::None };
@@ -1206,6 +1205,7 @@ mod tests {
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
 		type TransferPayment = ();
@@ -1221,6 +1221,8 @@ mod tests {
 		pub const MinimumDeposit: u64 = 1;
 		pub const EnactmentPeriod: u64 = 2;
 		pub const CooloffPeriod: u64 = 2;
+	}
+	ord_parameter_types! {
 		pub const One: u64 = 1;
 		pub const Two: u64 = 2;
 		pub const Three: u64 = 3;
@@ -1229,8 +1231,8 @@ mod tests {
 	}
 	pub struct OneToFive;
 	impl Contains<u64> for OneToFive {
-		fn contains(n: &u64) -> bool {
-			*n >= 1 && *n <= 5
+		fn sorted_members() -> Vec<u64> {
+			vec![1, 2, 3, 4, 5]
 		}
 	}
 	thread_local! {
@@ -1356,7 +1358,7 @@ mod tests {
 			PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 100);
 			assert_noop!(
 				Democracy::note_preimage(Origin::signed(6), vec![0; 500]),
-				"not enough free funds",
+				BalancesError::<Test, _>::InsufficientBalance,
 			);
 			// fee of 1 is reasonable.
 			PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
@@ -2118,7 +2120,7 @@ mod tests {
 	fn poor_proposer_should_not_work() {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
-			assert_noop!(propose_set_balance(1, 2, 11), "not enough free funds");
+			assert_noop!(propose_set_balance(1, 2, 11), BalancesError::<Test, _>::InsufficientBalance);
 		});
 	}
 
@@ -2127,7 +2129,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
 			assert_ok!(propose_set_balance_and_note(2, 2, 11));
-			assert_noop!(Democracy::second(Origin::signed(1), 0), "not enough free funds");
+			assert_noop!(Democracy::second(Origin::signed(1), 0), BalancesError::<Test, _>::InsufficientBalance);
 		});
 	}
 

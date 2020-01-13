@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,23 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::traits::{AugmentClap, GetLogFilter};
+use crate::traits::GetSharedParams;
 
 use std::{str::FromStr, path::PathBuf};
-use structopt::{StructOpt, clap::{arg_enum, App, AppSettings, SubCommand, Arg}};
+use structopt::{StructOpt, StructOptInternal, clap::{arg_enum, App, AppSettings, SubCommand, Arg}};
 
 pub use crate::execution_strategy::ExecutionStrategy;
-
-/// Auxiliary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
-macro_rules! impl_get_log_filter {
-	( $type:ident ) => {
-		impl $crate::GetLogFilter for $type {
-			fn get_log_filter(&self) -> Option<String> {
-				self.shared_params.get_log_filter()
-			}
-		}
-	}
-}
 
 impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
 	fn into(self) -> sc_client_api::ExecutionStrategy {
@@ -153,12 +142,6 @@ pub struct ImportParams {
 	pub state_cache_size: usize,
 }
 
-impl GetLogFilter for SharedParams {
-	fn get_log_filter(&self) -> Option<String> {
-		self.log.clone()
-	}
-}
-
 /// Parameters used to create the network configuration.
 #[derive(Debug, StructOpt, Clone)]
 pub struct NetworkConfigurationParams {
@@ -225,7 +208,7 @@ pub struct NetworkConfigurationParams {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub node_key_params: NodeKeyParams
+	pub node_key_params: NodeKeyParams,
 }
 
 arg_enum! {
@@ -295,7 +278,7 @@ pub struct NodeKeyParams {
 	/// If the file does not exist, it is created with a newly generated secret key of
 	/// the chosen type.
 	#[structopt(long = "node-key-file", value_name = "FILE")]
-	pub node_key_file: Option<PathBuf>
+	pub node_key_file: Option<PathBuf>,
 }
 
 /// Parameters used to create the pool configuration.
@@ -640,14 +623,14 @@ impl StructOpt for Keyring {
 		unimplemented!("Should not be called for `TestAccounts`.")
 	}
 
-	fn from_clap(m: &::structopt::clap::ArgMatches) -> Self {
+	fn from_clap(m: &structopt::clap::ArgMatches) -> Self {
 		Keyring {
 			account: TEST_ACCOUNTS_CLI_VALUES.iter().find(|a| m.is_present(&a.name)).map(|a| a.variant),
 		}
 	}
 }
 
-impl AugmentClap for Keyring {
+impl StructOptInternal for Keyring {
 	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
 		TEST_ACCOUNTS_CLI_VALUES.iter().fold(app, |app, a| {
 			let conflicts_with_strs = a.conflicts_with.iter().map(|s| s.as_str()).collect::<Vec<_>>();
@@ -660,12 +643,6 @@ impl AugmentClap for Keyring {
 					.takes_value(false)
 			)
 		})
-	}
-}
-
-impl Keyring {
-	fn is_subcommand() -> bool {
-		false
 	}
 }
 
@@ -722,9 +699,6 @@ fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
 	Ok(if is_all { Cors::All } else { Cors::List(origins) })
 }
 
-impl_augment_clap!(RunCmd);
-impl_get_log_filter!(RunCmd);
-
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt, Clone)]
 pub struct BuildSpecCmd {
@@ -747,8 +721,6 @@ pub struct BuildSpecCmd {
 	#[structopt(flatten)]
 	pub node_key_params: NodeKeyParams,
 }
-
-impl_get_log_filter!(BuildSpecCmd);
 
 /// Wrapper type of `String` which holds an arbitary sized unsigned integer formatted as decimal.
 #[derive(Debug, Clone)]
@@ -813,8 +785,6 @@ pub struct ExportBlocksCmd {
 	pub shared_params: SharedParams,
 }
 
-impl_get_log_filter!(ExportBlocksCmd);
-
 /// The `import-blocks` command used to import blocks.
 #[derive(Debug, StructOpt, Clone)]
 pub struct ImportBlocksCmd {
@@ -836,8 +806,6 @@ pub struct ImportBlocksCmd {
 	#[structopt(flatten)]
 	pub import_params: ImportParams,
 }
-
-impl_get_log_filter!(ImportBlocksCmd);
 
 /// The `check-block` command used to validate blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -861,8 +829,6 @@ pub struct CheckBlockCmd {
 	pub import_params: ImportParams,
 }
 
-impl_get_log_filter!(CheckBlockCmd);
-
 /// The `revert` command used revert the chain to a previous state.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RevertCmd {
@@ -875,8 +841,6 @@ pub struct RevertCmd {
 	pub shared_params: SharedParams,
 }
 
-impl_get_log_filter!(RevertCmd);
-
 /// The `purge-chain` command used to remove the whole chain.
 #[derive(Debug, StructOpt, Clone)]
 pub struct PurgeChainCmd {
@@ -888,8 +852,6 @@ pub struct PurgeChainCmd {
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 }
-
-impl_get_log_filter!(PurgeChainCmd);
 
 /// All core commands that are provided by default.
 ///
@@ -924,8 +886,8 @@ pub enum CoreParams<CC, RP> {
 }
 
 impl<CC, RP> StructOpt for CoreParams<CC, RP> where
-	CC: StructOpt + GetLogFilter,
-	RP: StructOpt + AugmentClap
+	CC: StructOpt + GetSharedParams,
+	RP: StructOpt + StructOptInternal,
 {
 	fn clap<'a, 'b>() -> App<'a, 'b> {
 		RP::augment_clap(
@@ -979,21 +941,6 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 	}
 }
 
-impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
-	fn get_log_filter(&self) -> Option<String> {
-		match self {
-			CoreParams::Run(c) => c.left.get_log_filter(),
-			CoreParams::BuildSpec(c) => c.get_log_filter(),
-			CoreParams::ExportBlocks(c) => c.get_log_filter(),
-			CoreParams::ImportBlocks(c) => c.get_log_filter(),
-			CoreParams::CheckBlock(c) => c.get_log_filter(),
-			CoreParams::PurgeChain(c) => c.get_log_filter(),
-			CoreParams::Revert(c) => c.get_log_filter(),
-			CoreParams::Custom(c) => c.get_log_filter(),
-		}
-	}
-}
-
 /// A special commandline parameter that expands to nothing.
 /// Should be used as custom subcommand/run arguments if no custom values are required.
 #[derive(Clone, Debug, Default)]
@@ -1009,14 +956,14 @@ impl StructOpt for NoCustom {
 	}
 }
 
-impl AugmentClap for NoCustom {
+impl StructOptInternal for NoCustom {
 	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
 		app
 	}
 }
 
-impl GetLogFilter for NoCustom {
-	fn get_log_filter(&self) -> Option<String> {
+impl GetSharedParams for NoCustom {
+	fn shared_params(&self) -> Option<&SharedParams> {
 		None
 	}
 }
@@ -1030,7 +977,7 @@ pub struct MergeParameters<L, R> {
 	pub right: R,
 }
 
-impl<L, R> StructOpt for MergeParameters<L, R> where L: StructOpt + AugmentClap, R: StructOpt {
+impl<L, R> StructOpt for MergeParameters<L, R> where L: StructOpt + StructOptInternal, R: StructOpt {
 	fn clap<'a, 'b>() -> App<'a, 'b> {
 		L::augment_clap(R::clap())
 	}

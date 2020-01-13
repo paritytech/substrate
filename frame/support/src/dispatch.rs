@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -1075,7 +1075,6 @@ macro_rules! decl_module {
 
 	// Declare a `Call` variant parameter that should be encoded `compact`.
 	(@create_call_enum
-		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
 		{ $( $other_where_bounds:tt )* }
@@ -1089,7 +1088,6 @@ macro_rules! decl_module {
 	) => {
 		$crate::decl_module! {
 			@create_call_enum
-			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
 			{ $( $other_where_bounds )* }
@@ -1107,7 +1105,6 @@ macro_rules! decl_module {
 
 	// Declare a `Call` variant parameter.
 	(@create_call_enum
-		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
 		{ $( $other_where_bounds:tt )* }
@@ -1120,7 +1117,6 @@ macro_rules! decl_module {
 	) => {
 		$crate::decl_module! {
 			@create_call_enum
-			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
 			{ $( $other_where_bounds )* }
@@ -1136,7 +1132,6 @@ macro_rules! decl_module {
 	};
 
 	(@create_call_enum
-		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
 		{ $( $other_where_bounds:tt )* }
@@ -1151,7 +1146,6 @@ macro_rules! decl_module {
 	) => {
 		$crate::decl_module! {
 			@create_call_enum
-			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
 			{ $( $other_where_bounds )* }
@@ -1172,21 +1166,22 @@ macro_rules! decl_module {
 	};
 
 	(@create_call_enum
-		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
 		{ $( $other_where_bounds:tt )* }
 		{ $( $generated_variants:tt )* }
 		{}
 	) => {
+		/// Dispatchable calls.
+		///
+		/// Each variant of this enum maps to a dispatchable function from the associated module.
 		#[derive($crate::codec::Encode, $crate::codec::Decode)]
-		$( #[$attr] )*
 		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?>
 			where $( $other_where_bounds )*
 		{
 			#[doc(hidden)]
 			#[codec(skip)]
-			__PhantomItem($crate::sp_std::marker::PhantomData<($trait_instance $(, $instance)?)>, $crate::dispatch::Never),
+			__PhantomItem($crate::sp_std::marker::PhantomData<($trait_instance, $($instance)?)>, $crate::dispatch::Never),
 			$( $generated_variants )*
 		}
 	};
@@ -1221,10 +1216,11 @@ macro_rules! decl_module {
 
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq, $crate::RuntimeDebug)]
+		$( #[$attr] )*
 		pub struct $mod_type<
 			$trait_instance: $trait_name
 			$(<I>, $instance: $instantiable $( = $module_default_instance)?)?
-		>($crate::sp_std::marker::PhantomData<($trait_instance $(, $instance)?)>) where
+		>($crate::sp_std::marker::PhantomData<($trait_instance, $( $instance)?)>) where
 			$( $other_where_bounds )*;
 
 		$crate::decl_module! {
@@ -1286,7 +1282,6 @@ macro_rules! decl_module {
 
 		$crate::decl_module! {
 			@create_call_enum
-			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
 			{ $( $other_where_bounds )* }
@@ -1317,8 +1312,9 @@ macro_rules! decl_module {
 							&$weight,
 							($( $param_name, )*)
 						);
-						let pays_fee = <dyn $crate::dispatch::PaysFee>::pays_fee(
-							&$weight
+						let pays_fee = <dyn $crate::dispatch::PaysFee<( $( & $param, )* )>>::pays_fee(
+							&$weight,
+							($( $param_name, )*)
 						);
 						return $crate::dispatch::DispatchInfo { weight, class, pays_fee };
 					}
@@ -1336,8 +1332,9 @@ macro_rules! decl_module {
 					&$crate::dispatch::SimpleDispatchInfo::default(),
 					()
 				);
-				let pays_fee = <dyn $crate::dispatch::PaysFee>::pays_fee(
-					&$crate::dispatch::SimpleDispatchInfo::default()
+				let pays_fee = <dyn $crate::dispatch::PaysFee<_>>::pays_fee(
+					&$crate::dispatch::SimpleDispatchInfo::default(),
+					()
 				);
 				$crate::dispatch::DispatchInfo { weight, class, pays_fee }
 
@@ -1671,7 +1668,7 @@ macro_rules! __impl_module_constants_metadata {
 							<I>, $const_instance: $const_instantiable
 						)?
 					>($crate::dispatch::marker::PhantomData<
-						($const_trait_instance $(, $const_instance)?)
+						($const_trait_instance, $( $const_instance)?)
 					>);
 					impl<$const_trait_instance: 'static + $const_trait_name $(
 						<I>, $const_instance: $const_instantiable)?

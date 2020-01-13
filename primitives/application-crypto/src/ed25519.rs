@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -54,4 +54,3 @@ impl RuntimePublic for Public {
 		sp_io::crypto::ed25519_verify(&signature, msg.as_ref(), self)
 	}
 }
-

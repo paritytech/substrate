@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,18 +22,20 @@
 
 use sp_std::prelude::*;
 use frame_support::{
-	construct_runtime, parameter_types,
+	construct_runtime, parameter_types, debug,
 	weights::Weight,
 	traits::{SplitTwoWays, Currency, Randomness},
 };
 use sp_core::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Moment, Signature};
 use sp_api::impl_runtime_apis;
-use sp_runtime::{Permill, Perbill, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str};
+use sp_runtime::{
+	Permill, Perbill, Percent, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str
+};
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::TransactionValidity;
 use sp_runtime::traits::{
-	self, BlakeTwo256, Block as BlockT, NumberFor, StaticLookup, SaturatedConversion,
+	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion,
 	OpaqueKeys,
 };
 use sp_version::RuntimeVersion;
@@ -78,8 +80,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 198,
-	impl_version: 198,
+	spec_version: 203,
+	impl_version: 203,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -125,12 +127,24 @@ impl frame_system::Trait for Runtime {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = Version;
-	type ModuleToIndex = ();
+	type ModuleToIndex = ModuleToIndex;
+}
+
+parameter_types! {
+	// One storage item; value is size 4+4+16+32 bytes = 56 bytes.
+	pub const MultisigDepositBase: Balance = 30 * CENTS;
+	// Additional storage item size of 32 bytes.
+	pub const MultisigDepositFactor: Balance = 5 * CENTS;
+	pub const MaxSignatories: u16 = 100;
 }
 
 impl pallet_utility::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
+	type Currency = Balances;
+	type MultisigDepositBase = MultisigDepositBase;
+	type MultisigDepositFactor = MultisigDepositFactor;
+	type MaxSignatories = MaxSignatories;
 }
 
 parameter_types! {
@@ -160,6 +174,7 @@ parameter_types! {
 impl pallet_balances::Trait for Runtime {
 	type Balance = Balance;
 	type OnFreeBalanceZero = ((Staking, Contracts), Session);
+	type OnReapAccount = System;
 	type OnNewAccount = Indices;
 	type Event = Event;
 	type DustRemoval = ();
@@ -364,6 +379,10 @@ parameter_types! {
 	pub const ProposalBondMinimum: Balance = 1 * DOLLARS;
 	pub const SpendPeriod: BlockNumber = 1 * DAYS;
 	pub const Burn: Permill = Permill::from_percent(50);
+	pub const TipCountdown: BlockNumber = 1 * DAYS;
+	pub const TipFindersFee: Percent = Percent::from_percent(20);
+	pub const TipReportDepositBase: Balance = 1 * DOLLARS;
+	pub const TipReportDepositPerByte: Balance = 1 * CENTS;
 }
 
 impl pallet_treasury::Trait for Runtime {
@@ -376,6 +395,11 @@ impl pallet_treasury::Trait for Runtime {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
+	type Tippers = Elections;
+	type TipCountdown = TipCountdown;
+	type TipFindersFee = TipFindersFee;
+	type TipReportDepositBase = TipReportDepositBase;
+	type TipReportDepositPerByte = TipReportDepositPerByte;
 }
 
 parameter_types! {
@@ -424,7 +448,8 @@ impl pallet_sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
-type SubmitTransaction = TransactionSubmitter<ImOnlineId, Runtime, UncheckedExtrinsic>;
+/// A runtime transaction submitter.
+pub type SubmitTransaction = TransactionSubmitter<ImOnlineId, Runtime, UncheckedExtrinsic>;
 
 parameter_types! {
 	pub const SessionDuration: BlockNumber = EPOCH_DURATION_IN_SLOTS as _;
@@ -488,8 +513,16 @@ impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for 
 		account: AccountId,
 		index: Index,
 	) -> Option<(Call, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
-		let period = 1 << 8;
-		let current_block = System::block_number().saturated_into::<u64>();
+		// take the biggest period possible.
+		let period = BlockHashCount::get()
+			.checked_next_power_of_two()
+			.map(|c| c / 2)
+			.unwrap_or(2) as u64;
+		let current_block = System::block_number()
+			.saturated_into::<u64>()
+			// The `System::block_number` is initialized with `n+1`,
+			// so the actual block number is `n`.
+			.saturating_sub(1);
 		let tip = 0;
 		let extra: SignedExtra = (
 			frame_system::CheckVersion::<Runtime>::new(),
@@ -500,7 +533,9 @@ impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for 
 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
 			Default::default(),
 		);
-		let raw_payload = SignedPayload::new(call, extra).ok()?;
+		let raw_payload = SignedPayload::new(call, extra).map_err(|e| {
+			debug::warn!("Unable to create signed payload: {:?}", e);
+		}).ok()?;
 		let signature = TSigner::sign(public, &raw_payload)?;
 		let address = Indices::unlookup(account);
 		let (call, extra, _) = raw_payload.deconstruct();
@@ -515,14 +550,14 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: frame_system::{Module, Call, Storage, Config, Event},
-		Utility: pallet_utility::{Module, Call, Event},
+		Utility: pallet_utility::{Module, Call, Storage, Event<T>},
 		Babe: pallet_babe::{Module, Call, Storage, Config, Inherent(Timestamp)},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
 		Indices: pallet_indices,
-		Balances: pallet_balances::{default, Error},
+		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
-		Staking: pallet_staking::{default, OfflineWorker},
+		Staking: pallet_staking,
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 		Democracy: pallet_democracy::{Module, Call, Storage, Config, Event<T>},
 		Council: pallet_collective::<Instance1>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},
@@ -621,8 +656,8 @@ impl_runtime_apis! {
 	}
 
 	impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
-		fn offchain_worker(number: NumberFor<Block>) {
-			Executive::offchain_worker(number)
+		fn offchain_worker(header: &<Block as BlockT>::Header) {
+			Executive::offchain_worker(header)
 		}
 	}
 
@@ -722,22 +757,29 @@ impl_runtime_apis! {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use frame_system::offchain::SubmitSignedTransaction;
-
-	fn is_submit_signed_transaction<T>(_arg: T) where
-		T: SubmitSignedTransaction<
-			Runtime,
-			Call,
-			Extrinsic=UncheckedExtrinsic,
-			CreateTransaction=Runtime,
-			Signer=ImOnlineId,
-		>,
-	{}
+	use frame_system::offchain::{SignAndSubmitTransaction, SubmitSignedTransaction};
 
 	#[test]
-	fn validate_bounds() {
-		let x = SubmitTransaction::default();
-		is_submit_signed_transaction(x);
+	fn validate_transaction_submitter_bounds() {
+		fn is_submit_signed_transaction<T>() where
+			T: SubmitSignedTransaction<
+				Runtime,
+				Call,
+			>,
+		{}
+
+		fn is_sign_and_submit_transaction<T>() where
+			T: SignAndSubmitTransaction<
+				Runtime,
+				Call,
+				Extrinsic=UncheckedExtrinsic,
+				CreateTransaction=Runtime,
+				Signer=ImOnlineId,
+			>,
+		{}
+
+		is_submit_signed_transaction::<SubmitTransaction>();
+		is_sign_and_submit_transaction::<SubmitTransaction>();
 	}
 
 	#[test]

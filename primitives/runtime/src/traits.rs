@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ use sp_io;
 use std::fmt::Display;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use sp_core::{self, Hasher, Blake2Hasher, TypeId};
+use sp_core::{self, Hasher, Blake2Hasher, TypeId, RuntimeDebug};
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
@@ -102,7 +102,7 @@ impl Verify for sp_core::ecdsa::Signature {
 			self.as_ref(),
 			&sp_io::hashing::blake2_256(msg.get()),
 		) {
-			Ok(pubkey) => <dyn AsRef<[u8]>>::as_ref(signer) == &pubkey[..],
+			Ok(pubkey) => signer.as_compressed().map(|s| &s[..] == &pubkey[..]).unwrap_or(false),
 			_ => false,
 		}
 	}
@@ -117,7 +117,7 @@ pub trait AppVerify {
 }
 
 impl<
-	S: Verify<Signer=<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic> + From<T>,
+	S: Verify<Signer = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic> + From<T>,
 	T: sp_application_crypto::Wraps<Inner=S> + sp_application_crypto::AppKey + sp_application_crypto::AppSignature +
 		AsRef<S> + AsMut<S> + From<S>,
 > AppVerify for T where
@@ -157,7 +157,7 @@ pub trait EnsureOrigin<OuterOrigin> {
 }
 
 /// An error that indicates that a lookup failed.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, RuntimeDebug)]
 pub struct LookupError;
 
 impl From<LookupError> for &'static str {
@@ -391,7 +391,7 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 }
 
 /// Blake2-256 Hash implementation.
-#[derive(PartialEq, Eq, Clone, sp_core::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
@@ -526,7 +526,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 	type Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ Copy + MaybeDisplay + SimpleArithmetic + Codec + sp_std::str::FromStr;
 	/// Header hash type
-	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
+	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
@@ -581,7 +581,7 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 	/// Header type.
 	type Header: Header<Hash=Self::Hash>;
 	/// Block hash type.
-	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
+	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// Returns a reference to the header.
@@ -626,6 +626,8 @@ pub trait Extrinsic: Sized {
 	fn new(_call: Self::Call, _signed_data: Option<Self::SignaturePayload>) -> Option<Self> { None }
 }
 
+/// Extract the hasher type for a block.
+pub type HasherFor<B> = <HashFor<B> as Hash>::Hasher;
 /// Extract the hashing type for a block.
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
@@ -889,42 +891,6 @@ pub trait Applyable: Sized + Send + Sync {
 	) -> crate::ApplyExtrinsicResult;
 }
 
-/// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
-pub struct ApiRef<'a, T>(T, sp_std::marker::PhantomData<&'a ()>);
-
-impl<'a, T> From<T> for ApiRef<'a, T> {
-	fn from(api: T) -> Self {
-		ApiRef(api, Default::default())
-	}
-}
-
-impl<'a, T> sp_std::ops::Deref for ApiRef<'a, T> {
-	type Target = T;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-impl<'a, T> sp_std::ops::DerefMut for ApiRef<'a, T> {
-	fn deref_mut(&mut self) -> &mut T {
-		&mut self.0
-	}
-}
-
-/// Something that provides a runtime api.
-pub trait ProvideRuntimeApi {
-	/// The concrete type that provides the api.
-	type Api;
-
-	/// Returns the runtime api.
-	/// The returned instance will keep track of modifications to the storage. Any successful
-	/// call to an api function, will `commit` its changes to an internal buffer. Otherwise,
-	/// the modifications will be `discarded`. The modifications will not be applied to the
-	/// storage, even on a `commit`.
-	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
-}
-
 /// A marker trait for something that knows the type of the runtime block.
 pub trait GetRuntimeBlockType {
 	/// The `RuntimeBlock` type.
@@ -935,14 +901,6 @@ pub trait GetRuntimeBlockType {
 pub trait GetNodeBlockType {
 	/// The `NodeBlock` type.
 	type NodeBlock: self::Block;
-}
-
-/// Something that provides information about a runtime api.
-pub trait RuntimeApiInfo {
-	/// The identifier of the runtime api.
-	const ID: [u8; 8];
-	/// The version of the runtime api.
-	const VERSION: u32;
 }
 
 /// Something that can validate unsigned extrinsics for the transaction pool.
@@ -997,6 +955,52 @@ pub trait OpaqueKeys: Clone {
 	}
 	/// Verify a proof of ownership for the keys.
 	fn ownership_proof_is_valid(&self, _proof: &[u8]) -> bool { true }
+}
+
+/// Input that adds infinite number of zero after wrapped input.
+///
+/// This can add an infinite stream of zeros onto any input, not just a slice as with
+/// `TrailingZerosInput`.
+pub struct AppendZerosInput<'a, T>(&'a mut T);
+
+impl<'a, T> AppendZerosInput<'a, T> {
+	/// Create a new instance from the given byte array.
+	pub fn new(input: &'a mut T) -> Self {
+		Self(input)
+	}
+}
+
+impl<'a, T: codec::Input> codec::Input for AppendZerosInput<'a, T> {
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+		Ok(None)
+	}
+
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+		let remaining = self.0.remaining_len()?;
+		let completed = if let Some(n) = remaining {
+			let readable = into.len().min(n);
+			// this should never fail if `remaining_len` API is implemented correctly.
+			self.0.read(&mut into[..readable])?;
+			readable
+		} else {
+			// Fill it byte-by-byte.
+			let mut i = 0;
+			while i < into.len() {
+				if let Ok(b) = self.0.read_byte() {
+					into[i] = b;
+					i += 1;
+				} else {
+					break;
+				}
+			}
+			i
+		};
+		// Fill the rest with zeros.
+		for i in &mut into[completed..] {
+			*i = 0;
+		}
+		Ok(())
+	}
 }
 
 /// Input that adds infinite number of zero after wrapped input.
@@ -1261,8 +1265,9 @@ pub trait BlockIdTo<Block: self::Block> {
 
 #[cfg(test)]
 mod tests {
-	use super::AccountIdConversion;
+	use super::*;
 	use crate::codec::{Encode, Decode, Input};
+	use sp_core::{crypto::Pair, ecdsa};
 
 	mod t {
 		use sp_core::crypto::KeyTypeId;
@@ -1341,5 +1346,17 @@ mod tests {
 		assert_eq!(t.read(&mut buffer), Ok(()));
 		assert_eq!(t.remaining_len(), Ok(None));
 		assert_eq!(buffer, [0, 0]);
+	}
+
+	#[test]
+	fn ecdsa_verify_works() {
+		let msg = &b"test-message"[..];
+		let (pair, _) = ecdsa::Pair::generate();
+
+		let signature = pair.sign(&msg);
+		assert!(ecdsa::Pair::verify(&signature, msg, &pair.public()));
+
+		assert!(signature.verify(msg, &pair.public()));
+		assert!(signature.verify(msg, &pair.public().into_compressed().unwrap()));
 	}
 }

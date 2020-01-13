@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -138,7 +138,7 @@ mod module2 {
 			pub Value config(value): T::Amount;
 			pub Map config(map): map u64 => u64;
 			pub LinkedMap config(linked_map): linked_map u64 => Vec<u8>;
-			pub DoubleMap config(double_map): double_map u64, blake2_256(u64) => u64;
+			pub DoubleMap config(double_map): double_map u64, u64 => u64;
 		}
 	}
 
