@@ -106,7 +106,7 @@ where
 
 	let block = create_block::<RA, _, _, _, _>(&client, transfer, inherents);
 	info!(
-		"Created block {} with hash {}. Transferring {} from {} to {}.",
+		"Created block {} with hash {}.",
 		factory_state.block_no() + RA::Number::one(),
 		prior_block_hash,
 		amount,
