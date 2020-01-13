@@ -9,7 +9,7 @@ edition = "2018"
 pallet-balances = { version = "2.0.0", path = "../../../frame/balances" }
 sc-client = { version = "0.8", path = "../../../client/" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-pallet-contracts = { version = "0.8.0", path = "../../../frame/contracts" }
+pallet-contracts = { version = "2.0.0", path = "../../../frame/contracts" }
 pallet-grandpa = { version = "2.0.0", path = "../../../frame/grandpa" }
 pallet-indices = { version = "2.0.0", path = "../../../frame/indices" }
 sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }
@@ -21,7 +21,7 @@ sp-io = { version = "2.0.0", path = "../../../primitives/io" }
 frame-support = { version = "2.0.0", path = "../../../frame/support" }
 pallet-session = { version = "2.0.0", path = "../../../frame/session" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-pallet-staking = { version = "0.8", path = "../../../frame/staking" }
+pallet-staking = { version = "2.0.0", path = "../../../frame/staking" }
 sc-executor = { version = "0.8", path = "../../../client/executor" }
 frame-system = { version = "2.0.0", path = "../../../frame/system" }
 substrate-test-client = { version = "2.0.0", path = "../../../test-utils/client" }
