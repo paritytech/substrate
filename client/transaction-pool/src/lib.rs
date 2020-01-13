@@ -20,7 +20,7 @@
 #![warn(unused_extern_crates)]
 
 mod api;
-mod maintainer;
+//mod maintainer;
 
 pub mod error;
 #[cfg(test)]
@@ -28,7 +28,7 @@ mod tests;
 
 pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
-pub use crate::maintainer::{FullBasicPoolMaintainer, LightBasicPoolMaintainer};
+//pub use crate::maintainer::{FullBasicPoolMaintainer, LightBasicPoolMaintainer};
 
 use std::{collections::HashMap, sync::Arc};
 use futures::{Future, FutureExt};
@@ -39,7 +39,7 @@ use sp_runtime::{
 };
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream,
-	TxHash, TransactionFor, TransactionStatusStreamFor,
+	TxHash, TransactionFor, TransactionStatusStreamFor, BlockHash,
 };
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
@@ -128,5 +128,8 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 
 	fn on_broadcasted(&self, propagations: HashMap<TxHash<Self>, Vec<String>>) {
 		self.pool.on_broadcasted(propagations)
+	}
+
+	fn maintain(&self, block: &BlockId<Self::Block>, retracted: &[BlockHash<Self>]) {
 	}
 }

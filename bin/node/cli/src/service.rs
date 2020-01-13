@@ -64,9 +64,7 @@ macro_rules! new_full_start {
 			.with_transaction_pool(|config, client, _fetcher| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
 				let pool = sc_transaction_pool::BasicPool::new(config, pool_api);
-				let maintainer = sc_transaction_pool::FullBasicPoolMaintainer::new(pool.pool().clone(), client);
-				let maintainable_pool = sp_transaction_pool::MaintainableTransactionPool::new(pool, maintainer);
-				Ok(maintainable_pool)
+				Ok(pool)
 			})?
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
@@ -272,15 +270,9 @@ type ConcreteClient =
 #[allow(dead_code)]
 type ConcreteBackend = Backend<ConcreteBlock>;
 #[allow(dead_code)]
-type ConcreteTransactionPool = sp_transaction_pool::MaintainableTransactionPool<
-	sc_transaction_pool::BasicPool<
-		sc_transaction_pool::FullChainApi<ConcreteClient, ConcreteBlock>,
-		ConcreteBlock
-	>,
-	sc_transaction_pool::FullBasicPoolMaintainer<
-		ConcreteClient,
-		sc_transaction_pool::FullChainApi<ConcreteClient, Block>
-	>
+type ConcreteTransactionPool = sc_transaction_pool::BasicPool<
+	sc_transaction_pool::FullChainApi<ConcreteClient, ConcreteBlock>,
+	ConcreteBlock
 >;
 
 /// A specialized configuration object for setting up the node..
@@ -323,9 +315,7 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
 			let pool_api = sc_transaction_pool::LightChainApi::new(client.clone(), fetcher.clone());
 			let pool = sc_transaction_pool::BasicPool::new(config, pool_api);
-			let maintainer = sc_transaction_pool::LightBasicPoolMaintainer::with_defaults(pool.pool().clone(), client, fetcher);
-			let maintainable_pool = sp_transaction_pool::MaintainableTransactionPool::new(pool, maintainer);
-			Ok(maintainable_pool)
+			Ok(pool)
 		})?
 		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
 			let fetch_checker = fetcher
