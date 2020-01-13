@@ -78,8 +78,8 @@ pub trait WeighBlock<BlockNumber> {
 
 /// Indicates if dispatch function should pay fees or not.
 /// If set to false, the block resource limits are applied, yet no fee is deducted.
-pub trait PaysFee {
-	fn pays_fee(&self) -> bool {
+pub trait PaysFee<T> {
+	fn pays_fee(&self, _target: T) -> bool {
 		true
 	}
 }
@@ -208,8 +208,8 @@ impl<T> ClassifyDispatch<T> for SimpleDispatchInfo {
 	}
 }
 
-impl PaysFee for SimpleDispatchInfo {
-	fn pays_fee(&self) -> bool {
+impl<T> PaysFee<T> for SimpleDispatchInfo {
+	fn pays_fee(&self, _: T) -> bool {
 		match self {
 			SimpleDispatchInfo::FixedNormal(_) => true,
 			SimpleDispatchInfo::MaxNormal => true,

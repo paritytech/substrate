@@ -57,7 +57,7 @@ decl_storage! {
 		Reports get(fn reports): map ReportIdOf<T> => Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
 
 		/// A vector of reports of the same kind that happened at the same time slot.
-		ConcurrentReportsIndex: double_map Kind, blake2_256(OpaqueTimeSlot) => Vec<ReportIdOf<T>>;
+		ConcurrentReportsIndex: double_map Kind, OpaqueTimeSlot => Vec<ReportIdOf<T>>;
 
 		/// Enumerates all reports of a kind along with the time they happened.
 		///

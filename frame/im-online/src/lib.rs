@@ -233,13 +233,12 @@ decl_storage! {
 
 		/// For each session index, we keep a mapping of `AuthIndex`
 		/// to `offchain::OpaqueNetworkState`.
-		ReceivedHeartbeats get(fn received_heartbeats): double_map SessionIndex,
-			blake2_256(AuthIndex) => Option<Vec<u8>>;
+		ReceivedHeartbeats get(fn received_heartbeats): double_map SessionIndex, AuthIndex
+			=> Option<Vec<u8>>;
 
 		/// For each session index, we keep a mapping of `T::ValidatorId` to the
 		/// number of blocks authored by the given authority.
-		AuthoredBlocks get(fn authored_blocks): double_map SessionIndex,
-			blake2_256(T::ValidatorId) => u32;
+		AuthoredBlocks get(fn authored_blocks): double_map SessionIndex, T::ValidatorId => u32;
 	}
 	add_extra_genesis {
 		config(keys): Vec<T::AuthorityId>;
