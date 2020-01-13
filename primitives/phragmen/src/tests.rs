@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use crate::mock::*;
-use crate::{elect, PhragmenResult, Assignment};
+use crate::{elect, reduce, reduce_4, reduce_all, PhragmenResult, Assignment, StakedAssignment};
 use substrate_test_utils::assert_eq_uvec;
 use sp_runtime::{Perbill, Saturating};
 use codec::{Encode, Decode};
@@ -50,7 +50,7 @@ fn float_phragmen_poc_works() {
 		]
 	);
 
-	let mut support_map = build_support_map(&mut phragmen_result, &stake_of);
+	let mut support_map = build_support_map_float(&mut phragmen_result, &stake_of);
 
 	assert_eq!(
 		support_map.get(&2).unwrap(),
@@ -523,3 +523,211 @@ fn basic_from_and_into_compact_works() {
 	);
 }
 
+
+#[test]
+fn basic_reduce_4_cycle_works() {
+	let mut assignments = vec![
+		StakedAssignment {
+			who: 1,
+			distribution: vec![
+				(10, 25),
+				(20, 75),
+			],
+		},
+		StakedAssignment {
+			who: 2,
+			distribution: vec![
+				(10, 50),
+				(20, 50),
+			],
+		},
+	];
+
+	let mut new_assignments = assignments.clone();
+	let num_reduced = reduce_4(&mut new_assignments);
+
+	assert_eq!(num_reduced, 1);
+	assert_eq!(
+		new_assignments,
+		vec![
+			StakedAssignment {
+				who: 1,
+				distribution: vec![
+					(20, 100),
+				],
+			},
+			StakedAssignment {
+				who: 2,
+				distribution: vec![
+					(10, 75),
+					(20, 25),
+				],
+			},
+		],
+	);
+}
+
+
+#[test]
+fn basic_reduce_all_cycles_works() {
+	let mut assignments = vec![
+		StakedAssignment {
+			who: 1,
+			distribution: vec![(10, 10)]
+		},
+		StakedAssignment {
+			who: 2,
+			distribution: vec![
+				(10, 15),
+				(20, 5),
+			],
+		},
+		StakedAssignment {
+			who: 3,
+			distribution: vec![
+				(20, 15),
+				(40, 15)
+			],
+		},
+		StakedAssignment {
+			who: 4, distribution:
+			vec![
+				(20, 10),
+				(30, 10),
+				(40, 20),
+			]
+		},
+		StakedAssignment {
+			who: 5,
+			distribution: vec![
+				(20, 20),
+				(30, 10),
+				(40, 20),
+			],
+		},
+	];
+	let winners = vec![10, 20, 30, 40];
+
+	assert_eq!(3, reduce_all(&mut assignments));
+
+	assert_eq!(
+		assignments,
+		vec![
+			StakedAssignment {
+			who: 1,
+			distribution: vec![
+				(10, 10),
+			]
+		},
+		StakedAssignment {
+			who: 2,
+			distribution: vec![
+				(10, 15),
+				(20, 5),
+			],
+		},
+		StakedAssignment {
+			who: 3,
+			distribution: vec![
+				(20, 30),
+			],
+		},
+		StakedAssignment {
+			who: 4, distribution:
+			vec![
+				(40, 40),
+			]
+		},
+		StakedAssignment {
+			who: 5,
+			distribution: vec![
+				(20, 15),
+				(30, 20),
+				(40, 15),
+			],
+		},
+		],
+	)
+}
+
+#[test]
+fn basic_reduce_works() {
+	let mut assignments = vec![
+		StakedAssignment {
+			who: 1,
+			distribution: vec![(10, 10)]
+		},
+		StakedAssignment {
+			who: 2,
+			distribution: vec![
+				(10, 15),
+				(20, 5),
+			],
+		},
+		StakedAssignment {
+			who: 3,
+			distribution: vec![
+				(20, 15),
+				(40, 15)
+			],
+		},
+		StakedAssignment {
+			who: 4, distribution:
+			vec![
+				(20, 10),
+				(30, 10),
+				(40, 20),
+			]
+		},
+		StakedAssignment {
+			who: 5,
+			distribution: vec![
+				(20, 20),
+				(30, 10),
+				(40, 20),
+			],
+		},
+	];
+	let winners = vec![10, 20, 30, 40];
+
+	assert_eq!(3, reduce_4(&mut assignments));
+
+	assert_eq!(
+		assignments,
+		vec![
+			StakedAssignment {
+			who: 1,
+			distribution: vec![
+				(10, 10),
+			]
+		},
+		StakedAssignment {
+			who: 2,
+			distribution: vec![
+				(10, 15),
+				(20, 5),
+			],
+		},
+		StakedAssignment {
+			who: 3,
+			distribution: vec![
+				(20, 30),
+			],
+		},
+		StakedAssignment {
+			who: 4, distribution:
+			vec![
+				(40, 40),
+			]
+		},
+		StakedAssignment {
+			who: 5,
+			distribution: vec![
+				(20, 15),
+				(30, 20),
+				(40, 15),
+			],
+		},
+		],
+	)
+}

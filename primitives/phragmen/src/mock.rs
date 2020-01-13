@@ -18,7 +18,10 @@
 
 #![cfg(test)]
 
-use crate::{elect, PhragmenResult, Assignment};
+use crate::{
+	elect, build_support_map,
+	PhragmenResult, Assignment, StakedAssignment,
+};
 use sp_runtime::{
 	assert_eq_error_rate, Perbill,
 	traits::{Convert, Member, SaturatedConversion}
@@ -375,7 +378,7 @@ pub(crate) fn run_and_compare(
 	check_assignments_sum(assignments);
 }
 
-pub(crate) fn build_support_map<FS>(
+pub(crate) fn build_support_map_float<FS>(
 	result: &mut _PhragmenResult<AccountId>,
 	stake_of: FS,
 ) -> _SupportMap<AccountId>
@@ -402,4 +405,25 @@ pub(crate) fn build_support_map<FS>(
 		}
 	}
 	supports
+}
+
+
+
+fn dummy_stake_of(who: &AccountId) -> Balance {
+	(*who * 100) as Balance
+}
+
+pub fn assert_assignments_equal(
+	winners: &Vec<AccountId>,
+	ass1: &Vec<StakedAssignment<AccountId>>,
+	ass2: &Vec<StakedAssignment<AccountId>>,
+) {
+	let support_1 = build_support_map::<Balance, AccountId>(winners, ass1);
+	let support_2 = build_support_map::<Balance, AccountId>(winners, ass2);
+
+	for (who, support) in support_1.iter() {
+		assert_eq!(support.total, support_2.get(who).unwrap().total);
+		assert_eq!(support.others, support_2.get(who).unwrap().others);
+
+	}
 }
