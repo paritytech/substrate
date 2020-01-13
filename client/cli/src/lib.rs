@@ -300,7 +300,7 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
 	pub fn into_configuration<C, G, E, S>(
 		self,
 		spec_factory: S,
-	) -> Option<error::Result<Configuration<C, G, E>>>
+	) -> error::Result<Option<Configuration<C, G, E>>>
 	where
 		C: Default,
 		G: RuntimeGenesis,
@@ -314,39 +314,47 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
 					spec_factory,
 					c.impl_name,
 					c.version
-				)),
-			ParseAndPrepare::BuildSpec(_) => None,
+				)).transpose(),
+			ParseAndPrepare::BuildSpec(c) => {
+				let spec = load_spec(&c.params.shared_params, spec_factory)?;
+
+				Some(create_build_spec_config(
+					&spec,
+					&c.params.shared_params,
+					c.version,
+				)).transpose()
+			},
 			ParseAndPrepare::ExportBlocks(c) =>
 				Some(create_config_with_db_path(
 					spec_factory,
 					&c.params.shared_params,
 					c.version,
-				)),
+				)).transpose(),
 			ParseAndPrepare::ImportBlocks(c) =>
 				Some(create_config_with_db_path(
 					spec_factory,
 					&c.params.shared_params,
 					c.version,
-				)),
+				)).transpose(),
 			ParseAndPrepare::CheckBlock(c) =>
 				Some(create_config_with_db_path(
 					spec_factory,
 					&c.params.shared_params,
 					c.version,
-				)),
+				)).transpose(),
 			ParseAndPrepare::PurgeChain(c) =>
 				Some(create_config_with_db_path(
 					spec_factory,
 					&c.params.shared_params,
 					c.version
-				)),
+				)).transpose(),
 			ParseAndPrepare::RevertChain(c) =>
 				Some(create_config_with_db_path(
 					spec_factory,
 					&c.params.shared_params,
 					c.version,
-				)),
-			ParseAndPrepare::CustomCommand(_) => None,
+				)).transpose(),
+			ParseAndPrepare::CustomCommand(_) => Ok(None),
 		}
 	}
 }
@@ -406,11 +414,11 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 		let mut spec = load_spec(&self.params.shared_params, spec_factory)?;
 
 		if spec.boot_nodes().is_empty() && !self.params.disable_default_bootnode {
-			let base_path = base_path(&self.params.shared_params, self.version);
-			let cfg = sc_service::Configuration::<C,_,_>::default_with_spec_and_base_path(
-				spec.clone(),
-				Some(base_path),
-			);
+			let cfg = create_build_spec_config::<C, _, _>(
+				&spec,
+				&self.params.shared_params,
+				self.version,
+			)?;
 			let node_key = node_key_config(
 				self.params.node_key_params,
 				&Some(cfg.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a base_path"))
@@ -1060,6 +1068,26 @@ where
 	};
 
 	Ok(config)
+}
+
+/// Creates a configuration including the base path and the shared params
+fn create_build_spec_config<C, G, E>(
+	spec: &ChainSpec<G, E>,
+	cli: &SharedParams,
+	version: &VersionInfo,
+) -> error::Result<Configuration<C, G, E>>
+where
+	C: Default,
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
+{
+	let base_path = base_path(&cli, version);
+	let cfg = sc_service::Configuration::<C,_,_>::default_with_spec_and_base_path(
+		spec.clone(),
+		Some(base_path),
+	);
+
+	Ok(cfg)
 }
 
 /// Internal trait used to cast to a dynamic type that implements Read and Seek.
