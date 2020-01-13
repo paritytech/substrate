@@ -24,8 +24,9 @@ use rand::rngs::StdRng;
 use codec::{Encode, Decode};
 use sp_keyring::sr25519::Keyring;
 use node_runtime::{
-	Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, BalancesCall, ExistentialDeposit,
-	MinimumPeriod
+	Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra,
+	BalancesCall, NicksCall,
+	MinimumPeriod, ExistentialDeposit,
 };
 use node_primitives::Signature;
 use sp_core::{sr25519, crypto::Pair};
@@ -150,20 +151,21 @@ impl RuntimeAdapter for FactoryState<Number> {
 		let index = self.extract_index(&sender, prior_block_hash);
 		let phase = self.extract_phase(*prior_block_hash);
 
-		match self.tx_name.as_str() {
-			"transfer" => {
-				sign::<Self>(CheckedExtrinsic {
-					signed: Some((sender.clone(), Self::build_extra(index, phase))),
-					function: Call::Balances(
-						BalancesCall::transfer(
-							pallet_indices::address::Address::Id(destination.clone().into()),
-							(*amount).into()
-						)
-					)
-				}, key, (version, genesis_hash.clone(), prior_block_hash.clone(), (), (), (), ()))
-			},
+		let function = match self.tx_name.as_str() {
+			"balances_transfer" => Call::Balances(BalancesCall::transfer(
+				pallet_indices::address::Address::Id(destination.clone().into()),
+				(*amount).into()
+			)),
+			"nicks_set_name" => Call::Nicks(NicksCall::set_name(
+				b"Marcio Oscar Diaz".to_vec()
+			)),
 			other => panic!("Extrinsic {} is not supported yet!", other),
-		}
+		};
+
+		sign::<Self>(CheckedExtrinsic {
+			signed: Some((sender.clone(), Self::build_extra(index, phase))),
+			function,
+		}, key, (version, genesis_hash.clone(), prior_block_hash.clone(), (), (), (), ()))
 	}
 
 	fn inherent_extrinsics(&self) -> InherentData {
