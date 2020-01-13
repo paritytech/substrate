@@ -174,7 +174,7 @@ fn node_config<G, E: Clone> (
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore: KeystoreConfig::Path {
-			path: Some(root.join("key")),
+			path: root.join("key"),
 			password: None
 		},
 		config_dir: Some(root.clone()),
