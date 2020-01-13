@@ -143,6 +143,20 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 				path: config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH).unwrap(),
 				password: None,
 			};
+			
+			// Tracing
+			config.tracing_targets = cli_args.shared_params.tracing_targets.into();
+			config.tracing_receiver = cli_args.shared_params.tracing_receiver.into();
+			if let Some(tracing_targets) = config.tracing_targets.as_ref() {
+				let subscriber = sc_tracing::ProfilingSubscriber::new(
+					config.tracing_receiver.clone(),
+					tracing_targets,
+				);
+				match tracing::subscriber::set_global_default(subscriber) {
+					Ok(_) => (),
+					Err(e) => panic!("Unable to set global default subscriber {}", e),
+				}
+			}
 
 			match ChainSpec::from(config.chain_spec.id()) {
 				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},

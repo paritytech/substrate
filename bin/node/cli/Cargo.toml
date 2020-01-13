@@ -32,6 +32,7 @@ jsonrpc-core = "14.0.3"
 log = "0.4.8"
 rand = "0.7.2"
 structopt = "=0.3.7"
+tracing = "0.1.10"
 
 # primitives
 sp-authority-discovery = { version = "2.0.0",  path = "../../../primitives/authority-discovery" }
@@ -62,6 +63,7 @@ sc-basic-authority = { version = "2.0.0", path = "../../../client/basic-authorsh
 sc-service = { version = "2.0.0", default-features = false, path = "../../../client/service" }
 sc-telemetry = { version = "2.0.0", path = "../../../client/telemetry" }
 sc-authority-discovery = { version = "2.0.0",  path = "../../../client/authority-discovery" }
+sc-tracing = { version = "2.0.0", path = "../../../client/tracing" }
 
 # frame dependencies
 pallet-indices = { version = "2.0.0", path = "../../../frame/indices" }
