@@ -747,7 +747,7 @@ fn max_limits_work() {
 fn zero_bid_works() {
 	// This tests:
 	// * Only one zero bid is selected.
-	// * That zero bid is places as head when accepted.
+	// * That zero bid is placed as head when accepted.
 	EnvBuilder::new().execute(|| {
 		// Users make bids of various amounts
 		assert_ok!(Society::bid(Origin::signed(60), 400));
