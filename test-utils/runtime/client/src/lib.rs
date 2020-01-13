@@ -26,6 +26,7 @@ use std::sync::Arc;
 use std::collections::HashMap;
 pub use substrate_test_client::*;
 pub use substrate_test_runtime as runtime;
+pub use sc_client::LongestChain;
 
 pub use self::block_builder_ext::BlockBuilderExt;
 
