@@ -67,7 +67,7 @@ pub struct SassafrasVerifier<B, E, Block: BlockT, RA, PRA> {
 	time_source: TimeSource,
 }
 
-impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA, PRA> where
+impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 	Block: BlockT<Hash=H256>,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
@@ -81,7 +81,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA
 		mut header: Block::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<Block::Extrinsic>>,
-	) -> Result<(BlockImportParams<Block>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<Block>, Option<Vec<(CacheKeyId, Vec<u8>)>>), Error<Block>> {
 		trace!(
 			target: "sassafras",
 			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
@@ -94,28 +94,28 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA
 		let mut inherent_data = self
 			.inherent_data_providers
 			.create_inherent_data()
-			.map_err(Error::<Block>::Runtime)?;
+			.map_err(Error::Runtime)?;
 
 		let (_, slot_now, _) = self.time_source.extract_timestamp_and_slot(&inherent_data)
-			.map_err(Error::<Block>::Extraction)?;
+			.map_err(Error::Extraction)?;
 
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
 		let mut auxiliary = aux_schema::load_auxiliary(&parent_hash, self.api.as_ref())
-			.map_err(Error::<Block>::Client)?;
+			.map_err(Error::Client)?;
 
 		let parent_header_metadata = self.client.header_metadata(parent_hash)
-			.map_err(Error::<Block>::FetchParentHeader)?;
+			.map_err(Error::FetchParentHeader)?;
 
 		// First, Verify pre-runtime digest.
 		let pre_digest = find_pre_digest::<Block>(&header)?;
 
 		// Verify that the slot is increasing, and not in the future.
 		if pre_digest.slot <= auxiliary.slot {
-			return Err(Error::<Block>::SlotInPast.into())
+			return Err(Error::SlotInPast.into())
 		}
 		if pre_digest.slot > slot_now {
-			return Err(Error::<Block>::SlotInFuture.into())
+			return Err(Error::SlotInFuture.into())
 		}
 		auxiliary.slot = pre_digest.slot;
 
@@ -123,20 +123,20 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA
 		let (author, block_weight) = auxiliary.validating.authorities
 			.get(pre_digest.authority_index as usize)
 			.cloned()
-			.ok_or(Error::<Block>::InvalidAuthorityId)?;
+			.ok_or(Error::InvalidAuthorityId)?;
 		let seal = header.digest_mut().pop()
-			.ok_or(Error::<Block>::HeaderUnsealed(header.hash()))?;
-		let signature = seal.as_sassafras_seal().ok_or(Error::<Block>::InvalidSeal)?;
+			.ok_or(Error::HeaderUnsealed(header.hash()))?;
+		let signature = seal.as_sassafras_seal().ok_or(Error::InvalidSeal)?;
 		let pre_hash = header.hash();
 		if !AuthorityPair::verify(&signature, pre_hash, &author) {
-			return Err(Error::<Block>::InvalidSeal.into())
+			return Err(Error::InvalidSeal.into())
 		}
 
 		// Check that the ticket VRF is of a valid index in auxiliary.validating.
 		let ticket_vrf_proof = auxiliary.validating.proofs
 			.get(pre_digest.ticket_vrf_index as usize)
 			.cloned()
-			.ok_or(Error::<Block>::InvalidTicketVRFIndex)?;
+			.ok_or(Error::InvalidTicketVRFIndex)?;
 
 		// Check that the ticket VRF is valid.
 		let ticket_transcript = make_ticket_transcript(
@@ -146,7 +146,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA
 		);
 		schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
 			p.vrf_verify(ticket_transcript, &pre_digest.ticket_vrf_output, &ticket_vrf_proof)
-		}).map_err(|_| Error::<Block>::TicketVRFVerificationFailed)?;
+		}).map_err(|_| Error::TicketVRFVerificationFailed)?;
 
 		// Check that the post-block VRF is valid.
 		let post_transcript = make_post_transcript(
@@ -156,7 +156,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA
 		);
 		schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
 			p.vrf_verify(post_transcript, &pre_digest.post_vrf_output, &pre_digest.post_vrf_proof)
-		}).map_err(|_| Error::<Block>::PostVRFVerificationFailed)?;
+		}).map_err(|_| Error::PostVRFVerificationFailed)?;
 
 		// Second, push in any commitments of ticket VRF.
 		if let Some(post_block_desc) = find_post_block_descriptor::<Block>(&header)? {
@@ -194,6 +194,25 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA
 		};
 
 		Ok((block_import_params, Default::default()))
+	}
+}
+
+impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA, PRA> where
+	Block: BlockT<Hash=H256>,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	RA: Send + Sync,
+	PRA: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<Block>,
+	PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>,
+{
+	fn verify(
+		&mut self,
+		origin: BlockOrigin,
+		mut header: Block::Header,
+		justification: Option<Justification>,
+		mut body: Option<Vec<Block::Extrinsic>>,
+	) -> Result<(BlockImportParams<Block>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+		self.verify(origin, header, justification, body).map_err(Into::into)
 	}
 }
 
