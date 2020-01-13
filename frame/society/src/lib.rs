@@ -400,6 +400,10 @@ impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
 // This module's storage items.
 decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Society {
+		/// The first member.
+		pub Founder get(founder) build(|config: &GenesisConfig<T, I>| config.members.first().cloned()):
+			Option<T::AccountId>;
+
 		/// The current set of candidates; bidders that are attempting to become members.
 		pub Candidates get(candidates): Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
 
@@ -816,6 +820,7 @@ decl_module! {
 			// This should never fail in the context of this function...
 			Self::add_member(&founder)?;
 			<Head<T, I>>::put(&founder);
+			<Founder<T, I>>::put(&founder);
 			Self::deposit_event(RawEvent::Founded(founder));
 		}
 		/// Allow suspension judgement origin to make judgement on a suspended member.
@@ -1086,8 +1091,8 @@ pub struct EnsureFounder<T>(sp_std::marker::PhantomData<T>);
 impl<T: Trait> EnsureOrigin<T::Origin> for EnsureFounder<T> {
 	type Success = T::AccountId;
 	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
-		o.into().and_then(|o| match (o, Members::<T>::get().get(0)) {
-			(system::RawOrigin::Signed(ref who), Some(f)) if who == f => Ok(who.clone()),
+		o.into().and_then(|o| match (o, Founder::<T>::get()) {
+			(system::RawOrigin::Signed(ref who), Some(ref f)) if who == f => Ok(who.clone()),
 			(r, _) => Err(T::Origin::from(r)),
 		})
 	}
@@ -1521,8 +1526,10 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// the number of bids would not surpass `MaxMembers` if all were accepted.
 	///
 	/// May be empty.
-	pub fn take_selected(members_len: usize, pot: BalanceOf<T, I>) -> Vec<Bid<T::AccountId, BalanceOf<T, I>>>
-	{
+	pub fn take_selected(
+		members_len: usize,
+		pot: BalanceOf<T, I>
+	) -> Vec<Bid<T::AccountId, BalanceOf<T, I>>> {
 		let max_members = MaxMembers::<I>::get() as usize;
 		// No more than 10 will be returned.
 		let mut max_selections: usize = 10.min(max_members.saturating_sub(members_len));

@@ -25,6 +25,8 @@ use sp_runtime::traits::BadOrigin;
 #[test]
 fn founding_works() {
 	EnvBuilder::new().with_members(vec![]).execute(|| {
+		// No founder initially.
+		assert_eq!(Society::founder(), None);
 		// Account 1 is set as the founder origin
 		// Account 5 cannot start a society
 		assert_noop!(Society::found(Origin::signed(5), 20), BadOrigin);
@@ -34,6 +36,8 @@ fn founding_works() {
 		assert_eq!(Society::members(), vec![10]);
 		// 10 is the head of the society
 		assert_eq!(Society::head(), Some(10));
+		// ...and also the founder
+		assert_eq!(Society::founder(), Some(10));
 		// Cannot start another society
 		assert_noop!(Society::found(Origin::signed(1), 20), Error::<Test, _>::AlreadyFounded);
 	});
@@ -264,7 +268,7 @@ fn suspended_member_lifecycle_works() {
 		// Suspended members cannot get payout
 		Society::bump_payout(&20, 10, 100);
 		assert_noop!(Society::payout(Origin::signed(20)), Error::<Test, _>::NotMember);
-		
+
 		// Normal people cannot make judgement
 		assert_noop!(Society::judge_suspended_member(Origin::signed(20), 20, true), BadOrigin);
 
