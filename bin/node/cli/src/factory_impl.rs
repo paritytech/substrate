@@ -41,8 +41,8 @@ use sp_finality_tracker;
 type AccountPublic = <Signature as Verify>::Signer;
 
 pub struct FactoryState<N> {
+	tx_name: String,
 	block_no: N,
-
 	mode: Mode,
 	start_number: u32,
 	rounds: u32,
@@ -78,11 +78,13 @@ impl RuntimeAdapter for FactoryState<Number> {
 	type Number = Number;
 
 	fn new(
+		tx_name: String,
 		mode: Mode,
 		num: u64,
 		rounds: u64,
 	) -> FactoryState<Self::Number> {
 		FactoryState {
+			tx_name,
 			mode,
 			num: num as u32,
 			round: 0,
@@ -145,15 +147,21 @@ impl RuntimeAdapter for FactoryState<Number> {
 	) -> <Self::Block as BlockT>::Extrinsic {
 		let index = self.extract_index(&sender, prior_block_hash);
 		let phase = self.extract_phase(*prior_block_hash);
-		sign::<Self>(CheckedExtrinsic {
-			signed: Some((sender.clone(), Self::build_extra(index, phase))),
-			function: Call::Balances(
-				BalancesCall::transfer(
-					pallet_indices::address::Address::Id(destination.clone().into()),
-					(*amount).into()
-				)
-			)
-		}, key, (version, genesis_hash.clone(), prior_block_hash.clone(), (), (), (), ()))
+
+		match &self.tx_name {
+			name => {
+				println!("signing a {} extrinsic", name);
+				sign::<Self>(CheckedExtrinsic {
+					signed: Some((sender.clone(), Self::build_extra(index, phase))),
+					function: Call::Balances(
+						BalancesCall::transfer(
+							pallet_indices::address::Address::Id(destination.clone().into()),
+							(*amount).into()
+						)
+					)
+				}, key, (version, genesis_hash.clone(), prior_block_hash.clone(), (), (), (), ()))
+			},
+		}
 	}
 
 	fn inherent_extrinsics(&self) -> InherentData {

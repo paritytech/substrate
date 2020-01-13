@@ -50,6 +50,10 @@ impl GetSharedParams for CustomSubcommands {
 /// Please note: this command currently only works on an empty database!
 #[derive(Debug, StructOpt, Clone)]
 pub struct FactoryCmd {
+	/// Transaction name.
+	#[structopt(long="tx-name", default_value = "transfer")]
+	pub tx_name: String,
+
 	/// How often to repeat. This option only has an effect in mode `MasterToNToM`.
 	#[structopt(long="rounds", default_value = "1")]
 	pub rounds: u64,
@@ -164,6 +168,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 			}
 
 			let factory_state = FactoryState::new(
+				cli_args.tx_name,
 				cli_args.mode.clone(),
 				cli_args.num,
 				cli_args.rounds,

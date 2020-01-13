@@ -54,7 +54,7 @@ pub trait RuntimeAdapter {
 	type Phase: Copy;
 	type Secret;
 
-	fn new(mode: Mode, rounds: u64, start_number: u64) -> Self;
+	fn new(tx_name: String, mode: Mode, rounds: u64, start_number: u64) -> Self;
 
 	fn block_no(&self) -> Self::Number;
 	fn block_in_round(&self) -> Self::Number;
