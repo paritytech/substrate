@@ -24,14 +24,17 @@ use rand::rngs::StdRng;
 use codec::{Encode, Decode};
 use sp_keyring::sr25519::Keyring;
 use node_runtime::{
-	Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra,
-	BalancesCall, NicksCall,
+	Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, Header,
+	BalancesCall, NicksCall, AuthorshipCall,
 	MinimumPeriod, ExistentialDeposit,
 };
 use node_primitives::Signature;
-use sp_core::{sr25519, crypto::Pair};
+use sp_core::{sr25519, crypto::Pair, H256};
 use sp_runtime::{
-	generic::Era, traits::{Block as BlockT, Header as HeaderT, SignedExtension, Verify, IdentifyAccount}
+	generic::Era,
+	traits::{
+		Block as BlockT, Header as HeaderT, SignedExtension, Verify, IdentifyAccount,
+	}
 };
 use node_transaction_factory::RuntimeAdapter;
 use node_transaction_factory::modes::Mode;
@@ -160,6 +163,15 @@ impl RuntimeAdapter for FactoryState<Number> {
 				b"Marcio Oscar Diaz".to_vec()
 			)),
 			"nicks_clear_name" => Call::Nicks(NicksCall::clear_name()),
+			"authorship_set_uncles" => {
+				let mut uncles = vec![];
+				let num_headers = 10; // TODO: make it configurable.
+				for _ in 0..num_headers {
+					let header = Header::new(std::cmp::max(1, self.block_no()), H256::random(), H256::random(), genesis_hash.clone(), Default::default());
+					uncles.push(header.clone());
+				}
+				Call::Authorship(AuthorshipCall::set_uncles(uncles))
+			},
 			other => panic!("Extrinsic {} is not supported yet!", other),
 		};
 
