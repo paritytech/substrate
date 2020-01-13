@@ -17,12 +17,14 @@
 //! Tests and test helpers for GRANDPA.
 
 use super::*;
+use environment::HasVoted;
 use sc_network_test::{
 	Block, DummySpecialization, Hash, TestNetFactory, BlockImportAdapter, Peer,
 	PeersClient, PassThroughVerifier,
 };
 use sc_network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
+use futures_timer::Delay;
 use tokio::runtime::current_thread;
 use sp_keyring::Ed25519Keyring;
 use sc_client::LongestChain;
@@ -1113,7 +1115,8 @@ fn test_bad_justification() {
 	);
 }
 
-/*#[test]
+#[test]
+#[ignore]
 fn voter_persists_its_votes() {
 	use std::iter::FromIterator;
 	use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1156,7 +1159,7 @@ fn voter_persists_its_votes() {
 		keystore_paths.push(keystore_path);
 
 		struct ResettableVoter {
-			voter: Pin<Box<dyn Future<Output = ()> + Send>>,
+			voter: Pin<Box<dyn Future<Output = ()> + Send + Unpin>>,
 			voter_rx: mpsc::UnboundedReceiver<()>,
 			net: Arc<Mutex<GrandpaTestNet>>,
 			client: PeersClient,
@@ -1170,36 +1173,37 @@ fn voter_persists_its_votes() {
 			fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 				let this = Pin::into_inner(self);
 
-				if let Poll::Ready(()) = Pin::new(this.voter).poll(cx) {
+				if let Poll::Ready(()) = Pin::new(&mut this.voter).poll(cx) {
 					panic!("error in the voter");
 				}
 
-				match Pin::new(this.voter_rx).poll_next(cx) {
+				match  Pin::new(&mut this.voter_rx).poll_next(cx) {
+					Poll::Pending => return Poll::Pending,
 					Poll::Ready(None) => return Poll::Ready(()),
 					Poll::Ready(Some(())) => {
 						let (_block_import, _, _, _, link) =
-							self.net.lock()
+							this.net.lock()
 									.make_block_import::<
 										TransactionFor<substrate_test_runtime_client::Backend, Block>
-									>(self.client.clone());
+									>(this.client.clone());
 						let link = link.lock().take().unwrap();
 
 						let grandpa_params = GrandpaParams {
 							config: Config {
 								gossip_duration: TEST_GOSSIP_DURATION,
 								justification_period: 32,
-								keystore: Some(self.keystore.clone()),
+								keystore: Some(this.keystore.clone()),
 								name: Some(format!("peer#{}", 0)),
 								is_authority: true,
 								observer_enabled: true,
 							},
 							link,
-							network: self.net.lock().peers[0].network_service().clone(),
+							network: this.net.lock().peers[0].network_service().clone(),
 							inherent_data_providers: InherentDataProviders::new(),
 							on_exit: Exit,
 							telemetry_on_connect: None,
 							voting_rule: VotingRulesBuilder::default().build(),
-							executor: self.threads_pool.clone(),
+							executor: this.threads_pool.clone(),
 						};
 
 						let voter = run_grandpa_voter(grandpa_params)
@@ -1212,7 +1216,7 @@ fn voter_persists_its_votes() {
 								r
 							});
 
-						self.voter = Box::pin(voter);
+						this.voter = Box::pin(voter);
 						// notify current task in order to poll the voter
 						cx.waker().wake_by_ref();
 					}
@@ -1283,98 +1287,96 @@ fn voter_persists_its_votes() {
 		let exit_tx = Arc::new(Mutex::new(Some(exit_tx)));
 
 		let net = net.clone();
-		let state = AtomicUsize::new(0);
+		let state = Arc::new(AtomicUsize::new(0));
 
 		runtime.spawn(round_rx.try_for_each(move |signed| {
-			if state.compare_and_swap(0, 1, Ordering::SeqCst) == 0 {
-				// the first message we receive should be a prevote from alice.
-				let prevote = match signed.message {
-					finality_grandpa::Message::Prevote(prevote) => prevote,
-					_ => panic!("voter should prevote."),
-				};
+			let net2 = net.clone();
+			let net = net.clone();
+			let voter_tx = voter_tx.clone();
+			let round_tx = round_tx.clone();
+			let state = state.clone();
+			let exit_tx = exit_tx.clone();
 
-				// its chain has 20 blocks and the voter targets 3/4 of the
-				// unfinalized chain, so the vote should be for block 15
-				assert!(prevote.target_number == 15);
+			async move {
+				if state.compare_and_swap(0, 1, Ordering::SeqCst) == 0 {
+					// the first message we receive should be a prevote from alice.
+					let prevote = match signed.message {
+						finality_grandpa::Message::Prevote(prevote) => prevote,
+						_ => panic!("voter should prevote."),
+					};
 
-				// we push 20 more blocks to alice's chain
-				net.lock().peer(0).push_blocks(20, false);
+					// its chain has 20 blocks and the voter targets 3/4 of the
+					// unfinalized chain, so the vote should be for block 15
+					assert!(prevote.target_number == 15);
 
-				let net2 = net.clone();
-				let net = net.clone();
-				let voter_tx = voter_tx.clone();
-				let round_tx = round_tx.clone();
+					// we push 20 more blocks to alice's chain
+					net.lock().peer(0).push_blocks(20, false);
 
-				let interval = futures::stream::unfold(Delay::new(Duration::from_millis(200)), |delay|
-					Box::pin(async move {
-						delay.await;
-						Some(((), Delay::new(Duration::from_millis(200))))
-					}));
+					let interval = futures::stream::unfold(Delay::new(Duration::from_millis(200)), |delay|
+						Box::pin(async move {
+							delay.await;
+							Some(((), Delay::new(Duration::from_millis(200))))
+						})
+					);
 
-				future::Either::Left(interval
-					.take_while(move |_| {
-						future::ready(net2.lock().peer(1).client().info().best_number != 40)
-					})
-					.for_each(|_| future::ready(()))
-					.then(move |_| {
-						let block_30_hash =
-							net.lock().peer(0).client().as_full().unwrap().hash(30).unwrap().unwrap();
+					interval
+						.take_while(move |_| {
+							future::ready(net2.lock().peer(1).client().info().best_number != 40)
+						})
+						.for_each(|_| future::ready(()))
+						.await;
 
-						// we restart alice's voter
-						voter_tx.unbounded_send(()).unwrap();
+					let block_30_hash =
+						net.lock().peer(0).client().as_full().unwrap().hash(30).unwrap().unwrap();
 
-						// and we push our own prevote for block 30
-						let prevote = finality_grandpa::Prevote {
-							target_number: 30,
-							target_hash: block_30_hash,
-						};
+					// we restart alice's voter
+					voter_tx.unbounded_send(()).unwrap();
 
-						Pin::new(&mut *round_tx.lock()).start_send(finality_grandpa::Message::Prevote(prevote)).unwrap();
-						future::ok(())
-					})
-				)
-			} else if state.compare_and_swap(1, 2, Ordering::SeqCst) == 1 {
-				// the next message we receive should be our own prevote
-				let prevote = match signed.message {
-					finality_grandpa::Message::Prevote(prevote) => prevote,
-					_ => panic!("We should receive our own prevote."),
-				};
+					// and we push our own prevote for block 30
+					let prevote = finality_grandpa::Prevote {
+						target_number: 30,
+						target_hash: block_30_hash,
+					};
 
-				// targeting block 30
-				assert!(prevote.target_number == 30);
+					// TODO: figure out why this doesn't compile.
+					// Pin::new(&mut *round_tx.lock()).start_send(finality_grandpa::Message::Prevote(prevote)).unwrap();
+				} else if state.compare_and_swap(1, 2, Ordering::SeqCst) == 1 {
+					// the next message we receive should be our own prevote
+					let prevote = match signed.message {
+						finality_grandpa::Message::Prevote(prevote) => prevote,
+						_ => panic!("We should receive our own prevote."),
+					};
 
-				// after alice restarts it should send its previous prevote
-				// therefore we won't ever receive it again since it will be a
-				// known message on the gossip layer
+					// targeting block 30
+					assert!(prevote.target_number == 30);
 
-				future::Either::Right(future::ok(()))
+					// after alice restarts it should send its previous prevote
+					// therefore we won't ever receive it again since it will be a
+					// known message on the gossip layer
 
-			} else if state.compare_and_swap(2, 3, Ordering::SeqCst) == 2 {
-				// we then receive a precommit from alice for block 15
-				// even though we casted a prevote for block 30
-				let precommit = match signed.message {
-					finality_grandpa::Message::Precommit(precommit) => precommit,
-					_ => panic!("voter should precommit."),
-				};
+				} else if state.compare_and_swap(2, 3, Ordering::SeqCst) == 2 {
+					// we then receive a precommit from alice for block 15
+					// even though we casted a prevote for block 30
+					let precommit = match signed.message {
+						finality_grandpa::Message::Precommit(precommit) => precommit,
+						_ => panic!("voter should precommit."),
+					};
 
-				assert!(precommit.target_number == 15);
+					assert!(precommit.target_number == 15);
 
-				// signal exit
-				exit_tx.clone().lock().take().unwrap().send(()).unwrap();
+					// signal exit
+					exit_tx.clone().lock().take().unwrap().send(()).unwrap();
+				} else {
+					panic!()
+				}
 
-				future::Either::Right(future::ok(()))
-
-			} else {
-				panic!()
+				Ok(())
 			}
-		}).map_err(drop).compat());
+		}).map_err(drop).boxed().compat());
 	}
 
-	let drive_to_completion = futures::future::poll_fn(|_| { net.lock().poll(); Poll::Pending });
-	let exit = exit_rx.into_future();
-
-	futures::executor::block_on(future::select(drive_to_completion, exit).map(drop));
-}*/
+	block_until_complete(exit_rx.into_future(), &net, &mut runtime);
+}
 
 #[test]
 fn finalize_3_voters_1_light_observer() {
