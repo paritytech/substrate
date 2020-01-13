@@ -23,7 +23,6 @@ use std::time::Duration;
 use log::{debug, warn, info};
 use parity_scale_codec::{Decode, Encode};
 use futures::prelude::*;
-use futures03::future::{FutureExt as _, TryFutureExt as _};
 use futures_timer::Delay;
 use parking_lot::RwLock;
 use sp_blockchain::{HeaderBackend, Error as ClientError};
@@ -558,12 +557,14 @@ where
 	Block: 'static,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + 'static + Send + Sync,
- 	N: NetworkT<Block> + 'static + Send,
+ 	N: NetworkT<Block> + 'static + Send + Unpin,
 	RA: 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
 	NumberFor<Block>: BlockNumberOps,
 	Client<B, E, Block, RA>: AuxStore,
+	Block::Hash: Unpin,
+	<<Block as BlockT>::Header as HeaderT>::Number: Unpin,
 {
 	type Timer = Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>>;
 	type Id = AuthorityId;
@@ -571,12 +572,11 @@ where
 
 	// regular round message streams
 	type In = Pin<Box<dyn Stream<
-		Item = ::finality_grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
-		Error = Self::Error,
+		Item = Result<::finality_grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>, Self::Error>
 	> + Send>>;
 	type Out = Pin<Box<dyn Sink<
-		SinkItem = ::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
-		SinkError = Self::Error,
+		::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
+		Error = Self::Error,
 	> + Send>>;
 
 	type Error = CommandOrError<Block::Hash, NumberFor<Block>>;
@@ -624,8 +624,8 @@ where
 
 		voter::RoundData {
 			voter_id: local_key.map(|pair| pair.public()),
-			prevote_timer: Box::new(prevote_timer),
-			precommit_timer: Box::new(precommit_timer),
+			prevote_timer: Box::pin(prevote_timer.map(Ok)),
+			precommit_timer: Box::pin(precommit_timer.map(Ok)),
 			incoming,
 			outgoing,
 		}
@@ -899,7 +899,7 @@ where
 
 		//random between 0-1 seconds.
 		let delay: u64 = thread_rng().gen_range(0, 1000);
-		Box::pin(Delay::new(Duration::from_millis(delay)))
+		Box::pin(Delay::new(Duration::from_millis(delay)).map(Ok))
 	}
 
 	fn prevote_equivocation(

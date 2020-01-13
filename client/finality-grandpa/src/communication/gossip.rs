@@ -89,9 +89,9 @@ use parity_scale_codec::{Encode, Decode};
 use sp_finality_grandpa::AuthorityId;
 
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG};
-use log::{trace, debug, warn};
+use log::{trace, debug};
 use futures::prelude::*;
-use futures::sync::mpsc;
+use futures::channel::mpsc;
 use rand::seq::SliceRandom;
 
 use crate::{environment, CatchUp, CompactCommit, SignedMessage};
@@ -99,6 +99,8 @@ use super::{cost, benefit, Round, SetId};
 
 use std::collections::{HashMap, VecDeque, HashSet};
 use std::time::{Duration, Instant};
+use std::pin::Pin;
+use std::task::{Poll, Context};
 
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
 const CATCH_UP_REQUEST_TIMEOUT: Duration = Duration::from_secs(45);
@@ -1491,9 +1493,6 @@ impl<B: BlockT> Future for ReportingTask<B> {
 			}
 		}
 	}
-}
-
-impl<B, N> Unpin for ReportingTask<B, N> {
 }
 
 #[cfg(test)]

@@ -53,19 +53,19 @@
 //! included in the newly-finalized chain.
 
 use futures::prelude::*;
-use log::{debug, error, info};
-use futures::sync::mpsc;
+use log::{debug, info};
+use futures::channel::mpsc;
 use sc_client_api::{BlockchainEvents, CallExecutor, backend::{AuxStore, Backend}, ExecutionStrategy};
 use sp_blockchain::{HeaderBackend, Error as ClientError};
 use sc_client::Client;
 use parity_scale_codec::{Decode, Encode};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
+use sp_runtime::traits::{NumberFor, Block as BlockT, Header as HeaderT, DigestFor, Zero};
 use sc_keystore::KeyStorePtr;
 use sp_inherents::InherentDataProviders;
 use sp_consensus::SelectChain;
 use sp_core::Pair;
-use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
+use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
 use serde_json;
 
 use sp_finality_tracker;
@@ -76,6 +76,8 @@ use finality_grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
 use std::{fmt, io};
 use std::sync::Arc;
 use std::time::Duration;
+use std::pin::Pin;
+use std::task::{Poll, Context};
 
 mod authorities;
 mod aux_schema;
@@ -464,9 +466,11 @@ fn global_communication<Block: BlockT, B, E, N, RA>(
 ) where
 	B: Backend<Block>,
 	E: CallExecutor<Block> + Send + Sync,
-	N: NetworkT<Block>,
+	N: NetworkT<Block> + Unpin,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
+	Block::Hash: Unpin,
+	<<Block as BlockT>::Header as HeaderT>::Number: Unpin,
 {
 	let is_voter = is_voter(voters, keystore).is_some();
 
@@ -545,19 +549,20 @@ pub struct GrandpaParams<B, E, Block: BlockT, N, RA, SC, VR, X, Sp> {
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X, Sp>,
-) -> client::error::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
-	Block::Hash: Ord,
+) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
+	Block::Hash: Ord + Unpin,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
-	N: NetworkT<Block> + Send + Sync + Clone + 'static,
+	N: NetworkT<Block> + Send + Sync + Clone + Unpin + 'static,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
-	X: futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
+	X: futures::Future<Output=()> + Clone + Send + Unpin + 'static,
 	Client<B, E, Block, RA>: AuxStore,
-	Sp: futures03::task::Spawn + 'static,
+	Sp: futures::task::Spawn + 'static,
+	<<Block as BlockT>::Header as HeaderT>::Number: Unpin,
 {
 	let GrandpaParams {
 		config,
@@ -632,13 +637,13 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	let telemetry_task = telemetry_task
 		.then(|_| future::pending::<()>());
 
-	Ok(future::select(future::select(voter_work, Compat01As03::new(on_exit)), telemetry_task).then(|_| future::ready(())))
+	Ok(future::select(future::select(voter_work, on_exit), telemetry_task).map(drop))
 }
 
 /// Future that powers the voter.
 #[must_use]
 struct VoterWork<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
-	voter: Pin<Box<dyn Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> + Send>>>,
+	voter: Pin<Box<dyn Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>> + Send>>,
 	env: Arc<Environment<B, E, Block, N, RA, SC, VR>>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
@@ -646,7 +651,7 @@ struct VoterWork<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
 impl<B, E, Block, N, RA, SC, VR> VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT,
- 	N: NetworkT<Block> + Sync,
+ 	N: NetworkT<Block> + Sync + Unpin,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block> + Send + Sync + 'static,
@@ -654,6 +659,8 @@ where
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 	Client<B, E, Block, RA>: AuxStore,
+	<Block as BlockT>::Hash: Unpin,
+	<<Block as BlockT>::Header as HeaderT>::Number: Unpin,
 {
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
@@ -822,7 +829,8 @@ where
 impl<B, E, Block, N, RA, SC, VR> Future for VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT,
- 	N: NetworkT<Block> + Sync,
+	Block::Hash: Unpin,
+ 	N: NetworkT<Block> + Sync + Unpin,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block> + Send + Sync + 'static,
@@ -830,6 +838,7 @@ where
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 	Client<B, E, Block, RA>: AuxStore,
+	<<Block as BlockT>::Header as HeaderT>::Number: Unpin,
 {
 	type Output = Result<(), Error>;
 
@@ -872,18 +881,19 @@ where
 pub fn run_grandpa<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X, Sp>,
 ) -> sp_blockchain::Result<impl Future<Output=()> + Send + 'static> where
-	Block::Hash: Ord,
+	Block::Hash: Ord + Unpin,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
-	N: NetworkT<Block> + Send + Sync + Clone + 'static,
+	N: NetworkT<Block> + Send + Sync + Clone + Unpin + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
-	X: futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
+	X: futures::Future<Output=()> + Clone + Send + Unpin + 'static,
 	Client<B, E, Block, RA>: AuxStore,
-	Sp: futures03::task::Spawn + 'static,
+	Sp: futures::task::Spawn + 'static,
+	<<Block as BlockT>::Header as HeaderT>::Number: Unpin,
 {
 	run_grandpa_voter(grandpa_params)
 }

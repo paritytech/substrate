@@ -18,7 +18,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures::{prelude::*, channel::mpsc, compat::Compat01As03};
+use futures::{prelude::*, channel::mpsc};
 
 use finality_grandpa::{
 	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
@@ -28,7 +28,7 @@ use log::{debug, info, warn};
 use sp_consensus::SelectChain;
 use sc_client_api::{CallExecutor, backend::{Backend, AuxStore}};
 use sc_client::Client;
-use sp_runtime::traits::{NumberFor, Block as BlockT};
+use sp_runtime::traits::{NumberFor, Block as BlockT, Header as HeaderT};
 
 use crate::{
 	global_communication, CommandOrError, CommunicationIn, Config, environment,
@@ -154,17 +154,19 @@ pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA, SC>,
 	network: N,
-	on_exit: impl futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
+	on_exit: impl futures::Future<Output=()> + Clone + Send + Unpin + 'static,
 	executor: Sp,
-) -> ::client::error::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
+) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
-	N: NetworkT<Block> + Send + Clone + 'static,
+	N: NetworkT<Block> + Send + Clone + Unpin + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: Send + Sync + 'static,
-	Sp: futures03::task::Spawn + 'static,
+	Sp: futures::task::Spawn + 'static,
 	Client<B, E, Block, RA>: AuxStore,
+	<Block as BlockT>::Hash: Unpin,
+	<<Block as BlockT>::Header as HeaderT>::Number: Unpin,
 {
 	let LinkHalf {
 		client,
@@ -212,12 +214,14 @@ struct ObserverWork<B: BlockT, N: NetworkT<B>, E, Backend, RA> {
 impl<B, N, E, Bk, RA> ObserverWork<B, N, E, Bk, RA>
 where
 	B: BlockT,
-	N: NetworkT<B>,
+	N: NetworkT<B> + Unpin,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<B> + Send + Sync + 'static,
 	Bk: Backend<B> + 'static,
 	Client<Bk, E, B, RA>: AuxStore,
+	B::Hash: Unpin,
+	<<B as BlockT>::Header as HeaderT>::Number: Unpin,
 {
 	fn new(
 		client: Arc<Client<Bk, E, B, RA>>,
@@ -328,17 +332,21 @@ where
 impl<B, N, E, Bk, RA> Future for ObserverWork<B, N, E, Bk, RA>
 where
 	B: BlockT,
-	N: NetworkT<B>,
+	N: NetworkT<B> + Unpin,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<B> + Send + Sync + 'static,
 	Bk: Backend<B> + 'static,
 	Client<Bk, E, B, RA>: AuxStore,
+	B::Hash: Unpin,
+	<<B as BlockT>::Header as HeaderT>::Number: Unpin,
 {
 	type Output = Result<(), Error>;
 
-	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		match Future::poll(Pin::new(&mut self.observer), cx) {
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		let this = Pin::into_inner(self);
+
+		match Future::poll(Pin::new(&mut this.observer), cx) {
 			Poll::Pending => {}
 			Poll::Ready(Ok(())) => {
 				// observer commit stream doesn't conclude naturally; this could reasonably be an error.
@@ -350,12 +358,12 @@ where
 			}
 			Poll::Ready(Err(CommandOrError::VoterCommand(command))) => {
 				// some command issued internally
-				self.handle_voter_command(command)?;
+				this.handle_voter_command(command)?;
 				cx.waker().wake_by_ref();
 			}
 		}
 
-		match Stream::poll_next(Pin::new(&mut self.voter_commands_rx), cx) {
+		match Stream::poll_next(Pin::new(&mut this.voter_commands_rx), cx) {
 			Poll::Pending => {}
 			Poll::Ready(None) => {
 				// the `voter_commands_rx` stream should never conclude since it's never closed.
@@ -363,15 +371,11 @@ where
 			}
 			Poll::Ready(Some(command)) => {
 				// some command issued externally
-				self.handle_voter_command(command)?;
+				this.handle_voter_command(command)?;
 				cx.waker().wake_by_ref();
 			}
 		}
 
 		Poll::Pending
 	}
-}
-
-impl<B: BlockT<Hash=H256>, N: Network<B>, E, Backend, RA> Unpin for
-ObserverWork<B, N, E, Backend, RA> {
 }

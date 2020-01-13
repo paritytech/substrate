@@ -23,7 +23,6 @@ use std::sync::Arc;
 use sc_consensus_babe;
 use sc_client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
-use futures03::prelude::*;
 use node_executor;
 use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
@@ -224,7 +223,7 @@ macro_rules! new_full {
 					service.network(),
 					service.on_exit(),
 					service.spawn_task_handle(),
-				)?);
+				)?.unit_error().compat());
 			},
 			(true, false) => {
 				// start the full GRANDPA voter

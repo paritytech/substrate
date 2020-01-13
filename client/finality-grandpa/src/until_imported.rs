@@ -33,7 +33,7 @@ use sc_client_api::{BlockImportNotification, ImportNotifications};
 use futures::prelude::*;
 use futures::stream::Fuse;
 use futures_timer::Delay;
-use futures03::{StreamExt as _, TryStreamExt as _};
+use futures::channel::mpsc::UnboundedReceiver;
 use finality_grandpa::voter;
 use parking_lot::Mutex;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
@@ -73,12 +73,12 @@ pub(crate) trait BlockUntilImported<Block: BlockT>: Sized {
 
 /// Buffering imported messages until blocks with given hashes are imported.
 pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, I, M: BlockUntilImported<Block>> {
-	import_notifications: Fuse<ImportNotifications<Block>>,
+	import_notifications: Fuse<UnboundedReceiver<BlockImportNotification<Block>>>,
 	block_sync_requester: BlockSyncRequester,
 	status_check: BlockStatus,
 	inner: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
-	check_pending: Box<dyn Stream<Item = (), Error = std::io::Error> + Send>,
+	check_pending: Pin<Box<dyn Stream<Item = Result<(), std::io::Error>> + Send>>,
 	/// Mapping block hashes to their block number, the point in time it was
 	/// first encountered (Instant) and a list of GRANDPA messages referencing
 	/// the block hash.
@@ -88,9 +88,13 @@ pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, 
 
 impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> where
 	Block: BlockT,
-	BlockStatus: BlockStatusT<Block>,
-	M: BlockUntilImported<Block>,
-	I: Stream,
+	BlockStatus: BlockStatusT<Block> + Unpin,
+	BlockSyncRequester: BlockSyncRequesterT<Block> + Unpin,
+	I: Stream<Item = Result<M::Blocked, Error>> + Unpin,
+	M: BlockUntilImported<Block> + Unpin,
+	Block::Hash: Unpin,
+	<<Block as BlockT>::Header as HeaderT>::Number: Unpin,
+	M::Blocked: Unpin,
 {
 	/// Create a new `UntilImported` wrapper.
 	pub(crate) fn new(
@@ -107,11 +111,11 @@ impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockSta
 		// used in the event of missed import notifications
 		const CHECK_PENDING_INTERVAL: Duration = Duration::from_secs(5);
 
-		let check_pending = futures03::stream::unfold(Delay::new(CHECK_PENDING_INTERVAL), |delay|
+		let check_pending = futures::stream::unfold(Delay::new(CHECK_PENDING_INTERVAL), |delay|
 			Box::pin(async move {
 				delay.await;
-				Some(((), Delay::new(CHECK_PENDING_INTERVAL)))
-			})).map(Ok).compat();
+				Some((Ok(()), Delay::new(CHECK_PENDING_INTERVAL)))
+			}));
 
 		UntilImported {
 			import_notifications: import_notifications.fuse(),
@@ -119,7 +123,7 @@ impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockSta
 			status_check,
 			inner: stream.fuse(),
 			ready: VecDeque::new(),
-			check_pending: Box::new(check_pending),
+			check_pending: Box::pin(check_pending),
 			pending: HashMap::new(),
 			identifier,
 		}
@@ -128,17 +132,20 @@ impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockSta
 
 impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStatus, BSyncRequester, I, M> where
 	Block: BlockT,
-	BStatus: BlockStatusT<Block>,
-	BSyncRequester: BlockSyncRequesterT<Block>,
+	BStatus: BlockStatusT<Block> + Unpin,
+	BSyncRequester: BlockSyncRequesterT<Block> + Unpin,
 	I: Stream<Item = Result<M::Blocked, Error>> + Unpin,
-	M: BlockUntilImported<Block>,
+	M: BlockUntilImported<Block> + Unpin,
+	Block::Hash: Unpin,
+	<<Block as BlockT>::Header as HeaderT>::Number: Unpin,
+	M::Blocked: Unpin,
 {
 	type Item = Result<M::Blocked, Error>;
 
-	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		// We are using a `this` variable in order to allow multiple simultaneous mutable borrow
 		// to `self`.
-		let this = &mut *self;
+		let this = Pin::into_inner(self);
 
 		loop {
 			match Stream::poll_next(Pin::new(&mut this.inner), cx) {
@@ -182,7 +189,7 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 		}
 
 		let mut update_interval = false;
-		while let Poll::Ready(Some(())) = Stream::poll_next(Pin::new(&mut this.check_pending), cx) {
+		while let Poll::Ready(Some(Ok(()))) = Stream::poll_next(Pin::new(&mut this.check_pending), cx) {
 			update_interval = true;
 		}
 
@@ -238,11 +245,6 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 			Poll::Pending
 		}
 	}
-}
-
-
-impl<Block: BlockT, BlockStatus, BlockSyncRequester, I, M: BlockUntilImported<Block>> Unpin for
-UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> {
 }
 
 fn warn_authority_wrong_target<H: ::std::fmt::Display>(hash: H, id: AuthorityId) {
@@ -481,13 +483,12 @@ pub(crate) type UntilGlobalMessageBlocksImported<Block, BlockStatus, BlockSyncRe
 mod tests {
 	use super::*;
 	use crate::{CatchUp, CompactCommit};
-	use tokio::runtime::current_thread::Runtime;
 	use substrate_test_runtime_client::runtime::{Block, Hash, Header};
 	use sp_consensus::BlockOrigin;
 	use sc_client_api::BlockImportNotification;
 	use futures::future::Either;
 	use futures_timer::Delay;
-	use futures03::{channel::mpsc, future::FutureExt as _, future::TryFutureExt as _};
+	use futures::channel::mpsc;
 	use finality_grandpa::Precommit;
 
 	#[derive(Clone)]
@@ -936,10 +937,10 @@ mod tests {
 		// the `until_imported` stream doesn't request the blocks immediately,
 		// but it should request them after a small timeout
 		let timeout = Delay::new(Duration::from_secs(60));
-		let test = assert.select2(timeout).map(|res| match res {
-			Either::A(_) => {},
-			Either::B(_) => panic!("timed out waiting for block sync request"),
-		}).map_err(|_| ());
+		let test = future::select(assert, timeout).map(|res| match res {
+			Either::Left(_) => {},
+			Either::Right(_) => panic!("timed out waiting for block sync request"),
+		}).map(drop);
 
 		futures::executor::block_on(test);
 	}
