@@ -73,9 +73,6 @@ impl<'a> sandbox::SandboxCapabilities for FunctionExecutor<'a> {
 	fn store(&self) -> &sandbox::Store<Self::SupervisorFuncRef> {
 		&self.sandbox_store
 	}
-	fn store_mut(&mut self) -> &mut sandbox::Store<Self::SupervisorFuncRef> {
-		&mut self.sandbox_store
-	}
 	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>, Error> {
 		let heap = &mut self.heap;
 		self.memory.with_direct_access_mut(|mem| {
@@ -264,7 +261,9 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		};
 
 		let instance_idx_or_err_code =
-			match sandbox::instantiate(self, dispatch_thunk, wasm, raw_env_def, state) {
+			match sandbox::instantiate(self, dispatch_thunk, wasm, raw_env_def, state)
+				.map(|i| i.finalize(&mut self.sandbox_store))
+			{
 				Ok(instance_idx) => instance_idx,
 				Err(sandbox::InstantiationError::StartTrapped) =>
 					sandbox_primitives::ERR_EXECUTION,

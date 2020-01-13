@@ -151,9 +151,6 @@ pub trait SandboxCapabilities {
 	/// Returns a reference to an associated sandbox `Store`.
 	fn store(&self) -> &Store<Self::SupervisorFuncRef>;
 
-	/// Returns a mutable reference to an associated sandbox `Store`.
-	fn store_mut(&mut self) -> &mut Store<Self::SupervisorFuncRef>;
-
 	/// Allocate space of the specified length in the supervisor memory.
 	///
 	/// # Errors
@@ -420,6 +417,20 @@ fn decode_environment_definition(
 	))
 }
 
+#[must_use]
+pub struct Instantiation<FR> {
+	sandbox_instance: Rc<SandboxInstance<FR>>,
+}
+
+impl<FR> Instantiation<FR> {
+	/// Finalizes instantiation of this module.
+	pub fn finalize(self, store: &mut Store<FR>) -> u32 {
+		// At last, register the instance.
+		let instance_idx = store.register_sandbox_instance(self.sandbox_instance);
+		instance_idx
+	}
+}
+
 /// Instantiate a guest module and return it's index in the store.
 ///
 /// The guest module's code is specified in `wasm`. Environment that will be available to
@@ -434,13 +445,13 @@ fn decode_environment_definition(
 /// - Module in `wasm` is invalid or couldn't be instantiated.
 ///
 /// [`EnvironmentDefinition`]: ../sandbox/struct.EnvironmentDefinition.html
-pub fn instantiate<FE: SandboxCapabilities>(
+pub fn instantiate<'a, FE: SandboxCapabilities>(
 	supervisor_externals: &mut FE,
 	dispatch_thunk: FE::SupervisorFuncRef,
 	wasm: &[u8],
 	raw_env_def: &[u8],
 	state: u32,
-) -> std::result::Result<u32, InstantiationError> {
+) -> std::result::Result<Instantiation<FE::SupervisorFuncRef>, InstantiationError> {
 	let (imports, guest_to_supervisor_mapping) =
 		decode_environment_definition(raw_env_def, &supervisor_externals.store().memories)?;
 
@@ -467,11 +478,9 @@ pub fn instantiate<FE: SandboxCapabilities>(
 		},
 	)?;
 
-	// At last, register the instance.
-	let instance_idx = supervisor_externals
-		.store_mut()
-		.register_sandbox_instance(sandbox_instance);
-	Ok(instance_idx)
+	Ok(Instantiation {
+		sandbox_instance,
+	})
 }
 
 /// This struct keeps track of all sandboxed components.
