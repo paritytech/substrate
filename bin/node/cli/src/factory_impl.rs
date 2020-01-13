@@ -159,6 +159,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 			"nicks_set_name" => Call::Nicks(NicksCall::set_name(
 				b"Marcio Oscar Diaz".to_vec()
 			)),
+			"nicks_clear_name" => Call::Nicks(NicksCall::clear_name()),
 			other => panic!("Extrinsic {} is not supported yet!", other),
 		};
 
