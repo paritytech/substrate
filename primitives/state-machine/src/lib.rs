@@ -38,10 +38,10 @@ mod basic;
 mod overlayed_changes;
 mod transaction_layers;
 mod proving_backend;
+mod stats;
 mod trie_backend;
 mod trie_backend_essence;
-#[cfg(feature = "test-helpers")]
-pub use transaction_layers::fuzz as transaction_layers_fuzz;
+
 pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
@@ -69,6 +69,9 @@ pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 pub use error::{Error, ExecutionError};
 pub use in_memory_backend::InMemory as InMemoryBackend;
+pub use stats::{UsageInfo, UsageUnit};
+#[cfg(feature = "test-helpers")]
+pub use transaction_layers::fuzz as transaction_layers_fuzz;
 
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 

@@ -165,10 +165,11 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 {
 	let keystore = match &config.keystore {
 		KeystoreConfig::Path { path, password } => Keystore::open(
-			path.clone().ok_or("No basepath configured")?,
+			path.clone(),
 			password.clone()
 		)?,
-		KeystoreConfig::InMemory => Keystore::new_in_memory()
+		KeystoreConfig::InMemory => Keystore::new_in_memory(),
+		KeystoreConfig::None => return Err("No keystore config provided!".into()),
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -289,10 +290,11 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 	>, Error> {
 		let keystore = match &config.keystore {
 			KeystoreConfig::Path { path, password } => Keystore::open(
-				path.clone().ok_or("No basepath configured")?,
+				path.clone(),
 				password.clone()
 			)?,
-			KeystoreConfig::InMemory => Keystore::new_in_memory()
+			KeystoreConfig::InMemory => Keystore::new_in_memory(),
+			KeystoreConfig::None => return Err("No keystore config provided!".into()),
 		};
 
 		let executor = NativeExecutor::<TExecDisp>::new(

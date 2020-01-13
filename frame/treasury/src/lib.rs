@@ -311,6 +311,71 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		/// Put forward a suggestion for spending. A deposit proportional to the value
+		/// is reserved and slashed if the proposal is rejected. It is returned once the
+		/// proposal is awarded.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB change, one extra DB entry.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		fn propose_spend(
+			origin,
+			#[compact] value: BalanceOf<T>,
+			beneficiary: <T::Lookup as StaticLookup>::Source
+		) {
+			let proposer = ensure_signed(origin)?;
+			let beneficiary = T::Lookup::lookup(beneficiary)?;
+
+			let bond = Self::calculate_bond(value);
+			T::Currency::reserve(&proposer, bond)
+				.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
+
+			let c = Self::proposal_count();
+			ProposalCount::put(c + 1);
+			<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary, bond });
+
+			Self::deposit_event(RawEvent::Proposed(c));
+		}
+
+		/// Reject a proposed spend. The original deposit will be slashed.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB clear.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
+		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
+			T::RejectOrigin::ensure_origin(origin)?;
+			let proposal = <Proposals<T>>::take(&proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
+
+			let value = proposal.bond;
+			let imbalance = T::Currency::slash_reserved(&proposal.proposer, value).0;
+			T::ProposalRejection::on_unbalanced(imbalance);
+
+			Self::deposit_event(Event::<T>::Rejected(proposal_id, value));
+		}
+
+		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
+		/// and the original deposit will be returned.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB change.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
+		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
+			T::ApproveOrigin::ensure_origin(origin)?;
+
+			ensure!(<Proposals<T>>::exists(proposal_id), Error::<T>::InvalidProposalIndex);
+
+			Approvals::mutate(|v| v.push(proposal_id));
+		}
+
 		/// Report something `reason` that deserves a tip and claim any eventual the finder's fee.
 		///
 		/// The dispatch origin for this call must be _Signed_.
@@ -475,71 +540,6 @@ decl_module! {
 			Reasons::<T>::remove(&tip.reason);
 			Tips::<T>::remove(hash);
 			Self::payout_tip(tip);
-		}
-
-		/// Put forward a suggestion for spending. A deposit proportional to the value
-		/// is reserved and slashed if the proposal is rejected. It is returned once the
-		/// proposal is awarded.
-		///
-		/// # <weight>
-		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB change, one extra DB entry.
-		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
-		fn propose_spend(
-			origin,
-			#[compact] value: BalanceOf<T>,
-			beneficiary: <T::Lookup as StaticLookup>::Source
-		) {
-			let proposer = ensure_signed(origin)?;
-			let beneficiary = T::Lookup::lookup(beneficiary)?;
-
-			let bond = Self::calculate_bond(value);
-			T::Currency::reserve(&proposer, bond)
-				.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
-
-			let c = Self::proposal_count();
-			ProposalCount::put(c + 1);
-			<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary, bond });
-
-			Self::deposit_event(RawEvent::Proposed(c));
-		}
-
-		/// Reject a proposed spend. The original deposit will be slashed.
-		///
-		/// # <weight>
-		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB clear.
-		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
-		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::RejectOrigin::ensure_origin(origin)?;
-			let proposal = <Proposals<T>>::take(&proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
-
-			let value = proposal.bond;
-			let imbalance = T::Currency::slash_reserved(&proposal.proposer, value).0;
-			T::ProposalRejection::on_unbalanced(imbalance);
-
-			Self::deposit_event(Event::<T>::Rejected(proposal_id, value));
-		}
-
-		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
-		/// and the original deposit will be returned.
-		///
-		/// # <weight>
-		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB change.
-		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
-		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::ApproveOrigin::ensure_origin(origin)?;
-
-			ensure!(<Proposals<T>>::exists(proposal_id), Error::<T>::InvalidProposalIndex);
-
-			Approvals::mutate(|v| v.push(proposal_id));
 		}
 
 		fn on_finalize(n: T::BlockNumber) {
