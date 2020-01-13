@@ -71,7 +71,7 @@ const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 /// default sub directory to store database
 const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
 /// default sub directory for the key store
-const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str =  "keystore";
+pub const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str =  "keystore";
 
 /// The maximum number of characters for a node name.
 const NODE_NAME_MAX_LENGTH: usize = 32;

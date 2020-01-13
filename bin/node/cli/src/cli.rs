@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use sc_cli::VersionInfo;
+pub use sc_cli::{VersionInfo, DEFAULT_KEYSTORE_CONFIG_PATH};
 use tokio::prelude::Future;
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
 use sc_cli::{IntoExit, NoCustom, SharedParams, ImportParams, error};
-use sc_service::{AbstractService, Roles as ServiceRoles, Configuration};
+use sc_service::{AbstractService, Roles as ServiceRoles, Configuration, config::KeystoreConfig};
 use log::info;
 use structopt::StructOpt;
 use sc_cli::{display_role, parse_and_prepare, GetSharedParams, ParseAndPrepare};
@@ -138,6 +138,11 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 			)?;
 
 			sc_cli::fill_import_params(&mut config, &cli_args.import_params, ServiceRoles::FULL)?;
+
+			config.keystore = KeystoreConfig::Path {
+				path: config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH).unwrap(),
+				password: None,
+			};
 
 			match ChainSpec::from(config.chain_spec.id()) {
 				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
