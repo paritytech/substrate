@@ -551,10 +551,10 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	Block::Hash: Ord,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
-	N: NetworkT<Block> + Send + Sync + Clone + 'static,
+	N: NetworkT<Block> + Send + Sync + Clone + Unpin + 'static,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
-	NumberFor<Block>: BlockNumberOps,
+	NumberFor<Block>: BlockNumberOps + Unpin,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
 	X: futures03::Future<Output=()> + Clone + Send + Unpin + 'static,
@@ -650,13 +650,14 @@ struct VoterWork<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
 	voter: Box<dyn Future<Item = (), Error = CommandOrError<Block::Hash, NumberFor<Block>>> + Send>,
 	env: Arc<Environment<B, E, Block, N, RA, SC, VR>>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+	network: futures03::compat::Compat<NetworkBridge<Block, N>>,
 }
 
 impl<B, E, Block, N, RA, SC, VR> VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT,
- 	N: NetworkT<Block> + Sync,
-	NumberFor<Block>: BlockNumberOps,
+ 	N: NetworkT<Block> + Sync + Unpin,
+	NumberFor<Block>: BlockNumberOps + Unpin,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block> + Send + Sync + 'static,
 	B: Backend<Block> + 'static,
@@ -681,7 +682,7 @@ where
 			voting_rule,
 			voters: Arc::new(voters),
 			config,
-			network,
+			network: network.clone(),
 			set_id: persistent_data.authority_set.set_id(),
 			authority_set: persistent_data.authority_set.clone(),
 			consensus_changes: persistent_data.consensus_changes.clone(),
@@ -694,6 +695,7 @@ where
 			voter: Box::new(futures::empty()) as Box<_>,
 			env,
 			voter_commands_rx,
+			network: futures03::future::TryFutureExt::compat(network),
 		};
 		work.rebuild_voter();
 		work
@@ -831,8 +833,8 @@ where
 impl<B, E, Block, N, RA, SC, VR> Future for VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT,
- 	N: NetworkT<Block> + Sync,
-	NumberFor<Block>: BlockNumberOps,
+ 	N: NetworkT<Block> + Sync + Unpin,
+	NumberFor<Block>: BlockNumberOps + Unpin,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block> + Send + Sync + 'static,
 	B: Backend<Block> + 'static,
@@ -878,6 +880,15 @@ where
 			}
 		}
 
+		match self.network.poll() {
+			Ok(Async::NotReady) => {},
+			Ok(Async::Ready(())) => {
+				// the network bridge future should never conclude.
+				return Ok(Async::Ready(()))
+			}
+			e @ Err(_) => return e,
+		};
+
 		Ok(Async::NotReady)
 	}
 }
@@ -889,9 +900,9 @@ pub fn run_grandpa<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	Block::Hash: Ord,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
-	N: NetworkT<Block> + Send + Sync + Clone + 'static,
+	N: NetworkT<Block> + Send + Sync + Clone + Unpin + 'static,
 	SC: SelectChain<Block> + 'static,
-	NumberFor<Block>: BlockNumberOps,
+	NumberFor<Block>: BlockNumberOps + Unpin,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
