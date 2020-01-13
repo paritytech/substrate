@@ -328,6 +328,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - The weight of the `call`.
+		/// - One storage lookup to check account is recovered by `who`. O(1)
 		/// # </weight>
 		#[weight = <Passthrough<T::AccountId, <T as Trait>::Call>>::new()]
 		fn as_recovered(origin,
