@@ -659,8 +659,8 @@ impl<AccountId, Call: GetDispatchInfo> ClassifyDispatch<(&AccountId, &Box<Call>)
 		call.get_dispatch_info().class
 	}
 }
-impl<AccountId, Call: GetDispatchInfo> PaysFee for Passthrough<AccountId, Call> {
-	fn pays_fee(&self) -> bool {
-		true
+impl<AccountId, Call: GetDispatchInfo> PaysFee<(&AccountId, &Box<Call>)> for Passthrough<AccountId, Call> {
+	fn pays_fee(&self, (_, call): (&AccountId, &Box<Call>)) -> bool {
+		call.get_dispatch_info().pays_fee
 	}
 }
