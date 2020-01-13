@@ -91,7 +91,7 @@ use frame_support::{
 		ChangeMembers, OnUnbalanced, WithdrawReason, Contains
 	}
 };
-use sp_phragmen::ExtendedBalance;
+use sp_phragmen::{build_support_map, ExtendedBalance, StakedAssignment};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 const MODULE_ID: LockIdentifier = *b"phrelect";
@@ -665,10 +665,14 @@ impl<T: Trait> Module<T> {
 				.filter_map(|(m, a)| if a.is_zero() { None } else { Some(m) } )
 				.collect::<Vec<T::AccountId>>();
 
-			let support_map = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
+			let staked_assignments: Vec<StakedAssignment<T::AccountId>> = phragmen_result.assignments
+				.into_iter()
+				.map(|a| a.into_staked::<_, T::CurrencyToVote, _>(Self::locked_stake_of))
+				.collect();
+
+			let support_map = build_support_map::<BalanceOf<T>, T::AccountId>(
 				&new_set,
-				&phragmen_result.assignments,
-				Self::locked_stake_of,
+				&staked_assignments,
 			);
 
 			let to_balance = |e: ExtendedBalance|

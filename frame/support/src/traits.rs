@@ -23,7 +23,7 @@ use codec::{FullCodec, Codec, Encode, Decode};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	ConsensusEngineId, DispatchResult, DispatchError,
-	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating, TrailingZeroInput},
+	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating, TrailingZeroInput, Bounded},
 };
 
 use crate::dispatch::Parameter;

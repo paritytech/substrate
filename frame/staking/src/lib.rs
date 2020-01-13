@@ -282,7 +282,7 @@ use sp_staking::{
 use sp_runtime::{Serialize, Deserialize};
 use frame_system::{self as system, ensure_signed, ensure_root, offchain::SubmitSignedTransaction};
 
-use sp_phragmen::{ExtendedBalance, Assignment};
+use sp_phragmen::{ExtendedBalance, Assignment, StakedAssignment};
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 // ------------- IMPORTANT NOTE: must be the same as `generate_compact_solution_type`.
@@ -1717,13 +1717,17 @@ impl<T: Trait> Module<T> {
 				.collect::<Vec<T::AccountId>>();
 			let assignments = phragmen_result.assignments;
 
+			let staked_assignments: Vec<StakedAssignment<T::AccountId>> = assignments
+				.into_iter()
+				.map(|a| a.into_staked::<_, T::CurrencyToVote, _>(Self::slashable_balance_of))
+				.collect();
+
 			let to_votes = |b: BalanceOf<T>|
 				<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
 
-			let mut supports = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
+			let mut supports = sp_phragmen::build_support_map::<BalanceOf<T>, T::AccountId>(
 				&elected_stashes,
-				&assignments,
-				Self::slashable_balance_of,
+				&staked_assignments,
 			);
 
 			// Clear Stakers.
@@ -1736,21 +1740,21 @@ impl<T: Trait> Module<T> {
 
 			// collect exposures and slot stake.
 			let mut slot_stake = BalanceOf::<T>::max_value();
-			let exposures = supports.into_iter().map(|(staker, support)| {
+			let exposures = supports.into_iter().map(|(voter, support)| {
 				// build `struct exposure` from `support`
 				let mut others = Vec::new();
 				let mut own: BalanceOf<T> = Zero::zero();
 				let mut total: BalanceOf<T> = Zero::zero();
-				s.voters
+				support.voters
 					.into_iter()
-					.map(|(who, value)| (who, to_balance(value)))
-					.for_each(|(who, value)| {
-						if who == c {
-							own = own.saturating_add(value);
+					.map(|(target, weight)| (target, to_balance(weight)))
+					.for_each(|(target, stake)| {
+						if target == voter {
+							own = own.saturating_add(stake);
 						} else {
-							others.push(IndividualExposure { who, value });
+							others.push(IndividualExposure { who: target, value: stake });
 						}
-						total = total.saturating_add(value);
+						total = total.saturating_add(stake);
 					});
 				let exposure = Exposure {
 					own,
@@ -1765,7 +1769,7 @@ impl<T: Trait> Module<T> {
 				if exposure.total < slot_stake {
 					slot_stake = exposure.total;
 				}
-				(staker, exposure)
+				(voter, exposure)
 			}).collect::<Vec<(T::AccountId, Exposure<_, _>)>>();
 
 			// In order to keep the property required by `n_session_ending`

@@ -407,12 +407,7 @@ pub(crate) fn build_support_map_float<FS>(
 	supports
 }
 
-
-
-fn dummy_stake_of(who: &AccountId) -> Balance {
-	(*who * 100) as Balance
-}
-
+#[allow(dead_code)] // to be used with fuzzing
 pub fn assert_assignments_equal(
 	winners: &Vec<AccountId>,
 	ass1: &Vec<StakedAssignment<AccountId>>,
@@ -426,4 +421,18 @@ pub fn assert_assignments_equal(
 		assert_eq!(support.voters, support_2.get(who).unwrap().voters);
 
 	}
+}
+
+#[allow(dead_code)] // to be used with fuzzing
+pub fn reduce_and_compare(
+	assignment: &Vec<StakedAssignment<AccountId>>,
+	winners: &Vec<AccountId>,
+) {
+	let mut altered_assignment = assignment.clone();
+	crate::reduce(&mut altered_assignment);
+	assert_assignments_equal(
+		winners,
+		&assignment,
+		&altered_assignment,
+	);
 }

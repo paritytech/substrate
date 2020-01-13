@@ -2865,6 +2865,9 @@ fn is_current_session_final_works() {
 		assert_eq!(Staking::current_era(), 2);
 		assert_eq!(Staking::is_current_session_final(), false);
 	})
+}
+
+#[test]
 fn slash_kicks_validators_not_nominators() {
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(1);

@@ -36,10 +36,6 @@ impl<A> Node<A> {
 		self.parent.is_some()
 	}
 
-	pub fn set_parent(&mut self, parent: &NodeRef<A>) {
-		self.parent = Some(parent.clone());
-	}
-
 	pub fn set_parent_of(target: &NodeRef<A>, parent: &NodeRef<A>) {
 		target.borrow_mut().parent = Some(parent.clone());
 	}

@@ -115,12 +115,12 @@ pub struct Assignment<AccountId> {
 }
 
 impl<AccountId> Assignment<AccountId> {
-	fn into_staked<Balance, C, FS>(self, stake_of: FS) -> StakedAssignment<AccountId>
+	pub fn into_staked<Balance, C, FS>(self, stake_of: FS) -> StakedAssignment<AccountId>
 	where
-		C: Convert<Balance, ExtendedBalance>,
+		C: Convert<Balance, u64>,
 		for<'r> FS: Fn(&'r AccountId) -> Balance,
 	{
-		let stake = C::convert(stake_of(&self.who));
+		let stake = C::convert(stake_of(&self.who)) as ExtendedBalance;
 		let distribution = self.distribution.into_iter().map(|(target, p)| {
 			let distribution_stake = p * stake;
 			(target, distribution_stake)
@@ -487,7 +487,7 @@ type Map<A> = std::collections::HashMap<(A, A), A>;
 fn reduce_4<AccountId: Clone + Eq + Default + std::hash::Hash + std::fmt::Debug,>(
 	assignments: &mut Vec<StakedAssignment<AccountId>>,
 ) -> u32 {
-	use std::collections::{HashMap, hash_map::{Entry::*}};
+	use std::collections::{hash_map::{Entry::*}};
 
 	let mut combination_map: Map<AccountId> = Map::new();
 	let mut num_changed: u32 = Zero::zero();
@@ -644,28 +644,12 @@ fn reduce_all<AccountId: Clone + Eq + Default + std::hash::Hash + std::fmt::Debu
 	assignments: &mut Vec<StakedAssignment<AccountId>>,
 ) -> u32 {
 	dbg!(&assignments);
-	use std::collections::{HashMap, hash_map::{Entry::*}};
-	use std::cell::{Cell, RefCell};
-	let mut change_buffer: HashMap<AccountId, Vec<(AccountId, Perbill)>> = HashMap::new();
+	use std::collections::{HashMap};
 	let mut num_changed: u32 = Zero::zero();
 
 	// ----------------- Phase 2: remove any other cycle
 	use node::{Node, NodeRef, NodeRole};
 	let mut tree: HashMap<AccountId, NodeRef<AccountId>> = HashMap::new();
-
-	// needless to say, this can be improved. TODO
-	let edge_weight_of = |voter: &AccountId, candidate: &AccountId| {
-		if let Some(a) = assignments.iter().find(|a| a.who == *voter) {
-			if let Some((_, w)) = a.distribution.iter().find(|(t, _)| t == candidate) {
-				Some(w)
-			} else {
-				None
-			}
-		} else {
-			None
-		}
-	};
-
 
 	// TODO: unify this terminology: we only have VOTER -> TARGET. no candidate. no staking terms.
 	// a flat iterator of (voter, candidate) over all pairs of votes. Similar to reduce_4, we loop
@@ -675,10 +659,6 @@ fn reduce_all<AccountId: Clone + Eq + Default + std::hash::Hash + std::fmt::Debu
 
 		for j in 0..assignments[i].distribution.len() {
 			let (target, _) = assignments[i].distribution[j].clone();
-			println!("+++++ {:?} -> {:?}, Tree", voter, target);
-			for (key, value) in tree.iter() {
-				println!("{:?}", value.borrow());
-			}
 
 			let voter_node = tree.entry(voter.clone())
 				.or_insert(Node::new(voter.clone(), NodeRole::Voter).into_ref()).clone();
@@ -747,14 +727,12 @@ fn reduce_all<AccountId: Clone + Eq + Default + std::hash::Hash + std::fmt::Debu
 					.chain(voter_root_path.iter().take(voter_root_path.len() - common_count).rev().cloned())
 					.collect::<Vec<NodeRef<AccountId>>>();
 
-				println!("cycle = {:?}", cycle.iter().map(|w| w.borrow().who.clone()).collect::<Vec<AccountId>>());
 
 				// TODO: a cycle struct that gives you min + to which chunk it belonged.
 				// find minimum of cycle.
 				let mut min_value: ExtendedBalance = Bounded::max_value();
 				// Note that this can only ever point to a target, not a voter.
 				let mut min_who: AccountId = Default::default();
-				let mut min_neighbor: AccountId = Default::default();
 				let mut min_index = 0usize;
 				// 1 -> next // 0 -> prev  TOOD: I have some ideas of fixing this.
 				let mut min_direction = 0u32;
@@ -790,9 +768,7 @@ fn reduce_all<AccountId: Clone + Eq + Default + std::hash::Hash + std::fmt::Debu
 					}
 				}
 				// if the min edge is in the voter's sub-chain.
-				let cycle_len = cycle.len();
 				let target_chunk = target_root_path.len() - common_count;
-				let voter_chunk = voter_root_path.len() - common_count;
 				let min_chain_in_voter = (min_index + min_direction as usize) >= target_chunk;
 
 				dbg!(min_value, min_index, &min_who, min_direction);

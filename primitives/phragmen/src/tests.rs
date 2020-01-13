@@ -529,7 +529,7 @@ fn basic_from_and_into_compact_works() {
 
 #[test]
 fn basic_reduce_4_cycle_works() {
-	let mut assignments = vec![
+	let assignments = vec![
 		StakedAssignment {
 			who: 1,
 			distribution: vec![
@@ -570,7 +570,6 @@ fn basic_reduce_4_cycle_works() {
 	);
 }
 
-
 #[test]
 fn basic_reduce_all_cycles_works() {
 	let mut assignments = vec![
@@ -609,7 +608,6 @@ fn basic_reduce_all_cycles_works() {
 			],
 		},
 	];
-	let winners = vec![10, 20, 30, 40];
 
 	assert_eq!(3, reduce_all(&mut assignments));
 
@@ -691,9 +689,8 @@ fn basic_reduce_works() {
 			],
 		},
 	];
-	let winners = vec![10, 20, 30, 40];
 
-	assert_eq!(3, reduce_4(&mut assignments));
+	assert_eq!(3, reduce(&mut assignments));
 
 	assert_eq!(
 		assignments,
