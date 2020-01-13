@@ -300,7 +300,7 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
 	pub fn into_configuration<C, G, E, S>(
 		self,
 		spec_factory: S,
-	) -> error::Result<Configuration<C, G, E>>
+	) -> Option<error::Result<Configuration<C, G, E>>>
 	where
 		C: Default,
 		G: RuntimeGenesis,
@@ -309,8 +309,44 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
 	{
 		match self {
 			ParseAndPrepare::Run(c) =>
-				create_run_node_config(c.params.left, spec_factory, c.impl_name, c.version),
-			_ => todo!(),
+				Some(create_run_node_config(
+					c.params.left,
+					spec_factory,
+					c.impl_name,
+					c.version
+				)),
+			ParseAndPrepare::BuildSpec(_) => None,
+			ParseAndPrepare::ExportBlocks(c) =>
+				Some(create_config_with_db_path(
+					spec_factory,
+					&c.params.shared_params,
+					c.version,
+				)),
+			ParseAndPrepare::ImportBlocks(c) =>
+				Some(create_config_with_db_path(
+					spec_factory,
+					&c.params.shared_params,
+					c.version,
+				)),
+			ParseAndPrepare::CheckBlock(c) =>
+				Some(create_config_with_db_path(
+					spec_factory,
+					&c.params.shared_params,
+					c.version,
+				)),
+			ParseAndPrepare::PurgeChain(c) =>
+				Some(create_config_with_db_path(
+					spec_factory,
+					&c.params.shared_params,
+					c.version
+				)),
+			ParseAndPrepare::RevertChain(c) =>
+				Some(create_config_with_db_path(
+					spec_factory,
+					&c.params.shared_params,
+					c.version,
+				)),
+			ParseAndPrepare::CustomCommand(_) => None,
 		}
 	}
 }
