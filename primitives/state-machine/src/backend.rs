@@ -18,11 +18,16 @@
 
 use log::warn;
 use hash_db::Hasher;
-use crate::trie_backend::TrieBackend;
-use crate::trie_backend_essence::TrieBackendStorage;
-use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
 use codec::Encode;
+
 use sp_core::storage::{ChildInfo, OwnedChildInfo};
+use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
+
+use crate::{
+	trie_backend::TrieBackend,
+	trie_backend_essence::TrieBackendStorage,
+	UsageInfo,
+};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -200,6 +205,14 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		txs.consolidate(parent_txs);
 		(root, txs)
 	}
+
+	/// Query backend usage statistics (i/o, memory)
+	///
+	/// Not all implementations are expected to be able to do this. In the
+	/// case when thay don't, empty statistics is returned.
+	fn usage_info(&self) -> UsageInfo {
+		UsageInfo::empty()
+	}
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
@@ -284,7 +297,11 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
 		(*self).for_key_values_with_prefix(prefix, f);
 	}
-}
+
+	fn usage_info(&self) -> UsageInfo {
+		(*self).usage_info()
+	}
+ }
 
 /// Trait that allows consolidate two transactions together.
 pub trait Consolidate {

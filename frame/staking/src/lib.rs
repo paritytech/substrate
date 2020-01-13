@@ -985,26 +985,6 @@ decl_module! {
 			}
 		}
 
-		/// Rebond a portion of the stash scheduled to be unlocked.
-		///
-		/// # <weight>
-		/// - Time complexity: O(1). Bounded by `MAX_UNLOCKING_CHUNKS`.
-		/// - Storage changes: Can't increase storage, only decrease it.
-		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
-		fn rebond(origin, #[compact] value: BalanceOf<T>) {
-			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(
-				ledger.unlocking.len() > 0,
-				Error::<T>::NoUnlockChunk,
-			);
-
-			let ledger = ledger.rebond(value);
-
-			Self::update_ledger(&controller, &ledger);
-		}
-
 		/// Remove any unlocked chunks from the `unlocking` queue from our management.
 		///
 		/// This essentially frees up that balance to be used by the stash account to do
@@ -1255,6 +1235,26 @@ decl_module! {
 			}
 
 			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
+		}
+
+		/// Rebond a portion of the stash scheduled to be unlocked.
+		///
+		/// # <weight>
+		/// - Time complexity: O(1). Bounded by `MAX_UNLOCKING_CHUNKS`.
+		/// - Storage changes: Can't increase storage, only decrease it.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		fn rebond(origin, #[compact] value: BalanceOf<T>) {
+			let controller = ensure_signed(origin)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			ensure!(
+				ledger.unlocking.len() > 0,
+				Error::<T>::NoUnlockChunk,
+			);
+
+			let ledger = ledger.rebond(value);
+
+			Self::update_ledger(&controller, &ledger);
 		}
 	}
 }
@@ -1518,40 +1518,6 @@ impl<T: Trait> Module<T> {
 				&assignments,
 				Self::slashable_balance_of,
 			);
-
-			if cfg!(feature = "equalize") {
-				let mut staked_assignments
-					: Vec<(T::AccountId, Vec<PhragmenStakedAssignment<T::AccountId>>)>
-					= Vec::with_capacity(assignments.len());
-				for (n, assignment) in assignments.iter() {
-					let mut staked_assignment
-						: Vec<PhragmenStakedAssignment<T::AccountId>>
-						= Vec::with_capacity(assignment.len());
-
-					// If this is a self vote, then we don't need to equalise it at all. While the
-					// staking system does not allow nomination and validation at the same time,
-					// this must always be 100% support.
-					if assignment.len() == 1 && assignment[0].0 == *n {
-						continue;
-					}
-					for (c, per_thing) in assignment.iter() {
-						let nominator_stake = to_votes(Self::slashable_balance_of(n));
-						let other_stake = *per_thing * nominator_stake;
-						staked_assignment.push((c.clone(), other_stake));
-					}
-					staked_assignments.push((n.clone(), staked_assignment));
-				}
-
-				let tolerance = 0_u128;
-				let iterations = 2_usize;
-				sp_phragmen::equalize::<_, _, T::CurrencyToVote, _>(
-					staked_assignments,
-					&mut supports,
-					tolerance,
-					iterations,
-					Self::slashable_balance_of,
-				);
-			}
 
 			// Clear Stakers.
 			for v in Self::current_elected().iter() {
