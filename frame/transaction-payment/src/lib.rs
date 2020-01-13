@@ -311,6 +311,7 @@ mod tests {
 	impl pallet_balances::Trait for Runtime {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
 		type TransferPayment = ();
