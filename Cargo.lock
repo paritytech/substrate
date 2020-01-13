@@ -3895,6 +3895,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-recovery"
+version = "2.0.0"
+dependencies = [
+ "enumflags2 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "frame-support 2.0.0",
+ "frame-system 2.0.0",
+ "pallet-balances 2.0.0",
+ "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-core 2.0.0",
+ "sp-io 2.0.0",
+ "sp-runtime 2.0.0",
+ "sp-std 2.0.0",
+]
+
+[[package]]
 name = "pallet-scored-pool"
 version = "2.0.0"
 dependencies = [

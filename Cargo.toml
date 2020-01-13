@@ -78,6 +78,7 @@ members = [
 	"frame/nicks",
 	"frame/offences",
 	"frame/randomness-collective-flip",
+	"frame/recovery",
 	"frame/scored-pool",
 	"frame/session",
 	"frame/society",
