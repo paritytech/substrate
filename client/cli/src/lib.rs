@@ -295,6 +295,26 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> where CC: GetSharedParams {
 	}
 }
 
+impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
+	/// Convert ParseAndPrepare to Configuration
+	pub fn into_configuration<C, G, E, S>(
+		self,
+		spec_factory: S,
+	) -> error::Result<Configuration<C, G, E>>
+	where
+		C: Default,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	{
+		match self {
+			ParseAndPrepare::Run(c) =>
+				create_run_node_config(c.params.left, spec_factory, c.impl_name, c.version),
+			_ => todo!(),
+		}
+	}
+}
+
 /// Command ready to run the main client.
 pub struct ParseAndPrepareRun<'a, RP> {
 	params: MergeParameters<RunCmd, RP>,
