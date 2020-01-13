@@ -168,6 +168,7 @@ where
 		ApiExt<Block, StateBackend = Backend::State>,
 	RA: RuntimeAdapter,
 {
+	println!("--- BEGIN CREATE BLOCK ---");
 	let mut block = client.new_block(Default::default()).expect("Failed to create new block");
 	block.push(
 		Decode::decode(&mut &transfer.encode()[..])
@@ -178,7 +179,10 @@ where
 		block.push(inherent).expect("Failed ...");
 	}
 
-	block.build().expect("Failed to bake block").block
+	let block = block.build().expect("Failed to bake block").block;
+	println!("--- END CREATE BLOCK ---");
+
+	block
 }
 
 fn import_block<Backend, Exec, Block, RtApi>(
@@ -193,6 +197,7 @@ fn import_block<Backend, Exec, Block, RtApi>(
 		sp_api::Core<Block, Error = sp_blockchain::Error> +
 		ApiExt<Block, StateBackend = Backend::State>,
 {
+	println!("--- BEGIN IMPORT BLOCK ---");
 	let import = BlockImportParams {
 		origin: BlockOrigin::File,
 		header: block.header().clone(),
@@ -207,4 +212,5 @@ fn import_block<Backend, Exec, Block, RtApi>(
 		import_existing: false,
 	};
 	client.import_block(import, HashMap::new()).expect("Failed to import block");
+	println!("--- END IMPORT BLOCK ---");
 }
