@@ -1108,7 +1108,36 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		const MAX_BID_COUNT: usize = 1000;
 
 		match bids.binary_search_by(|bid| bid.value.cmp(&value)) {
-			Ok(pos) | Err(pos) => bids.insert(pos, Bid {
+			// Insert new elements after the existing ones. This ensures new bids
+			// with the same bid value are further down the list than existing ones.
+			Ok(pos) => {
+				let different_bid = bids.iter()
+					// Easily extract the index we are on
+					.enumerate()
+					// Skip ahead to the suggested position
+					.skip(pos)
+					// Keep skipping ahead until the position changes
+					.skip_while(|(_, x)| x.value <= bids[pos].value)
+					// Get the element when things changed
+					.next();
+				// If the element is not at the end of the list, insert the new element
+				// in the spot.
+				if let Some((p, _)) = different_bid {
+					bids.insert(p, Bid {
+						value,
+						who: who.clone(),
+						kind: bid_kind,
+					});
+				// If the element is at the end of the list, push the element on the end.
+				} else {
+					bids.push(Bid {
+						value,
+						who: who.clone(),
+						kind: bid_kind,
+					});
+				}
+			},
+			Err(pos) => bids.insert(pos, Bid {
 				value,
 				who: who.clone(),
 				kind: bid_kind,
@@ -1264,7 +1293,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 					// We track here the total_approvals so that every candidate has a unique range
 					// of numbers from 0 to `total_approvals` with length `approval_count` so each
 					// candidate is proportionally represented when selecting a "primary" below.
-					Some((candidate, total_approvals))
+					Some((candidate, total_approvals, value))
 				} else {
 					// Suspend Candidate
 					<SuspendedCandidates<T, I>>::insert(&candidate, (value, kind));
@@ -1299,8 +1328,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				// select one as primary, randomly chosen from the accepted, weighted by approvals. 
 				// Choose a random number between 0 and `total_approvals`
 				let primary_point = pick_usize(&mut rng, total_approvals - 1);
-				// Find the user who falls on that point
-				let primary = accepted.iter().find(|e| e.1 > primary_point)
+				// Find the zero bid or the user who falls on that point
+				let primary = accepted.iter().find(|e| e.2.is_zero() || e.1 > primary_point)
 					.expect("e.1 of final item == total_approvals; \
 						worst case find will always return that item; qed")
 					.0.clone();
@@ -1484,24 +1513,57 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	{
 		let max_members = MaxMembers::<I>::get() as usize;
 		// No more than 10 will be returned.
-		let max_selections: usize = 10.min(max_members.saturating_sub(members_len));
+		let mut max_selections: usize = 10.min(max_members.saturating_sub(members_len));
 
-		// Get the number of left-most bidders whose bids add up to less than `pot`.
-		let mut bids = <Bids<T, I>>::get();
-		let taken = bids.iter()
-			.scan(<BalanceOf<T, I>>::zero(), |total, bid| {
-				*total = total.saturating_add(bid.value);
-				Some((*total, bid.who.clone(), bid.kind.clone()))
-			})
-			.take(max_selections)
-			.take_while(|x| pot >= x.0)
-			.count();
+		if max_selections > 0 {
+			// Get the number of left-most bidders whose bids add up to less than `pot`.
+			let mut bids = <Bids<T, I>>::get();
 
-		// No need to reset Bids if we're not taking anything.
-		if taken > 0 {
-			<Bids<T, I>>::put(&bids[taken..]);
+			// The list of selected candidates
+			let mut selected = Vec::new();
+			
+			if bids.len() > 0 {
+				// Can only select at most the length of bids
+				max_selections = max_selections.min(bids.len());
+				// Number of selected bids so far
+				let mut count = 0;
+				// Check if we have already selected a candidate with zero bid
+				let mut zero_selected = false;
+				// A running total of the cost to onboard these bids
+				let mut total_cost: BalanceOf<T, I> = Zero::zero();
+
+				bids.retain(|bid| {
+					if count < max_selections {
+						// Handle zero bids. We only want one of them.
+						if bid.value.is_zero() {
+							// Select only the first zero bid
+							if !zero_selected {
+								selected.push(bid.clone());
+								zero_selected = true;
+								count += 1;
+								return false
+							}
+						} else {
+							total_cost += bid.value;
+							// Select only as many users as the pot can support.
+							if total_cost <= pot {
+								selected.push(bid.clone());
+								count += 1;
+								return false
+							}
+						}
+					}
+					true
+				});
+
+				// No need to reset Bids if we're not taking anything.
+				if count > 0 {
+					<Bids<T, I>>::put(bids);
+				}
+			}
+			selected
+		} else {
+			vec![]
 		}
-		bids.truncate(taken);
-		bids
 	}
 }
