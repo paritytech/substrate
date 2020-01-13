@@ -18,19 +18,21 @@
 
 use std::{marker::PhantomData, pin::Pin, sync::Arc};
 use codec::{Decode, Encode};
-use futures::{channel::oneshot, executor::{ThreadPool, ThreadPoolBuilder}, future::{Future, FutureExt, ready}};
+use futures::{
+	channel::oneshot, executor::{ThreadPool, ThreadPoolBuilder}, future::{Future, FutureExt, ready},
+};
 
 use sc_client_api::{
 	blockchain::HeaderBackend,
 	light::{Fetcher, RemoteCallRequest}
 };
-use sp_core::{H256, Blake2Hasher, Hasher};
+use sp_core::Hasher;
 use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, BlockIdTo, ProvideRuntimeApi},
+	generic::BlockId, traits::{self, Block as BlockT, BlockIdTo, Header as HeaderT, Hash as HashT},
 	transaction_validity::TransactionValidity,
 };
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
+use sp_api::ProvideRuntimeApi;
 
 use crate::error::{self, Error};
 
@@ -43,7 +45,8 @@ pub struct FullChainApi<Client, Block> {
 
 impl<Client, Block> FullChainApi<Client, Block> where
 	Block: BlockT,
-	Client: ProvideRuntimeApi + BlockIdTo<Block> {
+	Client: ProvideRuntimeApi<Block> + BlockIdTo<Block>,
+{
 	/// Create new transaction pool logic.
 	pub fn new(client: Arc<Client>) -> Self {
 		FullChainApi {
@@ -59,13 +62,13 @@ impl<Client, Block> FullChainApi<Client, Block> where
 }
 
 impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block> where
-	Block: BlockT<Hash = H256>,
-	Client: ProvideRuntimeApi + BlockIdTo<Block> + 'static + Send + Sync,
+	Block: BlockT,
+	Client: ProvideRuntimeApi<Block> + BlockIdTo<Block> + 'static + Send + Sync,
 	Client::Api: TaggedTransactionQueue<Block>,
 	sp_api::ApiErrorFor<Client, Block>: Send,
 {
 	type Block = Block;
-	type Hash = H256;
+	type Hash = Block::Hash;
 	type Error = error::Error;
 	type ValidationFuture = Pin<Box<dyn Future<Output = error::Result<TransactionValidity>> + Send>>;
 
@@ -110,7 +113,7 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 
 	fn hash_and_length(&self, ex: &sc_transaction_graph::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
 		ex.using_encoded(|x| {
-			(Blake2Hasher::hash(x), x.len())
+			(traits::HasherFor::<Block>::hash(x), x.len())
 		})
 	}
 }
@@ -138,12 +141,12 @@ impl<Client, F, Block> LightChainApi<Client, F, Block> where
 }
 
 impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, F, Block> where
-	Block: BlockT<Hash=H256>,
+	Block: BlockT,
 	Client: HeaderBackend<Block> + 'static,
 	F: Fetcher<Block> + 'static,
 {
 	type Block = Block;
-	type Hash = H256;
+	type Hash = Block::Hash;
 	type Error = error::Error;
 	type ValidationFuture = Box<dyn Future<Output = error::Result<TransactionValidity>> + Send + Unpin>;
 
@@ -191,7 +194,7 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, 
 
 	fn hash_and_length(&self, ex: &sc_transaction_graph::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
 		ex.using_encoded(|x| {
-			(Blake2Hasher::hash(x), x.len())
+			(<<Block::Header as HeaderT>::Hashing as HashT>::hash(x), x.len())
 		})
 	}
 }

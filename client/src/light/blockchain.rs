@@ -164,7 +164,10 @@ impl<S, Block: BlockT> RemoteBlockchain<Block> for Blockchain<S>
 		}
 
 		Ok(LocalOrRemote::Remote(RemoteHeaderRequest {
-			cht_root: self.storage.header_cht_root(cht::size(), number)?,
+			cht_root: match self.storage.header_cht_root(cht::size(), number)? {
+				Some(cht_root) => cht_root,
+				None => return Ok(LocalOrRemote::Unknown),
+			},
 			block: number,
 			retry_count: None,
 		}))
@@ -298,17 +301,18 @@ pub mod tests {
 			Err(ClientError::Backend("Test error".into()))
 		}
 
-		fn header_cht_root(&self, _cht_size: u64, _block: u64) -> ClientResult<Hash> {
+		fn header_cht_root(&self, _cht_size: u64, _block: u64) -> ClientResult<Option<Hash>> {
 			Err(ClientError::Backend("Test error".into()))
 		}
 
-		fn changes_trie_cht_root(&self, cht_size: u64, block: u64) -> ClientResult<Hash> {
+		fn changes_trie_cht_root(&self, cht_size: u64, block: u64) -> ClientResult<Option<Hash>> {
 			cht::block_to_cht_number(cht_size, block)
 				.and_then(|cht_num| self.changes_tries_cht_roots.get(&cht_num))
 				.cloned()
 				.ok_or_else(|| ClientError::Backend(
 					format!("Test error: CHT for block #{} not found", block)
 				).into())
+				.map(Some)
 		}
 
 		fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>> {

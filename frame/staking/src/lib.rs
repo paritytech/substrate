@@ -395,7 +395,7 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 
 impl<
 	AccountId,
-	Balance: HasCompact + Copy + Saturating,
+	Balance: HasCompact + Copy + Saturating + SimpleArithmetic,
 > StakingLedger<AccountId, Balance> {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
@@ -412,6 +412,30 @@ impl<
 		Self { total, active: self.active, stash: self.stash, unlocking }
 	}
 
+	/// Re-bond funds that were scheduled for unlocking.
+	fn rebond(mut self, value: Balance) -> Self {
+		let mut unlocking_balance: Balance = Zero::zero();
+
+		while let Some(last) = self.unlocking.last_mut() {
+			if unlocking_balance + last.value <= value {
+				unlocking_balance += last.value;
+				self.active += last.value;
+				self.unlocking.pop();
+			} else {
+				let diff = value - unlocking_balance;
+
+				unlocking_balance += diff;
+				self.active += diff;
+				last.value -= diff;
+			}
+
+			if unlocking_balance >= value {
+				break
+			}
+		}
+
+		self
+	}
 }
 
 impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
@@ -714,11 +738,11 @@ decl_storage! {
 		/// All slashing events on validators, mapped by era to the highest slash proportion
 		/// and slash value of the era.
 		ValidatorSlashInEra:
-			double_map EraIndex, twox_128(T::AccountId) => Option<(Perbill, BalanceOf<T>)>;
+			double_map EraIndex, hasher(twox_128) T::AccountId => Option<(Perbill, BalanceOf<T>)>;
 
 		/// All slashing events on nominators, mapped by era to the highest slash value of the era.
 		NominatorSlashInEra:
-			double_map EraIndex, twox_128(T::AccountId) => Option<BalanceOf<T>>;
+			double_map EraIndex, hasher(twox_128) T::AccountId => Option<BalanceOf<T>>;
 
 		/// Slashing spans for stash accounts.
 		SlashingSpans: map T::AccountId => Option<slashing::SlashingSpans>;
@@ -804,6 +828,8 @@ decl_error! {
 		InsufficientValue,
 		/// Can not schedule more unlock chunks.
 		NoMoreChunks,
+		/// Can not rebond without unlocking chunks.
+		NoUnlockChunk,
 	}
 }
 
@@ -1209,6 +1235,26 @@ decl_module! {
 			}
 
 			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
+		}
+
+		/// Rebond a portion of the stash scheduled to be unlocked.
+		///
+		/// # <weight>
+		/// - Time complexity: O(1). Bounded by `MAX_UNLOCKING_CHUNKS`.
+		/// - Storage changes: Can't increase storage, only decrease it.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		fn rebond(origin, #[compact] value: BalanceOf<T>) {
+			let controller = ensure_signed(origin)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			ensure!(
+				ledger.unlocking.len() > 0,
+				Error::<T>::NoUnlockChunk,
+			);
+
+			let ledger = ledger.rebond(value);
+
+			Self::update_ledger(&controller, &ledger);
 		}
 	}
 }

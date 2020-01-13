@@ -19,7 +19,6 @@ use legacy_proto::{LegacyProto, LegacyProtoOut};
 use crate::utils::interval;
 use bytes::{Bytes, BytesMut};
 use futures::prelude::*;
-use futures03::{StreamExt as _, TryStreamExt as _};
 use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{ConnectedPoint, nodes::Substream, muxing::StreamMuxerBox};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
@@ -47,7 +46,7 @@ use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use std::fmt::Write;
-use std::{cmp, num::NonZeroUsize, time};
+use std::{cmp, num::NonZeroUsize, pin::Pin, task::Poll, time};
 use log::{log, Level, trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
 use sc_client_api::{FetchChecker, ChangesProof, StorageProof};
@@ -81,8 +80,6 @@ pub(crate) const MIN_VERSION: u32 = 3;
 
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
-// Maximum allowed entries in `ConsensusBatch`
-const MAX_CONSENSUS_MESSAGES: usize = 256;
 /// When light node connects to the full node and the full node is behind light node
 /// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it unuseful
 /// and disconnect to free connection slot.
@@ -124,9 +121,9 @@ mod rep {
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Interval at which we call `tick`.
-	tick_timeout: Box<dyn Stream<Item = (), Error = ()> + Send>,
+	tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Interval at which we call `propagate_extrinsics`.
-	propagate_timeout: Box<dyn Stream<Item = (), Error = ()> + Send>,
+	propagate_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	config: ProtocolConfig,
 	/// Handler for light client requests.
 	light_dispatch: LightDispatch<B>,
@@ -328,9 +325,6 @@ pub trait Context<B: BlockT> {
 	/// Force disconnecting from a peer. Use this when a peer misbehaved.
 	fn disconnect_peer(&mut self, who: PeerId);
 
-	/// Send a consensus message to a peer.
-	fn send_consensus(&mut self, who: PeerId, messages: Vec<ConsensusMessage>);
-
 	/// Send a chain-specific message to a peer.
 	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>);
 }
@@ -359,35 +353,6 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 
 	fn disconnect_peer(&mut self, who: PeerId) {
 		self.behaviour.disconnect_peer(&who)
-	}
-
-	fn send_consensus(&mut self, who: PeerId, messages: Vec<ConsensusMessage>) {
-		if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 4) {
-			let mut batch = Vec::new();
-			let len = messages.len();
-			for (index, message) in messages.into_iter().enumerate() {
-				batch.reserve(MAX_CONSENSUS_MESSAGES);
-				batch.push(message);
-				if batch.len() == MAX_CONSENSUS_MESSAGES || index == len - 1 {
-					send_message::<B> (
-						self.behaviour,
-						&mut self.context_data.stats,
-						&who,
-						GenericMessage::ConsensusBatch(std::mem::replace(&mut batch, Vec::new())),
-					)
-				}
-			}
-		} else {
-			// Backwards compatibility
-			for message in messages {
-				send_message::<B> (
-					self.behaviour,
-					&mut self.context_data.stats,
-					&who,
-					GenericMessage::Consensus(message)
-				)
-			}
-		}
 	}
 
 	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>) {
@@ -464,8 +429,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let behaviour = LegacyProto::new(protocol_id, versions, peerset);
 
 		let protocol = Protocol {
-			tick_timeout: Box::new(interval(TICK_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
-			propagate_timeout: Box::new(interval(PROPAGATE_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
+			tick_timeout: Box::pin(interval(TICK_TIMEOUT)),
+			propagate_timeout: Box::pin(interval(PROPAGATE_TIMEOUT)),
 			config,
 			context_data: ContextData {
 				peers: HashMap::new(),
@@ -545,6 +510,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Number of blocks in the import queue.
 	pub fn num_queued_blocks(&self) -> u32 {
 		self.sync.status().queued_blocks
+	}
+
+	/// Number of active sync requests.
+	pub fn num_sync_requests(&self) -> usize {
+		self.sync.num_sync_requests()
 	}
 
 	/// Starts a new data demand request.
@@ -892,7 +862,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			}
 		} else {
-			match self.sync.on_block_data(peer, request, response) {
+			match self.sync.on_block_data(peer, Some(request), response) {
 				Ok(sync::OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
 				Ok(sync::OnBlockData::Request(peer, req)) => {
@@ -1320,14 +1290,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		// been sent over network (but it is not in our case)
 		let blocks_to_import = self.sync.on_block_data(
 			who.clone(),
-			message::generic::BlockRequest {
-				id: 0,
-				fields: BlockAttributes::HEADER,
-				from: message::FromBlock::Hash(hash),
-				to: None,
-				direction: message::Direction::Ascending,
-				max: Some(1),
-			},
+			None,
 			message::generic::BlockResponse {
 				id: 0,
 				blocks: vec![
@@ -1886,18 +1849,19 @@ Protocol<B, S, H> {
 
 	fn poll(
 		&mut self,
+		cx: &mut std::task::Context,
 		params: &mut impl PollParameters,
-	) -> Async<
+	) -> Poll<
 		NetworkBehaviourAction<
 			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
 			Self::OutEvent
 		>
 	> {
-		while let Ok(Async::Ready(_)) = self.tick_timeout.poll() {
+		while let Poll::Ready(Some(())) = self.tick_timeout.poll_next_unpin(cx) {
 			self.tick();
 		}
 
-		while let Ok(Async::Ready(_)) = self.propagate_timeout.poll() {
+		while let Poll::Ready(Some(())) = self.propagate_timeout.poll_next_unpin(cx) {
 			self.propagate_extrinsics();
 		}
 
@@ -1928,17 +1892,17 @@ Protocol<B, S, H> {
 				GenericMessage::FinalityProofRequest(r))
 		}
 
-		let event = match self.behaviour.poll(params) {
-			Async::NotReady => return Async::NotReady,
-			Async::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
-			Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
-				return Async::Ready(NetworkBehaviourAction::DialAddress { address }),
-			Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
-				return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-			Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
-				return Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }),
-			Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
-				return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+		let event = match self.behaviour.poll(cx, params) {
+			Poll::Pending => return Poll::Pending,
+			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
+			Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
+				return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
+			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
+				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
+			Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
+				return Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }),
+			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
+				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 		};
 
 		let outcome = match event {
@@ -1972,9 +1936,9 @@ Protocol<B, S, H> {
 		};
 
 		if let CustomMessageOutcome::None = outcome {
-			Async::NotReady
+			Poll::Pending
 		} else {
-			Async::Ready(NetworkBehaviourAction::GenerateEvent(outcome))
+			Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome))
 		}
 	}
 

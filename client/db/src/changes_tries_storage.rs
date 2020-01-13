@@ -26,9 +26,9 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_trie::MemoryDB;
 use sc_client_api::backend::PrunableStateChangesTrieStorage;
 use sp_blockchain::{well_known_cache_keys, Cache as BlockchainCache};
-use sp_core::{H256, Blake2Hasher, ChangesTrieConfiguration, ChangesTrieConfigurationRange, convert_hash};
+use sp_core::{ChangesTrieConfiguration, ChangesTrieConfigurationRange, convert_hash};
 use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, CheckedSub,
+	Block as BlockT, Header as HeaderT, HasherFor, NumberFor, One, Zero, CheckedSub,
 };
 use sp_runtime::generic::{BlockId, DigestItem, ChangesTrieSignal};
 use sp_state_machine::{DBValue, ChangesTrieBuildCache, ChangesTrieCacheAction};
@@ -108,7 +108,7 @@ struct ChangesTriesMeta<Block: BlockT> {
 	pub oldest_pruned_digest_range_end: NumberFor<Block>,
 }
 
-impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
+impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	/// Create new changes trie storage.
 	pub fn new(
 		db: Arc<dyn KeyValueDB>,
@@ -150,7 +150,7 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	pub fn commit(
 		&self,
 		tx: &mut DBTransaction,
-		mut changes_trie: MemoryDB<Blake2Hasher>,
+		mut changes_trie: MemoryDB<HasherFor<Block>>,
 		parent_block: ComplexBlockId<Block>,
 		block: ComplexBlockId<Block>,
 		new_header: &Block::Header,
@@ -160,7 +160,7 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	) -> ClientResult<DbChangesTrieStorageTransaction<Block>> {
 		// insert changes trie, associated with block, into DB
 		for (key, (val, _)) in changes_trie.drain() {
-			tx.put(self.changes_tries_column, &key[..], &val);
+			tx.put(self.changes_tries_column, key.as_ref(), &val);
 		}
 
 		// if configuration has not been changed AND block is not finalized => nothing to do here
@@ -376,12 +376,8 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	}
 }
 
-impl<Block> PrunableStateChangesTrieStorage<Block, Blake2Hasher>
-	for DbChangesTrieStorage<Block>
-where
-	Block: BlockT<Hash=H256>,
-{
-	fn storage(&self) -> &dyn sp_state_machine::ChangesTrieStorage<Blake2Hasher, NumberFor<Block>> {
+impl<Block: BlockT> PrunableStateChangesTrieStorage<Block> for DbChangesTrieStorage<Block> {
+	fn storage(&self) -> &dyn sp_state_machine::ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>> {
 		self
 	}
 
@@ -400,15 +396,13 @@ where
 	}
 }
 
-impl<Block> sp_state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>>
+impl<Block: BlockT> sp_state_machine::ChangesTrieRootsStorage<HasherFor<Block>, NumberFor<Block>>
 	for DbChangesTrieStorage<Block>
-where
-	Block: BlockT<Hash=H256>,
 {
 	fn build_anchor(
 		&self,
-		hash: H256,
-	) -> Result<sp_state_machine::ChangesTrieAnchorBlockId<H256, NumberFor<Block>>, String> {
+		hash: Block::Hash,
+	) -> Result<sp_state_machine::ChangesTrieAnchorBlockId<Block::Hash, NumberFor<Block>>, String> {
 		utils::read_header::<Block>(&*self.db, self.key_lookup_column, self.header_column, BlockId::Hash(hash))
 			.map_err(|e| e.to_string())
 			.and_then(|maybe_header| maybe_header.map(|header|
@@ -421,9 +415,9 @@ where
 
 	fn root(
 		&self,
-		anchor: &sp_state_machine::ChangesTrieAnchorBlockId<H256, NumberFor<Block>>,
+		anchor: &sp_state_machine::ChangesTrieAnchorBlockId<Block::Hash, NumberFor<Block>>,
 		block: NumberFor<Block>,
-	) -> Result<Option<H256>, String> {
+	) -> Result<Option<Block::Hash>, String> {
 		// check API requirement: we can't get NEXT block(s) based on anchor
 		if block > anchor.number {
 			return Err(format!("Can't get changes trie root at {} using anchor at {}", block, anchor.number));
@@ -460,32 +454,40 @@ where
 			}
 		};
 
-		Ok(utils::require_header::<Block>(&*self.db, self.key_lookup_column, self.header_column, block_id)
+		Ok(
+			utils::require_header::<Block>(
+				&*self.db,
+				self.key_lookup_column,
+				self.header_column,
+				block_id,
+			)
 			.map_err(|e| e.to_string())?
-			.digest().log(DigestItem::as_changes_trie_root)
-			.map(|root| H256::from_slice(root.as_ref())))
+			.digest()
+			.log(DigestItem::as_changes_trie_root)
+			.cloned()
+		)
 	}
 }
 
-impl<Block> sp_state_machine::ChangesTrieStorage<Blake2Hasher, NumberFor<Block>>
+impl<Block> sp_state_machine::ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>
 	for DbChangesTrieStorage<Block>
 where
-	Block: BlockT<Hash=H256>,
+	Block: BlockT,
 {
-	fn as_roots_storage(&self) -> &dyn sp_state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>> {
+	fn as_roots_storage(&self) -> &dyn sp_state_machine::ChangesTrieRootsStorage<HasherFor<Block>, NumberFor<Block>> {
 		self
 	}
 
 	fn with_cached_changed_keys(
 		&self,
-		root: &H256,
+		root: &Block::Hash,
 		functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
 	) -> bool {
 		self.build_cache.read().with_changed_keys(root, functor)
 	}
 
-	fn get(&self, key: &H256, _prefix: Prefix) -> Result<Option<DBValue>, String> {
-		self.db.get(self.changes_tries_column, &key[..])
+	fn get(&self, key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
+		self.db.get(self.changes_tries_column, key.as_ref())
 			.map_err(|err| format!("{}", err))
 	}
 }
@@ -523,6 +525,7 @@ mod tests {
 		Backend as ClientBackend, NewBlockState, BlockImportOperation, PrunableStateChangesTrieStorage,
 	};
 	use sp_blockchain::HeaderBackend as BlockchainHeaderBackend;
+	use sp_core::H256;
 	use sp_runtime::testing::{Digest, Header};
 	use sp_runtime::traits::{Hash, BlakeTwo256};
 	use sp_state_machine::{ChangesTrieRootsStorage, ChangesTrieStorage};
