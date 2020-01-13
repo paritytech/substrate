@@ -756,8 +756,6 @@ fn zero_bid_works() {
 		assert_ok!(Society::bid(Origin::signed(20), 0));
 		assert_ok!(Society::bid(Origin::signed(40), 0));
 
-		println!("{:?}", <Bids<Test>>::get());
-
 		// Rotate period
 		run_to_block(4);
 		// Pot is 1000 after "PeriodSpend"
@@ -782,5 +780,26 @@ fn zero_bid_works() {
 		assert_eq!(Society::members(), vec![10, 30, 50, 60]);
 		// The zero bid is selected as head
 		assert_eq!(Society::head(), Some(30));
+	});
+}
+
+#[test]
+fn bids_ordered_correctly() {
+	// This tests that bids with the same value are placed in the list ordered
+	// with bidders who bid first earlier on the list.
+	EnvBuilder::new().execute(|| {
+		assert_ok!(Society::bid(Origin::signed(20), 400));
+		assert_ok!(Society::bid(Origin::signed(30), 400));
+		assert_ok!(Society::bid(Origin::signed(40), 400));
+		assert_ok!(Society::bid(Origin::signed(50), 400));
+		assert_ok!(Society::bid(Origin::signed(60), 400));
+
+		assert_eq!(<Bids<Test>>::get(), vec![
+			create_bid(400, 20, BidKind::Deposit(25)),
+			create_bid(400, 30, BidKind::Deposit(25)),
+			create_bid(400, 40, BidKind::Deposit(25)),
+			create_bid(400, 50, BidKind::Deposit(25)),
+			create_bid(400, 60, BidKind::Deposit(25)),
+		])
 	});
 }
