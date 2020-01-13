@@ -59,8 +59,8 @@ impl<V> LayerEntry<V> {
 /// transaction operation.
 #[derive(Debug, PartialEq)]
 pub(crate) enum LayeredOpsResult {
-	/// No inner data was changed, even technical
-	/// data, therefore no update is needed.
+	/// No inner value or metadata change occurs,
+	/// therefore no update is needed.
 	Unchanged,
 	/// Byte representation did change.
 	Changed,
@@ -125,7 +125,7 @@ impl<V> Layers<V> {
 
 	/// Set a new value, this function expect that
 	/// `number_transactions` is a valid state (can fail
-	/// otherwhise).
+	/// otherwise).
 	pub(crate) fn set(&mut self, number_transactions: usize, value: V) {
 		if let Some(v) = self.0.last_mut() {
 			debug_assert!(v.index <= number_transactions,

@@ -620,7 +620,10 @@ impl OverlayedChanges {
 		changes_trie_storage: Option<&T>,
 		parent_hash: H::Out,
 		mut cache: StorageTransactionCache<B::Transaction, H, N>,
-	) -> Result<StorageChanges<B::Transaction, H, N>, String> where H::Out: Ord + Encode + 'static {
+	) -> Result<StorageChanges<B::Transaction, H, N>, String>
+	where
+		H::Out: Ord + Encode + 'static,
+	{
 		// If the transaction does not exist, we generate it.
 		if cache.transaction.is_none() {
 			self.storage_root(backend, &mut cache);
@@ -728,7 +731,8 @@ impl OverlayedChanges {
 		backend: &B,
 		cache: &mut StorageTransactionCache<B::Transaction, H, N>,
 	) -> H::Out
-		where H::Out: Ord + Encode,
+		where
+			H::Out: Ord + Encode,
 	{
 		let child_delta_iter = self.changes.owned_children_iter();
 
@@ -756,7 +760,10 @@ impl OverlayedChanges {
 		parent_hash: H::Out,
 		panic_on_storage_error: bool,
 		cache: &mut StorageTransactionCache<B::Transaction, H, N>,
-	) -> Result<Option<H::Out>, ()> where H::Out: Ord + Encode + 'static {
+	) -> Result<Option<H::Out>, ()>
+		where
+			H::Out: Ord + Encode + 'static
+	{
 		build_changes_trie::<_, T, H, N>(
 			backend,
 			changes_trie_storage,
@@ -820,8 +827,10 @@ impl OverlayedChanges {
 /// hashmap usage.
 /// This could also be easilly replace if btreemap gets
 /// an implementation for retain in the future.
-fn retain<K: Ord + Clone, V, F>(map: &mut BTreeMap<K, V>, mut f: F) where
-    F: FnMut(&K, &mut V) -> bool, {
+fn retain<K: Ord + Clone, V, F>(map: &mut BTreeMap<K, V>, mut f: F)
+	where
+		F: FnMut(&K, &mut V) -> bool,
+{
 	// this is use to discard some historical values when
 	// their status is cleared.
 	// Regarding this use case we will only remove individually.
