@@ -299,7 +299,6 @@ macro_rules! implement_per_thing {
 				assert_eq!($name::from_percent(34) * 10u64, 3);
 				assert_eq!($name::from_percent(35) * 10u64, 3);
 				assert_eq!($name::from_percent(36) * 10u64, 4);
-				assert_eq!($name::from_percent(36) * 10u64, 4);
 			}
 
 			#[test]
