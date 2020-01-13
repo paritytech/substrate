@@ -302,7 +302,7 @@ impl<T: pallet_balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightFor
 }
 
 impl<T: pallet_balances::Trait> PaysFee<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
-	fn pays_fee(&self, _target: <(&BalanceOf<T>,)>) -> bool {
+	fn pays_fee(&self, _target: (&BalanceOf<T>,)) -> bool {
 		true
 	}
 }
