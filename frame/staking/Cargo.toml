@@ -27,9 +27,8 @@ pallet-staking-reward-curve = { version = "2.0.0",  path = "../staking/reward-cu
 substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
 
 [features]
-equalize = []
 migrate = []
-default = ["std", "equalize"]
+default = ["std"]
 std = [
 	"serde",
 	"safe-mix/std",
