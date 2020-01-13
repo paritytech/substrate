@@ -788,18 +788,22 @@ fn bids_ordered_correctly() {
 	// This tests that bids with the same value are placed in the list ordered
 	// with bidders who bid first earlier on the list.
 	EnvBuilder::new().execute(|| {
-		assert_ok!(Society::bid(Origin::signed(20), 400));
-		assert_ok!(Society::bid(Origin::signed(30), 400));
-		assert_ok!(Society::bid(Origin::signed(40), 400));
-		assert_ok!(Society::bid(Origin::signed(50), 400));
-		assert_ok!(Society::bid(Origin::signed(60), 400));
+		for i in 0..5 {
+			for j in 0..5 {
+				// Give them some funds
+				let _ = Balances::make_free_balance_be(&(100 + (i * 5 + j) as u128), 1000);
+				assert_ok!(Society::bid(Origin::signed(100 + (i * 5 + j) as u128), j));
+			}
+		}
 
-		assert_eq!(<Bids<Test>>::get(), vec![
-			create_bid(400, 20, BidKind::Deposit(25)),
-			create_bid(400, 30, BidKind::Deposit(25)),
-			create_bid(400, 40, BidKind::Deposit(25)),
-			create_bid(400, 50, BidKind::Deposit(25)),
-			create_bid(400, 60, BidKind::Deposit(25)),
-		])
+		let mut final_list = Vec::new();
+
+		for j in 0..5 {
+			for i in 0..5 {
+				final_list.push(create_bid(j, 100 + (i * 5 + j) as u128,  BidKind::Deposit(25)));
+			}
+		}
+
+		assert_eq!(<Bids<Test>>::get(), final_list);
 	});
 }

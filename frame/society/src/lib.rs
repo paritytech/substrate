@@ -1110,11 +1110,33 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		match bids.binary_search_by(|bid| bid.value.cmp(&value)) {
 			// Insert new elements after the existing ones. This ensures new bids
 			// with the same bid value are further down the list than existing ones.
-			Ok(pos) => bids.insert(pos + 1, Bid {
-				value,
-				who: who.clone(),
-				kind: bid_kind,
-			}),
+			Ok(pos) => {
+				let different_bid = bids.iter()
+					// Easily extract the index we are on
+					.enumerate()
+					// Skip ahead to the suggested position
+					.skip(pos)
+					// Keep skipping ahead until the position changes
+					.skip_while(|(_, x)| x.value <= bids[pos].value)
+					// Get the element when things changed
+					.next();
+				// If the element is not at the end of the list, insert the new element
+				// in the spot.
+				if let Some((p, _)) = different_bid {
+					bids.insert(p, Bid {
+						value,
+						who: who.clone(),
+						kind: bid_kind,
+					});
+				// If the element is at the end of the list, push the element on the end.
+				} else {
+					bids.push(Bid {
+						value,
+						who: who.clone(),
+						kind: bid_kind,
+					});
+				}
+			},
 			Err(pos) => bids.insert(pos, Bid {
 				value,
 				who: who.clone(),
