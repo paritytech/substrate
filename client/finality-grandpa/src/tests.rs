@@ -1116,7 +1116,6 @@ fn test_bad_justification() {
 }
 
 #[test]
-#[ignore]
 fn voter_persists_its_votes() {
 	use std::iter::FromIterator;
 	use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1338,8 +1337,7 @@ fn voter_persists_its_votes() {
 						target_hash: block_30_hash,
 					};
 
-					// TODO: figure out why this doesn't compile.
-					// Pin::new(&mut *round_tx.lock()).start_send(finality_grandpa::Message::Prevote(prevote)).unwrap();
+					Pin::new(&mut *round_tx.lock()).start_send(finality_grandpa::Message::Prevote(prevote)).unwrap();
 				} else if state.compare_and_swap(1, 2, Ordering::SeqCst) == 1 {
 					// the next message we receive should be our own prevote
 					let prevote = match signed.message {
