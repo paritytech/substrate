@@ -436,10 +436,8 @@ fn do_equalize<Balance, AccountId, C>(
 	let budget = to_votes(budget_balance);
 
 	// Nothing to do. This voter had nothing useful.
-	// Defensive only. Assignment list should always be populated.
-	if elected_edges.is_empty() { return 0; }
-	// Well, what can we equalize more? nothing.
-	if elected_edges.len() == 1 { return 0; }
+	// Defensive only. Assignment list should always be populated. 1 might happen for self vote.
+	if elected_edges.is_empty() || elected_edges.len() == 1 { return 0; }
 
 	let stake_used = elected_edges
 		.iter()
