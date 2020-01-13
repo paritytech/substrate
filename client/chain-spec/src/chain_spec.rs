@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -228,7 +228,7 @@ impl<G, E> ChainSpec<G, E> {
 		let client_spec = ClientSpec {
 			name: name.to_owned(),
 			id: id.to_owned(),
-			boot_nodes: boot_nodes,
+			boot_nodes,
 			telemetry_endpoints,
 			protocol_id: protocol_id.map(str::to_owned),
 			properties,

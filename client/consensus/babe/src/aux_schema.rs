@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -58,6 +58,12 @@ pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 			);
 			SharedEpochChanges::new()
 		});
+
+	// rebalance the tree after deserialization. this isn't strictly necessary
+	// since the tree is now rebalanced on every update operation. but since the
+	// tree wasn't rebalanced initially it's useful to temporarily leave it here
+	// to avoid having to wait until an import for rebalancing.
+	epoch_changes.lock().rebalance();
 
 	Ok(epoch_changes)
 }

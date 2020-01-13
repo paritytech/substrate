@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -107,7 +107,7 @@ impl<Number, Hash> traits::Header for Header<Number, Hash> where
 	Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + MaybeDisplay +
 		SimpleArithmetic + Codec + Copy + Into<U256> + TryFrom<U256> + sp_std::str::FromStr,
 	Hash: HashT,
-	Hash::Output: Default + sp_std::hash::Hash + Copy + Member +
+	Hash::Output: Default + sp_std::hash::Hash + Copy + Member + Ord +
 		MaybeSerialize + Debug + MaybeDisplay + SimpleBitOps + Codec,
 {
 	type Number = Number;

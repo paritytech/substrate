@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -623,8 +623,8 @@ cfg_if! {
 			}
 
 			impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
-				fn offchain_worker(block: u64) {
-					let ex = Extrinsic::IncludeData(block.encode());
+				fn offchain_worker(header: &<Block as BlockT>::Header) {
+					let ex = Extrinsic::IncludeData(header.number.encode());
 					sp_io::offchain::submit_transaction(ex.encode()).unwrap();
 				}
 			}
@@ -839,8 +839,8 @@ cfg_if! {
 			}
 
 			impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
-				fn offchain_worker(block: u64) {
-					let ex = Extrinsic::IncludeData(block.encode());
+				fn offchain_worker(header: &<Block as BlockT>::Header) {
+					let ex = Extrinsic::IncludeData(header.number.encode());
 					sp_io::offchain::submit_transaction(ex.encode()).unwrap()
 				}
 			}
@@ -954,19 +954,19 @@ mod tests {
 		DefaultTestClientBuilderExt, TestClientBuilder,
 		runtime::TestAPI,
 	};
-	use sp_runtime::{
-		generic::BlockId,
-		traits::ProvideRuntimeApi,
-	};
+	use sp_api::ProvideRuntimeApi;
+	use sp_runtime::generic::BlockId;
 	use sp_core::storage::well_known_keys::HEAP_PAGES;
 	use sp_state_machine::ExecutionStrategy;
 	use codec::Encode;
 
 	#[test]
 	fn returns_mutable_static() {
-		let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+			.build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		let ret = runtime_api.returns_mutable_static(&block_id).unwrap();
 		assert_eq!(ret, 33);
@@ -997,7 +997,7 @@ mod tests {
 			.set_heap_pages(REQUIRED_MEMORY_PAGES)
 			.build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
 		let ret = runtime_api.allocates_huge_stack_array(&block_id, true);
@@ -1013,31 +1013,31 @@ mod tests {
 		// This tests that the on-chain HEAP_PAGES parameter is respected.
 
 		// Create a client devoting only 8 pages of wasm memory. This gives us ~512k of heap memory.
-		let client = TestClientBuilder::new()
+		let mut client = TestClientBuilder::new()
 			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
 			.set_heap_pages(8)
 			.build();
-		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
-		let ret = runtime_api.vec_with_capacity(&block_id, 1048576);
+		let ret = client.runtime_api().vec_with_capacity(&block_id, 1048576);
 		assert!(ret.is_err());
 
 		// Create a block that sets the `:heap_pages` to 32 pages of memory which corresponds to
 		// ~2048k of heap memory.
-		let new_block_id = {
+		let (new_block_id, block) = {
 			let mut builder = client.new_block(Default::default()).unwrap();
 			builder.push_storage_change(HEAP_PAGES.to_vec(), Some(32u64.encode())).unwrap();
-			let block = builder.bake().unwrap();
+			let block = builder.build().unwrap().block;
 			let hash = block.header.hash();
-			client.import(BlockOrigin::Own, block).unwrap();
-			BlockId::Hash(hash)
+			(BlockId::Hash(hash), block)
 		};
 
+		client.import(BlockOrigin::Own, block).unwrap();
+
 		// Allocation of 1024k while having ~2048k should succeed.
-		let ret = runtime_api.vec_with_capacity(&new_block_id, 1048576);
+		let ret = client.runtime_api().vec_with_capacity(&new_block_id, 1048576);
 		assert!(ret.is_ok());
 	}
 
@@ -1047,7 +1047,7 @@ mod tests {
 			.set_execution_strategy(ExecutionStrategy::Both)
 			.build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.info().chain.best_number);
+		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		runtime_api.test_storage(&block_id).unwrap();
 	}
