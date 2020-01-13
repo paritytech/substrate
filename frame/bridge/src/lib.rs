@@ -135,15 +135,6 @@ decl_error! {
 	}
 }
 
-impl<T: Trait> From<StorageError> for DispatchError {
-	fn from(error: StorageError) -> Self {
-		match error {
-			StorageError::StorageRootMismatch => Error::<T>::StorageRootMismatch.into(),
-			StorageError::StorageValueUnavailable => Error::<T>::StorageValueUnavailable.into(),
-		}
-	}
-}
-
 impl<T: Trait> Module<T> {
 	fn check_validator_set_proof(
 		state_root: &T::Hash,
@@ -154,14 +145,23 @@ impl<T: Trait> Module<T> {
 		let checker = <StorageProofChecker<<T::Hashing as sp_runtime::traits::Hash>::Hasher>>::new(
 			*state_root,
 			proof.clone()
-		)?;
+		);
+
+		// TODO: Remove once I can impl From<StorageError> for DispatchError
+		let checker = match checker {
+			Ok(c) => c,
+			Err(e) => return Self::map_storage_err(e).into()
+		};
 
 		// By encoding the given set we should have an easy way to compare
 		// with the stuff we get out of storage via `read_value`
 		let encoded_validator_set = validator_set.encode();
-		let actual_validator_set: Vec<u8> = checker
-			.read_value(b":grandpa_authorities")?
-			.ok_or(Error::<T>::StorageValueUnavailable.into())?;
+
+		// TODO: Remove once I can impl From<StorageError> for DispatchError
+		let actual_validator_set = match checker.read_value(b":grandpa_authorities") {
+			Ok(c) => c.ok_or(Error::<T>::StorageValueUnavailable)?,
+			Err(e) => return Self::map_storage_err(e).into()
+		};
 
 		if encoded_validator_set == actual_validator_set {
 			Ok(())
@@ -195,6 +195,14 @@ impl<T: Trait> Module<T> {
 		}
 
 		Err(Error::<T>::InvalidAncestryProof.into())
+	}
+
+	// TODO: Remove once I can impl From<StorageError> for DispatchError
+	fn map_storage_err(e: StorageError) -> DispatchError {
+		match e {
+			StorageError::StorageRootMismatch => Error::<T>::StorageRootMismatch.into(),
+			StorageError::StorageValueUnavailable => Error::<T>::StorageValueUnavailable.into(),
+		}
 	}
 }
 
