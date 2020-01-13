@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,13 +18,13 @@ use futures01::sync::mpsc as mpsc01;
 use log::{debug, info};
 use std::sync::Arc;
 use service::{
-    AbstractService, RpcSession, Roles, Configuration, config::{DatabaseConfig, KeystoreConfig},
-    ChainSpec, RuntimeGenesis
+	AbstractService, RpcSession, Roles, Configuration, config::{DatabaseConfig, KeystoreConfig},
+	ChainSpec, RuntimeGenesis
 };
 use wasm_bindgen::prelude::*;
 use futures::{
-    TryFutureExt as _, FutureExt as _, Stream as _, Future as _, TryStreamExt as _,
-    channel::{oneshot, mpsc}, future::{poll_fn, ok}, compat::*,
+	TryFutureExt as _, FutureExt as _, Stream as _, Future as _, TryStreamExt as _,
+	channel::{oneshot, mpsc}, future::{poll_fn, ok}, compat::*,
 };
 use std::task::Poll;
 use std::pin::Pin;
@@ -38,136 +38,136 @@ pub use console_log::init_with_level as init_console_log;
 ///
 /// This configuration contains good defaults for a browser light client.
 pub async fn browser_configuration<C, G, E>(
-    transport: Transport,
-    chain_spec: ChainSpec<G, E>,
+	transport: Transport,
+	chain_spec: ChainSpec<G, E>,
 ) -> Result<Configuration<C, G, E>, Box<dyn std::error::Error>>
 where
-    C: Default,
-    G: RuntimeGenesis,
-    E: Extension,
+	C: Default,
+	G: RuntimeGenesis,
+	E: Extension,
 {
-    let name = chain_spec.name().to_string();
+	let name = chain_spec.name().to_string();
 
-    let transport = ExtTransport::new(transport);
-    let mut config = Configuration::default_with_spec_and_base_path(chain_spec, None);
-    config.network.transport = network::config::TransportConfig::Normal {
-        wasm_external_transport: Some(transport.clone()),
-        allow_private_ipv4: true,
-        enable_mdns: false,
-    };
-    config.telemetry_external_transport = Some(transport);
-    config.roles = Roles::LIGHT;
-    config.name = format!("{} (Browser)", name);
-    config.database = {
-        info!("Opening Indexed DB database '{}'...", name);
-        let db = kvdb_web::Database::open(name, 10)
-            .await?;
-        DatabaseConfig::Custom(Arc::new(db))
-    };
-    config.keystore = KeystoreConfig::InMemory;
+	let transport = ExtTransport::new(transport);
+	let mut config = Configuration::default_with_spec_and_base_path(chain_spec, None);
+	config.network.transport = network::config::TransportConfig::Normal {
+		wasm_external_transport: Some(transport.clone()),
+		allow_private_ipv4: true,
+		enable_mdns: false,
+	};
+	config.telemetry_external_transport = Some(transport);
+	config.roles = Roles::LIGHT;
+	config.name = format!("{} (Browser)", name);
+	config.database = {
+		info!("Opening Indexed DB database '{}'...", name);
+		let db = kvdb_web::Database::open(name, 10)
+			.await?;
+		DatabaseConfig::Custom(Arc::new(db))
+	};
+	config.keystore = KeystoreConfig::InMemory;
 
-    Ok(config)
+	Ok(config)
 }
 
 /// A running client.
 #[wasm_bindgen]
 pub struct Client {
-    rpc_send_tx: mpsc::UnboundedSender<RpcMessage>,
+	rpc_send_tx: mpsc::UnboundedSender<RpcMessage>,
 }
 
 struct RpcMessage {
-    rpc_json: String,
-    session: RpcSession,
-    send_back: oneshot::Sender<Pin<Box<dyn futures::Future<Output = Option<String>> + Send>>>,
+	rpc_json: String,
+	session: RpcSession,
+	send_back: oneshot::Sender<Pin<Box<dyn futures::Future<Output = Option<String>> + Send>>>,
 }
 
 /// Create a Client object that connects to a service.
 pub fn start_client(service: impl AbstractService) -> Client {
-    let mut service = service.compat();
-    // We dispatch a background task responsible for processing the service.
-    //
-    // The main action performed by the code below consists in polling the service with
-    // `service.poll()`.
-    // The rest consists in handling RPC requests.
-    let (rpc_send_tx, mut rpc_send_rx) = mpsc::unbounded::<RpcMessage>();
-    wasm_bindgen_futures::spawn_local(poll_fn(move |cx| {
-        loop {
-            match Pin::new(&mut rpc_send_rx).poll_next(cx) {
-                Poll::Ready(Some(message)) => {
-                    let fut = service.get_ref()
-                        .rpc_query(&message.session, &message.rpc_json)
-                        .compat()
-                        .unwrap_or_else(|_| None)
-                        .boxed();
-                    let _ = message.send_back.send(fut);
-                },
-                Poll::Pending => break,
-                Poll::Ready(None) => return Poll::Ready(()),
-            }
-        }
+	let mut service = service.compat();
+	// We dispatch a background task responsible for processing the service.
+	//
+	// The main action performed by the code below consists in polling the service with
+	// `service.poll()`.
+	// The rest consists in handling RPC requests.
+	let (rpc_send_tx, mut rpc_send_rx) = mpsc::unbounded::<RpcMessage>();
+	wasm_bindgen_futures::spawn_local(poll_fn(move |cx| {
+		loop {
+			match Pin::new(&mut rpc_send_rx).poll_next(cx) {
+				Poll::Ready(Some(message)) => {
+					let fut = service.get_ref()
+						.rpc_query(&message.session, &message.rpc_json)
+						.compat()
+						.unwrap_or_else(|_| None)
+						.boxed();
+					let _ = message.send_back.send(fut);
+				},
+				Poll::Pending => break,
+				Poll::Ready(None) => return Poll::Ready(()),
+			}
+		}
 
-        Pin::new(&mut service)
-            .poll(cx)
-            .map(drop)
-    }));
+		Pin::new(&mut service)
+			.poll(cx)
+			.map(drop)
+	}));
 
-    Client {
-        rpc_send_tx,
-    }
+	Client {
+		rpc_send_tx,
+	}
 }
 
 #[wasm_bindgen]
 impl Client {
-    /// Allows starting an RPC request. Returns a `Promise` containing the result of that request.
-    #[wasm_bindgen(js_name = "rpcSend")]
-    pub fn rpc_send(&mut self, rpc: &str) -> js_sys::Promise {
-        let rpc_session = RpcSession::new(mpsc01::channel(1).0);
-        let (tx, rx) = oneshot::channel();
-        let _ = self.rpc_send_tx.unbounded_send(RpcMessage {
-            rpc_json: rpc.to_owned(),
-            session: rpc_session,
-            send_back: tx,
-        });
-        wasm_bindgen_futures::future_to_promise(async {
-            match rx.await {
-                Ok(fut) => {
-                    fut.await
-                        .map(|s| JsValue::from_str(&s))
-                        .ok_or_else(|| JsValue::NULL)
-                },
-                Err(_) => Err(JsValue::NULL)
-            }
-        })
-    }
+	/// Allows starting an RPC request. Returns a `Promise` containing the result of that request.
+	#[wasm_bindgen(js_name = "rpcSend")]
+	pub fn rpc_send(&mut self, rpc: &str) -> js_sys::Promise {
+		let rpc_session = RpcSession::new(mpsc01::channel(1).0);
+		let (tx, rx) = oneshot::channel();
+		let _ = self.rpc_send_tx.unbounded_send(RpcMessage {
+			rpc_json: rpc.to_owned(),
+			session: rpc_session,
+			send_back: tx,
+		});
+		wasm_bindgen_futures::future_to_promise(async {
+			match rx.await {
+				Ok(fut) => {
+					fut.await
+						.map(|s| JsValue::from_str(&s))
+						.ok_or_else(|| JsValue::NULL)
+				},
+				Err(_) => Err(JsValue::NULL)
+			}
+		})
+	}
 
-    /// Subscribes to an RPC pubsub endpoint.
-    #[wasm_bindgen(js_name = "rpcSubscribe")]
-    pub fn rpc_subscribe(&mut self, rpc: &str, callback: js_sys::Function) {
-        let (tx, rx) = mpsc01::channel(4);
-        let rpc_session = RpcSession::new(tx);
-        let (fut_tx, fut_rx) = oneshot::channel();
-        let _ = self.rpc_send_tx.unbounded_send(RpcMessage {
-            rpc_json: rpc.to_owned(),
-            session: rpc_session.clone(),
-            send_back: fut_tx,
-        });
-        wasm_bindgen_futures::spawn_local(async {
-            if let Ok(fut) = fut_rx.await {
-                fut.await;
-            }
-        });
+	/// Subscribes to an RPC pubsub endpoint.
+	#[wasm_bindgen(js_name = "rpcSubscribe")]
+	pub fn rpc_subscribe(&mut self, rpc: &str, callback: js_sys::Function) {
+		let (tx, rx) = mpsc01::channel(4);
+		let rpc_session = RpcSession::new(tx);
+		let (fut_tx, fut_rx) = oneshot::channel();
+		let _ = self.rpc_send_tx.unbounded_send(RpcMessage {
+			rpc_json: rpc.to_owned(),
+			session: rpc_session.clone(),
+			send_back: fut_tx,
+		});
+		wasm_bindgen_futures::spawn_local(async {
+			if let Ok(fut) = fut_rx.await {
+				fut.await;
+			}
+		});
 
-        wasm_bindgen_futures::spawn_local(async move {
-            let _ = rx.compat()
-                .try_for_each(|s| {
-                    let _ = callback.call1(&callback, &JsValue::from_str(&s));
-                    ok(())
-                })
-                .await;
+		wasm_bindgen_futures::spawn_local(async move {
+			let _ = rx.compat()
+				.try_for_each(|s| {
+					let _ = callback.call1(&callback, &JsValue::from_str(&s));
+					ok(())
+				})
+				.await;
 
-            // We need to keep `rpc_session` alive.
-            debug!("RPC subscription has ended");
-            drop(rpc_session);
-        });
-    }
+			// We need to keep `rpc_session` alive.
+			debug!("RPC subscription has ended");
+			drop(rpc_session);
+		});
+	}
 }

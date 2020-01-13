@@ -22,6 +22,7 @@ use sc_client_api::{
 	self,
 	BlockchainEvents,
 	backend::RemoteBackend, light::RemoteBlockchain,
+	execution_extensions::ExtensionsFactory,
 };
 use sc_client::Client;
 use sc_chain_spec::{RuntimeGenesis, Extension};
@@ -165,10 +166,11 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 {
 	let keystore = match &config.keystore {
 		KeystoreConfig::Path { path, password } => Keystore::open(
-			path.clone().ok_or("No basepath configured")?,
+			path.clone(),
 			password.clone()
 		)?,
-		KeystoreConfig::InMemory => Keystore::new_in_memory()
+		KeystoreConfig::InMemory => Keystore::new_in_memory(),
+		KeystoreConfig::None => return Err("No keystore config provided!".into()),
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -289,10 +291,11 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 	>, Error> {
 		let keystore = match &config.keystore {
 			KeystoreConfig::Path { path, password } => Keystore::open(
-				path.clone().ok_or("No basepath configured")?,
+				path.clone(),
 				password.clone()
 			)?,
-			KeystoreConfig::InMemory => Keystore::new_in_memory()
+			KeystoreConfig::InMemory => Keystore::new_in_memory(),
+			KeystoreConfig::None => return Err("No keystore config provided!".into()),
 		};
 
 		let executor = NativeExecutor::<TExecDisp>::new(
@@ -744,6 +747,13 @@ ServiceBuilder<
 		+ TransactionPoolMaintainer<Block=TBl, Hash = <TBl as BlockT>::Hash>,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata> + Clone,
 {
+
+	/// Set an ExecutionExtensionsFactory
+	pub fn with_execution_extensions_factory(self, execution_extensions_factory: Box<dyn ExtensionsFactory>) -> Result<Self, Error> {
+		self.client.execution_extensions().set_extensions_factory(execution_extensions_factory);
+		Ok(self)
+	}
+
 	/// Builds the service.
 	pub fn build(self) -> Result<Service<
 		TBl,
