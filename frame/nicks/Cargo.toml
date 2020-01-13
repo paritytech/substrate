@@ -7,15 +7,15 @@ edition = "2018"
 [dependencies]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-std = { path = "../../primitives/std", default-features = false }
-sp-io = { path = "../../primitives/io", default-features = false }
-sp-runtime = { path = "../../primitives/runtime", default-features = false }
-frame-support = { path = "../support", default-features = false }
-frame-system = { path = "../system", default-features = false }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 
 [dev-dependencies]
-sp-core = { path = "../../primitives/core" }
-pallet-balances = { path = "../balances" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+pallet-balances = { version = "2.0.0", path = "../balances" }
 
 [features]
 default = ["std"]

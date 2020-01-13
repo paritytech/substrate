@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@ pub mod error;
 mod builder;
 mod status_sinks;
 
-use std::io;
+use std::{io, pin::Pin};
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
@@ -44,16 +44,19 @@ use futures03::{
 };
 use sc_network::{
 	NetworkService, NetworkState, specialization::NetworkSpecialization,
-	Event, DhtEvent, PeerId, ReportHandle,
+	PeerId, ReportHandle,
 };
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
-use sp_core::{Blake2Hasher, H256};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
 
 pub use self::error::Error;
-pub use self::builder::{ServiceBuilder, ServiceBuilderCommand};
+pub use self::builder::{
+	new_full_client,
+	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
+	TFullCallExecutor, TLightCallExecutor,
+};
 pub use config::{Configuration, Roles, PruningMode};
 pub use sc_chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
 pub use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, error::IntoPoolError};
@@ -143,11 +146,11 @@ impl futures03::task::Spawn for SpawnTaskHandle {
 pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send {
 	/// Type of block of this chain.
-	type Block: BlockT<Hash = H256>;
+	type Block: BlockT;
 	/// Backend storage for the client.
-	type Backend: 'static + sc_client_api::backend::Backend<Self::Block, Blake2Hasher>;
+	type Backend: 'static + sc_client_api::backend::Backend<Self::Block>;
 	/// How to execute calls towards the runtime.
-	type CallExecutor: 'static + sc_client::CallExecutor<Self::Block, Blake2Hasher> + Send + Sync + Clone;
+	type CallExecutor: 'static + sc_client::CallExecutor<Self::Block> + Send + Sync + Clone;
 	/// API that the runtime provides.
 	type RuntimeApi: Send + Sync;
 	/// Chain selection algorithm.
@@ -196,7 +199,8 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn select_chain(&self) -> Option<Self::SelectChain>;
 
 	/// Get shared network instance.
-	fn network(&self) -> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, H256>>;
+	fn network(&self)
+		-> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, <Self::Block as BlockT>::Hash>>;
 
 	/// Returns a receiver that periodically receives a status of the network.
 	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
@@ -210,11 +214,11 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 
 impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPool, TOc> AbstractService for
 	Service<TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
-		NetworkService<TBl, TNetSpec, H256>, TExPool, TOc>
+		NetworkService<TBl, TNetSpec, TBl::Hash>, TExPool, TOc>
 where
-	TBl: BlockT<Hash = H256>,
-	TBackend: 'static + sc_client_api::backend::Backend<TBl, Blake2Hasher>,
-	TExec: 'static + sc_client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
+	TBl: BlockT,
+	TBackend: 'static + sc_client_api::backend::Backend<TBl>,
+	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
 	TSc: sp_consensus::SelectChain<TBl> + 'static + Clone + Send,
 	TExPool: 'static + TransactionPool<Block = TBl>
@@ -284,7 +288,9 @@ where
 		self.select_chain.clone()
 	}
 
-	fn network(&self) -> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, H256>> {
+	fn network(&self)
+		-> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, <Self::Block as BlockT>::Hash>>
+	{
 		self.network.clone()
 	}
 
@@ -372,7 +378,6 @@ fn build_network_future<
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
 	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
-	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
 ) -> impl Future<Item = (), Error = ()> {
 	// Compatibility shim while we're transitioning to stable Futures.
 	// See https://github.com/paritytech/substrate/issues/3099
@@ -382,9 +387,6 @@ fn build_network_future<
 		.map(|v| Ok::<_, ()>(v)).compat();
 	let mut finality_notification_stream = client.finality_notification_stream().fuse()
 		.map(|v| Ok::<_, ()>(v)).compat();
-
-	// Initializing a stream in order to obtain DHT events from the network.
-	let mut event_stream = network.service().event_stream();
 
 	futures::future::poll_fn(move || {
 		let before_polling = Instant::now();
@@ -429,6 +431,22 @@ fn build_network_future<
 						let _ = sender.send(network_state);
 					}
 				}
+				sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
+					let x = network.add_reserved_peer(peer_addr)
+						.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
+					let _ = sender.send(x);
+				}
+				sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender) => {
+					let _ = match peer_id.parse::<PeerId>() {
+						Ok(peer_id) => {
+							network.remove_reserved_peer(peer_id);
+							sender.send(Ok(()))
+						}
+						Err(e) => sender.send(Err(sc_rpc::system::error::Error::MalformattedPeerArg(
+							e.to_string(),
+						))),
+					};
+				}
 				sc_rpc::system::Request::NodeRoles(sender) => {
 					use sc_rpc::system::NodeRole;
 
@@ -462,28 +480,10 @@ fn build_network_future<
 			(status, state)
 		});
 
-		// Processing DHT events.
-		while let Ok(Async::Ready(Some(event))) = event_stream.poll() {
-			match event {
-				Event::Dht(event) => {
-					// Given that client/authority-discovery is the only upper stack consumer of Dht events at the moment, all Dht
-					// events are being passed on to the authority-discovery module. In the future there might be multiple
-					// consumers of these events. In that case this would need to be refactored to properly dispatch the events,
-					// e.g. via a subscriber model.
-					if let Some(Err(e)) = dht_event_tx.as_ref().map(|c| c.clone().try_send(event)) {
-						if e.is_full() {
-							warn!(target: "service", "Dht event channel to authority discovery is full, dropping event.");
-						} else if e.is_disconnected() {
-							warn!(target: "service", "Dht event channel to authority discovery is disconnected, dropping event.");
-						}
-					}
-				}
-				_ => {}
-			}
-		}
-
 		// Main network polling.
-		if let Ok(Async::Ready(())) = network.poll().map_err(|err| {
+		let mut net_poll = futures03::future::poll_fn(|cx| futures03::future::Future::poll(Pin::new(&mut network), cx))
+			.compat();
+		if let Ok(Async::Ready(())) = net_poll.poll().map_err(|err| {
 			warn!(target: "service", "Error in network: {:?}", err);
 		}) {
 			return Ok(Async::Ready(()));
@@ -665,7 +665,7 @@ where
 		let encoded = transaction.encode();
 		match Decode::decode(&mut &encoded[..]) {
 			Ok(uxt) => {
-				let best_block_id = BlockId::hash(self.client.info().chain.best_hash);
+				let best_block_id = BlockId::hash(self.client.info().best_hash);
 				let import_future = self.pool.submit_one(&best_block_id, uxt);
 				let import_future = import_future
 					.then(move |import_result| {

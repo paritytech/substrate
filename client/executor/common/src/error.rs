@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,8 +18,6 @@
 
 use sp_serializer;
 use wasmi;
-#[cfg(feature = "wasmtime")]
-use wasmtime_jit::{ActionError, SetupError};
 
 /// Result type alias.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -33,9 +31,6 @@ pub enum Error {
 	Trap(wasmi::Trap),
 	/// Wasmi loading/instantiating error
 	Wasmi(wasmi::Error),
-	/// Wasmtime action error
-	#[cfg(feature = "wasmtime")]
-	Wasmtime(ActionError),
 	/// Error in the API. Parameter is an error message.
 	#[from(ignore)]
 	ApiError(String),
@@ -135,10 +130,6 @@ pub enum WasmError {
 	InvalidHeapPages,
 	/// Instantiation error.
 	Instantiation(String),
-	/// The compiler does not support the host machine as a target.
-	#[cfg(feature = "wasmtime")]
-	MissingCompilerSupport(&'static str),
-	/// Wasmtime setup error.
-	#[cfg(feature = "wasmtime")]
-	WasmtimeSetup(SetupError),
+	/// Other error happenend.
+	Other(String),
 }

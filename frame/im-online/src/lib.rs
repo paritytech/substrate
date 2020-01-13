@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn is_online(origin, authority_index: u32) -> dispatch::Result {
+//! 		pub fn is_online(origin, authority_index: u32) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _is_online = <im_online::Module<T>>::is_online(authority_index);
 //! 			Ok(())
@@ -89,7 +89,7 @@ use sp_staking::{
 	offence::{ReportOffence, Offence, Kind},
 };
 use frame_support::{
-	decl_module, decl_event, decl_storage, print, Parameter, debug,
+	decl_module, decl_event, decl_storage, print, Parameter, debug, decl_error,
 	traits::Get,
 };
 use frame_system::{self as system, ensure_none};
@@ -171,10 +171,14 @@ pub type AuthIndex = u32;
 pub struct Heartbeat<BlockNumber>
 	where BlockNumber: PartialEq + Eq + Decode + Encode,
 {
-	block_number: BlockNumber,
-	network_state: OpaqueNetworkState,
-	session_index: SessionIndex,
-	authority_index: AuthIndex,
+	/// Block number at the time heartbeat is created..
+	pub block_number: BlockNumber,
+	/// A state of local network (peer id and external addresses)
+	pub network_state: OpaqueNetworkState,
+	/// Index of the current session.
+	pub session_index: SessionIndex,
+	/// An index of the authority on the list of validators.
+	pub authority_index: AuthIndex,
 }
 
 pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {
@@ -229,13 +233,12 @@ decl_storage! {
 
 		/// For each session index, we keep a mapping of `AuthIndex`
 		/// to `offchain::OpaqueNetworkState`.
-		ReceivedHeartbeats get(fn received_heartbeats): double_map SessionIndex,
-			blake2_256(AuthIndex) => Option<Vec<u8>>;
+		ReceivedHeartbeats get(fn received_heartbeats): double_map SessionIndex, AuthIndex
+			=> Option<Vec<u8>>;
 
 		/// For each session index, we keep a mapping of `T::ValidatorId` to the
 		/// number of blocks authored by the given authority.
-		AuthoredBlocks get(fn authored_blocks): double_map SessionIndex,
-			blake2_256(T::ValidatorId) => u32;
+		AuthoredBlocks get(fn authored_blocks): double_map SessionIndex, T::ValidatorId => u32;
 	}
 	add_extra_genesis {
 		config(keys): Vec<T::AuthorityId>;
@@ -243,9 +246,20 @@ decl_storage! {
 	}
 }
 
+decl_error! {
+	/// Error for the im-online module.
+	pub enum Error for Module<T: Trait> {
+		/// Non existent public key.
+		InvalidKey,
+		/// Duplicated heartbeat.
+		DuplicatedHeartbeat,
+	}
+}
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		fn deposit_event() = default;
 
 		fn heartbeat(
@@ -274,9 +288,9 @@ decl_module! {
 					&network_state
 				);
 			} else if exists {
-				Err("Duplicated heartbeat.")?
+				Err(Error::<T>::DuplicatedHeartbeat)?
 			} else {
-				Err("Non existent public key.")?
+				Err(Error::<T>::InvalidKey)?
 			}
 		}
 

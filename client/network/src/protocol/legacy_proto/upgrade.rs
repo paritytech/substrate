@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -15,12 +15,12 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::config::ProtocolId;
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
+use futures::prelude::*;
+use futures_codec::Framed;
 use libp2p::core::{Negotiated, Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
-use libp2p::tokio_codec::Framed;
-use std::{collections::VecDeque, io, vec::IntoIter as VecIntoIter};
-use futures::{prelude::*, future, stream};
-use tokio_io::{AsyncRead, AsyncWrite};
+use std::{collections::VecDeque, io, pin::Pin, vec::IntoIter as VecIntoIter};
+use std::task::{Context, Poll};
 use unsigned_varint::codec::UviBytes;
 
 /// Connection upgrade for a single protocol.
@@ -32,7 +32,7 @@ pub struct RegisteredProtocol {
 	id: ProtocolId,
 	/// Base name of the protocol as advertised on the network.
 	/// Ends with `/` so that we can append a version number behind.
-	base_name: Bytes,
+	base_name: Vec<u8>,
 	/// List of protocol versions that we support.
 	/// Ordered in descending order so that the best comes first.
 	supported_versions: Vec<u8>,
@@ -44,7 +44,7 @@ impl RegisteredProtocol {
 	pub fn new(protocol: impl Into<ProtocolId>, versions: &[u8])
 		-> Self {
 		let protocol = protocol.into();
-		let mut base_name = Bytes::from_static(b"/substrate/");
+		let mut base_name = b"/substrate/".to_vec();
 		base_name.extend_from_slice(protocol.as_bytes());
 		base_name.extend_from_slice(b"/");
 
@@ -78,11 +78,11 @@ pub struct RegisteredProtocolSubstream<TSubstream> {
 	/// the remote (listener).
 	endpoint: Endpoint,
 	/// Buffer of packets to send.
-	send_queue: VecDeque<Vec<u8>>,
+	send_queue: VecDeque<BytesMut>,
 	/// If true, we should call `poll_complete` on the inner sink.
-	requires_poll_complete: bool,
+	requires_poll_flush: bool,
 	/// The underlying substream.
-	inner: stream::Fuse<Framed<Negotiated<TSubstream>, UviBytes<Vec<u8>>>>,
+	inner: stream::Fuse<Framed<Negotiated<TSubstream>, UviBytes<BytesMut>>>,
 	/// Version of the protocol that was negotiated.
 	protocol_version: u8,
 	/// If true, we have sent a "remote is clogged" event recently and shouldn't send another one
@@ -119,7 +119,7 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 			return
 		}
 
-		self.send_queue.push_back(data);
+		self.send_queue.push_back(From::from(&data[..]));
 	}
 }
 
@@ -138,25 +138,31 @@ pub enum RegisteredProtocolEvent {
 }
 
 impl<TSubstream> Stream for RegisteredProtocolSubstream<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite {
-	type Item = RegisteredProtocolEvent;
-	type Error = io::Error;
+where TSubstream: AsyncRead + AsyncWrite + Unpin {
+	type Item = Result<RegisteredProtocolEvent, io::Error>;
 
-	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		// Flushing the local queue.
-		while let Some(packet) = self.send_queue.pop_front() {
-			match self.inner.start_send(packet)? {
-				AsyncSink::NotReady(packet) => {
-					self.send_queue.push_front(packet);
-					break
-				},
-				AsyncSink::Ready => self.requires_poll_complete = true,
+		while !self.send_queue.is_empty() {
+			match Pin::new(&mut self.inner).poll_ready(cx) {
+				Poll::Ready(Ok(())) => {},
+				Poll::Ready(Err(err)) => return Poll::Ready(Some(Err(err))),
+				Poll::Pending => break,
+			}
+
+			if let Some(packet) = self.send_queue.pop_front() {
+				Pin::new(&mut self.inner).start_send(packet)?;
+				self.requires_poll_flush = true;
 			}
 		}
 
 		// If we are closing, close as soon as the Sink is closed.
 		if self.is_closing {
-			return Ok(self.inner.close()?.map(|()| None))
+			return match Pin::new(&mut self.inner).poll_close(cx) {
+				Poll::Pending => Poll::Pending,
+				Poll::Ready(Ok(_)) => Poll::Ready(None),
+				Poll::Ready(Err(err)) => Poll::Ready(Some(Err(err))),
+			}
 		}
 
 		// Indicating that the remote is clogged if that's the case.
@@ -166,9 +172,9 @@ where TSubstream: AsyncRead + AsyncWrite {
 				// 	if you remove the fuse, then we will always return early from this function and
 				//	thus never read any message from the network.
 				self.clogged_fuse = true;
-				return Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged {
+				return Poll::Ready(Some(Ok(RegisteredProtocolEvent::Clogged {
 					messages: self.send_queue.iter()
-						.map(|m| m.clone())
+						.map(|m| m.clone().to_vec())
 						.collect(),
 				})))
 			}
@@ -177,25 +183,25 @@ where TSubstream: AsyncRead + AsyncWrite {
 		}
 
 		// Flushing if necessary.
-		if self.requires_poll_complete {
-			if let Async::Ready(()) = self.inner.poll_complete()? {
-				self.requires_poll_complete = false;
+		if self.requires_poll_flush {
+			if let Poll::Ready(()) = Pin::new(&mut self.inner).poll_flush(cx)? {
+				self.requires_poll_flush = false;
 			}
 		}
 
 		// Receiving incoming packets.
 		// Note that `inner` is wrapped in a `Fuse`, therefore we can poll it forever.
-		match self.inner.poll()? {
-			Async::Ready(Some(data)) => {
-				Ok(Async::Ready(Some(RegisteredProtocolEvent::Message(data))))
+		match Pin::new(&mut self.inner).poll_next(cx)? {
+			Poll::Ready(Some(data)) => {
+				Poll::Ready(Some(Ok(RegisteredProtocolEvent::Message(data))))
 			}
-			Async::Ready(None) =>
-				if !self.requires_poll_complete && self.send_queue.is_empty() {
-					Ok(Async::Ready(None))
+			Poll::Ready(None) =>
+				if !self.requires_poll_flush && self.send_queue.is_empty() {
+					Poll::Ready(None)
 				} else {
-					Ok(Async::NotReady)
+					Poll::Pending
 				}
-			Async::NotReady => Ok(Async::NotReady),
+			Poll::Pending => Poll::Pending,
 		}
 	}
 }
@@ -224,7 +230,7 @@ impl UpgradeInfo for RegisteredProtocol {
 #[derive(Debug, Clone)]
 pub struct RegisteredProtocolName {
 	/// Protocol name, as advertised on the wire.
-	name: Bytes,
+	name: Vec<u8>,
 	/// Version number. Stored in string form in `name`, but duplicated here for easier retrieval.
 	version: u8,
 }
@@ -236,10 +242,10 @@ impl ProtocolName for RegisteredProtocolName {
 }
 
 impl<TSubstream> InboundUpgrade<TSubstream> for RegisteredProtocol
-where TSubstream: AsyncRead + AsyncWrite,
+where TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
 	type Output = RegisteredProtocolSubstream<TSubstream>;
-	type Future = future::FutureResult<Self::Output, io::Error>;
+	type Future = future::Ready<Result<Self::Output, io::Error>>;
 	type Error = io::Error;
 
 	fn upgrade_inbound(
@@ -257,7 +263,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 			is_closing: false,
 			endpoint: Endpoint::Listener,
 			send_queue: VecDeque::new(),
-			requires_poll_complete: false,
+			requires_poll_flush: false,
 			inner: framed.fuse(),
 			protocol_version: info.version,
 			clogged_fuse: false,
@@ -266,7 +272,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 }
 
 impl<TSubstream> OutboundUpgrade<TSubstream> for RegisteredProtocol
-where TSubstream: AsyncRead + AsyncWrite,
+where TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
 	type Output = <Self as InboundUpgrade<TSubstream>>::Output;
 	type Future = <Self as InboundUpgrade<TSubstream>>::Future;
@@ -283,7 +289,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 			is_closing: false,
 			endpoint: Endpoint::Dialer,
 			send_queue: VecDeque::new(),
-			requires_poll_complete: false,
+			requires_poll_flush: false,
 			inner: framed.fuse(),
 			protocol_version: info.version,
 			clogged_fuse: false,

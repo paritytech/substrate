@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -80,7 +80,7 @@ impl<P: TransactionPool, C, B> FullSystem<P, C, B> {
 
 impl<P, C, Block, AccountId, Index> SystemApi<AccountId, Index> for FullSystem<P, C, Block>
 where
-	C: traits::ProvideRuntimeApi,
+	C: sp_api::ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block>,
 	C: Send + Sync + 'static,
 	C::Api: AccountNonceApi<Block, AccountId, Index>,

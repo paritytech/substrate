@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -31,6 +31,7 @@ mod keyword {
 	syn::custom_keyword!(double_map);
 	syn::custom_keyword!(blake2_256);
 	syn::custom_keyword!(blake2_128);
+	syn::custom_keyword!(blake2_128_concat);
 	syn::custom_keyword!(twox_256);
 	syn::custom_keyword!(twox_128);
 	syn::custom_keyword!(twox_64_concat);
@@ -166,11 +167,11 @@ struct DeclStorageLinkedMap {
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageDoubleMap {
 	pub map_keyword: keyword::double_map,
-	pub hasher: ext::Opt<SetHasher>,
+	pub hasher1: ext::Opt<SetHasher>,
 	pub key1: syn::Type,
 	pub comma_keyword: Token![,],
-	pub key2_hasher: Hasher,
-	pub key2: ext::Parens<syn::Type>,
+	pub hasher2: ext::Opt<SetHasher>,
+	pub key2: syn::Type,
 	pub ass_keyword: Token![=>],
 	pub value: syn::Type,
 }
@@ -179,6 +180,7 @@ struct DeclStorageDoubleMap {
 enum Hasher {
 	Blake2_256(keyword::blake2_256),
 	Blake2_128(keyword::blake2_128),
+	Blake2_128Concat(keyword::blake2_128_concat),
 	Twox256(keyword::twox_256),
 	Twox128(keyword::twox_128),
 	Twox64Concat(keyword::twox_64_concat),
@@ -207,6 +209,7 @@ impl From<Hasher> for super::HasherKind {
 		match hasher {
 			Hasher::Blake2_256(_) => super::HasherKind::Blake2_256,
 			Hasher::Blake2_128(_) => super::HasherKind::Blake2_128,
+			Hasher::Blake2_128Concat(_) => super::HasherKind::Blake2_128Concat,
 			Hasher::Twox256(_) => super::HasherKind::Twox256,
 			Hasher::Twox128(_) => super::HasherKind::Twox128,
 			Hasher::Twox64Concat(_) => super::HasherKind::Twox64Concat,
@@ -377,11 +380,12 @@ fn parse_storage_line_defs(
 			),
 			DeclStorageType::DoubleMap(map) => super::StorageLineTypeDef::DoubleMap(
 				super::DoubleMapDef {
-					hasher1: map.hasher.inner.map(Into::into)
+					hasher1: map.hasher1.inner.map(Into::into)
 						.unwrap_or(super::HasherKind::Blake2_256),
-					hasher2: map.key2_hasher.into(),
+					hasher2: map.hasher2.inner.map(Into::into)
+						.unwrap_or(super::HasherKind::Blake2_256),
 					key1: map.key1,
-					key2: map.key2.content,
+					key2: map.key2,
 					value: map.value,
 				}
 			),

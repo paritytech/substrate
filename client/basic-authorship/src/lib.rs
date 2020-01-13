@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 //!
 //! ```
 //! # use sc_basic_authority::ProposerFactory;
-//! # use sp_consensus::{Environment, Proposer};
+//! # use sp_consensus::{Environment, Proposer, RecordProof};
 //! # use sp_runtime::generic::BlockId;
 //! # use std::{sync::Arc, time::Duration};
 //! # use substrate_test_runtime_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
@@ -43,12 +43,13 @@
 //! let future = proposer.propose(
 //! 	Default::default(),
 //! 	Default::default(),
-//! 	Duration::from_secs(2)
+//! 	Duration::from_secs(2),
+//! 	RecordProof::Yes,
 //! );
 //!
 //! // We wait until the proposition is performed.
 //! let block = futures::executor::block_on(future).unwrap();
-//! println!("Generated block: {:?}", block);
+//! println!("Generated block: {:?}", block.block);
 //! ```
 //!
 

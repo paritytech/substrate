@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,12 +17,13 @@
 //! Integration tests for sr25519
 
 
-use sp_runtime::{generic::BlockId, traits::ProvideRuntimeApi};
+use sp_runtime::generic::BlockId;
 use sp_core::{testing::{KeyStore, SR25519}, crypto::Pair};
 use substrate_test_runtime_client::{
 	TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
 	runtime::TestAPI,
 };
+use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::sr25519::{AppPair, AppPublic};
 
 #[test]
