@@ -19,6 +19,7 @@
 // * update doc
 // * new test
 // * make commission updatable only one for next future era. not current_era.
+// * new session API
 //! # Staking Module
 //!
 //! The Staking module is used to manage funds at stake by network maintainers.
@@ -311,6 +312,17 @@ pub struct EraRewardPoints<AccountId: Ord> {
 	total: RewardPoint,
 	/// The reward points earned by a given validator.
 	individual: BTreeMap<AccountId, RewardPoint>,
+}
+
+/// Deprecated
+// Reward points of an era. Used to split era total payout between validators.
+#[derive(Encode, Decode, Default)]
+pub struct EraPoints {
+	// Total number of points. Equals the sum of reward points for each validator.
+	total: u32,
+	// The reward points earned by a given validator. The index of this vec corresponds to the
+	// index into the current validator set.
+	individual: Vec<u32>,
 }
 
 /// Indicates the initial status of the staker.
@@ -789,6 +801,9 @@ decl_storage! {
 		// The session index at which the current era started.
 		CurrentEraStartSessionIndex: SessionIndex;
 
+		/// Deprecated
+		// Rewards for the current era. Using indices of current elected set.
+		CurrentEraPointsEarned: EraPoints;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -1361,7 +1376,7 @@ impl<T: Trait> Module<T> {
 		for validator in validators {
 			let commission = Self::eras_validator_prefs(&era, &validator).commission;
 			let validator_exposure = <ErasStakers<T>>::get(&era, &validator);
-			
+
 			if let Ok(nominator_exposure) = validator_exposure.others
 				.binary_search_by(|exposure| exposure.who.cmp(&nominator_ledger.stash))
 				.map(|indice| &validator_exposure.others[indice])

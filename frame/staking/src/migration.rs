@@ -20,7 +20,7 @@
 pub type VersionNumber = u32;
 
 // the current expected version of the storage
-pub const CURRENT_VERSION: VersionNumber = 1;
+pub const CURRENT_VERSION: VersionNumber = 2;
 
 #[cfg(any(test, feature = "migrate"))]
 mod inner {
@@ -64,12 +64,54 @@ mod inner {
 		if *version != 1 { return }
 		*version += 1;
 
+		// Fill new storages.
 
+		// TODO TODO: ActiveEra.
+		// we can't just compare current elected and T::SessionInterface::validators() because we
+		// could be in a new era while having the same set, we need to compare
+		// CurrentEraStartSessionIndex with session::current_index
+		// Or: what if you put a wrong one ?
 
-		crate::SlotStake::<T>::kill();
-		crate::CurrentElected::<T>::kill();
-		crate::CurrentEraStart::<T>::kill();
-		crate::CurrentEraStartSessionIndex::kill();
+		// Do ErasStakers, ErasValidatorPrefs and ErasTotalStake
+		let current_era = <Module<T> as Store>::CurrentEra::get();
+		let active_era = <Module<T> as Store>::ActiveEra::get();
+		let old_current_elected = <Module<T>>::CurrentElected::get();
+		let mut current_total_stake = 0.into();
+		for validator in &old_current_elected {
+			let exposure = <Module<T> as Store>::Stakers::get(elected);
+			current_total_stake += exposure.total;
+			let pref = <Module<T> as Store>::Validator::get(elected);
+			<Module<T> as Store>::ErasStakers::insert(current_era, validator, exposure);
+			<Module<T> as Store>::ErasValidatorPrefs::insert(current_era, validator, exposure);
+		}
+		<Module<T> as Store>::ErasTotalStake::insert(current_era, current_total_stake);
+		let mut active_total_stake = 0.into();
+		for validator in T::SessionInterface::validators() {
+			let exposure = <Module<T> as Store>::Stakers::get(elected);
+			active_total_stake += exposure.total;
+			let pref = <Module<T> as Store>::Validator::get(elected);
+			<Module<T> as Store>::ErasStakers::insert(active_era, validator, exposure);
+			<Module<T> as Store>::ErasValidatorPrefs::insert(active_era, validator, exposure);
+		}
+		<Module<T> as Store>::ErasTotalStake::insert(active_era, active_total_stake);
+
+		// Do ErasRewardPoints
+		let points = <Module<T> as Store>::CurrentEraPointsEarned::get();
+		<Module<T> as Store>::ErasRewardPoints::insert(active_era, EraRewardPoints {
+			total: points.total,
+			individual: current_elected.zip(points.individual).collect(),
+			// TODO TODO: this or zip with active_validators?
+		})
+
+		// Do ActiveEraStart
+		<Module<T> as Store>::ActiveEraStart::put(<Module<T> as Store>::CurrentEraStart::get());
+
+		// Kill old storages
+		<Module<T> as Store>::SlotStake::kill();
+		<Module<T> as Store>::CurrentElected::kill();
+		<Module<T> as Store>::CurrentEraStart::kill();
+		<Module<T> as Store>::CurrentEraStartSessionIndex::kill();
+		<Module<T> as Store>::CurrentEraPointsEarned::kill();
 
 		frame_support::print("Finished migrating Staking storage to v2.");
 	}
