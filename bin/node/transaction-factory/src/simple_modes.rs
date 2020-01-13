@@ -81,7 +81,7 @@ where
 
 	let amount = RA::minimum_balance();
 
-	let transfer = factory_state.transfer_extrinsic(
+	let transfer = factory_state.create_extrinsic(
 		&from.0,
 		&from.1,
 		&to,

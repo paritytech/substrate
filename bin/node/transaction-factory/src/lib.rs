@@ -68,7 +68,7 @@ pub trait RuntimeAdapter {
 	fn set_block_no(&mut self, val: Self::Number);
 	fn set_round(&mut self, val: Self::Number);
 
-	fn transfer_extrinsic(
+	fn create_extrinsic(
 		&self,
 		sender: &Self::AccountId,
 		key: &Self::Secret,

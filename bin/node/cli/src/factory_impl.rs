@@ -135,7 +135,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 		self.round = val;
 	}
 
-	fn transfer_extrinsic(
+	fn create_extrinsic(
 		&self,
 		sender: &Self::AccountId,
 		key: &Self::Secret,
@@ -145,12 +145,13 @@ impl RuntimeAdapter for FactoryState<Number> {
 		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic {
+		println!("Creating a {} extrinsic...", self.tx_name);
+
 		let index = self.extract_index(&sender, prior_block_hash);
 		let phase = self.extract_phase(*prior_block_hash);
 
-		match &self.tx_name {
-			name => {
-				println!("signing a {} extrinsic", name);
+		match self.tx_name.as_str() {
+			"transfer" => {
 				sign::<Self>(CheckedExtrinsic {
 					signed: Some((sender.clone(), Self::build_extra(index, phase))),
 					function: Call::Balances(
@@ -161,6 +162,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 					)
 				}, key, (version, genesis_hash.clone(), prior_block_hash.clone(), (), (), (), ()))
 			},
+			other => panic!("Extrinsic {} is not supported yet!", other),
 		}
 	}
 

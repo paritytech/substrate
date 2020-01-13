@@ -90,7 +90,7 @@ where
 	let rounds_left = factory_state.rounds() - factory_state.round();
 	let amount = RA::minimum_balance() * rounds_left.into();
 
-	let transfer = factory_state.transfer_extrinsic(
+	let transfer = factory_state.create_extrinsic(
 		&from.0,
 		&from.1,
 		&to,
