@@ -25,7 +25,7 @@ use codec::{Encode, Decode};
 use sp_keyring::sr25519::Keyring;
 use node_runtime::{
 	Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, Header,
-	BalancesCall, NicksCall, AuthorshipCall,
+	BalancesCall, NicksCall, AuthorshipCall, StakingCall,
 	MinimumPeriod, ExistentialDeposit,
 };
 use node_primitives::Signature;
@@ -41,6 +41,8 @@ use node_transaction_factory::modes::Mode;
 use sp_inherents::InherentData;
 use sp_timestamp;
 use sp_finality_tracker;
+
+use pallet_staking::RewardDestination;
 
 type AccountPublic = <Signature as Verify>::Signer;
 
@@ -167,18 +169,35 @@ impl RuntimeAdapter for FactoryState<Number> {
 				let mut uncles = vec![];
 				let num_headers = 10; // TODO: make it configurable.
 				for _ in 0..num_headers {
-					let header = Header::new(std::cmp::max(1, self.block_no()), H256::random(), H256::random(), genesis_hash.clone(), Default::default());
+					let header = Header::new(
+						std::cmp::max(1, self.block_no()),
+						H256::random(),
+						H256::random(),
+						genesis_hash.clone(),
+						Default::default(),
+					);
 					uncles.push(header.clone());
 				}
 				Call::Authorship(AuthorshipCall::set_uncles(uncles))
 			},
+			"staking_bond" => {
+				Call::Staking(StakingCall::bond(
+					pallet_indices::address::Address::Id(destination.clone().into()),
+					(*amount).into(),
+					RewardDestination::Controller,
+				))
+			},
 			other => panic!("Extrinsic {} is not supported yet!", other),
 		};
 
-		sign::<Self>(CheckedExtrinsic {
-			signed: Some((sender.clone(), Self::build_extra(index, phase))),
-			function,
-		}, key, (version, genesis_hash.clone(), prior_block_hash.clone(), (), (), (), ()))
+		sign::<Self>(
+			CheckedExtrinsic {
+				signed: Some((sender.clone(), Self::build_extra(index, phase))),
+				function,
+			},
+			key,
+			(version, genesis_hash.clone(), prior_block_hash.clone(), (), (), (), ()),
+		)
 	}
 
 	fn inherent_extrinsics(&self) -> InherentData {

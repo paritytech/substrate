@@ -71,6 +71,7 @@ pallet-timestamp = { version = "2.0.0", default-features = false, path = "../../
 pallet-contracts = { version = "2.0.0", path = "../../../frame/contracts" }
 frame-system = { version = "2.0.0", path = "../../../frame/system" }
 pallet-balances = { version = "2.0.0", path = "../../../frame/balances" }
+pallet-staking = { version = "2.0.0", path = "../../../frame/staking" }
 pallet-transaction-payment = { version = "2.0.0", path = "../../../frame/transaction-payment" }
 frame-support = { version = "2.0.0", default-features = false, path = "../../../frame/support" }
 pallet-im-online = { version = "2.0.0", default-features = false, path = "../../../frame/im-online" }
