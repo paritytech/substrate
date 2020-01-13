@@ -259,8 +259,8 @@ impl<Args, F> ClassifyDispatch<Args> for FunctionOf<F> {
 	}
 }
 
-impl<F> PaysFee for FunctionOf<F> {
-	fn pays_fee(&self) -> bool {
+impl<T, F> PaysFee<T> for FunctionOf<F> {
+	fn pays_fee(&self, _: T) -> bool {
 		self.2
 	}
 }
