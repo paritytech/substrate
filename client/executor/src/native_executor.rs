@@ -272,6 +272,7 @@ impl<D: NativeExecutionDispatch> sp_core::traits::CallInWasm for NativeExecutor<
 			wasm_blob,
 			self.default_heap_pages,
 			(*self.host_functions).clone(),
+			false,
 		).map_err(|e| e.to_string())
 	}
 }

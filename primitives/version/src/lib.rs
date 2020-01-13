@@ -28,6 +28,8 @@ use std::collections::HashSet;
 use codec::{Encode, Decode};
 use sp_runtime::RuntimeString;
 pub use sp_runtime::create_runtime_str;
+#[doc(hidden)]
+pub use sp_std;
 
 #[cfg(feature = "std")]
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};

@@ -1160,7 +1160,7 @@ pub fn block_import<B, E, Block: BlockT, I, RA, PRA>(
 	api: Arc<PRA>,
 ) -> ClientResult<(BabeBlockImport<B, E, Block, I, RA, PRA>, BabeLink<Block>)> where
 	B: Backend<Block>,
-	E: CallExecutor<Block> + Send + Sync, + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
 	RA: Send + Sync,
 	Client<B, E, Block, RA>: AuxStore,
 {

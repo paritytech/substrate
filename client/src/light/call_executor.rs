@@ -181,8 +181,8 @@ pub fn prove_execution<Block, S, E>(
 ) -> ClientResult<(Vec<u8>, StorageProof)>
 	where
 		Block: BlockT,
-		S: StateBackend<HasherFor<Block>> + 'static,
-		E: CallExecutor<Block>,
+		S: StateBackend<HasherFor<Block>>,
+		E: CallExecutor<Block> + 'static,
 {
 	let trie_state = state.as_trie_backend()
 		.ok_or_else(||

@@ -607,7 +607,6 @@ impl WasmRuntime for WasmiRuntime {
 				e
 			})?;
 		call_in_wasm_module(
-			ext,
 			&self.instance,
 			method,
 			data,
