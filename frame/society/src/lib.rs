@@ -1086,9 +1086,9 @@ pub struct EnsureFounder<T>(sp_std::marker::PhantomData<T>);
 impl<T: Trait> EnsureOrigin<T::Origin> for EnsureFounder<T> {
 	type Success = T::AccountId;
 	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
-		o.into().and_then(|o| match o {
-			system::RawOrigin::Signed(ref who) if who == &Members::<T>::get()[0] => Ok(who.clone()),
-			r => Err(T::Origin::from(r)),
+		o.into().and_then(|o| match (o, Members::<T>::get().get(0)) {
+			(system::RawOrigin::Signed(ref who), Some(f)) if who == f => Ok(who.clone()),
+			(r, _) => Err(T::Origin::from(r)),
 		})
 	}
 }
