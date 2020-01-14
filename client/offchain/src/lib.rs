@@ -139,6 +139,8 @@ impl<Client, Storage, Block> OffchainWorkers<
 			});
 			futures::future::Either::Left(runner.process())
 		} else {
+			let help = "Consider turning off offchain workers if they are not part of your runtime.";
+			warn!("Unsupported Offchain Worker API version: {}. {}", version, help);
 			futures::future::Either::Right(futures::future::ready(()))
 		}
 	}
