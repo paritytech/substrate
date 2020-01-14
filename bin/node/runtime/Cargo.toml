@@ -48,8 +48,8 @@ pallet-finality-tracker = { version = "2.0.0", default-features = false, path = 
 pallet-grandpa = { version = "2.0.0", default-features = false, path = "../../../frame/grandpa" }
 pallet-im-online = { version = "2.0.0", default-features = false, path = "../../../frame/im-online" }
 pallet-indices = { version = "2.0.0", default-features = false, path = "../../../frame/indices" }
+pallet-identity = { version = "2.0.0", default-features = false, path = "../../../frame/identity" }
 pallet-membership = { version = "2.0.0", default-features = false, path = "../../../frame/membership" }
-pallet-nicks = { version = "2.0.0", default-features = false, path = "../../../frame/nicks" }
 pallet-offences = { version = "2.0.0", default-features = false, path = "../../../frame/offences" }
 pallet-randomness-collective-flip = { version = "2.0.0", default-features = false, path = "../../../frame/randomness-collective-flip" }
 pallet-recovery = { version = "2.0.0", default-features = false, path = "../../../frame/recovery" }
@@ -93,7 +93,7 @@ std = [
 	"pallet-indices/std",
 	"sp-inherents/std",
 	"pallet-membership/std",
-	"pallet-nicks/std",
+	"pallet-identity/std",
 	"node-primitives/std",
 	"sp-offchain/std",
 	"pallet-offences/std",
