@@ -33,6 +33,8 @@ mod children;
 mod cache;
 mod changes_tries_storage;
 mod storage_cache;
+#[cfg(any(feature = "kvdb-rocksdb", test))]
+mod upgrade;
 mod utils;
 mod stats;
 
@@ -67,7 +69,7 @@ use sp_state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction,
 	backend::Backend as StateBackend, UsageInfo as StateUsageInfo,
 };
-use crate::utils::{Meta, db_err, meta_keys, read_db, read_meta};
+use crate::utils::{DatabaseType, Meta, db_err, meta_keys, read_db, read_meta};
 use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction};
 use sc_client::leaves::{LeafSet, FinalizationDisplaced};
 use sc_state_db::StateDb;
@@ -355,7 +357,7 @@ pub struct BlockchainDb<Block: BlockT> {
 
 impl<Block: BlockT> BlockchainDb<Block> {
 	fn new(db: Arc<dyn KeyValueDB>) -> ClientResult<Self> {
-		let meta = read_meta::<Block>(&*db, columns::META, columns::HEADER)?;
+		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
 			db,
@@ -752,7 +754,7 @@ impl<Block: BlockT> Backend<Block> {
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
 	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
-		let db = crate::utils::open_database(&config, columns::META, "full")?;
+		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Full)?;
 		Self::from_kvdb(db as Arc<_>, canonicalization_delay, &config)
 	}
 

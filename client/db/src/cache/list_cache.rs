@@ -1243,7 +1243,10 @@ pub mod tests {
 		);
 		assert!(tx.inserted_entries().is_empty());
 		assert!(tx.removed_entries().is_empty());
-		assert_eq!(*tx.updated_meta(), Some(Metadata { finalized: None, unfinalized: vec![correct_id(5)] }));
+		assert_eq!(
+			*tx.updated_meta(),
+			Some(Metadata { finalized: Some(correct_id(2)), unfinalized: vec![correct_id(5)] }),
+		);
 		// finalization finalizes entry
 		let cache = ListCache::new(
 			DummyStorage::new()

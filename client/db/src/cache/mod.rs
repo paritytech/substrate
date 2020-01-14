@@ -81,7 +81,7 @@ pub struct DbCache<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
 	key_lookup_column: u32,
 	header_column: u32,
-	authorities_column: u32,
+	cache_column: u32,
 	genesis_hash: Block::Hash,
 	best_finalized_block: ComplexBlockId<Block>,
 }
@@ -92,7 +92,7 @@ impl<Block: BlockT> DbCache<Block> {
 		db: Arc<dyn KeyValueDB>,
 		key_lookup_column: u32,
 		header_column: u32,
-		authorities_column: u32,
+		cache_column: u32,
 		genesis_hash: Block::Hash,
 		best_finalized_block: ComplexBlockId<Block>,
 	) -> Self {
@@ -101,7 +101,7 @@ impl<Block: BlockT> DbCache<Block> {
 			db,
 			key_lookup_column,
 			header_column,
-			authorities_column,
+			cache_column,
 			genesis_hash,
 			best_finalized_block,
 		}
@@ -158,7 +158,7 @@ impl<Block: BlockT> DbCache<Block> {
 			&self.db,
 			self.key_lookup_column,
 			self.header_column,
-			self.authorities_column,
+			self.cache_column,
 			&self.best_finalized_block
 		)
 	}

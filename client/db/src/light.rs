@@ -38,7 +38,7 @@ use codec::{Decode, Encode};
 use sp_runtime::generic::{DigestItem, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor, HasherFor};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
-use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
+use crate::utils::{self, meta_keys, DatabaseType, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
 use crate::{DatabaseSettings, FrozenForDuration};
 use log::{trace, warn, debug};
 
@@ -68,13 +68,10 @@ pub struct LightStorage<Block: BlockT> {
 	io_stats: FrozenForDuration<kvdb::IoStats>,
 }
 
-impl<Block> LightStorage<Block>
-	where
-		Block: BlockT,
-{
+impl<Block: BlockT> LightStorage<Block> {
 	/// Create new storage with given settings.
 	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
-		let db = crate::utils::open_database(&config, columns::META, "light")?;
+		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Light)?;
 		Self::from_kvdb(db as Arc<_>)
 	}
 
@@ -89,7 +86,7 @@ impl<Block> LightStorage<Block>
 	}
 
 	fn from_kvdb(db: Arc<dyn KeyValueDB>) -> ClientResult<Self> {
-		let meta = read_meta::<Block>(&*db, columns::META, columns::HEADER)?;
+		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let cache = DbCache::new(
 			db.clone(),
 			columns::KEY_LOOKUP,
