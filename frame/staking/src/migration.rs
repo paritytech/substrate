@@ -112,16 +112,21 @@ mod inner {
 		// Do ActiveEraStart
 		<Module<T> as Store>::ActiveEraStart::put(<Module<T> as Store>::CurrentEraStart::get());
 
-		// TODO TODO: StakingLedger
-		// let res = <Module<T> as Store>::Ledger::translate_value(
-		// 	|old: StakingLedgerV1<T::AccountId, BalanceOf<T>>| StakingLedger {
-		// 		stash: old.stash,
-		// 		total: old.total,
-		// 		active: old.active,
-		// 		unlocking: old.unlocking,
-		// 		next_reward: 0,
-		// 	}
-		// );
+		// Do StakingLedger
+		let res = <Module<T> as Store>::Ledger::translate_values(
+			|old: StakingLedgerV1<T::AccountId, BalanceOf<T>>| StakingLedger {
+				stash: old.stash,
+				total: old.total,
+				active: old.active,
+				unlocking: old.unlocking,
+				next_reward: 0,
+			}
+		);
+		if let Err(e) = res {
+			frame_support::print(&*format!("Encountered error in migration of Staking::Ledger map, \
+				{} keys have been removed", e));
+		}
+
 
 		// Kill old storages
 		<Module<T> as Store>::SlotStake::kill();
