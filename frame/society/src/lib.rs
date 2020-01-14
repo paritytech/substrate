@@ -1014,33 +1014,35 @@ decl_error! {
 	pub enum Error for Module<T: Trait<I>, I: Instance> {
 		/// An incorrect position was provided.
 		BadPosition,
-		/// User is not a member
+		/// User is not a member.
 		NotMember,
-		/// User is already a member
+		/// User is already a member.
 		AlreadyMember,
-		/// User is suspended
+		/// User is suspended.
 		Suspended,
-		/// User is not suspended
+		/// User is not suspended.
 		NotSuspended,
-		/// Nothing to payout
+		/// Nothing to payout.
 		NoPayout,
-		/// Society already founded
+		/// Society already founded.
 		AlreadyFounded,
-		/// Not enough in pot to accept candidate
+		/// Not enough in pot to accept candidate.
 		InsufficientPot,
-		/// Member is already vouching or banned from vouching again
+		/// Member is already vouching or banned from vouching again.
 		AlreadyVouching,
-		/// Member is not vouching
+		/// Member is not vouching.
 		NotVouching,
-		/// Cannot remove head
+		/// Cannot remove the head of the chain.
 		Head,
-		/// User has already made a bid
+		/// Cannot remove the founder.
+		Founder,
+		/// User has already made a bid.
 		AlreadyBid,
-		/// User is already a candidate
+		/// User is already a candidate.
 		AlreadyCandidate,
-		/// User is not a candidate
+		/// User is not a candidate.
 		NotCandidate,
-		/// Too many members in the society
+		/// Too many members in the society.
 		MaxMembers,
 	}
 }
