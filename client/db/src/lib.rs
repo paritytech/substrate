@@ -274,7 +274,7 @@ pub enum DatabaseSettingsSrc {
 pub fn new_client<E, S, Block, RA>(
 	settings: DatabaseSettings,
 	executor: E,
-	genesis_storage: S,
+	genesis_storage: &S,
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
