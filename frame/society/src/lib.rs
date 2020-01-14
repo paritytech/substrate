@@ -305,7 +305,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	type MaxLockDuration: Get<Self::BlockNumber>;
 
 	/// The origin that is allowed to call `found`.
-	type FounderOrigin: EnsureOrigin<Self::Origin>;
+	type FounderSetOrigin: EnsureOrigin<Self::Origin>;
 
 	/// The origin that is allowed to make suspension judgements.
 	type SuspensionJudgementOrigin: EnsureOrigin<Self::Origin>;
@@ -800,22 +800,21 @@ decl_module! {
 		/// This is done as a discrete action in order to allow for the
 		/// module to be included into a running chain and can only be done once.
 		///
-		/// The dispatch origin for this call must be from the _FounderOrigin_.
+		/// The dispatch origin for this call must be from the _FounderSetOrigin_.
 		///
 		/// Parameters:
 		/// - `founder` - The first member and head of the newly founded society.
 		///
 		/// # <weight>
-		/// - One storage read to check `Head`. O(1)
+		/// - Two storage mutates to set `Head` and `Founder`. O(1)
 		/// - One storage write to add the first member to society. O(1)
-		/// - One storage write to add new Head. O(1)
 		/// - One event.
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn found(origin, founder: T::AccountId) {
-			T::FounderOrigin::ensure_origin(origin)?;
+			T::FounderSetOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
 			// This should never fail in the context of this function...
 			Self::add_member(&founder)?;
@@ -1218,6 +1217,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// removes them from the Members storage item.
 	pub fn remove_member(m: &T::AccountId) -> DispatchResult {
 		ensure!(Self::head() != Some(m.clone()), Error::<T, I>::Head);
+		ensure!(Self::founder() != Some(m.clone()), Error::<T, I>::Founder);
 
 		<Members<T, I>>::mutate(|members|
 			match members.binary_search(&m) {
