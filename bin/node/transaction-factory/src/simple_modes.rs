@@ -67,34 +67,6 @@ where
 		return None;
 	}
 
-	// let from = (RA::master_account_id(), RA::master_account_secret());
-
-	// let seed = match factory_state.mode() {
-	// 	// choose the same receiver for all transactions
-	// 	Mode::MasterTo1 => factory_state.start_number(),
-
-	// 	// different receiver for each transaction
-	// 	Mode::MasterToN => factory_state.start_number() + factory_state.block_no(),
-	// 	_ => unreachable!("Mode not covered!"),
-	// };
-	// let to = RA::gen_random_account_id(&seed);
-
-	// let amount = RA::minimum_balance();
-
-	// let transfer = factory_state.create_extrinsic(
-	// 	&from.0,
-	// 	&from.1,
-	// 	&to,
-	// 	&amount,
-	// 	version,
-	// 	&genesis_hash,
-	// 	&prior_block_hash,
-	// );
-
-	// let inherents = RA::inherent_extrinsics(&factory_state);
-	// let inherents = client.runtime_api().inherent_extrinsics(&prior_block_id, inherents)
-	// 	.expect("Failed to create inherent extrinsics");
-
 	let block = create_block::<RA, _, _, _, _>(
 		factory_state,
 		&client,
