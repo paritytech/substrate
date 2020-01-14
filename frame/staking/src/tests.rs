@@ -461,57 +461,30 @@ fn nominating_and_rewards_should_work() {
 
 			// ------ check the staked value of all parties.
 
-			if cfg!(feature = "equalize") {
-				// 30 and 40 are not chosen anymore
-				assert_eq!(ErasStakers::<Test>::iter_prefix(Staking::active_era()).count(), 2);
-				assert_eq!(
-					Staking::eras_stakers(Staking::active_era(), 11),
-					Exposure {
-						total: 1000 + 1000,
-						own: 1000,
-						others: vec![
-							IndividualExposure { who: 1, value: 400 },
-							IndividualExposure { who: 3, value: 600 },
-						]
-					},
-				);
-				assert_eq!(
-					Staking::eras_stakers(Staking::active_era(), 21),
-					Exposure {
-						total: 1000 + 1000,
-						own: 1000,
-						others: vec![
-							IndividualExposure { who: 1, value: 600 },
-							IndividualExposure { who: 3, value: 400 },
-						]
-					},
-				);
-			} else {
-				// 30 and 40 are not chosen anymore
-				assert_eq!(ErasStakers::<Test>::iter_prefix(Staking::active_era()).count(), 2);
-				assert_eq!(
-					Staking::eras_stakers(Staking::active_era(), 11),
-					Exposure {
-						total: 1000 + 800,
-						own: 1000,
-						others: vec![
-							IndividualExposure { who: 1, value: 400 },
-							IndividualExposure { who: 3, value: 400 },
-						]
-					},
-				);
-				assert_eq!(
-					Staking::eras_stakers(Staking::active_era(), 21),
-					Exposure {
-						total: 1000 + 1200,
-						own: 1000,
-						others: vec![
-							IndividualExposure { who: 1, value: 600 },
-							IndividualExposure { who: 3, value: 600 },
-						]
-					},
-				);
-			}
+			// 30 and 40 are not chosen anymore
+			assert_eq!(ErasStakers::<Test>::iter_prefix(Staking::active_era()).count(), 2);
+			assert_eq!(
+				Staking::eras_stakers(Staking::active_era(), 11),
+				Exposure {
+					total: 1000 + 800,
+					own: 1000,
+					others: vec![
+						IndividualExposure { who: 1, value: 400 },
+						IndividualExposure { who: 3, value: 400 },
+					]
+				},
+			);
+			assert_eq!(
+				Staking::eras_stakers(Staking::active_era(), 21),
+				Exposure {
+					total: 1000 + 1200,
+					own: 1000,
+					others: vec![
+						IndividualExposure { who: 1, value: 600 },
+						IndividualExposure { who: 3, value: 600 },
+					]
+				},
+			);
 
 			// the total reward for era 1
 			let total_payout_1 = current_total_payout_for_duration(3000);
@@ -527,59 +500,31 @@ fn nominating_and_rewards_should_work() {
 			mock::make_all_reward_payment(1);
 			let payout_for_10 = total_payout_1 / 3;
 			let payout_for_20 = 2 * total_payout_1 / 3;
-			if cfg!(feature = "equalize") {
-				// Nominator 2: has [400 / 2000 ~ 1 / 5 from 10] + [600 / 2000 ~ 3 / 10 from 20]'s reward.
-				assert_eq_error_rate!(
-					Balances::total_balance(&2),
-					initial_balance + payout_for_10 / 5 + payout_for_20 * 3 / 10,
-					2,
-				);
-				// Nominator 4: has [400 / 2000 ~ 1 / 5 from 20] + [600 / 2000 ~ 3 / 10 from 10]'s reward.
-				assert_eq_error_rate!(
-					Balances::total_balance(&4),
-					initial_balance + payout_for_20 / 5 + payout_for_10 * 3 / 10,
-					2,
-				);
+			// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
+			assert_eq_error_rate!(
+				Balances::total_balance(&2),
+				initial_balance + (2 * payout_for_10 / 9 + 3 * payout_for_20 / 11),
+				1,
+			);
+			// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
+			assert_eq_error_rate!(
+				Balances::total_balance(&4),
+				initial_balance + (2 * payout_for_10 / 9 + 3 * payout_for_20 / 11),
+				1,
+			);
 
-				// Validator 10: got 1000 / 2000 external stake.
-				assert_eq_error_rate!(
-					Balances::total_balance(&10),
-					initial_balance + payout_for_10 / 2,
-					1,
-				);
-				// Validator 20: got 1000 / 2000 external stake.
-				assert_eq_error_rate!(
-					Balances::total_balance(&20),
-					initial_balance + payout_for_20 / 2,
-					1,
-				);
-			} else {
-				// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-				assert_eq_error_rate!(
-					Balances::total_balance(&2),
-					initial_balance + (2 * payout_for_10 / 9 + 3 * payout_for_20 / 11),
-					1,
-				);
-				// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-				assert_eq_error_rate!(
-					Balances::total_balance(&4),
-					initial_balance + (2 * payout_for_10 / 9 + 3 * payout_for_20 / 11),
-					1,
-				);
-
-				// Validator 10: got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
-				assert_eq_error_rate!(
-					Balances::total_balance(&10),
-					initial_balance + 5 * payout_for_10 / 9,
-					1,
-				);
-				// Validator 20: got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
-				assert_eq_error_rate!(
-					Balances::total_balance(&20),
-					initial_balance + 5 * payout_for_20 / 11,
-					1,
-				);
-			}
+			// Validator 10: got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
+			assert_eq_error_rate!(
+				Balances::total_balance(&10),
+				initial_balance + 5 * payout_for_10 / 9,
+				1,
+			);
+			// Validator 20: got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
+			assert_eq_error_rate!(
+				Balances::total_balance(&20),
+				initial_balance + 5 * payout_for_20 / 11,
+				1,
+			);
 
 			check_exposure_all(Staking::active_era());
 			check_nominator_all(Staking::active_era());
@@ -1727,9 +1672,9 @@ fn bond_with_little_staked_value_bounded() {
 			assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller));
 			assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
 
-			// reward session 1
-			let total_payout_1 = current_total_payout_for_duration(3000);
-			assert!(total_payout_1 > 100); // Test is meaningfull if reward something
+			// reward era 0
+			let total_payout_0 = current_total_payout_for_duration(3000);
+			assert!(total_payout_0 > 100); // Test is meaningfull if reward something
 			reward_all_elected();
 			start_era(1);
 			mock::make_all_reward_payment(0);
@@ -1740,13 +1685,13 @@ fn bond_with_little_staked_value_bounded() {
 			assert_eq!(Staking::eras_stakers(Staking::active_era(), 2).total, 0);
 
 			// Old ones are rewarded.
-			assert_eq!(Balances::free_balance(&10), init_balance_10 + total_payout_1 / 3);
+			assert_eq!(Balances::free_balance(&10), init_balance_10 + total_payout_0 / 3);
 			// no rewards paid to 2. This was initial election.
 			assert_eq!(Balances::free_balance(&2), init_balance_2);
 
-			// reward session 2
-			let total_payout_2 = current_total_payout_for_duration(3000);
-			assert!(total_payout_2 > 100); // Test is meaningfull if reward something
+			// reward era 1
+			let total_payout_1 = current_total_payout_for_duration(3000);
+			assert!(total_payout_1 > 100); // Test is meaningfull if reward something
 			reward_all_elected();
 			start_era(2);
 			mock::make_all_reward_payment(1);
@@ -1754,10 +1699,10 @@ fn bond_with_little_staked_value_bounded() {
 			assert_eq_uvec!(validator_controllers(), vec![20, 10, 2]);
 			assert_eq!(Staking::eras_stakers(Staking::active_era(), 2).total, 0);
 
-			assert_eq!(Balances::free_balance(&2), init_balance_2 + total_payout_2 / 3);
+			assert_eq!(Balances::free_balance(&2), init_balance_2 + total_payout_1 / 3);
 			assert_eq!(
 				Balances::free_balance(&10),
-				init_balance_10 + total_payout_1 / 3 + total_payout_2 / 3,
+				init_balance_10 + total_payout_0 / 3 + total_payout_1 / 3,
 			);
 			check_exposure_all(Staking::active_era());
 			check_nominator_all(Staking::active_era());
@@ -2798,9 +2743,7 @@ fn claim_reward_at_the_last_era() {
 	// * rewards get paid until $HISTORY_DEPTH for both validators and nominators
 	ExtBuilder::default().nominate(true).build().execute_with(|| {
 		let init_balance_10 = Balances::total_balance(&10);
-		let init_balance_11 = Balances::total_balance(&11);
 		let init_balance_100 = Balances::total_balance(&100);
-		let init_balance_101 = Balances::total_balance(&101);
 
 		let part_for_10 = Perbill::from_rational_approximation::<u32>(1000, 1125);
 		let part_for_100 = Perbill::from_rational_approximation::<u32>(125, 1125);
@@ -2840,12 +2783,12 @@ fn claim_reward_at_the_last_era() {
 		// This is the latest planned era in staking, not the active era
 		let current_era = Staking::current_era();
 		assert!(current_era - crate::HISTORY_DEPTH == 0);
-		Staking::payout_validator(Origin::signed(10), 0);
-		Staking::payout_validator(Origin::signed(10), 1);
-		Staking::payout_validator(Origin::signed(10), 2);
-		Staking::payout_nominator(Origin::signed(100), 0, vec![11]);
-		Staking::payout_nominator(Origin::signed(100), 1, vec![11]);
-		Staking::payout_nominator(Origin::signed(100), 2, vec![11]);
+		assert_ok!(Staking::payout_validator(Origin::signed(10), 0));
+		assert_ok!(Staking::payout_validator(Origin::signed(10), 1));
+		assert_ok!(Staking::payout_validator(Origin::signed(10), 2));
+		assert_ok!(Staking::payout_nominator(Origin::signed(100), 0, vec![11]));
+		assert_ok!(Staking::payout_nominator(Origin::signed(100), 1, vec![11]));
+		assert_ok!(Staking::payout_nominator(Origin::signed(100), 2, vec![11]));
 		
 		// Era 0 can't be rewarded anymore, only era 1 and 2 can be rewarded
 

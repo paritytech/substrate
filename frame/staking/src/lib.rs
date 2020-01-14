@@ -1572,8 +1572,8 @@ impl<T: Trait> Module<T> {
 		// Clean old era information.
 		if let Some(era) = current_era.checked_sub(HISTORY_DEPTH) {
 			<ErasStakers<T>>::remove_prefix(era);
+			<ErasValidatorPrefs<T>>::remove_prefix(era);
 			<ErasValidatorReward<T>>::remove(era);
-			<ErasValidatorPrefs<T>>::remove(era);
 			<ErasRewardPoints<T>>::remove(era);
 			<ErasTotalStake<T>>::remove(era);
 			ErasStartSessionIndex::remove(era);
