@@ -713,14 +713,18 @@ decl_storage! {
 		Nominators get(fn nominators): linked_map T::AccountId => Option<Nominations<T::AccountId>>;
 
 		/// The current era index.
+		///
+		/// This is the latest planned era, depending on how session module queues the validator
+		/// set, it might be active or not.
 		pub CurrentEra get(fn current_era) config(): EraIndex;
 
+		/// The active era index, the era currently rewarded.
 		pub ActiveEra get(fn active_era) config(): EraIndex;
 
+		/// The start of the currently rewarded era.
 		pub ActiveEraStart get(fn active_era_start): MomentOf<T>;
 
-		/// Nominators for a particular account that is in action right now. You can't iterate
-		/// through validators here, but you can find them in the Session module.
+		/// Exposure of validator at era.
 		///
 		/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
 		///
@@ -730,6 +734,11 @@ decl_storage! {
 			=> Exposure<T::AccountId, BalanceOf<T>>;
 		// TODO: consider switching this to a simple map EraIndex => Vec<Exposure>
 
+		/// Similarly to `ErasStakers` this holds the preferences of validators.
+		///
+		/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
+		///
+		/// Is it removed after `HISTORY_DEPTH` eras.
 		pub ErasValidatorPrefs get(fn eras_validator_prefs):
 			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
 			=> ValidatorPrefs;
@@ -739,13 +748,13 @@ decl_storage! {
 		/// Eras that haven't finished yet doesn't have reward.
 		pub ErasValidatorReward get(fn eras_validator_reward): map EraIndex => BalanceOf<T>;
 
-		/// The session index at which the era started for the last $HISTORY_DEPTH eras
+		/// The session index at which the era started for the last `HISTORY_DEPTH` eras
 		pub ErasStartSessionIndex get(fn eras_start_session_index): map EraIndex => SessionIndex;
 
-		/// Rewards for the last $HISTORY_DEPTH eras.
+		/// Rewards for the last `HISTORY_DEPTH` eras.
 		pub ErasRewardPoints get(fn eras_reward_points): map EraIndex => EraRewardPoints<T::AccountId>;
 
-		/// The total amount staked for the last $HISTORY_DEPTH eras.
+		/// The total amount staked for the last `HISTORY_DEPTH` eras.
 		pub ErasTotalStake get(fn eras_total_stake): map EraIndex => BalanceOf<T>;
 
 		/// True if the next session change will be a new era regardless of index.
