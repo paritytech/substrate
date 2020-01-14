@@ -524,14 +524,14 @@ impl OverlayedChanges {
 				.chain(self.committed.children.keys());
 		let child_delta_iter = child_storage_keys.map(|storage_key|
 			(
-				storage_key.clone(),
+				storage_key,
 				self.committed.children.get(storage_key)
 					.into_iter()
-					.flat_map(|(map, _)| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
+					.flat_map(|(map, _)| map.iter().map(|(k, v)| (k, v.value.as_ref())))
 					.chain(
 						self.prospective.children.get(storage_key)
 							.into_iter()
-							.flat_map(|(map, _)| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
+							.flat_map(|(map, _)| map.iter().map(|(k, v)| (k, v.value.as_ref())))
 					),
 				self.child_info(storage_key).cloned()
 					.expect("child info initialized in either committed or prospective"),
@@ -539,8 +539,8 @@ impl OverlayedChanges {
 		);
 
 		// compute and memoize
-		let delta = self.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
-			.chain(self.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
+		let delta = self.committed.top.iter().map(|(k, v)| (k, v.value.as_ref()))
+			.chain(self.prospective.top.iter().map(|(k, v)| (k, v.value.as_ref())));
 
 		let (root, transaction) = backend.full_storage_root(delta, child_delta_iter);
 

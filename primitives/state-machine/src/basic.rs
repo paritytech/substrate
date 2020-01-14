@@ -286,7 +286,7 @@ impl Externalities for BasicExternalities {
 		storage_key: ChildStorageKey,
 	) -> Vec<u8> {
 		if let Some(child) = self.inner.children.get(storage_key.as_ref()) {
-			let delta = child.data.clone().into_iter().map(|(k, v)| (k, Some(v)));
+			let delta = child.data.iter().map(|(k, v)| (k, Some(v)));
 
 			InMemoryBackend::<Blake2Hasher>::default()
 				.child_storage_root(storage_key.as_ref(), child.child_info.as_ref(), delta).0

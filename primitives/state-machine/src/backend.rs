@@ -127,22 +127,22 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
 	/// Does not include child storage updates.
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	fn storage_root<'i, I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I: IntoIterator<Item=(&'i Vec<u8>, Option<&'i Vec<u8>>)>,
 		H::Out: Ord;
 
 	/// Calculate the child storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit. The second argument
 	/// is true if child storage root equals default storage root.
-	fn child_storage_root<I>(
+	fn child_storage_root<'i, I>(
 		&self,
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I: IntoIterator<Item=(&'i Vec<u8>, Option<&'i Vec<u8>>)>,
 		H::Out: Ord;
 
 	/// Get all key/value pairs into a Vec.
@@ -175,15 +175,15 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
 	/// Does include child storage updates.
-	fn full_storage_root<I1, I2i, I2>(
+	fn full_storage_root<'i, I1, I2i, I2>(
 		&self,
 		delta: I1,
 		child_deltas: I2)
 	-> (H::Out, Self::Transaction)
 	where
-		I1: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		I2i: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		I2: IntoIterator<Item=(Vec<u8>, I2i, OwnedChildInfo)>,
+		I1: IntoIterator<Item=(&'i Vec<u8>, Option<&'i Vec<u8>>)>,
+		I2i: IntoIterator<Item=(&'i Vec<u8>, Option<&'i Vec<u8>>)>,
+		I2: IntoIterator<Item=(&'i Vec<u8>, I2i, OwnedChildInfo)>,
 		H::Out: Ord + Encode,
 	{
 		let mut txs: Self::Transaction = Default::default();
@@ -200,7 +200,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 			}
 		}
 		let (root, parent_txs) = self.storage_root(
-			delta.into_iter().chain(child_roots.into_iter())
+			delta.into_iter().chain(child_roots.iter().map(|(k, v)| (*k, v.as_ref())))
 		);
 		txs.consolidate(parent_txs);
 		(root, txs)
@@ -269,22 +269,22 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).for_child_keys_with_prefix(storage_key, child_info, prefix, f)
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	fn storage_root<'i, I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I: IntoIterator<Item=(&'i Vec<u8>, Option<&'i Vec<u8>>)>,
 		H::Out: Ord,
 	{
 		(*self).storage_root(delta)
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'i, I>(
 		&self,
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I: IntoIterator<Item=(&'i Vec<u8>, Option<&'i Vec<u8>>)>,
 		H::Out: Ord,
 	{
 		(*self).child_storage_root(storage_key, child_info, delta)

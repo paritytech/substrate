@@ -225,14 +225,14 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 			.map(|map| map.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	fn storage_root<'i, I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I: IntoIterator<Item=(&'i Vec<u8>, Option<&'i Vec<u8>>)>,
 		<H as Hasher>::Out: Ord,
 	{
 		let existing_pairs = self.inner.get(&None)
 			.into_iter()
-			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
+			.flat_map(|map| map.iter().map(|(k, v)| (k, Some(v))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
 		let root = Layout::<H>::trie_root(existing_pairs.chain(transaction.iter().cloned())
@@ -241,19 +241,19 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 		);
 
-		let full_transaction = transaction.into_iter().collect();
+		let full_transaction = transaction.into_iter().map(|(k, v)| (k.clone(), v.cloned())).collect();
 
 		(root, vec![(None, full_transaction)])
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'i, I>(
 		&self,
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I: IntoIterator<Item=(&'i Vec<u8>, Option<&'i Vec<u8>>)>,
 		H::Out: Ord
 	{
 		let storage_key = storage_key.to_vec();
@@ -261,7 +261,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 
 		let existing_pairs = self.inner.get(&child_info)
 			.into_iter()
-			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
+			.flat_map(|map| map.iter().map(|(k, v)| (k, Some(v))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
 		let root = child_trie_root::<Layout<H>, _, _, _>(
@@ -272,7 +272,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 				.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 		);
 
-		let full_transaction = transaction.into_iter().collect();
+		let full_transaction = transaction.into_iter().map(|(k, v)| (k.clone(), v.cloned())).collect();
 
 		let is_default = root == default_child_trie_root::<Layout<H>>(&storage_key);
 

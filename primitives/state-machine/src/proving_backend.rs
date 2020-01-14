@@ -341,20 +341,20 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.0.child_keys(storage_key, child_info, prefix)
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	fn storage_root<'i, I>(&self, delta: I) -> (H::Out, Self::Transaction)
+		where I: IntoIterator<Item=(&'i Vec<u8>, Option<&'i Vec<u8>>)>
 	{
 		self.0.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'i, I>(
 		&self,
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I: IntoIterator<Item=(&'i Vec<u8>, Option<&'i Vec<u8>>)>,
 		H::Out: Ord
 	{
 		self.0.child_storage_root(storage_key, child_info, delta)

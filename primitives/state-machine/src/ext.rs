@@ -514,11 +514,11 @@ where
 				let (root, is_empty, _) = {
 					let delta = self.overlay.committed.children.get(storage_key)
 						.into_iter()
-						.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
+						.flat_map(|(map, _)| map.into_iter().map(|(k, v)| (k, v.value.as_ref())))
 						.chain(
 							self.overlay.prospective.children.get(storage_key)
 								.into_iter()
-								.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
+								.flat_map(|(map, _)| map.into_iter().map(|(k, v)| (k, v.value.as_ref())))
 						);
 
 					self.backend.child_storage_root(storage_key, child_info.as_ref(), delta)

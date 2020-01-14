@@ -169,8 +169,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		collect_all().map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e)).unwrap_or_default()
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, S::Overlay)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	fn storage_root<'i, I>(&self, delta: I) -> (H::Out, S::Overlay)
+		where I: IntoIterator<Item=(&'i Vec<u8>, Option<&'i Vec<u8>>)>
 	{
 		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
@@ -190,14 +190,14 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		(root, write_overlay)
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'i, I>(
 		&self,
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I: IntoIterator<Item=(&'i Vec<u8>, Option<&'i Vec<u8>>)>,
 		H::Out: Ord,
 	{
 		let default_root = default_child_trie_root::<Layout<H>>(storage_key);
