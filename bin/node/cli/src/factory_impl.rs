@@ -31,7 +31,7 @@ use node_runtime::{
 use node_primitives::Signature;
 use sp_core::{sr25519, crypto::Pair, H256};
 use sp_runtime::{
-	generic::Era,
+	generic::Era, Perbill,
 	traits::{
 		Block as BlockT, Header as HeaderT, SignedExtension, Verify, IdentifyAccount,
 	}
@@ -41,7 +41,7 @@ use sp_inherents::InherentData;
 use sp_timestamp;
 use sp_finality_tracker;
 
-use pallet_staking::RewardDestination;
+use pallet_staking::{RewardDestination, ValidatorPrefs};
 
 type AccountPublic = <Signature as Verify>::Signer;
 
@@ -137,7 +137,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 	}
 
 	fn create_extrinsic(
-		&self,
+		&mut self,
 		sender: &Self::AccountId,
 		key: &Self::Secret,
 		destination: &Self::AccountId,
@@ -175,12 +175,48 @@ impl RuntimeAdapter for FactoryState<Number> {
 				Call::Authorship(AuthorshipCall::set_uncles(uncles))
 			},
 			"staking_bond" => {
-				// TODO: only first tx gets fully executed, so probably I'd play with unbond.
+				self.tx_name = String::from("staking_validate");
 				Call::Staking(StakingCall::bond(
 					pallet_indices::address::Address::Id(destination.clone().into()),
 					(*amount).into(),
 					RewardDestination::Controller,
 				))
+			},
+			"staking_validate" => {
+				self.tx_name = String::from("staking_nominate");
+				Call::Staking(StakingCall::validate(
+					ValidatorPrefs { commission: Perbill::from_rational_approximation(1u32, 10u32) }
+				))
+			},
+			"staking_nominate" => {
+				self.tx_name = String::from("staking_bond_extra");
+				let mut targets = vec![];
+				for _ in 0..16 {
+					targets.push(pallet_indices::address::Address::Id(destination.clone().into()));
+				}
+				Call::Staking(StakingCall::nominate(targets))
+			},
+			"staking_bond_extra" => {
+				self.tx_name = String::from("staking_unbond");
+				Call::Staking(StakingCall::bond_extra(
+					Self::minimum_balance() * 2,
+				))
+			},
+			"staking_unbond" => { // TODO: Need to execute many of these guys to bump rebond.
+				self.tx_name = String::from("staking_rebond");
+				Call::Staking(StakingCall::unbond(
+					Self::minimum_balance() * 2,
+				))
+			},
+			"staking_rebond" => {
+				self.tx_name = String::from("staking_withdraw_unbonded");
+				Call::Staking(StakingCall::rebond(
+					Self::minimum_balance(),
+				))
+			},
+			"staking_withdraw_unbonded" => {
+				self.tx_name = String::from("staking_bond_extra");
+				Call::Staking(StakingCall::withdraw_unbonded())
 			},
 			other => panic!("Extrinsic {} is not supported yet!", other),
 		};

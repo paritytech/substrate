@@ -67,7 +67,7 @@ pub trait RuntimeAdapter {
 	fn set_round(&mut self, val: Self::Number);
 
 	fn create_extrinsic(
-		&self,
+		&mut self,
 		sender: &Self::AccountId,
 		key: &Self::Secret,
 		destination: &Self::AccountId,
@@ -166,7 +166,7 @@ where
 	let inherents = client.runtime_api().inherent_extrinsics(&prior_block_id, inherents)
 		.expect("Failed to create inherent extrinsics");
 
-	for _ in 0..10 { // TODO: Make this configurable.
+	for _ in 0..7 { // TODO: Make this configurable.
 		let to = RA::gen_random_account_id(&seed);
 		let transfer = factory_state.create_extrinsic(
 			&from.0,
