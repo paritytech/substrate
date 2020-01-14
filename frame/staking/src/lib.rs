@@ -1628,7 +1628,6 @@ impl<T: Trait> Module<T> {
 	/// For each element in the iterator the given number of points in u32 is added to the
 	/// validator, thus duplicates are handled.
 	pub fn reward_by_indices(validators_points: impl IntoIterator<Item = (u32, u32)>) {
-		// TODO: This can be optimised once #3302 is implemented.
 		let current_elected_len = <Module<T>>::current_elected().len() as u32;
 
 		CurrentEraPointsEarned::mutate(|rewards| {
