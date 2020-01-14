@@ -2792,4 +2792,70 @@ fn slash_kicks_validators_not_nominators() {
 	});
 }
 
-// TODO TODO: test that we can ask for our reward until the $HISTORY_DEPTH
+#[test]
+fn claim_reward_at_the_last_era() {
+	// should check that:
+	// * rewards get paid until $HISTORY_DEPTH for both validators and nominators
+	ExtBuilder::default().nominate(true).build().execute_with(|| {
+		let init_balance_10 = Balances::total_balance(&10);
+		let init_balance_11 = Balances::total_balance(&11);
+		let init_balance_100 = Balances::total_balance(&100);
+		let init_balance_101 = Balances::total_balance(&101);
+
+		let part_for_10 = Perbill::from_rational_approximation::<u32>(1000, 1125);
+		let part_for_100 = Perbill::from_rational_approximation::<u32>(125, 1125);
+
+		// Check state
+		Payee::<Test>::insert(11, RewardDestination::Controller);
+		Payee::<Test>::insert(101, RewardDestination::Controller);
+
+		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3000);
+		assert!(total_payout_0 > 10); // Test is meaningful if reward something
+
+		start_era(1);
+
+		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		// Change total issuance in order to modify total payout
+		let _ = Balances::deposit_creating(&999, 1_000_000_000);
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_1 = current_total_payout_for_duration(3000);
+		assert!(total_payout_1 > 10); // Test is meaningful if reward something
+		assert!(total_payout_1 != total_payout_0);
+
+		start_era(2);
+
+		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		// Change total issuance in order to modify total payout
+		let _ = Balances::deposit_creating(&999, 1_000_000_000);
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_2 = current_total_payout_for_duration(3000);
+		assert!(total_payout_2 > 10); // Test is meaningful if reward something
+		assert!(total_payout_2 != total_payout_0);
+		assert!(total_payout_2 != total_payout_1);
+
+		start_era(crate::HISTORY_DEPTH);
+
+		// This is the latest planned era in staking, not the active era
+		let current_era = Staking::current_era();
+		assert!(current_era - crate::HISTORY_DEPTH == 0);
+		Staking::payout_validator(Origin::signed(10), 0);
+		Staking::payout_validator(Origin::signed(10), 1);
+		Staking::payout_validator(Origin::signed(10), 2);
+		Staking::payout_nominator(Origin::signed(100), 0, vec![11]);
+		Staking::payout_nominator(Origin::signed(100), 1, vec![11]);
+		Staking::payout_nominator(Origin::signed(100), 2, vec![11]);
+		
+		// Era 0 can't be rewarded anymore, only era 1 and 2 can be rewarded
+
+		assert_eq!(
+			Balances::total_balance(&10),
+			init_balance_10 + part_for_10 * (total_payout_1 + total_payout_2),
+		);
+		assert_eq!(
+			Balances::total_balance(&100),
+			init_balance_100 + part_for_100 * (total_payout_1 + total_payout_2),
+		);
+	});
+}

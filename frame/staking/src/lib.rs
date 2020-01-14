@@ -1451,7 +1451,6 @@ impl<T: Trait> Module<T> {
 		);
 		// This is zero if the era is not finished yet.
 		let era_payout = <ErasValidatorReward<T>>::get(&era);
-		println!("payout_validator {:?} at {:?}: payout {:?}/{:?}", who, era, reward * era_payout, era_payout);
 		if let Some(imbalance) = Self::make_payout(&ledger.stash, reward * era_payout) {
 			Self::deposit_event(RawEvent::Reward(who, imbalance.peek()));
 		}
@@ -1574,6 +1573,7 @@ impl<T: Trait> Module<T> {
 		if let Some(era) = current_era.checked_sub(HISTORY_DEPTH) {
 			<ErasStakers<T>>::remove_prefix(era);
 			<ErasValidatorReward<T>>::remove(era);
+			<ErasValidatorPrefs<T>>::remove(era);
 			<ErasRewardPoints<T>>::remove(era);
 			<ErasTotalStake<T>>::remove(era);
 			ErasStartSessionIndex::remove(era);
