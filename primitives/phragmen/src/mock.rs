@@ -375,7 +375,7 @@ pub(crate) fn run_and_compare(
 	check_assignments(assignments);
 }
 
-pub(crate) fn build_support_map<FS>(
+pub(crate) fn build_support_map_float<FS>(
 	result: &mut _PhragmenResult<AccountId>,
 	stake_of: FS,
 ) -> _SupportMap<AccountId>

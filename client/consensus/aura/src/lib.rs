@@ -153,7 +153,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	force_authoring: bool,
 	keystore: KeyStorePtr,
 	can_author_with: CAW,
-) -> Result<impl futures01::Future<Item = (), Error = ()>, sp_consensus::Error> where
+) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
@@ -189,7 +189,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 		inherent_data_providers,
 		AuraSlotCompatible,
 		can_author_with,
-	).map(|()| Ok::<(), ()>(())).compat())
+	))
 }
 
 struct AuraWorker<C, E, I, P, SO> {
@@ -1019,7 +1019,10 @@ mod tests {
 				false,
 				keystore,
 				sp_consensus::AlwaysCanAuthor,
-			).expect("Starts aura");
+			)
+				.expect("Starts aura")
+				.unit_error()
+				.compat();
 
 			runtime.spawn(aura);
 		}
@@ -1030,7 +1033,7 @@ mod tests {
 		}));
 
 		runtime.block_on(future::join_all(import_notifications)
-			.map(|_| Ok::<(), ()>(())).compat()).unwrap();
+			.unit_error().compat()).unwrap();
 	}
 
 	#[test]

@@ -53,6 +53,7 @@
 //! included in the newly-finalized chain.
 
 use futures::prelude::*;
+use futures03::{StreamExt, future::ready};
 use log::{debug, error, info};
 use futures::sync::mpsc;
 use sc_client_api::{BlockchainEvents, CallExecutor, backend::{AuxStore, Backend}, ExecutionStrategy};
@@ -535,7 +536,7 @@ pub struct GrandpaParams<B, E, Block: BlockT, N, RA, SC, VR, X, Sp> {
 	/// Handle to a future that will resolve on exit.
 	pub on_exit: X,
 	/// If supplied, can be used to hook on telemetry connection established events.
-	pub telemetry_on_connect: Option<mpsc::UnboundedReceiver<()>>,
+	pub telemetry_on_connect: Option<futures03::channel::mpsc::UnboundedReceiver<()>>,
 	/// A voting rule used to potentially restrict target votes.
 	pub voting_rule: VR,
 	/// How to spawn background tasks.
@@ -608,9 +609,10 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 							.expect("authorities is always at least an empty vector; elements are always of type string")
 					}
 				);
-				Ok(())
+				ready(())
 			})
-			.then(|_| -> Result<(), ()> { Ok(()) });
+			.unit_error()
+			.compat();
 		futures::future::Either::A(events)
 	} else {
 		futures::future::Either::B(futures::future::empty())

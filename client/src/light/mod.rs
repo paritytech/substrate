@@ -56,7 +56,7 @@ pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>) -> Arc<Backend<S,
 /// Create an instance of light client.
 pub fn new_light<B, S, GS, RA, E>(
 	backend: Arc<Backend<S, HasherFor<B>>>,
-	genesis_storage: GS,
+	genesis_storage: &GS,
 	code_executor: E,
 ) -> ClientResult<
 		Client<

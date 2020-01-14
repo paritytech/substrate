@@ -190,7 +190,7 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		let client = sc_client::Client::new(
 			self.backend.clone(),
 			executor,
-			storage,
+			&storage,
 			Default::default(),
 			Default::default(),
 			ExecutionExtensions::new(

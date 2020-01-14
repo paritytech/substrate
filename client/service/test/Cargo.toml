@@ -7,11 +7,11 @@ edition = "2018"
 [dependencies]
 tempfile = "3.1.0"
 tokio = "0.1.22"
-futures = "0.1.29"
+futures01 = { package = "futures", version = "0.1.29" }
 log = "0.4.8"
 env_logger = "0.7.0"
 fdlimit = "0.1.1"
-futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
+futures = { version = "0.3.1", features = ["compat"] }
 sc-service = { version = "2.0.0", default-features = false, path = "../../service" }
 sc-network = { version = "0.8", path = "../../network" }
 sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
