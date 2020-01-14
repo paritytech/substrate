@@ -123,8 +123,9 @@ mod inner {
 			}
 		);
 		if let Err(e) = res {
-			frame_support::print(&*format!("Encountered error in migration of Staking::Ledger map, \
-				{} keys have been removed", e));
+			frame_support::print("Encountered error in migration of Staking::Ledger map.");
+			frame_support::print("The number of removed key/value is:");
+			frame_support::print(e);
 		}
 
 
