@@ -101,13 +101,14 @@ impl<Client, Storage, Block> OffchainWorkers<
 		let has_api_v1 = runtime.has_api_with::<dyn OffchainWorkerApi<Block, Error = ()>, _>(
 			&at, |v| v == 1
 		);
-		let has_api_v2 = runtime.has_api::<dyn OffchainWorkerApi<Block, Error = ()>>(&at);
+		let has_api_v2 = runtime.has_api_with::<dyn OffchainWorkerApi<Block, Error = ()>, _>(
+			&at, |v| v == 2
+		);
 		let version = match (has_api_v1, has_api_v2) {
 			(_, Ok(true)) => 2,
 			(Ok(true), _) => 1,
 			_ => 0,
 		};
-
 		debug!("Checking offchain workers at {:?}: version:{}", at, version);
 		if version > 0 {
 			let (api, runner) = api::AsyncApi::new(
@@ -139,6 +140,8 @@ impl<Client, Storage, Block> OffchainWorkers<
 			});
 			futures::future::Either::Left(runner.process())
 		} else {
+			let help = "Consider turning off offchain workers if they are not part of your runtime.";
+			log::error!("Unsupported Offchain Worker API version: {}. {}", version, help);
 			futures::future::Either::Right(futures::future::ready(()))
 		}
 	}
