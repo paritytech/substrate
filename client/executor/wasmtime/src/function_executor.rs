@@ -27,14 +27,14 @@ use sp_wasm_interface::{
 	WordSize,
 };
 use std::{cell::RefCell, cmp, mem, ptr, slice};
-use wasmtime::{Func, HostRef, Memory, Table, Val};
+use wasmtime::{Func, Memory, Table, Val};
 
 /// Wrapper type for pointer to a Wasm table entry.
 ///
 /// The wrapper type is used to ensure that the function reference is valid as it must be unsafely
 /// dereferenced from within the safe method `<FunctionExecutor as SandboxCapabilities>::invoke`.
 #[derive(Clone)]
-pub struct SupervisorFuncRef(HostRef<Func>);
+pub struct SupervisorFuncRef(Func);
 
 /// The state required to construct a FunctionExecutor context. The context only lasts for one host
 /// call, whereas the state is maintained for the duration of a Wasm runtime call, which may make
@@ -46,13 +46,13 @@ pub struct FunctionExecutorState {
 	//
 	// Only allowed to be accessed thru `memory_as_slice` and `memory_as_slice_mut`.
 	// TODO: Consider a dedicated struct for that.
-	pub memory: HostRef<Memory>,
-	table: Option<HostRef<Table>>,
+	pub memory: Memory,
+	table: Option<Table>,
 }
 
 impl FunctionExecutorState {
 	/// Constructs a new `FunctionExecutorState`.
-	pub fn new(heap_base: u32, memory: HostRef<Memory>, table: Option<HostRef<Table>>) -> Self {
+	pub fn new(heap_base: u32, memory: Memory, table: Option<Table>) -> Self {
 		FunctionExecutorState {
 			sandbox_store: RefCell::new(sandbox::Store::new()),
 			allocator: RefCell::new(FreeingBumpHeapAllocator::new(heap_base)),
@@ -82,8 +82,8 @@ impl<'a> FunctionExecutor<'a> {
 	/// pointer. If a dynamic style heap is used the base pointer of the heap can change. Since
 	/// growing, we cannot guarantee the lifetime of the returned slice reference.
 	unsafe fn memory_as_slice(&self) -> &[u8] {
-		let ptr = self.state.memory.borrow().data_ptr() as *const _;
-		let len = self.state.memory.borrow().data_size();
+		let ptr = self.state.memory.data_ptr() as *const _;
+		let len = self.state.memory.data_size();
 
 		if len == 0 {
 			&[]
@@ -99,8 +99,8 @@ impl<'a> FunctionExecutor<'a> {
 	/// See `[memory_as_slice]`. In addition to those requirements, since a mutable reference is
 	/// returned it must be ensured that only one mutable reference to memory exists.
 	unsafe fn memory_as_slice_mut(&self) -> &mut [u8] {
-		let ptr = self.state.memory.borrow().data_ptr();
-		let len = self.state.memory.borrow().data_size();
+		let ptr = self.state.memory.data_ptr();
+		let len = self.state.memory.data_size();
 
 		if len == 0 {
 			&mut []
@@ -161,7 +161,7 @@ impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 		state: u32,
 		func_idx: SupervisorFuncIndex,
 	) -> Result<i64> {
-		let result = dispatch_thunk.0.borrow().call(&[
+		let result = dispatch_thunk.0.call(&[
 			Val::I32(u32::from(invoke_args_ptr) as i32),
 			Val::I32(invoke_args_len as i32),
 			Val::I32(state as i32),
@@ -383,7 +383,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 				.table
 				.as_ref()
 				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?;
-			let table_item = table.borrow().get(dispatch_thunk_id);
+			let table_item = table.get(dbg!(dispatch_thunk_id));
 
 			let func_ref = table_item
 				.funcref()

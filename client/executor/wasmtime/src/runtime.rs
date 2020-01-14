@@ -33,8 +33,7 @@ use std::convert::TryFrom;
 use std::rc::Rc;
 
 use wasmtime::{
-	Callable, Config, Extern, ExternType, Func, HostRef, Instance, Memory, Module, Store, Table,
-	Trap, Val,
+	Callable, Config, Extern, ExternType, Func, Instance, Memory, Module, Store, Table, Trap, Val,
 };
 
 /// A `WasmRuntime` implementation using the Wasmtime JIT to compile the runtime module to native
@@ -153,7 +152,7 @@ fn wrap_substrate_func(
 	let func_ty = wasmtime_func_sig(host_func);
 	let callable = HostFuncAdapterCallable::new(state_holder, host_func);
 	let func = Func::new(store, func_ty, Rc::new(callable));
-	Extern::Func(HostRef::new(func))
+	Extern::Func(func)
 }
 
 #[derive(Clone)]
@@ -214,9 +213,10 @@ impl Callable for HostFuncAdapterCallable {
 		let state = self.state_holder.state.borrow();
 		let mut host_func_ctx = FunctionExecutor::new(state.as_ref().unwrap()); // TODO:
 
-		let unwind_result = std::panic::catch_unwind(
-			std::panic::AssertUnwindSafe(|| self.host_func.execute(&mut host_func_ctx, &mut substrate_params))
-		);
+		let unwind_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+			self.host_func
+				.execute(&mut host_func_ctx, &mut substrate_params)
+		}));
 
 		let execution_result = match unwind_result {
 			Ok(execution_result) => execution_result,
@@ -229,7 +229,7 @@ impl Callable for HostFuncAdapterCallable {
 					},
 				};
 				return Err(Trap::new(msg));
-			},
+			}
 		};
 
 		match execution_result {
@@ -322,8 +322,7 @@ fn call_method(
 			.ok_or_else(|| Error::from(format!("Exported method {} is not found", method)))?;
 		let method_callable = export
 			.func()
-			.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?
-			.borrow();
+			.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?;
 
 		// TODO: Check the signature
 
@@ -355,14 +354,14 @@ fn call_method(
 	Ok(output)
 }
 
-fn get_table(instance: &Instance) -> Option<HostRef<Table>> {
+fn get_table(instance: &Instance) -> Option<Table> {
 	instance
 		.find_export_by_name("__indirect_function_table")
 		.and_then(|export| export.table())
 		.cloned()
 }
 
-fn get_linear_memory(instance: &Instance) -> Result<HostRef<Memory>> {
+fn get_linear_memory(instance: &Instance) -> Result<Memory> {
 	let memory_export = instance
 		.find_export_by_name("memory")
 		.ok_or_else(|| Error::from("memory is not exported under `memory` name"))?;
@@ -377,7 +376,7 @@ fn get_linear_memory(instance: &Instance) -> Result<HostRef<Memory>> {
 
 fn increase_linear_memory(instance: &Instance, pages: u32) -> Result<()> {
 	let memory = get_linear_memory(instance)?;
-	if memory.borrow_mut().grow(pages) {
+	if memory.grow(pages) {
 		Ok(())
 	} else {
 		return Err("failed top increase the linear memory size".into());
@@ -394,7 +393,6 @@ fn extract_heap_base(instance: &Instance) -> Result<u32> {
 		.ok_or_else(|| Error::from("__heap_base is not a global"))?;
 
 	let heap_base = heap_base_global
-		.borrow()
 		.get()
 		.i32()
 		.ok_or_else(|| Error::from("__heap_base is not a i32"))?;
@@ -411,8 +409,8 @@ fn inject_input_data(state_holder: &StateHolder, data: &[u8]) -> Result<(Pointer
 		let data_ptr = state
 			.allocator
 			.borrow_mut()
-			.allocate(state.memory.borrow().data(), data_len)?;
-		write_memory_from(state.memory.borrow().data(), data_ptr, data)?;
+			.allocate(state.memory.data(), data_len)?;
+		write_memory_from(state.memory.data(), data_ptr, data)?;
 		Ok((data_ptr, data_len))
 	}
 }
@@ -424,7 +422,7 @@ fn extract_output_data(
 ) -> Result<()> {
 	unsafe {
 		let state = state_holder.get().unwrap();
-		read_memory_into(state.memory.borrow().data(), ptr, output)?;
+		read_memory_into(state.memory.data(), ptr, output)?;
 	}
 
 	Ok(())
