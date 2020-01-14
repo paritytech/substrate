@@ -536,7 +536,7 @@ pub struct GrandpaParams<B, E, Block: BlockT, N, RA, SC, VR, X, Sp> {
 	/// Handle to a future that will resolve on exit.
 	pub on_exit: X,
 	/// If supplied, can be used to hook on telemetry connection established events.
-	pub telemetry_on_connect: Option<mpsc::UnboundedReceiver<()>>,
+	pub telemetry_on_connect: Option<futures::channel::mpsc::UnboundedReceiver<()>>,
 	/// A voting rule used to potentially restrict target votes.
 	pub voting_rule: VR,
 	/// How to spawn background tasks.
