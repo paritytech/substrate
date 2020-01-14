@@ -42,7 +42,6 @@ use sp_runtime::traits::{
 pub use crate::modes::Mode;
 
 pub mod modes;
-mod complex_mode;
 mod simple_modes;
 
 pub trait RuntimeAdapter {
@@ -113,11 +112,6 @@ where
 	RA: RuntimeAdapter<Block = Block>,
 	Block::Hash: From<sp_core::H256>,
 {
-	if *factory_state.mode() != Mode::MasterToNToM && factory_state.rounds() > RA::Number::one() {
-		let msg = "The factory can only be used with rounds set to 1 in this mode.".into();
-		return Err(sc_cli::error::Error::Input(msg));
-	}
-
 	let best_header: Result<<Block as BlockT>::Header, sc_cli::error::Error> =
 		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
 	let mut best_hash = best_header?.hash();
@@ -127,14 +121,6 @@ where
 		.expect("Genesis block always exists; qed").into();
 
 	while let Some(block) = match factory_state.mode() {
-		Mode::MasterToNToM => complex_mode::next::<RA, _, _, _, _>(
-			&mut factory_state,
-			&client,
-			version,
-			genesis_hash,
-			best_hash.into(),
-			best_block_id,
-		),
 		_ => simple_modes::next::<RA, _, _, _, _>(
 			&mut factory_state,
 			&client,
@@ -176,11 +162,7 @@ where
 {
 	let mut block = client.new_block(Default::default()).expect("Failed to create new block");
 
-	let seed = match factory_state.mode() {
-		Mode::MasterTo1 => factory_state.start_number(),
-		Mode::MasterToN => factory_state.start_number() + factory_state.block_no(),
-		_ => unreachable!("Mode not covered!"),
-	};
+	let seed = factory_state.start_number();
 
 	let from = (RA::master_account_id(), RA::master_account_secret());
 	let amount = RA::minimum_balance();
