@@ -731,13 +731,13 @@ decl_storage! {
 		/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
 		///
 		/// Is it removed after `HISTORY_DEPTH` eras.
-		pub ErasStakers get(fn eras_stakers): double_map hasher(twox_64_concat) EraIndex,
-			twox_64_concat(T::AccountId) => Exposure<T::AccountId, BalanceOf<T>>;
-		// TODO: ^^^ This will need a migration.
+		pub ErasStakers get(fn eras_stakers):
+			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
+			=> Exposure<T::AccountId, BalanceOf<T>>;
 		// TODO: consider switching this to a simple map EraIndex => Vec<Exposure>
 
 		pub ErasValidatorPrefs get(fn eras_validator_prefs):
-			double_map hasher(twox_64_concat) EraIndex, twox_64_concat(T::AccountId)
+			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
 			=> ValidatorPrefs;
 
 		/// The per-validator era payout for one in the last `HISTORY_DEPTH` eras.
@@ -1691,11 +1691,6 @@ impl<T: Trait> Module<T> {
 			// Populate ErasStakers and figure out the total stake.
 			let mut total_staked = BalanceOf::<T>::zero();
 			for (c, s) in supports.into_iter() {
-				let mut others_exposure = s.others.into_iter()
-					.map(|(who, value)| IndividualExposure { who, value: to_balance(value) })
-					.collect::<Vec<IndividualExposure<_, _>>>();
-				others_exposure.sort_by(|a, b| a.who.cmp(&b.who));
-
 				// build `struct exposure` from `support`
 				let mut others = Vec::new();
 				let mut own: BalanceOf<T> = Zero::zero();
@@ -1711,6 +1706,7 @@ impl<T: Trait> Module<T> {
 						}
 						total = total.saturating_add(value);
 					});
+				others.sort_by(|a, b| a.who.cmp(&b.who));
 				let exposure = Exposure {
 					own,
 					others,
