@@ -16,19 +16,8 @@
 
 //! Substrate transaction pool implementation.
 
-#![warn(missing_docs)]
-#![warn(unused_extern_crates)]
-
-mod api;
-mod full_pool;
-pub mod error;
-
-#[cfg(test)]
-mod tests;
-
-pub use full_pool::FullPool;
-pub use sc_transaction_graph as txpool;
-pub use crate::api::{FullChainApi, LightChainApi};
+use sc_transaction_graph as txpool;
+use crate::api::{FullChainApi, LightChainApi};
 
 use std::{collections::HashMap, sync::Arc, pin::Pin, time::Instant};
 use futures::{Future, FutureExt, future::{ready, join}};
@@ -43,19 +32,19 @@ use sp_transaction_pool::{
 	TxHash, TransactionFor, TransactionStatusStreamFor, BlockHash,
 	MaintainedTransactionPool,
 };
+use crate::error;
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
-pub struct BasicPool<PoolApi, Block>
+pub struct FullPool<PoolApi, Block>
 	where
 		Block: BlockT,
 		PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
 {
 	pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 	api: Arc<PoolApi>,
-	revalidation_status: Arc<Mutex<TxPoolRevalidationStatus<NumberFor<Block>>>>,
 }
 
-impl<PoolApi, Block> BasicPool<PoolApi, Block>
+impl<PoolApi, Block> FullPool<PoolApi, Block>
 	where
 		Block: BlockT,
 		PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
@@ -64,23 +53,17 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	pub fn new(options: sc_transaction_graph::Options, pool_api: PoolApi) -> Self {
 		let api = Arc::new(pool_api);
 		let cloned_api = api.clone();
-		BasicPool {
+		FullPool {
 			api: cloned_api,
 			pool: Arc::new(sc_transaction_graph::Pool::new(options, api)),
-			revalidation_status: Arc::new(Mutex::new(TxPoolRevalidationStatus::NotScheduled)),
 		}
-	}
-
-	/// Gets shared reference to the underlying pool.
-	pub fn pool(&self) -> &Arc<sc_transaction_graph::Pool<PoolApi>> {
-		&self.pool
 	}
 }
 
-impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
-	where
-		Block: BlockT,
-		PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash, Error=error::Error>,
+impl<PoolApi, Block> TransactionPool for FullPool<PoolApi, Block>
+where
+	Block: BlockT,
+	PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash, Error=error::Error>,
 {
 	type Block = PoolApi::Block;
 	type Hash = sc_transaction_graph::ExHash<PoolApi>;
@@ -139,51 +122,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	}
 }
 
-#[cfg_attr(test, derive(Debug))]
-enum TxPoolRevalidationStatus<N> {
-	/// The revalidation has never been completed.
-	NotScheduled,
-	/// The revalidation is scheduled.
-	Scheduled(Option<std::time::Instant>, Option<N>),
-	/// The revalidation is in progress.
-	InProgress,
-}
-
-impl<N: Clone + Copy + SimpleArithmetic> TxPoolRevalidationStatus<N> {
-	/// Called when revalidation is completed.
-	pub fn clear(&mut self) {
-		*self = TxPoolRevalidationStatus::NotScheduled;
-	}
-
-	/// Returns true if revalidation is required.
-	pub fn is_required(
-		&mut self,
-		block: N,
-		revalidate_time_period: Option<std::time::Duration>,
-		revalidate_block_period: Option<N>,
-	) -> bool {
-		match *self {
-			TxPoolRevalidationStatus::NotScheduled => {
-				*self = TxPoolRevalidationStatus::Scheduled(
-					revalidate_time_period.map(|period| Instant::now() + period),
-					revalidate_block_period.map(|period| block + period),
-				);
-				false
-			},
-			TxPoolRevalidationStatus::Scheduled(revalidate_at_time, revalidate_at_block) => {
-				let is_required = revalidate_at_time.map(|at| Instant::now() >= at).unwrap_or(false)
-					|| revalidate_at_block.map(|at| block >= at).unwrap_or(false);
-				if is_required {
-					*self = TxPoolRevalidationStatus::InProgress;
-				}
-				is_required
-			},
-			TxPoolRevalidationStatus::InProgress => false,
-		}
-	}
-}
-
-impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
+impl<PoolApi, Block> MaintainedTransactionPool for FullPool<PoolApi, Block>
 where
 	Block: BlockT,
 	PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash, Error=error::Error>,
@@ -203,12 +142,6 @@ where
 		let id = id.clone();
 		let pool = self.pool.clone();
 		let api = self.api.clone();
-		let is_revalidation_required = self.revalidation_status.lock().is_required(
-			*header.number(),
-			Some(std::time::Duration::from_secs(60)),
-			Some(20.into()),
-		);
-		let revalidation_status = self.revalidation_status.clone();
 
 		async move {
 			let hashes = api.block_body(&id).await
@@ -224,13 +157,9 @@ where
 				log::warn!("Cannot prune known in the pool {:?}!", e);
 			}
 
-			if is_revalidation_required {
-				if let Err(e) = pool.revalidate_ready(&id, None).await {
-					log::warn!("revalidate ready failed {:?}", e);
-				}
+			if let Err(e) = pool.revalidate_ready(&id, None).await {
+				log::warn!("revalidate ready failed {:?}", e);
 			}
-
-			revalidation_status.lock().clear();
 		}.boxed()
 	}
 }
