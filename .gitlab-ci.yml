@@ -203,7 +203,7 @@ test-linux-stable-int:
     - echo "___Full log will be saved to the job artifacts only in case of failure.___"
     - WASM_BUILD_NO_COLOR=1 RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
         time cargo test -p node-cli --release --verbose --locked -- --ignored
-        2>&1 | tee ${CI_COMMIT_SHORT_SHA}_int_failure.log
+        &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
     - sccache -s
   after_script:
     - awk '/FAILED|^error\[/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
