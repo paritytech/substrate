@@ -110,6 +110,8 @@
 //! The **reward and slashing** procedure is the core of the Staking module, attempting to _embrace
 //! valid behavior_ while _punishing any misbehavior or lack of availability_.
 //!
+//! Reward must be claimed by stakers for each era before it gets too old by $HISTORY_DEPTH.
+//!
 //! Slashing can occur at any point in time, once misbehavior is reported. Once slashing is
 //! determined, a value is deducted from the balance of the validator and all the nominators who
 //! voted for this validator (values are deducted from the _stash_ account of the slashed entity).
@@ -164,14 +166,6 @@
 //! ```
 //!
 //! ## Implementation Details
-//!
-//! ### Slot Stake
-//!
-//! The term [`SlotStake`](./struct.Module.html#method.slot_stake) will be used throughout this
-//! section. It refers to a value calculated at the end of each era, containing the _minimum value
-//! at stake among all validators._ Note that a validator's value at stake might be a combination
-//! of the validator's own stake and the votes it received. See [`Exposure`](./struct.Exposure.html)
-//! for more details.
 //!
 //! ### Reward Calculation
 //!
@@ -314,7 +308,7 @@ pub struct EraRewardPoints<AccountId: Ord> {
 	individual: BTreeMap<AccountId, RewardPoint>,
 }
 
-/// Deprecated
+/// Deprecated. Used for migration only.
 // Reward points of an era. Used to split era total payout between validators.
 #[derive(Encode, Decode, Default)]
 pub struct EraPoints {
@@ -382,6 +376,17 @@ pub struct UnlockChunk<Balance: HasCompact> {
 	era: EraIndex,
 }
 
+/// Deprecated. Used for migration only.
+#[derive(Encode, Decode)]
+struct StakingLedgerV1<AccountId, Balance: HasCompact> {
+	stash: AccountId,
+	#[codec(compact)]
+	total: Balance,
+	#[codec(compact)]
+	active: Balance,
+	unlocking: Vec<UnlockChunk<Balance>>,
+}
+
 /// The ledger of a (bonded) stash.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct StakingLedger<AccountId, Balance: HasCompact> {
@@ -400,9 +405,7 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	pub unlocking: Vec<UnlockChunk<Balance>>,
 	/// The next era at which the staker can claim reward.
 	pub next_reward: EraIndex,
-	// TODO: ^^^ this will need migration logic.
 }
-
 
 impl<
 	AccountId,
@@ -584,6 +587,8 @@ pub trait SessionInterface<AccountId>: frame_system::Trait {
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
 	fn prune_historical_up_to(up_to: SessionIndex);
+	/// The current session index.
+	fn current_index() -> SessionIndex;
 }
 
 impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T where
@@ -607,6 +612,10 @@ impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T whe
 
 	fn prune_historical_up_to(up_to: SessionIndex) {
 		<pallet_session::historical::Module<T>>::prune_up_to(up_to);
+	}
+
+	fn current_index() -> SessionIndex {
+		<pallet_session::Module<T>>::current_index()
 	}
 }
 
@@ -804,10 +813,18 @@ decl_storage! {
 		/// Deprecated
 		// Rewards for the current era. Using indices of current elected set.
 		CurrentEraPointsEarned: EraPoints;
-	}
-	add_extra_genesis {
-		config(stakers):
-			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
+
+		/// Deprecated
+		// Nominators for a particular account that is in action right now. You can't iterate
+		// through validators here, but you can find them in the Session module.
+		//
+		// This is keyed by the stash account.
+		Stakers: map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
+
+}
+add_extra_genesis {
+config(stakers):
+		Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|config: &GenesisConfig<T>| {
 			for &(ref stash, ref controller, balance, ref status) in &config.stakers {
 				assert!(

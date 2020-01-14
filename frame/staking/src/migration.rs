@@ -24,10 +24,14 @@ pub const CURRENT_VERSION: VersionNumber = 2;
 
 #[cfg(any(test, feature = "migrate"))]
 mod inner {
-	use crate::{Store, Module, Trait};
-	use frame_support::{StorageLinkedMap, StorageValue};
+	use crate::{
+		Store, Module, Trait, EraRewardPoints, SessionInterface, BalanceOf, StakingLedger,
+		StakingLedgerV1,
+	};
+	use frame_support::{StorageLinkedMap, StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap};
 	use sp_std::vec::Vec;
 	use super::{CURRENT_VERSION, VersionNumber};
+	use sp_runtime::traits::Zero;
 
 	// the minimum supported version of the migration logic.
 	const MIN_SUPPORTED_VERSION: VersionNumber = 0;
@@ -60,38 +64,41 @@ mod inner {
 		frame_support::print("Finished migrating Staking storage to v1.");
 	}
 
+
 	pub fn from_v1_to_v2<T: Trait>(version: &mut VersionNumber) {
 		if *version != 1 { return }
 		*version += 1;
 
 		// Fill new storages.
 
-		// TODO TODO: ActiveEra.
-		// we can't just compare current elected and T::SessionInterface::validators() because we
-		// could be in a new era while having the same set, we need to compare
-		// CurrentEraStartSessionIndex with session::current_index
-		// Or: what if you put a wrong one ?
+		// Do ActiveEra
+		let current_era_start_index = <Module<T> as Store>::CurrentEraStartSessionIndex::get();
+		let current_era = <Module<T> as Store>::CurrentEra::get();
+		let active_era = if current_era_start_index > T::SessionInterface::current_index() {
+			current_era - 1
+		} else {
+			current_era
+		};
+		<Module<T> as Store>::ActiveEra::put(active_era);
 
 		// Do ErasStakers, ErasValidatorPrefs and ErasTotalStake
-		let current_era = <Module<T> as Store>::CurrentEra::get();
-		let active_era = <Module<T> as Store>::ActiveEra::get();
-		let old_current_elected = <Module<T>>::CurrentElected::get();
-		let mut current_total_stake = 0.into();
+		let old_current_elected = <Module<T> as Store>::CurrentElected::get();
+		let mut current_total_stake = <BalanceOf<T>>::zero();
 		for validator in &old_current_elected {
-			let exposure = <Module<T> as Store>::Stakers::get(elected);
+			let exposure = <Module<T> as Store>::Stakers::get(validator);
 			current_total_stake += exposure.total;
-			let pref = <Module<T> as Store>::Validator::get(elected);
+			let pref = <Module<T> as Store>::Validators::get(validator);
 			<Module<T> as Store>::ErasStakers::insert(current_era, validator, exposure);
-			<Module<T> as Store>::ErasValidatorPrefs::insert(current_era, validator, exposure);
+			<Module<T> as Store>::ErasValidatorPrefs::insert(current_era, validator, pref);
 		}
 		<Module<T> as Store>::ErasTotalStake::insert(current_era, current_total_stake);
-		let mut active_total_stake = 0.into();
-		for validator in T::SessionInterface::validators() {
-			let exposure = <Module<T> as Store>::Stakers::get(elected);
+		let mut active_total_stake = <BalanceOf<T>>::zero();
+		for validator in &T::SessionInterface::validators() {
+			let exposure = <Module<T> as Store>::Stakers::get(validator);
 			active_total_stake += exposure.total;
-			let pref = <Module<T> as Store>::Validator::get(elected);
+			let pref = <Module<T> as Store>::Validators::get(validator);
 			<Module<T> as Store>::ErasStakers::insert(active_era, validator, exposure);
-			<Module<T> as Store>::ErasValidatorPrefs::insert(active_era, validator, exposure);
+			<Module<T> as Store>::ErasValidatorPrefs::insert(active_era, validator, pref);
 		}
 		<Module<T> as Store>::ErasTotalStake::insert(active_era, active_total_stake);
 
@@ -99,12 +106,22 @@ mod inner {
 		let points = <Module<T> as Store>::CurrentEraPointsEarned::get();
 		<Module<T> as Store>::ErasRewardPoints::insert(active_era, EraRewardPoints {
 			total: points.total,
-			individual: current_elected.zip(points.individual).collect(),
-			// TODO TODO: this or zip with active_validators?
-		})
+			individual: old_current_elected.iter().cloned().zip(points.individual.iter().cloned()).collect(),
+		});
 
 		// Do ActiveEraStart
 		<Module<T> as Store>::ActiveEraStart::put(<Module<T> as Store>::CurrentEraStart::get());
+
+		// TODO TODO: StakingLedger
+		// let res = <Module<T> as Store>::Ledger::translate_value(
+		// 	|old: StakingLedgerV1<T::AccountId, BalanceOf<T>>| StakingLedger {
+		// 		stash: old.stash,
+		// 		total: old.total,
+		// 		active: old.active,
+		// 		unlocking: old.unlocking,
+		// 		next_reward: 0,
+		// 	}
+		// );
 
 		// Kill old storages
 		<Module<T> as Store>::SlotStake::kill();
