@@ -65,7 +65,7 @@
 //! 		NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None),
 //!		),
 //! 	// This parameter provides the storage for the chain genesis.
-//! 	<Storage>::default(),
+//! 	&<Storage>::default(),
 //! 	Default::default(),
 //! 	Default::default(),
 //! 	Default::default(),
