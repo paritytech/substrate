@@ -277,15 +277,16 @@ impl OverlayedChangeSet {
 	/// There is always a transactional layer running
 	/// (discarding the last trasactional layer open a new one).
 	pub fn discard_transaction(&mut self) {
-		let number_transactions = self.number_transactions.saturating_sub(1);
-
+		self.number_transactions = self.number_transactions.saturating_sub(1);
+		let number_transactions = self.number_transactions;
 		retain(&mut self.top, |_, history| history.discard_transaction(number_transactions) != LayeredOpsResult::Cleared);
 		self.children.retain(|_, (map, _child_info)| {
 			retain(map, |_, history| history.discard_transaction(number_transactions) != LayeredOpsResult::Cleared);
 			!map.is_empty()
 		});
 		if number_transactions == COMMITTED_LAYER {
-			self.number_transactions = COMMITTED_LAYER + 1;
+			// start new transaction
+			self.start_transaction();
 		} else {
 			self.number_transactions = number_transactions;
 		}
@@ -293,10 +294,11 @@ impl OverlayedChangeSet {
 
 	/// Commit a transactional layer into previous transaction layer.
 	pub fn commit_transaction(&mut self) {
-		if self.number_transactions > COMMITTED_LAYER + 1 {
-			self.number_transactions -= 1;
+		if self.number_transactions == COMMITTED_LAYER + 1 {
+			// do nothing
+			return;
 		}
-
+		self.number_transactions = self.number_transactions.saturating_sub(1);
 		let number_transactions = self.number_transactions;
 		retain(&mut self.top, |_, history| history.commit_transaction(number_transactions) != LayeredOpsResult::Cleared);
 		self.children.retain(|_, (map, _child_info)| {
