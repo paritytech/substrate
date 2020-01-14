@@ -355,6 +355,12 @@ pub trait Misc {
 	/// Extract the runtime version of the given wasm blob by calling `Core_version`.
 	///
 	/// Returns the SCALE encoded runtime version and `None` if the call failed.
+	///
+	/// # Performance
+	///
+	/// Calling this function is very expensive and should only be done very occasionally.
+	/// For getting the runtime version, it requires instantiating the wasm blob and calling a
+	/// function in this blob.
 	fn runtime_version(&mut self, wasm: &[u8]) -> Option<Vec<u8>> {
 		// Create some dummy externalities, `Core_version` should not write data anyway.
 		let mut ext = sp_state_machine::BasicExternalities::default();
