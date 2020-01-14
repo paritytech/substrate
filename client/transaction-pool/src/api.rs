@@ -71,6 +71,15 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 	type Hash = Block::Hash;
 	type Error = error::Error;
 	type ValidationFuture = Pin<Box<dyn Future<Output = error::Result<TransactionValidity>> + Send>>;
+	type BodyFuture = Pin<Box<dyn Future<Output = error::Result<Vec<<Self::Block as BlockT>::Extrinsic>>> + Send>>;
+
+	fn block_header(&self, at: &BlockId<Self::Block>) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
+		Ok(None)
+	}
+
+	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture {
+		Box::pin(ready(Ok(Vec::new())))
+	}
 
 	fn validate_transaction(
 		&self,
@@ -149,6 +158,7 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, 
 	type Hash = Block::Hash;
 	type Error = error::Error;
 	type ValidationFuture = Box<dyn Future<Output = error::Result<TransactionValidity>> + Send + Unpin>;
+	type BodyFuture = Pin<Box<dyn Future<Output = error::Result<Vec<<Self::Block as BlockT>::Extrinsic>>> + Send>>;
 
 	fn validate_transaction(
 		&self,
@@ -196,5 +206,13 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, 
 		ex.using_encoded(|x| {
 			(<<Block::Header as HeaderT>::Hashing as HashT>::hash(x), x.len())
 		})
+	}
+
+	fn block_header(&self, at: &BlockId<Self::Block>) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
+		Ok(None)
+	}
+
+	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture {
+		Box::pin(ready(Ok(Vec::new())))
 	}
 }

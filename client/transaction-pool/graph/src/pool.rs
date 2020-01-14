@@ -68,6 +68,8 @@ pub trait ChainApi: Send + Sync {
 	type Error: From<error::Error> + error::IntoPoolError;
 	/// Validate transaction future.
 	type ValidationFuture: Future<Output=Result<TransactionValidity, Self::Error>> + Send + Unpin;
+	/// Body future (since block body might be remote)
+	type BodyFuture: Future<Output = Result<Vec<<Self::Block as traits::Block>::Extrinsic>, Self::Error>> + Unpin + Send + 'static;
 
 	/// Verify extrinsic at given block.
 	fn validate_transaction(
@@ -84,6 +86,12 @@ pub trait ChainApi: Send + Sync {
 
 	/// Returns hash and encoding length of the extrinsic.
 	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize);
+
+	/// Return header
+	fn block_header(&self, at: &BlockId<Self::Block>) -> Result<Option<<Self::Block as traits::Block>::Header>, Self::Error>;
+
+	/// Return body
+	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture;
 }
 
 /// Pool configuration options.
@@ -120,7 +128,7 @@ pub struct Pool<B: ChainApi> {
 
 impl<B: ChainApi> Pool<B> {
 	/// Create a new transaction pool.
-	pub fn new(options: Options, api: B) -> Self {
+	pub fn new(options: Options, api: Arc<B>) -> Self {
 		Pool {
 			validated_pool: Arc::new(ValidatedPool::new(options, api)),
 		}

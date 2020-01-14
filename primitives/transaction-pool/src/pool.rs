@@ -20,6 +20,7 @@ use std::{
 	collections::HashMap,
 	hash::Hash,
 	sync::Arc,
+	pin::Pin,
 };
 use futures::{
 	Future, Stream,
@@ -223,9 +224,12 @@ pub trait TransactionPool: Send + Sync {
 
 	/// Returns transaction hash
 	fn hash_of(&self, xt: &TransactionFor<Self>) -> TxHash<Self>;
+}
 
+pub trait MaintainedTransactionPool : TransactionPool {
 	/// Perform maintaince
-	fn maintain(&self, block: &BlockId<Self::Block>, retracted: &[BlockHash<Self>]);
+	fn maintain(&self, block: &BlockId<Self::Block>, retracted: &[BlockHash<Self>])
+		-> Pin<Box<dyn Future<Output=()> + Send>>;
 }
 
 /// An abstraction for transaction pool.

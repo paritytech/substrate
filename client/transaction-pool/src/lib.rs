@@ -30,8 +30,8 @@ pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 //pub use crate::maintainer::{FullBasicPoolMaintainer, LightBasicPoolMaintainer};
 
-use std::{collections::HashMap, sync::Arc};
-use futures::{Future, FutureExt};
+use std::{collections::HashMap, sync::Arc, pin::Pin};
+use futures::{Future, FutureExt, future::{ready, join}};
 
 use sp_runtime::{
 	generic::BlockId,
@@ -40,6 +40,7 @@ use sp_runtime::{
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream,
 	TxHash, TransactionFor, TransactionStatusStreamFor, BlockHash,
+	MaintainedTransactionPool,
 };
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
@@ -49,6 +50,7 @@ pub struct BasicPool<PoolApi, Block>
 		PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
 {
 	pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
+	api: Arc<PoolApi>,
 }
 
 impl<PoolApi, Block> BasicPool<PoolApi, Block>
@@ -58,8 +60,11 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 {
 	/// Create new basic transaction pool with provided api.
 	pub fn new(options: sc_transaction_graph::Options, pool_api: PoolApi) -> Self {
+		let api = Arc::new(pool_api);
+		let cloned_api = api.clone();
 		BasicPool {
-			pool: Arc::new(sc_transaction_graph::Pool::new(options, pool_api)),
+			api: cloned_api,
+			pool: Arc::new(sc_transaction_graph::Pool::new(options, api)),
 		}
 	}
 
@@ -129,7 +134,48 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	fn on_broadcasted(&self, propagations: HashMap<TxHash<Self>, Vec<String>>) {
 		self.pool.on_broadcasted(propagations)
 	}
+}
 
-	fn maintain(&self, block: &BlockId<Self::Block>, retracted: &[BlockHash<Self>]) {
+impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
+where
+	Block: BlockT,
+	PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash, Error=error::Error>,
+{
+	fn maintain(&self, id: &BlockId<Self::Block>, retracted: &[BlockHash<Self>]) -> Pin<Box<dyn Future<Output=()> + Send>> {
+		// basic pool revalidates everything in place (TODO: only if certain time has passed)
+		let header = self.api.block_header(id)
+			.and_then(|h| h.ok_or(error::Error::Blockchain(sp_blockchain::Error::UnknownBlock(format!("{}", id)))));
+		let header = match header {
+			Ok(header) => header,
+			Err(err) => {
+				log::warn!("Failed to maintain basic tx pool - no header in chain! {:?}", err);
+				return Box::pin(ready(()))
+			}
+		};
+
+		let id = id.clone();
+		let pool = self.pool.clone();
+		let api = self.api.clone();
+
+		async move {
+			let double_pool = pool.clone();
+			let hashes = api.block_body(&id).await
+				.unwrap_or_else(|e| {
+					log::warn!("Prune known transactions: error request {:?}!", e);
+					vec![]
+				})
+				.into_iter()
+				.map(|tx| pool.hash_of(&tx))
+				.collect::<Vec<_>>();
+
+			if let Err(e) = pool.prune_known(&id, &hashes) {
+				log::warn!("Cannot prune known in the pool {:?}!", e);
+			}
+
+			if let Err(e) = double_pool.revalidate_ready(&id, None).await {
+				log::warn!("revalidate ready failed {:?}", e);
+			}
+		}.boxed()
 	}
 }
+

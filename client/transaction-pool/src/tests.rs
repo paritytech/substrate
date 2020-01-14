@@ -20,9 +20,9 @@ use super::*;
 use codec::Encode;
 use futures::executor::block_on;
 use sc_transaction_graph::{self, Pool};
-use substrate_test_runtime_client::{runtime::{AccountId, Block, Hash, Index, Extrinsic, Transfer}, AccountKeyring::{self, *}};
+use substrate_test_runtime_client::{runtime::{AccountId, Block, Hash, Header, Index, Extrinsic, Transfer}, AccountKeyring::{self, *}};
 use sp_runtime::{
-	generic::{self, BlockId},
+	generic::{self, BlockId, Block as BlockT},
 	traits::{Hash as HashT, BlakeTwo256},
 	transaction_validity::{TransactionValidity, ValidTransaction},
 };
@@ -44,6 +44,7 @@ impl sc_transaction_graph::ChainApi for TestApi {
 	type Hash = Hash;
 	type Error = error::Error;
 	type ValidationFuture = futures::future::Ready<error::Result<TransactionValidity>>;
+	type BodyFuture = futures::future::Ready<error::Result<Vec<Extrinsic>>>;
 
 	fn validate_transaction(
 		&self,
@@ -89,6 +90,13 @@ impl sc_transaction_graph::ChainApi for TestApi {
 		(BlakeTwo256::hash(&encoded), encoded.len())
 	}
 
+	fn block_header(&self, id: &BlockId<Self::Block>) -> error::Result<Option<Header>> {
+		Ok(None)
+	}
+
+	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
+		futures::future::ready(Ok(vec![]))
+	}
 }
 
 fn index(at: &BlockId<Block>) -> u64 {
@@ -114,7 +122,11 @@ fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
 }
 
 fn pool() -> Pool<TestApi> {
-	Pool::new(Default::default(), TestApi::default())
+	Pool::new(Default::default(), TestApi::default().into())
+}
+
+fn pool_api_with_modifier(modifier: Box<dyn Fn(&mut ValidTransaction) + Send + Sync>) -> Pool<TestApi> {
+	Pool::new(Default::default(), TestApi { modifier }.into())
 }
 
 #[test]
@@ -196,7 +208,7 @@ fn should_correctly_prune_transactions_providing_more_than_one_tag() {
 	api.modifier = Box::new(|v: &mut ValidTransaction| {
 		v.provides.push(vec![155]);
 	});
-	let pool = Pool::new(Default::default(), api);
+	let pool = Pool::new(Default::default(), Arc::new(api));
 	let xt = uxt(Alice, 209);
 	block_on(pool.submit_one(&BlockId::number(0), xt.clone())).expect("1. Imported");
 	assert_eq!(pool.status().ready, 1);
