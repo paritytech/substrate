@@ -1699,15 +1699,30 @@ impl<T: Trait> Module<T> {
 				others_exposure.sort_by(|a, b| a.who.cmp(&b.who));
 
 				// build `struct exposure` from `support`
+				let mut others = Vec::new();
+				let mut own: BalanceOf<T> = Zero::zero();
+				let mut total: BalanceOf<T> = Zero::zero();
+				s.voters
+					.into_iter()
+					.map(|(who, value)| (who, to_balance(value)))
+					.for_each(|(who, value)| {
+						if who == c {
+							own = own.saturating_add(value);
+						} else {
+							others.push(IndividualExposure { who, value });
+						}
+						total = total.saturating_add(value);
+					});
 				let exposure = Exposure {
-					own: to_balance(s.own),
+					own,
+					others,
 					// This might reasonably saturate and we cannot do much about it. The sum of
 					// someone's stake might exceed the balance type if they have the maximum amount
 					// of balance and receive some support. This is super unlikely to happen, yet
 					// we simulate it in some tests.
-					total: to_balance(s.total),
-					others: others_exposure,
+					total,
 				};
+
 				total_staked = total_staked.saturating_add(exposure.total);
 				<ErasStakers<T>>::insert(&current_era, &c, exposure.clone());
 			}
