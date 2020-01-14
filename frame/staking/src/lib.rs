@@ -1690,8 +1690,7 @@ impl<T: Trait> Module<T> {
 			);
 
 			let current_era = Self::current_era();
-			// Populate ErasStakers and figure out the minimum stake behind a slot.
-			let mut slot_stake = BalanceOf::<T>::max_value();
+			// Populate ErasStakers and figure out the total stake.
 			let mut total_staked = BalanceOf::<T>::zero();
 			for (c, s) in supports.into_iter() {
 				let mut others_exposure = s.others.into_iter()
@@ -1709,9 +1708,6 @@ impl<T: Trait> Module<T> {
 					total: to_balance(s.total),
 					others: others_exposure,
 				};
-				if exposure.total < slot_stake {
-					slot_stake = exposure.total;
-				}
 				total_staked = total_staked.saturating_add(exposure.total);
 				<ErasStakers<T>>::insert(&current_era, &c, exposure.clone());
 			}
