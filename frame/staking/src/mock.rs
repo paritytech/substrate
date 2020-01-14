@@ -32,6 +32,9 @@ use frame_support::{
 	traits::{Currency, Get, FindAuthor, PredictNextSessionChange},
 	weights::Weight,
 };
+use frame_system::offchain::{
+	TransactionSubmitter, SignAndSubmitTransaction, Signer, CreateTransaction,
+};
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
 	Nominators, inflation
@@ -283,28 +286,45 @@ impl Trait for Test {
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
 	type NextSessionChange = PeriodicSessionChange<Period>;
-	type SigningKeyType = UintAuthorityId;
+	type SigningKeyType = dummy_sr25519::AuthorityId;
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
-	type SubmitTransaction = ();
+	type SubmitTransaction = SubmitTransaction;
 }
 
-// impl frame_system::offchain::CreateTransaction<Test, Extrinsic> for Test {
-// 	type Signature = <UintAuthorityId as sp_runtime::RuntimeAppPublic>::Signature;
-// 	type Public = <<UintAuthorityId as sp_core::crypto::CryptoType>::Pair as sp_core::crypto::Pair>::Public;
-// 	fn create_transaction<F: frame_system::offchain::Signer<Self::Public, Self::Signature>>(
-// 		call: Call,
-// 		public: Self::Public,
-// 		account: AccountId,
-// 		_index: AccountIndex,
-// 	) -> Option<(<Extrinsic as ExtrinsicT>::Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
-// 		let extra = ();
-// 		Some((call, (account, extra)))
-// 	}
-// }
+pub mod dummy_sr25519 {
+	mod app_sr25519 {
+		use sp_application_crypto::{app_crypto, key_types::DUMMY, sr25519};
+		app_crypto!(sr25519, DUMMY);
+	}
 
-// pub type Extrinsic = TestXt<Call, ()>;
-// type SubmitTransaction = frame_system::offchain::TransactionSubmitter<(), Call, Extrinsic>;
+	#[cfg(feature = "std")]
+	pub type AuthorityPair = app_sr25519::Pair;
+	pub type AuthoritySignature = app_sr25519::Signature;
+	pub type AuthorityId = app_sr25519::Public;
+
+	impl sp_runtime::traits::IdentifyAccount for AuthorityId {
+		type AccountId = u64;
+		fn into_account(self) -> Self::AccountId { 11u64 }
+	}
+}
+
+impl CreateTransaction<Test, Extrinsic> for Test {
+	type Signature = dummy_sr25519::AuthoritySignature;
+	type Public = dummy_sr25519::AuthorityId;
+	fn create_transaction<F: Signer<Self::Public, Self::Signature>>(
+		call: Call,
+		public: Self::Public,
+		account: AccountId,
+		_index: AccountIndex,
+	) -> Option<(<Extrinsic as ExtrinsicT>::Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
+		let extra = ();
+		Some((call, (account, extra)))
+	}
+}
+
+pub type Extrinsic = TestXt<Call, ()>;
+type SubmitTransaction = TransactionSubmitter<dummy_sr25519::AuthorityId, Test, Extrinsic>;
 
 pub struct ExtBuilder {
 	session_length: BlockNumber,

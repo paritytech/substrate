@@ -280,7 +280,10 @@ use sp_staking::{
 };
 #[cfg(feature = "std")]
 use sp_runtime::{Serialize, Deserialize};
-use frame_system::{self as system, ensure_signed, ensure_root, offchain::SubmitSignedTransaction};
+use frame_system::{
+	self as system, ensure_signed, ensure_root,
+	offchain::{SignAndSubmitTransaction, SubmitSignedTransaction},
+};
 
 use sp_phragmen::{ExtendedBalance, Assignment, StakedAssignment};
 
@@ -706,8 +709,7 @@ pub trait Trait: frame_system::Trait {
 	type Call: From<Call<Self>>;
 
 	/// A transaction submitter.
-	// type SubmitTransaction: SubmitSignedTransaction<Self, <Self as Trait>::Call>;
-	type SubmitTransaction;
+	type SubmitTransaction: SignAndSubmitTransaction<Self, <Self as Trait>::Call> + SubmitSignedTransaction<Self, <Self as Trait>::Call>;
 }
 
 /// Mode of era-forcing.
@@ -957,25 +959,31 @@ decl_module! {
 			if sp_io::offchain::is_validator() {
 				if Self::election_status() == OffchainElectionStatus::<T::BlockNumber>::Triggered(now) {
 					let era = CurrentEra::get();
-					if let Some(election_result) = Self::do_phragmen(ElectionCompute::Submitted) {
-						if let Some(key) = Self::local_signing_key() {
-							if let Some(sp_phragmen::PhragmenResult {
-								winners,
-								assignments,
-							}) = Self::do_phragmen(ElectionCompute::Submitted) {
-								let winners = winners.into_iter().map(|(w, _)| w).collect();
-								let compact_assignments: CompactAssignments<T::AccountId> = assignments.into();
-								let call: <T as Trait>::Call = Call::submit_election_result(
-									winners,
-									compact_assignments,
-								).into();
-								// T::SubmitTransaction::sign_and_submit(call, key);
-							} else {
-								frame_support::print("ran phragmen offchain but None was returned.");
-							}
+					// get all local keys that are among the current elected stakers.
+					let local_keys = T::SubmitTransaction::find_local_keys(Some(Self::current_elected()));
+					if local_keys.len() > 0 {
+						// run phragmen
+						if let Some(sp_phragmen::PhragmenResult {
+							winners,
+							assignments,
+						}) = Self::do_phragmen(ElectionCompute::Submitted) {
+							let winners = winners.into_iter().map(|(w, _)| w).collect();
+							// reduce the assignments. This will remove some additional edges.
+							// let reduced_assignments = sp_phragmen::reduce(&mut assignments);
+							// compact encode the assignment.
+							// let reduced_compact_assignments: CompactAssignments<T::AccountId> = assignments.into();
+							let compact_assignments: CompactAssignments<T::AccountId> = assignments.into();
+
+							let call: <T as Trait>::Call = Call::submit_election_result(winners, compact_assignments).into();
+
+							// TODO: we could allow offchain submitter to handler this as well.
+							// NOTE: uncomment this and rustc dies.
+							// <T::SubmitTransaction as SignAndSubmitTransaction<T, <T as Trait>::Call>>::sign_and_submit(call, local_keys[0].1.into());
 						} else {
-							frame_support::print("validator with not signing key.");
+							frame_support::print("ran phragmen offchain, but None was returned.");
 						}
+					} else {
+						frame_support::print("Have no key to sign this with");
 					}
 				} else {
 					frame_support::print("validator did not start offchain election.");

@@ -3956,6 +3956,7 @@ dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-application-crypto 2.0.0",
  "sp-core 2.0.0",
  "sp-io 2.0.0",
  "sp-keyring 2.0.0",
