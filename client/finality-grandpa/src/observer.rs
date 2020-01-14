@@ -28,7 +28,7 @@ use log::{debug, info, warn};
 use sp_consensus::SelectChain;
 use sc_client_api::{CallExecutor, backend::{Backend, AuxStore}};
 use sc_client::Client;
-use sp_runtime::traits::{NumberFor, Block as BlockT, Header as HeaderT};
+use sp_runtime::traits::{NumberFor, Block as BlockT};
 
 use crate::{
 	global_communication, CommandOrError, CommunicationIn, Config, environment,
