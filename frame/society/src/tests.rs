@@ -742,3 +742,68 @@ fn max_limits_work() {
 		assert_eq!(Society::candidates().len(), 10);
 	});
 }
+
+#[test]
+fn zero_bid_works() {
+	// This tests:
+	// * Only one zero bid is selected.
+	// * That zero bid is placed as head when accepted.
+	EnvBuilder::new().execute(|| {
+		// Users make bids of various amounts
+		assert_ok!(Society::bid(Origin::signed(60), 400));
+		assert_ok!(Society::bid(Origin::signed(50), 300));
+		assert_ok!(Society::bid(Origin::signed(30), 0));
+		assert_ok!(Society::bid(Origin::signed(20), 0));
+		assert_ok!(Society::bid(Origin::signed(40), 0));
+
+		// Rotate period
+		run_to_block(4);
+		// Pot is 1000 after "PeriodSpend"
+		assert_eq!(Society::pot(), 1000);
+		assert_eq!(Balances::free_balance(Society::account_id()), 10_000);
+		// Choose smallest bidding users whose total is less than pot, with only one zero bid.
+		assert_eq!(Society::candidates(), vec![
+			create_bid(0, 30, BidKind::Deposit(25)),
+			create_bid(300, 50, BidKind::Deposit(25)),
+			create_bid(400, 60, BidKind::Deposit(25)),
+		]);
+		assert_eq!(<Bids<Test>>::get(), vec![
+			create_bid(0, 20, BidKind::Deposit(25)),
+			create_bid(0, 40, BidKind::Deposit(25)),
+		]);
+		// A member votes for these candidates to join the society
+		assert_ok!(Society::vote(Origin::signed(10), 30, true));
+		assert_ok!(Society::vote(Origin::signed(10), 50, true));
+		assert_ok!(Society::vote(Origin::signed(10), 60, true));
+		run_to_block(8);
+		// Candidates become members after a period rotation
+		assert_eq!(Society::members(), vec![10, 30, 50, 60]);
+		// The zero bid is selected as head
+		assert_eq!(Society::head(), Some(30));
+	});
+}
+
+#[test]
+fn bids_ordered_correctly() {
+	// This tests that bids with the same value are placed in the list ordered
+	// with bidders who bid first earlier on the list.
+	EnvBuilder::new().execute(|| {
+		for i in 0..5 {
+			for j in 0..5 {
+				// Give them some funds
+				let _ = Balances::make_free_balance_be(&(100 + (i * 5 + j) as u128), 1000);
+				assert_ok!(Society::bid(Origin::signed(100 + (i * 5 + j) as u128), j));
+			}
+		}
+
+		let mut final_list = Vec::new();
+
+		for j in 0..5 {
+			for i in 0..5 {
+				final_list.push(create_bid(j, 100 + (i * 5 + j) as u128,  BidKind::Deposit(25)));
+			}
+		}
+
+		assert_eq!(<Bids<Test>>::get(), final_list);
+	});
+}
