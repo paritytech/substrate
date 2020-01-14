@@ -15,17 +15,17 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! # Society Module
-//! 
+//!
 //! - [`society::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
-//! 
+//!
 //! ## Overview
-//! 
+//!
 //! The Society module is an economic game which incentivizes users to participate
-//! and maintain a membership society. 
-//! 
+//! and maintain a membership society.
+//!
 //! ### User Types
-//! 
+//!
 //! At any point, a user in the society can be one of a:
 //! * Bidder - A user who has submitted intention of joining the society.
 //! * Candidate - A user who will be voted on to join the society.
@@ -33,31 +33,31 @@
 //! * Member - A user who is a member of the society.
 //! * Suspended Member - A member of the society who has accumulated too many strikes
 //! or failed their membership challenge.
-//! 
+//!
 //! Of the non-suspended members, there is always a:
 //! * Head - A member who is exempt from suspension.
 //! * Defender - A member whose membership is under question and voted on again.
-//! 
+//!
 //! Of the non-suspended members of the society, a random set of them are chosen as
 //! "skeptics". The mechanics of skeptics is explained in the
 //! [member phase](#member-phase) below.
-//! 
+//!
 //! ### Mechanics
-//! 
+//!
 //! #### Rewards
-//! 
+//!
 //! Members are incentivized to participate in the society through rewards paid
 //! by the Society treasury. These payments have a maturity period that the user
 //! must wait before they are able to access the funds.
-//! 
+//!
 //! #### Punishments
-//! 
+//!
 //! Members can be punished by slashing the reward payouts that have not been
 //! collected. Additionally, members can accumulate "strikes", and when they
 //! reach a max strike limit, they become suspended.
-//! 
+//!
 //! #### Skeptics
-//! 
+//!
 //! During the voting period, a random set of members are selected as "skeptics".
 //! These skeptics are expected to vote on the current candidates. If they do not vote,
 //! their skeptic status is treated as a rejection vote, the member is deemed
@@ -72,7 +72,7 @@
 //! assuming no one else votes, the defender always get a free vote on their
 //! own challenge keeping them in the society. The Head member is exempt from the
 //! negative outcome of a membership challenge.
-//! 
+//!
 //! #### Society Treasury
 //!
 //! The membership society is independently funded by a treasury managed by this
@@ -80,17 +80,17 @@
 //! to determine the number of accepted bids.
 //!
 //! #### Rate of Growth
-//! 
+//!
 //! The membership society can grow at a rate of 10 accepted candidates per rotation period up
 //! to the max membership threshold. Once this threshold is met, candidate selections
 //! are stalled until there is space for new members to join. This can be resolved by
 //! voting out existing members through the random challenges or by using governance
 //! to increase the maximum membership count.
-//! 
+//!
 //! ### User Life Cycle
-//! 
+//!
 //! A user can go through the following phases:
-//! 
+//!
 //! ```ignore
 //!           +------->  User  <----------+
 //!           |           +               |
@@ -115,40 +115,40 @@
 //! |                                              |
 //! +------------------Society---------------------+
 //! ```
-//! 
+//!
 //! #### Initialization
-//! 
+//!
 //! The society is initialized with a single member who is automatically chosen as the Head.
-//! 
+//!
 //! #### Bid Phase
-//! 
+//!
 //! New users must have a bid to join the society.
-//! 
+//!
 //! A user can make a bid by reserving a deposit. Alternatively, an already existing member
 //! can create a bid on a user's behalf by "vouching" for them.
-//! 
+//!
 //! A bid includes reward information that the user would like to receive for joining
 //! the society. A vouching bid can additionally request some portion of that reward as a tip
 //! to the voucher for vouching for the prospective candidate.
-//! 
+//!
 //! Every rotation period, Bids are ordered by reward amount, and the module
 //! selects as many bids the Society Pot can support for that period.
-//! 
+//!
 //! These selected bids become candidates and move on to the Candidate phase.
 //! Bids that were not selected stay in the bidder pool until they are selected or
 //! a user chooses to "unbid".
-//! 
+//!
 //! #### Candidate Phase
-//! 
+//!
 //! Once a bidder becomes a candidate, members vote whether to approve or reject
 //! that candidate into society. This voting process also happens during a rotation period.
-//! 
+//!
 //! The approval and rejection criteria for candidates are not set on chain,
 //! and may change for different societies.
-//! 
+//!
 //! At the end of the rotation period, we collect the votes for a candidate
 //! and randomly select a vote as the final outcome.
-//! 
+//!
 //! ```ignore
 //!  [ a-accept, r-reject, s-skeptic ]
 //! +----------------------------------+
@@ -163,63 +163,63 @@
 //!
 //! Result: Rejected
 //! ```
-//! 
+//!
 //! Each member that voted opposite to this randomly selected vote is punished by
 //! slashing their unclaimed payouts and increasing the number of strikes they have.
-//! 
+//!
 //! These slashed funds are given to a random user who voted the same as the
 //! selected vote as a reward for participating in the vote.
-//! 
+//!
 //! If the candidate wins the vote, they receive their bid reward as a future payout.
 //! If the bid was placed by a voucher, they will receive their portion of the reward,
 //! before the rest is paid to the winning candidate.
 //!
 //! One winning candidate is selected as the Head of the members. This is randomly
 //! chosen, weighted by the number of approvals the winning candidates accumulated.
-//! 
+//!
 //! If the candidate loses the vote, they are suspended and it is up to the Suspension
 //! Judgement origin to determine if the candidate should go through the bidding process
 //! again, should be accepted into the membership society, or rejected and their deposit
 //! slashed.
-//! 
+//!
 //! #### Member Phase
-//! 
+//!
 //! Once a candidate becomes a member, their role is to participate in society.
-//! 
+//!
 //! Regular participation involves voting on candidates who want to join the membership
 //! society, and by voting in the right way, a member will accumulate future payouts.
 //! When a payout matures, members are able to claim those payouts.
-//! 
+//!
 //! Members can also vouch for users to join the society, and request a "tip" from
 //! the fees the new member would collect by joining the society. This vouching
 //! process is useful in situations where a user may not have enough balance to
 //! satisfy the bid deposit. A member can only vouch one user at a time.
-//! 
+//!
 //! During rotation periods, a random group of members are selected as "skeptics".
 //! These skeptics are expected to vote on the current candidates. If they do not vote,
 //! their skeptic status is treated as a rejection vote, the member is deemed
 //! "lazy", and are given a strike per missing vote.
-//! 
+//!
 //! There is a challenge period in parallel to the rotation period. During a challenge period,
 //! a random member is selected to defend their membership to the society. Other members
 //! make a traditional majority-wins vote to determine if the member should stay in the society.
 //! Ties are treated as a failure of the challenge.
-//! 
+//!
 //! If a member accumulates too many strikes or fails their membership challenge,
 //! they will become suspended. While a member is suspended, they are unable to
 //! claim matured payouts. It is up to the Suspension Judgement origin to determine
 //! if the member should re-enter society or be removed from society with all their
 //! future payouts slashed.
-//! 
+//!
 //! ## Interface
-//! 
+//!
 //! ### Dispatchable Functions
-//! 
+//!
 //! #### For General Users
-//! 
+//!
 //! * `bid` - A user can make a bid to join the membership society by reserving a deposit.
 //! * `unbid` - A user can withdraw their bid for entry, the deposit is returned.
-//! 
+//!
 //! #### For Members
 //!
 //! * `vouch` - A member can place a bid on behalf of a user to join the membership society.
@@ -228,9 +228,9 @@
 //! * `defender_vote` - A member can vote to approve or reject a defender's continued membership
 //! to the society.
 //! * `payout` - A member can claim their first matured payment.
-//! 
+//!
 //! #### For Super Users
-//! 
+//!
 //! * `found` - The founder origin can initiate this society. Useful for bootstrapping the Society
 //! pallet on an already running chain.
 //! * `judge_suspended_member` - The suspension judgement origin is able to make
@@ -305,7 +305,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	type MaxLockDuration: Get<Self::BlockNumber>;
 
 	/// The origin that is allowed to call `found`.
-	type FounderOrigin: EnsureOrigin<Self::Origin>;
+	type FounderSetOrigin: EnsureOrigin<Self::Origin>;
 
 	/// The origin that is allowed to make suspension judgements.
 	type SuspensionJudgementOrigin: EnsureOrigin<Self::Origin>;
@@ -400,6 +400,10 @@ impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
 // This module's storage items.
 decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Society {
+		/// The first member.
+		pub Founder get(founder) build(|config: &GenesisConfig<T, I>| config.members.first().cloned()):
+			Option<T::AccountId>;
+
 		/// The current set of candidates; bidders that are attempting to become members.
 		pub Candidates get(candidates): Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
 
@@ -444,7 +448,7 @@ decl_storage! {
 
 		/// The defending member currently being challenged.
 		Defender get(fn defender): Option<T::AccountId>;
-		
+
 		/// Votes for the defender.
 		DefenderVotes: map hasher(twox_64_concat) T::AccountId => Option<Vote>;
 
@@ -796,26 +800,26 @@ decl_module! {
 		/// This is done as a discrete action in order to allow for the
 		/// module to be included into a running chain and can only be done once.
 		///
-		/// The dispatch origin for this call must be from the _FounderOrigin_.
+		/// The dispatch origin for this call must be from the _FounderSetOrigin_.
 		///
 		/// Parameters:
 		/// - `founder` - The first member and head of the newly founded society.
 		///
 		/// # <weight>
-		/// - One storage read to check `Head`. O(1)
+		/// - Two storage mutates to set `Head` and `Founder`. O(1)
 		/// - One storage write to add the first member to society. O(1)
-		/// - One storage write to add new Head. O(1)
 		/// - One event.
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn found(origin, founder: T::AccountId) {
-			T::FounderOrigin::ensure_origin(origin)?;
+			T::FounderSetOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
 			// This should never fail in the context of this function...
 			Self::add_member(&founder)?;
 			<Head<T, I>>::put(&founder);
+			<Founder<T, I>>::put(&founder);
 			Self::deposit_event(RawEvent::Founded(founder));
 		}
 		/// Allow suspension judgement origin to make judgement on a suspended member.
@@ -849,7 +853,7 @@ decl_module! {
 		fn judge_suspended_member(origin, who: T::AccountId, forgive: bool) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			ensure!(<SuspendedMembers<T, I>>::exists(&who), Error::<T, I>::NotSuspended);
-			
+
 			if forgive {
 				// Try to add member back to society. Can fail with `MaxMembers` limit.
 				Self::add_member(&who)?;
@@ -1010,33 +1014,35 @@ decl_error! {
 	pub enum Error for Module<T: Trait<I>, I: Instance> {
 		/// An incorrect position was provided.
 		BadPosition,
-		/// User is not a member
+		/// User is not a member.
 		NotMember,
-		/// User is already a member
+		/// User is already a member.
 		AlreadyMember,
-		/// User is suspended
+		/// User is suspended.
 		Suspended,
-		/// User is not suspended
+		/// User is not suspended.
 		NotSuspended,
-		/// Nothing to payout
+		/// Nothing to payout.
 		NoPayout,
-		/// Society already founded
+		/// Society already founded.
 		AlreadyFounded,
-		/// Not enough in pot to accept candidate
+		/// Not enough in pot to accept candidate.
 		InsufficientPot,
-		/// Member is already vouching or banned from vouching again
+		/// Member is already vouching or banned from vouching again.
 		AlreadyVouching,
-		/// Member is not vouching
+		/// Member is not vouching.
 		NotVouching,
-		/// Cannot remove head
+		/// Cannot remove the head of the chain.
 		Head,
-		/// User has already made a bid
+		/// Cannot remove the founder.
+		Founder,
+		/// User has already made a bid.
 		AlreadyBid,
-		/// User is already a candidate
+		/// User is already a candidate.
 		AlreadyCandidate,
-		/// User is not a candidate
+		/// User is not a candidate.
 		NotCandidate,
-		/// Too many members in the society
+		/// Too many members in the society.
 		MaxMembers,
 	}
 }
@@ -1078,6 +1084,18 @@ decl_event! {
 		DefenderVote(AccountId, bool),
 		/// A new max member count has been set
 		NewMaxMembers(u32),
+	}
+}
+
+/// Simple ensure origin struct to filter for the founder account.
+pub struct EnsureFounder<T>(sp_std::marker::PhantomData<T>);
+impl<T: Trait> EnsureOrigin<T::Origin> for EnsureFounder<T> {
+	type Success = T::AccountId;
+	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
+		o.into().and_then(|o| match (o, Founder::<T>::get()) {
+			(system::RawOrigin::Signed(ref who), Some(ref f)) if who == f => Ok(who.clone()),
+			(r, _) => Err(T::Origin::from(r)),
+		})
 	}
 }
 
@@ -1201,6 +1219,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// removes them from the Members storage item.
 	pub fn remove_member(m: &T::AccountId) -> DispatchResult {
 		ensure!(Self::head() != Some(m.clone()), Error::<T, I>::Head);
+		ensure!(Self::founder() != Some(m.clone()), Error::<T, I>::Founder);
 
 		<Members<T, I>>::mutate(|members|
 			match members.binary_search(&m) {
@@ -1251,7 +1270,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 					.filter_map(|m| <Votes<T, I>>::take(&candidate, m).map(|v| (v, m)))
 					.inspect(|&(v, _)| if v == Vote::Approve { approval_count += 1 })
 					.collect::<Vec<_>>();
-				
+
 				// Select one of the votes at random.
 				// Note that `Vote::Skeptical` and `Vote::Reject` both reject the candidate.
 				let is_accepted = pick_item(&mut rng, &votes).map(|x| x.0) == Some(Vote::Approve);
@@ -1325,7 +1344,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 			// if at least one candidate was accepted...
 			if !accepted.is_empty() {
-				// select one as primary, randomly chosen from the accepted, weighted by approvals. 
+				// select one as primary, randomly chosen from the accepted, weighted by approvals.
 				// Choose a random number between 0 and `total_approvals`
 				let primary_point = pick_usize(&mut rng, total_approvals - 1);
 				// Find the zero bid or the user who falls on that point
@@ -1333,7 +1352,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 					.expect("e.1 of final item == total_approvals; \
 						worst case find will always return that item; qed")
 					.0.clone();
-				
+
 				let accounts = accepted.into_iter().map(|x| x.0).collect::<Vec<_>>();
 
 				// Then write everything back out, signal the changed membership and leave an event.
@@ -1509,8 +1528,10 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// the number of bids would not surpass `MaxMembers` if all were accepted.
 	///
 	/// May be empty.
-	pub fn take_selected(members_len: usize, pot: BalanceOf<T, I>) -> Vec<Bid<T::AccountId, BalanceOf<T, I>>>
-	{
+	pub fn take_selected(
+		members_len: usize,
+		pot: BalanceOf<T, I>
+	) -> Vec<Bid<T::AccountId, BalanceOf<T, I>>> {
 		let max_members = MaxMembers::<I>::get() as usize;
 		// No more than 10 will be returned.
 		let mut max_selections: usize = 10.min(max_members.saturating_sub(members_len));
@@ -1521,7 +1542,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 			// The list of selected candidates
 			let mut selected = Vec::new();
-			
+
 			if bids.len() > 0 {
 				// Can only select at most the length of bids
 				max_selections = max_selections.min(bids.len());
