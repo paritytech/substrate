@@ -39,9 +39,7 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, SimpleArithmetic, One, Zero,
 };
-pub use crate::modes::Mode;
 
-pub mod modes;
 mod simple_modes;
 
 pub trait RuntimeAdapter {
@@ -53,16 +51,14 @@ pub trait RuntimeAdapter {
 	type Phase: Copy;
 	type Secret;
 
-	fn new(tx_name: String, mode: Mode, rounds: u64, start_number: u64) -> Self;
+	fn new(tx_name: String, start_number: u64) -> Self;
 
 	fn index(&self) -> u32;
 	fn increase_index(&mut self);
 
 	fn block_no(&self) -> Self::Number;
 	fn block_in_round(&self) -> Self::Number;
-	fn mode(&self) -> &Mode;
 	fn num(&self) -> Self::Number;
-	fn rounds(&self) -> Self::Number;
 	fn round(&self) -> Self::Number;
 	fn start_number(&self) -> Self::Number;
 
@@ -93,7 +89,7 @@ pub trait RuntimeAdapter {
 }
 
 /// Manufactures transactions. The exact amount depends on
-/// `mode`, `num` and `rounds`.
+/// `num` and `rounds`.
 pub fn factory<RA, Backend, Exec, Block, RtApi, Sc>(
 	mut factory_state: RA,
 	client: &Arc<Client<Backend, Exec, Block, RtApi>>,
@@ -120,16 +116,15 @@ where
 	let genesis_hash = client.block_hash(Zero::zero())?
 		.expect("Genesis block always exists; qed").into();
 
-	while let Some(block) = match factory_state.mode() {
-		_ => simple_modes::next::<RA, _, _, _, _>(
+	while let Some(block) = simple_modes::next::<RA, _, _, _, _>(
 			&mut factory_state,
 			&client,
 			version,
 			genesis_hash,
 			best_hash.into(),
 			best_block_id,
-		),
-	} {
+		)
+	{
 		best_hash = block.header().hash();
 		best_block_id = BlockId::<Block>::hash(best_hash);
 		import_block(client.clone(), block);

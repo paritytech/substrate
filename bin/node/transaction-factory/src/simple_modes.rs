@@ -42,7 +42,7 @@ use sp_api::{ConstructRuntimeApi, ProvideRuntimeApi};
 use sp_runtime::traits::{Block as BlockT, One};
 use sp_runtime::generic::BlockId;
 
-use crate::{Mode, RuntimeAdapter, create_block};
+use crate::{RuntimeAdapter, create_block};
 
 pub fn next<RA, Backend, Exec, Block, RtApi>(
 	factory_state: &mut RA,

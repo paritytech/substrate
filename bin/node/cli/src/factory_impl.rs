@@ -37,7 +37,6 @@ use sp_runtime::{
 	}
 };
 use node_transaction_factory::RuntimeAdapter;
-use node_transaction_factory::modes::Mode;
 use sp_inherents::InherentData;
 use sp_timestamp;
 use sp_finality_tracker;
@@ -49,9 +48,7 @@ type AccountPublic = <Signature as Verify>::Signer;
 pub struct FactoryState<N> {
 	tx_name: String,
 	block_no: N,
-	mode: Mode,
 	start_number: u32,
-	rounds: u32,
 	round: u32,
 	block_in_round: u32,
 	num: u32,
@@ -86,16 +83,12 @@ impl RuntimeAdapter for FactoryState<Number> {
 
 	fn new(
 		tx_name: String,
-		mode: Mode,
 		num: u64,
-		rounds: u64,
 	) -> FactoryState<Self::Number> {
 		FactoryState {
 			tx_name,
-			mode,
 			num: num as u32,
 			round: 0,
-			rounds: rounds as u32,
 			block_in_round: 0,
 			block_no: 0,
 			start_number: 0,
@@ -119,10 +112,6 @@ impl RuntimeAdapter for FactoryState<Number> {
 		self.block_in_round
 	}
 
-	fn rounds(&self) -> Self::Number {
-		self.rounds
-	}
-
 	fn num(&self) -> Self::Number {
 		self.num
 	}
@@ -133,10 +122,6 @@ impl RuntimeAdapter for FactoryState<Number> {
 
 	fn start_number(&self) -> Self::Number {
 		self.start_number
-	}
-
-	fn mode(&self) -> &Mode {
-		&self.mode
 	}
 
 	fn set_block_no(&mut self, val: Self::Number) {
@@ -250,22 +235,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 		_account_id: &Self::AccountId,
 		_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> Self::Index {
-		// TODO get correct index for account via api. See #2587.
-		// This currently prevents the factory from being used
-		// without a preceding purge of the database.
-		if self.mode == Mode::MasterToN || self.mode == Mode::MasterTo1 {
-			self.block_no() as Self::Index
-		} else {
-			match self.round() {
-				0 =>
-					// if round is 0 all transactions will be done with master as a sender
-					self.block_no() as Self::Index,
-				_ =>
-					// if round is e.g. 1 every sender account will be new and not yet have
-					// any transactions done
-					0
-			}
-		}
+		0
 	}
 
 	fn extract_phase(

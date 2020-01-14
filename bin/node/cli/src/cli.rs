@@ -54,32 +54,7 @@ pub struct FactoryCmd {
 	#[structopt(long="tx-name", default_value = "transfer")]
 	pub tx_name: String,
 
-	/// How often to repeat. This option only has an effect in mode `MasterToNToM`.
-	#[structopt(long="rounds", default_value = "1")]
-	pub rounds: u64,
-
-	/// MasterToN: Manufacture `num` transactions from the master account
-	///            to `num` randomly created accounts, one each.
-	///
-	/// MasterTo1: Manufacture `num` transactions from the master account
-	///            to exactly one other randomly created account.
-	///
-	/// MasterToNToM: Manufacture `num` transactions from the master account
-	///               to `num` randomly created accounts.
-	///               From each of these randomly created accounts manufacture
-	///               a transaction to another randomly created account.
-	///               Repeat this `rounds` times. If `rounds` = 1 the behavior
-	///               is the same as `MasterToN`.{n}
-	///               A -> B, A -> C, A -> D, ... x `num`{n}
-	///               B -> E, C -> F, D -> G, ...{n}
-	///               ... x `rounds`
-	///
-	/// These three modes control manufacturing.
-	#[structopt(long="mode", default_value = "MasterToN")]
-	pub mode: node_transaction_factory::Mode,
-
-	/// Number of transactions to generate. In mode `MasterNToNToM` this is
-	/// the number of transactions per round.
+	/// Number of transactions to generate.
 	#[structopt(long="num", default_value = "8")]
 	pub num: u64,
 
@@ -169,9 +144,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 
 			let factory_state = FactoryState::new(
 				cli_args.tx_name,
-				cli_args.mode.clone(),
 				cli_args.num,
-				cli_args.rounds,
 			);
 
 			let service_builder = new_full_start!(config).0;
