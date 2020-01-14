@@ -775,11 +775,11 @@ decl_storage! {
 		/// All slashing events on validators, mapped by era to the highest slash proportion
 		/// and slash value of the era.
 		ValidatorSlashInEra:
-			double_map EraIndex, twox_128(T::AccountId) => Option<(Perbill, BalanceOf<T>)>;
+			double_map EraIndex, hasher(twox_128) T::AccountId => Option<(Perbill, BalanceOf<T>)>;
 
 		/// All slashing events on nominators, mapped by era to the highest slash value of the era.
 		NominatorSlashInEra:
-			double_map EraIndex, twox_128(T::AccountId) => Option<BalanceOf<T>>;
+			double_map EraIndex, hasher(twox_128) T::AccountId => Option<BalanceOf<T>>;
 
 		/// Slashing spans for stash accounts.
 		SlashingSpans: map T::AccountId => Option<slashing::SlashingSpans>;
@@ -1055,26 +1055,6 @@ decl_module! {
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
 			}
-		}
-
-		/// Rebond a portion of the stash scheduled to be unlocked.
-		///
-		/// # <weight>
-		/// - Time complexity: O(1). Bounded by `MAX_UNLOCKING_CHUNKS`.
-		/// - Storage changes: Can't increase storage, only decrease it.
-		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
-		fn rebond(origin, #[compact] value: BalanceOf<T>) {
-			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(
-				ledger.unlocking.len() > 0,
-				Error::<T>::NoUnlockChunk,
-			);
-
-			let ledger = ledger.rebond(value);
-
-			Self::update_ledger(&controller, &ledger);
 		}
 
 		/// Remove any unlocked chunks from the `unlocking` queue from our management.
@@ -1363,6 +1343,26 @@ decl_module! {
 		fn payout_validator(origin, era: EraIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::do_payout_validator(who, era)
+		}
+
+		/// Rebond a portion of the stash scheduled to be unlocked.
+		///
+		/// # <weight>
+		/// - Time complexity: O(1). Bounded by `MAX_UNLOCKING_CHUNKS`.
+		/// - Storage changes: Can't increase storage, only decrease it.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		fn rebond(origin, #[compact] value: BalanceOf<T>) {
+			let controller = ensure_signed(origin)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			ensure!(
+				ledger.unlocking.len() > 0,
+				Error::<T>::NoUnlockChunk,
+			);
+
+			let ledger = ledger.rebond(value);
+
+			Self::update_ledger(&controller, &ledger);
 		}
 	}
 }

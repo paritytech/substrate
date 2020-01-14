@@ -117,7 +117,7 @@ use proc_macro::TokenStream;
 ///   Twox128(module_prefix) ++ Twox128(head_prefix)
 ///   ```
 ///
-/// * Double map: `Foo: double_map hasher($hash1) u32, $hash2(u32) => u32`: Implements the
+/// * Double map: `Foo: double_map hasher($hash1) u32, hasher($hash2) u32 => u32`: Implements the
 ///   [`StorageDoubleMap`](../frame_support/storage/trait.StorageDoubleMap.html) trait using the
 ///   [`StorageDoubleMap generator`](../frame_support/storage/generator/trait.StorageDoubleMap.html).
 ///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
@@ -126,10 +126,8 @@ use proc_macro::TokenStream;
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait. They must be choosen with care, see
 ///   generator documentation.
 ///
-///   `hasher($hash)` is optional and its default is `blake2_256`.
-///
-///   `hasher($hash)` is optional and its default is `blake2_256`. One should use another hasher
-///   with care, see generator documentation.
+///   `hasher($hash1)` and `hasher($hash2) are optional and default to `blake2_256`.
+///   One should use another hasher with care, see generator documentation.
 ///
 ///   If the first key is untrusted, a cryptographic `hasher` such as `blake2_256` must be used.
 ///   Otherwise, other values of all storage items can be compromised.

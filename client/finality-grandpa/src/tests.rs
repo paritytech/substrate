@@ -18,8 +18,10 @@
 
 use super::*;
 use environment::HasVoted;
-use sc_network_test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
-use sc_network_test::{PassThroughVerifier};
+use sc_network_test::{
+	Block, DummySpecialization, Hash, TestNetFactory, BlockImportAdapter, Peer,
+	PeersClient, PassThroughVerifier,
+};
 use sc_network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
 use futures_timer::Delay;
@@ -27,23 +29,28 @@ use futures03::{StreamExt as _, TryStreamExt as _};
 use tokio::runtime::current_thread;
 use sp_keyring::Ed25519Keyring;
 use sc_client::LongestChain;
+use sc_client_api::backend::TransactionFor;
 use sp_blockchain::Result;
-use sp_api::{Core, RuntimeVersion, ApiExt, StorageProof};
-use substrate_test_runtime_client::{self, runtime::BlockNumber};
-use sp_consensus::{BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult};
-use sp_consensus::import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport};
+use sp_api::{ApiRef, ApiErrorExt, Core, RuntimeVersion, ApiExt, StorageProof, ProvideRuntimeApi};
+use substrate_test_runtime_client::runtime::BlockNumber;
+use sp_consensus::{
+	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
+	import_queue::{BoxJustificationImport, BoxFinalityProofImport},
+};
 use std::collections::{HashMap, HashSet};
 use std::result;
 use parity_scale_codec::Decode;
-use sp_runtime::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
+use sp_runtime::traits::{Header as HeaderT, HasherFor};
 use sp_runtime::generic::{BlockId, DigestItem};
-use sp_core::{NativeOrEncoded, ExecutionContext, crypto::Public};
+use sp_core::{H256, NativeOrEncoded, ExecutionContext, crypto::Public};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
-use sp_state_machine::{backend::InMemory, prove_read, read_proof_check};
+use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 use std::{pin::Pin, task};
 
 use authorities::AuthoritySet;
-use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
+use finality_proof::{
+	FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker,
+};
 use consensus_changes::ConsensusChanges;
 
 type PeerData =
@@ -108,9 +115,9 @@ impl TestNetFactory for GrandpaTestNet {
 		PassThroughVerifier(false) // use non-instant finality.
 	}
 
-	fn make_block_import(&self, client: PeersClient)
+	fn make_block_import<Transaction>(&self, client: PeersClient)
 		-> (
-			BoxBlockImport<Block>,
+			BlockImportAdapter<Transaction>,
 			Option<BoxJustificationImport<Block>>,
 			Option<BoxFinalityProofImport<Block>>,
 			Option<BoxFinalityProofRequestBuilder<Block>>,
@@ -125,8 +132,13 @@ impl TestNetFactory for GrandpaTestNet {
 					LongestChain::new(backend.clone()),
 				).expect("Could not create block import for fresh peer.");
 				let justification_import = Box::new(import.clone());
-				let block_import = Box::new(import);
-				(block_import, Some(justification_import), None, None, Mutex::new(Some(link)))
+				(
+					BlockImportAdapter::new_full(import),
+					Some(justification_import),
+					None,
+					None,
+					Mutex::new(Some(link)),
+				)
 			},
 			PeersClient::Light(ref client, ref backend) => {
 				use crate::light_import::tests::light_block_import_without_justifications;
@@ -142,8 +154,13 @@ impl TestNetFactory for GrandpaTestNet {
 				).expect("Could not create block import for fresh peer.");
 				let finality_proof_req_builder = import.0.create_finality_proof_request_builder();
 				let proof_import = Box::new(import.clone());
-				let block_import = Box::new(import);
-				(block_import, None, Some(proof_import), Some(finality_proof_req_builder), Mutex::new(None))
+				(
+					BlockImportAdapter::new_light(import),
+					None,
+					Some(proof_import),
+					Some(finality_proof_req_builder),
+					Mutex::new(None),
+				)
 			},
 		}
 	}
@@ -202,7 +219,7 @@ pub(crate) struct RuntimeApi {
 	inner: TestApi,
 }
 
-impl ProvideRuntimeApi for TestApi {
+impl ProvideRuntimeApi<Block> for TestApi {
 	type Api = RuntimeApi;
 
 	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
@@ -242,8 +259,14 @@ impl Core<Block> for RuntimeApi {
 	}
 }
 
-impl ApiExt<Block> for RuntimeApi {
+impl ApiErrorExt for RuntimeApi {
 	type Error = sp_blockchain::Error;
+}
+
+impl ApiExt<Block> for RuntimeApi {
+	type StateBackend = <
+		substrate_test_runtime_client::Backend as sc_client_api::backend::Backend<Block>
+	>::State;
 
 	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
 		&self,
@@ -261,6 +284,19 @@ impl ApiExt<Block> for RuntimeApi {
 	}
 
 	fn extract_proof(&mut self) -> Option<StorageProof> {
+		unimplemented!("Not required for testing!")
+	}
+
+	fn into_storage_changes<
+		T: sp_api::ChangesTrieStorage<sp_api::HasherFor<Block>, sp_api::NumberFor<Block>>
+	>(
+		&self,
+		_: &Self::StateBackend,
+		_: Option<&T>,
+		_: <Block as sp_api::BlockT>::Hash,
+	) -> std::result::Result<sp_api::StorageChanges<Self::StateBackend, Block>, String>
+		where Self: Sized
+	{
 		unimplemented!("Not required for testing!")
 	}
 }
@@ -290,7 +326,7 @@ impl AuthoritySetForFinalityProver<Block> for TestApi {
 
 	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<StorageProof> {
 		let authorities = self.authorities(block)?;
-		let backend = <InMemory<Blake2Hasher>>::from(vec![
+		let backend = <InMemoryBackend<HasherFor<Block>>>::from(vec![
 			(None, vec![(b"authorities".to_vec(), Some(authorities.encode()))])
 		]);
 		let proof = prove_read(backend, vec![b"authorities"])
@@ -306,7 +342,7 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 		header: <Block as BlockT>::Header,
 		proof: StorageProof,
 	) -> Result<AuthorityList> {
-		let results = read_proof_check::<Blake2Hasher, _>(
+		let results = read_proof_check::<HasherFor<Block>, _>(
 			*header.state_root(), proof, vec![b"authorities"]
 		)
 			.expect("failure checking read proof for authorities");
@@ -629,7 +665,7 @@ fn transition_3_voters_twice_1_full_observer() {
 					14 => {
 						// generate transition at block 15, applied at 20.
 						net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-							let mut block = builder.bake().unwrap();
+							let mut block = builder.build().unwrap().block;
 							add_scheduled_change(&mut block, ScheduledChange {
 								next_authorities: make_ids(peers_b),
 								delay: 4,
@@ -643,7 +679,7 @@ fn transition_3_voters_twice_1_full_observer() {
 						// at block 21 we do another transition, but this time instant.
 						// add more until we have 30.
 						net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-							let mut block = builder.bake().unwrap();
+							let mut block = builder.build().unwrap().block;
 							add_scheduled_change(&mut block, ScheduledChange {
 								next_authorities: make_ids(&peers_c),
 								delay: 0,
@@ -808,7 +844,7 @@ fn sync_justifications_on_change_blocks() {
 
 	// at block 21 we do add a transition which is instant
 	net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-		let mut block = builder.bake().unwrap();
+		let mut block = builder.build().unwrap().block;
 		add_scheduled_change(&mut block, ScheduledChange {
 			next_authorities: make_ids(peers_b),
 			delay: 0,
@@ -870,7 +906,7 @@ fn finalizes_multiple_pending_changes_in_order() {
 
 	// at block 21 we do add a transition which is instant
 	net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-		let mut block = builder.bake().unwrap();
+		let mut block = builder.build().unwrap().block;
 		add_scheduled_change(&mut block, ScheduledChange {
 			next_authorities: make_ids(peers_b),
 			delay: 0,
@@ -883,7 +919,7 @@ fn finalizes_multiple_pending_changes_in_order() {
 
 	// at block 26 we add another which is enacted at block 30
 	net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-		let mut block = builder.bake().unwrap();
+		let mut block = builder.build().unwrap().block;
 		add_scheduled_change(&mut block, ScheduledChange {
 			next_authorities: make_ids(peers_c),
 			delay: 4,
@@ -927,7 +963,7 @@ fn force_change_to_new_set() {
 	let net = Arc::new(Mutex::new(net));
 
 	net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-		let mut block = builder.bake().unwrap();
+		let mut block = builder.build().unwrap().block;
 
 		// add a forced transition at block 12.
 		add_forced_change(&mut block, 0, ScheduledChange {
@@ -973,11 +1009,15 @@ fn allows_reimporting_change_blocks() {
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import(client.clone());
+	let (mut block_import, ..) = net.make_block_import::<
+		TransactionFor<substrate_test_runtime_client::Backend, Block>
+	>(
+		client.clone(),
+	);
 
 	let full_client = client.as_full().unwrap();
-	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
-	let mut block = builder.bake().unwrap();
+	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+	let mut block = builder.build().unwrap().block;
 	add_scheduled_change(&mut block, ScheduledChange {
 		next_authorities: make_ids(peers_b),
 		delay: 0,
@@ -991,6 +1031,7 @@ fn allows_reimporting_change_blocks() {
 			justification: None,
 			post_digests: Vec::new(),
 			body: Some(block.extrinsics),
+			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
@@ -1026,11 +1067,15 @@ fn test_bad_justification() {
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import(client.clone());
+	let (mut block_import, ..) = net.make_block_import::<
+		TransactionFor<substrate_test_runtime_client::Backend, Block>
+	>(
+		client.clone(),
+	);
 
 	let full_client = client.as_full().expect("only full clients are used in test");
-	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
-	let mut block = builder.bake().unwrap();
+	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+	let mut block = builder.build().unwrap().block;
 
 	add_scheduled_change(&mut block, ScheduledChange {
 		next_authorities: make_ids(peers_b),
@@ -1045,6 +1090,7 @@ fn test_bad_justification() {
 			justification: Some(Vec::new()),
 			post_digests: Vec::new(),
 			body: Some(block.extrinsics),
+			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
@@ -1136,7 +1182,10 @@ fn voter_persists_its_votes() {
 					Ok(Async::NotReady) => {}
 					Ok(Async::Ready(Some(()))) => {
 						let (_block_import, _, _, _, link) =
-							self.net.lock().make_block_import(self.client.clone());
+							self.net.lock()
+									.make_block_import::<
+										TransactionFor<substrate_test_runtime_client::Backend, Block>
+									>(self.client.clone());
 						let link = link.lock().take().unwrap();
 
 						let grandpa_params = GrandpaParams {
@@ -1209,7 +1258,10 @@ fn voter_persists_its_votes() {
 		};
 
 		let set_state = {
-			let (_, _, _, _, link) = net.lock().make_block_import(client);
+			let (_, _, _, _, link) = net.lock()
+				.make_block_import::<
+					TransactionFor<substrate_test_runtime_client::Backend, Block>
+				>(client);
 			let LinkHalf { persistent_data, .. } = link.lock().take().unwrap();
 			let PersistentData { set_state, .. } = persistent_data;
 			set_state
@@ -1439,7 +1491,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 	// best is #1
 	net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
 		// add a forced transition at block 5.
-		let mut block = builder.bake().unwrap();
+		let mut block = builder.build().unwrap().block;
 		if FORCE_CHANGE {
 			add_forced_change(&mut block, 0, ScheduledChange {
 				next_authorities: voters.clone(),
@@ -1728,11 +1780,13 @@ fn imports_justification_for_regular_blocks_on_import() {
 	let mut net = GrandpaTestNet::new(api.clone(), 1);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import(client.clone());
+	let (mut block_import, ..) = net.make_block_import::<
+		TransactionFor<substrate_test_runtime_client::Backend, Block>
+	>(client.clone());
 
 	let full_client = client.as_full().expect("only full clients are used in test");
-	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
-	let block = builder.bake().unwrap();
+	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+	let block = builder.build().unwrap().block;
 
 	let block_hash = block.hash();
 
@@ -1776,6 +1830,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 		justification: Some(justification.encode()),
 		post_digests: Vec::new(),
 		body: Some(block.extrinsics),
+		storage_changes: None,
 		finalized: false,
 		auxiliary: Vec::new(),
 		fork_choice: ForkChoiceStrategy::LongestChain,

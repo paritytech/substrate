@@ -165,6 +165,16 @@ impl BuildStorage for sp_core::storage::Storage {
 	}
 }
 
+#[cfg(feature = "std")]
+impl BuildStorage for () {
+	fn assimilate_storage(
+		&self,
+		_: &mut sp_core::storage::Storage,
+	)-> Result<(), String> {
+		Err("`assimilate_storage` not implemented for `()`".into())
+	}
+}
+
 /// Consensus engine unique ID.
 pub type ConsensusEngineId = [u8; 4];
 

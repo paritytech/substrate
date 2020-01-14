@@ -43,7 +43,7 @@ use node_primitives::{Balance, Hash};
 use wabt;
 use node_testing::keyring::*;
 
-mod common;
+pub mod common;
 use self::common::{*, sign};
 
 /// The wasm runtime binary which hasn't undergone the compacting process.
@@ -821,11 +821,11 @@ fn full_wasm_block_import_works_with_changes_trie() {
 #[test]
 fn should_import_block_with_test_client() {
 	use node_testing::client::{
-		ClientExt, TestClientBuilderExt, TestClientBuilder,
+		ClientBlockImportExt, TestClientBuilderExt, TestClientBuilder,
 		sp_consensus::BlockOrigin,
 	};
 
-	let client = TestClientBuilder::new().build();
+	let mut client = TestClientBuilder::new().build();
 	let block1 = changes_trie_block();
 	let block_data = block1.0;
 	let block = node_primitives::Block::decode(&mut &block_data[..]).unwrap();

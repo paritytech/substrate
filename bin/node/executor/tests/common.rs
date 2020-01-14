@@ -15,15 +15,13 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use codec::{Encode, Decode};
-use frame_support::{
-	Hashable,
-};
+use frame_support::Hashable;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
 use sp_core::{
 	Blake2Hasher, NeverNativeValue, NativeOrEncoded,
 	traits::CodeExecutor,
 };
-use sp_runtime::traits::{Header as HeaderT};
+use sp_runtime::traits::Header as HeaderT;
 use sc_executor::{NativeExecutor, WasmExecutionMethod};
 use sc_executor::error::Result;
 
