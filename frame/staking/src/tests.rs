@@ -90,45 +90,24 @@ fn basic_setup_works() {
 		);
 		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 
-		if cfg!(feature = "equalize") {
-			assert_eq!(
-				Staking::eras_stakers(Staking::active_era(), 11),
-				Exposure {
-					total: 1250,
-					own: 1000,
-					others: vec![ IndividualExposure { who: 101, value: 250 }]
-				},
-			);
-			assert_eq!(
-				Staking::eras_stakers(Staking::active_era(), 21),
-				Exposure {
-					total: 1250,
-					own: 1000,
-					others: vec![ IndividualExposure { who: 101, value: 250 }]
-				},
-			);
-			// initial slot_stake
-			assert_eq!(Staking::eras_total_stake(Staking::active_era()), 2500);
-		} else {
-			assert_eq!(
-				Staking::eras_stakers(Staking::active_era(), 11),
-				Exposure {
-					total: 1125,
-					own: 1000,
-					others: vec![ IndividualExposure { who: 101, value: 125 }]
-				},
-			);
-			assert_eq!(
-				Staking::eras_stakers(Staking::active_era(), 21),
-				Exposure {
-					total: 1375,
-					own: 1000,
-					others: vec![ IndividualExposure { who: 101, value: 375 }]
-				},
-			);
-			// initial slot_stake
-			assert_eq!(Staking::eras_total_stake(Staking::active_era()), 2500);
-		}
+		assert_eq!(
+			Staking::eras_stakers(Staking::active_era(), 11),
+			Exposure {
+				total: 1125,
+				own: 1000,
+				others: vec![ IndividualExposure { who: 101, value: 125 }]
+			},
+		);
+		assert_eq!(
+			Staking::eras_stakers(Staking::active_era(), 21),
+			Exposure {
+				total: 1375,
+				own: 1000,
+				others: vec![ IndividualExposure { who: 101, value: 375 }]
+			},
+		);
+		// initial slot_stake
+		assert_eq!(Staking::eras_total_stake(Staking::active_era()), 2500);
 
 
 		// The number of validators required.
@@ -173,7 +152,6 @@ fn change_controller_works() {
 }
 
 #[test]
-#[cfg(feature = "equalize")]
 fn rewards_should_work() {
 	// should check that:
 	// * rewards get recorded per session
@@ -214,6 +192,10 @@ fn rewards_should_work() {
 			total: 50*3,
 			individual: vec![(11, 100), (21, 50)].into_iter().collect(),
 		});
+		let part_for_10 = Perbill::from_rational_approximation::<u32>(1000, 1125);
+		let part_for_20 = Perbill::from_rational_approximation::<u32>(1000, 1375);
+		let part_for_100_from_10 = Perbill::from_rational_approximation::<u32>(125, 1125);
+		let part_for_100_from_20 = Perbill::from_rational_approximation::<u32>(375, 1375);
 
 		start_session(2);
 		start_session(3);
@@ -221,11 +203,17 @@ fn rewards_should_work() {
 		assert_eq!(Staking::active_era(), 1);
 		mock::make_all_reward_payment(0);
 
-		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + total_payout_0*2/3*1000/1250, 2);
+		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * total_payout_0*2/3, 2);
 		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
-		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + total_payout_0*1/3*1000/1250, 2);
+		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + part_for_20 * total_payout_0*1/3, 2);
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
-		assert_eq_error_rate!(Balances::total_balance(&100), init_balance_100 + total_payout_0*250/1250, 2);
+		assert_eq_error_rate!(
+			Balances::total_balance(&100),
+			init_balance_100
+				+ part_for_100_from_10 * total_payout_0 * 2/3
+				+ part_for_100_from_20 * total_payout_0 * 1/3,
+			2
+		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
 
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
@@ -238,11 +226,17 @@ fn rewards_should_work() {
 		start_era(2);
 		mock::make_all_reward_payment(1);
 
-		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + (total_payout_0*2/3 + total_payout_1)*1000/1250, 2);
+		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * (total_payout_0 * 2/3 + total_payout_1), 2);
 		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
-		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + total_payout_0*1/3*1000/1250, 2);
+		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + part_for_20 * total_payout_0 * 1/3, 2);
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
-		assert_eq_error_rate!(Balances::total_balance(&100), init_balance_100 + (total_payout_0 + total_payout_1)*250/1250, 2);
+		assert_eq_error_rate!(
+			Balances::total_balance(&100),
+			init_balance_100
+				+ part_for_100_from_10 * (total_payout_0 * 2/3 + total_payout_1)
+				+ part_for_100_from_20 * total_payout_0 * 1/3,
+			2
+		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
 	});
 }
@@ -1770,51 +1764,6 @@ fn bond_with_little_staked_value_bounded() {
 		});
 }
 
-#[cfg(feature = "equalize")]
-#[test]
-fn phragmen_linear_worse_case_equalize() {
-	ExtBuilder::default()
-		.nominate(false)
-		.validator_pool(true)
-		.fair(true)
-		.build()
-		.execute_with(|| {
-			bond_validator(50, 1000);
-			bond_validator(60, 1000);
-			bond_validator(70, 1000);
-
-			bond_nominator(2, 2000, vec![11]);
-			bond_nominator(4, 1000, vec![11, 21]);
-			bond_nominator(6, 1000, vec![21, 31]);
-			bond_nominator(8, 1000, vec![31, 41]);
-			bond_nominator(110, 1000, vec![41, 51]);
-			bond_nominator(120, 1000, vec![51, 61]);
-			bond_nominator(130, 1000, vec![61, 71]);
-
-			for i in &[10, 20, 30, 40, 50, 60, 70] {
-				assert_ok!(Staking::set_payee(Origin::signed(*i), RewardDestination::Controller));
-			}
-
-			assert_eq_uvec!(validator_controllers(), vec![40, 30]);
-			assert_ok!(Staking::set_validator_count(Origin::ROOT, 7));
-
-			start_era(1);
-
-			assert_eq_uvec!(validator_controllers(), vec![10, 60, 40, 20, 50, 30, 70]);
-
-			assert_eq_error_rate!(mock::validator_current_exposure(11).total, 3000, 2);
-			assert_eq_error_rate!(mock::validator_current_exposure(21).total, 2255, 2);
-			assert_eq_error_rate!(mock::validator_current_exposure(31).total, 2255, 2);
-			assert_eq_error_rate!(mock::validator_current_exposure(41).total, 1925, 2);
-			assert_eq_error_rate!(mock::validator_current_exposure(51).total, 1870, 2);
-			assert_eq_error_rate!(mock::validator_current_exposure(61).total, 1890, 2);
-			assert_eq_error_rate!(mock::validator_current_exposure(71).total, 1800, 2);
-
-			check_exposure_all(Staking::active_era());
-			check_nominator_all(Staking::active_era());
-		})
-}
-
 #[test]
 fn new_era_elects_correct_number_of_validators() {
 	ExtBuilder::default()
@@ -2210,9 +2159,6 @@ fn reporters_receive_their_slice() {
 	// amount.
 	ExtBuilder::default().build().execute_with(|| {
 		// The reporters' reward is calculated from the total exposure.
-		#[cfg(feature = "equalize")]
-		let initial_balance = 1250;
-		#[cfg(not(feature = "equalize"))]
 		let initial_balance = 1125;
 
 		assert_eq!(mock::validator_current_exposure(11).total, initial_balance);
@@ -2244,9 +2190,6 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 	// amount.
 	ExtBuilder::default().build().execute_with(|| {
 		// The reporters' reward is calculated from the total exposure.
-		#[cfg(feature = "equalize")]
-		let initial_balance = 1250;
-		#[cfg(not(feature = "equalize"))]
 		let initial_balance = 1125;
 
 		assert_eq!(mock::validator_current_exposure(11).total, initial_balance);

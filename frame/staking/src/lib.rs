@@ -14,12 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// TODO TODO:
-// * migration
-// * update doc
-// * new test
-// * make commission updatable only one for next future era. not current_era.
-// * new session API
 //! # Staking Module
 //!
 //! The Staking module is used to manage funds at stake by network maintainers.
@@ -1457,7 +1451,7 @@ impl<T: Trait> Module<T> {
 		);
 		// This is zero if the era is not finished yet.
 		let era_payout = <ErasValidatorReward<T>>::get(&era);
-		println!("payout_validator {:?} at {:?}: era payout {:?}", who, era, era_payout);
+		println!("payout_validator {:?} at {:?}: payout {:?}/{:?}", who, era, reward * era_payout, era_payout);
 		if let Some(imbalance) = Self::make_payout(&ledger.stash, reward * era_payout) {
 			Self::deposit_event(RawEvent::Reward(who, imbalance.peek()));
 		}
