@@ -145,7 +145,7 @@ decl_module! {
 		fn set_name(origin, name: Vec<u8>) {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(name.len() >= T::MinLength::get(), Error::<T>::TooShort,);
+			ensure!(name.len() >= T::MinLength::get(), Error::<T>::TooShort);
 			ensure!(name.len() <= T::MaxLength::get(), Error::<T>::TooLong);
 
 			let deposit = if let Some((_, deposit)) = <NameOf<T>>::get(&sender) {
@@ -241,7 +241,10 @@ decl_module! {
 mod tests {
 	use super::*;
 
-	use frame_support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::{
+		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
+		ord_parameter_types
+	};
 	use sp_core::H256;
 	use frame_system::EnsureSignedBy;
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -291,6 +294,7 @@ mod tests {
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
 		type TransferPayment = ();
@@ -303,6 +307,8 @@ mod tests {
 		pub const ReservationFee: u64 = 2;
 		pub const MinLength: usize = 3;
 		pub const MaxLength: usize = 16;
+	}
+	ord_parameter_types! {
 		pub const One: u64 = 1;
 	}
 	impl Trait for Test {
@@ -314,6 +320,7 @@ mod tests {
 		type MinLength = MinLength;
 		type MaxLength = MaxLength;
 	}
+	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
 	type Nicks = Module<Test>;
 

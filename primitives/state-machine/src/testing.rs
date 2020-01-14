@@ -19,36 +19,45 @@
 use std::any::{Any, TypeId};
 use hash_db::Hasher;
 use crate::{
-	backend::{InMemory, Backend}, OverlayedChanges,
+	backend::Backend, OverlayedChanges, StorageTransactionCache, ext::Ext, InMemoryBackend,
 	changes_trie::{
 		InMemoryStorage as ChangesTrieInMemoryStorage,
 		BlockNumber as ChangesTrieBlockNumber,
 	},
-	ext::Ext,
 };
 use sp_core::{
 	storage::{
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
 		Storage,
 	},
-	hash::H256, Blake2Hasher,
+	Blake2Hasher,
 };
 use codec::Encode;
 use sp_externalities::{Extensions, Extension};
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher<Out=H256>=Blake2Hasher, N: ChangesTrieBlockNumber=u64> {
+pub struct TestExternalities<H: Hasher = Blake2Hasher, N: ChangesTrieBlockNumber = u64>
+where
+	H::Out: codec::Codec,
+{
 	overlay: OverlayedChanges,
-	backend: InMemory<H>,
+	storage_transaction_cache: StorageTransactionCache<
+		<InMemoryBackend<H> as Backend<H>>::Transaction, H, N
+	>,
+	backend: InMemoryBackend<H>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	extensions: Extensions,
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
+	where
+		H::Out: Ord + 'static + codec::Codec
+{
 	/// Get externalities implementation.
-	pub fn ext(&mut self) -> Ext<H, N, InMemory<H>, ChangesTrieInMemoryStorage<H, N>> {
+	pub fn ext(&mut self) -> Ext<H, N, InMemoryBackend<H>, ChangesTrieInMemoryStorage<H, N>> {
 		Ext::new(
 			&mut self.overlay,
+			&mut self.storage_transaction_cache,
 			&self.backend,
 			Some(&self.changes_trie_storage),
 			Some(&mut self.extensions),
@@ -81,6 +90,7 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			backend: storage.into(),
 			extensions: Default::default(),
+			storage_transaction_cache: Default::default(),
 		}
 	}
 
@@ -100,7 +110,7 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	}
 
 	/// Return a new backend with all pending value.
-	pub fn commit_all(&self) -> InMemory<H> {
+	pub fn commit_all(&self) -> InMemoryBackend<H> {
 		let top: Vec<_> = self.overlay.committed.top.clone().into_iter()
 			.chain(self.overlay.prospective.top.clone().into_iter())
 			.map(|(k, v)| (k, v.value)).collect();
@@ -129,13 +139,18 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	}
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N> {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl<H: Hasher, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N>
+	where H::Out: codec::Codec,
+{
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, self.backend.pairs())
 	}
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N>
+	where
+		H::Out: Ord + 'static + codec::Codec
+{
 	/// This doesn't test if they are in the same state, only if they contains the
 	/// same data at this state
 	fn eq(&self, other: &TestExternalities<H, N>) -> bool {
@@ -143,18 +158,25 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> PartialEq for TestExternali
 	}
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N>
+	where
+		H::Out: Ord + 'static + codec::Codec,
+{
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> From<Storage> for TestExternalities<H, N> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> From<Storage> for TestExternalities<H, N>
+	where
+		H::Out: Ord + 'static + codec::Codec,
+{
 	fn from(storage: Storage) -> Self {
 		Self::new(storage)
 	}
 }
 
 impl<H, N> sp_externalities::ExtensionStore for TestExternalities<H, N> where
-	H: Hasher<Out=H256>,
+	H: Hasher,
+	H::Out: codec::Codec,
 	N: ChangesTrieBlockNumber,
 {
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {

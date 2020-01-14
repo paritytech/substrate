@@ -1337,6 +1337,104 @@ fn rebond_works() {
 }
 
 #[test]
+fn rebond_is_fifo() {
+	// Rebond should proceed by reversing the most recent bond operations.
+	ExtBuilder::default()
+		.nominate(false)
+		.build()
+		.execute_with(|| {
+			// Set payee to controller. avoids confusion
+			assert_ok!(Staking::set_payee(
+				Origin::signed(10),
+				RewardDestination::Controller
+			));
+
+			// Give account 11 some large free balance greater than total
+			let _ = Balances::make_free_balance_be(&11, 1000000);
+
+			// confirm that 10 is a normal validator and gets paid at the end of the era.
+			start_era(1);
+
+			// Initial state of 10
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 1000,
+					unlocking: vec![],
+				})
+			);
+
+			start_era(2);
+
+			// Unbond some of the funds in stash.
+			Staking::unbond(Origin::signed(10), 400).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 600,
+					unlocking: vec![
+						UnlockChunk { value: 400, era: 2 + 3 },
+					]
+				})
+			);
+
+			start_era(3);
+
+			// Unbond more of the funds in stash.
+			Staking::unbond(Origin::signed(10), 300).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 300,
+					unlocking: vec![
+						UnlockChunk { value: 400, era: 2 + 3 },
+						UnlockChunk { value: 300, era: 3 + 3 },
+					]
+				})
+			);
+
+			start_era(4);
+
+			// Unbond yet more of the funds in stash.
+			Staking::unbond(Origin::signed(10), 200).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 100,
+					unlocking: vec![
+						UnlockChunk { value: 400, era: 2 + 3 },
+						UnlockChunk { value: 300, era: 3 + 3 },
+						UnlockChunk { value: 200, era: 4 + 3 },
+					]
+				})
+			);
+
+			// Re-bond half of the unbonding funds.
+			Staking::rebond(Origin::signed(10), 400).unwrap();
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 500,
+					unlocking: vec![
+						UnlockChunk { value: 400, era: 2 + 3 },
+						UnlockChunk { value: 100, era: 3 + 3 },
+					]
+				})
+			);
+		})
+}
+
+#[test]
 fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment() {
 	// Test that slot_stake is determined by the least staked validator
 	// Test that slot_stake is the maximum punishment that can happen to a validator

@@ -16,32 +16,27 @@
 
 //! A method call executor interface.
 
-use std::{cmp::Ord, panic::UnwindSafe, result, cell::RefCell};
+use std::{panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
 use sp_runtime::{
-	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
+	generic::BlockId, traits::{Block as BlockT, HasherFor},
 };
 use sp_state_machine::{
-	self, OverlayedChanges, ExecutionManager, ExecutionStrategy,
-	ChangesTrieTransaction, StorageProof,
+	OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof,
 };
 use sc_executor::{RuntimeVersion, NativeVersion};
 use sp_externalities::Extensions;
-use hash_db::Hasher;
-use sp_core::{Blake2Hasher, NativeOrEncoded};
+use sp_core::NativeOrEncoded;
 
-use sp_api::{ProofRecorder, InitializeBlock};
-use sp_blockchain;
+use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 
 /// Method call executor.
-pub trait CallExecutor<B, H>
-where
-	B: BlockT,
-	H: Hasher<Out=B::Hash>,
-	H::Out: Ord,
-{
+pub trait CallExecutor<B: BlockT> {
 	/// Externalities error type.
 	type Error: sp_state_machine::Error;
+
+	/// The backend used by the node.
+	type Backend: crate::backend::Backend<B>;
 
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
@@ -76,6 +71,9 @@ where
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
+		storage_transaction_cache: Option<&RefCell<
+			StorageTransactionCache<B, <Self::Backend as crate::backend::Backend<B>>::State>,
+		>>,
 		initialize_block: InitializeBlock<'a, B>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
@@ -88,38 +86,10 @@ where
 	/// No changes are made.
 	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, sp_blockchain::Error>;
 
-	/// Execute a call to a contract on top of given state.
-	///
-	/// No changes are made.
-	fn call_at_state<
-		S: sp_state_machine::Backend<H>,
-		F: FnOnce(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>,
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-	>(&self,
-		state: &S,
-		overlay: &mut OverlayedChanges,
-		method: &str,
-		call_data: &[u8],
-		manager: ExecutionManager<F>,
-		native_call: Option<NC>,
-		extensions: Option<Extensions>,
-	) -> Result<
-		(
-			NativeOrEncoded<R>,
-			(S::Transaction, H::Out),
-			Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<B>>>
-		),
-		sp_blockchain::Error,
-	>;
-
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: sp_state_machine::Backend<H>>(
+	fn prove_at_state<S: sp_state_machine::Backend<HasherFor<B>>>(
 		&self,
 		mut state: S,
 		overlay: &mut OverlayedChanges,
@@ -137,9 +107,9 @@ where
 	/// Execute a call to a contract on top of given trie state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<H>>(
+	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HasherFor<B>>>(
 		&self,
-		trie_state: &sp_state_machine::TrieBackend<S, H>,
+		trie_state: &sp_state_machine::TrieBackend<S, HasherFor<B>>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]

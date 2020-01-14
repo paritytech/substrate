@@ -22,7 +22,7 @@ use futures::sync::mpsc;
 use parking_lot::RwLockWriteGuard;
 
 use sp_blockchain::{HeaderBackend, BlockStatus, well_known_cache_keys};
-use sc_client_api::{backend::Backend, CallExecutor, utils::is_descendent_of};
+use sc_client_api::{backend::{TransactionFor, Backend}, CallExecutor, utils::is_descendent_of};
 use sc_client::Client;
 use sp_consensus::{
 	BlockImport, Error as ConsensusError,
@@ -35,7 +35,6 @@ use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{
 	Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero,
 };
-use sp_core::{H256, Blake2Hasher};
 
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
@@ -52,7 +51,7 @@ use crate::justification::GrandpaJustification;
 ///
 /// When using GRANDPA, the block import worker should be using this block import
 /// object.
-pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, SC> {
+pub struct GrandpaBlockImport<B, E, Block: BlockT, RA, SC> {
 	inner: Arc<Client<B, E, Block, RA>>,
 	select_chain: SC,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
@@ -60,7 +59,7 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, SC> {
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, SC: Clone> Clone for
+impl<B, E, Block: BlockT, RA, SC: Clone> Clone for
 	GrandpaBlockImport<B, E, Block, RA, SC>
 {
 	fn clone(&self) -> Self {
@@ -74,11 +73,11 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC: Clone> Clone for
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, SC> JustificationImport<Block>
+impl<B, E, Block: BlockT, RA, SC> JustificationImport<Block>
 	for GrandpaBlockImport<B, E, Block, RA, SC> where
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
-		B: Backend<Block, Blake2Hasher> + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		B: Backend<Block> + 'static,
+		E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
 		RA: Send + Sync,
 		SC: SelectChain<Block>,
@@ -201,12 +200,12 @@ fn find_forced_change<B: BlockT>(header: &B::Header)
 	header.digest().convert_first(|l| l.try_to(id).and_then(filter_log))
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, SC>
+impl<B, E, Block: BlockT, RA, SC>
 	GrandpaBlockImport<B, E, Block, RA, SC>
 where
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync,
 {
@@ -236,9 +235,11 @@ where
 		})
 	}
 
-	fn make_authorities_changes<'a>(&'a self, block: &mut BlockImportParams<Block>, hash: Block::Hash)
-		-> Result<PendingSetChanges<'a, Block>, ConsensusError>
-	{
+	fn make_authorities_changes<'a>(
+		&'a self,
+		block: &mut BlockImportParams<Block, TransactionFor<B, Block>>,
+		hash: Block::Hash,
+	) -> Result<PendingSetChanges<'a, Block>, ConsensusError> {
 		// when we update the authorities, we need to hold the lock
 		// until the block is written to prevent a race if we need to restore
 		// the old authority set on error or panic.
@@ -285,7 +286,7 @@ where
 		// returns a function for checking whether a block is a descendent of another
 		// consistent with querying client directly after importing the block.
 		let parent_hash = *block.header.parent_hash();
-		let is_descendent_of = is_descendent_of(&*self.inner, Some((&hash, &parent_hash)));
+		let is_descendent_of = is_descendent_of(&*self.inner, Some((hash, parent_hash)));
 
 		let mut guard = InnerGuard {
 			guard: Some(self.authority_set.inner().write()),
@@ -379,19 +380,22 @@ where
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, SC> BlockImport<Block>
+impl<B, E, Block: BlockT, RA, SC> BlockImport<Block>
 	for GrandpaBlockImport<B, E, Block, RA, SC> where
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
-		B: Backend<Block, Blake2Hasher> + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		B: Backend<Block> + 'static,
+		E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
 		RA: Send + Sync,
+		for<'a> &'a Client<B, E, Block, RA>:
+			BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<B, Block>>,
 {
 	type Error = ConsensusError;
+	type Transaction = TransactionFor<B, Block>;
 
 	fn import_block(
 		&mut self,
-		mut block: BlockImportParams<Block>,
+		mut block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_header().hash();
@@ -416,12 +420,20 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC> BlockImport<Block>
 			match import_result {
 				Ok(ImportResult::Imported(aux)) => aux,
 				Ok(r) => {
-					debug!(target: "afg", "Restoring old authority set after block import result: {:?}", r);
+					debug!(
+						target: "afg",
+						"Restoring old authority set after block import result: {:?}",
+						r,
+					);
 					pending_changes.revert();
 					return Ok(r);
 				},
 				Err(e) => {
-					debug!(target: "afg", "Restoring old authority set after block import error: {:?}", e);
+					debug!(
+						target: "afg",
+						"Restoring old authority set after block import error: {:?}",
+						e,
+					);
 					pending_changes.revert();
 					return Err(ConsensusError::ClientImport(e.to_string()).into());
 				},
@@ -509,9 +521,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC> BlockImport<Block>
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, SC>
-	GrandpaBlockImport<B, E, Block, RA, SC>
-{
+impl<B, E, Block: BlockT, RA, SC> GrandpaBlockImport<B, E, Block, RA, SC> {
 	pub(crate) fn new(
 		inner: Arc<Client<B, E, Block, RA>>,
 		select_chain: SC,
@@ -529,12 +539,12 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC>
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, SC>
+impl<B, E, Block: BlockT, RA, SC>
 	GrandpaBlockImport<B, E, Block, RA, SC>
 where
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
 {
 

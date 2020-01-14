@@ -12,6 +12,8 @@ sc-client-api = { version = "2.0.0", path = "../../api" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
+sp-state-machine = { version = "2.0.0", path = "../../../primitives/state-machine" }
+sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 sc-telemetry = { version = "2.0.0", path = "../../telemetry" }
 sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
