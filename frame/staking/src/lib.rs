@@ -903,6 +903,8 @@ decl_module! {
 			let value = value.min(stash_balance);
 			let item = StakingLedger { stash, total: value, active: value, unlocking: vec![] };
 			Self::update_ledger(&controller, &item);
+			#[cfg(feature = "std")]
+			println!("Executed full bond");
 		}
 
 		/// Add some extra amount that have appeared in the stash `free_balance` into the balance up
@@ -934,6 +936,8 @@ decl_module! {
 				ledger.active += extra;
 				Self::update_ledger(&controller, &ledger);
 			}
+			#[cfg(feature = "std")]
+			println!("Executed full bond_extra");
 		}
 
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
@@ -983,6 +987,8 @@ decl_module! {
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
 			}
+			#[cfg(feature = "std")]
+			println!("Executed full unbond");
 		}
 
 		/// Remove any unlocked chunks from the `unlocking` queue from our management.
@@ -1016,9 +1022,13 @@ decl_module! {
 				T::Currency::remove_lock(STAKING_ID, &stash);
 				// remove all staking-related information.
 				Self::kill_stash(&stash);
+				#[cfg(feature = "std")]
+				println!("Executed full withdraw_unbonded 1/2 (heavy branch)");
 			} else {
 				// This was the consequence of a partial unbond. just update the ledger and move on.
 				Self::update_ledger(&controller, &ledger);
+				#[cfg(feature = "std")]
+				println!("Executed full withdraw_unbonded 2/2 (light branch)");
 			}
 		}
 
@@ -1042,6 +1052,8 @@ decl_module! {
 			let stash = &ledger.stash;
 			<Nominators<T>>::remove(stash);
 			<Validators<T>>::insert(stash, prefs);
+			#[cfg(feature = "std<")]
+			println!("Executed full validate");
 		}
 
 		/// Declare the desire to nominate `targets` for the origin controller.
@@ -1076,6 +1088,8 @@ decl_module! {
 
 			<Validators<T>>::remove(stash);
 			<Nominators<T>>::insert(stash, &nominations);
+			#[cfg(feature = "std")]
+			println!("Executed full nominate");
 		}
 
 		/// Declare no desire to either validate or nominate.
@@ -1255,6 +1269,8 @@ decl_module! {
 			let ledger = ledger.rebond(value);
 
 			Self::update_ledger(&controller, &ledger);
+			#[cfg(feature = "std")]
+			println!("Executed full rebond: {:?}/{:?}", ledger.unlocking.len(), MAX_UNLOCKING_CHUNKS);
 		}
 	}
 }
