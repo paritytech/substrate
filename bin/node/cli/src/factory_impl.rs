@@ -55,6 +55,7 @@ pub struct FactoryState<N> {
 	round: u32,
 	block_in_round: u32,
 	num: u32,
+	index: u32,
 }
 
 type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
@@ -98,7 +99,16 @@ impl RuntimeAdapter for FactoryState<Number> {
 			block_in_round: 0,
 			block_no: 0,
 			start_number: 0,
+			index: 0,
 		}
+	}
+
+	fn index(&self) -> u32 {
+		self.index
+	}
+
+	fn increase_index(&mut self) {
+		self.index += 1;
 	}
 
 	fn block_no(&self) -> Self::Number {
@@ -153,7 +163,6 @@ impl RuntimeAdapter for FactoryState<Number> {
 	) -> <Self::Block as BlockT>::Extrinsic {
 		println!("Creating a {} extrinsic...", self.tx_name);
 
-		let index = self.extract_index(&sender, prior_block_hash);
 		let phase = self.extract_phase(*prior_block_hash);
 
 		let function = match self.tx_name.as_str() {
@@ -193,7 +202,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 
 		sign::<Self>(
 			CheckedExtrinsic {
-				signed: Some((sender.clone(), Self::build_extra(index, phase))),
+				signed: Some((sender.clone(), Self::build_extra(self.index, phase))),
 				function,
 			},
 			key,

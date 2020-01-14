@@ -68,61 +68,62 @@ where
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	RA: RuntimeAdapter,
 {
-	let total = factory_state.start_number() + factory_state.num() * factory_state.rounds();
+	// let total = factory_state.start_number() + factory_state.num() * factory_state.rounds();
 
-	if factory_state.block_no() >= total || factory_state.round() >= factory_state.rounds() {
-		return None;
-	}
+	// if factory_state.block_no() >= total || factory_state.round() >= factory_state.rounds() {
+	// 	return None;
+	// }
 
-	info!(
-		"Round {}: Creating {} transactions in total, {} per round. {} rounds in total.",
-		factory_state.round() + RA::Number::one(),
-		factory_state.num() * factory_state.rounds(),
-		factory_state.num(),
-		factory_state.rounds(),
-	);
+	// info!(
+	// 	"Round {}: Creating {} transactions in total, {} per round. {} rounds in total.",
+	// 	factory_state.round() + RA::Number::one(),
+	// 	factory_state.num() * factory_state.rounds(),
+	// 	factory_state.num(),
+	// 	factory_state.rounds(),
+	// );
 
-	let from = from::<RA>(factory_state);
+	// let from = from::<RA>(factory_state);
 
-	let seed = factory_state.start_number() + factory_state.block_no();
-	let to = RA::gen_random_account_id(&seed);
+	// let seed = factory_state.start_number() + factory_state.block_no();
+	// let to = RA::gen_random_account_id(&seed);
 
-	let rounds_left = factory_state.rounds() - factory_state.round();
-	let amount = RA::minimum_balance() * rounds_left.into();
+	// let rounds_left = factory_state.rounds() - factory_state.round();
+	// let amount = RA::minimum_balance() * rounds_left.into();
 
-	let transfer = factory_state.create_extrinsic(
-		&from.0,
-		&from.1,
-		&to,
-		&amount,
-		version,
-		&genesis_hash,
-		&prior_block_hash,
-	);
+	// let transfer = factory_state.create_extrinsic(
+	// 	&from.0,
+	// 	&from.1,
+	// 	&to,
+	// 	&amount,
+	// 	version,
+	// 	&genesis_hash,
+	// 	&prior_block_hash,
+	// );
 
-	let inherents = factory_state.inherent_extrinsics();
-	let inherents = client.runtime_api().inherent_extrinsics(&prior_block_id, inherents)
-		.expect("Failed to create inherent extrinsics");
+	// let inherents = factory_state.inherent_extrinsics();
+	// let inherents = client.runtime_api().inherent_extrinsics(&prior_block_id, inherents)
+	// 	.expect("Failed to create inherent extrinsics");
 
-	let block = create_block::<RA, _, _, _, _>(&client, transfer, inherents);
-	info!(
-		"Created block {} with hash {}.",
-		factory_state.block_no() + RA::Number::one(),
-		prior_block_hash,
-	);
+	// let block = create_block::<RA, _, _, _, _>(&client, transfer, inherents);
+	// info!(
+	// 	"Created block {} with hash {}.",
+	// 	factory_state.block_no() + RA::Number::one(),
+	// 	prior_block_hash,
+	// );
 
-	factory_state.set_block_no(factory_state.block_no() + RA::Number::one());
+	// factory_state.set_block_no(factory_state.block_no() + RA::Number::one());
 
-	let new_round = factory_state.block_no() > RA::Number::zero()
-		&& factory_state.block_no() % factory_state.num() == RA::Number::zero();
-	if new_round {
-		factory_state.set_round(factory_state.round() + RA::Number::one());
-		factory_state.set_block_in_round(RA::Number::zero());
-	} else {
-		factory_state.set_block_in_round(factory_state.block_in_round() + RA::Number::one());
-	}
+	// let new_round = factory_state.block_no() > RA::Number::zero()
+	// 	&& factory_state.block_no() % factory_state.num() == RA::Number::zero();
+	// if new_round {
+	// 	factory_state.set_round(factory_state.round() + RA::Number::one());
+	// 	factory_state.set_block_in_round(RA::Number::zero());
+	// } else {
+	// 	factory_state.set_block_in_round(factory_state.block_in_round() + RA::Number::one());
+	// }
 
-	Some(block)
+	// Some(block)
+	None
 }
 
 /// Return the account which received tokens at this point in the previous round.

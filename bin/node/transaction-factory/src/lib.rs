@@ -56,6 +56,9 @@ pub trait RuntimeAdapter {
 
 	fn new(tx_name: String, mode: Mode, rounds: u64, start_number: u64) -> Self;
 
+	fn index(&self) -> u32;
+	fn increase_index(&mut self);
+
 	fn block_no(&self) -> Self::Number;
 	fn block_in_round(&self) -> Self::Number;
 	fn mode(&self) -> &Mode;
@@ -153,9 +156,12 @@ where
 
 /// Create a baked block from a transfer extrinsic and timestamp inherent.
 pub fn create_block<RA, Backend, Exec, Block, RtApi>(
-	client: &Arc<Client<Backend, Exec, Block, RtApi>>,
-	transfer: <RA::Block as BlockT>::Extrinsic,
-	inherent_extrinsics: Vec<<Block as BlockT>::Extrinsic>,
+	factory_state: &mut RA,
+	client: &Arc<Client<Backend, Exec, Block, RtApi>>,	
+	version: u32,
+	genesis_hash: <RA::Block as BlockT>::Hash,
+	prior_block_hash: <RA::Block as BlockT>::Hash,
+	prior_block_id: BlockId<Block>,
 ) -> Block
 where
 	Block: BlockT,
@@ -169,12 +175,41 @@ where
 	RA: RuntimeAdapter,
 {
 	let mut block = client.new_block(Default::default()).expect("Failed to create new block");
-	block.push(
-		Decode::decode(&mut &transfer.encode()[..])
-			.expect("Failed to decode transfer extrinsic")
-	).expect("Failed to push transfer extrinsic into block");
 
-	for inherent in inherent_extrinsics {
+	let seed = match factory_state.mode() {
+		Mode::MasterTo1 => factory_state.start_number(),
+		Mode::MasterToN => factory_state.start_number() + factory_state.block_no(),
+		_ => unreachable!("Mode not covered!"),
+	};
+
+	let from = (RA::master_account_id(), RA::master_account_secret());
+	let amount = RA::minimum_balance();
+
+	let inherents = factory_state.inherent_extrinsics();
+	let inherents = client.runtime_api().inherent_extrinsics(&prior_block_id, inherents)
+		.expect("Failed to create inherent extrinsics");
+
+	for _ in 0..10 { // TODO: Make this configurable.
+		let to = RA::gen_random_account_id(&seed);
+		let transfer = factory_state.create_extrinsic(
+			&from.0,
+			&from.1,
+			&to,
+			&amount,
+			version,
+			&genesis_hash,
+			&prior_block_hash,
+		);
+
+		block.push(
+			Decode::decode(&mut &transfer.encode()[..])
+				.expect("Failed to decode transfer extrinsic")
+		).expect("Failed to push transfer extrinsic into block");
+
+		factory_state.increase_index();
+	}
+
+	for inherent in inherents {
 		block.push(inherent).expect("Failed ...");
 	}
 
