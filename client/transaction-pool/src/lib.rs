@@ -30,12 +30,13 @@ pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 //pub use crate::maintainer::{FullBasicPoolMaintainer, LightBasicPoolMaintainer};
 
-use std::{collections::HashMap, sync::Arc, pin::Pin};
+use std::{collections::HashMap, sync::Arc, pin::Pin, time::Instant};
 use futures::{Future, FutureExt, future::{ready, join}};
+use parking_lot::Mutex;
 
 use sp_runtime::{
 	generic::BlockId,
-	traits::Block as BlockT,
+	traits::{Block as BlockT, Extrinsic, Header, NumberFor, SimpleArithmetic},
 };
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream,
@@ -51,6 +52,7 @@ pub struct BasicPool<PoolApi, Block>
 {
 	pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 	api: Arc<PoolApi>,
+	revalidation_status: Arc<Mutex<TxPoolRevalidationStatus<NumberFor<Block>>>>,
 }
 
 impl<PoolApi, Block> BasicPool<PoolApi, Block>
@@ -65,6 +67,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		BasicPool {
 			api: cloned_api,
 			pool: Arc::new(sc_transaction_graph::Pool::new(options, api)),
+			revalidation_status: Arc::new(Mutex::new(TxPoolRevalidationStatus::NotScheduled)),
 		}
 	}
 
@@ -136,6 +139,50 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	}
 }
 
+#[cfg_attr(test, derive(Debug))]
+enum TxPoolRevalidationStatus<N> {
+	/// The revalidation has never been completed.
+	NotScheduled,
+	/// The revalidation is scheduled.
+	Scheduled(Option<std::time::Instant>, Option<N>),
+	/// The revalidation is in progress.
+	InProgress,
+}
+
+impl<N: Clone + Copy + SimpleArithmetic> TxPoolRevalidationStatus<N> {
+	/// Called when revalidation is completed.
+	pub fn clear(&mut self) {
+		*self = TxPoolRevalidationStatus::NotScheduled;
+	}
+
+	/// Returns true if revalidation is required.
+	pub fn is_required(
+		&mut self,
+		block: N,
+		revalidate_time_period: Option<std::time::Duration>,
+		revalidate_block_period: Option<N>,
+	) -> bool {
+		match *self {
+			TxPoolRevalidationStatus::NotScheduled => {
+				*self = TxPoolRevalidationStatus::Scheduled(
+					revalidate_time_period.map(|period| Instant::now() + period),
+					revalidate_block_period.map(|period| block + period),
+				);
+				false
+			},
+			TxPoolRevalidationStatus::Scheduled(revalidate_at_time, revalidate_at_block) => {
+				let is_required = revalidate_at_time.map(|at| Instant::now() >= at).unwrap_or(false)
+					|| revalidate_at_block.map(|at| block >= at).unwrap_or(false);
+				if is_required {
+					*self = TxPoolRevalidationStatus::InProgress;
+				}
+				is_required
+			},
+			TxPoolRevalidationStatus::InProgress => false,
+		}
+	}
+}
+
 impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 where
 	Block: BlockT,
@@ -156,6 +203,12 @@ where
 		let id = id.clone();
 		let pool = self.pool.clone();
 		let api = self.api.clone();
+		let is_revalidation_required = self.revalidation_status.lock().is_required(
+			*header.number(),
+			Some(std::time::Duration::from_secs(60)),
+			Some(20.into()),
+		);
+		let revalidation_status = self.revalidation_status.clone();
 
 		async move {
 			let double_pool = pool.clone();
@@ -172,9 +225,13 @@ where
 				log::warn!("Cannot prune known in the pool {:?}!", e);
 			}
 
-			if let Err(e) = double_pool.revalidate_ready(&id, None).await {
-				log::warn!("revalidate ready failed {:?}", e);
+			if is_revalidation_required {
+				if let Err(e) = double_pool.revalidate_ready(&id, None).await {
+					log::warn!("revalidate ready failed {:?}", e);
+				}
 			}
+
+			revalidation_status.lock().clear();
 		}.boxed()
 	}
 }
