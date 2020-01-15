@@ -387,6 +387,7 @@ dependencies = [
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-chain-spec 2.0.0",
+ "sc-cli 2.0.0",
  "sc-network 0.8.0",
  "sc-service 2.0.0",
  "wasm-bindgen 0.2.57 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5155,6 +5156,7 @@ dependencies = [
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasm-timer 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

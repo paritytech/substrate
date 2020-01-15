@@ -33,6 +33,7 @@ sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
 names = "0.11.0"
 structopt = "=0.3.7"
 sc-tracing = { version = "2.0.0", path = "../tracing" }
+wasm-timer = "0.2"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 rpassword = "4.0.1"
