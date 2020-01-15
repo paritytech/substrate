@@ -66,7 +66,7 @@ decl_storage! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn on_initialize(_n: T::BlockNumber) {
-			CachedObsolete::remove_all();
+			CachedObsolete::<T>::remove_all();
 		}
 	}
 }
