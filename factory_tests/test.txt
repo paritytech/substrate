@@ -1,0 +1,8 @@
+0 1 staking_bond 0 0
+1 2 staking_validate 0 0
+2 3 staking_nominate 0 0
+3 4 staking_bond_extra 0 0
+4 5 staking_unbond 0 0
+5 6 staking_rebond 0 0
+6 7 staking_withdraw_unbonded 0 0
+7 4 staking_bond_extra 0 0

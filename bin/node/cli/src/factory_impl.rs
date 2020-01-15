@@ -25,7 +25,7 @@ use codec::{Encode, Decode};
 use sp_keyring::sr25519::Keyring;
 use node_runtime::{
 	Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, Header,
-	BalancesCall, NicksCall, AuthorshipCall, StakingCall,
+	BalancesCall, AuthorshipCall, StakingCall,
 	MinimumPeriod, ExistentialDeposit,
 };
 use node_primitives::Signature;
@@ -37,6 +37,8 @@ use sp_runtime::{
 	}
 };
 use node_transaction_factory::RuntimeAdapter;
+use node_transaction_factory::automata::Automaton;
+
 use sp_inherents::InherentData;
 use sp_timestamp;
 use sp_finality_tracker;
@@ -53,6 +55,7 @@ pub struct FactoryState<N> {
 	block_in_round: u32,
 	num: u32,
 	index: u32,
+	automaton: Automaton,
 }
 
 type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
@@ -84,6 +87,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 	fn new(
 		tx_name: String,
 		num: u64,
+		automaton: Automaton,
 	) -> FactoryState<Self::Number> {
 		FactoryState {
 			tx_name,
@@ -93,6 +97,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 			block_no: 0,
 			start_number: 0,
 			index: 0,
+			automaton,
 		}
 	}
 
@@ -150,15 +155,11 @@ impl RuntimeAdapter for FactoryState<Number> {
 
 		let phase = self.extract_phase(*prior_block_hash);
 
-		let function = match self.tx_name.as_str() {
+		let function = match self.automaton.next_state().expect("TODO").as_str() {
 			"balances_transfer" => Call::Balances(BalancesCall::transfer(
 				pallet_indices::address::Address::Id(destination.clone().into()),
 				(*amount).into()
 			)),
-			"nicks_set_name" => Call::Nicks(NicksCall::set_name(
-				b"Marcio Oscar Diaz".to_vec()
-			)),
-			"nicks_clear_name" => Call::Nicks(NicksCall::clear_name()),
 			"authorship_set_uncles" => {
 				let mut uncles = vec![];
 				let num_headers = 10; // TODO: make it configurable.
@@ -175,7 +176,6 @@ impl RuntimeAdapter for FactoryState<Number> {
 				Call::Authorship(AuthorshipCall::set_uncles(uncles))
 			},
 			"staking_bond" => {
-				self.tx_name = String::from("staking_validate");
 				Call::Staking(StakingCall::bond(
 					pallet_indices::address::Address::Id(destination.clone().into()),
 					(*amount).into(),
@@ -183,13 +183,11 @@ impl RuntimeAdapter for FactoryState<Number> {
 				))
 			},
 			"staking_validate" => {
-				self.tx_name = String::from("staking_nominate");
 				Call::Staking(StakingCall::validate(
 					ValidatorPrefs { commission: Perbill::from_rational_approximation(1u32, 10u32) }
 				))
 			},
 			"staking_nominate" => {
-				self.tx_name = String::from("staking_bond_extra");
 				let mut targets = vec![];
 				for _ in 0..16 {
 					targets.push(pallet_indices::address::Address::Id(destination.clone().into()));
@@ -197,25 +195,21 @@ impl RuntimeAdapter for FactoryState<Number> {
 				Call::Staking(StakingCall::nominate(targets))
 			},
 			"staking_bond_extra" => {
-				self.tx_name = String::from("staking_unbond");
 				Call::Staking(StakingCall::bond_extra(
 					Self::minimum_balance() * 2,
 				))
 			},
 			"staking_unbond" => { // TODO: Need to execute many of these guys to bump rebond.
-				self.tx_name = String::from("staking_rebond");
 				Call::Staking(StakingCall::unbond(
 					Self::minimum_balance() * 2,
 				))
 			},
 			"staking_rebond" => {
-				self.tx_name = String::from("staking_withdraw_unbonded");
 				Call::Staking(StakingCall::rebond(
 					Self::minimum_balance(),
 				))
 			},
 			"staking_withdraw_unbonded" => {
-				self.tx_name = String::from("staking_bond_extra");
 				Call::Staking(StakingCall::withdraw_unbonded())
 			},
 			other => panic!("Extrinsic {} is not supported yet!", other),

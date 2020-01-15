@@ -40,6 +40,7 @@ use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, SimpleArithmetic, One, Zero,
 };
 
+pub mod automata;
 mod simple_modes;
 
 pub trait RuntimeAdapter {
@@ -51,7 +52,7 @@ pub trait RuntimeAdapter {
 	type Phase: Copy;
 	type Secret;
 
-	fn new(tx_name: String, start_number: u64) -> Self;
+	fn new(tx_name: String, start_number: u64, automaton: automata::Automaton) -> Self;
 
 	fn index(&self) -> u32;
 	fn increase_index(&mut self);

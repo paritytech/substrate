@@ -24,6 +24,7 @@ use sc_cli::{display_role, parse_and_prepare, GetSharedParams, ParseAndPrepare};
 use crate::{service, ChainSpec, load_spec};
 use crate::factory_impl::FactoryState;
 use node_transaction_factory::RuntimeAdapter;
+use node_transaction_factory::automata::Automaton;
 use futures::{channel::oneshot, future::{select, Either}};
 
 /// Custom subcommands.
@@ -145,9 +146,11 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 				_ => panic!("Factory is only supported for development and local testnet."),
 			}
 
+			let automaton = Automaton::new_from_file(String::from("./factory_tests/test.txt"));
 			let factory_state = FactoryState::new(
 				cli_args.tx_name,
 				cli_args.num,
+				automaton, 
 			);
 
 			let service_builder = new_full_start!(config).0;
