@@ -1347,9 +1347,7 @@ impl<T: Trait> Module<T> {
 
 	/// Session has just ended. Provide the validator set for the next session if it's an era-end, along
 	/// with the exposure of the prior validator set.
-	fn new_session(session_index: SessionIndex)
-		-> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>>
-	{
+	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		let era_length = session_index.checked_sub(Self::current_era_start_session_index()).unwrap_or(0);
 		match ForceEra::get() {
 			Forcing::ForceNew => ForceEra::kill(),
@@ -1358,12 +1356,7 @@ impl<T: Trait> Module<T> {
 			_ => return None,
 		}
 
-		Self::new_era(session_index).map(|validators| {
-			validators.into_iter().map(|v| {
-				let exposure = <Stakers<T>>::get(&v);
-				(v, exposure)
-			}).collect()
-		})
+		Self::new_era(session_index)
 	}
 
 	/// The era has changed - enact new staking set.
@@ -1648,8 +1641,11 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		<Self as SessionManager<_, _>>::new_session(new_index)
-			.map(|v| v.into_iter().map(|(v, _expo)| v).collect())
+		Self::ensure_storage_upgraded();
+		if new_index < 2 {
+			return <Module<T>>::select_validators().1
+		}
+		Self::new_session(new_index - 1)
 	}
 	fn end_session(end_index: SessionIndex) {
 		<Self as SessionManager<_, _>>::end_session(end_index)
@@ -1660,8 +1656,12 @@ impl<T: Trait> SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>
 	fn new_session(new_index: SessionIndex)
 		-> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>>
 	{
-		Self::ensure_storage_upgraded();
-		Self::new_session(new_index - 1)
+		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
+			validators.into_iter().map(|v| {
+				let exposure = <Stakers<T>>::get(&v);
+				(v, exposure)
+			}).collect()
+		})
 	}
 	fn end_session(_end_index: SessionIndex) {
 	}

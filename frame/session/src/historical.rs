@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// TODO TODO: make at genesis the current session using fullidentificationof
 //! An opt-in utility for tracking historical sessions in SRML-session.
 //!
 //! This is generally useful when implementing blockchains that require accountable
