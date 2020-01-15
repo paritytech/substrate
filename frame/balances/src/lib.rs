@@ -886,6 +886,7 @@ where
 	}
 
 	fn can_slash(who: &T::AccountId, value: Self::Balance) -> bool {
+		if value.is_zero() { return true }
 		Self::free_balance(who) >= value
 	}
 
@@ -902,6 +903,7 @@ where
 	}
 
 	fn burn(mut amount: Self::Balance) -> Self::PositiveImbalance {
+		if amount.is_zero() { return PositiveImbalance::zero() }
 		<TotalIssuance<T, I>>::mutate(|issued| {
 			*issued = issued.checked_sub(&amount).unwrap_or_else(|| {
 				amount = *issued;
@@ -912,6 +914,7 @@ where
 	}
 
 	fn issue(mut amount: Self::Balance) -> Self::NegativeImbalance {
+		if amount.is_zero() { return NegativeImbalance::zero() }
 		<TotalIssuance<T, I>>::mutate(|issued|
 			*issued = issued.checked_add(&amount).unwrap_or_else(|| {
 				amount = Self::Balance::max_value() - *issued;
@@ -927,10 +930,11 @@ where
 	// # </weight>
 	fn ensure_can_withdraw(
 		who: &T::AccountId,
-		_amount: T::Balance,
+		amount: T::Balance,
 		reasons: WithdrawReasons,
 		new_balance: T::Balance,
 	) -> DispatchResult {
+		if amount.is_zero() { return Ok(()) }
 		if reasons.intersects(WithdrawReason::Reserve | WithdrawReason::Transfer)
 			&& Self::vesting_balance(who) > new_balance
 		{
@@ -961,6 +965,7 @@ where
 		value: Self::Balance,
 		existence_requirement: ExistenceRequirement,
 	) -> DispatchResult {
+		if value.is_zero() { return Ok(()) }
 		let from_balance = Self::free_balance(transactor);
 		let to_balance = Self::free_balance(dest);
 		let would_create = to_balance.is_zero();
@@ -1007,6 +1012,8 @@ where
 		reasons: WithdrawReasons,
 		liveness: ExistenceRequirement,
 	) -> result::Result<Self::NegativeImbalance, DispatchError> {
+		if value.is_zero() { return Ok(NegativeImbalance::zero()); }
+
 		let old_balance = Self::free_balance(who);
 		if let Some(new_balance) = old_balance.checked_sub(&value) {
 			// if we need to keep the account alive...
@@ -1026,10 +1033,14 @@ where
 		}
 	}
 
+	// Slash an account, returning the negative imbalance created and any left over
+	// amount that could not be slashed.
 	fn slash(
 		who: &T::AccountId,
 		value: Self::Balance
 	) -> (Self::NegativeImbalance, Self::Balance) {
+		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
+
 		let free_balance = Self::free_balance(who);
 		let free_slash = cmp::min(free_balance, value);
 
@@ -1053,6 +1064,8 @@ where
 		who: &T::AccountId,
 		value: Self::Balance
 	) -> result::Result<Self::PositiveImbalance, DispatchError> {
+		if value.is_zero() { return Ok(PositiveImbalance::zero()) }
+
 		if Self::total_balance(who).is_zero() {
 			Err(Error::<T, I>::DeadAccount)?
 		}
@@ -1064,6 +1077,8 @@ where
 		who: &T::AccountId,
 		value: Self::Balance,
 	) -> Self::PositiveImbalance {
+		if value.is_zero() { return Self::PositiveImbalance::zero() }
+
 		let (imbalance, _) = Self::make_free_balance_be(who, Self::free_balance(who) + value);
 		if let SignedImbalance::Positive(p) = imbalance {
 			p
@@ -1123,6 +1138,7 @@ where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
+		if value.is_zero() { return true }
 		Self::free_balance(who)
 			.checked_sub(&value)
 			.map_or(false, |new_balance|
@@ -1135,6 +1151,7 @@ where
 	}
 
 	fn reserve(who: &T::AccountId, value: Self::Balance) -> result::Result<(), DispatchError> {
+		if value.is_zero() { return Ok(()) }
 		let b = Self::free_balance(who);
 		if b < value {
 			Err(Error::<T, I>::InsufficientBalance)?
@@ -1146,7 +1163,9 @@ where
 		Ok(())
 	}
 
+	// Unreserve some funds, returning any amount that was unable to be unreserved.
 	fn unreserve(who: &T::AccountId, value: Self::Balance) -> Self::Balance {
+		if value.is_zero() { return Zero::zero() }
 		let b = Self::reserved_balance(who);
 		let actual = cmp::min(b, value);
 		Self::set_free_balance(who, Self::free_balance(who) + actual);
@@ -1154,10 +1173,13 @@ where
 		value - actual
 	}
 
+	// Slash from reserved balance, returning the negative imbalance created,
+	// and any amount that was unable to be slashed.
 	fn slash_reserved(
 		who: &T::AccountId,
 		value: Self::Balance
 	) -> (Self::NegativeImbalance, Self::Balance) {
+		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
 		let b = Self::reserved_balance(who);
 		let slash = cmp::min(b, value);
 		// underflow should never happen, but it if does, there's nothing to be done here.
@@ -1170,6 +1192,7 @@ where
 		beneficiary: &T::AccountId,
 		value: Self::Balance,
 	) -> result::Result<Self::Balance, DispatchError> {
+		if value.is_zero() { return Ok (Zero::zero()) }
 		if Self::total_balance(beneficiary).is_zero() {
 			Err(Error::<T, I>::DeadAccount)?
 		}
@@ -1194,20 +1217,22 @@ where
 		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		let now = <frame_system::Module<T>>::block_number();
-		let mut new_lock = Some(BalanceLock { id, amount, until, reasons });
-		let mut locks = Self::locks(who).into_iter().filter_map(|l|
-			if l.id == id {
-				new_lock.take()
-			} else if l.until > now {
-				Some(l)
-			} else {
-				None
-			}).collect::<Vec<_>>();
-		if let Some(lock) = new_lock {
-			locks.push(lock)
+		if !amount.is_zero(){
+			let now = <frame_system::Module<T>>::block_number();
+			let mut new_lock = Some(BalanceLock { id, amount, until, reasons });
+			let mut locks = Self::locks(who).into_iter().filter_map(|l|
+				if l.id == id {
+					new_lock.take()
+				} else if l.until > now {
+					Some(l)
+				} else {
+					None
+				}).collect::<Vec<_>>();
+			if let Some(lock) = new_lock {
+				locks.push(lock)
+			}
+			<Locks<T, I>>::insert(who, locks);
 		}
-		<Locks<T, I>>::insert(who, locks);
 	}
 
 	fn extend_lock(
@@ -1281,6 +1306,7 @@ where
 		per_block: T::Balance,
 		starting_block: T::BlockNumber
 	) -> DispatchResult {
+		if locked.is_zero() { return Ok(()) }
 		if <Vesting<T, I>>::exists(who) {
 			Err(Error::<T, I>::ExistingVestingSchedule)?
 		}
