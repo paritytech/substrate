@@ -406,33 +406,3 @@ pub(crate) fn build_support_map_float<FS>(
 	}
 	supports
 }
-
-#[allow(dead_code)] // to be used with fuzzing
-pub fn assert_assignments_equal(
-	winners: &Vec<AccountId>,
-	ass1: &Vec<StakedAssignment<AccountId>>,
-	ass2: &Vec<StakedAssignment<AccountId>>,
-) {
-	let (support_1, _) = build_support_map::<Balance, AccountId>(winners, ass1);
-	let (support_2, _) = build_support_map::<Balance, AccountId>(winners, ass2);
-
-	for (who, support) in support_1.iter() {
-		assert_eq!(support.total, support_2.get(who).unwrap().total);
-		assert_eq!(support.voters, support_2.get(who).unwrap().voters);
-
-	}
-}
-
-#[allow(dead_code)] // to be used with fuzzing
-pub fn reduce_and_compare(
-	assignment: &Vec<StakedAssignment<AccountId>>,
-	winners: &Vec<AccountId>,
-) {
-	let mut altered_assignment = assignment.clone();
-	crate::reduce(&mut altered_assignment);
-	assert_assignments_equal(
-		winners,
-		&assignment,
-		&altered_assignment,
-	);
-}

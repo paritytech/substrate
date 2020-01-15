@@ -120,6 +120,7 @@ members = [
 	"primitives/panic-handler",
 	"primitives/phragmen",
 	"primitives/phragmen/compact",
+	"primitives/phragmen/reduce",
 	"primitives/rpc",
 	"primitives/runtime-interface",
 	"primitives/runtime-interface/proc-macro",

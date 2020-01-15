@@ -42,8 +42,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-mod node;
-
 /// A type in which performing operations on balances and stakes of candidates and voters are safe.
 ///
 /// This module's functions expect a `Convert` type to convert all balances to u64. Hence, u128 is
@@ -105,6 +103,7 @@ pub struct PhragmenResult<AccountId> {
 	pub assignments: Vec<Assignment<AccountId>>
 }
 
+/// A voter's stake assignment among a set of targets, represented as ratios.
 #[derive(RuntimeDebug, Clone)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq))]
 pub struct Assignment<AccountId> {
@@ -133,6 +132,8 @@ impl<AccountId> Assignment<AccountId> {
 	}
 }
 
+/// A voter's stake assignment among a set of targets, represented as absolute values in the scale
+/// of [`ExtendedBalance`].
 #[derive(RuntimeDebug, Clone)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq))]
 pub struct StakedAssignment<AccountId> {
@@ -187,7 +188,6 @@ pub fn elect<AccountId, Balance, FS, C>(
 	AccountId: Default + Ord + Member,
 	Balance: Default + Copy + SimpleArithmetic,
 	for<'r> FS: Fn(&'r AccountId) -> Balance,
-	// TODO: btw now we can remove the backward convert!
 	C: Convert<Balance, u64> + Convert<u128, Balance>,
 {
 	let to_votes = |b: Balance| <C as Convert<Balance, u64>>::convert(b) as ExtendedBalance;
@@ -323,7 +323,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 								n.load.n(),
 							).unwrap_or(Bounded::max_value())
 						} else {
-							// defensive only. Both edge and nominator loads are built from
+							// defensive only. Both edge and voter loads are built from
 							// scores, hence MUST have the same denominator.
 							Zero::zero()
 						}
@@ -338,7 +338,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 		}
 
 		if assignment.distribution.len() > 0 {
-			// To ensure an assertion indicating: no stake from the nominator going to waste,
+			// To ensure an assertion indicating: no stake from the voter going to waste,
 			// we add a minimal post-processing to equally assign all of the leftover stake ratios.
 			let vote_count = assignment.distribution.len() as u32;
 			let len = assignment.distribution.len();
@@ -358,7 +358,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 				}
 			}
 
-			// `remainder` is set to be less than maximum votes of a nominator (currently 16).
+			// `remainder` is set to be less than maximum votes of a voter (currently 16).
 			// safe to cast it to usize.
 			let remainder = diff - diff_per_vote * vote_count;
 			for i in 0..remainder as usize {
@@ -445,6 +445,7 @@ pub fn evaluate_support<AccountId>(
 	let mut min_support = ExtendedBalance::max_value();
 	let mut sum: ExtendedBalance = Zero::zero();
 	// TODO: this will probably saturate but using big num makes it even slower. We'll have to see.
+	// This must run on chain..
 	let mut sum_squared: ExtendedBalance = Zero::zero();
 	for (_, support) in support.iter() {
 		sum += support.total;
@@ -455,466 +456,6 @@ pub fn evaluate_support<AccountId>(
 		}
 	}
 	[min_support, sum, sum_squared]
-}
-
-/// Returns all combinations of size two in the collection `input` with no repetition.
-fn combinations_2<T: Clone + std::fmt::Debug>(input: &[T]) -> Vec<(T, T)> {
-	let n = input.len();
-	if n < 2 {
-		return Default::default()
-	}
-
-	let mut comb = Vec::with_capacity(n * (n-1) / 2);
-	for i in 0..n {
-		for j in i+1..n {
-			comb.push((input[i].clone(), input[j].clone()))
-		}
-	}
-	comb
-}
-
-/// Returns the count of trailing common elements in a slice.
-/// TODO: this need not to be in the public interface.
-/// ```rust
-/// use sp_phragmen::trailing_common;
-///
-/// fn main() {
-/// 	assert_eq!(
-/// 		trailing_common(&vec![1u8, 2, 3, 4, 5], &vec![7u8, 8, 4, 5]),
-/// 		2,
-/// 	);
-///
-/// 	assert_eq!(
-/// 		trailing_common(&vec![1u8, 2], &vec![7u8, 8]),
-/// 		0,
-/// 	);
-///
-/// 	assert_eq!(
-/// 		trailing_common(&vec![1u8, 2, 3, 4, 5], &vec![3u8, 4, 5]),
-/// 		3,
-/// 	)
-/// }
-/// ```
-pub fn trailing_common<T: Eq>(t1: &[T], t2: &[T]) -> usize {
-	let mut t1_pointer = t1.len() - 1;
-	let mut t2_pointer = t2.len() - 1;
-	let mut common = 0usize;
-
-	while t1[t1_pointer] == t2[t2_pointer] {
-		common += 1;
-		if t1_pointer == 0 || t2_pointer == 0 {
-			break;
-		}
-		t1_pointer -= 1;
-		t2_pointer -= 1;
-	}
-
-	common
-}
-
-// TODO: this whole reduce stuff must go into a crate. Phragmen itself is no_std. This should use std.
-// TODO: Using hashMap is more efficient here but that requires a Hash impl for AccountId. We can
-// make this by constraining the impl to just polkadot account id type, instead of the opaque
-// substrate version which is not `Hash`.
-use std::collections::{btree_map::{Entry::*}};
-type Map<A> = BTreeMap<(A, A), A>;
-
-fn reduce_4<AccountId: Clone + Eq + Default + Ord + std::fmt::Debug>(
-	assignments: &mut Vec<StakedAssignment<AccountId>>,
-) -> u32 {
-
-	let mut combination_map: Map<AccountId> = Map::new();
-	let mut num_changed: u32 = Zero::zero();
-
-	// NOTE: we have to use the old fashioned style loops here with manual indexing. Borrowing
-	// assignments will not work since then there is NO way to mutate it inside.
-	for i in 0..assignments.len() {
-		let who = assignments[i].who.clone();
-		// immutable copy -- needed for further read operations. TODO: As an optimization at the
-		// expense of readability, we can remove this.
-		let distribution = &assignments[i].distribution.clone();
-
-		// all combinations for this particular voter
-		let candidate_combinations = combinations_2(
-			&distribution.iter().map(|(t, _p)| t.clone()).collect::<Vec<AccountId>>(),
-		);
-
-		for (v1, v2) in candidate_combinations {
-			match combination_map.entry((v1.clone(), v2.clone())) {
-				Vacant(entry) => {
-					entry.insert(who.clone());
-				},
-				Occupied(mut entry) => {
-					let other_who = entry.get_mut();
-					println!("Occupied {:?} -> ({:?} {:?}) other: {:?}", &who, &v1, &v2, &other_who);
-
-					// check if other_who voted for the same pair v1, v2.
-					let maybe_other_assignments = assignments.iter().find(|a| a.who == *other_who);
-					if maybe_other_assignments.is_none() {
-						// TODO: test for this path?
-						// This combination is not a cycle.
-						continue;
-					}
-					let other_assignment = maybe_other_assignments.expect("value is checked to be 'Some'");
-
-					// Collect potential cycle votes
-					let mut other_cycle_votes: Vec<(AccountId, ExtendedBalance)> = Vec::with_capacity(2);
-					other_assignment.distribution.iter().for_each(|(t, w)| {
-						if *t == v1 || *t == v2  { other_cycle_votes.push((t.clone(), *w)); }
-					});
-
-					// This is not a cycle. Replace and continue.
-					let other_votes_count = other_cycle_votes.len();
-					// TODO: this might need testing. Some duplicate can cause this and this
-					// function should reject them.
-					debug_assert!(other_votes_count <= 2);
-
-					if other_votes_count < 2 {
-						// Not a cycle. Replace and move on.
-						// TODO test fro this path??
-						*other_who = who.clone();
-						continue;
-					} else {
-						println!("And it is a cycle! ");
-						// This is a cycle.
-						let mut who_cycle_votes: Vec<(AccountId, ExtendedBalance)> = Vec::with_capacity(2);
-						distribution.iter().for_each(|(t, w)| {
-							if *t == v1 || *t == v2  { who_cycle_votes.push((t.clone(), *w)); }
-						});
-
-						if who_cycle_votes.len() != 2 { continue; }
-
-						// Align the targets similarly. This helps with the circulation below.
-						if other_cycle_votes[0].0 != who_cycle_votes[0].0 {
-							other_cycle_votes.swap(0, 1);
-						}
-
-						// TODO: remove later.
-						debug_assert_eq!(who_cycle_votes[0].0, other_cycle_votes[0].0);
-						debug_assert_eq!(who_cycle_votes[1].0, other_cycle_votes[1].0);
-
-						// Find min
-						let mut min_value: ExtendedBalance = Bounded::max_value();
-						let mut min_index: usize = 0;
-						let cycle = who_cycle_votes
-							.iter()
-							.chain(other_cycle_votes.iter())
-							.enumerate()
-							.map(|(index, (t, w))| {
-								if *w <= min_value { min_value = *w; min_index = index; }
-								(t.clone(), *w)
-							}).collect::<Vec<(AccountId, ExtendedBalance)>>();
-						dbg!(&cycle, &min_value);
-
-						// min was in the first part of the chained iters
-						let mut increase_indices: Vec<usize> = Vec::new();
-						let mut decrease_indices: Vec<usize> = Vec::new();
-						decrease_indices.push(min_index);
-						if min_index < 2 {
-							// min_index == 0 => sibling_index <- 1
-							// min_index == 1 => sibling_index <- 0
-							let sibling_index = 1 - min_index;
-							increase_indices.push(sibling_index);
-							// valid because the two chained sections of `cycle` are aligned;
-							// index [0, 2] are both voting for v1 or both v2. Same goes for [1, 3].
-							decrease_indices.push(sibling_index + 2);
-							increase_indices.push(min_index + 2);
-						} else {
-							// min_index == 2 => sibling_index <- 3
-							// min_index == 3 => sibling_index <- 2
-							let sibling_index = 3 - min_index % 2;
-							increase_indices.push(sibling_index);
-							// valid because the two chained sections of `cycle` are aligned;
-							// index [0, 2] are both voting for v1 or both v2. Same goes for [1, 3].
-							decrease_indices.push(sibling_index - 2);
-							increase_indices.push(min_index - 2);
-						}
-
-						dbg!(&increase_indices, &decrease_indices);
-
-						// apply changes
-						increase_indices.into_iter().for_each(|i| {
-							assignments.iter_mut().filter(|a| a.who == if i < 2 { who.clone() } else { other_who.clone() }).for_each(|ass| {
-								ass.distribution
-									.iter_mut()
-									.position(|(t, _)| *t == cycle[i].0)
-									.map(|idx| {
-										let next_value = ass.distribution[idx].1.saturating_add(min_value);
-										if next_value.is_zero() {
-											ass.distribution.remove(idx);
-										} else {
-											ass.distribution[idx].1 = next_value;
-										}
-									});
-							});
-						});
-						decrease_indices.into_iter().for_each(|i| {
-							assignments.iter_mut().filter(|a| a.who == if i < 2 { who.clone() } else { other_who.clone() }).for_each(|ass| {
-								ass.distribution
-									.iter_mut()
-									.position(|(t, _)| *t == cycle[i].0)
-									.map(|idx| {
-										let next_value = ass.distribution[idx].1.saturating_sub(min_value);
-										if next_value.is_zero() {
-											ass.distribution.remove(idx);
-											num_changed += 1;
-										} else {
-											ass.distribution[idx].1 = next_value;
-										}
-									});
-							});
-						});
-					}
-				}
-			}
-		}
-	}
-
-	println!("DoNE {:?}", assignments);
-	num_changed
-}
-
-fn reduce_all<AccountId: Clone + Eq + Default + Ord + std::fmt::Debug>(
-	assignments: &mut Vec<StakedAssignment<AccountId>>,
-) -> u32 {
-	let mut num_changed: u32 = Zero::zero();
-
-	// ----------------- Phase 2: remove any other cycle
-	use node::{Node, NodeRef, NodeRole};
-	let mut tree: BTreeMap<AccountId, NodeRef<AccountId>> = BTreeMap::new();
-
-	// TODO: unify this terminology: we only have VOTER -> TARGET. no candidate. no staking terms.
-	// a flat iterator of (voter, candidate) over all pairs of votes. Similar to reduce_4, we loop
-	// without borrowing.
-	for i in 0..assignments.len() {
-		let voter = assignments[i].who.clone();
-
-		for j in 0..assignments[i].distribution.len() {
-			let (target, _) = assignments[i].distribution[j].clone();
-
-			let voter_node = tree.entry(voter.clone())
-				.or_insert(Node::new(voter.clone(), NodeRole::Voter).into_ref()).clone();
-			let target_node = tree.entry(target.clone())
-				.or_insert(Node::new(target.clone(), NodeRole::Target).into_ref()).clone();
-
-			if !voter_node.borrow().has_parent() {
-				Node::set_parent_of(&voter_node, &target_node);
-				continue;
-			}
-			if !target_node.borrow().has_parent() {
-				Node::set_parent_of(&target_node, &voter_node);
-				continue;
-			}
-
-			let (voter_root, voter_root_path) = Node::root(&voter_node);
-			let (target_root, target_root_path) = Node::root(&target_node);
-
-			if voter_root != target_root {
-				// swap
-				// TODO: test case for this path
-				if voter_root_path.len() <= target_root_path.len() {
-					// iterate from last to beginning, skipping the first one. This asserts that
-					// indexing is always correct.
-					voter_root_path
-						.iter()
-						.skip(1)
-						.rev()
-						.enumerate()
-						.map(|(index, r)| (voter_root_path.len() - index - 1, r))
-						.for_each(|(index, r)| {
-							let index = voter_root_path.len() - index;
-							Node::set_parent_of(r, &voter_root_path[index-1])
-						});
-					debug_assert_eq!(voter_root_path[0], voter_node);
-					Node::set_parent_of(&voter_node, &target_node);
-				} else {
-					target_root_path
-						.iter()
-						.skip(1)
-						.rev()
-						.enumerate()
-						.map(|(index, r)| (target_root_path.len() - index - 1, r))
-						.for_each(|(index, r)| {
-							let index = target_root_path.len() - index;
-							Node::set_parent_of(r, &target_root_path[index-1])
-						});
-					debug_assert_eq!(target_root_path[0], target_node);
-					Node::set_parent_of(&target_node, &voter_node);
-				}
-			} else {
-				debug_assert_eq!(target_root_path.last().unwrap(), voter_root_path.last().unwrap());
-
-				// find common and cycle.
-				let common_count = trailing_common(&voter_root_path, &target_root_path);
-
-				// because roots are the same. TODO: replace with a bail-out
-				debug_assert!(common_count > 0);
-
-				// cycle part of each path will be `path[path.len() - common_count - 1 : 0]`
-				// NOTE: the order of chaining is important! it is always build from [target, ...,
-				// voter]
-				// TODO: check borrows panic!
-				let cycle =
-					target_root_path.iter().take(target_root_path.len() - common_count + 1).cloned()
-					.chain(voter_root_path.iter().take(voter_root_path.len() - common_count).rev().cloned())
-					.collect::<Vec<NodeRef<AccountId>>>();
-
-
-				// TODO: a cycle struct that gives you min + to which chunk it belonged.
-				// find minimum of cycle.
-				let mut min_value: ExtendedBalance = Bounded::max_value();
-				// Note that this can only ever point to a target, not a voter.
-				let mut min_who: AccountId = Default::default();
-				let mut min_index = 0usize;
-				// 1 -> next // 0 -> prev  TOOD: I have some ideas of fixing this.
-				let mut min_direction = 0u32;
-				// helpers
-				let next_index = |i| { if i < (cycle.len() - 1) { i + 1 } else { 0 } };
-				let prev_index = |i| { if i > 0 { i - 1 } else { cycle.len() - 1 } };
-				for i in 0..cycle.len() {
-					if cycle[i].borrow().role == NodeRole::Voter {
-						// NOTE: sadly way too many clones since I don't want to make AccountId: Copy
-						let current = cycle[i].borrow().who.clone();
-						let next = cycle[next_index(i)].borrow().who.clone();
-						let prev = cycle[prev_index(i)].borrow().who.clone();
-						assignments.iter().find(|a| a.who == current).map(|ass| {
-							ass.distribution.iter().find(|d| d.0 == next).map(|(_, w)| {
-								if *w < min_value {
-									min_value = *w;
-									min_who = next.clone();
-									min_index = i;
-									min_direction = 1;
-								}
-							})
-						});
-						assignments.iter().find(|a| a.who == current).map(|ass| {
-							ass.distribution.iter().find(|d| d.0 == prev).map(|(_, w)| {
-								if *w < min_value {
-									min_value = *w;
-									min_who = prev.clone();
-									min_index = i;
-									min_direction = 0;
-								}
-							})
-						});
-					}
-				}
-				// if the min edge is in the voter's sub-chain.
-				let target_chunk = target_root_path.len() - common_count;
-				let min_chain_in_voter = (min_index + min_direction as usize) >= target_chunk;
-
-				dbg!(min_value, min_index, &min_who, min_direction);
-
-				// walk over the cycle and update the weights
-				// TODO: or at least unify and merge the process of adding this flow in both places. and surely add dedicated tests for this supply demand circulation math
-				// if the circulation begins with an addition. It is assumed that a cycle always starts with a target.
-				let start_operation_add = ((min_index % 2) + min_direction as usize) % 2 == 1;
-				for i in 0..cycle.len() {
-					let current = cycle[i].borrow();
-					if current.role == NodeRole::Voter {
-						let prev = cycle[prev_index(i)].borrow();
-
-						assignments.iter_mut().filter(|a| a.who == current.who).for_each(|ass| {
-							ass.distribution.iter_mut().position(|(t, _)| *t == prev.who).map(|idx| {
-								let next_value = if i % 2 == 0 {
-									if start_operation_add {
-										ass.distribution[idx].1.saturating_add(min_value)
-									} else {
-										ass.distribution[idx].1.saturating_sub(min_value)
-									}
-								} else {
-									if start_operation_add {
-										ass.distribution[idx].1.saturating_sub(min_value)
-									} else {
-										ass.distribution[idx].1.saturating_add(min_value)
-									}
-								};
-								// println!("Next value for edge {:?} -> {:?} is {}", current.who, prev.who, next_value);
-								if next_value.is_zero() {
-									ass.distribution.remove(idx);
-									num_changed += 1;
-								} else {
-									ass.distribution[idx].1 = next_value;
-								}
-							});
-						});
-
-						let next = cycle[next_index(i)].borrow();
-
-						assignments.iter_mut().filter(|a| a.who == current.who).for_each(|ass| {
-							ass.distribution.iter_mut().position(|(t, _)| *t == next.who).map(|idx| {
-								let next_value = if i % 2 == 0 {
-									if start_operation_add {
-										ass.distribution[idx].1.saturating_sub(min_value)
-									} else {
-										ass.distribution[idx].1.saturating_add(min_value)
-									}
-								} else {
-									if start_operation_add {
-										ass.distribution[idx].1.saturating_add(min_value)
-									} else {
-										ass.distribution[idx].1.saturating_sub(min_value)
-									}
-								};
-								// println!("Next value for edge {:?} -> {:?} is {}", current.who, next.who, next_value);
-								if next_value.is_zero() {
-									ass.distribution.remove(idx);
-									num_changed += 1;
-								} else {
-									ass.distribution[idx].1 = next_value;
-								}
-							});
-						});
-					}
-				};
-
-				// don't do anything if the edge removed itself
-				if min_index == (cycle.len() - 1) && min_direction == 1 { continue; }
-
-				// TODO: this is most likely buggy
-				// re-org otherwise.
-				if min_chain_in_voter {
-					// NOTE: safe; voter_root_path is always bigger than 1 element.
-					for i in 0..voter_root_path.len()-1 {
-						let next = voter_root_path[i + 1].clone();
-						if next.borrow().who == min_who {
-							break;
-						}
-						Node::set_parent_of(&voter_root_path[i + 1], &voter_root_path[i]);
-					}
-					Node::set_parent_of(&voter_node, &target_node);
-				} else {
-					// NOTE: safe; target_root_path is always bigger than 1 element.
-					for i in 0..target_root_path.len()-1 {
-						if target_root_path[i].borrow().who == min_who {
-							break;
-						}
-						Node::set_parent_of(&target_root_path[i + 1], &target_root_path[i]);
-					}
-					Node::set_parent_of(&target_node, &voter_node);
-				}
-
-
-
-			}
-		}
-	}
-
-	num_changed
-}
-
-/// Reduce the given [`PhragmenResult`]. This removes redundant edges from without changing the
-/// overall backing of any of the elected candidates.
-///
-/// TODO: add complexity to all functions.
-pub fn reduce<
-	AccountId: Clone + Eq + Default + Ord + std::fmt::Debug,
->(
-	assignments: &mut Vec<StakedAssignment<AccountId>>,
-) -> u32 where {
-	let mut num_changed = reduce_4(assignments);
-	num_changed += reduce_all(assignments);
-	num_changed
 }
 
 /// Performs equalize post-processing to the output of the election algorithm. This happens in

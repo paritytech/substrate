@@ -20,8 +20,10 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, Span, Ident};
+use proc_macro_crate::crate_name;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
+// use codec::{Encode, Decode};
 
 const PREFIX: &'static str = "votes";
 
@@ -59,6 +61,25 @@ fn field_name_for(n: usize) -> Ident {
 ///     from the rest.
 ///
 /// An example expansion of length 16 is as follows:
+///
+/// struct TestCompact<AccountId, W> {
+/// 	votes1: Vec<(AccountId, AccountId)>,
+/// 	votes2: Vec<(AccountId, (AccountId, W), AccountId)>,
+/// 	votes3: Vec<(AccountId, [(AccountId, W); 2usize], AccountId)>,
+/// 	votes4: Vec<(AccountId, [(AccountId, W); 3usize], AccountId)>,
+/// 	votes5: Vec<(AccountId, [(AccountId, W); 4usize], AccountId)>,
+/// 	votes6: Vec<(AccountId, [(AccountId, W); 5usize], AccountId)>,
+/// 	votes7: Vec<(AccountId, [(AccountId, W); 6usize], AccountId)>,
+/// 	votes8: Vec<(AccountId, [(AccountId, W); 7usize], AccountId)>,
+/// 	votes9: Vec<(AccountId, [(AccountId, W); 8usize], AccountId)>,
+/// 	votes10: Vec<(AccountId, [(AccountId, W); 9usize], AccountId)>,
+/// 	votes11: Vec<(AccountId, [(AccountId, W); 10usize], AccountId)>,
+/// 	votes12: Vec<(AccountId, [(AccountId, W); 11usize], AccountId)>,
+/// 	votes13: Vec<(AccountId, [(AccountId, W); 12usize], AccountId)>,
+/// 	votes14: Vec<(AccountId, [(AccountId, W); 13usize], AccountId)>,
+/// 	votes15: Vec<(AccountId, [(AccountId, W); 14usize], AccountId)>,
+/// 	votes16: Vec<(AccountId, [(AccountId, W); 15usize], AccountId)>,
+/// 	}
 #[proc_macro]
 pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 	let CompactSolutionDef {
@@ -72,6 +93,8 @@ pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 	if count <= 2 {
 		panic!("cannot build compact solution struct with capacity less than 2.");
 	}
+
+	let imports = imports();
 
 	let singles = {
 		let name = field_name_for(1);
@@ -94,8 +117,8 @@ pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 	}).collect::<TokenStream2>();
 
 	let compact_def = quote! (
-		// TODO: clean imports: how to deal with codec?
-		#[derive(Default, PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, codec::Encode, codec::Decode)]
+		#imports
+		#[derive(Default, PartialEq, Eq, Clone, _sp_runtime::RuntimeDebug, _codec::Encode, _codec::Decode)]
 		#vis struct #ident<#account_type, #weight> {
 			#singles
 			#doubles
@@ -103,12 +126,12 @@ pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 		}
 	);
 
-	// TODO: we can remove this entirely and make the staked impl a bit more generic. A perbill's max value is always ::one.
 	let from_into_impl_assignment = convert_impl_for_assignment(
 		ident.clone(),
 		account_type.clone(),
 		count,
 	);
+
 	let from_into_impl_staked_assignment = convert_impl_for_staked_assignment(
 		ident,
 		account_type,
@@ -121,6 +144,28 @@ pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 		#from_into_impl_assignment
 		#from_into_impl_staked_assignment
 	).into()
+}
+
+fn imports() -> TokenStream2 {
+	let runtime_imports = match crate_name("sp-runtime") {
+		Ok(sp_runtime) => {
+			let ident = syn::Ident::new(&sp_runtime, Span::call_site());
+			quote!( extern crate #ident as _sp_runtime; )
+		},
+		Err(e) => syn::Error::new(Span::call_site(), &e).to_compile_error(),
+	};
+	let codec_imports = match crate_name("parity-scale-codec") {
+		Ok(codec) => {
+			let ident = syn::Ident::new(&codec, Span::call_site());
+			quote!( extern crate #ident as _codec; )
+		},
+		Err(e) => syn::Error::new(Span::call_site(), &e).to_compile_error(),
+	};
+
+	quote!(
+		#runtime_imports
+		#codec_imports
+	)
 }
 
 fn convert_impl_for_assignment(
@@ -163,7 +208,7 @@ fn convert_impl_for_assignment(
 						#from_impl_double
 						#from_impl_rest
 						_ => {
-							sp_runtime::print("assignment length too big. ignoring");
+							_sp_runtime::print("assignment length too big. ignoring");
 						}
 					}
 				});
@@ -278,7 +323,7 @@ fn convert_impl_for_staked_assignment(
 		let name = field_name_for(1);
 		quote!(
 			for (who, target) in self.#name {
-				let all_stake = C::convert(max_of(&who)) as ExtendedBalance;
+				let all_stake = C::convert(max_of(&who)) as u128;
 				assignments.push(StakedAssignment {
 					who,
 					distribution: vec![(target, all_stake)],
@@ -290,7 +335,7 @@ fn convert_impl_for_staked_assignment(
 		let name = field_name_for(2);
 		quote!(
 			for (who, (t1, w1), t2) in self.#name {
-				let all_stake = C::convert(max_of(&who)) as ExtendedBalance;
+				let all_stake = C::convert(max_of(&who)) as u128;
 				let w2 = all_stake.saturating_sub(w1);
 				assignments.push( StakedAssignment {
 					who,
@@ -307,7 +352,7 @@ fn convert_impl_for_staked_assignment(
 		quote!(
 			for (who, inners, t_last) in self.#name {
 				let mut sum = u128::min_value();
-				let all_stake = C::convert(max_of(&who)) as ExtendedBalance;
+				let all_stake = C::convert(max_of(&who)) as u128;
 				let mut inners_parsed = inners
 					.into_iter()
 					.map(|(ref c, w)| {
@@ -352,7 +397,7 @@ fn convert_impl_for_staked_assignment(
 						#from_impl_double
 						#from_impl_rest
 						_ => {
-							sp_runtime::print("staked assignment length too big. ignoring");
+							_sp_runtime::print("staked assignment length too big. ignoring");
 						}
 					}
 				});
