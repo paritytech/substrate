@@ -115,7 +115,7 @@ pub struct Assignment<AccountId> {
 }
 
 impl<AccountId> Assignment<AccountId> {
-	pub fn into_staked<Balance, C, FS>(self, stake_of: FS) -> StakedAssignment<AccountId>
+	pub fn into_staked<Balance, FS, C>(self, stake_of: FS) -> StakedAssignment<AccountId>
 	where
 		C: Convert<Balance, u64>,
 		for<'r> FS: Fn(&'r AccountId) -> Balance,
@@ -401,16 +401,20 @@ pub fn elect<AccountId, Balance, FS, C>(
 ///		},
 /// }
 /// ```
+/// The second returned flag indicates the number of edges who corresponded to an actual winner from
+/// the given winner set. A value in this place larger than 0 indicates a potentially faulty
+/// assignment.
 pub fn build_support_map<Balance, AccountId>(
-	elected_stashes: &Vec<AccountId>,
+	winners: &Vec<AccountId>,
 	assignments: &Vec<StakedAssignment<AccountId>>,
-) -> SupportMap<AccountId> where
+) -> (SupportMap<AccountId>, u32) where
 	AccountId: Default + Ord + Member,
 	Balance: Default + Copy + SimpleArithmetic,
 {
+	let mut errors = 0;
 	// Initialize the support of each candidate.
 	let mut supports = <SupportMap<AccountId>>::new();
-	elected_stashes
+	winners
 		.iter()
 		.for_each(|e| { supports.insert(e.clone(), Default::default()); });
 
@@ -420,10 +424,37 @@ pub fn build_support_map<Balance, AccountId>(
 			if let Some(support) = supports.get_mut(c) {
 				support.total = support.total.saturating_add(*weight_extended);
 				support.voters.push((who.clone(), *weight_extended));
+			} else {
+				errors = errors.saturating_add(1);
 			}
 		}
 	}
-	supports
+	(supports, errors)
+}
+
+/// Evaluate a phragmen result, given the support map. The returned tuple contains:
+///
+/// - Minimum support. This value must be **maximized**.
+/// - Sum of all supports. This value must be **maximized**.
+/// - Sum of all supports squared. This value must be **minimized**.
+///
+/// O(E)
+pub fn evaluate_support<AccountId>(
+	support: &SupportMap<AccountId>,
+) -> [ExtendedBalance; 3] {
+	let mut min_support = ExtendedBalance::max_value();
+	let mut sum: ExtendedBalance = Zero::zero();
+	// TODO: this will probably saturate but using big num makes it even slower. We'll have to see.
+	let mut sum_squared: ExtendedBalance = Zero::zero();
+	for (_, support) in support.iter() {
+		sum += support.total;
+		let squared = support.total.saturating_mul(support.total);
+		sum_squared = sum_squared.saturating_add(squared);
+		if support.total < min_support {
+			min_support = support.total;
+		}
+	}
+	[min_support, sum, sum_squared]
 }
 
 /// Returns all combinations of size two in the collection `input` with no repetition.
@@ -481,13 +512,16 @@ pub fn trailing_common<T: Eq>(t1: &[T], t2: &[T]) -> usize {
 	common
 }
 
-// TODO: maybe replace with BTreeMap if we want to support this in no_std?
-type Map<A> = std::collections::HashMap<(A, A), A>;
+// TODO: this whole reduce stuff must go into a crate. Phragmen itself is no_std. This should use std.
+// TODO: Using hashMap is more efficient here but that requires a Hash impl for AccountId. We can
+// make this by constraining the impl to just polkadot account id type, instead of the opaque
+// substrate version which is not `Hash`.
+use std::collections::{btree_map::{Entry::*}};
+type Map<A> = BTreeMap<(A, A), A>;
 
-fn reduce_4<AccountId: Clone + Eq + Default + std::hash::Hash + std::fmt::Debug,>(
+fn reduce_4<AccountId: Clone + Eq + Default + Ord + std::fmt::Debug>(
 	assignments: &mut Vec<StakedAssignment<AccountId>>,
 ) -> u32 {
-	use std::collections::{hash_map::{Entry::*}};
 
 	let mut combination_map: Map<AccountId> = Map::new();
 	let mut num_changed: u32 = Zero::zero();
@@ -640,16 +674,14 @@ fn reduce_4<AccountId: Clone + Eq + Default + std::hash::Hash + std::fmt::Debug,
 	num_changed
 }
 
-fn reduce_all<AccountId: Clone + Eq + Default + std::hash::Hash + std::fmt::Debug>(
+fn reduce_all<AccountId: Clone + Eq + Default + Ord + std::fmt::Debug>(
 	assignments: &mut Vec<StakedAssignment<AccountId>>,
 ) -> u32 {
-	dbg!(&assignments);
-	use std::collections::{HashMap};
 	let mut num_changed: u32 = Zero::zero();
 
 	// ----------------- Phase 2: remove any other cycle
 	use node::{Node, NodeRef, NodeRole};
-	let mut tree: HashMap<AccountId, NodeRef<AccountId>> = HashMap::new();
+	let mut tree: BTreeMap<AccountId, NodeRef<AccountId>> = BTreeMap::new();
 
 	// TODO: unify this terminology: we only have VOTER -> TARGET. no candidate. no staking terms.
 	// a flat iterator of (voter, candidate) over all pairs of votes. Similar to reduce_4, we loop
@@ -876,7 +908,7 @@ fn reduce_all<AccountId: Clone + Eq + Default + std::hash::Hash + std::fmt::Debu
 ///
 /// TODO: add complexity to all functions.
 pub fn reduce<
-	AccountId: Clone + Eq + Default + std::hash::Hash + std::fmt::Debug,
+	AccountId: Clone + Eq + Default + Ord + std::fmt::Debug,
 >(
 	assignments: &mut Vec<StakedAssignment<AccountId>>,
 ) -> u32 where {

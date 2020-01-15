@@ -278,7 +278,7 @@ fn convert_impl_for_staked_assignment(
 		let name = field_name_for(1);
 		quote!(
 			for (who, target) in self.#name {
-				let all_stake = C::convert(max_of(&who));
+				let all_stake = C::convert(max_of(&who)) as ExtendedBalance;
 				assignments.push(StakedAssignment {
 					who,
 					distribution: vec![(target, all_stake)],
@@ -290,7 +290,7 @@ fn convert_impl_for_staked_assignment(
 		let name = field_name_for(2);
 		quote!(
 			for (who, (t1, w1), t2) in self.#name {
-				let all_stake = C::convert(max_of(&who));
+				let all_stake = C::convert(max_of(&who)) as ExtendedBalance;
 				let w2 = all_stake.saturating_sub(w1);
 				assignments.push( StakedAssignment {
 					who,
@@ -307,7 +307,7 @@ fn convert_impl_for_staked_assignment(
 		quote!(
 			for (who, inners, t_last) in self.#name {
 				let mut sum = u128::min_value();
-				let all_stake = C::convert(max_of(&who));
+				let all_stake = C::convert(max_of(&who)) as ExtendedBalance;
 				let mut inners_parsed = inners
 					.into_iter()
 					.map(|(ref c, w)| {
@@ -330,11 +330,11 @@ fn convert_impl_for_staked_assignment(
 		impl<#account_type: codec::Codec + Default + Clone>
 		#ident<#account_type, u128>
 		{
-			fn into_compact_staked<Balance, FM, C>(self, max_of: FM)
+			fn into_staked<Balance, FM, C>(self, max_of: FM)
 			-> Vec<StakedAssignment<#account_type>>
 			where
 				for<'r> FM: Fn(&'r #account_type) -> Balance,
-				C: Convert<Balance, u128>
+				C: Convert<Balance, u64>
 			{
 				let mut assignments: Vec<StakedAssignment<#account_type>> = Default::default();
 				#into_impl_single

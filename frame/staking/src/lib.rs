@@ -267,7 +267,7 @@ use frame_support::{
 };
 use pallet_session::{historical, SelectInitialValidators};
 use sp_runtime::{
-	Perbill, RuntimeDebug, RuntimeAppPublic,
+	Perbill, RuntimeDebug,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
@@ -291,8 +291,6 @@ const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 // ------------- IMPORTANT NOTE: must be the same as `generate_compact_solution_type`.
 const MAX_NOMINATIONS: usize = 16;
 const MAX_UNLOCKING_CHUNKS: usize = 32;
-const ELECTION_TOLERANCE: ExtendedBalance = 0;
-const ELECTION_ITERATIONS: usize = 2;
 const STAKING_ID: LockIdentifier = *b"staking ";
 
 /// Counter for the number of eras that have passed.
@@ -561,8 +559,6 @@ pub enum ElectionCompute {
 /// The result of an election round.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct ElectionResult<AccountId, Balance: HasCompact> {
-	/// Era at which this election has happened.
-	era: EraIndex,
 	/// Type of the result,
 	compute: ElectionCompute,
 	/// The new computed slot stake.
@@ -571,6 +567,8 @@ pub struct ElectionResult<AccountId, Balance: HasCompact> {
 	elected_stashes: Vec<AccountId>,
 	/// Flat list of new exposures, to be updated in the [`Exposure`] storage.
 	exposures: Vec<(AccountId, Exposure<AccountId, Balance>)>,
+	/// The score of the result based on [`sp_phragmen::evaluate_support`].
+	score: [ExtendedBalance; 3],
 }
 
 /// The status of the upcoming (offchain) election.
@@ -910,6 +908,8 @@ decl_error! {
 		NoMoreChunks,
 		/// Can not rebond without unlocking chunks.
 		NoUnlockChunk,
+		/// The submitted result is not as good as the one stored on chain.
+		WeakPhragmenResult
 	}
 }
 
@@ -964,17 +964,24 @@ decl_module! {
 						if let Some(sp_phragmen::PhragmenResult {
 							winners,
 							assignments,
-						}) = Self::do_phragmen(ElectionCompute::Submitted) {
+						}) = Self::do_phragmen() {
 							let winners = winners.into_iter().map(|(w, _)| w).collect();
-							// reduce the assignments. This will remove some additional edges.
-							// let reduced_assignments = sp_phragmen::reduce(&mut assignments);
-							// compact encode the assignment.
-							// let reduced_compact_assignments: CompactAssignments<T::AccountId> = assignments.into();
-							let compact_assignments: CompactAssignments<T::AccountId> = assignments.into();
 
-							let call: <T as Trait>::Call = Call::submit_election_result(winners, compact_assignments).into();
+							// convert into staked. This is needed to be able to reduce.
+							let mut staked: Vec<StakedAssignment<T::AccountId>> = assignments
+								.into_iter()
+								.map(|a| a.into_staked::<_, _, T::CurrencyToVote>(Self::slashable_balance_of))
+								.collect();
+
+							// reduce the assignments. This will remove some additional edges.
+							sp_phragmen::reduce(&mut staked);
+
+							// compact encode the assignment.
+							let compact = <CompactAssignments<T::AccountId, ExtendedBalance>>::from_staked(staked);
+
+							let call: <T as Trait>::Call = Call::submit_election_result(winners, compact).into();
 							// TODO: maybe we want to send from just one of them? we'll see.
-							T::SubmitTransaction::submit_signed_from(call, current_elected);
+							let _result = T::SubmitTransaction::submit_signed_from(call, current_elected);
 						} else {
 							frame_support::print("ran phragmen offchain, but None was returned.");
 						}
@@ -997,10 +1004,104 @@ decl_module! {
 		fn submit_election_result(
 			origin,
 			winners: Vec<T::AccountId>,
-			assignments: CompactAssignments<T::AccountId>,
+			compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
 		) {
-			let who = ensure_signed(origin)?;
-			// TODO: nothing for now, needs encoding.
+			let _who = ensure_signed(origin)?;
+
+			// convert into staked.
+			let staked_assignments = compact_assignments.into_staked::<
+				_,
+				_,
+				T::CurrencyToVote,
+			>(Self::slashable_balance_of);
+
+			// build the support map thereof in order to evaluate.
+			// OPTIMIZATION: we could merge this with the `staked_assignments.iter()` below and
+			// iterate only once.
+			let (supports, num_error) = sp_phragmen::build_support_map::<BalanceOf<T>, T::AccountId>(
+				&winners,
+				&staked_assignments,
+			);
+
+			ensure!(num_error == 0, "bogus edge pointed to a non-winner in assignments.");
+
+			// score the result. Go further only if it is better than what we already have.
+			let submitted_score = sp_phragmen::evaluate_support(&supports);
+			if let Some(ElectionResult::<T::AccountId, BalanceOf<T>> {
+				score,
+				..
+			}) = Self::queued_elected() {
+				// if the local score is better in any of the three parameters.
+				if
+					submitted_score.iter().enumerate().take(2).any(|(i, s)| score[i] > *s) ||
+					score[2] < submitted_score[2]
+				{
+					Err(Error::<T>::WeakPhragmenResult)?
+				}
+			}
+
+			// Either the result is better than the one on chain, or we don't have an any on chain.
+			// do the sanity check. Each claimed edge must exist. Also, each claimed winner must
+			// have a support associated.
+
+			// check all winners being actual validators.
+			for w in winners.iter() {
+				ensure!(
+					Self::bonded(&w).is_some(),
+					"presented winner is not a validator candidate",
+				)
+			}
+
+			// check all nominators being bonded, and actually including the claimed vote.
+			for StakedAssignment { who, distribution } in staked_assignments.iter() {
+				let maybe_nomination = Self::nominators(&who);
+				ensure!(
+					maybe_nomination.is_some(),
+					"presented nominator is invalid",
+				);
+				let nomination = maybe_nomination.expect("value is checked to be 'Some'");
+				ensure!(
+					distribution.into_iter().all(|(v, _)| nomination.targets.iter().find(|t| *t == v).is_some()),
+					"assignment contains an edge from non-nominator",
+				);
+			}
+
+			// Endlich alles Ok. Exposures and store the result.
+			let to_balance = |e: ExtendedBalance|
+				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
+			let mut slot_stake: BalanceOf<T> = Bounded::max_value();
+
+			let exposures = supports.into_iter().map(|(validator, support)| {
+				let mut others = Vec::new();
+				let mut own: BalanceOf<T> = Zero::zero();
+				let mut total: BalanceOf<T> = Zero::zero();
+				support.voters
+					.into_iter()
+					.map(|(target, weight)| (target, to_balance(weight)))
+					.for_each(|(nominator, stake)| {
+						if nominator == validator {
+							own = own.saturating_add(stake);
+						} else {
+							others.push(IndividualExposure { who: nominator, value: stake });
+						}
+						total = total.saturating_add(stake);
+					});
+				let exposure = Exposure { own, others, total };
+
+				if exposure.total < slot_stake {
+					slot_stake = exposure.total;
+				}
+				(validator, exposure)
+			}).collect::<Vec<(T::AccountId, Exposure<_, _>)>>();
+
+			<QueuedElected<T>>::put(ElectionResult {
+				compute: ElectionCompute::Submitted,
+				elected_stashes: winners,
+				score: submitted_score,
+				exposures,
+				slot_stake,
+
+			});
 		}
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
@@ -1636,9 +1737,9 @@ impl<T: Trait> Module<T> {
 		if let Some(ElectionResult::<T::AccountId, BalanceOf<T>> {
 			elected_stashes,
 			exposures,
-			era,
 			slot_stake,
 			compute,
+			.. // TODO: this means that we are never storing the score of a winning chain. It this okay?
 		}) = Self::try_do_phragmen() {
 			// Clear Stakers.
 			for v in Self::current_elected().iter() {
@@ -1692,8 +1793,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// No storage item is updated.
 	fn do_phragmen_with_post_processing(compute: ElectionCompute) -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
-		let era = Self::current_era();
-		if let Some(phragmen_result) = Self::do_phragmen(compute) {
+		if let Some(phragmen_result) = Self::do_phragmen() {
 			let elected_stashes = phragmen_result.winners.iter()
 				.map(|(s, _)| s.clone())
 				.collect::<Vec<T::AccountId>>();
@@ -1701,13 +1801,10 @@ impl<T: Trait> Module<T> {
 
 			let staked_assignments: Vec<StakedAssignment<T::AccountId>> = assignments
 				.into_iter()
-				.map(|a| a.into_staked::<_, T::CurrencyToVote, _>(Self::slashable_balance_of))
+				.map(|a| a.into_staked::<_, _, T::CurrencyToVote>(Self::slashable_balance_of))
 				.collect();
 
-			let to_votes = |b: BalanceOf<T>|
-				<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
-
-			let supports = sp_phragmen::build_support_map::<BalanceOf<T>, T::AccountId>(
+			let (supports, _) = sp_phragmen::build_support_map::<BalanceOf<T>, T::AccountId>(
 				&elected_stashes,
 				&staked_assignments,
 			);
@@ -1717,24 +1814,25 @@ impl<T: Trait> Module<T> {
 				<Stakers<T>>::remove(v);
 			}
 
+			let score = sp_phragmen::evaluate_support(&supports);
 			let to_balance = |e: ExtendedBalance|
 				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 
 			// collect exposures and slot stake.
 			let mut slot_stake = BalanceOf::<T>::max_value();
-			let exposures = supports.into_iter().map(|(voter, support)| {
+			let exposures = supports.into_iter().map(|(validator, support)| {
 				// build `struct exposure` from `support`
 				let mut others = Vec::new();
 				let mut own: BalanceOf<T> = Zero::zero();
 				let mut total: BalanceOf<T> = Zero::zero();
 				support.voters
 					.into_iter()
-					.map(|(target, weight)| (target, to_balance(weight)))
-					.for_each(|(target, stake)| {
-						if target == voter {
+					.map(|(nominator, weight)| (nominator, to_balance(weight)))
+					.for_each(|(nominator, stake)| {
+						if nominator == validator {
 							own = own.saturating_add(stake);
 						} else {
-							others.push(IndividualExposure { who: target, value: stake });
+							others.push(IndividualExposure { who: nominator, value: stake });
 						}
 						total = total.saturating_add(stake);
 					});
@@ -1751,7 +1849,7 @@ impl<T: Trait> Module<T> {
 				if exposure.total < slot_stake {
 					slot_stake = exposure.total;
 				}
-				(voter, exposure)
+				(validator, exposure)
 			}).collect::<Vec<(T::AccountId, Exposure<_, _>)>>();
 
 			// In order to keep the property required by `n_session_ending`
@@ -1762,8 +1860,8 @@ impl<T: Trait> Module<T> {
 				elected_stashes,
 				slot_stake,
 				exposures,
-				era,
 				compute,
+				score,
 			})
 		} else {
 			// There were not enough candidates for even our minimal level of functionality.
@@ -1780,7 +1878,7 @@ impl<T: Trait> Module<T> {
 	/// weights are returned.
 	///
 	/// No storage item is updated.
-	fn do_phragmen(compute: ElectionCompute) -> Option<sp_phragmen::PhragmenResult<T::AccountId>> {
+	fn do_phragmen() -> Option<sp_phragmen::PhragmenResult<T::AccountId>> {
 		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
 		let all_validator_candidates_iter = <Validators<T>>::enumerate();
 		let all_validators = all_validator_candidates_iter.map(|(who, _pref)| {

@@ -33,7 +33,7 @@ use frame_support::{
 	weights::Weight,
 };
 use frame_system::offchain::{
-	TransactionSubmitter, SignAndSubmitTransaction, Signer, CreateTransaction,
+	TransactionSubmitter, Signer, CreateTransaction,
 };
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
@@ -146,7 +146,6 @@ impl_outer_dispatch! {
 
 mod staking {
 	pub use super::super::*;
-	use frame_support::impl_outer_event;
 }
 use pallet_balances as balances;
 use pallet_session as session;
@@ -291,14 +290,11 @@ impl Trait for Test {
 	type SubmitTransaction = SubmitTransaction;
 }
 
-pub mod dummy_sr25519 {
+mod dummy_sr25519 {
 	mod app_sr25519 {
 		use sp_application_crypto::{app_crypto, key_types::DUMMY, sr25519};
 		app_crypto!(sr25519, DUMMY);
 	}
-
-	#[cfg(feature = "std")]
-	pub type AuthorityPair = app_sr25519::Pair;
 	pub type AuthoritySignature = app_sr25519::Signature;
 	pub type AuthorityId = app_sr25519::Public;
 
@@ -313,7 +309,7 @@ impl CreateTransaction<Test, Extrinsic> for Test {
 	type Public = dummy_sr25519::AuthorityId;
 	fn create_transaction<F: Signer<Self::Public, Self::Signature>>(
 		call: Call,
-		public: Self::Public,
+		_public: Self::Public,
 		account: AccountId,
 		_index: AccountIndex,
 	) -> Option<(<Extrinsic as ExtrinsicT>::Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {

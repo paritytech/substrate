@@ -578,11 +578,11 @@ fn basic_from_and_into_compact_works_staked_assignments() {
 		}
 	);
 
-	let max_of_fn = |a: &AccountId| -> Balance { 100u128 };
+	let max_of_fn = |_: &AccountId| -> Balance { 100u128 };
 	let max_of: Box<dyn Fn(&AccountId) -> Balance> = Box::new(max_of_fn);
 
 	assert_eq!(
-		compacted.into_compact_staked::<Balance, _, TestCurrencyToVote>(&max_of),
+		compacted.into_staked::<Balance, _, TestCurrencyToVote>(&max_of),
 		assignments
 	);
 }
@@ -836,7 +836,7 @@ fn self_votes_should_be_kept() {
 		.map(|a| a.into_staked::<_, TestCurrencyToVote, _>(&stake_of))
 		.collect();
 
-	let mut supports = build_support_map::<
+	let (mut supports, _) = build_support_map::<
 		Balance,
 		AccountId,
 		>(
