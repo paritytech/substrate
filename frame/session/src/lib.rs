@@ -162,29 +162,28 @@ impl<
 	}
 }
 
-/// An event handler for when the session is ending.
-/// TODO [slashing] consider renaming to OnSessionStarting
-pub trait OnSessionEnding<ValidatorId> {
-	/// Handle the fact that the session is ending, and optionally provide the new validator set.
+/// A trait for managing creation of new validator set.
+pub trait SessionManager<ValidatorId> {
+	/// Plan a new session, and optionally provide the new validator set.
 	///
 	/// Even if the validator-set is the same as before, if any underlying economic
 	/// conditions have changed (i.e. stake-weights), the new validator set must be returned.
 	/// This is necessary for consensus engines making use of the session module to
 	/// issue a validator-set change so misbehavior can be provably associated with the new
 	/// economic conditions as opposed to the old.
+	/// The returned validator set, if any, will not be applied until `new_index`.
+	/// `new_index` is strictly greater than from previous call.
+	fn new_session(new_index: SessionIndex) -> Option<Vec<ValidatorId>>;
+	/// End the session.
 	///
-	/// `ending_index` is the index of the currently ending session.
-	/// The returned validator set, if any, will not be applied until `will_apply_at`.
-	/// `will_apply_at` is guaranteed to be at least `ending_index + 1`, since session indices don't
-	/// repeat, but it could be some time after in case we are staging authority set changes.
-	fn on_session_ending(
-		ending_index: SessionIndex,
-		will_apply_at: SessionIndex
-	) -> Option<Vec<ValidatorId>>;
+	/// Because the session pallet can queue validator set the ending session can be lower than the
+	/// last new session index.
+	fn end_session(end_index: SessionIndex);
 }
 
-impl<A> OnSessionEnding<A> for () {
-	fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<A>> { None }
+impl<A> SessionManager<A> for () {
+	fn new_session(_: SessionIndex) -> Option<Vec<A>> { None }
+	fn end_session(_: SessionIndex) {}
 }
 
 /// Handler for session lifecycle events.
@@ -214,7 +213,7 @@ pub trait SessionHandler<ValidatorId> {
 
 	/// A notification for end of the session.
 	///
-	/// Note it is triggered before any `OnSessionEnding` handlers,
+	/// Note it is triggered before any `SessionManager::end_session` handlers,
 	/// so we can still affect the validator set.
 	fn on_before_session_ending() {}
 
@@ -248,7 +247,7 @@ pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 
 	/// A notification for end of the session.
 	///
-	/// Note it is triggered before any `OnSessionEnding` handlers,
+	/// Note it is triggered before any `SessionManager::end_session` handlers,
 	/// so we can still affect the validator set.
 	fn on_before_session_ending() {}
 
@@ -352,8 +351,8 @@ pub trait Trait: frame_system::Trait {
 	/// Indicator for when to end the session.
 	type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;
 
-	/// Handler for when a session is about to end.
-	type OnSessionEnding: OnSessionEnding<Self::ValidatorId>;
+	/// Handler for managing new session.
+	type SessionManager: SessionManager<Self::ValidatorId>;
 
 	/// Handler when a session has changed.
 	type SessionHandler: SessionHandler<Self::ValidatorId>;
@@ -543,10 +542,14 @@ impl<T: Trait> Module<T> {
 			DisabledValidators::take();
 		}
 
-		let applied_at = session_index + 2;
+		T::SessionManager::end_session(session_index);
+
+		// Increment session index.
+		let session_index = session_index + 1;
+		CurrentIndex::put(session_index);
 
 		// Get next validator set.
-		let maybe_next_validators = T::OnSessionEnding::on_session_ending(session_index, applied_at);
+		let maybe_next_validators = T::SessionManager::new_session(session_index + 2);
 		let (next_validators, next_identities_changed)
 			= if let Some(validators) = maybe_next_validators
 		{
@@ -557,10 +560,6 @@ impl<T: Trait> Module<T> {
 		} else {
 			(<Validators<T>>::get(), false)
 		};
-
-		// Increment session index.
-		let session_index = session_index + 1;
-		CurrentIndex::put(session_index);
 
 		// Queue next session keys.
 		let (queued_amalgamated, next_changed) = {
