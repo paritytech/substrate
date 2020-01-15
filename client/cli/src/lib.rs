@@ -300,6 +300,7 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
 	pub fn into_configuration<C, G, E, S>(
 		self,
 		spec_factory: S,
+		base_path_override: Option<PathBuf>,
 	) -> error::Result<Option<Configuration<C, G, E>>>
 	where
 		C: Default,
@@ -313,7 +314,8 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
 					c.params.left,
 					spec_factory,
 					c.impl_name,
-					c.version
+					c.version,
+					base_path_override,
 				)).transpose(),
 			ParseAndPrepare::BuildSpec(c) => {
 				let spec = load_spec(&c.params.shared_params, spec_factory)?;
@@ -322,6 +324,7 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
 					&spec,
 					&c.params.shared_params,
 					c.version,
+					base_path_override,
 				)).transpose()
 			},
 			ParseAndPrepare::ExportBlocks(c) =>
@@ -329,30 +332,35 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
 					spec_factory,
 					&c.params.shared_params,
 					c.version,
+					base_path_override,
 				)).transpose(),
 			ParseAndPrepare::ImportBlocks(c) =>
 				Some(create_config_with_db_path(
 					spec_factory,
 					&c.params.shared_params,
 					c.version,
+					base_path_override,
 				)).transpose(),
 			ParseAndPrepare::CheckBlock(c) =>
 				Some(create_config_with_db_path(
 					spec_factory,
 					&c.params.shared_params,
 					c.version,
+					base_path_override,
 				)).transpose(),
 			ParseAndPrepare::PurgeChain(c) =>
 				Some(create_config_with_db_path(
 					spec_factory,
 					&c.params.shared_params,
-					c.version
+					c.version,
+					base_path_override,
 				)).transpose(),
 			ParseAndPrepare::RevertChain(c) =>
 				Some(create_config_with_db_path(
 					spec_factory,
 					&c.params.shared_params,
 					c.version,
+					base_path_override,
 				)).transpose(),
 			ParseAndPrepare::CustomCommand(_) => Ok(None),
 		}
@@ -385,7 +393,11 @@ impl<'a, RP> ParseAndPrepareRun<'a, RP> {
 		RS: FnOnce(Exit, RunCmd, RP, Configuration<C, G, CE>) -> Result<(), E>
 	{
 		let config = create_run_node_config(
-			self.params.left.clone(), spec_factory, self.impl_name, self.version,
+			self.params.left.clone(),
+			spec_factory,
+			self.impl_name,
+			self.version,
+			None,
 		)?;
 
 		run_service(exit, self.params.left, self.params.right, config).map_err(Into::into)
@@ -418,6 +430,7 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 				&spec,
 				&self.params.shared_params,
 				self.version,
+				None,
 			)?;
 			let node_key = node_key_config(
 				self.params.node_key_params,
@@ -465,7 +478,12 @@ impl<'a> ParseAndPrepareExport<'a> {
 		E: ChainSpecExtension,
 		Exit: IntoExit
 	{
-		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		let config = create_config_with_db_path(
+			spec_factory,
+			&self.params.shared_params,
+			self.version,
+			None,
+		)?;
 
 		if let DatabaseConfig::Path { ref path, .. } = &config.database {
 			info!("DB path: {}", path.display());
@@ -527,7 +545,12 @@ impl<'a> ParseAndPrepareImport<'a> {
 		E: ChainSpecExtension,
 		Exit: IntoExit
 	{
-		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		let mut config = create_config_with_db_path(
+			spec_factory,
+			&self.params.shared_params,
+			self.version,
+			None,
+		)?;
 		fill_import_params(&mut config, &self.params.import_params, sc_service::Roles::FULL)?;
 
 		let file: Box<dyn ReadPlusSeek + Send> = match self.params.input {
@@ -587,7 +610,12 @@ impl<'a> CheckBlock<'a> {
 			E: ChainSpecExtension,
 			Exit: IntoExit
 	{
-		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		let mut config = create_config_with_db_path(
+			spec_factory,
+			&self.params.shared_params,
+			self.version,
+			None,
+		)?;
 		fill_import_params(&mut config, &self.params.import_params, sc_service::Roles::FULL)?;
 
 		let input = if self.params.input.starts_with("0x") { &self.params.input[2..] } else { &self.params.input[..] };
@@ -627,7 +655,10 @@ impl<'a> ParseAndPreparePurge<'a> {
 		E: ChainSpecExtension,
 	{
 		let config = create_config_with_db_path::<(), _, _, _>(
-			spec_factory, &self.params.shared_params, self.version
+			spec_factory,
+			&self.params.shared_params,
+			self.version,
+			None,
 		)?;
 		let db_path = match config.database {
 			DatabaseConfig::Path { path, .. } => path,
@@ -691,7 +722,10 @@ impl<'a> ParseAndPrepareRevert<'a> {
 		E: ChainSpecExtension,
 	{
 		let config = create_config_with_db_path(
-			spec_factory, &self.params.shared_params, self.version
+			spec_factory,
+			&self.params.shared_params,
+			self.version,
+			None,
 		)?;
 		let blocks = self.params.num.parse()?;
 		builder(config)?.revert_chain(blocks)?;
@@ -904,7 +938,11 @@ pub fn fill_import_params<C, G, E>(
 }
 
 fn create_run_node_config<C, G, E, S>(
-	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo,
+	cli: RunCmd,
+	spec_factory: S,
+	impl_name: &'static str,
+	version: &VersionInfo,
+	base_path_override: Option<PathBuf>,
 ) -> error::Result<Configuration<C, G, E>>
 where
 	C: Default,
@@ -912,7 +950,12 @@ where
 	E: ChainSpecExtension,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 {
-	let mut config = create_config_with_db_path(spec_factory, &cli.shared_params, &version)?;
+	let mut config = create_config_with_db_path(
+		spec_factory,
+		&cli.shared_params,
+		&version,
+		base_path_override,
+	)?;
 
 	fill_config_keystore_password_and_path(&mut config, &cli)?;
 
@@ -1046,7 +1089,10 @@ fn interface_str(
 
 /// Creates a configuration including the database path.
 pub fn create_config_with_db_path<C, G, E, S>(
-	spec_factory: S, cli: &SharedParams, version: &VersionInfo,
+	spec_factory: S,
+	cli: &SharedParams,
+	version: &VersionInfo,
+	base_path_override: Option<PathBuf>,
 ) -> error::Result<Configuration<C, G, E>>
 where
 	C: Default,
@@ -1055,7 +1101,7 @@ where
 	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 {
 	let spec = load_spec(cli, spec_factory)?;
-	let base_path = base_path(cli, version);
+	let base_path = base_path_override.unwrap_or_else(|| base_path(cli, version));
 
 	let mut config = sc_service::Configuration::default_with_spec_and_base_path(
 		spec.clone(),
@@ -1075,13 +1121,14 @@ fn create_build_spec_config<C, G, E>(
 	spec: &ChainSpec<G, E>,
 	cli: &SharedParams,
 	version: &VersionInfo,
+	base_path_override: Option<PathBuf>,
 ) -> error::Result<Configuration<C, G, E>>
 where
 	C: Default,
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 {
-	let base_path = base_path(&cli, version);
+	let base_path = base_path_override.unwrap_or_else(|| base_path(&cli, version));
 	let cfg = sc_service::Configuration::<C,_,_>::default_with_spec_and_base_path(
 		spec.clone(),
 		Some(base_path),
@@ -1363,14 +1410,18 @@ mod tests {
 
 		let args = vec!["substrate", "--dev", "--state-cache-size=42"];
 		let pnp = parse_and_prepare::<NoCustom, NoCustom, _>(&version, "test", args);
-		let config = pnp.into_configuration::<(), _, _, _>(spec_factory).unwrap().unwrap();
+		let config = pnp.into_configuration::<(), _, _, _>(spec_factory, None).unwrap().unwrap();
 		assert_eq!(config.roles, sc_service::Roles::AUTHORITY);
 		assert_eq!(config.state_cache_size, 42);
 
 		let args = vec!["substrate", "import-blocks", "--dev"];
 		let pnp = parse_and_prepare::<NoCustom, NoCustom, _>(&version, "test", args);
-		let config = pnp.into_configuration::<(), _, _, _>(spec_factory).unwrap().unwrap();
-		// NOTE: only RunCmd (no subcommand) knows --dev
+		let config = pnp.into_configuration::<(), _, _, _>(spec_factory, None).unwrap().unwrap();
 		assert_eq!(config.roles, sc_service::Roles::FULL);
+
+		let args = vec!["substrate", "--base-path=/foo"];
+		let pnp = parse_and_prepare::<NoCustom, NoCustom, _>(&version, "test", args);
+		let config = pnp.into_configuration::<(), _, _, _>(spec_factory, Some("/bar".into())).unwrap().unwrap();
+		assert_eq!(config.config_dir, Some("/bar".into()));
 	}
 }
