@@ -512,10 +512,6 @@ pub fn on_offence_now(
 	on_offence_in_era(offenders, slash_fraction, now)
 }
 
-pub fn validator_current_exposure(stash: AccountId) -> Exposure<AccountId, Balance> {
-	Staking::eras_stakers(Staking::active_era(), stash)
-}
-
 /// Make all validator and nominator request their payment
 pub fn make_all_reward_payment(era: EraIndex) {
 	let validators_with_reward = ErasRewardPoints::<Test>::get(era).individual.keys()

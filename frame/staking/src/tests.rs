@@ -570,13 +570,13 @@ fn nominators_also_get_slashed() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					mock::validator_current_exposure(11),
+					Staking::eras_stakers(Staking::active_era(), 11),
 				),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(5)],
 		);
-		let expo = mock::validator_current_exposure(11);
+		let expo = Staking::eras_stakers(Staking::active_era(), 11);
 		let slash_value = 50;
 		let total_slash = expo.total.min(slash_value);
 		let validator_slash = expo.own.min(total_slash);
@@ -754,7 +754,7 @@ fn cannot_transfer_staked_balance() {
 		// Confirm account 11 has some free balance
 		assert_eq!(Balances::free_balance(&11), 1000);
 		// Confirm account 11 (via controller 10) is totally staked
-		assert_eq!(mock::validator_current_exposure(11).total, 1000);
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).total, 1000);
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
 			Balances::transfer(Origin::signed(11), 20, 1),
@@ -783,7 +783,7 @@ fn cannot_transfer_staked_balance_2() {
 		// Confirm account 21 has some free balance
 		assert_eq!(Balances::free_balance(&21), 2000);
 		// Confirm account 21 (via controller 20) is totally staked
-		assert_eq!(mock::validator_current_exposure(21).total, 1000);
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 21).total, 1000);
 		// Confirm account 21 can transfer at most 1000
 		assert_noop!(
 			Balances::transfer(Origin::signed(21), 20, 1001),
@@ -806,7 +806,7 @@ fn cannot_reserve_staked_balance() {
 		// Confirm account 11 has some free balance
 		assert_eq!(Balances::free_balance(&11), 1000);
 		// Confirm account 11 (via controller 10) is totally staked
-		assert_eq!(mock::validator_current_exposure(11).own, 1000);
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).own, 1000);
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
 			Balances::reserve(&11, 1),
@@ -944,7 +944,7 @@ fn validator_payment_prefs_work() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(3000);
-		let exposure_1 = mock::validator_current_exposure(11);
+		let exposure_1 = Staking::eras_stakers(Staking::active_era(), 11);
 		assert!(total_payout_1 > 100); // Test is meaningfull if reward something
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
@@ -1042,7 +1042,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			unlocking: vec![],
 			next_reward: 0,
 		}));
-		assert_eq!(mock::validator_current_exposure(11), Exposure { total: 1000, own: 1000, others: vec![] });
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11), Exposure { total: 1000, own: 1000, others: vec![] });
 
 		// deposit the extra 100 units
 		Staking::bond_extra(Origin::signed(11), 100).unwrap();
@@ -1055,7 +1055,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			next_reward: 0,
 		}));
 		// Exposure is a snapshot! only updated after the next era update.
-		assert_ne!(mock::validator_current_exposure(11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
+		assert_ne!(Staking::eras_stakers(Staking::active_era(), 11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
 
 		// trigger next era.
 		Timestamp::set_timestamp(10);
@@ -1071,7 +1071,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			next_reward: 0,
 		}));
 		// Exposure is now updated.
-		assert_eq!(mock::validator_current_exposure(11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
 
 		// Unbond almost all of the funds in stash.
 		Staking::unbond(Origin::signed(10), 1000).unwrap();
@@ -1388,8 +1388,8 @@ fn reward_to_stake_works() {
 		// Confirm account 10 and 20 are validators
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
 
-		assert_eq!(mock::validator_current_exposure(11).total, 1000);
-		assert_eq!(mock::validator_current_exposure(21).total, 2000);
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).total, 1000);
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 21).total, 2000);
 
 		// Give the man some money.
 		let _ = Balances::make_free_balance_be(&10, 1000);
@@ -1399,7 +1399,7 @@ fn reward_to_stake_works() {
 		ErasStakers::<Test>::insert(0, 21, Exposure { total: 69, own: 69, others: vec![] });
 
 		// Now lets lower account 20 stake
-		assert_eq!(mock::validator_current_exposure(21).total, 69);
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 21).total, 69);
 		<Ledger<Test>>::insert(&20, StakingLedger { stash: 21, total: 69, active: 69, unlocking: vec![], next_reward: 0 });
 
 		// Compute total payout now for whole duration as other parameter won't change
@@ -1412,8 +1412,8 @@ fn reward_to_stake_works() {
 		start_era(1);
 		mock::make_all_reward_payment(0);
 
-		assert_eq!(mock::validator_current_exposure(11).total, 1000);
-		assert_eq!(mock::validator_current_exposure(21).total, 69);
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).total, 1000);
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 21).total, 69);
 
 		let _11_balance = Balances::free_balance(&11);
 		assert_eq!(_11_balance, 1000 + total_payout_0 / 2);
@@ -1422,8 +1422,8 @@ fn reward_to_stake_works() {
 		start_era(2);
 
 		// -- new infos
-		assert_eq!(mock::validator_current_exposure(11).total, 1000 + total_payout_0 / 2);
-		assert_eq!(mock::validator_current_exposure(21).total, 69 + total_payout_0 / 2);
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).total, 1000 + total_payout_0 / 2);
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 21).total, 69 + total_payout_0 / 2);
 
 		check_exposure_all(Staking::active_era());
 		check_nominator_all(Staking::active_era());
@@ -1748,8 +1748,8 @@ fn phragmen_should_not_overflow_validators() {
 
 		// This test will fail this. Will saturate.
 		// check_exposure_all();
-		assert_eq!(mock::validator_current_exposure(3).total, u64::max_value());
-		assert_eq!(mock::validator_current_exposure(5).total, u64::max_value());
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 3).total, u64::max_value());
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 5).total, u64::max_value());
 	})
 }
 
@@ -1770,8 +1770,8 @@ fn phragmen_should_not_overflow_nominators() {
 		assert_eq_uvec!(validator_controllers(), vec![4, 2]);
 
 		// Saturate.
-		assert_eq!(mock::validator_current_exposure(3).total, u64::max_value());
-		assert_eq!(mock::validator_current_exposure(5).total, u64::max_value());
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 3).total, u64::max_value());
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 5).total, u64::max_value());
 	})
 }
 
@@ -1789,8 +1789,8 @@ fn phragmen_should_not_overflow_ultimate() {
 		assert_eq_uvec!(validator_controllers(), vec![4, 2]);
 
 		// Saturate.
-		assert_eq!(mock::validator_current_exposure(3).total, u64::max_value());
-		assert_eq!(mock::validator_current_exposure(5).total, u64::max_value());
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 3).total, u64::max_value());
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 5).total, u64::max_value());
 	})
 }
 
@@ -1837,7 +1837,7 @@ fn reward_validator_slashing_validator_doesnt_overflow() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, mock::validator_current_exposure(11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -1947,7 +1947,7 @@ fn offence_forces_new_era() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					mock::validator_current_exposure(11),
+					Staking::eras_stakers(Staking::active_era(), 11),
 				),
 				reporters: vec![],
 			}],
@@ -1967,7 +1967,7 @@ fn offence_ensures_new_era_without_clobbering() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					mock::validator_current_exposure(11),
+					Staking::eras_stakers(Staking::active_era(), 11),
 				),
 				reporters: vec![],
 			}],
@@ -1987,7 +1987,7 @@ fn offence_deselects_validator_when_slash_is_zero() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					mock::validator_current_exposure(11),
+					Staking::eras_stakers(Staking::active_era(), 11),
 				),
 				reporters: vec![],
 			}],
@@ -2006,7 +2006,7 @@ fn slashing_performed_according_exposure() {
 	// This test checks that slashing is performed according the exposure (or more precisely,
 	// historical exposure), not the current balance.
 	ExtBuilder::default().build().execute_with(|| {
-		assert_eq!(mock::validator_current_exposure(11).own, 1000);
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).own, 1000);
 
 		// Handle an offence with a historical exposure.
 		on_offence_now(
@@ -2040,7 +2040,7 @@ fn slash_in_old_span_does_not_deselect() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					mock::validator_current_exposure(11),
+					Staking::eras_stakers(Staking::active_era(), 11),
 				),
 				reporters: vec![],
 			}],
@@ -2065,7 +2065,7 @@ fn slash_in_old_span_does_not_deselect() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					mock::validator_current_exposure(11),
+					Staking::eras_stakers(Staking::active_era(), 11),
 				),
 				reporters: vec![],
 			}],
@@ -2082,7 +2082,7 @@ fn slash_in_old_span_does_not_deselect() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					mock::validator_current_exposure(11),
+					Staking::eras_stakers(Staking::active_era(), 11),
 				),
 				reporters: vec![],
 			}],
@@ -2106,13 +2106,13 @@ fn reporters_receive_their_slice() {
 		// The reporters' reward is calculated from the total exposure.
 		let initial_balance = 1125;
 
-		assert_eq!(mock::validator_current_exposure(11).total, initial_balance);
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).total, initial_balance);
 
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (
 					11,
-					mock::validator_current_exposure(11),
+					Staking::eras_stakers(Staking::active_era(), 11),
 				),
 				reporters: vec![1, 2],
 			}],
@@ -2137,13 +2137,13 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 		// The reporters' reward is calculated from the total exposure.
 		let initial_balance = 1125;
 
-		assert_eq!(mock::validator_current_exposure(11).total, initial_balance);
+		assert_eq!(Staking::eras_stakers(Staking::active_era(), 11).total, initial_balance);
 
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (
 					11,
-					mock::validator_current_exposure(11),
+					Staking::eras_stakers(Staking::active_era(), 11),
 				),
 				reporters: vec![1],
 			}],
@@ -2159,7 +2159,7 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					mock::validator_current_exposure(11),
+					Staking::eras_stakers(Staking::active_era(), 11),
 				),
 				reporters: vec![1],
 			}],
@@ -2183,7 +2183,7 @@ fn invulnerables_are_not_slashed() {
 		assert_eq!(Balances::free_balance(&11), 1000);
 		assert_eq!(Balances::free_balance(&21), 2000);
 
-		let exposure = mock::validator_current_exposure(21);
+		let exposure = Staking::eras_stakers(Staking::active_era(), 21);
 		let initial_balance = Staking::slashable_balance_of(&21);
 
 		let nominator_balances: Vec<_> = exposure.others
@@ -2192,11 +2192,11 @@ fn invulnerables_are_not_slashed() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, mock::validator_current_exposure(11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
 					reporters: vec![],
 				},
 				OffenceDetails {
-					offender: (21, mock::validator_current_exposure(21)),
+					offender: (21, Staking::eras_stakers(Staking::active_era(), 21)),
 					reporters: vec![],
 				},
 			],
@@ -2230,7 +2230,7 @@ fn dont_slash_if_fraction_is_zero() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					mock::validator_current_exposure(11),
+					Staking::eras_stakers(Staking::active_era(), 11),
 				),
 				reporters: vec![],
 			}],
@@ -2251,7 +2251,7 @@ fn only_slash_for_max_in_era() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, mock::validator_current_exposure(11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2265,7 +2265,7 @@ fn only_slash_for_max_in_era() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, mock::validator_current_exposure(11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2278,7 +2278,7 @@ fn only_slash_for_max_in_era() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, mock::validator_current_exposure(11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2299,7 +2299,7 @@ fn garbage_collection_after_slashing() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, mock::validator_current_exposure(11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2313,7 +2313,7 @@ fn garbage_collection_after_slashing() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, mock::validator_current_exposure(11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2336,14 +2336,14 @@ fn garbage_collection_on_window_pruning() {
 
 		assert_eq!(Balances::free_balance(&11), 1000);
 
-		let exposure = mock::validator_current_exposure(11);
+		let exposure = Staking::eras_stakers(Staking::active_era(), 11);
 		assert_eq!(Balances::free_balance(&101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, mock::validator_current_exposure(11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2384,8 +2384,8 @@ fn slashing_nominators_by_span_max() {
 		assert_eq!(Staking::slashable_balance_of(&21), 1000);
 
 
-		let exposure_11 = mock::validator_current_exposure(11);
-		let exposure_21 = mock::validator_current_exposure(21);
+		let exposure_11 = Staking::eras_stakers(Staking::active_era(), 11);
+		let exposure_21 = Staking::eras_stakers(Staking::active_era(), 21);
 		assert_eq!(Balances::free_balance(&101), 2000);
 		let nominated_value_11 = exposure_11.others.iter().find(|o| o.who == 101).unwrap().value;
 		let nominated_value_21 = exposure_21.others.iter().find(|o| o.who == 101).unwrap().value;
@@ -2393,7 +2393,7 @@ fn slashing_nominators_by_span_max() {
 		on_offence_in_era(
 			&[
 				OffenceDetails {
-					offender: (11, mock::validator_current_exposure(11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2427,7 +2427,7 @@ fn slashing_nominators_by_span_max() {
 		on_offence_in_era(
 			&[
 				OffenceDetails {
-					offender: (21, mock::validator_current_exposure(21)),
+					offender: (21, Staking::eras_stakers(Staking::active_era(), 21)),
 					reporters: vec![],
 				},
 			],
@@ -2450,7 +2450,7 @@ fn slashing_nominators_by_span_max() {
 		on_offence_in_era(
 			&[
 				OffenceDetails {
-					offender: (11, mock::validator_current_exposure(11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2486,7 +2486,7 @@ fn slashes_are_summed_across_spans() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (21, mock::validator_current_exposure(21)),
+					offender: (21, Staking::eras_stakers(Staking::active_era(), 21)),
 					reporters: vec![],
 				},
 			],
@@ -2511,7 +2511,7 @@ fn slashes_are_summed_across_spans() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (21, mock::validator_current_exposure(21)),
+					offender: (21, Staking::eras_stakers(Staking::active_era(), 21)),
 					reporters: vec![],
 				},
 			],
@@ -2536,14 +2536,14 @@ fn deferred_slashes_are_deferred() {
 
 		assert_eq!(Balances::free_balance(&11), 1000);
 
-		let exposure = mock::validator_current_exposure(11);
+		let exposure = Staking::eras_stakers(Staking::active_era(), 11);
 		assert_eq!(Balances::free_balance(&101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, mock::validator_current_exposure(11)),
+					offender: (11, Staking::eras_stakers(Staking::active_era(), 11)),
 					reporters: vec![],
 				},
 			],
@@ -2579,7 +2579,7 @@ fn remove_deferred() {
 
 		assert_eq!(Balances::free_balance(&11), 1000);
 
-		let exposure = mock::validator_current_exposure(11);
+		let exposure = Staking::eras_stakers(Staking::active_era(), 11);
 		assert_eq!(Balances::free_balance(&101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
@@ -2649,7 +2649,7 @@ fn remove_multi_deferred() {
 
 		assert_eq!(Balances::free_balance(&11), 1000);
 
-		let exposure = mock::validator_current_exposure(11);
+		let exposure = Staking::eras_stakers(Staking::active_era(), 11);
 		assert_eq!(Balances::free_balance(&101), 2000);
 
 		on_offence_now(
@@ -2665,7 +2665,7 @@ fn remove_multi_deferred() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (21, mock::validator_current_exposure(21)),
+					offender: (21, Staking::eras_stakers(Staking::active_era(), 21)),
 					reporters: vec![],
 				}
 			],
@@ -2705,7 +2705,7 @@ fn slash_kicks_validators_not_nominators() {
 
 		assert_eq!(Balances::free_balance(&11), 1000);
 
-		let exposure = mock::validator_current_exposure(11);
+		let exposure = Staking::eras_stakers(Staking::active_era(), 11);
 		assert_eq!(Balances::free_balance(&101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
