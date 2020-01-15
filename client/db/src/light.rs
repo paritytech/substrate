@@ -35,9 +35,8 @@ use sp_blockchain::{
 };
 use sc_client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
-use sp_core::Blake2Hasher;
 use sp_runtime::generic::{DigestItem, BlockId};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor, HasherFor};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
 use crate::{DatabaseSettings, FrozenForDuration};
@@ -64,6 +63,8 @@ pub struct LightStorage<Block: BlockT> {
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	cache: Arc<DbCacheSync<Block>>,
 	header_metadata_cache: HeaderMetadataCache<Block>,
+
+	#[cfg(not(target_os = "unknown"))]
 	io_stats: FrozenForDuration<kvdb::IoStats>,
 }
 
@@ -103,6 +104,7 @@ impl<Block> LightStorage<Block>
 			meta: RwLock::new(meta),
 			cache: Arc::new(DbCacheSync(RwLock::new(cache))),
 			header_metadata_cache: HeaderMetadataCache::default(),
+			#[cfg(not(target_os = "unknown"))]
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1), kvdb::IoStats::empty()),
 		})
 	}
@@ -306,7 +308,7 @@ impl<Block: BlockT> LightStorage<Block> {
 				Some(old_current_num)
 			});
 
-			let new_header_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
+			let new_header_cht_root = cht::compute_root::<Block::Header, HasherFor<Block>, _>(
 				cht::size(), new_cht_number, cht_range.map(|num| self.hash(num))
 			)?;
 			transaction.put(
@@ -323,7 +325,7 @@ impl<Block: BlockT> LightStorage<Block> {
 					current_num = current_num + One::one();
 					Some(old_current_num)
 				});
-				let new_changes_trie_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
+				let new_changes_trie_cht_root = cht::compute_root::<Block::Header, HasherFor<Block>, _>(
 					cht::size(), new_cht_number, cht_range
 						.map(|num| self.changes_trie_root(BlockId::Number(num)))
 				)?;
@@ -559,6 +561,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		Some(self.cache.clone())
 	}
 
+	#[cfg(not(target_os = "unknown"))]
 	fn usage_info(&self) -> Option<UsageInfo> {
 		use sc_client_api::{MemoryInfo, IoInfo};
 
@@ -577,8 +580,16 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 				writes: io_stats.writes,
 				reads: io_stats.reads,
 				average_transaction_size: io_stats.avg_transaction_size() as u64,
+				// Light client does not track those
+				state_reads: 0,
+				state_reads_cache: 0,
 			}
 		})
+	}
+
+	#[cfg(target_os = "unknown")]
+	fn usage_info(&self) -> Option<UsageInfo> {
+		None
 	}
 }
 

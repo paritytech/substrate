@@ -23,7 +23,7 @@ use codec::{FullCodec, Codec, Encode, Decode};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	ConsensusEngineId, DispatchResult, DispatchError,
-	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
+	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating, TrailingZeroInput},
 };
 
 use crate::dispatch::Parameter;
@@ -774,6 +774,12 @@ pub trait Randomness<Output> {
 	/// from any other such seeds.
 	fn random_seed() -> Output {
 		Self::random(&[][..])
+	}
+}
+
+impl<Output: Decode + Default> Randomness<Output> for () {
+	fn random(subject: &[u8]) -> Output {
+		Output::decode(&mut TrailingZeroInput::new(subject)).unwrap_or_default()
 	}
 }
 

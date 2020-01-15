@@ -20,10 +20,9 @@ use sc_client::Client as SubstrateClient;
 use sp_blockchain::{Error, Info as BlockchainInfo};
 use sc_client_api::{ChangesProof, StorageProof, CallExecutor};
 use sp_consensus::{BlockImport, BlockStatus, Error as ConsensusError};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::generic::{BlockId};
 use sp_runtime::Justification;
-use sp_core::{H256, Blake2Hasher};
 use sp_core::storage::{StorageKey, ChildInfo};
 
 /// Local client abstraction for the network.
@@ -35,7 +34,7 @@ pub trait Client<Block: BlockT>: Send + Sync {
 	fn block_status(&self, id: &BlockId<Block>) -> Result<BlockStatus, Error>;
 
 	/// Get block hash by number.
-	fn block_hash(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<Option<Block::Hash>, Error>;
+	fn block_hash(&self, block_number: NumberFor<Block>) -> Result<Option<Block::Hash>, Error>;
 
 	/// Get block header.
 	fn header(&self, id: &BlockId<Block>) -> Result<Option<Block::Header>, Error>;
@@ -47,7 +46,7 @@ pub trait Client<Block: BlockT>: Send + Sync {
 	fn justification(&self, id: &BlockId<Block>) -> Result<Option<Justification>, Error>;
 
 	/// Get block header proof.
-	fn header_proof(&self, block_number: <Block::Header as HeaderT>::Number)
+	fn header_proof(&self, block_number: NumberFor<Block>)
 		-> Result<(Block::Header, StorageProof), Error>;
 
 	/// Get storage read execution proof.
@@ -93,10 +92,10 @@ impl<Block: BlockT> FinalityProofProvider<Block> for () {
 }
 
 impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
-	B: sc_client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
 	Self: BlockImport<Block, Error=ConsensusError>,
-	Block: BlockT<Hash=H256>,
+	Block: BlockT,
 	RA: Send + Sync
 {
 	fn info(&self) -> BlockchainInfo<Block> {
@@ -107,7 +106,10 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		(self as &SubstrateClient<B, E, Block, RA>).block_status(id)
 	}
 
-	fn block_hash(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<Option<Block::Hash>, Error> {
+	fn block_hash(
+		&self,
+		block_number: <Block::Header as HeaderT>::Number,
+	) -> Result<Option<Block::Hash>, Error> {
 		(self as &SubstrateClient<B, E, Block, RA>).block_hash(block_number)
 	}
 
@@ -144,8 +146,17 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 			.read_child_proof(&BlockId::Hash(block.clone()), storage_key, child_info, keys)
 	}
 
-	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, StorageProof), Error> {
-		(self as &SubstrateClient<B, E, Block, RA>).execution_proof(&BlockId::Hash(block.clone()), method, data)
+	fn execution_proof(
+		&self,
+		block: &Block::Hash,
+		method: &str,
+		data: &[u8],
+	) -> Result<(Vec<u8>, StorageProof), Error> {
+		(self as &SubstrateClient<B, E, Block, RA>).execution_proof(
+			&BlockId::Hash(block.clone()),
+			method,
+			data,
+		)
 	}
 
 	fn key_changes_proof(

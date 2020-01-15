@@ -323,7 +323,7 @@ pub struct IdentityInfo {
 ///
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
 /// backwards compatible way through a specialized `Decode` impl.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug)]
 pub struct Registration<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
 > {
@@ -348,8 +348,17 @@ impl <
 	}
 }
 
+impl<
+	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq,
+> Decode for Registration<Balance> {
+	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
+		let (judgements, deposit, info) = Decode::decode(&mut AppendZerosInput::new(input))?;
+		Ok(Self { judgements, deposit, info })
+	}
+}
+
 /// Information concerning a registrar.
-#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct RegistrarInfo<
 	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
 	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
@@ -363,16 +372,6 @@ pub struct RegistrarInfo<
 	/// Relevant fields for this registrar. Registrar judgements are limited to attestations on
 	/// these fields.
 	pub fields: IdentityFields,
-}
-
-impl<
-	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
-	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
-> Decode for RegistrarInfo<Balance, AccountId> {
-	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
-		let (account, fee, fields) = Decode::decode(&mut AppendZerosInput::new(input))?;
-		Ok(Self { account, fee, fields })
-	}
 }
 
 decl_storage! {

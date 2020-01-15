@@ -28,7 +28,7 @@ use frame_system::offchain::{SubmitSignedTransaction, SubmitUnsignedTransaction}
 use pallet_im_online::sr25519::AuthorityPair as Key;
 use codec::Decode;
 
-mod common;
+pub mod common;
 use self::common::*;
 
 #[test]
