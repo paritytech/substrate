@@ -320,7 +320,7 @@ mod tests {
 	#[test]
 	fn requests_are_processed_in_order() {
 		fn property(mut peers: ArbitraryPeers) {
-			let mut requests = ExtraRequests::<Block>::new();
+			let mut requests = ExtraRequests::<Block>::new("test");
 
 			let num_peers_available = peers.0.values()
 				.filter(|s| s.state == PeerSyncState::Available).count();
@@ -346,7 +346,7 @@ mod tests {
 	#[test]
 	fn new_roots_schedule_new_request() {
 		fn property(data: Vec<BlockNumber>) {
-			let mut requests = ExtraRequests::<Block>::new();
+			let mut requests = ExtraRequests::<Block>::new("test");
 			for (i, number) in data.into_iter().enumerate() {
 				let hash = [i as u8; 32].into();
 				let pending = requests.pending_requests.len();
@@ -363,7 +363,7 @@ mod tests {
 	#[test]
 	fn disconnecting_implies_rescheduling() {
 		fn property(mut peers: ArbitraryPeers) -> bool {
-			let mut requests = ExtraRequests::<Block>::new();
+			let mut requests = ExtraRequests::<Block>::new("test");
 
 			let num_peers_available = peers.0.values()
 				.filter(|s| s.state == PeerSyncState::Available).count();
@@ -398,7 +398,7 @@ mod tests {
 	#[test]
 	fn no_response_reschedules() {
 		fn property(mut peers: ArbitraryPeers) {
-			let mut requests = ExtraRequests::<Block>::new();
+			let mut requests = ExtraRequests::<Block>::new("test");
 
 			let num_peers_available = peers.0.values()
 				.filter(|s| s.state == PeerSyncState::Available).count();
@@ -431,7 +431,7 @@ mod tests {
 	fn request_is_rescheduled_when_earlier_block_is_finalized() {
 		let _ = ::env_logger::try_init();
 
-		let mut finality_proofs = ExtraRequests::<Block>::new();
+		let mut finality_proofs = ExtraRequests::<Block>::new("test");
 
 		let hash4 = [4; 32].into();
 		let hash5 = [5; 32].into();
@@ -469,7 +469,7 @@ mod tests {
 
 	#[test]
 	fn anecstor_roots_are_finalized_when_finality_notification_is_missed() {
-		let mut finality_proofs = ExtraRequests::<Block>::new();
+		let mut finality_proofs = ExtraRequests::<Block>::new("test");
 
 		let hash4 = [4; 32].into();
 		let hash5 = [5; 32].into();
