@@ -7,7 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-grafana-data-source = { version = "2.0.0", path = ".." }
+grafana-data-source = { version = "0.8", path = ".." }
 futures = "0.3"
 futures-timer = "2.0"
 rand = "0.7"
