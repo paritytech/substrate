@@ -317,21 +317,6 @@ impl<AId> SessionHandler<AId> for TestSessionHandler {
 	fn on_disabled(_: usize) {}
 }
 
-/// Handler for selecting the genesis validator set.
-pub trait SelectInitialValidators<ValidatorId> {
-	/// Returns the initial validator set. If `None` is returned
-	/// all accounts that have session keys set in the genesis block
-	/// will be validators.
-	fn select_initial_validators() -> Option<Vec<ValidatorId>>;
-}
-
-/// Implementation of `SelectInitialValidators` that does nothing.
-impl<V> SelectInitialValidators<V> for () {
-	fn select_initial_validators() -> Option<Vec<V>> {
-		None
-	}
-}
-
 impl<T: Trait> ValidatorRegistration<T::ValidatorId> for Module<T> {
 	fn is_registered(id: &T::ValidatorId) -> bool {
 		Self::load_keys(id).is_some()
@@ -365,9 +350,6 @@ pub trait Trait: frame_system::Trait {
 	/// After the threshold is reached `disabled` method starts to return true,
 	/// which in combination with `pallet_staking` forces a new era.
 	type DisabledValidatorsThreshold: Get<Perbill>;
-
-	/// Select initial validators.
-	type SelectInitialValidators: SelectInitialValidators<Self::ValidatorId>;
 }
 
 const DEDUP_KEY_PREFIX: &[u8] = b":session:keys";
@@ -434,12 +416,19 @@ decl_storage! {
 					.expect("genesis config must not contain duplicates; qed");
 			}
 
-			let initial_validators = T::SelectInitialValidators::select_initial_validators()
-				.unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
+			let initial_validators_0 = T::SessionManager::new_session(0)
+				// TODO TODO: should we always expect one can we fall back with config keys ?
+				// TODO TODO: it might be relevant for test, but if so we should just change
+				// implementation of SessionManager for type `()`
+				.expect("TODO TODO: cannot have empty validator set for session 0");
+				// .unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
+			assert!(!initial_validators_0.is_empty(), "Empty validator set in genesis block!");
 
-			assert!(!initial_validators.is_empty(), "Empty validator set in genesis block!");
+			let initial_validators_1 = T::SessionManager::new_session(1)
+				.unwrap_or_else(|| initial_validators_0.clone());
+			assert!(!initial_validators_1.is_empty(), "Empty validator set in genesis block!");
 
-			let queued_keys: Vec<_> = initial_validators
+			let queued_keys: Vec<_> = initial_validators_1
 				.iter()
 				.cloned()
 				.map(|v| (
@@ -451,7 +440,7 @@ decl_storage! {
 			// Tell everyone about the genesis session keys
 			T::SessionHandler::on_genesis_session::<T::Keys>(&queued_keys);
 
-			<Validators<T>>::put(initial_validators);
+			<Validators<T>>::put(initial_validators_0);
 			<QueuedKeys<T>>::put(queued_keys);
 		});
 	}
@@ -551,7 +540,7 @@ impl<T: Trait> Module<T> {
 		CurrentIndex::put(session_index);
 
 		// Get next validator set.
-		let maybe_next_validators = T::SessionManager::new_session(session_index + 2);
+		let maybe_next_validators = T::SessionManager::new_session(session_index + 1);
 		let (next_validators, next_identities_changed)
 			= if let Some(validators) = maybe_next_validators
 		{

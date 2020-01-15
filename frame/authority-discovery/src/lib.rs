@@ -109,11 +109,10 @@ mod tests {
 	pub struct Test;
 	impl Trait for Test {}
 
-	pub struct TestOnSessionEnding;
-	impl pallet_session::OnSessionEnding<AuthorityId> for TestOnSessionEnding {
-		fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<AuthorityId>> {
-			None
-		}
+	pub struct TestSessionManager;
+	impl pallet_session::SessionManager<AuthorityId> for TestSessionManager {
+		fn new_session(_: SessionIndex) -> Option<Vec<AuthorityId>> { None }
+		fn end_session(_: SessionIndex) {}
 	}
 
 	parameter_types! {
@@ -121,14 +120,13 @@ mod tests {
 	}
 
 	impl pallet_session::Trait for Test {
-		type OnSessionEnding = TestOnSessionEnding;
+		type SessionManager = TestSessionManager;
 		type Keys = UintAuthorityId;
 		type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 		type SessionHandler = TestSessionHandler;
 		type Event = ();
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
-		type SelectInitialValidators = ();
 		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	}
 
