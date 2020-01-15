@@ -417,7 +417,11 @@ decl_storage! {
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)
-				.expect("No initial validator set by `SessionManager`");
+				.unwrap_or_else(|| {
+					frame_support::print("No initial validator provided by `SessionManager`, use \
+						session config keys to generate initial validator set.");
+					config.keys.iter().map(|(ref v, _)| v.clone()).collect()
+				});
 			assert!(!initial_validators_0.is_empty(), "Empty validator set for session 0 in genesis block!");
 
 			let initial_validators_1 = T::SessionManager::new_session(1)

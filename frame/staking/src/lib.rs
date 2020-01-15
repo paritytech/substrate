@@ -1345,8 +1345,7 @@ impl<T: Trait> Module<T> {
 		imbalance
 	}
 
-	/// Session has just ended. Provide the validator set for the next session if it's an era-end, along
-	/// with the exposure of the prior validator set.
+	/// Session has just ended. Provide the validator set for the next session if it's an era-end.
 	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		let era_length = session_index.checked_sub(Self::current_era_start_session_index()).unwrap_or(0);
 		match ForceEra::get() {
@@ -1642,7 +1641,7 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		Self::ensure_storage_upgraded();
-		if new_index < 2 {
+		if new_index == 0 {
 			return <Module<T>>::select_validators().1
 		}
 		Self::new_session(new_index - 1)
