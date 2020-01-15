@@ -108,7 +108,6 @@ pub fn create_instance(
 			)));
 		}
 
-		dbg!();
 		let host_func = host_functions
 			.iter()
 			.find(|host_func| host_func.name() == import_ty.name())
@@ -205,7 +204,6 @@ impl HostFuncAdapterCallable {
 
 impl Callable for HostFuncAdapterCallable {
 	fn call(&self, params: &[Val], results: &mut [Val]) -> std::result::Result<(), Trap> {
-		dbg!();
 		let mut substrate_params = params
 			.iter()
 			.cloned()
@@ -302,7 +300,7 @@ fn call_method(
 	data: &[u8],
 	heap_pages: u32,
 ) -> Result<Vec<u8>> {
-	let instance = Instance::new(store, module, externs)
+	let instance = Instance::new(module, externs)
 		.map_err(|e| WasmError::Other(format!("cannot instantiate: {}", e)))?;
 
 	increase_linear_memory(&instance, heap_pages)?;

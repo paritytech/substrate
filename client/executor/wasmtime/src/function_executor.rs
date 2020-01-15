@@ -383,7 +383,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 				.table
 				.as_ref()
 				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?;
-			let table_item = table.get(dbg!(dispatch_thunk_id));
+			let table_item = table.get(dispatch_thunk_id);
 
 			let func_ref = table_item
 				.funcref()
