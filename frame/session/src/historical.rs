@@ -342,7 +342,6 @@ mod tests {
 			System::set_block_number(2);
 			Session::on_initialize(2);
 
-			println!("proof session: {}", proof.session);
 			assert!(Historical::historical_root(proof.session).is_some());
 			assert!(Session::current_index() > proof.session);
 
