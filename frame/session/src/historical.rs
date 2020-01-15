@@ -56,18 +56,19 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// Mapping from historical session indices to session-data root hash and validator count.
 		HistoricalSessions get(fn historical_root): map SessionIndex => Option<(T::Hash, ValidatorCount)>;
-		// /// Queued full identifications for queued sessions whose validators have become obsolete.
-		// CachedObsolete get(fn cached_obsolete): map SessionIndex
-		// 	=> Option<Vec<(T::ValidatorId, T::FullIdentification)>>;
-		// TODO TODO: clean this, no longer need to store some fullidentification before the
-		// session get started
 		/// The range of historical sessions we store. [first, last)
 		StoredRange: Option<(SessionIndex, SessionIndex)>;
+		/// Deprecated.
+		CachedObsolete: map SessionIndex => Option<Vec<(T::ValidatorId, T::FullIdentification)>>;
 	}
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn on_initialize(_n: T::BlockNumber) {
+			CachedObsolete::remove_all();
+		}
+	}
 }
 
 impl<T: Trait> Module<T> {
