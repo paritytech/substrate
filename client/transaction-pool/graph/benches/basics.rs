@@ -50,7 +50,7 @@ impl ChainApi for TestApi {
 	type Hash = H256;
 	type Error = sp_transaction_pool::error::Error;
 	type ValidationFuture = Ready<sp_transaction_pool::error::Result<TransactionValidity>>;
-	type BodyFuture = Ready<error::Result<Option<Vec<Extrinsic>>>>;
+	type BodyFuture = Ready<sp_transaction_pool::error::Result<Option<Vec<Extrinsic>>>>;
 
 	fn validate_transaction(
 		&self,
@@ -155,13 +155,13 @@ fn benchmark_main(c: &mut Criterion) {
 
     c.bench_function("sequential 50 tx", |b| {
 		b.iter(|| {
-			bench_configured(Pool::new(Default::default(), TestApi::new_dependant()), 50);
+			bench_configured(Pool::new(Default::default(), TestApi::new_dependant().into()), 50);
 		});
 	});
 
 	c.bench_function("random 100 tx", |b| {
 		b.iter(|| {
-			bench_configured(Pool::new(Default::default(), TestApi::default()), 100);
+			bench_configured(Pool::new(Default::default(), TestApi::default().into()), 100);
 		});
 	});
 }
