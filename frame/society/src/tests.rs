@@ -25,6 +25,8 @@ use sp_runtime::traits::BadOrigin;
 #[test]
 fn founding_works() {
 	EnvBuilder::new().with_members(vec![]).execute(|| {
+		// No founder initially.
+		assert_eq!(Society::founder(), None);
 		// Account 1 is set as the founder origin
 		// Account 5 cannot start a society
 		assert_noop!(Society::found(Origin::signed(5), 20), BadOrigin);
@@ -34,6 +36,8 @@ fn founding_works() {
 		assert_eq!(Society::members(), vec![10]);
 		// 10 is the head of the society
 		assert_eq!(Society::head(), Some(10));
+		// ...and also the founder
+		assert_eq!(Society::founder(), Some(10));
 		// Cannot start another society
 		assert_noop!(Society::found(Origin::signed(1), 20), Error::<Test, _>::AlreadyFounded);
 	});
@@ -264,7 +268,7 @@ fn suspended_member_lifecycle_works() {
 		// Suspended members cannot get payout
 		Society::bump_payout(&20, 10, 100);
 		assert_noop!(Society::payout(Origin::signed(20)), Error::<Test, _>::NotMember);
-		
+
 		// Normal people cannot make judgement
 		assert_noop!(Society::judge_suspended_member(Origin::signed(20), 20, true), BadOrigin);
 
@@ -460,10 +464,11 @@ fn unbid_vouch_works() {
 }
 
 #[test]
-fn head_cannot_be_removed() {
+fn founder_and_head_cannot_be_removed() {
 	EnvBuilder::new().execute(|| {
-		// 10 is the only member and head
+		// 10 is the only member, founder, and head
 		assert_eq!(Society::members(), vec![10]);
+		assert_eq!(Society::founder(), Some(10));
 		assert_eq!(Society::head(), Some(10));
 		// 10 can still accumulate strikes
 		assert_ok!(Society::bid(Origin::signed(20), 0));
@@ -485,16 +490,37 @@ fn head_cannot_be_removed() {
 		run_to_block(32);
 		assert_eq!(Society::members(), vec![10, 50]);
 		assert_eq!(Society::head(), Some(50));
+		// Founder is unchanged
+		assert_eq!(Society::founder(), Some(10));
 
-		// 10 can now be suspended for strikes
+		// 50 can still accumulate strikes
 		assert_ok!(Society::bid(Origin::signed(60), 0));
-		run_to_block(36);
-		// The candidate is rejected, so voting approve will give a strike
-		assert_ok!(Society::vote(Origin::signed(10), 60, true));
 		run_to_block(40);
-		assert_eq!(Strikes::<Test>::get(10), 0);
-		assert_eq!(<SuspendedMembers<Test>>::get(10), Some(()));
-		assert_eq!(Society::members(), vec![50]);
+		assert_eq!(Strikes::<Test>::get(50), 1);
+		assert_ok!(Society::bid(Origin::signed(70), 0));
+		run_to_block(48);
+		assert_eq!(Strikes::<Test>::get(50), 2);
+
+		// Replace the head
+		assert_ok!(Society::bid(Origin::signed(80), 0));
+		run_to_block(52);
+		assert_ok!(Society::vote(Origin::signed(10), 80, true));
+		assert_ok!(Society::vote(Origin::signed(50), 80, true));
+		assert_ok!(Society::defender_vote(Origin::signed(10), true)); // Keep defender around
+		run_to_block(56);
+		assert_eq!(Society::members(), vec![10, 50, 80]);
+		assert_eq!(Society::head(), Some(80));
+		assert_eq!(Society::founder(), Some(10));
+
+		// 50 can now be suspended for strikes
+		assert_ok!(Society::bid(Origin::signed(90), 0));
+		run_to_block(60);
+		// The candidate is rejected, so voting approve will give a strike
+		assert_ok!(Society::vote(Origin::signed(50), 90, true));
+		run_to_block(64);
+		assert_eq!(Strikes::<Test>::get(50), 0);
+		assert_eq!(<SuspendedMembers<Test>>::get(50), Some(()));
+		assert_eq!(Society::members(), vec![10, 80]);
 	});
 }
 

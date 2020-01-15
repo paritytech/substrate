@@ -61,7 +61,7 @@ pub use traits::GetSharedParams;
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
-use futures::{Future, compat::Future01CompatExt, executor::block_on};
+use futures::{Future, executor::block_on};
 use sc_telemetry::TelemetryEndpoints;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
@@ -426,8 +426,7 @@ impl<'a> ParseAndPrepareExport<'a> {
 		});
 
 		let mut export_fut = builder(config)?
-			.export_blocks(file, from.into(), to, json)
-			.compat();
+			.export_blocks(file, from.into(), to, json);
 		let fut = futures::future::poll_fn(|cx| {
 			if exit_recv.try_recv().is_ok() {
 				return Poll::Ready(Ok(()));
@@ -485,8 +484,7 @@ impl<'a> ParseAndPrepareImport<'a> {
 		});
 
 		let mut import_fut = builder(config)?
-			.import_blocks(file, false)
-			.compat();
+			.import_blocks(file, false);
 		let fut = futures::future::poll_fn(|cx| {
 			if exit_recv.try_recv().is_ok() {
 				return Poll::Ready(Ok(()));
@@ -537,8 +535,7 @@ impl<'a> CheckBlock<'a> {
 
 		let start = std::time::Instant::now();
 		let check = builder(config)?
-			.check_block(block_id)
-			.compat();
+			.check_block(block_id);
 		let mut runtime = tokio::runtime::Runtime::new().unwrap();
 		runtime.block_on(check)?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
