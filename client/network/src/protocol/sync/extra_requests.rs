@@ -18,7 +18,7 @@ use sp_blockchain::Error as ClientError;
 use crate::protocol::sync::{PeerSync, PeerSyncState};
 use fork_tree::ForkTree;
 use libp2p::PeerId;
-use log::{debug, warn};
+use log::{debug, trace, warn};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
@@ -48,10 +48,12 @@ pub(crate) struct ExtraRequests<B: BlockT> {
 	failed_requests: HashMap<ExtraRequest<B>, Vec<(PeerId, Instant)>>,
 	/// successful requests
 	importing_requests: HashSet<ExtraRequest<B>>,
+	/// the name of this type of extra request (useful for logging.)
+	request_type_name: &'static str,
 }
 
 impl<B: BlockT> ExtraRequests<B> {
-	pub(crate) fn new() -> Self {
+	pub(crate) fn new(request_type_name: &'static str) -> Self {
 		ExtraRequests {
 			tree: ForkTree::new(),
 			best_seen_finalized_number: Zero::zero(),
@@ -59,6 +61,7 @@ impl<B: BlockT> ExtraRequests<B> {
 			active_requests: HashMap::new(),
 			failed_requests: HashMap::new(),
 			importing_requests: HashSet::new(),
+			request_type_name,
 		}
 	}
 
@@ -113,11 +116,28 @@ impl<B: BlockT> ExtraRequests<B> {
 		// messages to chain sync.
 		if let Some(request) = self.active_requests.remove(&who) {
 			if let Some(r) = resp {
+				trace!(target: "sync", "Queuing import of {} from {:?} for {:?}",
+					self.request_type_name,
+					who,
+					request,
+				);
+
 				self.importing_requests.insert(request);
 				return Some((who, request.0, request.1, r))
+			} else {
+				trace!(target: "sync", "Empty {} response from {:?} for {:?}",
+					self.request_type_name,
+					who,
+					request,
+				);
 			}
 			self.failed_requests.entry(request).or_insert(Vec::new()).push((who, Instant::now()));
 			self.pending_requests.push_front(request);
+		} else {
+			trace!(target: "sync", "No active {} request to {:?}",
+				self.request_type_name,
+				who,
+			);
 		}
 		None
 	}
@@ -265,6 +285,13 @@ impl<'a, B: BlockT> Matcher<'a, B> {
 					continue
 				}
 				self.extras.active_requests.insert(peer.clone(), request);
+
+				trace!(target: "sync", "Sending {} request to {:?} for {:?}",
+					self.extras.request_type_name,
+					peer,
+					request,
+				);
+
 				return Some((peer.clone(), request))
 			}
 
