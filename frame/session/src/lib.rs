@@ -417,16 +417,12 @@ decl_storage! {
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)
-				// TODO TODO: should we always expect one can we fall back with config keys ?
-				// TODO TODO: it might be relevant for test, but if so we should just change
-				// implementation of SessionManager for type `()`
-				.expect("TODO TODO: cannot have empty validator set for session 0");
-				// .unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
-			assert!(!initial_validators_0.is_empty(), "Empty validator set in genesis block!");
+				.expect("No initial validator set by `SessionManager`");
+			assert!(!initial_validators_0.is_empty(), "Empty validator set for session 0 in genesis block!");
 
 			let initial_validators_1 = T::SessionManager::new_session(1)
 				.unwrap_or_else(|| initial_validators_0.clone());
-			assert!(!initial_validators_1.is_empty(), "Empty validator set in genesis block!");
+			assert!(!initial_validators_1.is_empty(), "Empty validator set for session 1 in genesis block!");
 
 			let queued_keys: Vec<_> = initial_validators_1
 				.iter()

@@ -125,7 +125,6 @@ impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T
 		});
 
 		if let Some(new_validators) = new_validators_and_id {
-			println!("new validator set for {}", new_index);
 			let count = new_validators.len() as u32;
 			match ProvingTrie::<T>::generate_for(new_validators) {
 				Ok(trie) => <HistoricalSessions<T>>::insert(new_index, &(trie.root, count)),
