@@ -15,13 +15,14 @@ wasmtime = [
 
 [dependencies]
 derive_more = "0.99.2"
-futures = "0.1.29"
-futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
+futures01 = { package = "futures", version = "0.1.29" }
+futures = "0.3.1"
 parking_lot = "0.9.0"
 lazy_static = "1.4.0"
 log = "0.4.8"
 slog = { version = "2.5.2", features = ["nested-values"] }
 tokio-executor = "0.1.8"
+futures-timer = { git = "https://github.com/expenses/futures-timer", branch = "wasm-support" }
 wasm-timer = "0.2"
 exit-future = "0.2.0"
 serde = "1.0.101"
@@ -54,11 +55,10 @@ parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
 grafana-data-source = { version = "2.0.0", path = "../../utils/grafana-data-source" }
 sc-tracing = { version = "2.0.0", path = "../tracing" }
 tracing = "0.1.10"
-futures-timer = { git = "https://github.com/expenses/futures-timer", branch = "wasm-support" }
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 sp-consensus-babe = { version = "0.8", path = "../../primitives/consensus/babe" }
 grandpa = { version = "2.0.0", package = "sc-finality-grandpa", path = "../finality-grandpa" }
 grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
-tokio = "0.1"
+tokio = { version = "0.2", features = ["rt-core"] }
