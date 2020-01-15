@@ -535,7 +535,9 @@ mod tests {
 
 				digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(babe_pre_digest));
 
-				let mut proposer = proposer_factory.init(&parent_header).unwrap();
+				let mut proposer = futures::executor::block_on(
+					proposer_factory.init(&parent_header)
+				).unwrap();
 				let new_block = futures::executor::block_on(proposer.propose(
 					inherent_data,
 					digest,
