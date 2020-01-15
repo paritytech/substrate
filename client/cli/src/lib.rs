@@ -142,8 +142,13 @@ pub fn load_spec<F, G, E>(cli: &SharedParams, factory: F) -> error::Result<Chain
 	Ok(spec)
 }
 
-fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
+fn base_path(
+	cli: &SharedParams,
+	version: &VersionInfo,
+	default_base_path: Option<PathBuf>,
+) -> PathBuf {
 	cli.base_path.clone()
+		.or(default_base_path)
 		.unwrap_or_else(||
 			app_dirs::get_app_root(
 				AppDataType::UserData,
@@ -300,7 +305,7 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
 	pub fn into_configuration<C, G, E, S>(
 		self,
 		spec_factory: S,
-		base_path_override: Option<PathBuf>,
+		default_base_path: Option<PathBuf>,
 	) -> error::Result<Option<Configuration<C, G, E>>>
 	where
 		C: Default,
@@ -315,7 +320,7 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
 					spec_factory,
 					c.impl_name,
 					c.version,
-					base_path_override,
+					default_base_path,
 				)).transpose(),
 			ParseAndPrepare::BuildSpec(c) => {
 				let spec = load_spec(&c.params.shared_params, spec_factory)?;
@@ -324,7 +329,7 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
 					&spec,
 					&c.params.shared_params,
 					c.version,
-					base_path_override,
+					default_base_path,
 				)).transpose()
 			},
 			ParseAndPrepare::ExportBlocks(c) =>
@@ -332,35 +337,35 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
 					spec_factory,
 					&c.params.shared_params,
 					c.version,
-					base_path_override,
+					default_base_path,
 				)).transpose(),
 			ParseAndPrepare::ImportBlocks(c) =>
 				Some(create_config_with_db_path(
 					spec_factory,
 					&c.params.shared_params,
 					c.version,
-					base_path_override,
+					default_base_path,
 				)).transpose(),
 			ParseAndPrepare::CheckBlock(c) =>
 				Some(create_config_with_db_path(
 					spec_factory,
 					&c.params.shared_params,
 					c.version,
-					base_path_override,
+					default_base_path,
 				)).transpose(),
 			ParseAndPrepare::PurgeChain(c) =>
 				Some(create_config_with_db_path(
 					spec_factory,
 					&c.params.shared_params,
 					c.version,
-					base_path_override,
+					default_base_path,
 				)).transpose(),
 			ParseAndPrepare::RevertChain(c) =>
 				Some(create_config_with_db_path(
 					spec_factory,
 					&c.params.shared_params,
 					c.version,
-					base_path_override,
+					default_base_path,
 				)).transpose(),
 			ParseAndPrepare::CustomCommand(_) => Ok(None),
 		}
@@ -942,7 +947,7 @@ fn create_run_node_config<C, G, E, S>(
 	spec_factory: S,
 	impl_name: &'static str,
 	version: &VersionInfo,
-	base_path_override: Option<PathBuf>,
+	default_base_path: Option<PathBuf>,
 ) -> error::Result<Configuration<C, G, E>>
 where
 	C: Default,
@@ -954,7 +959,7 @@ where
 		spec_factory,
 		&cli.shared_params,
 		&version,
-		base_path_override,
+		default_base_path,
 	)?;
 
 	fill_config_keystore_password_and_path(&mut config, &cli)?;
@@ -1092,7 +1097,7 @@ pub fn create_config_with_db_path<C, G, E, S>(
 	spec_factory: S,
 	cli: &SharedParams,
 	version: &VersionInfo,
-	base_path_override: Option<PathBuf>,
+	default_base_path: Option<PathBuf>,
 ) -> error::Result<Configuration<C, G, E>>
 where
 	C: Default,
@@ -1101,7 +1106,7 @@ where
 	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 {
 	let spec = load_spec(cli, spec_factory)?;
-	let base_path = base_path_override.unwrap_or_else(|| base_path(cli, version));
+	let base_path = base_path(cli, version, default_base_path);
 
 	let mut config = sc_service::Configuration::default_with_spec_and_base_path(
 		spec.clone(),
@@ -1121,14 +1126,14 @@ fn create_build_spec_config<C, G, E>(
 	spec: &ChainSpec<G, E>,
 	cli: &SharedParams,
 	version: &VersionInfo,
-	base_path_override: Option<PathBuf>,
+	default_base_path: Option<PathBuf>,
 ) -> error::Result<Configuration<C, G, E>>
 where
 	C: Default,
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 {
-	let base_path = base_path_override.unwrap_or_else(|| base_path(&cli, version));
+	let base_path = base_path(&cli, version, default_base_path);
 	let cfg = sc_service::Configuration::<C,_,_>::default_with_spec_and_base_path(
 		spec.clone(),
 		Some(base_path),
@@ -1422,6 +1427,6 @@ mod tests {
 		let args = vec!["substrate", "--base-path=/foo"];
 		let pnp = parse_and_prepare::<NoCustom, NoCustom, _>(&version, "test", args);
 		let config = pnp.into_configuration::<(), _, _, _>(spec_factory, Some("/bar".into())).unwrap().unwrap();
-		assert_eq!(config.config_dir, Some("/bar".into()));
+		assert_eq!(config.config_dir, Some("/foo".into()));
 	}
 }
