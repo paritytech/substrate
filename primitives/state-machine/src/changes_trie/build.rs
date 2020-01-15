@@ -330,6 +330,7 @@ mod test {
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
 	use crate::transaction_layers::{COMMITTED_LAYER, Layers, LayerEntry};
+	use crate::transaction_layers::{States, TransactionState};
 	use super::*;
 
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
@@ -403,7 +404,11 @@ mod test {
 		]);
 		let changes = OverlayedChanges {
 			changes: OverlayedChangeSet {
-				number_transactions: COMMITTED_LAYER + 1,
+				states: States::test_vector(
+					vec![TransactionState::Pending, TransactionState::Pending],
+					vec![0, 0],
+					1,
+				),
 				top: vec![
 					(EXTRINSIC_INDEX.to_vec(), Layers::from_iter(vec![
 						(OverlayedValue {
@@ -458,6 +463,8 @@ mod test {
 				].into_iter().collect(),
 			},
 			changes_trie_config: Some(config.clone()),
+			operation_from_last_gc: 0,
+			not_eager_gc: false,
 		};
 
 		(backend, storage, changes, config)

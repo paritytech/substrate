@@ -16,10 +16,177 @@
 
 //! Types and method for managing a stack of transactional values.
 
+
+#[derive(Debug, Clone, Eq, PartialEq, Copy)]
+/// State of a transactional layer.
+pub(crate) enum TransactionState {
+	/// Data is under change and can still be dropped.
+	Pending,
+	/// Same as pending but does count as a transaction start.
+	TxPending,
+	/// Data pointing to this indexed historic state should
+	/// not be returned and can be removed.
+	Dropped,
+}
+
+/// States for all past transaction layers.
+#[derive(Debug, Clone)]
+#[cfg_attr(any(test, feature = "test-helpers"), derive(PartialEq))]
+pub struct States {
+	history: Vec<TransactionState>,
+	// Keep track of the transaction positions.
+	// This is redundant with `history`.
+	// This is only use to precalculate the result
+	// of a backward iteration to find the start
+	// of a transactional window (function
+	// `transaction_start_windows`).
+	//
+	// At many place we could use this instead
+	// of the `TxPending` state, but `TxPending`
+	// state is favored, except for `start_windows`
+	// case.
+	start_transaction_window: Vec<usize>,
+	// commit is the position in history of the latest committed.
+	commit: usize,
+}
+
+impl Default for States {
+	fn default() -> Self {
+		States {
+			history: vec![TransactionState::Pending],
+			start_transaction_window: vec![0],
+			commit: 0,
+		}
+	}
+}
+
+impl States {
+	/// Get reference of state, that is enough
+	/// information to query historical
+	/// data.
+	pub(crate) fn as_ref(&self) -> &[TransactionState] {
+		self.history.as_ref()
+	}
+
+	/// Current number of inner states.
+	pub fn num_states(&self) -> usize {
+		self.history.len()
+	}
+
+	/// Get index of committed layer.
+	pub fn committed(&self) -> usize {
+		self.commit
+	}
+
+	/// Allow to rollback to a previous committed
+	/// index.
+	/// This can only work if there was no eager
+	/// garbage collection (eager collection can
+	/// change interval between `old_committed` and
+	/// `self.commit`).
+	pub fn unchecked_rollback_committed(&mut self, old_committed: usize) {
+		self.commit = old_committed;
+		self.discard_prospective();
+	}
+
+	/// Build any state for testing only.
+	#[cfg(test)]
+	pub(crate) fn test_vector(
+		history: Vec<TransactionState>,
+		start_transaction_window: Vec<usize>,
+		commit: usize,
+	) -> Self {
+		States { history, start_transaction_window, commit }
+	}
+
+	/// Discard prospective changes to state.
+	/// That is revert all transaction up to the committed index.
+	pub fn discard_prospective(&mut self) {
+		for i in self.commit .. self.history.len() {
+			self.history[i] = TransactionState::Dropped;
+			self.start_transaction_window[i] = self.commit;
+		}
+		self.history.push(TransactionState::Pending);
+		self.start_transaction_window.push(self.commit);
+	}
+
+	/// Commit prospective changes to state.
+	pub fn commit_prospective(&mut self) {
+		self.commit = self.history.len();
+		self.history.push(TransactionState::Pending);
+		for i in 0..self.history.len() - 1 {
+			self.start_transaction_window[i] = self.commit;
+		}
+		self.start_transaction_window.push(self.commit);
+	}
+
+	/// Create a new transactional layer.
+	pub fn start_transaction(&mut self) {
+		self.start_transaction_window.push(self.history.len());
+		self.history.push(TransactionState::TxPending);
+	}
+
+	/// Discard a transactional layer.
+	/// A transaction is always running (history always end with pending).
+	pub fn discard_transaction(&mut self) {
+		let mut i = self.history.len();
+		while i > self.commit {
+			i -= 1;
+			match self.history[i] {
+				TransactionState::Dropped => (),
+				TransactionState::Pending => {
+					self.history[i] = TransactionState::Dropped;
+				},
+				TransactionState::TxPending => {
+					self.history[i] = TransactionState::Dropped;
+					break;
+				},
+			}
+		}
+		self.history.push(TransactionState::Pending);
+		self.start_transaction_window.truncate(i);
+		let previous = self.start_transaction_window.last()
+			.cloned().unwrap_or(self.commit);
+		self.start_transaction_window.resize(self.history.len(), previous);
+	}
+
+	/// Commit a transactional layer.
+	pub fn commit_transaction(&mut self) {
+		let mut i = self.history.len();
+		while i > self.commit {
+			i -= 1;
+			match self.history[i] {
+				TransactionState::Pending
+				| TransactionState::Dropped => (),
+				TransactionState::TxPending => {
+					self.history[i] = TransactionState::Pending;
+					break;
+				},
+			}
+		}
+		self.history.push(TransactionState::Pending);
+		self.start_transaction_window.truncate(i);
+		let previous = self.start_transaction_window.last()
+			.cloned().unwrap_or(self.commit);
+		self.start_transaction_window.resize(self.history.len(), previous);
+	}
+}
+
+#[inline]
+/// Get previous index of pending state.
+///
+/// Used to say if it is possible to drop a committed transaction
+/// state value.
+/// Committed index is seen as a transaction state.
+pub fn transaction_start_windows(states: &States, from: usize) -> usize {
+	states.start_transaction_window[from]
+}
+
 /// Stack of values at different transactional layers.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Layers<V>(pub(crate) smallvec::SmallVec<[LayerEntry<V>; ALLOCATED_HISTORY]>);
 
+#[cfg(test)]
 /// Index of reserved layer for commited values.
 pub(crate) const COMMITTED_LAYER: usize = 0;
 
@@ -50,164 +217,246 @@ impl<V> From<(V, usize)> for LayerEntry<V> {
 }
 
 impl<V> LayerEntry<V> {
-	fn as_mut(&mut self) -> LayerEntry<&mut V> {
-		LayerEntry { value: &mut self.value, index: self.index }
+	fn as_ref(&self) -> LayerEntry<&V> {
+		LayerEntry { value: &self.value, index: self.index }
 	}
 }
 
-/// Possible results when updating `Layers` after a
-/// transaction operation.
-#[derive(Debug, PartialEq)]
-pub(crate) enum LayeredOpsResult {
-	/// No inner value or metadata change occurs,
-	/// therefore no update is needed.
-	Unchanged,
-	/// Byte representation did change.
-	Changed,
-	/// No data is stored anymore, `Layers` can be dropped.
-	Cleared,
-}
-
 impl<V> Layers<V> {
+	fn remove_until(&mut self, index: usize) {
+		if index > 0 {
+			if self.0.spilled() {
+				let owned = std::mem::replace(&mut self.0, Default::default());
+				self.0 = smallvec::SmallVec::from_vec(owned.into_vec().split_off(index));
+			} else {
+				for i in (0..index).rev() {
+					self.0.remove(i);
+				}
+			}
+		}
+	}
+
+	fn get_pending_unchecked(
+		&self,
+		states: &[TransactionState],
+		history_index: usize,
+	)	-> Option<LayerEntry<&V>> {
+		let LayerEntry { value, index } = self.0[history_index].as_ref();
+		match states[index] {
+			TransactionState::Dropped => (),
+			TransactionState::Pending
+			| TransactionState::TxPending =>
+				return Some(LayerEntry { value, index }),
+		}
+		None
+	}
+
 	/// Push a value without checking without transactional layer
 	/// consistency.
 	pub(crate) fn push_unchecked(&mut self, item: LayerEntry<V>) {
 		self.0.push(item);
 	}
 
-	/// Discard all prospective values, keeping previous committed value
-	/// only.
-	pub(crate) fn discard_prospective(&mut self) -> LayeredOpsResult {
-		if self.0.is_empty() {
-			return LayeredOpsResult::Cleared;
+	/// Access to the latest pending value (non dropped state).
+	/// When possible please prefer `get_mut` as it can free
+	/// some memory.
+	pub(crate) fn get(&self, states: &[TransactionState]) -> Option<&V> {
+		let self_len = self.0.len();
+		if self_len == 0 {
+			return None;
 		}
-		if self.0[0].index == COMMITTED_LAYER {
-			if self.0.len() == 1 {
-				LayeredOpsResult::Unchanged
+		debug_assert!(states.len() >= self_len);
+		for index in (0 .. self_len).rev() {
+			if let Some(h) = self.get_pending_unchecked(states, index) {
+				return Some(h.value);
+			}
+		}
+		None
+	}
+
+	/// Access to latest pending value (non dropped state).
+	///
+	/// This method removes latest dropped and merged values,
+	/// only keeping the latest valid value.
+	///
+	/// Returns mutable latest pending value.
+	pub(crate) fn get_mut(
+		&mut self,
+		states: &States,
+	) -> Option<LayerEntry<&mut V>> {
+		let self_len = self.0.len();
+		if self_len == 0 {
+			return None;
+		}
+		debug_assert!(states.history.len() >= self_len);
+		let mut result = None;
+		let mut start_transaction_window = usize::max_value();
+		let mut previous_switch = None;
+		for index in (0 .. self_len).rev() {
+			let state_index = self.0[index].index;
+			match states.history[state_index] {
+				TransactionState::TxPending => {
+					if state_index >= start_transaction_window {
+						previous_switch = Some(index);
+					} else {
+						if result.is_none() {
+							result = Some((index, state_index));
+						}
+					}
+					break;
+				},
+				TransactionState::Pending => {
+					if state_index >= start_transaction_window {
+						previous_switch = Some(index);
+					} else {
+						if result.is_none() {
+							result = Some((index, state_index));
+							start_transaction_window = transaction_start_windows(states, state_index);
+						} else {
+							break;
+						}
+					}
+				},
+				TransactionState::Dropped => (),
+			}
+		}
+		self.drop_last_values(result, previous_switch, 0)
+	}
+
+	/// Method to prune regarding a full state.
+	/// It also returns the last value as mutable.
+	/// Internally it acts like `get_mut` with an
+	/// additional cleaning capacity to clean committed
+	/// state if `prune_to_commit` is set to true.
+	pub(crate) fn get_mut_pruning(
+		&mut self,
+		states: &States,
+		prune_to_commit: bool,
+	) -> Option<LayerEntry<&mut V>> {
+		let self_len = self.0.len();
+		if self_len == 0 {
+			return None;
+		}
+		let mut prune_index = 0;
+		debug_assert!(states.history.len() >= self_len);
+		let mut result = None;
+		let mut start_transaction_window = usize::max_value();
+		let mut previous_switch = None;
+		for index in (0 .. self_len).rev() {
+			let state_index = self.0[index].index;
+			match states.history[state_index] {
+				state @ TransactionState::TxPending
+				| state @ TransactionState::Pending => {
+					if state_index < states.commit && index > prune_index {
+						prune_index = index;
+					}
+
+					if state_index >= start_transaction_window {
+						previous_switch = Some(index);
+					} else {
+						if result.is_none() {
+							result = Some((index, state_index));
+							if state == TransactionState::Pending {
+								start_transaction_window = transaction_start_windows(states, state_index);
+							}
+						} else {
+							if prune_to_commit {
+								if state_index < states.commit {
+									break;
+								}
+							} else {
+								break;
+							}
+						}
+					}
+				},
+				TransactionState::Dropped => (),
+			}
+		}
+		let deleted = if prune_to_commit && prune_index > 0 && result.is_some() {
+			self.remove_until(prune_index);
+			prune_index
+		} else {
+			0
+		};
+		self.drop_last_values(result, previous_switch, deleted)
+	}
+
+	// Function used to remove all last values for `get_mut` and
+	// `get_mut_pruning`.
+	//
+	// It expects the `result` of the iteration that lookup
+	// for the latest non dropped value (coupled with its state
+	// index). That is to remove terminal dropped states.
+	//
+	// It also does remove values on committed state that are
+	// not needed (before another committed value).
+	// `previous_switch` is the index to the first unneeded value.
+	//
+	// An index offset is here in case some content was `deleted` before
+	// this function call.
+	fn drop_last_values(
+		&mut self,
+		result: Option<(usize, usize)>,
+		previous_switch: Option<usize>,
+		deleted: usize,
+	) -> Option<LayerEntry<&mut V>> {
+		if let Some((index, state_index)) = result {
+			if index + 1 - deleted < self.0.len() {
+				self.0.truncate(index + 1 - deleted);
+			}
+			if let Some(switch_index) = previous_switch {
+				if let Some(mut value) = self.0.pop() {
+					self.0.truncate(switch_index - deleted);
+					value.index = state_index;
+					self.push_unchecked(value);
+				}
+				Some((&mut self.0[switch_index - deleted].value, state_index).into())
 			} else {
-				self.0.truncate(1);
-				LayeredOpsResult::Changed
+				Some((&mut self.0[index - deleted].value, state_index).into())
 			}
 		} else {
 			self.0.clear();
-			LayeredOpsResult::Cleared
-		}
-	}
-
-	/// Commits latest transaction pending value and clear existing transaction history.
-	pub fn commit_prospective(&mut self) -> LayeredOpsResult {
-		if self.0.is_empty() {
-			return LayeredOpsResult::Cleared;
-		}
-		if self.0.len() == 1 {
-			if self.0[0].index != COMMITTED_LAYER {
-				self.0[0].index = COMMITTED_LAYER;
-			} else {
-				return LayeredOpsResult::Unchanged;
-			}
-		} else if let Some(mut v) = self.0.pop() {
-			v.index = COMMITTED_LAYER;
-			self.0.clear();
-			self.0.push(v);
-		}
-		LayeredOpsResult::Changed
-	}
-
-	/// Access to the latest transactional value.
-	pub(crate) fn get(&self) -> Option<&V> {
-		self.0.last().map(|h| &h.value)
-	}
-
-	/// Returns mutable handle on latest pending historical value.
-	pub(crate) fn get_mut(&mut self) -> Option<LayerEntry<&mut V>> {
-		self.0.last_mut().map(|h| h.as_mut())
-	}
-
-	/// Set a new value, this function expect that
-	/// `number_transactions` is a valid state (can fail
-	/// otherwise).
-	pub(crate) fn set(&mut self, number_transactions: usize, value: V) {
-		if let Some(v) = self.0.last_mut() {
-			debug_assert!(v.index <= number_transactions,
-				"Layers expects \
-				only new values at the latest transaction \
-				this indicates some unsynchronized layer value.");
-			if v.index == number_transactions {
-				v.value = value;
-				return;
-			}
-		}
-		self.0.push(LayerEntry {
-			value,
-			index: number_transactions,
-		});
-	}
-
-	/// Extracts the committed value if there is one.
-	pub fn into_committed(mut self) -> Option<V> {
-		self.0.truncate(COMMITTED_LAYER + 1);
-		if let Some(LayerEntry {
-					value,
-					index: COMMITTED_LAYER,
-				}) = self.0.pop() {
-			return Some(value)
-		} else {
 			None
 		}
 	}
 
-	/// Commit all transaction layer that are stacked
-	/// over the layer at `number_transaction`.
-	pub fn commit_transaction(&mut self, number_transaction: usize) -> LayeredOpsResult {
-		let mut new_value = None;
-		// Iterate on layers to get latest layered value and remove
-		// unused layered values inbetween.
-		for i in (0 .. self.0.len()).rev() {
-			if self.0[i].index > COMMITTED_LAYER {
-				if self.0[i].index > number_transaction {
-					// Remove value from committed layer
-					if let Some(v) = self.0.pop() {
-						if new_value.is_none() {
-							new_value = Some(v.value);
-						}
-					}
-				} else if self.0[i].index == number_transaction && new_value.is_some() {
-					// Remove parent layer value (will be overwritten by `new_value`.
-					self.0.pop();
-				} else {
-					// Do not remove this is already a valid state.
-					break;
-				}
-			} else {
-				// Non transactional layer, stop removing history.
-				break;
+	/// Set a value, it uses a state history as parameter.
+	///
+	/// This method uses `get_mut` and does remove pending
+	/// dropped value.
+	pub(crate) fn set(&mut self, states: &States, value: V) {
+		let last_state_index = states.num_states() - 1;
+		if let Some(v) = self.get_mut(states) {
+			if v.index == last_state_index {
+				*v.value = value;
+				return;
 			}
+			debug_assert!(v.index < last_state_index, "Layers expects \
+				only new values at the latest state");
 		}
-		if let Some(new_value) = new_value {
-			self.0.push(LayerEntry {
-				value: new_value,
-				index: number_transaction,
-			});
-			return LayeredOpsResult::Changed;
-		}
-		LayeredOpsResult::Unchanged
+		self.push_unchecked(LayerEntry {
+			value,
+			index: last_state_index,
+		});
 	}
 
-	/// Discard value from transactional layers that are stacked over
-	/// the layer at `number_transaction`.
-	pub fn discard_transaction(&mut self, number_transaction: usize) -> LayeredOpsResult {
-		let init_len = self.0.len();
-		let truncate_index = self.0.iter().rev()
-			.position(|entry| entry.index <= number_transaction)
-			.unwrap_or(init_len);
-		self.0.truncate(init_len - truncate_index);
-		if self.0.is_empty() {
-			LayeredOpsResult::Cleared
-		} else if self.0.len() != init_len {
-			LayeredOpsResult::Changed
-		} else {
-			LayeredOpsResult::Unchanged
+	/// Extracts the committed value if there is one.
+	pub fn into_committed(mut self, states: &[TransactionState], committed: usize) -> Option<V> {
+		let self_len = self.0.len();
+		if self_len == 0 {
+			return None;
 		}
+		debug_assert!(states.len() >= self_len);
+		for index in (0 .. self_len).rev() {
+			if let Some(h) = self.get_pending_unchecked(states, index) {
+				if h.index < committed {
+						self.0.truncate(index + 1);
+						return self.0.pop().map(|v| v.value);
+				}
+			}
+		}
+		None
 	}
 }
 
@@ -224,38 +473,96 @@ impl<V> Layers<V> {
 
 	/// Get latest prospective value, excludes
 	/// committed values.
-	pub(crate) fn get_prospective(&self) -> Option<&V> {
-		match self.0.get(0) {
-			Some(entry) if entry.index == COMMITTED_LAYER => {
-				if let Some(entry) = self.0.get(1) {
-					if entry.index > COMMITTED_LAYER {
-						Some(&entry.value)
-					} else {
-						None
-					}
-				} else {
-					None
-				}
-			},
-			Some(entry) => Some(&entry.value),
-			None => None,
+	pub(crate) fn get_prospective(&self, states: &States) -> Option<&V> {
+		let self_len = self.len();
+		if self_len == 0 {
+			return None;
 		}
+		debug_assert!(states.history.len() >= self_len);
+		for index in (states.commit .. self_len).rev() {
+			if let Some(h) = self.get_pending_unchecked(states.history.as_ref(), index) {
+				return Some(h.value);
+			}
+		}
+		None
 	}
 
 	/// Get latest committed value.
-	pub(crate) fn get_committed(&self) -> Option<&V> {
-		if let Some(entry) = self.0.get(0) {
-			if entry.index == COMMITTED_LAYER {
-				return Some(&entry.value)
-			} else {
-				None
-			}
-		} else {
-			None
+	pub(crate) fn get_committed(&self, states: &States) -> Option<&V> {
+		let self_len = self.len();
+		if self_len == 0 {
+			return None;
 		}
+		debug_assert!(states.history.len() >= self_len);
+		for index in (0 .. self_len).rev() {
+			if let Some(h) = self.get_pending_unchecked(states.history.as_ref(), index) {
+				if h.index < states.commit {
+					return Some(h.value);
+				}
+			}
+		}
+		None
 	}
 }
 
+
+/// A default sample configuration to manage garbage collection
+/// triggering.
+pub(crate) const DEFAULT_GC_CONF: GCConfiguration = GCConfiguration {
+	trigger_transaction_gc: 1_000_000,
+	trigger_commit_gc: 100_000,
+	add_content_size_unit: 64,
+};
+
+/// Garbage collection configuration.
+/// It is designed to listen on two different operation, transaction
+/// and commit.
+/// It match transcational semantic with transaction for transaction
+/// operation and commit for prospective operation.
+/// Considering transaction can be manipulated in extrinsic, this option
+/// is quite unsafe and shoudl be use with care (the default value is
+/// explicitelly very high).
+/// More generally it should be very unlikelly that gc is needed
+/// during a block processing for most use case.
+///
+/// This is not a very good measurement and should be replace by
+/// heap measurement or other metrics, at this point the gc even
+/// if tested should not be required.
+pub(crate) struct GCConfiguration {
+	/// Treshold in number of operation before running a garbage collection.
+	///
+	/// Should be same as `TRIGGER_COMMIT_GC` or higher
+	/// (we most likely do not want lower as transaction are
+	/// possibly more frequent than commit).
+	pub trigger_transaction_gc: usize,
+
+	/// Treshold in number of operation before running a garbage colletion
+	/// on a commit operation.
+	///
+	/// We may want a lower value than for a transaction, even
+	/// a 1 if we want to do it between every operation.
+	pub trigger_commit_gc: usize,
+
+	/// Used to count big content as multiple operations.
+	/// This is a number of octet.
+	/// Set to 0 to ignore.
+	pub add_content_size_unit: usize,
+}
+
+impl GCConfiguration {
+	/// Cost depending on value if any.
+	pub fn operation_cost(&self, val: Option<&Vec<u8>>) -> usize {
+		let additional_cost = if self.add_content_size_unit > 0 {
+			if let Some(s) = val.as_ref() {
+				s.len() / self.add_content_size_unit
+			} else {
+				0
+			}
+		} else { 0 };
+		1 + additional_cost
+	}
+
+}
 /// Base code for fuzzing.
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod fuzz {
@@ -290,7 +597,6 @@ pub mod fuzz {
 				input_index += 1;
 				(*v).into()
 			} else { break };
-			//println!("{:?}", action);
 
 			actions.push(action);
 			match action {
@@ -338,6 +644,7 @@ pub mod fuzz {
 
 		if check_compactness {
 			let reference_size = ref_overlayed.total_length();
+			overlayed.gc(true);
 			let size = overlayed.top_count_keyvalue_pair();
 			if reference_size != size {
 				println!("inconsistent gc {} {}", size, reference_size);

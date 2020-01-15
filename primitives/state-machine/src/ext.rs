@@ -638,7 +638,7 @@ mod tests {
 				digest_levels: 0,
 			}),
 			changes: OverlayedChangeSet {
-				number_transactions: COMMITTED_LAYER + 1,
+				states: Default::default(),
 				children: Default::default(),
 				top: vec![
 					(EXTRINSIC_INDEX.to_vec(), Layers::from_iter(vec![
@@ -655,6 +655,8 @@ mod tests {
 					].into_iter().map(|(value, index)| LayerEntry { value, index }))),
 				].into_iter().collect(),
 			},
+			operation_from_last_gc: 0,
+			not_eager_gc: false,
 		}
 	}
 
