@@ -1472,6 +1472,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		who: PeerId,
 		request: message::RemoteReadRequest<B::Hash>,
 	) {
+		if request.keys.is_empty() {
+			debug!(target: "sync", "Invalid remote read request sent by {}", who);
+			self.behaviour.disconnect_peer(&who);
+			self.peerset_handle.report_peer(who, rep::BAD_MESSAGE);
+			return;
+		}
+
 		let keys_str = || match request.keys.len() {
 			1 => request.keys[0].to_hex::<String>(),
 			_ => format!(
@@ -1510,6 +1517,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		who: PeerId,
 		request: message::RemoteReadChildRequest<B::Hash>,
 	) {
+		if request.keys.is_empty() {
+			debug!(target: "sync", "Invalid remote child read request sent by {}", who);
+			self.behaviour.disconnect_peer(&who);
+			self.peerset_handle.report_peer(who, rep::BAD_MESSAGE);
+			return;
+		}
+
 		let keys_str = || match request.keys.len() {
 			1 => request.keys[0].to_hex::<String>(),
 			_ => format!(
