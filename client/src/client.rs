@@ -129,7 +129,7 @@ impl<H> PrePostHeader<H> {
 /// Create an instance of in-memory client.
 pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
-	genesis_storage: S,
+	genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
@@ -149,7 +149,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 pub fn new_with_backend<B, E, Block, S, RA>(
 	backend: Arc<B>,
 	executor: E,
-	build_genesis_storage: S,
+	build_genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
@@ -187,7 +187,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn new<S: BuildStorage>(
 		backend: Arc<B>,
 		executor: E,
-		build_genesis_storage: S,
+		build_genesis_storage: &S,
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
