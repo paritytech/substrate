@@ -21,7 +21,7 @@
 use crate::mock::*;
 use crate::{
 	elect, reduce, reduce_4, reduce_all, build_support_map, equalize,
-	Support, StakedAssignment, Assignment, PhragmenResult,
+	Support, StakedAssignment, Assignment, PhragmenResult, ExtendedBalance,
 };
 use substrate_test_utils::assert_eq_uvec;
 use sp_runtime::{Perbill, Saturating, traits::Convert};
@@ -833,7 +833,7 @@ fn self_votes_should_be_kept() {
 
 	let staked_assignments: Vec<StakedAssignment<AccountId>> = result.assignments
 		.into_iter()
-		.map(|a| a.into_staked::<_, TestCurrencyToVote, _>(&stake_of))
+		.map(|a| a.into_staked::<_, _, TestCurrencyToVote>(&stake_of))
 		.collect();
 
 	let (mut supports, _) = build_support_map::<
