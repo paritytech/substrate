@@ -419,7 +419,7 @@ fn run_one_test(
 			babe_link: data.link.clone(),
 			keystore,
 			can_author_with: sp_consensus::AlwaysCanAuthor,
-		}).expect("Starts babe"));
+		}).expect("Starts babe").unit_error().compat());
 	}
 
 	runtime.spawn(futures01::future::poll_fn(move || {
@@ -428,7 +428,7 @@ fn run_one_test(
 	}));
 
 	runtime.block_on(future::join_all(import_notifications)
-		.map(|_| Ok::<(), ()>(())).compat()).unwrap();
+		.unit_error().compat()).unwrap();
 }
 
 #[test]

@@ -14,8 +14,7 @@ sc-client-api = { version = "2.0.0", path = "../../api" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
 derive_more = "0.99.2"
-futures = { version = "0.3.1", features = ["compat"] }
-futures01 = { package = "futures", version = "0.1" }
+futures = "0.3.1"
 futures-timer = "0.4.0"
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
 sc-keystore = { version = "2.0.0", path = "../../keystore" }
@@ -41,3 +40,4 @@ substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils
 tokio = "0.1.22"
 env_logger = "0.7.0"
 tempfile = "3.1.0"
+futures01 = { package = "futures", version = "0.1" }
