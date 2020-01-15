@@ -20,23 +20,21 @@
 #![warn(unused_extern_crates)]
 
 mod api;
-mod full_pool;
 pub mod error;
 
 #[cfg(test)]
 mod tests;
 
-pub use full_pool::FullPool;
 pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 
 use std::{collections::HashMap, sync::Arc, pin::Pin, time::Instant};
-use futures::{Future, FutureExt, future::{ready, join}};
+use futures::{Future, FutureExt, future::ready};
 use parking_lot::Mutex;
 
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Extrinsic, Header, NumberFor, SimpleArithmetic},
+	traits::{Block as BlockT, NumberFor, SimpleArithmetic},
 };
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream,
@@ -52,7 +50,22 @@ pub struct BasicPool<PoolApi, Block>
 {
 	pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 	api: Arc<PoolApi>,
-	revalidation_status: Arc<Mutex<TxPoolRevalidationStatus<NumberFor<Block>>>>,
+	revalidation_strategy: Arc<Mutex<RevalidationStrategy<NumberFor<Block>>>>,
+}
+
+/// Type of revalidation.
+pub enum RevalidationType {
+	/// Light revalidation type.
+	///
+	/// During maintaince, transaction pool makes periodic revalidation
+	/// depending on number of blocks or time passed.
+	Light,
+
+	/// Full revalidation type.
+	///
+	/// During maintaince, transaction pool revalidates some transactions
+	/// from the pool of valid transactions.
+	Full,
 }
 
 impl<PoolApi, Block> BasicPool<PoolApi, Block>
@@ -61,19 +74,43 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
 {
 	/// Create new basic transaction pool with provided api.
-	pub fn new(options: sc_transaction_graph::Options, pool_api: PoolApi) -> Self {
+	pub fn new(
+		options: sc_transaction_graph::Options,
+		pool_api: PoolApi,
+	) -> Self {
+		Self::with_revalidation_type(options, pool_api, RevalidationType::Full)
+	}
+
+	/// Create new basic transaction pool with provided api and custom
+	/// revalidation type.
+	pub fn with_revalidation_type(
+		options: sc_transaction_graph::Options,
+		pool_api: PoolApi,
+		revalidation_type: RevalidationType,
+	) -> Self {
 		let api = Arc::new(pool_api);
 		let cloned_api = api.clone();
 		BasicPool {
 			api: cloned_api,
 			pool: Arc::new(sc_transaction_graph::Pool::new(options, api)),
-			revalidation_status: Arc::new(Mutex::new(TxPoolRevalidationStatus::NotScheduled)),
+			revalidation_strategy: Arc::new(Mutex::new(
+				match revalidation_type {
+					RevalidationType::Light => RevalidationStrategy::Light(RevalidationStatus::NotScheduled),
+					RevalidationType::Full => RevalidationStrategy::Always,
+				}
+			)),
 		}
+
 	}
 
 	/// Gets shared reference to the underlying pool.
 	pub fn pool(&self) -> &Arc<sc_transaction_graph::Pool<PoolApi>> {
 		&self.pool
+	}
+
+	#[cfg(test)]
+	pub fn api(&self) -> &Arc<PoolApi> {
+		&self.api
 	}
 }
 
@@ -140,7 +177,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 }
 
 #[cfg_attr(test, derive(Debug))]
-enum TxPoolRevalidationStatus<N> {
+enum RevalidationStatus<N> {
 	/// The revalidation has never been completed.
 	NotScheduled,
 	/// The revalidation is scheduled.
@@ -149,10 +186,43 @@ enum TxPoolRevalidationStatus<N> {
 	InProgress,
 }
 
-impl<N: Clone + Copy + SimpleArithmetic> TxPoolRevalidationStatus<N> {
+enum RevalidationStrategy<N> {
+	Always,
+	Light(RevalidationStatus<N>)
+}
+
+impl<N: Clone + Copy + SimpleArithmetic> RevalidationStrategy<N> {
+	pub fn clear(&mut self) {
+		if let Self::Light(status) = self { status.clear() }
+	}
+
+	pub fn resubmit_required(&mut self) -> bool {
+		if let Self::Light(_) = self { return false } else { return true }
+	}
+
+	pub fn is_required(
+		&mut self,
+		block: N,
+		revalidate_time_period: Option<std::time::Duration>,
+		revalidate_block_period: Option<N>,
+	) -> bool {
+		if let Self::Light(status) = self {
+			status.is_required(block, revalidate_time_period, revalidate_block_period)
+		} else { true }
+	}
+
+	pub fn amount(&self) -> Option<usize> {
+		match self {
+			Self::Light(_) => None,
+			Self::Always => Some(16),
+		}
+	}
+}
+
+impl<N: Clone + Copy + SimpleArithmetic> RevalidationStatus<N> {
 	/// Called when revalidation is completed.
 	pub fn clear(&mut self) {
-		*self = TxPoolRevalidationStatus::NotScheduled;
+		*self = Self::NotScheduled;
 	}
 
 	/// Returns true if revalidation is required.
@@ -163,22 +233,22 @@ impl<N: Clone + Copy + SimpleArithmetic> TxPoolRevalidationStatus<N> {
 		revalidate_block_period: Option<N>,
 	) -> bool {
 		match *self {
-			TxPoolRevalidationStatus::NotScheduled => {
-				*self = TxPoolRevalidationStatus::Scheduled(
+			Self::NotScheduled => {
+				*self = Self::Scheduled(
 					revalidate_time_period.map(|period| Instant::now() + period),
 					revalidate_block_period.map(|period| block + period),
 				);
 				false
 			},
-			TxPoolRevalidationStatus::Scheduled(revalidate_at_time, revalidate_at_block) => {
+			Self::Scheduled(revalidate_at_time, revalidate_at_block) => {
 				let is_required = revalidate_at_time.map(|at| Instant::now() >= at).unwrap_or(false)
 					|| revalidate_at_block.map(|at| block >= at).unwrap_or(false);
 				if is_required {
-					*self = TxPoolRevalidationStatus::InProgress;
+					*self = Self::InProgress;
 				}
 				is_required
 			},
-			TxPoolRevalidationStatus::InProgress => false,
+			Self::InProgress => false,
 		}
 	}
 }
@@ -189,33 +259,41 @@ where
 	PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash, Error=error::Error>,
 {
 	fn maintain(&self, id: &BlockId<Self::Block>, retracted: &[BlockHash<Self>]) -> Pin<Box<dyn Future<Output=()> + Send>> {
-		// basic pool revalidates everything in place (TODO: only if certain time has passed)
-		let header = self.api.block_header(id)
-			.and_then(|h| h.ok_or(error::Error::Blockchain(sp_blockchain::Error::UnknownBlock(format!("{}", id)))));
-		let header = match header {
-			Ok(header) => header,
-			Err(err) => {
-				log::warn!("Failed to maintain basic tx pool - no header in chain! {:?}", err);
-				return Box::pin(ready(()))
-			}
-		};
-
 		let id = id.clone();
 		let pool = self.pool.clone();
 		let api = self.api.clone();
-		let is_revalidation_required = self.revalidation_status.lock().is_required(
-			*header.number(),
-			Some(std::time::Duration::from_secs(60)),
-			Some(20.into()),
-		);
-		let revalidation_status = self.revalidation_status.clone();
+
+		let block_number = match api.block_id_to_number(&id) {
+			Ok(Some(number)) => number,
+			_ => {
+				log::trace!(target: "txqueue", "Skipping chain event - no numbrer for that block {:?}", id);
+				return Box::pin(ready(()));
+			}
+		};
+
+		let (is_revalidation_required, is_resubmit_required) = {
+			let mut lock = self.revalidation_strategy.lock();
+			(
+				lock.is_required(
+					block_number,
+					Some(std::time::Duration::from_secs(60)),
+					Some(20.into()),
+				),
+				lock.resubmit_required()
+			)
+		};
+
+		let revalidation_status = self.revalidation_strategy.clone();
+		let revalidation_amount = revalidation_status.lock().amount();
+		let retracted = retracted.to_vec();
 
 		async move {
 			let hashes = api.block_body(&id).await
 				.unwrap_or_else(|e| {
 					log::warn!("Prune known transactions: error request {:?}!", e);
-					vec![]
+					None
 				})
+				.unwrap_or(Vec::new())
 				.into_iter()
 				.map(|tx| pool.hash_of(&tx))
 				.collect::<Vec<_>>();
@@ -224,8 +302,26 @@ where
 				log::warn!("Cannot prune known in the pool {:?}!", e);
 			}
 
+			if is_resubmit_required {
+				let mut resubmit_transactions = Vec::new();
+
+				for retracted_hash in retracted.into_iter() {
+					let txes = api.block_body(&BlockId::hash(retracted_hash.clone())).await
+						.unwrap_or(None)
+						.unwrap_or(Vec::new());
+					for tx in txes {
+						resubmit_transactions.push(tx)
+					}
+				}
+				if let Err(e) = pool.submit_at(&id, resubmit_transactions, true).await {
+					log::debug!(target: "txpool",
+						"[{:?}] Error re-submitting transactions: {:?}", id, e
+					)
+				}
+			}
+
 			if is_revalidation_required {
-				if let Err(e) = pool.revalidate_ready(&id, None).await {
+				if let Err(e) = pool.revalidate_ready(&id, revalidation_amount).await {
 					log::warn!("revalidate ready failed {:?}", e);
 				}
 			}

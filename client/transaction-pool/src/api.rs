@@ -24,7 +24,8 @@ use futures::{
 
 use sc_client_api::{
 	blockchain::HeaderBackend,
-	light::{Fetcher, RemoteCallRequest}
+	light::{Fetcher, RemoteCallRequest, RemoteBodyRequest},
+	BlockBody,
 };
 use sp_core::Hasher;
 use sp_runtime::{
@@ -63,7 +64,7 @@ impl<Client, Block> FullChainApi<Client, Block> where
 
 impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block> where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockIdTo<Block> + 'static + Send + Sync,
+	Client: ProvideRuntimeApi<Block> + BlockBody<Block> + BlockIdTo<Block> + 'static + Send + Sync,
 	Client::Api: TaggedTransactionQueue<Block>,
 	sp_api::ApiErrorFor<Client, Block>: Send,
 {
@@ -71,14 +72,12 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 	type Hash = Block::Hash;
 	type Error = error::Error;
 	type ValidationFuture = Pin<Box<dyn Future<Output = error::Result<TransactionValidity>> + Send>>;
-	type BodyFuture = Pin<Box<dyn Future<Output = error::Result<Vec<<Self::Block as BlockT>::Extrinsic>>> + Send>>;
+	type BodyFuture = Pin<Box<dyn Future<Output = error::Result<Option<Vec<<Self::Block as BlockT>::Extrinsic>>>> + Send>>;
 
-	fn block_header(&self, at: &BlockId<Self::Block>) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
-		Ok(None)
-	}
-
-	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture {
-		Box::pin(ready(Ok(Vec::new())))
+	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
+		Box::pin(ready(
+			self.client.block_body(&id).map_err(|e| error::Error::from(e))
+		))
 	}
 
 	fn validate_transaction(
@@ -158,7 +157,7 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, 
 	type Hash = Block::Hash;
 	type Error = error::Error;
 	type ValidationFuture = Box<dyn Future<Output = error::Result<TransactionValidity>> + Send + Unpin>;
-	type BodyFuture = Pin<Box<dyn Future<Output = error::Result<Vec<<Self::Block as BlockT>::Extrinsic>>> + Send>>;
+	type BodyFuture = Pin<Box<dyn Future<Output = error::Result<Option<Vec<<Self::Block as BlockT>::Extrinsic>>>> + Send>>;
 
 	fn validate_transaction(
 		&self,
@@ -208,11 +207,27 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, 
 		})
 	}
 
-	fn block_header(&self, at: &BlockId<Self::Block>) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
-		Ok(None)
-	}
+	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
+		let header = self.client.header(*id)
+			.and_then(|h| h.ok_or(sp_blockchain::Error::UnknownBlock(format!("{}", id))));
+		let header = match header {
+			Ok(header) => header,
+			Err(err) => {
+				log::warn!(target: "txpool", "Failed to query header: {:?}", err);
+				return Box::pin(ready(Ok(None)));
+			}
+		};
 
-	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture {
-		Box::pin(ready(Ok(Vec::new())))
+		let fetcher = self.fetcher.clone();
+		async move {
+			let transactions = fetcher.remote_body({
+				RemoteBodyRequest {
+					header,
+					retry_count: None,
+				}
+			}).await;
+
+			Ok(Some(transactions.unwrap_or(Vec::new())))
+		}.boxed()
 	}
 }

@@ -226,6 +226,7 @@ pub trait TransactionPool: Send + Sync {
 	fn hash_of(&self, xt: &TransactionFor<Self>) -> TxHash<Self>;
 }
 
+/// Trait for transaction pool maintaince.
 pub trait MaintainedTransactionPool : TransactionPool {
 	/// Perform maintaince
 	fn maintain(&self, block: &BlockId<Self::Block>, retracted: &[BlockHash<Self>])
