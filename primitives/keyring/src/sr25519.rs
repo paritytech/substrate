@@ -113,6 +113,23 @@ impl From<Keyring> for sp_runtime::MultiSigner {
 	}
 }
 
+#[derive(Debug)]
+pub struct ParseKeyringError;
+
+impl std::fmt::Display for ParseKeyringError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "ParseKeyringError")
+	}
+}
+
+impl std::str::FromStr for Keyring {
+	type Err = ParseKeyringError;
+
+	fn from_str(_: &str) -> Result<Self, <Self as std::str::FromStr>::Err> {
+		todo!();
+	}
+}
+
 lazy_static! {
 	static ref PRIVATE_KEYS: HashMap<Keyring, Pair> = {
 		Keyring::iter().map(|i| (i, i.pair())).collect()

@@ -16,7 +16,7 @@
 
 use std::{fs, env, path::Path};
 use structopt::{StructOpt, clap::Shell};
-use sc_cli::{NoCustom, CoreParams};
+use sc_cli::CoreParams;
 use vergen::{ConstantsFlags, generate_cargo_keys};
 
 fn main() {
@@ -48,5 +48,5 @@ fn build_completion(shell: &Shell) {
 
 	fs::create_dir(&path).ok();
 
-	CoreParams::<NoCustom, NoCustom>::clap().gen_completions("substrate-node", *shell, &path);
+	CoreParams::clap().gen_completions("substrate-node", *shell, &path);
 }

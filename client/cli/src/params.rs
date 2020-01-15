@@ -613,37 +613,9 @@ lazy_static::lazy_static! {
 }
 
 /// Wrapper for exposing the keyring test accounts into the Cli.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, StructOpt)]
 pub struct Keyring {
 	pub account: Option<sp_keyring::Sr25519Keyring>,
-}
-
-impl StructOpt for Keyring {
-	fn clap<'a, 'b>() -> App<'a, 'b> {
-		unimplemented!("Should not be called for `TestAccounts`.")
-	}
-
-	fn from_clap(m: &structopt::clap::ArgMatches) -> Self {
-		Keyring {
-			account: TEST_ACCOUNTS_CLI_VALUES.iter().find(|a| m.is_present(&a.name)).map(|a| a.variant),
-		}
-	}
-}
-
-impl StructOptInternal for Keyring {
-	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
-		TEST_ACCOUNTS_CLI_VALUES.iter().fold(app, |app, a| {
-			let conflicts_with_strs = a.conflicts_with.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-
-			app.arg(
-				Arg::with_name(&a.name)
-					.long(&a.name)
-					.help(&a.help)
-					.conflicts_with_all(&conflicts_with_strs)
-					.takes_value(false)
-			)
-		})
-	}
 }
 
 /// Default to verbosity level 0, if none is provided.
@@ -858,10 +830,10 @@ pub struct PurgeChainCmd {
 /// The core commands are split into multiple subcommands and `Run` is the default subcommand. From
 /// the CLI user perspective, it is not visible that `Run` is a subcommand. So, all parameters of
 /// `Run` are exported as main executable parameters.
-#[derive(Debug, Clone)]
-pub enum CoreParams<CC, RP> {
+#[derive(Debug, Clone, StructOpt)]
+pub enum CoreParams {
 	/// Run a node.
-	Run(MergeParameters<RunCmd, RP>),
+	Run(RunCmd),
 
 	/// Build a spec.json file, outputing to stdout.
 	BuildSpec(BuildSpecCmd),
@@ -880,65 +852,6 @@ pub enum CoreParams<CC, RP> {
 
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
-
-	/// Further custom subcommands.
-	Custom(CC),
-}
-
-impl<CC, RP> StructOpt for CoreParams<CC, RP> where
-	CC: StructOpt + GetSharedParams,
-	RP: StructOpt + StructOptInternal,
-{
-	fn clap<'a, 'b>() -> App<'a, 'b> {
-		RP::augment_clap(
-			RunCmd::augment_clap(
-				CC::clap().unset_setting(AppSettings::SubcommandRequiredElseHelp)
-			)
-		).subcommand(
-			BuildSpecCmd::augment_clap(SubCommand::with_name("build-spec"))
-				.about("Build a spec.json file, outputting to stdout.")
-		)
-		.subcommand(
-			ExportBlocksCmd::augment_clap(SubCommand::with_name("export-blocks"))
-				.about("Export blocks to a file. This file can only be re-imported \
-						if it is in binary format (not JSON!)."
-					)
-		)
-		.subcommand(
-			ImportBlocksCmd::augment_clap(SubCommand::with_name("import-blocks"))
-				.about("Import blocks from file.")
-		)
-		.subcommand(
-			CheckBlockCmd::augment_clap(SubCommand::with_name("check-block"))
-				.about("Re-validate a known block.")
-		)
-		.subcommand(
-			RevertCmd::augment_clap(SubCommand::with_name("revert"))
-				.about("Revert chain to the previous state.")
-		)
-		.subcommand(
-			PurgeChainCmd::augment_clap(SubCommand::with_name("purge-chain"))
-				.about("Remove the whole chain data.")
-		)
-	}
-
-	fn from_clap(matches: &::structopt::clap::ArgMatches) -> Self {
-		match matches.subcommand() {
-			("build-spec", Some(matches)) =>
-				CoreParams::BuildSpec(BuildSpecCmd::from_clap(matches)),
-			("export-blocks", Some(matches)) =>
-				CoreParams::ExportBlocks(ExportBlocksCmd::from_clap(matches)),
-			("import-blocks", Some(matches)) =>
-				CoreParams::ImportBlocks(ImportBlocksCmd::from_clap(matches)),
-			("check-block", Some(matches)) =>
-				CoreParams::CheckBlock(CheckBlockCmd::from_clap(matches)),
-			("revert", Some(matches)) => CoreParams::Revert(RevertCmd::from_clap(matches)),
-			("purge-chain", Some(matches)) =>
-				CoreParams::PurgeChain(PurgeChainCmd::from_clap(matches)),
-			(_, None) => CoreParams::Run(MergeParameters::from_clap(matches)),
-			_ => CoreParams::Custom(CC::from_clap(matches)),
-		}
-	}
 }
 
 /// A special commandline parameter that expands to nothing.
@@ -956,36 +869,8 @@ impl StructOpt for NoCustom {
 	}
 }
 
-impl StructOptInternal for NoCustom {
-	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
-		app
-	}
-}
-
 impl GetSharedParams for NoCustom {
 	fn shared_params(&self) -> Option<&SharedParams> {
 		None
-	}
-}
-
-/// Merge all CLI parameters of `L` and `R` into the same level.
-#[derive(Clone, Debug)]
-pub struct MergeParameters<L, R> {
-	/// The left side parameters.
-	pub left: L,
-	/// The right side parameters.
-	pub right: R,
-}
-
-impl<L, R> StructOpt for MergeParameters<L, R> where L: StructOpt + StructOptInternal, R: StructOpt {
-	fn clap<'a, 'b>() -> App<'a, 'b> {
-		L::augment_clap(R::clap())
-	}
-
-	fn from_clap(matches: &::structopt::clap::ArgMatches) -> Self {
-		MergeParameters {
-			left: L::from_clap(matches),
-			right: R::from_clap(matches),
-		}
 	}
 }

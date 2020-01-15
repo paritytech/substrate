@@ -53,7 +53,7 @@ use structopt::{StructOpt, StructOptInternal, clap::AppSettings};
 pub use structopt::clap::App;
 use params::{
 	RunCmd, PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
-	NetworkConfigurationParams, MergeParameters, TransactionPoolParams,
+	NetworkConfigurationParams, TransactionPoolParams,
 	NodeKeyParams, NodeKeyType, Cors, CheckBlockCmd,
 };
 pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy};
@@ -190,14 +190,12 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 /// `RP` are custom parameters for the run command. This needs to be a `struct`! The custom
 /// parameters are visible to the user as if they were normal run command parameters. If no custom
 /// parameters are required, `NoCustom` can be used as type here.
-pub fn parse_and_prepare<'a, CC, RP, I>(
+pub fn parse_and_prepare<'a, I>(
 	version: &'a VersionInfo,
 	impl_name: &'static str,
 	args: I,
-) -> ParseAndPrepare<'a, CC, RP>
+) -> ParseAndPrepare<'a>
 where
-	CC: StructOpt + Clone + GetSharedParams,
-	RP: StructOpt + Clone + StructOptInternal,
 	I: IntoIterator,
 	<I as IntoIterator>::Item: Into<std::ffi::OsString> + Clone,
 {
@@ -207,7 +205,7 @@ where
 	);
 
 	sp_panic_handler::set(version.support_url, &full_version);
-	let matches = CoreParams::<CC, RP>::clap()
+	let matches = CoreParams::clap()
 		.name(version.executable_name)
 		.author(version.author)
 		.about(version.description)
@@ -216,7 +214,7 @@ where
 		.setting(AppSettings::ArgsNegateSubcommands)
 		.setting(AppSettings::SubcommandsNegateReqs)
 		.get_matches_from(args);
-	let cli_args = CoreParams::<CC, RP>::from_clap(&matches);
+	let cli_args = CoreParams::from_clap(&matches);
 	fdlimit::raise_fd_limit();
 
 	let args = match cli_args {
@@ -241,7 +239,6 @@ where
 		params::CoreParams::Revert(params) => ParseAndPrepare::RevertChain(
 			ParseAndPrepareRevert { params, version }
 		),
-		params::CoreParams::Custom(params) => ParseAndPrepare::CustomCommand(params),
 	};
 	init_logger(args.shared_params().and_then(|p| p.log.as_ref()).map(|v| v.as_ref()).unwrap_or(""));
 	args
@@ -260,9 +257,9 @@ pub fn display_role<A, B, C>(config: &Configuration<A, B, C>) -> String {
 
 /// Output of calling `parse_and_prepare`.
 #[must_use]
-pub enum ParseAndPrepare<'a, CC, RP> {
+pub enum ParseAndPrepare<'a> {
 	/// Command ready to run the main client.
-	Run(ParseAndPrepareRun<'a, RP>),
+	Run(ParseAndPrepareRun<'a>),
 	/// Command ready to build chain specs.
 	BuildSpec(ParseAndPrepareBuildSpec<'a>),
 	/// Command ready to export the chain.
@@ -275,27 +272,24 @@ pub enum ParseAndPrepare<'a, CC, RP> {
 	PurgeChain(ParseAndPreparePurge<'a>),
 	/// Command ready to revert the chain.
 	RevertChain(ParseAndPrepareRevert<'a>),
-	/// An additional custom command passed to `parse_and_prepare`.
-	CustomCommand(CC),
 }
 
-impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> where CC: GetSharedParams {
+impl<'a> ParseAndPrepare<'a> {
 	/// Return common set of parameters shared by all commands.
 	pub fn shared_params(&self) -> Option<&SharedParams> {
 		match self {
-			ParseAndPrepare::Run(c) => Some(&c.params.left.shared_params),
+			ParseAndPrepare::Run(c) => Some(&c.params.shared_params),
 			ParseAndPrepare::BuildSpec(c) => Some(&c.params.shared_params),
 			ParseAndPrepare::ExportBlocks(c) => Some(&c.params.shared_params),
 			ParseAndPrepare::ImportBlocks(c) => Some(&c.params.shared_params),
 			ParseAndPrepare::CheckBlock(c) => Some(&c.params.shared_params),
 			ParseAndPrepare::PurgeChain(c) => Some(&c.params.shared_params),
 			ParseAndPrepare::RevertChain(c) => Some(&c.params.shared_params),
-			ParseAndPrepare::CustomCommand(c) => c.shared_params(),
 		}
 	}
 }
 
-impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
+impl<'a> ParseAndPrepare<'a> {
 	/// Convert ParseAndPrepare to Configuration
 	pub fn into_configuration<C, G, E, S>(
 		self,
@@ -310,7 +304,7 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
 		match self {
 			ParseAndPrepare::Run(c) =>
 				Some(create_run_node_config(
-					c.params.left,
+					c.params,
 					spec_factory,
 					c.impl_name,
 					c.version
@@ -354,19 +348,18 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
 					&c.params.shared_params,
 					c.version,
 				)).transpose(),
-			ParseAndPrepare::CustomCommand(_) => Ok(None),
 		}
 	}
 }
 
 /// Command ready to run the main client.
-pub struct ParseAndPrepareRun<'a, RP> {
-	params: MergeParameters<RunCmd, RP>,
+pub struct ParseAndPrepareRun<'a> {
+	params: RunCmd,
 	impl_name: &'static str,
 	version: &'a VersionInfo,
 }
 
-impl<'a, RP> ParseAndPrepareRun<'a, RP> {
+impl<'a> ParseAndPrepareRun<'a> {
 	/// Runs the command and runs the main client.
 	pub fn run<C, G, CE, S, Exit, RS, E>(
 		self,
@@ -377,18 +370,17 @@ impl<'a, RP> ParseAndPrepareRun<'a, RP> {
 	where
 		S: FnOnce(&str) -> Result<Option<ChainSpec<G, CE>>, String>,
 		E: Into<error::Error>,
-		RP: StructOpt + Clone,
 		C: Default,
 		G: RuntimeGenesis,
 		CE: ChainSpecExtension,
 		Exit: IntoExit,
-		RS: FnOnce(Exit, RunCmd, RP, Configuration<C, G, CE>) -> Result<(), E>
+		RS: FnOnce(Exit, RunCmd, Configuration<C, G, CE>) -> Result<(), E>
 	{
 		let config = create_run_node_config(
-			self.params.left.clone(), spec_factory, self.impl_name, self.version,
+			self.params.clone(), spec_factory, self.impl_name, self.version,
 		)?;
 
-		run_service(exit, self.params.left, self.params.right, config).map_err(Into::into)
+		run_service(exit, self.params, config).map_err(Into::into)
 	}
 }
 
@@ -1361,16 +1353,15 @@ mod tests {
 		};
 		let spec_factory = |_: &str| Ok(Some(chain_spec.clone()));
 
-		let args = vec!["substrate", "--dev", "--state-cache-size=42"];
-		let pnp = parse_and_prepare::<NoCustom, NoCustom, _>(&version, "test", args);
+		let args = vec!["substrate", "run", "--dev", "--state-cache-size=42"];
+		let pnp = parse_and_prepare(&version, "test", args);
 		let config = pnp.into_configuration::<(), _, _, _>(spec_factory).unwrap().unwrap();
 		assert_eq!(config.roles, sc_service::Roles::AUTHORITY);
 		assert_eq!(config.state_cache_size, 42);
 
 		let args = vec!["substrate", "import-blocks", "--dev"];
-		let pnp = parse_and_prepare::<NoCustom, NoCustom, _>(&version, "test", args);
+		let pnp = parse_and_prepare(&version, "test", args);
 		let config = pnp.into_configuration::<(), _, _, _>(spec_factory).unwrap().unwrap();
-		// NOTE: only RunCmd (no subcommand) knows --dev
 		assert_eq!(config.roles, sc_service::Roles::FULL);
 	}
 }

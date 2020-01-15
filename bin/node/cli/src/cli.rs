@@ -21,7 +21,7 @@ use sc_cli::{IntoExit, NoCustom, SharedParams, ImportParams, error};
 use sc_service::{AbstractService, Roles as ServiceRoles, Configuration};
 use log::info;
 use structopt::StructOpt;
-use sc_cli::{display_role, parse_and_prepare, GetSharedParams, ParseAndPrepare};
+use sc_cli::{display_role, parse_and_prepare, GetSharedParams, ParseAndPrepare, CoreParams};
 use crate::{service, ChainSpec, load_spec};
 use crate::factory_impl::FactoryState;
 use node_transaction_factory::RuntimeAdapter;
@@ -36,6 +36,12 @@ pub enum CustomSubcommands {
 		Only supported for development or local testnet."
 	)]
 	Factory(FactoryCmd),
+}
+
+#[derive(Clone, Debug, StructOpt)]
+struct Cli {
+	#[structopt(subcommand)]
+	custom_subcommands: Option<CustomSubcommands>,
 }
 
 impl GetSharedParams for CustomSubcommands {
@@ -96,9 +102,52 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 {
 	type Config<A, B> = Configuration<(), A, B>;
 
-	match parse_and_prepare::<CustomSubcommands, NoCustom, _>(&version, "substrate-node", args) {
+	let clap = Cli::clap();
+	let core_clap = CoreParams::clap();
+	let clap = clap.subcommands(core_clap.p.subcommands);
+	let opt = clap.get_matches_from(args);
+	//let opt = Cli::from_iter(args);
+	panic!("{:?}", opt);
+
+	panic!("boo");
+	/*
+		CustomSubcommands::Factory(cli_args) => {
+			let mut config: Config<_, _> = sc_cli::create_config_with_db_path(
+				load_spec,
+				&cli_args.shared_params,
+				&version,
+			)?;
+
+			sc_cli::fill_import_params(&mut config, &cli_args.import_params, ServiceRoles::FULL)?;
+
+			match ChainSpec::from(config.chain_spec.id()) {
+				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
+				_ => panic!("Factory is only supported for development and local testnet."),
+			}
+
+			let factory_state = FactoryState::new(
+				cli_args.mode.clone(),
+				cli_args.num,
+				cli_args.rounds,
+			);
+
+			let service_builder = new_full_start!(config).0;
+			node_transaction_factory::factory::<FactoryState<_>, _, _, _, _, _>(
+				factory_state,
+				service_builder.client(),
+				service_builder.select_chain()
+					.expect("The select_chain is always initialized by new_full_start!; QED")
+			).map_err(|e| format!("Error in transaction factory: {}", e))?;
+
+			Ok(())
+		},
+	*/
+
+	panic!("boo");
+
+	match parse_and_prepare(&version, "substrate-node", args) {
 		ParseAndPrepare::Run(cmd) => cmd.run(load_spec, exit,
-		|exit, _cli_args, _custom_args, config: Config<_, _>| {
+		|exit, _cli_args, config: Config<_, _>| {
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
 			info!("  by Parity Technologies, 2017-2019");
@@ -130,36 +179,6 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 		ParseAndPrepare::PurgeChain(cmd) => cmd.run(load_spec),
 		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder(|config: Config<_, _>|
 			Ok(new_full_start!(config).0), load_spec),
-		ParseAndPrepare::CustomCommand(CustomSubcommands::Factory(cli_args)) => {
-			let mut config: Config<_, _> = sc_cli::create_config_with_db_path(
-				load_spec,
-				&cli_args.shared_params,
-				&version,
-			)?;
-
-			sc_cli::fill_import_params(&mut config, &cli_args.import_params, ServiceRoles::FULL)?;
-
-			match ChainSpec::from(config.chain_spec.id()) {
-				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
-				_ => panic!("Factory is only supported for development and local testnet."),
-			}
-
-			let factory_state = FactoryState::new(
-				cli_args.mode.clone(),
-				cli_args.num,
-				cli_args.rounds,
-			);
-
-			let service_builder = new_full_start!(config).0;
-			node_transaction_factory::factory::<FactoryState<_>, _, _, _, _, _>(
-				factory_state,
-				service_builder.client(),
-				service_builder.select_chain()
-					.expect("The select_chain is always initialized by new_full_start!; QED")
-			).map_err(|e| format!("Error in transaction factory: {}", e))?;
-
-			Ok(())
-		}
 	}
 }
 
