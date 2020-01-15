@@ -20,7 +20,7 @@ use crate::state_machine::{ConsensusGossip, TopicNotification};
 use sc_network::message::generic::ConsensusMessage;
 use sc_network::{Event, ReputationChange};
 
-use futures::{prelude::*, channel::mpsc, compat::Compat01As03, task::SpawnExt as _};
+use futures::{prelude::*, channel::mpsc, task::SpawnExt as _};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
@@ -50,7 +50,7 @@ impl<B: BlockT> GossipEngine<B> {
 
 		// We grab the event stream before registering the notifications protocol, otherwise we
 		// might miss events.
-		let event_stream = network.event_stream();
+		let mut event_stream = network.event_stream();
 
 		network.register_notifications_protocol(engine_id);
 		state_machine.register_validator(&mut network, engine_id, validator);
@@ -89,8 +89,7 @@ impl<B: BlockT> GossipEngine<B> {
 		}
 
 		let res = executor.spawn(async move {
-			let mut stream = Compat01As03::new(event_stream);
-			while let Some(Ok(event)) = stream.next().await {
+			while let Some(event) = event_stream.next().await {
 				match event {
 					Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, roles } => {
 						if msg_engine_id != engine_id {

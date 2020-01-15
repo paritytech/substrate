@@ -38,7 +38,7 @@ use parking_lot::Mutex;
 use sc_client::Client;
 use exit_future::Signal;
 use futures::{
-	Future, FutureExt, Stream, StreamExt, TryFutureExt,
+	Future, FutureExt, Stream, StreamExt,
 	future::select, channel::mpsc,
 	compat::*,
 	sink::SinkExt,
@@ -107,6 +107,8 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
 }
+
+impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
 
 /// Alias for a an implementation of `futures::future::Executor`.
 pub type TaskExecutor = Arc<dyn Spawn + Send + Sync>;
@@ -210,11 +212,11 @@ impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPool, TOc> AbstractService 
 	Service<TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
 		NetworkService<TBl, TNetSpec, TBl::Hash>, TExPool, TOc>
 where
-	TBl: BlockT + Unpin,
+	TBl: BlockT,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl>,
 	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
-	TSc: sp_consensus::SelectChain<TBl> + 'static + Clone + Send + Unpin,
+	TSc: sp_consensus::SelectChain<TBl> + 'static + Clone + Send,
 	TExPool: 'static + TransactionPool<Block = TBl>
 		+ TransactionPoolMaintainer<Block = TBl>,
 	TOc: 'static + Send + Sync,
@@ -304,7 +306,7 @@ where
 	}
 }
 
-impl<TBl: Unpin, TCl, TSc: Unpin, TNetStatus, TNet, TTxPool, TOc> Future for
+impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 	Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
 {
 	type Output = Result<(), Error>;
@@ -322,17 +324,7 @@ impl<TBl: Unpin, TCl, TSc: Unpin, TNetStatus, TNet, TTxPool, TOc> Future for
 		}
 
 		while let Poll::Ready(Some(task_to_spawn)) = Pin::new(&mut this.to_spawn_rx).poll_next(cx) {
-			// TODO: Update to tokio 0.2 when libp2p get switched to std futures (#4383)
-			let executor = tokio_executor::DefaultExecutor::current();
-			use futures01::future::Executor;
-			if let Err(err) = executor.execute(task_to_spawn.unit_error().compat()) {
-				debug!(
-					target: "service",
-					"Failed to spawn background task: {:?}; falling back to manual polling",
-					err
-				);
-				this.to_poll.push(Box::pin(err.into_future().compat().map(drop)));
-			}
+			tokio::spawn(task_to_spawn);
 		}
 
 		// Polling all the `to_poll` futures.
