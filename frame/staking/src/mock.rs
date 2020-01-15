@@ -286,7 +286,6 @@ impl Trait for Test {
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
 	type NextSessionChange = PeriodicSessionChange<Period>;
-	type SigningKeyType = dummy_sr25519::AuthorityId;
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
 	type SubmitTransaction = SubmitTransaction;

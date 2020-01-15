@@ -71,6 +71,8 @@ use constants::{time::*, currency::*};
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+pub type TransactionSubmitterOf<KeyType> = TransactionSubmitter<KeyType, Runtime, UncheckedExtrinsic>;
+
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
@@ -448,9 +450,6 @@ impl pallet_sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
-/// A runtime transaction submitter.
-pub type SubmitTransaction = TransactionSubmitter<ImOnlineId, Runtime, UncheckedExtrinsic>;
-
 parameter_types! {
 	// assume 1 slot == 1 block
 	pub const SessionDuration: BlockNumber = EPOCH_DURATION_IN_SLOTS as _;
@@ -460,7 +459,7 @@ impl pallet_im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
 	type Call = Call;
 	type Event = Event;
-	type SubmitTransaction = SubmitTransaction;
+	type SubmitTransaction = TransactionSubmitterOf<ImOnlineId>;
 	type ReportUnresponsiveness = Offences;
 	type SessionDuration = SessionDuration;
 }
@@ -779,8 +778,8 @@ mod tests {
 			>,
 		{}
 
-		is_submit_signed_transaction::<SubmitTransaction>();
-		is_sign_and_submit_transaction::<SubmitTransaction>();
+		is_submit_signed_transaction::<TransactionSubmitterOf<ImOnlineId>>();
+		is_sign_and_submit_transaction::<TransactionSubmitterOf<ImOnlineId>>();
 	}
 
 	#[test]

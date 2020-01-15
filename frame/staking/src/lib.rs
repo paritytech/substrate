@@ -701,12 +701,9 @@ pub trait Trait: frame_system::Trait {
 	/// zero will disable the offchain compute and only on-chain seq-phragmen will be used.
 	type ElectionLookahead: Get<Self::BlockNumber>;
 
-	/// A (potentially unknown) key type used to sign the transactions.
-	type SigningKeyType: RuntimeAppPublic + Clone + /*IdentifyAccount<AccountId=Self::AccountId>*/;
-
 	/// The overarching call type.
 	// TODO: This is needed just to bound it to `From<Call<Self>>`. Otherwise could have `Self as system`
-	type Call: From<Call<Self>>;
+	type Call: From<Call<Self>> + Clone;
 
 	/// A transaction submitter.
 	type SubmitTransaction: SignAndSubmitTransaction<Self, <Self as Trait>::Call> + SubmitSignedTransaction<Self, <Self as Trait>::Call>;
@@ -958,11 +955,12 @@ decl_module! {
 			// TODO: add runtime logging.
 			if sp_io::offchain::is_validator() {
 				if Self::election_status() == OffchainElectionStatus::<T::BlockNumber>::Triggered(now) {
-					let era = CurrentEra::get();
 					// get all local keys that are among the current elected stakers.
-					let local_keys = T::SubmitTransaction::find_local_keys(Some(Self::current_elected()));
-					if local_keys.len() > 0 {
-						// run phragmen
+					// TODO: well this is outdated, neh?
+					let current_elected = Self::current_elected();
+					if T::SubmitTransaction::can_sign_with(Some(current_elected.clone())) {
+						// We have at least some local key which corresponds to an elected
+						// validator. run phragmen
 						if let Some(sp_phragmen::PhragmenResult {
 							winners,
 							assignments,
@@ -975,10 +973,8 @@ decl_module! {
 							let compact_assignments: CompactAssignments<T::AccountId> = assignments.into();
 
 							let call: <T as Trait>::Call = Call::submit_election_result(winners, compact_assignments).into();
-
-							// TODO: we could allow offchain submitter to handler this as well.
-							// NOTE: uncomment this and rustc dies.
-							// <T::SubmitTransaction as SignAndSubmitTransaction<T, <T as Trait>::Call>>::sign_and_submit(call, local_keys[0].1.into());
+							// TODO: maybe we want to send from just one of them? we'll see.
+							T::SubmitTransaction::submit_signed_from(call, current_elected);
 						} else {
 							frame_support::print("ran phragmen offchain, but None was returned.");
 						}
@@ -1418,29 +1414,6 @@ impl<T: Trait> Module<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
-	/// Make sure that the account corresponding with the given account-id is a validator.
-	// TODO: needs a storage item to keep the most recent validators. ATM this is WRONG.
-	pub fn is_current_validator(who: &T::AccountId) -> bool {
-		Self::current_elected().contains(who)
-	}
-
-	/// Find a local `AccountId` we can sign with.
-	/// TODO: this needs a way to ge from either of account_id <-> public_key. Linked to the
-	/// transaction signing stuff
-	fn local_signing_key() -> Option<T::AccountId> {
-		// Find all local keys accessible to this app through the localised KeyType. Then go through
-		// all keys currently stored on chain and check them against the list of local keys until a
-		// match is found, otherwise return `None`.
-		let local_keys = T::SigningKeyType::all().iter().map(|i|
-			(*i).clone()
-		).collect::<Vec<T::SigningKeyType>>();
-
-		// TODO: this is WRONG. current elected is not accurate and is one behind
-		Self::current_elected().into_iter().find_map(|v| {
-			Some(v)
-		})
-	}
-
 	/// returns true if the end of the current session leads to an era change.
 	fn is_current_session_final() -> bool {
 		let current_index = T::SessionInterface::current_index();
@@ -1714,7 +1687,8 @@ impl<T: Trait> Module<T> {
 		somehow_phragmen_results
 	}
 
-	/// Execute phragmen and return the new results. The edge weights are processed into  support values.
+	/// Execute phragmen and return the new results. The edge weights are processed into  support
+	/// values.
 	///
 	/// No storage item is updated.
 	fn do_phragmen_with_post_processing(compute: ElectionCompute) -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
@@ -1733,7 +1707,7 @@ impl<T: Trait> Module<T> {
 			let to_votes = |b: BalanceOf<T>|
 				<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
 
-			let mut supports = sp_phragmen::build_support_map::<BalanceOf<T>, T::AccountId>(
+			let supports = sp_phragmen::build_support_map::<BalanceOf<T>, T::AccountId>(
 				&elected_stashes,
 				&staked_assignments,
 			);
