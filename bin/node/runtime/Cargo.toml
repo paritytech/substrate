@@ -48,14 +48,16 @@ pallet-finality-tracker = { version = "2.0.0", default-features = false, path = 
 pallet-grandpa = { version = "2.0.0", default-features = false, path = "../../../frame/grandpa" }
 pallet-im-online = { version = "2.0.0", default-features = false, path = "../../../frame/im-online" }
 pallet-indices = { version = "2.0.0", default-features = false, path = "../../../frame/indices" }
+pallet-identity = { version = "2.0.0", default-features = false, path = "../../../frame/identity" }
 pallet-membership = { version = "2.0.0", default-features = false, path = "../../../frame/membership" }
-pallet-nicks = { version = "2.0.0", default-features = false, path = "../../../frame/nicks" }
 pallet-offences = { version = "2.0.0", default-features = false, path = "../../../frame/offences" }
 pallet-randomness-collective-flip = { version = "2.0.0", default-features = false, path = "../../../frame/randomness-collective-flip" }
+pallet-recovery = { version = "2.0.0", default-features = false, path = "../../../frame/recovery" }
 pallet-session = { version = "2.0.0", features = ["historical"], path = "../../../frame/session", default-features = false }
 pallet-staking = { version = "2.0.0", features = ["migrate"], path = "../../../frame/staking", default-features = false }
 pallet-staking-reward-curve = { version = "2.0.0",  path = "../../../frame/staking/reward-curve" }
 pallet-sudo = { version = "2.0.0", default-features = false, path = "../../../frame/sudo" }
+pallet-society = { version = "2.0.0", default-features = false, path = "../../../frame/society" }
 pallet-timestamp = { version = "2.0.0", default-features = false, path = "../../../frame/timestamp" }
 pallet-treasury = { version = "2.0.0", default-features = false, path = "../../../frame/treasury" }
 pallet-utility = { version = "2.0.0", default-features = false, path = "../../../frame/utility" }
@@ -91,7 +93,7 @@ std = [
 	"pallet-indices/std",
 	"sp-inherents/std",
 	"pallet-membership/std",
-	"pallet-nicks/std",
+	"pallet-identity/std",
 	"node-primitives/std",
 	"sp-offchain/std",
 	"pallet-offences/std",
@@ -119,4 +121,6 @@ std = [
 	"sp-transaction-pool/std",
 	"pallet-utility/std",
 	"sp-version/std",
+	"pallet-society/std",
+	"pallet-recovery/std",
 ]

@@ -18,7 +18,7 @@ use sp_blockchain::Error as ClientError;
 use crate::protocol::sync::{PeerSync, PeerSyncState};
 use fork_tree::ForkTree;
 use libp2p::PeerId;
-use log::{debug, warn};
+use log::{debug, trace, warn};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Duration;
@@ -49,10 +49,12 @@ pub(crate) struct ExtraRequests<B: BlockT> {
 	failed_requests: HashMap<ExtraRequest<B>, Vec<(PeerId, Instant)>>,
 	/// successful requests
 	importing_requests: HashSet<ExtraRequest<B>>,
+	/// the name of this type of extra request (useful for logging.)
+	request_type_name: &'static str,
 }
 
 impl<B: BlockT> ExtraRequests<B> {
-	pub(crate) fn new() -> Self {
+	pub(crate) fn new(request_type_name: &'static str) -> Self {
 		ExtraRequests {
 			tree: ForkTree::new(),
 			best_seen_finalized_number: Zero::zero(),
@@ -60,6 +62,7 @@ impl<B: BlockT> ExtraRequests<B> {
 			active_requests: HashMap::new(),
 			failed_requests: HashMap::new(),
 			importing_requests: HashSet::new(),
+			request_type_name,
 		}
 	}
 
@@ -114,11 +117,28 @@ impl<B: BlockT> ExtraRequests<B> {
 		// messages to chain sync.
 		if let Some(request) = self.active_requests.remove(&who) {
 			if let Some(r) = resp {
+				trace!(target: "sync", "Queuing import of {} from {:?} for {:?}",
+					self.request_type_name,
+					who,
+					request,
+				);
+
 				self.importing_requests.insert(request);
 				return Some((who, request.0, request.1, r))
+			} else {
+				trace!(target: "sync", "Empty {} response from {:?} for {:?}",
+					self.request_type_name,
+					who,
+					request,
+				);
 			}
 			self.failed_requests.entry(request).or_insert(Vec::new()).push((who, Instant::now()));
 			self.pending_requests.push_front(request);
+		} else {
+			trace!(target: "sync", "No active {} request to {:?}",
+				self.request_type_name,
+				who,
+			);
 		}
 		None
 	}
@@ -266,6 +286,13 @@ impl<'a, B: BlockT> Matcher<'a, B> {
 					continue
 				}
 				self.extras.active_requests.insert(peer.clone(), request);
+
+				trace!(target: "sync", "Sending {} request to {:?} for {:?}",
+					self.extras.request_type_name,
+					peer,
+					request,
+				);
+
 				return Some((peer.clone(), request))
 			}
 
@@ -294,7 +321,7 @@ mod tests {
 	#[test]
 	fn requests_are_processed_in_order() {
 		fn property(mut peers: ArbitraryPeers) {
-			let mut requests = ExtraRequests::<Block>::new();
+			let mut requests = ExtraRequests::<Block>::new("test");
 
 			let num_peers_available = peers.0.values()
 				.filter(|s| s.state == PeerSyncState::Available).count();
@@ -320,7 +347,7 @@ mod tests {
 	#[test]
 	fn new_roots_schedule_new_request() {
 		fn property(data: Vec<BlockNumber>) {
-			let mut requests = ExtraRequests::<Block>::new();
+			let mut requests = ExtraRequests::<Block>::new("test");
 			for (i, number) in data.into_iter().enumerate() {
 				let hash = [i as u8; 32].into();
 				let pending = requests.pending_requests.len();
@@ -337,7 +364,7 @@ mod tests {
 	#[test]
 	fn disconnecting_implies_rescheduling() {
 		fn property(mut peers: ArbitraryPeers) -> bool {
-			let mut requests = ExtraRequests::<Block>::new();
+			let mut requests = ExtraRequests::<Block>::new("test");
 
 			let num_peers_available = peers.0.values()
 				.filter(|s| s.state == PeerSyncState::Available).count();
@@ -372,7 +399,7 @@ mod tests {
 	#[test]
 	fn no_response_reschedules() {
 		fn property(mut peers: ArbitraryPeers) {
-			let mut requests = ExtraRequests::<Block>::new();
+			let mut requests = ExtraRequests::<Block>::new("test");
 
 			let num_peers_available = peers.0.values()
 				.filter(|s| s.state == PeerSyncState::Available).count();
@@ -405,7 +432,7 @@ mod tests {
 	fn request_is_rescheduled_when_earlier_block_is_finalized() {
 		let _ = ::env_logger::try_init();
 
-		let mut finality_proofs = ExtraRequests::<Block>::new();
+		let mut finality_proofs = ExtraRequests::<Block>::new("test");
 
 		let hash4 = [4; 32].into();
 		let hash5 = [5; 32].into();
@@ -443,7 +470,7 @@ mod tests {
 
 	#[test]
 	fn anecstor_roots_are_finalized_when_finality_notification_is_missed() {
-		let mut finality_proofs = ExtraRequests::<Block>::new();
+		let mut finality_proofs = ExtraRequests::<Block>::new("test");
 
 		let hash4 = [4; 32].into();
 		let hash5 = [5; 32].into();
