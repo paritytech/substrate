@@ -70,9 +70,6 @@ impl<'a> FunctionExecutor<'a> {
 impl<'a> sandbox::SandboxCapabilities for FunctionExecutor<'a> {
 	type SupervisorFuncRef = wasmi::FuncRef;
 
-	fn store(&self) -> &sandbox::Store<Self::SupervisorFuncRef> {
-		&self.sandbox_store
-	}
 	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>, Error> {
 		let heap = &mut self.heap;
 		self.memory.with_direct_access_mut(|mem| {
@@ -260,8 +257,13 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 				.clone()
 		};
 
+		let guest_env = match sandbox::GuestEnvironment::decode(&self.sandbox_store, raw_env_def) {
+			Ok(guest_env) => guest_env,
+			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
+		};
+
 		let instance_idx_or_err_code =
-			match sandbox::instantiate(self, dispatch_thunk, wasm, raw_env_def, state)
+			match sandbox::instantiate(self, dispatch_thunk, wasm, guest_env, state)
 				.map(|i| i.finalize(&mut self.sandbox_store))
 			{
 				Ok(instance_idx) => instance_idx,

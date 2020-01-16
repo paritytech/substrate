@@ -113,14 +113,6 @@ impl<'a> FunctionExecutor<'a> {
 impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 	type SupervisorFuncRef = SupervisorFuncRef;
 
-	fn store(&self) -> &sandbox::Store<Self::SupervisorFuncRef> {
-		// TODO: Fix this cursed code!
-		// &self.state.sandbox_store
-		unsafe {
-			self.state.sandbox_store.try_borrow_unguarded().unwrap()
-		}
-	}
-
 	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>> {
 		unsafe {
 			let mem_mut = self.memory_as_slice_mut();
@@ -376,7 +368,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		raw_env_def: &[u8],
 		state: u32,
 	) -> WResult<u32> {
-		// Extract a dispatch thunk from instance's table by the specified index.
+		// Extract a dispatch thunk from the instance's table by the specified index.
 		let dispatch_thunk = {
 			let table = self
 				.state
@@ -392,8 +384,13 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			SupervisorFuncRef(func_ref)
 		};
 
+		let guest_env = match sandbox::GuestEnvironment::decode(&*self.state.sandbox_store.borrow(), raw_env_def) {
+			Ok(guest_env) => guest_env,
+			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
+		};
+
 		let instance_idx_or_err_code =
-			match sandbox::instantiate(self, dispatch_thunk, wasm, raw_env_def, state)
+			match sandbox::instantiate(self, dispatch_thunk, wasm, guest_env, state)
 				.map(|i| i.finalize(&mut *self.state.sandbox_store.borrow_mut()))
 			{
 				Ok(instance_idx) => instance_idx,

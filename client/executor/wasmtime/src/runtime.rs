@@ -36,7 +36,7 @@ use wasmtime::{
 	Callable, Config, Extern, ExternType, Func, Instance, Memory, Module, Store, Table, Trap, Val,
 };
 
-/// A `WasmRuntime` implementation using the Wasmtime JIT to compile the runtime module to native
+/// A `WasmRuntime` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
 pub struct WasmtimeRuntime {
 	store: Store,
@@ -96,8 +96,7 @@ pub fn create_instance(
 	// TODO: Check the heap pages
 	let max_heap_pages = None;
 
-	// TODO: Resolve externs.
-	let state_holder = StateHolder::new_empty();
+	let state_holder = StateHolder::empty();
 	let mut externs = vec![];
 	for import_ty in module.imports() {
 		if import_ty.module() != "env" {
@@ -161,7 +160,7 @@ struct StateHolder {
 }
 
 impl StateHolder {
-	fn new_empty() -> StateHolder {
+	fn empty() -> StateHolder {
 		StateHolder {
 			state: Rc::new(RefCell::new(None)),
 		}
@@ -422,53 +421,5 @@ fn extract_output_data(
 		let state = state_holder.get().unwrap();
 		read_memory_into(state.memory.data(), ptr, output)?;
 	}
-
 	Ok(())
 }
-
-// fn reset_env_state_and_take_trap(
-// 	context: &mut Context,
-// 	executor_state: Option<FunctionExecutorState>,
-// ) -> Result<Option<Error>> {
-// 	let env_state = get_env_state(context)?;
-// 	env_state.executor_state = executor_state;
-// 	Ok(env_state.take_trap())
-// }
-
-// fn inject_input_data(
-// 	context: &mut Context,
-// 	instance: &mut InstanceHandle,
-// 	data: &[u8],
-// ) -> Result<(Pointer<u8>, WordSize)> {
-// 	let env_state = get_env_state(context)?;
-// 	let executor_state = env_state
-// 		.executor_state
-// 		.as_mut()
-// 		.ok_or_else(|| "cannot get \"env\" module executor state")?;
-
-// 	let memory = get_memory_mut(instance)?;
-
-// 	let data_len = data.len() as WordSize;
-// 	let data_ptr = executor_state.heap().allocate(memory, data_len)?;
-// 	write_memory_from(memory, data_ptr, data)?;
-// 	Ok((data_ptr, data_len))
-// }
-
-// fn get_memory_mut(instance: &mut InstanceHandle) -> Result<&mut [u8]> {
-// 	match instance.lookup("memory") {
-// 		// This is safe to wrap in an unsafe block as:
-// 		// - The definition pointer is returned by a lookup on a valid instance and thus points to
-// 		//   a valid memory definition
-// 		Some(Export::Memory {
-// 			definition,
-// 			vmctx: _,
-// 			memory: _,
-// 		}) => unsafe {
-// 			Ok(std::slice::from_raw_parts_mut(
-// 				(*definition).base,
-// 				(*definition).current_length,
-// 			))
-// 		},
-// 		_ => Err(Error::InvalidMemoryReference),
-// 	}
-// }

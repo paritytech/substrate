@@ -148,9 +148,6 @@ pub trait SandboxCapabilities {
 	/// Represents a function reference into the supervisor environment.
 	type SupervisorFuncRef;
 
-	/// Returns a reference to an associated sandbox `Store`.
-	fn store(&self) -> &Store<Self::SupervisorFuncRef>;
-
 	/// Allocate space of the specified length in the supervisor memory.
 	///
 	/// # Errors
@@ -417,6 +414,23 @@ fn decode_environment_definition(
 	))
 }
 
+/// An environment in which the guest module is instantiated.
+pub struct GuestEnvironment {
+	imports: Imports,
+	guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
+}
+
+impl GuestEnvironment {
+	pub fn decode<FR>(store: &Store<FR>, raw_env_def: &[u8]) -> std::result::Result<Self, InstantiationError> {
+		let (imports, guest_to_supervisor_mapping) =
+			decode_environment_definition(raw_env_def, &store.memories)?;
+		Ok(Self {
+			imports,
+			guest_to_supervisor_mapping,
+		})
+	}
+}
+
 #[must_use]
 pub struct Instantiation<FR> {
 	sandbox_instance: Rc<SandboxInstance<FR>>,
@@ -449,14 +463,11 @@ pub fn instantiate<'a, FE: SandboxCapabilities>(
 	supervisor_externals: &mut FE,
 	dispatch_thunk: FE::SupervisorFuncRef,
 	wasm: &[u8],
-	raw_env_def: &[u8],
+	host_env: GuestEnvironment,
 	state: u32,
 ) -> std::result::Result<Instantiation<FE::SupervisorFuncRef>, InstantiationError> {
-	let (imports, guest_to_supervisor_mapping) =
-		decode_environment_definition(raw_env_def, &supervisor_externals.store().memories)?;
-
 	let module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
-	let instance = ModuleInstance::new(&module, &imports).map_err(|_| InstantiationError::Instantiation)?;
+	let instance = ModuleInstance::new(&module, &host_env.imports).map_err(|_| InstantiationError::Instantiation)?;
 
 	let sandbox_instance = Rc::new(SandboxInstance {
 		// In general, it's not a very good idea to use `.not_started_instance()` for anything
@@ -464,7 +475,7 @@ pub fn instantiate<'a, FE: SandboxCapabilities>(
 		// for the purpose of running `start` function which should be ok.
 		instance: instance.not_started_instance().clone(),
 		dispatch_thunk,
-		guest_to_supervisor_mapping,
+		guest_to_supervisor_mapping: host_env.guest_to_supervisor_mapping,
 	});
 
 	with_guest_externals(
