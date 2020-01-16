@@ -132,16 +132,16 @@ pub mod trie_types {
 ///
 /// [`verify_trie_proof`]: ./fn.verify_trie_proof.html
 pub fn generate_trie_proof<'a, L: TrieConfiguration, I, K, DB>(
-    db: &DB,
-    root: TrieHash<L>,
-    keys: I
+	db: &DB,
+	root: TrieHash<L>,
+	keys: I
 ) -> Result<Vec<Vec<u8>>, Box<TrieError<L>>> where
-    I: IntoIterator<Item=&'a K>,
-    K: 'a + AsRef<[u8]>,
-    DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
+	I: IntoIterator<Item=&'a K>,
+	K: 'a + AsRef<[u8]>,
+	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-    let trie = TrieDB::<L>::new(db, &root)?;
-    generate_proof(&trie, keys)
+	let trie = TrieDB::<L>::new(db, &root)?;
+	generate_proof(&trie, keys)
 }
 
 /// Verify a set of key-value pairs against a trie root and a proof.
@@ -155,15 +155,15 @@ pub fn generate_trie_proof<'a, L: TrieConfiguration, I, K, DB>(
 ///
 /// [`generate_trie_proof`]: ./fn.generate_trie_proof.html
 pub fn verify_trie_proof<'a, L: TrieConfiguration, I, K, V>(
-    root: &TrieHash<L>,
-    proof: &[Vec<u8>],
-    items: I,
+	root: &TrieHash<L>,
+	proof: &[Vec<u8>],
+	items: I,
 ) -> Result<(), VerifyError<TrieHash<L>, error::Error>> where
-    I: IntoIterator<Item=&'a (K, Option<V>)>,
-    K: 'a + AsRef<[u8]>,
-    V: 'a + AsRef<[u8]>,
+	I: IntoIterator<Item=&'a (K, Option<V>)>,
+	K: 'a + AsRef<[u8]>,
+	V: 'a + AsRef<[u8]>,
 {
-    verify_proof::<Layout<L::Hash>, _, _, _>(root, proof, items)
+	verify_proof::<Layout<L::Hash>, _, _, _>(root, proof, items)
 }
 
 /// Determine a trie root given a hash DB and delta values.
@@ -775,88 +775,88 @@ mod tests {
 		assert_eq!(pairs, iter_pairs);
 	}
 
-    #[test]
-    fn proof_non_inclusion_works() {
-        let pairs = vec![
-            (hex!("0102").to_vec(), hex!("01").to_vec()),
-            (hex!("0203").to_vec(), hex!("0405").to_vec()),
-        ];
+	#[test]
+	fn proof_non_inclusion_works() {
+		let pairs = vec![
+			(hex!("0102").to_vec(), hex!("01").to_vec()),
+			(hex!("0203").to_vec(), hex!("0405").to_vec()),
+		];
 
-        let mut memdb = MemoryDB::default();
-        let mut root = Default::default();
-        populate_trie::<Layout>(&mut memdb, &mut root, &pairs);
+		let mut memdb = MemoryDB::default();
+		let mut root = Default::default();
+		populate_trie::<Layout>(&mut memdb, &mut root, &pairs);
 
-        let non_included_key: Vec<u8> = hex!("0909").to_vec();
-        let proof = generate_trie_proof::<Layout, _, _, _>(
-            &memdb,
-            root,
-            &[non_included_key.clone()]
-        ).unwrap();
+		let non_included_key: Vec<u8> = hex!("0909").to_vec();
+		let proof = generate_trie_proof::<Layout, _, _, _>(
+			&memdb,
+			root,
+			&[non_included_key.clone()]
+		).unwrap();
 
-        // Verifying that the K was not included into the trie should work.
-        assert!(verify_trie_proof::<Layout, _, _, Vec<u8>>(
-                &root,
-                &proof,
-                &[(non_included_key.clone(), None)],
-            ).is_ok()
-        );
+		// Verifying that the K was not included into the trie should work.
+		assert!(verify_trie_proof::<Layout, _, _, Vec<u8>>(
+				&root,
+				&proof,
+				&[(non_included_key.clone(), None)],
+			).is_ok()
+		);
 
-        // Verifying that the K was included into the trie should fail.
-        assert!(verify_trie_proof::<Layout, _, _, Vec<u8>>(
-                &root,
-                &proof,
-                &[(non_included_key, Some(hex!("1010").to_vec()))],
-            ).is_err()
-        );
-    }
+		// Verifying that the K was included into the trie should fail.
+		assert!(verify_trie_proof::<Layout, _, _, Vec<u8>>(
+				&root,
+				&proof,
+				&[(non_included_key, Some(hex!("1010").to_vec()))],
+			).is_err()
+		);
+	}
 
-    #[test]
-    fn proof_inclusion_works() {
-        let pairs = vec![
-            (hex!("0102").to_vec(), hex!("01").to_vec()),
-            (hex!("0203").to_vec(), hex!("0405").to_vec()),
-        ];
+	#[test]
+	fn proof_inclusion_works() {
+		let pairs = vec![
+			(hex!("0102").to_vec(), hex!("01").to_vec()),
+			(hex!("0203").to_vec(), hex!("0405").to_vec()),
+		];
 
-        let mut memdb = MemoryDB::default();
-        let mut root = Default::default();
-        populate_trie::<Layout>(&mut memdb, &mut root, &pairs);
+		let mut memdb = MemoryDB::default();
+		let mut root = Default::default();
+		populate_trie::<Layout>(&mut memdb, &mut root, &pairs);
 
-        let proof = generate_trie_proof::<Layout, _, _, _>(
-            &memdb,
-            root,
-            &[pairs[0].0.clone()]
-        ).unwrap();
+		let proof = generate_trie_proof::<Layout, _, _, _>(
+			&memdb,
+			root,
+			&[pairs[0].0.clone()]
+		).unwrap();
 
-        // Check that a K, V included into the proof are verified.
-        assert!(verify_trie_proof::<Layout, _, _, _>(
-                &root,
-                &proof,
-                &[(pairs[0].0.clone(), Some(pairs[0].1.clone()))]
-            ).is_ok()
-        );
+		// Check that a K, V included into the proof are verified.
+		assert!(verify_trie_proof::<Layout, _, _, _>(
+				&root,
+				&proof,
+				&[(pairs[0].0.clone(), Some(pairs[0].1.clone()))]
+			).is_ok()
+		);
 
-        // Absence of the V is not verified with the proof that has K, V included.
-        assert!(verify_trie_proof::<Layout, _, _, Vec<u8>>(
-                &root,
-                &proof,
-                &[(pairs[0].0.clone(), None)]
-            ).is_err()
-        );
+		// Absence of the V is not verified with the proof that has K, V included.
+		assert!(verify_trie_proof::<Layout, _, _, Vec<u8>>(
+				&root,
+				&proof,
+				&[(pairs[0].0.clone(), None)]
+			).is_err()
+		);
 
-        // K not included into the trie is not verified.
-        assert!(verify_trie_proof::<Layout, _, _, _>(
-                &root,
-                &proof,
-                &[(hex!("4242").to_vec(), Some(pairs[0].1.clone()))]
-            ).is_err()
-        );
+		// K not included into the trie is not verified.
+		assert!(verify_trie_proof::<Layout, _, _, _>(
+				&root,
+				&proof,
+				&[(hex!("4242").to_vec(), Some(pairs[0].1.clone()))]
+			).is_err()
+		);
 
-        // K included into the trie but not included into the proof is not verified.
-        assert!(verify_trie_proof::<Layout, _, _, _>(
-                &root,
-                &proof,
-                &[(pairs[1].0.clone(), Some(pairs[1].1.clone()))]
-            ).is_err()
-        );
-    }
+		// K included into the trie but not included into the proof is not verified.
+		assert!(verify_trie_proof::<Layout, _, _, _>(
+				&root,
+				&proof,
+				&[(pairs[1].0.clone(), Some(pairs[1].1.clone()))]
+			).is_err()
+		);
+	}
 }
