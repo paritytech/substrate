@@ -3044,7 +3044,7 @@ dependencies = [
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-authority-discovery 0.8.0",
- "sc-basic-authority 0.8.0",
+ "sc-basic-authorship 0.8.0",
  "sc-chain-spec 2.0.0",
  "sc-cli 0.8.0",
  "sc-client 0.8.0",
@@ -3223,7 +3223,7 @@ dependencies = [
  "node-template-runtime 2.0.0",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-basic-authority 0.8.0",
+ "sc-basic-authorship 0.8.0",
  "sc-cli 0.8.0",
  "sc-client 0.8.0",
  "sc-consensus-aura 0.8.0",
@@ -5037,7 +5037,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-basic-authority"
+name = "sc-basic-authorship"
 version = "0.8.0"
 dependencies = [
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
