@@ -25,13 +25,13 @@ rand = "0.7.2"
 libp2p = { version = "0.14.0-alpha.1", default-features = false, features = ["libp2p-websocket"] }
 fork-tree = { version = "2.0.0", path = "../../utils/fork-tree" }
 sp-consensus = { version = "0.8", path = "../../primitives/consensus/common" }
-sc-client = { version = "2.0.0", path = "../" }
+sc-client = { version = "0.8", path = "../" }
 sc-client-api = { version = "2.0.0", path = "../api" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sp-arithmetic = { version = "2.0.0", path = "../../primitives/arithmetic" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sc-block-builder = { version = "2.0.0", path = "../block-builder" }
+sc-block-builder = { version = "0.8", path = "../block-builder" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 sc-peerset = { version = "2.0.0", path = "../peerset" }
 serde = { version = "1.0.101", features = ["derive"] }

@@ -1,6 +1,6 @@
 [package]
 name = "sp-state-machine"
-version = "2.0.0"
+version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate State Machine"
 edition = "2018"
@@ -17,7 +17,7 @@ sp-panic-handler = { version = "2.0.0", path = "../panic-handler" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 num-traits = "0.2.8"
 rand = "0.7.2"
-sp-externalities = { version = "2.0.0", path = "../externalities" }
+sp-externalities = { version = "0.8.0", path = "../externalities" }
 
 [dev-dependencies]
 hex-literal = "0.2.1"
