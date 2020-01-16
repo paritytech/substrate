@@ -1,5 +1,5 @@
 [package]
-name = "sc-basic-authority"
+name = "sc-basic-authorship"
 version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
