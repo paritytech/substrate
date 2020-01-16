@@ -61,7 +61,7 @@ pub use traits::GetSharedParams;
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
-use futures::{Future, compat::Future01CompatExt, executor::block_on};
+use futures::{Future, executor::block_on};
 use sc_telemetry::TelemetryEndpoints;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
@@ -489,6 +489,7 @@ impl<'a> ParseAndPrepareExport<'a> {
 			self.version,
 			None,
 		)?;
+		fill_config_keystore_in_memory(&mut config)?;
 
 		if let DatabaseConfig::Path { ref path, .. } = &config.database {
 			info!("DB path: {}", path.display());
@@ -513,8 +514,7 @@ impl<'a> ParseAndPrepareExport<'a> {
 		});
 
 		let mut export_fut = builder(config)?
-			.export_blocks(file, from.into(), to, json)
-			.compat();
+			.export_blocks(file, from.into(), to, json);
 		let fut = futures::future::poll_fn(|cx| {
 			if exit_recv.try_recv().is_ok() {
 				return Poll::Ready(Ok(()));
@@ -577,8 +577,7 @@ impl<'a> ParseAndPrepareImport<'a> {
 		});
 
 		let mut import_fut = builder(config)?
-			.import_blocks(file, false)
-			.compat();
+			.import_blocks(file, false);
 		let fut = futures::future::poll_fn(|cx| {
 			if exit_recv.try_recv().is_ok() {
 				return Poll::Ready(Ok(()));
@@ -622,6 +621,7 @@ impl<'a> CheckBlock<'a> {
 			None,
 		)?;
 		fill_import_params(&mut config, &self.params.import_params, sc_service::Roles::FULL)?;
+		fill_config_keystore_in_memory(&mut config)?;
 
 		let input = if self.params.input.starts_with("0x") { &self.params.input[2..] } else { &self.params.input[..] };
 		let block_id = match FromStr::from_str(input) {
@@ -634,8 +634,7 @@ impl<'a> CheckBlock<'a> {
 
 		let start = std::time::Instant::now();
 		let check = builder(config)?
-			.check_block(block_id)
-			.compat();
+			.check_block(block_id);
 		let mut runtime = tokio::runtime::Runtime::new().unwrap();
 		runtime.block_on(check)?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
@@ -665,6 +664,7 @@ impl<'a> ParseAndPreparePurge<'a> {
 			self.version,
 			None,
 		)?;
+		fill_config_keystore_in_memory(&mut config)?;
 		let db_path = match config.database {
 			DatabaseConfig::Path { path, .. } => path,
 			_ => {
@@ -732,6 +732,8 @@ impl<'a> ParseAndPrepareRevert<'a> {
 			self.version,
 			None,
 		)?;
+		fill_config_keystore_in_memory(&mut config)?;
+
 		let blocks = self.params.num.parse()?;
 		builder(config)?.revert_chain(blocks)?;
 		Ok(())
@@ -853,6 +855,16 @@ fn fill_network_configuration(
 fn input_keystore_password() -> Result<String, String> {
 	rpassword::read_password_from_tty(Some("Keystore password: "))
 		.map_err(|e| format!("{:?}", e))
+}
+
+/// Use in memory keystore config when it is not required at all.
+fn fill_config_keystore_in_memory<C, G, E>(config: &mut sc_service::Configuration<C, G, E>)
+	-> Result<(), String>
+{
+	match &mut config.keystore {
+		cfg @ KeystoreConfig::None => { *cfg = KeystoreConfig::InMemory; Ok(()) },
+		_ => Err("Keystore config specified when it should not be!".into()),
+	}
 }
 
 /// Fill the password field of the given config instance.

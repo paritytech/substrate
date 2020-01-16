@@ -7,8 +7,8 @@ publish = false
 
 [dependencies]
 sp-runtime-interface = { version = "2.0.0", path = "../" }
-sc-executor = { version = "2.0.0", path = "../../../client/executor" }
+sc-executor = { version = "0.8", path = "../../../client/executor" }
 sp-runtime-interface-test-wasm = { version = "2.0.0", path = "../test-wasm" }
-sp-state-machine = { version = "2.0.0", path = "../../../primitives/state-machine" }
+sp-state-machine = { version = "0.8", path = "../../../primitives/state-machine" }
 sp-core = { version = "2.0.0", path = "../../core" }
 sp-io = { version = "2.0.0", path = "../../io" }
