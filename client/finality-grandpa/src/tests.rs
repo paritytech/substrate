@@ -1694,8 +1694,8 @@ fn grandpa_environment_respects_voting_rules() {
 		}
 	};
 
-	// add 20 blocks
-	peer.push_blocks(20, false);
+	// add 21 blocks
+	peer.push_blocks(21, false);
 
 	// create an environment with no voting rule restrictions
 	let unrestricted_env = environment(Box::new(()));
@@ -1716,38 +1716,38 @@ fn grandpa_environment_respects_voting_rules() {
 		unrestricted_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		).unwrap().1,
-		20,
+		21,
 	);
 
-	// both the other environments should return block 15, which is 3/4 of the
+	// both the other environments should return block 16, which is 3/4 of the
 	// way in the unfinalized chain
 	assert_eq!(
 		three_quarters_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		).unwrap().1,
-		15,
+		16,
 	);
 
 	assert_eq!(
 		default_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		).unwrap().1,
-		15,
+		16,
 	);
 
-	// we finalize block 19 with block 20 being the best block
+	// we finalize block 19 with block 21 being the best block
 	peer.client().finalize_block(BlockId::Number(19), None, false).unwrap();
 
-	// the 3/4 environment should propose block 20 for voting
+	// the 3/4 environment should propose block 21 for voting
 	assert_eq!(
 		three_quarters_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		).unwrap().1,
-		20,
+		21,
 	);
 
 	// while the default environment will always still make sure we don't vote
-	// on the best block
+	// on the best block (2 behind)
 	assert_eq!(
 		default_env.best_chain_containing(
 			peer.client().info().finalized_hash
@@ -1755,17 +1755,17 @@ fn grandpa_environment_respects_voting_rules() {
 		19,
 	);
 
-	// we finalize block 20 with block 20 being the best block
-	peer.client().finalize_block(BlockId::Number(20), None, false).unwrap();
+	// we finalize block 21 with block 21 being the best block
+	peer.client().finalize_block(BlockId::Number(21), None, false).unwrap();
 
 	// even though the default environment will always try to not vote on the
 	// best block, there's a hard rule that we can't cast any votes lower than
-	// the given base (#20).
+	// the given base (#21).
 	assert_eq!(
 		default_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		).unwrap().1,
-		20,
+		21,
 	);
 }
 

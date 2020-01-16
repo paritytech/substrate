@@ -412,7 +412,7 @@ for Environment<B, E, Block, N, RA, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block> + 'static,
-	E: CallExecutor<Block> + Send + Sync + 'static,
+	E: CallExecutor<Block> + Send + Sync,
  	N: NetworkT<Block> + 'static + Send,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,

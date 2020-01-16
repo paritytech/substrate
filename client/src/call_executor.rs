@@ -61,7 +61,7 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 where
 	B: backend::Backend<Block>,
-	E: CodeExecutor + RuntimeInfo,
+	E: CodeExecutor + RuntimeInfo + Clone + 'static,
 	Block: BlockT,
 {
 	type Error = E::Error;
@@ -225,7 +225,7 @@ where
 impl<B, E, Block> sp_version::GetRuntimeVersion<Block> for LocalCallExecutor<B, E>
 	where
 		B: backend::Backend<Block>,
-		E: CodeExecutor + RuntimeInfo,
+		E: CodeExecutor + RuntimeInfo + Clone + 'static,
 		Block: BlockT,
 {
 	fn native_version(&self) -> &sp_version::NativeVersion {

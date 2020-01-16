@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::net::Ipv4Addr;
 use std::time::Duration;
 use log::info;
-use futures::{Future, Stream, Poll};
+use futures01::{Future, Stream, Poll};
 use tempfile::TempDir;
 use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
@@ -72,12 +72,13 @@ impl<T> From<T> for SyncService<T> {
 	}
 }
 
-impl<T: Future<Item=(), Error=sc_service::Error>> Future for SyncService<T> {
+impl<T: futures::Future<Output=Result<(), sc_service::Error>> + Unpin> Future for SyncService<T> {
 	type Item = ();
 	type Error = sc_service::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		self.0.lock().unwrap().poll()
+		let mut f = self.0.lock().unwrap();
+		futures::compat::Compat::new(&mut *f).poll()
 	}
 }
 
@@ -458,7 +459,7 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	let first_user_data = &network.full_nodes[0].2;
 	let best_block = BlockId::number(first_service.get().client().chain_info().best_number);
 	let extrinsic = extrinsic_factory(&first_service.get(), first_user_data);
-	futures03::executor::block_on(first_service.get().transaction_pool().submit_one(&best_block, extrinsic)).unwrap();
+	futures::executor::block_on(first_service.get().transaction_pool().submit_one(&best_block, extrinsic)).unwrap();
 	network.run_until_all_full(
 		|_index, service| service.get().transaction_pool().ready().count() == 1,
 		|_index, _service| true,

@@ -27,7 +27,7 @@ use wasmi::{
 	memory_units::Pages, RuntimeValue::{I32, I64, self},
 };
 use codec::{Encode, Decode};
-use sp_core::{sandbox as sandbox_primitives, traits::Externalities};
+use sp_core::sandbox as sandbox_primitives;
 use log::{error, trace};
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
 use sp_wasm_interface::{
@@ -381,7 +381,6 @@ fn get_heap_base(module: &ModuleRef) -> Result<u32, Error> {
 
 /// Call a given method in the given wasm-module runtime.
 fn call_in_wasm_module(
-	ext: &mut dyn Externalities,
 	module_instance: &ModuleRef,
 	method: &str,
 	data: &[u8],
@@ -410,13 +409,10 @@ fn call_in_wasm_module(
 	let offset = fec.allocate_memory(data.len() as u32)?;
 	fec.write_memory(offset, data)?;
 
-	let result = sp_externalities::set_and_run_with_externalities(
-		ext,
-		|| module_instance.invoke_export(
-			method,
-			&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
-			&mut fec,
-		),
+	let result = module_instance.invoke_export(
+		method,
+		&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
+		&mut fec,
 	);
 
 	match result {
@@ -599,7 +595,6 @@ impl WasmRuntime for WasmiRuntime {
 
 	fn call(
 		&mut self,
-		ext: &mut dyn Externalities,
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>, Error> {
@@ -612,7 +607,6 @@ impl WasmRuntime for WasmiRuntime {
 				e
 			})?;
 		call_in_wasm_module(
-			ext,
 			&self.instance,
 			method,
 			data,
