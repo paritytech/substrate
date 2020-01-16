@@ -649,9 +649,6 @@ fn pay_reporters<T: Trait>(
 	T::Slash::on_unbalanced(value_slashed);
 }
 
-// TODO: function for undoing a slash.
-//
-
 #[cfg(test)]
 mod tests {
 	use super::*;

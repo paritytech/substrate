@@ -23,8 +23,8 @@ use log::{warn, trace};
 use hash_db::Hasher;
 use codec::{Decode, Encode, Codec};
 use sp_core::{
-	storage::ChildInfo, NativeOrEncoded, NeverNativeValue,
-	traits::CodeExecutor, hexdisplay::HexDisplay
+	storage::{well_known_keys, ChildInfo}, NativeOrEncoded, NeverNativeValue
+	traits::{CodeExecutor, CallInWasmExt}, hexdisplay::HexDisplay,
 };
 use overlayed_changes::OverlayedChangeSet;
 use sp_externalities::Extensions;
@@ -193,7 +193,7 @@ pub struct StateMachine<'a, B, H, N, Exec>
 impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 	H: Hasher,
 	H::Out: Ord + 'static + codec::Codec,
-	Exec: CodeExecutor,
+	Exec: CodeExecutor + Clone + 'static,
 	B: Backend<H>,
 	N: crate::changes_trie::BlockNumber,
 {
@@ -205,8 +205,10 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		exec: &'a Exec,
 		method: &'a str,
 		call_data: &'a [u8],
-		extensions: Extensions,
+		mut extensions: Extensions,
 	) -> Self {
+		extensions.register(CallInWasmExt::new(exec.clone()));
+
 		Self {
 			backend,
 			exec,
@@ -436,7 +438,7 @@ where
 	B: Backend<H>,
 	H: Hasher,
 	H::Out: Ord + 'static + codec::Codec,
-	Exec: CodeExecutor,
+	Exec: CodeExecutor + Clone + 'static,
 	N: crate::changes_trie::BlockNumber,
 {
 	let trie_backend = backend.as_trie_backend()
@@ -464,7 +466,7 @@ where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher,
 	H::Out: Ord + 'static + codec::Codec,
-	Exec: CodeExecutor,
+	Exec: CodeExecutor + 'static + Clone,
 	N: crate::changes_trie::BlockNumber,
 {
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
@@ -491,7 +493,7 @@ pub fn execution_proof_check<H, N, Exec>(
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
 	H: Hasher,
-	Exec: CodeExecutor,
+	Exec: CodeExecutor + Clone + 'static,
 	H::Out: Ord + 'static + codec::Codec,
 	N: crate::changes_trie::BlockNumber,
 {
@@ -510,7 +512,7 @@ pub fn execution_proof_check_on_trie_backend<H, N, Exec>(
 where
 	H: Hasher,
 	H::Out: Ord + 'static + codec::Codec,
-	Exec: CodeExecutor,
+	Exec: CodeExecutor + Clone + 'static,
 	N: crate::changes_trie::BlockNumber,
 {
 	let mut sm = StateMachine::<_, H, N, Exec>::new(
@@ -689,6 +691,7 @@ mod tests {
 	use super::changes_trie::Configuration as ChangesTrieConfig;
 	use sp_core::{Blake2Hasher, map, traits::Externalities, storage::ChildStorageKey};
 
+	#[derive(Clone)]
 	struct DummyCodeExecutor {
 		change_changes_trie_config: bool,
 		native_available: bool,
@@ -742,6 +745,18 @@ mod tests {
 				},
 				_ => (Err(0), using_native),
 			}
+		}
+	}
+
+	impl sp_core::traits::CallInWasm for DummyCodeExecutor {
+		fn call_in_wasm(
+			&self,
+			_: &[u8],
+			_: &str,
+			_: &[u8],
+			_: &mut dyn Externalities,
+		) -> std::result::Result<Vec<u8>, String> {
+			unimplemented!("Not required in tests.")
 		}
 	}
 

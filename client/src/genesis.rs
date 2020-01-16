@@ -59,7 +59,7 @@ mod tests {
 	native_executor_instance!(
 		Executor,
 		substrate_test_runtime_client::runtime::api::dispatch,
-		substrate_test_runtime_client::runtime::native_version
+		substrate_test_runtime_client::runtime::native_version,
 	);
 
 	fn executor() -> sc_executor::NativeExecutor<Executor> {

@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sc-block-builder = { version = "2.0.0", path = "../../../client/block-builder" }
+sc-block-builder = { version = "0.8", path = "../../../client/block-builder" }
 substrate-test-client = { version = "2.0.0", path = "../../client" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 substrate-test-runtime = { version = "2.0.0", path = "../../runtime" }
@@ -14,5 +14,5 @@ sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 sc-client-api = { version = "2.0.0", path = "../../../client/api" }
-sc-client = { version = "2.0.0", path = "../../../client/" }
+sc-client = { version = "0.8", path = "../../../client/" }
 futures = "0.3.1"
