@@ -165,7 +165,7 @@ impl<B: BlockT> GossipEngine<B> {
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile).
 	pub fn messages_for(&self, topic: B::Hash)
-		-> mpsc::UnboundedReceiver<TopicNotification>
+		-> mpsc::Receiver<TopicNotification>
 	{
 		self.inner.lock().state_machine.messages_for(self.engine_id, topic)
 	}

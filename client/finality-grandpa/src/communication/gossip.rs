@@ -1168,7 +1168,7 @@ impl<Block: BlockT> Inner<Block> {
 pub(super) struct GossipValidator<Block: BlockT> {
 	inner: parking_lot::RwLock<Inner<Block>>,
 	set_state: environment::SharedVoterSetState<Block>,
-	report_sender: mpsc::UnboundedSender<PeerReport>,
+	report_sender: mpsc::Sender<PeerReport>,
 }
 
 impl<Block: BlockT> GossipValidator<Block> {
@@ -1179,7 +1179,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		config: crate::Config,
 		set_state: environment::SharedVoterSetState<Block>,
 	) -> (GossipValidator<Block>, ReportStream)	{
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = mpsc::channel(100);
 		let val = GossipValidator {
 			inner: parking_lot::RwLock::new(Inner::new(config)),
 			set_state,
@@ -1226,7 +1226,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 
 	fn report(&self, who: PeerId, cost_benefit: ReputationChange) {
-		let _ = self.report_sender.unbounded_send(PeerReport { who, cost_benefit });
+		let _ = self.report_sender.try_send(PeerReport { who, cost_benefit });
 	}
 
 	pub(super) fn do_validate(&self, who: &PeerId, mut data: &[u8])
@@ -1453,7 +1453,7 @@ struct PeerReport {
 // wrapper around a stream of reports.
 #[must_use = "The report stream must be consumed"]
 pub(super) struct ReportStream {
-	reports: mpsc::UnboundedReceiver<PeerReport>,
+	reports: mpsc::Receiver<PeerReport>,
 }
 
 impl ReportStream {
@@ -1474,7 +1474,7 @@ impl ReportStream {
 /// A future for reporting peers.
 #[must_use = "Futures do nothing unless polled"]
 struct ReportingTask<B: BlockT> {
-	reports: mpsc::UnboundedReceiver<PeerReport>,
+	reports: mpsc::Receiver<PeerReport>,
 	net: GossipEngine<B>,
 }
 

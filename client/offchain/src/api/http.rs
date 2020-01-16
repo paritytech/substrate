@@ -35,8 +35,8 @@ use std::{fmt, io::Read as _, mem, pin::Pin, task::Context, task::Poll};
 
 /// Creates a pair of [`HttpApi`] and [`HttpWorker`].
 pub fn http() -> (HttpApi, HttpWorker) {
-	let (to_worker, from_api) = mpsc::unbounded();
-	let (to_api, from_worker) = mpsc::unbounded();
+	let (to_worker, from_api) = mpsc::channel(100);
+	let (to_api, from_worker) = mpsc::channel(100);
 
 	let api = HttpApi {
 		to_worker,
@@ -63,10 +63,10 @@ pub fn http() -> (HttpApi, HttpWorker) {
 /// to offchain workers.
 pub struct HttpApi {
 	/// Used to sends messages to the worker.
-	to_worker: mpsc::UnboundedSender<ApiToWorker>,
+	to_worker: mpsc::Sender<ApiToWorker>,
 	/// Used to receive messages from the worker.
 	/// We use a `Fuse` in order to have an extra protection against panicking.
-	from_worker: stream::Fuse<mpsc::UnboundedReceiver<WorkerToApi>>,
+	from_worker: stream::Fuse<mpsc::Receiver<WorkerToApi>>,
 	/// Id to assign to the next HTTP request that is started.
 	next_id: HttpRequestId,
 	/// List of HTTP requests in preparation or in progress.
@@ -119,7 +119,7 @@ impl HttpApi {
 		// Start by building the prototype of the request.
 		// We do this first so that we don't touch anything in `self` if building the prototype
 		// fails.
-		let (body_sender, body) = hyper::Body::channel();
+		let (body_sender, body) = hyper::Body::channel(100);
 		let mut request = hyper::Request::new(body);
 		*request.method_mut() = hyper::Method::from_bytes(method.as_bytes()).map_err(|_| ())?;
 		*request.uri_mut() = hyper::Uri::from_shared(From::from(uri)).map_err(|_| ())?;
@@ -204,7 +204,7 @@ impl HttpApi {
 			request = match request {
 				HttpApiRequest::NotDispatched(request, sender) => {
 					// If the request is not dispatched yet, dispatch it and loop again.
-					let _ = self.to_worker.unbounded_send(ApiToWorker::Dispatch {
+					let _ = self.to_worker.try_send(ApiToWorker::Dispatch {
 						id: request_id,
 						request
 					});
@@ -290,7 +290,7 @@ impl HttpApi {
 				_ => unreachable!("we checked for NotDispatched above; qed")
 			};
 
-			let _ = self.to_worker.unbounded_send(ApiToWorker::Dispatch {
+			let _ = self.to_worker.try_send(ApiToWorker::Dispatch {
 				id: *id,
 				request
 			});
@@ -552,9 +552,9 @@ enum WorkerToApi {
 /// Must be continuously polled for the [`HttpApi`] to properly work.
 pub struct HttpWorker {
 	/// Used to sends messages to the `HttpApi`.
-	to_api: mpsc::UnboundedSender<WorkerToApi>,
+	to_api: mpsc::Sender<WorkerToApi>,
 	/// Used to receive messages from the `HttpApi`.
-	from_api: mpsc::UnboundedReceiver<ApiToWorker>,
+	from_api: mpsc::Receiver<ApiToWorker>,
 	/// The engine that runs HTTP requests.
 	http_client: hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, hyper::Body>,
 	/// HTTP requests that are being worked on by the engine.
@@ -597,7 +597,7 @@ impl Future for HttpWorker {
 						},
 						Poll::Ready(Ok(response)) => response,
 						Poll::Ready(Err(err)) => {
-							let _ = me.to_api.unbounded_send(WorkerToApi::Fail {
+							let _ = me.to_api.try_send(WorkerToApi::Fail {
 								id,
 								error: err,
 							});
@@ -611,7 +611,7 @@ impl Future for HttpWorker {
 					let body = Compat01As03::new(response.into_body());
 
 					let (body_tx, body_rx) = mpsc::channel(3);
-					let _ = me.to_api.unbounded_send(WorkerToApi::Response {
+					let _ = me.to_api.try_send(WorkerToApi::Response {
 						id,
 						status_code,
 						headers,

@@ -88,13 +88,13 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	signal: Option<Signal>,
 	/// Send a signal when a spawned essential task has concluded. The next time
 	/// the service future is polled it should complete with an error.
-	essential_failed_tx: mpsc::UnboundedSender<()>,
+	essential_failed_tx: mpsc::Sender<()>,
 	/// A receiver for spawned essential-tasks concluding.
-	essential_failed_rx: mpsc::UnboundedReceiver<()>,
+	essential_failed_rx: mpsc::Receiver<()>,
 	/// Sender for futures that must be spawned as background tasks.
-	to_spawn_tx: mpsc::UnboundedSender<Pin<Box<dyn Future<Output = ()> + Send>>>,
+	to_spawn_tx: mpsc::Sender<Pin<Box<dyn Future<Output = ()> + Send>>>,
 	/// Receiver for futures that must be spawned as background tasks.
-	to_spawn_rx: mpsc::UnboundedReceiver<Pin<Box<dyn Future<Output = ()> + Send>>>,
+	to_spawn_rx: mpsc::Receiver<Pin<Box<dyn Future<Output = ()> + Send>>>,
 	/// List of futures to poll from `poll`.
 	/// If spawning a background task is not possible, we instead push the task into this `Vec`.
 	/// The elements must then be polled manually.
@@ -102,7 +102,7 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	rpc_handlers: sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<sc_telemetry::Telemetry>,
-	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
+	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::Sender<()>>>>,
 	_offchain_workers: Option<Arc<TOc>>,
 	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
@@ -114,7 +114,7 @@ pub type TaskExecutor = Arc<dyn Spawn + Send + Sync>;
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
-	sender: mpsc::UnboundedSender<Pin<Box<dyn Future<Output = ()> + Send>>>,
+	sender: mpsc::Sender<Pin<Box<dyn Future<Output = ()> + Send>>>,
 	on_exit: exit_future::Exit,
 }
 
@@ -122,7 +122,7 @@ impl Spawn for SpawnTaskHandle {
 	fn spawn_obj(&self, future: FutureObj<'static, ()>)
 	-> Result<(), SpawnError> {
 		let future = select(self.on_exit.clone(), future).map(drop);
-		self.sender.unbounded_send(Box::pin(future))
+		self.sender.try_send(Box::pin(future))
 			.map_err(|_| SpawnError::shutdown())
 	}
 }
@@ -156,7 +156,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	type NetworkSpecialization: NetworkSpecialization<Self::Block>;
 
 	/// Get event stream for telemetry connection established events.
-	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()>;
+	fn telemetry_on_connect_stream(&self) -> mpsc::Receiver<()>;
 
 	/// return a shared instance of Telemetry (if enabled)
 	fn telemetry(&self) -> Option<sc_telemetry::Telemetry>;
@@ -197,7 +197,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 		-> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, <Self::Block as BlockT>::Hash>>;
 
 	/// Returns a receiver that periodically receives a status of the network.
-	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
+	fn network_status(&self, interval: Duration) -> mpsc::Receiver<(NetworkStatus<Self::Block>, NetworkState)>;
 
 	/// Get shared transaction pool instance.
 	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
@@ -228,8 +228,8 @@ where
 	type TransactionPool = TExPool;
 	type NetworkSpecialization = TNetSpec;
 
-	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()> {
-		let (sink, stream) = mpsc::unbounded();
+	fn telemetry_on_connect_stream(&self) -> mpsc::Receiver<()> {
+		let (sink, stream) = mpsc::channel(100);
 		self._telemetry_on_connect_sinks.lock().push(sink);
 		stream
 	}
@@ -244,7 +244,7 @@ where
 
 	fn spawn_task(&self, task: impl Future<Output = ()> + Send + Unpin + 'static) {
 		let task = select(self.on_exit(), task).map(drop);
-		let _ = self.to_spawn_tx.unbounded_send(Box::pin(task));
+		let _ = self.to_spawn_tx.try_send(Box::pin(task));
 	}
 
 	fn spawn_essential_task(&self, task: impl Future<Output = ()> + Send + Unpin + 'static) {
@@ -257,7 +257,7 @@ where
 			});
 		let task = select(self.on_exit(), essential_task).map(drop);
 
-		let _ = self.to_spawn_tx.unbounded_send(Box::pin(task));
+		let _ = self.to_spawn_tx.try_send(Box::pin(task));
 	}
 
 	fn spawn_task_handle(&self) -> SpawnTaskHandle {
@@ -289,8 +289,8 @@ where
 		self.network.clone()
 	}
 
-	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
-		let (sink, stream) = mpsc::unbounded();
+	fn network_status(&self, interval: Duration) -> mpsc::Receiver<(NetworkStatus<Self::Block>, NetworkState)> {
+		let (sink, stream) = mpsc::channel(100);
 		self.network_status_sinks.lock().push(interval, sink);
 		stream
 	}
@@ -352,7 +352,7 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Spawn for
 		&self,
 		future: FutureObj<'static, ()>
 	) -> Result<(), SpawnError> {
-		self.to_spawn_tx.unbounded_send(Box::pin(future))
+		self.to_spawn_tx.try_send(Box::pin(future))
 			.map_err(|_| SpawnError::shutdown())
 	}
 }
@@ -370,7 +370,7 @@ fn build_network_future<
 	mut network: sc_network::NetworkWorker<B, S, H>,
 	client: Arc<C>,
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
-	mut rpc_rx: mpsc::UnboundedReceiver<sc_rpc::system::Request<B>>,
+	mut rpc_rx: mpsc::Receiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 ) -> impl Future<Output = ()> {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();

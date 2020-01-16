@@ -67,7 +67,7 @@ impl StorageChangeSet {
 }
 
 /// Type that implements `futures::Stream` of storage change events.
-pub type StorageEventStream<H> = mpsc::UnboundedReceiver<(H, StorageChangeSet)>;
+pub type StorageEventStream<H> = mpsc::Receiver<(H, StorageChangeSet)>;
 
 type SubscriberId = u64;
 
@@ -82,7 +82,7 @@ pub struct StorageNotifications<Block: BlockT> {
 		FnvHashSet<SubscriberId>
 	)>,
 	sinks: FnvHashMap<SubscriberId, (
-		mpsc::UnboundedSender<(Block::Hash, StorageChangeSet)>,
+		mpsc::Sender<(Block::Hash, StorageChangeSet)>,
 		Option<HashSet<StorageKey>>,
 		Option<HashMap<StorageKey, Option<HashSet<StorageKey>>>>,
 	)>,
@@ -173,7 +173,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 			let should_remove = {
 				let &(ref sink, ref filter, ref child_filters) = self.sinks.get(&subscriber)
 					.expect("subscribers returned from self.listeners are always in self.sinks; qed");
-				sink.unbounded_send((hash.clone(), StorageChangeSet {
+				sink.try_send((hash.clone(), StorageChangeSet {
 					changes: changes.clone(),
 					child_changes: child_changes.clone(),
 					filter: filter.clone(),
@@ -299,7 +299,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 
 
 		// insert sink
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = mpsc::channel(100);
 		self.sinks.insert(current_id, (tx, keys, child_keys));
 		rx
 	}

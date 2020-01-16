@@ -20,7 +20,7 @@ use std::pin::Pin;
 use std::task::{Poll, Context};
 use futures_timer::Delay;
 
-/// Holds a list of `UnboundedSender`s, each associated with a certain time period. Every time the
+/// Holds a list of `Sender`s, each associated with a certain time period. Every time the
 /// period elapses, we push an element on the sender.
 ///
 /// Senders are removed only when they are closed.
@@ -31,7 +31,7 @@ pub struct StatusSinks<T> {
 struct YieldAfter<T> {
 	delay: Delay,
 	interval: Duration,
-	sender: Option<mpsc::UnboundedSender<T>>,
+	sender: Option<mpsc::Sender<T>>,
 }
 
 impl<T> StatusSinks<T> {
@@ -45,7 +45,7 @@ impl<T> StatusSinks<T> {
 	/// Adds a sender to the collection.
 	///
 	/// The `interval` is the time period between two pushes on the sender.
-	pub fn push(&mut self, interval: Duration, sender: mpsc::UnboundedSender<T>) {
+	pub fn push(&mut self, interval: Duration, sender: mpsc::Sender<T>) {
 		self.entries.push(YieldAfter {
 			delay: Delay::new(interval),
 			interval,
@@ -68,7 +68,7 @@ impl<T> StatusSinks<T> {
 			match Pin::new(&mut self.entries).poll_next(cx) {
 				Poll::Ready(Some((sender, interval))) => {
 					let status = status_grab();
-					if sender.unbounded_send(status).is_ok() {
+					if sender.try_send(status).is_ok() {
 						self.entries.push(YieldAfter {
 							// Note that since there's a small delay between the moment a task is
 							// waken up and the moment it is polled, the period is actually not
@@ -88,7 +88,7 @@ impl<T> StatusSinks<T> {
 }
 
 impl<T> futures::Future for YieldAfter<T> {
-	type Output = (mpsc::UnboundedSender<T>, Duration);
+	type Output = (mpsc::Sender<T>, Duration);
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = Pin::into_inner(self);
@@ -119,7 +119,7 @@ mod tests {
 
 		let mut status_sinks = StatusSinks::new();
 
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = mpsc::channel(100);
 		status_sinks.push(Duration::from_millis(100), tx);
 
 		let mut runtime = tokio::runtime::Runtime::new().unwrap();

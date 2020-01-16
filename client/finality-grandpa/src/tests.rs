@@ -1160,7 +1160,7 @@ fn voter_persists_its_votes() {
 
 		struct ResettableVoter {
 			voter: Box<dyn Future<Item = (), Error = ()> + Send>,
-			voter_rx: mpsc::UnboundedReceiver<()>,
+			voter_rx: mpsc::Receiver<()>,
 			net: Arc<Mutex<GrandpaTestNet>>,
 			client: PeersClient,
 			keystore: KeyStorePtr,
@@ -1228,7 +1228,7 @@ fn voter_persists_its_votes() {
 
 		// we create a "dummy" voter by setting it to `empty` and triggering the `tx`.
 		// this way, the `ResettableVoter` will reset its `voter` field to a value ASAP.
-		voter_tx.unbounded_send(()).unwrap();
+		voter_tx.try_send(()).unwrap();
 		runtime.spawn(ResettableVoter {
 			voter: Box::new(futures::future::empty()),
 			voter_rx,
@@ -1325,7 +1325,7 @@ fn voter_persists_its_votes() {
 							net.lock().peer(0).client().as_full().unwrap().hash(30).unwrap().unwrap();
 
 						// we restart alice's voter
-						voter_tx.unbounded_send(()).unwrap();
+						voter_tx.try_send(()).unwrap();
 
 						// and we push our own prevote for block 30
 						let prevote = finality_grandpa::Prevote {

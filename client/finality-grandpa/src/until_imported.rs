@@ -485,13 +485,13 @@ mod tests {
 
 	#[derive(Clone)]
 	struct TestChainState {
-		sender: mpsc::UnboundedSender<BlockImportNotification<Block>>,
+		sender: mpsc::Sender<BlockImportNotification<Block>>,
 		known_blocks: Arc<Mutex<HashMap<Hash, u64>>>,
 	}
 
 	impl TestChainState {
 		fn new() -> (Self, ImportNotifications<Block>) {
-			let (tx, rx) = mpsc::unbounded();
+			let (tx, rx) = mpsc::channel(100);
 			let state = TestChainState {
 				sender: tx,
 				known_blocks: Arc::new(Mutex::new(HashMap::new())),
@@ -509,7 +509,7 @@ mod tests {
 			let number = header.number().clone();
 
 			self.known_blocks.lock().insert(hash, number);
-			self.sender.unbounded_send(BlockImportNotification {
+			self.sender.try_send(BlockImportNotification {
 				hash,
 				origin: BlockOrigin::File,
 				header,
@@ -588,7 +588,7 @@ mod tests {
 		// enact all dependencies before importing the message
 		enact_dependencies(&chain_state);
 
-		let (global_tx, global_rx) = futures::sync::mpsc::unbounded();
+		let (global_tx, global_rx) = futures::sync::mpsc::channel(100);
 
 		let until_imported = UntilGlobalMessageBlocksImported::new(
 			import_notifications,
@@ -598,7 +598,7 @@ mod tests {
 			"global",
 		);
 
-		global_tx.unbounded_send(msg).unwrap();
+		global_tx.try_send(msg).unwrap();
 
 		let work = until_imported.into_future();
 
@@ -615,7 +615,7 @@ mod tests {
 		let (chain_state, import_notifications) = TestChainState::new();
 		let block_status = chain_state.block_status();
 
-		let (global_tx, global_rx) = futures::sync::mpsc::unbounded();
+		let (global_tx, global_rx) = futures::sync::mpsc::channel(100);
 
 		let until_imported = UntilGlobalMessageBlocksImported::new(
 			import_notifications,
@@ -625,7 +625,7 @@ mod tests {
 			"global",
 		);
 
-		global_tx.unbounded_send(msg).unwrap();
+		global_tx.try_send(msg).unwrap();
 
 		// NOTE: needs to be cloned otherwise it is moved to the stream and
 		// dropped too early.
@@ -871,7 +871,7 @@ mod tests {
 		let (chain_state, import_notifications) = TestChainState::new();
 		let block_status = chain_state.block_status();
 
-		let (global_tx, global_rx) = futures::sync::mpsc::unbounded();
+		let (global_tx, global_rx) = futures::sync::mpsc::channel(100);
 
 		let block_sync_requester = TestBlockSyncRequester::default();
 
@@ -912,7 +912,7 @@ mod tests {
 		);
 
 		// we send the commit message and spawn the until_imported stream
-		global_tx.unbounded_send(unknown_commit()).unwrap();
+		global_tx.try_send(unknown_commit()).unwrap();
 
 		let mut runtime = Runtime::new().unwrap();
 		runtime.spawn(until_imported.into_future().map(|_| ()).map_err(|_| ()));

@@ -112,7 +112,7 @@ pub enum TransactionStatus<Hash, BlockHash> {
 pub type TransactionStatusStream<Hash, BlockHash> = dyn Stream<Item=TransactionStatus<Hash, BlockHash>> + Send + Unpin;
 
 /// The import notification event stream.
-pub type ImportNotificationStream = mpsc::UnboundedReceiver<()>;
+pub type ImportNotificationStream = mpsc::Receiver<()>;
 
 /// Transaction hash type for a pool.
 pub type TxHash<P> = <P as TransactionPool>::Hash;

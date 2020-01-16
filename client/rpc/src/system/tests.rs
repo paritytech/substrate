@@ -44,7 +44,7 @@ impl Default for Status {
 fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 	let status = sync.into().unwrap_or_default();
 	let should_have_peers = !status.is_dev;
-	let (tx, rx) = mpsc::unbounded();
+	let (tx, rx) = mpsc::channel(100);
 	thread::spawn(move || {
 		futures::executor::block_on(rx.for_each(move |request| {
 			match request {

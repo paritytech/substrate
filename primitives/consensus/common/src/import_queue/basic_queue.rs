@@ -31,7 +31,7 @@ use crate::import_queue::{
 /// task, with pluggable verification.
 pub struct BasicQueue<B: BlockT, Transaction> {
 	/// Channel to send messages to the background task.
-	sender: mpsc::UnboundedSender<ToWorkerMsg<B>>,
+	sender: mpsc::Sender<ToWorkerMsg<B>>,
 	/// Results coming from the worker task.
 	result_port: BufferedLinkReceiver<B>,
 	/// If it isn't possible to spawn the future in `future_to_spawn` (which is notably the case in
@@ -94,7 +94,7 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 		}
 
 		trace!(target: "sync", "Scheduling {} blocks for import", blocks.len());
-		let _ = self.sender.unbounded_send(ToWorkerMsg::ImportBlocks(origin, blocks));
+		let _ = self.sender.try_send(ToWorkerMsg::ImportBlocks(origin, blocks));
 	}
 
 	fn import_justification(
@@ -105,7 +105,7 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 		justification: Justification
 	) {
 		let _ = self.sender
-			.unbounded_send(
+			.try_send(
 				ToWorkerMsg::ImportJustification(who.clone(), hash, number, justification)
 			);
 	}
@@ -119,7 +119,7 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 	) {
 		trace!(target: "sync", "Scheduling finality proof of {}/{} for import", number, hash);
 		let _ = self.sender
-			.unbounded_send(
+			.try_send(
 				ToWorkerMsg::ImportFinalityProof(who, hash, number, finality_proof)
 			);
 	}
@@ -161,8 +161,8 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 		block_import: BoxBlockImport<B, Transaction>,
 		justification_import: Option<BoxJustificationImport<B>>,
 		finality_proof_import: Option<BoxFinalityProofImport<B>>,
-	) -> (impl Future<Output = ()> + Send, mpsc::UnboundedSender<ToWorkerMsg<B>>) {
-		let (sender, mut port) = mpsc::unbounded();
+	) -> (impl Future<Output = ()> + Send, mpsc::Sender<ToWorkerMsg<B>>) {
+		let (sender, mut port) = mpsc::channel(100);
 
 		let mut worker = BlockImportWorker {
 			result_sender,

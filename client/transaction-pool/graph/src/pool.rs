@@ -39,7 +39,7 @@ use sp_transaction_pool::{error, PoolStatus};
 use crate::validated_pool::{ValidatedPool, ValidatedTransaction};
 
 /// Modification notification event stream type;
-pub type EventStream = mpsc::UnboundedReceiver<()>;
+pub type EventStream = mpsc::Receiver<()>;
 
 /// Extrinsic hash type for a pool.
 pub type ExHash<A> = <A as ChainApi>::Hash;

@@ -360,7 +360,7 @@ pub struct LinkHalf<B, E, Block: BlockT, RA, SC> {
 	client: Arc<Client<B, E, Block, RA>>,
 	select_chain: SC,
 	persistent_data: PersistentData<Block>,
-	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+	voter_commands_rx: mpsc::Receiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
 
 /// Provider for the Grandpa authority set configured on the genesis block.
@@ -429,7 +429,7 @@ where
 		}
 	)?;
 
-	let (voter_commands_tx, voter_commands_rx) = mpsc::unbounded();
+	let (voter_commands_tx, voter_commands_rx) = mpsc::channel(100);
 
 	Ok((
 		GrandpaBlockImport::new(
@@ -536,7 +536,7 @@ pub struct GrandpaParams<B, E, Block: BlockT, N, RA, SC, VR, X, Sp> {
 	/// Handle to a future that will resolve on exit.
 	pub on_exit: X,
 	/// If supplied, can be used to hook on telemetry connection established events.
-	pub telemetry_on_connect: Option<futures03::channel::mpsc::UnboundedReceiver<()>>,
+	pub telemetry_on_connect: Option<futures03::channel::mpsc::Receiver<()>>,
 	/// A voting rule used to potentially restrict target votes.
 	pub voting_rule: VR,
 	/// How to spawn background tasks.
@@ -649,7 +649,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 struct VoterWork<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
 	voter: Box<dyn Future<Item = (), Error = CommandOrError<Block::Hash, NumberFor<Block>>> + Send>,
 	env: Arc<Environment<B, E, Block, N, RA, SC, VR>>,
-	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+	voter_commands_rx: mpsc::Receiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
 
 impl<B, E, Block, N, RA, SC, VR> VoterWork<B, E, Block, N, RA, SC, VR>
@@ -671,7 +671,7 @@ where
 		select_chain: SC,
 		voting_rule: VR,
 		persistent_data: PersistentData<Block>,
-		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+		voter_commands_rx: mpsc::Receiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	) -> Self {
 
 		let voters = persistent_data.authority_set.current_authorities();

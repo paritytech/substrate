@@ -115,7 +115,7 @@ pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>, H: E
 	/// nodes it should be connected to or not.
 	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
-	to_worker: mpsc::UnboundedSender<ServiceToWorkerMsg<B, S>>,
+	to_worker: mpsc::Sender<ServiceToWorkerMsg<B, S>>,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -128,7 +128,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
 	pub fn new(params: Params<B, S, H>) -> Result<NetworkWorker<B, S, H>, Error> {
-		let (to_worker, from_worker) = mpsc::unbounded();
+		let (to_worker, from_worker) = mpsc::channel(100);
 
 		if let Some(ref path) = params.network_config.net_config_path {
 			fs::create_dir_all(Path::new(path))?;
@@ -440,7 +440,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// The protocol must have been registered with `register_notifications_protocol`.
 	///
 	pub fn write_notification(&self, target: PeerId, engine_id: ConsensusEngineId, message: Vec<u8>) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::WriteNotification {
+		let _ = self.to_worker.try_send(ServiceToWorkerMsg::WriteNotification {
 			target,
 			engine_id,
 			message,
@@ -454,8 +454,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// The stream never ends (unless the `NetworkWorker` gets shut down).
 	pub fn event_stream(&self) -> impl Stream<Item = Event> {
 		// Note: when transitioning to stable futures, remove the `Error` entirely
-		let (tx, rx) = mpsc::unbounded();
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
+		let (tx, rx) = mpsc::channel(100);
+		let _ = self.to_worker.try_send(ServiceToWorkerMsg::EventStream(tx));
 		rx
 	}
 
@@ -472,7 +472,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		&self,
 		engine_id: ConsensusEngineId,
 	) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::RegisterNotifProtocol {
+		let _ = self.to_worker.try_send(ServiceToWorkerMsg::RegisterNotifProtocol {
 			engine_id,
 		});
 	}
@@ -482,7 +482,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// The latest transactions will be fetched from the `TransactionPool` that was passed at
 	/// initialization as part of the configuration.
 	pub fn trigger_repropagate(&self) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateExtrinsics);
+		let _ = self.to_worker.try_send(ServiceToWorkerMsg::PropagateExtrinsics);
 	}
 
 	/// Make sure an important block is propagated to peers.
@@ -490,7 +490,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced. This function forces such an announcement.
 	pub fn announce_block(&self, hash: B::Hash, data: Vec<u8>) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AnnounceBlock(hash, data));
+		let _ = self.to_worker.try_send(ServiceToWorkerMsg::AnnounceBlock(hash, data));
 	}
 
 	/// Report a given peer as either beneficial (+) or costly (-) according to the
@@ -503,7 +503,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// This triggers the same effects as if the connection had closed itself spontaneously.
 	pub fn disconnect_peer(&self, who: PeerId) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::DisconnectPeer(who));
+		let _ = self.to_worker.try_send(ServiceToWorkerMsg::DisconnectPeer(who));
 	}
 
 	/// Request a justification for the given block from the network.
@@ -513,7 +513,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	pub fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::RequestJustification(hash.clone(), number));
+			.try_send(ServiceToWorkerMsg::RequestJustification(hash.clone(), number));
 	}
 
 	/// Execute a closure with the chain-specific network specialization.
@@ -522,7 +522,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	{
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::ExecuteWithSpec(Box::new(f)));
+			.try_send(ServiceToWorkerMsg::ExecuteWithSpec(Box::new(f)));
 	}
 
 	/// Are we in the process of downloading the chain?
@@ -537,7 +537,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	pub fn get_value(&self, key: &record::Key) {
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::GetValue(key.clone()));
+			.try_send(ServiceToWorkerMsg::GetValue(key.clone()));
 	}
 
 	/// Start putting a value in the DHT.
@@ -547,7 +547,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	pub fn put_value(&self, key: record::Key, value: Vec<u8>) {
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::PutValue(key, value));
+			.try_send(ServiceToWorkerMsg::PutValue(key, value));
 	}
 
 	/// Connect to unreserved peers and allow unreserved peers to connect.
@@ -572,7 +572,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		self.peerset.add_reserved_peer(peer_id.clone());
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+			.try_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 		Ok(())
 	}
 
@@ -585,7 +585,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	pub fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::SyncFork(peers, hash, number));
+			.try_send(ServiceToWorkerMsg::SyncFork(peers, hash, number));
 	}
 
 	/// Modify a peerset priority group.
@@ -600,7 +600,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		for (peer_id, addr) in peers.into_iter() {
 			let _ = self
 				.to_worker
-				.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+				.try_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 		}
 
 		Ok(())
@@ -674,7 +674,7 @@ enum ServiceToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
-	EventStream(mpsc::UnboundedSender<Event>),
+	EventStream(mpsc::Sender<Event>),
 	WriteNotification {
 		message: Vec<u8>,
 		engine_id: ConsensusEngineId,
@@ -704,11 +704,11 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	/// The import queue that was passed as initialization.
 	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the `NetworkService` and that must be processed.
-	from_worker: mpsc::UnboundedReceiver<ServiceToWorkerMsg<B, S>>,
+	from_worker: mpsc::Receiver<ServiceToWorkerMsg<B, S>>,
 	/// Receiver for queries from the light client that must be processed.
-	light_client_rqs: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
+	light_client_rqs: Option<mpsc::Receiver<RequestData<B>>>,
 	/// Senders for events that happen on the network.
-	event_streams: Vec<mpsc::UnboundedSender<Event>>,
+	event_streams: Vec<mpsc::Sender<Event>>,
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for NetworkWorker<B, S, H> {
@@ -764,7 +764,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 				ServiceToWorkerMsg::RegisterNotifProtocol { engine_id } => {
 					let events = this.network_service.user_protocol_mut().register_notifications_protocol(engine_id);
 					for event in events {
-						this.event_streams.retain(|sender| sender.unbounded_send(event.clone()).is_ok());
+						this.event_streams.retain(|sender| sender.try_send(event.clone()).is_ok());
 					}
 				},
 				ServiceToWorkerMsg::DisconnectPeer(who) =>
@@ -787,7 +787,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::FinalityProofImport(origin, hash, nb, proof))) =>
 					this.import_queue.import_finality_proof(origin, hash, nb, proof),
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Event(ev))) =>
-					this.event_streams.retain(|sender| sender.unbounded_send(ev.clone()).is_ok()),
+					this.event_streams.retain(|sender| sender.try_send(ev.clone()).is_ok()),
 				Poll::Ready(SwarmEvent::Connected(peer_id)) =>
 					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id),
 				Poll::Ready(SwarmEvent::Disconnected(peer_id)) =>

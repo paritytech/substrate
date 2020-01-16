@@ -55,7 +55,7 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT, RA, SC> {
 	inner: Arc<Client<B, E, Block, RA>>,
 	select_chain: SC,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
+	send_voter_commands: mpsc::Sender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 }
 
@@ -444,7 +444,7 @@ impl<B, E, Block: BlockT, RA, SC> BlockImport<Block>
 
 		// Send the pause signal after import but BEFORE sending a `ChangeAuthorities` message.
 		if do_pause {
-			let _ = self.send_voter_commands.unbounded_send(
+			let _ = self.send_voter_commands.try_send(
 				VoterCommand::Pause(format!("Forced change scheduled after inactivity"))
 			);
 		}
@@ -464,7 +464,7 @@ impl<B, E, Block: BlockT, RA, SC> BlockImport<Block>
 				// they should import the block and discard the justification, and they will
 				// then request a justification from sync if it's necessary (which they should
 				// then be able to successfully validate).
-				let _ = self.send_voter_commands.unbounded_send(VoterCommand::ChangeAuthorities(new));
+				let _ = self.send_voter_commands.try_send(VoterCommand::ChangeAuthorities(new));
 
 				// we must clear all pending justifications requests, presumably they won't be
 				// finalized hence why this forced changes was triggered
@@ -526,7 +526,7 @@ impl<B, E, Block: BlockT, RA, SC> GrandpaBlockImport<B, E, Block, RA, SC> {
 		inner: Arc<Client<B, E, Block, RA>>,
 		select_chain: SC,
 		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-		send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
+		send_voter_commands: mpsc::Sender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	) -> GrandpaBlockImport<B, E, Block, RA, SC> {
 		GrandpaBlockImport {
@@ -587,7 +587,7 @@ where
 					command {}, signaling voter.", number, command);
 
 				// send the command to the voter
-				let _ = self.send_voter_commands.unbounded_send(command);
+				let _ = self.send_voter_commands.try_send(command);
 			},
 			Err(CommandOrError::Error(e)) => {
 				return Err(match e {

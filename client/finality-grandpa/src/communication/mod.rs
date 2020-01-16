@@ -311,7 +311,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			.filter_map(|x| x)
 			.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")));
 
-		let (tx, out_rx) = mpsc::unbounded();
+		let (tx, out_rx) = mpsc::channel(100);
 		let outgoing = OutgoingMessages::<B> {
 			round: round.0,
 			set_id: set_id.0,
@@ -575,7 +575,7 @@ struct OutgoingMessages<Block: BlockT> {
 	round: RoundNumber,
 	set_id: SetIdNumber,
 	locals: Option<(AuthorityPair, AuthorityId)>,
-	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
+	sender: mpsc::Sender<SignedMessage<Block>>,
 	network: GossipEngine<Block>,
 	has_voted: HasVoted<Block>,
 }
@@ -641,7 +641,7 @@ impl<Block: BlockT> Sink for OutgoingMessages<Block>
 			self.network.gossip_message(topic, message.encode(), false);
 
 			// forward the message to the inner sender.
-			let _ = self.sender.unbounded_send(signed);
+			let _ = self.sender.try_send(signed);
 		}
 
 		Ok(AsyncSink::Ready)

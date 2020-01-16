@@ -208,7 +208,7 @@ struct ObserverWork<B: BlockT, N: NetworkT<B>, E, Backend, RA> {
 	network: NetworkBridge<B, N>,
 	persistent_data: PersistentData<B>,
 	keystore: Option<sc_keystore::KeyStorePtr>,
-	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
+	voter_commands_rx: mpsc::Receiver<VoterCommand<B::Hash, NumberFor<B>>>,
 }
 
 impl<B, N, E, Bk, RA> ObserverWork<B, N, E, Bk, RA>
@@ -226,7 +226,7 @@ where
 		network: NetworkBridge<B, N>,
 		persistent_data: PersistentData<B>,
 		keystore: Option<sc_keystore::KeyStorePtr>,
-		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
+		voter_commands_rx: mpsc::Receiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	) -> Self {
 
 		let mut work = ObserverWork {

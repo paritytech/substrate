@@ -30,10 +30,10 @@ use crate::notifications::StorageEventStream;
 use sp_blockchain;
 
 /// Type that implements `futures::Stream` of block import events.
-pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
+pub type ImportNotifications<Block> = mpsc::Receiver<BlockImportNotification<Block>>;
 
 /// A stream of block finality notifications.
-pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotification<Block>>;
+pub type FinalityNotifications<Block> = mpsc::Receiver<FinalityNotification<Block>>;
 
 /// Expected hashes of blocks at given heights.
 ///

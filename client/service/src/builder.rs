@@ -796,7 +796,7 @@ ServiceBuilder<
 			mpsc::unbounded::<Pin<Box<dyn Future<Output = ()> + Send>>>();
 
 		// A side-channel for essential tasks to communicate shutdown.
-		let (essential_failed_tx, essential_failed_rx) = mpsc::unbounded();
+		let (essential_failed_tx, essential_failed_rx) = mpsc::channel(100);
 
 		let import_queue = Box::new(import_queue);
 		let chain_info = client.chain_info();
@@ -885,7 +885,7 @@ ServiceBuilder<
 							&BlockId::hash(notification.hash),
 							&notification.retracted,
 						);
-						let _ = to_spawn_tx_.unbounded_send(Box::pin(future));
+						let _ = to_spawn_tx_.try_send(Box::pin(future));
 					}
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
@@ -895,12 +895,12 @@ ServiceBuilder<
 							network_state_info.clone(),
 							is_validator
 						);
-						let _ = to_spawn_tx_.unbounded_send(Box::pin(future));
+						let _ = to_spawn_tx_.try_send(Box::pin(future));
 					}
 
 					ready(())
 				});
-			let _ = to_spawn_tx.unbounded_send(Box::pin(select(events, exit.clone()).map(drop)));
+			let _ = to_spawn_tx.try_send(Box::pin(select(events, exit.clone()).map(drop)));
 		}
 
 		{
@@ -920,7 +920,7 @@ ServiceBuilder<
 					ready(())
 				});
 
-			let _ = to_spawn_tx.unbounded_send(Box::pin(select(events, exit.clone()).map(drop)));
+			let _ = to_spawn_tx.try_send(Box::pin(select(events, exit.clone()).map(drop)));
 		}
 
 		// Periodically notify the telemetry.
@@ -984,7 +984,7 @@ ServiceBuilder<
 
 			ready(())
 		});
-		let _ = to_spawn_tx.unbounded_send(Box::pin(select(tel_task, exit.clone()).map(drop)));
+		let _ = to_spawn_tx.try_send(Box::pin(select(tel_task, exit.clone()).map(drop)));
 
 		// Periodically send the network state to the telemetry.
 		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
@@ -997,10 +997,10 @@ ServiceBuilder<
 			);
 			ready(())
 		});
-		let _ = to_spawn_tx.unbounded_send(Box::pin(select(tel_task_2, exit.clone()).map(drop)));
+		let _ = to_spawn_tx.try_send(Box::pin(select(tel_task_2, exit.clone()).map(drop)));
 
 		// RPC
-		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
+		let (system_rpc_tx, system_rpc_rx) = mpsc::channel(100);
 		let gen_handler = || {
 			use sc_rpc::{chain, state, author, system};
 
@@ -1060,7 +1060,7 @@ ServiceBuilder<
 		let rpc = start_rpc_servers(&config, gen_handler)?;
 
 
-		let _ = to_spawn_tx.unbounded_send(Box::pin(select(build_network_future(
+		let _ = to_spawn_tx.try_send(Box::pin(select(build_network_future(
 			config.roles,
 			network_mut,
 			client.clone(),
@@ -1069,7 +1069,7 @@ ServiceBuilder<
 			has_bootnodes,
 		), exit.clone()).map(drop)));
 
-		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
+		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::Sender<()>>>> = Default::default();
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
@@ -1104,11 +1104,11 @@ ServiceBuilder<
 					);
 
 					telemetry_connection_sinks_.lock().retain(|sink| {
-						sink.unbounded_send(()).is_ok()
+						sink.try_send(()).is_ok()
 					});
 					ready(())
 				});
-			let _ = to_spawn_tx.unbounded_send(Box::pin(select(
+			let _ = to_spawn_tx.try_send(Box::pin(select(
 				future, exit.clone()
 			).map(drop)));
 			telemetry
@@ -1121,7 +1121,7 @@ ServiceBuilder<
 				exit.clone()
 			).map(drop);
 
-			let _ = to_spawn_tx.unbounded_send(Box::pin(future));
+			let _ = to_spawn_tx.try_send(Box::pin(future));
     	}
 
 		// Instrumentation

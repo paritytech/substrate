@@ -33,7 +33,7 @@ use super::gossip::{self, GossipValidator};
 use super::{AuthorityId, VoterSet, Round, SetId};
 
 enum Event {
-	EventStream(mpsc::UnboundedSender<NetworkEvent>),
+	EventStream(mpsc::Sender<NetworkEvent>),
 	WriteNotification(sc_network::PeerId, Vec<u8>),
 	Report(sc_network::PeerId, sc_network::ReputationChange),
 	Announce(Hash),
@@ -41,30 +41,30 @@ enum Event {
 
 #[derive(Clone)]
 struct TestNetwork {
-	sender: mpsc::UnboundedSender<Event>,
+	sender: mpsc::Sender<Event>,
 }
 
 impl sc_network_gossip::Network<Block> for TestNetwork {
 	fn event_stream(&self) -> Box<dyn futures::Stream<Item = NetworkEvent, Error = ()> + Send> {
-		let (tx, rx) = mpsc::unbounded();
-		let _ = self.sender.unbounded_send(Event::EventStream(tx));
+		let (tx, rx) = mpsc::channel(100);
+		let _ = self.sender.try_send(Event::EventStream(tx));
 		Box::new(rx)
 	}
 
 	fn report_peer(&self, who: sc_network::PeerId, cost_benefit: sc_network::ReputationChange) {
-		let _ = self.sender.unbounded_send(Event::Report(who, cost_benefit));
+		let _ = self.sender.try_send(Event::Report(who, cost_benefit));
 	}
 
 	fn disconnect_peer(&self, _: PeerId) {}
 
 	fn write_notification(&self, who: PeerId, _: ConsensusEngineId, message: Vec<u8>) {
-		let _ = self.sender.unbounded_send(Event::WriteNotification(who, message));
+		let _ = self.sender.try_send(Event::WriteNotification(who, message));
 	}
 
 	fn register_notifications_protocol(&self, _: ConsensusEngineId) {}
 
 	fn announce(&self, block: Hash, _associated_data: Vec<u8>) {
-		let _ = self.sender.unbounded_send(Event::Announce(block));
+		let _ = self.sender.try_send(Event::Announce(block));
 	}
 }
 
@@ -97,7 +97,7 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 struct Tester {
 	net_handle: super::NetworkBridge<Block, TestNetwork>,
 	gossip_validator: Arc<GossipValidator<Block>>,
-	events: mpsc::UnboundedReceiver<Event>,
+	events: mpsc::Receiver<Event>,
 }
 
 impl Tester {
@@ -153,7 +153,7 @@ fn make_test_network(executor: &impl futures03::task::Spawn) -> (
 	impl Future<Item=Tester,Error=()>,
 	TestNetwork,
 ) {
-	let (tx, rx) = mpsc::unbounded();
+	let (tx, rx) = mpsc::channel(100);
 	let net = TestNetwork { sender: tx };
 
 	#[derive(Clone)]
@@ -274,19 +274,19 @@ fn good_commit_leads_to_relay() {
 			let send_message = tester.filter_network_events(move |event| match event {
 				Event::EventStream(sender) => {
 					// Add the sending peer and send the commit
-					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
+					let _ = sender.try_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
 						roles: Roles::FULL,
 					});
 
-					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
+					let _ = sender.try_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id.clone(),
 						messages: vec![(GRANDPA_ENGINE_ID, commit_to_send.clone().into())],
 					});
 
 					// Add a random peer which will be the recipient of this message
-					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
+					let _ = sender.try_send(NetworkEvent::NotificationStreamOpened {
 						remote: sc_network::PeerId::random(),
 						engine_id: GRANDPA_ENGINE_ID,
 						roles: Roles::FULL,
@@ -399,12 +399,12 @@ fn bad_commit_leads_to_report() {
 			let sender_id = id.clone();
 			let send_message = tester.filter_network_events(move |event| match event {
 				Event::EventStream(sender) => {
-					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
+					let _ = sender.try_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
 						roles: Roles::FULL,
 					});
-					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
+					let _ = sender.try_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id.clone(),
 						messages: vec![(GRANDPA_ENGINE_ID, commit_to_send.clone().into())],
 					});

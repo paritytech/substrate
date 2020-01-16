@@ -161,7 +161,7 @@ fn propagate<'a, B: BlockT, I>(
 /// Consensus network protocol handler. Manages statements and candidate requests.
 pub struct ConsensusGossip<B: BlockT> {
 	peers: HashMap<PeerId, PeerConsensus<B::Hash>>,
-	live_message_sinks: HashMap<(ConsensusEngineId, B::Hash), Vec<mpsc::UnboundedSender<TopicNotification>>>,
+	live_message_sinks: HashMap<(ConsensusEngineId, B::Hash), Vec<mpsc::Sender<TopicNotification>>>,
 	messages: Vec<MessageEntry<B>>,
 	known_messages: LruCache<B::Hash, ()>,
 	validators: HashMap<ConsensusEngineId, Arc<dyn Validator<B>>>,
@@ -324,13 +324,13 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile)
 	pub fn messages_for(&mut self, engine_id: ConsensusEngineId, topic: B::Hash)
-		-> mpsc::UnboundedReceiver<TopicNotification>
+		-> mpsc::Receiver<TopicNotification>
 	{
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = mpsc::channel(100);
 		for entry in self.messages.iter_mut()
 			.filter(|e| e.topic == topic && e.message.engine_id == engine_id)
 		{
-			tx.unbounded_send(TopicNotification {
+			tx.try_send(TopicNotification {
 					message: entry.message.data.clone(),
 					sender: entry.sender.clone(),
 				})
@@ -390,7 +390,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 					if let Entry::Occupied(mut entry) = self.live_message_sinks.entry((engine_id, topic)) {
 						debug!(target: "gossip", "Pushing consensus message to sinks for {}.", topic);
 						entry.get_mut().retain(|sink| {
-							if let Err(e) = sink.unbounded_send(TopicNotification {
+							if let Err(e) = sink.try_send(TopicNotification {
 								message: message.data.clone(),
 								sender: Some(who.clone())
 							}) {

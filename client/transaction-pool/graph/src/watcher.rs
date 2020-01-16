@@ -27,7 +27,7 @@ use sp_transaction_pool::TransactionStatus;
 /// Represents a stream of status updates for particular extrinsic.
 #[derive(Debug)]
 pub struct Watcher<H, H2> {
-	receiver: mpsc::UnboundedReceiver<TransactionStatus<H, H2>>,
+	receiver: mpsc::Receiver<TransactionStatus<H, H2>>,
 	hash: H,
 }
 
@@ -48,7 +48,7 @@ impl<H, H2> Watcher<H, H2> {
 /// Sender part of the watcher. Exposed only for testing purposes.
 #[derive(Debug)]
 pub struct Sender<H, H2> {
-	receivers: Vec<mpsc::UnboundedSender<TransactionStatus<H, H2>>>,
+	receivers: Vec<mpsc::Sender<TransactionStatus<H, H2>>>,
 	finalized: bool,
 }
 
@@ -64,7 +64,7 @@ impl<H, H2> Default for Sender<H, H2> {
 impl<H: Clone, H2: Clone> Sender<H, H2> {
 	/// Add a new watcher to this sender object.
 	pub fn new_watcher(&mut self, hash: H) -> Watcher<H, H2> {
-		let (tx, receiver) = mpsc::unbounded();
+		let (tx, receiver) = mpsc::channel(100);
 		self.receivers.push(tx);
 		Watcher {
 			receiver,
@@ -118,6 +118,6 @@ impl<H: Clone, H2: Clone> Sender<H, H2> {
 	}
 
 	fn send(&mut self, status: TransactionStatus<H, H2>) {
-		self.receivers.retain(|sender| sender.unbounded_send(status.clone()).is_ok())
+		self.receivers.retain(|sender| sender.try_send(status.clone()).is_ok())
 	}
 }

@@ -280,7 +280,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
+		let range = (ops::Bound::Excluded(key), ops::Bound::);
 		let next_key = self.inner.get(&None)
 			.and_then(|map| map.range::<[u8], _>(range).next().map(|(k, _)| k).cloned());
 
@@ -293,7 +293,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
+		let range = (ops::Bound::Excluded(key), ops::Bound::);
 		let next_key = self.inner.get(&Some((storage_key.to_vec(), child_info.to_owned())))
 			.and_then(|map| map.range::<[u8], _>(range).next().map(|(k, _)| k).cloned());
 

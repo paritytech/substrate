@@ -594,7 +594,7 @@ impl OverlayedChanges {
 	/// Returns the next (in lexicographic order) storage key in the overlayed alongside its value.
 	/// If no value is next then `None` is returned.
 	pub fn next_storage_key_change(&self, key: &[u8]) -> Option<(&[u8], &OverlayedValue)> {
-		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
+		let range = (ops::Bound::Excluded(key), ops::Bound::);
 
 		let next_prospective_key = self.prospective.top
 			.range::<[u8], _>(range)
@@ -623,7 +623,7 @@ impl OverlayedChanges {
 		storage_key: &[u8],
 		key: &[u8]
 	) -> Option<(&[u8], &OverlayedValue)> {
-		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
+		let range = (ops::Bound::Excluded(key), ops::Bound::);
 
 		let next_prospective_key = self.prospective.children.get(storage_key)
 			.and_then(|(map, _)| map.range::<[u8], _>(range).next().map(|(k, v)| (&k[..], v)));

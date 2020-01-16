@@ -33,7 +33,7 @@ pub use self::gen_client::Client as SystemClient;
 /// System API implementation
 pub struct System<B: traits::Block> {
 	info: SystemInfo,
-	send_back: mpsc::UnboundedSender<Request<B>>,
+	send_back: mpsc::Sender<Request<B>>,
 }
 
 /// Request to be processed.
@@ -59,7 +59,7 @@ impl<B: traits::Block> System<B> {
 	/// reading from that channel and answering the requests.
 	pub fn new(
 		info: SystemInfo,
-		send_back: mpsc::UnboundedSender<Request<B>>,
+		send_back: mpsc::Sender<Request<B>>,
 	) -> Self {
 		System {
 			info,
@@ -87,19 +87,19 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 
 	fn system_health(&self) -> Receiver<Health> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::Health(tx));
+		let _ = self.send_back.try_send(Request::Health(tx));
 		Receiver(Compat::new(rx))
 	}
 
 	fn system_peers(&self) -> Receiver<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::Peers(tx));
+		let _ = self.send_back.try_send(Request::Peers(tx));
 		Receiver(Compat::new(rx))
 	}
 
 	fn system_network_state(&self) -> Receiver<rpc::Value> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::NetworkState(tx));
+		let _ = self.send_back.try_send(Request::NetworkState(tx));
 		Receiver(Compat::new(rx))
 	}
 
@@ -107,7 +107,7 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		-> Compat<BoxFuture<'static, std::result::Result<(), rpc::Error>>>
 	{
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::NetworkAddReservedPeer(peer, tx));
+		let _ = self.send_back.try_send(Request::NetworkAddReservedPeer(peer, tx));
 		async move {
 			match rx.await {
 				Ok(Ok(())) => Ok(()),
@@ -121,7 +121,7 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		-> Compat<BoxFuture<'static, std::result::Result<(), rpc::Error>>>
 	{
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::NetworkRemoveReservedPeer(peer, tx));
+		let _ = self.send_back.try_send(Request::NetworkRemoveReservedPeer(peer, tx));
 		async move {
 			match rx.await {
 				Ok(Ok(())) => Ok(()),
@@ -133,7 +133,7 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 
 	fn system_node_roles(&self) -> Receiver<Vec<NodeRole>> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::NodeRoles(tx));
+		let _ = self.send_back.try_send(Request::NodeRoles(tx));
 		Receiver(Compat::new(rx))
 	}
 }

@@ -69,7 +69,7 @@ where
 /// A running client.
 #[wasm_bindgen]
 pub struct Client {
-	rpc_send_tx: mpsc::UnboundedSender<RpcMessage>,
+	rpc_send_tx: mpsc::Sender<RpcMessage>,
 }
 
 struct RpcMessage {
@@ -117,7 +117,7 @@ impl Client {
 	pub fn rpc_send(&mut self, rpc: &str) -> js_sys::Promise {
 		let rpc_session = RpcSession::new(mpsc01::channel(1).0);
 		let (tx, rx) = oneshot::channel();
-		let _ = self.rpc_send_tx.unbounded_send(RpcMessage {
+		let _ = self.rpc_send_tx.try_send(RpcMessage {
 			rpc_json: rpc.to_owned(),
 			session: rpc_session,
 			send_back: tx,
@@ -140,7 +140,7 @@ impl Client {
 		let (tx, rx) = mpsc01::channel(4);
 		let rpc_session = RpcSession::new(tx);
 		let (fut_tx, fut_rx) = oneshot::channel();
-		let _ = self.rpc_send_tx.unbounded_send(RpcMessage {
+		let _ = self.rpc_send_tx.try_send(RpcMessage {
 			rpc_json: rpc.to_owned(),
 			session: rpc_session.clone(),
 			send_back: fut_tx,

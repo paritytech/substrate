@@ -40,7 +40,7 @@ fn rebroadcast_instant() -> Instant {
 /// A sender used to send neighbor packets to a background job.
 #[derive(Clone)]
 pub(super) struct NeighborPacketSender<B: BlockT>(
-	mpsc::UnboundedSender<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>
+	mpsc::Sender<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>
 );
 
 impl<B: BlockT> NeighborPacketSender<B> {
@@ -50,7 +50,7 @@ impl<B: BlockT> NeighborPacketSender<B> {
 		who: Vec<sc_network::PeerId>,
 		neighbor_packet: NeighborPacket<NumberFor<B>>,
 	) {
-		if let Err(err) = self.0.unbounded_send((who, neighbor_packet)) {
+		if let Err(err) = self.0.try_send((who, neighbor_packet)) {
 			debug!(target: "afg", "Failed to send neighbor packet: {:?}", err);
 		}
 	}

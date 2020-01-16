@@ -89,8 +89,8 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	backend: Arc<B>,
 	executor: E,
 	storage_notifications: Mutex<StorageNotifications<Block>>,
-	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
-	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
+	import_notification_sinks: Mutex<Vec<mpsc::Sender<BlockImportNotification<Block>>>>,
+	finality_notification_sinks: Mutex<Vec<mpsc::Sender<FinalityNotification<Block>>>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	fork_blocks: ForkBlocks<Block>,
@@ -1106,7 +1106,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				hash: finalized_hash,
 			};
 
-			sinks.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+			sinks.retain(|sink| sink.try_send(notification.clone()).is_ok());
 		}
 
 		Ok(())
@@ -1132,7 +1132,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		self.import_notification_sinks.lock()
-			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+			.retain(|sink| sink.try_send(notification.clone()).is_ok());
 
 		Ok(())
 	}
@@ -1645,13 +1645,13 @@ where
 {
 	/// Get block import event stream.
 	fn import_notification_stream(&self) -> ImportNotifications<Block> {
-		let (sink, stream) = mpsc::unbounded();
+		let (sink, stream) = mpsc::channel(100);
 		self.import_notification_sinks.lock().push(sink);
 		stream
 	}
 
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
-		let (sink, stream) = mpsc::unbounded();
+		let (sink, stream) = mpsc::channel(100);
 		self.finality_notification_sinks.lock().push(sink);
 		stream
 	}

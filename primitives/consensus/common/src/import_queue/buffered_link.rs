@@ -46,7 +46,7 @@ use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 /// can be used to buffer commands, and the receiver can be used to poll said commands and transfer
 /// them to another link.
 pub fn buffered_link<B: BlockT>() -> (BufferedLinkSender<B>, BufferedLinkReceiver<B>) {
-	let (tx, rx) = mpsc::unbounded();
+	let (tx, rx) = mpsc::channel(100);
 	let tx = BufferedLinkSender { tx };
 	let rx = BufferedLinkReceiver { rx };
 	(tx, rx)
@@ -54,7 +54,7 @@ pub fn buffered_link<B: BlockT>() -> (BufferedLinkSender<B>, BufferedLinkReceive
 
 /// See [`buffered_link`].
 pub struct BufferedLinkSender<B: BlockT> {
-	tx: mpsc::UnboundedSender<BlockImportWorkerMsg<B>>,
+	tx: mpsc::Sender<BlockImportWorkerMsg<B>>,
 }
 
 impl<B: BlockT> BufferedLinkSender<B> {
@@ -90,7 +90,7 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 		count: usize,
 		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
 	) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlocksProcessed(imported, count, results));
+		let _ = self.tx.try_send(BlockImportWorkerMsg::BlocksProcessed(imported, count, results));
 	}
 
 	fn justification_imported(
@@ -101,11 +101,11 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 		success: bool
 	) {
 		let msg = BlockImportWorkerMsg::JustificationImported(who, hash.clone(), number, success);
-		let _ = self.tx.unbounded_send(msg);
+		let _ = self.tx.try_send(msg);
 	}
 
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestJustification(hash.clone(), number));
+		let _ = self.tx.try_send(BlockImportWorkerMsg::RequestJustification(hash.clone(), number));
 	}
 
 	fn finality_proof_imported(
@@ -115,17 +115,17 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
 	) {
 		let msg = BlockImportWorkerMsg::FinalityProofImported(who, request_block, finalization_result);
-		let _ = self.tx.unbounded_send(msg);
+		let _ = self.tx.try_send(msg);
 	}
 
 	fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestFinalityProof(hash.clone(), number));
+		let _ = self.tx.try_send(BlockImportWorkerMsg::RequestFinalityProof(hash.clone(), number));
 	}
 }
 
 /// See [`buffered_link`].
 pub struct BufferedLinkReceiver<B: BlockT> {
-	rx: mpsc::UnboundedReceiver<BlockImportWorkerMsg<B>>,
+	rx: mpsc::Receiver<BlockImportWorkerMsg<B>>,
 }
 
 impl<B: BlockT> BufferedLinkReceiver<B> {

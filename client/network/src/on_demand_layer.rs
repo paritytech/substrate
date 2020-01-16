@@ -41,10 +41,10 @@ pub struct OnDemand<B: BlockT> {
 	/// Note that a better alternative would be to use a MPMC queue here, and add a `poll` method
 	/// from the `OnDemand`. However there exists no popular implementation of MPMC channels in
 	/// asynchronous Rust at the moment
-	requests_queue: Mutex<Option<mpsc::UnboundedReceiver<RequestData<B>>>>,
+	requests_queue: Mutex<Option<mpsc::Receiver<RequestData<B>>>>,
 
 	/// Sending side of `requests_queue`.
-	requests_send: mpsc::UnboundedSender<RequestData<B>>,
+	requests_send: mpsc::Sender<RequestData<B>>,
 }
 
 impl<B: BlockT> OnDemand<B> where
@@ -52,7 +52,7 @@ impl<B: BlockT> OnDemand<B> where
 {
 	/// Creates new on-demand service.
 	pub fn new(checker: Arc<dyn FetchChecker<B>>) -> Self {
-		let (requests_send, requests_queue) = mpsc::unbounded();
+		let (requests_send, requests_queue) = mpsc::channel(100);
 		let requests_queue = Mutex::new(Some(requests_queue));
 
 		OnDemand {
@@ -74,7 +74,7 @@ impl<B: BlockT> OnDemand<B> where
 	///
 	/// If this function returns `None`, that means that the receiver has already been extracted in
 	/// the past, and therefore that something already handles the requests.
-	pub(crate) fn extract_receiver(&self) -> Option<mpsc::UnboundedReceiver<RequestData<B>>> {
+	pub(crate) fn extract_receiver(&self) -> Option<mpsc::Receiver<RequestData<B>>> {
 		self.requests_queue.lock().take()
 	}
 }
@@ -91,13 +91,13 @@ impl<B> Fetcher<B> for OnDemand<B> where
 
 	fn remote_header(&self, request: RemoteHeaderRequest<B::Header>) -> Self::RemoteHeaderResult {
 		let (sender, receiver) = oneshot::channel();
-		let _ = self.requests_send.unbounded_send(RequestData::RemoteHeader(request, sender));
+		let _ = self.requests_send.try_send(RequestData::RemoteHeader(request, sender));
 		RemoteResponse { receiver }
 	}
 
 	fn remote_read(&self, request: RemoteReadRequest<B::Header>) -> Self::RemoteReadResult {
 		let (sender, receiver) = oneshot::channel();
-		let _ = self.requests_send.unbounded_send(RequestData::RemoteRead(request, sender));
+		let _ = self.requests_send.try_send(RequestData::RemoteRead(request, sender));
 		RemoteResponse { receiver }
 	}
 
@@ -106,25 +106,25 @@ impl<B> Fetcher<B> for OnDemand<B> where
 		request: RemoteReadChildRequest<B::Header>
 	) -> Self::RemoteReadResult {
 		let (sender, receiver) = oneshot::channel();
-		let _ = self.requests_send.unbounded_send(RequestData::RemoteReadChild(request, sender));
+		let _ = self.requests_send.try_send(RequestData::RemoteReadChild(request, sender));
 		RemoteResponse { receiver }
 	}
 
 	fn remote_call(&self, request: RemoteCallRequest<B::Header>) -> Self::RemoteCallResult {
 		let (sender, receiver) = oneshot::channel();
-		let _ = self.requests_send.unbounded_send(RequestData::RemoteCall(request, sender));
+		let _ = self.requests_send.try_send(RequestData::RemoteCall(request, sender));
 		RemoteResponse { receiver }
 	}
 
 	fn remote_changes(&self, request: RemoteChangesRequest<B::Header>) -> Self::RemoteChangesResult {
 		let (sender, receiver) = oneshot::channel();
-		let _ = self.requests_send.unbounded_send(RequestData::RemoteChanges(request, sender));
+		let _ = self.requests_send.try_send(RequestData::RemoteChanges(request, sender));
 		RemoteResponse { receiver }
 	}
 
 	fn remote_body(&self, request: RemoteBodyRequest<B::Header>) -> Self::RemoteBodyResult {
 		let (sender, receiver) = oneshot::channel();
-		let _ = self.requests_send.unbounded_send(RequestData::RemoteBody(request, sender));
+		let _ = self.requests_send.try_send(RequestData::RemoteBody(request, sender));
 		RemoteResponse { receiver }
 	}
 }

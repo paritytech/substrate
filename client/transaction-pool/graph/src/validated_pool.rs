@@ -70,7 +70,7 @@ pub(crate) struct ValidatedPool<B: ChainApi> {
 		ExHash<B>,
 		ExtrinsicFor<B>,
 	>>,
-	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<()>>>,
+	import_notification_sinks: Mutex<Vec<mpsc::Sender<()>>>,
 	rotator: PoolRotator<ExHash<B>>,
 }
 
@@ -126,7 +126,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				let imported = self.pool.write().import(tx)?;
 
 				if let base::Imported::Ready { .. } = imported {
-					self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(()).is_ok());
+					self.import_notification_sinks.lock().retain(|sink| sink.try_send(()).is_ok());
 				}
 
 				let mut listener = self.listener.write();
@@ -445,7 +445,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 	/// Return an event stream of transactions imported to the pool.
 	pub fn import_notification_stream(&self) -> EventStream {
-		let (sink, stream) = mpsc::unbounded();
+		let (sink, stream) = mpsc::channel(100);
 		self.import_notification_sinks.lock().push(sink);
 		stream
 	}

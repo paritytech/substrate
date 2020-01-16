@@ -164,7 +164,7 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
-		let range = (Bound::Excluded(key), Bound::Unbounded);
+		let range = (Bound::Excluded(key), Bound::);
 		self.inner.top.range::<[u8], _>(range).next().map(|(k, _)| k).cloned()
 	}
 
@@ -174,7 +174,7 @@ impl Externalities for BasicExternalities {
 		_child_info: ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
-		let range = (Bound::Excluded(key), Bound::Unbounded);
+		let range = (Bound::Excluded(key), Bound::);
 		self.inner.children.get(storage_key.as_ref())
 			.and_then(|child| child.data.range::<[u8], _>(range).next().map(|(k, _)| k).cloned())
 	}
@@ -227,7 +227,7 @@ impl Externalities for BasicExternalities {
 			return;
 		}
 
-		let to_remove = self.inner.top.range::<[u8], _>((Bound::Included(prefix), Bound::Unbounded))
+		let to_remove = self.inner.top.range::<[u8], _>((Bound::Included(prefix), Bound::))
 			.map(|(k, _)| k)
 			.take_while(|k| k.starts_with(prefix))
 			.cloned()
@@ -245,7 +245,7 @@ impl Externalities for BasicExternalities {
 		prefix: &[u8],
 	) {
 		if let Some(child) = self.inner.children.get_mut(storage_key.as_ref()) {
-			let to_remove = child.data.range::<[u8], _>((Bound::Included(prefix), Bound::Unbounded))
+			let to_remove = child.data.range::<[u8], _>((Bound::Included(prefix), Bound::))
 				.map(|(k, _)| k)
 				.take_while(|k| k.starts_with(prefix))
 				.cloned()

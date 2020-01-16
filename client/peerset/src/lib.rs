@@ -68,7 +68,7 @@ impl ReputationChange {
 /// Shared handle to the peer set manager (PSM). Distributed around the code.
 #[derive(Debug, Clone)]
 pub struct PeersetHandle {
-	tx: mpsc::UnboundedSender<Action>,
+	tx: mpsc::Sender<Action>,
 }
 
 impl PeersetHandle {
@@ -80,39 +80,39 @@ impl PeersetHandle {
 	/// > **Note**: Keep in mind that the networking has to know an address for this node,
 	/// >			otherwise it will not be able to connect to it.
 	pub fn add_reserved_peer(&self, peer_id: PeerId) {
-		let _ = self.tx.unbounded_send(Action::AddReservedPeer(peer_id));
+		let _ = self.tx.try_send(Action::AddReservedPeer(peer_id));
 	}
 
 	/// Remove a previously-added reserved peer.
 	///
 	/// Has no effect if the node was not a reserved peer.
 	pub fn remove_reserved_peer(&self, peer_id: PeerId) {
-		let _ = self.tx.unbounded_send(Action::RemoveReservedPeer(peer_id));
+		let _ = self.tx.try_send(Action::RemoveReservedPeer(peer_id));
 	}
 
 	/// Sets whether or not the peerset only has connections .
 	pub fn set_reserved_only(&self, reserved: bool) {
-		let _ = self.tx.unbounded_send(Action::SetReservedOnly(reserved));
+		let _ = self.tx.try_send(Action::SetReservedOnly(reserved));
 	}
 
 	/// Reports an adjustment to the reputation of the given peer.
 	pub fn report_peer(&self, peer_id: PeerId, score_diff: ReputationChange) {
-		let _ = self.tx.unbounded_send(Action::ReportPeer(peer_id, score_diff));
+		let _ = self.tx.try_send(Action::ReportPeer(peer_id, score_diff));
 	}
 
 	/// Modify a priority group.
 	pub fn set_priority_group(&self, group_id: String, peers: HashSet<PeerId>) {
-		let _ = self.tx.unbounded_send(Action::SetPriorityGroup(group_id, peers));
+		let _ = self.tx.try_send(Action::SetPriorityGroup(group_id, peers));
 	}
 
 	/// Add a peer to a priority group.
 	pub fn add_to_priority_group(&self, group_id: String, peer_id: PeerId) {
-		let _ = self.tx.unbounded_send(Action::AddToPriorityGroup(group_id, peer_id));
+		let _ = self.tx.try_send(Action::AddToPriorityGroup(group_id, peer_id));
 	}
 
 	/// Remove a peer from a priority group.
 	pub fn remove_from_priority_group(&self, group_id: String, peer_id: PeerId) {
-		let _ = self.tx.unbounded_send(Action::RemoveFromPriorityGroup(group_id, peer_id));
+		let _ = self.tx.try_send(Action::RemoveFromPriorityGroup(group_id, peer_id));
 	}
 }
 
@@ -178,9 +178,9 @@ pub struct Peerset {
 	/// If true, we only accept reserved nodes.
 	reserved_only: bool,
 	/// Receiver for messages from the `PeersetHandle` and from `tx`.
-	rx: mpsc::UnboundedReceiver<Action>,
+	rx: mpsc::Receiver<Action>,
 	/// Sending side of `rx`.
-	tx: mpsc::UnboundedSender<Action>,
+	tx: mpsc::Sender<Action>,
 	/// Queue of messages to be emitted when the `Peerset` is polled.
 	message_queue: VecDeque<Message>,
 	/// When the `Peerset` was created.
@@ -192,7 +192,7 @@ pub struct Peerset {
 impl Peerset {
 	/// Builds a new peerset from the given configuration.
 	pub fn from_config(config: PeersetConfig) -> (Peerset, PeersetHandle) {
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = mpsc::channel(100);
 
 		let handle = PeersetHandle {
 			tx: tx.clone(),
@@ -472,7 +472,7 @@ impl Peerset {
 		// We don't immediately perform the adjustments in order to have state consistency. We
 		// don't want the reporting here to take priority over messages sent using the
 		// `PeersetHandle`.
-		let _ = self.tx.unbounded_send(Action::ReportPeer(peer_id, score_diff));
+		let _ = self.tx.try_send(Action::ReportPeer(peer_id, score_diff));
 	}
 
 	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.
