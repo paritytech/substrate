@@ -70,7 +70,7 @@ use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug};
-use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput};
+use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput, Benchmarking};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
@@ -862,8 +862,39 @@ decl_module! {
 	}
 }
 
+mod benchmarking {
+	mod set_identity {
+		fn components() -> Vec<(&'static str, u32, u32)> {
+			vec![
+				// Registrar Count
+				("R", 1, 16),
+				// Additional Field Count
+				("X", 1, 20)
+			]
+		}
+
+		/// Assumes externalities are set up with a mutable state.
+		///
+		/// Panics if `component_name` isn't from `set_identity::components` or `component_value` is out of
+		/// the range of `set_identity::components`.
+		///
+		/// Sets up state randomly and returns a randomly generated `set_identity` with sensible (fixed)
+		/// values for all complexity components except those mentioned in the identity.
+		fn instance(components: &[(&'static str, u32)]) -> Call {
+			Call::set_identity::default()
+		}
+	}
+}
+
+impl<T: Trait> Benchmarking for Module<T> {
+	type BenchmarkResults = bool;
+	fn run_benchmarks() -> Vec<Self::BenchmarkResults> {
+		return vec![true]
+	}
+}
+
 #[cfg(test)]
-mod tests {
+pub mod tests {
 	use super::*;
 
 	use sp_runtime::traits::BadOrigin;
