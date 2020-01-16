@@ -24,9 +24,11 @@ use sp_runtime::traits::BadOrigin;
 
 #[test]
 fn founding_works() {
-	EnvBuilder::new().with_members(vec![]).execute(|| {
-		// No founder initially.
+	EnvBuilder::new().with_max_members(0).with_members(vec![]).execute(|| {
+		// Not set up initially.
 		assert_eq!(Society::founder(), None);
+		assert_eq!(Society::max_members(), 0);
+		assert_eq!(Society::pot(), 0);
 		// Account 1 is set as the founder origin
 		// Account 5 cannot start a society
 		assert_noop!(Society::found(Origin::signed(5), 20, 100), BadOrigin);
@@ -40,6 +42,9 @@ fn founding_works() {
 		assert_eq!(Society::founder(), Some(10));
 		// 100 members max
 		assert_eq!(Society::max_members(), 100);
+		// Pot grows after first rotation period
+		run_to_block(4);
+		assert_eq!(Society::pot(), 1000);
 		// Cannot start another society
 		assert_noop!(Society::found(Origin::signed(1), 20, 100), Error::<Test, _>::AlreadyFounded);
 	});

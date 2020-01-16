@@ -817,11 +817,12 @@ decl_module! {
 		fn found(origin, founder: T::AccountId, max_members: u32) {
 			T::FounderSetOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
+			ensure!(max_members > 1, Error::<T, I>::MaxMembers);
 			// This should never fail in the context of this function...
+			<MaxMembers<I>>::put(max_members);
 			Self::add_member(&founder)?;
 			<Head<T, I>>::put(&founder);
 			<Founder<T, I>>::put(&founder);
-			<MaxMembers<I>>::put(max_members);
 			Self::deposit_event(RawEvent::Founded(founder));
 		}
 		/// Allow suspension judgement origin to make judgement on a suspended member.
