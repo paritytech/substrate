@@ -67,7 +67,7 @@ fn grandpa_observer<B, E, Block: BlockT, RA, S, F>(
 ) -> impl Future<Item=(), Error=CommandOrError<Block::Hash, NumberFor<Block>>> where
 	NumberFor<Block>: BlockNumberOps,
 	B: Backend<Block>,
-	E: CallExecutor<Block> + Send + Sync,
+	E: CallExecutor<Block> + Send + Sync + 'static,
 	RA: Send + Sync,
 	S: Stream<
 		Item = CommunicationIn<Block>,

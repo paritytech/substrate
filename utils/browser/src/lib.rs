@@ -17,7 +17,7 @@
 use futures01::sync::mpsc as mpsc01;
 use log::{debug, info};
 use std::sync::Arc;
-use sc_service::{
+use service::{
 	AbstractService, RpcSession, Roles, Configuration, config::{DatabaseConfig, KeystoreConfig},
 	ChainSpec, RuntimeGenesis
 };
@@ -25,7 +25,7 @@ use wasm_bindgen::prelude::*;
 use futures::{prelude::*, channel::{oneshot, mpsc}, future::{poll_fn, ok}, compat::*};
 use std::task::Poll;
 use std::pin::Pin;
-use sc_chain_spec::Extension;
+use chain_spec::Extension;
 
 pub use libp2p::wasm_ext::{ExtTransport, ffi::Transport};
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
@@ -47,7 +47,7 @@ where
 
 	let transport = ExtTransport::new(transport);
 	let mut config = Configuration::default_with_spec_and_base_path(chain_spec, None);
-	config.network.transport = sc_network::config::TransportConfig::Normal {
+	config.network.transport = network::config::TransportConfig::Normal {
 		wasm_external_transport: Some(transport.clone()),
 		allow_private_ipv4: true,
 		enable_mdns: false,
@@ -82,7 +82,7 @@ struct RpcMessage {
 pub fn start_client(mut service: impl AbstractService) -> Client {
 	// Spawn informant
 	wasm_bindgen_futures::spawn_local(
-		sc_cli::informant::build(&service).map(drop)
+		cli::informant::build(&service).map(drop)
 	);
 
 	// We dispatch a background task responsible for processing the service.

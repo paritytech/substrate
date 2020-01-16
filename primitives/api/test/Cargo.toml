@@ -12,7 +12,7 @@ sp-runtime = { version = "2.0.0", path = "../../runtime" }
 sp-blockchain = { version = "2.0.0", path = "../../blockchain" }
 sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sp-state-machine = { version = "2.0.0", path = "../../../primitives/state-machine" }
+sp-state-machine = { version = "0.8", path = "../../../primitives/state-machine" }
 trybuild = "1.0.17"
 rustversion = "1.0.0"
 

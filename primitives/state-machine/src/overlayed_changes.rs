@@ -19,8 +19,8 @@
 use crate::{
 	backend::Backend, ChangesTrieTransaction,
 	changes_trie::{
-		NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig, BlockNumber, build_changes_trie,
-		Storage as ChangesTrieStorage,
+		NO_EXTRINSIC_INDEX, BlockNumber, build_changes_trie,
+		State as ChangesTrieState,
 	},
 };
 
@@ -43,9 +43,8 @@ pub struct OverlayedChanges {
 	pub(crate) prospective: OverlayedChangeSet,
 	/// Committed changes.
 	pub(crate) committed: OverlayedChangeSet,
-	/// Changes trie configuration. None by default, but could be installed by the
-	/// runtime if it supports change tries.
-	pub(crate) changes_trie_config: Option<ChangesTrieConfig>,
+	/// True if extrinsiscs stats must be collected.
+	pub(crate) collect_extrinsics: bool,
 }
 
 /// The storage value, used inside OverlayedChanges.
@@ -184,20 +183,9 @@ impl OverlayedChanges {
 		self.prospective.is_empty() && self.committed.is_empty()
 	}
 
-	/// Sets the changes trie configuration.
-	///
-	/// Returns false if configuration has been set already and we now trying
-	/// to install different configuration. This isn't supported now.
-	pub(crate) fn set_changes_trie_config(&mut self, config: ChangesTrieConfig) -> bool {
-		if let Some(ref old_config) = self.changes_trie_config {
-			// we do not support changes trie configuration' change now
-			if *old_config != config {
-				return false;
-			}
-		}
-
-		self.changes_trie_config = Some(config);
-		true
+	/// Ask to collect/not to collect extrinsics indices where key(s) has been changed.
+	pub fn set_collect_extrinsics(&mut self, collect_extrinsics: bool) {
+		self.collect_extrinsics = collect_extrinsics;
 	}
 
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be referred
@@ -442,11 +430,11 @@ impl OverlayedChanges {
 
 	/// Convert this instance with all changes into a [`StorageChanges`] instance.
 	pub fn into_storage_changes<
-		B: Backend<H>, H: Hasher, N: BlockNumber, T: ChangesTrieStorage<H, N>
+		B: Backend<H>, H: Hasher, N: BlockNumber
 	>(
 		self,
 		backend: &B,
-		changes_trie_storage: Option<&T>,
+		changes_trie_state: Option<&ChangesTrieState<H, N>>,
 		parent_hash: H::Out,
 		mut cache: StorageTransactionCache<B::Transaction, H, N>,
 	) -> Result<StorageChanges<B::Transaction, H, N>, String> where H::Out: Ord + Encode + 'static {
@@ -463,7 +451,7 @@ impl OverlayedChanges {
 		if cache.changes_trie_transaction.is_none() {
 			self.changes_trie_root(
 				backend,
-				changes_trie_storage,
+				changes_trie_state,
 				parent_hash,
 				false,
 				&mut cache,
@@ -501,7 +489,7 @@ impl OverlayedChanges {
 	/// Changes that are made outside of extrinsics, are marked with
 	/// `NO_EXTRINSIC_INDEX` index.
 	fn extrinsic_index(&self) -> Option<u32> {
-		match self.changes_trie_config.is_some() {
+		match self.collect_extrinsics {
 			true => Some(
 				self.storage(EXTRINSIC_INDEX)
 					.and_then(|idx| idx.and_then(|idx| Decode::decode(&mut &*idx).ok()))
@@ -557,17 +545,17 @@ impl OverlayedChanges {
 	/// # Panics
 	///
 	/// Panics on storage error, when `panic_on_storage_error` is set.
-	pub fn changes_trie_root<H: Hasher, N: BlockNumber, B: Backend<H>, T: ChangesTrieStorage<H, N>>(
+	pub fn changes_trie_root<'a, H: Hasher, N: BlockNumber, B: Backend<H>>(
 		&self,
 		backend: &B,
-		changes_trie_storage: Option<&T>,
+		changes_trie_state: Option<&'a ChangesTrieState<'a, H, N>>,
 		parent_hash: H::Out,
 		panic_on_storage_error: bool,
 		cache: &mut StorageTransactionCache<B::Transaction, H, N>,
 	) -> Result<Option<H::Out>, ()> where H::Out: Ord + Encode + 'static {
-		build_changes_trie::<_, T, H, N>(
+		build_changes_trie::<_, H, N>(
 			backend,
-			changes_trie_storage,
+			changes_trie_state,
 			self,
 			parent_hash,
 			panic_on_storage_error,
@@ -656,7 +644,6 @@ mod tests {
 		Blake2Hasher, traits::Externalities, storage::well_known_keys::EXTRINSIC_INDEX,
 	};
 	use crate::InMemoryBackend;
-	use crate::changes_trie::InMemoryStorage as InMemoryChangesTrieStorage;
 	use crate::ext::Ext;
 	use super::*;
 
@@ -718,13 +705,12 @@ mod tests {
 			..Default::default()
 		};
 
-		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(
 			&mut overlay,
 			&mut cache,
 			&backend,
-			Some(&changes_trie_storage),
+			crate::changes_trie::disabled_state::<_, u64>(),
 			None,
 		);
 		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
@@ -733,56 +719,9 @@ mod tests {
 	}
 
 	#[test]
-	fn changes_trie_configuration_is_saved() {
-		let mut overlay = OverlayedChanges::default();
-		assert!(overlay.changes_trie_config.is_none());
-		assert_eq!(
-			overlay.set_changes_trie_config(
-				ChangesTrieConfig { digest_interval: 4, digest_levels: 1, },
-			),
-			true,
-		);
-		assert!(overlay.changes_trie_config.is_some());
-	}
-
-	#[test]
-	fn changes_trie_configuration_is_saved_twice() {
-		let mut overlay = OverlayedChanges::default();
-		assert!(overlay.changes_trie_config.is_none());
-		assert_eq!(overlay.set_changes_trie_config(ChangesTrieConfig {
-			digest_interval: 4, digest_levels: 1,
-		}), true);
-		overlay.set_extrinsic_index(0);
-		overlay.set_storage(vec![1], Some(vec![2]));
-		assert_eq!(overlay.set_changes_trie_config(ChangesTrieConfig {
-			digest_interval: 4, digest_levels: 1,
-		}), true);
-		assert_eq!(
-			strip_extrinsic_index(&overlay.prospective.top),
-			vec![
-				(vec![1], OverlayedValue { value: Some(vec![2]),
-				 extrinsics: Some(vec![0].into_iter().collect()) }),
-			].into_iter().collect(),
-		);
-	}
-
-	#[test]
-	fn panics_when_trying_to_save_different_changes_trie_configuration() {
-		let mut overlay = OverlayedChanges::default();
-		assert_eq!(overlay.set_changes_trie_config(ChangesTrieConfig {
-			digest_interval: 4, digest_levels: 1,
-		}), true);
-		assert_eq!(overlay.set_changes_trie_config(ChangesTrieConfig {
-			digest_interval: 2, digest_levels: 1,
-		}), false);
-	}
-
-	#[test]
 	fn extrinsic_changes_are_collected() {
 		let mut overlay = OverlayedChanges::default();
-		let _ = overlay.set_changes_trie_config(ChangesTrieConfig {
-			digest_interval: 4, digest_levels: 1,
-		});
+		overlay.set_collect_extrinsics(true);
 
 		overlay.set_storage(vec![100], Some(vec![101]));
 

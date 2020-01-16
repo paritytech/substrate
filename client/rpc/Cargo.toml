@@ -5,9 +5,9 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sc-rpc-api = { version = "2.0.0", path = "../rpc-api" }
+sc-rpc-api = { version = "0.8", path = "../rpc-api" }
 sc-client-api = { version = "2.0.0", path = "../api" }
-sc-client = { version = "2.0.0", path = "../" }
+sc-client = { version = "0.8", path = "../" }
 sp-api = { version = "2.0.0", path = "../../primitives/api" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 futures = { version = "0.3.1", features = ["compat"] }
@@ -20,8 +20,8 @@ serde_json = "1.0.41"
 sp-session = { version = "2.0.0", path = "../../primitives/session" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sp-rpc = { version = "2.0.0", path = "../../primitives/rpc" }
-sp-state-machine = { version = "2.0.0", path = "../../primitives/state-machine" }
-sc-executor = { version = "2.0.0", path = "../executor" }
+sp-state-machine = { version = "0.8", path = "../../primitives/state-machine" }
+sc-executor = { version = "0.8", path = "../executor" }
 sc-keystore = { version = "2.0.0", path = "../keystore" }
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }

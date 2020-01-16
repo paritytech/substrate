@@ -21,7 +21,7 @@ use self::error::Error;
 use std::sync::Arc;
 use assert_matches::assert_matches;
 use futures01::stream::Stream;
-use sp_core::storage::{well_known_keys, ChildInfo};
+use sp_core::{storage::{well_known_keys, ChildInfo}, ChangesTrieConfiguration};
 use sp_core::hash::H256;
 use sp_io::hashing::blake2_256;
 use substrate_test_runtime_client::{
@@ -378,7 +378,9 @@ fn should_query_storage() {
 	}
 
 	run_tests(Arc::new(substrate_test_runtime_client::new()));
-	run_tests(Arc::new(TestClientBuilder::new().set_support_changes_trie(true).build()));
+	run_tests(Arc::new(TestClientBuilder::new()
+		.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
+		.build()));
 }
 
 #[test]
@@ -399,7 +401,7 @@ fn should_return_runtime_version() {
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
-		\"specVersion\":1,\"implVersion\":1,\"apis\":[[\"0xdf6acb689907609b\",2],\
+		\"specVersion\":1,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",2],\
 		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",1],[\"0x40fe3ad401f8959a\",4],\
 		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",1],\
 		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]]}";

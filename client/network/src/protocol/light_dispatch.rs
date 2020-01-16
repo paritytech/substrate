@@ -692,7 +692,7 @@ pub mod tests {
 	use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 	use libp2p::PeerId;
 	use super::{REQUEST_TIMEOUT, LightDispatch, LightDispatchNetwork, RequestData, StorageProof};
-	use sp_test_primitives::{changes_trie_config, Block, Extrinsic, Header};
+	use sp_test_primitives::{Block, Extrinsic, Header};
 
 	struct DummyFetchChecker { ok: bool }
 
@@ -1096,7 +1096,11 @@ pub mod tests {
 
 		let (tx, response) = oneshot::channel();
 		light_dispatch.add_request(&mut network_interface, RequestData::RemoteChanges(RemoteChangesRequest {
-			changes_trie_config: changes_trie_config(),
+			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
+				zero: (0, Default::default()),
+				end: None,
+				config: Some(sp_core::ChangesTrieConfiguration::new(4, 2)),
+			}],
 			first_block: (1, Default::default()),
 			last_block: (100, Default::default()),
 			max_block: (100, Default::default()),
