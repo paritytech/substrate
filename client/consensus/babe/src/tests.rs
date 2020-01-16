@@ -72,23 +72,24 @@ struct DummyProposer {
 }
 
 impl Environment<TestBlock> for DummyFactory {
+	type CreateProposer = future::Ready<Result<DummyProposer, Error>>;
 	type Proposer = DummyProposer;
 	type Error = Error;
 
 	fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header)
-		-> Result<DummyProposer, Error>
+		-> Self::CreateProposer
 	{
 
 		let parent_slot = crate::find_pre_digest::<TestBlock>(parent_header)
 			.expect("parent header has a pre-digest")
 			.slot_number();
 
-		Ok(DummyProposer {
+		future::ready(Ok(DummyProposer {
 			factory: self.clone(),
 			parent_hash: parent_header.hash(),
 			parent_number: *parent_header.number(),
 			parent_slot,
-		})
+		}))
 	}
 }
 
@@ -547,7 +548,7 @@ fn propose_and_import_block<Transaction>(
 	proposer_factory: &mut DummyFactory,
 	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
 ) -> sp_core::H256 {
-	let mut proposer = proposer_factory.init(parent).unwrap();
+	let mut proposer = futures::executor::block_on(proposer_factory.init(parent)).unwrap();
 
 	let slot_number = slot_number.unwrap_or_else(|| {
 		let parent_pre_digest = find_pre_digest::<TestBlock>(parent).unwrap();

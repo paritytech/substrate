@@ -165,7 +165,7 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		>,
 		sc_client::LongestChain<Backend, Block>,
 	) where
-		Executor: sc_client::CallExecutor<Block>,
+		Executor: sc_client::CallExecutor<Block> + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 		Block: BlockT,
 	{
@@ -224,8 +224,8 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 		sc_client::LongestChain<Backend, Block>,
 	) where
 		I: Into<Option<NativeExecutor<E>>>,
-		E: sc_executor::NativeExecutionDispatch,
-		Backend: sc_client_api::backend::Backend<Block>,
+		E: sc_executor::NativeExecutionDispatch + 'static,
+		Backend: sc_client_api::backend::Backend<Block> + 'static,
 		Block: BlockT,
 	{
 		let executor = executor.into().unwrap_or_else(||
