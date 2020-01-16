@@ -18,11 +18,11 @@
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use sp_core::ChangesTrieConfiguration;
+use sp_core::ChangesTrieConfigurationRange;
 use sp_core::offchain::OffchainStorage;
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, HasherFor};
-use sp_state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction};
+use sp_state_machine::{ChangesTrieState, ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction};
 use crate::{
 	blockchain::{
 		Backend as BlockchainBackend, well_known_cache_keys
@@ -248,8 +248,6 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	type Blockchain: BlockchainBackend<Block>;
 	/// Associated state backend type.
 	type State: StateBackend<HasherFor<Block>> + Send;
-	/// Changes trie storage.
-	type ChangesTrieStorage: PrunableStateChangesTrieStorage<Block>;
 	/// Offchain workers local storage.
 	type OffchainStorage: OffchainStorage;
 
@@ -284,7 +282,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	fn usage_info(&self) -> Option<UsageInfo>;
 
 	/// Returns reference to changes trie storage.
-	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage>;
+	fn changes_trie_storage(&self) -> Option<&dyn PrunableStateChangesTrieStorage<Block>>;
 
 	/// Returns a handle to offchain storage.
 	fn offchain_storage(&self) -> Option<Self::OffchainStorage>;
@@ -342,12 +340,16 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 pub trait PrunableStateChangesTrieStorage<Block: BlockT>:
 	StateChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>
 {
-	/// Get number block of oldest, non-pruned changes trie.
-	fn oldest_changes_trie_block(
-		&self,
-		config: &ChangesTrieConfiguration,
-		best_finalized: NumberFor<Block>,
-	) -> NumberFor<Block>;
+	/// Get reference to StateChangesTrieStorage.
+	fn storage(&self) -> &dyn StateChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>;
+	/// Get configuration at given block.
+	fn configuration_at(&self, at: &BlockId<Block>) -> sp_blockchain::Result<
+		ChangesTrieConfigurationRange<NumberFor<Block>, Block::Hash>
+	>;
+	/// Get end block (inclusive) of oldest pruned max-level (or skewed) digest trie blocks range.
+	/// It is guaranteed that we have no any changes tries before (and including) this block.
+	/// It is guaranteed that all existing changes tries after this block are not yet pruned (if created).
+	fn oldest_pruned_digest_range_end(&self) -> NumberFor<Block>;
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.
@@ -363,4 +365,21 @@ pub trait RemoteBackend<Block: BlockT>: Backend<Block> {
 	/// Returned backend either resolves blockchain data
 	/// locally, or prepares request to fetch that data from remote node.
 	fn remote_blockchain(&self) -> Arc<dyn RemoteBlockchain<Block>>;
+}
+
+/// Return changes tries state at given block.
+pub fn changes_tries_state_at_block<'a, Block: BlockT>(
+	block: &BlockId<Block>,
+	maybe_storage: Option<&'a dyn PrunableStateChangesTrieStorage<Block>>,
+) -> sp_blockchain::Result<Option<ChangesTrieState<'a, HasherFor<Block>, NumberFor<Block>>>> {
+	let storage = match maybe_storage {
+		Some(storage) => storage,
+		None => return Ok(None),
+	};
+
+	let config_range = storage.configuration_at(block)?;
+	match config_range.config {
+		Some(config) => Ok(Some(ChangesTrieState::new(config, config_range.zero.0, storage.storage()))),
+		None => Ok(None),
+	}
 }

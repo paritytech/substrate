@@ -70,6 +70,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// A handle to a `SyncOracle`.
 	type SyncOracle: SyncOracle;
 
+	/// The type of future resolving to the proposer.
+	type CreateProposer: Future<Output = Result<Self::Proposer, sp_consensus::Error>>
+		+ Send + Unpin + 'static;
+
 	/// The type of proposer to use to build blocks.
 	type Proposer: Proposer<B>;
 
@@ -129,7 +133,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle;
 
 	/// Returns a `Proposer` to author on top of the given block.
-	fn proposer(&mut self, block: &B::Header) -> Result<Self::Proposer, sp_consensus::Error>;
+	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer;
 
 	/// Remaining duration of the slot.
 	fn slot_remaining_duration(&self, slot_info: &SlotInfo) -> Duration {
@@ -216,32 +220,30 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			"timestamp" => timestamp,
 		);
 
-		let mut proposer = match self.proposer(&chain_head) {
-			Ok(proposer) => proposer,
-			Err(err) => {
-				warn!("Unable to author block in slot {:?}: {:?}", slot_number, err);
+		let awaiting_proposer = self.proposer(&chain_head).map_err(move |err| {
+			warn!("Unable to author block in slot {:?}: {:?}", slot_number, err);
 
-				telemetry!(CONSENSUS_WARN; "slots.unable_authoring_block";
-					"slot" => slot_number, "err" => ?err
-				);
+			telemetry!(CONSENSUS_WARN; "slots.unable_authoring_block";
+				"slot" => slot_number, "err" => ?err
+			);
 
-				return Box::pin(future::ready(Ok(())));
-			},
-		};
+			err
+		});
 
 		let slot_remaining_duration = self.slot_remaining_duration(&slot_info);
 		let proposing_remaining_duration = self.proposing_remaining_duration(&chain_head, &slot_info);
 		let logs = self.pre_digest_data(slot_number, &claim);
 
 		// deadline our production to approx. the end of the slot
-		let proposing = proposer.propose(
+		let proposing = awaiting_proposer.and_then(move |mut proposer| proposer.propose(
 			slot_info.inherent_data,
 			sp_runtime::generic::Digest {
 				logs,
 			},
 			slot_remaining_duration,
 			RecordProof::No,
-		).map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
+		).map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e))));
+
 		let delay: Box<dyn Future<Output=()> + Unpin + Send> = match proposing_remaining_duration {
 			Some(r) => Box::new(Delay::new(r)),
 			None => Box::new(future::pending()),
