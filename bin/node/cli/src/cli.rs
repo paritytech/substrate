@@ -139,7 +139,6 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 				&cli_args.shared_params,
 				&version,
 			)?;
-
 			sc_cli::fill_import_params(&mut config, &cli_args.import_params, ServiceRoles::FULL)?;
 
 			match ChainSpec::from(config.chain_spec.id()) {
