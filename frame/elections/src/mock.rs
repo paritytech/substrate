@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -65,6 +65,7 @@ impl pallet_balances::Trait for Test {
 	type Balance = u64;
 	type OnNewAccount = ();
 	type OnFreeBalanceZero = ();
+	type OnReapAccount = System;
 	type Event = Event;
 	type TransferPayment = ();
 	type DustRemoval = ();
@@ -154,7 +155,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Event},
-		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>, Error},
+		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
 		Elections: elections::{Module, Call, Event<T>, Config<T>},
 	}
 );

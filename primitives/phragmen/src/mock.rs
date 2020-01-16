@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -375,7 +375,7 @@ pub(crate) fn run_and_compare(
 	check_assignments(assignments);
 }
 
-pub(crate) fn build_support_map<FS>(
+pub(crate) fn build_support_map_float<FS>(
 	result: &mut _PhragmenResult<AccountId>,
 	stake_of: FS,
 ) -> _SupportMap<AccountId>
