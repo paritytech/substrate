@@ -14,10 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use self::legacy::*;
-//pub use self::group::{NotifsHandlerProto, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut};
+pub use self::group::{NotifsHandlerProto, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut};
 
-//mod group;
+mod group;
 mod legacy;
-//mod notif_in;
-//mod notif_out;
+mod notif_in;
+mod notif_out;
