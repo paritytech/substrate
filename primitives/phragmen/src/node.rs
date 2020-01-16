@@ -1,7 +1,7 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+use sp_std::{cell::RefCell, rc::Rc, prelude::*};
+use sp_runtime::RuntimeDebug;
 
-#[derive(PartialEq, Eq, std::fmt::Debug)]
+#[derive(PartialEq, Eq, RuntimeDebug)]
 pub(crate) enum NodeRole {
 	Voter,
 	Target,
@@ -16,9 +16,9 @@ pub(crate) struct Node<A> {
 	pub(crate) parent: Option<NodeRef<A>>,
 }
 
-use std::fmt;
-impl<A: fmt::Debug + Clone> fmt::Debug for Node<A> {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+#[cfg(feature = "std")]
+impl<A: sp_std::fmt::Debug + Clone> sp_std::fmt::Debug for Node<A> {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		write!(f, "({:?} [--> {:?})]", self.who, self.parent.as_ref().map(|p| p.borrow().who.clone()))
 	}
 }

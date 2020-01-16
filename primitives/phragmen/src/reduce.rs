@@ -47,7 +47,10 @@
 //!
 //! 1. https://hackmd.io/JOn9x98iS0e0DPWQ87zGWg?view
 
-use sp_std::collections::{btree_map::{Entry::*, BTreeMap}};
+use sp_std::{
+	prelude::*,
+	collections::{btree_map::{Entry::*, BTreeMap}},
+};
 
 use crate::node::{Node, NodeRef, NodeRole};
 
@@ -121,7 +124,6 @@ fn reduce_4<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 				},
 				Occupied(mut entry) => {
 					let other_who = entry.get_mut();
-					println!("Occupied {:?} -> ({:?} {:?}) other: {:?}", &who, &v1, &v2, &other_who);
 
 					// check if other_who voted for the same pair v1, v2.
 					let maybe_other_assignments = assignments.iter().find(|a| a.who == *other_who);
@@ -150,7 +152,6 @@ fn reduce_4<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 						*other_who = who.clone();
 						continue;
 					} else {
-						println!("And it is a cycle! ");
 						// This is a cycle.
 						let mut who_cycle_votes: Vec<(AccountId, ExtendedBalance)> = Vec::with_capacity(2);
 						distribution.iter().for_each(|(t, w)| {
@@ -178,7 +179,6 @@ fn reduce_4<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 								if *w <= min_value { min_value = *w; min_index = index; }
 								(t.clone(), *w)
 							}).collect::<Vec<(AccountId, ExtendedBalance)>>();
-						dbg!(&cycle, &min_value);
 
 						// min was in the first part of the chained iters
 						let mut increase_indices: Vec<usize> = Vec::new();
@@ -203,8 +203,6 @@ fn reduce_4<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 							decrease_indices.push(sibling_index - 2);
 							increase_indices.push(min_index - 2);
 						}
-
-						dbg!(&increase_indices, &decrease_indices);
 
 						// apply changes
 						increase_indices.into_iter().for_each(|i| {
@@ -377,8 +375,6 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 				let target_chunk = target_root_path.len() - common_count;
 				let min_chain_in_voter = (min_index + min_direction as usize) >= target_chunk;
 
-				dbg!(min_value, min_index, &min_who, min_direction);
-
 				// walk over the cycle and update the weights
 				// TODO: or at least unify and merge the process of adding this flow in both places. and surely add dedicated tests for this supply demand circulation math
 				// if the circulation begins with an addition. It is assumed that a cycle always starts with a target.
@@ -403,7 +399,6 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 										ass.distribution[idx].1.saturating_add(min_value)
 									}
 								};
-								// println!("Next value for edge {:?} -> {:?} is {}", current.who, prev.who, next_value);
 								if next_value.is_zero() {
 									ass.distribution.remove(idx);
 									num_changed += 1;
@@ -430,7 +425,6 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 										ass.distribution[idx].1.saturating_sub(min_value)
 									}
 								};
-								// println!("Next value for edge {:?} -> {:?} is {}", current.who, next.who, next_value);
 								if next_value.is_zero() {
 									ass.distribution.remove(idx);
 									num_changed += 1;
@@ -480,9 +474,11 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 /// Reduce the given [`PhragmenResult`]. This removes redundant edges from without changing the
 /// overall backing of any of the elected candidates.
 ///
+/// Returns the number of edges removed.
+///
 /// O(min{ |Ew| ⋅ k + m3 , |Ew| ⋅ m })
 pub fn reduce<
-	AccountId: Clone + Eq + Default + Ord + std::fmt::Debug,
+	AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug,
 >(
 	assignments: &mut Vec<StakedAssignment<AccountId>>,
 ) -> u32 where {
