@@ -349,6 +349,8 @@ decl_storage! {
 			config.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n)
 		}): T::Balance;
 
+		// TODO: should be in a different pallet and just use the locking system.
+
 		/// Information regarding the vesting of a given account.
 		pub Vesting get(fn vesting) build(|config: &GenesisConfig<T, I>| {
 			// Generate initial vesting configuration
@@ -375,6 +377,14 @@ decl_storage! {
 					})
 			}).collect::<Vec<_>>()
 		}): map T::AccountId => Option<VestingSchedule<T::Balance, T::BlockNumber>>;
+
+		// TODO: amalgamate the next two into a single item, and also include:
+		//  - fees-locked (min balance to be kept regarding payment of fees - paying a
+		//    fee may not result in the balance being reduced to below this amount)
+		//  - tips-locked (min balance to be kept when paying tx tip)
+		//  - transfer-locked (min balance to be kept when transferring)
+		//  - reserve-locked (min balance to be kept when reserving)
+		// consider combining the last three and only have fees and non-fees.
 
 		/// The 'free' balance of a given account.
 		///
@@ -405,6 +415,7 @@ decl_storage! {
 		pub ReservedBalance get(fn reserved_balance): map T::AccountId => T::Balance;
 
 		/// Any liquidity locks on some account balances.
+		/// NOTE: Should only be accessed when setting, changing and freeing a lock.
 		pub Locks get(fn locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
 	}
 	add_extra_genesis {

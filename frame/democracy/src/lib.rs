@@ -712,6 +712,9 @@ decl_module! {
 			let (_, conviction) = <Delegations<T>>::take(&who);
 			// Indefinite lock is reduced to the maximum voting lock that could be possible.
 			let now = <frame_system::Module<T>>::block_number();
+			// TODO: refactor this so that `locked_until` is stored in this pallet and there's
+			// an extra step (call) to be made explicitly by the user to unlock the funds after
+			// `locked_until`.
 			let locked_until = now + T::EnactmentPeriod::get() * conviction.lock_periods().into();
 			T::Currency::set_lock(
 				DEMOCRACY_ID,
