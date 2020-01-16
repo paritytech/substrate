@@ -45,10 +45,11 @@ struct TestNetwork {
 }
 
 impl sc_network_gossip::Network<Block> for TestNetwork {
-	fn event_stream(&self) -> Box<dyn futures::Stream<Item = NetworkEvent, Error = ()> + Send> {
+	fn event_stream(&self) -> Pin<Box<dyn futures03::Stream<Item = NetworkEvent> + Send>> {
+		use futures03::{StreamExt, compat::Stream01CompatExt};
 		let (tx, rx) = mpsc::unbounded();
 		let _ = self.sender.unbounded_send(Event::EventStream(tx));
-		Box::new(rx)
+		Box::pin(rx.compat().map(|res| res.unwrap()))
 	}
 
 	fn report_peer(&self, who: sc_network::PeerId, cost_benefit: sc_network::ReputationChange) {
