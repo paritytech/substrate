@@ -92,10 +92,10 @@ pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, 
 
 impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> where
 	Block: BlockT,
-	BlockStatus: BlockStatusT<Block> + Unpin,
-	BlockSyncRequester: BlockSyncRequesterT<Block> + Unpin,
-	I: Stream<Item = M::Blocked> + Unpin,
-	M: BlockUntilImported<Block> + Unpin,
+	BlockStatus: BlockStatusT<Block>,
+	BlockSyncRequester: BlockSyncRequesterT<Block>,
+	I: Stream<Item = M::Blocked,
+	M: BlockUntilImported<Block>,
 	M::Blocked: Unpin,
 {
 	/// Create a new `UntilImported` wrapper.
@@ -136,7 +136,7 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 	Block: BlockT,
 	BStatus: BlockStatusT<Block>,
 	BSyncRequester: BlockSyncRequesterT<Block>,
-	I: Stream<Item = M::Blocked> + Unpin,
+	I: Stream<Item = M::Blocked>,
 	M: BlockUntilImported<Block>,
 {
 	type Item = Result<M::Blocked, Error>;
