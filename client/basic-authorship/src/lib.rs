@@ -19,7 +19,7 @@
 //! # Example
 //!
 //! ```
-//! # use sc_basic_authority::ProposerFactory;
+//! # use sc_basic_authorship::ProposerFactory;
 //! # use sp_consensus::{Environment, Proposer, RecordProof};
 //! # use sp_runtime::generic::BlockId;
 //! # use std::{sync::Arc, time::Duration};

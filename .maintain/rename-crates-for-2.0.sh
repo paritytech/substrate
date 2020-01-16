@@ -1,4 +1,4 @@
-#!/bin/bash
+	#!/bin/bash
 
 function rust_rename() {
     sed -i "s/$1/$2/g" `grep -Rl --include="*.rs" --include="*.stderr" "$1" *` > /dev/null
@@ -43,6 +43,7 @@ TO_RENAME=(
     "sp-finality-granpda sp-finality-grandpa"
     "sp-sesssion sp-session"
     "sp-tracing-pool sp-transaction-pool"
+    "sc-basic-authority sc-basic-authorship"
 
     # PRIMITIVES
     "substrate-application-crypto sp-application-crypto"
