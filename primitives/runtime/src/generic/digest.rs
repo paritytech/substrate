@@ -23,7 +23,7 @@ use sp_std::prelude::*;
 
 use crate::ConsensusEngineId;
 use crate::codec::{Decode, Encode, Input, Error};
-use sp_core::RuntimeDebug;
+use sp_core::{ChangesTrieConfiguration, RuntimeDebug};
 
 /// Generic header digest.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -97,8 +97,30 @@ pub enum DigestItem<Hash> {
 	/// by runtimes.
 	Seal(ConsensusEngineId, Vec<u8>),
 
+	/// Digest item that contains signal from changes tries manager to the
+	/// native code.
+	ChangesTrieSignal(ChangesTrieSignal),
+
 	/// Some other thing. Unsupported and experimental.
 	Other(Vec<u8>),
+}
+
+/// Available changes trie signals.
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum ChangesTrieSignal {
+	/// New changes trie configuration is enacted, starting from **next block**.
+	///
+	/// The block that emits this signal will contain changes trie (CT) that covers
+	/// blocks range [BEGIN; current block], where BEGIN is (order matters):
+	/// - LAST_TOP_LEVEL_DIGEST_BLOCK+1 if top level digest CT has ever been created
+	///   using current configuration AND the last top level digest CT has been created
+	///   at block LAST_TOP_LEVEL_DIGEST_BLOCK;
+	/// - LAST_CONFIGURATION_CHANGE_BLOCK+1 if there has been CT configuration change
+	///   before and the last configuration change happened at block
+	///   LAST_CONFIGURATION_CHANGE_BLOCK;
+	/// - 1 otherwise.
+	NewConfiguration(Option<ChangesTrieConfiguration>),
 }
 
 #[cfg(feature = "std")]
@@ -141,6 +163,9 @@ pub enum DigestItemRef<'a, Hash: 'a> {
 	/// Put a Seal on it. This is only used by native code, and is never seen
 	/// by runtimes.
 	Seal(&'a ConsensusEngineId, &'a Vec<u8>),
+	/// Digest item that contains signal from changes tries manager to the
+	/// native code.
+	ChangesTrieSignal(&'a ChangesTrieSignal),
 	/// Any 'non-system' digest item, opaque to the native code.
 	Other(&'a Vec<u8>),
 }
@@ -152,11 +177,12 @@ pub enum DigestItemRef<'a, Hash: 'a> {
 #[repr(u32)]
 #[derive(Encode, Decode)]
 pub enum DigestItemType {
+	Other = 0,
 	ChangesTrieRoot = 2,
-	PreRuntime = 6,
 	Consensus = 4,
 	Seal = 5,
-	Other = 0,
+	PreRuntime = 6,
+	ChangesTrieSignal = 7,
 }
 
 /// Type of a digest item that contains raw data; this also names the consensus engine ID where
@@ -181,6 +207,7 @@ impl<Hash> DigestItem<Hash> {
 			DigestItem::PreRuntime(ref v, ref s) => DigestItemRef::PreRuntime(v, s),
 			DigestItem::Consensus(ref v, ref s) => DigestItemRef::Consensus(v, s),
 			DigestItem::Seal(ref v, ref s) => DigestItemRef::Seal(v, s),
+			DigestItem::ChangesTrieSignal(ref s) => DigestItemRef::ChangesTrieSignal(s),
 			DigestItem::Other(ref v) => DigestItemRef::Other(v),
 		}
 	}
@@ -203,6 +230,11 @@ impl<Hash> DigestItem<Hash> {
 	/// Returns `Some` if this entry is the `Seal` entry.
 	pub fn as_seal(&self) -> Option<(ConsensusEngineId, &[u8])> {
 		self.dref().as_seal()
+	}
+
+	/// Returns `Some` if the entry is the `ChangesTrieSignal` entry.
+	pub fn as_changes_trie_signal(&self) -> Option<&ChangesTrieSignal> {
+		self.dref().as_changes_trie_signal()
 	}
 
 	/// Returns Some if `self` is a `DigestItem::Other`.
@@ -253,6 +285,9 @@ impl<Hash: Decode> Decode for DigestItem<Hash> {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
 				Ok(DigestItem::Seal(vals.0, vals.1))
 			},
+			DigestItemType::ChangesTrieSignal => Ok(DigestItem::ChangesTrieSignal(
+				Decode::decode(input)?,
+			)),
 			DigestItemType::Other => Ok(DigestItem::Other(
 				Decode::decode(input)?,
 			)),
@@ -289,6 +324,14 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	pub fn as_seal(&self) -> Option<(ConsensusEngineId, &'a [u8])> {
 		match *self {
 			DigestItemRef::Seal(consensus_engine_id, ref data) => Some((*consensus_engine_id, data)),
+			_ => None,
+		}
+	}
+
+	/// Cast this digest item into `ChangesTrieSignal`.
+	pub fn as_changes_trie_signal(&self) -> Option<&'a ChangesTrieSignal> {
+		match *self {
+			DigestItemRef::ChangesTrieSignal(ref changes_trie_signal) => Some(changes_trie_signal),
 			_ => None,
 		}
 	}
@@ -342,6 +385,10 @@ impl<'a, Hash: Encode> Encode for DigestItemRef<'a, Hash> {
 				DigestItemType::PreRuntime.encode_to(&mut v);
 				(val, data).encode_to(&mut v);
 			},
+			DigestItemRef::ChangesTrieSignal(changes_trie_signal) => {
+				DigestItemType::ChangesTrieSignal.encode_to(&mut v);
+				changes_trie_signal.encode_to(&mut v);
+			},
 			DigestItemRef::Other(val) => {
 				DigestItemType::Other.encode_to(&mut v);
 				val.encode_to(&mut v);
@@ -349,6 +396,15 @@ impl<'a, Hash: Encode> Encode for DigestItemRef<'a, Hash> {
 		}
 
 		v
+	}
+}
+
+impl ChangesTrieSignal {
+	/// Try to cast this signal to NewConfiguration.
+	pub fn as_new_configuration(&self) -> Option<&Option<ChangesTrieConfiguration>> {
+		match self {
+			ChangesTrieSignal::NewConfiguration(config) => Some(config),
+		}
 	}
 }
 

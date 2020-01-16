@@ -18,7 +18,7 @@
 
 use crate::{
 	backend::Backend, OverlayedChanges, StorageTransactionCache,
-	changes_trie::Storage as ChangesTrieStorage,
+	changes_trie::State as ChangesTrieState,
 };
 
 use hash_db::Hasher;
@@ -65,7 +65,7 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 }
 
 /// Wraps a read-only backend, call executor, and current overlayed changes.
-pub struct Ext<'a, H, N, B, T>
+pub struct Ext<'a, H, N, B>
 	where
 		H: Hasher,
 		B: 'a + Backend<H>,
@@ -77,8 +77,8 @@ pub struct Ext<'a, H, N, B, T>
 	backend: &'a B,
 	/// The cache for the storage transactions.
 	storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H, N>,
-	/// Changes trie storage to read from.
-	changes_trie_storage: Option<&'a T>,
+	/// Changes trie state to read from.
+	changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 	/// Pseudo-unique id used for tracing.
 	pub id: u16,
 	/// Dummy usage of N arg.
@@ -87,12 +87,11 @@ pub struct Ext<'a, H, N, B, T>
 	extensions: Option<&'a mut Extensions>,
 }
 
-impl<'a, H, N, B, T> Ext<'a, H, N, B, T>
+impl<'a, H, N, B> Ext<'a, H, N, B>
 where
 	H: Hasher,
 	H::Out: Ord + 'static + codec::Codec,
 	B: 'a + Backend<H>,
-	T: 'a + ChangesTrieStorage<H, N>,
 	N: crate::changes_trie::BlockNumber,
 {
 
@@ -101,13 +100,13 @@ where
 		overlay: &'a mut OverlayedChanges,
 		storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H, N>,
 		backend: &'a B,
-		changes_trie_storage: Option<&'a T>,
+		changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 		extensions: Option<&'a mut Extensions>,
 	) -> Self {
 		Ext {
 			overlay,
 			backend,
-			changes_trie_storage,
+			changes_trie_state,
 			storage_transaction_cache,
 			id: rand::random(),
 			_phantom: Default::default(),
@@ -124,12 +123,11 @@ where
 }
 
 #[cfg(test)]
-impl<'a, H, N, B, T> Ext<'a, H, N, B, T>
+impl<'a, H, N, B> Ext<'a, H, N, B>
 where
 	H: Hasher,
 	H::Out: Ord + 'static,
 	B: 'a + Backend<H>,
-	T: 'a + ChangesTrieStorage<H, N>,
 	N: crate::changes_trie::BlockNumber,
 {
 	pub fn storage_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -146,12 +144,11 @@ where
 	}
 }
 
-impl<'a, H, B, T, N> Externalities for Ext<'a, H, N, B, T>
+impl<'a, H, B, N> Externalities for Ext<'a, H, N, B>
 where
 	H: Hasher,
 	H::Out: Ord + 'static + codec::Codec,
 	B: 'a + Backend<H>,
-	T: 'a + ChangesTrieStorage<H, N>,
 	N: crate::changes_trie::BlockNumber,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
@@ -564,7 +561,7 @@ where
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let root = self.overlay.changes_trie_root(
 			self.backend,
-			self.changes_trie_storage.clone(),
+			self.changes_trie_state.as_ref(),
 			Decode::decode(&mut &parent_hash[..]).map_err(|e|
 				trace!(
 					target: "state-trace",
@@ -586,11 +583,10 @@ where
 	}
 }
 
-impl<'a, H, B, T, N> sp_externalities::ExtensionStore for Ext<'a, H, N, B, T>
+impl<'a, H, B, N> sp_externalities::ExtensionStore for Ext<'a, H, N, B>
 where
 	H: Hasher,
 	B: 'a + Backend<H>,
-	T: 'a + ChangesTrieStorage<H, N>,
 	N: crate::changes_trie::BlockNumber,
 {
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
@@ -602,19 +598,19 @@ where
 mod tests {
 	use super::*;
 	use hex_literal::hex;
+	use num_traits::Zero;
 	use codec::Encode;
 	use sp_core::{H256, Blake2Hasher, storage::well_known_keys::EXTRINSIC_INDEX, map};
 	use crate::{
 		changes_trie::{
 			Configuration as ChangesTrieConfiguration,
-			InMemoryStorage as InMemoryChangesTrieStorage,
+			InMemoryStorage as TestChangesTrieStorage,
 		}, InMemoryBackend, overlayed_changes::OverlayedValue,
 	};
 	use sp_core::storage::{Storage, StorageChild};
 
 	type TestBackend = InMemoryBackend<Blake2Hasher>;
-	type TestChangesTrieStorage = InMemoryChangesTrieStorage<Blake2Hasher, u64>;
-	type TestExt<'a> = Ext<'a, Blake2Hasher, u64, TestBackend, TestChangesTrieStorage>;
+	type TestExt<'a> = Ext<'a, Blake2Hasher, u64, TestBackend>;
 
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
 		OverlayedChanges {
@@ -629,10 +625,14 @@ mod tests {
 				}),
 			].into_iter().collect(),
 			committed: Default::default(),
-			changes_trie_config: Some(ChangesTrieConfiguration {
-				digest_interval: 0,
-				digest_levels: 0,
-			}),
+			collect_extrinsics: true,
+		}
+	}
+
+	fn changes_trie_config() -> ChangesTrieConfiguration {
+		ChangesTrieConfiguration {
+			digest_interval: 0,
+			digest_levels: 0,
 		}
 	}
 
@@ -646,13 +646,11 @@ mod tests {
 	}
 
 	#[test]
-	fn storage_changes_root_is_none_when_extrinsic_changes_are_none() {
+	fn storage_changes_root_is_none_when_state_is_not_provided() {
 		let mut overlay = prepare_overlay_with_changes();
 		let mut cache = StorageTransactionCache::default();
-		overlay.changes_trie_config = None;
-		let storage = TestChangesTrieStorage::with_blocks(vec![(100, Default::default())]);
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &mut cache, &backend, Some(&storage), None);
+		let mut ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 		assert_eq!(ext.storage_changes_root(&H256::default().encode()).unwrap(), None);
 	}
 
@@ -661,8 +659,9 @@ mod tests {
 		let mut overlay = prepare_overlay_with_changes();
 		let mut cache = StorageTransactionCache::default();
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
+		let state = Some(ChangesTrieState::new(changes_trie_config(), Zero::zero(), &storage));
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &mut cache, &backend, Some(&storage), None);
+		let mut ext = TestExt::new(&mut overlay, &mut cache, &backend, state, None);
 		assert_eq!(
 			ext.storage_changes_root(&H256::default().encode()).unwrap(),
 			Some(hex!("bb0c2ef6e1d36d5490f9766cfcc7dfe2a6ca804504c3bb206053890d6dd02376").to_vec()),
@@ -675,8 +674,9 @@ mod tests {
 		let mut cache = StorageTransactionCache::default();
 		overlay.prospective.top.get_mut(&vec![1]).unwrap().value = None;
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
+		let state = Some(ChangesTrieState::new(changes_trie_config(), Zero::zero(), &storage));
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &mut cache, &backend, Some(&storage), None);
+		let mut ext = TestExt::new(&mut overlay, &mut cache, &backend, state, None);
 		assert_eq!(
 			ext.storage_changes_root(&H256::default().encode()).unwrap(),
 			Some(hex!("96f5aae4690e7302737b6f9b7f8567d5bbb9eac1c315f80101235a92d9ec27f4").to_vec()),

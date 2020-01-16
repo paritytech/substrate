@@ -16,22 +16,17 @@
 
 //! In memory client backend
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::RwLock;
-use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
+use sp_core::storage::well_known_keys;
 use sp_core::offchain::storage::{
 	InMemOffchainStorage as OffchainStorage
 };
-use sp_runtime::generic::{BlockId, DigestItem};
+use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, HasherFor};
 use sp_runtime::{Justification, Storage};
-use sp_state_machine::{
-	InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId, ChangesTrieTransaction,
-	InMemoryBackend, Backend as StateBackend,
-};
-use hash_db::Prefix;
-use sp_trie::MemoryDB;
+use sp_state_machine::{ChangesTrieTransaction, InMemoryBackend, Backend as StateBackend};
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata};
 
 use sc_client_api::{
@@ -466,7 +461,6 @@ pub struct BlockImportOperation<Block: BlockT> {
 	pending_cache: HashMap<CacheKeyId, Vec<u8>>,
 	old_state: InMemoryBackend<HasherFor<Block>>,
 	new_state: Option<InMemoryBackend<HasherFor<Block>>>,
-	changes_trie_update: Option<MemoryDB<HasherFor<Block>>>,
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
 	set_head: Option<BlockId<Block>>,
@@ -510,9 +504,8 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 
 	fn update_changes_trie(
 		&mut self,
-		update: ChangesTrieTransaction<HasherFor<Block>, NumberFor<Block>>,
+		_update: ChangesTrieTransaction<HasherFor<Block>, NumberFor<Block>>,
 	) -> sp_blockchain::Result<()> {
-		self.changes_trie_update = Some(update.0);
 		Ok(())
 	}
 
@@ -569,7 +562,6 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 /// > struct for testing purposes. Do **NOT** use in production.
 pub struct Backend<Block: BlockT> where Block::Hash: Ord {
 	states: RwLock<HashMap<Block::Hash, InMemoryBackend<HasherFor<Block>>>>,
-	changes_trie_storage: ChangesTrieStorage<Block>,
 	blockchain: Blockchain<Block>,
 	import_lock: RwLock<()>,
 }
@@ -579,7 +571,6 @@ impl<Block: BlockT> Backend<Block> where Block::Hash: Ord {
 	pub fn new() -> Self {
 		Backend {
 			states: RwLock::new(HashMap::new()),
-			changes_trie_storage: ChangesTrieStorage(InMemoryChangesTrieStorage::new()),
 			blockchain: Blockchain::new(),
 			import_lock: Default::default(),
 		}
@@ -606,7 +597,6 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = Blockchain<Block>;
 	type State = InMemoryBackend<HasherFor<Block>>;
-	type ChangesTrieStorage = ChangesTrieStorage<Block>;
 	type OffchainStorage = OffchainStorage;
 
 	fn begin_operation(&self) -> sp_blockchain::Result<Self::BlockImportOperation> {
@@ -616,7 +606,6 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 			pending_cache: Default::default(),
 			old_state,
 			new_state: None,
-			changes_trie_update: None,
 			aux: Default::default(),
 			finalized_blocks: Default::default(),
 			set_head: None,
@@ -646,17 +635,6 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 			let hash = header.hash();
 
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
-
-			let maybe_changes_trie_root = header.digest().log(DigestItem::as_changes_trie_root).cloned();
-			if let Some(changes_trie_root) = maybe_changes_trie_root {
-				if let Some(changes_trie_update) = operation.changes_trie_update {
-					self.changes_trie_storage.0.insert(
-						*header.number(),
-						changes_trie_root,
-						changes_trie_update
-					);
-				}
-			}
 
 			self.blockchain.insert(hash, header, justification, body, pending_block.state)?;
 		}
@@ -688,8 +666,8 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		None
 	}
 
-	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
-		Some(&self.changes_trie_storage)
+	fn changes_trie_storage(&self) -> Option<&dyn backend::PrunableStateChangesTrieStorage<Block>> {
+		None
 	}
 
 	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
@@ -734,66 +712,6 @@ impl<Block: BlockT> backend::RemoteBackend<Block> for Backend<Block> where Block
 
 	fn remote_blockchain(&self) -> Arc<dyn crate::light::blockchain::RemoteBlockchain<Block>> {
 		unimplemented!()
-	}
-}
-
-/// Prunable in-memory changes trie storage.
-pub struct ChangesTrieStorage<Block: BlockT>(
-	InMemoryChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>
-);
-
-impl<Block: BlockT> backend::PrunableStateChangesTrieStorage<Block> for ChangesTrieStorage<Block> {
-	fn oldest_changes_trie_block(
-		&self,
-		_config: &ChangesTrieConfiguration,
-		_best_finalized: NumberFor<Block>,
-	) -> NumberFor<Block> {
-		Zero::zero()
-	}
-}
-
-impl<Block: BlockT> sp_state_machine::ChangesTrieRootsStorage<HasherFor<Block>, NumberFor<Block>> for
-	ChangesTrieStorage<Block>
-{
-	fn build_anchor(
-		&self,
-		_hash: Block::Hash,
-	) -> Result<sp_state_machine::ChangesTrieAnchorBlockId<Block::Hash, NumberFor<Block>>, String> {
-		Err("Dummy implementation".into())
-	}
-
-	fn root(
-		&self,
-		_anchor: &ChangesTrieAnchorBlockId<Block::Hash, NumberFor<Block>>,
-		_block: NumberFor<Block>,
-	) -> Result<Option<Block::Hash>, String> {
-		Err("Dummy implementation".into())
-	}
-}
-
-impl<Block: BlockT> sp_state_machine::ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>> for
-	ChangesTrieStorage<Block>
-{
-	fn as_roots_storage(&self)
-		-> &dyn sp_state_machine::ChangesTrieRootsStorage<HasherFor<Block>, NumberFor<Block>>
-	{
-		self
-	}
-
-	fn with_cached_changed_keys(
-		&self,
-		_root: &Block::Hash,
-		_functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
-	) -> bool {
-		false
-	}
-
-	fn get(
-		&self,
-		key: &Block::Hash,
-		prefix: Prefix,
-	) -> Result<Option<sp_state_machine::DBValue>, String> {
-		self.0.get(key, prefix)
 	}
 }
 
