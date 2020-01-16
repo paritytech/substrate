@@ -17,7 +17,8 @@
 //! Concrete externalities implementation.
 
 use crate::{
-	backend::Backend, OverlayedChanges, StorageTransactionCache,
+	StorageKey, StorageValue, OverlayedChanges, StorageTransactionCache,
+	backend::Backend,
 	changes_trie::Storage as ChangesTrieStorage,
 };
 
@@ -132,7 +133,7 @@ where
 	T: 'a + ChangesTrieStorage<H, N>,
 	N: crate::changes_trie::BlockNumber,
 {
-	pub fn storage_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+	pub fn storage_pairs(&self) -> Vec<(StorageKey, StorageValue)> {
 		use std::collections::HashMap;
 
 		self.backend.pairs().iter()
@@ -154,7 +155,7 @@ where
 	T: 'a + ChangesTrieStorage<H, N>,
 	N: crate::changes_trie::BlockNumber,
 {
-	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
@@ -181,7 +182,7 @@ where
 		result.map(|r| r.encode())
 	}
 
-	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+	fn original_storage(&self, key: &[u8]) -> Option<StorageValue> {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
 
@@ -210,7 +211,7 @@ where
 		storage_key: ChildStorageKey,
 		child_info: ChildInfo,
 		key: &[u8],
-	) -> Option<Vec<u8>> {
+	) -> Option<StorageValue> {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
 			.child_storage(storage_key.as_ref(), key)
@@ -259,7 +260,7 @@ where
 		storage_key: ChildStorageKey,
 		child_info: ChildInfo,
 		key: &[u8],
-	) -> Option<Vec<u8>> {
+	) -> Option<StorageValue> {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.backend
 			.child_storage(storage_key.as_ref(), child_info, key)
@@ -335,7 +336,7 @@ where
 		result
 	}
 
-	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
+	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
 		let next_backend_key = self.backend.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		let next_overlay_key_change = self.overlay.next_storage_key_change(key);
 
@@ -355,7 +356,7 @@ where
 		storage_key: ChildStorageKey,
 		child_info: ChildInfo,
 		key: &[u8],
-	) -> Option<Vec<u8>> {
+	) -> Option<StorageKey> {
 		let next_backend_key = self.backend
 			.next_child_storage_key(storage_key.as_ref(), child_info, key)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
@@ -379,7 +380,7 @@ where
 		}
 	}
 
-	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
+	fn place_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
 		trace!(target: "state-trace", "{:04x}: Put {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
@@ -399,8 +400,8 @@ where
 		&mut self,
 		storage_key: ChildStorageKey,
 		child_info: ChildInfo,
-		key: Vec<u8>,
-		value: Option<Vec<u8>>,
+		key: StorageKey,
+		value: Option<StorageValue>,
 	) {
 		trace!(target: "state-trace", "{:04x}: PutChild({}) {}={:?}",
 			self.id,

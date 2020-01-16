@@ -24,7 +24,8 @@ use parking_lot::RwLock;
 use sp_core::storage::{ChildInfo, OwnedChildInfo};
 use sp_core::offchain::storage::InMemOffchainStorage;
 use sp_state_machine::{
-	Backend as StateBackend, TrieBackend, InMemoryBackend, ChangesTrieTransaction
+	Backend as StateBackend, TrieBackend, InMemoryBackend, ChangesTrieTransaction,
+	StorageCollection, ChildStorageCollection,
 };
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero, Header, HasherFor};
@@ -33,7 +34,6 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sc_client_api::{
 	backend::{
 		AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
-		StorageCollection, ChildStorageCollection,
 	},
 	blockchain::{
 		HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys,

@@ -21,13 +21,17 @@ use std::collections::btree_map::Entry;
 use codec::{Decode, Encode};
 use hash_db::Hasher;
 use num_traits::One;
-use crate::backend::Backend;
-use crate::overlayed_changes::OverlayedChanges;
-use crate::trie_backend_essence::TrieBackendEssence;
-use crate::changes_trie::build_iterator::digest_build_iterator;
-use crate::changes_trie::input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex};
-use crate::changes_trie::{AnchorBlockId, ConfigurationRange, Storage, BlockNumber};
-use crate::changes_trie::input::ChildIndex;
+use crate::{
+	StorageKey,
+	backend::Backend,
+	overlayed_changes::OverlayedChanges,
+	trie_backend_essence::TrieBackendEssence,
+	changes_trie::{
+		AnchorBlockId, ConfigurationRange, Storage, BlockNumber,
+		build_iterator::digest_build_iterator,
+		input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex, ChildIndex},
+	},
+};
 
 /// Prepare input pairs for building a changes trie of given block.
 ///
@@ -101,7 +105,7 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 		Number: BlockNumber,
 {
 
-	let mut children_keys = BTreeSet::<Vec<u8>>::new();
+	let mut children_keys = BTreeSet::<StorageKey>::new();
 	let mut children_result = BTreeMap::new();
 	for (storage_key, _) in changes.prospective.children.iter()
 		.chain(changes.committed.children.iter()) {
@@ -126,7 +130,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 	backend: &'a B,
 	block: &Number,
 	changes: &'a OverlayedChanges,
-	storage_key: Option<Vec<u8>>,
+	storage_key: Option<StorageKey>,
 ) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
 	where
 		B: Backend<H>,
@@ -231,7 +235,7 @@ fn prepare_digest_input<'a, H, Number>(
 			let trie_root = storage.root(parent, digest_build_block.clone())?;
 			let trie_root = trie_root.ok_or_else(|| format!("No changes trie root for block {}", digest_build_block.clone()))?;
 
-			let insert_to_map = |map: &mut BTreeMap<_,_>, key: Vec<u8>| {
+			let insert_to_map = |map: &mut BTreeMap<_,_>, key: StorageKey| {
 				match map.entry(key.clone()) {
 					Entry::Vacant(entry) => {
 						entry.insert((DigestIndex {
@@ -277,7 +281,7 @@ fn prepare_digest_input<'a, H, Number>(
 				return Ok((map, child_map));
 			}
 
-			let mut children_roots = BTreeMap::<Vec<u8>, _>::new();
+			let mut children_roots = BTreeMap::<StorageKey, _>::new();
 			{
 				let trie_storage = TrieBackendEssence::<_, H>::new(
 					crate::changes_trie::TrieBackendStorageAdapter(storage),

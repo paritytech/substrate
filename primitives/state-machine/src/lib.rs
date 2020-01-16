@@ -60,7 +60,10 @@ pub use changes_trie::{
 	oldest_non_pruned_trie as oldest_non_pruned_changes_trie,
 	BlockNumber as ChangesTrieBlockNumber,
 };
-pub use overlayed_changes::{OverlayedChanges, StorageChanges, StorageTransactionCache};
+pub use overlayed_changes::{
+	OverlayedChanges, StorageChanges, StorageTransactionCache, StorageKey, StorageValue,
+	StorageCollection, ChildStorageCollection,
+};
 pub use proving_backend::{
 	create_proof_check_backend, create_proof_check_backend_storage, merge_storage_proofs,
 	ProofRecorder, ProvingBackend, ProvingBackendRecorder, StorageProof,

@@ -28,14 +28,14 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, Ha
 use sp_runtime::{Justification, Storage};
 use sp_state_machine::{
 	InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId, ChangesTrieTransaction,
-	InMemoryBackend, Backend as StateBackend,
+	InMemoryBackend, Backend as StateBackend, StorageCollection, ChildStorageCollection,
 };
 use hash_db::Prefix;
 use sp_trie::MemoryDB;
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata};
 
 use sc_client_api::{
-	backend::{self, NewBlockState, StorageCollection, ChildStorageCollection},
+	backend::{self, NewBlockState},
 	blockchain::{
 		self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
 	},

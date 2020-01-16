@@ -42,7 +42,6 @@ use std::collections::{HashMap, HashSet};
 
 use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo};
 use sc_client_api::backend::NewBlockState;
-use sc_client_api::backend::{StorageCollection, ChildStorageCollection};
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
 	well_known_cache_keys, HeaderBackend,
@@ -64,7 +63,8 @@ use sp_runtime::traits::{
 use sc_executor::RuntimeInfo;
 use sp_state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, ChangesTrieBuildCache,
-	backend::Backend as StateBackend, UsageInfo as StateUsageInfo,
+	backend::Backend as StateBackend, UsageInfo as StateUsageInfo, StorageCollection,
+	ChildStorageCollection,
 };
 use crate::utils::{Meta, db_err, meta_keys, read_db, read_meta};
 use sc_client::leaves::{LeafSet, FinalizationDisplaced};

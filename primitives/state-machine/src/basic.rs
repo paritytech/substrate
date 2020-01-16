@@ -19,7 +19,7 @@
 use std::{
 	collections::BTreeMap, any::{TypeId, Any}, iter::FromIterator, ops::Bound
 };
-use crate::{Backend, InMemoryBackend};
+use crate::{Backend, InMemoryBackend, StorageKey, StorageValue};
 use hash_db::Hasher;
 use sp_trie::{TrieConfiguration, default_child_trie_root};
 use sp_trie::trie_types::Layout;
@@ -46,7 +46,7 @@ impl BasicExternalities {
 	}
 
 	/// Insert key/value
-	pub fn insert(&mut self, k: Vec<u8>, v: Vec<u8>) -> Option<Vec<u8>> {
+	pub fn insert(&mut self, k: StorageKey, v: StorageValue) -> Option<StorageValue> {
 		self.inner.top.insert(k, v)
 	}
 
@@ -89,8 +89,8 @@ impl PartialEq for BasicExternalities {
 	}
 }
 
-impl FromIterator<(Vec<u8>, Vec<u8>)> for BasicExternalities {
-	fn from_iter<I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>>(iter: I) -> Self {
+impl FromIterator<(StorageKey, StorageValue)> for BasicExternalities {
+	fn from_iter<I: IntoIterator<Item=(StorageKey, StorageValue)>>(iter: I) -> Self {
 		let mut t = Self::default();
 		t.inner.top.extend(iter);
 		t
@@ -101,8 +101,8 @@ impl Default for BasicExternalities {
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl From<BTreeMap<Vec<u8>, Vec<u8>>> for BasicExternalities {
-	fn from(hashmap: BTreeMap<Vec<u8>, Vec<u8>>) -> Self {
+impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
+	fn from(hashmap: BTreeMap<StorageKey, StorageValue>) -> Self {
 		BasicExternalities { inner: Storage {
 			top: hashmap,
 			children: Default::default(),
@@ -111,7 +111,7 @@ impl From<BTreeMap<Vec<u8>, Vec<u8>>> for BasicExternalities {
 }
 
 impl Externalities for BasicExternalities {
-	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
 		self.inner.top.get(key).cloned()
 	}
 
@@ -119,7 +119,7 @@ impl Externalities for BasicExternalities {
 		self.storage(key).map(|v| Blake2Hasher::hash(&v).encode())
 	}
 
-	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+	fn original_storage(&self, key: &[u8]) -> Option<StorageValue> {
 		self.storage(key)
 	}
 
@@ -132,7 +132,7 @@ impl Externalities for BasicExternalities {
 		storage_key: ChildStorageKey,
 		_child_info: ChildInfo,
 		key: &[u8],
-	) -> Option<Vec<u8>> {
+	) -> Option<StorageValue> {
 		self.inner.children.get(storage_key.as_ref()).and_then(|child| child.data.get(key)).cloned()
 	}
 
@@ -159,11 +159,11 @@ impl Externalities for BasicExternalities {
 		storage_key: ChildStorageKey,
 		child_info: ChildInfo,
 		key: &[u8],
-	) -> Option<Vec<u8>> {
+	) -> Option<StorageValue> {
 		Externalities::child_storage(self, storage_key, child_info, key)
 	}
 
-	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
+	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
 		let range = (Bound::Excluded(key), Bound::Unbounded);
 		self.inner.top.range::<[u8], _>(range).next().map(|(k, _)| k).cloned()
 	}
@@ -173,13 +173,13 @@ impl Externalities for BasicExternalities {
 		storage_key: ChildStorageKey,
 		_child_info: ChildInfo,
 		key: &[u8],
-	) -> Option<Vec<u8>> {
+	) -> Option<StorageKey> {
 		let range = (Bound::Excluded(key), Bound::Unbounded);
 		self.inner.children.get(storage_key.as_ref())
 			.and_then(|child| child.data.range::<[u8], _>(range).next().map(|(k, _)| k).cloned())
 	}
 
-	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
+	fn place_storage(&mut self, key: StorageKey, maybe_value: Option<StorageValue>) {
 		if is_child_storage_key(&key) {
 			warn!(target: "trie", "Refuse to set child storage key via main storage");
 			return;
@@ -195,8 +195,8 @@ impl Externalities for BasicExternalities {
 		&mut self,
 		storage_key: ChildStorageKey,
 		child_info: ChildInfo,
-		key: Vec<u8>,
-		value: Option<Vec<u8>>,
+		key: StorageKey,
+		value: Option<StorageValue>,
 	) {
 		let child_map = self.inner.children.entry(storage_key.into_owned())
 			.or_insert_with(|| StorageChild {
