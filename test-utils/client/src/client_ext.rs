@@ -64,7 +64,7 @@ pub trait ClientBlockImportExt<Block: BlockT>: Sized {
 impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 	where
 		B: sc_client_api::backend::Backend<Block>,
-		E: sc_client::CallExecutor<Block>,
+		E: sc_client::CallExecutor<Block> + 'static,
 		Self: BlockImport<Block, Error = ConsensusError>,
 		Block: BlockT,
 {

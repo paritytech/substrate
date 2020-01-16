@@ -197,7 +197,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 	where
 		Block: BlockT,
-		E: CodeExecutor,
+		E: CodeExecutor + Clone + 'static,
 		H: Hasher,
 		H::Out: Ord + codec::Codec + 'static,
 		S: BlockchainStorage<Block>,

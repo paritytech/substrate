@@ -259,11 +259,38 @@ decl_module! {
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 		}
 
-		/// Set the new code.
+		/// Set the new runtime code.
 		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
-		pub fn set_code(origin, new: Vec<u8>) {
+		pub fn set_code(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
-			storage::unhashed::put_raw(well_known_keys::CODE, &new);
+
+			let current_version = T::Version::get();
+			let new_version = sp_io::misc::runtime_version(&code)
+				.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
+				.ok_or_else(|| Error::<T>::FailedToExtractRuntimeVersion)?;
+
+			if new_version.spec_name != current_version.spec_name {
+				Err(Error::<T>::InvalidSpecName)?
+			}
+
+			if new_version.spec_version < current_version.spec_version {
+				Err(Error::<T>::SpecVersionNotAllowedToDecrease)?
+			} else if new_version.spec_version == current_version.spec_version {
+				if new_version.impl_version < current_version.impl_version {
+					Err(Error::<T>::ImplVersionNotAllowedToDecrease)?
+				} else if new_version.impl_version == current_version.impl_version {
+					Err(Error::<T>::SpecOrImplVersionNeedToIncrease)?
+				}
+			}
+
+			storage::unhashed::put_raw(well_known_keys::CODE, &code);
+		}
+
+		/// Set the new runtime code without doing any checks of the given `code`.
+		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
+		pub fn set_code_without_checks(origin, code: Vec<u8>) {
+			ensure_root(origin)?;
+			storage::unhashed::put_raw(well_known_keys::CODE, &code);
 		}
 
 		/// Set some items of storage.
@@ -327,7 +354,24 @@ decl_event!(
 
 decl_error! {
 	/// Error for the System module
-	pub enum Error for Module<T: Trait> {}
+	pub enum Error for Module<T: Trait> {
+		/// The name of specification does not match between the current runtime
+		/// and the new runtime.
+		InvalidSpecName,
+		/// The specification version is not allowed to decrease between the current runtime
+		/// and the new runtime.
+		SpecVersionNotAllowedToDecrease,
+		/// The implementation version is not allowed to decrease between the current runtime
+		/// and the new runtime.
+		ImplVersionNotAllowedToDecrease,
+		/// The specification or the implementation version need to increase between the
+		/// current runtime and the new runtime.
+		SpecOrImplVersionNeedToIncrease,
+		/// Failed to extract the runtime version from the new runtime.
+		///
+		/// Either calling `Core_version` or decoding `RuntimeVersion` failed.
+		FailedToExtractRuntimeVersion,
+	}
 }
 
 /// Origin for the System module.
@@ -1189,6 +1233,14 @@ mod tests {
 		pub const MaximumBlockWeight: Weight = 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 		pub const MaximumBlockLength: u32 = 1024;
+		pub const Version: RuntimeVersion = RuntimeVersion {
+			spec_name: sp_version::create_runtime_str!("test"),
+			impl_name: sp_version::create_runtime_str!("system-test"),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+			apis: sp_version::create_apis_vec!([]),
+		};
 	}
 
 	impl Trait for Test {
@@ -1206,7 +1258,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
-		type Version = ();
+		type Version = Version;
 		type ModuleToIndex = ();
 	}
 
@@ -1503,7 +1555,7 @@ mod tests {
 				.validate(&1, CALL, op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, Bounded::max_value());
+			assert_eq!(priority, u64::max_value());
 		})
 	}
 
@@ -1561,5 +1613,66 @@ mod tests {
 
 			assert_eq!(ext.validate(&1, CALL, normal, len).unwrap().longevity, 15);
 		})
+	}
+
+
+	#[test]
+	fn set_code_checks_works() {
+		struct CallInWasm(Vec<u8>);
+
+		impl sp_core::traits::CallInWasm for CallInWasm {
+			fn call_in_wasm(
+				&self,
+				_: &[u8],
+				_: &str,
+				_: &[u8],
+				_: &mut dyn sp_externalities::Externalities,
+			) -> Result<Vec<u8>, String> {
+				Ok(self.0.clone())
+			}
+		}
+
+		let test_data = vec![
+			("test", 1, 2, Ok(())),
+			("test", 1, 1, Err(Error::<Test>::SpecOrImplVersionNeedToIncrease)),
+			("test2", 1, 1, Err(Error::<Test>::InvalidSpecName)),
+			("test", 2, 1, Ok(())),
+			("test", 0, 1, Err(Error::<Test>::SpecVersionNotAllowedToDecrease)),
+			("test", 1, 0, Err(Error::<Test>::ImplVersionNotAllowedToDecrease)),
+		];
+
+		for (spec_name, spec_version, impl_version, expected) in test_data.into_iter() {
+			let version = RuntimeVersion {
+				spec_name: spec_name.into(),
+				spec_version,
+				impl_version,
+				..Default::default()
+			};
+			let call_in_wasm = CallInWasm(version.encode());
+
+			let mut ext = new_test_ext();
+			ext.register_extension(sp_core::traits::CallInWasmExt::new(call_in_wasm));
+			ext.execute_with(|| {
+				let res = System::set_code(
+					RawOrigin::Root.into(),
+					vec![1, 2, 3, 4],
+				);
+
+				assert_eq!(expected.map_err(DispatchError::from), res);
+			});
+		}
+	}
+
+	#[test]
+	fn set_code_with_real_wasm_blob() {
+		let executor = substrate_test_runtime_client::new_native_executor();
+		let mut ext = new_test_ext();
+		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor));
+		ext.execute_with(|| {
+			System::set_code(
+				RawOrigin::Root.into(),
+				substrate_test_runtime_client::runtime::WASM_BINARY.to_vec(),
+			).unwrap();
+		});
 	}
 }
