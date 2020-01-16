@@ -804,6 +804,7 @@ decl_module! {
 		///
 		/// Parameters:
 		/// - `founder` - The first member and head of the newly founded society.
+		/// - `max_members` - The initial max number of members for the society.
 		///
 		/// # <weight>
 		/// - Two storage mutates to set `Head` and `Founder`. O(1)
@@ -813,13 +814,14 @@ decl_module! {
 		/// Total Complexity: O(1)
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn found(origin, founder: T::AccountId) {
+		fn found(origin, founder: T::AccountId, max_members: u32) {
 			T::FounderSetOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
 			// This should never fail in the context of this function...
 			Self::add_member(&founder)?;
 			<Head<T, I>>::put(&founder);
 			<Founder<T, I>>::put(&founder);
+			<MaxMembers<I>>::put(max_members);
 			Self::deposit_event(RawEvent::Founded(founder));
 		}
 		/// Allow suspension judgement origin to make judgement on a suspended member.

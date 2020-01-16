@@ -29,17 +29,19 @@ fn founding_works() {
 		assert_eq!(Society::founder(), None);
 		// Account 1 is set as the founder origin
 		// Account 5 cannot start a society
-		assert_noop!(Society::found(Origin::signed(5), 20), BadOrigin);
+		assert_noop!(Society::found(Origin::signed(5), 20, 100), BadOrigin);
 		// Account 1 can start a society, where 10 is the founding member
-		assert_ok!(Society::found(Origin::signed(1), 10));
+		assert_ok!(Society::found(Origin::signed(1), 10, 100));
 		// Society members only include 10
 		assert_eq!(Society::members(), vec![10]);
 		// 10 is the head of the society
 		assert_eq!(Society::head(), Some(10));
 		// ...and also the founder
 		assert_eq!(Society::founder(), Some(10));
+		// 100 members max
+		assert_eq!(Society::max_members(), 100);
 		// Cannot start another society
-		assert_noop!(Society::found(Origin::signed(1), 20), Error::<Test, _>::AlreadyFounded);
+		assert_noop!(Society::found(Origin::signed(1), 20, 100), Error::<Test, _>::AlreadyFounded);
 	});
 }
 
