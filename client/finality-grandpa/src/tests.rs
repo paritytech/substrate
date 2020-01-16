@@ -380,7 +380,7 @@ fn block_until_complete(future: impl Future + Unpin, net: &Arc<Mutex<GrandpaTest
 		future::select(future, drive_to_completion.compat())
 			.map(|_| Ok::<(), ()>(()))
 			.compat()
-	);
+	).unwrap();
 }
 
 // run the voters to completion. provide a closure to be invoked after
@@ -1288,7 +1288,7 @@ fn voter_persists_its_votes() {
 		let net = net.clone();
 		let state = Arc::new(AtomicUsize::new(0));
 
-		runtime.spawn(round_rx.try_for_each(move |signed| {
+		runtime.spawn(round_rx.for_each(move |signed| {
 			let net2 = net.clone();
 			let net = net.clone();
 			let voter_tx = voter_tx.clone();
@@ -1367,10 +1367,8 @@ fn voter_persists_its_votes() {
 				} else {
 					panic!()
 				}
-
-				Ok(())
 			}
-		}).map_err(drop).boxed().compat());
+		}).map(Ok).boxed().compat());
 	}
 
 	block_until_complete(exit_rx.into_future(), &net, &mut runtime);
@@ -1635,7 +1633,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 		future::select(test, drive_to_completion.compat())
 			.map(|_| Ok::<(), ()>(()))
 			.compat()
-	);
+	).unwrap();
 }
 
 #[test]

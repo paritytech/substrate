@@ -307,7 +307,7 @@ fn good_commit_leads_to_relay() {
 			// when the commit comes in, we'll tell the callback it was good.
 			let handle_commit = commits_in.into_future()
 				.map(|(item, _)| {
-					match item.unwrap().unwrap() {
+					match item.unwrap() {
 						finality_grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
 							callback.run(finality_grandpa::voter::CommitProcessingOutcome::good());
 						},
@@ -422,7 +422,7 @@ fn bad_commit_leads_to_report() {
 			// when the commit comes in, we'll tell the callback it was good.
 			let handle_commit = commits_in.into_future()
 				.map(|(item, _)| {
-					match item.unwrap().unwrap() {
+					match item.unwrap() {
 						finality_grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
 							callback.run(finality_grandpa::voter::CommitProcessingOutcome::bad());
 						},

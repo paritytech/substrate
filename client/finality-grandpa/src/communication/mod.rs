@@ -237,7 +237,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		local_key: Option<AuthorityPair>,
 		has_voted: HasVoted<B>,
 	) -> (
-		impl Stream<Item = Result<SignedMessage<B>, Error>>,
+		impl Stream<Item = SignedMessage<B>>,
 		OutgoingMessages<B>,
 	) {
 		self.note_round(
@@ -304,8 +304,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 						future::ready(None)
 					}
 				}
-			})
-			.map(Ok);
+			});
 
 		let (tx, out_rx) = mpsc::unbounded();
 		let outgoing = OutgoingMessages::<B> {
@@ -316,10 +315,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			sender: tx,
 			has_voted,
 		};
-
-		let out_rx = out_rx.map(Result::Ok).map_err(move |()| Error::Network(
-			format!("Failed to receive on unbounded receiver for round {}", round.0)
-		));
 
 		// Combine incoming votes from external GRANDPA nodes with outgoing
 		// votes from our own GRANDPA voter to have a single
@@ -336,7 +331,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		voters: Arc<VoterSet<AuthorityId>>,
 		is_voter: bool,
 	) -> (
-		impl Stream<Item = Result<CommunicationIn<B>, Error>>,
+		impl Stream<Item = CommunicationIn<B>,>,
 		impl Sink<CommunicationOutH<B, B::Hash>, Error = Error> + Unpin,
 	) {
 		self.validator.note_set(
@@ -395,7 +390,7 @@ fn incoming_global<B: BlockT>(
 	voters: Arc<VoterSet<AuthorityId>>,
 	gossip_validator: Arc<GossipValidator<B>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
-) -> impl Stream<Item = Result<CommunicationIn<B>, Error>> {
+) -> impl Stream<Item = CommunicationIn<B>> {
 	let process_commit = move |
 		msg: FullCommitMessage<B>,
 		mut notification: sc_network_gossip::TopicNotification,
@@ -517,7 +512,6 @@ fn incoming_global<B: BlockT>(
 				}
 			})
 		})
-		.map(Ok)
 }
 
 impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {

@@ -72,12 +72,16 @@ pub(crate) trait BlockUntilImported<Block: BlockT>: Sized {
 }
 
 /// Buffering imported messages until blocks with given hashes are imported.
+#[pin_project::pin_project]
 pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, I, M: BlockUntilImported<Block>> {
+	#[pin]
 	import_notifications: Fuse<UnboundedReceiver<BlockImportNotification<Block>>>,
 	block_sync_requester: BlockSyncRequester,
 	status_check: BlockStatus,
+	#[pin]
 	inner: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
+	#[pin]
 	check_pending: Pin<Box<dyn Stream<Item = Result<(), std::io::Error>> + Send>>,
 	/// Mapping block hashes to their block number, the point in time it was
 	/// first encountered (Instant) and a list of GRANDPA messages referencing
@@ -86,15 +90,11 @@ pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, 
 	identifier: &'static str,
 }
 
-impl<Block: BlockT, BlockStatus, BlockSyncRequester, I, M: BlockUntilImported<Block>> Unpin for
-UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> {
-}
-
 impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> where
 	Block: BlockT,
 	BlockStatus: BlockStatusT<Block> + Unpin,
 	BlockSyncRequester: BlockSyncRequesterT<Block> + Unpin,
-	I: Stream<Item = Result<M::Blocked, Error>> + Unpin,
+	I: Stream<Item = M::Blocked> + Unpin,
 	M: BlockUntilImported<Block> + Unpin,
 	M::Blocked: Unpin,
 {
@@ -134,31 +134,29 @@ impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockSta
 
 impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStatus, BSyncRequester, I, M> where
 	Block: BlockT,
-	BStatus: BlockStatusT<Block> + Unpin,
-	BSyncRequester: BlockSyncRequesterT<Block> + Unpin,
-	I: Stream<Item = Result<M::Blocked, Error>> + Unpin,
-	M: BlockUntilImported<Block> + Unpin,
-	M::Blocked: Unpin,
+	BStatus: BlockStatusT<Block>,
+	BSyncRequester: BlockSyncRequesterT<Block>,
+	I: Stream<Item = M::Blocked> + Unpin,
+	M: BlockUntilImported<Block>,
 {
 	type Item = Result<M::Blocked, Error>;
 
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		// We are using a `this` variable in order to allow multiple simultaneous mutable borrow
 		// to `self`.
-		let this = Pin::into_inner(self);
+		let mut this = self.project();
 
 		loop {
 			match Stream::poll_next(Pin::new(&mut this.inner), cx) {
 				Poll::Ready(None) => return Poll::Ready(None),
-				Poll::Ready(Some(Err(err))) => return Poll::Ready(Some(Err(err.into()))),
-				Poll::Ready(Some(Ok(input))) => {
+				Poll::Ready(Some(input)) => {
 					// new input: schedule wait of any parts which require
 					// blocks to be known.
 					let ready = &mut this.ready;
 					let pending = &mut this.pending;
 					M::schedule_wait(
 						input,
-						&this.status_check,
+						this.status_check,
 						|target_hash, target_number, wait| pending
 							.entry(target_hash)
 							.or_insert_with(|| (target_number, Instant::now(), Vec::new()))
@@ -195,7 +193,7 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 
 		if update_interval {
 			let mut known_keys = Vec::new();
-			for (&block_hash, &mut (block_number, ref mut last_log, ref v)) in &mut this.pending {
+			for (&block_hash, &mut (block_number, ref mut last_log, ref v)) in this.pending.iter_mut() {
 				if let Some(number) = this.status_check.block_number(block_hash)? {
 					known_keys.push((block_hash, number));
 				} else {
@@ -604,11 +602,11 @@ mod tests {
 			import_notifications,
 			TestBlockSyncRequester::default(),
 			block_status,
-			global_rx.map_err(|()| panic!("should never error")),
+			global_rx,
 			"global",
 		);
 
-		global_tx.unbounded_send(Ok(msg)).unwrap();
+		global_tx.unbounded_send(msg).unwrap();
 
 		let work = until_imported.into_future();
 
@@ -630,11 +628,11 @@ mod tests {
 			import_notifications,
 			TestBlockSyncRequester::default(),
 			block_status,
-			global_rx.map_err(|()| panic!("should never error")),
+			global_rx,
 			"global",
 		);
 
-		global_tx.unbounded_send(Ok(msg)).unwrap();
+		global_tx.unbounded_send(msg).unwrap();
 
 		// NOTE: needs to be cloned otherwise it is moved to the stream and
 		// dropped too early.
@@ -884,7 +882,7 @@ mod tests {
 			import_notifications,
 			block_sync_requester.clone(),
 			block_status,
-			global_rx.map_err(|()| panic!("should never error")),
+			global_rx,
 			"global",
 		);
 
@@ -917,7 +915,7 @@ mod tests {
 		);
 
 		// we send the commit message and spawn the until_imported stream
-		global_tx.unbounded_send(Ok(unknown_commit())).unwrap();
+		global_tx.unbounded_send(unknown_commit()).unwrap();
 
 		let threads_pool = futures::executor::ThreadPool::new().unwrap();
 		threads_pool.spawn_ok(until_imported.into_future().map(|_| ()));
