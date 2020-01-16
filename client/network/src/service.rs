@@ -33,10 +33,10 @@ use std::task::Poll;
 use sp_consensus::import_queue::{ImportQueue, Link};
 use sp_consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, channel::mpsc};
-use log::{warn, error, info};
+use log::{warn, error, info, trace};
 use libp2p::{PeerId, Multiaddr, kad::record};
 use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
-use libp2p::swarm::NetworkBehaviour;
+use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
 use parking_lot::Mutex;
 use sc_peerset::PeersetHandle;
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
@@ -774,23 +774,32 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 		loop {
 			// Process the next action coming from the network.
-			let poll_value = this.network_service.poll_next_unpin(cx);
+			let next_event = this.network_service.next_event();
+			futures::pin_mut!(next_event);
+			let poll_value = next_event.poll_unpin(cx);
 
 			match poll_value {
 				Poll::Pending => break,
-				Poll::Ready(Some(BehaviourOut::BlockImport(origin, blocks))) =>
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::BlockImport(origin, blocks))) =>
 					this.import_queue.import_blocks(origin, blocks),
-				Poll::Ready(Some(BehaviourOut::JustificationImport(origin, hash, nb, justification))) =>
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::JustificationImport(origin, hash, nb, justification))) =>
 					this.import_queue.import_justification(origin, hash, nb, justification),
-				Poll::Ready(Some(BehaviourOut::FinalityProofImport(origin, hash, nb, proof))) =>
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::FinalityProofImport(origin, hash, nb, proof))) =>
 					this.import_queue.import_finality_proof(origin, hash, nb, proof),
-				Poll::Ready(Some(BehaviourOut::Event(ev))) => {
-					this.event_streams.retain(|sender| sender.unbounded_send(ev.clone()).is_ok());
-				},
-				Poll::Ready(None) => {
-					error!(target: "sync", "Network events stream has returned None");
-					break;
-				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Event(ev))) =>
+					this.event_streams.retain(|sender| sender.unbounded_send(ev.clone()).is_ok()),
+				Poll::Ready(SwarmEvent::Connected(peer_id)) =>
+					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id),
+				Poll::Ready(SwarmEvent::Disconnected(peer_id)) =>
+					trace!(target: "sub-libp2p", "Libp2p => Disconnected({:?})", peer_id),
+				Poll::Ready(SwarmEvent::NewListenAddr(addr)) =>
+					trace!(target: "sub-libp2p", "Libp2p => NewListenAddr({})", addr),
+				Poll::Ready(SwarmEvent::ExpiredListenAddr(addr)) =>
+					trace!(target: "sub-libp2p", "Libp2p => ExpiredListenAddr({})", addr),
+				Poll::Ready(SwarmEvent::UnreachableAddr { peer_id, address, error }) =>
+					trace!(target: "sub-libp2p", "Libp2p => Failed to reach {:?} through {:?}: {}", peer_id, address, error),
+				Poll::Ready(SwarmEvent::StartConnect(peer_id)) =>
+					trace!(target: "sub-libp2p", "Libp2p => StartConnect({:?})", peer_id),
 			};
 		}
 
