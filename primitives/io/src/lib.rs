@@ -86,7 +86,7 @@ fn child_storage_key_or_panic(storage_key: &[u8]) -> ChildStorageKey {
 #[runtime_interface]
 pub trait Storage {
 	/// Returns the data for `key` in the storage or `None` if the key can not be found.
-	fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+	fn get(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		self.storage(key).map(|s| s.to_vec())
 	}
 
@@ -102,7 +102,7 @@ pub trait Storage {
 	/// This function specifically returns the data for `key` in the child storage or `None`
 	/// if the key can not be found.
 	fn child_get(
-		&self,
+		&mut self,
 		child_storage_key: &[u8],
 		child_definition: &[u8],
 		child_type: u32,
@@ -119,7 +119,7 @@ pub trait Storage {
 	/// doesn't exist at all.
 	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
 	/// are copied into `value_out`.
-	fn read(&self, key: &[u8], value_out: &mut [u8], value_offset: u32) -> Option<u32> {
+	fn read(&mut self, key: &[u8], value_out: &mut [u8], value_offset: u32) -> Option<u32> {
 		self.storage(key).map(|value| {
 			let value_offset = value_offset as usize;
 			let data = &value[value_offset.min(value.len())..];
@@ -137,7 +137,7 @@ pub trait Storage {
 	///
 	/// See `child_get` for common child api parameters.
 	fn child_read(
-		&self,
+		&mut self,
 		child_storage_key: &[u8],
 		child_definition: &[u8],
 		child_type: u32,
@@ -217,7 +217,7 @@ pub trait Storage {
 	}
 
 	/// Check whether the given `key` exists in storage.
-	fn exists(&self, key: &[u8]) -> bool {
+	fn exists(&mut self, key: &[u8]) -> bool {
 		self.exists_storage(key)
 	}
 
@@ -225,7 +225,7 @@ pub trait Storage {
 	///
 	/// See `child_get` for common child api parameters.
 	fn child_exists(
-		&self,
+		&mut self,
 		child_storage_key: &[u8],
 		child_definition: &[u8],
 		child_type: u32,

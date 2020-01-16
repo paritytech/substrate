@@ -111,24 +111,24 @@ impl From<BTreeMap<Vec<u8>, Vec<u8>>> for BasicExternalities {
 }
 
 impl Externalities for BasicExternalities {
-	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+	fn storage(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		self.inner.top.get(key).cloned()
 	}
 
-	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
+	fn storage_hash(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		self.storage(key).map(|v| Blake2Hasher::hash(&v).encode())
 	}
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.storage(key)
+		self.inner.top.get(key).cloned()
 	}
 
 	fn original_storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.storage_hash(key)
+		self.original_storage(key).map(|v| Blake2Hasher::hash(&v).encode())
 	}
 
 	fn child_storage(
-		&self,
+		&mut self,
 		storage_key: ChildStorageKey,
 		_child_info: ChildInfo,
 		key: &[u8],
@@ -137,7 +137,7 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn child_storage_hash(
-		&self,
+		&mut self,
 		storage_key: ChildStorageKey,
 		child_info: ChildInfo,
 		key: &[u8],
@@ -146,7 +146,7 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn original_child_storage_hash(
-		&self,
+		&mut self,
 		storage_key: ChildStorageKey,
 		child_info: ChildInfo,
 		key: &[u8],
@@ -157,19 +157,19 @@ impl Externalities for BasicExternalities {
 	fn original_child_storage(
 		&self,
 		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
+		_child_info: ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
-		Externalities::child_storage(self, storage_key, child_info, key)
+		self.inner.children.get(storage_key.as_ref()).and_then(|child| child.data.get(key)).cloned()
 	}
 
-	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
+	fn next_storage_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		let range = (Bound::Excluded(key), Bound::Unbounded);
 		self.inner.top.range::<[u8], _>(range).next().map(|(k, _)| k).cloned()
 	}
 
 	fn next_child_storage_key(
-		&self,
+		&mut self,
 		storage_key: ChildStorageKey,
 		_child_info: ChildInfo,
 		key: &[u8],
