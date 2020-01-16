@@ -982,7 +982,9 @@ fn interface_str(
 
 /// Creates a configuration including the database path.
 pub fn create_config_with_db_path<C, G, E, S>(
-	spec_factory: S, cli: &SharedParams, version: &VersionInfo,
+	spec_factory: S,
+	cli: &SharedParams,
+	version: &VersionInfo,
 ) -> error::Result<Configuration<C, G, E>>
 where
 	C: Default,

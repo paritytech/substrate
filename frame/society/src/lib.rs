@@ -629,6 +629,11 @@ decl_module! {
 		/// 	- Up to one event for AutoUnbid if bid.len() > MAX_BID_COUNT.
 		///
 		/// Total Complexity: O(M + B + C + logM + logB + X)
+		/// t = mM + bB + cC + m'logM + b'logB + k
+		/// let mut state;
+		/// let f = |&mut state, size_M, size_B, size_C| -> Call {
+		///   // alter state in order to create the corresponding env and return a call.
+		/// };
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> DispatchResult {
