@@ -60,6 +60,10 @@ impl FunctionExecutorState {
 			table,
 		}
 	}
+
+	pub fn materialize(&self) -> FunctionExecutor {
+		FunctionExecutor { state: self }
+	}
 }
 
 /// A `FunctionExecutor` implements `FunctionContext` for making host calls from a Wasmtime
@@ -70,10 +74,6 @@ pub struct FunctionExecutor<'a> {
 }
 
 impl<'a> FunctionExecutor<'a> {
-	pub fn new(state: &'a FunctionExecutorState) -> Self {
-		FunctionExecutor { state }
-	}
-
 	/// Returns linear memory of the wasm instance as a slice.
 	///
 	/// # Safety

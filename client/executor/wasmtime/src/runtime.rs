@@ -208,7 +208,7 @@ impl Callable for HostFuncAdapterCallable {
 			.cloned()
 			.map(convert_wasmtime_val_to_substrate_value);
 		let state = self.state_holder.state.borrow();
-		let mut host_func_ctx = FunctionExecutor::new(state.as_ref().unwrap()); // TODO:
+		let mut host_func_ctx = state.as_ref().unwrap().materialize(); // TODO: Unwrap
 
 		let unwind_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 			self.host_func
