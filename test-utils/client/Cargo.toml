@@ -6,10 +6,10 @@ edition = "2018"
 
 [dependencies]
 sc-client-api = { version = "2.0.0", path = "../../client/api" }
-sc-client = { version = "2.0.0", path = "../../client/" }
-sc-client-db = { version = "2.0.0", features = ["test-helpers"], path = "../../client/db" }
+sc-client = { version = "0.8", path = "../../client/" }
+sc-client-db = { version = "0.8", features = ["test-helpers"], path = "../../client/db" }
 sp-consensus = { version = "0.8", path = "../../primitives/consensus/common" }
-sc-executor = { version = "2.0.0", path = "../../client/executor" }
+sc-executor = { version = "0.8", path = "../../client/executor" }
 futures = "0.3.1"
 hash-db = "0.15.2"
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
@@ -17,4 +17,4 @@ codec = { package = "parity-scale-codec", version = "1.0.0" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
-sp-state-machine = { version = "2.0.0", path = "../../primitives/state-machine" }
+sp-state-machine = { version = "0.8", path = "../../primitives/state-machine" }

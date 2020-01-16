@@ -22,16 +22,15 @@ use sc_client_api::{
 	self,
 	BlockchainEvents,
 	backend::RemoteBackend, light::RemoteBlockchain,
+	execution_extensions::ExtensionsFactory,
 };
 use sc_client::Client;
 use sc_chain_spec::{RuntimeGenesis, Extension};
 use sp_consensus::import_queue::ImportQueue;
-use futures::{prelude::*, sync::mpsc};
-use futures03::{
-	compat::Compat,
-	FutureExt as _, TryFutureExt as _,
-	StreamExt as _, TryStreamExt as _,
-	future::{select, Either}
+use futures::{
+	Future, FutureExt, StreamExt,
+	channel::mpsc,
+	future::{select, ready}
 };
 use sc_keystore::{Store as Keystore};
 use log::{info, warn, error};
@@ -46,7 +45,7 @@ use sp_api::ProvideRuntimeApi;
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
 	io::{Read, Write, Seek},
-	marker::PhantomData, sync::Arc, time::SystemTime
+	marker::PhantomData, sync::Arc, time::SystemTime, pin::Pin
 };
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
@@ -681,7 +680,7 @@ pub trait ServiceBuilderCommand {
 		self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
-	) -> Box<dyn Future<Item = (), Error = Error> + Send>;
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 
 	/// Performs the blocks export.
 	fn export_blocks(
@@ -690,7 +689,7 @@ pub trait ServiceBuilderCommand {
 		from: NumberFor<Self::Block>,
 		to: Option<NumberFor<Self::Block>>,
 		json: bool
-	) -> Box<dyn Future<Item = (), Error = Error>>;
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>>;
 
 	/// Performs a revert of `blocks` blocks.
 	fn revert_chain(
@@ -702,7 +701,7 @@ pub trait ServiceBuilderCommand {
 	fn check_block(
 		self,
 		block: BlockId<Self::Block>
-	) -> Box<dyn Future<Item = (), Error = Error> + Send>;
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 }
 
 impl<TBl, TRtApi, TCfg, TGen, TCSExt, TBackend, TExec, TSc, TImpQu, TNetP, TExPool, TRpc>
@@ -746,6 +745,13 @@ ServiceBuilder<
 		+ TransactionPoolMaintainer<Block=TBl, Hash = <TBl as BlockT>::Hash>,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata> + Clone,
 {
+
+	/// Set an ExecutionExtensionsFactory
+	pub fn with_execution_extensions_factory(self, execution_extensions_factory: Box<dyn ExtensionsFactory>) -> Result<Self, Error> {
+		self.client.execution_extensions().set_extensions_factory(execution_extensions_factory);
+		Ok(self)
+	}
+
 	/// Builds the service.
 	pub fn build(self) -> Result<Service<
 		TBl,
@@ -787,7 +793,7 @@ ServiceBuilder<
 
 		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
 		let (to_spawn_tx, to_spawn_rx) =
-			mpsc::unbounded::<Box<dyn Future<Item = (), Error = ()> + Send>>();
+			mpsc::unbounded::<Pin<Box<dyn Future<Output = ()> + Send>>>();
 
 		// A side-channel for essential tasks to communicate shutdown.
 		let (essential_failed_tx, essential_failed_rx) = mpsc::unbounded();
@@ -871,7 +877,6 @@ ServiceBuilder<
 			let is_validator = config.roles.is_authority();
 
 			let events = client.import_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |notification| {
 					let txpool = txpool.upgrade();
 
@@ -879,8 +884,8 @@ ServiceBuilder<
 						let future = txpool.maintain(
 							&BlockId::hash(notification.hash),
 							&notification.retracted,
-						).map(|_| Ok(())).compat();
-						let _ = to_spawn_tx_.unbounded_send(Box::new(future));
+						);
+						let _ = to_spawn_tx_.unbounded_send(Box::pin(future));
 					}
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
@@ -889,15 +894,13 @@ ServiceBuilder<
 							&notification.header,
 							network_state_info.clone(),
 							is_validator
-						).map(|()| Ok(()));
-						let _ = to_spawn_tx_.unbounded_send(Box::new(Compat::new(future)));
+						);
+						let _ = to_spawn_tx_.unbounded_send(Box::pin(future));
 					}
 
-					Ok(())
-				})
-				.select(exit.clone().map(Ok).compat())
-				.then(|_| Ok(()));
-			let _ = to_spawn_tx.unbounded_send(Box::new(events));
+					ready(())
+				});
+			let _ = to_spawn_tx.unbounded_send(Box::pin(select(events, exit.clone()).map(drop)));
 		}
 
 		{
@@ -905,7 +908,6 @@ ServiceBuilder<
 			let network = Arc::downgrade(&network);
 			let transaction_pool_ = transaction_pool.clone();
 			let events = transaction_pool.import_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |_| {
 					if let Some(network) = network.upgrade() {
 						network.trigger_repropagate();
@@ -915,12 +917,10 @@ ServiceBuilder<
 						"ready" => status.ready,
 						"future" => status.future
 					);
-					Ok(())
-				})
-				.select(exit.clone().map(Ok).compat())
-				.then(|_| Ok(()));
+					ready(())
+				});
 
-			let _ = to_spawn_tx.unbounded_send(Box::new(events));
+			let _ = to_spawn_tx.unbounded_send(Box::pin(select(events, exit.clone()).map(drop)));
 		}
 
 		// Periodically notify the telemetry.
@@ -982,9 +982,9 @@ ServiceBuilder<
 				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
 			);
 
-			Ok(())
-		}).select(exit.clone().map(Ok).compat()).then(|_| Ok(()));
-		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
+			ready(())
+		});
+		let _ = to_spawn_tx.unbounded_send(Box::pin(select(tel_task, exit.clone()).map(drop)));
 
 		// Periodically send the network state to the telemetry.
 		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
@@ -995,12 +995,12 @@ ServiceBuilder<
 				"system.network_state";
 				"state" => network_state,
 			);
-			Ok(())
-		}).select(exit.clone().map(Ok).compat()).then(|_| Ok(()));
-		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task_2));
+			ready(())
+		});
+		let _ = to_spawn_tx.unbounded_send(Box::pin(select(tel_task_2, exit.clone()).map(drop)));
 
 		// RPC
-		let (system_rpc_tx, system_rpc_rx) = futures03::channel::mpsc::unbounded();
+		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
 		let gen_handler = || {
 			use sc_rpc::{chain, state, author, system};
 
@@ -1060,17 +1060,14 @@ ServiceBuilder<
 		let rpc = start_rpc_servers(&config, gen_handler)?;
 
 
-		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future(
+		let _ = to_spawn_tx.unbounded_send(Box::pin(select(build_network_future(
 			config.roles,
 			network_mut,
 			client.clone(),
 			network_status_sinks.clone(),
 			system_rpc_rx,
 			has_bootnodes,
-		)
-			.map_err(|_| ())
-			.select(exit.clone().map(Ok).compat())
-			.then(|_| Ok(()))));
+		), exit.clone()).map(drop)));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
@@ -1091,8 +1088,6 @@ ServiceBuilder<
 				.map(|dur| dur.as_millis())
 				.unwrap_or(0);
 			let future = telemetry.clone()
-				.map(|ev| Ok::<_, ()>(ev))
-				.compat()
 				.for_each(move |event| {
 					// Safe-guard in case we add more events in the future.
 					let sc_telemetry::TelemetryEvent::Connected = event;
@@ -1111,11 +1106,11 @@ ServiceBuilder<
 					telemetry_connection_sinks_.lock().retain(|sink| {
 						sink.unbounded_send(()).is_ok()
 					});
-					Ok(())
+					ready(())
 				});
-			let _ = to_spawn_tx.unbounded_send(Box::new(future
-				.select(exit.clone().map(Ok).compat())
-				.then(|_| Ok(()))));
+			let _ = to_spawn_tx.unbounded_send(Box::pin(select(
+				future, exit.clone()
+			).map(drop)));
 			telemetry
 		});
 
@@ -1124,13 +1119,10 @@ ServiceBuilder<
 			let future = select(
 				grafana_data_source::run_server(port).boxed(),
 				exit.clone()
-			).map(|either| match either {
-				Either::Left((result, _)) => result.map_err(|_| ()),
-				Either::Right(_) => Ok(())
-			}).compat();
+			).map(drop);
 
-			let _ = to_spawn_tx.unbounded_send(Box::new(future));
-		}
+			let _ = to_spawn_tx.unbounded_send(Box::pin(future));
+    	}
 
 		// Instrumentation
 		if let Some(tracing_targets) = config.tracing_targets.as_ref() {

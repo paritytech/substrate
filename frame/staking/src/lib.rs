@@ -283,7 +283,7 @@ use sp_staking::{
 use sp_runtime::{Serialize, Deserialize};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
-use sp_phragmen::{ExtendedBalance, PhragmenStakedAssignment};
+use sp_phragmen::ExtendedBalance;
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -1508,50 +1508,14 @@ impl<T: Trait> Module<T> {
 				.collect::<Vec<T::AccountId>>();
 			let assignments = phragmen_result.assignments;
 
-			let to_votes = |b: BalanceOf<T>|
-				<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
 			let to_balance = |e: ExtendedBalance|
 				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 
-			let mut supports = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
+			let supports = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
 				&elected_stashes,
 				&assignments,
 				Self::slashable_balance_of,
 			);
-
-			if cfg!(feature = "equalize") {
-				let mut staked_assignments
-					: Vec<(T::AccountId, Vec<PhragmenStakedAssignment<T::AccountId>>)>
-					= Vec::with_capacity(assignments.len());
-				for (n, assignment) in assignments.iter() {
-					let mut staked_assignment
-						: Vec<PhragmenStakedAssignment<T::AccountId>>
-						= Vec::with_capacity(assignment.len());
-
-					// If this is a self vote, then we don't need to equalise it at all. While the
-					// staking system does not allow nomination and validation at the same time,
-					// this must always be 100% support.
-					if assignment.len() == 1 && assignment[0].0 == *n {
-						continue;
-					}
-					for (c, per_thing) in assignment.iter() {
-						let nominator_stake = to_votes(Self::slashable_balance_of(n));
-						let other_stake = *per_thing * nominator_stake;
-						staked_assignment.push((c.clone(), other_stake));
-					}
-					staked_assignments.push((n.clone(), staked_assignment));
-				}
-
-				let tolerance = 0_u128;
-				let iterations = 2_usize;
-				sp_phragmen::equalize::<_, _, T::CurrencyToVote, _>(
-					staked_assignments,
-					&mut supports,
-					tolerance,
-					iterations,
-					Self::slashable_balance_of,
-				);
-			}
 
 			// Clear Stakers.
 			for v in Self::current_elected().iter() {
@@ -1562,18 +1526,30 @@ impl<T: Trait> Module<T> {
 			let mut slot_stake = BalanceOf::<T>::max_value();
 			for (c, s) in supports.into_iter() {
 				// build `struct exposure` from `support`
+				let mut others = Vec::new();
+				let mut own: BalanceOf<T> = Zero::zero();
+				let mut total: BalanceOf<T> = Zero::zero();
+				s.voters
+					.into_iter()
+					.map(|(who, value)| (who, to_balance(value)))
+					.for_each(|(who, value)| {
+						if who == c {
+							own = own.saturating_add(value);
+						} else {
+							others.push(IndividualExposure { who, value });
+						}
+						total = total.saturating_add(value);
+					});
 				let exposure = Exposure {
-					own: to_balance(s.own),
+					own,
+					others,
 					// This might reasonably saturate and we cannot do much about it. The sum of
 					// someone's stake might exceed the balance type if they have the maximum amount
 					// of balance and receive some support. This is super unlikely to happen, yet
 					// we simulate it in some tests.
-					total: to_balance(s.total),
-					others: s.others
-						.into_iter()
-						.map(|(who, value)| IndividualExposure { who, value: to_balance(value) })
-						.collect::<Vec<IndividualExposure<_, _>>>(),
+					total,
 				};
+
 				if exposure.total < slot_stake {
 					slot_stake = exposure.total;
 				}
@@ -1650,7 +1626,6 @@ impl<T: Trait> Module<T> {
 	/// For each element in the iterator the given number of points in u32 is added to the
 	/// validator, thus duplicates are handled.
 	pub fn reward_by_indices(validators_points: impl IntoIterator<Item = (u32, u32)>) {
-		// TODO: This can be optimised once #3302 is implemented.
 		let current_elected_len = <Module<T>>::current_elected().len() as u32;
 
 		CurrentEraPointsEarned::mutate(|rewards| {
