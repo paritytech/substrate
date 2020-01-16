@@ -20,7 +20,7 @@
 
 use crate::mock::*;
 use crate::{
-	elect, equalize,
+	elect, equalize, build_support_map,
 	Support, StakedAssignment, Assignment, PhragmenResult,
 };
 use substrate_test_utils::assert_eq_uvec;

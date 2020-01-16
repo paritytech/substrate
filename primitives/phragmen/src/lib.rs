@@ -42,6 +42,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+mod node;
+pub mod reduce;
+
 /// A type in which performing operations on balances and stakes of candidates and voters are safe.
 ///
 /// This module's functions expect a `Convert` type to convert all balances to u64. Hence, u128 is

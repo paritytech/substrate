@@ -18,10 +18,7 @@
 
 #![cfg(test)]
 
-use crate::{
-	elect, build_support_map,
-	PhragmenResult, Assignment, StakedAssignment,
-};
+use crate::{elect, PhragmenResult, Assignment};
 use sp_runtime::{
 	assert_eq_error_rate, Perbill,
 	traits::{Convert, Member, SaturatedConversion}

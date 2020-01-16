@@ -974,7 +974,7 @@ decl_module! {
 								.collect();
 
 							// reduce the assignments. This will remove some additional edges.
-							sp_phragmen::reduce(&mut staked);
+							sp_phragmen::reduce::reduce(&mut staked);
 
 							// compact encode the assignment.
 							let compact = <CompactAssignments<T::AccountId, ExtendedBalance>>::from_staked(staked);

@@ -26,6 +26,7 @@ use sp_runtime::{
 	traits::{IdentityLookup, OnInitialize},
 };
 use sp_version::RuntimeVersion;
+use frame_system::InitKind;
 use frame_support::{impl_outer_origin, parameter_types, StorageValue, weights::Weight};
 use sp_io;
 use sp_core::{H256, Blake2Hasher};
@@ -110,7 +111,7 @@ pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> sp_io::TestExternalit
 
 pub fn go_to_block(n: u64, s: u64) {
 	let pre_digest = make_pre_digest(0, s, [1; 32], [0xff; 64]);
-	System::initialize(&n, &Default::default(), &Default::default(), &pre_digest);
+	System::initialize(&n, &Default::default(), &Default::default(), &pre_digest, InitKind::Full);
 	System::set_block_number(n);
 	if s > 1 {
 		CurrentSlot::put(s);
