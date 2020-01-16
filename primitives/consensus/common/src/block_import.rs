@@ -90,6 +90,8 @@ pub enum BlockOrigin {
 /// Fork choice strategy.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ForkChoiceStrategy {
+	/// The import should always fail.
+	Fail,
 	/// Longest chain fork choice.
 	LongestChain,
 	/// Custom fork choice rule, where true indicates the new block should be the best block.
@@ -142,6 +144,10 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// Is this block finalized already?
 	/// `true` implies instant finality.
 	pub finalized: bool,
+	/// Intermediate values that are interpreted by block importers. Each block importer,
+	/// when handled a value, removes it from the intermediate list. The final block importer
+	/// rejects block import if there are still intermediate values remain unhandled.
+	pub intermediates: HashMap<Vec<u8>, Vec<u8>>,
 	/// Auxiliary consensus data produced by the block.
 	/// Contains a list of key-value pairs. If values are `None`, the keys
 	/// will be deleted.
@@ -210,6 +216,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 			storage_changes: None,
 			finalized: self.finalized,
 			auxiliary: self.auxiliary,
+			intermediates: self.intermediates,
 			allow_missing_state: self.allow_missing_state,
 			fork_choice: self.fork_choice,
 			import_existing: self.import_existing,
