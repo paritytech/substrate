@@ -218,20 +218,23 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 		// pay any fees.
 		let tip = self.0;
 		let fee = Self::compute_fee(len as u32, info, tip);
-		let imbalance = match T::Currency::withdraw(
-			who,
-			fee,
-			if tip.is_zero() {
-				WithdrawReason::TransactionPayment.into()
-			} else {
-				WithdrawReason::TransactionPayment | WithdrawReason::Tip
-			},
-			ExistenceRequirement::KeepAlive,
-		) {
-			Ok(imbalance) => imbalance,
-			Err(_) => return InvalidTransaction::Payment.into(),
-		};
-		T::OnTransactionPayment::on_unbalanced(imbalance);
+		// Only mess with balances if fee is not zero.
+		if !fee.is_zero() {
+			let imbalance = match T::Currency::withdraw(
+				who,
+				fee,
+				if tip.is_zero() {
+					WithdrawReason::TransactionPayment.into()
+				} else {
+					WithdrawReason::TransactionPayment | WithdrawReason::Tip
+				},
+				ExistenceRequirement::KeepAlive,
+			) {
+				Ok(imbalance) => imbalance,
+				Err(_) => return InvalidTransaction::Payment.into(),
+			};
+			T::OnTransactionPayment::on_unbalanced(imbalance);
+		}
 
 		let mut r = ValidTransaction::default();
 		// NOTE: we probably want to maximize the _fee (of any type) per weight unit_ here, which

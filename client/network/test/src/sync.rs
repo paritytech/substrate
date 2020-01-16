@@ -80,7 +80,7 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 			}
 			if peer < 2 {
 				// Major syncing.
-				if !net.peer(peer).is_major_syncing() {
+				if net.peer(peer).blocks_count() < 100 && !net.peer(peer).is_major_syncing() {
 					return Ok(Async::NotReady)
 				}
 			}

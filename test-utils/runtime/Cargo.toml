@@ -32,15 +32,15 @@ pallet-babe = { version = "2.0.0", default-features = false, path = "../../frame
 frame-system = { version = "2.0.0", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../frame/system/rpc/runtime-api" }
 pallet-timestamp = { version = "2.0.0", default-features = false, path = "../../frame/timestamp" }
-sc-client = { version = "2.0.0", optional = true, path = "../../client" }
+sc-client = { version = "0.8", optional = true, path = "../../client" }
 sp-trie = { version = "2.0.0", default-features = false, path = "../../primitives/trie" }
 sp-transaction-pool = { version = "2.0.0", default-features = false, path = "../../primitives/transaction-pool" }
 trie-db = { version = "0.18.1", default-features = false }
 
 [dev-dependencies]
-sc-executor = { version = "2.0.0", path = "../../client/executor" }
+sc-executor = { version = "0.8", path = "../../client/executor" }
 substrate-test-runtime-client = { version = "2.0.0", path = "./client" }
-sp-state-machine = { version = "2.0.0", path = "../../primitives/state-machine" }
+sp-state-machine = { version = "0.8", path = "../../primitives/state-machine" }
 
 [build-dependencies]
 wasm-builder-runner = { version = "1.0.4", package = "substrate-wasm-builder-runner", path = "../../utils/wasm-builder-runner" }

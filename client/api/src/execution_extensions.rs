@@ -62,6 +62,18 @@ impl Default for ExecutionStrategies {
 	}
 }
 
+/// Generate the starting set of ExternalitiesExtensions based upon the given capabilities
+pub trait ExtensionsFactory: Send + Sync {
+	/// Make `Extensions` for given Capapbilities
+	fn extensions_for(&self, capabilities: offchain::Capabilities) -> Extensions;
+}
+
+impl ExtensionsFactory for () {
+	fn extensions_for(&self, _capabilities: offchain::Capabilities) -> Extensions {
+		Extensions::new()
+	}
+}
+
 /// A producer of execution extensions for offchain calls.
 ///
 /// This crate aggregates extensions available for the offchain calls
@@ -70,7 +82,10 @@ impl Default for ExecutionStrategies {
 pub struct ExecutionExtensions<Block: traits::Block> {
 	strategies: ExecutionStrategies,
 	keystore: Option<BareCryptoStorePtr>,
+	// FIXME: these two are only RwLock because of https://github.com/paritytech/substrate/issues/4587
+	//        remove when fixed.
 	transaction_pool: RwLock<Option<Weak<dyn sp_transaction_pool::OffchainSubmitTransaction<Block>>>>,
+	extensions_factory: RwLock<Box<dyn ExtensionsFactory>>,
 }
 
 impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
@@ -79,6 +94,7 @@ impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
 			strategies: Default::default(),
 			keystore: None,
 			transaction_pool: RwLock::new(None),
+			extensions_factory: RwLock::new(Box::new(())),
 		}
 	}
 }
@@ -90,12 +106,18 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 		keystore: Option<BareCryptoStorePtr>,
 	) -> Self {
 		let transaction_pool = RwLock::new(None);
-		Self { strategies, keystore, transaction_pool }
+		let extensions_factory = Box::new(());
+		Self { strategies, keystore, extensions_factory: RwLock::new(extensions_factory), transaction_pool }
 	}
 
 	/// Get a reference to the execution strategies.
 	pub fn strategies(&self) -> &ExecutionStrategies {
 		&self.strategies
+	}
+
+	/// Set the new extensions_factory
+	pub fn set_extensions_factory(&self, maker: Box<dyn ExtensionsFactory>) {
+		*self.extensions_factory.write() = maker;
 	}
 
 	/// Register transaction pool extension.
@@ -135,7 +157,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 
 		let capabilities = context.capabilities();
 
-		let mut extensions = Extensions::new();
+		let mut extensions = self.extensions_factory.read().extensions_for(capabilities);
 
 		if capabilities.has(offchain::Capability::Keystore) {
 			if let Some(keystore) = self.keystore.as_ref() {

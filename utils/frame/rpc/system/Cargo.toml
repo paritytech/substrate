@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sc-client = { version = "2.0.0", path = "../../../../client/" }
+sc-client = { version = "0.8", path = "../../../../client/" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 futures = "0.3.1"
 jsonrpc-core = "14.0.3"

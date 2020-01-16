@@ -486,7 +486,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 		}
 
 		let mut aux = PowAux::read(client, &best_hash)?;
-		let mut proposer = env.init(&best_header)
+		let mut proposer = futures::executor::block_on(env.init(&best_header))
 			.map_err(|e| Error::Environment(format!("{:?}", e)))?;
 
 		let inherent_data = inherent_data_providers
