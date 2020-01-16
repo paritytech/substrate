@@ -17,7 +17,7 @@
 use crate::protocol::generic_proto::upgrade::{NotificationsOut, NotificationsOutSubstream};
 use bytes::BytesMut;
 use futures::prelude::*;
-use libp2p::core::{ConnectedPoint, PeerId, Endpoint};
+use libp2p::core::{ConnectedPoint, PeerId};
 use libp2p::core::upgrade::{DeniedUpgrade, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
@@ -28,7 +28,7 @@ use libp2p::swarm::{
 };
 use log::error;
 use smallvec::SmallVec;
-use std::{borrow::Cow, fmt, io, marker::PhantomData, mem, task::{Context, Poll}, time::{Duration, Instant}};
+use std::{borrow::Cow, fmt, io, marker::PhantomData, mem, task::Poll, time::{Duration, Instant}};
 
 /// Maximum duration to open a substream and receive the handshake message. After that, we
 /// consider that we failed to open the substream.

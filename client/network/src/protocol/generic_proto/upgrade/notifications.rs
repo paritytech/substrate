@@ -163,10 +163,15 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + 'static,
 				NotificationsInSubstreamHandshake::NotSent =>
 					return Poll::Pending,
 				NotificationsInSubstreamHandshake::PendingSend(msg) =>
-					match self.socket.start_send(msg, cx)? {
-						AsyncSink::Ready =>
-							self.handshake = NotificationsInSubstreamHandshake::Close,
-						AsyncSink::NotReady(msg) =>
+					match self.socket.poll_ready(cx) {
+						Poll::Ready(_) => {
+							self.handshake = NotificationsInSubstreamHandshake::Close;
+							match self.socket.start_send(msg, cx) {
+								Ok(()) => {},
+								Err(err) => return Poll::Ready(Some(Err(err))),
+							}
+						},
+						Poll::Pending =>
 							self.handshake = NotificationsInSubstreamHandshake::PendingSend(msg),
 					},
 				NotificationsInSubstreamHandshake::Close =>
@@ -238,13 +243,13 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + 'static,
 		self.messages_queue.push_back(message);
 	}
 
-	/// Processes the substream. Must be called within the context of a task.
-	pub fn process(&mut self) -> Result<(), io::Error> {
+	/// Processes the substream.
+	pub fn process(&mut self, cx: &mut Context) -> Result<(), io::Error> {
 		while let Some(msg) = self.messages_queue.pop_front() {
-			match self.socket.start_send(msg) {
-				Err(err) => return Err(err),
-				Ok(AsyncSink::Ready) => self.need_flush = true,
-				Ok(AsyncSink::NotReady(msg)) => {
+			match self.socket.poll_read(cx) {
+				Poll::Ready(Err(err)) => return Err(err),
+				Poll::Ready(Ok(())) => self.socket.start_send(msg, cx)?,
+				Poll::Pending => {
 					self.messages_queue.push_front(msg);
 					return Ok(());
 				}
@@ -252,8 +257,8 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + 'static,
 		}
 
 		if self.need_flush {
-			match self.socket.poll_complete() {
-				Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
+			match self.socket.poll_complete(cx) {
+				Poll::Ready(Err(err)) => return Err(err),
 				Poll::Ready(Ok(())) => self.need_flush = false,
 				Poll::Pending => {},
 			}

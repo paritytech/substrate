@@ -17,7 +17,7 @@
 use crate::protocol::generic_proto::upgrade::{NotificationsIn, NotificationsInSubstream};
 use bytes::BytesMut;
 use futures::prelude::*;
-use libp2p::core::{ConnectedPoint, PeerId, Endpoint};
+use libp2p::core::{ConnectedPoint, PeerId};
 use libp2p::core::upgrade::{DeniedUpgrade, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
@@ -28,7 +28,7 @@ use libp2p::swarm::{
 };
 use log::{error, warn};
 use smallvec::SmallVec;
-use std::{borrow::Cow, error, fmt, marker::PhantomData, task::{Context, Poll}};
+use std::{borrow::Cow, fmt, marker::PhantomData, task::{Context, Poll}};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
