@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 pallet-balances = { version = "2.0.0", path = "../../../frame/balances" }
-sc-client = { version = "2.0.0", path = "../../../client/" }
+sc-client = { version = "0.8", path = "../../../client/" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 pallet-contracts = { version = "2.0.0", path = "../../../frame/contracts" }
 pallet-grandpa = { version = "2.0.0", path = "../../../frame/grandpa" }
@@ -22,7 +22,7 @@ frame-support = { version = "2.0.0", path = "../../../frame/support" }
 pallet-session = { version = "2.0.0", path = "../../../frame/session" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 pallet-staking = { version = "2.0.0", path = "../../../frame/staking" }
-sc-executor = { version = "2.0.0", path = "../../../client/executor" }
+sc-executor = { version = "0.8", path = "../../../client/executor" }
 frame-system = { version = "2.0.0", path = "../../../frame/system" }
 substrate-test-client = { version = "2.0.0", path = "../../../test-utils/client" }
 pallet-timestamp = { version = "2.0.0", path = "../../../frame/timestamp" }
