@@ -38,7 +38,7 @@ use codec::{Decode, Encode};
 use sp_runtime::generic::{DigestItem, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor, HasherFor};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
-use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
+use crate::utils::{self, meta_keys, DatabaseType, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
 use crate::{DatabaseSettings, FrozenForDuration};
 use log::{trace, warn, debug};
 
@@ -68,13 +68,10 @@ pub struct LightStorage<Block: BlockT> {
 	io_stats: FrozenForDuration<kvdb::IoStats>,
 }
 
-impl<Block> LightStorage<Block>
-	where
-		Block: BlockT,
-{
+impl<Block: BlockT> LightStorage<Block> {
 	/// Create new storage with given settings.
 	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
-		let db = crate::utils::open_database(&config, columns::META, "light")?;
+		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Light)?;
 		Self::from_kvdb(db as Arc<_>)
 	}
 
@@ -89,7 +86,7 @@ impl<Block> LightStorage<Block>
 	}
 
 	fn from_kvdb(db: Arc<dyn KeyValueDB>) -> ClientResult<Self> {
-		let meta = read_meta::<Block>(&*db, columns::META, columns::HEADER)?;
+		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let cache = DbCache::new(
 			db.clone(),
 			columns::KEY_LOOKUP,
@@ -417,7 +414,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	fn import_header(
 		&self,
 		header: Block::Header,
-		cache_at: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+		mut cache_at: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		leaf_state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()> {
@@ -475,6 +472,13 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			)?;
 		}
 
+		// update changes trie configuration cache
+		if !cache_at.contains_key(&well_known_cache_keys::CHANGES_TRIE_CONFIG) {
+			if let Some(new_configuration) = crate::changes_tries_storage::extract_new_configuration(&header) {
+				cache_at.insert(well_known_cache_keys::CHANGES_TRIE_CONFIG, new_configuration.encode());
+			}
+		}
+
 		{
 			let mut cache = self.cache.0.write();
 			let cache_ops = cache.transaction(&mut transaction)
@@ -487,8 +491,11 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 				.into_ops();
 
 			debug!("Light DB Commit {:?} ({})", hash, number);
+
 			self.db.write(transaction).map_err(db_err)?;
-			cache.commit(cache_ops);
+			cache.commit(cache_ops)
+				.expect("only fails if cache with given name isn't loaded yet;\
+						cache is already loaded because there are cache_ops; qed");
 		}
 
 		self.update_meta(hash, number, leaf_state.is_best(), finalized);
@@ -543,7 +550,9 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 					.into_ops();
 
 				self.db.write(transaction).map_err(db_err)?;
-				cache.commit(cache_ops);
+				cache.commit(cache_ops)
+					.expect("only fails if cache with given name isn't loaded yet;\
+							cache is already loaded because there are cache_ops; qed");
 			}
 			self.update_meta(hash, header.number().clone(), false, true);
 
@@ -603,7 +612,8 @@ fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 #[cfg(test)]
 pub(crate) mod tests {
 	use sc_client::cht;
-	use sp_runtime::generic::DigestItem;
+	use sp_core::ChangesTrieConfiguration;
+	use sp_runtime::generic::{DigestItem, ChangesTrieSignal};
 	use sp_runtime::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
 	use sp_blockchain::{lowest_common_ancestor, tree_route};
 	use super::*;
@@ -964,7 +974,7 @@ pub(crate) mod tests {
 		}
 
 		fn get_authorities(cache: &dyn BlockchainCache<Block>, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
-			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at)
+			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at).unwrap_or(None)
 				.and_then(|(_, _, val)| Decode::decode(&mut &val[..]).ok())
 		}
 
@@ -1148,8 +1158,8 @@ pub(crate) mod tests {
 		let (genesis_hash, storage) = {
 			let db = LightStorage::<Block>::new_test();
 
-			// before cache is initialized => None
-			assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
+			// before cache is initialized => Err
+			assert!(db.cache().get_at(b"test", &BlockId::Number(0)).is_err());
 
 			// insert genesis block (no value for cache is provided)
 			let mut genesis_hash = None;
@@ -1160,14 +1170,14 @@ pub(crate) mod tests {
 			});
 
 			// after genesis is inserted => None
-			assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
+			assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)).unwrap(), None);
 
 			// initialize cache
 			db.cache().initialize(b"test", vec![42]).unwrap();
 
 			// after genesis is inserted + cache is initialized => Some
 			assert_eq!(
-				db.cache().get_at(b"test", &BlockId::Number(0)),
+				db.cache().get_at(b"test", &BlockId::Number(0)).unwrap(),
 				Some(((0, genesis_hash.unwrap()), None, vec![42])),
 			);
 
@@ -1177,8 +1187,37 @@ pub(crate) mod tests {
 		// restart && check that after restart value is read from the cache
 		let db = LightStorage::<Block>::from_kvdb(storage as Arc<_>).expect("failed to create test-db");
 		assert_eq!(
-			db.cache().get_at(b"test", &BlockId::Number(0)),
+			db.cache().get_at(b"test", &BlockId::Number(0)).unwrap(),
 			Some(((0, genesis_hash.unwrap()), None, vec![42])),
+		);
+	}
+
+	#[test]
+	fn changes_trie_configuration_is_tracked_on_light_client() {
+		let db = LightStorage::<Block>::new_test();
+
+		let new_config = Some(ChangesTrieConfiguration::new(2, 2));
+
+		// insert block#0 && block#1 (no value for cache is provided)
+		let hash0 = insert_block(&db, HashMap::new(), || default_header(&Default::default(), 0));
+		assert_eq!(
+			db.cache().get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, &BlockId::Number(0)).unwrap()
+				.map(|(_, _, v)| ChangesTrieConfiguration::decode(&mut &v[..]).unwrap()),
+			None,
+		);
+
+		// insert configuration at block#1 (starts from block#2)
+		insert_block(&db, HashMap::new(), || {
+			let mut header = default_header(&hash0, 1);
+			header.digest_mut().push(
+				DigestItem::ChangesTrieSignal(ChangesTrieSignal::NewConfiguration(new_config.clone()))
+			);
+			header
+		});
+		assert_eq!(
+			db.cache().get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, &BlockId::Number(1)).unwrap()
+				.map(|(_, _, v)| Option::<ChangesTrieConfiguration>::decode(&mut &v[..]).unwrap()),
+			Some(new_config),
 		);
 	}
 }

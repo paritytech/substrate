@@ -23,6 +23,7 @@ use crate::{traits::Len, hash::{Twox128, StorageHasher}};
 pub mod unhashed;
 pub mod hashed;
 pub mod child;
+#[doc(hidden)]
 pub mod generator;
 
 /// Execute under a new transactional layer.

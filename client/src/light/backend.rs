@@ -21,19 +21,22 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::RwLock;
 
-use sp_core::storage::{ChildInfo, OwnedChildInfo};
+use codec::{Decode, Encode};
+
+use sp_core::ChangesTrieConfiguration;
+use sp_core::storage::{well_known_keys, ChildInfo, OwnedChildInfo};
 use sp_core::offchain::storage::InMemOffchainStorage;
 use sp_state_machine::{
 	Backend as StateBackend, TrieBackend, InMemoryBackend, ChangesTrieTransaction
 };
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero, Header, HasherFor};
-use crate::in_mem::{self, check_genesis_storage};
+use crate::in_mem::check_genesis_storage;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sc_client_api::{
 	backend::{
 		AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
-		StorageCollection, ChildStorageCollection,
+		StorageCollection, ChildStorageCollection, PrunableStateChangesTrieStorage,
 	},
 	blockchain::{
 		HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys,
@@ -62,6 +65,7 @@ pub struct ImportOperation<Block: BlockT, S> {
 	finalized_blocks: Vec<BlockId<Block>>,
 	set_head: Option<BlockId<Block>>,
 	storage_update: Option<InMemoryBackend<HasherFor<Block>>>,
+	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
 	_phantom: std::marker::PhantomData<S>,
 }
 
@@ -115,7 +119,6 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
 	type BlockImportOperation = ImportOperation<Block, S>;
 	type Blockchain = Blockchain<S>;
 	type State = GenesisOrUnavailableState<HasherFor<Block>>;
-	type ChangesTrieStorage = in_mem::ChangesTrieStorage<Block>;
 	type OffchainStorage = InMemOffchainStorage;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
@@ -127,6 +130,7 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
 			finalized_blocks: Vec::new(),
 			set_head: None,
 			storage_update: None,
+			changes_trie_config_update: None,
 			_phantom: Default::default(),
 		})
 	}
@@ -148,6 +152,9 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
 
 		if let Some(header) = operation.header {
 			let is_genesis_import = header.number().is_zero();
+			if let Some(new_config) = operation.changes_trie_config_update {
+				operation.cache.insert(well_known_cache_keys::CHANGES_TRIE_CONFIG, new_config.encode());
+			}
 			self.blockchain.storage().import_header(
 				header,
 				operation.cache,
@@ -194,7 +201,7 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
 		self.blockchain.storage().usage_info()
 	}
 
-	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
+	fn changes_trie_storage(&self) -> Option<&dyn PrunableStateChangesTrieStorage<Block>> {
 		None
 	}
 
@@ -295,6 +302,13 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 
 	fn reset_storage(&mut self, input: Storage) -> ClientResult<Block::Hash> {
 		check_genesis_storage(&input)?;
+
+		// changes trie configuration
+		let changes_trie_config = input.top.iter()
+			.find(|(k, _)| &k[..] == well_known_keys::CHANGES_TRIE_CONFIG)
+			.map(|(_, v)| Decode::decode(&mut &v[..])
+				.expect("changes trie configuration is encoded properly at genesis"));
+		self.changes_trie_config_update = Some(changes_trie_config);
 
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
 		let mut storage: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, _> = HashMap::new();
