@@ -134,6 +134,7 @@ test-linux-stable:                 &test-linux
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
     RUSTFLAGS: -Cdebug-assertions=y
+	RUST_LOG: info
   except:
     variables:
       - $DEPLOY_TAG

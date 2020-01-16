@@ -68,8 +68,10 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 	}
 
 	// Generate blocks.
-	net.peer(2).push_blocks(100, false);
+	log::info!("Pushing blocks");
+	net.peer(2).push_blocks(10, false);
 
+	log::info!("Waiting for sync start");
 	// Block until all nodes are online and nodes 0 and 1 and major syncing.
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
 		net.poll();
@@ -88,6 +90,7 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 		Ok(Async::Ready(()))
 	})).unwrap();
 
+	log::info!("Waiting for sync end");
 	// Block until all nodes are done syncing.
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
 		net.poll();
@@ -99,6 +102,7 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 		Ok(Async::Ready(()))
 	})).unwrap();
 
+	log::info!("Waiting for offline");
 	// Now drop nodes 1 and 2, and check that node 0 is offline.
 	net.peers.remove(2);
 	net.peers.remove(1);
