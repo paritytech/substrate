@@ -19,7 +19,7 @@
 use crate::{
 	StorageKey, StorageValue, OverlayedChanges, StorageTransactionCache,
 	backend::Backend,
-	changes_trie::Storage as ChangesTrieState,
+	changes_trie::State as ChangesTrieState,
 };
 
 use hash_db::Hasher;
