@@ -483,7 +483,7 @@ impl<'a> ParseAndPrepareExport<'a> {
 		E: ChainSpecExtension,
 		Exit: IntoExit
 	{
-		let config = create_config_with_db_path(
+		let mut config = create_config_with_db_path(
 			spec_factory,
 			&self.params.shared_params,
 			self.version,
@@ -658,7 +658,7 @@ impl<'a> ParseAndPreparePurge<'a> {
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		let config = create_config_with_db_path::<(), _, _, _>(
+		let mut config = create_config_with_db_path::<(), _, _, _>(
 			spec_factory,
 			&self.params.shared_params,
 			self.version,
@@ -726,7 +726,7 @@ impl<'a> ParseAndPrepareRevert<'a> {
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		let config = create_config_with_db_path(
+		let mut config = create_config_with_db_path(
 			spec_factory,
 			&self.params.shared_params,
 			self.version,
