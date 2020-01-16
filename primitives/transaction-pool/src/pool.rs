@@ -124,6 +124,9 @@ pub type TransactionFor<P> = <<P as TransactionPool>::Block as BlockT>::Extrinsi
 /// Type of transactions event stream for a pool.
 pub type TransactionStatusStreamFor<P> = TransactionStatusStream<TxHash<P>, BlockHash<P>>;
 
+/// Typical future type used in transaction pool api.
+pub type PoolFuture<T, E> = std::pin::Pin<Box<dyn Future<Output=Result<T, E>> + Send>>;
+
 /// In-pool transaction interface.
 ///
 /// The pool is container of transactions that are implementing this trait.
@@ -170,55 +173,41 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_at(
 		&self,
 		at: &BlockId<Self::Block>,
-		xts: impl IntoIterator<Item=TransactionFor<Self>> + 'static,
-	) -> Box<dyn Future<Output=Result<
-		Vec<Result<TxHash<Self>, Self::Error>>,
-		Self::Error
-	>> + Send + Unpin>;
+		xts: Vec<TransactionFor<Self>>,
+	) -> PoolFuture<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error>;
 
 	/// Returns a future that imports one unverified transaction to the pool.
 	fn submit_one(
 		&self,
 		at: &BlockId<Self::Block>,
 		xt: TransactionFor<Self>,
-	) -> Box<dyn Future<Output=Result<
-		TxHash<Self>,
-		Self::Error
-	>> + Send + Unpin>;
+	) -> PoolFuture<TxHash<Self>, Self::Error>;
 
-	// RPC
-
+	// *** RPC
 	/// Returns a future that import a single transaction and starts to watch their progress in the pool.
 	fn submit_and_watch(
 		&self,
 		at: &BlockId<Self::Block>,
 		xt: TransactionFor<Self>,
-	) -> Box<dyn Future<Output=Result<Box<TransactionStatusStreamFor<Self>>, Self::Error>> + Send + Unpin>;
+	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error>;
 
-
-	// Block production / Networking
-
+	// *** Block production / Networking
 	/// Get an iterator for ready transactions ordered by priority
 	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>>>;
 
-
-	// Block production
-
+	// *** Block production
 	/// Remove transactions identified by given hashes (and dependent transactions) from the pool.
 	fn remove_invalid(&self, hashes: &[TxHash<Self>]) -> Vec<Arc<Self::InPoolTransaction>>;
 
-	// logging
-
+	// *** logging
 	/// Returns pool status.
 	fn status(&self) -> PoolStatus;
 
-	// logging / RPC / networking
-
+	// *** logging / RPC / networking
 	/// Return an event stream of transactions imported to the pool.
 	fn import_notification_stream(&self) -> ImportNotificationStream;
 
-	// networking
-
+	// *** networking
 	/// Notify the pool about transactions broadcast.
 	fn on_broadcasted(&self, propagations: HashMap<TxHash<Self>, Vec<String>>);
 
