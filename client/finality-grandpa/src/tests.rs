@@ -287,12 +287,10 @@ impl ApiExt<Block> for RuntimeApi {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn into_storage_changes<
-		T: sp_api::ChangesTrieStorage<sp_api::HasherFor<Block>, sp_api::NumberFor<Block>>
-	>(
+	fn into_storage_changes(
 		&self,
 		_: &Self::StateBackend,
-		_: Option<&T>,
+		_: Option<&sp_api::ChangesTrieState<sp_api::HasherFor<Block>, sp_api::NumberFor<Block>>>,
 		_: <Block as sp_api::BlockT>::Hash,
 	) -> std::result::Result<sp_api::StorageChanges<Self::StateBackend, Block>, String>
 		where Self: Sized
