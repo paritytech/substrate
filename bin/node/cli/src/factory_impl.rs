@@ -36,6 +36,7 @@ use sp_runtime::{
 		Block as BlockT, Header as HeaderT, SignedExtension, Verify, IdentifyAccount,
 	}
 };
+use frame_support::weights::GetDispatchInfo;
 use node_transaction_factory::RuntimeAdapter;
 use node_transaction_factory::automata::Automaton;
 
@@ -176,11 +177,13 @@ impl RuntimeAdapter for FactoryState<Number> {
 				Call::Authorship(AuthorshipCall::set_uncles(uncles))
 			},
 			"staking_bond" => {
-				Call::Staking(StakingCall::bond(
+				let call = StakingCall::bond(
 					pallet_indices::address::Address::Id(destination.clone().into()),
 					(*amount).into(),
 					RewardDestination::Controller,
-				))
+				);
+				println!("{:?}", call.get_dispatch_info());
+				Call::Staking(call)
 			},
 			"staking_validate" => {
 				Call::Staking(StakingCall::validate(

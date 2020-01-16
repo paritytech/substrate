@@ -337,6 +337,12 @@ pub enum Judgement {
 	Approve,
 }
 
+impl Default for Judgement {
+	fn default() -> Self {
+		Self::Rebid
+	}
+}
+
 /// Details of a payout given as a per-block linear "trickle".
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, Default)]
 pub struct Payout<Balance, BlockNumber> {

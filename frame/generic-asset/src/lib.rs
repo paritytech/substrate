@@ -205,7 +205,7 @@ impl<T: Trait> Subtrait for T {
 }
 
 /// Asset creation options.
-#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug, Default)]
 pub struct AssetOptions<Balance: HasCompact, AccountId> {
 	/// Initial issuance of this asset. All deposit to the creater of the asset.
 	#[codec(compact)]

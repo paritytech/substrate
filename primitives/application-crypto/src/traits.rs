@@ -114,7 +114,7 @@ pub trait RuntimeAppPublic: Sized  {
 	const ID: KeyTypeId;
 
 	/// The signature that will be generated when signing with the corresponding private key.
-	type Signature: Codec + Debug + MaybeHash + Eq + PartialEq + Clone;
+	type Signature: Codec + Debug + MaybeHash + Eq + PartialEq + Clone + Default;
 
 	/// Returns all public keys for this application in the keystore.
 	fn all() -> crate::Vec<Self>;

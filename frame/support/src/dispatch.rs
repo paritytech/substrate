@@ -17,7 +17,7 @@
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
 
-pub use crate::sp_std::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq}, marker};
+pub use crate::sp_std::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq, Default}, marker};
 pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use frame_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
@@ -1215,7 +1215,7 @@ macro_rules! decl_module {
 		$crate::__check_reserved_fn_name! { $( $fn_name )* }
 
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, Copy, PartialEq, Eq, $crate::RuntimeDebug)]
+		#[derive(Clone, Copy, PartialEq, Eq, Default, $crate::RuntimeDebug)]
 		$( #[$attr] )*
 		pub struct $mod_type<
 			$trait_instance: $trait_name
@@ -1304,6 +1304,10 @@ macro_rules! decl_module {
 			fn get_dispatch_info(&self) -> $crate::dispatch::DispatchInfo {
 				$(
 					if let $call_type::$fn_name($( ref $param_name ),*) = self {
+						use $crate::sp_std::if_std;
+						if_std! {
+							println!("{} {} {:?} {}", stringify!($call_type), stringify!($fn_name), ( $( <$param>::default(), )* ), stringify!(( $( $param_name, )* )));
+						}
 						let weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
 							&$weight,
 							($( $param_name, )*)
@@ -1341,8 +1345,15 @@ macro_rules! decl_module {
 			}
 		}
 
-		// manual implementation of clone/eq/partialeq because using derive erroneously requires
-		// clone/eq/partialeq from T.
+		// manual implementation of default/clone/eq/partialeq because using derive erroneously requires
+		// default/clone/eq/partialeq from T.
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Default
+			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn default() -> Self {
+				$call_type::default()
+			}
+		}
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Clone
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
@@ -1492,6 +1503,11 @@ macro_rules! impl_outer_dispatch {
 			$(
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase, $runtime> )
 			,)*
+		}
+		impl $crate::dispatch::Default for $call_type {
+			fn default() -> Self {
+				unimplemented!("TODO")
+			}
 		}
 		impl $crate::dispatch::GetDispatchInfo for $call_type {
 			fn get_dispatch_info(&self) -> $crate::dispatch::DispatchInfo {
