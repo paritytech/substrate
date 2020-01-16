@@ -1391,6 +1391,7 @@ mod tests {
 				|_| Ok(Some(chain_spec.clone())),
 				"test",
 				&version_info,
+				None,
 			).unwrap();
 
 			let expected_path = match keystore_path {
