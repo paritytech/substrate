@@ -170,9 +170,13 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 				&cmd.shared_params,
 				&version,
 			)?;
-			let service_builder = new_full_start!(config).0;
+			// make sure to configure keystore
+			config.keystore = sc_service::config::KeystoreConfig::InMemory;
+			let client = sc_service::new_full_client::<
+				node_runtime::Block, node_runtime::RuntimeApi, node_executor::Executor, _, _, _
+			>(&config)?;
 			let inspect = node_inspect::Inspector::<node_runtime::Block>::new(
-				service_builder.client()
+				client
 			);
 			match cmd.command {
 				InspectSubCmd::Block { input } => {
@@ -197,6 +201,8 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 				&cli_args.shared_params,
 				&version,
 			)?;
+			// make sure to configure keystore
+			config.keystore = sc_service::config::KeystoreConfig::InMemory;
 
 			sc_cli::fill_import_params(&mut config, &cli_args.import_params, ServiceRoles::FULL)?;
 
