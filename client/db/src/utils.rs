@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::{io, convert::TryInto};
 
 use kvdb::{KeyValueDB, DBTransaction};
-#[cfg(feature = "kvdb-rocksdb")]
+#[cfg(any(feature = "kvdb-rocksdb", test))]
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use log::debug;
 
@@ -36,7 +36,7 @@ use crate::{DatabaseSettings, DatabaseSettingsSrc};
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
-pub const NUM_COLUMNS: u32 = 10;
+pub const NUM_COLUMNS: u32 = 11;
 /// Meta column. The set of keys in the column is shared by full && light storages.
 pub const COLUMN_META: u32 = 0;
 
@@ -50,6 +50,8 @@ pub mod meta_keys {
 	pub const FINALIZED_BLOCK: &[u8; 5] = b"final";
 	/// Meta information prefix for list-based caches.
 	pub const CACHE_META_PREFIX: &[u8; 5] = b"cache";
+	/// Meta information for changes tries key.
+	pub const CHANGES_TRIES_META: &[u8; 5] = b"ctrie";
 	/// Genesis block hash.
 	pub const GENESIS_HASH: &[u8; 3] = b"gen";
 	/// Leaves prefix list key.
@@ -75,6 +77,15 @@ pub struct Meta<N, H> {
 
 /// A block lookup key: used for canonical lookup from block number to hash
 pub type NumberIndexKey = [u8; 4];
+
+/// Database type.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DatabaseType {
+	/// Full node database.
+	Full,
+	/// Light node database.
+	Light,
+}
 
 /// Convert block number into short lookup key (LE representation) for
 /// blocks that are in the canonical chain.
@@ -203,14 +214,17 @@ pub fn db_err(err: io::Error) -> sp_blockchain::Error {
 }
 
 /// Open RocksDB database.
-pub fn open_database(
+pub fn open_database<Block: BlockT>(
 	config: &DatabaseSettings,
-	col_meta: u32,
-	db_type: &str
+	db_type: DatabaseType,
 ) -> sp_blockchain::Result<Arc<dyn KeyValueDB>> {
 	let db: Arc<dyn KeyValueDB> = match &config.source {
-		#[cfg(feature = "kvdb-rocksdb")]
+		#[cfg(any(feature = "kvdb-rocksdb", test))]
 		DatabaseSettingsSrc::Path { path, cache_size } => {
+			// first upgrade database to required version
+			crate::upgrade::upgrade_db::<Block>(&path, db_type)?;
+
+			// and now open database assuming that it has the latest version
 			let mut db_config = DatabaseConfig::with_columns(NUM_COLUMNS);
 
 			if let Some(cache_size) = cache_size {
@@ -232,7 +246,7 @@ pub fn open_database(
 				.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
 			Arc::new(Database::open(&db_config, &path).map_err(db_err)?)
 		},
-		#[cfg(not(feature = "kvdb-rocksdb"))]
+		#[cfg(not(any(feature = "kvdb-rocksdb", test)))]
 		DatabaseSettingsSrc::Path { .. } => {
 			let msg = "Try to open RocksDB database with RocksDB disabled".into();
 			return Err(sp_blockchain::Error::Backend(msg));
@@ -240,22 +254,28 @@ pub fn open_database(
 		DatabaseSettingsSrc::Custom(db) => db.clone(),
 	};
 
-	// check database type
-	match db.get(col_meta, meta_keys::TYPE).map_err(db_err)? {
+	check_database_type(&*db, db_type)?;
+
+	Ok(db)
+}
+
+/// Check database type.
+pub fn check_database_type(db: &dyn KeyValueDB, db_type: DatabaseType) -> sp_blockchain::Result<()> {
+	match db.get(COLUMN_META, meta_keys::TYPE).map_err(db_err)? {
 		Some(stored_type) => {
-			if db_type.as_bytes() != &*stored_type {
+			if db_type.as_str().as_bytes() != &*stored_type {
 				return Err(sp_blockchain::Error::Backend(
-					format!("Unexpected database type. Expected: {}", db_type)).into());
+					format!("Unexpected database type. Expected: {}", db_type.as_str())).into());
 			}
 		},
 		None => {
 			let mut transaction = DBTransaction::new();
-			transaction.put(col_meta, meta_keys::TYPE, db_type.as_bytes());
+			transaction.put(COLUMN_META, meta_keys::TYPE, db_type.as_str().as_bytes());
 			db.write(transaction).map_err(db_err)?;
 		},
 	}
 
-	Ok(db)
+	Ok(())
 }
 
 /// Read database column entry for the given block.
@@ -304,20 +324,15 @@ pub fn require_header<Block: BlockT>(
 }
 
 /// Read meta from the database.
-pub fn read_meta<Block>(db: &dyn KeyValueDB, col_meta: u32, col_header: u32) -> Result<
+pub fn read_meta<Block>(db: &dyn KeyValueDB, col_header: u32) -> Result<
 	Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>,
 	sp_blockchain::Error,
 >
 	where
 		Block: BlockT,
 {
-	let genesis_hash: Block::Hash = match db.get(col_meta, meta_keys::GENESIS_HASH).map_err(db_err)? {
-		Some(h) => match Decode::decode(&mut &h[..]) {
-			Ok(h) => h,
-			Err(err) => return Err(sp_blockchain::Error::Backend(
-				format!("Error decoding genesis hash: {}", err)
-			)),
-		},
+	let genesis_hash: Block::Hash = match read_genesis_hash(db)? {
+		Some(genesis_hash) => genesis_hash,
 		None => return Ok(Meta {
 			best_hash: Default::default(),
 			best_number: Zero::zero(),
@@ -328,7 +343,7 @@ pub fn read_meta<Block>(db: &dyn KeyValueDB, col_meta: u32, col_header: u32) -> 
 	};
 
 	let load_meta_block = |desc, key| -> Result<_, sp_blockchain::Error> {
-		if let Some(Some(header)) = db.get(col_meta, key).and_then(|id|
+		if let Some(Some(header)) = db.get(COLUMN_META, key).and_then(|id|
 			match id {
 				Some(id) => db.get(col_header, &id).map(|h| h.map(|b| Block::Header::decode(&mut &b[..]).ok())),
 				None => Ok(None),
@@ -354,6 +369,29 @@ pub fn read_meta<Block>(db: &dyn KeyValueDB, col_meta: u32, col_header: u32) -> 
 	})
 }
 
+/// Read genesis hash from database.
+pub fn read_genesis_hash<Hash: Decode>(db: &dyn KeyValueDB) -> sp_blockchain::Result<Option<Hash>> {
+	match db.get(COLUMN_META, meta_keys::GENESIS_HASH).map_err(db_err)? {
+		Some(h) => match Decode::decode(&mut &h[..]) {
+			Ok(h) => Ok(Some(h)),
+			Err(err) => Err(sp_blockchain::Error::Backend(
+				format!("Error decoding genesis hash: {}", err)
+			)),
+		},
+		None => Ok(None),
+	}
+}
+
+impl DatabaseType {
+	/// Returns str representation of the type.
+	pub fn as_str(&self) -> &'static str {
+		match *self {
+			DatabaseType::Full => "full",
+			DatabaseType::Light => "light",
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -367,5 +405,11 @@ mod tests {
 			BlockId::Number(n) => number_index_key(n).expect_err("number should overflow u32"),
 			_ => unreachable!(),
 		};
+	}
+
+	#[test]
+	fn database_type_as_str_works() {
+		assert_eq!(DatabaseType::Full.as_str(), "full");
+		assert_eq!(DatabaseType::Light.as_str(), "light");
 	}
 }

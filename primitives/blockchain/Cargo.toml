@@ -13,4 +13,4 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 sp-consensus = { version = "0.8", path = "../consensus/common" }
 sp-runtime = { version = "2.0.0", path = "../runtime" }
 sp-block-builder = { version = "2.0.0", path = "../block-builder" }
-sp-state-machine = { version = "2.0.0", path = "../state-machine" }
+sp-state-machine = { version = "0.8", path = "../state-machine" }

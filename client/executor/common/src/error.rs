@@ -57,6 +57,10 @@ pub enum Error {
 	/// Runtime failed.
 	#[display(fmt="Runtime error")]
 	Runtime,
+	/// Runtime panicked.
+	#[display(fmt="Runtime panicked: {}", _0)]
+	#[from(ignore)]
+	RuntimePanicked(String),
 	/// Invalid memory reference.
 	#[display(fmt="Invalid memory reference")]
 	InvalidMemoryReference,
