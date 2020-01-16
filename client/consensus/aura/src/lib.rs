@@ -217,6 +217,9 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 {
 	type BlockImport = I;
 	type SyncOracle = SO;
+	type CreateProposer = Pin<Box<
+		dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static
+	>>;
 	type Proposer = E::Proposer;
 	type Claim = P;
 	type EpochData = Vec<AuthorityId<P>>;
@@ -302,10 +305,10 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		&mut self.sync_oracle
 	}
 
-	fn proposer(&mut self, block: &B::Header) -> Result<Self::Proposer, sp_consensus::Error> {
-		self.env.init(block).map_err(|e| {
+	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
+		Box::pin(self.env.init(block).map_err(|e| {
 			sp_consensus::Error::ClientImport(format!("{:?}", e)).into()
-		})
+		}))
 	}
 
 	fn proposing_remaining_duration(
@@ -874,12 +877,13 @@ mod tests {
 
 	impl Environment<TestBlock> for DummyFactory {
 		type Proposer = DummyProposer;
+		type CreateProposer = futures::future::Ready<Result<DummyProposer, Error>>;
 		type Error = Error;
 
 		fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header)
-			-> Result<DummyProposer, Error>
+			-> Self::CreateProposer
 		{
-			Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
+			futures::future::ready(Ok(DummyProposer(parent_header.number + 1, self.0.clone())))
 		}
 	}
 

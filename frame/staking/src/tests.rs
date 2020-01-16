@@ -90,29 +90,16 @@ fn basic_setup_works() {
 		);
 		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 
-		if cfg!(feature = "equalize") {
-			assert_eq!(
-				Staking::stakers(11),
-				Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 101, value: 250 }] }
-			);
-			assert_eq!(
-				Staking::stakers(21),
-				Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 101, value: 250 }] }
-			);
-			// initial slot_stake
-			assert_eq!(Staking::slot_stake(),  1250);
-		} else {
-			assert_eq!(
-				Staking::stakers(11),
-				Exposure { total: 1125, own: 1000, others: vec![ IndividualExposure { who: 101, value: 125 }] }
-			);
-			assert_eq!(
-				Staking::stakers(21),
-				Exposure { total: 1375, own: 1000, others: vec![ IndividualExposure { who: 101, value: 375 }] }
-			);
-			// initial slot_stake
-			assert_eq!(Staking::slot_stake(),  1125);
-		}
+		assert_eq!(
+			Staking::stakers(11),
+			Exposure { total: 1125, own: 1000, others: vec![ IndividualExposure { who: 101, value: 125 }] }
+		);
+		assert_eq!(
+			Staking::stakers(21),
+			Exposure { total: 1375, own: 1000, others: vec![ IndividualExposure { who: 101, value: 375 }] }
+		);
+		// initial slot_stake
+		assert_eq!(Staking::slot_stake(),  1125);
 
 
 		// The number of validators required.
@@ -488,57 +475,30 @@ fn nominating_and_rewards_should_work() {
 
 			// ------ check the staked value of all parties.
 
-			if cfg!(feature = "equalize") {
-				// total expo of 10, with 1200 coming from nominators (externals), according to phragmen.
-				assert_eq!(Staking::stakers(11).own, 1000);
-				assert_eq_error_rate!(Staking::stakers(11).total, 1000 + 1000, 2);
-				// 2 and 4 supported 10, each with stake 600, according to phragmen.
-				assert_eq!(
-					Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
-					vec![600, 400]
-				);
-				assert_eq!(
-					Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
-					vec![3, 1]
-				);
-				// total expo of 20, with 500 coming from nominators (externals), according to phragmen.
-				assert_eq!(Staking::stakers(21).own, 1000);
-				assert_eq_error_rate!(Staking::stakers(21).total, 1000 + 1000, 2);
-				// 2 and 4 supported 20, each with stake 250, according to phragmen.
-				assert_eq!(
-					Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
-					vec![400, 600]
-				);
-				assert_eq!(
-					Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
-					vec![3, 1]
-				);
-			} else {
-				// total expo of 10, with 1200 coming from nominators (externals), according to phragmen.
-				assert_eq!(Staking::stakers(11).own, 1000);
-				assert_eq!(Staking::stakers(11).total, 1000 + 800);
-				// 2 and 4 supported 10, each with stake 600, according to phragmen.
-				assert_eq!(
-					Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
-					vec![400, 400]
-				);
-				assert_eq!(
-					Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
-					vec![3, 1]
-				);
-				// total expo of 20, with 500 coming from nominators (externals), according to phragmen.
-				assert_eq!(Staking::stakers(21).own, 1000);
-				assert_eq_error_rate!(Staking::stakers(21).total, 1000 + 1200, 2);
-				// 2 and 4 supported 20, each with stake 250, according to phragmen.
-				assert_eq!(
-					Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
-					vec![600, 600]
-				);
-				assert_eq!(
-					Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
-					vec![3, 1]
-				);
-			}
+			// total expo of 10, with 1200 coming from nominators (externals), according to phragmen.
+			assert_eq!(Staking::stakers(11).own, 1000);
+			assert_eq!(Staking::stakers(11).total, 1000 + 800);
+			// 2 and 4 supported 10, each with stake 600, according to phragmen.
+			assert_eq!(
+				Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![400, 400]
+			);
+			assert_eq!(
+				Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
+				vec![3, 1]
+			);
+			// total expo of 20, with 500 coming from nominators (externals), according to phragmen.
+			assert_eq!(Staking::stakers(21).own, 1000);
+			assert_eq_error_rate!(Staking::stakers(21).total, 1000 + 1200, 2);
+			// 2 and 4 supported 20, each with stake 250, according to phragmen.
+			assert_eq!(
+				Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![600, 600]
+			);
+			assert_eq!(
+				Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
+				vec![3, 1]
+			);
 
 			// They are not chosen anymore
 			assert_eq!(Staking::stakers(31).total, 0);
@@ -559,59 +519,31 @@ fn nominating_and_rewards_should_work() {
 
 			let payout_for_10 = total_payout_1 / 3;
 			let payout_for_20 = 2 * total_payout_1 / 3;
-			if cfg!(feature = "equalize") {
-				// Nominator 2: has [400 / 2000 ~ 1 / 5 from 10] + [600 / 2000 ~ 3 / 10 from 20]'s reward.
-				assert_eq_error_rate!(
-					Balances::total_balance(&2),
-					initial_balance + payout_for_10 / 5 + payout_for_20 * 3 / 10,
-					2,
-				);
-				// Nominator 4: has [400 / 2000 ~ 1 / 5 from 20] + [600 / 2000 ~ 3 / 10 from 10]'s reward.
-				assert_eq_error_rate!(
-					Balances::total_balance(&4),
-					initial_balance + payout_for_20 / 5 + payout_for_10 * 3 / 10,
-					2,
-				);
+			// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
+			assert_eq_error_rate!(
+				Balances::total_balance(&2),
+				initial_balance + (2 * payout_for_10 / 9 + 3 * payout_for_20 / 11),
+				1,
+			);
+			// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
+			assert_eq_error_rate!(
+				Balances::total_balance(&4),
+				initial_balance + (2 * payout_for_10 / 9 + 3 * payout_for_20 / 11),
+				1,
+			);
 
-				// Validator 10: got 1000 / 2000 external stake.
-				assert_eq_error_rate!(
-					Balances::total_balance(&10),
-					initial_balance + payout_for_10 / 2,
-					1,
-				);
-				// Validator 20: got 1000 / 2000 external stake.
-				assert_eq_error_rate!(
-					Balances::total_balance(&20),
-					initial_balance + payout_for_20 / 2,
-					1,
-				);
-			} else {
-				// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-				assert_eq_error_rate!(
-					Balances::total_balance(&2),
-					initial_balance + (2 * payout_for_10 / 9 + 3 * payout_for_20 / 11),
-					1,
-				);
-				// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-				assert_eq_error_rate!(
-					Balances::total_balance(&4),
-					initial_balance + (2 * payout_for_10 / 9 + 3 * payout_for_20 / 11),
-					1,
-				);
-
-				// Validator 10: got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
-				assert_eq_error_rate!(
-					Balances::total_balance(&10),
-					initial_balance + 5 * payout_for_10 / 9,
-					1,
-				);
-				// Validator 20: got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
-				assert_eq_error_rate!(
-					Balances::total_balance(&20),
-					initial_balance + 5 * payout_for_20 / 11,
-					1,
-				);
-			}
+			// Validator 10: got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
+			assert_eq_error_rate!(
+				Balances::total_balance(&10),
+				initial_balance + 5 * payout_for_10 / 9,
+				1,
+			);
+			// Validator 20: got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
+			assert_eq_error_rate!(
+				Balances::total_balance(&20),
+				initial_balance + 5 * payout_for_20 / 11,
+				1,
+			);
 
 			check_exposure_all();
 			check_nominator_all();
@@ -1778,51 +1710,6 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 		});
 }
 
-#[cfg(feature = "equalize")]
-#[test]
-fn phragmen_linear_worse_case_equalize() {
-	ExtBuilder::default()
-		.nominate(false)
-		.validator_pool(true)
-		.fair(true)
-		.build()
-		.execute_with(|| {
-			bond_validator(50, 1000);
-			bond_validator(60, 1000);
-			bond_validator(70, 1000);
-
-			bond_nominator(2, 2000, vec![11]);
-			bond_nominator(4, 1000, vec![11, 21]);
-			bond_nominator(6, 1000, vec![21, 31]);
-			bond_nominator(8, 1000, vec![31, 41]);
-			bond_nominator(110, 1000, vec![41, 51]);
-			bond_nominator(120, 1000, vec![51, 61]);
-			bond_nominator(130, 1000, vec![61, 71]);
-
-			for i in &[10, 20, 30, 40, 50, 60, 70] {
-				assert_ok!(Staking::set_payee(Origin::signed(*i), RewardDestination::Controller));
-			}
-
-			assert_eq_uvec!(validator_controllers(), vec![40, 30]);
-			assert_ok!(Staking::set_validator_count(Origin::ROOT, 7));
-
-			start_era(1);
-
-			assert_eq_uvec!(validator_controllers(), vec![10, 60, 40, 20, 50, 30, 70]);
-
-			assert_eq_error_rate!(Staking::stakers(11).total, 3000, 2);
-			assert_eq_error_rate!(Staking::stakers(21).total, 2255, 2);
-			assert_eq_error_rate!(Staking::stakers(31).total, 2255, 2);
-			assert_eq_error_rate!(Staking::stakers(41).total, 1925, 2);
-			assert_eq_error_rate!(Staking::stakers(51).total, 1870, 2);
-			assert_eq_error_rate!(Staking::stakers(61).total, 1890, 2);
-			assert_eq_error_rate!(Staking::stakers(71).total, 1800, 2);
-
-			check_exposure_all();
-			check_nominator_all();
-		})
-}
-
 #[test]
 fn new_era_elects_correct_number_of_validators() {
 	ExtBuilder::default()
@@ -2195,9 +2082,6 @@ fn reporters_receive_their_slice() {
 	// amount.
 	ExtBuilder::default().build().execute_with(|| {
 		// The reporters' reward is calculated from the total exposure.
-		#[cfg(feature = "equalize")]
-		let initial_balance = 1250;
-		#[cfg(not(feature = "equalize"))]
 		let initial_balance = 1125;
 
 		assert_eq!(Staking::stakers(&11).total, initial_balance);
@@ -2229,9 +2113,6 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 	// amount.
 	ExtBuilder::default().build().execute_with(|| {
 		// The reporters' reward is calculated from the total exposure.
-		#[cfg(feature = "equalize")]
-		let initial_balance = 1250;
-		#[cfg(not(feature = "equalize"))]
 		let initial_balance = 1125;
 
 		assert_eq!(Staking::stakers(&11).total, initial_balance);
