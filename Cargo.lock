@@ -5482,6 +5482,7 @@ dependencies = [
  "sc-telemetry 2.0.0",
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
+ "sp-arithmetic 2.0.0",
  "sp-blockchain 2.0.0",
  "sp-consensus 0.8.0",
  "sp-consensus-babe 0.8.0",
