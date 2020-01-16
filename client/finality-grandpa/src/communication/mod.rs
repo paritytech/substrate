@@ -153,6 +153,8 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	neighbor_packet_worker: Arc<Mutex<periodic::NeighborPacketWorker<B>>>,
 }
 
+impl<B: BlockT, N: Network<B>> Unpin for NetworkBridge<B, N> {}
+
 impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle.
@@ -411,15 +413,12 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	}
 }
 
-impl<B: BlockT, N: Network<B>> Future03 for NetworkBridge<B, N>
-where
-	NumberFor<B>: Unpin,
-{
+impl<B: BlockT, N: Network<B>> Future03 for NetworkBridge<B, N> {
 	type Output = Result<(), Error>;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll03<Self::Output> {
 		loop {
-			match futures03::ready!(self.neighbor_packet_worker.lock().poll_next_unpin(cx)) {
+			match futures03::ready!((self.neighbor_packet_worker.lock()).poll_next_unpin(cx)) {
 				None => return Poll03::Ready(
 					Err(Error::Network("NeighborPacketWorker stream closed.".into()))
 				),

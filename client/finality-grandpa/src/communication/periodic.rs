@@ -57,6 +57,8 @@ pub(super) struct NeighborPacketWorker<B: BlockT> {
 	rx: mpsc::UnboundedReceiver<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>,
 }
 
+impl<B: BlockT> Unpin for NeighborPacketWorker<B> {}
+
 impl<B: BlockT> NeighborPacketWorker<B> {
 	pub(super) fn new() -> (Self, NeighborPacketSender<B>){
 		let (tx, rx) = mpsc::unbounded::<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>();
@@ -70,10 +72,7 @@ impl<B: BlockT> NeighborPacketWorker<B> {
 	}
 }
 
-impl <B: BlockT> Stream for NeighborPacketWorker<B>
-where
-	NumberFor<B>: Unpin,
-{
+impl <B: BlockT> Stream for NeighborPacketWorker<B> {
 	type Item = (Vec<PeerId>, GossipMessage<B>);
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>>
@@ -87,7 +86,7 @@ where
 
 				return Poll::Ready(Some((to, GossipMessage::<B>::from(packet.clone()))));
 			}
-			// Don't do anything, maybe the timer fired.
+			// Don't return yet, maybe the timer fired.
 			Poll::Pending => {},
 		};
 
