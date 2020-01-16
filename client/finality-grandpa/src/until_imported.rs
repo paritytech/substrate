@@ -94,9 +94,8 @@ impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockSta
 	Block: BlockT,
 	BlockStatus: BlockStatusT<Block>,
 	BlockSyncRequester: BlockSyncRequesterT<Block>,
-	I: Stream<Item = M::Blocked,
+	I: Stream<Item = M::Blocked>,
 	M: BlockUntilImported<Block>,
-	M::Blocked: Unpin,
 {
 	/// Create a new `UntilImported` wrapper.
 	pub(crate) fn new(
