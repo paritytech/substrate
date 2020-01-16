@@ -86,6 +86,12 @@ pub fn build_transport(
 		OptionalTransport::none()
 	});
 
+	// TODO: implement that properly in libp2p instead: https://github.com/libp2p/rust-libp2p/issues/1394
+	let transport = transport.map(|sock, _| {
+		let (r, w) = sock.split();
+		duplexify::Duplex::new(futures::io::BufReader::new(r), futures::io::BufWriter::new(w))
+	});
+
 	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, Duration::from_secs(5));
 
 	// Encryption
