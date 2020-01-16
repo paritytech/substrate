@@ -1646,9 +1646,7 @@ impl<T: Trait> pallet_session::SessionManager<T::AccountId> for Module<T> {
 		}
 		Self::new_session(new_index - 1)
 	}
-	fn end_session(end_index: SessionIndex) {
-		<Self as SessionManager<_, _>>::end_session(end_index)
-	}
+	fn end_session(_end_index: SessionIndex) {}
 }
 
 impl<T: Trait> SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
@@ -1662,7 +1660,8 @@ impl<T: Trait> SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>
 			}).collect()
 		})
 	}
-	fn end_session(_end_index: SessionIndex) {
+	fn end_session(end_index: SessionIndex) {
+		<Self as pallet_session::SessionManager<_>>::end_session(end_index)
 	}
 }
 
