@@ -720,7 +720,7 @@ fn set_changes_trie_config(
 
 /// Reads storage value from overlay or from the backend.
 fn try_read_overlay_value<H, B>(
-	overlay: &OverlayedChanges,
+	overlay: &mut OverlayedChanges,
 	backend: &B, key: &[u8],
 ) -> Result<Option<Vec<u8>>, Box<dyn Error>> where H: Hasher, B: Backend<H> {
 	match overlay.storage(key).map(|x| x.map(|x| x.to_vec())) {

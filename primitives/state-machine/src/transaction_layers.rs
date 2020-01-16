@@ -260,18 +260,21 @@ impl<V> Layers<V> {
 	/// Access to the latest pending value (non dropped state).
 	/// When possible please prefer `get_mut` as it can free
 	/// some memory.
-	pub(crate) fn get(&self, states: &[TransactionState]) -> Option<&V> {
+	/// If tail freeing is needed, the function also return true
+	/// (this indicates the operation run suboptimally and could
+	/// in certain condition leads to bad complexity).
+	pub(crate) fn get(&self, states: &[TransactionState]) -> (Option<&V>, bool) {
 		let self_len = self.0.len();
 		if self_len == 0 {
-			return None;
+			return (None, false);
 		}
 		debug_assert!(states.len() >= self_len);
 		for index in (0 .. self_len).rev() {
 			if let Some(h) = self.get_pending_unchecked(states, index) {
-				return Some(h.value);
+				return (Some(h.value), index != self_len - 1);
 			}
 		}
-		None
+		(None, true)
 	}
 
 	/// Access to latest pending value (non dropped state).
