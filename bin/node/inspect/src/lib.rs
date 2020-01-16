@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,9 +16,10 @@
 
 #![warn(missing_docs)]
 
+pub mod cli;
+
 use std::{
 	fmt,
-	str::FromStr,
 	marker::PhantomData
 };
 use codec::{Encode, Decode};
@@ -30,50 +31,8 @@ use sp_runtime::{
 	traits::{Block, HashFor, NumberFor, Hash}
 };
 
-/// A block to retrieve.
-pub enum BlockAddress<Hash, Number> {
-	/// Get block by hash.
-	Hash(Hash),
-	/// Get block by number.
-	Number(Number),
-	/// Raw SCALE-encoded bytes.
-	Bytes(Vec<u8>),
-}
-
-/// An extrinsic to retrieve.
-pub enum ExtrinsicAddress<Hash, Number> {
-	/// Extrinsic as part of existing block.
-	Block(BlockAddress<Hash, Number>, usize),
-	/// Raw SCALE-encoded extrinsic bytes.
-	Bytes(Vec<u8>),
-}
-
-impl<Hash: FromStr, Number: FromStr> FromStr for BlockAddress<Hash, Number> {
-	type Err = String;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		// try to parse hash first
-		if let Ok(hash) = s.parse() {
-			return Ok(BlockAddress::Hash(hash))
-		}
-
-		// then number
-		if let Ok(number) = s.parse() {
-			return Ok(BlockAddress::Number(number))
-		}
-
-		// then assume it's bytes (hex-encoded)
-		sp_core::bytes::from_hex(s)
-			.map(BlockAddress::Bytes)
-			.map_err(|e| format!(
-				"Given string does not look like hash or number. It could not be parsed as bytes either: {}",
-				e
-			))
-	}
-}
-
 /// A helper type for a generic block input.
-pub type BlockAddressFor<TBlock> = BlockAddress<
+pub type BlockAddressFor<TBlock> = cli::BlockAddress<
 	<HashFor<TBlock> as Hash>::Output,
 	NumberFor<TBlock>
 >;
@@ -109,12 +68,17 @@ impl<TBlock: Block> PrettyPrinter<TBlock> for DebugPrinter {
 	}
 }
 
+/// Aggregated error for `Inspector` operations.
 #[derive(Debug, derive_more::From, derive_more::Display)]
 pub enum Error {
+	/// Could not decode Block or Extrinsic.
 	Codec(codec::Error),
+	/// Error accessing blockchain DB.
 	Blockchain(sp_blockchain::Error),
+	/// Given block has not been found.
 	NotFound(String),
 }
+
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match *self {
@@ -178,40 +142,34 @@ impl<TBlock: Block, TPrinter: PrettyPrinter<TBlock>> Inspector<TBlock, TPrinter>
 
 	fn get_block(&self, input: BlockAddressFor<TBlock>) -> Result<TBlock, Error> {
 		Ok(match input {
-			BlockAddress::Bytes(bytes) => {
+			cli::BlockAddress::Bytes(bytes) => {
 				TBlock::decode(&mut &*bytes)?
 			},
-			BlockAddress::Number(number) => {
+			cli::BlockAddress::Number(number) => {
 				let id = BlockId::number(number);
 				let not_found = format!("Could not find block {:?}", id);
 				let body = self.chain.block_body(&id)?
-					.ok_or(Error::NotFound(not_found.clone()))?;
+					.ok_or_else(|| Error::NotFound(not_found.clone()))?;
 				let header = self.chain.header(id)?
-					.ok_or(Error::NotFound(not_found.clone()))?;
+					.ok_or_else(|| Error::NotFound(not_found.clone()))?;
 				TBlock::new(header, body)
 			},
-			BlockAddress::Hash(hash) => {
+			cli::BlockAddress::Hash(hash) => {
 				let id = BlockId::hash(hash);
 				let not_found = format!("Could not find block {:?}", id);
 				let body = self.chain.block_body(&id)?
-					.ok_or(Error::NotFound(not_found.clone()))?;
+					.ok_or_else(|| Error::NotFound(not_found.clone()))?;
 				let header = self.chain.header(id)?
-					.ok_or(Error::NotFound(not_found.clone()))?;
+					.ok_or_else(|| Error::NotFound(not_found.clone()))?;
 				TBlock::new(header, body)
 			},
 		})
 	}
 
 	/// Get a pretty-printed extrinsic.
-	///
-	/// TODO [ToDr] Change input format to be either:
-	/// (Hash, index)
-	/// (Number, index)
-	/// (Bytes, index)
-	/// (Bytes)
 	pub fn extrinsic(
 		&self,
-		input: ExtrinsicAddress<<HashFor<TBlock> as Hash>::Output, NumberFor<TBlock>>,
+		input: cli::ExtrinsicAddress<<HashFor<TBlock> as Hash>::Output, NumberFor<TBlock>>,
 	) -> Result<String, Error> {
 		struct ExtrinsicPrinter<'a, A: Block, B>(A::Extrinsic, &'a B);
 		impl<'a, A: Block, B: PrettyPrinter<A>> fmt::Display for ExtrinsicPrinter<'a, A, B> {
@@ -221,14 +179,14 @@ impl<TBlock: Block, TPrinter: PrettyPrinter<TBlock>> Inspector<TBlock, TPrinter>
 		}
 
 		let ext = match input {
-			ExtrinsicAddress::Block(block, index) => {
+			cli::ExtrinsicAddress::Block(block, index) => {
 				let block = self.get_block(block)?;
 				block.extrinsics()
 					.get(index)
 					.cloned()
 					.ok_or_else(|| Error::NotFound(format!("Not found TODO")))?
 			},
-			ExtrinsicAddress::Bytes(bytes) => {
+			cli::ExtrinsicAddress::Bytes(bytes) => {
 				TBlock::Extrinsic::decode(&mut &*bytes)?
 			}
 		};

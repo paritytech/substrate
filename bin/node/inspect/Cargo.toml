@@ -8,7 +8,8 @@ edition = "2018"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 derive_more = "0.99"
 log = "0.4.8"
+sc-client-api = { version = "2.0.0", path = "../../../client/api" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-sc-client-api = { version = "2.0.0", path = "../../../client/api" }
+structopt = "=0.3.7"

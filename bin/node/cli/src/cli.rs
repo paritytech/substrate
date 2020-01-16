@@ -101,25 +101,11 @@ pub struct FactoryCmd {
 pub struct InspectCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub command: InspectSubCmd,
+	pub command: node_inspect::cli::InspectCmd,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
-}
-
-#[derive(Debug, StructOpt, Clone)]
-pub enum InspectSubCmd {
-	/// Decode block with native version of runtime and print out the details.
-	Block {
-		#[structopt(value_name = "HASH or NUMBER or BYTES")]
-		input: String,
-	},
-	/// Decode extrinsic with native version of runtime and print out the details.
-	Extrinsic {
-		#[structopt(value_name = "BYTES")]
-		input: String,
-	},
 }
 
 /// Parse command line arguments into service configuration.
@@ -182,14 +168,14 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 				client
 			);
 			match cmd.command {
-				InspectSubCmd::Block { input } => {
+				node_inspect::cli::InspectCmd::Block { input } => {
 					let input = input.parse()?;
 					let res = inspect.block(input)
 						.map_err(|e| format!("{}", e))?;
 					println!("{}", res);
 					Ok(())
 				},
-				InspectSubCmd::Extrinsic { input } => {
+				node_inspect::cli::InspectCmd::Extrinsic { input } => {
 					let input = input.parse()?;
 					let res = inspect.extrinsic(input)
 						.map_err(|e| format!("{}", e))?;
