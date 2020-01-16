@@ -335,10 +335,10 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 
 		let key = aux_key(&intermediate.hash);
 		block.auxiliary.push((key, Some(aux.encode())));
-		if block.fork_choice == ForkChoiceStrategy::Fail {
-			block.fork_choice = ForkChoiceStrategy::Custom(
+		if block.fork_choice.is_none() {
+			block.fork_choice = Some(ForkChoiceStrategy::Custom(
 				aux.total_difficulty > best_aux.total_difficulty
-			);
+			));
 		}
 
 		self.inner.import_block(block, new_cache).map_err(Into::into)
@@ -422,7 +422,7 @@ impl<B: BlockT, Algorithm> Verifier<B> for PowVerifier<B, Algorithm> where
 				ret
 			},
 			auxiliary: vec![],
-			fork_choice: ForkChoiceStrategy::Fail,
+			fork_choice: None,
 			allow_missing_state: false,
 			import_existing: false,
 		};
@@ -664,7 +664,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 			},
 			finalized: false,
 			auxiliary: vec![],
-			fork_choice: ForkChoiceStrategy::Fail,
+			fork_choice: None,
 			allow_missing_state: false,
 			import_existing: false,
 		};

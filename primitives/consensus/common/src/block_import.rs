@@ -90,8 +90,6 @@ pub enum BlockOrigin {
 /// Fork choice strategy.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ForkChoiceStrategy {
-	/// The import should always fail.
-	Fail,
 	/// Longest chain fork choice.
 	LongestChain,
 	/// Custom fork choice rule, where true indicates the new block should be the best block.
@@ -154,7 +152,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	pub auxiliary: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	/// Fork choice strategy of this import. This should only be set by a
 	/// synchronous import, otherwise it may race against other imports.
-	pub fork_choice: ForkChoiceStrategy,
+	pub fork_choice: Option<ForkChoiceStrategy>,
 	/// Allow importing the block skipping state verification if parent state is missing.
 	pub allow_missing_state: bool,
 	/// Re-validate existing block.
