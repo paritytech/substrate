@@ -374,9 +374,12 @@ mod tests {
 		api.execute_block(&block_id, proposal.block).unwrap();
 
 		let state = backend.state_at(block_id).unwrap();
-		let changes_trie_storage = backend.changes_trie_storage();
+		let changes_trie_state = backend::changes_tries_state_at_block(
+			&block_id,
+			backend.changes_trie_storage(),
+		).unwrap();
 
-		let storage_changes = api.into_storage_changes(&state, changes_trie_storage, genesis_hash)
+		let storage_changes = api.into_storage_changes(&state, changes_trie_state.as_ref(), genesis_hash)
 			.unwrap();
 
 		assert_eq!(

@@ -360,7 +360,6 @@ mod test {
 		OverlayedChanges,
 		Configuration,
 	) {
-		let config = Configuration { digest_interval: 4, digest_levels: 2 };
 		let backend: InMemoryBackend<_> = vec![
 			(vec![100], vec![255]),
 			(vec![101], vec![255]),
@@ -469,8 +468,9 @@ mod test {
 					].into_iter().collect(), CHILD_INFO_1.to_owned())),
 				].into_iter().collect(),
 			},
-			changes_trie_config: Some(config.clone()),
+			collect_extrinsics: true,
 		};
+		let config = Configuration { digest_interval: 4, digest_levels: 2 };
 
 		(backend, storage, changes, config)
 	}
@@ -557,7 +557,6 @@ mod test {
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4, key: vec![100] }, vec![0, 2]),
 					]),
 			]);
-
 		}
 
 		test_with_zero(0);
@@ -601,7 +600,6 @@ mod test {
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 16, key: vec![100] }, vec![0, 2]),
 					]),
 			]);
-
 		}
 
 		test_with_zero(0);
@@ -710,8 +708,7 @@ mod test {
 
 	#[test]
 	fn cache_is_used_when_changes_trie_is_built() {
-		let (backend, mut storage, changes, _) = prepare_for_build(0);
-		let config = changes.changes_trie_config.as_ref().unwrap();
+		let (backend, mut storage, changes, config) = prepare_for_build(0);
 		let parent = AnchorBlockId { hash: Default::default(), number: 15 };
 
 		// override some actual values from storage with values from the cache
@@ -774,6 +771,5 @@ mod test {
 				InputPair::DigestIndex(DigestIndex { block: 16u64, key: vec![106] }, vec![4]),
 			],
 		);
-
 	}
 }
