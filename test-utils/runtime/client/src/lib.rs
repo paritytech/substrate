@@ -59,20 +59,11 @@ pub mod prelude {
 	pub use super::{AccountKeyring, Sr25519Keyring};
 }
 
-mod local_executor {
-	#![allow(missing_docs)]
-	use substrate_test_runtime;
-	use crate::sc_executor::native_executor_instance;
-	// FIXME #1576 change the macro and pass in the `BlakeHasher` that dispatch needs from here instead
-	native_executor_instance!(
-		pub LocalExecutor,
-		substrate_test_runtime::api::dispatch,
-		substrate_test_runtime::native_version
-	);
+sc_executor::native_executor_instance! {
+	pub LocalExecutor,
+	substrate_test_runtime::api::dispatch,
+	substrate_test_runtime::native_version,
 }
-
-/// Native executor used for tests.
-pub use self::local_executor::LocalExecutor;
 
 /// Test client database backend.
 pub type Backend = substrate_test_client::Backend<substrate_test_runtime::Block>;
@@ -245,7 +236,7 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	sc_client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
 	B
 > where
-	B: sc_client_api::backend::Backend<substrate_test_runtime::Block>,
+	B: sc_client_api::backend::Backend<substrate_test_runtime::Block> + 'static,
 	// Rust bug: https://github.com/rust-lang/rust/issues/24159
 	<B as sc_client_api::backend::Backend<substrate_test_runtime::Block>>::State:
 		sp_api::StateBackend<HasherFor<substrate_test_runtime::Block>>,
@@ -353,7 +344,7 @@ pub fn new_light() -> (
 	let storage = sc_client_db::light::LightStorage::new_test();
 	let blockchain = Arc::new(sc_client::light::blockchain::Blockchain::new(storage));
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));
-	let executor = NativeExecutor::new(WasmExecutionMethod::Interpreted, None);
+	let executor = new_native_executor();
 	let local_call_executor = sc_client::LocalCallExecutor::new(backend.clone(), executor);
 	let call_executor = LightExecutor::new(
 		backend.clone(),
@@ -371,4 +362,9 @@ pub fn new_light() -> (
 /// Creates new light client fetcher used for tests.
 pub fn new_light_fetcher() -> LightFetcher {
 	LightFetcher::default()
+}
+
+/// Create a new native executor.
+pub fn new_native_executor() -> sc_executor::NativeExecutor<LocalExecutor> {
+	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None)
 }
