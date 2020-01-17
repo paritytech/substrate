@@ -1324,6 +1324,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				}
 			}).collect::<Vec<_>>();
 
+			// Clean up all votes.
+			<Votes<T, I>>::remove_all();
+
 			// Reward one of the voters who voted the right way.
 			if !total_slash.is_zero() {
 				if let Some(winner) = pick_item(&mut rng, &rewardees) {
@@ -1472,7 +1475,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				let mut rejection_count = 0;
 				// Tallies total number of approve and reject votes for the defender.
 				members.iter()
-					.filter_map(|m| <DefenderVotes<T, I>>::get(m))
+					.filter_map(|m| <DefenderVotes<T, I>>::take(m))
 					.for_each(|v| {
 						match v {
 							Vote::Approve => approval_count += 1,
@@ -1485,6 +1488,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 					Self::suspend_member(&defender);
 					*members = Self::members();
 				}
+
+				// Clean up all votes.
+				<DefenderVotes<T, I>>::remove_all();
 			}
 
 			// Start a new defender rotation

@@ -3040,7 +3040,6 @@ dependencies = [
  "pallet-contracts 2.0.0",
  "pallet-im-online 2.0.0",
  "pallet-indices 2.0.0",
- "pallet-society 2.0.0",
  "pallet-timestamp 2.0.0",
  "pallet-transaction-payment 2.0.0",
  "parity-scale-codec 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",

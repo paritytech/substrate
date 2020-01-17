@@ -538,6 +538,11 @@ fn challenges_work() {
 		assert_ok!(Society::add_member(&20));
 		assert_ok!(Society::add_member(&30));
 		assert_ok!(Society::add_member(&40));
+		// Votes are empty
+		assert_eq!(<DefenderVotes<Test>>::get(10), None);
+		assert_eq!(<DefenderVotes<Test>>::get(20), None);
+		assert_eq!(<DefenderVotes<Test>>::get(30), None);
+		assert_eq!(<DefenderVotes<Test>>::get(40), None);
 		// Check starting point
 		assert_eq!(Society::members(), vec![10, 20, 30, 40]);
 		assert_eq!(Society::defender(), None);
@@ -561,6 +566,11 @@ fn challenges_work() {
 		run_to_block(24);
 		// 20 survives
 		assert_eq!(Society::members(), vec![10, 20, 30, 40]);
+		// Votes are reset
+		assert_eq!(<DefenderVotes<Test>>::get(10), None);
+		assert_eq!(<DefenderVotes<Test>>::get(20), None);
+		assert_eq!(<DefenderVotes<Test>>::get(30), None);
+		assert_eq!(<DefenderVotes<Test>>::get(40), None);
 		// One more time
 		assert_eq!(Society::defender(), Some(20));
 		// 2 people say accept, 2 reject
@@ -574,6 +584,11 @@ fn challenges_work() {
 		assert_eq!(Society::suspended_member(20), true);
 		// New defender is chosen
 		assert_eq!(Society::defender(), Some(40));
+		// Votes are reset
+		assert_eq!(<DefenderVotes<Test>>::get(10), None);
+		assert_eq!(<DefenderVotes<Test>>::get(20), None);
+		assert_eq!(<DefenderVotes<Test>>::get(30), None);
+		assert_eq!(<DefenderVotes<Test>>::get(40), None);
 	});
 }
 
