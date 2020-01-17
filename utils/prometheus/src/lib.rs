@@ -18,7 +18,7 @@ extern crate lazy_static;
 
 use futures_util::{FutureExt, future::Future};
 use hyper::http::StatusCode;
-use hyper::{Server, Body, Request, Response, service::{service_fn, make_service_fn}};
+use hyper::{Server, Body, Response, service::{service_fn, make_service_fn}};
 use prometheus::{Encoder, Opts, TextEncoder, core::Atomic};
 use std::net::SocketAddr;
 #[cfg(not(target_os = "unknown"))]
@@ -27,12 +27,12 @@ mod networking;
 pub use prometheus::core::{
 	GenericGauge as Gauge, AtomicF64 as F64, AtomicI64 as I64, AtomicU64 as U64
 };
+pub use prometheus::{Registry, Error as PrometheusError};
 pub use lazy_static::lazy_static;
 
 pub fn create_gauge<T: Atomic + 'static>(name: &str, description: &str) -> Gauge<T> {
 	let opts = Opts::new(name, description);
 	let gauge = Gauge::with_opts(opts).expect("Creating Gauge Failed");
-	prometheus::register(Box::new(gauge.clone())).expect("Registering gauge failed");
 	gauge
 }
 
@@ -58,8 +58,8 @@ impl std::error::Error for Error {
 	}
 }
 
-async fn request_metrics(_req: Request<Body>) -> Result<Response<Body>, Error> {
-	let metric_families = prometheus::gather();
+async fn request_metrics(registry: Registry) -> Result<Response<Body>, Error> {
+	let metric_families = registry.gather();
 	let mut buffer = vec![];
 	let encoder = TextEncoder::new();
 	encoder.encode(&metric_families, &mut buffer).unwrap();
@@ -87,15 +87,21 @@ impl<T> hyper::rt::Executor<T> for Executor
 /// Initializes the metrics context, and starts an HTTP server
 /// to serve metrics.
 #[cfg(not(target_os = "unknown"))]
-pub  async fn init_prometheus(prometheus_addr: SocketAddr) -> Result<(), Error>{
+pub async fn init_prometheus(prometheus_addr: SocketAddr, registry: Registry) -> Result<(), Error>{
 	use networking::Incoming;
 	let listener = async_std::net::TcpListener::bind(&prometheus_addr)
 		.await
 		.map_err(|_| Error::PortInUse(prometheus_addr))?;
 
-	let service = make_service_fn(|_| {
-		async {
-			Ok::<_, Error>(service_fn(request_metrics))
+	log::info!("Prometheus server started at {}", prometheus_addr);
+
+	let service = make_service_fn(move |_| {
+		let registry = registry.clone();
+
+		async move {
+			Ok::<_, hyper::Error>(service_fn(move |_| {
+				request_metrics(registry.clone())
+			}))
 		}
 	});
 

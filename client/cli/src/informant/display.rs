@@ -18,19 +18,9 @@ use ansi_term::Colour;
 use sc_client_api::ClientInfo;
 use log::info;
 use sc_network::SyncState;
-use sp_runtime::traits::{
-	Block as BlockT, CheckedDiv, NumberFor, Zero, Saturating, UniqueSaturatedInto
-};
+use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Zero, Saturating};
 use sc_service::NetworkStatus;
 use std::{convert::{TryFrom, TryInto}, fmt, time};
-use prometheus_endpoint::{create_gauge, Gauge, U64};
-
-prometheus_endpoint::lazy_static! {
-	pub static ref SYNC_TARGET: Gauge<U64> = create_gauge(
-		"substrate_sync_target_number",
-		"Block sync target number"
-	);
-}
 
 /// State of the informant display system.
 ///
@@ -73,10 +63,7 @@ impl<B: BlockT> InformantDisplay<B> {
 		let (status, target) = match (net_status.sync_state, net_status.best_seen_block) {
 			(SyncState::Idle, _) => ("Idle".into(), "".into()),
 			(SyncState::Downloading, None) => (format!("Syncing{}", speed), "".into()),
-			(SyncState::Downloading, Some(n)) => {
-				SYNC_TARGET.set(n.unique_saturated_into() as u64);
-				(format!("Syncing{}", speed), format!(", target=#{}", n))
-			}
+			(SyncState::Downloading, Some(n)) => (format!("Syncing{}", speed), format!(", target=#{}", n)),
 		};
 
 		info!(

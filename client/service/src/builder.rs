@@ -39,7 +39,7 @@ use sc_network::{config::BoxFinalityProofRequestBuilder, specialization::Network
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, NumberFor, SaturatedConversion, HasherFor,
+	Block as BlockT, NumberFor, SaturatedConversion, HasherFor, UniqueSaturatedInto,
 };
 use sp_api::ProvideRuntimeApi;
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
@@ -51,40 +51,44 @@ use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer};
 use sp_blockchain;
-use prometheus_endpoint::{create_gauge, Gauge, U64, F64};
+use prometheus_endpoint::{create_gauge, Gauge, U64, F64, Registry};
 
 prometheus_endpoint::lazy_static! {
 	pub static ref FINALITY_HEIGHT: Gauge<U64> = create_gauge(
-		"substrate_finality_block_height_number",
+		"finality_block_height_number",
 		"Height of the highest finalized block"
 	);
 	pub static ref BEST_HEIGHT: Gauge<U64> = create_gauge(
-		"substrate_best_block_height_number",
+		"best_block_height_number",
 		"Height of the highest block"
 	);
 	pub static ref PEERS_NUM: Gauge<U64> = create_gauge(
-		"substrate_peers_count",
+		"peers_count",
 		"Number of network gossip peers"
 	);
 	pub static ref TX_COUNT: Gauge<U64> = create_gauge(
-		"substrate_transaction_count",
+		"transaction_count",
 		"Number of transactions"
 	);
 	pub static ref NODE_MEMORY: Gauge<U64> = create_gauge(
-		"substrate_memory_usage",
+		"memory_usage",
 		"Node memory usage"
 	);
 	pub static ref NODE_CPU: Gauge<F64> = create_gauge(
-		"substrate_cpu_usage",
+		"cpu_usage",
 		"Node CPU usage"
 	);
 	pub static ref NODE_DOWNLOAD: Gauge<U64> = create_gauge(
-		"substrate_receive_byte_per_sec",
+		"receive_byte_per_sec",
 		"Received bytes per second"
 	);
 	pub static ref NODE_UPLOAD: Gauge<U64> = create_gauge(
-		"substrate_sent_byte_per_sec",
+		"sent_byte_per_sec",
 		"Sent bytes per second"
+	);
+	pub static ref SYNC_TARGET: Gauge<U64> = create_gauge(
+		"sync_target_number",
+		"Block sync target number"
 	);
 }
 /// Aggregator for the components required to build a service.
@@ -122,6 +126,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImp
 	rpc_extensions: TRpc,
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	marker: PhantomData<(TBl, TRtApi)>,
+	prometheus_registry: Option<Registry>
 }
 
 /// Full client type.
@@ -298,6 +303,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			rpc_extensions: Default::default(),
 			remote_backend: None,
 			marker: PhantomData,
+			prometheus_registry: None,
 		})
 	}
 
@@ -384,6 +390,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			rpc_extensions: Default::default(),
 			remote_backend: Some(remote_blockchain),
 			marker: PhantomData,
+			prometheus_registry: None,
 		})
 	}
 }
@@ -432,6 +439,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -474,6 +482,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -500,6 +509,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -541,6 +551,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -606,6 +617,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -661,6 +673,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -700,7 +713,29 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			rpc_extensions,
 			remote_backend: self.remote_backend,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
+	}
+
+	/// Use an existing prometheus `Registry` to record metrics into.
+	pub fn with_prometheus_registry(self, registry: Registry) -> Self {
+		Self {
+			config: self.config,
+			client: self.client,
+			backend: self.backend,
+			keystore: self.keystore,
+			fetcher: self.fetcher,
+			select_chain: self.select_chain,
+			import_queue: self.import_queue,
+			finality_proof_request_builder: self.finality_proof_request_builder,
+			finality_proof_provider: self.finality_proof_provider,
+			network_protocol: self.network_protocol,
+			transaction_pool: self.transaction_pool,
+			rpc_extensions: self.rpc_extensions,
+			remote_backend: self.remote_backend,
+			marker: self.marker,
+			prometheus_registry: Some(registry),
+		}
 	}
 }
 
@@ -815,6 +850,7 @@ ServiceBuilder<
 			transaction_pool,
 			rpc_extensions,
 			remote_backend,
+			prometheus_registry,
 		} = self;
 
 		sp_session::generate_initial_session_keys(
@@ -973,6 +1009,8 @@ ServiceBuilder<
 			let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
 			let bandwidth_download = net_status.average_download_per_sec;
 			let bandwidth_upload = net_status.average_upload_per_sec;
+			let best_seen_block = net_status.best_seen_block
+				.map(|num: NumberFor<TBl>| num.unique_saturated_into() as u64);
 
 			// get cpu usage and memory usage of this process
 			let (cpu_usage, memory) = if let Some(self_pid) = self_pid {
@@ -1009,6 +1047,9 @@ ServiceBuilder<
 			PEERS_NUM.set(num_peers as u64);
 			NODE_DOWNLOAD.set(net_status.average_download_per_sec);
 			NODE_UPLOAD.set(net_status.average_upload_per_sec);
+			if let Some(best_seen_block) = best_seen_block {
+				SYNC_TARGET.set(best_seen_block);
+			}
 
 			ready(())
 		});
@@ -1143,8 +1184,22 @@ ServiceBuilder<
 		});
 		// Prometheus endpoint
 		if let Some(port) = config.prometheus_port {
+			let registry = match prometheus_registry {
+				Some(registry) => registry,
+				None => Registry::new_custom(Some("substrate".into()), None)?
+			};
+
+			registry.register(Box::new(NODE_MEMORY.clone()))?;
+			registry.register(Box::new(NODE_CPU.clone()))?;
+			registry.register(Box::new(TX_COUNT.clone()))?;
+			registry.register(Box::new(FINALITY_HEIGHT.clone()))?;
+			registry.register(Box::new(BEST_HEIGHT.clone()))?;
+			registry.register(Box::new(PEERS_NUM.clone()))?;
+			registry.register(Box::new(NODE_DOWNLOAD.clone()))?;
+			registry.register(Box::new(NODE_UPLOAD.clone()))?;
+
 			let future = select(
-				prometheus_endpoint::init_prometheus(port).boxed(),
+				prometheus_endpoint::init_prometheus(port, registry).boxed(),
 				exit.clone()
 			).map(drop);
 
