@@ -24,22 +24,29 @@ use sp_runtime::traits::BadOrigin;
 
 #[test]
 fn founding_works() {
-	EnvBuilder::new().with_members(vec![]).execute(|| {
-		// No founder initially.
+	EnvBuilder::new().with_max_members(0).with_members(vec![]).execute(|| {
+		// Not set up initially.
 		assert_eq!(Society::founder(), None);
+		assert_eq!(Society::max_members(), 0);
+		assert_eq!(Society::pot(), 0);
 		// Account 1 is set as the founder origin
 		// Account 5 cannot start a society
-		assert_noop!(Society::found(Origin::signed(5), 20), BadOrigin);
+		assert_noop!(Society::found(Origin::signed(5), 20, 100), BadOrigin);
 		// Account 1 can start a society, where 10 is the founding member
-		assert_ok!(Society::found(Origin::signed(1), 10));
+		assert_ok!(Society::found(Origin::signed(1), 10, 100));
 		// Society members only include 10
 		assert_eq!(Society::members(), vec![10]);
 		// 10 is the head of the society
 		assert_eq!(Society::head(), Some(10));
 		// ...and also the founder
 		assert_eq!(Society::founder(), Some(10));
+		// 100 members max
+		assert_eq!(Society::max_members(), 100);
+		// Pot grows after first rotation period
+		run_to_block(4);
+		assert_eq!(Society::pot(), 1000);
 		// Cannot start another society
-		assert_noop!(Society::found(Origin::signed(1), 20), Error::<Test, _>::AlreadyFounded);
+		assert_noop!(Society::found(Origin::signed(1), 20, 100), Error::<Test, _>::AlreadyFounded);
 	});
 }
 
@@ -252,7 +259,7 @@ fn suspended_member_lifecycle_works() {
 		assert_ok!(Society::add_member(&20));
 		assert_eq!(<Members<Test>>::get(), vec![10, 20]);
 		assert_eq!(Strikes::<Test>::get(20), 0);
-		assert_eq!(<SuspendedMembers<Test>>::get(20), None);
+		assert_eq!(<SuspendedMembers<Test>>::get(20), false);
 
 		// Let's suspend account 20 by giving them 2 strikes by not voting
 		assert_ok!(Society::bid(Origin::signed(30), 0));
@@ -262,7 +269,7 @@ fn suspended_member_lifecycle_works() {
 		run_to_block(16);
 
 		// Strike 2 is accumulated, and 20 is suspended :(
-		assert_eq!(<SuspendedMembers<Test>>::get(20), Some(()));
+		assert_eq!(<SuspendedMembers<Test>>::get(20), true);
 		assert_eq!(<Members<Test>>::get(), vec![10]);
 
 		// Suspended members cannot get payout
@@ -275,16 +282,16 @@ fn suspended_member_lifecycle_works() {
 		// Suspension judgment origin can judge thee
 		// Suspension judgement origin forgives the suspended member
 		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 20, true));
-		assert_eq!(<SuspendedMembers<Test>>::get(20), None);
+		assert_eq!(<SuspendedMembers<Test>>::get(20), false);
 		assert_eq!(<Members<Test>>::get(), vec![10, 20]);
 
 		// Let's suspend them again, directly
 		Society::suspend_member(&20);
-		assert_eq!(<SuspendedMembers<Test>>::get(20), Some(()));
+		assert_eq!(<SuspendedMembers<Test>>::get(20), true);
 		// Suspension judgement origin does not forgive the suspended member
 		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 20, false));
 		// Cleaned up
-		assert_eq!(<SuspendedMembers<Test>>::get(20), None);
+		assert_eq!(<SuspendedMembers<Test>>::get(20), false);
 		assert_eq!(<Members<Test>>::get(), vec![10]);
 		assert_eq!(<Payouts<Test>>::get(20), vec![]);
 	});
@@ -519,7 +526,7 @@ fn founder_and_head_cannot_be_removed() {
 		assert_ok!(Society::vote(Origin::signed(50), 90, true));
 		run_to_block(64);
 		assert_eq!(Strikes::<Test>::get(50), 0);
-		assert_eq!(<SuspendedMembers<Test>>::get(50), Some(()));
+		assert_eq!(<SuspendedMembers<Test>>::get(50), true);
 		assert_eq!(Society::members(), vec![10, 80]);
 	});
 }
@@ -564,7 +571,7 @@ fn challenges_work() {
 		run_to_block(32);
 		// 20 is suspended
 		assert_eq!(Society::members(), vec![10, 30, 40]);
-		assert_eq!(Society::suspended_member(20), Some(()));
+		assert_eq!(Society::suspended_member(20), true);
 		// New defender is chosen
 		assert_eq!(Society::defender(), Some(40));
 	});
@@ -636,7 +643,7 @@ fn vouching_handles_removed_member_with_bid() {
 		assert_eq!(<Vouching<Test>>::get(20), Some(VouchingStatus::Vouching));
 		// Suspend that member
 		Society::suspend_member(&20);
-		assert_eq!(<SuspendedMembers<Test>>::get(20), Some(()));
+		assert_eq!(<SuspendedMembers<Test>>::get(20), true);
 		// Nothing changes yet
 		assert_eq!(<Bids<Test>>::get(), vec![create_bid(1000, 30, BidKind::Vouch(20, 100))]);
 		assert_eq!(<Vouching<Test>>::get(20), Some(VouchingStatus::Vouching));
@@ -663,7 +670,7 @@ fn vouching_handles_removed_member_with_candidate() {
 		assert_eq!(Society::candidates(), vec![create_bid(1000, 30, BidKind::Vouch(20, 100))]);
 		// Suspend that member
 		Society::suspend_member(&20);
-		assert_eq!(<SuspendedMembers<Test>>::get(20), Some(()));
+		assert_eq!(<SuspendedMembers<Test>>::get(20), true);
 		// Nothing changes yet
 		assert_eq!(Society::candidates(), vec![create_bid(1000, 30, BidKind::Vouch(20, 100))]);
 		assert_eq!(<Vouching<Test>>::get(20), Some(VouchingStatus::Vouching));

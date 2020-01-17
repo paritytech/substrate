@@ -53,6 +53,7 @@
 //! included in the newly-finalized chain.
 
 use futures::prelude::*;
+use futures::StreamExt;
 use log::{debug, info};
 use futures::channel::mpsc;
 use sc_client_api::{BlockchainEvents, CallExecutor, backend::{AuxStore, Backend}, ExecutionStrategy};
@@ -466,7 +467,7 @@ fn global_communication<Block: BlockT, B, E, N, RA>(
 ) where
 	B: Backend<Block>,
 	E: CallExecutor<Block> + Send + Sync,
-	N: NetworkT<Block> + Unpin,
+	N: NetworkT<Block>,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
@@ -551,7 +552,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	Block::Hash: Ord,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
-	N: NetworkT<Block> + Send + Sync + Clone + Unpin + 'static,
+	N: NetworkT<Block> + Send + Sync + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 	NumberFor<Block>: BlockNumberOps,
@@ -584,7 +585,6 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 		config.clone(),
 		persistent_data.set_state.clone(),
 		&executor,
-		on_exit.clone(),
 	);
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
@@ -643,12 +643,13 @@ struct VoterWork<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
 	voter: Pin<Box<dyn Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>> + Send>>,
 	env: Arc<Environment<B, E, Block, N, RA, SC, VR>>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+	network: NetworkBridge<Block, N>,
 }
 
 impl<B, E, Block, N, RA, SC, VR> VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT,
- 	N: NetworkT<Block> + Sync + Unpin,
+	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block> + Send + Sync + 'static,
@@ -674,7 +675,7 @@ where
 			voting_rule,
 			voters: Arc::new(voters),
 			config,
-			network,
+			network: network.clone(),
 			set_id: persistent_data.authority_set.set_id(),
 			authority_set: persistent_data.authority_set.clone(),
 			consensus_changes: persistent_data.consensus_changes.clone(),
@@ -687,6 +688,7 @@ where
 			voter: Box::pin(future::pending()),
 			env,
 			voter_commands_rx,
+			network,
 		};
 		work.rebuild_voter();
 		work
@@ -824,7 +826,7 @@ where
 impl<B, E, Block, N, RA, SC, VR> Future for VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT,
- 	N: NetworkT<Block> + Sync + Unpin,
+	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block> + Send + Sync + 'static,
@@ -866,7 +868,7 @@ where
 			}
 		}
 
-		Poll::Pending
+		Future::poll(Pin::new(&mut self.network), cx)
 	}
 }
 
@@ -877,7 +879,7 @@ pub fn run_grandpa<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 	Block::Hash: Ord,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
-	N: NetworkT<Block> + Send + Sync + Clone + Unpin + 'static,
+	N: NetworkT<Block> + Send + Sync + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,

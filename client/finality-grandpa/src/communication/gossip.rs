@@ -83,14 +83,13 @@
 //! We only send polite messages to peers,
 
 use sp_runtime::traits::{NumberFor, Block as BlockT, Zero};
-use sc_network_gossip::{GossipEngine, MessageIntent, ValidatorContext};
+use sc_network_gossip::{MessageIntent, ValidatorContext};
 use sc_network::{config::Roles, PeerId, ReputationChange};
 use parity_scale_codec::{Encode, Decode};
 use sp_finality_grandpa::AuthorityId;
 
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug};
-use futures::prelude::*;
 use futures::channel::mpsc;
 use rand::seq::SliceRandom;
 
@@ -99,8 +98,6 @@ use super::{cost, benefit, Round, SetId};
 
 use std::collections::{HashMap, VecDeque, HashSet};
 use std::time::{Duration, Instant};
-use std::pin::Pin;
-use std::task::{Poll, Context};
 
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
 const CATCH_UP_REQUEST_TIMEOUT: Duration = Duration::from_secs(45);
@@ -1180,7 +1177,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 	pub(super) fn new(
 		config: crate::Config,
 		set_state: environment::SharedVoterSetState<Block>,
-	) -> (GossipValidator<Block>, ReportStream)	{
+	) -> (GossipValidator<Block>, mpsc::UnboundedReceiver<PeerReport>)	{
 		let (tx, rx) = mpsc::unbounded();
 		let val = GossipValidator {
 			inner: parking_lot::RwLock::new(Inner::new(config)),
@@ -1188,7 +1185,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 			report_sender: tx,
 		};
 
-		(val, ReportStream { reports: rx })
+		(val, rx)
 	}
 
 	/// Note a round in the current set has started.
@@ -1447,52 +1444,9 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 	}
 }
 
-struct PeerReport {
-	who: PeerId,
-	cost_benefit: ReputationChange,
-}
-
-// wrapper around a stream of reports.
-#[must_use = "The report stream must be consumed"]
-pub(super) struct ReportStream {
-	reports: mpsc::UnboundedReceiver<PeerReport>,
-}
-
-impl ReportStream {
-	/// Consume the report stream, converting it into a future that
-	/// handles all reports.
-	pub(super) fn consume<B>(self, net: GossipEngine<B>)
-		-> impl Future<Output=()> + Send + 'static + Unpin
-	where
-		B: BlockT,
-	{
-		ReportingTask {
-			reports: self.reports,
-			net,
-		}
-	}
-}
-
-/// A future for reporting peers.
-#[must_use = "Futures do nothing unless polled"]
-struct ReportingTask<B: BlockT> {
-	reports: mpsc::UnboundedReceiver<PeerReport>,
-	net: GossipEngine<B>,
-}
-
-impl<B: BlockT> Future for ReportingTask<B> {
-	type Output = ();
-
-	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<()> {
-		loop {
-			match Stream::poll_next(Pin::new(&mut self.reports), cx) {
-				Poll::Ready(None) => return Poll::Ready(()),
-				Poll::Ready(Some(PeerReport { who, cost_benefit })) =>
-					self.net.report(who, cost_benefit),
-				Poll::Pending => return Poll::Pending,
-			}
-		}
-	}
+pub(super) struct PeerReport {
+	pub who: PeerId,
+	pub cost_benefit: ReputationChange,
 }
 
 #[cfg(test)]

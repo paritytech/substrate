@@ -159,7 +159,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
-	N: NetworkT<Block> + Send + Clone + Unpin + 'static,
+	N: NetworkT<Block> + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: Send + Sync + 'static,
@@ -178,7 +178,6 @@ pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
 		config.clone(),
 		persistent_data.set_state.clone(),
 		&executor,
-		on_exit.clone(),
 	);
 
 	let observer_work = ObserverWork::new(
@@ -212,7 +211,7 @@ struct ObserverWork<B: BlockT, N: NetworkT<B>, E, Backend, RA> {
 impl<B, N, E, Bk, RA> ObserverWork<B, N, E, Bk, RA>
 where
 	B: BlockT,
-	N: NetworkT<B> + Unpin,
+	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<B> + Send + Sync + 'static,
@@ -328,7 +327,7 @@ where
 impl<B, N, E, Bk, RA> Future for ObserverWork<B, N, E, Bk, RA>
 where
 	B: BlockT,
-	N: NetworkT<B> + Unpin,
+	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<B> + Send + Sync + 'static,

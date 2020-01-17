@@ -557,7 +557,7 @@ where
 	Block: 'static,
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + 'static + Send + Sync,
- 	N: NetworkT<Block> + 'static + Send + Unpin,
+ 	N: NetworkT<Block> + 'static + Send,
 	RA: 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,

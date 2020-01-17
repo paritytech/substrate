@@ -179,7 +179,6 @@ fn make_test_network(executor: &impl futures::task::Spawn) -> (
 		config(),
 		voter_set_state(),
 		executor,
-		Exit,
 	);
 
 	(

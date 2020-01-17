@@ -24,17 +24,17 @@ use hash_db::Hasher;
 use sp_runtime::traits::{Block as BlockT, Header, HasherFor, NumberFor};
 use sp_core::hexdisplay::HexDisplay;
 use sp_core::storage::ChildInfo;
-use sp_state_machine::{backend::Backend as StateBackend, TrieBackend};
+use sp_state_machine::{
+	backend::Backend as StateBackend, TrieBackend, StorageKey, StorageValue,
+	StorageCollection, ChildStorageCollection,
+};
 use log::trace;
-use sc_client_api::backend::{StorageCollection, ChildStorageCollection};
 use std::hash::Hash as StdHash;
 use crate::stats::StateUsageStats;
 
 const STATE_CACHE_BLOCKS: usize = 12;
 
-type StorageKey = Vec<u8>;
 type ChildStorageKey = (Vec<u8>, Vec<u8>);
-type StorageValue = Vec<u8>;
 
 /// Shared canonical state cache.
 pub struct Cache<B: BlockT> {
