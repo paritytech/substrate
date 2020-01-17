@@ -1489,7 +1489,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 					*members = Self::members();
 				}
 
-				// Clean up the entire store item.
+				// Clean up all votes.
 				<DefenderVotes<T, I>>::remove_all();
 			}
 
