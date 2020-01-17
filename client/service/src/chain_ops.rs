@@ -45,11 +45,11 @@ pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<Strin
 
 impl<
 	TBl, TRtApi, TCfg, TGen, TCSExt, TBackend,
-	TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP,
+	TExec, TFchr, TSc, TImpQu, TFprb, TFpp,
 	TExPool, TRpc, Backend
 > ServiceBuilderCommand for ServiceBuilder<
 	TBl, TRtApi, TCfg, TGen, TCSExt, Client<TBackend, TExec, TBl, TRtApi>,
-	TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend
+	TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend
 > where
 	TBl: BlockT,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,

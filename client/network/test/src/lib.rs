@@ -52,7 +52,7 @@ use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProof
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_core::H256;
-use sc_network::{Context, ProtocolConfig};
+use sc_network::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::Justification;
@@ -288,7 +288,7 @@ impl<D> Peer<D> {
 				Default::default()
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
-			self.network.on_block_imported(hash, header, Vec::new(), true);
+			self.network.on_block_imported(header, Vec::new(), true);
 			at = hash;
 		}
 
@@ -341,7 +341,7 @@ impl<D> Peer<D> {
 	}
 
 	/// Get a reference to the network service.
-	pub fn network_service(&self) -> &Arc<NetworkService<Block, S, <Block as BlockT>::Hash>> {
+	pub fn network_service(&self) -> &Arc<NetworkService<Block, <Block as BlockT>::Hash>> {
 		&self.network.service()
 	}
 
@@ -756,7 +756,6 @@ pub trait TestNetFactory: Sized {
 				// We poll `imported_blocks_stream`.
 				while let Ok(Async::Ready(Some(notification))) = peer.imported_blocks_stream.poll() {
 					peer.network.on_block_imported(
-						notification.hash,
 						notification.header,
 						Vec::new(),
 						true,

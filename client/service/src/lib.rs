@@ -203,9 +203,9 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	fn on_exit(&self) -> ::exit_future::Exit;
 }
 
-impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPool, TOc> AbstractService for
+impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
 	Service<TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
-		NetworkService<TBl, TNetSpec, TBl::Hash>, TExPool, TOc>
+		NetworkService<TBl, TBl::Hash>, TExPool, TOc>
 where
 	TBl: BlockT + Unpin,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl>,
@@ -375,7 +375,7 @@ fn build_network_future<
 
 		// We poll `imported_blocks_stream`.
 		while let Poll::Ready(Some(notification)) = Pin::new(&mut imported_blocks_stream).poll_next(cx) {
-			network.on_block_imported(notification.hash, notification.header, Vec::new(), notification.is_new_best);
+			network.on_block_imported(notification.header, Vec::new(), notification.is_new_best);
 		}
 
 		// We poll `finality_notification_stream`, but we only take the last event.

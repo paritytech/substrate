@@ -220,7 +220,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 	Ok((client, backend, keystore))
 }
 
-impl<TCfg, TGen, TCSExt> ServiceBuilder<(), (), TCfg, TGen, TCSExt, (), (), (), (), (), (), (), (), (), ()>
+impl<TCfg, TGen, TCSExt> ServiceBuilder<(), (), TCfg, TGen, TCSExt, (), (), (), (), (), (), (), (), ()>
 where TGen: RuntimeGenesis, TCSExt: Extension {
 	/// Start the service builder with a configuration.
 	pub fn new_full<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch + 'static>(
@@ -237,7 +237,6 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		BoxFinalityProofRequestBuilder<TBl>,
 		Arc<dyn FinalityProofProvider<TBl>>,
-		(),
 		(),
 		(),
 		TFullBackend<TBl>,
@@ -278,7 +277,6 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		BoxFinalityProofRequestBuilder<TBl>,
 		Arc<dyn FinalityProofProvider<TBl>>,
-		(),
 		(),
 		(),
 		TLightBackend<TBl>,
@@ -452,7 +450,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExP
 		TImpQu,
 		TFprb,
 		Arc<dyn FinalityProofProvider<TBl>>,
-		TNetP,
 		TExPool,
 		TRpc,
 		Backend,
@@ -492,7 +489,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExP
 		TImpQu,
 		TFprb,
 		Arc<dyn FinalityProofProvider<TBl>>,
-		TNetP,
 		TExPool,
 		TRpc,
 		Backend,

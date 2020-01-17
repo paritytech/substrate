@@ -288,7 +288,7 @@ pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 		ConcreteClient,
 		LongestChain<ConcreteBackend, ConcreteBlock>,
 		NetworkStatus<ConcreteBlock>,
-		NetworkService<ConcreteBlock, crate::service::NodeProtocol, <ConcreteBlock as BlockT>::Hash>,
+		NetworkService<ConcreteBlock, <ConcreteBlock as BlockT>::Hash>,
 		ConcreteTransactionPool,
 		OffchainWorkers<
 			ConcreteClient,
