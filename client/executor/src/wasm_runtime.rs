@@ -237,6 +237,7 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 	Ok(VersionedRuntime {
 		runtime,
 		version,
+		heap_pages,
 	})
 }
 
