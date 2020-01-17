@@ -22,7 +22,10 @@ use sp_core::ChangesTrieConfigurationRange;
 use sp_core::offchain::OffchainStorage;
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, HasherFor};
-use sp_state_machine::{ChangesTrieState, ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction};
+use sp_state_machine::{
+	ChangesTrieState, ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction,
+	StorageCollection, ChildStorageCollection,
+};
 use crate::{
 	blockchain::{
 		Backend as BlockchainBackend, well_known_cache_keys
@@ -44,12 +47,6 @@ pub type TransactionForSB<B, Block> = <B as StateBackend<HasherFor<Block>>>::Tra
 
 /// Extracts the transaction for the given backend.
 pub type TransactionFor<B, Block> = TransactionForSB<StateBackendFor<B, Block>, Block>;
-
-/// In memory array of storage values.
-pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
-
-/// In memory arrays of storage values for multiple child tries.
-pub type ChildStorageCollection = Vec<(Vec<u8>, StorageCollection)>;
 
 /// Import operation summary.
 ///
