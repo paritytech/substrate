@@ -146,7 +146,7 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	/// the underlying `GossipEngine`.
 	neighbor_sender: periodic::NeighborPacketSender<B>,
 
-	/// `NeighborPacketWorker` processing packets send through the `NeighborPacketSender`.
+	/// `NeighborPacketWorker` processing packets sent through the `NeighborPacketSender`.
 	//
 	// NetworkBridge is required to be clonable, thus one needs to be able to clone its children,
 	// thus one has to wrap neighor_packet_worker with an Arc Mutex.
