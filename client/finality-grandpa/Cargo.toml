@@ -7,7 +7,6 @@ edition = "2018"
 [dependencies]
 fork-tree = { version = "2.0.0", path = "../../utils/fork-tree" }
 futures = "0.3.1"
-futures01 = { package = "futures", version = "0.1.29" }
 futures-timer = "2.0.2"
 log = "0.4.8"
 parking_lot = "0.9.0"
@@ -43,3 +42,4 @@ env_logger = "0.7.0"
 tokio = "0.1.22"
 tempfile = "3.1.0"
 sp-api = { version = "2.0.0", path = "../../primitives/api" }
+futures01 = { package = "futures", version = "0.1.29" }
