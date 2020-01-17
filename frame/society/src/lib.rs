@@ -426,7 +426,7 @@ decl_storage! {
 		}): Vec<T::AccountId>;
 
 		/// The set of suspended members.
-		pub SuspendedMembers get(fn suspended_member): map T::AccountId => Option<()>;
+		pub SuspendedMembers get(fn suspended_member): map T::AccountId => Option<bool>;
 
 		/// The current bids, stored ordered by the value of the bid.
 		Bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
@@ -1426,7 +1426,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Suspend a user, removing them from the member list.
 	fn suspend_member(who: &T::AccountId) {
 		if Self::remove_member(&who).is_ok() {
-			<SuspendedMembers<T, I>>::insert(who, ());
+			<SuspendedMembers<T, I>>::insert(who, true);
 			<Strikes<T, I>>::remove(who);
 			Self::deposit_event(RawEvent::MemberSuspended(who.clone()));
 		}
