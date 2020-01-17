@@ -37,7 +37,7 @@ use sp_runtime::{
 	}
 };
 use frame_support::weights::GetDispatchInfo;
-use frame_support::benchmarking::Benchmarking;
+use frame_support::benchmarking::{GetModule, GetFunction};
 use node_transaction_factory::RuntimeAdapter;
 use node_transaction_factory::automata::Automaton;
 
@@ -178,14 +178,14 @@ impl RuntimeAdapter for FactoryState<Number> {
 				Call::Authorship(AuthorshipCall::set_uncles(uncles))
 			},
 			"staking_bond" => {
-				let call = StakingCall::bond(
-					pallet_indices::address::Address::Id(destination.clone().into()),
-					(*amount).into(),
-					RewardDestination::Controller,
-				);
-				println!("{:?}", Call::get_call("Staking", "bond"));
-				
-				Call::Staking(call)
+				// let call = StakingCall::bond(
+				// 	pallet_indices::address::Address::Id(destination.clone().into()),
+				// 	(*amount).into(),
+				// 	RewardDestination::Controller,
+				// );
+				// println!("{:?}", Call::get_module("Staking", "bond"));
+				Call::get_module("Staking", "bond")
+				// Call::Staking(call)
 			},
 			"staking_validate" => {
 				Call::Staking(StakingCall::validate(

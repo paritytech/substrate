@@ -1297,26 +1297,6 @@ macro_rules! decl_module {
 			)*
 		}
 
-		// impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::benchmarking::Benchmarking
-		// 	for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
-		// {
-		// 	type Call = ();
-		// 	fn get_call(module_name: &str, function_name: &str) -> Self::Call {
-		// 		use $crate::sp_std::if_std;
-						
-		// 		match function_name {
-		// 			$( 
-		// 				stringify!($fn_name) => {
-		// 					if_std!{
-		// 						println!("matched {:?}", stringify!($fn_name));
-		// 					}
-		// 				}
-		// 			)*
-		// 			_ => unreachable!(),
-		// 		}
-		// 	}
-		// }
-
 		// Implement weight calculation function for Call
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::GetDispatchInfo
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
@@ -1449,11 +1429,11 @@ macro_rules! decl_module {
 				}
 			}
 		}
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::benchmarking::Other
+
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::benchmarking::GetFunction
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			type Potato = Self;
-			fn get_call(module: &str, function: &str) -> Self::Potato {
+			fn get_function(function: &str) -> Self {
 				use $crate::sp_std::if_std;
 		
 				match function {
@@ -1472,6 +1452,7 @@ macro_rules! decl_module {
 				}
 			}
 		}
+
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Callable<$trait_instance>
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
@@ -1548,11 +1529,12 @@ macro_rules! impl_outer_dispatch {
 				unimplemented!("TODO")
 			}
 		}
-		impl $crate::benchmarking::Benchmarking for $call_type {
-			type Call = Self;
-			fn get_call(module: &str, function: &str) -> Self {
+		impl $crate::benchmarking::GetModule for $call_type {
+			fn get_module(module: &str, function: &str) -> Self {
 				match module {
-					$( stringify!($camelcase) => $call_type::$camelcase(<<$camelcase as $crate::dispatch::Callable<$runtime>>::Call as $crate::benchmarking::Other>::get_call(module, function)), )*
+					$( stringify!($camelcase) => $call_type::$camelcase(
+							$crate::benchmarking::GetFunction::get_function(function)
+					),)*
 					_ => unreachable!(),
 				}
 			}

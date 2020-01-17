@@ -18,32 +18,10 @@
 // #[allow(deprecated)]
 // pub use crate::sp_runtime::traits::Benchmarking;
 
-pub trait Benchmarking {
-	type Call;
-	fn get_call(module: &str, function: &str) -> Self::Call;
+pub trait GetModule {
+	fn get_module(module: &str, function: &str) -> Self;
 }
 
-pub trait Other {
-	type Potato;
-	fn get_call(module: &str, function: &str) -> Self::Potato;
+pub trait GetFunction {
+	fn get_function(function: &str) -> Self;
 }
-
-
-// #[macro_export]
-// macro_rules! impl_outer_benchmarking {
-// 	(
-// 		impl Benchmarking for $runtime:ident {
-// 			$( $module:ident )*
-// 		}
-// 	) => {
-// 		#[allow(deprecated)]
-// 		impl $crate::benchmarking::Benchmarking for $runtime {
-// 			type Call = Call;
-
-// 			fn make_call() -> Self::Call {
-// 				#[cfg(feature = "std")]
-// 				println!("module: {:?}", stringify!( $( $module::metadata(), )* ))
-// 			}
-// 		}
-// 	};
-// }
