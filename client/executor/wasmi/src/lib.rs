@@ -475,7 +475,6 @@ struct StateSnapshot {
 	data_segments: Vec<(u32, Vec<u8>)>,
 	/// The list of all global mutable variables of the module in their sequential order.
 	global_mut_values: Vec<RuntimeValue>,
-	heap_pages: u64,
 }
 
 impl StateSnapshot {
@@ -483,7 +482,6 @@ impl StateSnapshot {
 	fn take(
 		module_instance: &ModuleRef,
 		data_segments: Vec<DataSegment>,
-		heap_pages: u64,
 	) -> Option<Self> {
 		let prepared_segments = data_segments
 			.into_iter()
@@ -529,7 +527,6 @@ impl StateSnapshot {
 		Some(Self {
 			data_segments: prepared_segments,
 			global_mut_values,
-			heap_pages,
 		})
 	}
 
@@ -590,10 +587,6 @@ pub struct WasmiRuntime {
 }
 
 impl WasmRuntime for WasmiRuntime {
-	fn update_heap_pages(&mut self, heap_pages: u64) -> bool {
-		self.state_snapshot.heap_pages == heap_pages
-	}
-
 	fn host_functions(&self) -> &[&'static dyn Function] {
 		&self.host_functions
 	}
@@ -647,7 +640,7 @@ pub fn create_instance(
 	).map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
 	// Take state snapshot before executing anything.
-	let state_snapshot = StateSnapshot::take(&instance, data_segments, heap_pages)
+	let state_snapshot = StateSnapshot::take(&instance, data_segments)
 		.expect(
 			"`take` returns `Err` if the module is not valid;
 				we already loaded module above, thus the `Module` is proven to be valid at this point;

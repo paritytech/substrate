@@ -384,7 +384,10 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			SupervisorFuncRef(func_ref)
 		};
 
-		let guest_env = match sandbox::GuestEnvironment::decode(&*self.state.sandbox_store.borrow(), raw_env_def) {
+		let guest_env = match sandbox::GuestEnvironment::decode(
+			&*self.state.sandbox_store.borrow(),
+			raw_env_def,
+		) {
 			Ok(guest_env) => guest_env,
 			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
 		};

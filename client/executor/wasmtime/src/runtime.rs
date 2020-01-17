@@ -33,42 +33,27 @@ use std::convert::TryFrom;
 use std::rc::Rc;
 
 use wasmtime::{
-	Callable, Config, Extern, ExternType, Func, Instance, Memory, Module, Store, Table, Trap, Val,
+	Callable, Config, Engine, Extern, ExternType, Func, Instance, Memory, Module, Store, Table,
+	Trap, Val,
 };
 
 /// A `WasmRuntime` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
 pub struct WasmtimeRuntime {
-	store: Store,
 	module: Module,
 	externs: Vec<Extern>,
 	state_holder: StateHolder,
-	max_heap_pages: Option<u32>,
 	heap_pages: u32,
-	/// The host functions registered for this instance.
 	host_functions: Vec<&'static dyn Function>,
 }
 
 impl WasmRuntime for WasmtimeRuntime {
-	fn update_heap_pages(&mut self, heap_pages: u64) -> bool {
-		// match heap_pages_valid(heap_pages, self.max_heap_pages) {
-		// 	Some(heap_pages) => {
-		// 		self.heap_pages = heap_pages;
-		// 		true
-		// 	}
-		// 	None => false,
-		// }
-		// TODO:
-		true
-	}
-
 	fn host_functions(&self) -> &[&'static dyn Function] {
 		&self.host_functions
 	}
 
 	fn call(&mut self, ext: &mut dyn Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>> {
 		call_method(
-			&self.store,
 			&self.module,
 			&self.externs,
 			&self.state_holder,
@@ -89,12 +74,13 @@ pub fn create_instance(
 ) -> std::result::Result<WasmtimeRuntime, WasmError> {
 	// TODO: Tinker with the config.
 	// For now the default Store would suffice.
-	let store = Store::default();
+	let mut config = Config::new();
+	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
+
+	let engine = Engine::new(&config);
+	let store = Store::new(&engine);
 	let module = Module::new(&store, code)
 		.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
-
-	// TODO: Check the heap pages
-	let max_heap_pages = None;
 
 	let state_holder = StateHolder::empty();
 	let mut externs = vec![];
@@ -110,7 +96,13 @@ pub fn create_instance(
 		let host_func = host_functions
 			.iter()
 			.find(|host_func| host_func.name() == import_ty.name())
-			.unwrap(); // TODO: Handle missing functions
+			.ok_or_else(|| {
+				WasmError::Other(format!(
+					"host doesn't provide such function: {}:{}",
+					import_ty.module(),
+					import_ty.name()
+				))
+			})?;
 
 		let func_ty = match import_ty.ty() {
 			ExternType::Func(func_ty) => func_ty,
@@ -119,10 +111,16 @@ pub fn create_instance(
 					"host doesn't provide any non function imports: {}:{}",
 					import_ty.module(),
 					import_ty.name()
-				)))
+				)));
 			}
 		};
-		// TODO: Check the signature
+		if !signature_matches(&func_ty, &wasmtime_func_sig(*host_func)) {
+			return Err(WasmError::Other(format!(
+				"signature mismatch for: {}:{}",
+				import_ty.module(),
+				import_ty.name()
+			)));
+		}
 
 		externs.push(wrap_substrate_func(
 			&store,
@@ -132,14 +130,16 @@ pub fn create_instance(
 	}
 
 	Ok(WasmtimeRuntime {
-		store,
 		module,
 		externs,
 		state_holder,
-		max_heap_pages,
 		heap_pages: heap_pages as u32,
 		host_functions,
 	})
+}
+
+fn signature_matches(lhs: &wasmtime::FuncType, rhs: &wasmtime::FuncType) -> bool {
+	lhs.params().iter().eq(rhs.params().iter()) && lhs.results().iter().eq(rhs.results().iter())
 }
 
 fn wrap_substrate_func(
@@ -290,7 +290,6 @@ fn convert_substrate_value_to_wasmtime_val(value: Value) -> Val {
 
 /// Call a function inside a precompiled Wasm module.
 fn call_method(
-	store: &Store,
 	module: &Module,
 	externs: &[Extern],
 	state_holder: &StateHolder,
