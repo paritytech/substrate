@@ -1359,11 +1359,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Initialise the first session (and consequently the first era)
-	fn initial_session(session_index) -> Option<Vec<T::AccountId>> {
+	fn initial_session() -> Option<Vec<T::AccountId>> {
 		// note: `CurrentEraStart` is set in `on_finalize` of the first block because now is not
 		// available yet.
-		CurrentEraStartSessionIndex::put(session_index);
-		BondedEras::mutate(|bonded| bonded.push((current_era, 0)));
+		CurrentEraStartSessionIndex::put(0);
+		BondedEras::mutate(|bonded| bonded.push((0, 0)));
 		Self::select_validators().1
 	}
 
