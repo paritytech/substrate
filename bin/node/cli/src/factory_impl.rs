@@ -25,7 +25,7 @@ use codec::{Encode, Decode};
 use sp_keyring::sr25519::Keyring;
 use node_runtime::{
 	Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, Header,
-	BalancesCall, AuthorshipCall, StakingCall,
+	BalancesCall, AuthorshipCall, StakingCall, StakingModule,
 	MinimumPeriod, ExistentialDeposit,
 };
 use node_primitives::Signature;
@@ -37,6 +37,7 @@ use sp_runtime::{
 	}
 };
 use frame_support::weights::GetDispatchInfo;
+use frame_support::benchmarking::Benchmarking;
 use node_transaction_factory::RuntimeAdapter;
 use node_transaction_factory::automata::Automaton;
 
@@ -182,7 +183,8 @@ impl RuntimeAdapter for FactoryState<Number> {
 					(*amount).into(),
 					RewardDestination::Controller,
 				);
-				println!("{:?}", call.get_dispatch_info());
+				println!("{:?}", Call::get_call("Staking", "bond"));
+				
 				Call::Staking(call)
 			},
 			"staking_validate" => {

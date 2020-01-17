@@ -82,12 +82,27 @@ impl Automaton {
 
 	pub fn next_state(&mut self) -> Option<String> {
 		if let Some(node) = self.nodes.get_mut(&self.current_node) {
-			let mut max_priority_output = node.outputs.first_mut().expect("TODO");
+			let mut max_out: Option<&mut Edge> = None;
 
-			self.current_node = max_priority_output.target;
-			max_priority_output.used += 1;
+			for edge in node.outputs.iter_mut() {
+				if let Some(max_edge) = max_out.take() {
+					if (*edge).priority > max_edge.priority && (*edge).repeat - (*edge).used > 0 {
+						max_out = Some(edge);
+					} else {
+						max_out = Some(max_edge);
+					}
+				} else if (*edge).repeat - (*edge).used > 0 {
+					max_out = Some(edge);
+				}
+			}
 
-			Some(max_priority_output.tx_name.clone())
+			if let Some(edge) = max_out {
+				edge.used += 1;
+				self.current_node = edge.target;
+				Some(edge.tx_name.clone())
+			} else {
+				None
+			}
 		} else {
 			panic!("automaton current state is undefined, check your bench file!");
 		}

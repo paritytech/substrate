@@ -62,6 +62,8 @@ pub mod inherent;
 #[macro_use]
 pub mod unsigned;
 #[macro_use]
+pub mod benchmarking;
+#[macro_use]
 pub mod error;
 pub mod traits;
 pub mod weights;

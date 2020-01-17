@@ -17,7 +17,7 @@
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
 
-pub use crate::sp_std::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq, Default}, marker};
+pub use crate::sp_std::{ result, fmt, prelude::{Vec, Clone, Eq, PartialEq, Default}, marker};
 pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use frame_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
@@ -1297,6 +1297,26 @@ macro_rules! decl_module {
 			)*
 		}
 
+		// impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::benchmarking::Benchmarking
+		// 	for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		// {
+		// 	type Call = ();
+		// 	fn get_call(module_name: &str, function_name: &str) -> Self::Call {
+		// 		use $crate::sp_std::if_std;
+						
+		// 		match function_name {
+		// 			$( 
+		// 				stringify!($fn_name) => {
+		// 					if_std!{
+		// 						println!("matched {:?}", stringify!($fn_name));
+		// 					}
+		// 				}
+		// 			)*
+		// 			_ => unreachable!(),
+		// 		}
+		// 	}
+		// }
+
 		// Implement weight calculation function for Call
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::GetDispatchInfo
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
@@ -1304,10 +1324,6 @@ macro_rules! decl_module {
 			fn get_dispatch_info(&self) -> $crate::dispatch::DispatchInfo {
 				$(
 					if let $call_type::$fn_name($( ref $param_name ),*) = self {
-						use $crate::sp_std::if_std;
-						if_std! {
-							println!("{} {} {:?} {}", stringify!($call_type), stringify!($fn_name), ( $( <$param>::default(), )* ), stringify!(( $( $param_name, )* )));
-						}
 						let weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
 							&$weight,
 							($( $param_name, )*)
@@ -1433,6 +1449,29 @@ macro_rules! decl_module {
 				}
 			}
 		}
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::benchmarking::Other
+			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			type Potato = Self;
+			fn get_call(module: &str, function: &str) -> Self::Potato {
+				use $crate::sp_std::if_std;
+		
+				match function {
+					$( 
+						stringify!($fn_name) => {
+							if_std!{
+								println!("matched {:?}", stringify!($fn_name));
+							}
+							$(
+								let $param_name = <$param>::default();
+							)*
+							$call_type::$fn_name($( $param_name ),* )
+						}
+					)*
+					_ => unreachable!(),
+				}
+			}
+		}
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Callable<$trait_instance>
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
@@ -1509,12 +1548,21 @@ macro_rules! impl_outer_dispatch {
 				unimplemented!("TODO")
 			}
 		}
+		impl $crate::benchmarking::Benchmarking for $call_type {
+			type Call = Self;
+			fn get_call(module: &str, function: &str) -> Self {
+				match module {
+					$( stringify!($camelcase) => $call_type::$camelcase(<<$camelcase as $crate::dispatch::Callable<$runtime>>::Call as $crate::benchmarking::Other>::get_call(module, function)), )*
+					_ => unreachable!(),
+				}
+			}
+		}
 		impl $crate::dispatch::GetDispatchInfo for $call_type {
 			fn get_dispatch_info(&self) -> $crate::dispatch::DispatchInfo {
 				match self {
 					$( $call_type::$camelcase(call) => call.get_dispatch_info(), )*
 				}
-			}
+			}  
 		}
 		impl $crate::dispatch::Dispatchable for $call_type {
 			type Origin = $origin;

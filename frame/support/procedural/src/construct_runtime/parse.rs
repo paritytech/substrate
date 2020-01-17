@@ -351,7 +351,7 @@ impl ModulePart {
 
 	/// Returns all allowed names for module parts.
 	pub fn all_allowed() -> &'static [&'static str] {
-		&["Module", "Call", "Storage", "Event", "Config", "Origin", "Inherent", "ValidateUnsigned"]
+		&["Module", "Call", "Storage", "Event", "Config", "Origin", "Inherent", "ValidateUnsigned", "Benchmarking"]
 	}
 
 	pub fn format_names(names: &[&'static str]) -> String {
