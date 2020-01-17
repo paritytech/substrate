@@ -17,6 +17,7 @@
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
 
 use crate::function_executor::{FunctionExecutor, FunctionExecutorState};
+use crate::instance_wrapper::InstanceWrapper;
 use crate::imports::resolve_imports;
 use crate::state_holder::StateHolder;
 
@@ -113,7 +114,7 @@ fn call_method(
 		.map_err(|e| WasmError::Other(format!("cannot instantiate: {}", e)))?;
 
 	let instance_wrapper = unsafe { InstanceWrapper::new(instance)? };
-	instance_wrapper.increase_linear_memory(heap_pages)?;
+	instance_wrapper.grow_memory(heap_pages)?;
 
 	let heap_base = instance_wrapper.extract_heap_base()?;
 	let allocator = FreeingBumpHeapAllocator::new(heap_base);
@@ -179,191 +180,4 @@ fn extract_output_data(
 	let mut output = vec![0; output_len as usize];
 	instance.read_memory_into(Pointer::new(output_ptr), &mut output)?;
 	Ok(output)
-}
-
-// TODO: Why do we need this?
-pub struct InstanceWrapper {
-	instance: Instance,
-	memory: Memory,
-	table: Option<Table>,
-}
-
-impl InstanceWrapper {
-	pub unsafe fn new(instance: Instance) -> Result<Self> {
-		Ok(Self {
-			table: get_table(&instance),
-			memory: get_linear_memory(&instance)?,
-			instance,
-		})
-	}
-
-	pub fn increase_linear_memory(&self, pages: u32) -> Result<()> {
-		if self.memory.grow(pages) {
-			Ok(())
-		} else {
-			return Err("failed top increase the linear memory size".into());
-		}
-	}
-
-	pub fn resolve_entrypoint(&self, entrypoint_name: &str) -> Result<wasmtime::Func> {
-		// Resolve the requested method and verify that it has a proper signature.
-		let export = self
-			.instance
-			.find_export_by_name(entrypoint_name)
-			.ok_or_else(|| {
-				Error::from(format!("Exported method {} is not found", entrypoint_name))
-			})?;
-		let entrypoint_func = export
-			.func()
-			.ok_or_else(|| Error::from(format!("Export {} is not a function", entrypoint_name)))?;
-		// TODO: Check the signature
-		Ok(entrypoint_func.clone())
-	}
-
-	pub fn table(&self) -> Option<&Table> {
-		self.table.as_ref()
-	}
-
-	pub fn memory_size(&self) -> u32 {
-		self.memory.data_size() as u32
-	}
-
-	fn extract_heap_base(&self) -> Result<u32> {
-		let heap_base_export = self
-			.instance
-			.find_export_by_name("__heap_base")
-			.ok_or_else(|| Error::from("__heap_base is not found"))?;
-
-		let heap_base_global = heap_base_export
-			.global()
-			.ok_or_else(|| Error::from("__heap_base is not a global"))?;
-
-		let heap_base = heap_base_global
-			.get()
-			.i32()
-			.ok_or_else(|| Error::from("__heap_base is not a i32"))?;
-
-		Ok(heap_base as u32)
-	}
-}
-
-fn get_table(instance: &Instance) -> Option<Table> {
-	instance
-		.find_export_by_name("__indirect_function_table")
-		.and_then(|export| export.table())
-		.cloned()
-}
-
-fn get_linear_memory(instance: &Instance) -> Result<Memory> {
-	let memory_export = instance
-		.find_export_by_name("memory")
-		.ok_or_else(|| Error::from("memory is not exported under `memory` name"))?;
-
-	let memory = memory_export
-		.memory()
-		.ok_or_else(|| Error::from("the `memory` export should have memory type"))?
-		.clone();
-
-	Ok(memory)
-}
-
-/// Functions realted to memory.
-impl InstanceWrapper {
-	/// Read data from a slice of memory into a destination buffer.
-	///
-	/// Returns an error if the read would go out of the memory bounds.
-	pub fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> Result<()> {
-		unsafe {
-			// TODO: Proof
-			let memory = self.memory_as_slice();
-			let range = checked_range(address.into(), dest.len(), memory.len())
-				.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
-			dest.copy_from_slice(&memory[range]);
-			Ok(())
-		}
-	}
-
-	/// Write data to a slice of memory.
-	///
-	/// Returns an error if the write would go out of the memory bounds.
-	pub fn write_memory_from(&self, address: Pointer<u8>, data: &[u8]) -> Result<()> {
-		unsafe {
-			// TODO: Proof
-			let memory = self.memory_as_slice_mut();
-			let range = checked_range(address.into(), data.len(), memory.len())
-				.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
-			&mut memory[range].copy_from_slice(data);
-			Ok(())
-		}
-	}
-
-	pub fn allocate(
-		&self,
-		allocator: &mut sc_executor_common::allocator::FreeingBumpHeapAllocator,
-		size: WordSize,
-	) -> Result<Pointer<u8>> {
-		unsafe {
-			// TODO: Proof
-			let mem_mut = self.memory_as_slice_mut();
-			allocator.allocate(mem_mut, size)
-		}
-	}
-
-	pub fn deallocate(
-		&self,
-		allocator: &mut sc_executor_common::allocator::FreeingBumpHeapAllocator,
-		ptr: Pointer<u8>,
-	) -> Result<()> {
-		unsafe {
-			// TODO: Proof
-			let mem_mut = self.memory_as_slice_mut();
-			allocator.deallocate(mem_mut, ptr)
-		}
-	}
-
-	/// Returns linear memory of the wasm instance as a slice.
-	///
-	/// # Safety
-	///
-	/// Wasmtime doesn't provide comprehensive documentation about the exact behavior of the data
-	/// pointer. If a dynamic style heap is used the base pointer of the heap can change. Since
-	/// growing, we cannot guarantee the lifetime of the returned slice reference.
-	unsafe fn memory_as_slice(&self) -> &[u8] {
-		let ptr = self.memory.data_ptr() as *const _;
-		let len = self.memory.data_size();
-
-		if len == 0 {
-			&[]
-		} else {
-			slice::from_raw_parts(ptr, len)
-		}
-	}
-
-	/// Returns linear memory of the wasm instance as a slice.
-	///
-	/// # Safety
-	///
-	/// See `[memory_as_slice]`. In addition to those requirements, since a mutable reference is
-	/// returned it must be ensured that only one mutable reference to memory exists.
-	unsafe fn memory_as_slice_mut(&self) -> &mut [u8] {
-		let ptr = self.memory.data_ptr();
-		let len = self.memory.data_size();
-
-		if len == 0 {
-			&mut []
-		} else {
-			slice::from_raw_parts_mut(ptr, len)
-		}
-	}
-}
-
-/// Construct a range from an offset to a data length after the offset.
-/// Returns None if the end of the range would exceed some maximum offset.
-fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usize>> {
-	let end = offset.checked_add(len)?;
-	if end <= max {
-		Some(offset..end)
-	} else {
-		None
-	}
 }

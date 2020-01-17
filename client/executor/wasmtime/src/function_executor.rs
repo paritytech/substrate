@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::runtime::InstanceWrapper;
+use crate::instance_wrapper::InstanceWrapper;
 use crate::util::{checked_range, read_memory_into, write_memory_from};
 use sc_executor_common::allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::error::{Error, Result};

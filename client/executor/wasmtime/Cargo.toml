@@ -9,6 +9,7 @@ log = "0.4.8"
 wasmi = "0.6.2"
 parity-wasm = "0.41.0"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
+take_mut = "0.2.2"
 sc-executor-common = { version = "2.0.0", path = "../common" }
 sp-wasm-interface = { version = "2.0.0", path = "../../../primitives/wasm-interface" }
 sp-runtime-interface = { version = "2.0.0", path = "../../../primitives/runtime-interface" }

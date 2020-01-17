@@ -24,6 +24,8 @@ use sc_executor_common::{
 use sp_wasm_interface::{Function, Value, ValueType};
 use wasmtime::{Callable, Extern, ExternType, Store, Module, Val, ValType, Trap, Func};
 
+/// Goes over all imports of a module and prepares a vector of `Extern`s that can be used for
+/// instantiation of the module. Returns an error if there are imports that cannot be satisfied.
 pub fn resolve_imports(
 	state_holder: &StateHolder,
 	module: &Module,
@@ -77,6 +79,7 @@ pub fn resolve_imports(
 	Ok(externs)
 }
 
+/// Returns `true` if `lhs` and `rhs` represent the same signature.
 fn signature_matches(lhs: &wasmtime::FuncType, rhs: &wasmtime::FuncType) -> bool {
 	lhs.params() == rhs.params() && lhs.results() == rhs.results()
 }

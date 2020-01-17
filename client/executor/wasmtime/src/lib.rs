@@ -21,5 +21,6 @@ mod runtime;
 mod util;
 mod state_holder;
 mod imports;
+mod instance_wrapper;
 
 pub use runtime::create_instance;
