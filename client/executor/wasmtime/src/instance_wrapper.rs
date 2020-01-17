@@ -17,6 +17,14 @@
 //! Defines data and logic needed for interaction with an WebAssembly instance of a substrate
 //! runtime module.
 
+use std::ops::Range;
+use std::slice;
+use sc_executor_common::{
+	error::{Error, Result},
+};
+use sp_wasm_interface::{Pointer, WordSize};
+use wasmtime::{Instance, Memory, Table};
+
 // TODO: Why do we need this?
 pub struct InstanceWrapper {
 	instance: Instance,

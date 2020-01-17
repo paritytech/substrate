@@ -16,7 +16,7 @@
 
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
 
-use crate::function_executor::{FunctionExecutor, FunctionExecutorState};
+use crate::function_executor::HostState;
 use crate::instance_wrapper::InstanceWrapper;
 use crate::imports::resolve_imports;
 use crate::state_holder::StateHolder;
@@ -134,9 +134,9 @@ fn perform_call(
 ) -> Result<Vec<u8>> {
 	let (data_ptr, data_len) = inject_input_data(&instance_wrapper, &mut allocator, data)?;
 
-	let mut executor_state = FunctionExecutorState::new(allocator, instance_wrapper);
+	let mut host_state = HostState::new(allocator, instance_wrapper);
 
-	let (output_ptr, output_len) = state_holder.init_state(&mut executor_state, || {
+	let (output_ptr, output_len) = state_holder.init_state(&mut host_state, || {
 		sp_externalities::set_and_run_with_externalities(ext, || {
 			match entrypoint.call(&[
 				wasmtime::Val::I32(u32::from(data_ptr) as i32),
@@ -156,7 +156,8 @@ fn perform_call(
 		})
 	})?;
 
-	let output = extract_output_data(&executor_state.into_instance(), output_ptr, output_len)?;
+	let instance = host_state.into_instance();
+	let output = extract_output_data(&instance, output_ptr, output_len)?;
 
 	Ok(output)
 }

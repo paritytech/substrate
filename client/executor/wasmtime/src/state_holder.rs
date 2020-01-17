@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::function_executor::{FunctionExecutor, FunctionExecutorState};
+use crate::function_executor::{HostState, HostContext};
 use std::cell::{self, RefCell};
 use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct StateHolder {
 	// This is `Some` only during a call.
-	state: Rc<RefCell<Option<FunctionExecutorState>>>,
+	state: Rc<RefCell<Option<HostState>>>,
 }
 
 impl StateHolder {
@@ -31,7 +31,7 @@ impl StateHolder {
 		}
 	}
 
-	pub fn init_state<R, F>(&self, state: &mut FunctionExecutorState, f: F) -> R
+	pub fn init_state<R, F>(&self, state: &mut HostState, f: F) -> R
 	where
 		F: FnOnce() -> R,
 	{
@@ -56,9 +56,9 @@ impl StateHolder {
 		ret.expect("cannot be None since was just in the closure above; qed")
 	}
 
-	pub fn with_executor<R, F>(&self, f: F) -> R
+	pub fn with_context<R, F>(&self, f: F) -> R
 	where
-		F: FnOnce(FunctionExecutor) -> R,
+		F: FnOnce(HostContext) -> R,
 	{
 		let state = self.state.borrow();
 		match *state {

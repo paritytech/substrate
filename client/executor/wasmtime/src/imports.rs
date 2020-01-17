@@ -110,13 +110,13 @@ impl HostFuncAdapterCallable {
 }
 
 impl Callable for HostFuncAdapterCallable {
-	fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), wasmtime::Trap> {
-		let unwind_result = self.state_holder.with_executor(|mut host_func_ctx| {
-			let mut substrate_params = params.iter().cloned().map(into_value);
+	fn call(&self, wasmtime_params: &[Val], wasmtime_results: &mut [Val]) -> Result<(), wasmtime::Trap> {
+		let unwind_result = self.state_holder.with_context(|mut host_ctx| {
+			let mut params = wasmtime_params.iter().cloned().map(into_value);
 
 			std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 				self.host_func
-					.execute(&mut host_func_ctx, &mut substrate_params)
+					.execute(&mut host_ctx, &mut params)
 			}))
 		});
 
@@ -128,7 +128,7 @@ impl Callable for HostFuncAdapterCallable {
 		match execution_result {
 			Ok(Some(ret_val)) => {
 				// TODO: Should we check the return type?
-				results[0] = into_wasmtime_val(ret_val);
+				wasmtime_results[0] = into_wasmtime_val(ret_val);
 				Ok(())
 			}
 			Ok(None) => {
