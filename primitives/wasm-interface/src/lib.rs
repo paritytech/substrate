@@ -43,11 +43,11 @@ pub enum Value {
 	I32(i32),
 	/// A 64-bit integer.
 	I64(i64),
-	/// A 32-bit float point number stored as raw bit pattern.
+	/// A 32-bit floating-point number stored as raw bit pattern.
 	///
 	/// You can materialize this value using `f32::from_bits`.
 	F32(u32),
-	/// A 64-bit float point number stored as raw bit pattern.
+	/// A 64-bit floating-point number stored as raw bit pattern.
 	///
 	/// You can materialize this value using `f64::from_bits`.
 	F64(u64),
