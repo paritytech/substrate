@@ -650,12 +650,13 @@ struct VoterWork<B, E, Block: BlockT, N: NetworkT<Block>, RA, SC, VR> {
 	voter: Box<dyn Future<Item = (), Error = CommandOrError<Block::Hash, NumberFor<Block>>> + Send>,
 	env: Arc<Environment<B, E, Block, N, RA, SC, VR>>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+	network: futures03::compat::Compat<NetworkBridge<Block, N>>,
 }
 
 impl<B, E, Block, N, RA, SC, VR> VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT,
- 	N: NetworkT<Block> + Sync,
+	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block> + Send + Sync + 'static,
@@ -681,7 +682,7 @@ where
 			voting_rule,
 			voters: Arc::new(voters),
 			config,
-			network,
+			network: network.clone(),
 			set_id: persistent_data.authority_set.set_id(),
 			authority_set: persistent_data.authority_set.clone(),
 			consensus_changes: persistent_data.consensus_changes.clone(),
@@ -694,6 +695,7 @@ where
 			voter: Box::new(futures::empty()) as Box<_>,
 			env,
 			voter_commands_rx,
+			network: futures03::future::TryFutureExt::compat(network),
 		};
 		work.rebuild_voter();
 		work
@@ -831,7 +833,7 @@ where
 impl<B, E, Block, N, RA, SC, VR> Future for VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT,
- 	N: NetworkT<Block> + Sync,
+	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block> + Send + Sync + 'static,
@@ -877,6 +879,15 @@ where
 				futures::task::current().notify();
 			}
 		}
+
+		match self.network.poll() {
+			Ok(Async::NotReady) => {},
+			Ok(Async::Ready(())) => {
+				// the network bridge future should never conclude.
+				return Ok(Async::Ready(()))
+			}
+			e @ Err(_) => return e,
+		};
 
 		Ok(Async::NotReady)
 	}
