@@ -540,7 +540,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 	fn child_storage(
 		&self,
 		storage_key: &[u8],
-		child_info: ChildInfo,
+		mut child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		let key = (storage_key.to_vec(), key.to_vec());
@@ -560,7 +560,21 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 				)
 			}
 		}
+		let root;
 		trace!("Cache miss: {:?}", key);
+		if child_info.root().is_none() {
+			if child_info.can_set_root() {
+				// TODO root from cache
+				if let Some(fetched_root) = self.storage(storage_key)? {
+					root = fetched_root;
+					child_info.set_root(root.as_slice());
+					// TODO should store an option root which means
+					// empty root for none
+				}
+				// TODO store updated child info
+			}
+		}
+
 		let value = self.state.child_storage(storage_key, child_info, &key.1[..])?;
 
 		// just pass it through the usage counter

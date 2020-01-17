@@ -179,6 +179,7 @@ impl<'a> ChildStorageKey<'a> {
 /// Information related to a child state.
 pub enum ChildInfo<'a> {
 	Default(ChildTrie<'a>),
+	DefaultWithRoot(ChildTrie<'a>, &'a [u8]),
 }
 
 /// Owned version of `ChildInfo`.
@@ -187,6 +188,7 @@ pub enum ChildInfo<'a> {
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub enum OwnedChildInfo {
 	Default(OwnedChildTrie),
+	DefaultWithRoot(OwnedChildTrie, Vec<u8>),
 }
 
 impl<'a> ChildInfo<'a> {
@@ -204,6 +206,10 @@ impl<'a> ChildInfo<'a> {
 				=> OwnedChildInfo::Default(OwnedChildTrie {
 					data: data.to_vec(),
 				}),
+			ChildInfo::DefaultWithRoot(ChildTrie { data }, root)
+							=> OwnedChildInfo::DefaultWithRoot(OwnedChildTrie {
+					data: data.to_vec(),
+				}, root.to_vec()),
 		}
 	}
 
@@ -219,7 +225,10 @@ impl<'a> ChildInfo<'a> {
 	/// This can be use as input for `resolve_child_info`.
 	pub fn info(&self) -> (&[u8], u32) {
 		match self {
-			ChildInfo::Default(ChildTrie {
+			ChildInfo::DefaultWithRoot(ChildTrie {
+				data,
+			}, ..)
+			| ChildInfo::Default(ChildTrie {
 				data,
 			}) => (data, ChildType::CryptoUniqueId as u32),
 		}
@@ -230,9 +239,41 @@ impl<'a> ChildInfo<'a> {
 	/// depends on the type of child info use. For `ChildInfo::Default` it is and need to be.
 	pub fn keyspace(&self) -> &[u8] {
 		match self {
-			ChildInfo::Default(ChildTrie {
+			ChildInfo::DefaultWithRoot(ChildTrie {
+				data,
+			}, ..)
+			| ChildInfo::Default(ChildTrie {
 				data,
 			}) => &data[..],
+		}
+	}
+
+	/// Return true if it is possible to add a root from cache
+	/// here.
+	pub fn can_set_root(&self) -> bool {
+		match self {
+			ChildInfo::Default(..) => true,
+			ChildInfo::DefaultWithRoot(..) => true,
+		}
+	}
+
+	/// Associate root to child info, to avoid querying twice.
+	pub fn set_root(&'a mut self, new_root: &'a [u8]) {
+		match self {
+			ChildInfo::Default(data) => {
+				*self = ChildInfo::DefaultWithRoot(*data, new_root);
+			},
+			ChildInfo::DefaultWithRoot(_child_trie, root) => {
+				*root = new_root;
+			},
+		}
+	}
+
+	/// Return stored root if there is one.
+	pub fn root(&self) -> Option<&[u8]> {
+		match self {
+			ChildInfo::Default( .. ) => None,
+			ChildInfo::DefaultWithRoot(_child_trie, root) => Some(root),
 		}
 	}
 }
@@ -258,6 +299,16 @@ impl OwnedChildInfo {
 	/// are not compatible.
 	pub fn try_update(&mut self, other: ChildInfo) -> bool {
 		match self {
+			OwnedChildInfo::DefaultWithRoot(owned_child_trie, _root) => {
+				if owned_child_trie.try_update(other) {
+					if let Some(root) = other.root() {
+						self.set_root(root);
+					}
+					true
+				} else {
+					false
+				}
+			}
 			OwnedChildInfo::Default(owned_child_trie) => owned_child_trie.try_update(other),
 		}
 	}
@@ -265,10 +316,29 @@ impl OwnedChildInfo {
 	/// Get `ChildInfo` reference to this owned child info.
 	pub fn as_ref(&self) -> ChildInfo {
 		match self {
+			OwnedChildInfo::DefaultWithRoot(OwnedChildTrie { data }, root)
+				=> ChildInfo::DefaultWithRoot(ChildTrie {
+					data: data.as_slice(),
+				}, root.as_slice()),
 			OwnedChildInfo::Default(OwnedChildTrie { data })
 				=> ChildInfo::Default(ChildTrie {
 					data: data.as_slice(),
 				}),
+		}
+	}
+
+	/// Associate root to child info, to avoid querying twice.
+	pub fn set_root(&mut self, new_root: &[u8]) {
+		match self {
+			OwnedChildInfo::Default(data) => {
+				let data = sp_std::mem::replace(data, Default::default());
+				*self = OwnedChildInfo::DefaultWithRoot(data, new_root.to_vec());
+			},
+			OwnedChildInfo::DefaultWithRoot(_child_trie, root) => {
+				if root.as_slice() != new_root {
+					*root = new_root.to_vec();
+				}
+			},
 		}
 	}
 }
@@ -287,7 +357,7 @@ pub struct ChildTrie<'a> {
 }
 
 /// Owned version of default child trie `ChildTrie`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub struct OwnedChildTrie {
 	/// See `ChildTrie` reference field documentation.
@@ -299,7 +369,8 @@ impl OwnedChildTrie {
 	/// are not compatible.
 	fn try_update(&mut self, other: ChildInfo) -> bool {
 		match other {
-			ChildInfo::Default(other) => self.data[..] == other.data[..],
+			ChildInfo::DefaultWithRoot(other, ..)
+			| ChildInfo::Default(other) => self.data[..] == other.data[..],
 		}
 	}
 }
