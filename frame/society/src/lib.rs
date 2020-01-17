@@ -426,7 +426,7 @@ decl_storage! {
 		}): Vec<T::AccountId>;
 
 		/// The set of suspended members.
-		pub SuspendedMembers get(fn suspended_member): map T::AccountId => Option<bool>;
+		pub SuspendedMembers get(fn suspended_member): map T::AccountId => bool;
 
 		/// The current bids, stored ordered by the value of the bid.
 		Bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>;

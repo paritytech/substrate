@@ -98,7 +98,7 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 		pallet_treasury: Some(Default::default()),
 		pallet_society: Some(SocietyConfig {
 			members: vec![alice(), bob()],
-			pot: 100000,
+			pot: 0,
 			max_members: 999,
 		}),
 	}

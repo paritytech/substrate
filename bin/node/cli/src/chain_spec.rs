@@ -297,7 +297,7 @@ pub fn testnet_genesis(
 		pallet_treasury: Some(Default::default()),
 		pallet_society: Some(SocietyConfig {
 			members: endowed_accounts[0..3].to_vec(),
-			pot: 100000,
+			pot: 0,
 			max_members: 999,
 		})
 	}
