@@ -1149,6 +1149,7 @@ impl<Block: BlockT> Backend<Block> {
 				changes_trie_config_update,
 				changes_trie_cache_ops,
 			)?);
+			self.state_usage.merge_sm(operation.old_state.usage_info());
 			let cache = operation.old_state.release(); // release state reference so that it can be finalized
 
 			if finalized {
@@ -1619,6 +1620,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn destroy_state(&self, state: Self::State) -> ClientResult<()> {
+		self.state_usage.merge_sm(state.usage_info());
 		if let Some(hash) = state.cache.parent_hash.clone() {
 			let is_best = self.blockchain.meta.read().best_hash == hash;
 			state.release().sync_cache(&[], &[], vec![], vec![], None, None, is_best);
