@@ -173,6 +173,8 @@ pub trait SessionManager<ValidatorId> {
 	/// economic conditions as opposed to the old.
 	/// The returned validator set, if any, will not be applied until `new_index`.
 	/// `new_index` is strictly greater than from previous call.
+	///
+	/// The first session start at index 0.
 	fn new_session(new_index: SessionIndex) -> Option<Vec<ValidatorId>>;
 	/// End the session.
 	///

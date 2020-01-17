@@ -1358,6 +1358,15 @@ impl<T: Trait> Module<T> {
 		Self::new_era(session_index)
 	}
 
+	/// Initialise the first session (and consequently the first era)
+	fn initial_session(session_index) -> Option<Vec<T::AccountId>> {
+		// note: `CurrentEraStart` is set in `on_finalize` of the first block because now is not
+		// available yet.
+		CurrentEraStartSessionIndex::put(session_index);
+		BondedEras::mutate(|bonded| bonded.push((current_era, 0)));
+		Self::select_validators().1
+	}
+
 	/// The era has changed - enact new staking set.
 	///
 	/// NOTE: This always happens immediately before a session change to ensure that new validators
@@ -1642,7 +1651,7 @@ impl<T: Trait> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		Self::ensure_storage_upgraded();
 		if new_index == 0 {
-			return <Module<T>>::select_validators().1
+			return Self::initial_session();
 		}
 		Self::new_session(new_index - 1)
 	}
