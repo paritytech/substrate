@@ -1049,7 +1049,7 @@ where
 	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
 	config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
 	config.prometheus_port = Some(
-		parse_address(&format!("{}:{}", prometheus_interface, 9955), cli.prometheus_port)?
+		parse_address(&format!("{}:{}", prometheus_interface, 9615), cli.prometheus_port)?
 	);
 
 	config.rpc_ws_max_connections = cli.ws_max_connections;

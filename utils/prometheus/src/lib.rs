@@ -43,19 +43,22 @@ pub enum Error {
 	/// Http request error.
 	Http(hyper::http::Error),
 	/// i/o error.
-	Io(std::io::Error)
+	Io(std::io::Error),
+	#[display(fmt = "Prometheus export port {} already in use.", _0)]
+	PortInUse(SocketAddr)
 }
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
 			Error::Hyper(error) => Some(error),
 			Error::Http(error) => Some(error),
-			Error::Io(error) => Some(error)
+			Error::Io(error) => Some(error),
+			Error::PortInUse(_) => None
 		}
 	}
 }
 
-async fn request_metrics(req: Request<Body>) -> Result<Response<Body>, Error> {
+async fn request_metrics(_req: Request<Body>) -> Result<Response<Body>, Error> {
 	let metric_families = prometheus::gather();
 	let mut buffer = vec![];
 	let encoder = TextEncoder::new();
@@ -84,40 +87,24 @@ impl<T> hyper::rt::Executor<T> for Executor
 /// Initializes the metrics context, and starts an HTTP server
 /// to serve metrics.
 #[cfg(not(target_os = "unknown"))]
-pub  async fn init_prometheus(mut prometheus_addr: SocketAddr) -> Result<(), Error>{
-	use async_std::{net, io};
+pub  async fn init_prometheus(prometheus_addr: SocketAddr) -> Result<(), Error>{
 	use networking::Incoming;
-	let listener = loop {
-		let listener = net::TcpListener::bind(&prometheus_addr).await;
-		match listener {
-			Ok(listener) => {
-				log::info!("Prometheus server started at {}", prometheus_addr);
-				break listener
-			},
-			Err(err) => match err.kind() {
-				io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied if prometheus_addr.port() != 0 => {
-					log::warn!(
-						"Prometheus server to already {} port.", prometheus_addr.port()
-					);
-					prometheus_addr.set_port(0);
-					continue;
-				},
-				_ => return Err(err.into())
-			}
-		}
-	};
+	let listener = async_std::net::TcpListener::bind(&prometheus_addr)
+		.await
+		.map_err(|_| Error::PortInUse(prometheus_addr))?;
+
 	let service = make_service_fn(|_| {
 		async {
 			Ok::<_, Error>(service_fn(request_metrics))
 		}
 	});
 
-	let _server = Server::builder(Incoming(listener.incoming()))
+	let server = Server::builder(Incoming(listener.incoming()))
 		.executor(Executor)
 		.serve(service)
 		.boxed();
 
-	let result = _server.await.map_err(Into::into);
+	let result = server.await.map_err(Into::into);
 
 	result
 }

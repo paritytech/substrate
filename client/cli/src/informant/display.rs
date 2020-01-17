@@ -27,8 +27,8 @@ use prometheus_endpoint::{create_gauge, Gauge, U64};
 
 prometheus_endpoint::lazy_static! {
 	pub static ref SYNC_TARGET: Gauge<U64> = create_gauge(
-		"sync_target_number",
-		"block sync target number"
+		"substrate_sync_target_number",
+		"Block sync target number"
 	);
 }
 

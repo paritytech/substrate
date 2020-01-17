@@ -290,6 +290,6 @@ fn send_telemetry(span_datum: SpanDatum) {
 	);
 }
 
-fn send_prometheus(span_datum: SpanDatum) {
+fn send_prometheus(_span_datum: SpanDatum) {
 	unimplemented!()
 }
