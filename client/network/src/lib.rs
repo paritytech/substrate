@@ -140,10 +140,6 @@
 //! - Light-client requests. When a light client requires information, a random node we have a
 //! substream open with is chosen, and the information is requested from it.
 //! - Gossiping. Used for example by grandpa.
-//! - Network specialization. The network protocol can be specialized through a template parameter
-//! of the network service. This specialization is free to send and receive messages with the
-//! remote. This is meant to be used by the chain that is being built on top of Substrate
-//! (eg. Polkadot).
 //!
 //! It is intended that in the future each of these components gets more isolated, so that they
 //! are free to open and close their own substreams, and so that syncing and light client requests
@@ -186,7 +182,7 @@ pub use service::{
 	NetworkService, NetworkWorker, TransactionPool, ExHashT, ReportHandle,
 	NetworkStateInfo,
 };
-pub use protocol::{PeerInfo, Context, ProtocolConfig, message, specialization};
+pub use protocol::{PeerInfo, ProtocolConfig, message};
 pub use protocol::event::{Event, DhtEvent};
 pub use protocol::sync::SyncState;
 pub use libp2p::{Multiaddr, PeerId};
