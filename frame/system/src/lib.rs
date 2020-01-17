@@ -110,7 +110,7 @@ use sp_runtime::{
 	},
 };
 
-use sp_core::storage::well_known_keys;
+use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
 	traits::{Contains, Get, ModuleToIndex, OnReapAccount},
@@ -120,9 +120,6 @@ use codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
 use sp_io::TestExternalities;
-
-#[cfg(any(feature = "std", test))]
-use sp_core::ChangesTrieConfiguration;
 
 pub mod offchain;
 
@@ -291,6 +288,24 @@ decl_module! {
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
+		}
+
+		/// Set the new changes trie configuration.
+		#[weight = SimpleDispatchInfo::FixedOperational(20_000)]
+		pub fn set_changes_trie_config(origin, changes_trie_config: Option<ChangesTrieConfiguration>) {
+			ensure_root(origin)?;
+			match changes_trie_config.clone() {
+				Some(changes_trie_config) => storage::unhashed::put_raw(
+					well_known_keys::CHANGES_TRIE_CONFIG,
+					&changes_trie_config.encode(),
+				),
+				None => storage::unhashed::kill(well_known_keys::CHANGES_TRIE_CONFIG),
+			}
+
+			let log = generic::DigestItem::ChangesTrieSignal(
+				generic::ChangesTrieSignal::NewConfiguration(changes_trie_config),
+			);
+			Self::deposit_log(log.into());
 		}
 
 		/// Set some items of storage.
