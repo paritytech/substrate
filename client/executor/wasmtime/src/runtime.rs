@@ -17,11 +17,13 @@
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
 
 use crate::function_executor::{FunctionExecutor, FunctionExecutorState};
-use crate::util::{read_memory_into, write_memory_from};
+use crate::imports::resolve_imports;
+use crate::state_holder::StateHolder;
 
 use sc_executor_common::{
 	error::{Error, Result, WasmError},
 	wasm_runtime::WasmRuntime,
+	allocator::FreeingBumpHeapAllocator,
 };
 use sp_core::traits::Externalities;
 use sp_runtime_interface::unpack_ptr_and_len;
@@ -30,11 +32,12 @@ use sp_wasm_interface::{Function, Pointer, Value, ValueType, WordSize};
 use std::cell::{self, RefCell};
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::ops::Range;
 use std::rc::Rc;
+use std::slice;
 
 use wasmtime::{
-	Callable, Config, Engine, Extern, ExternType, Func, Instance, Memory, Module, Store, Table,
-	Trap, Val,
+	Config, Engine, Extern, ExternType, Func, Instance, Memory, Module, Store, Table, Trap, Val,
 };
 
 /// A `WasmRuntime` implementation using wasmtime to compile the runtime module to machine code
@@ -72,8 +75,7 @@ pub fn create_instance(
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
 ) -> std::result::Result<WasmtimeRuntime, WasmError> {
-	// TODO: Tinker with the config.
-	// For now the default Store would suffice.
+	// Create the engine, store and finally the module from the given code.
 	let mut config = Config::new();
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
 
@@ -83,51 +85,10 @@ pub fn create_instance(
 		.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
 
 	let state_holder = StateHolder::empty();
-	let mut externs = vec![];
-	for import_ty in module.imports() {
-		if import_ty.module() != "env" {
-			return Err(WasmError::Other(format!(
-				"host doesn't provide any imports from non-env module: {}:{}",
-				import_ty.module(),
-				import_ty.name()
-			)));
-		}
 
-		let host_func = host_functions
-			.iter()
-			.find(|host_func| host_func.name() == import_ty.name())
-			.ok_or_else(|| {
-				WasmError::Other(format!(
-					"host doesn't provide such function: {}:{}",
-					import_ty.module(),
-					import_ty.name()
-				))
-			})?;
-
-		let func_ty = match import_ty.ty() {
-			ExternType::Func(func_ty) => func_ty,
-			_ => {
-				return Err(WasmError::Other(format!(
-					"host doesn't provide any non function imports: {}:{}",
-					import_ty.module(),
-					import_ty.name()
-				)));
-			}
-		};
-		if !signature_matches(&func_ty, &wasmtime_func_sig(*host_func)) {
-			return Err(WasmError::Other(format!(
-				"signature mismatch for: {}:{}",
-				import_ty.module(),
-				import_ty.name()
-			)));
-		}
-
-		externs.push(wrap_substrate_func(
-			&store,
-			state_holder.clone(),
-			*host_func,
-		));
-	}
+	// Scan all imports, find the matching host functions, and create stubs that adapt arguments
+	// and results.
+	let externs = resolve_imports(&state_holder, &module, &host_functions)?;
 
 	Ok(WasmtimeRuntime {
 		module,
@@ -136,156 +97,6 @@ pub fn create_instance(
 		heap_pages: heap_pages as u32,
 		host_functions,
 	})
-}
-
-fn signature_matches(lhs: &wasmtime::FuncType, rhs: &wasmtime::FuncType) -> bool {
-	lhs.params().iter().eq(rhs.params().iter()) && lhs.results().iter().eq(rhs.results().iter())
-}
-
-fn wrap_substrate_func(
-	store: &Store,
-	state_holder: StateHolder,
-	host_func: &'static dyn Function,
-) -> Extern {
-	let func_ty = wasmtime_func_sig(host_func);
-	let callable = HostFuncAdapterCallable::new(state_holder, host_func);
-	let func = Func::new(store, func_ty, Rc::new(callable));
-	Extern::Func(func)
-}
-
-#[derive(Clone)]
-struct StateHolder {
-	// This is `Some` only during a call.
-	state: Rc<RefCell<Option<FunctionExecutorState>>>,
-}
-
-impl StateHolder {
-	fn empty() -> StateHolder {
-		StateHolder {
-			state: Rc::new(RefCell::new(None)),
-		}
-	}
-
-	fn set(&self, state: FunctionExecutorState) {
-		*self.state.borrow_mut() = Some(state);
-	}
-
-	fn reset(&self) {
-		*self.state.borrow_mut() = None;
-	}
-
-	fn get(&self) -> Option<cell::Ref<FunctionExecutorState>> {
-		let state = self.state.borrow();
-		match *state {
-			Some(_) => Some(cell::Ref::map(state, |inner| {
-				inner
-					.as_ref()
-					.expect("cannot fail, checked in the arm; qed")
-			})),
-			None => None,
-		}
-	}
-}
-
-struct HostFuncAdapterCallable {
-	state_holder: StateHolder,
-	host_func: &'static dyn Function,
-}
-
-impl HostFuncAdapterCallable {
-	fn new(state_holder: StateHolder, host_func: &'static dyn Function) -> Self {
-		Self {
-			state_holder,
-			host_func,
-		}
-	}
-}
-
-impl Callable for HostFuncAdapterCallable {
-	fn call(&self, params: &[Val], results: &mut [Val]) -> std::result::Result<(), Trap> {
-		let mut substrate_params = params
-			.iter()
-			.cloned()
-			.map(convert_wasmtime_val_to_substrate_value);
-		let state = self.state_holder.state.borrow();
-		let mut host_func_ctx = state.as_ref().unwrap().materialize(); // TODO: Unwrap
-
-		let unwind_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-			self.host_func
-				.execute(&mut host_func_ctx, &mut substrate_params)
-		}));
-
-		let execution_result = match unwind_result {
-			Ok(execution_result) => execution_result,
-			Err(err) => {
-				let msg = match err.downcast::<&'static str>() {
-					Ok(msg) => msg.to_string(),
-					Err(err) => match err.downcast::<String>() {
-						Ok(msg) => *msg,
-						Err(_) => "Box<Any>".to_string(),
-					},
-				};
-				return Err(Trap::new(msg));
-			}
-		};
-
-		match execution_result {
-			Ok(Some(ret_val)) => {
-				// TODO: Should we check the return type?
-				results[0] = convert_substrate_value_to_wasmtime_val(ret_val);
-				Ok(())
-			}
-			Ok(None) => {
-				// TODO: Should we check the return type?
-				Ok(())
-			}
-			Err(msg) => Err(Trap::new(msg)),
-		}
-	}
-}
-
-fn wasmtime_func_sig(func: &dyn Function) -> wasmtime::FuncType {
-	let params = func
-		.signature()
-		.args
-		.iter()
-		.cloned()
-		.map(convert_substrate_value_type_to_val_type)
-		.collect::<Vec<_>>()
-		.into_boxed_slice();
-	let results = func
-		.signature()
-		.return_value
-		.iter()
-		.cloned()
-		.map(convert_substrate_value_type_to_val_type)
-		.collect::<Vec<_>>()
-		.into_boxed_slice();
-	wasmtime::FuncType::new(params, results)
-}
-
-fn convert_substrate_value_type_to_val_type(val_ty: ValueType) -> wasmtime::ValType {
-	match val_ty {
-		ValueType::I32 => wasmtime::ValType::I32,
-		ValueType::I64 => wasmtime::ValType::I64,
-		_ => todo!(), // TODO:
-	}
-}
-
-fn convert_wasmtime_val_to_substrate_value(val: Val) -> Value {
-	match val {
-		Val::I32(v) => Value::I32(v),
-		Val::I64(v) => Value::I64(v),
-		_ => todo!(), // TODO:
-	}
-}
-
-fn convert_substrate_value_to_wasmtime_val(value: Value) -> Val {
-	match value {
-		Value::I32(v) => Val::I32(v),
-		Value::I64(v) => Val::I64(v),
-		_ => todo!(), // TODO:
-	}
 }
 
 /// Call a function inside a precompiled Wasm module.
@@ -301,53 +112,139 @@ fn call_method(
 	let instance = Instance::new(module, externs)
 		.map_err(|e| WasmError::Other(format!("cannot instantiate: {}", e)))?;
 
-	increase_linear_memory(&instance, heap_pages)?;
-	let heap_base = extract_heap_base(&instance)?;
+	let instance_wrapper = unsafe { InstanceWrapper::new(instance)? };
+	instance_wrapper.increase_linear_memory(heap_pages)?;
 
-	let table = get_table(&instance);
-	let memory = get_linear_memory(&instance)?;
-	let executor_state = FunctionExecutorState::new(heap_base, memory, table);
+	let heap_base = instance_wrapper.extract_heap_base()?;
+	let allocator = FreeingBumpHeapAllocator::new(heap_base);
 
-	state_holder.set(executor_state);
-	let output = {
-		let (data_ptr, data_len) = inject_input_data(state_holder, data)?;
+	let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
 
-		// TODO: Perform the invocation
-		let export = instance
-			.find_export_by_name(method)
-			.ok_or_else(|| Error::from(format!("Exported method {} is not found", method)))?;
-		let method_callable = export
-			.func()
-			.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?;
+	perform_call(ext, data, state_holder, instance_wrapper, entrypoint, allocator)
+}
 
-		// TODO: Check the signature
+fn perform_call(
+	ext: &mut dyn Externalities,
+	data: &[u8],
+	state_holder: &StateHolder,
+	instance_wrapper: InstanceWrapper,
+	entrypoint: wasmtime::Func,
+	mut allocator: FreeingBumpHeapAllocator,
+) -> Result<Vec<u8>> {
+	let (data_ptr, data_len) = inject_input_data(&instance_wrapper, &mut allocator, data)?;
 
-		let (output_ptr, output_len) =
-			sp_externalities::set_and_run_with_externalities(ext, || {
-				match method_callable.call(&[
-					wasmtime::Val::I32(u32::from(data_ptr) as i32),
-					wasmtime::Val::I32(u32::from(data_len) as i32),
-				]) {
-					Ok(results) => {
-						let retval = results[0].unwrap_i64() as u64;
-						Ok(unpack_ptr_and_len(retval))
-					}
-					Err(trap) => {
-						return Err(Error::from(format!(
-							"Wasm execution trapped: {}",
-							trap.message()
-						)));
-					}
+	let mut executor_state = FunctionExecutorState::new(allocator, instance_wrapper);
+
+	let (output_ptr, output_len) = state_holder.init_state(&mut executor_state, || {
+		sp_externalities::set_and_run_with_externalities(ext, || {
+			match entrypoint.call(&[
+				wasmtime::Val::I32(u32::from(data_ptr) as i32),
+				wasmtime::Val::I32(u32::from(data_len) as i32),
+			]) {
+				Ok(results) => {
+					let retval = results[0].unwrap_i64() as u64;
+					Ok(unpack_ptr_and_len(retval))
 				}
-			})?;
+				Err(trap) => {
+					return Err(Error::from(format!(
+						"Wasm execution trapped: {}",
+						trap.message()
+					)));
+				}
+			}
+		})
+	})?;
 
-		let mut output = vec![0; output_len as usize];
-		extract_output_data(state_holder, Pointer::new(output_ptr), &mut output)?;
-		output
-	};
-	state_holder.reset();
+	let output = extract_output_data(&executor_state.into_instance(), output_ptr, output_len)?;
 
 	Ok(output)
+}
+
+fn inject_input_data(
+	instance: &InstanceWrapper,
+	allocator: &mut FreeingBumpHeapAllocator,
+	data: &[u8],
+) -> Result<(Pointer<u8>, WordSize)> {
+	let data_len = data.len() as WordSize;
+	let data_ptr = instance.allocate(allocator, data_len)?;
+	instance.write_memory_from(data_ptr, data)?;
+	Ok((data_ptr, data_len))
+}
+
+fn extract_output_data(
+	instance: &InstanceWrapper,
+	output_ptr: u32,
+	output_len: u32,
+) -> Result<Vec<u8>> {
+	let mut output = vec![0; output_len as usize];
+	instance.read_memory_into(Pointer::new(output_ptr), &mut output)?;
+	Ok(output)
+}
+
+// TODO: Why do we need this?
+pub struct InstanceWrapper {
+	instance: Instance,
+	memory: Memory,
+	table: Option<Table>,
+}
+
+impl InstanceWrapper {
+	pub unsafe fn new(instance: Instance) -> Result<Self> {
+		Ok(Self {
+			table: get_table(&instance),
+			memory: get_linear_memory(&instance)?,
+			instance,
+		})
+	}
+
+	pub fn increase_linear_memory(&self, pages: u32) -> Result<()> {
+		if self.memory.grow(pages) {
+			Ok(())
+		} else {
+			return Err("failed top increase the linear memory size".into());
+		}
+	}
+
+	pub fn resolve_entrypoint(&self, entrypoint_name: &str) -> Result<wasmtime::Func> {
+		// Resolve the requested method and verify that it has a proper signature.
+		let export = self
+			.instance
+			.find_export_by_name(entrypoint_name)
+			.ok_or_else(|| {
+				Error::from(format!("Exported method {} is not found", entrypoint_name))
+			})?;
+		let entrypoint_func = export
+			.func()
+			.ok_or_else(|| Error::from(format!("Export {} is not a function", entrypoint_name)))?;
+		// TODO: Check the signature
+		Ok(entrypoint_func.clone())
+	}
+
+	pub fn table(&self) -> Option<&Table> {
+		self.table.as_ref()
+	}
+
+	pub fn memory_size(&self) -> u32 {
+		self.memory.data_size() as u32
+	}
+
+	fn extract_heap_base(&self) -> Result<u32> {
+		let heap_base_export = self
+			.instance
+			.find_export_by_name("__heap_base")
+			.ok_or_else(|| Error::from("__heap_base is not found"))?;
+
+		let heap_base_global = heap_base_export
+			.global()
+			.ok_or_else(|| Error::from("__heap_base is not a global"))?;
+
+		let heap_base = heap_base_global
+			.get()
+			.i32()
+			.ok_or_else(|| Error::from("__heap_base is not a i32"))?;
+
+		Ok(heap_base as u32)
+	}
 }
 
 fn get_table(instance: &Instance) -> Option<Table> {
@@ -370,55 +267,103 @@ fn get_linear_memory(instance: &Instance) -> Result<Memory> {
 	Ok(memory)
 }
 
-fn increase_linear_memory(instance: &Instance, pages: u32) -> Result<()> {
-	let memory = get_linear_memory(instance)?;
-	if memory.grow(pages) {
-		Ok(())
+/// Functions realted to memory.
+impl InstanceWrapper {
+	/// Read data from a slice of memory into a destination buffer.
+	///
+	/// Returns an error if the read would go out of the memory bounds.
+	pub fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> Result<()> {
+		unsafe {
+			// TODO: Proof
+			let memory = self.memory_as_slice();
+			let range = checked_range(address.into(), dest.len(), memory.len())
+				.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
+			dest.copy_from_slice(&memory[range]);
+			Ok(())
+		}
+	}
+
+	/// Write data to a slice of memory.
+	///
+	/// Returns an error if the write would go out of the memory bounds.
+	pub fn write_memory_from(&self, address: Pointer<u8>, data: &[u8]) -> Result<()> {
+		unsafe {
+			// TODO: Proof
+			let memory = self.memory_as_slice_mut();
+			let range = checked_range(address.into(), data.len(), memory.len())
+				.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
+			&mut memory[range].copy_from_slice(data);
+			Ok(())
+		}
+	}
+
+	pub fn allocate(
+		&self,
+		allocator: &mut sc_executor_common::allocator::FreeingBumpHeapAllocator,
+		size: WordSize,
+	) -> Result<Pointer<u8>> {
+		unsafe {
+			// TODO: Proof
+			let mem_mut = self.memory_as_slice_mut();
+			allocator.allocate(mem_mut, size)
+		}
+	}
+
+	pub fn deallocate(
+		&self,
+		allocator: &mut sc_executor_common::allocator::FreeingBumpHeapAllocator,
+		ptr: Pointer<u8>,
+	) -> Result<()> {
+		unsafe {
+			// TODO: Proof
+			let mem_mut = self.memory_as_slice_mut();
+			allocator.deallocate(mem_mut, ptr)
+		}
+	}
+
+	/// Returns linear memory of the wasm instance as a slice.
+	///
+	/// # Safety
+	///
+	/// Wasmtime doesn't provide comprehensive documentation about the exact behavior of the data
+	/// pointer. If a dynamic style heap is used the base pointer of the heap can change. Since
+	/// growing, we cannot guarantee the lifetime of the returned slice reference.
+	unsafe fn memory_as_slice(&self) -> &[u8] {
+		let ptr = self.memory.data_ptr() as *const _;
+		let len = self.memory.data_size();
+
+		if len == 0 {
+			&[]
+		} else {
+			slice::from_raw_parts(ptr, len)
+		}
+	}
+
+	/// Returns linear memory of the wasm instance as a slice.
+	///
+	/// # Safety
+	///
+	/// See `[memory_as_slice]`. In addition to those requirements, since a mutable reference is
+	/// returned it must be ensured that only one mutable reference to memory exists.
+	unsafe fn memory_as_slice_mut(&self) -> &mut [u8] {
+		let ptr = self.memory.data_ptr();
+		let len = self.memory.data_size();
+
+		if len == 0 {
+			&mut []
+		} else {
+			slice::from_raw_parts_mut(ptr, len)
+		}
+	}
+}
+
+/// Construct a range from an offset to a data length after the offset.
+/// Returns None if the end of the range would exceed some maximum offset.
+fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usize>> {
+	let end = offset.checked_add(len)?;
+	if end <= max {
+		Some(offset..end)
 	} else {
-		return Err("failed top increase the linear memory size".into());
+		None
 	}
-}
-
-fn extract_heap_base(instance: &Instance) -> Result<u32> {
-	let heap_base_export = instance
-		.find_export_by_name("__heap_base")
-		.ok_or_else(|| Error::from("__heap_base is not found"))?;
-
-	let heap_base_global = heap_base_export
-		.global()
-		.ok_or_else(|| Error::from("__heap_base is not a global"))?;
-
-	let heap_base = heap_base_global
-		.get()
-		.i32()
-		.ok_or_else(|| Error::from("__heap_base is not a i32"))?;
-
-	Ok(heap_base as u32)
-}
-
-fn inject_input_data(state_holder: &StateHolder, data: &[u8]) -> Result<(Pointer<u8>, WordSize)> {
-	unsafe {
-		let state = state_holder.get().unwrap();
-
-		// TODO:
-		let data_len = data.len() as WordSize;
-		let data_ptr = state
-			.allocator
-			.borrow_mut()
-			.allocate(state.memory.data(), data_len)?;
-		write_memory_from(state.memory.data(), data_ptr, data)?;
-		Ok((data_ptr, data_len))
-	}
-}
-
-fn extract_output_data(
-	state_holder: &StateHolder,
-	ptr: Pointer<u8>,
-	output: &mut [u8],
-) -> Result<()> {
-	unsafe {
-		let state = state_holder.get().unwrap();
-		read_memory_into(state.memory.data(), ptr, output)?;
-	}
-	Ok(())
 }

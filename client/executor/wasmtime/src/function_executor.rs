@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::runtime::InstanceWrapper;
 use crate::util::{checked_range, read_memory_into, write_memory_from};
 use sc_executor_common::allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::error::{Error, Result};
@@ -41,24 +42,22 @@ pub struct SupervisorFuncRef(Func);
 /// many different host calls that must share state.
 pub struct FunctionExecutorState {
 	sandbox_store: RefCell<sandbox::Store<SupervisorFuncRef>>,
-	pub allocator: RefCell<FreeingBumpHeapAllocator>,
-	// The linear memory instance of the executed instance.
-	//
-	// Only allowed to be accessed thru `memory_as_slice` and `memory_as_slice_mut`.
-	// TODO: Consider a dedicated struct for that.
-	pub memory: Memory,
-	table: Option<Table>,
+	allocator: RefCell<FreeingBumpHeapAllocator>,
+	instance: InstanceWrapper,
 }
 
 impl FunctionExecutorState {
 	/// Constructs a new `FunctionExecutorState`.
-	pub fn new(heap_base: u32, memory: Memory, table: Option<Table>) -> Self {
+	pub fn new(allocator: FreeingBumpHeapAllocator, instance: InstanceWrapper) -> Self {
 		FunctionExecutorState {
 			sandbox_store: RefCell::new(sandbox::Store::new()),
-			allocator: RefCell::new(FreeingBumpHeapAllocator::new(heap_base)),
-			memory: memory,
-			table,
+			allocator: RefCell::new(allocator),
+			instance,
 		}
+	}
+
+	pub fn into_instance(self) -> InstanceWrapper {
+		self.instance
 	}
 
 	pub fn materialize(&self) -> FunctionExecutor {
@@ -73,75 +72,28 @@ pub struct FunctionExecutor<'a> {
 	state: &'a FunctionExecutorState,
 }
 
-impl<'a> FunctionExecutor<'a> {
-	/// Returns linear memory of the wasm instance as a slice.
-	///
-	/// # Safety
-	///
-	/// Wasmtime doesn't provide comprehensive documentation about the exact behavior of the data
-	/// pointer. If a dynamic style heap is used the base pointer of the heap can change. Since
-	/// growing, we cannot guarantee the lifetime of the returned slice reference.
-	unsafe fn memory_as_slice(&self) -> &[u8] {
-		let ptr = self.state.memory.data_ptr() as *const _;
-		let len = self.state.memory.data_size();
-
-		if len == 0 {
-			&[]
-		} else {
-			slice::from_raw_parts(ptr, len)
-		}
-	}
-
-	/// Returns linear memory of the wasm instance as a slice.
-	///
-	/// # Safety
-	///
-	/// See `[memory_as_slice]`. In addition to those requirements, since a mutable reference is
-	/// returned it must be ensured that only one mutable reference to memory exists.
-	unsafe fn memory_as_slice_mut(&self) -> &mut [u8] {
-		let ptr = self.state.memory.data_ptr();
-		let len = self.state.memory.data_size();
-
-		if len == 0 {
-			&mut []
-		} else {
-			slice::from_raw_parts_mut(ptr, len)
-		}
-	}
-}
-
 impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 	type SupervisorFuncRef = SupervisorFuncRef;
 
 	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>> {
-		unsafe {
-			let mem_mut = self.memory_as_slice_mut();
-			self.state.allocator.borrow_mut().allocate(mem_mut, len)
-		}
+		self.state
+			.instance
+			.allocate(&mut *self.state.allocator.borrow_mut(), len)
 	}
 
 	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<()> {
-		unsafe {
-			let mem_mut = self.memory_as_slice_mut();
-			self.state.allocator.borrow_mut().deallocate(mem_mut, ptr)
-		}
+		self.state
+			.instance
+			.deallocate(&mut *self.state.allocator.borrow_mut(), ptr)
 	}
 
 	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<()> {
-		unsafe {
-			// TODO: Proof
-			let mem_mut = self.memory_as_slice_mut();
-			write_memory_from(mem_mut, ptr, data)
-		}
+		self.state.instance.write_memory_from(ptr, data)
 	}
 
 	fn read_memory(&self, ptr: Pointer<u8>, len: WordSize) -> Result<Vec<u8>> {
 		let mut output = vec![0; len as usize];
-		unsafe {
-			// This is safe since there are no grow operations.
-			let mem = self.memory_as_slice();
-			read_memory_into(mem, ptr, output.as_mut())?;
-		}
+		self.state.instance.read_memory_into(ptr, output.as_mut())?;
 		Ok(output)
 	}
 
@@ -184,43 +136,31 @@ impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 
 impl<'a> FunctionContext for FunctionExecutor<'a> {
 	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> WResult<()> {
-		unsafe {
-			// TODO: Proof
-			let mem = self.memory_as_slice();
-			read_memory_into(mem, address, dest).map_err(|e| e.to_string())
-		}
+		self.state
+			.instance
+			.read_memory_into(address, dest)
+			.map_err(|e| e.to_string())
 	}
 
 	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> WResult<()> {
-		unsafe {
-			// TODO: Proof
-			let mem_mut = self.memory_as_slice_mut();
-			write_memory_from(mem_mut, address, data).map_err(|e| e.to_string())
-		}
+		self.state
+			.instance
+			.write_memory_from(address, data)
+			.map_err(|e| e.to_string())
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> WResult<Pointer<u8>> {
-		unsafe {
-			// TODO: Proof
-			let mem_mut = self.memory_as_slice_mut();
-			self.state
-				.allocator
-				.borrow_mut()
-				.allocate(mem_mut, size)
-				.map_err(|e| e.to_string())
-		}
+		self.state
+			.instance
+			.allocate(&mut *self.state.allocator.borrow_mut(), size)
+			.map_err(|e| e.to_string())
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> WResult<()> {
-		unsafe {
-			// TODO: Proof
-			let mem_mut = self.memory_as_slice_mut();
-			self.state
-				.allocator
-				.borrow_mut()
-				.deallocate(mem_mut, ptr)
-				.map_err(|e| e.to_string())
-		}
+		self.state
+			.instance
+			.deallocate(&mut *self.state.allocator.borrow_mut(), ptr)
+			.map_err(|e| e.to_string())
 	}
 
 	fn sandbox(&mut self) -> &mut dyn Sandbox {
@@ -248,16 +188,18 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			};
-			unsafe {
-				// TODO: Proof
-				let supervisor_mem_mut = self.memory_as_slice_mut();
-
-				let dst_range = match checked_range(buf_ptr.into(), len, supervisor_mem_mut.len()) {
-					Some(range) => range,
-					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-				};
-				&mut supervisor_mem_mut[dst_range].copy_from_slice(&sandboxed_memory[src_range]);
-			}
+			let supervisor_mem_size = self.state.instance.memory_size() as usize;
+			let dst_range = match checked_range(buf_ptr.into(), len, supervisor_mem_size) {
+				Some(range) => range,
+				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			};
+			self.state
+				.instance
+				.write_memory_from(
+					Pointer::new(dst_range.start as u32),
+					&sandboxed_memory[src_range],
+				)
+				.expect("ranges are checked above; write can't fail; qed");
 			Ok(sandbox_primitives::ERR_OK)
 		})
 	}
@@ -277,20 +219,22 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			.map_err(|e| e.to_string())?;
 		sandboxed_memory.with_direct_access_mut(|sandboxed_memory| {
 			let len = val_len as usize;
-			unsafe {
-				// TODO: Proof
-				let supervisor_mem = self.memory_as_slice();
-
-				let src_range = match checked_range(val_ptr.into(), len, supervisor_mem.len()) {
-					Some(range) => range,
-					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-				};
-				let dst_range = match checked_range(offset as usize, len, sandboxed_memory.len()) {
-					Some(range) => range,
-					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-				};
-				&mut sandboxed_memory[dst_range].copy_from_slice(&supervisor_mem[src_range]);
-			}
+			let supervisor_mem_size = self.state.instance.memory_size() as usize;
+			let src_range = match checked_range(val_ptr.into(), len, supervisor_mem_size) {
+				Some(range) => range,
+				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			};
+			let dst_range = match checked_range(offset as usize, len, sandboxed_memory.len()) {
+				Some(range) => range,
+				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			};
+			self.state
+				.instance
+				.read_memory_into(
+					Pointer::new(src_range.start as u32),
+					&mut sandboxed_memory[dst_range],
+				)
+				.expect("ranges are checked above; read can't fail; qed");
 			Ok(sandbox_primitives::ERR_OK)
 		})
 	}
@@ -370,12 +314,13 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 	) -> WResult<u32> {
 		// Extract a dispatch thunk from the instance's table by the specified index.
 		let dispatch_thunk = {
-			let table = self
+			let table_item = self
 				.state
-				.table
+				.instance
+				.table()
 				.as_ref()
-				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?;
-			let table_item = table.get(dispatch_thunk_id);
+				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?
+				.get(dispatch_thunk_id);
 
 			let func_ref = table_item
 				.funcref()
