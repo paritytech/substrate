@@ -28,18 +28,8 @@ use sc_executor_common::{
 };
 use sp_core::traits::Externalities;
 use sp_runtime_interface::unpack_ptr_and_len;
-use sp_wasm_interface::{Function, Pointer, Value, ValueType, WordSize};
-
-use std::cell::{self, RefCell};
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::ops::Range;
-use std::rc::Rc;
-use std::slice;
-
-use wasmtime::{
-	Config, Engine, Extern, ExternType, Func, Instance, Memory, Module, Store, Table, Trap, Val,
-};
+use sp_wasm_interface::{Function, Pointer, WordSize};
+use wasmtime::{Config, Engine, Extern, Instance, Module, Store};
 
 /// A `WasmRuntime` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.

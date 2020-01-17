@@ -18,7 +18,6 @@
 
 mod function_executor;
 mod runtime;
-mod util;
 mod state_holder;
 mod imports;
 mod instance_wrapper;

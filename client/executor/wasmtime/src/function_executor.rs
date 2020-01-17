@@ -15,20 +15,19 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::instance_wrapper::InstanceWrapper;
-use crate::util::checked_range;
 use sc_executor_common::allocator::FreeingBumpHeapAllocator;
-use sc_executor_common::error::{Error, Result};
+use sc_executor_common::error::{Result};
 use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
 
 use codec::{Decode, Encode};
 use log::trace;
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{
-	MemoryId, Pointer, Result as WResult, Sandbox, Signature, Value, ValueType,
+	MemoryId, Pointer, Result as WResult, Sandbox,
 	WordSize,
 };
-use std::{cell::RefCell, cmp, mem, ptr, slice};
-use wasmtime::{Func, Memory, Table, Val};
+use std::{cell::RefCell};
+use wasmtime::{Func, Val};
 
 /// Wrapper type for pointer to a Wasm table entry.
 ///
@@ -335,5 +334,14 @@ impl<'a> Sandbox for HostContext<'a> {
 			};
 
 		Ok(instance_idx_or_err_code as u32)
+	}
+}
+
+fn checked_range(offset: usize, len: usize, max: usize) -> Option<std::ops::Range<usize>> {
+	let end = offset.checked_add(len)?;
+	if end <= max {
+		Some(offset..end)
+	} else {
+		None
 	}
 }

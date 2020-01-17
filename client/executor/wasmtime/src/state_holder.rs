@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::function_executor::{HostState, HostContext};
-use std::cell::{self, RefCell};
+use std::cell::{RefCell};
 use std::rc::Rc;
 
 #[derive(Clone)]
