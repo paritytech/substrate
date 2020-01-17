@@ -142,7 +142,7 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 
 	/// Sender side of the neighbor packet channel.
 	///
-	/// Packets send into this channel are processed by the `NeighborPacketWorker` and passed on to
+	/// Packets sent into this channel are processed by the `NeighborPacketWorker` and passed on to
 	/// the underlying `GossipEngine`.
 	neighbor_sender: periodic::NeighborPacketSender<B>,
 
