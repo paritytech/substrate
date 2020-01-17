@@ -777,7 +777,7 @@ pub trait TestNetFactory: Sized {
 }
 
 pub struct TestNet {
-	peers: Vec<Peer<(), DummySpecialization>>,
+	peers: Vec<Peer<()>>,
 }
 
 impl TestNetFactory for TestNet {

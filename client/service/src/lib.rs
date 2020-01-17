@@ -45,8 +45,7 @@ use futures::{
 	task::{Spawn, SpawnExt, FutureObj, SpawnError},
 };
 use sc_network::{
-	NetworkService, NetworkState, specialization::NetworkSpecialization,
-	PeerId, ReportHandle,
+	NetworkService, NetworkState, PeerId, ReportHandle,
 };
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
@@ -152,8 +151,6 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	/// Transaction pool.
 	type TransactionPool: TransactionPool<Block = Self::Block>
 		+ TransactionPoolMaintainer<Block = Self::Block>;
-	/// Network specialization.
-	type NetworkSpecialization: NetworkSpecialization<Self::Block>;
 
 	/// Get event stream for telemetry connection established events.
 	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()>;
@@ -194,7 +191,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 
 	/// Get shared network instance.
 	fn network(&self)
-		-> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, <Self::Block as BlockT>::Hash>>;
+		-> Arc<NetworkService<Self::Block, <Self::Block as BlockT>::Hash>>;
 
 	/// Returns a receiver that periodically receives a status of the network.
 	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
@@ -218,7 +215,6 @@ where
 	TExPool: 'static + TransactionPool<Block = TBl>
 		+ TransactionPoolMaintainer<Block = TBl>,
 	TOc: 'static + Send + Sync,
-	TNetSpec: NetworkSpecialization<TBl>,
 {
 	type Block = TBl;
 	type Backend = TBackend;
@@ -226,7 +222,6 @@ where
 	type RuntimeApi = TRtApi;
 	type SelectChain = TSc;
 	type TransactionPool = TExPool;
-	type NetworkSpecialization = TNetSpec;
 
 	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()> {
 		let (sink, stream) = mpsc::unbounded();
@@ -284,7 +279,7 @@ where
 	}
 
 	fn network(&self)
-		-> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, <Self::Block as BlockT>::Hash>>
+		-> Arc<NetworkService<Self::Block, <Self::Block as BlockT>::Hash>>
 	{
 		self.network.clone()
 	}
@@ -363,11 +358,10 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Spawn for
 fn build_network_future<
 	B: BlockT,
 	C: sc_client::BlockchainEvents<B>,
-	S: sc_network::specialization::NetworkSpecialization<B>,
 	H: sc_network::ExHashT
 > (
 	roles: Roles,
-	mut network: sc_network::NetworkWorker<B, S, H>,
+	mut network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
 	mut rpc_rx: mpsc::UnboundedReceiver<sc_rpc::system::Request<B>>,

@@ -200,7 +200,7 @@ impl<B: BlockImport<TestBlock>> BlockImport<TestBlock> for PanickingBlockImport<
 }
 
 pub struct BabeTestNet {
-	peers: Vec<Peer<Option<PeerData>, DummySpecialization>>,
+	peers: Vec<Peer<Option<PeerData>>>,
 }
 
 type TestHeader = <TestBlock as BlockT>::Header;
@@ -243,7 +243,6 @@ pub struct PeerData {
 }
 
 impl TestNetFactory for BabeTestNet {
-	type Specialization = DummySpecialization;
 	type Verifier = TestVerifier;
 	type PeerData = Option<PeerData>;
 
@@ -316,17 +315,17 @@ impl TestNetFactory for BabeTestNet {
 		}
 	}
 
-	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, DummySpecialization> {
+	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData> {
 		trace!(target: "babe", "Retreiving a peer");
 		&mut self.peers[i]
 	}
 
-	fn peers(&self) -> &Vec<Peer<Self::PeerData, DummySpecialization>> {
+	fn peers(&self) -> &Vec<Peer<Self::PeerData>> {
 		trace!(target: "babe", "Retreiving peers");
 		&self.peers
 	}
 
-	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, DummySpecialization>>)>(
+	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData>>)>(
 		&mut self,
 		closure: F,
 	) {

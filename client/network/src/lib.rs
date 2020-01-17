@@ -193,10 +193,6 @@ pub use message::{generic as generic_message, RequestId, Status as StatusMessage
 pub use on_demand_layer::{OnDemand, RemoteResponse};
 pub use sc_peerset::ReputationChange;
 
-// Used by the `construct_simple_protocol!` macro.
-#[doc(hidden)]
-pub use sp_runtime::traits::Block as BlockT;
-
 use libp2p::core::ConnectedPoint;
 use serde::{Deserialize, Serialize};
 use slog_derive::SerdeValue;
