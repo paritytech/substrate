@@ -72,6 +72,7 @@ pallet-transaction-payment = { version = "2.0.0", path = "../../../frame/transac
 frame-support = { version = "2.0.0", default-features = false, path = "../../../frame/support" }
 pallet-im-online = { version = "2.0.0", default-features = false, path = "../../../frame/im-online" }
 pallet-authority-discovery = { version = "2.0.0",  path = "../../../frame/authority-discovery" }
+pallet-society = { version = "2.0.0",  path = "../../../frame/society" }
 
 # node-specific dependencies
 node-runtime = { version = "2.0.0", path = "../runtime" }
