@@ -378,7 +378,7 @@ impl<B: ChainApi> Pool<B> {
 		let block_number = self.resolve_block_number(at)?;
 		let mut result = HashMap::new();
 
-		for xt in xts.into_iter() {
+		for xt in xts {
 			let (hash, validated_tx) = self.verify_one(at, block_number, xt, force).await;
 			result.insert(hash, validated_tx);
 		}
@@ -393,8 +393,7 @@ impl<B: ChainApi> Pool<B> {
 		block_number: NumberFor<B>,
 		xt: ExtrinsicFor<B>,
 		force: bool,
-	) -> (ExHash<B>, ValidatedTransactionFor<B>)
-	{
+	) -> (ExHash<B>, ValidatedTransactionFor<B>) {
 		let (hash, bytes) = self.validated_pool.api().hash_and_length(&xt);
 		if !force && self.validated_pool.is_banned(&hash) {
 			return (
