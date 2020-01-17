@@ -426,7 +426,7 @@ decl_storage! {
 		}): Vec<T::AccountId>;
 
 		/// The set of suspended members.
-		pub SuspendedMembers get(fn suspended_member): map T::AccountId => Option<()>;
+		pub SuspendedMembers get(fn suspended_member): map T::AccountId => bool;
 
 		/// The current bids, stored ordered by the value of the bid.
 		Bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
@@ -804,6 +804,7 @@ decl_module! {
 		///
 		/// Parameters:
 		/// - `founder` - The first member and head of the newly founded society.
+		/// - `max_members` - The initial max number of members for the society.
 		///
 		/// # <weight>
 		/// - Two storage mutates to set `Head` and `Founder`. O(1)
@@ -813,10 +814,12 @@ decl_module! {
 		/// Total Complexity: O(1)
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn found(origin, founder: T::AccountId) {
+		fn found(origin, founder: T::AccountId, max_members: u32) {
 			T::FounderSetOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
+			ensure!(max_members > 1, Error::<T, I>::MaxMembers);
 			// This should never fail in the context of this function...
+			<MaxMembers<I>>::put(max_members);
 			Self::add_member(&founder)?;
 			<Head<T, I>>::put(&founder);
 			<Founder<T, I>>::put(&founder);
@@ -1423,7 +1426,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Suspend a user, removing them from the member list.
 	fn suspend_member(who: &T::AccountId) {
 		if Self::remove_member(&who).is_ok() {
-			<SuspendedMembers<T, I>>::insert(who, ());
+			<SuspendedMembers<T, I>>::insert(who, true);
 			<Strikes<T, I>>::remove(who);
 			Self::deposit_event(RawEvent::MemberSuspended(who.clone()));
 		}
