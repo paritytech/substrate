@@ -835,13 +835,12 @@ decl_module! {
 
 		/// Anull the founding of the society.
 		///
-		/// This may be done when there is only one member.
-		///
-		/// The dispatch origin for this call must be Signed, and the signing account must be the
-		/// `Founder`.
+		/// The dispatch origin for this call must be Signed, and the signing account must be both
+		/// the `Founder` and the `Head`. This implies that it may only be done when there is one
+		/// member.
 		///
 		/// # <weight>
-		/// - One storage read, O(M).
+		/// - Two storage reads O(1).
 		/// - Four storage removals O(1).
 		/// - One event.
 		///
@@ -850,8 +849,8 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
 		fn unfound(origin) {
 			let founder = ensure_signed(origin)?;
-			let members = <Members<T, I>>::get();
-			ensure!(members.len() == 1 && &members[0] == &founder, Error::<T, I>::NotFounder);
+			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
+			ensure!(Head::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotHead);
 
 			Members::<T, I>::kill();
 			Head::<T, I>::kill();
@@ -1082,8 +1081,10 @@ decl_error! {
 		NotCandidate,
 		/// Too many members in the society.
 		MaxMembers,
-		/// The society is not a single member who is the caller.
+		/// The caller is not the founder.
 		NotFounder,
+		/// The caller is not the head.
+		NotHead,
 	}
 }
 

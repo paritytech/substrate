@@ -75,7 +75,7 @@ fn unfounding_works() {
 		run_to_block(8);
 
 		// Unfounding won't work now, even though it's from 20.
-		assert_noop!(Society::unfound(Origin::signed(20)), Error::<Test, _>::NotFounder);
+		assert_noop!(Society::unfound(Origin::signed(20)), Error::<Test, _>::NotHead);
 	});
 }
 
