@@ -36,11 +36,10 @@
 
 mod storage_proof;
 
-use crate::storage_proof::StorageProofChecker;
+use crate::storage_proof::{StorageProof, StorageProofChecker};
 use codec::{Encode, Decode};
 use fg_primitives::{AuthorityId, AuthorityWeight};
 use sp_runtime::traits::Header;
-use sp_state_machine::StorageProof;
 use frame_support::{
 	dispatch::{DispatchResult, DispatchError},
 	decl_error, decl_module, decl_storage,
@@ -293,7 +292,10 @@ mod tests {
 		let root = backend.storage_root(std::iter::empty()).0;
 
 		// Generates a storage read proof
-		let proof = prove_read(backend, &[&b":grandpa_authorities"[..]]).unwrap();
+		let proof: StorageProof = prove_read(backend, &[&b":grandpa_authorities"[..]])
+			.unwrap()
+			.iter_nodes()
+			.collect();
 
 		(root, proof)
 	}
