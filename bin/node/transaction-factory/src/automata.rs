@@ -22,10 +22,19 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Edge {
+	/// Target state.
 	target: u32,
+	/// Module of the transaction to execute.
+	tx_module: String,
+	/// Name of the transaction to executed.
 	tx_name: String,
+	/// Name of transaction parameters that will be used.
+	tx_params: Vec<String>,
+	/// Priority of this edge.
 	priority: u32,
+	/// Maximum number of times we can move through it.
 	repeat: u32,
+	/// Number of times we passed through it.
 	used: u32, 
 }
 
@@ -57,13 +66,17 @@ impl Automaton {
 			let line: Vec<&str> = line.split_whitespace().collect();
 			let source = line[0].parse().expect("source value can't be parsed");
 			let target = line[1].parse().expect("target value can't be parsed");
-			let tx_name = line[2].to_string();
-			let repeat = line[3].parse().expect("repeat value can't be parsed");
-			let priority = line[4].parse().expect("priority value can't be parsed");
-
+			let tx_module = line[2].to_string();
+			let tx_name = line[3].to_string();
+			let tx_params = vec![];
+			let repeat = line[4].parse().expect("repeat value can't be parsed");
+			let priority = line[5].parse().expect("priority value can't be parsed");
+			
 			let edge = Edge {
 				target,
+				tx_module,
 				tx_name,
+				tx_params,
 				priority,
 				repeat,
 				used: 0,
@@ -80,7 +93,7 @@ impl Automaton {
 		automaton
 	}
 
-	pub fn next_state(&mut self) -> Option<String> {
+	pub fn next_state(&mut self) -> Option<(String, String, Vec<String>)> {
 		if let Some(node) = self.nodes.get_mut(&self.current_node) {
 			let mut max_out: Option<&mut Edge> = None;
 
@@ -99,7 +112,7 @@ impl Automaton {
 			if let Some(edge) = max_out {
 				edge.used += 1;
 				self.current_node = edge.target;
-				Some(edge.tx_name.clone())
+				Some((edge.tx_module.clone(), edge.tx_name.clone(), edge.tx_params.clone()))
 			} else {
 				None
 			}

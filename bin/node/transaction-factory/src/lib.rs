@@ -76,7 +76,7 @@ pub trait RuntimeAdapter {
 		version: u32,
 		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
-	) -> <Self::Block as BlockT>::Extrinsic;
+	) -> Option<<Self::Block as BlockT>::Extrinsic>;
 
 	fn inherent_extrinsics(&self) -> InherentData;
 
@@ -117,20 +117,30 @@ where
 	let genesis_hash = client.block_hash(Zero::zero())?
 		.expect("Genesis block always exists; qed").into();
 
-	while let Some(block) = simple_modes::next::<RA, _, _, _, _>(
+	loop {
+		if factory_state.block_no() >= factory_state.num() {
+			break
+		}
+		if let Some(block) = create_block::<RA, _, _, _, _>(
 			&mut factory_state,
 			&client,
 			version,
 			genesis_hash,
-			best_hash.into(),
+			best_hash,
 			best_block_id,
-		)
-	{
-		best_hash = block.header().hash();
-		best_block_id = BlockId::<Block>::hash(best_hash);
-		import_block(client.clone(), block);
+		) {
+			factory_state.set_block_no(factory_state.block_no() + RA::Number::one());
 
-		info!("Imported block at {}\n\n", factory_state.block_no());
+			info!("Created block {} with hash {}.", factory_state.block_no(), best_hash);
+
+			best_hash = block.header().hash();
+			best_block_id = BlockId::<Block>::hash(best_hash);
+			import_block(client.clone(), block);
+
+			info!("Imported block at {}\n\n", factory_state.block_no());
+		} else {
+			break
+		}
 	}
 
 	Ok(())
@@ -144,7 +154,7 @@ pub fn create_block<RA, Backend, Exec, Block, RtApi>(
 	genesis_hash: <RA::Block as BlockT>::Hash,
 	prior_block_hash: <RA::Block as BlockT>::Hash,
 	prior_block_id: BlockId<Block>,
-) -> Block
+) -> Option<Block>
 where
 	Block: BlockT,
 	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
@@ -169,7 +179,7 @@ where
 
 	for _ in 0..7 { // TODO: Make this configurable.
 		let to = RA::gen_random_account_id(&seed);
-		let transfer = factory_state.create_extrinsic(
+		if let Some(extrinsic) = factory_state.create_extrinsic(
 			&from.0,
 			&from.1,
 			&to,
@@ -177,21 +187,23 @@ where
 			version,
 			&genesis_hash,
 			&prior_block_hash,
-		);
+		) {
+			block.push(
+				Decode::decode(&mut &extrinsic.encode()[..])
+					.expect("Failed to decode extrinsic")
+			).expect("Failed to push extrinsic into block");
 
-		block.push(
-			Decode::decode(&mut &transfer.encode()[..])
-				.expect("Failed to decode transfer extrinsic")
-		).expect("Failed to push transfer extrinsic into block");
-
-		factory_state.increase_index();
+			factory_state.increase_index();
+		} else {
+			return None
+		}
 	}
 
 	for inherent in inherents {
 		block.push(inherent).expect("Failed ...");
 	}
 
-	block.build().expect("Failed to bake block").block
+	Some(block.build().expect("Failed to bake block").block)
 }
 
 fn import_block<Backend, Exec, Block, RtApi>(

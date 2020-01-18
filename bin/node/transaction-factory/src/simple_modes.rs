@@ -67,22 +67,22 @@ where
 		return None;
 	}
 
-	let block = create_block::<RA, _, _, _, _>(
+	create_block::<RA, _, _, _, _>(
 		factory_state,
 		&client,
 		version,
 		genesis_hash,
 		prior_block_hash,
 		prior_block_id,
-	);
+	).map(|block| {
+		factory_state.set_block_no(factory_state.block_no() + RA::Number::one());
 
-	factory_state.set_block_no(factory_state.block_no() + RA::Number::one());
+		info!(
+			"Created block {} with hash {}.",
+			factory_state.block_no(),
+			prior_block_hash,
+		);
 
-	info!(
-		"Created block {} with hash {}.",
-		factory_state.block_no(),
-		prior_block_hash,
-	);
-
-	Some(block)
+		block
+	})
 }

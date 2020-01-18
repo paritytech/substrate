@@ -152,82 +152,24 @@ impl RuntimeAdapter for FactoryState<Number> {
 		version: u32,
 		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
-	) -> <Self::Block as BlockT>::Extrinsic {
-		println!("Creating a {} extrinsic...", self.tx_name);
-
-		let phase = self.extract_phase(*prior_block_hash);
-
-		let function = match self.automaton.next_state().expect("TODO").as_str() {
-			"balances_transfer" => Call::Balances(BalancesCall::transfer(
-				pallet_indices::address::Address::Id(destination.clone().into()),
-				(*amount).into()
-			)),
-			"authorship_set_uncles" => {
-				let mut uncles = vec![];
-				let num_headers = 10; // TODO: make it configurable.
-				for _ in 0..num_headers {
-					let header = Header::new(
-						std::cmp::max(1, self.block_no()),
-						H256::random(),
-						H256::random(),
-						genesis_hash.clone(),
-						Default::default(),
-					);
-					uncles.push(header.clone());
-				}
-				Call::Authorship(AuthorshipCall::set_uncles(uncles))
-			},
-			"staking_bond" => {
-				// let call = StakingCall::bond(
-				// 	pallet_indices::address::Address::Id(destination.clone().into()),
-				// 	(*amount).into(),
-				// 	RewardDestination::Controller,
-				// );
-				// println!("{:?}", Call::get_module("Staking", "bond"));
-				Call::get_module("Staking", "bond")
-				// Call::Staking(call)
-			},
-			"staking_validate" => {
-				Call::Staking(StakingCall::validate(
-					ValidatorPrefs { commission: Perbill::from_rational_approximation(1u32, 10u32) }
-				))
-			},
-			"staking_nominate" => {
-				let mut targets = vec![];
-				for _ in 0..16 {
-					targets.push(pallet_indices::address::Address::Id(destination.clone().into()));
-				}
-				Call::Staking(StakingCall::nominate(targets))
-			},
-			"staking_bond_extra" => {
-				Call::Staking(StakingCall::bond_extra(
-					Self::minimum_balance() * 2,
-				))
-			},
-			"staking_unbond" => { // TODO: Need to execute many of these guys to bump rebond.
-				Call::Staking(StakingCall::unbond(
-					Self::minimum_balance() * 2,
-				))
-			},
-			"staking_rebond" => {
-				Call::Staking(StakingCall::rebond(
-					Self::minimum_balance(),
-				))
-			},
-			"staking_withdraw_unbonded" => {
-				Call::Staking(StakingCall::withdraw_unbonded())
-			},
-			other => panic!("Extrinsic {} is not supported yet!", other),
-		};
-
-		sign::<Self>(
-			CheckedExtrinsic {
+	) -> Option<<Self::Block as BlockT>::Extrinsic> {
+		self.automaton.next_state().map(|(module, function, _args)| {
+			println!("Creating a {}::{} extrinsic...", module, function);
+			let phase = self.extract_phase(*prior_block_hash);
+			let function = Call::get_module(&module, &function);
+			println!("{:?}", function);
+			let extrinsic = CheckedExtrinsic {
 				signed: Some((sender.clone(), Self::build_extra(self.index, phase))),
 				function,
-			},
-			key,
-			(version, genesis_hash.clone(), prior_block_hash.clone(), (), (), (), ()),
-		)
+			};
+			let additional_signed = (
+				version,
+				genesis_hash.clone(),
+				prior_block_hash.clone(),
+				(), (), (), (),
+			);
+			sign::<Self>(extrinsic, key, additional_signed)
+		})	
 	}
 
 	fn inherent_extrinsics(&self) -> InherentData {
