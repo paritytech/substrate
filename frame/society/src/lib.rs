@@ -841,6 +841,7 @@ decl_module! {
 		/// `Founder`.
 		///
 		/// # <weight>
+		/// - One storage read, O(M).
 		/// - Four storage removals O(1).
 		/// - One event.
 		///
