@@ -432,7 +432,7 @@ decl_storage! {
 		}): Vec<T::AccountId>;
 
 		/// The set of suspended members.
-		pub SuspendedMembers get(fn suspended_member): map T::AccountId => Option<()>;
+		pub SuspendedMembers get(fn suspended_member): map T::AccountId => bool;
 
 		/// The current bids, stored ordered by the value of the bid.
 		Bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
@@ -810,6 +810,7 @@ decl_module! {
 		///
 		/// Parameters:
 		/// - `founder` - The first member and head of the newly founded society.
+		/// - `max_members` - The initial max number of members for the society.
 		///
 		/// # <weight>
 		/// - Two storage mutates to set `Head` and `Founder`. O(1)
@@ -819,10 +820,12 @@ decl_module! {
 		/// Total Complexity: O(1)
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn found(origin, founder: T::AccountId) {
+		fn found(origin, founder: T::AccountId, max_members: u32) {
 			T::FounderSetOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
+			ensure!(max_members > 1, Error::<T, I>::MaxMembers);
 			// This should never fail in the context of this function...
+			<MaxMembers<I>>::put(max_members);
 			Self::add_member(&founder)?;
 			<Head<T, I>>::put(&founder);
 			<Founder<T, I>>::put(&founder);
@@ -1327,6 +1330,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				}
 			}).collect::<Vec<_>>();
 
+			// Clean up all votes.
+			<Votes<T, I>>::remove_all();
+
 			// Reward one of the voters who voted the right way.
 			if !total_slash.is_zero() {
 				if let Some(winner) = pick_item(&mut rng, &rewardees) {
@@ -1429,7 +1435,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Suspend a user, removing them from the member list.
 	fn suspend_member(who: &T::AccountId) {
 		if Self::remove_member(&who).is_ok() {
-			<SuspendedMembers<T, I>>::insert(who, ());
+			<SuspendedMembers<T, I>>::insert(who, true);
 			<Strikes<T, I>>::remove(who);
 			Self::deposit_event(RawEvent::MemberSuspended(who.clone()));
 		}
@@ -1475,7 +1481,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				let mut rejection_count = 0;
 				// Tallies total number of approve and reject votes for the defender.
 				members.iter()
-					.filter_map(|m| <DefenderVotes<T, I>>::get(m))
+					.filter_map(|m| <DefenderVotes<T, I>>::take(m))
 					.for_each(|v| {
 						match v {
 							Vote::Approve => approval_count += 1,
@@ -1488,6 +1494,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 					Self::suspend_member(&defender);
 					*members = Self::members();
 				}
+
+				// Clean up all votes.
+				<DefenderVotes<T, I>>::remove_all();
 			}
 
 			// Start a new defender rotation

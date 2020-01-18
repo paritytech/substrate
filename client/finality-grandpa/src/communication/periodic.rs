@@ -16,21 +16,16 @@
 
 //! Periodic rebroadcast of neighbor packets.
 
-use std::time::{Instant, Duration};
-
-use parity_scale_codec::Encode;
-use futures::prelude::*;
-use futures::sync::mpsc;
 use futures_timer::Delay;
-use futures03::future::{FutureExt as _, TryFutureExt as _};
-use log::{debug, warn};
+use futures03::{channel::mpsc, future::{FutureExt as _}, prelude::*, ready, stream::Stream};
+use log::debug;
+use std::{pin::Pin, task::{Context, Poll}, time::{Instant, Duration}};
 
 use sc_network::PeerId;
-use sc_network_gossip::GossipEngine;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
 use super::gossip::{NeighborPacket, GossipMessage};
 
-// how often to rebroadcast, if no other
+// How often to rebroadcast, in cases where no new packets are created.
 const REBROADCAST_AFTER: Duration = Duration::from_secs(2 * 60);
 
 fn rebroadcast_instant() -> Instant {
@@ -56,56 +51,65 @@ impl<B: BlockT> NeighborPacketSender<B> {
 	}
 }
 
-/// Does the work of sending neighbor packets, asynchronously.
-///
-/// It may rebroadcast the last neighbor packet periodically when no
-/// progress is made.
-pub(super) fn neighbor_packet_worker<B>(net: GossipEngine<B>) -> (
-	impl Future<Item = (), Error = ()> + Send + 'static,
-	NeighborPacketSender<B>,
-) where
-	B: BlockT,
-{
-	let mut last = None;
-	let (tx, mut rx) = mpsc::unbounded::<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>();
-	let mut delay = Delay::new(REBROADCAST_AFTER);
+/// NeighborPacketWorker is listening on a channel for new neighbor packets being produced by
+/// components within `finality-grandpa` and forwards those packets to the underlying
+/// `NetworkEngine` through the `NetworkBridge` that it is being polled by (see `Stream`
+/// implementation). Periodically it sends out the last packet in cases where no new ones arrive.
+pub(super) struct NeighborPacketWorker<B: BlockT> {
+	last: Option<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>,
+	delay: Delay,
+	rx: mpsc::UnboundedReceiver<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>,
+}
 
-	let work = futures::future::poll_fn(move || {
-		loop {
-			match rx.poll().expect("unbounded receivers do not error; qed") {
-				Async::Ready(None) => return Ok(Async::Ready(())),
-				Async::Ready(Some((to, packet))) => {
-					// send to peers.
-					net.send_message(to.clone(), GossipMessage::<B>::from(packet.clone()).encode());
+impl<B: BlockT> Unpin for NeighborPacketWorker<B> {}
 
-					// rebroadcasting network.
-					delay.reset(rebroadcast_instant());
-					last = Some((to, packet));
-				}
-				Async::NotReady => break,
+impl<B: BlockT> NeighborPacketWorker<B> {
+	pub(super) fn new() -> (Self, NeighborPacketSender<B>){
+		let (tx, rx) = mpsc::unbounded::<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>();
+		let delay = Delay::new(REBROADCAST_AFTER);
+
+		(NeighborPacketWorker {
+			last: None,
+			delay,
+			rx,
+		}, NeighborPacketSender(tx))
+	}
+}
+
+impl <B: BlockT> Stream for NeighborPacketWorker<B> {
+	type Item = (Vec<PeerId>, GossipMessage<B>);
+
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>>
+	{
+		let this = &mut *self;
+		match this.rx.poll_next_unpin(cx) {
+			Poll::Ready(None) => return Poll::Ready(None),
+			Poll::Ready(Some((to, packet))) => {
+				this.delay.reset(rebroadcast_instant());
+				this.last = Some((to.clone(), packet.clone()));
+
+				return Poll::Ready(Some((to, GossipMessage::<B>::from(packet.clone()))));
 			}
+			// Don't return yet, maybe the timer fired.
+			Poll::Pending => {},
+		};
+
+		ready!(this.delay.poll_unpin(cx));
+
+		// Getting this far here implies that the timer fired.
+
+		this.delay.reset(rebroadcast_instant());
+
+		// Make sure the underlying task is scheduled for wake-up.
+		//
+		// Note: In case poll_unpin is called after the resetted delay fires again, this
+		// will drop one tick. Deemed as very unlikely and also not critical.
+		while let Poll::Ready(()) = this.delay.poll_unpin(cx) {};
+
+		if let Some((ref to, ref packet)) = this.last {
+			return Poll::Ready(Some((to.clone(), GossipMessage::<B>::from(packet.clone()))));
 		}
 
-		// has to be done in a loop because it needs to be polled after
-		// re-scheduling.
-		loop {
-			match (&mut delay).unit_error().compat().poll() {
-				Err(e) => {
-					warn!(target: "afg", "Could not rebroadcast neighbor packets: {:?}", e);
-					delay.reset(rebroadcast_instant());
-				}
-				Ok(Async::Ready(())) => {
-					delay.reset(rebroadcast_instant());
-
-					if let Some((ref to, ref packet)) = last {
-						// send to peers.
-						net.send_message(to.clone(), GossipMessage::<B>::from(packet.clone()).encode());
-					}
-				}
-				Ok(Async::NotReady) => return Ok(Async::NotReady),
-			}
-		}
-	});
-
-	(work, NeighborPacketSender(tx))
+		return Poll::Pending;
+	}
 }

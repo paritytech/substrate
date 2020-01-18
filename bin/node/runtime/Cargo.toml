@@ -9,7 +9,6 @@ build = "build.rs"
 # third-party dependencies
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
 integer-sqrt = { version = "0.1.2" }
-safe-mix = { version = "1.0", default-features = false }
 rustc-hex = { version = "2.0", optional = true }
 serde = { version = "1.0.102", optional = true }
 
@@ -41,7 +40,7 @@ pallet-babe = { version = "2.0.0", default-features = false, path = "../../../fr
 pallet-balances = { version = "2.0.0", default-features = false, path = "../../../frame/balances" }
 pallet-collective = { version = "2.0.0", default-features = false, path = "../../../frame/collective" }
 pallet-contracts = { version = "2.0.0", default-features = false, path = "../../../frame/contracts" }
-pallet-contracts-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
+pallet-contracts-rpc-runtime-api = { version = "0.8.0", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
 pallet-democracy = { version = "2.0.0", default-features = false, path = "../../../frame/democracy" }
 pallet-elections-phragmen = { version = "2.0.0", default-features = false, path = "../../../frame/elections-phragmen" }
 pallet-finality-tracker = { version = "2.0.0", default-features = false, path = "../../../frame/finality-tracker" }
@@ -101,7 +100,6 @@ std = [
 	"pallet-randomness-collective-flip/std",
 	"sp-std/std",
 	"rustc-hex",
-	"safe-mix/std",
 	"serde",
 	"pallet-session/std",
 	"sp-api/std",

@@ -25,11 +25,11 @@ use std::fmt;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
 
-use codec::Encode;
-#[cfg(feature = "std")]
-use codec::Decode;
+use codec::{Encode, Decode};
 use sp_runtime::RuntimeString;
 pub use sp_runtime::create_runtime_str;
+#[doc(hidden)]
+pub use sp_std;
 
 #[cfg(feature = "std")]
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
@@ -37,25 +37,13 @@ use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 /// The identity of a particular API interface that the runtime might provide.
 pub type ApiId = [u8; 8];
 
-/// A vector of pairs of `ApiId` and a `u32` for version. For `"std"` builds, this
-/// is a `Cow`.
-#[cfg(feature = "std")]
-pub type ApisVec = std::borrow::Cow<'static, [(ApiId, u32)]>;
-/// A vector of pairs of `ApiId` and a `u32` for version. For `"no-std"` builds, this
-/// is just a reference.
-#[cfg(not(feature = "std"))]
-pub type ApisVec = &'static [(ApiId, u32)];
+/// A vector of pairs of `ApiId` and a `u32` for version.
+pub type ApisVec = sp_std::borrow::Cow<'static, [(ApiId, u32)]>;
 
 /// Create a vector of Api declarations.
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! create_apis_vec {
-	( $y:expr ) => { std::borrow::Cow::Borrowed(& $y) }
-}
-#[macro_export]
-#[cfg(not(feature = "std"))]
-macro_rules! create_apis_vec {
-	( $y:expr ) => { & $y }
+	( $y:expr ) => { $crate::sp_std::borrow::Cow::Borrowed(& $y) }
 }
 
 /// Runtime version.
@@ -63,8 +51,8 @@ macro_rules! create_apis_vec {
 /// This triplet have different semantics and mis-interpretation could cause problems.
 /// In particular: bug fixes should result in an increment of `spec_version` and possibly `authoring_version`,
 /// absolutely not `impl_version` since they change the semantics of the runtime.
-#[derive(Clone, PartialEq, Eq, Encode, Default, sp_runtime::RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Decode))]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Default, sp_runtime::RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct RuntimeVersion {
 	/// Identifies the different Substrate runtimes. There'll be at least polkadot and node.
