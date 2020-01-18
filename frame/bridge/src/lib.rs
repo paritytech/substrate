@@ -40,7 +40,7 @@ use crate::storage_proof::StorageProofChecker;
 use codec::{Encode, Decode};
 use fg_primitives::{AuthorityId, AuthorityWeight};
 use sp_runtime::traits::Header;
-use state_machine::StorageProof;
+use sp_state_machine::StorageProof;
 use frame_support::{
 	dispatch::{DispatchResult, DispatchError},
 	decl_error, decl_module, decl_storage,
@@ -282,13 +282,13 @@ mod tests {
 	}
 
 	fn create_dummy_validator_proof(validator_set: Vec<(AuthorityId, AuthorityWeight)>) -> (H256, StorageProof) {
-		use state_machine::{prove_read, backend::{Backend, InMemory}};
+		use sp_state_machine::{prove_read, backend::Backend, InMemoryBackend};
 
 		let encoded_set = validator_set.encode();
 
 		// construct storage proof
-		let backend = <InMemory<Blake2Hasher>>::from(vec![
-			(None, b":grandpa_authorities".to_vec(), Some(encoded_set)),
+		let backend = <InMemoryBackend<Blake2Hasher>>::from(vec![
+			(None, vec![(b":grandpa_authorities".to_vec(), Some(encoded_set))]),
 		]);
 		let root = backend.storage_root(std::iter::empty()).0;
 
@@ -423,7 +423,7 @@ mod tests {
 
 		assert_err!(
 			MockBridge::verify_ancestry(proof, fake_ancestor.hash(), child),
-			Error::InvalidAncestryProof
+			Error::<Test>::InvalidAncestryProof
 		);
 	}
 
@@ -453,7 +453,7 @@ mod tests {
 
 		assert_err!(
 			MockBridge::verify_ancestry(invalid_proof, ancestor.hash(), child),
-			Error::InvalidAncestryProof
+			Error::<Test>::InvalidAncestryProof
 		);
 	}
 }

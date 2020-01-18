@@ -17,7 +17,7 @@
 //! Logic for checking Substrate storage proofs.
 
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX};
-use state_machine::StorageProof;
+use sp_state_machine::StorageProof;
 use sp_trie::{MemoryDB, Trie, trie_types::TrieDB};
 use sp_runtime::RuntimeDebug;
 
@@ -79,18 +79,18 @@ mod tests {
 	use super::*;
 
 	use primitives::{Blake2Hasher, H256};
-	use state_machine::{prove_read, backend::{Backend, InMemory}};
+	use sp_state_machine::{prove_read, backend::Backend, InMemoryBackend};
 	// use trie::{PrefixedMemoryDB, TrieDBMut};
 
 	#[test]
 	fn storage_proof_check() {
 		// construct storage proof
-		let backend = <InMemory<Blake2Hasher>>::from(vec![
-			(None, b"key1".to_vec(), Some(b"value1".to_vec())),
-			(None, b"key2".to_vec(), Some(b"value2".to_vec())),
-			(None, b"key3".to_vec(), Some(b"value3".to_vec())),
+		let backend = <InMemoryBackend<Blake2Hasher>>::from(vec![
+			(None, vec![(b"key1".to_vec(), Some(b"value1".to_vec()))]),
+			(None, vec![(b"key2".to_vec(), Some(b"value2".to_vec()))]),
+			(None, vec![(b"key3".to_vec(), Some(b"value3".to_vec()))]),
 			// Value is too big to fit in a branch node
-			(None, b"key11".to_vec(), Some(vec![0u8; 32])),
+			(None, vec![(b"key11".to_vec(), Some(vec![0u8; 32]))]),
 		]);
 		let root = backend.storage_root(std::iter::empty()).0;
 		let proof = prove_read(backend, &[&b"key1"[..], &b"key2"[..], &b"key22"[..]]).unwrap();
