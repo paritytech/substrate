@@ -25,9 +25,6 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Author RPC future Result type.
 pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error> + Send>;
 
-/// Author RPC future Result type with specific lifetime.
-pub type FutureResultLt<'a, T> = Box<dyn rpc::futures::Future<Item = T, Error = Error> + Send + 'a>;
-
 /// Author RPC errors.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
