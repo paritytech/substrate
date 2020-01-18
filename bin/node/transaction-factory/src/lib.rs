@@ -132,7 +132,22 @@ where
 
 			best_hash = block.header().hash();
 			best_block_id = BlockId::<Block>::hash(best_hash);
-			import_block(client.clone(), block);
+
+			let import = BlockImportParams {
+				origin: BlockOrigin::File,
+				header: block.header().clone(),
+				post_digests: Vec::new(),
+				body: Some(block.extrinsics().to_vec()),
+				storage_changes: None,
+				finalized: false,
+				justification: None,
+				auxiliary: Vec::new(),
+				fork_choice: ForkChoiceStrategy::LongestChain,
+				allow_missing_state: false,
+				import_existing: false,
+			};
+
+			client.clone().import_block(import, HashMap::new()).expect("Failed to import block");
 
 			info!("Imported block at {}\n\n", factory_state.block_no());
 		} else {
@@ -164,9 +179,7 @@ where
 	RA: RuntimeAdapter,
 {
 	let mut block = client.new_block(Default::default()).expect("Failed to create new block");
-
 	let seed = factory_state.start_number();
-
 	let from = (RA::master_account_id(), RA::master_account_secret());
 	let amount = RA::minimum_balance();
 
@@ -185,11 +198,8 @@ where
 			&genesis_hash,
 			&prior_block_hash,
 		) {
-			block.push(
-				Decode::decode(&mut &extrinsic.encode()[..])
-					.expect("Failed to decode extrinsic")
-			).expect("Failed to push extrinsic into block");
-
+			let e = Decode::decode(&mut &extrinsic.encode()[..]).expect("decode failed");
+			block.push(e).expect("push extrinsic failed");
 			factory_state.increase_index();
 		} else {
 			return None
@@ -201,32 +211,4 @@ where
 	}
 
 	Some(block.build().expect("Failed to bake block").block)
-}
-
-fn import_block<Backend, Exec, Block, RtApi>(
-	mut client: Arc<Client<Backend, Exec, Block, RtApi>>,
-	block: Block
-) -> () where
-	Block: BlockT,
-	Exec: sc_client::CallExecutor<Block> + Send + Sync + Clone,
-	Backend: sc_client_api::backend::Backend<Block> + Send,
-	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
-	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
-		sp_api::Core<Block, Error = sp_blockchain::Error> +
-		ApiExt<Block, StateBackend = Backend::State>,
-{
-	let import = BlockImportParams {
-		origin: BlockOrigin::File,
-		header: block.header().clone(),
-		post_digests: Vec::new(),
-		body: Some(block.extrinsics().to_vec()),
-		storage_changes: None,
-		finalized: false,
-		justification: None,
-		auxiliary: Vec::new(),
-		fork_choice: ForkChoiceStrategy::LongestChain,
-		allow_missing_state: false,
-		import_existing: false,
-	};
-	client.import_block(import, HashMap::new()).expect("Failed to import block");
 }

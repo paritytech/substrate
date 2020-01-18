@@ -156,7 +156,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 			let service_builder = new_full_start!(config).0;
 			node_transaction_factory::factory::<FactoryState<_>, _, _, _, _, _>(
 				factory_state,
-				service_builder.client(),
+				&*service_builder.client(),
 				service_builder.select_chain()
 					.expect("The select_chain is always initialized by new_full_start!; QED")
 			).map_err(|e| format!("Error in transaction factory: {}", e))?;
