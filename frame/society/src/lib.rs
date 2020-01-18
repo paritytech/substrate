@@ -857,6 +857,7 @@ decl_module! {
 			Founder::<T, I>::kill();
 			Rules::<T, I>::kill();
 			Candidates::<T, I>::kill();
+			SuspendedCandidates::<T, I>::remove_all();
 			Self::deposit_event(RawEvent::Unfounded(founder));
 		}
 
