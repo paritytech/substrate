@@ -108,13 +108,11 @@ where
 	RA: RuntimeAdapter<Block = Block>,
 	Block::Hash: From<sp_core::H256>,
 {
-	let best_header: Result<<Block as BlockT>::Header, sc_cli::error::Error> =
-		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
-	let mut best_hash = best_header?.hash();
+	let best_header = select_chain.best_chain().map_err(|e| format!("{:?}", e))?;
+	let mut best_hash = best_header.hash();
 	let mut best_block_id = BlockId::<Block>::hash(best_hash);
-	let version = client.runtime_version_at(&best_block_id)?.spec_version;
-	let genesis_hash = client.block_hash(Zero::zero())?
-		.expect("Genesis block always exists; qed").into();
+	let runtime_version = client.runtime_version_at(&best_block_id)?.spec_version;
+	let genesis_hash = client.block_hash(Zero::zero())?.expect("genesis should exist");
 
 	loop {
 		if factory_state.block_no() >= factory_state.num() {
@@ -123,7 +121,7 @@ where
 		if let Some(block) = create_block::<RA, _, _, _, _>(
 			&mut factory_state,
 			&client,
-			version,
+			runtime_version,
 			genesis_hash,
 			best_hash,
 			best_block_id,
