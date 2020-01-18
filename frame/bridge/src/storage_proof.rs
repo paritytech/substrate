@@ -20,8 +20,6 @@ use hash_db::{Hasher, HashDB, EMPTY_PREFIX};
 use sp_trie::{MemoryDB, Trie, trie_types::TrieDB};
 use sp_runtime::RuntimeDebug;
 
-// use crate::Error;
-
 pub(crate) type StorageProof = Vec<Vec<u8>>;
 
 /// This struct is used to read storage values from a subset of a Merklized database. The "proof"
@@ -81,7 +79,6 @@ mod tests {
 
 	use sp_core::{Blake2Hasher, H256};
 	use sp_state_machine::{prove_read, backend::Backend, InMemoryBackend};
-	// use trie::{PrefixedMemoryDB, TrieDBMut};
 
 	#[test]
 	fn storage_proof_check() {
