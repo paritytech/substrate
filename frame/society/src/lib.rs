@@ -228,6 +228,7 @@
 //! * `defender_vote` - A member can vote to approve or reject a defender's continued membership
 //! to the society.
 //! * `payout` - A member can claim their first matured payment.
+//! * `unfound` - Allow the founder to unfound the society when they are the only member.
 //!
 //! #### For Super Users
 //!
@@ -254,7 +255,7 @@ use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_runtime::{Percent, ModuleId, RuntimeDebug,
 	traits::{
-		StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot,
+		StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot, Hash,
 		TrailingZeroInput, CheckedSub, EnsureOrigin
 	}
 };
@@ -403,6 +404,10 @@ decl_storage! {
 		/// The first member.
 		pub Founder get(founder) build(|config: &GenesisConfig<T, I>| config.members.first().cloned()):
 			Option<T::AccountId>;
+
+		/// A hash of the rules of this society concerning membership. Can only be set once and
+		/// only by the founder.
+		pub Rules get(rules): Option<T::Hash>;
 
 		/// The current set of candidates; bidders that are attempting to become members.
 		pub Candidates get(candidates): Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
@@ -805,6 +810,7 @@ decl_module! {
 		/// Parameters:
 		/// - `founder` - The first member and head of the newly founded society.
 		/// - `max_members` - The initial max number of members for the society.
+		/// - `rules` - The rules of this society concerning membership.
 		///
 		/// # <weight>
 		/// - Two storage mutates to set `Head` and `Founder`. O(1)
@@ -814,7 +820,7 @@ decl_module! {
 		/// Total Complexity: O(1)
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn found(origin, founder: T::AccountId, max_members: u32) {
+		fn found(origin, founder: T::AccountId, max_members: u32, rules: Vec<u8>) {
 			T::FounderSetOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
 			ensure!(max_members > 1, Error::<T, I>::MaxMembers);
@@ -823,8 +829,38 @@ decl_module! {
 			Self::add_member(&founder)?;
 			<Head<T, I>>::put(&founder);
 			<Founder<T, I>>::put(&founder);
+			Rules::<T, I>::put(T::Hashing::hash(&rules));
 			Self::deposit_event(RawEvent::Founded(founder));
 		}
+
+		/// Anull the founding of the society.
+		///
+		/// The dispatch origin for this call must be Signed, and the signing account must be both
+		/// the `Founder` and the `Head`. This implies that it may only be done when there is one
+		/// member.
+		///
+		/// # <weight>
+		/// - Two storage reads O(1).
+		/// - Four storage removals O(1).
+		/// - One event.
+		///
+		/// Total Complexity: O(1)
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
+		fn unfound(origin) {
+			let founder = ensure_signed(origin)?;
+			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
+			ensure!(Head::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotHead);
+
+			Members::<T, I>::kill();
+			Head::<T, I>::kill();
+			Founder::<T, I>::kill();
+			Rules::<T, I>::kill();
+			Candidates::<T, I>::kill();
+			SuspendedCandidates::<T, I>::remove_all();
+			Self::deposit_event(RawEvent::Unfounded(founder));
+		}
+
 		/// Allow suspension judgement origin to make judgement on a suspended member.
 		///
 		/// If a suspended member is forgiven, we simply add them back as a member, not affecting
@@ -1047,6 +1083,10 @@ decl_error! {
 		NotCandidate,
 		/// Too many members in the society.
 		MaxMembers,
+		/// The caller is not the founder.
+		NotFounder,
+		/// The caller is not the head.
+		NotHead,
 	}
 }
 
@@ -1087,6 +1127,8 @@ decl_event! {
 		DefenderVote(AccountId, bool),
 		/// A new max member count has been set
 		NewMaxMembers(u32),
+		/// Society is unfounded.
+		Unfounded(AccountId),
 	}
 }
 
@@ -1224,16 +1266,16 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		ensure!(Self::head() != Some(m.clone()), Error::<T, I>::Head);
 		ensure!(Self::founder() != Some(m.clone()), Error::<T, I>::Founder);
 
-		<Members<T, I>>::mutate(|members|
-			match members.binary_search(&m) {
-				Err(_) => Err(Error::<T, I>::NotMember)?,
-				Ok(i) => {
-					members.remove(i);
-					T::MembershipChanged::change_members_sorted(&[], &[m.clone()], members);
-					Ok(())
-				}
+		let mut members = <Members<T, I>>::get();
+		match members.binary_search(&m) {
+			Err(_) => Err(Error::<T, I>::NotMember)?,
+			Ok(i) => {
+				members.remove(i);
+				T::MembershipChanged::change_members_sorted(&[], &[m.clone()], &members[..]);
+				<Members<T, I>>::put(members);
+				Ok(())
 			}
-		)
+		}
 	}
 
 	/// End the current period and begin a new one.

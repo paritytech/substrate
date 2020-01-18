@@ -497,7 +497,7 @@ decl_module! {
 		}
 
 		/// Vote in a referendum on behalf of a stash. If `vote.is_aye()`, the vote is to enact
-		/// the proposal;  otherwise it is a vote to keep the status quo.
+		/// the proposal; otherwise it is a vote to keep the status quo.
 		///
 		/// # <weight>
 		/// - O(1).
