@@ -228,6 +228,7 @@
 //! * `defender_vote` - A member can vote to approve or reject a defender's continued membership
 //! to the society.
 //! * `payout` - A member can claim their first matured payment.
+//! * `unfound` - Allow the founder to unfound the society when they are the only member.
 //!
 //! #### For Super Users
 //!
@@ -840,21 +841,22 @@ decl_module! {
 		/// `Founder`.
 		///
 		/// # <weight>
-		/// - Two storage mutates to set `Head` and `Founder`. O(1)
-		/// - One storage write to add the first member to society. O(1)
+		/// - Four storage removals O(1).
 		/// - One event.
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(20_000)]
 		fn unfound(origin) {
-			let who = ensure_signed(origin)?;
-			ensure!(&<Members<T, I>>::get()[..] == &[who][..], Error::<T, I>::NotFounder);
+			let founder = ensure_signed(origin)?;
+			let members = <Members<T, I>>::get();
+			ensure!(members.len() == 1 && &members[0] == &founder, Error::<T, I>::NotFounder);
 
 			Members::<T, I>::kill();
 			Head::<T, I>::kill();
 			Founder::<T, I>::kill();
 			Rules::<T, I>::kill();
+			Self::deposit_event(RawEvent::Unfounded(founder));
 		}
 
 		/// Allow suspension judgement origin to make judgement on a suspended member.
@@ -1121,6 +1123,8 @@ decl_event! {
 		DefenderVote(AccountId, bool),
 		/// A new max member count has been set
 		NewMaxMembers(u32),
+		/// Society is unfounded.
+		Unfounded(AccountId),
 	}
 }
 
