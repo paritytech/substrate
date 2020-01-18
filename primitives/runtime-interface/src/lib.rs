@@ -28,7 +28,7 @@
 //! implement [`RIType`]. The associated type `FFIType` is the type that is used in the FFI
 //! function to represent the actual type. For example `[T]` is represented by an `u64`. The slice
 //! pointer and the length will be mapped to an `u64` value. For more information, see the
-//! implementation of [`RIType`] for [`T`]. The FFI function definition is used when calling from
+//! implementation of [`RIType`] for `T`. The FFI function definition is used when calling from
 //! the wasm runtime into the node.
 //!
 //! Traits are used to convert from a type to the corresponding [`RIType::FFIType`].
@@ -69,6 +69,34 @@
 //!
 //! For more information on declaring a runtime interface, see
 //! [`#[runtime_interface]`](attr.runtime_interface.html).
+//!
+//! # FFI type and conversion
+//!
+//! The following table documents how values of types are passed between the wasm and
+//! the host side and how they are converted into the corresponding type.
+//!
+//! | Type | FFI type | Conversion |
+//! |----|----|----|
+//! | `u8` | `u8` | `Identity` |
+//! | `u16` | `u16` | `Identity` |
+//! | `u32` | `u32` | `Identity` |
+//! | `u64` | `u64` | `Identity` |
+//! | `i8` | `i8` | `Identity` |
+//! | `i16` | `i16` | `Identity` |
+//! | `i32` | `i32` | `Identity` |
+//! | `i64` | `i64` | `Identity` |
+//! | `bool` | `u8` | `if v { 1 } else { 0 }` |
+//! | `&str` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
+//! | `&[u8]` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
+//! | `Vec<u8>` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
+//! | `Vec<T> where T: Encode` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
+//! | `&[T] where T: Encode` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
+//! | `[u8; N]` | `u32` | `v.as_ptr()` |
+//! | `*const T` | `u32` | `Identity` |
+//! | [`T where T: PassBy<PassBy=Inner>`](pass_by::Inner) | Depends on inner | Depends on inner |
+//! | [`T where T: PassBy<PassBy=Codec>`](pass_by::Codec) | `u64`| <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
+//!
+//! `Identity` means that the value is converted directly into the corresponding FFI type.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
