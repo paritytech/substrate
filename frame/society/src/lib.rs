@@ -856,6 +856,7 @@ decl_module! {
 			Head::<T, I>::kill();
 			Founder::<T, I>::kill();
 			Rules::<T, I>::kill();
+			Candidates::<T, I>::kill();
 			Self::deposit_event(RawEvent::Unfounded(founder));
 		}
 
@@ -1264,16 +1265,16 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		ensure!(Self::head() != Some(m.clone()), Error::<T, I>::Head);
 		ensure!(Self::founder() != Some(m.clone()), Error::<T, I>::Founder);
 
-		<Members<T, I>>::mutate(|members|
-			match members.binary_search(&m) {
-				Err(_) => Err(Error::<T, I>::NotMember)?,
-				Ok(i) => {
-					members.remove(i);
-					T::MembershipChanged::change_members_sorted(&[], &[m.clone()], members);
-					Ok(())
-				}
+		let mut members = <Members<T, I>>::get();
+		match members.binary_search(&m) {
+			Err(_) => Err(Error::<T, I>::NotMember)?,
+			Ok(i) => {
+				members.remove(i);
+				T::MembershipChanged::change_members_sorted(&[], &[m.clone()], &members[..]);
+				<Members<T, I>>::put(members);
+				Ok(())
 			}
-		)
+		}
 	}
 
 	/// End the current period and begin a new one.
