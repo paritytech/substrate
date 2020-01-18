@@ -16,7 +16,6 @@
 
 //! Implementation of a kind of automata, used to read benchmark tests from files.
 
-use std::env;
 use std::fs;
 use std::collections::HashMap;
 

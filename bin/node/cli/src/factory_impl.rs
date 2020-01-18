@@ -24,20 +24,18 @@ use rand::rngs::StdRng;
 use codec::{Encode, Decode};
 use sp_keyring::sr25519::Keyring;
 use node_runtime::{
-	Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, Header,
-	BalancesCall, AuthorshipCall, StakingCall, StakingModule,
+	Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra,
 	MinimumPeriod, ExistentialDeposit,
 };
 use node_primitives::Signature;
-use sp_core::{sr25519, crypto::Pair, H256};
+use sp_core::{sr25519, crypto::Pair};
 use sp_runtime::{
-	generic::Era, Perbill,
+	generic::Era,
 	traits::{
 		Block as BlockT, Header as HeaderT, SignedExtension, Verify, IdentifyAccount,
 	}
 };
-use frame_support::weights::GetDispatchInfo;
-use frame_support::benchmarking::{GetModule, GetFunction};
+use frame_support::benchmarking::GetModule;
 use node_transaction_factory::RuntimeAdapter;
 use node_transaction_factory::automata::Automaton;
 
@@ -45,24 +43,19 @@ use sp_inherents::InherentData;
 use sp_timestamp;
 use sp_finality_tracker;
 
-use pallet_staking::{RewardDestination, ValidatorPrefs};
-
 type AccountPublic = <Signature as Verify>::Signer;
+type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
 
-pub struct FactoryState<N> {
-	tx_name: String,
-	block_no: N,
+pub struct RuntimeState {
+	block_number: Number,
 	start_number: u32,
 	round: u32,
 	block_in_round: u32,
 	num: u32,
 	index: u32,
-	automaton: Automaton,
 }
 
-type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
-
-impl<Number> FactoryState<Number> {
+impl RuntimeState {
 	fn build_extra(index: node_primitives::Index, phase: u64) -> node_runtime::SignedExtra {
 		(
 			frame_system::CheckVersion::new(),
@@ -76,30 +69,25 @@ impl<Number> FactoryState<Number> {
 	}
 }
 
-impl RuntimeAdapter for FactoryState<Number> {
+impl RuntimeAdapter for RuntimeState {
 	type AccountId = node_primitives::AccountId;
 	type Balance = node_primitives::Balance;
 	type Block = node_primitives::Block;
 	type Phase = sp_runtime::generic::Phase;
 	type Secret = sr25519::Pair;
 	type Index = node_primitives::Index;
-
 	type Number = Number;
 
 	fn new(
-		tx_name: String,
 		num: u64,
-		automaton: Automaton,
-	) -> FactoryState<Self::Number> {
-		FactoryState {
-			tx_name,
+	) -> RuntimeState {
+		RuntimeState {
 			num: num as u32,
 			round: 0,
 			block_in_round: 0,
-			block_no: 0,
+			block_number: 0,
 			start_number: 0,
 			index: 0,
-			automaton,
 		}
 	}
 
@@ -111,8 +99,8 @@ impl RuntimeAdapter for FactoryState<Number> {
 		self.index += 1;
 	}
 
-	fn block_no(&self) -> Self::Number {
-		self.block_no
+	fn block_number(&self) -> Self::Number {
+		self.block_number
 	}
 
 	fn block_in_round(&self) -> Self::Number {
@@ -132,7 +120,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 	}
 
 	fn set_block_no(&mut self, val: Self::Number) {
-		self.block_no = val;
+		self.block_number = val;
 	}
 
 	fn set_block_in_round(&mut self, val: Self::Number) {
@@ -146,39 +134,36 @@ impl RuntimeAdapter for FactoryState<Number> {
 	fn create_extrinsic(
 		&mut self,
 		sender: &Self::AccountId,
+		module: String,
+		extrinsic_name: String,
 		key: &Self::Secret,
-		destination: &Self::AccountId,
-		amount: &Self::Balance,
-		version: u32,
+		runtime_version: u32,
 		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
-	) -> Option<<Self::Block as BlockT>::Extrinsic> {
-		self.automaton.next_state().map(|(module, function, _args)| {
-			println!("Creating a {}::{} extrinsic...", module, function);
-			let phase = self.extract_phase(*prior_block_hash);
-			let function = Call::get_module(&module, &function);
-			println!("{:?}", function);
-			let extrinsic = CheckedExtrinsic {
-				signed: Some((sender.clone(), Self::build_extra(self.index, phase))),
-				function,
-			};
-			let additional_signed = (
-				version,
-				genesis_hash.clone(),
-				prior_block_hash.clone(),
-				(), (), (), (),
-			);
-			sign::<Self>(extrinsic, key, additional_signed)
-		})	
+	) -> <Self::Block as BlockT>::Extrinsic {
+		println!("Creating a {}::{} extrinsic...", module, extrinsic_name);
+		let phase = self.extract_phase(*prior_block_hash);
+		let function = Call::get_module(&module, &extrinsic_name);
+		let extrinsic = CheckedExtrinsic {
+			signed: Some((sender.clone(), Self::build_extra(self.index, phase))),
+			function,
+		};
+		let additional_signed = (
+			runtime_version,
+			genesis_hash.clone(),
+			prior_block_hash.clone(),
+			(), (), (), (),
+		);
+		sign::<Self>(extrinsic, key, additional_signed)
 	}
 
 	fn inherent_extrinsics(&self) -> InherentData {
-		let timestamp = (self.block_no as u64 + 1) * MinimumPeriod::get();
+		let timestamp = (self.block_number as u64 + 1) * MinimumPeriod::get();
 
 		let mut inherent = InherentData::new();
 		inherent.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
 			.expect("Failed putting timestamp inherent");
-		inherent.put_data(sp_finality_tracker::INHERENT_IDENTIFIER, &self.block_no)
+		inherent.put_data(sp_finality_tracker::INHERENT_IDENTIFIER, &self.block_number)
 			.expect("Failed putting finalized number inherent");
 		inherent
 	}
@@ -222,7 +207,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 		// TODO get correct phase via api. See #2587.
 		// This currently prevents the factory from being used
 		// without a preceding purge of the database.
-		self.block_no() as Self::Phase
+		self.block_number() as Self::Phase
 	}
 }
 

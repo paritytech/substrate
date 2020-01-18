@@ -51,12 +51,12 @@ pub trait RuntimeAdapter {
 	type Phase: Copy;
 	type Secret;
 
-	fn new(tx_name: String, start_number: u64, automaton: automata::Automaton) -> Self;
+	fn new(start_number: u64) -> Self;
 
 	fn index(&self) -> u32;
 	fn increase_index(&mut self);
 
-	fn block_no(&self) -> Self::Number;
+	fn block_number(&self) -> Self::Number;
 	fn block_in_round(&self) -> Self::Number;
 	fn num(&self) -> Self::Number;
 	fn round(&self) -> Self::Number;
@@ -69,13 +69,13 @@ pub trait RuntimeAdapter {
 	fn create_extrinsic(
 		&mut self,
 		sender: &Self::AccountId,
+		module: String,
+		extrinsic_name: String,
 		key: &Self::Secret,
-		destination: &Self::AccountId,
-		amount: &Self::Balance,
-		version: u32,
+		runtime_version: u32,
 		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
-	) -> Option<<Self::Block as BlockT>::Extrinsic>;
+	) -> <Self::Block as BlockT>::Extrinsic;
 
 	fn inherent_extrinsics(&self) -> InherentData;
 
@@ -88,14 +88,19 @@ pub trait RuntimeAdapter {
 	fn gen_random_account_secret(seed: &Self::Number) -> Self::Secret;
 }
 
-/// Manufactures transactions. The exact amount depends on
-/// `num` and `rounds`.
-pub fn factory<RA, Backend, Exec, Block, RtApi, Sc>(
-	mut factory_state: RA,
-	client: &Arc<Client<Backend, Exec, Block, RtApi>>,
-	select_chain: &Sc,
-) -> sc_cli::error::Result<()>
-where
+
+pub struct FactoryState<RA, Backend, Exec, Block, RtApi, Sc> 
+where 
+	Block: BlockT,
+{
+	runtime_state: RA,
+	automaton: automata::Automaton,
+	client: Arc<Client<Backend, Exec, Block, RtApi>>,
+	select_chain: Sc,
+}
+
+impl<RA, Backend, Exec, Block, RtApi, Sc> FactoryState<RA, Backend, Exec, Block, RtApi, Sc>
+where 
 	Block: BlockT,
 	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
 	Backend: sc_client_api::backend::Backend<Block> + Send,
@@ -108,107 +113,150 @@ where
 	RA: RuntimeAdapter<Block = Block>,
 	Block::Hash: From<sp_core::H256>,
 {
-	let best_header = select_chain.best_chain().map_err(|e| format!("{:?}", e))?;
-	let mut best_hash = best_header.hash();
-	let mut best_block_id = BlockId::<Block>::hash(best_hash);
-	let runtime_version = client.runtime_version_at(&best_block_id)?.spec_version;
-	let genesis_hash = client.block_hash(Zero::zero())?.expect("genesis should exist");
-
-	loop {
-		if factory_state.block_no() >= factory_state.num() {
-			break
-		}
-		if let Some(block) = create_block::<RA, _, _, _, _>(
-			&mut factory_state,
-			&client,
-			runtime_version,
-			genesis_hash,
-			best_hash,
-			best_block_id,
-		) {
-			factory_state.set_block_no(factory_state.block_no() + RA::Number::one());
-
-			info!("Created block {} with hash {}.", factory_state.block_no(), best_hash);
-
-			best_hash = block.header().hash();
-			best_block_id = BlockId::<Block>::hash(best_hash);
-
-			let import = BlockImportParams {
-				origin: BlockOrigin::File,
-				header: block.header().clone(),
-				post_digests: Vec::new(),
-				body: Some(block.extrinsics().to_vec()),
-				storage_changes: None,
-				finalized: false,
-				justification: None,
-				auxiliary: Vec::new(),
-				fork_choice: ForkChoiceStrategy::LongestChain,
-				allow_missing_state: false,
-				import_existing: false,
-			};
-
-			client.clone().import_block(import, HashMap::new()).expect("Failed to import block");
-
-			info!("Imported block at {}\n\n", factory_state.block_no());
-		} else {
-			break
+	pub fn new(
+		client: Arc<Client<Backend, Exec, Block, RtApi>>,
+		select_chain: Sc,
+		automaton: automata::Automaton,
+		runtime_state: RA,
+	) -> Self {
+		Self {
+			client,
+			select_chain,
+			automaton,
+			runtime_state,
 		}
 	}
 
-	Ok(())
+	pub fn run(&mut self) -> sc_cli::error::Result<()> {
+		let best_header = self.select_chain.best_chain().map_err(|e| format!("{:?}", e))?;
+		let mut best_hash = best_header.hash();
+		let mut best_block_id = BlockId::<Block>::hash(best_hash);
+		let runtime_version = self.client.runtime_version_at(&best_block_id)?.spec_version;
+		let genesis_hash = self.client.block_hash(Zero::zero())?.expect("genesis should exist");
+
+		loop {
+			if self.runtime_state.block_number() >= self.runtime_state.num() {
+				break
+			}
+			if let Some(block) = self.create_block(
+				runtime_version,
+				genesis_hash,
+				best_hash,
+				best_block_id,
+			) {
+				self.runtime_state.set_block_no(self.runtime_state.block_number() + RA::Number::one());
+
+				info!("Created block {} with hash {}.", self.runtime_state.block_number(), best_hash);
+
+				best_hash = block.header().hash();
+				best_block_id = BlockId::<Block>::hash(best_hash);
+
+				let import = BlockImportParams {
+					origin: BlockOrigin::File,
+					header: block.header().clone(),
+					post_digests: Vec::new(),
+					body: Some(block.extrinsics().to_vec()),
+					storage_changes: None,
+					finalized: false,
+					justification: None,
+					auxiliary: Vec::new(),
+					fork_choice: ForkChoiceStrategy::LongestChain,
+					allow_missing_state: false,
+					import_existing: false,
+				};
+
+				self.client.clone().import_block(import, HashMap::new()).expect("Failed to import block");
+
+				info!("Imported block at {}\n\n", self.runtime_state.block_number());
+			} else {
+				break
+			}
+		}
+
+		Ok(())
+	}
+
+	pub fn create_block(
+		&mut self,
+		runtime_version: u32,
+		genesis_hash: <RA::Block as BlockT>::Hash,
+		prior_block_hash: <RA::Block as BlockT>::Hash,
+		prior_block_id: BlockId<Block>,
+	) -> Option<Block> {
+		let mut block = self.client.new_block(Default::default()).expect("Failed to create new block");
+		let seed = self.runtime_state.start_number();
+		let from = (RA::master_account_id(), RA::master_account_secret());
+		let amount = RA::minimum_balance();
+
+		let inherents = self.runtime_state.inherent_extrinsics();
+		let inherents = self.client.runtime_api().inherent_extrinsics(&prior_block_id, inherents)
+			.expect("Failed to create inherent extrinsics");
+
+		for _ in 0..7 { // TODO: Make this configurable.
+			let to = RA::gen_random_account_id(&seed);
+			if let Some((module, function, _args)) = self.automaton.next_state() {
+				let extrinsic = self.runtime_state.create_extrinsic(
+					&from.0,
+					module,
+					function,
+					&from.1,
+					runtime_version,
+					&genesis_hash,
+					&prior_block_hash,
+				);
+				let e = Decode::decode(&mut &extrinsic.encode()[..]).expect("decode failed");
+				block.push(e).expect("push extrinsic failed");
+				self.runtime_state.increase_index();
+			}
+		}
+
+		for inherent in inherents {
+			block.push(inherent).expect("Failed ...");
+		}
+
+		Some(block.build().expect("Failed to bake block").block)
+	}
 }
 
-/// Create a baked block from a transfer extrinsic and timestamp inherent.
-pub fn create_block<RA, Backend, Exec, Block, RtApi>(
-	factory_state: &mut RA,
-	client: &Arc<Client<Backend, Exec, Block, RtApi>>,	
-	version: u32,
-	genesis_hash: <RA::Block as BlockT>::Hash,
-	prior_block_hash: <RA::Block as BlockT>::Hash,
-	prior_block_id: BlockId<Block>,
-) -> Option<Block>
-where
-	Block: BlockT,
-	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
-	Backend: sc_client_api::backend::Backend<Block> + Send,
-	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
-	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
-	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
-		BlockBuilder<Block, Error = sp_blockchain::Error> +
-		ApiExt<Block, StateBackend = Backend::State>,
-	RA: RuntimeAdapter,
-{
-	let mut block = client.new_block(Default::default()).expect("Failed to create new block");
-	let seed = factory_state.start_number();
-	let from = (RA::master_account_id(), RA::master_account_secret());
-	let amount = RA::minimum_balance();
+// pub fn factory<RA, Backend, Exec, Block, RtApi, Sc>(
+// 	mut factory_state: FactoryState,
+// 	client: &Arc<Client<Backend, Exec, Block, RtApi>>,
+// 	select_chain: &Sc,
+// ) -> sc_cli::error::Result<()>
+// where
+// 	Block: BlockT,
+// 	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
+// 	Backend: sc_client_api::backend::Backend<Block> + Send,
+// 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
+// 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
+// 		BlockBuilder<Block, Error = sp_blockchain::Error> +
+// 		ApiExt<Block, StateBackend = Backend::State>,
+// 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
+// 	Sc: SelectChain<Block>,
+// 	RA: RuntimeAdapter<Block = Block>,
+// 	Block::Hash: From<sp_core::H256>,
+// {
+// }
 
-	let inherents = factory_state.inherent_extrinsics();
-	let inherents = client.runtime_api().inherent_extrinsics(&prior_block_id, inherents)
-		.expect("Failed to create inherent extrinsics");
+// /// Create a baked block from a transfer extrinsic and timestamp inherent.
+// pub fn create_block<RA, Backend, Exec, Block, RtApi>(
+// 	factory_state: FactoryState,
+// 	client: &Arc<Client<Backend, Exec, Block, RtApi>>,	
+// 	version: u32,
+// 	genesis_hash: <RA::Block as BlockT>::Hash,
+// 	prior_block_hash: <RA::Block as BlockT>::Hash,
+// 	prior_block_id: BlockId<Block>,
+// ) -> Option<Block>
+// where
+// 	Block: BlockT,
+// 	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
+// 	Backend: sc_client_api::backend::Backend<Block> + Send,
+// 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
+// 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
+// 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
+// 		BlockBuilder<Block, Error = sp_blockchain::Error> +
+// 		ApiExt<Block, StateBackend = Backend::State>,
+// 	RA: RuntimeAdapter,
+// {
 
-	for _ in 0..7 { // TODO: Make this configurable.
-		let to = RA::gen_random_account_id(&seed);
-		if let Some(extrinsic) = factory_state.create_extrinsic(
-			&from.0,
-			&from.1,
-			&to,
-			&amount,
-			version,
-			&genesis_hash,
-			&prior_block_hash,
-		) {
-			let e = Decode::decode(&mut &extrinsic.encode()[..]).expect("decode failed");
-			block.push(e).expect("push extrinsic failed");
-			factory_state.increase_index();
-		} else {
-			return None
-		}
-	}
-
-	for inherent in inherents {
-		block.push(inherent).expect("Failed ...");
-	}
-
-	Some(block.build().expect("Failed to bake block").block)
-}
+// }

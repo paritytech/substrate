@@ -22,9 +22,10 @@ use log::info;
 use structopt::StructOpt;
 use sc_cli::{display_role, parse_and_prepare, GetSharedParams, ParseAndPrepare};
 use crate::{service, ChainSpec, load_spec};
-use crate::factory_impl::FactoryState;
-use node_transaction_factory::RuntimeAdapter;
+use crate::factory_impl::RuntimeState;
+use node_transaction_factory::FactoryState;
 use node_transaction_factory::automata::Automaton;
+use node_transaction_factory::RuntimeAdapter;
 use futures::{channel::oneshot, future::{select, Either}};
 
 /// Custom subcommands.
@@ -147,19 +148,16 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 			}
 
 			let automaton = Automaton::new_from_file(String::from("./factory_tests/test.txt"));
-			let factory_state = FactoryState::new(
-				cli_args.tx_name,
-				cli_args.num,
-				automaton, 
-			);
+			let runtime_state = RuntimeState::new(cli_args.num);
 
 			let service_builder = new_full_start!(config).0;
-			node_transaction_factory::factory::<FactoryState<_>, _, _, _, _, _>(
-				factory_state,
-				&*service_builder.client(),
-				service_builder.select_chain()
-					.expect("The select_chain is always initialized by new_full_start!; QED")
-			).map_err(|e| format!("Error in transaction factory: {}", e))?;
+			let mut factory_state = FactoryState::new(
+				service_builder.client().clone(),
+				service_builder.select_chain().expect("initialized by new_full_start").clone(),
+				automaton,
+				runtime_state,
+			);
+			factory_state.run().map_err(|e| format!("Error in transaction factory: {}", e))?;
 
 			Ok(())
 		}
