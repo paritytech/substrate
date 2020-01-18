@@ -254,7 +254,7 @@ use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_runtime::{Percent, ModuleId, RuntimeDebug,
 	traits::{
-		StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot,
+		StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot, Hash,
 		TrailingZeroInput, CheckedSub, EnsureOrigin
 	}
 };
@@ -403,6 +403,10 @@ decl_storage! {
 		/// The first member.
 		pub Founder get(founder) build(|config: &GenesisConfig<T, I>| config.members.first().cloned()):
 			Option<T::AccountId>;
+
+		/// A hash of the rules of this society concerning membership. Can only be set once and
+		/// only by the founder.
+		pub Rules get(rules): Option<T::Hash>;
 
 		/// The current set of candidates; bidders that are attempting to become members.
 		pub Candidates get(candidates): Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
@@ -805,6 +809,7 @@ decl_module! {
 		/// Parameters:
 		/// - `founder` - The first member and head of the newly founded society.
 		/// - `max_members` - The initial max number of members for the society.
+		/// - `rules` - The rules of this society concerning membership.
 		///
 		/// # <weight>
 		/// - Two storage mutates to set `Head` and `Founder`. O(1)
@@ -814,7 +819,7 @@ decl_module! {
 		/// Total Complexity: O(1)
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn found(origin, founder: T::AccountId, max_members: u32) {
+		fn found(origin, founder: T::AccountId, max_members: u32, rules: Vec<u8>) {
 			T::FounderSetOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
 			ensure!(max_members > 1, Error::<T, I>::MaxMembers);
@@ -823,8 +828,35 @@ decl_module! {
 			Self::add_member(&founder)?;
 			<Head<T, I>>::put(&founder);
 			<Founder<T, I>>::put(&founder);
+			Rules::<T, I>::put(T::Hashing::hash(&rules));
 			Self::deposit_event(RawEvent::Founded(founder));
 		}
+
+		/// Anull the founding of the society.
+		///
+		/// This may be done when there is only one member.
+		///
+		/// The dispatch origin for this call must be Signed, and the signing account must be the
+		/// `Founder`.
+		///
+		/// # <weight>
+		/// - Two storage mutates to set `Head` and `Founder`. O(1)
+		/// - One storage write to add the first member to society. O(1)
+		/// - One event.
+		///
+		/// Total Complexity: O(1)
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		fn unfound(origin) {
+			let who = ensure_signed(origin)?;
+			ensure!(&<Members<T, I>>::get()[..] == &[who][..], Error::<T, I>::NotFounder);
+
+			Members::<T, I>::kill();
+			Head::<T, I>::kill();
+			Founder::<T, I>::kill();
+			Rules::<T, I>::kill();
+		}
+
 		/// Allow suspension judgement origin to make judgement on a suspended member.
 		///
 		/// If a suspended member is forgiven, we simply add them back as a member, not affecting
@@ -1047,6 +1079,8 @@ decl_error! {
 		NotCandidate,
 		/// Too many members in the society.
 		MaxMembers,
+		/// The society is not a single member who is the caller.
+		NotFounder,
 	}
 }
 
