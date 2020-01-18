@@ -41,7 +41,6 @@ use sp_runtime::traits::{
 };
 
 pub mod automata;
-mod simple_modes;
 
 pub trait RuntimeAdapter {
 	type AccountId: Display;
