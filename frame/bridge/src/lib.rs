@@ -38,7 +38,7 @@ mod storage_proof;
 
 use crate::storage_proof::{StorageProof, StorageProofChecker};
 use codec::{Encode, Decode};
-use fg_primitives::{AuthorityId, AuthorityWeight};
+use sp_finality_grandpa::{AuthorityId, AuthorityWeight};
 use sp_runtime::traits::Header;
 use frame_support::{
 	dispatch::{DispatchResult, DispatchError},
@@ -209,7 +209,7 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 
-	use primitives::{Blake2Hasher, H256, Public};
+	use sp_core::{Blake2Hasher, H256, Public};
 	use sp_runtime::{
 		Perbill, traits::{Header as HeaderT, IdentityLookup}, testing::Header, generic::Digest,
 	};

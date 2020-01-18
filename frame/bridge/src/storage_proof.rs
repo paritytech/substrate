@@ -79,7 +79,7 @@ pub enum Error {
 mod tests {
 	use super::*;
 
-	use primitives::{Blake2Hasher, H256};
+	use sp_core::{Blake2Hasher, H256};
 	use sp_state_machine::{prove_read, backend::Backend, InMemoryBackend};
 	// use trie::{PrefixedMemoryDB, TrieDBMut};
 
