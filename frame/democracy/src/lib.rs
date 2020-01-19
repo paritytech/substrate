@@ -299,6 +299,10 @@ decl_storage! {
 		/// Get the account (and lock periods) to which another account is delegating vote.
 		pub Delegations get(fn delegations): linked_map T::AccountId => (T::AccountId, Conviction);
 
+		/// Accounts for which there are locks in action which may be removed at some point in the
+		/// future. The value is the block number at which the lock expires and may be removed.
+		pub Locks get(locks): map T::AccountId => Option<T::BlockNumber>;
+
 		/// True if the last referendum tabled was submitted externally. False if it was a public
 		/// proposal.
 		pub LastTabledWasExternal: bool;
@@ -357,6 +361,8 @@ decl_event! {
 		PreimageMissing(Hash, ReferendumIndex),
 		/// A registered preimage was removed and the deposit collected by the reaper (last item).
 		PreimageReaped(Hash, AccountId, Balance, AccountId),
+		/// An account has been unlocked successfully.
+		Unlocked(AccountId),
 	}
 }
 
@@ -406,6 +412,10 @@ decl_error! {
 		PreimageInvalid,
 		/// No proposals waiting
 		NoneWaiting,
+		/// The target account does not have a lock.
+		NotLocked,
+		/// The lock on the account to be unlocked has not yet expired.
+		NotExpired,
 	}
 }
 
@@ -697,6 +707,7 @@ decl_module! {
 				T::BlockNumber::max_value(),
 				WithdrawReason::Transfer.into()
 			);
+			Locks::<T>::remove(&who);
 			Self::deposit_event(RawEvent::Delegated(who, to));
 		}
 
@@ -712,16 +723,14 @@ decl_module! {
 			let (_, conviction) = <Delegations<T>>::take(&who);
 			// Indefinite lock is reduced to the maximum voting lock that could be possible.
 			let now = <frame_system::Module<T>>::block_number();
-			// TODO: refactor this so that `locked_until` is stored in this pallet and there's
-			// an extra step (call) to be made explicitly by the user to unlock the funds after
-			// `locked_until`.
 			let locked_until = now + T::EnactmentPeriod::get() * conviction.lock_periods().into();
+			Locks::<T>::insert(&who, locked_until);
 			T::Currency::set_lock(
 				DEMOCRACY_ID,
 				&who,
 				Bounded::max_value(),
-				locked_until,
-				WithdrawReason::Transfer.into()
+				T::BlockNumber::max_value(),
+				WithdrawReason::Transfer.into(),
 			);
 			Self::deposit_event(RawEvent::Undelegated(who));
 		}
@@ -791,6 +800,18 @@ decl_module! {
 			let _ = T::Currency::repatriate_reserved(&old, &who, deposit);
 			<Preimages<T>>::remove(&proposal_hash);
 			Self::deposit_event(RawEvent::PreimageReaped(proposal_hash, old, deposit, who));
+		}
+
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		fn unlock(origin, target: T::AccountId) {
+			ensure_signed(origin)?;
+
+			let expiry = Locks::<T>::get(&target).ok_or(Error::<T>::NotLocked)?;
+			ensure!(expiry <= system::Module::<T>::block_number(), Error::<T>::NotExpired);
+
+			T::Currency::remove_lock(DEMOCRACY_ID, &target);
+			Locks::<T>::remove(&target);
+			Self::deposit_event(RawEvent::Unlocked(target));
 		}
 	}
 }
@@ -1077,14 +1098,16 @@ impl<T: Trait> Module<T> {
 			// now plus: the base lock period multiplied by the number of periods this voter
 			// offered to lock should they win...
 			let locked_until = now + T::EnactmentPeriod::get() * conviction.lock_periods().into();
+			Locks::<T>::insert(&a, locked_until);
 			// ...extend their bondage until at least then.
 			T::Currency::extend_lock(
 				DEMOCRACY_ID,
 				&a,
 				Bounded::max_value(),
-				locked_until,
+				T::BlockNumber::max_value(),
 				WithdrawReason::Transfer.into()
 			);
+
 		}
 
 		Self::clear_referendum(index);
@@ -2395,24 +2418,47 @@ mod tests {
 			assert_eq!(Balances::locks(2), vec![BalanceLock {
 				id: DEMOCRACY_ID,
 				amount: u64::max_value(),
-				until: 18,
+				until: u64::max_value(),
 				reasons: WithdrawReason::Transfer.into()
 			}]);
+			assert_eq!(Democracy::locks(2), Some(18));
 			assert_eq!(Balances::locks(3), vec![BalanceLock {
 				id: DEMOCRACY_ID,
 				amount: u64::max_value(),
-				until: 10,
+				until: u64::max_value(),
 				reasons: WithdrawReason::Transfer.into()
 			}]);
+			assert_eq!(Democracy::locks(3), Some(10));
 			assert_eq!(Balances::locks(4), vec![BalanceLock {
 				id: DEMOCRACY_ID,
 				amount: u64::max_value(),
-				until: 6,
+				until: u64::max_value(),
 				reasons: WithdrawReason::Transfer.into()
 			}]);
+			assert_eq!(Democracy::locks(4), Some(6));
 			assert_eq!(Balances::locks(5), vec![]);
 
 			assert_eq!(Balances::free_balance(&42), 2);
+
+			assert_noop!(Democracy::unlock(Origin::signed(1), 1), Error::<Test>::NotLocked);
+
+			fast_forward_to(5);
+			assert_noop!(Democracy::unlock(Origin::signed(1), 4), Error::<Test>::NotExpired);
+			fast_forward_to(6);
+			assert_ok!(Democracy::unlock(Origin::signed(1), 4));
+			assert_noop!(Democracy::unlock(Origin::signed(1), 4), Error::<Test>::NotLocked);
+
+			fast_forward_to(9);
+			assert_noop!(Democracy::unlock(Origin::signed(1), 3), Error::<Test>::NotExpired);
+			fast_forward_to(10);
+			assert_ok!(Democracy::unlock(Origin::signed(1), 3));
+			assert_noop!(Democracy::unlock(Origin::signed(1), 3), Error::<Test>::NotLocked);
+
+			fast_forward_to(17);
+			assert_noop!(Democracy::unlock(Origin::signed(1), 2), Error::<Test>::NotExpired);
+			fast_forward_to(18);
+			assert_ok!(Democracy::unlock(Origin::signed(1), 2));
+			assert_noop!(Democracy::unlock(Origin::signed(1), 2), Error::<Test>::NotLocked);
 		});
 	}
 
