@@ -704,7 +704,6 @@ decl_module! {
 				DEMOCRACY_ID,
 				&who,
 				Bounded::max_value(),
-				T::BlockNumber::max_value(),
 				WithdrawReason::Transfer.into()
 			);
 			Locks::<T>::remove(&who);
@@ -729,7 +728,6 @@ decl_module! {
 				DEMOCRACY_ID,
 				&who,
 				Bounded::max_value(),
-				T::BlockNumber::max_value(),
 				WithdrawReason::Transfer.into(),
 			);
 			Self::deposit_event(RawEvent::Undelegated(who));
@@ -1104,7 +1102,6 @@ impl<T: Trait> Module<T> {
 				DEMOCRACY_ID,
 				&a,
 				Bounded::max_value(),
-				T::BlockNumber::max_value(),
 				WithdrawReason::Transfer.into()
 			);
 

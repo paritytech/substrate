@@ -444,7 +444,6 @@ decl_module! {
 pub struct BalanceLock<Balance, BlockNumber> {
 	pub id: LockIdentifier,
 	pub amount: Balance,
-	pub until: BlockNumber,
 	pub reasons: WithdrawReasons,
 }
 
@@ -835,14 +834,11 @@ impl<T: Trait> Module<T> {
 		id: LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
-		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		let now = <frame_system::Module<T>>::block_number();
 		let mut new_lock = Some(BalanceLock {
 			id,
 			amount,
-			until,
 			reasons,
 		});
 		let mut locks = <Module<T>>::locks(who)
@@ -850,10 +846,8 @@ impl<T: Trait> Module<T> {
 			.filter_map(|l| {
 				if l.id == id {
 					new_lock.take()
-				} else if l.until > now {
-					Some(l)
 				} else {
-					None
+					Some(l)
 				}
 			})
 			.collect::<Vec<_>>();
@@ -867,14 +861,11 @@ impl<T: Trait> Module<T> {
 		id: LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
-		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		let now = <frame_system::Module<T>>::block_number();
 		let mut new_lock = Some(BalanceLock {
 			id,
 			amount,
-			until,
 			reasons,
 		});
 		let mut locks = <Module<T>>::locks(who)
@@ -884,13 +875,10 @@ impl<T: Trait> Module<T> {
 					new_lock.take().map(|nl| BalanceLock {
 						id: l.id,
 						amount: l.amount.max(nl.amount),
-						until: l.until.max(nl.until),
 						reasons: l.reasons | nl.reasons,
 					})
-				} else if l.until > now {
-					Some(l)
 				} else {
-					None
+					Some(l)
 				}
 			})
 			.collect::<Vec<_>>();
@@ -901,11 +889,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn remove_lock(id: LockIdentifier, who: &T::AccountId) {
-		let now = <frame_system::Module<T>>::block_number();
-		let locks = <Module<T>>::locks(who)
-			.into_iter()
-			.filter_map(|l| if l.until > now && l.id != id { Some(l) } else { None })
-			.collect::<Vec<_>>();
+		let mut locks = <Module<T>>::locks(who)
+		locks.retain(|l| l.id != id);
 		<Locks<T>>::insert(who, locks);
 	}
 }
@@ -1349,20 +1334,18 @@ where
 		id: LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
-		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		<Module<T>>::set_lock(id, who, amount, until, reasons)
+		<Module<T>>::set_lock(id, who, amount, reasons)
 	}
 
 	fn extend_lock(
 		id: LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
-		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		<Module<T>>::extend_lock(id, who, amount, until, reasons)
+		<Module<T>>::extend_lock(id, who, amount, reasons)
 	}
 
 	fn remove_lock(id: LockIdentifier, who: &T::AccountId) {

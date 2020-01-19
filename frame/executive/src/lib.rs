@@ -712,7 +712,6 @@ mod tests {
 					id,
 					&1,
 					110,
-					Bounded::max_value(),
 					lock,
 				);
 				let xt = sp_runtime::testing::TestXt(

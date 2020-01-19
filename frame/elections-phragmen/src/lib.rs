@@ -260,7 +260,6 @@ decl_module! {
 				MODULE_ID,
 				&who,
 				locked_balance,
-				T::BlockNumber::max_value(),
 				WithdrawReasons::except(WithdrawReason::TransactionPayment),
 			);
 			<StakeOf<T>>::insert(&who, locked_balance);

@@ -35,7 +35,7 @@ const ID_3: LockIdentifier = *b"3       ";
 fn basic_locking_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
 		assert_eq!(Balances::free_balance(&1), 10);
-		Balances::set_lock(ID_1, &1, 9, u64::max_value(), WithdrawReasons::all());
+		Balances::set_lock(ID_1, &1, 9, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 5, AllowDeath),
 			Error::<Test, _>::LiquidityRestrictions
@@ -46,7 +46,7 @@ fn basic_locking_should_work() {
 #[test]
 fn partial_locking_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
-		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
+		Balances::set_lock(ID_1, &1, 5, WithdrawReasons::all());
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 	});
 }
@@ -54,7 +54,7 @@ fn partial_locking_should_work() {
 #[test]
 fn lock_removal_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
-		Balances::set_lock(ID_1, &1, u64::max_value(), u64::max_value(), WithdrawReasons::all());
+		Balances::set_lock(ID_1, &1, u64::max_value(), WithdrawReasons::all());
 		Balances::remove_lock(ID_1, &1);
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 	});
@@ -63,8 +63,8 @@ fn lock_removal_should_work() {
 #[test]
 fn lock_replacement_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
-		Balances::set_lock(ID_1, &1, u64::max_value(), u64::max_value(), WithdrawReasons::all());
-		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
+		Balances::set_lock(ID_1, &1, u64::max_value(), WithdrawReasons::all());
+		Balances::set_lock(ID_1, &1, 5, WithdrawReasons::all());
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 	});
 }
@@ -72,8 +72,8 @@ fn lock_replacement_should_work() {
 #[test]
 fn double_locking_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
-		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
-		Balances::set_lock(ID_2, &1, 5, u64::max_value(), WithdrawReasons::all());
+		Balances::set_lock(ID_1, &1, 5, WithdrawReasons::all());
+		Balances::set_lock(ID_2, &1, 5, WithdrawReasons::all());
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 	});
 }
@@ -81,9 +81,8 @@ fn double_locking_should_work() {
 #[test]
 fn combination_locking_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
-		Balances::set_lock(ID_1, &1, u64::max_value(), 0, WithdrawReasons::none());
-		Balances::set_lock(ID_2, &1, 0, u64::max_value(), WithdrawReasons::none());
-		Balances::set_lock(ID_3, &1, 0, 0, WithdrawReasons::all());
+		Balances::set_lock(ID_1, &1, u64::max_value(), WithdrawReasons::none());
+		Balances::set_lock(ID_2, &1, 0, WithdrawReasons::all());
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 	});
 }
@@ -91,17 +90,17 @@ fn combination_locking_should_work() {
 #[test]
 fn lock_value_extension_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
-		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
+		Balances::set_lock(ID_1, &1, 5, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 			Error::<Test, _>::LiquidityRestrictions
 		);
-		Balances::extend_lock(ID_1, &1, 2, u64::max_value(), WithdrawReasons::all());
+		Balances::extend_lock(ID_1, &1, 2, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 			Error::<Test, _>::LiquidityRestrictions
 		);
-		Balances::extend_lock(ID_1, &1, 8, u64::max_value(), WithdrawReasons::all());
+		Balances::extend_lock(ID_1, &1, 8, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 3, AllowDeath),
 			Error::<Test, _>::LiquidityRestrictions
@@ -116,7 +115,7 @@ fn lock_reasons_should_work() {
 		.monied(true)
 		.build()
 		.execute_with(|| {
-			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Transfer.into());
+			Balances::set_lock(ID_1, &1, 10, WithdrawReason::Transfer.into());
 			assert_noop!(
 				<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
 				Error::<Test, _>::LiquidityRestrictions
@@ -131,7 +130,7 @@ fn lock_reasons_should_work() {
 				0,
 			).is_ok());
 
-			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Reserve.into());
+			Balances::set_lock(ID_1, &1, 10, WithdrawReason::Reserve.into());
 			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 			assert_noop!(
 				<Balances as ReservableCurrency<_>>::reserve(&1, 1),
@@ -145,7 +144,7 @@ fn lock_reasons_should_work() {
 				0,
 			).is_ok());
 
-			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::TransactionPayment.into());
+			Balances::set_lock(ID_1, &1, 10, WithdrawReason::TransactionPayment.into());
 			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
 			assert!(<ChargeTransactionPayment<Test> as SignedExtension>::pre_dispatch(
@@ -161,7 +160,7 @@ fn lock_reasons_should_work() {
 #[test]
 fn lock_block_number_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
-		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
+		Balances::set_lock(ID_1, &1, 10, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
 			Error::<Test, _>::LiquidityRestrictions
@@ -175,18 +174,18 @@ fn lock_block_number_should_work() {
 #[test]
 fn lock_block_number_extension_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
-		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
+		Balances::set_lock(ID_1, &1, 10, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 			Error::<Test, _>::LiquidityRestrictions
 		);
-		Balances::extend_lock(ID_1, &1, 10, 1, WithdrawReasons::all());
+		Balances::extend_lock(ID_1, &1, 10, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 			Error::<Test, _>::LiquidityRestrictions
 		);
 		System::set_block_number(2);
-		Balances::extend_lock(ID_1, &1, 10, 8, WithdrawReasons::all());
+		Balances::extend_lock(ID_1, &1, 10, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 3, AllowDeath),
 			Error::<Test, _>::LiquidityRestrictions
@@ -197,17 +196,17 @@ fn lock_block_number_extension_should_work() {
 #[test]
 fn lock_reasons_extension_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
-		Balances::set_lock(ID_1, &1, 10, 10, WithdrawReason::Transfer.into());
+		Balances::set_lock(ID_1, &1, 10, WithdrawReason::Transfer.into());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 			Error::<Test, _>::LiquidityRestrictions
 		);
-		Balances::extend_lock(ID_1, &1, 10, 10, WithdrawReasons::none());
+		Balances::extend_lock(ID_1, &1, 10, WithdrawReasons::none());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 			Error::<Test, _>::LiquidityRestrictions
 		);
-		Balances::extend_lock(ID_1, &1, 10, 10, WithdrawReason::Reserve.into());
+		Balances::extend_lock(ID_1, &1, 10, WithdrawReason::Reserve.into());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 			Error::<Test, _>::LiquidityRestrictions

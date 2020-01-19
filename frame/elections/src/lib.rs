@@ -891,7 +891,6 @@ impl<T: Trait> Module<T> {
 			MODULE_ID,
 			&who,
 			locked_balance,
-			T::BlockNumber::max_value(),
 			WithdrawReasons::all(),
 		);
 

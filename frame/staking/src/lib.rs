@@ -1279,7 +1279,6 @@ impl<T: Trait> Module<T> {
 			STAKING_ID,
 			&ledger.stash,
 			ledger.total,
-			T::BlockNumber::max_value(),
 			WithdrawReasons::all(),
 		);
 		<Ledger<T>>::insert(controller, ledger);

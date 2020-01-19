@@ -581,7 +581,6 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 		id: LockIdentifier,
 		who: &AccountId,
 		amount: Self::Balance,
-		until: Self::Moment,
 		reasons: WithdrawReasons,
 	);
 
@@ -592,13 +591,11 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// applies the most severe constraints of the two, while `set_lock` replaces the lock
 	/// with the new parameters. As in, `extend_lock` will set:
 	/// - maximum `amount`
-	/// - farthest duration (`until`)
 	/// - bitwise mask of all `reasons`
 	fn extend_lock(
 		id: LockIdentifier,
 		who: &AccountId,
 		amount: Self::Balance,
-		until: Self::Moment,
 		reasons: WithdrawReasons,
 	);
 

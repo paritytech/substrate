@@ -141,7 +141,6 @@
 //! 		STAKING_ID,
 //! 		&ledger.stash,
 //! 		ledger.total,
-//! 		T::BlockNumber::max_value(),
 //! 		WithdrawReasons::all()
 //! 	);
 //! 	// <Ledger<T>>::insert(controller, ledger); // Commented out as we don't have access to Staking's storage here.
@@ -338,7 +337,6 @@ impl<Balance: SimpleArithmetic + Copy, BlockNumber: SimpleArithmetic + Copy> Ves
 pub struct BalanceLock<Balance, BlockNumber> {
 	pub id: LockIdentifier,
 	pub amount: Balance,
-	pub until: BlockNumber,
 	pub reasons: WithdrawReasons,
 }
 
@@ -1255,19 +1253,15 @@ where
 		id: LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
-		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
 		if amount.is_zero() { return }
-		let now = <frame_system::Module<T>>::block_number();
-		let mut new_lock = Some(BalanceLock { id, amount, until, reasons });
+		let mut new_lock = Some(BalanceLock { id, amount, reasons });
 		let mut locks = Self::locks(who).into_iter().filter_map(|l|
 			if l.id == id {
 				new_lock.take()
-			} else if l.until > now {
-				Some(l)
 			} else {
-				None
+				Some(l)
 			}).collect::<Vec<_>>();
 		if let Some(lock) = new_lock {
 			locks.push(lock)
@@ -1279,10 +1273,8 @@ where
 		id: LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
-		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		let now = <frame_system::Module<T>>::block_number();
 		let mut new_lock = Some(BalanceLock { id, amount, until, reasons });
 		let mut locks = Self::locks(who).into_iter().filter_map(|l|
 			if l.id == id {
@@ -1290,14 +1282,11 @@ where
 					BalanceLock {
 						id: l.id,
 						amount: l.amount.max(nl.amount),
-						until: l.until.max(nl.until),
 						reasons: l.reasons | nl.reasons,
 					}
 				})
-			} else if l.until > now {
-				Some(l)
 			} else {
-				None
+				Some(l)
 			}).collect::<Vec<_>>();
 		if let Some(lock) = new_lock {
 			locks.push(lock)
@@ -1309,13 +1298,8 @@ where
 		id: LockIdentifier,
 		who: &T::AccountId,
 	) {
-		let now = <frame_system::Module<T>>::block_number();
-		let locks = Self::locks(who).into_iter().filter_map(|l|
-			if l.until > now && l.id != id {
-				Some(l)
-			} else {
-				None
-			}).collect::<Vec<_>>();
+		let mut locks = Self::locks(who);
+		locks.retain(|l| l.id != id);
 		<Locks<T, I>>::insert(who, locks);
 	}
 }
