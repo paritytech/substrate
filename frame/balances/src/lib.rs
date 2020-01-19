@@ -334,7 +334,7 @@ impl<Balance: SimpleArithmetic + Copy, BlockNumber: SimpleArithmetic + Copy> Ves
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct BalanceLock<Balance, BlockNumber> {
+pub struct BalanceLock<Balance> {
 	pub id: LockIdentifier,
 	pub amount: Balance,
 	pub reasons: WithdrawReasons,
@@ -414,7 +414,7 @@ decl_storage! {
 
 		/// Any liquidity locks on some account balances.
 		/// NOTE: Should only be accessed when setting, changing and freeing a lock.
-		pub Locks get(fn locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
+		pub Locks get(fn locks): map T::AccountId => Vec<BalanceLock<T::Balance>>;
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
@@ -965,14 +965,7 @@ where
 			return Ok(())
 		}
 
-		let now = <frame_system::Module<T>>::block_number();
-		if locks.into_iter()
-			.all(|l|
-				now >= l.until
-				|| new_balance >= l.amount
-				|| !l.reasons.intersects(reasons)
-			)
-		{
+		if locks.into_iter().all(|l| new_balance >= l.amount || !l.reasons.intersects(reasons)) {
 			Ok(())
 		} else {
 			Err(Error::<T, I>::LiquidityRestrictions.into())
@@ -1275,7 +1268,7 @@ where
 		amount: T::Balance,
 		reasons: WithdrawReasons,
 	) {
-		let mut new_lock = Some(BalanceLock { id, amount, until, reasons });
+		let mut new_lock = Some(BalanceLock { id, amount, reasons });
 		let mut locks = Self::locks(who).into_iter().filter_map(|l|
 			if l.id == id {
 				new_lock.take().map(|nl| {

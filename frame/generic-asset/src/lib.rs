@@ -441,7 +441,7 @@ decl_module! {
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct BalanceLock<Balance, BlockNumber> {
+pub struct BalanceLock<Balance> {
 	pub id: LockIdentifier,
 	pub amount: Balance,
 	pub reasons: WithdrawReasons,
@@ -468,7 +468,7 @@ decl_storage! {
 		pub Permissions get(fn get_permission): map T::AssetId => PermissionVersions<T::AccountId>;
 
 		/// Any liquidity locks on some account balances.
-		pub Locks get(fn locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
+		pub Locks get(fn locks): map T::AccountId => Vec<BalanceLock<T::Balance>>;
 
 		/// The identity of the asset which is the one that is designated for the chain's staking system.
 		pub StakingAssetId get(fn staking_asset_id) config(): T::AssetId;

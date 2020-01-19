@@ -29,7 +29,6 @@ use frame_system::RawOrigin;
 
 const ID_1: LockIdentifier = *b"1       ";
 const ID_2: LockIdentifier = *b"2       ";
-const ID_3: LockIdentifier = *b"3       ";
 
 #[test]
 fn basic_locking_should_work() {
@@ -155,20 +154,6 @@ fn lock_reasons_should_work() {
 				0,
 			).is_err());
 		});
-}
-
-#[test]
-fn lock_block_number_should_work() {
-	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
-		Balances::set_lock(ID_1, &1, 10, WithdrawReasons::all());
-		assert_noop!(
-			<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
-			Error::<Test, _>::LiquidityRestrictions
-		);
-
-		System::set_block_number(2);
-		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
-	});
 }
 
 #[test]
