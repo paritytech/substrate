@@ -84,6 +84,10 @@ pub enum UpdateBalanceOutcome {
 	Updated,
 	/// The update led to killing the account.
 	AccountKilled,
+	/// Free balance became zero as a result of this update.
+	FreeBalanceZero,
+	/// Reserved balance became zero as a result of this update.
+	ReservedBalanceZero,
 }
 
 /// A trait for finding the author of a block header based on the `PreRuntime` digests contained
@@ -641,7 +645,7 @@ bitmask! {
 		TransactionPayment = 0b00000001,
 		/// In order to transfer ownership.
 		Transfer = 0b00000010,
-		/// In order to reserve some funds for a later return or repatriation
+		/// In order to reserve some funds for a later return or repatriation.
 		Reserve = 0b00000100,
 		/// In order to pay some other (higher-level) fees.
 		Fee = 0b00001000,

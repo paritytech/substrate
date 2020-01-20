@@ -196,7 +196,6 @@ impl timestamp::Trait for Runtime {
 
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 500;
-	pub const TransferFee: u128 = 0;
 	pub const CreationFee: u128 = 0;
 }
 
@@ -214,7 +213,6 @@ impl balances::Trait for Runtime {
 	type DustRemoval = ();
 	type TransferPayment = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
 }
 

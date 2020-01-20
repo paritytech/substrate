@@ -26,7 +26,7 @@
 use sp_std::prelude::*;
 use sp_runtime::{
 	RuntimeDebug, DispatchResult, print,
-	traits::{Zero, One, StaticLookup, Bounded, Saturating},
+	traits::{Zero, One, StaticLookup, Saturating},
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,

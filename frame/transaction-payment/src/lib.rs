@@ -76,7 +76,7 @@ pub trait Trait: frame_system::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
-		NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
+		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
 	}
 }
 
@@ -306,7 +306,6 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 		pub const ExistentialDeposit: u64 = 0;
 	}
@@ -320,7 +319,6 @@ mod tests {
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
 	}
 

@@ -18,7 +18,7 @@
 
 use super::*;
 use mock::{Balances, ExtBuilder, Test, System, info_from_weight, CALL};
-use sp_runtime::traits::{SignedExtension, BadOrigin};
+use sp_runtime::{Fixed64, traits::{SignedExtension, BadOrigin}};
 use frame_support::{
 	assert_noop, assert_ok, assert_err,
 	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
@@ -114,23 +114,12 @@ fn lock_reasons_should_work() {
 		.monied(true)
 		.build()
 		.execute_with(|| {
-			Balances::set_lock(ID_1, &1, 10, WithdrawReason::Transfer.into());
+			pallet_transaction_payment::NextFeeMultiplier::put(Fixed64::from_natural(1));
+			Balances::set_lock(ID_1, &1, 10, WithdrawReason::Reserve.into());
 			assert_noop!(
 				<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
 				Error::<Test, _>::LiquidityRestrictions
 			);
-			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
-			// NOTE: this causes a fee payment.
-			assert!(<ChargeTransactionPayment<Test> as SignedExtension>::pre_dispatch(
-				ChargeTransactionPayment::from(1),
-				&1,
-				CALL,
-				info_from_weight(1),
-				0,
-			).is_ok());
-
-			Balances::set_lock(ID_1, &1, 10, WithdrawReason::Reserve.into());
-			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 			assert_noop!(
 				<Balances as ReservableCurrency<_>>::reserve(&1, 1),
 				Error::<Test, _>::LiquidityRestrictions
@@ -140,7 +129,14 @@ fn lock_reasons_should_work() {
 				&1,
 				CALL,
 				info_from_weight(1),
-				0,
+				1,
+			).is_err());
+			assert!(<ChargeTransactionPayment<Test> as SignedExtension>::pre_dispatch(
+				ChargeTransactionPayment::from(0),
+				&1,
+				CALL,
+				info_from_weight(1),
+				1,
 			).is_ok());
 
 			Balances::set_lock(ID_1, &1, 10, WithdrawReason::TransactionPayment.into());
@@ -151,7 +147,14 @@ fn lock_reasons_should_work() {
 				&1,
 				CALL,
 				info_from_weight(1),
-				0,
+				1,
+			).is_err());
+			assert!(<ChargeTransactionPayment<Test> as SignedExtension>::pre_dispatch(
+				ChargeTransactionPayment::from(0),
+				&1,
+				CALL,
+				info_from_weight(1),
+				1,
 			).is_err());
 		});
 }
@@ -487,8 +490,8 @@ fn transferring_incomplete_reserved_balance_should_work() {
 #[test]
 fn transferring_too_high_value_should_not_panic() {
 	ExtBuilder::default().build().execute_with(|| {
-		<FreeBalance<Test>>::insert(1, u64::max_value());
-		<FreeBalance<Test>>::insert(2, 1);
+		<Balance<Test>>::insert(1, Account { free: u64::max_value(), .. Default::default() });
+		<Balance<Test>>::insert(2, Account { free: 1, .. Default::default() });
 
 		assert_err!(
 			Balances::transfer(Some(1).into(), 2, u64::max_value()),
@@ -764,16 +767,16 @@ fn dust_moves_between_free_and_reserved() {
 		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 100));
 		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 2, 100, 100));
 		// Check balance
-		assert_eq!(Balances::free_balance(1), 100);
-		assert_eq!(Balances::reserved_balance(1), 100);
-		assert_eq!(Balances::free_balance(2), 100);
-		assert_eq!(Balances::reserved_balance(2), 100);
+		assert_eq!(Balances::free_balance(&1), 100);
+		assert_eq!(Balances::reserved_balance(&1), 100);
+		assert_eq!(Balances::free_balance(&2), 100);
+		assert_eq!(Balances::reserved_balance(&2), 100);
 
 		// Drop 1 free_balance below ED
 		assert_ok!(Balances::transfer(Some(1).into(), 2, 1));
 		// Check balance, the other 99 should move to reserved_balance
-		assert_eq!(Balances::free_balance(1), 0);
-		assert_eq!(Balances::reserved_balance(1), 199);
+		assert_eq!(Balances::free_balance(&1), 0);
+		assert_eq!(Balances::reserved_balance(&1), 199);
 
 		// Reset accounts
 		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 100));
@@ -782,13 +785,13 @@ fn dust_moves_between_free_and_reserved() {
 		// Drop 2 reserved_balance below ED
 		Balances::unreserve(&2, 1);
 		// Check balance, all 100 should move to free_balance
-		assert_eq!(Balances::free_balance(2), 200);
-		assert_eq!(Balances::reserved_balance(2), 0);
+		assert_eq!(Balances::free_balance(&2), 200);
+		assert_eq!(Balances::reserved_balance(&2), 0);
 
 		// An account with both too little free and reserved is completely killed
 		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 99, 99));
 		// Check balance is 0 for everything
-		assert_eq!(Balances::free_balance(1), 0);
-		assert_eq!(Balances::reserved_balance(1), 0);
+		assert_eq!(Balances::free_balance(&1), 0);
+		assert_eq!(Balances::reserved_balance(&1), 0);
 	});
 }

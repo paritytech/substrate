@@ -805,10 +805,8 @@ impl<T: Trait> Module<T> {
 		if locks.is_empty() {
 			return Ok(());
 		}
-		let now = <frame_system::Module<T>>::block_number();
 		if Self::locks(who)
-			.into_iter()
-			.all(|l| now >= l.until || new_balance >= l.amount || !l.reasons.intersects(reasons))
+			.into_iter().all(|l| new_balance >= l.amount || !l.reasons.intersects(reasons))
 		{
 			Ok(())
 		} else {
@@ -889,7 +887,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn remove_lock(id: LockIdentifier, who: &T::AccountId) {
-		let mut locks = <Module<T>>::locks(who)
+		let mut locks = <Module<T>>::locks(who);
 		locks.retain(|l| l.id != id);
 		<Locks<T>>::insert(who, locks);
 	}

@@ -140,7 +140,6 @@ impl frame_system::Trait for Test {
 	type ModuleToIndex = ();
 }
 parameter_types! {
-	pub const TransferFee: Balance = 0;
 	pub const CreationFee: Balance = 0;
 }
 impl pallet_balances::Trait for Test {
@@ -152,7 +151,6 @@ impl pallet_balances::Trait for Test {
 	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
 }
 parameter_types! {

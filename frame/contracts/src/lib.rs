@@ -400,9 +400,6 @@ pub trait Trait: frame_system::Trait {
 	/// to removal of a contract.
 	type SurchargeReward: Get<BalanceOf<Self>>;
 
-	/// The fee required to make a transfer.
-	type TransferFee: Get<BalanceOf<Self>>;
-
 	/// The fee required to create an account.
 	type CreationFee: Get<BalanceOf<Self>>;
 
@@ -518,9 +515,6 @@ decl_module! {
 		/// Reward that is received by the party whose touch has led
 		/// to removal of a contract.
 		const SurchargeReward: BalanceOf<T> = T::SurchargeReward::get();
-
-		/// The fee required to make a transfer.
-		const TransferFee: BalanceOf<T> = T::TransferFee::get();
 
 		/// The fee required to create an account.
 		const CreationFee: BalanceOf<T> = T::CreationFee::get();

@@ -32,18 +32,12 @@ impl_outer_origin!{
 
 thread_local! {
 	pub(crate) static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
-	static TRANSFER_FEE: RefCell<u64> = RefCell::new(0);
 	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
 }
 
 pub struct ExistentialDeposit;
 impl Get<u64> for ExistentialDeposit {
 	fn get() -> u64 { EXISTENTIAL_DEPOSIT.with(|v| *v.borrow()) }
-}
-
-pub struct TransferFee;
-impl Get<u64> for TransferFee {
-	fn get() -> u64 { TRANSFER_FEE.with(|v| *v.borrow()) }
 }
 
 pub struct CreationFee;
@@ -99,13 +93,11 @@ impl Trait for Test {
 	type DustRemoval = ();
 	type TransferPayment = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
 }
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
-	transfer_fee: u64,
 	creation_fee: u64,
 	monied: bool,
 	vesting: bool,
@@ -114,7 +106,6 @@ impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			existential_deposit: 0,
-			transfer_fee: 0,
 			creation_fee: 0,
 			monied: false,
 			vesting: false,
@@ -124,11 +115,6 @@ impl Default for ExtBuilder {
 impl ExtBuilder {
 	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
 		self.existential_deposit = existential_deposit;
-		self
-	}
-	#[allow(dead_code)]
-	pub fn transfer_fee(mut self, transfer_fee: u64) -> Self {
-		self.transfer_fee = transfer_fee;
 		self
 	}
 	pub fn creation_fee(mut self, creation_fee: u64) -> Self {
@@ -148,7 +134,6 @@ impl ExtBuilder {
 	}
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
-		TRANSFER_FEE.with(|v| *v.borrow_mut() = self.transfer_fee);
 		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
@@ -187,5 +172,5 @@ pub const CALL: &<Test as frame_system::Trait>::Call = &();
 
 /// create a transaction info struct from weight. Handy to avoid building the whole struct.
 pub fn info_from_weight(w: Weight) -> DispatchInfo {
-	DispatchInfo { weight: w, ..Default::default() }
+	DispatchInfo { weight: w, pays_fee: true, ..Default::default() }
 }

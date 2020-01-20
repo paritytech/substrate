@@ -83,7 +83,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::{print, DispatchResult, DispatchError, traits::{Zero, StaticLookup, Bounded, Convert}};
+use sp_runtime::{print, DispatchResult, DispatchError, traits::{Zero, StaticLookup, Convert}};
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error, weights::SimpleDispatchInfo,
 	traits::{
@@ -815,7 +815,6 @@ mod tests {
 
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
 
@@ -828,7 +827,6 @@ mod tests {
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
 	}
 
