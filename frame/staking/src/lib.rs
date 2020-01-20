@@ -1482,11 +1482,11 @@ impl<T: Trait> Module<T> {
 			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
 
 			// Filter out nomination targets which were nominated before the most recent
-			// slashing span.
+			// non-zero slash.
 			targets.retain(|stash| {
 				<Self as Store>::SlashingSpans::get(&stash).map_or(
 					true,
-					|spans| submitted_in >= spans.last_start(),
+					|spans| submitted_in >= spans.last_nonzero_slash(),
 				)
 			});
 
