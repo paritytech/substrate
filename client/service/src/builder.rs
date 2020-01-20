@@ -51,9 +51,9 @@ use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer};
 use sp_blockchain;
-use prometheus_endpoint::{create_gauge, Gauge, U64, F64, Registry};
+use prometheus_exporter::{create_gauge, Gauge, U64, F64, Registry};
 
-prometheus_endpoint::lazy_static! {
+prometheus_exporter::lazy_static! {
 	pub static ref FINALITY_HEIGHT: Gauge<U64> = create_gauge(
 		"finality_block_height_number",
 		"Height of the highest finalized block"
@@ -1182,7 +1182,7 @@ ServiceBuilder<
 			).map(drop)));
 			telemetry
 		});
-		// Prometheus endpoint
+		// Prometheus exporter
 		if let Some(port) = config.prometheus_port {
 			let registry = match prometheus_registry {
 				Some(registry) => registry,
@@ -1199,7 +1199,7 @@ ServiceBuilder<
 			registry.register(Box::new(NODE_UPLOAD.clone()))?;
 
 			let future = select(
-				prometheus_endpoint::init_prometheus(port, registry).boxed(),
+				prometheus_exporter::init_prometheus(port, registry).boxed(),
 				exit.clone()
 			).map(drop);
 

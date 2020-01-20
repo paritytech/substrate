@@ -1,6 +1,6 @@
 [package]
-description = "Prometheus endpoint server"
-name = "prometheus-endpoint"
+description = "Prometheus exporter server"
+name = "prometheus-exporter"
 version = "0.8.0"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
