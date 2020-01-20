@@ -15,11 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::state_holder::StateHolder;
-use std::rc::Rc;
-use std::any::Any;
 use sc_executor_common::error::WasmError;
 use sp_wasm_interface::{Function, Value, ValueType};
-use wasmtime::{Callable, Extern, ExternType, Store, Module, Val, Trap, Func};
+use std::any::Any;
+use std::rc::Rc;
+use wasmtime::{Callable, Extern, ExternType, Func, Module, Store, Trap, Val};
 
 /// Goes over all imports of a module and prepares a vector of `Extern`s that can be used for
 /// instantiation of the module. Returns an error if there are imports that cannot be satisfied.
@@ -108,13 +108,16 @@ impl HostFuncHandler {
 }
 
 impl Callable for HostFuncHandler {
-	fn call(&self, wasmtime_params: &[Val], wasmtime_results: &mut [Val]) -> Result<(), wasmtime::Trap> {
+	fn call(
+		&self,
+		wasmtime_params: &[Val],
+		wasmtime_results: &mut [Val],
+	) -> Result<(), wasmtime::Trap> {
 		let unwind_result = self.state_holder.with_context(|mut host_ctx| {
 			let mut params = wasmtime_params.iter().cloned().map(into_value);
 
 			std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-				self.host_func
-					.execute(&mut host_ctx, &mut params)
+				self.host_func.execute(&mut host_ctx, &mut params)
 			}))
 		});
 

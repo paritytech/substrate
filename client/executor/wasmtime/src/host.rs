@@ -186,7 +186,8 @@ impl<'a> Sandbox for HostContext<'a> {
 			.map_err(|e| e.to_string())?;
 		sandboxed_memory.with_direct_access(|sandboxed_memory| {
 			let len = buf_len as usize;
-			let src_range = match util::checked_range(offset as usize, len, sandboxed_memory.len()) {
+			let src_range = match util::checked_range(offset as usize, len, sandboxed_memory.len())
+			{
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			};
@@ -224,7 +225,8 @@ impl<'a> Sandbox for HostContext<'a> {
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			};
-			let dst_range = match util::checked_range(offset as usize, len, sandboxed_memory.len()) {
+			let dst_range = match util::checked_range(offset as usize, len, sandboxed_memory.len())
+			{
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			};
