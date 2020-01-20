@@ -135,12 +135,20 @@ impl Callable for HostFuncHandler {
 
 		match execution_result {
 			Ok(Some(ret_val)) => {
-				// TODO: Should we check the return type?
+				debug_assert!(
+					wasmtime_results.len() == 1,
+					"wasmtime function signature, therefore the number of results, should always \
+					correspond to the number of results returned by the host function",
+				);
 				wasmtime_results[0] = into_wasmtime_val(ret_val);
 				Ok(())
 			}
 			Ok(None) => {
-				// TODO: Should we check the return type?
+				debug_assert!(
+					wasmtime_results.len() == 0,
+					"wasmtime function signature, therefore the number of results, should always \
+					correspond to the number of results returned by the host function",
+				);
 				Ok(())
 			}
 			Err(msg) => Err(Trap::new(msg)),
