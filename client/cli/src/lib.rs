@@ -180,11 +180,12 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	Ok(())
 }
 
-pub fn run<F, G, E, F2, F3, T1, T2>(
+pub fn run<F, G, E, F2, F3, F4, T1, T2, T3, T5>(
 	core_params: CoreParams,
 	new_light: F2,
 	new_full: F3,
-	load_spec: F,
+	spec_factory: F,
+	builder: F4,
 	impl_name: &'static str,
 	version: &VersionInfo,
 ) -> error::Result<()>
@@ -192,10 +193,15 @@ where
 	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 	F2: FnOnce(Configuration<G, E>) -> Result<T1, sc_service::error::Error>,
 	F3: FnOnce(Configuration<G, E>) -> Result<T2, sc_service::error::Error>,
+	F4: FnOnce(Configuration<G, E>) -> Result<T3, sc_service::error::Error>,
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 	T1: AbstractService + std::marker::Unpin,
 	T2: AbstractService + std::marker::Unpin,
+	T3: ServiceBuilderCommand<Block = T5> + std::marker::Unpin,
+	T5: sp_runtime::traits::Block + Debug,
+	<<<T5 as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as
+	std::str::FromStr>::Err: std::fmt::Debug,
 {
 	let full_version = sc_service::config::full_version_from_strs(
 		version.version,
@@ -218,11 +224,10 @@ where
 	fdlimit::raise_fd_limit();
 	init_logger(core_params.get_shared_params().log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
 
-	let config = get_config(&core_params, load_spec, impl_name, &version)?;
+	match &core_params {
+		CoreParams::Run(_params) => {
+			let config = get_config(&core_params, spec_factory, impl_name, &version)?;
 
-	match core_params {
-		CoreParams::Run(params) => {
-			//ParseAndPrepare::Run(
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
 			info!("  by {}, 2017, 2018", version.author);
@@ -230,34 +235,94 @@ where
 			info!("Node name: {}", config.name);
 			info!("Roles: {}", display_role(&config));
 			match config.roles {
-				ServiceRoles::LIGHT => run_until_exit(
+				ServiceRoles::LIGHT => run_service_until_exit(
 					new_light(config)?,
 				),
-				_ => run_until_exit(
+				_ => run_service_until_exit(
 					new_full(config)?,
 				),
 			}
 		},
+		CoreParams::BuildSpec(params) => {
+			info!("Building chain spec");
+			let raw_output = params.raw;
+			let mut spec = load_spec(&params.shared_params, spec_factory)?;
+
+			if spec.boot_nodes().is_empty() && !params.disable_default_bootnode {
+				let cfg = create_build_spec_config(
+					&spec,
+					&params.shared_params,
+					version,
+				)?;
+				let node_key = node_key_config(
+					params.node_key_params.clone(),
+					&Some(cfg.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a base_path"))
+				)?;
+				let keys = node_key.into_keypair()?;
+				let peer_id = keys.public().into_peer_id();
+				let addr = build_multiaddr![
+					Ip4([127, 0, 0, 1]),
+					Tcp(30333u16),
+					P2p(peer_id)
+				];
+				spec.add_boot_node(addr)
+			}
+
+			let json = sc_service::chain_ops::build_spec(spec, raw_output)?;
+
+			print!("{}", json);
+
+			Ok(())
+		},
+		CoreParams::ExportBlocks(params) => {
+			let config = get_config(&core_params, spec_factory, impl_name, &version)?;
+
+			if let DatabaseConfig::Path { ref path, .. } = &config.database {
+				info!("DB path: {}", path.display());
+			}
+			let from = params.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
+			let to = params.to.as_ref().and_then(|t| t.parse().ok());
+
+			let json = params.json;
+
+			let file: Box<dyn Write> = match &params.output {
+				Some(filename) => Box::new(File::create(filename)?),
+				None => Box::new(stdout()),
+			};
+
+			let f = builder(config)?
+				.export_blocks(file, from.into(), to, json)
+				.compat();
+			let f = f.fuse();
+			pin_mut!(f);
+
+			run_until_exit(f)
+		},
+		CoreParams::ImportBlocks(params) => {
+			let mut config = get_config(&core_params, spec_factory, impl_name, &version)?;
+			fill_import_params(&mut config, &params.import_params, sc_service::Roles::FULL)?;
+
+			let file: Box<dyn ReadPlusSeek + Send> = match &params.input {
+				Some(filename) => Box::new(File::open(filename)?),
+				None => {
+					let mut buffer = Vec::new();
+					stdin().read_to_end(&mut buffer)?;
+					Box::new(Cursor::new(buffer))
+				},
+			};
+
+			let f = builder(config)?
+				.import_blocks(file, false)
+				.compat();
+			let f = f.fuse();
+			pin_mut!(f);
+
+			run_until_exit(f)
+		},
 		/*
-		CoreParams::BuildSpec(params) => ParseAndPrepare::BuildSpec(
-			ParseAndPrepareBuildSpec { params, version }
-			ParseAndPrepare::BuildSpec(cmd) => cmd.run::<NoCustom, _, _, _>(load_spec),
-		),
-		CoreParams::ExportBlocks(params) => ParseAndPrepare::ExportBlocks(
-			ParseAndPrepareExport { params, version }
-		),
-		CoreParams::ImportBlocks(params) => ParseAndPrepare::ImportBlocks(
-			ParseAndPrepareImport { params, version }
-		),
-		CoreParams::CheckBlock(params) => ParseAndPrepare::CheckBlock(
-			CheckBlock { params, version }
-		),
-		CoreParams::PurgeChain(params) => ParseAndPrepare::PurgeChain(
-			ParseAndPreparePurge { params, version }
-		),
-		CoreParams::Revert(params) => ParseAndPrepare::RevertChain(
-			ParseAndPrepareRevert { params, version }
-		),
+		CoreParams::CheckBlock(params) =>
+		CoreParams::PurgeChain(params) =>
+		CoreParams::Revert(params) =>
 		*/
 		/*
 		ParseAndPrepare::ExportBlocks(cmd) => cmd.run_with_builder(|config: Configuration<_, G, E>|
@@ -310,13 +375,26 @@ where
     }
 }
 
-fn run_until_exit<T>(
+fn run_service_until_exit<T>(
 	service: T,
 ) -> error::Result<()>
 where
 	T: AbstractService + std::marker::Unpin,
 {
 	let runtime = Runtime(service.compat().fuse());
+	runtime.run().map_err(|e| e.to_string())?;
+
+	Ok(())
+}
+
+fn run_until_exit<F, E: 'static>(
+	future: F,
+) -> error::Result<()>
+where
+	F: Future<Output = Result<(), E>> + future::FusedFuture + Unpin,
+	E: std::error::Error
+{
+	let runtime = Runtime(future);
 	runtime.run().map_err(|e| e.to_string())?;
 
 	Ok(())
@@ -476,75 +554,10 @@ pub struct ParseAndPrepareRun<'a> {
 	version: &'a VersionInfo,
 }
 
-impl<'a> ParseAndPrepareRun<'a> {
-	/// Runs the command and runs the main client.
-	pub fn run<G, CE, S, Exit, RS, E>(
-		self,
-		spec_factory: S,
-		run_service: RS,
-	) -> error::Result<()>
-	where
-		S: FnOnce(&str) -> Result<Option<ChainSpec<G, CE>>, String>,
-		E: Into<error::Error>,
-		G: RuntimeGenesis,
-		CE: ChainSpecExtension,
-		RS: FnOnce(RunCmd, Configuration<G, CE>) -> Result<(), E>
-	{
-		let config = create_run_node_config(
-			self.params.clone(), spec_factory, self.impl_name, self.version,
-		)?;
-
-		run_service(self.params, config).map_err(Into::into)
-	}
-}
-
 /// Command ready to build chain specs.
 pub struct ParseAndPrepareBuildSpec<'a> {
 	params: BuildSpecCmd,
 	version: &'a VersionInfo,
-}
-
-impl<'a> ParseAndPrepareBuildSpec<'a> {
-	/// Runs the command and build the chain specs.
-	pub fn run<C, G, S, E>(
-		self,
-		spec_factory: S
-	) -> error::Result<()> where
-		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		C: Default,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		info!("Building chain spec");
-		let raw_output = self.params.raw;
-		let mut spec = load_spec(&self.params.shared_params, spec_factory)?;
-
-		if spec.boot_nodes().is_empty() && !self.params.disable_default_bootnode {
-			let cfg = create_build_spec_config(
-				&spec,
-				&self.params.shared_params,
-				self.version,
-			)?;
-			let node_key = node_key_config(
-				self.params.node_key_params,
-				&Some(cfg.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a base_path"))
-			)?;
-			let keys = node_key.into_keypair()?;
-			let peer_id = keys.public().into_peer_id();
-			let addr = build_multiaddr![
-				Ip4([127, 0, 0, 1]),
-				Tcp(30333u16),
-				P2p(peer_id)
-			];
-			spec.add_boot_node(addr)
-		}
-
-		let json = sc_service::chain_ops::build_spec(spec, raw_output)?;
-
-		print!("{}", json);
-
-		Ok(())
-	}
 }
 
 /// Command ready to export the chain.
@@ -553,121 +566,10 @@ pub struct ParseAndPrepareExport<'a> {
 	version: &'a VersionInfo,
 }
 
-impl<'a> ParseAndPrepareExport<'a> {
-	/// Runs the command and exports from the chain.
-	pub fn run_with_builder<C, G, E, F, B, S, Exit>(
-		self,
-		builder: F,
-		spec_factory: S,
-		exit: Exit,
-	) -> error::Result<()>
-	where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		F: FnOnce(Configuration<G, E>) -> Result<B, error::Error>,
-		B: ServiceBuilderCommand,
-		<<<<B as ServiceBuilderCommand>::Block as BlockT>::Header as HeaderT>
-			::Number as FromStr>::Err: Debug,
-		C: Default,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		Exit: IntoExit
-	{
-		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
-
-		if let DatabaseConfig::Path { ref path, .. } = &config.database {
-			info!("DB path: {}", path.display());
-		}
-		let from = self.params.from.and_then(|f| f.parse().ok()).unwrap_or(1);
-		let to = self.params.to.and_then(|t| t.parse().ok());
-
-		let json = self.params.json;
-
-		let file: Box<dyn Write> = match self.params.output {
-			Some(filename) => Box::new(File::create(filename)?),
-			None => Box::new(stdout()),
-		};
-
-		// Note: while we would like the user to handle the exit themselves, we handle it here
-		// for backwards compatibility reasons.
-		let (exit_send, exit_recv) = std::sync::mpsc::channel();
-		let exit = exit.into_exit();
-		std::thread::spawn(move || {
-			block_on(exit);
-			let _ = exit_send.send(());
-		});
-
-		let mut export_fut = builder(config)?
-			.export_blocks(file, from.into(), to, json)
-			.compat();
-		let fut = futures::future::poll_fn(|cx| {
-			if exit_recv.try_recv().is_ok() {
-				return Poll::Ready(Ok(()));
-			}
-			Pin::new(&mut export_fut).poll(cx)
-		});
-
-		let mut runtime = tokio::runtime::Runtime::new().unwrap();
-		runtime.block_on(fut)?;
-		Ok(())
-	}
-}
-
 /// Command ready to import the chain.
 pub struct ParseAndPrepareImport<'a> {
 	params: ImportBlocksCmd,
 	version: &'a VersionInfo,
-}
-
-impl<'a> ParseAndPrepareImport<'a> {
-	/// Runs the command and imports to the chain.
-	pub fn run_with_builder<C, G, E, F, B, S, Exit>(
-		self,
-		builder: F,
-		spec_factory: S,
-		exit: Exit,
-	) -> error::Result<()>
-	where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		F: FnOnce(Configuration<G, E>) -> Result<B, error::Error>,
-		B: ServiceBuilderCommand,
-		C: Default,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		Exit: IntoExit
-	{
-		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
-		fill_import_params(&mut config, &self.params.import_params, sc_service::Roles::FULL)?;
-
-		let file: Box<dyn ReadPlusSeek + Send> = match self.params.input {
-			Some(filename) => Box::new(File::open(filename)?),
-			None => {
-				let mut buffer = Vec::new();
-				stdin().read_to_end(&mut buffer)?;
-				Box::new(Cursor::new(buffer))
-			},
-		};
-
-		// Note: while we would like the user to handle the exit themselves, we handle it here
-		// for backwards compatibility reasons.
-		let (exit_send, exit_recv) = std::sync::mpsc::channel();
-		let exit = exit.into_exit();
-		std::thread::spawn(move || {
-			block_on(exit);
-			let _ = exit_send.send(());
-		});
-
-		let mut import_fut = builder(config)?
-			.import_blocks(file, false)
-			.compat();
-		let fut = futures::future::poll_fn(|cx| {
-			if exit_recv.try_recv().is_ok() {
-				return Poll::Ready(Ok(()));
-			}
-			Pin::new(&mut import_fut).poll(cx)
-		});
-
-		let mut runtime = tokio::runtime::Runtime::new().unwrap();
-		runtime.block_on(fut)?;
-		Ok(())
-	}
 }
 
 /// Command to check a block.

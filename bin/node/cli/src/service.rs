@@ -286,7 +286,7 @@ type ConcreteTransactionPool = sp_transaction_pool::MaintainableTransactionPool<
 pub type NodeConfiguration = Configuration<GenesisConfig, crate::chain_spec::Extensions>;
 
 /// Builds a new service for a full client.
-pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration)
+pub fn new_full(config: NodeConfiguration)
 -> Result<
 	Service<
 		ConcreteBlock,
@@ -308,7 +308,7 @@ pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration)
 }
 
 /// Builds a new service for a light client.
-pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration)
+pub fn new_light(config: NodeConfiguration)
 -> Result<impl AbstractService, ServiceError> {
 	type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 	let inherent_data_providers = InherentDataProviders::new();

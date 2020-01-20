@@ -82,10 +82,10 @@ pub struct FactoryCmd {
 }
 
 /// Parse command line arguments into service configuration.
-pub fn run<I, T, E>(args: I, version: sc_cli::VersionInfo) -> error::Result<()> where
+pub fn run<I, T>(args: I, version: sc_cli::VersionInfo) -> error::Result<()>
+where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
-	E: IntoExit,
 {
 	type Config<A, B> = Configuration<A, B>;
 
@@ -95,7 +95,9 @@ pub fn run<I, T, E>(args: I, version: sc_cli::VersionInfo) -> error::Result<()> 
 			cli,
 			service::new_light,
 			service::new_full,
-			load_spec, "substrate-node",
+			load_spec,
+			|config: Config<_, _>| Ok(new_full_start!(config).0),
+			"substrate-node",
 			&version,
 		),
 		Cli::Factory(cli_args) => {
