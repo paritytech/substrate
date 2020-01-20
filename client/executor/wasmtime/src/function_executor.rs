@@ -22,7 +22,7 @@ use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex
 use codec::{Decode, Encode};
 use log::trace;
 use sp_core::sandbox as sandbox_primitives;
-use sp_wasm_interface::{MemoryId, Pointer, Result as WResult, Sandbox, WordSize};
+use sp_wasm_interface::{MemoryId, Pointer, Sandbox, WordSize};
 use std::cell::RefCell;
 use wasmtime::{Func, Val};
 
@@ -134,25 +134,29 @@ impl<'a> SandboxCapabilities for HostContext<'a> {
 }
 
 impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
-	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> WResult<()> {
+	fn read_memory_into(
+		&self,
+		address: Pointer<u8>,
+		dest: &mut [u8],
+	) -> sp_wasm_interface::Result<()> {
 		self.instance
 			.read_memory_into(address, dest)
 			.map_err(|e| e.to_string())
 	}
 
-	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> WResult<()> {
+	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> sp_wasm_interface::Result<()> {
 		self.instance
 			.write_memory_from(address, data)
 			.map_err(|e| e.to_string())
 	}
 
-	fn allocate_memory(&mut self, size: WordSize) -> WResult<Pointer<u8>> {
+	fn allocate_memory(&mut self, size: WordSize) -> sp_wasm_interface::Result<Pointer<u8>> {
 		self.instance
 			.allocate(&mut *self.allocator.borrow_mut(), size)
 			.map_err(|e| e.to_string())
 	}
 
-	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> WResult<()> {
+	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> sp_wasm_interface::Result<()> {
 		self.instance
 			.deallocate(&mut *self.allocator.borrow_mut(), ptr)
 			.map_err(|e| e.to_string())
@@ -170,7 +174,7 @@ impl<'a> Sandbox for HostContext<'a> {
 		offset: WordSize,
 		buf_ptr: Pointer<u8>,
 		buf_len: WordSize,
-	) -> WResult<u32> {
+	) -> sp_wasm_interface::Result<u32> {
 		let sandboxed_memory = self
 			.sandbox_store
 			.borrow()
@@ -203,7 +207,7 @@ impl<'a> Sandbox for HostContext<'a> {
 		offset: WordSize,
 		val_ptr: Pointer<u8>,
 		val_len: WordSize,
-	) -> WResult<u32> {
+	) -> sp_wasm_interface::Result<u32> {
 		let sandboxed_memory = self
 			.sandbox_store
 			.borrow()
@@ -230,14 +234,14 @@ impl<'a> Sandbox for HostContext<'a> {
 		})
 	}
 
-	fn memory_teardown(&mut self, memory_id: MemoryId) -> WResult<()> {
+	fn memory_teardown(&mut self, memory_id: MemoryId) -> sp_wasm_interface::Result<()> {
 		self.sandbox_store
 			.borrow_mut()
 			.memory_teardown(memory_id)
 			.map_err(|e| e.to_string())
 	}
 
-	fn memory_new(&mut self, initial: u32, maximum: MemoryId) -> WResult<u32> {
+	fn memory_new(&mut self, initial: u32, maximum: MemoryId) -> sp_wasm_interface::Result<u32> {
 		self.sandbox_store
 			.borrow_mut()
 			.new_memory(initial, maximum)
@@ -252,7 +256,7 @@ impl<'a> Sandbox for HostContext<'a> {
 		return_val: Pointer<u8>,
 		return_val_len: u32,
 		state: u32,
-	) -> WResult<u32> {
+	) -> sp_wasm_interface::Result<u32> {
 		trace!(target: "sp-sandbox", "invoke, instance_idx={}", instance_id);
 
 		// Deserialize arguments and convert them into wasmi types.
@@ -286,7 +290,7 @@ impl<'a> Sandbox for HostContext<'a> {
 		}
 	}
 
-	fn instance_teardown(&mut self, instance_id: u32) -> WResult<()> {
+	fn instance_teardown(&mut self, instance_id: u32) -> sp_wasm_interface::Result<()> {
 		self.sandbox_store
 			.borrow_mut()
 			.instance_teardown(instance_id)
@@ -299,7 +303,7 @@ impl<'a> Sandbox for HostContext<'a> {
 		wasm: &[u8],
 		raw_env_def: &[u8],
 		state: u32,
-	) -> WResult<u32> {
+	) -> sp_wasm_interface::Result<u32> {
 		// Extract a dispatch thunk from the instance's table by the specified index.
 		let dispatch_thunk = {
 			let table_item = self
