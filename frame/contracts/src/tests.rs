@@ -650,7 +650,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 				100_000,
 				vec![],
 			),
-			"during execution"
+			"contract trapped during execution"
 		);
 		assert_eq!(System::events(), vec![
 			EventRecord {
@@ -1533,7 +1533,7 @@ fn storage_max_value_limit() {
 				100_000,
 				Encode::encode(&(self::MaxValueSize::get() + 1)),
 			),
-			"during execution"
+			"contract trapped during execution"
 		);
 	});
 }
@@ -2056,7 +2056,7 @@ fn cannot_self_destruct_while_live() {
 				100_000,
 				vec![0],
 			),
-			"during execution"
+			"contract trapped during execution"
 		);
 
 		// Check that BOB is still alive.
