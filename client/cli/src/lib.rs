@@ -53,11 +53,11 @@ use structopt::{StructOpt, clap::AppSettings};
 #[doc(hidden)]
 pub use structopt::clap::App;
 use params::{
-	RunCmd, PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
+	PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
 	NetworkConfigurationParams, TransactionPoolParams,
 	NodeKeyParams, NodeKeyType, Cors, CheckBlockCmd,
 };
-pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy};
+pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy, RunCmd};
 pub use traits::GetSharedParams;
 use app_dirs::{AppInfo, AppDataType};
 use log::info;

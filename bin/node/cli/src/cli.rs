@@ -15,20 +15,25 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use sc_cli::VersionInfo;
-use tokio::prelude::Future;
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
 use sc_cli::{IntoExit, NoCustom, SharedParams, ImportParams, error};
-use sc_service::{AbstractService, Roles as ServiceRoles, Configuration};
+use sc_service::{Roles as ServiceRoles, Configuration};
 use log::info;
 use structopt::StructOpt;
-use sc_cli::{display_role, CoreParams};
+use sc_cli::{CoreParams, RunCmd};
 use crate::{service, ChainSpec, load_spec};
 use crate::factory_impl::FactoryState;
 use node_transaction_factory::RuntimeAdapter;
 
 #[derive(Clone, Debug, StructOpt)]
 #[structopt(settings = &[structopt::clap::AppSettings::GlobalVersion, structopt::clap::AppSettings::ArgsNegateSubcommands, structopt::clap::AppSettings::SubcommandsNegateReqs])]
-enum Cli {
+struct Cli {
+	#[structopt(subcommand)]
+	subcommand: Option<Subcommands>,
+}
+
+#[derive(Clone, Debug, StructOpt)]
+enum Subcommands {
 	#[structopt(flatten)]
 	SubstrateCli(CoreParams),
 	/// The custom factory subcommmand for manufacturing transactions.
@@ -85,14 +90,26 @@ pub struct FactoryCmd {
 /// Parse command line arguments into service configuration.
 pub fn run<I, T>(args: I, version: sc_cli::VersionInfo) -> error::Result<()>
 where
-	I: IntoIterator<Item = T>,
+	I: Iterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
 	type Config<A, B> = Configuration<A, B>;
 
-	let opt = sc_cli::from_iter(args, &version);
-	match opt {
-		Cli::SubstrateCli(cli) => sc_cli::run(
+	let args: Vec<_> = args.collect();
+	let opt = sc_cli::from_iter::<Cli, _>(args.clone(), &version);
+	let subcommand = opt.subcommand.unwrap_or_else(|| {
+		let opt = sc_cli::from_iter::<RunCmd, _>(args, &version);
+
+		eprintln!(
+			"WARNING: running this command without the subcommand `run` is deprecated, please \
+			use run:\n{} run [node_arguments]",
+			version.executable_name,
+		);
+		Subcommands::SubstrateCli(CoreParams::Run(opt))
+	});
+
+	match subcommand {
+		Subcommands::SubstrateCli(cli) => sc_cli::run(
 			cli,
 			service::new_light,
 			service::new_full,
@@ -101,7 +118,7 @@ where
 			"substrate-node",
 			&version,
 		),
-		Cli::Factory(cli_args) => {
+		Subcommands::Factory(cli_args) => {
 			let mut config: Config<_, _> = sc_cli::create_config_with_db_path(
 				load_spec,
 				&cli_args.shared_params,
