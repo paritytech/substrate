@@ -143,3 +143,27 @@ pub trait BoundToRuntimeAppPublic {
 	/// The `RuntimeAppPublic` this type is bound to.
 	type Public: RuntimeAppPublic;
 }
+
+#[cfg(feature = "full_crypto")]
+use sp_core::crypto::Dummy;
+
+#[cfg(feature = "full_crypto")]
+impl RuntimePublic for Dummy {
+	type Signature = Self;
+
+	fn all(_key_type: KeyTypeId) -> Vec<Self> {
+		vec![Dummy]
+	}
+
+	fn generate_pair(_key_type: KeyTypeId, _seed: Option<Vec<u8>>) -> Self {
+		Dummy
+	}
+
+	fn sign<M: AsRef<[u8]>>(&self, _key_type: KeyTypeId, msg: &M) -> Option<Self::Signature> {
+		Some(Pair::sign(self, msg.as_ref()))
+	}
+
+	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
+		<Dummy as Pair>::verify(signature, msg, self)
+	}
+}

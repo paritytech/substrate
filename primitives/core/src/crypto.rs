@@ -632,8 +632,14 @@ mod dummy {
 	use super::*;
 
 	/// Dummy cryptography. Doesn't do anything.
-	#[derive(Clone, Hash, Default, Eq, PartialEq)]
+	#[derive(Clone, Hash, Default, Eq, PartialEq, Encode, Decode, Debug, Ord, PartialOrd)]
 	pub struct Dummy;
+
+	impl std::fmt::Display for Dummy {
+		fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+			write!(fmt, "{:?}", self)
+		}
+	}
 
 	impl AsRef<[u8]> for Dummy {
 		fn as_ref(&self) -> &[u8] { &b""[..] }

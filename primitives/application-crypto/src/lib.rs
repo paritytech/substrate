@@ -37,6 +37,24 @@ pub use sp_std::{ops::Deref, vec::Vec};
 
 pub mod ed25519;
 pub mod sr25519;
+
+#[cfg(feature = "std")]
+/// A dummy cryptography, useful at most for tests
+/// that don't care about any particular crypto or even
+/// having multiple different public keys.
+/// The `Dummy` type is opaque, and the same non-parametrizable
+/// type represents public key, signature and the entire pair.
+/// All operations always succeed (i.e. sign, verify, etc).
+pub mod dummy {
+	use sp_core::crypto::Dummy;
+	/// Dummy opaque public key.
+	pub type Public = Dummy;
+	/// Dummy opaque signature.
+	pub type Signature = Dummy;
+	/// Dummy opaque key pair.
+	pub type Pair = Dummy;
+}
+
 mod traits;
 
 pub use traits::*;
@@ -431,4 +449,15 @@ macro_rules! wrap {
 			}
 		}
 	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{app_crypto, dummy, key_types};
+
+	#[test]
+	fn should_be_possible_to_wrap_dummy_crypto() {
+		app_crypto!(dummy, key_types::DUMMY);
+	}
+
 }

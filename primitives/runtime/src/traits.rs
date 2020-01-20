@@ -73,6 +73,12 @@ impl IdentifyAccount for sp_core::ecdsa::Public {
 	fn into_account(self) -> Self { self }
 }
 
+#[cfg(feature = "std")]
+impl IdentifyAccount for sp_core::crypto::Dummy {
+	type AccountId = Self;
+	fn into_account(self) -> Self { self }
+}
+
 /// Means of signature verification.
 pub trait Verify {
 	/// Type of the signer.
