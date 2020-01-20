@@ -453,7 +453,7 @@ fn instantiate_and_call_and_deposit_event() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::Contract(BOB, vec![1, 2, 3, 4])),
+				event: MetaEvent::contract(RawEvent::ContractExecution(BOB, vec![1, 2, 3, 4])),
 				topics: vec![],
 			},
 			EventRecord {
