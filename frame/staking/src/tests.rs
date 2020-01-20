@@ -356,7 +356,7 @@ fn less_than_needed_candidates_works() {
 #[test]
 fn no_candidate_emergency_condition() {
 	ExtBuilder::default()
-		.minimum_validator_count(4)
+		.minimum_validator_count(1)
 		.validator_count(15)
 		.num_validators(4)
 		.validator_pool(true)
@@ -365,7 +365,11 @@ fn no_candidate_emergency_condition() {
 		.execute_with(|| {
 			// initial validators
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
-			assert_eq!(Staking::validator_count(), 15);
+			let prefs = ValidatorPrefs { commission: Perbill::one() };
+			<Staking as crate::Store>::Validators::insert(11, prefs.clone());
+
+			// set the minimum validator count.
+			<Staking as crate::Store>::MinimumValidatorCount::put(10);
 
 			// try to chill
 			let _ = Staking::chill(Origin::signed(10));
@@ -375,7 +379,8 @@ fn no_candidate_emergency_condition() {
 
 			// Previous ones are elected. chill is invalidates. TODO: #2494
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
-			assert_eq_uvec!(Session::validators(), vec![11, 21, 31, 41]);
+			// Though the validator preferences has been removed.
+			assert!(Staking::validators(11) != prefs);
 		});
 }
 
@@ -2804,9 +2809,10 @@ fn claim_reward_at_the_last_era() {
 	});
 }
 
+#[test]
 fn migration_v2() {
 	ExtBuilder::default().build().execute_with(|| {
-		use crate::{EraIndex, slashing::SpanIndex};
+		use crate::slashing::SpanIndex;
 
 		#[derive(Encode)]
 		struct V1SlashingSpans {

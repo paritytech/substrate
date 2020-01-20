@@ -79,9 +79,8 @@ impl pallet_session::Trait for Test {
 	type ValidatorId = <Self as frame_system::Trait>::AccountId;
 	type ShouldEndSession = Babe;
 	type SessionHandler = (Babe,Babe,);
-	type OnSessionEnding = ();
+	type SessionManager = ();
 	type ValidatorIdOf = ();
-	type SelectInitialValidators = ();
 	type Keys = MockSessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }

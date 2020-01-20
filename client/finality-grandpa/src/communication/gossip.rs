@@ -1445,6 +1445,7 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 	}
 }
 
+/// Report specifying a reputation change for a given peer.
 pub(super) struct PeerReport {
 	pub who: PeerId,
 	pub cost_benefit: ReputationChange,
