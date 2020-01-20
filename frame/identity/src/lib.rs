@@ -280,7 +280,6 @@ impl Decode for IdentityFields {
 /// NOTE: This should be stored at the end of the storage item to facilitate the addition of extra
 /// fields in a backwards compatible way through a specialized `Decode` impl.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
-#[cfg_attr(test, derive(Default))]
 pub struct IdentityInfo {
 	/// Additional fields of the identity that are not catered for with the struct's explicit
 	/// fields.
