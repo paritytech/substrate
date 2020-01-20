@@ -121,6 +121,11 @@ impl Callable for HostFuncHandler {
 				qed
 				"
 			);
+			// `into_value` panics if it encounters a value that doesn't fit into the values
+			// available in substrate.
+			//
+			// This, however, cannot happen since the signature of this function is created from
+			// a `dyn Function` signature of which cannot have a non substrate value by definition.
 			let mut params = wasmtime_params.iter().cloned().map(into_value);
 
 			std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -185,13 +190,16 @@ fn into_wasmtime_val_type(val_ty: ValueType) -> wasmtime::ValType {
 	}
 }
 
+/// Converts a `Val` into a substrate runtime interface `Value`.
+///
+/// Panics if the given value doesn't have a corresponding variant in `Value`.
 fn into_value(val: Val) -> Value {
 	match val {
 		Val::I32(v) => Value::I32(v),
 		Val::I64(v) => Value::I64(v),
 		Val::F32(f_bits) => Value::F32(f_bits),
 		Val::F64(f_bits) => Value::F64(f_bits),
-		_ => todo!(), // TODO:
+		_ => panic!(),
 	}
 }
 
