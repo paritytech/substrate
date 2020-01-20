@@ -33,6 +33,18 @@ arg_enum! {
 	}
 }
 
+impl ExecutionStrategy {
+	/// Returns the variant as `'&static str`.
+	pub fn as_str(&self) -> &'static str {
+		match self {
+			Self::Native => "Native",
+			Self::Wasm => "Wasm",
+			Self::Both => "Both",
+			Self::NativeElseWasm => "NativeElseWasm",
+		}
+	}
+}
+
 /// Default value for the `--execution-syncing` parameter.
 pub const DEFAULT_EXECUTION_SYNCING: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
 /// Default value for the `--execution-import-block` parameter.

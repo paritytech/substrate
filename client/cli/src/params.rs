@@ -322,7 +322,7 @@ pub struct ExecutionStrategies {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "DEFAULT_EXECUTION_SYNCING"
+		default_value = DEFAULT_EXECUTION_SYNCING.as_str(),
 	)]
 	pub execution_syncing: ExecutionStrategy,
 
@@ -332,7 +332,7 @@ pub struct ExecutionStrategies {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "DEFAULT_EXECUTION_IMPORT_BLOCK"
+		default_value = DEFAULT_EXECUTION_IMPORT_BLOCK.as_str(),
 	)]
 	pub execution_import_block: ExecutionStrategy,
 
@@ -342,7 +342,7 @@ pub struct ExecutionStrategies {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "DEFAULT_EXECUTION_BLOCK_CONSTRUCTION"
+		default_value = DEFAULT_EXECUTION_BLOCK_CONSTRUCTION.as_str(),
 	)]
 	pub execution_block_construction: ExecutionStrategy,
 
@@ -352,7 +352,7 @@ pub struct ExecutionStrategies {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "DEFAULT_EXECUTION_OFFCHAIN_WORKER"
+		default_value = DEFAULT_EXECUTION_OFFCHAIN_WORKER.as_str(),
 	)]
 	pub execution_offchain_worker: ExecutionStrategy,
 
@@ -362,7 +362,7 @@ pub struct ExecutionStrategies {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "DEFAULT_EXECUTION_OTHER"
+		default_value = DEFAULT_EXECUTION_OTHER.as_str(),
 	)]
 	pub execution_other: ExecutionStrategy,
 
