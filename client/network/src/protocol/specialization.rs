@@ -57,6 +57,32 @@ pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
 	fn on_block_imported(&mut self, _ctx: &mut dyn Context<B>, _hash: B::Hash, _header: &B::Header) { }
 }
 
+/// A specialization that does nothing.
+#[derive(Clone)]
+pub struct DummySpecialization;
+
+impl<B: BlockT> NetworkSpecialization<B> for DummySpecialization {
+	fn status(&self) -> Vec<u8> {
+		vec![]
+	}
+
+	fn on_connect(
+		&mut self,
+		_ctx: &mut dyn Context<B>,
+		_peer_id: PeerId,
+		_status: crate::message::Status<B>
+	) {}
+
+	fn on_disconnect(&mut self, _ctx: &mut dyn Context<B>, _peer_id: PeerId) {}
+
+	fn on_message(
+		&mut self,
+		_ctx: &mut dyn Context<B>,
+		_peer_id: PeerId,
+		_message: Vec<u8>,
+	) {}
+}
+
 /// Construct a simple protocol that is composed of several sub protocols.
 /// Each "sub protocol" needs to implement `Specialization` and needs to provide a `new()` function.
 /// For more fine grained implementations, this macro is not usable.
