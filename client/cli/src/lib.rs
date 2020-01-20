@@ -251,20 +251,7 @@ where
 		CoreParams::Run(_params) => {
 			let config = get_config(&core_params, spec_factory, impl_name, &version)?;
 
-			info!("{}", version.name);
-			info!("  version {}", config.full_version());
-			info!("  by {}, 2017, 2018", version.author);
-			info!("Chain specification: {}", config.chain_spec.name());
-			info!("Node name: {}", config.name);
-			info!("Roles: {}", display_role(&config));
-			match config.roles {
-				ServiceRoles::LIGHT => run_service_until_exit(
-					new_light(config)?,
-				),
-				_ => run_service_until_exit(
-					new_full(config)?,
-				),
-			}
+			run_node(config, new_light, new_full, &version)
 		},
 		CoreParams::BuildSpec(params) => {
 			info!("Building chain spec");
@@ -416,6 +403,36 @@ where
 	};
 
 	Ok(())
+}
+
+pub fn run_node<G, E, F2, F3, T1, T2>(
+	config: Configuration<G, E>,
+	new_light: F2,
+	new_full: F3,
+	version: &VersionInfo,
+) -> error::Result<()>
+where
+	F2: FnOnce(Configuration<G, E>) -> Result<T1, sc_service::error::Error>,
+	F3: FnOnce(Configuration<G, E>) -> Result<T2, sc_service::error::Error>,
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
+	T1: AbstractService + std::marker::Unpin,
+	T2: AbstractService + std::marker::Unpin,
+{
+	info!("{}", version.name);
+	info!("  version {}", config.full_version());
+	info!("  by {}, 2017, 2018", version.author);
+	info!("Chain specification: {}", config.chain_spec.name());
+	info!("Node name: {}", config.name);
+	info!("Roles: {}", display_role(&config));
+	match config.roles {
+		ServiceRoles::LIGHT => run_service_until_exit(
+			new_light(config)?,
+		),
+		_ => run_service_until_exit(
+			new_full(config)?,
+		),
+	}
 }
 
 struct Runtime<F, E: 'static>(F)
