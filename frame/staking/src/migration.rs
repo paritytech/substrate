@@ -87,10 +87,10 @@ pub mod inner {
 		let prefix = <Module<T> as Store>::SlashingSpans::final_prefix();
 		let mut current_key = prefix.to_vec();
 		loop {
-			let next_key = sp_io::storage::next_key(&current_key[..])
+			let maybe_next_key = sp_io::storage::next_key(&current_key[..])
 				.filter(|v| v.starts_with(&prefix[..]));
 
-			match next_key {
+			match maybe_next_key {
 				Some(next_key) => {
 					let maybe_spans = sp_io::storage::get(&next_key[..])
 						.and_then(|v| V1SlashingSpans::decode(&mut &v[..]).ok());
