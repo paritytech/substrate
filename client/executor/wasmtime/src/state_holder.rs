@@ -18,6 +18,15 @@ use crate::host::{HostState, HostContext};
 use std::cell::{RefCell};
 use std::rc::Rc;
 
+/// A common place to store a reference to the `HostState`.
+///
+/// This structure is passed into each host function handler and retained in the implementation of
+/// `WasmRuntime`. Whenever, a call into a runtime method is initiated the host state is populated
+/// with the state for that runtime method call.
+///
+/// During the execution of the runtime method call, wasm can call imported host functions. When
+/// that happens the host function handler gets a `HostContext` (obtainable through having a
+/// `HostState` reference).
 #[derive(Clone)]
 pub struct StateHolder {
 	// This is `Some` only during a call.
@@ -25,12 +34,16 @@ pub struct StateHolder {
 }
 
 impl StateHolder {
+	/// Create a placeholder `StateHolder`.
 	pub fn empty() -> StateHolder {
 		StateHolder {
 			state: Rc::new(RefCell::new(None)),
 		}
 	}
 
+	/// Provide `HostState` for the runtime method call and execute the given function `f`.
+	///
+	/// During the execution of the provided function `with_context` will be callable.
 	pub fn init_state<R, F>(&self, state: &mut HostState, f: F) -> R
 	where
 		F: FnOnce() -> R,
@@ -56,6 +69,9 @@ impl StateHolder {
 		ret.expect("cannot be None since was just in the closure above; qed")
 	}
 
+	/// Create a `HostContext` from the contained `HostState` and execute the given function `f`.
+	///
+	/// This function is only callable within closure passed to `init_state`.
 	pub fn with_context<R, F>(&self, f: F) -> R
 	where
 		F: FnOnce(HostContext) -> R,

@@ -67,10 +67,10 @@ pub fn resolve_imports(
 			)));
 		}
 
-		externs.push(wrap_substrate_func(
+		externs.push(create_host_func_handler(
+			*host_func,
 			module.store(),
 			state_holder.clone(),
-			*host_func,
 		));
 	}
 	Ok(externs)
@@ -81,23 +81,24 @@ fn signature_matches(lhs: &wasmtime::FuncType, rhs: &wasmtime::FuncType) -> bool
 	lhs.params() == rhs.params() && lhs.results() == rhs.results()
 }
 
-fn wrap_substrate_func(
+/// Wraps the given `host_func` as a wasmtime's `Extern` suitable for passing it as an import.
+fn create_host_func_handler(
+	host_func: &'static dyn Function,
 	store: &Store,
 	state_holder: StateHolder,
-	host_func: &'static dyn Function,
 ) -> Extern {
 	let func_ty = wasmtime_func_sig(host_func);
-	let callable = HostFuncAdapterCallable::new(state_holder, host_func);
+	let callable = HostFuncHandler::new(state_holder, host_func);
 	let func = Func::new(store, func_ty, Rc::new(callable));
 	Extern::Func(func)
 }
 
-struct HostFuncAdapterCallable {
+struct HostFuncHandler {
 	state_holder: StateHolder,
 	host_func: &'static dyn Function,
 }
 
-impl HostFuncAdapterCallable {
+impl HostFuncHandler {
 	fn new(state_holder: StateHolder, host_func: &'static dyn Function) -> Self {
 		Self {
 			state_holder,
@@ -106,7 +107,7 @@ impl HostFuncAdapterCallable {
 	}
 }
 
-impl Callable for HostFuncAdapterCallable {
+impl Callable for HostFuncHandler {
 	fn call(&self, wasmtime_params: &[Val], wasmtime_results: &mut [Val]) -> Result<(), wasmtime::Trap> {
 		let unwind_result = self.state_holder.with_context(|mut host_ctx| {
 			let mut params = wasmtime_params.iter().cloned().map(into_value);
