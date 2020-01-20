@@ -152,6 +152,10 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	pub auxiliary: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	/// Fork choice strategy of this import. This should only be set by a
 	/// synchronous import, otherwise it may race against other imports.
+	/// `None` indicates that the current verifier or importer cannot yet
+	/// determine the fork choice value, and it expects subsequent importer
+	/// to modify it. If `None` is passed all the way down to bottom block
+	/// importer, the import fails with an `IncompletePipeline` error.
 	pub fork_choice: Option<ForkChoiceStrategy>,
 	/// Allow importing the block skipping state verification if parent state is missing.
 	pub allow_missing_state: bool,
