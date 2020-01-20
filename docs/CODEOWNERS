@@ -46,10 +46,15 @@
 /client/finality-grandpa/ @andresilva @DemiMarie-parity
 /client/consensus/babe/ @andresilva @DemiMarie-parity
 /client/consensus/slots/ @andresilva @DemiMarie-parity
+/client/consensus/pow/ @sorpaas
+/primitives/consensus/pow/ @sorpaas
 
 # Contracts
 /frame/contracts/ @pepyakin @thiolliere
 /frame/contracts/src/wasm/runtime.rs @Robbepop
+
+# EVM
+/frame/evm/ @sorpaas
 
 # Inflation points
 /frame/staking/src/inflation.rs @thiolliere
