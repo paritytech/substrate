@@ -43,7 +43,7 @@ impl InstanceWrapper {
 
 	/// Increases the size of the linear memory attached to this instance.
 	pub fn grow_memory(&self, pages: u32) -> Result<()> {
-		if self.memory.grow(pages) {
+		if self.memory.grow(pages).is_ok() {
 			Ok(())
 		} else {
 			return Err("failed top increase the linear memory size".into());
@@ -58,7 +58,7 @@ impl InstanceWrapper {
 		// Resolve the requested method and verify that it has a proper signature.
 		let export = self
 			.instance
-			.find_export_by_name(name)
+			.get_export(name)
 			.ok_or_else(|| {
 				Error::from(format!("Exported method {} is not found", name))
 			})?;
@@ -85,7 +85,7 @@ impl InstanceWrapper {
 	pub fn extract_heap_base(&self) -> Result<u32> {
 		let heap_base_export = self
 			.instance
-			.find_export_by_name("__heap_base")
+			.get_export("__heap_base")
 			.ok_or_else(|| Error::from("__heap_base is not found"))?;
 
 		let heap_base_global = heap_base_export
@@ -103,14 +103,14 @@ impl InstanceWrapper {
 
 fn get_table(instance: &Instance) -> Option<Table> {
 	instance
-		.find_export_by_name("__indirect_function_table")
+		.get_export("__indirect_function_table")
 		.and_then(|export| export.table())
 		.cloned()
 }
 
 fn get_linear_memory(instance: &Instance) -> Result<Memory> {
 	let memory_export = instance
-		.find_export_by_name("memory")
+		.get_export("memory")
 		.ok_or_else(|| Error::from("memory is not exported under `memory` name"))?;
 
 	let memory = memory_export

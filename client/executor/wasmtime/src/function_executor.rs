@@ -312,6 +312,7 @@ impl<'a> Sandbox for HostContext<'a> {
 				.get(dispatch_thunk_id);
 
 			let func_ref = table_item
+				.ok_or_else(|| "dispatch_thunk_id is out of bounds")?
 				.funcref()
 				.ok_or_else(|| "dispatch_thunk_idx should be a funcref")?
 				.clone();
