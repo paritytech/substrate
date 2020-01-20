@@ -181,8 +181,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 /// Make account paying the rent for the current block number
 ///
 /// NOTE: This function acts eagerly.
-pub fn pay_rent<T: Trait>(account: &T::AccountId) -> Option<ContractInfo<T>> {
-	try_evict_or_and_pay_rent::<T>(account, Zero::zero(), true).1
+pub fn pay_rent<T: Trait>(account: &T::AccountId) -> (RentOutcome, Option<ContractInfo<T>>) {
+	try_evict_or_and_pay_rent::<T>(account, Zero::zero(), true)
 }
 
 /// Evict the account if it should be evicted at the given block number.
