@@ -44,7 +44,7 @@ pub enum Error {
 	Http(hyper::http::Error),
 	/// i/o error.
 	Io(std::io::Error),
-	#[display(fmt = "Prometheus export port {} already in use.", _0)]
+	#[display(fmt = "Prometheus exporter port {} already in use.", _0)]
 	PortInUse(SocketAddr)
 }
 impl std::error::Error for Error {
