@@ -64,7 +64,7 @@ pub trait RuntimeAdapter {
 	fn start_number(&self) -> Self::Number;
 
 	fn set_block_in_round(&mut self, val: Self::Number);
-	fn set_block_number(&mut self, val: u32);
+	fn increase_block_number(&mut self);
 	fn set_round(&mut self, val: Self::Number);
 
 	fn create_extrinsic(
@@ -137,11 +137,13 @@ where
 	}
 
 	pub fn run(&mut self) -> sc_cli::error::Result<()> {
-		let best_header = self.select_chain.best_chain().map_err(|e| format!("{:?}", e))?;
+		let best_header = self.select_chain.best_chain()
+			.map_err(|e| format!("{:?}", e))?;
 		let mut best_hash = best_header.hash();
 		let mut best_block_id = BlockId::<Block>::hash(best_hash);
 		let runtime_version = self.client.runtime_version_at(&best_block_id)?.spec_version;
-		let genesis_hash = self.client.block_hash(Zero::zero())?.expect("genesis should exist");
+		let genesis_hash = self.client.block_hash(Zero::zero())?
+			.expect("genesis should exist");
 
 		loop {
 			if self.runtime_state.block_number() >= self.options.blocks {
@@ -153,9 +155,12 @@ where
 				best_hash,
 				best_block_id,
 			) {
-				self.runtime_state.set_block_number(self.runtime_state.block_number() + 1);
+				self.runtime_state.increase_block_number();
 
-				info!("Created block {} with hash {}.", self.runtime_state.block_number(), best_hash);
+				info!("Created block {} with hash {}.",
+					self.runtime_state.block_number(),
+					best_hash,
+				);
 
 				best_hash = block.header().hash();
 				best_block_id = BlockId::<Block>::hash(best_hash);
@@ -174,7 +179,8 @@ where
 					import_existing: false,
 				};
 
-				self.client.clone().import_block(import, HashMap::new()).expect("Failed to import block");
+				self.client.clone().import_block(import, HashMap::new())
+					.expect("Failed to import block");
 
 				info!("Imported block at {}\n\n", self.runtime_state.block_number());
 			} else {
@@ -192,8 +198,10 @@ where
 		prior_block_hash: <RA::Block as BlockT>::Hash,
 		prior_block_id: BlockId<Block>,
 	) -> Option<Block> {
-		let mut block = self.client.new_block(Default::default()).expect("Failed to create new block");
-		let from = (RA::master_account_id(), RA::master_account_secret());
+		let mut block = self.client.new_block(Default::default())
+			.expect("Failed to create new block");
+		let account_id = RA::master_account_id();
+		let account_secret = RA::master_account_secret();
 
 		let inherents = self.runtime_state.inherent_extrinsics();
 		let inherents = self.client.runtime_api()
@@ -210,15 +218,16 @@ where
 					self.options.tx_per_block,
 				);
 				let extrinsic = self.runtime_state.create_extrinsic(
-					&from.0,
+					&account_id,
 					module,
 					function,
-					&from.1,
+					&account_secret,
 					runtime_version,
 					&genesis_hash,
 					&prior_block_hash,
 				);
-				let e = Decode::decode(&mut &extrinsic.encode()[..]).expect("decode failed");
+				let e = Decode::decode(&mut &extrinsic.encode()[..])
+					.expect("decode failed");
 				block.push(e).expect("push extrinsic failed");
 				self.runtime_state.increase_index();
 				tx_pushed += 1;

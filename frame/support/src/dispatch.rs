@@ -1430,10 +1430,10 @@ macro_rules! decl_module {
 			}
 		}
 
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::benchmarking::GetFunction
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::benchmarking::Call
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn get_function(function: &str) -> Self {
+			fn get_call(function: &str) -> Self {
 				use $crate::sp_std::if_std;
 		
 				match function {
@@ -1526,11 +1526,17 @@ macro_rules! impl_outer_dispatch {
 				unimplemented!("TODO")
 			}
 		}
-		impl $crate::benchmarking::GetModule for $call_type {
-			fn get_module(module: &str, function: &str) -> Self {
+		impl $crate::benchmarking::Module for $call_type {
+			fn all_modules() -> &'static [&'static str] {
+				&[$(
+					stringify!($camelcase),
+				)*]
+			}
+
+			fn get_call(module: &str, function: &str) -> Self {
 				match module {
 					$( stringify!($camelcase) => $call_type::$camelcase(
-							$crate::benchmarking::GetFunction::get_function(function)
+							$crate::benchmarking::Call::get_call(function)
 					),)*
 					_ => unreachable!(),
 				}

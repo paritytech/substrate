@@ -18,10 +18,11 @@
 // #[allow(deprecated)]
 // pub use crate::sp_runtime::traits::Benchmarking;
 
-pub trait GetModule {
-	fn get_module(module: &str, function: &str) -> Self;
+pub trait Module {
+	fn all_modules() -> &'static [&'static str];
+	fn get_call(module: &str, function: &str) -> Self;
 }
 
-pub trait GetFunction {
-	fn get_function(function: &str) -> Self;
+pub trait Call {
+	fn get_call(function: &str) -> Self;
 }

@@ -35,9 +35,8 @@ use sp_runtime::{
 		Block as BlockT, Header as HeaderT, SignedExtension, Verify, IdentifyAccount,
 	}
 };
-use frame_support::benchmarking::GetModule;
+use frame_support::benchmarking::Module;
 use node_transaction_factory::RuntimeAdapter;
-use node_transaction_factory::automata::Automaton;
 
 use sp_inherents::InherentData;
 use sp_timestamp;
@@ -111,8 +110,8 @@ impl RuntimeAdapter for RuntimeState {
 		self.start_number
 	}
 
-	fn set_block_number(&mut self, val: Self::Number) {
-		self.block_number = val;
+	fn increase_block_number(&mut self) {
+		self.block_number += 1;
 	}
 
 	fn set_block_in_round(&mut self, val: Self::Number) {
@@ -134,7 +133,7 @@ impl RuntimeAdapter for RuntimeState {
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic {
 		let phase = self.extract_phase(*prior_block_hash);
-		let function = Call::get_module(&module, &extrinsic_name);
+		let function = Call::get_call(&module, &extrinsic_name);
 		let extrinsic = CheckedExtrinsic {
 			signed: Some((sender.clone(), Self::build_extra(self.index, phase))),
 			function,
