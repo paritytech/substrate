@@ -113,7 +113,8 @@ pub trait ContractsApi<BlockHash, AccountId, Balance> {
 	/// Executes a call to a contract.
 	///
 	/// This call is performed locally without submitting any transactions. Thus executing this
-	/// won't change any state. Nonetheless, the calling state-changing contracts is still possible.
+	/// won't change any state or const any gas. Nonetheless, calling state-changing contracts is
+	/// still possible.
 	///
 	/// This method is useful for calling getter-like methods on contracts.
 	#[rpc(name = "contracts_call")]

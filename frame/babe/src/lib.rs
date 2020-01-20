@@ -127,6 +127,7 @@ decl_storage! {
 		/// (like everything else on-chain) it is public. For example, it can be
 		/// used where a number is needed that cannot have been chosen by an
 		/// adversary, for purposes such as public-coin zero-knowledge proofs.
+		/// This number only changes when the epoch changes.
 		// NOTE: the following fields don't use the constants to define the
 		// array size because the metadata API currently doesn't resolve the
 		// variable to its underlying value.
@@ -322,10 +323,7 @@ impl<T: Trait> Module<T> {
 	) {
 		// PRECONDITION: caller has done initialization and is guaranteed
 		// by the session module to be called before this.
-		#[cfg(debug_assertions)]
-		{
-			assert!(Self::initialized().is_some())
-		}
+		debug_assert!(Self::initialized().is_some());
 
 		// Update epoch index
 		let epoch_index = EpochIndex::get()

@@ -143,7 +143,9 @@ pub trait ComputeDispatchFee<Call, Balance> {
 }
 
 /// Information for managing an acocunt and its sub trie abstraction.
-/// This is the required info to cache for an account
+/// This is the required info to cache for an account.
+/// All operation on this enum are at most proportional to
+/// `std::mem::sizeof::<T>()`.
 #[derive(Encode, Decode, RuntimeDebug)]
 pub enum ContractInfo<T: Trait> {
 	Alive(AliveContractInfo<T>),
@@ -573,6 +575,9 @@ decl_module! {
 
 		/// Stores the given binary Wasm code into the chain's storage and returns its `codehash`.
 		/// You can instantiate contracts only with stored code.
+		///
+		/// This is of complexity linear in the amount of gas consumed, which will not exceed the
+		/// limit.
 		pub fn put_code(
 			origin,
 			#[compact] gas_limit: Gas,
@@ -599,7 +604,7 @@ decl_module! {
 		/// executed and any value will be transferred.
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
-		/// a regular account will be created and any value will be transferred.
+		///   a regular account will be created and any value will be transferred.
 		pub fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -707,6 +712,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Query storage of a specified contract under a specified key.
+	///
+	/// # <weight>
+	/// Linear in the amount of data returned.
+	/// # </weight>
 	pub fn get_storage(
 		address: T::AccountId,
 		key: [u8; 32],
@@ -727,6 +736,8 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> Module<T> {
+	/// This function may use resources proportional to the gas limit.  Gas is charged in
+	/// proportion to resources actually consumed.
 	fn execute_wasm(
 		origin: T::AccountId,
 		gas_limit: Gas,

@@ -205,6 +205,7 @@ decl_module! {
 		}
 
 		/// Provide a set of uncles.
+		/// O(uncles * new_uncles)
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
 			ensure_none(origin)?;
@@ -225,6 +226,8 @@ impl<T: Trait> Module<T> {
 	///
 	/// This is safe to invoke in `on_initialize` implementations, as well
 	/// as afterwards.
+	///
+	/// Complexity: O(logs), which is O(1) in practice.
 	pub fn author() -> T::AccountId {
 		// Check the memoized storage value.
 		if let Some(author) = <Self as Store>::Author::get() {

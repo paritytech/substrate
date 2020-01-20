@@ -154,6 +154,11 @@ decl_module! {
 		/// provide it pre-sorted.
 		///
 		/// Requires root origin.
+		///
+		/// # <weight>
+		/// O(n log n) compute, where n is the number of new members.  One storage access of size
+		/// O(n + m) where m is the number of old members.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn set_members(origin, new_members: Vec<T::AccountId>) {
 			ensure_root(origin)?;
@@ -168,6 +173,10 @@ decl_module! {
 		/// Dispatch a proposal from a member using the `Member` origin.
 		///
 		/// Origin must be a member of the collective.
+		///
+		/// # <weight>
+		/// - One storage access of size linear in number of members
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn execute(origin, proposal: Box<<T as Trait<I>>::Proposal>) {
 			let who = ensure_signed(origin)?;
@@ -180,6 +189,7 @@ decl_module! {
 
 		/// # <weight>
 		/// - Bounded storage reads and writes.
+		/// - One storage access of size linear in number of members.
 		/// - Argument `threshold` has bearing on weight.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(5_000_000)]
@@ -209,6 +219,7 @@ decl_module! {
 
 		/// # <weight>
 		/// - Bounded storage read and writes.
+		/// - Storage read of size proportional to number of members.
 		/// - Will be slightly heavier if the proposal is approved / disapproved after the vote.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]

@@ -442,7 +442,7 @@ decl_module! {
 		/// Propose a sensitive action to be taken.
 		///
 		/// # <weight>
-		/// - O(1).
+		/// - O(number of proposals).
 		/// - Two DB changes, one DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
@@ -467,7 +467,7 @@ decl_module! {
 		/// Propose a sensitive action to be taken.
 		///
 		/// # <weight>
-		/// - O(1).
+		/// - O(proposers).
 		/// - One DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
@@ -514,6 +514,10 @@ decl_module! {
 
 		/// Schedule an emergency cancellation of a referendum. Cannot happen twice to the same
 		/// referendum.
+		///
+		/// # <weight>
+		/// - O(referenda)
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
 		fn emergency_cancel(origin, ref_index: ReferendumIndex) {
 			T::CancellationOrigin::ensure_origin(origin)?;
@@ -528,6 +532,10 @@ decl_module! {
 
 		/// Schedule a referendum to be tabled once it is legal to schedule an external
 		/// referendum.
+		///
+		/// # <weight>
+		/// - O(1)
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn external_propose(origin, proposal_hash: T::Hash) {
 			T::ExternalOrigin::ensure_origin(origin)?;
@@ -546,6 +554,10 @@ decl_module! {
 		///
 		/// Unlike `external_propose`, blacklisting has no effect on this and it may replace a
 		/// pre-scheduled `external_propose` call.
+		///
+		/// # <weight>
+		/// - `O(1)`
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn external_propose_majority(origin, proposal_hash: T::Hash) {
 			T::ExternalMajorityOrigin::ensure_origin(origin)?;
@@ -557,6 +569,10 @@ decl_module! {
 		///
 		/// Unlike `external_propose`, blacklisting has no effect on this and it may replace a
 		/// pre-scheduled `external_propose` call.
+		///
+		/// # <weight>
+		/// - `O(1)`
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn external_propose_default(origin, proposal_hash: T::Hash) {
 			T::ExternalDefaultOrigin::ensure_origin(origin)?;
@@ -565,13 +581,17 @@ decl_module! {
 
 		/// Schedule the currently externally-proposed majority-carries referendum to be tabled
 		/// immediately. If there is no externally-proposed referendum currently, or if there is one
-		/// but it is not a majority-carries referendum then it fails.
+		/// but it is not a majority-carries referendum, then it fails.
 		///
 		/// - `proposal_hash`: The hash of the current external proposal.
 		/// - `voting_period`: The period that is allowed for voting on this proposal. Increased to
 		///   `EmergencyVotingPeriod` if too low.
 		/// - `delay`: The number of block after voting has ended in approval and this should be
 		///   enacted. This doesn't have a minimum amount.
+		///
+		/// # <weight>
+		/// - `O(1)`
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn fast_track(origin,
 			proposal_hash: T::Hash,
@@ -593,7 +613,11 @@ decl_module! {
 			Self::inject_referendum(now + period, proposal_hash, threshold, delay);
 		}
 
-		/// Veto and blacklist the external proposal hash.
+		/// Veto and blacklist the external proposal hash.  O(n log n) in the number of existing
+		/// vetoers.
+		///
+		/// # <weight>
+		/// - `O(n log n)` in number of votors
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn veto_external(origin, proposal_hash: T::Hash) {
 			let who = T::VetoOrigin::ensure_origin(origin)?;
@@ -619,6 +643,9 @@ decl_module! {
 		}
 
 		/// Remove a referendum.
+		/// # <weight>
+		/// O(referenda)
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn cancel_referendum(origin, #[compact] ref_index: ReferendumIndex) {
 			ensure_root(origin)?;
@@ -626,6 +653,12 @@ decl_module! {
 		}
 
 		/// Cancel a proposal queued for enactment.
+		///
+		/// # <weight>
+		/// - O(queued proposals).
+		/// - 1 DB read
+		/// - 1 DB write
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn cancel_queued(origin, which: ReferendumIndex) {
 			ensure_root(origin)?;
@@ -924,6 +957,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Remove a referendum.
+	/// *O(n)* where n is the number of referenda.
 	pub fn internal_cancel_referendum(ref_index: ReferendumIndex) {
 		Self::deposit_event(RawEvent::Cancelled(ref_index));
 		<Module<T>>::clear_referendum(ref_index);
@@ -941,7 +975,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Start a referendum
+	/// Start a referendum.  O(1).
 	fn inject_referendum(
 		end: T::BlockNumber,
 		proposal_hash: T::Hash,
@@ -957,9 +991,9 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Remove all info on a referendum.
+	/// *O(n)* where n is the number of referenda.
 	fn clear_referendum(ref_index: ReferendumIndex) {
 		<ReferendumInfoOf<T>>::remove(ref_index);
-
 
 		LowestUnbaked::mutate(|i| if *i == ref_index {
 			*i += 1;
@@ -1053,6 +1087,7 @@ impl<T: Trait> Module<T> {
 
 	}
 
+	/// O(voters) + O(referenda)
 	fn bake_referendum(
 		now: T::BlockNumber,
 		index: ReferendumIndex,

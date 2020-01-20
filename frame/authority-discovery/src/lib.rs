@@ -46,7 +46,7 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	/// Retrieve authority identifiers of the current authority set.
+	/// Retrieve authority identifiers of the current authority set. O(authorities).
 	pub fn authorities() -> Vec<AuthorityId> {
 		Keys::get()
 	}
@@ -74,6 +74,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 		Self::initialize_keys(&keys);
 	}
 
+	/// O(authorities).
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
 	where
 		I: Iterator<Item = (&'a T::AccountId, Self::Key)>,
