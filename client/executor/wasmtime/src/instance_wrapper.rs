@@ -18,11 +18,9 @@
 //! runtime module.
 
 use crate::util;
-use std::slice;
-use sc_executor_common::{
-	error::{Error, Result},
-};
+use sc_executor_common::error::{Error, Result};
 use sp_wasm_interface::{Pointer, WordSize};
+use std::slice;
 use wasmtime::{Instance, Memory, Table};
 
 /// Wrap the given WebAssembly Instance of a wasm module with Substrate-runtime.
@@ -72,14 +70,20 @@ impl InstanceWrapper {
 		let export = self
 			.instance
 			.get_export(name)
-			.ok_or_else(|| {
-				Error::from(format!("Exported method {} is not found", name))
-			})?;
-		let entrypoint_func = export
+			.ok_or_else(|| Error::from(format!("Exported method {} is not found", name)))?;
+		let entrypoint = export
 			.func()
 			.ok_or_else(|| Error::from(format!("Export {} is not a function", name)))?;
-		// TODO: Check the signature
-		Ok(entrypoint_func.clone())
+		match (entrypoint.ty().params(), entrypoint.ty().results()) {
+			(&[wasmtime::ValType::I32, wasmtime::ValType::I32], &[wasmtime::ValType::I64]) => {}
+			_ => {
+				return Err(Error::from(format!(
+					"method {} have an unsupported signature",
+					name
+				)))
+			}
+		}
+		Ok(entrypoint.clone())
 	}
 
 	/// Returns an indirect function table of this instance.
