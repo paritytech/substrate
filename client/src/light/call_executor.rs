@@ -222,7 +222,7 @@ pub fn check_execution_proof<Header, E, H>(
 ) -> ClientResult<Vec<u8>>
 	where
 		Header: HeaderT,
-		E: CodeExecutor,
+		E: CodeExecutor + Clone + 'static,
 		H: Hasher,
 		H::Out: Ord + codec::Codec + 'static,
 {
@@ -248,7 +248,7 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 ) -> ClientResult<Vec<u8>>
 	where
 		Header: HeaderT,
-		E: CodeExecutor,
+		E: CodeExecutor + Clone + 'static,
 		H: Hasher,
 		H::Out: Ord + codec::Codec + 'static,
 {
@@ -259,7 +259,7 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 	let mut changes = OverlayedChanges::default();
 	let trie_backend = create_proof_check_backend(root, remote_proof)?;
 	let next_header = make_next_header(&request.header);
-	execution_proof_check_on_trie_backend::<H, _>(
+	execution_proof_check_on_trie_backend::<H, Header::Number, _>(
 		&trie_backend,
 		&mut changes,
 		executor,
@@ -268,7 +268,7 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 	)?;
 
 	// execute method
-	execution_proof_check_on_trie_backend::<H, _>(
+	execution_proof_check_on_trie_backend::<H, Header::Number, _>(
 		&trie_backend,
 		&mut changes,
 		executor,

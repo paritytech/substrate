@@ -20,10 +20,12 @@ use log::{warn, debug};
 use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
-use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
-use crate::Backend;
 use sp_core::storage::ChildInfo;
 use codec::{Codec, Decode};
+use crate::{
+	StorageKey, StorageValue, Backend,
+	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral},
+};
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
@@ -72,7 +74,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	type Transaction = S::Overlay;
 	type TrieBackendStorage = S;
 
-	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
 		self.essence.storage(key)
 	}
 
@@ -81,11 +83,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		key: &[u8],
-	) -> Result<Option<Vec<u8>>, Self::Error> {
+	) -> Result<Option<StorageValue>, Self::Error> {
 		self.essence.child_storage(storage_key, child_info, key)
 	}
 
-	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
 		self.essence.next_storage_key(key)
 	}
 
@@ -94,7 +96,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		key: &[u8],
-	) -> Result<Option<Vec<u8>>, Self::Error> {
+	) -> Result<Option<StorageKey>, Self::Error> {
 		self.essence.next_child_storage_key(storage_key, child_info, key)
 	}
 
@@ -125,7 +127,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		self.essence.for_child_keys_with_prefix(storage_key, child_info, prefix, f)
 	}
 
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
@@ -149,7 +151,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		}
 	}
 
-	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
+	fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
@@ -170,7 +172,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, S::Overlay)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+		where I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>
 	{
 		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
@@ -197,7 +199,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		H::Out: Ord,
 	{
 		let default_root = default_child_trie_root::<Layout<H>>(storage_key);

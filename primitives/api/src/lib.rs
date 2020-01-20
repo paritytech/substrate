@@ -36,7 +36,7 @@ extern crate self as sp_api;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_state_machine::{
-	OverlayedChanges, StorageProof, Backend as StateBackend, ChangesTrieStorage,
+	OverlayedChanges, StorageProof, Backend as StateBackend, ChangesTrieState,
 };
 #[doc(hidden)]
 #[cfg(feature = "std")]
@@ -325,10 +325,10 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 	/// api functions.
 	///
 	/// After executing this function, all collected changes are reset.
-	fn into_storage_changes<T: ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>>(
+	fn into_storage_changes(
 		&self,
 		backend: &Self::StateBackend,
-		changes_trie_storage: Option<&T>,
+		changes_trie_state: Option<&ChangesTrieState<HasherFor<Block>, NumberFor<Block>>>,
 		parent_hash: Block::Hash,
 	) -> Result<StorageChanges<Self::StateBackend, Block>, String> where Self: Sized;
 }

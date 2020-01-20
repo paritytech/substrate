@@ -191,14 +191,17 @@ where
 		let proof = self.api.extract_proof();
 
 		let state = self.backend.state_at(self.block_id)?;
-		let changes_trie_storage = self.backend.changes_trie_storage();
+		let changes_trie_state = backend::changes_tries_state_at_block(
+			&self.block_id,
+			self.backend.changes_trie_storage(),
+		)?;
 		let parent_hash = self.parent_hash;
 
 		// The unsafe is required because the consume requires that we drop/consume the inner api
 		// (what we do here).
 		let storage_changes = self.api.into_storage_changes(
 			&state,
-			changes_trie_storage,
+			changes_trie_state.as_ref(),
 			parent_hash,
 		);
 
