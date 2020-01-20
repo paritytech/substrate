@@ -143,7 +143,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// `true` implies instant finality.
 	pub finalized: bool,
 	/// Intermediate values that are interpreted by block importers. Each block importer,
-	/// when handled a value, removes it from the intermediate list. The final block importer
+	/// upon handling a value, removes it from the intermediate list. The final block importer
 	/// rejects block import if there are still intermediate values remain unhandled.
 	pub intermediates: HashMap<Vec<u8>, Vec<u8>>,
 	/// Auxiliary consensus data produced by the block.
