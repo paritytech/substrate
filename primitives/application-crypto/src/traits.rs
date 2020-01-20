@@ -144,10 +144,10 @@ pub trait BoundToRuntimeAppPublic {
 	type Public: RuntimeAppPublic;
 }
 
-#[cfg(feature = "full_crypto")]
+#[cfg(feature = "std")]
 use sp_core::crypto::Dummy;
 
-#[cfg(feature = "full_crypto")]
+#[cfg(feature = "std")]
 impl RuntimePublic for Dummy {
 	type Signature = Self;
 
