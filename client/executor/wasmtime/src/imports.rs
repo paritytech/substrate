@@ -113,7 +113,14 @@ impl Callable for HostFuncHandler {
 		wasmtime_params: &[Val],
 		wasmtime_results: &mut [Val],
 	) -> Result<(), wasmtime::Trap> {
-		let unwind_result = self.state_holder.with_context(|mut host_ctx| {
+		let unwind_result = self.state_holder.with_context(|host_ctx| {
+			let mut host_ctx = host_ctx.expect(
+				"host functions can be called only from wasm instance;
+				wasm instance is always called initializing context;
+				therefore host_ctx cannot be None;
+				qed
+				"
+			);
 			let mut params = wasmtime_params.iter().cloned().map(into_value);
 
 			std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

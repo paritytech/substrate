@@ -71,15 +71,16 @@ impl StateHolder {
 
 	/// Create a `HostContext` from the contained `HostState` and execute the given function `f`.
 	///
-	/// This function is only callable within closure passed to `init_state`.
+	/// This function is only callable within closure passed to `init_state`. Otherwise, the passed
+	/// context will be `None`.
 	pub fn with_context<R, F>(&self, f: F) -> R
 	where
-		F: FnOnce(HostContext) -> R,
+		F: FnOnce(Option<HostContext>) -> R,
 	{
 		let state = self.state.borrow();
 		match *state {
-			Some(ref state) => f(state.materialize()),
-			None => panic!(),
+			Some(ref state) => f(Some(state.materialize())),
+			None => f(None),
 		}
 	}
 }
