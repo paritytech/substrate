@@ -27,6 +27,7 @@ use crate::factory_impl::FactoryState;
 use node_transaction_factory::RuntimeAdapter;
 
 #[derive(Clone, Debug, StructOpt)]
+#[structopt(settings = &[structopt::clap::AppSettings::GlobalVersion, structopt::clap::AppSettings::ArgsNegateSubcommands, structopt::clap::AppSettings::SubcommandsNegateReqs])]
 enum Cli {
 	#[structopt(flatten)]
 	SubstrateCli(CoreParams),
@@ -89,7 +90,7 @@ where
 {
 	type Config<A, B> = Configuration<A, B>;
 
-	let opt = Cli::from_iter(args);
+	let opt = sc_cli::from_iter(args, &version);
 	match opt {
 		Cli::SubstrateCli(cli) => sc_cli::run(
 			cli,

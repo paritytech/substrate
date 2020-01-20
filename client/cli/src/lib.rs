@@ -180,6 +180,40 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	Ok(())
 }
 
+/// Gets the struct from the command line arguments.  Print the
+/// error message and quit the program in case of failure.
+pub fn from_args<T>(version: &VersionInfo) -> T
+where
+	T: StructOpt + Sized,
+{
+	from_iter::<T, _>(&mut std::env::args_os(), version)
+}
+
+/// Gets the struct from any iterator such as a `Vec` of your making.
+/// Print the error message and quit the program in case of failure.
+pub fn from_iter<T, I>(iter: I, version: &VersionInfo) -> T
+where
+	T: StructOpt + Sized,
+	I: IntoIterator,
+	I::Item: Into<std::ffi::OsString> + Clone,
+{
+	let app = T::clap();
+
+	let mut full_version = sc_service::config::full_version_from_strs(
+		version.version,
+		version.commit
+	);
+	full_version.push_str("\n");
+
+	let app = app
+		.name(version.executable_name)
+		.author(version.author)
+		.about(version.description)
+		.version(full_version.as_str());
+
+	T::from_clap(&app.get_matches_from(iter))
+}
+
 pub fn run<F, G, E, F2, F3, F4, T1, T2, T3, T5>(
 	core_params: CoreParams,
 	new_light: F2,
@@ -202,25 +236,14 @@ where
 	T5: sp_runtime::traits::Block + Debug,
 	<<<T5 as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as
 	std::str::FromStr>::Err: std::fmt::Debug,
+	<T5 as sp_runtime::traits::Block>::Hash: std::str::FromStr,
 {
 	let full_version = sc_service::config::full_version_from_strs(
 		version.version,
 		version.commit
 	);
-
 	sp_panic_handler::set(version.support_url, &full_version);
-	/*
-	let matches = CoreParams::clap()
-		.name(version.executable_name)
-		.author(version.author)
-		.about(version.description)
-		.version(&(full_version + "\n")[..])
-		.setting(AppSettings::GlobalVersion)
-		.setting(AppSettings::ArgsNegateSubcommands)
-		.setting(AppSettings::SubcommandsNegateReqs)
-		.get_matches_from(args);
-	*/
-	//let cli_args = CoreParams::from_clap(&matches);
+
 	fdlimit::raise_fd_limit();
 	init_logger(core_params.get_shared_params().log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
 
@@ -319,23 +342,77 @@ where
 
 			run_until_exit(f)
 		},
-		/*
-		CoreParams::CheckBlock(params) =>
-		CoreParams::PurgeChain(params) =>
-		CoreParams::Revert(params) =>
-		*/
-		/*
-		ParseAndPrepare::ExportBlocks(cmd) => cmd.run_with_builder(|config: Configuration<_, G, E>|
-			Ok(new_full_start!(config).0), load_spec, exit),
-		ParseAndPrepare::ImportBlocks(cmd) => cmd.run_with_builder(|config: Configuration<_, G, E>|
-			Ok(new_full_start!(config).0), load_spec, exit),
-		ParseAndPrepare::CheckBlock(cmd) => cmd.run_with_builder(|config: Configuration<_, G, E>|
-			Ok(new_full_start!(config).0), load_spec, exit),
-		ParseAndPrepare::PurgeChain(cmd) => cmd.run(load_spec),
-		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder(|config: Configuration<_, G, E>|
-			Ok(new_full_start!(config).0), load_spec),
-		*/
-		_ => todo!(),
+		CoreParams::CheckBlock(params) => {
+			let mut config = get_config(&core_params, spec_factory, impl_name, &version)?;
+			fill_import_params(&mut config, &params.import_params, sc_service::Roles::FULL)?;
+
+			let input = if params.input.starts_with("0x") { &params.input[2..] } else { &params.input[..] };
+			let block_id = match FromStr::from_str(input) {
+				Ok(hash) => BlockId::hash(hash),
+				Err(_) => match params.input.parse::<u32>() {
+					Ok(n) => BlockId::number((n as u32).into()),
+					Err(_) => return Err(error::Error::Input("Invalid hash or number specified".into())),
+				}
+			};
+
+			let start = std::time::Instant::now();
+			let check = builder(config)?
+				.check_block(block_id)
+				.compat();
+			let mut runtime = tokio::runtime::Runtime::new().unwrap();
+			runtime.block_on(check)?;
+			println!("Completed in {} ms.", start.elapsed().as_millis());
+
+			Ok(())
+		},
+		CoreParams::PurgeChain(params) => {
+			let config = get_config(&core_params, spec_factory, impl_name, &version)?;
+
+			let db_path = match config.database {
+				DatabaseConfig::Path { path, .. } => path,
+				_ => {
+					eprintln!("Cannot purge custom database implementation");
+					return Ok(());
+				}
+			};
+
+			if !params.yes {
+				print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
+				stdout().flush().expect("failed to flush stdout");
+
+				let mut input = String::new();
+				stdin().read_line(&mut input)?;
+				let input = input.trim();
+
+				match input.chars().nth(0) {
+					Some('y') | Some('Y') => {},
+					_ => {
+						println!("Aborted");
+						return Ok(());
+					},
+				}
+			}
+
+			match fs::remove_dir_all(&db_path) {
+				Result::Ok(_) => {
+					println!("{:?} removed.", &db_path);
+					Ok(())
+				},
+				Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
+					eprintln!("{:?} did not exist.", &db_path);
+					Ok(())
+				},
+				Result::Err(err) => Result::Err(err.into())
+			}
+		},
+		CoreParams::Revert(params) => {
+			let config = get_config(&core_params, spec_factory, impl_name, &version)?;
+
+			let blocks = params.num.parse()?;
+			builder(config)?.revert_chain(blocks)?;
+
+			Ok(())
+		},
 	};
 
 	Ok(())
@@ -381,6 +458,10 @@ fn run_service_until_exit<T>(
 where
 	T: AbstractService + std::marker::Unpin,
 {
+	// we eagerly drop the service so that the internal exit future is fired,
+	// but we need to keep holding a reference to the global telemetry guard
+	let _telemetry = service.telemetry();
+
 	let runtime = Runtime(service.compat().fuse());
 	runtime.run().map_err(|e| e.to_string())?;
 
@@ -400,47 +481,6 @@ where
 	Ok(())
 }
 
-/*
-	//use futures::Stream;
-	use futures::{TryFutureExt, future::select};
-
-	let (exit_send, exit) = oneshot::channel();
-
-	let informant = informant::build(&service);
-
-	let future = select(exit, informant)
-		.map(|_| Ok(()))
-		.compat();
-
-	runtime.spawn(future);
-
-	// we eagerly drop the service so that the internal exit future is fired,
-	// but we need to keep holding a reference to the global telemetry guard
-	let _telemetry = service.telemetry();
-
-	let service_res = {
-		let exit = e.into_exit();
-		let service = service
-			.map_err(|err| error::Error::Service(err))
-			.compat();
-		let select = select(service, exit)
-			.map(|_| Ok(()));
-			//.compat();
-		runtime.block_on(select)
-	};
-
-	let _ = exit_send.send(());
-
-	// TODO [andre]: timeout this future #1318
-
-	//use futures01::Future;
-
-	//let _ = runtime.shutdown_on_idle().wait();
-
-	service_res
-}
-*/
-
 /// Returns a string displaying the node role, special casing the sentry mode
 /// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
 /// doesn't participate.
@@ -449,40 +489,6 @@ pub fn display_role<G, E>(config: &Configuration<G, E>) -> String {
 		"SENTRY".to_string()
 	} else {
 		format!("{:?}", config.roles)
-	}
-}
-
-/// Output of calling `parse_and_prepare`.
-#[must_use]
-pub enum ParseAndPrepare<'a> {
-	/// Command ready to run the main client.
-	Run(ParseAndPrepareRun<'a>),
-	/// Command ready to build chain specs.
-	BuildSpec(ParseAndPrepareBuildSpec<'a>),
-	/// Command ready to export the chain.
-	ExportBlocks(ParseAndPrepareExport<'a>),
-	/// Command ready to import the chain.
-	ImportBlocks(ParseAndPrepareImport<'a>),
-	/// Command to check a block.
-	CheckBlock(CheckBlock<'a>),
-	/// Command ready to purge the chain.
-	PurgeChain(ParseAndPreparePurge<'a>),
-	/// Command ready to revert the chain.
-	RevertChain(ParseAndPrepareRevert<'a>),
-}
-
-impl<'a> ParseAndPrepare<'a> {
-	/// Return common set of parameters shared by all commands.
-	pub fn shared_params(&self) -> Option<&SharedParams> {
-		match self {
-			ParseAndPrepare::Run(c) => Some(&c.params.shared_params),
-			ParseAndPrepare::BuildSpec(c) => Some(&c.params.shared_params),
-			ParseAndPrepare::ExportBlocks(c) => Some(&c.params.shared_params),
-			ParseAndPrepare::ImportBlocks(c) => Some(&c.params.shared_params),
-			ParseAndPrepare::CheckBlock(c) => Some(&c.params.shared_params),
-			ParseAndPrepare::PurgeChain(c) => Some(&c.params.shared_params),
-			ParseAndPrepare::RevertChain(c) => Some(&c.params.shared_params),
-		}
 	}
 }
 
@@ -544,166 +550,6 @@ where
 				&params.shared_params,
 				version,
 			),
-	}
-}
-
-/// Command ready to run the main client.
-pub struct ParseAndPrepareRun<'a> {
-	params: RunCmd,
-	impl_name: &'static str,
-	version: &'a VersionInfo,
-}
-
-/// Command ready to build chain specs.
-pub struct ParseAndPrepareBuildSpec<'a> {
-	params: BuildSpecCmd,
-	version: &'a VersionInfo,
-}
-
-/// Command ready to export the chain.
-pub struct ParseAndPrepareExport<'a> {
-	params: ExportBlocksCmd,
-	version: &'a VersionInfo,
-}
-
-/// Command ready to import the chain.
-pub struct ParseAndPrepareImport<'a> {
-	params: ImportBlocksCmd,
-	version: &'a VersionInfo,
-}
-
-/// Command to check a block.
-pub struct CheckBlock<'a> {
-	params: CheckBlockCmd,
-	version: &'a VersionInfo,
-}
-
-impl<'a> CheckBlock<'a> {
-	/// Runs the command and imports to the chain.
-	pub fn run_with_builder<C, G, E, F, B, S, Exit>(
-		self,
-		builder: F,
-		spec_factory: S,
-		_exit: Exit,
-	) -> error::Result<()>
-		where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-			F: FnOnce(Configuration<G, E>) -> Result<B, error::Error>,
-			B: ServiceBuilderCommand,
-			<<B as ServiceBuilderCommand>::Block as BlockT>::Hash: FromStr,
-			C: Default,
-			G: RuntimeGenesis,
-			E: ChainSpecExtension,
-			Exit: IntoExit
-	{
-		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
-		fill_import_params(&mut config, &self.params.import_params, sc_service::Roles::FULL)?;
-
-		let input = if self.params.input.starts_with("0x") { &self.params.input[2..] } else { &self.params.input[..] };
-		let block_id = match FromStr::from_str(input) {
-			Ok(hash) => BlockId::hash(hash),
-			Err(_) => match self.params.input.parse::<u32>() {
-				Ok(n) => BlockId::number((n as u32).into()),
-				Err(_) => return Err(error::Error::Input("Invalid hash or number specified".into())),
-			}
-		};
-
-		let start = std::time::Instant::now();
-		let check = builder(config)?
-			.check_block(block_id)
-			.compat();
-		let mut runtime = tokio::runtime::Runtime::new().unwrap();
-		runtime.block_on(check)?;
-		println!("Completed in {} ms.", start.elapsed().as_millis());
-		Ok(())
-	}
-}
-
-/// Command ready to purge the chain.
-pub struct ParseAndPreparePurge<'a> {
-	params: PurgeChainCmd,
-	version: &'a VersionInfo,
-}
-
-impl<'a> ParseAndPreparePurge<'a> {
-	/// Runs the command and purges the chain.
-	pub fn run<G, E, S>(
-		self,
-		spec_factory: S
-	) -> error::Result<()> where
-		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		let config = create_config_with_db_path(
-			spec_factory, &self.params.shared_params, self.version
-		)?;
-		let db_path = match config.database {
-			DatabaseConfig::Path { path, .. } => path,
-			_ => {
-				eprintln!("Cannot purge custom database implementation");
-				return Ok(());
-			}
-		};
-
-		if !self.params.yes {
-			print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
-			stdout().flush().expect("failed to flush stdout");
-
-			let mut input = String::new();
-			stdin().read_line(&mut input)?;
-			let input = input.trim();
-
-			match input.chars().nth(0) {
-				Some('y') | Some('Y') => {},
-				_ => {
-					println!("Aborted");
-					return Ok(());
-				},
-			}
-		}
-
-		match fs::remove_dir_all(&db_path) {
-			Result::Ok(_) => {
-				println!("{:?} removed.", &db_path);
-				Ok(())
-			},
-			Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
-				eprintln!("{:?} did not exist.", &db_path);
-				Ok(())
-			},
-			Result::Err(err) => Result::Err(err.into())
-		}
-	}
-}
-
-/// Command ready to revert the chain.
-pub struct ParseAndPrepareRevert<'a> {
-	params: RevertCmd,
-	version: &'a VersionInfo,
-}
-
-impl<'a> ParseAndPrepareRevert<'a> {
-	/// Runs the command and reverts the chain.
-	pub fn run_with_builder<C, G, E, F, B, S>(
-		self,
-		builder: F,
-		spec_factory: S
-	) -> error::Result<()> where
-		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		F: FnOnce(Configuration<G, E>) -> Result<B, error::Error>,
-		B: ServiceBuilderCommand,
-		<<<<B as ServiceBuilderCommand>::Block as BlockT>::Header as HeaderT>
-			::Number as FromStr>::Err: Debug,
-		C: Default,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		let config = create_config_with_db_path(
-			spec_factory, &self.params.shared_params, self.version
-		)?;
-		let blocks = self.params.num.parse()?;
-		builder(config)?.revert_chain(blocks)?;
-		Ok(())
 	}
 }
 
