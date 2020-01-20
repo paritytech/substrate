@@ -18,12 +18,13 @@
 
 use super::*;
 use mock::*;
+use codec::Encode;
 use sp_runtime::{assert_eq_error_rate, traits::{OnInitialize, BadOrigin}};
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
 	assert_ok, assert_noop,
 	traits::{Currency, ReservableCurrency},
-	dispatch::DispatchError,
+	dispatch::DispatchError, StorageMap,
 };
 use substrate_test_utils::assert_eq_uvec;
 
@@ -2710,7 +2711,95 @@ fn slash_kicks_validators_not_nominators() {
 
 		// and make sure that the vote will be ignored even if the validator
 		// re-registers.
-		let last_slash = <Staking as Store>::SlashingSpans::get(&11).unwrap().last_start();
+		let last_slash = <Staking as Store>::SlashingSpans::get(&11).unwrap().last_nonzero_slash();
 		assert!(nominations.submitted_in < last_slash);
+	});
+}
+
+#[test]
+fn migration_v2() {
+	ExtBuilder::default().build().execute_with(|| {
+		use crate::{EraIndex, slashing::SpanIndex};
+
+		#[derive(Encode)]
+		struct V1SlashingSpans {
+			span_index: SpanIndex,
+			last_start: EraIndex,
+			prior: Vec<EraIndex>,
+		}
+
+		// inject old-style values directly into storage.
+		let set = |stash, spans: V1SlashingSpans| {
+			let key = <Staking as Store>::SlashingSpans::hashed_key_for(stash);
+			sp_io::storage::set(&key, &spans.encode());
+		};
+
+		let spans_11 = V1SlashingSpans {
+			span_index: 10,
+			last_start: 1,
+			prior: vec![0],
+		};
+
+		let spans_21 = V1SlashingSpans {
+			span_index: 1,
+			last_start: 5,
+			prior: vec![],
+		};
+
+		set(11, spans_11);
+		set(21, spans_21);
+
+		<Staking as Store>::StorageVersion::put(1);
+
+		// perform migration.
+		crate::migration::inner::to_v2::<Test>(&mut 1);
+
+		assert_eq!(
+			<Staking as Store>::SlashingSpans::get(&11).unwrap().last_nonzero_slash(),
+			1,
+		);
+
+		assert_eq!(
+			<Staking as Store>::SlashingSpans::get(&21).unwrap().last_nonzero_slash(),
+			5,
+		);
+	});
+}
+
+#[test]
+fn zero_slash_keeps_nominators() {
+	ExtBuilder::default().build().execute_with(|| {
+		start_era(1);
+
+		assert_eq!(Balances::free_balance(&11), 1000);
+
+		let exposure = Staking::stakers(&11);
+		assert_eq!(Balances::free_balance(&101), 2000);
+
+		on_offence_now(
+			&[
+				OffenceDetails {
+					offender: (11, exposure.clone()),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(0)],
+		);
+
+		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(&101), 2000);
+
+		// This is the best way to check that the validator was chilled; `get` will
+		// return default value.
+		for (stash, _) in <Staking as Store>::Validators::enumerate() {
+			assert!(stash != 11);
+		}
+
+		let nominations = <Staking as Store>::Nominators::get(&101).unwrap();
+
+		// and make sure that the vote will not be ignored, because the slash was
+		// zero.
+		let last_slash = <Staking as Store>::SlashingSpans::get(&11).unwrap().last_nonzero_slash();
+		assert!(nominations.submitted_in >= last_slash);
 	});
 }

@@ -90,7 +90,9 @@ pub struct SlashingSpans {
 	span_index: SpanIndex,
 	// the start era of the most recent (ongoing) slashing span.
 	last_start: EraIndex,
-	// all prior slashing spans start indices, in reverse order (most recent first)
+	// the last era at which a non-zero slash occurred.
+	last_nonzero_slash: EraIndex,
+	// all prior slashing spans' start indices, in reverse order (most recent first)
 	// encoded as offsets relative to the slashing span after it.
 	prior: Vec<EraIndex>,
 }
@@ -102,6 +104,10 @@ impl SlashingSpans {
 		SlashingSpans {
 			span_index: 0,
 			last_start: window_start,
+			// initialize to zero, as this structure is lazily created until
+			// the first slash is applied. setting equal to `window_start` would
+			// put a time limit on nominations.
+			last_nonzero_slash: 0,
 			prior: Vec::new(),
 		}
 	}
@@ -136,9 +142,9 @@ impl SlashingSpans {
 		sp_std::iter::once(last).chain(prior)
 	}
 
-	/// Yields the era index where the last (current) slashing span started.
-	pub(crate) fn last_start(&self) -> EraIndex {
-		self.last_start
+	/// Yields the era index where the most recent non-zero slash occurred.
+	pub(crate) fn last_nonzero_slash(&self) -> EraIndex {
+		self.last_nonzero_slash
 	}
 
 	// prune the slashing spans against a window, whose start era index is given.
@@ -457,8 +463,12 @@ impl<'a, T: 'a + Trait> InspectingSpans<'a, T> {
 		self.dirty = self.spans.end_span(now) || self.dirty;
 	}
 
-	fn add_slash(&mut self, amount: BalanceOf<T>) {
+	// add some value to the slash of the staker.
+	// invariant: the staker is being slashed for non-zero value here
+	// although `amount` may be zero, as it is only a difference.
+	fn add_slash(&mut self, amount: BalanceOf<T>, slash_era: EraIndex) {
 		*self.slash_of += amount;
+		self.spans.last_nonzero_slash = sp_std::cmp::max(self.spans.last_nonzero_slash, slash_era);
 	}
 
 	// find the span index of the given era, if covered.
@@ -489,7 +499,7 @@ impl<'a, T: 'a + Trait> InspectingSpans<'a, T> {
 			let reward = REWARD_F1
 				* (self.reward_proportion * slash).saturating_sub(span_record.paid_out);
 
-			self.add_slash(difference);
+			self.add_slash(difference, slash_era);
 			changed = true;
 
 			reward
@@ -681,6 +691,7 @@ mod tests {
 		let spans = SlashingSpans {
 			span_index: 0,
 			last_start: 1000,
+			last_nonzero_slash: 0,
 			prior: Vec::new(),
 		};
 
@@ -695,6 +706,7 @@ mod tests {
 		let spans = SlashingSpans {
 			span_index: 10,
 			last_start: 1000,
+			last_nonzero_slash: 0,
 			prior: vec![10, 9, 8, 10],
 		};
 
@@ -715,6 +727,7 @@ mod tests {
 		let mut spans = SlashingSpans {
 			span_index: 10,
 			last_start: 1000,
+			last_nonzero_slash: 0,
 			prior: vec![10, 9, 8, 10],
 		};
 
@@ -768,6 +781,7 @@ mod tests {
 		let mut spans = SlashingSpans {
 			span_index: 10,
 			last_start: 1000,
+			last_nonzero_slash: 0,
 			prior: vec![10, 9, 8, 10],
 		};
 		assert_eq!(spans.prune(2000), Some((6, 10)));
@@ -784,6 +798,7 @@ mod tests {
 		let mut spans = SlashingSpans {
 			span_index: 1,
 			last_start: 10,
+			last_nonzero_slash: 0,
 			prior: Vec::new(),
 		};
 
