@@ -95,6 +95,8 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	to_spawn_tx: mpsc::UnboundedSender<Pin<Box<dyn Future<Output = ()> + Send>>>,
 	/// Receiver for futures that must be spawned as background tasks.
 	to_spawn_rx: mpsc::UnboundedReceiver<Pin<Box<dyn Future<Output = ()> + Send>>>,
+	/// How to spawn background tasks.
+	tasks_executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
 	/// List of futures to poll from `poll`.
 	/// If spawning a background task is not possible, we instead push the task into this `Vec`.
 	/// The elements must then be polled manually.
@@ -322,16 +324,10 @@ impl<TBl: Unpin, TCl, TSc: Unpin, TNetStatus, TNet, TTxPool, TOc> Future for
 		}
 
 		while let Poll::Ready(Some(task_to_spawn)) = Pin::new(&mut this.to_spawn_rx).poll_next(cx) {
-			// TODO: Update to tokio 0.2 when libp2p get switched to std futures (#4383)
-			let executor = tokio_executor::DefaultExecutor::current();
-			use futures01::future::Executor;
-			if let Err(err) = executor.execute(task_to_spawn.unit_error().compat()) {
-				debug!(
-					target: "service",
-					"Failed to spawn background task: {:?}; falling back to manual polling",
-					err
-				);
-				this.to_poll.push(Box::pin(err.into_future().compat().map(drop)));
+			if let Some(tasks_executor) = this.tasks_executor.as_ref() {
+				tasks_executor(task_to_spawn);
+			} else {
+				this.to_poll.push(Box::pin(task_to_spawn.map(drop)));
 			}
 		}
 

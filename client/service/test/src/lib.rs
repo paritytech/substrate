@@ -172,6 +172,7 @@ fn node_config<G, E: Clone> (
 		impl_version: "0.1",
 		impl_commit: "",
 		roles: role,
+		tasks_executor: None,
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore: KeystoreConfig::Path {
