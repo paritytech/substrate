@@ -11,7 +11,6 @@ use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
-use sc_basic_authority;
 use futures::{FutureExt, compat::Future01CompatExt};
 
 // Our native executor instance.
@@ -107,7 +106,7 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 		.build()?;
 
 	if participates_in_consensus {
-		let proposer = sc_basic_authority::ProposerFactory {
+		let proposer = sc_basic_authorship::ProposerFactory {
 			client: service.client(),
 			transaction_pool: service.transaction_pool(),
 		};

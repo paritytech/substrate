@@ -470,11 +470,14 @@ impl<B: ChainApi> ValidatedPool<B> {
 			return vec![]
 		}
 
+		debug!(target: "txpool", "Removing invalid transactions: {:?}", hashes);
+
 		// temporarily ban invalid transactions
-		debug!(target: "txpool", "Banning invalid transactions: {:?}", hashes);
 		self.rotator.ban(&time::Instant::now(), hashes.iter().cloned());
 
 		let invalid = self.pool.write().remove_subtree(hashes);
+
+		debug!(target: "txpool", "Removed invalid transactions: {:?}", invalid);
 
 		let mut listener = self.listener.write();
 		for tx in &invalid {

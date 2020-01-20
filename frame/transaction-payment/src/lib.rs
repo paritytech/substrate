@@ -151,7 +151,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	///      transactions can have a tip.
 	///
 	/// final_fee = base_fee + targeted_fee_adjustment(len_fee + weight_fee) + tip;
-	fn compute_fee(
+	pub fn compute_fee(
 		len: u32,
 		info: <Self as SignedExtension>::DispatchInfo,
 		tip: BalanceOf<T>,
