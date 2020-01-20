@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,13 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-///! Defines a `WasmRuntime` that uses the Wasmtime JIT to execute.
+use std::ops::Range;
 
-mod function_executor;
-mod runtime;
-mod state_holder;
-mod imports;
-mod instance_wrapper;
-mod util;
-
-pub use runtime::create_instance;
+/// Construct a range from an offset to a data length after the offset.
+/// Returns None if the end of the range would exceed some maximum offset.
+pub fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usize>> {
+	let end = offset.checked_add(len)?;
+	if end <= max {
+		Some(offset..end)
+	} else {
+		None
+	}
+}

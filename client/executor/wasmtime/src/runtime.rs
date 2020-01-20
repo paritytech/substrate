@@ -100,10 +100,14 @@ fn call_method(
 	data: &[u8],
 	heap_pages: u32,
 ) -> Result<Vec<u8>> {
-	let instance = Instance::new(module, externs)
-		.map_err(|e| WasmError::Other(format!("cannot instantiate: {}", e)))?;
+	let instance_wrapper = unsafe {
+		let instance = Instance::new(module, externs)
+			.map_err(|e| WasmError::Other(format!("cannot instantiate: {}", e)))?;
 
-	let instance_wrapper = unsafe { InstanceWrapper::new(instance)? };
+		// This is safe since the requirement that `InstanceWrapper` own the instance exclusively
+		// is held.
+		InstanceWrapper::new(instance)?
+	};
 	instance_wrapper.grow_memory(heap_pages)?;
 
 	let heap_base = instance_wrapper.extract_heap_base()?;

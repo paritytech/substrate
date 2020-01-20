@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::instance_wrapper::InstanceWrapper;
+use crate::util;
 use sc_executor_common::allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::error::Result;
 use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
@@ -182,12 +183,12 @@ impl<'a> Sandbox for HostContext<'a> {
 			.map_err(|e| e.to_string())?;
 		sandboxed_memory.with_direct_access(|sandboxed_memory| {
 			let len = buf_len as usize;
-			let src_range = match checked_range(offset as usize, len, sandboxed_memory.len()) {
+			let src_range = match util::checked_range(offset as usize, len, sandboxed_memory.len()) {
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			};
 			let supervisor_mem_size = self.instance.memory_size() as usize;
-			let dst_range = match checked_range(buf_ptr.into(), len, supervisor_mem_size) {
+			let dst_range = match util::checked_range(buf_ptr.into(), len, supervisor_mem_size) {
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			};
@@ -216,11 +217,11 @@ impl<'a> Sandbox for HostContext<'a> {
 		sandboxed_memory.with_direct_access_mut(|sandboxed_memory| {
 			let len = val_len as usize;
 			let supervisor_mem_size = self.instance.memory_size() as usize;
-			let src_range = match checked_range(val_ptr.into(), len, supervisor_mem_size) {
+			let src_range = match util::checked_range(val_ptr.into(), len, supervisor_mem_size) {
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			};
-			let dst_range = match checked_range(offset as usize, len, sandboxed_memory.len()) {
+			let dst_range = match util::checked_range(offset as usize, len, sandboxed_memory.len()) {
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			};
@@ -337,14 +338,5 @@ impl<'a> Sandbox for HostContext<'a> {
 			};
 
 		Ok(instance_idx_or_err_code as u32)
-	}
-}
-
-fn checked_range(offset: usize, len: usize, max: usize) -> Option<std::ops::Range<usize>> {
-	let end = offset.checked_add(len)?;
-	if end <= max {
-		Some(offset..end)
-	} else {
-		None
 	}
 }

@@ -17,7 +17,7 @@
 //! Defines data and logic needed for interaction with an WebAssembly instance of a substrate
 //! runtime module.
 
-use std::ops::Range;
+use crate::util;
 use std::slice;
 use sc_executor_common::{
 	error::{Error, Result},
@@ -33,6 +33,16 @@ pub struct InstanceWrapper {
 }
 
 impl InstanceWrapper {
+	/// Wrap the given instance.
+	///
+	/// # Safety
+	///
+	/// This wrapper requires exclusive ownership over the given instance and all its components.
+	/// Since `Instance` is a `Clone` we cannot use typesystem to prevent this, hence unsafe.
+	///
+	/// Requiring `Instance` is rather a convenience feature: in reality exclusive ownership is only
+	/// required for `Memory` to guarantee exclusive access to its memory and prevent caching
+	/// the pointer to the memory's base address to prevent invalidation.
 	pub unsafe fn new(instance: Instance) -> Result<Self> {
 		Ok(Self {
 			table: get_table(&instance),
@@ -128,9 +138,11 @@ impl InstanceWrapper {
 	/// Returns an error if the read would go out of the memory bounds.
 	pub fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> Result<()> {
 		unsafe {
-			// TODO: Proof
+			// This should be safe since we don't grow up memory while caching this reference and
+			// we give up the reference before returning from this function.
 			let memory = self.memory_as_slice();
-			let range = checked_range(address.into(), dest.len(), memory.len())
+
+			let range = util::checked_range(address.into(), dest.len(), memory.len())
 				.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
 			dest.copy_from_slice(&memory[range]);
 			Ok(())
@@ -142,36 +154,44 @@ impl InstanceWrapper {
 	/// Returns an error if the write would go out of the memory bounds.
 	pub fn write_memory_from(&self, address: Pointer<u8>, data: &[u8]) -> Result<()> {
 		unsafe {
-			// TODO: Proof
+			// This should be safe since we don't grow up memory while caching this reference and
+			// we give up the reference before returning from this function.
 			let memory = self.memory_as_slice_mut();
-			let range = checked_range(address.into(), data.len(), memory.len())
+
+			let range = util::checked_range(address.into(), data.len(), memory.len())
 				.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
 			&mut memory[range].copy_from_slice(data);
 			Ok(())
 		}
 	}
 
+	/// Allocate some memory of the given size.
 	pub fn allocate(
 		&self,
 		allocator: &mut sc_executor_common::allocator::FreeingBumpHeapAllocator,
 		size: WordSize,
 	) -> Result<Pointer<u8>> {
 		unsafe {
-			// TODO: Proof
-			let mem_mut = self.memory_as_slice_mut();
-			allocator.allocate(mem_mut, size)
+			// This should be safe since we don't grow up memory while caching this reference and
+			// we give up the reference before returning from this function.
+			let memory = self.memory_as_slice_mut();
+
+			allocator.allocate(memory, size)
 		}
 	}
 
+	/// Deallocate the memory pointed by the given pointer.
 	pub fn deallocate(
 		&self,
 		allocator: &mut sc_executor_common::allocator::FreeingBumpHeapAllocator,
 		ptr: Pointer<u8>,
 	) -> Result<()> {
 		unsafe {
-			// TODO: Proof
-			let mem_mut = self.memory_as_slice_mut();
-			allocator.deallocate(mem_mut, ptr)
+			// This should be safe since we don't grow up memory while caching this reference and
+			// we give up the reference before returning from this function.
+			let memory = self.memory_as_slice_mut();
+
+			allocator.deallocate(memory, ptr)
 		}
 	}
 
@@ -198,7 +218,8 @@ impl InstanceWrapper {
 	/// # Safety
 	///
 	/// See `[memory_as_slice]`. In addition to those requirements, since a mutable reference is
-	/// returned it must be ensured that only one mutable reference to memory exists.
+	/// returned it must be ensured that only one mutable and no shared references to memory exists
+	/// at the same time.
 	unsafe fn memory_as_slice_mut(&self) -> &mut [u8] {
 		let ptr = self.memory.data_ptr();
 		let len = self.memory.data_size();
@@ -208,16 +229,5 @@ impl InstanceWrapper {
 		} else {
 			slice::from_raw_parts_mut(ptr, len)
 		}
-	}
-}
-
-/// Construct a range from an offset to a data length after the offset.
-/// Returns None if the end of the range would exceed some maximum offset.
-fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usize>> {
-	let end = offset.checked_add(len)?;
-	if end <= max {
-		Some(offset..end)
-	} else {
-		None
 	}
 }
