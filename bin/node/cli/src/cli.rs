@@ -21,7 +21,7 @@ use sc_cli::{IntoExit, NoCustom, SharedParams, ImportParams, error};
 use sc_service::{AbstractService, Roles as ServiceRoles, Configuration};
 use log::info;
 use structopt::StructOpt;
-use sc_cli::{display_role, parse_and_prepare, GetSharedParams, ParseAndPrepare, CoreParams, run};
+use sc_cli::{display_role, CoreParams};
 use crate::{service, ChainSpec, load_spec};
 use crate::factory_impl::FactoryState;
 use node_transaction_factory::RuntimeAdapter;
@@ -91,7 +91,13 @@ pub fn run<I, T, E>(args: I, version: sc_cli::VersionInfo) -> error::Result<()> 
 
 	let opt = Cli::from_iter(args);
 	match opt {
-		Cli::SubstrateCli(cli) => run(load_spect, &version),
+		Cli::SubstrateCli(cli) => sc_cli::run(
+			cli,
+			service::new_light,
+			service::new_full,
+			load_spec, "substrate-node",
+			&version,
+		),
 		Cli::Factory(cli_args) => {
 			let mut config: Config<_, _> = sc_cli::create_config_with_db_path(
 				load_spec,
