@@ -133,7 +133,7 @@ fn node_config<G, E: Clone> (
 	key_seed: Option<String>,
 	base_port: u16,
 	root: &TempDir,
-) -> Configuration<(), G, E>
+) -> Configuration<G, E>
 {
 	let root = root.path().join(format!("node-{}", index));
 
@@ -186,7 +186,6 @@ fn node_config<G, E: Clone> (
 		state_cache_child_ratio: None,
 		pruning: Default::default(),
 		chain_spec: (*spec).clone(),
-		custom: Default::default(),
 		name: format!("Node {}", index),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
@@ -216,11 +215,11 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	fn new(
 		temp: &TempDir,
 		spec: ChainSpec<G, E>,
-		full: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>>,
-		light: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<L, Error>>,
+		full: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>>,
+		light: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<L, Error>>,
 		authorities: impl Iterator<Item = (
 			String,
-			impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>
+			impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>
 		)>,
 		base_port: u16
 	) -> TestNet<G, E, F, L, U> {
@@ -243,9 +242,9 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	fn insert_nodes(
 		&mut self,
 		temp: &TempDir,
-		full: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>>,
-		light: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<L, Error>>,
-		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>)>
+		full: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>>,
+		light: impl Iterator<Item = impl FnOnce(Configuration<G, E>) -> Result<L, Error>>,
+		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration<G, E>) -> Result<(F, U), Error>)>
 	) {
 		let executor = self.runtime.executor();
 
@@ -303,9 +302,9 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	light_builder: Lb,
 ) where
 	E: Clone,
-	Fb: Fn(Configuration<(), G, E>) -> Result<F, Error>,
+	Fb: Fn(Configuration<G, E>) -> Result<F, Error>,
 	F: AbstractService,
-	Lb: Fn(Configuration<(), G, E>) -> Result<L, Error>,
+	Lb: Fn(Configuration<G, E>) -> Result<L, Error>,
 	L: AbstractService,
 {
 	const NUM_FULL_NODES: usize = 5;
@@ -402,9 +401,9 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	mut make_block_and_import: B,
 	mut extrinsic_factory: ExF
 ) where
-	Fb: Fn(Configuration<(), G, E>) -> Result<(F, U), Error>,
+	Fb: Fn(Configuration<G, E>) -> Result<(F, U), Error>,
 	F: AbstractService,
-	Lb: Fn(Configuration<(), G, E>) -> Result<L, Error>,
+	Lb: Fn(Configuration<G, E>) -> Result<L, Error>,
 	L: AbstractService,
 	B: FnMut(&F, &mut U),
 	ExF: FnMut(&F, &U) -> <F::Block as BlockT>::Extrinsic,
@@ -471,9 +470,9 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	light_builder: Lb,
 	authorities: impl IntoIterator<Item = String>
 ) where
-	Fb: Fn(Configuration<(), G, E>) -> Result<F, Error>,
+	Fb: Fn(Configuration<G, E>) -> Result<F, Error>,
 	F: AbstractService,
-	Lb: Fn(Configuration<(), G, E>) -> Result<L, Error>,
+	Lb: Fn(Configuration<G, E>) -> Result<L, Error>,
 	L: AbstractService,
 	E: Clone,
 {

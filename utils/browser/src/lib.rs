@@ -37,12 +37,11 @@ pub use console_log::init_with_level as init_console_log;
 /// Create a service configuration from a chain spec and the websocket transport.
 ///
 /// This configuration contains good defaults for a browser light client.
-pub async fn browser_configuration<C, G, E>(
+pub async fn browser_configuration<G, E>(
 	transport: Transport,
 	chain_spec: ChainSpec<G, E>,
-) -> Result<Configuration<C, G, E>, Box<dyn std::error::Error>>
+) -> Result<Configuration<G, E>, Box<dyn std::error::Error>>
 where
-	C: Default,
 	G: RuntimeGenesis,
 	E: Extension,
 {

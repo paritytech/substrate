@@ -1188,7 +1188,7 @@ mod tests {
 			run_cmds.shared_params.base_path = Some(PathBuf::from("/test/path"));
 			run_cmds.keystore_path = keystore_path.clone().map(PathBuf::from);
 
-			let node_config = create_run_node_config::<(), _, _, _>(
+			let node_config = create_run_node_config(
 				run_cmds.clone(),
 				|_| Ok(Some(chain_spec.clone())),
 				"test",
@@ -1228,14 +1228,14 @@ mod tests {
 		let spec_factory = |_: &str| Ok(Some(chain_spec.clone()));
 
 		let args = vec!["substrate", "run", "--dev", "--state-cache-size=42"];
-		let pnp = parse_and_prepare(&version, "test", args);
-		let config = pnp.into_configuration::<(), _, _, _>(spec_factory).unwrap().unwrap();
+		let core_params = from_iter(args, &version);
+		let config = get_config(&core_params, spec_factory, "substrate", &version).unwrap();
 		assert_eq!(config.roles, sc_service::Roles::AUTHORITY);
 		assert_eq!(config.state_cache_size, 42);
 
 		let args = vec!["substrate", "import-blocks", "--dev"];
-		let pnp = parse_and_prepare(&version, "test", args);
-		let config = pnp.into_configuration::<(), _, _, _>(spec_factory).unwrap().unwrap();
+		let core_params = from_iter(args, &version);
+		let config = get_config(&core_params, spec_factory, "substrate", &version).unwrap();
 		assert_eq!(config.roles, sc_service::Roles::FULL);
 	}
 }
