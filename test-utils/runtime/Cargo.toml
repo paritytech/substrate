@@ -35,7 +35,7 @@ pallet-timestamp = { version = "2.0.0", default-features = false, path = "../../
 sc-client = { version = "0.8", optional = true, path = "../../client" }
 sp-trie = { version = "2.0.0", default-features = false, path = "../../primitives/trie" }
 sp-transaction-pool = { version = "2.0.0", default-features = false, path = "../../primitives/transaction-pool" }
-trie-db = { version = "0.18.1", default-features = false }
+trie-db = { version = "0.19.2", default-features = false }
 
 [dev-dependencies]
 sc-executor = { version = "0.8", path = "../../client/executor" }

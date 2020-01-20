@@ -116,6 +116,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 			let runtime = RuntimeBuilder::new()
 				.thread_name("main-tokio-")
 				.threaded_scheduler()
+				.enable_all()
 				.build()
 				.map_err(|e| format!("{:?}", e))?;
 			match config.roles {
@@ -153,6 +154,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 				load_spec,
 				&cli_args.shared_params,
 				&version,
+				None,
 			)?;
 			// make sure to configure keystore
 			config.keystore = sc_service::config::KeystoreConfig::InMemory;

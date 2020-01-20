@@ -73,7 +73,7 @@ pub fn new_light<B, S, GS, RA, E>(
 		B: BlockT,
 		S: BlockchainStorage<B> + 'static,
 		GS: BuildStorage,
-		E: CodeExecutor + RuntimeInfo,
+		E: CodeExecutor + RuntimeInfo + Clone + 'static,
 {
 	let local_executor = LocalCallExecutor::new(backend.clone(), code_executor);
 	let executor = GenesisCallExecutor::new(backend.clone(), local_executor);

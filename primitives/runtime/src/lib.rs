@@ -53,6 +53,9 @@ pub mod testing;
 pub mod traits;
 pub mod transaction_validity;
 pub mod random_number_generator;
+mod runtime_string;
+
+pub use crate::runtime_string::*;
 
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};
@@ -90,27 +93,6 @@ pub struct ModuleId(pub [u8; 8]);
 
 impl TypeId for ModuleId {
 	const TYPE_ID: [u8; 4] = *b"modl";
-}
-
-/// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
-#[cfg(feature = "std")]
-pub type RuntimeString = std::borrow::Cow<'static, str>;
-/// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
-#[cfg(not(feature = "std"))]
-pub type RuntimeString = &'static str;
-
-/// Create a const [`RuntimeString`].
-#[cfg(feature = "std")]
-#[macro_export]
-macro_rules! create_runtime_str {
-	( $y:expr ) => {{ std::borrow::Cow::Borrowed($y) }}
-}
-
-/// Create a const [`RuntimeString`].
-#[cfg(not(feature = "std"))]
-#[macro_export]
-macro_rules! create_runtime_str {
-	( $y:expr ) => {{ $y }}
 }
 
 #[cfg(feature = "std")]
@@ -256,9 +238,7 @@ impl traits::IdentifyAccount for MultiSigner {
 		match self {
 			MultiSigner::Ed25519(who) => <[u8; 32]>::from(who).into(),
 			MultiSigner::Sr25519(who) => <[u8; 32]>::from(who).into(),
-			MultiSigner::Ecdsa(who) => sp_io::hashing::blake2_256(
-				&who.as_compressed().expect("`who` is a valid `ECDSA` public key; qed")[..],
-			).into(),
+			MultiSigner::Ecdsa(who) => sp_io::hashing::blake2_256(&who.as_ref()[..]).into(),
 		}
 	}
 }
@@ -742,7 +722,7 @@ mod tests {
 		let multi_signer = MultiSigner::from(pair.public());
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
 
-		let multi_signer = MultiSigner::from(pair.public().into_compressed().unwrap());
+		let multi_signer = MultiSigner::from(pair.public());
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
 	}
 }
