@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! This module defgines `HostState` and `HostContext` structs which provide logic and state
+//! required for execution of host
+
 use crate::instance_wrapper::InstanceWrapper;
 use crate::util;
 use sc_executor_common::allocator::FreeingBumpHeapAllocator;

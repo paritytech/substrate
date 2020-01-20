@@ -16,7 +16,7 @@
 
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
 
-use crate::function_executor::HostState;
+use crate::host::HostState;
 use crate::instance_wrapper::InstanceWrapper;
 use crate::imports::resolve_imports;
 use crate::state_holder::StateHolder;
