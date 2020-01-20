@@ -906,8 +906,8 @@ decl_event! {
 		/// successful execution or not.
 		Dispatched(AccountId, bool),
 
-		/// An event from contract of account.
-		Contract(AccountId, Vec<u8>),
+		/// An event deposited upon execution of a contract from the account.
+		ContractExecution(AccountId, Vec<u8>),
 	}
 }
 
