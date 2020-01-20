@@ -134,6 +134,7 @@ impl RuntimeAdapter for RuntimeState {
 	) -> <Self::Block as BlockT>::Extrinsic {
 		let phase = self.extract_phase(*prior_block_hash);
 		let function = Call::get_call(&module, &extrinsic_name);
+
 		let extrinsic = CheckedExtrinsic {
 			signed: Some((sender.clone(), Self::build_extra(self.index, phase))),
 			function,
@@ -145,6 +146,15 @@ impl RuntimeAdapter for RuntimeState {
 			(), (), (), (),
 		);
 		sign::<Self>(extrinsic, key, additional_signed)
+	}
+
+
+	fn all_modules(&self) -> Vec<String> {
+		Call::all_modules().to_vec().iter().map(|m| m.to_string()).collect()
+	}
+
+	fn all_calls(&self, module: String) -> Vec<String> {
+		Call::all_calls(module.as_str()).to_vec().iter().map(|c| c.to_string()).collect()
 	}
 
 	fn inherent_extrinsics(&self) -> InherentData {

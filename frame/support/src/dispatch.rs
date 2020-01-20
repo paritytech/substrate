@@ -1433,9 +1433,15 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::benchmarking::Call
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
+			fn all_calls() -> &'static [&'static str] {
+				&[
+					$(
+						stringify!($fn_name),
+					)*
+				]
+			}
+
 			fn get_call(function: &str) -> Self {
-				use $crate::sp_std::if_std;
-		
 				match function {
 					$( 
 						stringify!($fn_name) => {
@@ -1523,7 +1529,7 @@ macro_rules! impl_outer_dispatch {
 		}
 		impl $crate::dispatch::Default for $call_type {
 			fn default() -> Self {
-				unimplemented!("TODO")
+				<Self as $crate::benchmarking::Module>::get_call("Balances", "transfer")
 			}
 		}
 		impl $crate::benchmarking::Module for $call_type {
@@ -1533,11 +1539,24 @@ macro_rules! impl_outer_dispatch {
 				)*]
 			}
 
+			fn all_calls(module: &str) -> &'static [&'static str] {
+				match module {
+					$(
+						stringify!($camelcase) =>
+							<<$camelcase as $crate::dispatch::Callable<$runtime>>::Call
+								as $crate::benchmarking::Call>::all_calls(),
+					)*
+					_ => unreachable!(),
+				}
+			}
+
 			fn get_call(module: &str, function: &str) -> Self {
 				match module {
-					$( stringify!($camelcase) => $call_type::$camelcase(
+					$(
+						stringify!($camelcase) => $call_type::$camelcase(
 							$crate::benchmarking::Call::get_call(function)
-					),)*
+						),
+					)*
 					_ => unreachable!(),
 				}
 			}

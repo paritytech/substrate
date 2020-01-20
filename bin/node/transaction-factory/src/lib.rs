@@ -24,6 +24,9 @@ use std::sync::Arc;
 use std::cmp::PartialOrd;
 use std::fmt::Display;
 
+use codec::{Decode, Encode};
+use structopt::clap::arg_enum;
+use rand::seq::SliceRandom;
 use log::info;
 
 use sc_client::Client;
@@ -34,7 +37,6 @@ use sp_consensus::{
 	SelectChain
 };
 use sp_consensus::block_import::BlockImport;
-use codec::{Decode, Encode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, SimpleArithmetic, One, Zero,
@@ -78,6 +80,9 @@ pub trait RuntimeAdapter {
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic;
 
+	fn all_modules(&self) -> Vec<String>;
+	fn all_calls(&self, module: String) -> Vec<String>;
+
 	fn inherent_extrinsics(&self) -> InherentData;
 
 	fn minimum_balance() -> Self::Balance;
@@ -89,10 +94,21 @@ pub trait RuntimeAdapter {
 	fn gen_random_account_secret(seed: &Self::Number) -> Self::Secret;
 }
 
+arg_enum! {
+	#[derive(Debug, Clone, Copy)]
+	pub enum Mode {
+		Random,
+		Sequential,
+		Automata,
+	}
+}
+
+#[derive(Debug, Clone)]
 pub struct Options {
 	pub bench_file: String,
 	pub blocks: u32,
 	pub tx_per_block: u32,
+	pub mode: Mode,
 }
 
 pub struct FactoryState<RA, Backend, Exec, Block, RtApi, Sc> 
@@ -209,8 +225,15 @@ where
 			.expect("Failed to create inherent extrinsics");
 
 		let mut tx_pushed = 0;
+
 		while tx_pushed < self.options.tx_per_block {
-			if let Some((module, function, _args)) = self.automaton.next_state() {
+			let next_state = match self.options.mode {
+				Mode::Automata => self.automaton.next_state(),
+				Mode::Random => self.random_state(),
+				Mode::Sequential => self.next_sequential_state(),
+			};
+
+			if let Some((module, function, _args)) = next_state {
 				println!("Creating a {}::{} extrinsic. Extrinsic {}/{} in this block.",
 					module,
 					function,
@@ -243,5 +266,25 @@ where
 		}
 
 		Some(block.build().expect("Failed to bake block").block)
+	}
+
+	fn random_state(&self) -> Option<(String, String, Vec<String>)> {
+		let modules = self.runtime_state.all_modules();
+		loop {
+			let random_module = modules.choose(&mut rand::thread_rng())
+				.expect("failed to choose module");
+			let calls = self.runtime_state.all_calls(random_module.to_string());
+
+			if let Some(random_call) = calls.choose(&mut rand::thread_rng()) {
+				return Some((random_module.clone(), random_call.clone(), vec![]))
+			} else {
+				println!("Couldn't find any call for {}, retrying.", random_module);
+			}
+		}
+	}
+
+	/// This should iterate over all modules and all extrinsics.
+	fn next_sequential_state(&self) -> Option<(String, String, Vec<String>)> {
+		None
 	}
 }

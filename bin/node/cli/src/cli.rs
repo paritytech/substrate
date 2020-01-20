@@ -25,7 +25,7 @@ use crate::{service, ChainSpec, load_spec};
 use crate::factory_impl::RuntimeState;
 use node_transaction_factory::FactoryState;
 use node_transaction_factory::automata::Automaton;
-use node_transaction_factory::{RuntimeAdapter, Options as FactoryOptions};
+use node_transaction_factory::{RuntimeAdapter, Options as FactoryOptions, Mode};
 use futures::{channel::oneshot, future::{select, Either}};
 
 /// Custom subcommands.
@@ -63,6 +63,10 @@ pub struct BenchmarkCmd {
 	/// Number of transactions to generate per block.
 	#[structopt(long="tx-per-block", default_value = "10")]
 	pub tx_per_block: u32,
+
+	/// Execution mode.
+	#[structopt(long="mode", default_value = "random")]
+	pub mode: Mode,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -158,6 +162,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 				bench_file: cli_args.bench_file,
 				blocks: cli_args.blocks,
 				tx_per_block: cli_args.tx_per_block,
+				mode: cli_args.mode,
 			};
 			let service_builder = new_full_start!(config).0;
 			let mut factory_state = FactoryState::new(

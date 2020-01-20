@@ -1,4 +1,4 @@
-error: Only the following modules are allowed: `Module`, `Call`, `Storage`, `Event`, `Config`, `Origin`, `Inherent`, `ValidateUnsigned`
+error: Only the following modules are allowed: `Module`, `Call`, `Storage`, `Event`, `Config`, `Origin`, `Inherent`, `ValidateUnsigned`, `Benchmarking`
   --> $DIR/invalid_module_entry.rs:10:23
    |
 10 |         Balance: balances::{Error},

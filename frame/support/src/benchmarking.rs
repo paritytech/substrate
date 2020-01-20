@@ -20,9 +20,11 @@
 
 pub trait Module {
 	fn all_modules() -> &'static [&'static str];
+	fn all_calls(module: &str) -> &'static [&'static str];
 	fn get_call(module: &str, function: &str) -> Self;
 }
 
 pub trait Call {
+	fn all_calls() -> &'static [&'static str];
 	fn get_call(function: &str) -> Self;
 }
