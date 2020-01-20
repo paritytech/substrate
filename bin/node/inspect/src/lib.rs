@@ -14,6 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! A CLI extension for substrate node, adding sub-command to pretty print debug info
+//! about blocks and extrinsics.
+//!
+//! The blocks and extrinsics can either be retrieved from the database (on-chain),
+//! or a raw SCALE-encoding can be provided.
+
 #![warn(missing_docs)]
 
 pub mod cli;

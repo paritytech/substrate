@@ -20,26 +20,94 @@ use std::{
 	fmt::Debug,
 	str::FromStr,
 };
+use crate::{Inspector, PrettyPrinter};
+use sc_cli::{SharedParams, error};
 use structopt::StructOpt;
 
+/// The `inspect` command used to print decoded chain data.
 #[derive(Debug, StructOpt, Clone)]
-pub enum InspectCmd {
+pub struct InspectCmd {
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub command: InspectSubCmd,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub shared_params: SharedParams,
+}
+
+/// A possible inspect sub-commands.
+#[derive(Debug, StructOpt, Clone)]
+pub enum InspectSubCmd {
 	/// Decode block with native version of runtime and print out the details.
 	Block {
+		/// Address of the block to print out.
+		///
+		/// Can be either a block hash or a number to retrieve existing block,
+		/// or a 0x-prefixed bytes hex string, representing SCALE encoding of
+		/// a block.
 		#[structopt(value_name = "HASH or NUMBER or BYTES")]
 		input: String,
 	},
 	/// Decode extrinsic with native version of runtime and print out the details.
 	Extrinsic {
-		#[structopt(value_name = "BYTES or BLOCK:INDEX")]
+		/// Address of an extrinsic to print out.
+		///
+		/// Can be either a block hash (or number) and the index, in the form
+		/// of `{block}:{index}` or a 0x-prefixed bytes hex string,
+		/// representing SCALE encoding of an extrinsic.
+		#[structopt(value_name = "BLOCK:INDEX or BYTES")]
 		input: String,
 	},
 }
-/*
- impl InspectCmd {
-	pub fn run_with_builder()
- }
-*/
+
+impl InspectCmd {
+	/// Run the inspect command, passing an inspector buuilder,
+	/// spec_factory and software version.
+	pub fn run_with_builder<C, G, E, B, P>(
+		self,
+		builder: impl FnOnce(sc_service::config::Configuration<C, G, E>) -> Result<
+			Inspector<B, P>,
+			error::Error
+		>,
+		spec_factory: impl FnOnce(&str) -> Result<Option<sc_service::ChainSpec<G, E>>, String>,
+		version: &sc_cli::VersionInfo,
+	) -> error::Result<()> where
+		B: sp_runtime::traits::Block,
+		B::Hash: FromStr,
+		C: Default,
+		G: sc_service::RuntimeGenesis,
+		E: sc_service::ChainSpecExtension,
+		P: PrettyPrinter<B>,
+	{
+		let mut config = sc_cli::create_config_with_db_path(
+			spec_factory,
+			&self.shared_params,
+			version,
+		)?;
+		// make sure to configure keystore
+		config.keystore = sc_service::config::KeystoreConfig::InMemory;
+		let inspect = (builder)(config)?;
+
+		match self.command {
+			InspectSubCmd::Block { input } => {
+				let input = input.parse()?;
+				let res = inspect.block(input)
+					.map_err(|e| format!("{}", e))?;
+				println!("{}", res);
+				Ok(())
+			},
+			InspectSubCmd::Extrinsic { input } => {
+				let input = input.parse()?;
+				let res = inspect.extrinsic(input)
+					.map_err(|e| format!("{}", e))?;
+				println!("{}", res);
+				Ok(())
+			},
+		}
+	}
+}
+
 
 /// A block to retrieve.
 #[derive(Debug, Clone, PartialEq)]
@@ -76,6 +144,7 @@ impl<Hash: FromStr, Number: FromStr> FromStr for BlockAddress<Hash, Number> {
 	}
 }
 
+/// An extrinsic address to decode and print out.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExtrinsicAddress<Hash, Number> {
 	/// Extrinsic as part of existing block.

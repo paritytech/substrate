@@ -42,7 +42,7 @@ pub enum CustomSubcommands {
 		name = "inspect",
 		about = "Decode given block or extrinsic using current native runtime."
 	)]
-	Inspect(InspectCmd),
+	Inspect(node_inspect::cli::InspectCmd),
 }
 
 impl GetSharedParams for CustomSubcommands {
@@ -96,18 +96,6 @@ pub struct FactoryCmd {
 	pub import_params: ImportParams,
 }
 
-/// The `inspect` command used to print decoded chain data.
-#[derive(Debug, StructOpt, Clone)]
-pub struct InspectCmd {
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub command: node_inspect::cli::InspectCmd,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
-}
-
 /// Parse command line arguments into service configuration.
 pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
@@ -153,37 +141,13 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 		ParseAndPrepare::PurgeChain(cmd) => cmd.run(load_spec),
 		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder(|config: Config<_, _>|
 			Ok(new_full_start!(config).0), load_spec),
-		ParseAndPrepare::CustomCommand(CustomSubcommands::Inspect(cmd)) => {
-			let mut config: Config<_, _> = sc_cli::create_config_with_db_path(
-				load_spec,
-				&cmd.shared_params,
-				&version,
-			)?;
-			// make sure to configure keystore
-			config.keystore = sc_service::config::KeystoreConfig::InMemory;
-			let client = sc_service::new_full_client::<
-				node_runtime::Block, node_runtime::RuntimeApi, node_executor::Executor, _, _, _
-			>(&config)?;
-			let inspect = node_inspect::Inspector::<node_runtime::Block>::new(
-				client
-			);
-			match cmd.command {
-				node_inspect::cli::InspectCmd::Block { input } => {
-					let input = input.parse()?;
-					let res = inspect.block(input)
-						.map_err(|e| format!("{}", e))?;
-					println!("{}", res);
-					Ok(())
-				},
-				node_inspect::cli::InspectCmd::Extrinsic { input } => {
-					let input = input.parse()?;
-					let res = inspect.extrinsic(input)
-						.map_err(|e| format!("{}", e))?;
-					println!("{}", res);
-					Ok(())
-				},
-			}
-		},
+		ParseAndPrepare::CustomCommand(CustomSubcommands::Inspect(cmd)) => cmd
+			.run_with_builder(|config: Config<_, _>| {
+				let client = sc_service::new_full_client::<
+					node_runtime::Block, node_runtime::RuntimeApi, node_executor::Executor, _, _, _,
+				>(&config)?;
+				Ok(node_inspect::Inspector::<node_runtime::Block>::new(client))
+			}, load_spec, &version),
 		ParseAndPrepare::CustomCommand(CustomSubcommands::Factory(cli_args)) => {
 			let mut config: Config<_, _> = sc_cli::create_config_with_db_path(
 				load_spec,
