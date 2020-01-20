@@ -1439,9 +1439,6 @@ macro_rules! decl_module {
 				match function {
 					$( 
 						stringify!($fn_name) => {
-							if_std!{
-								println!("matched {:?}", stringify!($fn_name));
-							}
 							$(
 								let $param_name = <$param>::default();
 							)*

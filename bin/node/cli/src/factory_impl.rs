@@ -51,7 +51,6 @@ pub struct RuntimeState {
 	start_number: u32,
 	round: u32,
 	block_in_round: u32,
-	num: u32,
 	index: u32,
 }
 
@@ -78,11 +77,8 @@ impl RuntimeAdapter for RuntimeState {
 	type Index = node_primitives::Index;
 	type Number = Number;
 
-	fn new(
-		num: u64,
-	) -> RuntimeState {
+	fn new() -> RuntimeState {
 		RuntimeState {
-			num: num as u32,
 			round: 0,
 			block_in_round: 0,
 			block_number: 0,
@@ -107,10 +103,6 @@ impl RuntimeAdapter for RuntimeState {
 		self.block_in_round
 	}
 
-	fn num(&self) -> Self::Number {
-		self.num
-	}
-
 	fn round(&self) -> Self::Number {
 		self.round
 	}
@@ -119,7 +111,7 @@ impl RuntimeAdapter for RuntimeState {
 		self.start_number
 	}
 
-	fn set_block_no(&mut self, val: Self::Number) {
+	fn set_block_number(&mut self, val: Self::Number) {
 		self.block_number = val;
 	}
 
@@ -141,7 +133,7 @@ impl RuntimeAdapter for RuntimeState {
 		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic {
-		println!("Creating a {}::{} extrinsic...", module, extrinsic_name);
+		println!("Creating a {}::{} extrinsic.", module, extrinsic_name);
 		let phase = self.extract_phase(*prior_block_hash);
 		let function = Call::get_module(&module, &extrinsic_name);
 		let extrinsic = CheckedExtrinsic {

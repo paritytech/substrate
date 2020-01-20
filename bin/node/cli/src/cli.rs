@@ -25,16 +25,16 @@ use crate::{service, ChainSpec, load_spec};
 use crate::factory_impl::RuntimeState;
 use node_transaction_factory::FactoryState;
 use node_transaction_factory::automata::Automaton;
-use node_transaction_factory::RuntimeAdapter;
+use node_transaction_factory::{RuntimeAdapter, Options as FactoryOptions};
 use futures::{channel::oneshot, future::{select, Either}};
 
 /// Custom subcommands.
 #[derive(Clone, Debug, StructOpt)]
 pub enum CustomSubcommands {
-	/// The custom factory subcommmand for manufacturing transactions.
+	/// The custom benchmark subcommmand for manufacturing transactions.
 	#[structopt(
-		name = "factory",
-		about = "Manufactures num transactions from Alice to random accounts. \
+		name = "benchmark",
+		about = "Benchmark transactions. \
 		Only supported for development or local testnet."
 	)]
 	Factory(FactoryCmd),
@@ -52,13 +52,17 @@ impl GetSharedParams for CustomSubcommands {
 /// Please note: this command currently only works on an empty database!
 #[derive(Debug, StructOpt, Clone)]
 pub struct FactoryCmd {
-	/// Transaction name.
-	#[structopt(long="tx-name", default_value = "transfer")]
-	pub tx_name: String,
+	/// Path to bench file.
+	#[structopt(long="bench-file", default_value = "./factory_tests/test.txt")]
+	pub bench_file: String,
 
-	/// Number of transactions to generate.
-	#[structopt(long="num", default_value = "8")]
-	pub num: u64,
+	/// Number of blocks to generate.
+	#[structopt(long="blocks", default_value = "10")]
+	pub blocks: u32,
+
+	/// Number of transactions to generate per block.
+	#[structopt(long="tx-per-block", default_value = "10")]
+	pub tx_per_block: u32,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -148,14 +152,20 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 			}
 
 			let automaton = Automaton::new_from_file(String::from("./factory_tests/test.txt"));
-			let runtime_state = RuntimeState::new(cli_args.num);
+			let runtime_state = RuntimeState::new();
 
+			let options = FactoryOptions {
+				bench_file: cli_args.bench_file,
+				blocks: cli_args.blocks,
+				tx_per_block: cli_args.tx_per_block,
+			};
 			let service_builder = new_full_start!(config).0;
 			let mut factory_state = FactoryState::new(
 				service_builder.client().clone(),
 				service_builder.select_chain().expect("initialized by new_full_start").clone(),
 				automaton,
 				runtime_state,
+				options,
 			);
 			factory_state.run().map_err(|e| format!("Error in transaction factory: {}", e))?;
 

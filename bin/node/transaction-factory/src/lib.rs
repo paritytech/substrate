@@ -42,28 +42,29 @@ use sp_runtime::traits::{
 
 pub mod automata;
 
+pub trait Number: Display + PartialOrd + SimpleArithmetic + Zero + One {}
+
 pub trait RuntimeAdapter {
 	type AccountId: Display;
 	type Balance: Display + SimpleArithmetic + From<Self::Number>;
 	type Block: BlockT;
 	type Index: Copy;
-	type Number: Display + PartialOrd + SimpleArithmetic + Zero + One;
+	type Number: ;
 	type Phase: Copy;
 	type Secret;
 
-	fn new(start_number: u64) -> Self;
+	fn new() -> Self;
 
 	fn index(&self) -> u32;
 	fn increase_index(&mut self);
 
-	fn block_number(&self) -> Self::Number;
+	fn block_number(&self) -> u32;
 	fn block_in_round(&self) -> Self::Number;
-	fn num(&self) -> Self::Number;
 	fn round(&self) -> Self::Number;
 	fn start_number(&self) -> Self::Number;
 
 	fn set_block_in_round(&mut self, val: Self::Number);
-	fn set_block_no(&mut self, val: Self::Number);
+	fn set_block_number(&mut self, val: u32);
 	fn set_round(&mut self, val: Self::Number);
 
 	fn create_extrinsic(
@@ -88,6 +89,11 @@ pub trait RuntimeAdapter {
 	fn gen_random_account_secret(seed: &Self::Number) -> Self::Secret;
 }
 
+pub struct Options {
+	pub bench_file: String,
+	pub blocks: u32,
+	pub tx_per_block: u32,
+}
 
 pub struct FactoryState<RA, Backend, Exec, Block, RtApi, Sc> 
 where 
@@ -97,6 +103,7 @@ where
 	automaton: automata::Automaton,
 	client: Arc<Client<Backend, Exec, Block, RtApi>>,
 	select_chain: Sc,
+	options: Options,
 }
 
 impl<RA, Backend, Exec, Block, RtApi, Sc> FactoryState<RA, Backend, Exec, Block, RtApi, Sc>
@@ -118,12 +125,14 @@ where
 		select_chain: Sc,
 		automaton: automata::Automaton,
 		runtime_state: RA,
+		options: Options,
 	) -> Self {
 		Self {
 			client,
 			select_chain,
 			automaton,
 			runtime_state,
+			options,
 		}
 	}
 
@@ -135,7 +144,7 @@ where
 		let genesis_hash = self.client.block_hash(Zero::zero())?.expect("genesis should exist");
 
 		loop {
-			if self.runtime_state.block_number() >= self.runtime_state.num() {
+			if self.runtime_state.block_number() >= self.options.blocks {
 				break
 			}
 			if let Some(block) = self.create_block(
@@ -144,7 +153,7 @@ where
 				best_hash,
 				best_block_id,
 			) {
-				self.runtime_state.set_block_no(self.runtime_state.block_number() + RA::Number::one());
+				self.runtime_state.set_block_number(self.runtime_state.block_number() + 1);
 
 				info!("Created block {} with hash {}.", self.runtime_state.block_number(), best_hash);
 
@@ -192,7 +201,8 @@ where
 		let inherents = self.client.runtime_api().inherent_extrinsics(&prior_block_id, inherents)
 			.expect("Failed to create inherent extrinsics");
 
-		for _ in 0..7 { // TODO: Make this configurable.
+		let mut tx_pushed = 0;
+		while tx_pushed < self.options.tx_per_block {
 			let to = RA::gen_random_account_id(&seed);
 			if let Some((module, function, _args)) = self.automaton.next_state() {
 				let extrinsic = self.runtime_state.create_extrinsic(
@@ -207,6 +217,9 @@ where
 				let e = Decode::decode(&mut &extrinsic.encode()[..]).expect("decode failed");
 				block.push(e).expect("push extrinsic failed");
 				self.runtime_state.increase_index();
+				tx_pushed += 1;
+			} else {
+				self.automaton.clear_usage();
 			}
 		}
 
@@ -217,46 +230,3 @@ where
 		Some(block.build().expect("Failed to bake block").block)
 	}
 }
-
-// pub fn factory<RA, Backend, Exec, Block, RtApi, Sc>(
-// 	mut factory_state: FactoryState,
-// 	client: &Arc<Client<Backend, Exec, Block, RtApi>>,
-// 	select_chain: &Sc,
-// ) -> sc_cli::error::Result<()>
-// where
-// 	Block: BlockT,
-// 	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
-// 	Backend: sc_client_api::backend::Backend<Block> + Send,
-// 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
-// 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
-// 		BlockBuilder<Block, Error = sp_blockchain::Error> +
-// 		ApiExt<Block, StateBackend = Backend::State>,
-// 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
-// 	Sc: SelectChain<Block>,
-// 	RA: RuntimeAdapter<Block = Block>,
-// 	Block::Hash: From<sp_core::H256>,
-// {
-// }
-
-// /// Create a baked block from a transfer extrinsic and timestamp inherent.
-// pub fn create_block<RA, Backend, Exec, Block, RtApi>(
-// 	factory_state: FactoryState,
-// 	client: &Arc<Client<Backend, Exec, Block, RtApi>>,	
-// 	version: u32,
-// 	genesis_hash: <RA::Block as BlockT>::Hash,
-// 	prior_block_hash: <RA::Block as BlockT>::Hash,
-// 	prior_block_id: BlockId<Block>,
-// ) -> Option<Block>
-// where
-// 	Block: BlockT,
-// 	Exec: sc_client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
-// 	Backend: sc_client_api::backend::Backend<Block> + Send,
-// 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
-// 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
-// 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
-// 		BlockBuilder<Block, Error = sp_blockchain::Error> +
-// 		ApiExt<Block, StateBackend = Backend::State>,
-// 	RA: RuntimeAdapter,
-// {
-
-// }

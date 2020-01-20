@@ -29,8 +29,6 @@ pub struct Edge {
 	tx_name: String,
 	/// Name of transaction parameters that will be used.
 	tx_params: Vec<String>,
-	/// Priority of this edge.
-	priority: u32,
 	/// Maximum number of times we can move through it.
 	repeat: u32,
 	/// Number of times we passed through it.
@@ -68,15 +66,13 @@ impl Automaton {
 			let tx_module = line[2].to_string();
 			let tx_name = line[3].to_string();
 			let tx_params = vec![];
-			let repeat = line[4].parse().expect("repeat value can't be parsed");
-			let priority = line[5].parse().expect("priority value can't be parsed");
+			let repeat = line.get(4).unwrap_or(&"1").parse().expect("repeat value can't be parsed");
 			
 			let edge = Edge {
 				target,
 				tx_module,
 				tx_name,
 				tx_params,
-				priority,
 				repeat,
 				used: 0,
 			};
@@ -98,7 +94,7 @@ impl Automaton {
 
 			for edge in node.outputs.iter_mut() {
 				if let Some(max_edge) = max_out.take() {
-					if (*edge).priority > max_edge.priority && (*edge).repeat - (*edge).used > 0 {
+					if (*edge).repeat > max_edge.repeat && (*edge).repeat - (*edge).used > 0 {
 						max_out = Some(edge);
 					} else {
 						max_out = Some(max_edge);
@@ -118,6 +114,15 @@ impl Automaton {
 		} else {
 			panic!("automaton current state is undefined, check your bench file!");
 		}
+	}
+
+	pub fn clear_usage(&mut self) {
+		for (_, node) in self.nodes.iter_mut() {
+			for edge in node.outputs.iter_mut() {
+				edge.used = 0;
+			}
+		}
+		self.current_node = 0;
 	}
 }
 
