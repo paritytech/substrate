@@ -133,7 +133,6 @@ impl RuntimeAdapter for RuntimeState {
 		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic {
-		println!("Creating a {}::{} extrinsic.", module, extrinsic_name);
 		let phase = self.extract_phase(*prior_block_hash);
 		let function = Call::get_module(&module, &extrinsic_name);
 		let extrinsic = CheckedExtrinsic {

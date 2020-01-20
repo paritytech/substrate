@@ -37,13 +37,13 @@ pub enum CustomSubcommands {
 		about = "Benchmark transactions. \
 		Only supported for development or local testnet."
 	)]
-	Factory(FactoryCmd),
+	Benchmark(BenchmarkCmd),
 }
 
 impl GetSharedParams for CustomSubcommands {
 	fn shared_params(&self) -> Option<&SharedParams> {
 		match self {
-			CustomSubcommands::Factory(cmd) => Some(&cmd.shared_params),
+			CustomSubcommands::Benchmark(cmd) => Some(&cmd.shared_params),
 		}
 	}
 }
@@ -51,7 +51,7 @@ impl GetSharedParams for CustomSubcommands {
 /// The `factory` command used to generate transactions.
 /// Please note: this command currently only works on an empty database!
 #[derive(Debug, StructOpt, Clone)]
-pub struct FactoryCmd {
+pub struct BenchmarkCmd {
 	/// Path to bench file.
 	#[structopt(long="bench-file", default_value = "./factory_tests/test.txt")]
 	pub bench_file: String,
@@ -118,7 +118,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 		ParseAndPrepare::PurgeChain(cmd) => cmd.run(load_spec),
 		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder(|config: Config<_, _>|
 			Ok(new_full_start!(config).0), load_spec),
-		ParseAndPrepare::CustomCommand(CustomSubcommands::Factory(cli_args)) => {
+		ParseAndPrepare::CustomCommand(CustomSubcommands::Benchmark(cli_args)) => {
 			let mut config: Config<_, _> = sc_cli::create_config_with_db_path(
 				load_spec,
 				&cli_args.shared_params,
@@ -148,7 +148,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 
 			match ChainSpec::from(config.chain_spec.id()) {
 				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
-				_ => panic!("Factory is only supported for development and local testnet."),
+				_ => panic!("Benchmark command is only supported for development and local testnet."),
 			}
 
 			let automaton = Automaton::new_from_file(String::from("./factory_tests/test.txt"));

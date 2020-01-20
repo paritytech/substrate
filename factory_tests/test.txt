@@ -1,1 +1,1 @@
-0 0 Staking bond
+0 0 Balances transfer

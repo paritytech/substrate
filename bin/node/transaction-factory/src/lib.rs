@@ -193,18 +193,22 @@ where
 		prior_block_id: BlockId<Block>,
 	) -> Option<Block> {
 		let mut block = self.client.new_block(Default::default()).expect("Failed to create new block");
-		let seed = self.runtime_state.start_number();
 		let from = (RA::master_account_id(), RA::master_account_secret());
-		let amount = RA::minimum_balance();
 
 		let inherents = self.runtime_state.inherent_extrinsics();
-		let inherents = self.client.runtime_api().inherent_extrinsics(&prior_block_id, inherents)
+		let inherents = self.client.runtime_api()
+			.inherent_extrinsics(&prior_block_id, inherents)
 			.expect("Failed to create inherent extrinsics");
 
 		let mut tx_pushed = 0;
 		while tx_pushed < self.options.tx_per_block {
-			let to = RA::gen_random_account_id(&seed);
 			if let Some((module, function, _args)) = self.automaton.next_state() {
+				println!("Creating a {}::{} extrinsic. Extrinsic {}/{} in this block.",
+					module,
+					function,
+					tx_pushed + 1,
+					self.options.tx_per_block,
+				);
 				let extrinsic = self.runtime_state.create_extrinsic(
 					&from.0,
 					module,
@@ -219,6 +223,8 @@ where
 				self.runtime_state.increase_index();
 				tx_pushed += 1;
 			} else {
+				// We reset the automaton, comming back to starting state,
+				// in order to get more extrinsics out of it.
 				self.automaton.clear_usage();
 			}
 		}
