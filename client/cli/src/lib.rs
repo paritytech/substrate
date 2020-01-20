@@ -40,6 +40,7 @@ use sc_network::{
 	},
 };
 use sp_core::H256;
+use execution_strategy::*;
 
 use std::{
 	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fmt::Debug, fs::{self, File},
@@ -953,20 +954,23 @@ pub fn fill_import_params<C, G, E>(
 
 	config.wasm_method = cli.wasm_method.into();
 
-	let execution = if is_dev {
-		cli.execution_strategies.execution.or(Some(ExecutionStrategy::Native))
-	} else {
-		cli.execution_strategies.execution
+	let exec = &cli.execution_strategies;
+	let exec_all_or = |strat: ExecutionStrategy, default: ExecutionStrategy| {
+		if strat == default && is_dev {
+			exec.execution.unwrap_or(ExecutionStrategy::Native)
+		} else {
+			exec.execution.unwrap_or(strat)
+		}.into()
 	};
 
-	let exec = &cli.execution_strategies;
-	let exec_all_or = |strat: ExecutionStrategy| execution.unwrap_or(strat).into();
 	config.execution_strategies = ExecutionStrategies {
-		syncing: exec_all_or(exec.execution_syncing),
-		importing: exec_all_or(exec.execution_import_block),
-		block_construction: exec_all_or(exec.execution_block_construction),
-		offchain_worker: exec_all_or(exec.execution_offchain_worker),
-		other: exec_all_or(exec.execution_other),
+		syncing: exec_all_or(exec.execution_syncing, DEFAULT_EXECUTION_SYNCING),
+		importing: exec_all_or(exec.execution_import_block, DEFAULT_EXECUTION_IMPORT_BLOCK),
+		block_construction:
+			exec_all_or(exec.execution_block_construction, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION),
+		offchain_worker:
+			exec_all_or(exec.execution_offchain_worker, DEFAULT_EXECUTION_OFFCHAIN_WORKER),
+		other: exec_all_or(exec.execution_other, DEFAULT_EXECUTION_OTHER),
 	};
 	Ok(())
 }

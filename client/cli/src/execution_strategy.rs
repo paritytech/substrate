@@ -20,7 +20,7 @@ use structopt::clap::arg_enum;
 
 arg_enum! {
 	/// How to execute blocks
-	#[derive(Debug, Clone, Copy)]
+	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 	pub enum ExecutionStrategy {
 		// Execute with native build (if available, WebAssembly otherwise).
 		Native,
@@ -33,3 +33,13 @@ arg_enum! {
 	}
 }
 
+/// Default value for the `--execution-syncing` parameter.
+pub const DEFAULT_EXECUTION_SYNCING: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
+/// Default value for the `--execution-import-block` parameter.
+pub const DEFAULT_EXECUTION_IMPORT_BLOCK: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
+/// Default value for the `--execution-block-construction` parameter.
+pub const DEFAULT_EXECUTION_BLOCK_CONSTRUCTION: ExecutionStrategy = ExecutionStrategy::Wasm;
+/// Default value for the `--execution-offchain-worker` parameter.
+pub const DEFAULT_EXECUTION_OFFCHAIN_WORKER: ExecutionStrategy = ExecutionStrategy::Native;
+/// Default value for the `--execution-other` parameter.
+pub const DEFAULT_EXECUTION_OTHER: ExecutionStrategy = ExecutionStrategy::Native;
