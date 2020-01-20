@@ -97,7 +97,7 @@ pub  async fn init_prometheus(mut prometheus_addr: SocketAddr) -> Result<(), Err
 			Err(err) => match err.kind() {
 				io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied if prometheus_addr.port() != 0 => {
 					log::warn!(
-						"Prometheus server to already {} port.", prometheus_addr.port()
+						"Prometheus metric port {} already in use.", prometheus_addr.port()
 					);
 					prometheus_addr.set_port(0);
 					continue;
@@ -112,12 +112,12 @@ pub  async fn init_prometheus(mut prometheus_addr: SocketAddr) -> Result<(), Err
 		}
 	});
 
-	let _server = Server::builder(Incoming(listener.incoming()))
+	let server = Server::builder(Incoming(listener.incoming()))
 		.executor(Executor)
 		.serve(service)
 		.boxed();
 
-	let result = _server.await.map_err(Into::into);
+	let result = server.await.map_err(Into::into);
 
 	result
 }
