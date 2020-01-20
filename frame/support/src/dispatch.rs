@@ -1312,8 +1312,9 @@ macro_rules! decl_module {
 							&$weight,
 							($( $param_name, )*)
 						);
-						let pays_fee = <dyn $crate::dispatch::PaysFee>::pays_fee(
-							&$weight
+						let pays_fee = <dyn $crate::dispatch::PaysFee<( $( & $param, )* )>>::pays_fee(
+							&$weight,
+							($( $param_name, )*)
 						);
 						return $crate::dispatch::DispatchInfo { weight, class, pays_fee };
 					}
@@ -1331,8 +1332,9 @@ macro_rules! decl_module {
 					&$crate::dispatch::SimpleDispatchInfo::default(),
 					()
 				);
-				let pays_fee = <dyn $crate::dispatch::PaysFee>::pays_fee(
-					&$crate::dispatch::SimpleDispatchInfo::default()
+				let pays_fee = <dyn $crate::dispatch::PaysFee<_>>::pays_fee(
+					&$crate::dispatch::SimpleDispatchInfo::default(),
+					()
 				);
 				$crate::dispatch::DispatchInfo { weight, class, pays_fee }
 

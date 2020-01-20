@@ -30,7 +30,6 @@ fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
 	let mut ext_ext = ext.ext();
 
 	sc_executor::call_in_wasm::<
-		_,
 		(
 			HF,
 			sp_io::SubstrateHostFunctions,

@@ -26,7 +26,6 @@ use sc_executor_common::{
 	error::{Error, Result, WasmError},
 	wasm_runtime::WasmRuntime,
 };
-use sp_core::traits::Externalities;
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, Pointer, WordSize};
 use wasmtime::{Config, Engine, Extern, Instance, Module, Store};
@@ -46,12 +45,11 @@ impl WasmRuntime for WasmtimeRuntime {
 		&self.host_functions
 	}
 
-	fn call(&mut self, ext: &mut dyn Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>> {
+	fn call(&mut self, method: &str, data: &[u8]) -> Result<Vec<u8>> {
 		call_method(
 			&self.module,
 			&self.externs,
 			&self.state_holder,
-			ext,
 			method,
 			data,
 			self.heap_pages,
@@ -95,7 +93,6 @@ fn call_method(
 	module: &Module,
 	externs: &[Extern],
 	state_holder: &StateHolder,
-	ext: &mut dyn Externalities,
 	method: &str,
 	data: &[u8],
 	heap_pages: u32,
@@ -115,18 +112,10 @@ fn call_method(
 
 	let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
 
-	perform_call(
-		ext,
-		data,
-		state_holder,
-		instance_wrapper,
-		entrypoint,
-		allocator,
-	)
+	perform_call(data, state_holder, instance_wrapper, entrypoint, allocator)
 }
 
 fn perform_call(
-	ext: &mut dyn Externalities,
 	data: &[u8],
 	state_holder: &StateHolder,
 	instance_wrapper: InstanceWrapper,
@@ -137,24 +126,21 @@ fn perform_call(
 
 	let mut host_state = HostState::new(allocator, instance_wrapper);
 
-	let (output_ptr, output_len) = state_holder.init_state(&mut host_state, || {
-		sp_externalities::set_and_run_with_externalities(ext, || {
-			match entrypoint.call(&[
-				wasmtime::Val::I32(u32::from(data_ptr) as i32),
-				wasmtime::Val::I32(u32::from(data_len) as i32),
-			]) {
-				Ok(results) => {
-					let retval = results[0].unwrap_i64() as u64;
-					Ok(unpack_ptr_and_len(retval))
-				}
-				Err(trap) => {
-					return Err(Error::from(format!(
-						"Wasm execution trapped: {}",
-						trap.message()
-					)));
-				}
-			}
-		})
+	let (output_ptr, output_len) = state_holder.init_state(&mut host_state, || match entrypoint
+		.call(&[
+			wasmtime::Val::I32(u32::from(data_ptr) as i32),
+			wasmtime::Val::I32(u32::from(data_len) as i32),
+		]) {
+		Ok(results) => {
+			let retval = results[0].unwrap_i64() as u64;
+			Ok(unpack_ptr_and_len(retval))
+		}
+		Err(trap) => {
+			return Err(Error::from(format!(
+				"Wasm execution trapped: {}",
+				trap.message()
+			)));
+		}
 	})?;
 
 	let instance = host_state.into_instance();

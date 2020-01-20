@@ -74,13 +74,16 @@ pub enum BlockStatus {
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
 pub trait Environment<B: BlockT> {
 	/// The proposer type this creates.
-	type Proposer: Proposer<B> + 'static;
+	type Proposer: Proposer<B> + Send + 'static;
+	/// A future that resolves to the proposer.
+	type CreateProposer: Future<Output = Result<Self::Proposer, Self::Error>>
+		+ Send + Unpin + 'static;
 	/// Error which can occur upon creation.
 	type Error: From<Error> + std::fmt::Debug + 'static;
 
 	/// Initialize the proposal logic on top of a specific header. Provide
 	/// the authorities at that header.
-	fn init(&mut self, parent_header: &B::Header) -> Result<Self::Proposer, Self::Error>;
+	fn init(&mut self, parent_header: &B::Header) -> Self::CreateProposer;
 }
 
 /// A proposal that is created by a [`Proposer`].
