@@ -274,7 +274,7 @@ fn should_correctly_prune_transactions_providing_more_than_one_tag() {
 }
 
 #[test]
-fn maintaince_prune() {
+fn should_prune_old_during_maintenance() {
 	let xt = uxt(Alice, 209);
 
 	let pool = maintained_pool();
@@ -290,7 +290,7 @@ fn maintaince_prune() {
 
 
 #[test]
-fn maintaince_revalidate() {
+fn should_revalidate_during_maintenance() {
 	let xt1 = uxt(Alice, 209);
 	let xt2 = uxt(Alice, 210);
 

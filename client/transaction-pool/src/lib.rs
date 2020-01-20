@@ -58,13 +58,15 @@ pub enum RevalidationType {
 	/// Light revalidation type.
 	///
 	/// During maintaince, transaction pool makes periodic revalidation
-	/// depending on number of blocks or time passed.
+	/// of all transactions depending on number of blocks or time passed.
+	/// Also this kind of revalidation does not resubmit transactions from
+	/// retracted blocks, since it is too expensive.
 	Light,
 
 	/// Full revalidation type.
 	///
-	/// During maintaince, transaction pool revalidates some transactions
-	/// from the pool of valid transactions.
+	/// During maintaince, transaction pool revalidates some fixed amount of
+	/// transactions from the pool of valid transactions.
 	Full,
 }
 
@@ -191,30 +193,38 @@ enum RevalidationStrategy<N> {
 	Light(RevalidationStatus<N>)
 }
 
+struct RevalidationAction {
+	revalidate: bool,
+	resubmit: bool,
+	revalidate_amount: Option<usize>,
+}
+
 impl<N: Clone + Copy + SimpleArithmetic> RevalidationStrategy<N> {
 	pub fn clear(&mut self) {
 		if let Self::Light(status) = self { status.clear() }
 	}
 
-	pub fn resubmit_required(&mut self) -> bool {
-		if let Self::Light(_) = self { return false } else { return true }
-	}
-
-	pub fn is_required(
+	pub fn next(
 		&mut self,
 		block: N,
 		revalidate_time_period: Option<std::time::Duration>,
 		revalidate_block_period: Option<N>,
-	) -> bool {
-		if let Self::Light(status) = self {
-			status.is_required(block, revalidate_time_period, revalidate_block_period)
-		} else { true }
-	}
-
-	pub fn amount(&self) -> Option<usize> {
+	) -> RevalidationAction {
 		match self {
-			Self::Light(_) => None,
-			Self::Always => Some(16),
+			Self::Light(status) => RevalidationAction {
+				revalidate: status.next_required(
+					block,
+					revalidate_time_period,
+					revalidate_block_period
+				),
+				resubmit: false,
+				revalidate_amount: None,
+			},
+			Self::Always => RevalidationAction {
+				revalidate: true,
+				resubmit: true,
+				revalidate_amount: Some(16),
+			}
 		}
 	}
 }
@@ -226,7 +236,7 @@ impl<N: Clone + Copy + SimpleArithmetic> RevalidationStatus<N> {
 	}
 
 	/// Returns true if revalidation is required.
-	pub fn is_required(
+	pub fn next_required(
 		&mut self,
 		block: N,
 		revalidate_time_period: Option<std::time::Duration>,
@@ -258,7 +268,9 @@ where
 	Block: BlockT,
 	PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash, Error=error::Error>,
 {
-	fn maintain(&self, id: &BlockId<Self::Block>, retracted: &[BlockHash<Self>]) -> Pin<Box<dyn Future<Output=()> + Send>> {
+	fn maintain(&self, id: &BlockId<Self::Block>, retracted: &[BlockHash<Self>])
+		-> Pin<Box<dyn Future<Output=()> + Send>>
+	{
 		let id = id.clone();
 		let pool = self.pool.clone();
 		let api = self.api.clone();
@@ -271,20 +283,12 @@ where
 			}
 		};
 
-		let (is_revalidation_required, is_resubmit_required) = {
-			let mut lock = self.revalidation_strategy.lock();
-			(
-				lock.is_required(
-					block_number,
-					Some(std::time::Duration::from_secs(60)),
-					Some(20.into()),
-				),
-				lock.resubmit_required()
-			)
-		};
-
-		let revalidation_status = self.revalidation_strategy.clone();
-		let revalidation_amount = revalidation_status.lock().amount();
+		let next_action = self.revalidation_strategy.lock().next(
+			block_number,
+			Some(std::time::Duration::from_secs(60)),
+			Some(20.into()),
+		);
+		let revalidation_strategy = self.revalidation_strategy.clone();
 		let retracted = retracted.to_vec();
 
 		async move {
@@ -293,25 +297,27 @@ where
 					log::warn!("Prune known transactions: error request {:?}!", e);
 					None
 				})
-				.unwrap_or(Vec::new())
+				.unwrap_or_default()
 				.into_iter()
 				.map(|tx| pool.hash_of(&tx))
 				.collect::<Vec<_>>();
 
 			if let Err(e) = pool.prune_known(&id, &hashes) {
-				log::warn!("Cannot prune known in the pool {:?}!", e);
+				log::error!("Cannot prune known in the pool {:?}!", e);
 			}
 
-			if is_resubmit_required {
+			if next_action.resubmit {
 				let mut resubmit_transactions = Vec::new();
 
-				for retracted_hash in retracted.into_iter() {
-					let txes = api.block_body(&BlockId::hash(retracted_hash.clone())).await
-						.unwrap_or(None)
-						.unwrap_or(Vec::new());
-					for tx in txes {
-						resubmit_transactions.push(tx)
-					}
+				for retracted_hash in retracted {
+					let block_transactions = api.block_body(&BlockId::hash(retracted_hash.clone())).await
+						.unwrap_or_else(|e| {
+							log::warn!("Failed to fetch block body {:?}!", e);
+							None
+						})
+						.unwrap_or_default();
+
+					resubmit_transactions.extend(block_transactions);
 				}
 				if let Err(e) = pool.submit_at(&id, resubmit_transactions, true).await {
 					log::debug!(target: "txpool",
@@ -320,13 +326,13 @@ where
 				}
 			}
 
-			if is_revalidation_required {
-				if let Err(e) = pool.revalidate_ready(&id, revalidation_amount).await {
-					log::warn!("revalidate ready failed {:?}", e);
+			if next_action.revalidate {
+				if let Err(e) = pool.revalidate_ready(&id, next_action.revalidate_amount).await {
+					log::warn!("Revalidate ready failed {:?}", e);
 				}
 			}
 
-			revalidation_status.lock().clear();
+			revalidation_strategy.lock().clear();
 		}.boxed()
 	}
 }
