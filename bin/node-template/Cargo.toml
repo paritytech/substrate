@@ -34,7 +34,7 @@ grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path 
 sc-client = { version = "0.8", path = "../../client/" }
 node-template-runtime = { version = "2.0.0", path = "runtime" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
-sc-basic-authority = { path  = "../../client/basic-authorship" }
+sc-basic-authorship = { path  = "../../client/basic-authorship" }
 
 [build-dependencies]
 vergen = "3.0.4"
