@@ -905,9 +905,7 @@ decl_event! {
 		/// Contract has been evicted and is now in tombstone state.
 		Evicted(AccountId),
 
-		/// Contract has successfully been restored from tombstone state to a
-		/// ctive.
-		///
+		/// Restoration for a contract has been initiated.
 		///
 		/// # Params
 		///
