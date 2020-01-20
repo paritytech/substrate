@@ -16,17 +16,14 @@
 
 use crate::instance_wrapper::InstanceWrapper;
 use sc_executor_common::allocator::FreeingBumpHeapAllocator;
-use sc_executor_common::error::{Result};
+use sc_executor_common::error::Result;
 use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
 
 use codec::{Decode, Encode};
 use log::trace;
 use sp_core::sandbox as sandbox_primitives;
-use sp_wasm_interface::{
-	MemoryId, Pointer, Result as WResult, Sandbox,
-	WordSize,
-};
-use std::{cell::RefCell};
+use sp_wasm_interface::{MemoryId, Pointer, Result as WResult, Sandbox, WordSize};
+use std::cell::RefCell;
 use wasmtime::{Func, Val};
 
 /// Wrapper type for pointer to a Wasm table entry.
@@ -280,7 +277,8 @@ impl<'a> Sandbox for HostContext<'a> {
 					if val.len() > return_val_len as usize {
 						Err("Return value buffer is too small")?;
 					}
-					HostContext::write_memory(self, return_val, val).map_err(|_| "can't write return value")?;
+					HostContext::write_memory(self, return_val, val)
+						.map_err(|_| "can't write return value")?;
 					Ok(sandbox_primitives::ERR_OK)
 				})
 			}
