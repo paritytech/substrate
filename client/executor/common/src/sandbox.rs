@@ -421,7 +421,13 @@ pub struct GuestEnvironment {
 }
 
 impl GuestEnvironment {
-	pub fn decode<FR>(store: &Store<FR>, raw_env_def: &[u8]) -> std::result::Result<Self, InstantiationError> {
+	/// Decodes an envrionment definition from the given raw bytes.
+	///
+	/// Returns `Err` if the definition cannot be decoded.
+	pub fn decode<FR>(
+		store: &Store<FR>,
+		raw_env_def: &[u8],
+	) -> std::result::Result<Self, InstantiationError> {
 		let (imports, guest_to_supervisor_mapping) =
 			decode_environment_definition(raw_env_def, &store.memories)?;
 		Ok(Self {
@@ -431,14 +437,17 @@ impl GuestEnvironment {
 	}
 }
 
+/// An unregistered sandboxed instance.
+///
+/// To finish off the instantiation the user must call `register`.
 #[must_use]
-pub struct Instantiation<FR> {
+pub struct UnregisteredInstance<FR> {
 	sandbox_instance: Rc<SandboxInstance<FR>>,
 }
 
-impl<FR> Instantiation<FR> {
+impl<FR> UnregisteredInstance<FR> {
 	/// Finalizes instantiation of this module.
-	pub fn finalize(self, store: &mut Store<FR>) -> u32 {
+	pub fn register(self, store: &mut Store<FR>) -> u32 {
 		// At last, register the instance.
 		let instance_idx = store.register_sandbox_instance(self.sandbox_instance);
 		instance_idx
@@ -465,9 +474,10 @@ pub fn instantiate<'a, FE: SandboxCapabilities>(
 	wasm: &[u8],
 	host_env: GuestEnvironment,
 	state: u32,
-) -> std::result::Result<Instantiation<FE::SupervisorFuncRef>, InstantiationError> {
+) -> std::result::Result<UnregisteredInstance<FE::SupervisorFuncRef>, InstantiationError> {
 	let module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
-	let instance = ModuleInstance::new(&module, &host_env.imports).map_err(|_| InstantiationError::Instantiation)?;
+	let instance = ModuleInstance::new(&module, &host_env.imports)
+		.map_err(|_| InstantiationError::Instantiation)?;
 
 	let sandbox_instance = Rc::new(SandboxInstance {
 		// In general, it's not a very good idea to use `.not_started_instance()` for anything
@@ -489,9 +499,7 @@ pub fn instantiate<'a, FE: SandboxCapabilities>(
 		},
 	)?;
 
-	Ok(Instantiation {
-		sandbox_instance,
-	})
+	Ok(UnregisteredInstance { sandbox_instance })
 }
 
 /// This struct keeps track of all sandboxed components.

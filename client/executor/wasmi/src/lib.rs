@@ -264,7 +264,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 
 		let instance_idx_or_err_code =
 			match sandbox::instantiate(self, dispatch_thunk, wasm, guest_env, state)
-				.map(|i| i.finalize(&mut self.sandbox_store))
+				.map(|i| i.register(&mut self.sandbox_store))
 			{
 				Ok(instance_idx) => instance_idx,
 				Err(sandbox::InstantiationError::StartTrapped) =>
