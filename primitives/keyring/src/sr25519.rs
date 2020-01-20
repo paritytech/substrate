@@ -125,8 +125,18 @@ impl std::fmt::Display for ParseKeyringError {
 impl std::str::FromStr for Keyring {
 	type Err = ParseKeyringError;
 
-	fn from_str(_: &str) -> Result<Self, <Self as std::str::FromStr>::Err> {
-		todo!();
+	fn from_str(s: &str) -> Result<Self, <Self as std::str::FromStr>::Err> {
+		match s {
+			"alice" => Keyring::Alice,
+			"bob" => Keyring::Bob,
+			"charlie" => Keyring::Charlie,
+			"dave" => Keyring::Dave,
+			"eve" => Keyring::Eve,
+			"ferdie" => Keyring::Ferdie,
+			"one" => Keyring::One,
+			"two" => Keyring::Two,
+			_ => Err(ParseKeyringError)
+		}
 	}
 }
 
