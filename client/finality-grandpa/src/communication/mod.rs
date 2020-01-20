@@ -27,13 +27,19 @@
 //! In the future, there will be a fallback for allowing sending the same message
 //! under certain conditions that are used to un-stick the protocol.
 
-use std::sync::Arc;
+use futures::{prelude::*, sync::mpsc};
+use futures03::{
+	channel::mpsc as mpsc03,
+	compat::Compat,
+	future::{Future as Future03},
+	stream::StreamExt,
+};
+use log::{debug, trace};
+use parking_lot::Mutex;
+use std::{pin::Pin, sync::Arc, task::{Context, Poll as Poll03}};
 
-use futures::{prelude::*, future::Executor as _, sync::mpsc};
-use futures03::{compat::Compat, stream::StreamExt, future::FutureExt as _, future::TryFutureExt as _};
 use finality_grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use finality_grandpa::{voter, voter_set::VoterSet};
-use log::{debug, trace};
 use sc_network::{NetworkService, ReputationChange};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use parity_scale_codec::{Encode, Decode};
@@ -47,7 +53,12 @@ use crate::{
 };
 use crate::environment::HasVoted;
 use gossip::{
-	GossipMessage, FullCatchUpMessage, FullCommitMessage, VoteMessage, GossipValidator
+	FullCatchUpMessage,
+	FullCommitMessage,
+	GossipMessage,
+	GossipValidator,
+	PeerReport,
+	VoteMessage,
 };
 use sp_finality_grandpa::{
 	AuthorityPair, AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
@@ -134,8 +145,30 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	service: N,
 	gossip_engine: GossipEngine<B>,
 	validator: Arc<GossipValidator<B>>,
+
+	/// Sender side of the neighbor packet channel.
+	///
+	/// Packets sent into this channel are processed by the `NeighborPacketWorker` and passed on to
+	/// the underlying `GossipEngine`.
 	neighbor_sender: periodic::NeighborPacketSender<B>,
+
+	/// `NeighborPacketWorker` processing packets sent through the `NeighborPacketSender`.
+	//
+	// `NetworkBridge` is required to be clonable, thus one needs to be able to clone its children,
+	// thus one has to wrap neighor_packet_worker with an `Arc` `Mutex`.
+	neighbor_packet_worker: Arc<Mutex<periodic::NeighborPacketWorker<B>>>,
+
+	/// Receiver side of the peer report stream populated by the gossip validator, forwarded to the
+	/// gossip engine.
+	//
+	// `NetworkBridge` is required to be clonable, thus one needs to be able to clone its children,
+	// thus one has to wrap gossip_validator_report_stream with an `Arc` `Mutex`. Given that it is
+	// just an `UnboundedReceiver`, one could also switch to a multi-producer-*multi*-consumer
+	// channel implementation.
+	gossip_validator_report_stream: Arc<Mutex<mpsc03::UnboundedReceiver<PeerReport>>>,
 }
+
+impl<B: BlockT, N: Network<B>> Unpin for NetworkBridge<B, N> {}
 
 impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
@@ -147,7 +180,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		executor: &impl futures03::task::Spawn,
-		on_exit: impl futures03::Future<Output = ()> + Clone + Send + Unpin + 'static,
 	) -> Self {
 		let (validator, report_stream) = GossipValidator::new(
 			config,
@@ -195,16 +227,16 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			}
 		}
 
-		let (rebroadcast_job, neighbor_sender) = periodic::neighbor_packet_worker(gossip_engine.clone());
-		let reporting_job = report_stream.consume(gossip_engine.clone());
+		let (neighbor_packet_worker, neighbor_packet_sender) = periodic::NeighborPacketWorker::new();
 
-		let bridge = NetworkBridge { service, gossip_engine, validator, neighbor_sender };
-
-		let executor = Compat::new(executor);
-		executor.execute(Box::new(rebroadcast_job.select(on_exit.clone().map(Ok).compat()).then(|_| Ok(()))))
-			.expect("failed to spawn grandpa rebroadcast job task");
-		executor.execute(Box::new(reporting_job.select(on_exit.clone().map(Ok).compat()).then(|_| Ok(()))))
-			.expect("failed to spawn grandpa reporting job task");
+		let bridge = NetworkBridge {
+			service,
+			gossip_engine,
+			validator,
+			neighbor_sender: neighbor_packet_sender,
+			neighbor_packet_worker: Arc::new(Mutex::new(neighbor_packet_worker)),
+			gossip_validator_report_stream: Arc::new(Mutex::new(report_stream)),
+		};
 
 		bridge
 	}
@@ -391,6 +423,38 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	}
 }
 
+impl<B: BlockT, N: Network<B>> Future03 for NetworkBridge<B, N> {
+	type Output = Result<(), Error>;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll03<Self::Output> {
+		loop {
+			match self.neighbor_packet_worker.lock().poll_next_unpin(cx) {
+				Poll03::Ready(Some((to, packet))) => {
+					self.gossip_engine.send_message(to, packet.encode());
+				},
+				Poll03::Ready(None) => return Poll03::Ready(
+					Err(Error::Network("Neighbor packet worker stream closed.".into()))
+				),
+				Poll03::Pending => break,
+			}
+		}
+
+		loop {
+			match self.gossip_validator_report_stream.lock().poll_next_unpin(cx) {
+				Poll03::Ready(Some(PeerReport { who, cost_benefit })) => {
+					self.gossip_engine.report(who, cost_benefit);
+				},
+				Poll03::Ready(None) => return Poll03::Ready(
+					Err(Error::Network("Gossip validator report stream closed.".into()))
+				),
+				Poll03::Pending => break,
+			}
+		}
+
+		Poll03::Pending
+	}
+}
+
 fn incoming_global<B: BlockT>(
 	mut gossip_engine: GossipEngine<B>,
 	topic: B::Hash,
@@ -530,6 +594,8 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 			gossip_engine: self.gossip_engine.clone(),
 			validator: Arc::clone(&self.validator),
 			neighbor_sender: self.neighbor_sender.clone(),
+			neighbor_packet_worker: self.neighbor_packet_worker.clone(),
+			gossip_validator_report_stream: self.gossip_validator_report_stream.clone(),
 		}
 	}
 }

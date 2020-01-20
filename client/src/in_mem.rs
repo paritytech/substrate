@@ -26,11 +26,14 @@ use sp_core::offchain::storage::{
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, HasherFor};
 use sp_runtime::{Justification, Storage};
-use sp_state_machine::{ChangesTrieTransaction, InMemoryBackend, Backend as StateBackend};
+use sp_state_machine::{
+	ChangesTrieTransaction, InMemoryBackend, Backend as StateBackend, StorageCollection,
+	ChildStorageCollection,
+};
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata};
 
 use sc_client_api::{
-	backend::{self, NewBlockState, StorageCollection, ChildStorageCollection},
+	backend::{self, NewBlockState},
 	blockchain::{
 		self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
 	},

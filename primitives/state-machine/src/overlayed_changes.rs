@@ -34,6 +34,18 @@ use std::ops;
 
 use hash_db::Hasher;
 
+/// Storage key.
+pub type StorageKey = Vec<u8>;
+
+/// Storage value.
+pub type StorageValue = Vec<u8>;
+
+/// In memory array of storage values.
+pub type StorageCollection = Vec<(StorageKey, Option<StorageValue>)>;
+
+/// In memory arrays of storage values for multiple child tries.
+pub type ChildStorageCollection = Vec<(StorageKey, StorageCollection)>;
+
 /// The overlayed changes to state to be queried on top of the backend.
 ///
 /// A transaction shares all prospective changes within an inner overlay
@@ -51,13 +63,13 @@ pub struct OverlayedChanges {
 #[cfg_attr(test, derive(PartialEq))]
 pub struct OverlayedValue {
 	/// Current value. None if value has been deleted.
-	pub value: Option<Vec<u8>>,
+	pub value: Option<StorageValue>,
 	/// The set of extinsic indices where the values has been changed.
 	/// Is filled only if runtime has announced changes trie support.
 	pub extrinsics: Option<BTreeSet<u32>>,
 }
 
-type TreeChangeSet = BTreeMap<Vec<u8>, Layers<OverlayedValue>>;
+type TreeChangeSet = BTreeMap<StorageKey, Layers<OverlayedValue>>;
 
 /// Overlayed change set, content keep trace of its history.
 ///
@@ -70,10 +82,10 @@ pub struct OverlayedChangeSet {
 	/// Top level storage changes.
 	pub(crate) top: TreeChangeSet,
 	/// Child storage changes.
-	/// OwnedChildInfo is currently an absolute value, for some child trie
-	/// operations (eg full deletion) it will need to change
-	/// to `Layers<OwnedChildInfo>`.
-	pub(crate) children: HashMap<Vec<u8>, (TreeChangeSet, OwnedChildInfo)>,
+	/// OwnedChildInfo is currently a non modifiable value,
+	/// for future child trie operations (eg full deletion)
+	/// it will need to manage history too (`Layers<OwnedChildInfo>`).
+	pub(crate) children: HashMap<StorageKey, (TreeChangeSet, OwnedChildInfo)>,
 }
 
 impl Default for OverlayedChangeSet {
@@ -94,9 +106,9 @@ pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
 	/// All changes to the main storage.
 	///
 	/// A value of `None` means that it was deleted.
-	pub main_storage_changes: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	pub main_storage_changes: StorageCollection,
 	/// All changes to the child storages.
-	pub child_storage_changes: Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
+	pub child_storage_changes: ChildStorageCollection,
 	/// A transaction for the backend that contains all changes from
 	/// [`main_storage_changes`](Self::main_storage_changes) and from
 	/// [`child_storage_changes`](Self::child_storage_changes).
@@ -112,8 +124,8 @@ pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
 impl<Transaction, H: Hasher, N: BlockNumber> StorageChanges<Transaction, H, N> {
 	/// Deconstruct into the inner values
 	pub fn into_inner(self) -> (
-		Vec<(Vec<u8>, Option<Vec<u8>>)>,
-		Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
+		StorageCollection,
+		ChildStorageCollection,
 		Transaction,
 		H::Out,
 		Option<ChangesTrieTransaction<H, N>>,
@@ -173,8 +185,8 @@ impl<Transaction: Default, H: Hasher, N: BlockNumber> Default for StorageChanges
 }
 
 #[cfg(test)]
-impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
-	fn from_iter<T: IntoIterator<Item = (Vec<u8>, OverlayedValue)>>(iter: T) -> Self {
+impl FromIterator<(StorageKey, OverlayedValue)> for OverlayedChangeSet {
+	fn from_iter<T: IntoIterator<Item = (StorageKey, OverlayedValue)>>(iter: T) -> Self {
 		let mut result = OverlayedChangeSet::default();
 		result.top = iter.into_iter().map(|(k, value)| (k, {
 			let mut history = Layers::default();
@@ -191,7 +203,7 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 fn set_with_extrinsic_overlayed_value(
 	history: &mut Layers<OverlayedValue>,
 	number_transaction: usize,
-	value: Option<Vec<u8>>,
+	value: Option<StorageValue>,
 	extrinsic_index: Option<u32>,
 ) {
 	if let Some(extrinsic) = extrinsic_index {
@@ -466,10 +478,15 @@ impl OverlayedChanges {
 	/// Inserts the given key-value pair into the prospective change set.
 	///
 	/// `None` can be used to delete a value specified by the given key.
-	pub fn set_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
+	pub(crate) fn set_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.changes.top.entry(key).or_default();
-		set_with_extrinsic_overlayed_value(entry, self.changes.number_transactions, value, extrinsic_index);
+		set_with_extrinsic_overlayed_value(
+			entry,
+			self.changes.number_transactions,
+			value,
+			extrinsic_index,
+		);
 	}
 
 	/// Inserts the given key-value pair into the prospective child change set.
@@ -477,10 +494,10 @@ impl OverlayedChanges {
 	/// `None` can be used to delete a value specified by the given key.
 	pub(crate) fn set_child_storage(
 		&mut self,
-		storage_key: Vec<u8>,
+		storage_key: StorageKey,
 		child_info: ChildInfo,
-		key: Vec<u8>,
-		value: Option<Vec<u8>>,
+		key: StorageKey,
+		value: Option<StorageValue>,
 	) {
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.changes.children.entry(storage_key)
@@ -582,8 +599,12 @@ impl OverlayedChanges {
 
 	/// Consume `OverlayedChanges` and take committed set.
 	pub fn into_committed(self) -> (
-		impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		impl Iterator<Item=(Vec<u8>, impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>, OwnedChildInfo)>,
+		impl Iterator<Item=(StorageKey, Option<StorageValue>)>,
+		impl Iterator<Item=(
+			StorageKey,
+			impl Iterator<Item=(StorageKey, Option<StorageValue>)>,
+			OwnedChildInfo,
+		)>,
 	){
 		let top = self.changes.top;
 		let children = self.changes.children;
@@ -840,8 +861,8 @@ fn retain<K: Ord + Clone, V, F>(map: &mut BTreeMap<K, V>, mut f: F)
 }
 
 #[cfg(test)]
-impl From<Option<Vec<u8>>> for OverlayedValue {
-	fn from(value: Option<Vec<u8>>) -> OverlayedValue {
+impl From<Option<StorageValue>> for OverlayedValue {
+	fn from(value: Option<StorageValue>) -> OverlayedValue {
 		OverlayedValue { value, ..Default::default() }
 	}
 }
@@ -856,8 +877,8 @@ mod tests {
 	use crate::ext::Ext;
 	use super::*;
 
-	fn strip_extrinsic_index(mut map: BTreeMap<Vec<u8>, OverlayedValue>)
-		-> BTreeMap<Vec<u8>, OverlayedValue>
+	fn strip_extrinsic_index(mut map: BTreeMap<StorageKey, OverlayedValue>)
+		-> BTreeMap<StorageKey, OverlayedValue>
 	{
 		map.remove(&EXTRINSIC_INDEX.to_vec());
 		map
