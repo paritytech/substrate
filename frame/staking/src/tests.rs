@@ -365,7 +365,7 @@ fn less_than_needed_candidates_works() {
 #[test]
 fn no_candidate_emergency_condition() {
 	ExtBuilder::default()
-		.minimum_validator_count(10)
+		.minimum_validator_count(1)
 		.validator_count(15)
 		.num_validators(4)
 		.validator_pool(true)
@@ -374,21 +374,21 @@ fn no_candidate_emergency_condition() {
 		.execute_with(|| {
 			// initial validators
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
+			let prefs = ValidatorPrefs { commission: Perbill::one() };
+			<Staking as crate::Store>::Validators::insert(11, prefs.clone());
 
 			// set the minimum validator count.
 			<Staking as crate::Store>::MinimumValidatorCount::put(10);
-			<Staking as crate::Store>::ValidatorCount::put(15);
-			assert_eq!(Staking::validator_count(), 15);
 
 			let _ = Staking::chill(Origin::signed(10));
 
 			// trigger era
-			System::set_block_number(1);
-			Session::on_initialize(System::block_number());
+			start_era(1);
 
 			// Previous ones are elected. chill is invalidates. TODO: #2494
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
-			assert_eq!(Staking::current_elected().len(), 0);
+			// Though the validator preferences has been removed.
+			assert!(Staking::validators(11) != prefs);
 		});
 }
 
