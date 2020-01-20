@@ -44,25 +44,24 @@ use sp_core::H256;
 
 use std::{
 	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fmt::Debug, fs::{self, File},
-	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr, pin::Pin, task::Poll
+	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr
 };
 
 use names::{Generator, Name};
 use regex::Regex;
-use structopt::{StructOpt, clap::AppSettings};
+use structopt::StructOpt;
 #[doc(hidden)]
 pub use structopt::clap::App;
 use params::{
-	PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
 	NetworkConfigurationParams, TransactionPoolParams,
-	NodeKeyParams, NodeKeyType, Cors, CheckBlockCmd,
+	NodeKeyParams, NodeKeyType, Cors,
 };
 pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy, RunCmd};
 pub use traits::GetSharedParams;
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
-use futures::{Future, compat::Future01CompatExt, executor::block_on, future, future::FutureExt};
+use futures::{Future, compat::Future01CompatExt, future, future::FutureExt};
 use sc_telemetry::TelemetryEndpoints;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};

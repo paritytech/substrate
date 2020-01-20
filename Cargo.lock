@@ -3258,6 +3258,7 @@ dependencies = [
  "sp-io 2.0.0",
  "sp-runtime 2.0.0",
  "sp-transaction-pool 2.0.0",
+ "structopt 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-build-script-utils 2.0.0",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-root 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
