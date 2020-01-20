@@ -26,9 +26,9 @@
 //! actively calling any function.
 
 use crate::api::timestamp;
-use bytes::Buf as _;
+use bytes::buf::ext::{BufExt, Reader};
 use fnv::FnvHashMap;
-use futures::{prelude::*, channel::mpsc, compat::Compat01As03};
+use futures::{prelude::*, channel::mpsc};
 use log::error;
 use sp_core::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
 use std::{fmt, io::Read as _, mem, pin::Pin, task::Context, task::Poll};
@@ -50,7 +50,7 @@ pub fn http() -> (HttpApi, HttpWorker) {
 	let engine = HttpWorker {
 		to_api,
 		from_api,
-		http_client: hyper::Client::builder().build(hyper_rustls::HttpsConnector::new(1)),
+		http_client: hyper::Client::builder().build(hyper_rustls::HttpsConnector::new()),
 		requests: Vec::new(),
 	};
 
@@ -103,10 +103,10 @@ struct HttpApiRequestRp {
 	/// Elements extracted from the channel are first put into `current_read_chunk`.
 	/// If the channel produces an error, then that is translated into an `IoError` and the request
 	/// is removed from the list.
-	body: stream::Fuse<mpsc::Receiver<Result<hyper::Chunk, hyper::Error>>>,
+	body: stream::Fuse<mpsc::Receiver<Result<hyper::body::Bytes, hyper::Error>>>,
 	/// Chunk that has been extracted from the channel and that is currently being read.
 	/// Reading data from the response should read from this field in priority.
-	current_read_chunk: Option<bytes::Reader<hyper::Chunk>>,
+	current_read_chunk: Option<Reader<hyper::body::Bytes>>,
 }
 
 impl HttpApi {
@@ -122,7 +122,7 @@ impl HttpApi {
 		let (body_sender, body) = hyper::Body::channel();
 		let mut request = hyper::Request::new(body);
 		*request.method_mut() = hyper::Method::from_bytes(method.as_bytes()).map_err(|_| ())?;
-		*request.uri_mut() = hyper::Uri::from_shared(From::from(uri)).map_err(|_| ())?;
+		*request.uri_mut() = hyper::Uri::from_maybe_shared(String::from(uri)).map_err(|_| ())?;
 
 		let new_id = self.next_id;
 		debug_assert!(!self.requests.contains_key(&new_id));
@@ -177,9 +177,9 @@ impl HttpApi {
 		// (if the body has been written), or `DeadlineReached`, or `IoError`.
 		// If `IoError` is returned, don't forget to remove the request from the list.
 		let mut poll_sender = move |sender: &mut hyper::body::Sender| -> Result<(), HttpError> {
-			let mut when_ready = future::maybe_done(Compat01As03::new(
-				futures01::future::poll_fn(|| sender.poll_ready())
-			));
+			let mut when_ready = future::maybe_done(
+				futures::future::poll_fn(|cx| sender.poll_ready(cx))
+			);
 			futures::executor::block_on(future::select(&mut when_ready, &mut deadline));
 			match when_ready {
 				future::MaybeDone::Done(Ok(())) => {}
@@ -191,7 +191,7 @@ impl HttpApi {
 				}
 			};
 
-			match sender.send_data(hyper::Chunk::from(chunk.to_owned())) {
+			match futures::executor::block_on(sender.send_data(hyper::body::Bytes::from(chunk.to_owned()))) {
 				Ok(()) => Ok(()),
 				Err(_chunk) => {
 					error!("HTTP sender refused data despite being ready");
@@ -538,7 +538,7 @@ enum WorkerToApi {
 		/// the next item.
 		/// Can also be used to send an error, in case an error happend on the HTTP socket. After
 		/// an error is sent, the channel will close.
-		body: mpsc::Receiver<Result<hyper::Chunk, hyper::Error>>,
+		body: mpsc::Receiver<Result<hyper::body::Bytes, hyper::Error>>,
 	},
 	/// A request has failed because of an error. The request is then no longer valid.
 	Fail {
@@ -564,13 +564,13 @@ pub struct HttpWorker {
 /// HTTP request being processed by the worker.
 enum HttpWorkerRequest {
 	/// Request has been dispatched and is waiting for a response from the Internet.
-	Dispatched(Compat01As03<hyper::client::ResponseFuture>),
+	Dispatched(hyper::client::ResponseFuture),
 	/// Progressively reading the body of the response and sending it to the channel.
 	ReadBody {
 		/// Body to read `Chunk`s from. Only used if the channel is ready to accept data.
-		body: Compat01As03<hyper::Body>,
+		body: hyper::Body,
 		/// Channel to the [`HttpApi`] where we send the chunks to.
-		tx: mpsc::Sender<Result<hyper::Chunk, hyper::Error>>,
+		tx: mpsc::Sender<Result<hyper::body::Bytes, hyper::Error>>,
 	},
 }
 
@@ -608,7 +608,7 @@ impl Future for HttpWorker {
 					// We received a response! Decompose it into its parts.
 					let status_code = response.status();
 					let headers = mem::replace(response.headers_mut(), hyper::HeaderMap::new());
-					let body = Compat01As03::new(response.into_body());
+					let body = response.into_body();
 
 					let (body_tx, body_rx) = mpsc::channel(3);
 					let _ = me.to_api.unbounded_send(WorkerToApi::Response {
@@ -660,7 +660,7 @@ impl Future for HttpWorker {
 			Poll::Pending => {},
 			Poll::Ready(None) => return Poll::Ready(()),	// stops the worker
 			Poll::Ready(Some(ApiToWorker::Dispatch { id, request })) => {
-				let future = Compat01As03::new(me.http_client.request(request));
+				let future = me.http_client.request(request);
 				debug_assert!(me.requests.iter().all(|(i, _)| *i != id));
 				me.requests.push((id, HttpWorkerRequest::Dispatched(future)));
 				cx.waker().wake_by_ref();	// reschedule the task to poll the request
@@ -693,283 +693,294 @@ impl fmt::Debug for HttpWorkerRequest {
 #[cfg(test)]
 mod tests {
 	use crate::api::timestamp;
-	use super::http;
-	use futures::prelude::*;
-	use futures01::Future as _;
+	use super::{http, HttpApi};
 	use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Duration};
+	use std::{net::SocketAddr, convert::Infallible};
+	use hyper::{Request, Response, Body, service::{make_service_fn, service_fn}};
+	use tokio::runtime::Runtime;
+
+	async fn hello_world(_: Request<Body>) -> Result<Response<Body>, Infallible> {
+		Ok(Response::new(Body::from("Hello World!")))
+	}
 
 	// Returns an `HttpApi` whose worker is ran in the background, and a `SocketAddr` to an HTTP
 	// server that runs in the background as well.
-	macro_rules! build_api_server {
-		() => {{
-			let (api, worker) = http();
-			// Note: we have to use tokio because hyper still uses old futures.
-			std::thread::spawn(move || {
-				tokio::run(futures::compat::Compat::new(worker.map(|()| Ok::<(), ()>(()))))
-			});
-			let (addr_tx, addr_rx) = std::sync::mpsc::channel();
-			std::thread::spawn(move || {
-				let server = hyper::Server::bind(&"127.0.0.1:0".parse().unwrap())
-					.serve(|| {
-						hyper::service::service_fn_ok(move |_: hyper::Request<hyper::Body>| {
-							hyper::Response::new(hyper::Body::from("Hello World!"))
-						})
-					});
-				let _ = addr_tx.send(server.local_addr());
-				hyper::rt::run(server.map_err(|e| panic!("{:?}", e)));
-			});
-			(api, addr_rx.recv().unwrap())
-		}};
+	fn build_api_server() -> (HttpApi, SocketAddr) {
+		let (api, worker) = http();
+		tokio::spawn(worker);
+		let server = hyper::Server::bind(&"127.0.0.1:0".parse().unwrap())
+			.serve(make_service_fn(|_| async {
+				Ok::<_, Infallible>(service_fn(hello_world))
+			}));
+		let addr = server.local_addr();
+		tokio::spawn(server);
+		(api, addr)
 	}
 
 	#[test]
 	fn basic_localhost() {
-		let deadline = timestamp::now().add(Duration::from_millis(10_000));
+		Runtime::new().unwrap().block_on(async {
+			let deadline = timestamp::now().add(Duration::from_millis(10_000));
 
-		// Performs an HTTP query to a background HTTP server.
+			// Performs an HTTP query to a background HTTP server.
 
-		let (mut api, addr) = build_api_server!();
+			let (mut api, addr) = build_api_server();
 
-		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		api.request_write_body(id, &[], Some(deadline)).unwrap();
+			let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+			api.request_write_body(id, &[], Some(deadline)).unwrap();
 
-		match api.response_wait(&[id], Some(deadline))[0] {
-			HttpRequestStatus::Finished(200) => {},
-			v => panic!("Connecting to localhost failed: {:?}", v)
-		}
+			match api.response_wait(&[id], Some(deadline))[0] {
+				HttpRequestStatus::Finished(200) => {},
+				v => panic!("Connecting to localhost failed: {:?}", v)
+			}
 
-		let headers = api.response_headers(id);
-		assert!(headers.iter().any(|(h, _)| h.eq_ignore_ascii_case(b"Date")));
+			let headers = api.response_headers(id);
+			assert!(headers.iter().any(|(h, _)| h.eq_ignore_ascii_case(b"Date")));
 
-		let mut buf = vec![0; 2048];
-		let n = api.response_read_body(id, &mut buf, Some(deadline)).unwrap();
-		assert_eq!(&buf[..n], b"Hello World!");
+			let mut buf = vec![0; 2048];
+			let n = api.response_read_body(id, &mut buf, Some(deadline)).unwrap();
+			assert_eq!(&buf[..n], b"Hello World!");
+		})
 	}
 
 	#[test]
 	fn request_start_invalid_call() {
-		let (mut api, addr) = build_api_server!();
+		Runtime::new().unwrap().block_on(async {
+			let (mut api, addr) = build_api_server();
 
-		match api.request_start("\0", &format!("http://{}", addr)) {
-			Err(()) => {}
-			Ok(_) => panic!()
-		};
+			match api.request_start("\0", &format!("http://{}", addr)) {
+				Err(()) => {}
+				Ok(_) => panic!()
+			};
 
-		match api.request_start("GET", "http://\0localhost") {
-			Err(()) => {}
-			Ok(_) => panic!()
-		};
+			match api.request_start("GET", "http://\0localhost") {
+				Err(()) => {}
+				Ok(_) => panic!()
+			};
+		});
 	}
 
 	#[test]
 	fn request_add_header_invalid_call() {
-		let (mut api, addr) = build_api_server!();
+		Runtime::new().unwrap().block_on(async {
+			let (mut api, addr) = build_api_server();
 
-		match api.request_add_header(HttpRequestId(0xdead), "Foo", "bar") {
-			Err(()) => {}
-			Ok(_) => panic!()
-		};
+			match api.request_add_header(HttpRequestId(0xdead), "Foo", "bar") {
+				Err(()) => {}
+				Ok(_) => panic!()
+			};
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
-		match api.request_add_header(id, "\0", "bar") {
-			Err(()) => {}
-			Ok(_) => panic!()
-		};
+			let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+			match api.request_add_header(id, "\0", "bar") {
+				Err(()) => {}
+				Ok(_) => panic!()
+			};
 
-		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		match api.request_add_header(id, "Foo", "\0") {
-			Err(()) => {}
-			Ok(_) => panic!()
-		};
+			let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+			match api.request_add_header(id, "Foo", "\0") {
+				Err(()) => {}
+				Ok(_) => panic!()
+			};
 
-		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		api.request_add_header(id, "Foo", "Bar").unwrap();
-		api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
-		match api.request_add_header(id, "Foo2", "Bar") {
-			Err(()) => {}
-			Ok(_) => panic!()
-		};
+			let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+			api.request_add_header(id, "Foo", "Bar").unwrap();
+			api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
+			match api.request_add_header(id, "Foo2", "Bar") {
+				Err(()) => {}
+				Ok(_) => panic!()
+			};
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
-		api.response_headers(id);
-		match api.request_add_header(id, "Foo2", "Bar") {
-			Err(()) => {}
-			Ok(_) => panic!()
-		};
+			let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+			api.response_headers(id);
+			match api.request_add_header(id, "Foo2", "Bar") {
+				Err(()) => {}
+				Ok(_) => panic!()
+			};
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
-		api.response_read_body(id, &mut [], None).unwrap();
-		match api.request_add_header(id, "Foo2", "Bar") {
-			Err(()) => {}
-			Ok(_) => panic!()
-		};
+			let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+			api.response_read_body(id, &mut [], None).unwrap();
+			match api.request_add_header(id, "Foo2", "Bar") {
+				Err(()) => {}
+				Ok(_) => panic!()
+			};
+		});
 	}
 
 	#[test]
 	fn request_write_body_invalid_call() {
-		let (mut api, addr) = build_api_server!();
+		Runtime::new().unwrap().block_on(async {
+			let (mut api, addr) = build_api_server();
 
-		match api.request_write_body(HttpRequestId(0xdead), &[1, 2, 3], None) {
-			Err(HttpError::Invalid) => {}
-			_ => panic!()
-		};
+			match api.request_write_body(HttpRequestId(0xdead), &[1, 2, 3], None) {
+				Err(HttpError::Invalid) => {}
+				_ => panic!()
+			};
 
-		match api.request_write_body(HttpRequestId(0xdead), &[], None) {
-			Err(HttpError::Invalid) => {}
-			_ => panic!()
-		};
+			match api.request_write_body(HttpRequestId(0xdead), &[], None) {
+				Err(HttpError::Invalid) => {}
+				_ => panic!()
+			};
 
-		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
-		api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
-		api.request_write_body(id, &[], None).unwrap();
-		match api.request_write_body(id, &[], None) {
-			Err(HttpError::Invalid) => {}
-			_ => panic!()
-		};
+			let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+			api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
+			api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
+			api.request_write_body(id, &[], None).unwrap();
+			match api.request_write_body(id, &[], None) {
+				Err(HttpError::Invalid) => {}
+				_ => panic!()
+			};
 
-		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
-		api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
-		api.request_write_body(id, &[], None).unwrap();
-		match api.request_write_body(id, &[1, 2, 3, 4], None) {
-			Err(HttpError::Invalid) => {}
-			_ => panic!()
-		};
+			let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+			api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
+			api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
+			api.request_write_body(id, &[], None).unwrap();
+			match api.request_write_body(id, &[1, 2, 3, 4], None) {
+				Err(HttpError::Invalid) => {}
+				_ => panic!()
+			};
 
-		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
-		api.response_wait(&[id], None);
-		match api.request_write_body(id, &[], None) {
-			Err(HttpError::Invalid) => {}
-			_ => panic!()
-		};
+			let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+			api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
+			api.response_wait(&[id], None);
+			match api.request_write_body(id, &[], None) {
+				Err(HttpError::Invalid) => {}
+				_ => panic!()
+			};
 
-		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
-		api.response_wait(&[id], None);
-		match api.request_write_body(id, &[1, 2, 3, 4], None) {
-			Err(HttpError::Invalid) => {}
-			_ => panic!()
-		};
+			let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+			api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
+			api.response_wait(&[id], None);
+			match api.request_write_body(id, &[1, 2, 3, 4], None) {
+				Err(HttpError::Invalid) => {}
+				_ => panic!()
+			};
 
-		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		api.response_headers(id);
-		match api.request_write_body(id, &[1, 2, 3, 4], None) {
-			Err(HttpError::Invalid) => {}
-			_ => panic!()
-		};
+			let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+			api.response_headers(id);
+			match api.request_write_body(id, &[1, 2, 3, 4], None) {
+				Err(HttpError::Invalid) => {}
+				_ => panic!()
+			};
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
-		api.response_headers(id);
-		match api.request_write_body(id, &[], None) {
-			Err(HttpError::Invalid) => {}
-			_ => panic!()
-		};
+			let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+			api.response_headers(id);
+			match api.request_write_body(id, &[], None) {
+				Err(HttpError::Invalid) => {}
+				_ => panic!()
+			};
 
-		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		api.response_read_body(id, &mut [], None).unwrap();
-		match api.request_write_body(id, &[1, 2, 3, 4], None) {
-			Err(HttpError::Invalid) => {}
-			_ => panic!()
-		};
+			let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+			api.response_read_body(id, &mut [], None).unwrap();
+			match api.request_write_body(id, &[1, 2, 3, 4], None) {
+				Err(HttpError::Invalid) => {}
+				_ => panic!()
+			};
 
-		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		api.response_read_body(id, &mut [], None).unwrap();
-		match api.request_write_body(id, &[], None) {
-			Err(HttpError::Invalid) => {}
-			_ => panic!()
-		};
+			let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+			api.response_read_body(id, &mut [], None).unwrap();
+			match api.request_write_body(id, &[], None) {
+				Err(HttpError::Invalid) => {}
+				_ => panic!()
+			};
+		});
 	}
 
 	#[test]
 	fn response_headers_invalid_call() {
-		let (mut api, addr) = build_api_server!();
-		assert!(api.response_headers(HttpRequestId(0xdead)).is_empty());
+		Runtime::new().unwrap().block_on(async {
+			let (mut api, addr) = build_api_server();
+			assert!(api.response_headers(HttpRequestId(0xdead)).is_empty());
 
-		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		assert!(api.response_headers(id).is_empty());
+			let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+			assert!(api.response_headers(id).is_empty());
 
-		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		api.request_write_body(id, &[], None).unwrap();
-		while api.response_headers(id).is_empty() {
-			std::thread::sleep(std::time::Duration::from_millis(100));
-		}
+			let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+			api.request_write_body(id, &[], None).unwrap();
+			while api.response_headers(id).is_empty() {
+				std::thread::sleep(std::time::Duration::from_millis(100));
+			}
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
-		api.response_wait(&[id], None);
-		assert!(!api.response_headers(id).is_empty());
+			let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+			api.response_wait(&[id], None);
+			assert!(!api.response_headers(id).is_empty());
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
-		let mut buf = [0; 128];
-		while api.response_read_body(id, &mut buf, None).unwrap() != 0 {}
-		assert!(api.response_headers(id).is_empty());
+			let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+			let mut buf = [0; 128];
+			while api.response_read_body(id, &mut buf, None).unwrap() != 0 {}
+			assert!(api.response_headers(id).is_empty());
+		});
 	}
 
 	#[test]
 	fn response_header_invalid_call() {
-		let (mut api, addr) = build_api_server!();
+		Runtime::new().unwrap().block_on(async {
+			let (mut api, addr) = build_api_server();
 
-		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		assert!(api.response_headers(id).is_empty());
+			let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+			assert!(api.response_headers(id).is_empty());
 
-		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		api.request_add_header(id, "Foo", "Bar").unwrap();
-		assert!(api.response_headers(id).is_empty());
+			let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+			api.request_add_header(id, "Foo", "Bar").unwrap();
+			assert!(api.response_headers(id).is_empty());
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
-		api.request_add_header(id, "Foo", "Bar").unwrap();
-		api.request_write_body(id, &[], None).unwrap();
-		// Note: this test actually sends out the request, and is supposed to test a situation
-		// where we haven't received any response yet. This test can theoretically fail if the
-		// HTTP response comes back faster than the kernel schedules our thread, but that is highly
-		// unlikely.
-		assert!(api.response_headers(id).is_empty());
+			let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+			api.request_add_header(id, "Foo", "Bar").unwrap();
+			api.request_write_body(id, &[], None).unwrap();
+			// Note: this test actually sends out the request, and is supposed to test a situation
+			// where we haven't received any response yet. This test can theoretically fail if the
+			// HTTP response comes back faster than the kernel schedules our thread, but that is highly
+			// unlikely.
+			assert!(api.response_headers(id).is_empty());
+		});
 	}
 
 	#[test]
 	fn response_read_body_invalid_call() {
-		let (mut api, addr) = build_api_server!();
-		let mut buf = [0; 512];
+		Runtime::new().unwrap().block_on(async {
+			let (mut api, addr) = build_api_server();
+			let mut buf = [0; 512];
 
-		match api.response_read_body(HttpRequestId(0xdead), &mut buf, None) {
-			Err(HttpError::Invalid) => {}
-			_ => panic!()
-		}
+			match api.response_read_body(HttpRequestId(0xdead), &mut buf, None) {
+				Err(HttpError::Invalid) => {}
+				_ => panic!()
+			}
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
-		while api.response_read_body(id, &mut buf, None).unwrap() != 0 {}
-		match api.response_read_body(id, &mut buf, None) {
-			Err(HttpError::Invalid) => {}
-			_ => panic!()
-		}
+			let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+			while api.response_read_body(id, &mut buf, None).unwrap() != 0 {}
+			match api.response_read_body(id, &mut buf, None) {
+				Err(HttpError::Invalid) => {}
+				_ => panic!()
+			}
+		});
 	}
 
 	#[test]
 	fn fuzzing() {
-		// Uses the API in random ways to try to trigger panicks.
-		// Doesn't test some paths, such as waiting for multiple requests. Also doesn't test what
-		// happens if the server force-closes our socket.
+		Runtime::new().unwrap().block_on(async {
+			// Uses the API in random ways to try to trigger panicks.
+			// Doesn't test some paths, such as waiting for multiple requests. Also doesn't test what
+			// happens if the server force-closes our socket.
 
-		let (mut api, addr) = build_api_server!();
+			let (mut api, addr) = build_api_server();
 
-		for _ in 0..50 {
-			let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+			for _ in 0..50 {
+				let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
 
-			for _ in 0..250 {
-				match rand::random::<u8>() % 6 {
-					0 => { let _ = api.request_add_header(id, "Foo", "Bar"); }
-					1 => { let _ = api.request_write_body(id, &[1, 2, 3, 4], None); }
-					2 => { let _ = api.request_write_body(id, &[], None); }
-					3 => { let _ = api.response_wait(&[id], None); }
-					4 => { let _ = api.response_headers(id); }
-					5 => {
-						let mut buf = [0; 512];
-						let _ = api.response_read_body(id, &mut buf, None);
+				for _ in 0..250 {
+					match rand::random::<u8>() % 6 {
+						0 => { let _ = api.request_add_header(id, "Foo", "Bar"); }
+						1 => { let _ = api.request_write_body(id, &[1, 2, 3, 4], None); }
+						2 => { let _ = api.request_write_body(id, &[], None); }
+						3 => { let _ = api.response_wait(&[id], None); }
+						4 => { let _ = api.response_headers(id); }
+						5 => {
+							let mut buf = [0; 512];
+							let _ = api.response_read_body(id, &mut buf, None);
+						}
+						6 ..= 255 => unreachable!()
 					}
-					6 ..= 255 => unreachable!()
 				}
 			}
-		}
+		});
 	}
 }
