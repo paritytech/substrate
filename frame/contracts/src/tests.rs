@@ -1139,8 +1139,16 @@ fn call_removed_contract() {
 			Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
 			"contract has been evicted"
 		);
+		// Calling a contract that is about to evict shall emit an event.
+		assert_eq!(System::events(), vec![
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contract(RawEvent::Evicted(BOB)),
+				topics: vec![],
+			},
+		]);
 
- 		// Subsequent contract calls should also fail.
+		// Subsequent contract calls should also fail.
 		assert_err!(
 			Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
 			"contract has been evicted"
@@ -1367,6 +1375,9 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		// Advance 4 blocks, to the 5th.
 		initialize_block(5);
 
+		/// Preserve `BOB`'s code hash for later introspection.
+		let bob_code_hash = ContractInfoOf::<Test>::get(BOB).unwrap()
+			.get_alive().unwrap().code_hash;
 		// Call `BOB`, which makes it pay rent. Since the rent allowance is set to 0
 		// we expect that it will get removed leaving tombstone.
 		assert_err!(
@@ -1374,6 +1385,15 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			"contract has been evicted"
 		);
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+		assert_eq!(System::events(), vec![
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contract(
+					RawEvent::Evicted(BOB.clone())
+				),
+				topics: vec![],
+			},
+		]);
 
 		/// Create another account with the address `DJANGO` with `CODE_RESTORATION`.
 		///
@@ -1416,6 +1436,60 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			assert_eq!(django_contract.storage_size, 16);
 			assert_eq!(django_contract.trie_id, django_trie_id);
 			assert_eq!(django_contract.deduct_block, System::block_number());
+			match (test_different_storage, test_restore_to_with_dirty_storage) {
+				(true, false) => {
+					assert_eq!(System::events(), vec![
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::contract(
+								RawEvent::Restored(DJANGO, BOB, bob_code_hash, 50, false)
+							),
+							topics: vec![],
+						},
+					]);
+				}
+				(_, true) => {
+					assert_eq!(System::events(), vec![
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::contract(RawEvent::Evicted(BOB)),
+							topics: vec![],
+						},
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(CHARLIE, 1_000_000)),
+							topics: vec![],
+						},
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::balances(pallet_balances::RawEvent::NewAccount(DJANGO, 30_000)),
+							topics: vec![],
+						},
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::contract(RawEvent::Transfer(CHARLIE, DJANGO, 30_000)),
+							topics: vec![],
+						},
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::contract(RawEvent::Instantiated(CHARLIE, DJANGO)),
+							topics: vec![],
+						},
+						EventRecord {
+							phase: Phase::ApplyExtrinsic(0),
+							event: MetaEvent::contract(RawEvent::Restored(
+								DJANGO,
+								BOB,
+								bob_code_hash,
+								50,
+								false,
+							)),
+							topics: vec![],
+						},
+					]);
+				}
+				_ => unreachable!(),
+			}
 		} else {
 			// Here we expect that the restoration is succeeded. Check that the restoration
 			// contract `DJANGO` ceased to exist and that `BOB` returned back.
@@ -1427,6 +1501,20 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			assert_eq!(bob_contract.trie_id, django_trie_id);
 			assert_eq!(bob_contract.deduct_block, System::block_number());
 			assert!(ContractInfoOf::<Test>::get(DJANGO).is_none());
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::ReapedAccount(DJANGO, 0)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(
+						RawEvent::Restored(DJANGO, BOB, bob_contract.code_hash, 50, true)
+					),
+					topics: vec![],
+				},
+			]);
 		}
 	});
 }
