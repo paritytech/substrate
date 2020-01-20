@@ -205,6 +205,7 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 		let pending_iterator = self.transaction_pool.ready();
 
 		debug!("Attempting to push transactions from the pool.");
+		debug!("Pool status: {:?}", self.transaction_pool.status());
 		for pending_tx in pending_iterator {
 			if (self.now)() > deadline {
 				debug!(

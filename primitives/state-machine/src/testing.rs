@@ -21,6 +21,7 @@ use codec::Decode;
 use hash_db::Hasher;
 use crate::{
 	backend::Backend, OverlayedChanges, StorageTransactionCache, ext::Ext, InMemoryBackend,
+	StorageKey, StorageValue,
 	changes_trie::{
 		Configuration as ChangesTrieConfiguration,
 		InMemoryStorage as ChangesTrieInMemoryStorage,
@@ -104,7 +105,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 	}
 
 	/// Insert key/value into backend
-	pub fn insert(&mut self, k: Vec<u8>, v: Vec<u8>) {
+	pub fn insert(&mut self, k: StorageKey, v: StorageValue) {
 		self.backend = self.backend.update(vec![(None, vec![(k, Some(v))])]);
 	}
 

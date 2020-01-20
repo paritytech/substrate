@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
@@ -22,7 +21,6 @@ pallet-balances = { version = "2.0.0", path = "../balances" }
 default = ["std"]
 std = [
 	"serde",
-	"safe-mix/std",
 	"codec/std",
 	"sp-std/std",
 	"sp-io/std",
