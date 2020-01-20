@@ -855,10 +855,11 @@ mod tests {
 	use sp_runtime::traits::{Block as BlockT, DigestFor};
 	use sc_network::config::ProtocolConfig;
 	use parking_lot::Mutex;
-	use tokio::runtime::current_thread;
+	use tokio::runtime::Runtime;
 	use sp_keyring::sr25519::Keyring;
 	use sc_client::BlockchainEvents;
 	use sp_consensus_aura::sr25519::AuthorityPair;
+	use std::task::Poll;
 
 	type Error = sp_blockchain::Error;
 
@@ -979,7 +980,7 @@ mod tests {
 		let net = Arc::new(Mutex::new(net));
 		let mut import_notifications = Vec::new();
 
-		let mut runtime = current_thread::Runtime::new().unwrap();
+		let mut runtime = Runtime::new().unwrap();
 		let mut keystore_paths = Vec::new();
 		for (peer_id, key) in peers {
 			let mut net = net.lock();
@@ -1019,21 +1020,17 @@ mod tests {
 				false,
 				keystore,
 				sp_consensus::AlwaysCanAuthor,
-			)
-				.expect("Starts aura")
-				.unit_error()
-				.compat();
+			).expect("Starts aura");
 
 			runtime.spawn(aura);
 		}
 
-		runtime.spawn(futures01::future::poll_fn(move || {
-			net.lock().poll();
-			Ok::<_, ()>(futures01::Async::NotReady::<()>)
+		runtime.spawn(futures::future::poll_fn(move |cx| {
+			net.lock().poll(cx);
+			Poll::<()>::Pending
 		}));
 
-		runtime.block_on(future::join_all(import_notifications)
-			.unit_error().compat()).unwrap();
+		runtime.block_on(future::join_all(import_notifications));
 	}
 
 	#[test]

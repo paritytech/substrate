@@ -10,9 +10,8 @@ edition = "2018"
 sc-network = { version = "0.8", path = "../" }
 log = "0.4.8"
 parking_lot = "0.9.0"
-futures = "0.1.29"
-futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
-futures-timer = "0.4.0"
+futures = { version = "0.3.1", features = ["compat"] }
+futures-timer = "2.0.2"
 rand = "0.7.2"
 libp2p = { version = "0.14.0-alpha.1", default-features = false, features = ["libp2p-websocket"] }
 sp-consensus = { version = "0.8", path = "../../../primitives/consensus/common" }
@@ -27,4 +26,3 @@ env_logger = "0.7.0"
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }
 tempfile = "3.1.0"
-tokio = "0.1.22"

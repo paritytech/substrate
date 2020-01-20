@@ -47,10 +47,9 @@ sc-network-test = { version = "2.0.0", path = "../../network/test" }
 sc-service = { version = "2.0.0", path = "../../service" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 sc-block-builder = { version = "2.0.0", path = "../../block-builder" }
-tokio = "0.1.22"
+tokio = "0.2.9"
 env_logger = "0.7.0"
 tempfile = "3.1.0"
-futures01 = { package = "futures", version = "0.1" }
 
 [features]
 test-helpers = []
