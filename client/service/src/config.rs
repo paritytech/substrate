@@ -30,7 +30,7 @@ use sc_telemetry::TelemetryEndpoints;
 
 /// Service configuration.
 #[derive(Clone)]
-pub struct Configuration<C, G, E = NoExtension> {
+pub struct Configuration<G, E = NoExtension> {
 	/// Implementation name
 	pub impl_name: &'static str,
 	/// Implementation version
@@ -57,8 +57,6 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub pruning: PruningMode,
 	/// Chain configuration.
 	pub chain_spec: ChainSpec<G, E>,
-	/// Custom configuration.
-	pub custom: C,
 	/// Node name.
 	pub name: String,
 	/// Wasm execution method.
@@ -145,8 +143,7 @@ pub enum DatabaseConfig {
 	Custom(Arc<dyn KeyValueDB>),
 }
 
-impl<C, G, E> Configuration<C, G, E> where
-	C: Default,
+impl<G, E> Configuration<G, E> where
 	G: RuntimeGenesis,
 	E: Extension,
 {
@@ -169,7 +166,6 @@ impl<C, G, E> Configuration<C, G, E> where
 			},
 			state_cache_size: Default::default(),
 			state_cache_child_ratio: Default::default(),
-			custom: Default::default(),
 			pruning: PruningMode::default(),
 			wasm_method: WasmExecutionMethod::Interpreted,
 			execution_strategies: Default::default(),
@@ -198,7 +194,7 @@ impl<C, G, E> Configuration<C, G, E> where
 
 }
 
-impl<C, G, E> Configuration<C, G, E> {
+impl<G, E> Configuration<G, E> {
 	/// Returns full version string of this configuration.
 	pub fn full_version(&self) -> String {
 		full_version_from_strs(self.impl_version, self.impl_commit)

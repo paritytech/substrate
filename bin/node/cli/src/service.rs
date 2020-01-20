@@ -283,10 +283,10 @@ type ConcreteTransactionPool = sp_transaction_pool::MaintainableTransactionPool<
 >;
 
 /// A specialized configuration object for setting up the node..
-pub type NodeConfiguration<C> = Configuration<C, GenesisConfig, crate::chain_spec::Extensions>;
+pub type NodeConfiguration = Configuration<GenesisConfig, crate::chain_spec::Extensions>;
 
 /// Builds a new service for a full client.
-pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
+pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration)
 -> Result<
 	Service<
 		ConcreteBlock,
@@ -308,7 +308,7 @@ pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 }
 
 /// Builds a new service for a light client.
-pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
+pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration)
 -> Result<impl AbstractService, ServiceError> {
 	type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 	let inherent_data_providers = InherentDataProviders::new();

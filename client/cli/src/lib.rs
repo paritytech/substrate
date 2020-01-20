@@ -180,21 +180,22 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	Ok(())
 }
 
-pub fn run<F, G, E, F2, T, C>(
+pub fn run<F, G, E, F2, F3, T1, T2>(
 	core_params: CoreParams,
 	new_light: F2,
-	new_full: F2,
+	new_full: F3,
 	load_spec: F,
 	impl_name: &'static str,
 	version: &VersionInfo,
 ) -> error::Result<()>
 where
 	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	F2: FnOnce(Configuration<C, G, E>) -> Result<T, ()>,
+	F2: FnOnce(Configuration<G, E>) -> Result<T1, sc_service::error::Error>,
+	F3: FnOnce(Configuration<G, E>) -> Result<T2, sc_service::error::Error>,
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
-	T: AbstractService + std::marker::Unpin,
-	C: Default
+	T1: AbstractService + std::marker::Unpin,
+	T2: AbstractService + std::marker::Unpin,
 {
 	let full_version = sc_service::config::full_version_from_strs(
 		version.version,
@@ -365,7 +366,7 @@ where
 /// Returns a string displaying the node role, special casing the sentry mode
 /// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
 /// doesn't participate.
-pub fn display_role<A, B, C>(config: &Configuration<A, B, C>) -> String {
+pub fn display_role<G, E>(config: &Configuration<G, E>) -> String {
 	if config.sentry_mode {
 		"SENTRY".to_string()
 	} else {
@@ -407,14 +408,13 @@ impl<'a> ParseAndPrepare<'a> {
 	}
 }
 
-pub fn get_config<C, G, E, F>(
+pub fn get_config<G, E, F>(
 	core_params: &CoreParams,
 	spec_factory: F,
 	impl_name: &'static str,
 	version: &VersionInfo,
-) -> error::Result<Configuration<C, G, E>>
+) -> error::Result<Configuration<G, E>>
 where
-	C: Default,
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
@@ -478,7 +478,7 @@ pub struct ParseAndPrepareRun<'a> {
 
 impl<'a> ParseAndPrepareRun<'a> {
 	/// Runs the command and runs the main client.
-	pub fn run<C, G, CE, S, Exit, RS, E>(
+	pub fn run<G, CE, S, Exit, RS, E>(
 		self,
 		spec_factory: S,
 		run_service: RS,
@@ -486,10 +486,9 @@ impl<'a> ParseAndPrepareRun<'a> {
 	where
 		S: FnOnce(&str) -> Result<Option<ChainSpec<G, CE>>, String>,
 		E: Into<error::Error>,
-		C: Default,
 		G: RuntimeGenesis,
 		CE: ChainSpecExtension,
-		RS: FnOnce(RunCmd, Configuration<C, G, CE>) -> Result<(), E>
+		RS: FnOnce(RunCmd, Configuration<G, CE>) -> Result<(), E>
 	{
 		let config = create_run_node_config(
 			self.params.clone(), spec_factory, self.impl_name, self.version,
@@ -521,7 +520,7 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 		let mut spec = load_spec(&self.params.shared_params, spec_factory)?;
 
 		if spec.boot_nodes().is_empty() && !self.params.disable_default_bootnode {
-			let cfg = create_build_spec_config::<C, _, _>(
+			let cfg = create_build_spec_config(
 				&spec,
 				&self.params.shared_params,
 				self.version,
@@ -563,7 +562,7 @@ impl<'a> ParseAndPrepareExport<'a> {
 		exit: Exit,
 	) -> error::Result<()>
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
+		F: FnOnce(Configuration<G, E>) -> Result<B, error::Error>,
 		B: ServiceBuilderCommand,
 		<<<<B as ServiceBuilderCommand>::Block as BlockT>::Header as HeaderT>
 			::Number as FromStr>::Err: Debug,
@@ -627,7 +626,7 @@ impl<'a> ParseAndPrepareImport<'a> {
 		exit: Exit,
 	) -> error::Result<()>
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
+		F: FnOnce(Configuration<G, E>) -> Result<B, error::Error>,
 		B: ServiceBuilderCommand,
 		C: Default,
 		G: RuntimeGenesis,
@@ -686,7 +685,7 @@ impl<'a> CheckBlock<'a> {
 		_exit: Exit,
 	) -> error::Result<()>
 		where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-			F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
+			F: FnOnce(Configuration<G, E>) -> Result<B, error::Error>,
 			B: ServiceBuilderCommand,
 			<<B as ServiceBuilderCommand>::Block as BlockT>::Hash: FromStr,
 			C: Default,
@@ -733,7 +732,7 @@ impl<'a> ParseAndPreparePurge<'a> {
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		let config = create_config_with_db_path::<(), _, _, _>(
+		let config = create_config_with_db_path(
 			spec_factory, &self.params.shared_params, self.version
 		)?;
 		let db_path = match config.database {
@@ -789,7 +788,7 @@ impl<'a> ParseAndPrepareRevert<'a> {
 		spec_factory: S
 	) -> error::Result<()> where
 		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
+		F: FnOnce(Configuration<G, E>) -> Result<B, error::Error>,
 		B: ServiceBuilderCommand,
 		<<<<B as ServiceBuilderCommand>::Block as BlockT>::Header as HeaderT>
 			::Number as FromStr>::Err: Debug,
@@ -845,8 +844,8 @@ fn parse_ed25519_secret(hex: &String) -> error::Result<sc_network::config::Ed255
 }
 
 /// Fill the given `PoolConfiguration` by looking at the cli parameters.
-fn fill_transaction_pool_configuration<C, G, E>(
-	options: &mut Configuration<C, G, E>,
+fn fill_transaction_pool_configuration<G, E>(
+	options: &mut Configuration<G, E>,
 	params: TransactionPoolParams,
 ) -> error::Result<()> {
 	// ready queue
@@ -924,8 +923,8 @@ fn input_keystore_password() -> Result<String, String> {
 }
 
 /// Fill the password field of the given config instance.
-fn fill_config_keystore_password_and_path<C, G, E>(
-	config: &mut sc_service::Configuration<C, G, E>,
+fn fill_config_keystore_password_and_path<G, E>(
+	config: &mut sc_service::Configuration<G, E>,
 	cli: &RunCmd,
 ) -> Result<(), String> {
 	let password = if cli.password_interactive {
@@ -956,13 +955,12 @@ fn fill_config_keystore_password_and_path<C, G, E>(
 }
 
 /// Put block import CLI params into `config` object.
-pub fn fill_import_params<C, G, E>(
-	config: &mut Configuration<C, G, E>,
+pub fn fill_import_params<G, E>(
+	config: &mut Configuration<G, E>,
 	cli: &ImportParams,
 	role: sc_service::Roles,
 ) -> error::Result<()>
 	where
-		C: Default,
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 {
@@ -1010,11 +1008,10 @@ pub fn fill_import_params<C, G, E>(
 	Ok(())
 }
 
-fn create_run_node_config<C, G, E, S>(
+fn create_run_node_config<G, E, S>(
 	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo,
-) -> error::Result<Configuration<C, G, E>>
+) -> error::Result<Configuration<G, E>>
 where
-	C: Default,
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
@@ -1152,11 +1149,10 @@ fn interface_str(
 }
 
 /// Creates a configuration including the database path.
-pub fn create_config_with_db_path<C, G, E, S>(
+pub fn create_config_with_db_path<G, E, S>(
 	spec_factory: S, cli: &SharedParams, version: &VersionInfo,
-) -> error::Result<Configuration<C, G, E>>
+) -> error::Result<Configuration<G, E>>
 where
-	C: Default,
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
@@ -1178,18 +1174,17 @@ where
 }
 
 /// Creates a configuration including the base path and the shared params
-fn create_build_spec_config<C, G, E>(
+fn create_build_spec_config<G, E>(
 	spec: &ChainSpec<G, E>,
 	cli: &SharedParams,
 	version: &VersionInfo,
-) -> error::Result<Configuration<C, G, E>>
+) -> error::Result<Configuration<G, E>>
 where
-	C: Default,
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 {
 	let base_path = base_path(&cli, version);
-	let cfg = sc_service::Configuration::<C,_,_>::default_with_spec_and_base_path(
+	let cfg = sc_service::Configuration::default_with_spec_and_base_path(
 		spec.clone(),
 		Some(base_path),
 	);

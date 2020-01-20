@@ -87,7 +87,7 @@ pub fn run<I, T, E>(args: I, version: sc_cli::VersionInfo) -> error::Result<()> 
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
-	type Config<A, B> = Configuration<(), A, B>;
+	type Config<A, B> = Configuration<A, B>;
 
 	let opt = Cli::from_iter(args);
 	match opt {
