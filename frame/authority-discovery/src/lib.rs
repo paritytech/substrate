@@ -109,26 +109,18 @@ mod tests {
 	pub struct Test;
 	impl Trait for Test {}
 
-	pub struct TestOnSessionEnding;
-	impl pallet_session::OnSessionEnding<AuthorityId> for TestOnSessionEnding {
-		fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<AuthorityId>> {
-			None
-		}
-	}
-
 	parameter_types! {
 		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 	}
 
 	impl pallet_session::Trait for Test {
-		type OnSessionEnding = TestOnSessionEnding;
+		type SessionManager = ();
 		type Keys = UintAuthorityId;
 		type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 		type SessionHandler = TestSessionHandler;
 		type Event = ();
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
-		type SelectInitialValidators = ();
 		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	}
 
