@@ -41,6 +41,15 @@ pub struct SupervisorFuncRef(Func);
 /// call, whereas the state is maintained for the duration of a Wasm runtime call, which may make
 /// many different host calls that must share state.
 pub struct HostState {
+	// We need some interior mutability here since the host state is shared between all host
+	// function handlers and the wasmtime backend's `impl WasmRuntime`.
+	//
+	// Furthermore, because of recursive calls (e.g. runtime can create and call an sandboxed
+	// instance which in turn can call the runtime back) we have to be very careful with borrowing
+	// those.
+	//
+	// Basically, most of the interactions should do temporary borrow immediately releasing the
+	// borrow after performing necessary queries/changes.
 	sandbox_store: RefCell<sandbox::Store<SupervisorFuncRef>>,
 	allocator: RefCell<FreeingBumpHeapAllocator>,
 	instance: InstanceWrapper,
