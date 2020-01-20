@@ -2896,3 +2896,6 @@ fn zero_slash_keeps_nominators() {
 		assert!(nominations.submitted_in >= last_slash);
 	});
 }
+
+// TODO TODO: test migration
+// TODO TODO: test asynchronous creation and deletion of session

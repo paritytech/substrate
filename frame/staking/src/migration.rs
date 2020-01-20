@@ -27,12 +27,12 @@ pub const CURRENT_VERSION: VersionNumber = 2;
 pub mod inner {
 	use crate::{
 		Store, Module, Trait, EraRewardPoints, SessionInterface, BalanceOf, StakingLedger,
-		StakingLedgerV1, // TODO TODO: move this from staking to here
+		UnlockChunk,
 	};
 	use frame_support::{
 		StorageLinkedMap, StoragePrefixedMap, StorageValue, StorageDoubleMap, StorageMap,
 	};
-	use codec::{Encode, Decode};
+	use codec::{Encode, Decode, HasCompact};
 	use sp_std::vec::Vec;
 	use super::{CURRENT_VERSION, VersionNumber};
 	use sp_runtime::traits::Zero;
@@ -117,10 +117,32 @@ pub mod inner {
 		}
 	}
 
-	// migrate storage from v1 to v2:
-	// * TODO TODO: doc
+	// migrate storage from v2 to v3:
+	// * create:
+	//   * ActiveEraStart
+	//   * ErasRewardPoints
+	//   * ActiveEra
+	//   * ErasStakers,
+	//   * ErasValidatorPrefs
+	//   * ErasTotalStake
+	//   * StakingLedger
+	// * removal of:
+	//   * SlotStake
+	//   * CurrentElected
+	//   * CurrentEraStart
+	//   * CurrentEraStartSessionIndex
+	//   * CurrentEraPointsEarned
 	pub fn to_v3<T: Trait>(version: &mut VersionNumber) {
-		// TODO TODO: move stakingledgerV1 here
+		#[derive(Encode, Decode)]
+		struct StakingLedgerV1<AccountId, Balance: HasCompact> {
+			stash: AccountId,
+			#[codec(compact)]
+			total: Balance,
+			#[codec(compact)]
+			active: Balance,
+			unlocking: Vec<UnlockChunk<Balance>>,
+		}
+
 		if *version != 2 { return }
 		*version += 1;
 

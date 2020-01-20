@@ -371,17 +371,6 @@ pub struct UnlockChunk<Balance: HasCompact> {
 	era: EraIndex,
 }
 
-/// Deprecated. Used for migration only.
-#[derive(Encode, Decode)]
-struct StakingLedgerV1<AccountId, Balance: HasCompact> {
-	stash: AccountId,
-	#[codec(compact)]
-	total: Balance,
-	#[codec(compact)]
-	active: Balance,
-	unlocking: Vec<UnlockChunk<Balance>>,
-}
-
 /// The ledger of a (bonded) stash.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct StakingLedger<AccountId, Balance: HasCompact> {
@@ -1582,9 +1571,6 @@ impl<T: Trait> Module<T> {
 	fn new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		// Increment current era.
 		let current_era = CurrentEra::mutate(|s| { *s += 1; *s });
-		// TODO TODO: either start_session_index strictly increase or we must remove old era overriden
-		// TODO TODO: update doc or code to make this correct
-		// TODO TODO: this should be closed by pallet-session API change.
 		ErasStartSessionIndex::insert(&current_era, &start_session_index);
 
 		// Clean old era information.
