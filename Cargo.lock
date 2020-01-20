@@ -6973,7 +6973,7 @@ version = "2.0.0"
 
 [[package]]
 name = "substrate-wasm-builder"
-version = "1.0.8"
+version = "1.0.9"
 dependencies = [
  "atty 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "build-helper 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
