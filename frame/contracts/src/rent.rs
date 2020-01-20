@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo, Trait, AliveContractInfo};
+use crate::{Module, RawEvent, BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo,
+	Trait, AliveContractInfo};
 use sp_runtime::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
 	SaturatedConversion};
 use frame_support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason, OnUnbalanced};
@@ -101,6 +102,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		// The contract cannot afford to leave a tombstone, so remove the contract info altogether.
 		<ContractInfoOf<T>>::remove(account);
 		child::kill_storage(&contract.trie_id, contract.child_trie_unique_id());
+		<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), false));
 		return (RentOutcome::Evicted, None);
 	}
 
@@ -160,6 +162,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 
 		child::kill_storage(&contract.trie_id, contract.child_trie_unique_id());
 
+		<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), true));
+
 		return (RentOutcome::Evicted, Some(tombstone_info));
 	}
 
@@ -181,8 +185,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 /// Make account paying the rent for the current block number
 ///
 /// NOTE: This function acts eagerly.
-pub fn pay_rent<T: Trait>(account: &T::AccountId) -> (RentOutcome, Option<ContractInfo<T>>) {
-	try_evict_or_and_pay_rent::<T>(account, Zero::zero(), true)
+pub fn pay_rent<T: Trait>(account: &T::AccountId) -> Option<ContractInfo<T>> {
+	try_evict_or_and_pay_rent::<T>(account, Zero::zero(), true).1
 }
 
 /// Evict the account if it should be evicted at the given block number.

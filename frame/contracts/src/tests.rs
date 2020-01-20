@@ -1143,7 +1143,7 @@ fn call_removed_contract() {
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: MetaEvent::contract(RawEvent::Evicted(BOB)),
+				event: MetaEvent::contract(RawEvent::Evicted(BOB, true)),
 				topics: vec![],
 			},
 		]);
@@ -1389,7 +1389,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::contract(
-					RawEvent::Evicted(BOB.clone())
+					RawEvent::Evicted(BOB.clone(), true)
 				),
 				topics: vec![],
 			},
@@ -1452,7 +1452,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 					assert_eq!(System::events(), vec![
 						EventRecord {
 							phase: Phase::ApplyExtrinsic(0),
-							event: MetaEvent::contract(RawEvent::Evicted(BOB)),
+							event: MetaEvent::contract(RawEvent::Evicted(BOB, true)),
 							topics: vec![],
 						},
 						EventRecord {

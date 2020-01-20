@@ -356,15 +356,7 @@ where
 		// Assumption: pay_rent doesn't collide with overlay because
 		// pay_rent will be done on first call and dest contract and balance
 		// cannot be changed before the first call
-		let (rent_outcome, contract_info) = rent::pay_rent::<T>(&dest);
-
-		// Deposit an event to indicate contract eviction.
-		if rent_outcome == rent::RentOutcome::Evicted {
-			self.deferred.push(DeferredAction::DepositEvent {
-				event: RawEvent::Evicted(dest.clone()),
-				topics: Vec::new(),
-			});
-		}
+		let contract_info = rent::pay_rent::<T>(&dest);
 
 		// Calls to dead contracts always fail.
 		if let Some(ContractInfo::Tombstone(_)) = contract_info {

@@ -671,7 +671,6 @@ decl_module! {
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
 			if rent::try_evict::<T>(&dest, handicap) == rent::RentOutcome::Evicted {
 				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get())?;
-				Self::deposit_event(RawEvent::Evicted(dest));
 			}
 		}
 
@@ -903,7 +902,12 @@ decl_event! {
 		Instantiated(AccountId, AccountId),
 
 		/// Contract has been evicted and is now in tombstone state.
-		Evicted(AccountId),
+		///
+		/// # Params
+		///
+		/// - `contract`: `AccountId`: The account ID of the evicted contract.
+		/// - `tombstone`: `bool`: True if the evicted contract left behind a tombstone.
+		Evicted(AccountId, bool),
 
 		/// Restoration for a contract has been initiated.
 		///
