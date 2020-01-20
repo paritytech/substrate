@@ -140,7 +140,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 					// ignore temporary values (values that have null value at the end of operation
 					// AND are not in storage at the beginning of operation
 					if let Some(sk) = storage_key.as_ref() {
-						if !changes.child_storage_n(sk, k).map(|v| v.0.is_some()).unwrap_or_default() {
+						if !changes.child_storage_once(sk, k).map(|v| v.0.is_some()).unwrap_or_default() {
 							if let Some(child_info) = child_info { 
 								if !backend.exists_child_storage(sk, child_info, k)
 									.map_err(|e| format!("{}", e))? {
@@ -149,9 +149,9 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 							}
 						}
 					} else {
-						// we use `storage_n` as this is called only a limited number of time
+						// we use `storage_once` because this is called a limited number of time
 						// per block processing.
-						if !changes.storage_n(k).map(|v| v.0.is_some()).unwrap_or_default() {
+						if !changes.storage_once(k).map(|v| v.0.is_some()).unwrap_or_default() {
 							if !backend.exists_storage(k).map_err(|e| format!("{}", e))? {
 								return Ok(map);
 							}

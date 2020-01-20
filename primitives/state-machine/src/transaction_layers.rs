@@ -18,14 +18,15 @@
 
 
 #[derive(Debug, Clone, Eq, PartialEq, Copy)]
-/// State of a transactional layer.
+/// Possible states of a transactional layer.
 pub(crate) enum TransactionState {
 	/// Data is under change and can still be dropped.
 	Pending,
-	/// Same as pending but does count as a transaction start.
+	/// Same as `Pending` but does count as a transaction start.
 	TxPending,
-	/// Data pointing to this indexed historic state should
-	/// not be returned and can be removed.
+	/// The transaction has been discarded.
+	/// Data from a `LayerEntry` pointing to this layer state should
+	/// not be returned and can be remove.
 	Dropped,
 }
 
@@ -34,19 +35,17 @@ pub(crate) enum TransactionState {
 #[cfg_attr(any(test, feature = "test-helpers"), derive(PartialEq))]
 pub struct States {
 	history: Vec<TransactionState>,
-	// Keep track of the transaction positions.
-	// This is redundant with `history`.
-	// This is only use to precalculate the result
-	// of a backward iteration to find the start
-	// of a transactional window (function
-	// `transaction_start_windows`).
-	//
-	// At many place we could use this instead
-	// of the `TxPending` state, but `TxPending`
-	// state is favored, except for `start_windows`
-	// case.
+	// Keep track of the latest start of transaction
+	// for any `LayerEntry`.
+	// This information is redundant as it could be
+	// calculated by iterating backward over `history`
+	// field.
+	// Managing this cache allow use to have
+	// an implementation of `transaction_start_windows`
+	// function that is constant time.
 	start_transaction_window: Vec<usize>,
-	// commit is the position in history of the latest committed.
+	// `commit` stores the index of the layer for which a previous
+	// prospective commit occurs.
 	commit: usize,
 }
 
@@ -61,15 +60,14 @@ impl Default for States {
 }
 
 impl States {
-	/// Get reference of state, that is enough
-	/// information to query historical
-	/// data.
+	/// Get reference of states, this is enough
+	/// information to query a `Layers` of values.
 	pub(crate) fn as_ref(&self) -> &[TransactionState] {
 		self.history.as_ref()
 	}
 
 	/// Current number of inner states.
-	pub fn num_states(&self) -> usize {
+	pub(crate) fn num_states(&self) -> usize {
 		self.history.len()
 	}
 
@@ -82,14 +80,16 @@ impl States {
 	/// index.
 	/// This can only work if there was no eager
 	/// garbage collection (eager collection can
-	/// change interval between `old_committed` and
-	/// `self.commit`).
+	/// drop `LayersEntry` in the interval between
+	/// `old_committed` and `self.commit` and moving
+	/// back the committed cursor is therefore not
+	/// allowed in this case).
 	pub fn unchecked_rollback_committed(&mut self, old_committed: usize) {
 		self.commit = old_committed;
 		self.discard_prospective();
 	}
 
-	/// Build any state for testing only.
+	/// Instantiate a random state, only for testing.
 	#[cfg(test)]
 	pub(crate) fn test_vector(
 		history: Vec<TransactionState>,
@@ -99,8 +99,8 @@ impl States {
 		States { history, start_transaction_window, commit }
 	}
 
-	/// Discard prospective changes to state.
-	/// That is revert all transaction up to the committed index.
+	/// Discard prospective changes.
+	/// This action invalidates all transaction state up to the committed index.
 	pub fn discard_prospective(&mut self) {
 		for i in self.commit .. self.history.len() {
 			self.history[i] = TransactionState::Dropped;
@@ -110,7 +110,10 @@ impl States {
 		self.start_transaction_window.push(self.commit);
 	}
 
-	/// Commit prospective changes to state.
+	/// Commit prospective changes.
+	/// It push the committed pointer at the very
+	/// end of the state, blocking discard of any
+	/// current state.
 	pub fn commit_prospective(&mut self) {
 		self.commit = self.history.len();
 		self.history.push(TransactionState::Pending);
@@ -127,7 +130,8 @@ impl States {
 	}
 
 	/// Discard a transactional layer.
-	/// A transaction is always running (history always end with pending).
+	/// A transaction is always running, so this also append
+	/// a new pending transactional layer to the state.
 	pub fn discard_transaction(&mut self) {
 		let mut i = self.history.len();
 		while i > self.commit {
@@ -153,6 +157,11 @@ impl States {
 	/// Commit a transactional layer.
 	pub fn commit_transaction(&mut self) {
 		let mut i = self.history.len();
+/* TODO test and fuzz with this implementation (replaces while loop).
+	let latest_transaction = self.start_transaction_window[i - 1];
+		if latest_transaction > self.commit {
+			self.history[latest_transaction] = TransactionState::Pending;
+		} */
 		while i > self.commit {
 			i -= 1;
 			match self.history[i] {
@@ -164,8 +173,10 @@ impl States {
 				},
 			}
 		}
+		// TODO test without this push
 		self.history.push(TransactionState::Pending);
 		self.start_transaction_window.truncate(i);
+		// self.start_transaction_window.truncate(latest_transaction);
 		let previous = self.start_transaction_window.last()
 			.cloned().unwrap_or(self.commit);
 		self.start_transaction_window.resize(self.history.len(), previous);
@@ -300,6 +311,7 @@ impl<V> Layers<V> {
 			match states.history[state_index] {
 				TransactionState::TxPending => {
 					if state_index >= start_transaction_window {
+						debug_assert!(state_index == start_transaction_window); // TODO test replace this condition
 						previous_switch = Some(index);
 					} else {
 						if result.is_none() {
@@ -314,6 +326,8 @@ impl<V> Layers<V> {
 					} else {
 						if result.is_none() {
 							result = Some((index, state_index));
+							// continue iteration to find all `LayersEntry` from this
+							// start_transaction_window.
 							start_transaction_window = transaction_start_windows(states, state_index);
 						} else {
 							break;
@@ -352,6 +366,9 @@ impl<V> Layers<V> {
 				| state @ TransactionState::Pending => {
 					if state_index < states.commit && index > prune_index {
 						prune_index = index;
+						// TODO break ?? and remove condition?? and later in break
+						// condition do not if state_index < states.commit, just do
+						// not break!!
 					}
 
 					if state_index >= start_transaction_window {
@@ -377,6 +394,7 @@ impl<V> Layers<V> {
 			}
 		}
 		let deleted = if prune_to_commit && prune_index > 0 && result.is_some() {
+			// Remove values before first value needed to read committed state.
 			self.remove_until(prune_index);
 			prune_index
 		} else {
@@ -396,19 +414,23 @@ impl<V> Layers<V> {
 	// not needed (before another committed value).
 	// `previous_switch` is the index to the first unneeded value.
 	//
-	// An index offset is here in case some content was `deleted` before
-	// this function call.
+	// An index offset is here in case some content was `deleted` from
+	// the `Layers` head without updating the input indexes.
 	fn drop_last_values(
 		&mut self,
 		result: Option<(usize, usize)>,
 		previous_switch: Option<usize>,
+		// TODO remove it from result before call.
 		deleted: usize,
 	) -> Option<LayerEntry<&mut V>> {
 		if let Some((index, state_index)) = result {
+			// Remove terminal values.
 			if index + 1 - deleted < self.0.len() {
 				self.0.truncate(index + 1 - deleted);
 			}
 			if let Some(switch_index) = previous_switch {
+				// We need to remove some value in between
+				// transaction start and this latest value.
 				if let Some(mut value) = self.0.pop() {
 					self.0.truncate(switch_index - deleted);
 					value.index = state_index;
@@ -511,6 +533,9 @@ impl<V> Layers<V> {
 
 /// A default sample configuration to manage garbage collection
 /// triggering.
+///
+/// With this default values it should be very unlikelly that gc is needed
+/// during a block processing for most use case.
 pub(crate) const DEFAULT_GC_CONF: GCConfiguration = GCConfiguration {
 	trigger_transaction_gc: 1_000_000,
 	trigger_commit_gc: 100_000,
@@ -518,16 +543,17 @@ pub(crate) const DEFAULT_GC_CONF: GCConfiguration = GCConfiguration {
 };
 
 /// Garbage collection configuration.
-/// It is designed to listen on two different operation, transaction
-/// and commit.
-/// It match transcational semantic with transaction for transaction
-/// operation and commit for prospective operation.
-/// Considering transaction can be manipulated in extrinsic, this option
-/// is quite unsafe and shoudl be use with care (the default value is
-/// explicitelly very high).
-/// More generally it should be very unlikelly that gc is needed
-/// during a block processing for most use case.
+/// It is designed to listen on two different event, transaction
+/// or commit.
+/// Transaction operations are `discard_transaction` and `commit_transaction`.
+/// Prospective operations are `discard_prospective` and `commit_prospective`.
 ///
+/// Transaction can be call at any time, while prospective operation are only
+/// call between extrinsics, therefore transaction treshold should be higher
+/// than commit for being more frequent.
+///
+/// It measures operation, that is write or delete storage, giving an idea
+/// of a possible maximum size of used memory.
 /// This is not a very good measurement and should be replace by
 /// heap measurement or other metrics, at this point the gc even
 /// if tested should not be required.

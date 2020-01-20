@@ -256,7 +256,9 @@ pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 
 	// prepare configuration range - we already know zero block. Current block may be the end block if configuration
 	// has been changed in this block
-	let is_config_changed = match changes.storage_n(sp_core::storage::well_known_keys::CHANGES_TRIE_CONFIG) {
+	let is_config_changed = match changes.storage_once(
+		sp_core::storage::well_known_keys::CHANGES_TRIE_CONFIG
+	) {
 		Some((Some(new_config), _)) => new_config != &state.config.encode()[..],
 		Some((None, _)) => true,
 		None => false,

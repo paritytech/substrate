@@ -431,10 +431,11 @@ impl OverlayedChanges {
 		self.collect_extrinsics = collect_extrinsics;
 	}
 
-	/// Same as `storage` but to use carefully as it does not clean
-	/// tail values and complexity remain the same for following calls.
-	/// The return boolean indicates if a tail value iteration was required
-	pub fn storage_n(&self, key: &[u8]) -> Option<(Option<&[u8]>, bool)> {
+	/// Same as `child_storage` but does not update value. It should
+	/// consequently be used only when the query is bounded to a bounded
+	/// number of call before memory get drop.
+	/// There returned boolean indicates if there is a query overhead.
+	pub fn storage_once(&self, key: &[u8]) -> Option<(Option<&[u8]>, bool)> {
 		if let Some(overlay_value) = self.changes.top.get(key) {
 			if let (Some(o_value), tail) = overlay_value.get(self.changes.states.as_ref()) {
 				return Some((o_value.value.as_ref().map(|v| v.as_slice()), tail))
@@ -443,9 +444,15 @@ impl OverlayedChanges {
 		None
 	}
 
-	/// Same as `child_storage` but to use carefully as it does not clean
-	/// tail values and complexity remain the same for following calls.
-	pub fn child_storage_n(&self, storage_key: &[u8], key: &[u8]) -> Option<(Option<&[u8]>, bool)> {
+	/// Same as `child_storage` but does not update value. It should
+	/// consequently be used only when the query is bounded to a bounded
+	/// number of call before memory get drop.
+	/// There returned boolean indicates if there is a query overhead.
+	pub fn child_storage_once(
+		&self,
+		storage_key: &[u8],
+		key: &[u8],
+	) -> Option<(Option<&[u8]>, bool)> {
 		if let Some(map) = self.changes.children.get(storage_key) {
 			if let Some(overlay_value) = map.0.get(key) {
 				if let (Some(o_value), tail) = overlay_value.get(self.changes.states.as_ref()) {
@@ -743,8 +750,6 @@ impl OverlayedChanges {
 	fn extrinsic_index(&mut self) -> Option<u32> {
 		match self.collect_extrinsics {
 			true => Some(
-				// this call to storage is a map access for something that is just
-				// a counter and should be a field of the struct TODO
 				self.storage(EXTRINSIC_INDEX)
 					.and_then(|idx| idx.and_then(|idx| Decode::decode(&mut &*idx).ok()))
 					.unwrap_or(NO_EXTRINSIC_INDEX)),
@@ -762,9 +767,8 @@ impl OverlayedChanges {
 	}
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	/// Count the number of key value pairs, at every latest history.
-	/// Should only be use for debugging or testing, this is slow
-	/// and technical.
+	/// Count the number of pending key value pairs.
+	/// This is slow and should only be use for debugging or testing.
 	pub fn top_count_keyvalue_pair(&self) -> usize {
 		let mut result = 0;
 		for (_, v) in self.changes.top.iter() {
@@ -773,9 +777,11 @@ impl OverlayedChanges {
 		result
 	}
 
-	/// costy garbage collection of unneeded memory from
-	/// key values. Eager set to true will remove more
-	/// key value but allows more costy memory changes.
+	/// Garbage collection of unneeded memory from
+	/// every `Layers` of values in regard to current transactional state.
+	/// If `eager` parameter is true, the garbage collection will go past
+	/// the latest discarded and committed transaction and reclaim the maximal
+	/// size of memory at an additional computational cost.
 	pub fn gc(&mut self, eager: bool) {
 		self.changes.gc(eager);
 	}
