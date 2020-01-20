@@ -671,6 +671,7 @@ decl_module! {
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
 			if rent::try_evict::<T>(&dest, handicap) == rent::RentOutcome::Evicted {
 				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get())?;
+				Self::deposit_event(RawEvent::Evicted(dest));
 			}
 		}
 
@@ -786,7 +787,12 @@ impl<T: Trait> Module<T> {
 					rent_allowance,
 					delta,
 				} => {
-					let _result = Self::restore_to(donor, dest, code_hash, rent_allowance, delta);
+					let result = Self::restore_to(
+						donor.clone(), dest.clone(), code_hash.clone(), rent_allowance.clone(), delta
+					);
+					Self::deposit_event(
+						RawEvent::Restored(donor, dest, code_hash, rent_allowance, result.is_ok())
+					);
 				}
 			}
 		});
@@ -895,6 +901,22 @@ decl_event! {
 
 		/// Contract deployed by address at the specified address.
 		Instantiated(AccountId, AccountId),
+
+		/// Contract has been evicted and is now in tombstone state.
+		Evicted(AccountId),
+
+		/// Contract has successfully been restored from tombstone state to a
+		/// ctive.
+		///
+		///
+		/// # Params
+		///
+		/// - `donor`: `AccountId`: Account ID of the restoring contract
+		/// - `dest`: `AccountId`: Account ID of the restored contract
+		/// - `code_hash`: `Hash`: Code hash of the restored contract
+		/// - `rent_allowance: `Balance`: Rent allowance of the restored contract
+		/// - `success`: `bool`: True if the restoration was successful
+		Restored(AccountId, AccountId, Hash, Balance, bool),
 
 		/// Code with the specified hash has been stored.
 		CodeStored(Hash),
