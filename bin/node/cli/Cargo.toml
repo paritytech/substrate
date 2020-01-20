@@ -31,7 +31,7 @@ hex-literal = "0.2.1"
 jsonrpc-core = "14.0.3"
 log = "0.4.8"
 rand = "0.7.2"
-structopt = "=0.3.7"
+structopt = "=0.3.8"
 
 # primitives
 sp-authority-discovery = { version = "2.0.0",  path = "../../../primitives/authority-discovery" }
@@ -83,7 +83,6 @@ node-executor = { version = "2.0.0", path = "../executor" }
 # CLI-specific dependencies
 tokio = { version = "0.1.22", optional = true }
 sc-cli = { version = "2.0.0", optional = true, path = "../../../client/cli" }
-ctrlc = { version = "3.1.3", features = ["termination"], optional = true }
 node-transaction-factory = { version = "2.0.0", optional = true, path = "../transaction-factory" }
 
 # WASM-specific dependencies
@@ -101,7 +100,7 @@ tempfile = "3.1.0"
 [build-dependencies]
 sc-cli = { version = "2.0.0", package = "sc-cli", path = "../../../client/cli" }
 build-script-utils = { version = "2.0.0", package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
-structopt = "=0.3.7"
+structopt = "=0.3.8"
 vergen = "3.0.4"
 
 [features]
@@ -115,7 +114,6 @@ cli = [
 	"sc-cli",
 	"node-transaction-factory",
 	"tokio",
-	"ctrlc",
 	"sc-service/rocksdb",
 	"node-executor/wasmi-errno",
 ]

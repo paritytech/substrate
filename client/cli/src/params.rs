@@ -17,7 +17,7 @@
 use crate::traits::GetSharedParams;
 
 use std::{str::FromStr, path::PathBuf};
-use structopt::{StructOpt, StructOptInternal, clap::{arg_enum, App, AppSettings, SubCommand, Arg}};
+use structopt::{StructOpt, clap::{arg_enum, App}};
 
 pub use crate::execution_strategy::ExecutionStrategy;
 
@@ -852,6 +852,22 @@ pub enum CoreParams {
 
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
+}
+
+impl CoreParams {
+	pub fn get_shared_params(&self) -> SharedParams {
+		use CoreParams::*;
+
+		match self {
+			Run(params) => params.shared_params,
+			BuildSpec(params) => params.shared_params,
+			ExportBlocks(params) => params.shared_params,
+			ImportBlocks(params) => params.shared_params,
+			CheckBlock(params) => params.shared_params,
+			Revert(params) => params.shared_params,
+			PurgeChain(params) => params.shared_params,
+		}
+	}
 }
 
 /// A special commandline parameter that expands to nothing.
