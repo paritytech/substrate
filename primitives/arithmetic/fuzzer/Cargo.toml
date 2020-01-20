@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 sp-arithmetic = { version = "2.0.0", path = ".." }
-honggfuzz = "0.5"
+honggfuzz = { path = "../../../../honggfuzz-rs" }
 primitive-types = "0.6"
 num-bigint = "0.2"
 num-traits = "0.2"

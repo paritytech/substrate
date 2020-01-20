@@ -583,6 +583,8 @@ pub enum OffchainElectionStatus<BlockNumber> {
 	Received,
 }
 
+impl OffchainElectionStatus
+
 impl<BlockNumber> Default for OffchainElectionStatus<BlockNumber> {
 	fn default() -> Self {
 		Self::None
