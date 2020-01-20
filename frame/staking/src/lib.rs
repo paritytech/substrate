@@ -104,7 +104,8 @@
 //! The **reward and slashing** procedure is the core of the Staking module, attempting to _embrace
 //! valid behavior_ while _punishing any misbehavior or lack of availability_.
 //!
-//! Reward must be claimed by stakers for each era before it gets too old by $HISTORY_DEPTH.
+//! Reward must be claimed by stakers for each era before it gets too old by $HISTORY_DEPTH using
+//! `payout_nominator` and `payout_validator` calls.
 //!
 //! Slashing can occur at any point in time, once misbehavior is reported. Once slashing is
 //! determined, a value is deducted from the balance of the validator and all the nominators who
@@ -1312,13 +1313,16 @@ decl_module! {
 			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
 		}
 
-		/// Make one staker's payout for one era.
+		/// Make one nominator's payout for one era.
 		///
-		/// - `who` is the nominator to pay out.
+		/// - `who` is the controller account of the nominator to pay out.
 		/// - `era` may not be lower than one following the most recently paid era. If it is higher,
 		///   then it indicates an instruction to skip the payout of all previous eras.
 		/// - `validators` is the list of all validators that `who` had exposure to during `era`.
 		///   If it is incomplete, then less than the full reward will be paid out.
+		///
+		/// WARNING: once an era is payed for a validator such validator can't claim the payout of
+		/// previous era.
 		///
 		/// WARNING: Incorrect arguments here can result in loss of payout. Be very careful.
 		///
@@ -1336,11 +1340,14 @@ decl_module! {
 			Self::do_payout_nominator(who, era, validators)
 		}
 
-		/// Make one staker's payout for one era.
+		/// Make one validator's payout for one era.
 		///
-		/// - `who` is the nominator to pay out.
+		/// - `who` is the controller account of the validator to pay out.
 		/// - `era` may not be lower than one following the most recently paid era. If it is higher,
 		///   then it indicates an instruction to skip the payout of all previous eras.
+		///
+		/// WARNING: once an era is payed for a validator such validator can't claim the payout of
+		/// previous era.
 		///
 		/// WARNING: Incorrect arguments here can result in loss of payout. Be very careful.
 		fn payout_validator(origin, era: EraIndex) -> DispatchResult {
