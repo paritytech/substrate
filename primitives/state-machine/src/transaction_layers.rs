@@ -156,26 +156,12 @@ impl States {
 
 	/// Commit a transactional layer.
 	pub fn commit_transaction(&mut self) {
-		let mut i = self.history.len();
-/* TODO test and fuzz with this implementation (replaces while loop).
-	let latest_transaction = self.start_transaction_window[i - 1];
+		let latest_transaction = self.start_transaction_window[self.history.len() - 1];
 		if latest_transaction > self.commit {
 			self.history[latest_transaction] = TransactionState::Pending;
-		} */
-		while i > self.commit {
-			i -= 1;
-			match self.history[i] {
-				TransactionState::Pending
-				| TransactionState::Dropped => (),
-				TransactionState::TxPending => {
-					self.history[i] = TransactionState::Pending;
-					break;
-				},
-			}
 		}
-		// TODO test without this push
 		self.history.push(TransactionState::Pending);
-		self.start_transaction_window.truncate(i);
+		self.start_transaction_window.truncate(latest_transaction);
 		// self.start_transaction_window.truncate(latest_transaction);
 		let previous = self.start_transaction_window.last()
 			.cloned().unwrap_or(self.commit);
@@ -311,11 +297,10 @@ impl<V> Layers<V> {
 			match states.history[state_index] {
 				TransactionState::TxPending => {
 					if state_index >= start_transaction_window {
-						debug_assert!(state_index == start_transaction_window); // TODO test replace this condition
 						previous_switch = Some(index);
 					} else {
 						if result.is_none() {
-							result = Some((index, state_index));
+							result = Some((index + 1, state_index));
 						}
 					}
 					break;
@@ -325,7 +310,7 @@ impl<V> Layers<V> {
 						previous_switch = Some(index);
 					} else {
 						if result.is_none() {
-							result = Some((index, state_index));
+							result = Some((index + 1, state_index));
 							// continue iteration to find all `LayersEntry` from this
 							// start_transaction_window.
 							start_transaction_window = transaction_start_windows(states, state_index);
@@ -337,7 +322,7 @@ impl<V> Layers<V> {
 				TransactionState::Dropped => (),
 			}
 		}
-		self.drop_last_values(result, previous_switch, 0)
+		self.drop_last_values(result, previous_switch)
 	}
 
 	/// Method to prune regarding a full state.
@@ -354,7 +339,7 @@ impl<V> Layers<V> {
 		if self_len == 0 {
 			return None;
 		}
-		let mut prune_index = 0;
+		let mut head_prune_index = 0;
 		debug_assert!(states.history.len() >= self_len);
 		let mut result = None;
 		let mut start_transaction_window = usize::max_value();
@@ -364,43 +349,37 @@ impl<V> Layers<V> {
 			match states.history[state_index] {
 				state @ TransactionState::TxPending
 				| state @ TransactionState::Pending => {
-					if state_index < states.commit && index > prune_index {
-						prune_index = index;
-						// TODO break ?? and remove condition?? and later in break
-						// condition do not if state_index < states.commit, just do
-						// not break!!
-					}
-
 					if state_index >= start_transaction_window {
 						previous_switch = Some(index);
 					} else {
 						if result.is_none() {
-							result = Some((index, state_index));
+							result = Some((index + 1, state_index));
 							if state == TransactionState::Pending {
 								start_transaction_window = transaction_start_windows(states, state_index);
 							}
 						} else {
-							if prune_to_commit {
-								if state_index < states.commit {
-									break;
-								}
-							} else {
+							if !prune_to_commit {
 								break;
 							}
 						}
+					}
+
+					if state_index < states.commit {
+						head_prune_index = index;
+						break;
 					}
 				},
 				TransactionState::Dropped => (),
 			}
 		}
-		let deleted = if prune_to_commit && prune_index > 0 && result.is_some() {
+		if prune_to_commit && head_prune_index > 0 && result.is_some() {
 			// Remove values before first value needed to read committed state.
-			self.remove_until(prune_index);
-			prune_index
-		} else {
-			0
-		};
-		self.drop_last_values(result, previous_switch, deleted)
+			self.remove_until(head_prune_index);
+			previous_switch = previous_switch.map(|switch| switch - head_prune_index);
+			result = result
+				.map(|(index, state_index)| (index - head_prune_index, state_index));
+		}
+		self.drop_last_values(result, previous_switch)
 	}
 
 	// Function used to remove all last values for `get_mut` and
@@ -413,32 +392,27 @@ impl<V> Layers<V> {
 	// It also does remove values on committed state that are
 	// not needed (before another committed value).
 	// `previous_switch` is the index to the first unneeded value.
-	//
-	// An index offset is here in case some content was `deleted` from
-	// the `Layers` head without updating the input indexes.
 	fn drop_last_values(
 		&mut self,
 		result: Option<(usize, usize)>,
 		previous_switch: Option<usize>,
-		// TODO remove it from result before call.
-		deleted: usize,
 	) -> Option<LayerEntry<&mut V>> {
 		if let Some((index, state_index)) = result {
 			// Remove terminal values.
-			if index + 1 - deleted < self.0.len() {
-				self.0.truncate(index + 1 - deleted);
+			if index < self.0.len() {
+				self.0.truncate(index);
 			}
 			if let Some(switch_index) = previous_switch {
 				// We need to remove some value in between
 				// transaction start and this latest value.
 				if let Some(mut value) = self.0.pop() {
-					self.0.truncate(switch_index - deleted);
+					self.0.truncate(switch_index);
 					value.index = state_index;
 					self.push_unchecked(value);
 				}
-				Some((&mut self.0[switch_index - deleted].value, state_index).into())
+				Some((&mut self.0[switch_index].value, state_index).into())
 			} else {
-				Some((&mut self.0[index - deleted].value, state_index).into())
+				Some((&mut self.0[index - 1].value, state_index).into())
 			}
 		} else {
 			self.0.clear();
@@ -834,6 +808,9 @@ pub mod fuzz {
 			vec![0xef,0xdf,0xc1,0x0,0xc1,0xdf,0xc1,0x2b,0xf3,0xf3,0xb0,0x18,
 				0xef,0xdf,0x2e,0x3a,0xef,0xdf,0x0,0xc1,0xf3,0x30,0x18,0xef,0xdf,
 				0xc1,0x2b,0xf3,0xf3,0x30,0x17,0x0,0xdf,],
+			vec![0xff,0xd,0x0,0x61,0x8,0x9c,0xff,0x57,0xd3,0xff,0xd1,0xd1,0x26,
+				0xff,0x33,0xff,0x24,0x1f,0xff,0xff,0xdd,0x0,0x8,0x7a,0x7f,0xff,0xff,
+				0x26,0xff,0x7b,0xff,0xff,0x26,0xee,0xff,0xff,0x41,0x83],
 		];
 		for input in inputs.iter() {
 			fuzz_transactions_inner(&input[..], true);
