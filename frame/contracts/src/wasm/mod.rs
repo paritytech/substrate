@@ -1430,7 +1430,9 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(ExecError { reason: DispatchError::Other("contract trapped during execution"), buffer: _ })
+			Err(ExecError {
+				reason: DispatchError::Other("contract trapped during execution"), buffer: _
+			})
 		);
 	}
 
