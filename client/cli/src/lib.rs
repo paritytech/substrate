@@ -180,16 +180,21 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	Ok(())
 }
 
-pub fn run<F, G, E>(
+pub fn run<F, G, E, F2, T, C>(
 	core_params: CoreParams,
+	new_light: F2,
+	new_full: F2,
 	load_spec: F,
 	impl_name: &'static str,
 	version: &VersionInfo,
 ) -> error::Result<()>
 where
 	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	F2: FnOnce(Configuration<C, G, E>) -> Result<T, ()>,
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
+	T: AbstractService + std::marker::Unpin,
+	C: Default
 {
 	let full_version = sc_service::config::full_version_from_strs(
 		version.version,
@@ -212,7 +217,7 @@ where
 	fdlimit::raise_fd_limit();
 	init_logger(core_params.get_shared_params().log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
 
-	let config = get_config(core_params, load_spec, impl_name, &version)?;
+	let config = get_config(&core_params, load_spec, impl_name, &version)?;
 
 	match core_params {
 		CoreParams::Run(params) => {
@@ -288,8 +293,8 @@ where
         let mut stream_int = signal(SignalKind::interrupt())?;
         let mut stream_term = signal(SignalKind::terminate())?;
 
-        let mut t1 = stream_int.recv().fuse();
-        let mut t2 = stream_term.recv().fuse();
+        let t1 = stream_int.recv().fuse();
+        let t2 = stream_term.recv().fuse();
         let mut t3 = self.0;
 
         pin_mut!(t1, t2);
@@ -304,7 +309,7 @@ where
     }
 }
 
-fn run_until_exit<T, E>(
+fn run_until_exit<T>(
 	service: T,
 ) -> error::Result<()>
 where
@@ -403,7 +408,7 @@ impl<'a> ParseAndPrepare<'a> {
 }
 
 pub fn get_config<C, G, E, F>(
-	core_params: CoreParams,
+	core_params: &CoreParams,
 	spec_factory: F,
 	impl_name: &'static str,
 	version: &VersionInfo,
@@ -417,7 +422,7 @@ where
 	match core_params {
 		CoreParams::Run(params) =>
 			create_run_node_config(
-				params,
+				params.clone(),
 				spec_factory,
 				impl_name,
 				version

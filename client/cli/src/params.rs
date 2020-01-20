@@ -855,17 +855,17 @@ pub enum CoreParams {
 }
 
 impl CoreParams {
-	pub fn get_shared_params(&self) -> SharedParams {
+	pub fn get_shared_params(&self) -> &SharedParams {
 		use CoreParams::*;
 
 		match self {
-			Run(params) => params.shared_params,
-			BuildSpec(params) => params.shared_params,
-			ExportBlocks(params) => params.shared_params,
-			ImportBlocks(params) => params.shared_params,
-			CheckBlock(params) => params.shared_params,
-			Revert(params) => params.shared_params,
-			PurgeChain(params) => params.shared_params,
+			Run(params) => &params.shared_params,
+			BuildSpec(params) => &params.shared_params,
+			ExportBlocks(params) => &params.shared_params,
+			ImportBlocks(params) => &params.shared_params,
+			CheckBlock(params) => &params.shared_params,
+			Revert(params) => &params.shared_params,
+			PurgeChain(params) => &params.shared_params,
 		}
 	}
 }
