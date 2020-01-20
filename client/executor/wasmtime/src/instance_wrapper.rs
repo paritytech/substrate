@@ -25,7 +25,10 @@ use sc_executor_common::{
 use sp_wasm_interface::{Pointer, WordSize};
 use wasmtime::{Instance, Memory, Table};
 
-// TODO: Why do we need this?
+/// Wrap the given WebAssembly Instance of a wasm module with Substrate-runtime.
+///
+/// This struct is a handy wrapper around a wasmtime `Instance` that provides substrate specific
+/// routines.
 pub struct InstanceWrapper {
 	instance: Instance,
 	memory: Memory,
@@ -33,7 +36,7 @@ pub struct InstanceWrapper {
 }
 
 impl InstanceWrapper {
-	/// Wrap the given instance.
+	/// Wrap the given `Instance`.
 	///
 	/// # Safety
 	///
@@ -165,7 +168,10 @@ impl InstanceWrapper {
 		}
 	}
 
-	/// Allocate some memory of the given size.
+	/// Allocate some memory of the given size. Returns pointer to the allocated memory region.
+	///
+	/// Returns `Err` in case memory cannot be allocated. Refer to the allocator documentation
+	/// to get more details.
 	pub fn allocate(
 		&self,
 		allocator: &mut sc_executor_common::allocator::FreeingBumpHeapAllocator,
@@ -181,6 +187,8 @@ impl InstanceWrapper {
 	}
 
 	/// Deallocate the memory pointed by the given pointer.
+	///
+	/// Returns `Err` in case the given memory region cannot be deallocated.
 	pub fn deallocate(
 		&self,
 		allocator: &mut sc_executor_common::allocator::FreeingBumpHeapAllocator,
