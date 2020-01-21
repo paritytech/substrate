@@ -213,29 +213,28 @@ where
 	T::from_clap(&app.get_matches_from(iter))
 }
 
-pub fn run<F, G, E, F2, F3, F4, T1, T2, T3, T5>(
+pub fn run<F, G, E, FNL, FNF, B, SL, SF, BC, BB>(
 	core_params: CoreParams,
-	new_light: F2,
-	new_full: F3,
+	new_light: FNL,
+	new_full: FNF,
 	spec_factory: F,
-	builder: F4,
+	builder: B,
 	impl_name: &'static str,
 	version: &VersionInfo,
 ) -> error::Result<()>
 where
 	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	F2: FnOnce(Configuration<G, E>) -> Result<T1, sc_service::error::Error>,
-	F3: FnOnce(Configuration<G, E>) -> Result<T2, sc_service::error::Error>,
-	F4: FnOnce(Configuration<G, E>) -> Result<T3, sc_service::error::Error>,
+	FNL: FnOnce(Configuration<G, E>) -> Result<SL, sc_service::error::Error>,
+	FNF: FnOnce(Configuration<G, E>) -> Result<SF, sc_service::error::Error>,
+	B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
-	T1: AbstractService + std::marker::Unpin,
-	T2: AbstractService + std::marker::Unpin,
-	T3: ServiceBuilderCommand<Block = T5> + std::marker::Unpin,
-	T5: sp_runtime::traits::Block + Debug,
-	<<<T5 as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as
-	std::str::FromStr>::Err: std::fmt::Debug,
-	<T5 as sp_runtime::traits::Block>::Hash: std::str::FromStr,
+	SL: AbstractService + Unpin,
+	SF: AbstractService + Unpin,
+	BC: ServiceBuilderCommand<Block = BB> + Unpin,
+	BB: sp_runtime::traits::Block + Debug,
+	<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+	<BB as BlockT>::Hash: std::str::FromStr,
 {
 	let full_version = sc_service::config::full_version_from_strs(
 		version.version,
@@ -342,11 +341,12 @@ where
 			};
 
 			let start = std::time::Instant::now();
-			let check = builder(config)?
+			let f = builder(config)?
 				.check_block(block_id)
 				.compat();
-			let mut runtime = tokio::runtime::Runtime::new().unwrap();
-			runtime.block_on(check)?;
+			let f = f.fuse();
+			pin_mut!(f);
+			run_until_exit(f)?;
 			println!("Completed in {} ms.", start.elapsed().as_millis());
 
 			Ok(())
@@ -415,8 +415,8 @@ where
 	F3: FnOnce(Configuration<G, E>) -> Result<T2, sc_service::error::Error>,
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
-	T1: AbstractService + std::marker::Unpin,
-	T2: AbstractService + std::marker::Unpin,
+	T1: AbstractService + Unpin,
+	T2: AbstractService + Unpin,
 {
 	info!("{}", version.name);
 	info!("  version {}", config.full_version());
@@ -441,57 +441,61 @@ where
 
 impl<F, E: 'static> Runtime<F, E>
 where
-    F: Future<Output = Result<(), E>> + future::FusedFuture + Unpin,
+	F: Future<Output = Result<(), E>> + future::FusedFuture + Unpin,
 	E: std::error::Error,
 {
-    #[tokio::main]
-    async fn run(self) -> Result<(), Box<dyn std::error::Error>>
-    {
+	async fn main(self) -> Result<(), Box<dyn std::error::Error>>
+	{
 		use tokio::signal::unix::{signal, SignalKind};
 
-        let mut stream_int = signal(SignalKind::interrupt())?;
-        let mut stream_term = signal(SignalKind::terminate())?;
+		let mut stream_int = signal(SignalKind::interrupt())?;
+		let mut stream_term = signal(SignalKind::terminate())?;
 
-        let t1 = stream_int.recv().fuse();
-        let t2 = stream_term.recv().fuse();
-        let mut t3 = self.0;
+		let t1 = stream_int.recv().fuse();
+		let t2 = stream_term.recv().fuse();
+		let mut t3 = self.0;
 
-        pin_mut!(t1, t2);
+		pin_mut!(t1, t2);
 
-        select! {
-            _ = t1 => println!("Caught SIGINT"),
-            _ = t2 => println!("Caught SIGTERM"),
-            res = t3 => res?,
-        }
+		select! {
+			_ = t1 => println!("Caught SIGINT"),
+			_ = t2 => println!("Caught SIGTERM"),
+			res = t3 => res?,
+		}
 
-        Ok(())
-    }
+		Ok(())
+	}
+
+	fn run(self) -> Result<(), Box<dyn std::error::Error>> {
+		let mut r = tokio::runtime::Runtime::new()?;
+		r.block_on(self.main())
+	}
 }
 
-fn run_service_until_exit<T>(
+pub fn run_until_exit<F, E>(
+	future: F,
+) -> error::Result<()>
+where
+	F: Future<Output = Result<(), E>> + future::FusedFuture + Unpin,
+	E: 'static + std::error::Error,
+{
+	let runtime = Runtime(future);
+	runtime.run().map_err(|e| e.to_string())?;
+
+	Ok(())
+}
+
+pub fn run_service_until_exit<T>(
 	service: T,
 ) -> error::Result<()>
 where
-	T: AbstractService + std::marker::Unpin,
+	T: AbstractService + Unpin,
 {
 	// we eagerly drop the service so that the internal exit future is fired,
 	// but we need to keep holding a reference to the global telemetry guard
 	let _telemetry = service.telemetry();
 
 	let runtime = Runtime(service.compat().fuse());
-	runtime.run().map_err(|e| e.to_string())?;
-
-	Ok(())
-}
-
-fn run_until_exit<F, E: 'static>(
-	future: F,
-) -> error::Result<()>
-where
-	F: Future<Output = Result<(), E>> + future::FusedFuture + Unpin,
-	E: std::error::Error
-{
-	let runtime = Runtime(future);
 	runtime.run().map_err(|e| e.to_string())?;
 
 	Ok(())
