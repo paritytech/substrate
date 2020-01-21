@@ -21,7 +21,7 @@ pub use sc_client_db::{kvdb::KeyValueDB, PruningMode};
 pub use sc_network::config::{ExtTransport, NetworkConfiguration, Roles};
 pub use sc_executor::WasmExecutionMethod;
 
-use std::{path::{PathBuf, Path}, net::SocketAddr, sync::Arc};
+use std::{future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension, NoExtension};
 use sp_core::crypto::Protected;
@@ -29,7 +29,6 @@ use target_info::Target;
 use sc_telemetry::TelemetryEndpoints;
 
 /// Service configuration.
-#[derive(Clone)]
 pub struct Configuration<C, G, E = NoExtension> {
 	/// Implementation name
 	pub impl_name: &'static str,
@@ -39,6 +38,8 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub impl_commit: &'static str,
 	/// Node roles.
 	pub roles: Roles,
+	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
+	pub tasks_executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
@@ -160,6 +161,7 @@ impl<C, G, E> Configuration<C, G, E> where
 			config_dir: config_dir.clone(),
 			name: Default::default(),
 			roles: Roles::FULL,
+			tasks_executor: None,
 			transaction_pool: Default::default(),
 			network: Default::default(),
 			keystore: KeystoreConfig::None,

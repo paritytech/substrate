@@ -600,8 +600,28 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 	}
 }
 
-pub(crate) fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
-	(message, round, set_id).encode()
+/// Encode round message localized to a given round and set id.
+pub(crate) fn localized_payload<E: Encode>(
+	round: RoundNumber,
+	set_id: SetIdNumber,
+	message: &E,
+) -> Vec<u8> {
+	let mut buf = Vec::new();
+	localized_payload_with_buffer(round, set_id, message, &mut buf);
+	buf
+}
+
+/// Encode round message localized to a given round and set id using the given
+/// buffer. The given buffer will be cleared and the resulting encoded payload
+/// will always be written to the start of the buffer.
+pub(crate) fn localized_payload_with_buffer<E: Encode>(
+	round: RoundNumber,
+	set_id: SetIdNumber,
+	message: &E,
+	buf: &mut Vec<u8>,
+) {
+	buf.clear();
+	(message, round, set_id).encode_to(buf)
 }
 
 /// Type-safe wrapper around a round number.
@@ -612,7 +632,8 @@ pub struct Round(pub RoundNumber);
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
 pub struct SetId(pub SetIdNumber);
 
-// check a message.
+/// Check a message signature by encoding the message as a localized payload and
+/// verifying the provided signature using the expected authority id.
 pub(crate) fn check_message_sig<Block: BlockT>(
 	message: &Message<Block>,
 	id: &AuthorityId,
@@ -620,9 +641,32 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 	round: RoundNumber,
 	set_id: SetIdNumber,
 ) -> Result<(), ()> {
+	check_message_sig_with_buffer::<Block>(
+		message,
+		id,
+		signature,
+		round,
+		set_id,
+		&mut Vec::new(),
+	)
+}
+
+/// Check a message signature by encoding the message as a localized payload and
+/// verifying the provided signature using the expected authority id.
+/// The encoding necessary to verify the signature will be done using the given
+/// buffer, the original content of the buffer will be cleared.
+pub(crate) fn check_message_sig_with_buffer<Block: BlockT>(
+	message: &Message<Block>,
+	id: &AuthorityId,
+	signature: &AuthoritySignature,
+	round: RoundNumber,
+	set_id: SetIdNumber,
+	buf: &mut Vec<u8>,
+) -> Result<(), ()> {
 	let as_public = id.clone();
-	let encoded_raw = localized_payload(round, set_id, message);
-	if AuthorityPair::verify(signature, &encoded_raw, &as_public) {
+	localized_payload_with_buffer(round, set_id, message, buf);
+
+	if AuthorityPair::verify(signature, buf, &as_public) {
 		Ok(())
 	} else {
 		debug!(target: "afg", "Bad signature on message from {:?}", id);
@@ -752,6 +796,7 @@ fn check_compact_commit<Block: BlockT>(
 	}
 
 	// check signatures on all contained precommits.
+	let mut buf = Vec::new();
 	for (i, (precommit, &(ref sig, ref id))) in msg.precommits.iter()
 		.zip(&msg.auth_data)
 		.enumerate()
@@ -759,12 +804,13 @@ fn check_compact_commit<Block: BlockT>(
 		use crate::communication::gossip::Misbehavior;
 		use finality_grandpa::Message as GrandpaMessage;
 
-		if let Err(()) = check_message_sig::<Block>(
+		if let Err(()) = check_message_sig_with_buffer::<Block>(
 			&GrandpaMessage::Precommit(precommit.clone()),
 			id,
 			sig,
 			round.0,
 			set_id.0,
+			&mut buf,
 		) {
 			debug!(target: "afg", "Bad commit message signature {}", id);
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_commit_msg_signature"; "id" => ?id);
@@ -836,6 +882,7 @@ fn check_catch_up<Block: BlockT>(
 		round: RoundNumber,
 		set_id: SetIdNumber,
 		mut signatures_checked: usize,
+		buf: &mut Vec<u8>,
 	) -> Result<usize, ReputationChange> where
 		B: BlockT,
 		I: Iterator<Item=(Message<B>, &'a AuthorityId, &'a AuthoritySignature)>,
@@ -845,12 +892,13 @@ fn check_catch_up<Block: BlockT>(
 		for (msg, id, sig) in messages {
 			signatures_checked += 1;
 
-			if let Err(()) = check_message_sig::<B>(
+			if let Err(()) = check_message_sig_with_buffer::<B>(
 				&msg,
 				id,
 				sig,
 				round,
 				set_id,
+				buf,
 			) {
 				debug!(target: "afg", "Bad catch up message signature {}", id);
 				telemetry!(CONSENSUS_DEBUG; "afg.bad_catch_up_msg_signature"; "id" => ?id);
@@ -866,6 +914,8 @@ fn check_catch_up<Block: BlockT>(
 		Ok(signatures_checked)
 	}
 
+	let mut buf = Vec::new();
+
 	// check signatures on all contained prevotes.
 	let signatures_checked = check_signatures::<Block, _>(
 		msg.prevotes.iter().map(|vote| {
@@ -874,6 +924,7 @@ fn check_catch_up<Block: BlockT>(
 		msg.round_number,
 		set_id.0,
 		0,
+		&mut buf,
 	)?;
 
 	// check signatures on all contained precommits.
@@ -884,6 +935,7 @@ fn check_catch_up<Block: BlockT>(
 		msg.round_number,
 		set_id.0,
 		signatures_checked,
+		&mut buf,
 	)?;
 
 	Ok(())

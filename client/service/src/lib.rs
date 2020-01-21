@@ -38,7 +38,7 @@ use parking_lot::Mutex;
 use sc_client::Client;
 use exit_future::Signal;
 use futures::{
-	Future, FutureExt, Stream, StreamExt, TryFutureExt,
+	Future, FutureExt, Stream, StreamExt,
 	future::select, channel::mpsc,
 	compat::*,
 	sink::SinkExt,
@@ -95,10 +95,8 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	to_spawn_tx: mpsc::UnboundedSender<Pin<Box<dyn Future<Output = ()> + Send>>>,
 	/// Receiver for futures that must be spawned as background tasks.
 	to_spawn_rx: mpsc::UnboundedReceiver<Pin<Box<dyn Future<Output = ()> + Send>>>,
-	/// List of futures to poll from `poll`.
-	/// If spawning a background task is not possible, we instead push the task into this `Vec`.
-	/// The elements must then be polled manually.
-	to_poll: Vec<Pin<Box<dyn Future<Output = ()> + Send>>>,
+	/// How to spawn background tasks.
+	tasks_executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
 	rpc_handlers: sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<sc_telemetry::Telemetry>,
@@ -322,22 +320,7 @@ impl<TBl: Unpin, TCl, TSc: Unpin, TNetStatus, TNet, TTxPool, TOc> Future for
 		}
 
 		while let Poll::Ready(Some(task_to_spawn)) = Pin::new(&mut this.to_spawn_rx).poll_next(cx) {
-			// TODO: Update to tokio 0.2 when libp2p get switched to std futures (#4383)
-			let executor = tokio_executor::DefaultExecutor::current();
-			use futures01::future::Executor;
-			if let Err(err) = executor.execute(task_to_spawn.unit_error().compat()) {
-				debug!(
-					target: "service",
-					"Failed to spawn background task: {:?}; falling back to manual polling",
-					err
-				);
-				this.to_poll.push(Box::pin(err.into_future().compat().map(drop)));
-			}
-		}
-
-		// Polling all the `to_poll` futures.
-		while let Some(pos) = this.to_poll.iter_mut().position(|t| Pin::new(t).poll(cx).is_ready()) {
-			let _ = this.to_poll.remove(pos);
+			(this.tasks_executor)(task_to_spawn);
 		}
 
 		// The service future never ends.
