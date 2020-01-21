@@ -20,6 +20,7 @@ sp-runtime = {  path = "../../../primitives/runtime" }
 sp-block-builder = { path = "../../../primitives/block-builder" }
 sp-inherents = { path = "../../../primitives/inherents" }
 sp-timestamp = { path = "../../../primitives/timestamp" }
+sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 sc-client = { path = "../../" }
 sc-client-api = { path = "../../api" }
 sc-consensus-slots = { path = "../slots"  }

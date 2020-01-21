@@ -1,6 +1,8 @@
 mod aux_schema;
 
-use std::{sync::Arc, marker::PhantomData, time::{Duration, Instant}};
+use std::{
+	sync::Arc, marker::PhantomData, time::{Duration, Instant}, collections::HashMap,
+};
 use log::trace;
 use codec::Encode;
 use parking_lot::Mutex;
@@ -11,6 +13,7 @@ use sp_inherents::InherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
 use sp_consensus::{
 	Error as ConsensusError, BlockImportParams, BlockOrigin, ForkChoiceStrategy,
+	ImportResult, BlockImport,
 };
 use sp_consensus::import_queue::{Verifier, CacheKeyId, BasicQueue};
 use sp_consensus_sassafras::{
@@ -21,7 +24,8 @@ use sp_consensus_sassafras::digest::{
 };
 use sp_consensus_sassafras::inherents::SassafrasInherentData;
 use sp_runtime::{generic::BlockId, Justification};
-use sp_runtime::traits::{Block as BlockT, Header, ProvideRuntimeApi};
+use sp_runtime::traits::{Block as BlockT, Header};
+use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sc_client::{Client, CallExecutor};
 use sc_client_api::backend::{AuxStore, Backend};
@@ -101,8 +105,6 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		let mut auxiliary = aux_schema::load_auxiliary(&parent_hash, self.api.as_ref())
-			.map_err(Error::Client)?;
 
 		let parent_header_metadata = self.client.header_metadata(parent_hash)
 			.map_err(Error::FetchParentHeader)?;
@@ -110,14 +112,9 @@ impl<B, E, Block, RA, PRA> SassafrasVerifier<B, E, Block, RA, PRA> where
 		// First, Verify pre-runtime digest.
 		let pre_digest = find_pre_digest::<Block>(&header)?;
 
-		// Verify that the slot is increasing, and not in the future.
-		if pre_digest.slot <= auxiliary.slot {
-			return Err(Error::SlotInPast.into())
-		}
 		if pre_digest.slot > slot_now {
 			return Err(Error::SlotInFuture.into())
 		}
-		auxiliary.slot = pre_digest.slot;
 
 		// Check the signature.
 		let (author, block_weight) = auxiliary.validating.authorities
@@ -217,6 +214,53 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for SassafrasVerifier<B, E, Block, RA
 }
 
 pub type SassafrasImportQueue<B> = BasicQueue<B>;
+
+pub struct SassafrasBlockImport<B, E, Block: BlockT, I, RA, PRA> {
+	inner: I,
+	client: Arc<Client<B, E, Block, RA>>,
+	api: Arc<PRA>,
+}
+
+impl<B, E, Block: BlockT, I, RA, PRA> BlockImport<Block> for
+	SassafrasBlockImport<B, E, Block, I, RA, PRA>
+where
+	I: BlockImport<Block, Transaction = sp_api::TransactionFor<PRA, Block>> + Send + Sync,
+	I::Error: Into<ConsensusError>,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
+	Client<B, E, Block, RA>: AuxStore,
+	RA: Send + Sync,
+	PRA: ProvideRuntimeApi<Block> + ProvideCache<Block>,
+	PRA::Api: ApiExt<Block, StateBackend = B::State>,
+{
+	type Error = ConsensusError;
+	type Transaction = sp_api::TransactionFor<PRA, Block>;
+
+	fn import_block(
+		&mut self,
+		mut block: BlockImportParams<Block, Self::Transaction>,
+		new_cache: HashMap<CacheKeyId, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
+		let hash = block.post_header().hash();
+		let parent_hash = *block.header.parent_hash();
+		let number = block.header.number().clone();
+
+		let mut auxiliary = aux_schema::load_auxiliary(&parent_hash, self.api.as_ref())
+			.map_err(Error::Client)?;
+
+		let pre_digest = find_pre_digest::<Block>(&block.header)?;
+
+		// Verify that the slot is increasing, and not in the future.
+		if pre_digest.slot <= auxiliary.slot {
+			return Err(Error::SlotInPast.into())
+		}
+		auxiliary.slot = pre_digest.slot;
+
+		let import_result = self.inner.import_block(block, new_cache);
+
+		import_result.map_err(Into::into)
+	}
+}
 
 #[derive(Default, Clone)]
 struct TimeSource(Arc<Mutex<(Option<Duration>, Vec<(Instant, u64)>)>>);

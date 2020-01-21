@@ -25,6 +25,7 @@ members = [
 	"client/consensus/sassafras",
 	"client/consensus/pow",
 	"client/consensus/slots",
+	"client/consensus/epochs",
 	"client/consensus/uncles",
 	"client/db",
 	"client/executor",

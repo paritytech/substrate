@@ -200,7 +200,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 			data,
 			hash: hash,
 			number: number,
-			children:  Vec::new(),
+			children: Vec::new(),
 		});
 
 		self.rebalance();
