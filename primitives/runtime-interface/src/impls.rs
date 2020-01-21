@@ -471,3 +471,56 @@ impl<T: sp_wasm_interface::PointerType> IntoFFIValue for Pointer<T> {
 		Ok(self.into())
 	}
 }
+
+/// Implement the traits for `u128`/`i128`
+macro_rules! for_u128_i128 {
+	($type:ty) => {
+		/// `u128`/`i128` is passed as `u32`.
+		///
+		/// The `u32` is a pointer to an `[u8; 16]` array.
+		impl RIType for $type {
+			type FFIType = u32;
+		}
+
+		#[cfg(not(feature = "std"))]
+		impl IntoFFIValue for $type {
+			type Owned = ();
+
+			fn into_ffi_value(&self) -> WrappedFFIValue<u32> {
+				unsafe { (mem::transmute::<&Self, *const u8>(self) as u32).into() }
+			}
+		}
+
+		#[cfg(not(feature = "std"))]
+		impl FromFFIValue for $type {
+			fn from_ffi_value(arg: u32) -> $type {
+				unsafe { mem::transmute::<[u8; 16], $type>(<[u8; 16]>::from_ffi_value(arg)) }
+			}
+		}
+
+		#[cfg(feature = "std")]
+		impl FromFFIValue for $type {
+			type SelfInstance = $type;
+
+			fn from_ffi_value(context: &mut dyn FunctionContext, arg: u32) -> Result<$type> {
+				let data = context.read_memory(Pointer::new(arg), 16)?;
+				let mut res = [0u8; 16];
+				res.copy_from_slice(&data);
+				Ok(unsafe { mem::transmute::<[u8; 16], $type>(res) })
+			}
+		}
+
+		#[cfg(feature = "std")]
+		impl IntoFFIValue for $type {
+			fn into_ffi_value(self, context: &mut dyn FunctionContext) -> Result<u32> {
+				let addr = context.allocate_memory(16)?;
+				let data = unsafe { mem::transmute::<$type, [u8; 16]>(self) };
+				context.write_memory(addr, &data)?;
+				Ok(addr.into())
+			}
+		}
+	}
+}
+
+for_u128_i128!(u128);
+for_u128_i128!(i128);
