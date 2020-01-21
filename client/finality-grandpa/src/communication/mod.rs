@@ -106,6 +106,11 @@ mod benefit {
 	pub(super) const PER_EQUIVOCATION: i32 = 10;
 }
 
+/// If the voter set is larger than this value some telemetry events are not
+/// sent to avoid increasing usage resource on the node and flooding the
+/// telemetry server (e.g. received votes, received commits.)
+const TELEMETRY_VOTERS_LIMIT: usize = 10;
+
 /// A handle to the network.
 ///
 /// Something that provides both the capabilities needed for the `gossip_network::Network` trait as
@@ -308,29 +313,31 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 							return Ok(None);
 						}
 
-						match &msg.message.message {
-							PrimaryPropose(propose) => {
-								telemetry!(CONSENSUS_INFO; "afg.received_propose";
-									"voter" => ?format!("{}", msg.message.id),
-									"target_number" => ?propose.target_number,
-									"target_hash" => ?propose.target_hash,
-								);
-							},
-							Prevote(prevote) => {
-								telemetry!(CONSENSUS_INFO; "afg.received_prevote";
-									"voter" => ?format!("{}", msg.message.id),
-									"target_number" => ?prevote.target_number,
-									"target_hash" => ?prevote.target_hash,
-								);
-							},
-							Precommit(precommit) => {
-								telemetry!(CONSENSUS_INFO; "afg.received_precommit";
-									"voter" => ?format!("{}", msg.message.id),
-									"target_number" => ?precommit.target_number,
-									"target_hash" => ?precommit.target_hash,
-								);
-							},
-						};
+						if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+							match &msg.message.message {
+								PrimaryPropose(propose) => {
+									telemetry!(CONSENSUS_INFO; "afg.received_propose";
+										"voter" => ?format!("{}", msg.message.id),
+										"target_number" => ?propose.target_number,
+										"target_hash" => ?propose.target_hash,
+									);
+								},
+								Prevote(prevote) => {
+									telemetry!(CONSENSUS_INFO; "afg.received_prevote";
+										"voter" => ?format!("{}", msg.message.id),
+										"target_number" => ?prevote.target_number,
+										"target_hash" => ?prevote.target_hash,
+									);
+								},
+								Precommit(precommit) => {
+									telemetry!(CONSENSUS_INFO; "afg.received_precommit";
+										"voter" => ?format!("{}", msg.message.id),
+										"target_number" => ?precommit.target_number,
+										"target_hash" => ?precommit.target_hash,
+									);
+								},
+							};
+						}
 
 						Ok(Some(msg.message))
 					}
@@ -474,11 +481,13 @@ fn incoming_global<B: BlockT>(
 				format!("{}", a)
 			}).collect();
 
-		telemetry!(CONSENSUS_INFO; "afg.received_commit";
-			"contains_precommits_signed_by" => ?precommits_signed_by,
-			"target_number" => ?msg.message.target_number.clone(),
-			"target_hash" => ?msg.message.target_hash.clone(),
-		);
+		if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+			telemetry!(CONSENSUS_INFO; "afg.received_commit";
+				"contains_precommits_signed_by" => ?precommits_signed_by,
+				"target_number" => ?msg.message.target_number.clone(),
+				"target_hash" => ?msg.message.target_hash.clone(),
+			);
+		}
 
 		if let Err(cost) = check_compact_commit::<B>(
 			&msg.message,
