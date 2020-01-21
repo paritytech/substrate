@@ -93,11 +93,9 @@ impl Trait for Benchmark {
 }
 type System = frame_system::Module<Benchmark>;
 type Balances = pallet_balances::Module<Benchmark>;
-pub type Identity = Module<Benchmark>;
+type Identity = Module<Benchmark>;
 
-pub type BalancesCall = pallet_balances::Call<Benchmark>;
 pub type IdentityCall = crate::Call<Benchmark>;
-
 
 pub mod set_identity {
 	use super::*;
@@ -118,7 +116,7 @@ pub mod set_identity {
 	///
 	/// Sets up state randomly and returns a randomly generated `set_identity` with sensible (fixed)
 	/// values for all complexity components except those mentioned in the identity.
-	pub fn instance(components: &[(&'static str, u32)]) -> Call<Benchmark>
+	pub fn instance(components: &[(&'static str, u32)]) -> Call
 	{
 		// Add r registrars
 		let r = components.iter().find(|&c| c.0 == "R").unwrap();
@@ -131,9 +129,10 @@ pub mod set_identity {
 		
 		// Create identity info with x additional fields
 		let x = components.iter().find(|&c| c.0 == "R").unwrap();
-		let data = Data::Raw(vec![0; x.1 as usize]);
+		// 32 byte data that we reuse below
+		let data = Data::Raw(vec![0; 32]);
 		let info = IdentityInfo {
-			additional: vec![(data.clone(), data.clone()); 3],
+			additional: vec![(data.clone(), data.clone()); x.1 as usize],
 			display: data.clone(),
 			legal: data.clone(),
 			web: data.clone(),

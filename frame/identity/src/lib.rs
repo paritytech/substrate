@@ -902,13 +902,13 @@ impl<T: Trait> Benchmarking for Module<T> {
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
 	use super::*;
 
 	use sp_runtime::traits::BadOrigin;
 	use frame_support::{
 		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
-		ord_parameter_types, impl_outer_dispatch,
+		ord_parameter_types,
 	};
 	use sp_core::H256;
 	use frame_system::EnsureSignedBy;
@@ -920,14 +920,6 @@ pub mod tests {
 
 	impl_outer_origin! {
 		pub enum Origin for Test  where system = frame_system {}
-	}
-
-	impl_outer_dispatch! {
-		pub enum Call for Test where origin: Origin {
-			frame_system::System,
-			pallet_balances::Balances,
-			pallet_identity::Identity,
-		}
 	}
 
 	// For testing the module, we construct most of a mock runtime. This means
@@ -946,7 +938,7 @@ pub mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Call = Call;
+		type Call = ();
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
@@ -999,7 +991,7 @@ pub mod tests {
 	}
 	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
-	pub type Identity = Module<Test>;
+	type Identity = Module<Test>;
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
