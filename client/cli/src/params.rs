@@ -869,24 +869,3 @@ impl CoreParams {
 		}
 	}
 }
-
-/// A special commandline parameter that expands to nothing.
-/// Should be used as custom subcommand/run arguments if no custom values are required.
-#[derive(Clone, Debug, Default)]
-pub struct NoCustom {}
-
-impl StructOpt for NoCustom {
-	fn clap<'a, 'b>() -> App<'a, 'b> {
-		App::new("NoCustom")
-	}
-
-	fn from_clap(_: &::structopt::clap::ArgMatches) -> Self {
-		NoCustom {}
-	}
-}
-
-impl GetSharedParams for NoCustom {
-	fn shared_params(&self) -> Option<&SharedParams> {
-		None
-	}
-}

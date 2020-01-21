@@ -16,7 +16,7 @@
 
 pub use sc_cli::VersionInfo;
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
-use sc_cli::{IntoExit, NoCustom, SharedParams, ImportParams, error};
+use sc_cli::{SharedParams, ImportParams, error};
 use sc_service::{Roles as ServiceRoles, Configuration};
 use log::info;
 use structopt::StructOpt;

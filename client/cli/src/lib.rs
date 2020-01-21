@@ -56,7 +56,7 @@ use params::{
 	NetworkConfigurationParams, TransactionPoolParams,
 	NodeKeyParams, NodeKeyType, Cors,
 };
-pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy, RunCmd};
+pub use params::{CoreParams, SharedParams, ImportParams, ExecutionStrategy, RunCmd};
 pub use traits::GetSharedParams;
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
@@ -100,14 +100,6 @@ pub struct VersionInfo {
 	pub author: &'static str,
 	/// Support URL.
 	pub support_url: &'static str,
-}
-
-/// Something that can be converted into an exit signal.
-pub trait IntoExit {
-	/// Exit signal type.
-	type Exit: Future<Output=()> + Unpin + Send + 'static;
-	/// Convert into exit signal.
-	fn into_exit(self) -> Self::Exit;
 }
 
 fn get_chain_key(cli: &SharedParams) -> String {
