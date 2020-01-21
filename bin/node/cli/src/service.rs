@@ -113,8 +113,8 @@ macro_rules! new_full_start {
 macro_rules! new_full {
 	($config:expr, $with_startup_data: expr) => {{
 		use futures::{
-			stream::StreamExt,
-			future::{FutureExt, TryFutureExt},
+			prelude::*,
+			compat::Future01CompatExt
 		};
 		use sc_network::Event;
 
@@ -151,7 +151,7 @@ macro_rules! new_full {
 		($with_startup_data)(&block_import, &babe_link);
 
 		if participates_in_consensus {
-			let proposer = sc_basic_authority::ProposerFactory {
+			let proposer = sc_basic_authorship::ProposerFactory {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
 			};
@@ -191,9 +191,8 @@ macro_rules! new_full {
 				service.keystore(),
 				dht_event_stream,
 			);
-			let future01_authority_discovery = authority_discovery.map(|x| Ok(x)).compat();
 
-			service.spawn_task(future01_authority_discovery);
+			service.spawn_task(authority_discovery);
 		}
 
 		// if the node isn't actively participating in consensus then it doesn't
@@ -223,7 +222,7 @@ macro_rules! new_full {
 					service.network(),
 					service.on_exit(),
 					service.spawn_task_handle(),
-				)?);
+				)?.compat().map(drop));
 			},
 			(true, false) => {
 				// start the full GRANDPA voter
@@ -239,7 +238,9 @@ macro_rules! new_full {
 				};
 				// the GRANDPA voter task is considered infallible, i.e.
 				// if it fails we take down the service with it.
-				service.spawn_essential_task(grandpa::run_grandpa_voter(grandpa_config)?);
+				service.spawn_essential_task(
+					grandpa::run_grandpa_voter(grandpa_config)?.compat().map(drop)
+				);
 			},
 			(_, true) => {
 				grandpa::setup_disabled_grandpa(
@@ -508,7 +509,7 @@ mod tests {
 
 				let parent_id = BlockId::number(service.client().chain_info().best_number);
 				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
-				let mut proposer_factory = sc_basic_authority::ProposerFactory {
+				let mut proposer_factory = sc_basic_authorship::ProposerFactory {
 					client: service.client(),
 					transaction_pool: service.transaction_pool(),
 				};
@@ -534,13 +535,15 @@ mod tests {
 
 				digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(babe_pre_digest));
 
-				let mut proposer = proposer_factory.init(&parent_header).unwrap();
-				let new_block = futures::executor::block_on(proposer.propose(
-					inherent_data,
-					digest,
-					std::time::Duration::from_secs(1),
-					RecordProof::Yes,
-				)).expect("Error making test block").block;
+				let new_block = futures::executor::block_on(async move {
+					let proposer = proposer_factory.init(&parent_header).await;
+					proposer.unwrap().propose(
+						inherent_data,
+						digest,
+						std::time::Duration::from_secs(1),
+						RecordProof::Yes,
+					).await
+				}).expect("Error making test block").block;
 
 				let (new_header, new_body) = new_block.deconstruct();
 				let pre_hash = new_header.hash();

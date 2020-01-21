@@ -43,6 +43,7 @@ TO_RENAME=(
     "sp-finality-granpda sp-finality-grandpa"
     "sp-sesssion sp-session"
     "sp-tracing-pool sp-transaction-pool"
+    "sc-basic-authority sc-basic-authorship"
 
     # PRIMITIVES
     "substrate-application-crypto sp-application-crypto"
@@ -88,7 +89,7 @@ TO_RENAME=(
     "substrate-client sc-client"
     "substrate-client-api sc-api"
     "substrate-authority-discovery sc-authority-discovery"
-    "substrate-basic-authorship sc-basic-authority"
+    "substrate-basic-authorship sc-basic-authorship"
     "substrate-block-builder sc-block-builder"
     "substrate-chain-spec sc-chain-spec"
     "substrate-chain-spec-derive sc-chain-spec-derive"

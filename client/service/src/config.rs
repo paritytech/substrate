@@ -73,7 +73,7 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub rpc_ws_max_connections: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
-	/// Prometheus endpoint Port. `None` if disabled.
+	/// Prometheus exporter Port. `None` if disabled.
 	pub prometheus_port: Option<SocketAddr>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,

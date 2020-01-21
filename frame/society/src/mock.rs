@@ -44,7 +44,6 @@ parameter_types! {
 	pub const PeriodSpend: u64 = 1000;
 	pub const MaxLockDuration: u64 = 100;
 	pub const ChallengePeriod: u64 = 8;
-	pub const MaxMembers: u32 = 100;
 
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 1024;
@@ -104,7 +103,7 @@ impl Trait for Test {
 	type MembershipChanged = ();
 	type RotationPeriod = RotationPeriod;
 	type MaxLockDuration = MaxLockDuration;
-	type FounderOrigin = EnsureSignedBy<FounderSetAccount, u128>;
+	type FounderSetOrigin = EnsureSignedBy<FounderSetAccount, u128>;
 	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
 	type ChallengePeriod = ChallengePeriod;
 }
@@ -133,6 +132,9 @@ impl EnvBuilder {
 				(40, 50),
 				(50, 50),
 				(60, 50),
+				(70, 50),
+				(80, 50),
+				(90, 50),
 			],
 			pot: 0,
 			max_members: 100,

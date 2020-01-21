@@ -27,12 +27,10 @@ use sc_client_api::{
 use sc_client::Client;
 use sc_chain_spec::{RuntimeGenesis, Extension};
 use sp_consensus::import_queue::ImportQueue;
-use futures::{prelude::*, sync::mpsc};
-use futures03::{
-	compat::Compat,
-	FutureExt as _, TryFutureExt as _,
-	StreamExt as _, TryStreamExt as _,
-	future::{select, Either}
+use futures::{
+	Future, FutureExt, StreamExt,
+	channel::mpsc,
+	future::{select, ready}
 };
 use sc_keystore::{Store as Keystore};
 use log::{info, warn, error};
@@ -41,52 +39,56 @@ use sc_network::{config::BoxFinalityProofRequestBuilder, specialization::Network
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, NumberFor, SaturatedConversion, HasherFor,
+	Block as BlockT, NumberFor, SaturatedConversion, HasherFor, UniqueSaturatedInto,
 };
 use sp_api::ProvideRuntimeApi;
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
 	io::{Read, Write, Seek},
-	marker::PhantomData, sync::Arc, time::SystemTime
+	marker::PhantomData, sync::Arc, time::SystemTime, pin::Pin
 };
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer};
 use sp_blockchain;
-use prometheus_endpoint::{create_gauge, Gauge, U64, F64};
+use prometheus_exporter::{create_gauge, Gauge, U64, F64, Registry};
 
-prometheus_endpoint::lazy_static! {
+prometheus_exporter::lazy_static! {
 	pub static ref FINALITY_HEIGHT: Gauge<U64> = create_gauge(
-		"consensus_finality_block_height_number",
-		"block is finality HEIGHT"
+		"finality_block_height_number",
+		"Height of the highest finalized block"
 	);
 	pub static ref BEST_HEIGHT: Gauge<U64> = create_gauge(
-		"consensus_best_block_height_number",
-		"block is best HEIGHT"
+		"best_block_height_number",
+		"Height of the highest block"
 	);
-	pub static ref P2P_PEERS_NUM: Gauge<U64> = create_gauge(
-		"p2p_peers_number",
-		"network gosip peers number"
+	pub static ref PEERS_NUM: Gauge<U64> = create_gauge(
+		"peers_count",
+		"Number of network gossip peers"
 	);
 	pub static ref TX_COUNT: Gauge<U64> = create_gauge(
-		"consensus_num_txs",
+		"transaction_count",
 		"Number of transactions"
 	);
 	pub static ref NODE_MEMORY: Gauge<U64> = create_gauge(
-		"consensus_node_memory",
-		"node memory"
+		"memory_usage",
+		"Node memory usage"
 	);
 	pub static ref NODE_CPU: Gauge<F64> = create_gauge(
-		"consensus_node_cpu",
-		"node cpu"
+		"cpu_usage",
+		"Node CPU usage"
 	);
-	pub static ref P2P_NODE_DOWNLOAD: Gauge<U64> = create_gauge(
-		"p2p_peers_receive_byte_per_sec",
-		"p2p_node_download_per_sec_byte"
+	pub static ref NODE_DOWNLOAD: Gauge<U64> = create_gauge(
+		"receive_byte_per_sec",
+		"Received bytes per second"
 	);
-	pub static ref P2P_NODE_UPLOAD: Gauge<U64> = create_gauge(
-		"p2p_peers_send_byte_per_sec",
-		"p2p_node_upload_per_sec_byte"
+	pub static ref NODE_UPLOAD: Gauge<U64> = create_gauge(
+		"sent_byte_per_sec",
+		"Sent bytes per second"
+	);
+	pub static ref SYNC_TARGET: Gauge<U64> = create_gauge(
+		"sync_target_number",
+		"Block sync target number"
 	);
 }
 /// Aggregator for the components required to build a service.
@@ -124,6 +126,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImp
 	rpc_extensions: TRpc,
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	marker: PhantomData<(TBl, TRtApi)>,
+	prometheus_registry: Option<Registry>
 }
 
 /// Full client type.
@@ -183,7 +186,7 @@ pub fn new_full_client<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 	config: &Configuration<TCfg, TGen, TCSExt>,
 ) -> Result<TFullClient<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
-	TExecDisp: NativeExecutionDispatch,
+	TExecDisp: NativeExecutionDispatch + 'static,
 	TGen: sp_runtime::BuildStorage + serde::Serialize + for<'de> serde::Deserialize<'de>,
 	TCSExt: Extension,
 {
@@ -194,7 +197,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 	config: &Configuration<TCfg, TGen, TCSExt>,
 ) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
 	TBl: BlockT,
-	TExecDisp: NativeExecutionDispatch,
+	TExecDisp: NativeExecutionDispatch + 'static,
 	TGen: sp_runtime::BuildStorage + serde::Serialize + for<'de> serde::Deserialize<'de>,
 	TCSExt: Extension,
 {
@@ -262,7 +265,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 impl<TCfg, TGen, TCSExt> ServiceBuilder<(), (), TCfg, TGen, TCSExt, (), (), (), (), (), (), (), (), (), ()>
 where TGen: RuntimeGenesis, TCSExt: Extension {
 	/// Start the service builder with a configuration.
-	pub fn new_full<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch>(
+	pub fn new_full<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch + 'static>(
 		config: Configuration<TCfg, TGen, TCSExt>
 	) -> Result<ServiceBuilder<
 		TBl,
@@ -300,6 +303,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			rpc_extensions: Default::default(),
 			remote_backend: None,
 			marker: PhantomData,
+			prometheus_registry: None,
 		})
 	}
 
@@ -386,6 +390,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			rpc_extensions: Default::default(),
 			remote_backend: Some(remote_blockchain),
 			marker: PhantomData,
+			prometheus_registry: None,
 		})
 	}
 }
@@ -434,6 +439,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -476,6 +482,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -502,6 +509,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -543,6 +551,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -608,6 +617,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -663,6 +673,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
 	}
 
@@ -702,7 +713,29 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 			rpc_extensions,
 			remote_backend: self.remote_backend,
 			marker: self.marker,
+			prometheus_registry: self.prometheus_registry,
 		})
+	}
+
+	/// Use an existing prometheus `Registry` to record metrics into.
+	pub fn with_prometheus_registry(self, registry: Registry) -> Self {
+		Self {
+			config: self.config,
+			client: self.client,
+			backend: self.backend,
+			keystore: self.keystore,
+			fetcher: self.fetcher,
+			select_chain: self.select_chain,
+			import_queue: self.import_queue,
+			finality_proof_request_builder: self.finality_proof_request_builder,
+			finality_proof_provider: self.finality_proof_provider,
+			network_protocol: self.network_protocol,
+			transaction_pool: self.transaction_pool,
+			rpc_extensions: self.rpc_extensions,
+			remote_backend: self.remote_backend,
+			marker: self.marker,
+			prometheus_registry: Some(registry),
+		}
 	}
 }
 
@@ -716,7 +749,7 @@ pub trait ServiceBuilderCommand {
 		self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
-	) -> Box<dyn Future<Item = (), Error = Error> + Send>;
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 
 	/// Performs the blocks export.
 	fn export_blocks(
@@ -725,7 +758,7 @@ pub trait ServiceBuilderCommand {
 		from: NumberFor<Self::Block>,
 		to: Option<NumberFor<Self::Block>>,
 		json: bool
-	) -> Box<dyn Future<Item = (), Error = Error>>;
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>>;
 
 	/// Performs a revert of `blocks` blocks.
 	fn revert_chain(
@@ -737,7 +770,7 @@ pub trait ServiceBuilderCommand {
 	fn check_block(
 		self,
 		block: BlockId<Self::Block>
-	) -> Box<dyn Future<Item = (), Error = Error> + Send>;
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 }
 
 impl<TBl, TRtApi, TCfg, TGen, TCSExt, TBackend, TExec, TSc, TImpQu, TNetP, TExPool, TRpc>
@@ -817,6 +850,7 @@ ServiceBuilder<
 			transaction_pool,
 			rpc_extensions,
 			remote_backend,
+			prometheus_registry,
 		} = self;
 
 		sp_session::generate_initial_session_keys(
@@ -829,7 +863,7 @@ ServiceBuilder<
 
 		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
 		let (to_spawn_tx, to_spawn_rx) =
-			mpsc::unbounded::<Box<dyn Future<Item = (), Error = ()> + Send>>();
+			mpsc::unbounded::<Pin<Box<dyn Future<Output = ()> + Send>>>();
 
 		// A side-channel for essential tasks to communicate shutdown.
 		let (essential_failed_tx, essential_failed_rx) = mpsc::unbounded();
@@ -913,7 +947,6 @@ ServiceBuilder<
 			let is_validator = config.roles.is_authority();
 
 			let events = client.import_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |notification| {
 					let txpool = txpool.upgrade();
 
@@ -921,8 +954,8 @@ ServiceBuilder<
 						let future = txpool.maintain(
 							&BlockId::hash(notification.hash),
 							&notification.retracted,
-						).map(|_| Ok(())).compat();
-						let _ = to_spawn_tx_.unbounded_send(Box::new(future));
+						);
+						let _ = to_spawn_tx_.unbounded_send(Box::pin(future));
 					}
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
@@ -931,15 +964,13 @@ ServiceBuilder<
 							&notification.header,
 							network_state_info.clone(),
 							is_validator
-						).map(|()| Ok(()));
-						let _ = to_spawn_tx_.unbounded_send(Box::new(Compat::new(future)));
+						);
+						let _ = to_spawn_tx_.unbounded_send(Box::pin(future));
 					}
 
-					Ok(())
-				})
-				.select(exit.clone().map(Ok).compat())
-				.then(|_| Ok(()));
-			let _ = to_spawn_tx.unbounded_send(Box::new(events));
+					ready(())
+				});
+			let _ = to_spawn_tx.unbounded_send(Box::pin(select(events, exit.clone()).map(drop)));
 		}
 
 		{
@@ -947,7 +978,6 @@ ServiceBuilder<
 			let network = Arc::downgrade(&network);
 			let transaction_pool_ = transaction_pool.clone();
 			let events = transaction_pool.import_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |_| {
 					if let Some(network) = network.upgrade() {
 						network.trigger_repropagate();
@@ -957,12 +987,10 @@ ServiceBuilder<
 						"ready" => status.ready,
 						"future" => status.future
 					);
-					Ok(())
-				})
-				.select(exit.clone().map(Ok).compat())
-				.then(|_| Ok(()));
+					ready(())
+				});
 
-			let _ = to_spawn_tx.unbounded_send(Box::new(events));
+			let _ = to_spawn_tx.unbounded_send(Box::pin(select(events, exit.clone()).map(drop)));
 		}
 
 		// Periodically notify the telemetry.
@@ -981,6 +1009,8 @@ ServiceBuilder<
 			let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
 			let bandwidth_download = net_status.average_download_per_sec;
 			let bandwidth_upload = net_status.average_upload_per_sec;
+			let best_seen_block = net_status.best_seen_block
+				.map(|num: NumberFor<TBl>| num.unique_saturated_into() as u64);
 
 			// get cpu usage and memory usage of this process
 			let (cpu_usage, memory) = if let Some(self_pid) = self_pid {
@@ -1014,12 +1044,16 @@ ServiceBuilder<
 			TX_COUNT.set(txpool_status.ready as u64);
 			FINALITY_HEIGHT.set(finalized_number);
 			BEST_HEIGHT.set(best_number);
-			P2P_PEERS_NUM.set(num_peers as u64);
-			P2P_NODE_DOWNLOAD.set(net_status.average_download_per_sec);
-			P2P_NODE_UPLOAD.set(net_status.average_upload_per_sec);
-			Ok(())
-		}).select(exit.clone().map(Ok).compat()).then(|_| Ok(()));
-		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
+			PEERS_NUM.set(num_peers as u64);
+			NODE_DOWNLOAD.set(net_status.average_download_per_sec);
+			NODE_UPLOAD.set(net_status.average_upload_per_sec);
+			if let Some(best_seen_block) = best_seen_block {
+				SYNC_TARGET.set(best_seen_block);
+			}
+
+			ready(())
+		});
+		let _ = to_spawn_tx.unbounded_send(Box::pin(select(tel_task, exit.clone()).map(drop)));
 
 		// Periodically send the network state to the telemetry.
 		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
@@ -1030,12 +1064,12 @@ ServiceBuilder<
 				"system.network_state";
 				"state" => network_state,
 			);
-			Ok(())
-		}).select(exit.clone().map(Ok).compat()).then(|_| Ok(()));
-		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task_2));
+			ready(())
+		});
+		let _ = to_spawn_tx.unbounded_send(Box::pin(select(tel_task_2, exit.clone()).map(drop)));
 
 		// RPC
-		let (system_rpc_tx, system_rpc_rx) = futures03::channel::mpsc::unbounded();
+		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
 		let gen_handler = || {
 			use sc_rpc::{chain, state, author, system};
 
@@ -1095,17 +1129,14 @@ ServiceBuilder<
 		let rpc = start_rpc_servers(&config, gen_handler)?;
 
 
-		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future(
+		let _ = to_spawn_tx.unbounded_send(Box::pin(select(build_network_future(
 			config.roles,
 			network_mut,
 			client.clone(),
 			network_status_sinks.clone(),
 			system_rpc_rx,
 			has_bootnodes,
-		)
-			.map_err(|_| ())
-			.select(exit.clone().map(Ok).compat())
-			.then(|_| Ok(()))));
+		), exit.clone()).map(drop)));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
@@ -1126,8 +1157,6 @@ ServiceBuilder<
 				.map(|dur| dur.as_millis())
 				.unwrap_or(0);
 			let future = telemetry.clone()
-				.map(|ev| Ok::<_, ()>(ev))
-				.compat()
 				.for_each(move |event| {
 					// Safe-guard in case we add more events in the future.
 					let sc_telemetry::TelemetryEvent::Connected = event;
@@ -1146,25 +1175,36 @@ ServiceBuilder<
 					telemetry_connection_sinks_.lock().retain(|sink| {
 						sink.unbounded_send(()).is_ok()
 					});
-					Ok(())
+					ready(())
 				});
-			let _ = to_spawn_tx.unbounded_send(Box::new(future
-				.select(exit.clone().map(Ok).compat())
-				.then(|_| Ok(()))));
+			let _ = to_spawn_tx.unbounded_send(Box::pin(select(
+				future, exit.clone()
+			).map(drop)));
 			telemetry
 		});
-		// Prometheus endpoint
+		// Prometheus exporter
 		if let Some(port) = config.prometheus_port {
-			let future = select(
-				prometheus_endpoint::init_prometheus(port).boxed(),
-				exit.clone()
-			).map(|either| match either {
-				Either::Left((result, _)) => result.map_err(|_| ()),
-				Either::Right(_) => Ok(())
-			}).compat();
+			let registry = match prometheus_registry {
+				Some(registry) => registry,
+				None => Registry::new_custom(Some("substrate".into()), None)?
+			};
 
-			let _ = to_spawn_tx.unbounded_send(Box::new(future));
-		}
+			registry.register(Box::new(NODE_MEMORY.clone()))?;
+			registry.register(Box::new(NODE_CPU.clone()))?;
+			registry.register(Box::new(TX_COUNT.clone()))?;
+			registry.register(Box::new(FINALITY_HEIGHT.clone()))?;
+			registry.register(Box::new(BEST_HEIGHT.clone()))?;
+			registry.register(Box::new(PEERS_NUM.clone()))?;
+			registry.register(Box::new(NODE_DOWNLOAD.clone()))?;
+			registry.register(Box::new(NODE_UPLOAD.clone()))?;
+
+			let future = select(
+				prometheus_exporter::init_prometheus(port, registry).boxed(),
+				exit.clone()
+			).map(drop);
+
+			let _ = to_spawn_tx.unbounded_send(Box::pin(future));
+    	}
 
 		// Instrumentation
 		if let Some(tracing_targets) = config.tracing_targets.as_ref() {

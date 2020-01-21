@@ -39,7 +39,7 @@ mod wasm_runtime;
 mod integration_tests;
 
 pub use wasmi;
-pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
+pub use native_executor::{with_externalities_safe, NativeExecutor, NativeExecutionDispatch};
 pub use sp_version::{RuntimeVersion, NativeVersion};
 pub use codec::Codec;
 #[doc(hidden)]
@@ -57,26 +57,55 @@ pub use sc_executor_common::{error, allocator, sandbox};
 /// - `call_data`: Will be given as input parameters to `function`
 /// - `execution_method`: The execution method to use.
 /// - `ext`: The externalities that should be set while executing the wasm function.
+///          If `None` is given, no externalities will be set.
 /// - `heap_pages`: The number of heap pages to allocate.
 ///
 /// Returns the `Vec<u8>` that contains the return value of the function.
-pub fn call_in_wasm<E: Externalities, HF: sp_wasm_interface::HostFunctions>(
+pub fn call_in_wasm<HF: sp_wasm_interface::HostFunctions>(
 	function: &str,
 	call_data: &[u8],
 	execution_method: WasmExecutionMethod,
-	ext: &mut E,
+	ext: &mut dyn Externalities,
 	code: &[u8],
 	heap_pages: u64,
 	allow_missing_imports: bool,
 ) -> error::Result<Vec<u8>> {
-	let mut instance = wasm_runtime::create_wasm_runtime_with_code(
+	call_in_wasm_with_host_functions(
+		function,
+		call_data,
+		execution_method,
+		ext,
+		code,
+		heap_pages,
+		HF::host_functions(),
+		allow_missing_imports,
+	)
+}
+
+/// Non-generic version of [`call_in_wasm`] that takes the `host_functions` as parameter.
+/// For more information please see [`call_in_wasm`].
+pub fn call_in_wasm_with_host_functions(
+	function: &str,
+	call_data: &[u8],
+	execution_method: WasmExecutionMethod,
+	ext: &mut dyn Externalities,
+	code: &[u8],
+	heap_pages: u64,
+	host_functions: Vec<&'static dyn sp_wasm_interface::Function>,
+	allow_missing_imports: bool,
+) -> error::Result<Vec<u8>> {
+	let instance = wasm_runtime::create_wasm_runtime_with_code(
 		execution_method,
 		heap_pages,
 		code,
-		HF::host_functions(),
+		host_functions,
 		allow_missing_imports,
 	)?;
-	instance.call(ext, function, call_data)
+
+	// It is safe, as we delete the instance afterwards.
+	let mut instance = std::panic::AssertUnwindSafe(instance);
+
+	with_externalities_safe(ext, move || instance.call(function, call_data)).and_then(|r| r)
 }
 
 /// Provides runtime information.
@@ -98,7 +127,7 @@ mod tests {
 	fn call_in_interpreted_wasm_works() {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
-		let res = call_in_wasm::<_, sp_io::SubstrateHostFunctions>(
+		let res = call_in_wasm::<sp_io::SubstrateHostFunctions>(
 			"test_empty_return",
 			&[],
 			WasmExecutionMethod::Interpreted,
