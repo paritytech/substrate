@@ -34,6 +34,7 @@ use std::{
 };
 
 use futures::prelude::*;
+use futures_channel::mpsc::state_channel as state;
 use parking_lot::Mutex;
 use log::{debug, info, trace};
 
@@ -219,6 +220,10 @@ impl<H, B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for Au
 	type Proposer = E::Proposer;
 	type Claim = P;
 	type EpochData = Vec<AuthorityId<P>>;
+
+	fn sender(&self) -> state::Sender<SlotWorkerEvent<P>> {
+		unimplemented!()
+	}
 
 	fn logging_target(&self) -> &'static str {
 		"aura"

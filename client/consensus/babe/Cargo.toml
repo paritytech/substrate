@@ -7,6 +7,9 @@ edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+jsonrpc-core = "14.0.5"
+jsonrpc-core-client = "14.0.5"
+jsonrpc-derive = "14.0.5"
 sp-consensus-babe = { version = "0.8", path = "../../../primitives/consensus/babe" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-application-crypto = { version = "2.0.0", path = "../../../primitives/application-crypto" }
@@ -39,6 +42,7 @@ rand = "0.7.2"
 merlin = "1.2.1"
 pdqselect = "0.1.0"
 derive_more = "0.99.2"
+futures-channel = { path = "../../../../futures-channel" }
 
 [dev-dependencies]
 sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }

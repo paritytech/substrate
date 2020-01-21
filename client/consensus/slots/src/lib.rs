@@ -34,6 +34,7 @@ use codec::{Decode, Encode};
 use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData};
 use futures::{prelude::*, future::{self, Either}};
 use futures_timer::Delay;
+use futures_channel::mpsc::state_channel as state;
 use sp_inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
 use sp_runtime::generic::BlockId;
@@ -67,10 +68,13 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	type Proposer: Proposer<B>;
 
 	/// Data associated with a slot claim.
-	type Claim: Send + 'static;
+	type Claim: Clone + Send + 'static;
 
 	/// Epoch data necessary for authoring.
 	type EpochData;
+
+	/// get the sender for events
+	fn sender(&self) -> state::Sender<SlotWorkerEvent<Self::Claim>>;
 
 	/// The logging target to use when logging messages.
 	fn logging_target(&self) -> &'static str;
@@ -140,6 +144,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	{
 		let (timestamp, slot_number, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
+
+		self.sender().send(SlotWorkerEvent::NewSlot {
+			slot_number,
+		});
 
 		{
 			let slot_now = SignedDuration::default().slot_now(slot_duration);
@@ -285,6 +293,32 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			}
 		}))
 	}
+}
+
+/// Slot worker events
+#[derive(Clone)]
+pub enum SlotWorkerEvent<T> {
+	/// produced when there's a new slot
+	NewSlot {
+		/// slot number of the epoch
+		slot_number: u64,
+	},
+	/// slot_number was unclaimed
+	UnClaimedSlot {
+		/// slot threshold
+		thresholds: Vec<u128>,
+		/// slot number of the epoch
+		slot_number: u64,
+	},
+	/// a slot was claimed
+	ClaimedSlot {
+		/// claim data
+		claim: T,
+		/// slot threshold
+		thresholds: Vec<u128>,
+		/// slot number of the epoch
+		slot_number: u64,
+	},
 }
 
 /// Slot compatible inherent data.

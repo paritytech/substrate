@@ -145,20 +145,21 @@ pub(super) fn claim_slot(
 	epoch: &Epoch,
 	config: &BabeConfiguration,
 	keystore: &KeyStorePtr,
-) -> Option<(BabePreDigest, AuthorityPair)> {
-	claim_primary_slot(slot_number, epoch, config.c, keystore)
-		.or_else(|| {
-			if config.secondary_slots {
-				claim_secondary_slot(
-					slot_number,
-					&epoch.authorities,
-					keystore,
-					epoch.randomness,
-				)
-			} else {
-				None
-			}
-		})
+) -> (Vec<u128>, Option<(BabePreDigest, AuthorityPair)>) {
+	let (thresholds, claim) = claim_primary_slot(slot_number, epoch, config.c, keystore);
+	let claim = claim.or_else(|| {
+		if config.secondary_slots {
+			claim_secondary_slot(
+				slot_number,
+				&epoch.authorities,
+				keystore,
+				epoch.randomness,
+			)
+		} else {
+			None
+		}
+		});
+	(thresholds, claim)
 }
 
 fn get_keypair(q: &AuthorityPair) -> &schnorrkel::Keypair {
@@ -175,10 +176,11 @@ fn claim_primary_slot(
 	epoch: &Epoch,
 	c: (u64, u64),
 	keystore: &KeyStorePtr,
-) -> Option<(BabePreDigest, AuthorityPair)> {
+) -> (Vec<u128>, Option<(BabePreDigest, AuthorityPair)>) {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
 	let keystore = keystore.read();
 
+	let mut thresholds = Vec::with_capacity(authorities.len());
 	for (pair, authority_index) in authorities.iter()
 		.enumerate()
 		.flat_map(|(i, a)| {
@@ -192,6 +194,7 @@ fn claim_primary_slot(
 		// We already checked that authorities contains `key.public()`, so it can't
 		// be empty.  Therefore, this division in `calculate_threshold` is safe.
 		let threshold = super::authorship::calculate_primary_threshold(c, authorities, authority_index);
+		thresholds.push(threshold);
 
 		let pre_digest = get_keypair(&pair)
 			.vrf_sign_after_check(transcript, |inout| super::authorship::check_primary_threshold(inout, threshold))
@@ -206,9 +209,9 @@ fn claim_primary_slot(
 
 		// early exit on first successful claim
 		if let Some(pre_digest) = pre_digest {
-			return Some((pre_digest, pair));
+			return (thresholds, Some((pre_digest, pair)));
 		}
 	}
 
-	None
+	(thresholds, None)
 }

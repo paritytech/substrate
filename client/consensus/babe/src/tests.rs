@@ -506,8 +506,8 @@ fn can_author_block() {
 
 	// with secondary slots enabled it should never be empty
 	match claim_slot(i, &epoch, &config, &keystore) {
-		None => i += 1,
-		Some(s) => debug!(target: "babe", "Authored block {:?}", s.0),
+		(_, None) => i += 1,
+		(_, Some(s)) => debug!(target: "babe", "Authored block {:?}", s.0),
 	}
 
 	// otherwise with only vrf-based primary slots we might need to try a couple
@@ -515,8 +515,8 @@ fn can_author_block() {
 	config.secondary_slots = false;
 	loop {
 		match claim_slot(i, &epoch, &config, &keystore) {
-			None => i += 1,
-			Some(s) => {
+			(_, None) => i += 1,
+			(_, Some(s)) => {
 				debug!(target: "babe", "Authored block {:?}", s.0);
 				break;
 			}

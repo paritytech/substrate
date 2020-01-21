@@ -96,7 +96,7 @@ use sc_client::Client;
 
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
-use sc_consensus_slots::{CheckedHeader, check_equivocation};
+use sc_consensus_slots::{CheckedHeader, check_equivocation, SlotWorkerEvent};
 use futures::prelude::*;
 use log::{warn, debug, info, trace};
 use sc_consensus_slots::{SlotWorker, SlotInfo, SlotCompatible};
@@ -106,6 +106,7 @@ use sp_blockchain::{
 	HeaderBackend, ProvideCache, HeaderMetadata
 };
 use schnorrkel::SignatureError;
+use futures_channel::mpsc::state_channel as state;
 
 use sp_api::ApiExt;
 
@@ -113,6 +114,7 @@ mod aux_schema;
 mod verification;
 mod epoch_changes;
 mod authorship;
+pub mod rpc;
 #[cfg(test)]
 mod tests;
 pub use sp_consensus_babe::{
@@ -271,6 +273,9 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	/// The source of timestamps for relative slots
 	pub babe_link: BabeLink<B>,
 
+	/// sender for producing events
+	pub sender: state::Sender<SlotWorkerEvent<BabeClaim>>,
+
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
 }
@@ -287,6 +292,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	force_authoring,
 	babe_link,
 	can_author_with,
+	sender,
 }: BabeParams<B, C, E, I, SO, SC, CAW>) -> Result<
 	impl futures01::Future<Item=(), Error=()>,
 	sp_consensus::Error,
@@ -314,6 +320,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		keystore,
 		epoch_changes: babe_link.epoch_changes.clone(),
 		config: config.clone(),
+		sender,
 	};
 
 	register_babe_inherent_data_provider(&inherent_data_providers, config.slot_duration())?;
@@ -337,6 +344,8 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	Ok(slot_worker.map(|_| Ok::<(), ()>(())).compat())
 }
 
+type BabeClaim = (BabePreDigest, AuthorityPair);
+
 struct BabeWorker<B: BlockT, C, E, I, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
@@ -346,6 +355,7 @@ struct BabeWorker<B: BlockT, C, E, I, SO> {
 	keystore: KeyStorePtr,
 	epoch_changes: SharedEpochChanges<B>,
 	config: Config,
+	sender:	state::Sender<SlotWorkerEvent<BabeClaim>>,
 }
 
 impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I, SO> where
@@ -360,7 +370,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	Error: std::error::Error + Send + From<::sp_consensus::Error> + From<I::Error> + 'static,
 {
 	type EpochData = Epoch;
-	type Claim = (BabePreDigest, AuthorityPair);
+	type Claim = BabeClaim;
 	type SyncOracle = SO;
 	type Proposer = E::Proposer;
 	type BlockImport = I;
@@ -371,6 +381,10 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 
 	fn block_import(&self) -> Arc<Mutex<Self::BlockImport>> {
 		self.block_import.clone()
+	}
+
+	fn sender(&self) -> state::Sender<SlotWorkerEvent<Self::Claim>> {
+		self.sender.clone()
 	}
 
 	fn epoch_data(&self, parent: &B::Header, slot_number: u64) -> Result<Self::EpochData, sp_consensus::Error> {
@@ -397,15 +411,29 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		epoch_data: &Epoch,
 	) -> Option<Self::Claim> {
 		debug!(target: "babe", "Attempting to claim slot {}", slot_number);
-		let s = authorship::claim_slot(
+		let (thresholds, s) = authorship::claim_slot(
 			slot_number,
 			epoch_data,
 			&*self.config,
 			&self.keystore,
 		);
 
-		if let Some(_) = s {
-			debug!(target: "babe", "Claimed slot {}", slot_number);
+		match s {
+			Some((ref digest, ref pair)) => {
+				debug!(target: "babe", "Claimed slot {}", slot_number);
+
+				self.sender().send(SlotWorkerEvent::ClaimedSlot {
+					thresholds,
+					slot_number,
+					claim: ((digest.clone(), pair.clone()))
+				});
+			},
+			None => {
+				self.sender().send(SlotWorkerEvent::UnClaimedSlot {
+					thresholds,
+					slot_number,
+				});
+			}
 		}
 
 		s
@@ -1239,11 +1267,13 @@ pub mod test_helpers {
 			|slot| link.config.genesis_epoch(slot),
 		).unwrap().unwrap();
 
-		authorship::claim_slot(
+		let (_, claim) = authorship::claim_slot(
 			slot_number,
 			epoch.as_ref(),
 			&link.config,
 			keystore,
-		).map(|(digest, _)| digest)
+		);
+
+		claim.map(|(digest, _)| digest)
 	}
 }
