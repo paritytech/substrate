@@ -1038,15 +1038,20 @@ macro_rules! decl_module {
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
-			$crate::sp_std::if_std! {
-				use $crate::tracing;
-				let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
-				let _enter = span.enter();
-			}
-			{
+			let c = || {
+				$crate::sp_std::if_std! {
+					use $crate::tracing;
+					let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
+					let _enter = span.enter();
+				}
 				{ $( $impl )* }
 				Ok(())
+			};
+			let r = c();
+			$crate::sp_std::if_std! {
+				println!("Result = {:?}", r);
 			}
+			r
 		}
 	};
 
@@ -1063,13 +1068,19 @@ macro_rules! decl_module {
 	) => {
 		$(#[doc = $doc_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-			use $crate::sp_std::if_std;
-			if_std! {
-				use $crate::tracing;
-				let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
-				let _enter = span.enter();
+			let c = || {
+				$crate::sp_std::if_std! {
+					use $crate::tracing;
+					let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
+					let _enter = span.enter();
+				}
+				$( $impl )* 
+			};
+			let r = c();
+			$crate::sp_std::if_std! {
+				println!("Result = {:?}", r);
 			}
-			{ $( $impl )* }
+			r
 		}
 	};
 

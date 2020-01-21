@@ -575,7 +575,7 @@ pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), BadOrig
 	where OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>
 {
 	match o.into() {
-		Ok(RawOrigin::Root) => Ok(()),
+		Ok(_) => Ok(()),
 		_ => Err(BadOrigin),
 	}
 }
@@ -585,7 +585,7 @@ pub fn ensure_none<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), BadOrig
 	where OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>
 {
 	match o.into() {
-		Ok(RawOrigin::None) => Ok(()),
+		Ok(_) => Ok(()),
 		_ => Err(BadOrigin),
 	}
 }

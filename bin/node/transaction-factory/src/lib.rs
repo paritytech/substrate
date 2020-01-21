@@ -251,9 +251,10 @@ where
 				);
 				let e = Decode::decode(&mut &extrinsic.encode()[..])
 					.expect("decode failed");
-				block.push(e).expect("push extrinsic failed");
-				self.runtime_state.increase_index();
-				tx_pushed += 1;
+				if block.push(e).is_ok() { // TODO: figure out heartbeat.
+					self.runtime_state.increase_index();
+					tx_pushed += 1;
+				}
 			} else {
 				// We reset the automaton, comming back to starting state,
 				// in order to get more extrinsics out of it.
@@ -277,8 +278,6 @@ where
 
 			if let Some(random_call) = calls.choose(&mut rand::thread_rng()) {
 				return Some((random_module.clone(), random_call.clone(), vec![]))
-			} else {
-				println!("Couldn't find any call for {}, retrying.", random_module);
 			}
 		}
 	}
