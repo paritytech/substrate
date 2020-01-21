@@ -21,7 +21,7 @@ use std::{
 	str::FromStr,
 };
 use crate::{Inspector, PrettyPrinter};
-use sc_cli::{SharedParams, error};
+use sc_cli::{ImportParams, SharedParams, error};
 use structopt::StructOpt;
 
 /// The `inspect` command used to print decoded chain data.
@@ -34,6 +34,10 @@ pub struct InspectCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub import_params: ImportParams,
 }
 
 /// A possible inspect sub-commands.
@@ -88,6 +92,14 @@ impl InspectCmd {
 		)?;
 		// make sure to configure keystore
 		config.keystore = sc_service::config::KeystoreConfig::InMemory;
+		// and all import params (especially pruning that has to match db meta)
+		sc_cli::fill_import_params(
+			&mut config,
+			&self.import_params,
+			sc_service::Roles::FULL,
+			self.shared_params.dev,
+		)?;
+
 		let inspect = (builder)(config)?;
 
 		match self.command {
