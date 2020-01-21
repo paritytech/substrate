@@ -83,7 +83,7 @@ fn call_in_wasm<E: Externalities>(
 	code: &[u8],
 	heap_pages: u64,
 ) -> crate::error::Result<Vec<u8>> {
-	crate::call_in_wasm::<E, HostFunctions>(
+	crate::call_in_wasm::<HostFunctions>(
 		function,
 		call_data,
 		execution_method,

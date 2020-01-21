@@ -19,7 +19,7 @@
 //! # Example
 //!
 //! ```
-//! # use sc_basic_authority::ProposerFactory;
+//! # use sc_basic_authorship::ProposerFactory;
 //! # use sp_consensus::{Environment, Proposer, RecordProof};
 //! # use sp_runtime::generic::BlockId;
 //! # use std::{sync::Arc, time::Duration};
@@ -34,9 +34,12 @@
 //! };
 //!
 //! // From this factory, we create a `Proposer`.
-//! let mut proposer = proposer_factory.init(
+//! let proposer = proposer_factory.init(
 //! 	&client.header(&BlockId::number(0)).unwrap().unwrap(),
-//! ).unwrap();
+//! );
+//!
+//! // The proposer is created asynchronously.
+//! let mut proposer = futures::executor::block_on(proposer).unwrap();
 //!
 //! // This `Proposer` allows us to create a block proposition.
 //! // The proposer will grab transactions from the transaction pool, and put them into the block.

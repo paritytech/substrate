@@ -325,8 +325,8 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		keys: Option<Vec<StorageKey>>
 	) {
 		let keys = match keys {
-			Some(keys) => keys,
-			None => {
+			Some(keys) if !keys.is_empty() => keys,
+			_ => {
 				warn!("Cannot subscribe to all keys on light client. Subscription rejected.");
 				return;
 			}

@@ -106,6 +106,9 @@ pub enum Error {
 	/// Changes tries are not supported.
 	#[display(fmt = "Changes tries are not supported by the runtime")]
 	ChangesTriesNotSupported,
+	/// Error reading changes tries configuration.
+	#[display(fmt = "Error reading changes tries configuration")]
+	ErrorReadingChangesTriesConfig,
 	/// Key changes query has failed.
 	#[display(fmt = "Failed to check changes proof: {}", _0)]
 	#[from(ignore)]
