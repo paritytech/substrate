@@ -138,6 +138,7 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
+    - fail here
     - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked |
         tee output.log
     - sccache -s
