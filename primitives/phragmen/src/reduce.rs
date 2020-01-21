@@ -76,6 +76,24 @@ fn combinations_2<T: Clone>(input: &[T]) -> Vec<(T, T)> {
 	comb
 }
 
+/// Returns the count of trailing common elements in a slice.
+pub(crate) fn trailing_common<T: Eq>(t1: &[T], t2: &[T]) -> usize {
+	let mut t1_pointer = t1.len() - 1;
+	let mut t2_pointer = t2.len() - 1;
+	let mut common = 0usize;
+
+	while t1[t1_pointer] == t2[t2_pointer] {
+		common += 1;
+		if t1_pointer == 0 || t2_pointer == 0 {
+			break;
+		}
+		t1_pointer -= 1;
+		t2_pointer -= 1;
+	}
+
+	common
+}
+
 /// Reduce only redundant edges with cycle length of 4.
 ///
 /// O(|E_w| ⋅ k).
@@ -117,7 +135,6 @@ fn reduce_4<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 					// check if other_who voted for the same pair v1, v2.
 					let maybe_other_assignments = assignments.iter().find(|a| a.who == *other_who);
 					if maybe_other_assignments.is_none() {
-						// TODO: test for this path?
 						// This combination is not a cycle.
 						continue;
 					}
@@ -277,9 +294,13 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 	assignments: &mut Vec<StakedAssignment<AccountId>>,
 ) -> u32 {
 	let mut num_changed: u32 = Zero::zero();
-
-	// ----------------- Phase 2: remove any other cycle
 	let mut tree: BTreeMap<AccountId, NodeRef<AccountId>> = BTreeMap::new();
+
+	// NOTE: This code can heavily use an index cache. Looking up a pair of (voter, target) in the
+	// assignments happens numerous times and and we can save time. For now it is written as such
+	// because abstracting some of this code into a function/closure is super hard due to borrow
+	// checks (and most likely needs unsafe code at the end). For now I will keep it as it and
+	// refactor later.
 
 	// a flat iterator of (voter, target) over all pairs of votes. Similar to reduce_4, we loop
 	// without borrowing.
@@ -293,22 +314,21 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 				// The rest of this loop is moot.
 				break;
 			}
-
 			let (target, _) = maybe_dist.expect("Value checked to be some").clone();
-
-			println!("+++ {:?} -> {:?} , TREE = {:?}", &voter, &target, &tree);
 
 			// store if they existed already.
 			let voter_exists = tree.contains_key(&voter);
 			let target_exists = tree.contains_key(&target);
 
-			// create both
+			// create both.
 			let voter_node = tree.entry(voter.clone())
 				.or_insert(Node::new(voter.clone(), NodeRole::Voter).into_ref()).clone();
 			let target_node = tree.entry(target.clone())
 				.or_insert(Node::new(target.clone(), NodeRole::Target).into_ref()).clone();
 
-			// TODO a simple test for this. The pic I sent to alfonso
+			// If one exists but the other one doesn't, or if both does not, then set the existing
+			// one as the parent of the non-existing one and move on. Else, continue with the rest
+			// of the code.
 			match (voter_exists, target_exists) {
 				(false, false) => {
 					Node::set_parent_of(&target_node, &voter_node);
@@ -325,37 +345,30 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 				(true, true) => { /* don't continue and execute the rest */ }
 			};
 
-			dbg!(assignment_index, dist_index);
-
 			let (voter_root, voter_root_path) = Node::root(&voter_node);
 			let (target_root, target_root_path) = Node::root(&target_node);
 
-			dbg!("got roots");
 			if voter_root != target_root {
-				dbg!("merging");
 				// swap
-				// TODO: test case for this path
 				merge(voter_root_path, target_root_path);
 			} else {
-				debug_assert_eq!(target_root_path.last().unwrap(), voter_root_path.last().unwrap());
-
 				// find common and cycle.
-				let common_count = crate::cycle::trailing_common(&voter_root_path, &target_root_path);
+				let common_count = trailing_common(&voter_root_path, &target_root_path);
 
-				// because roots are the same. TODO: replace with a bail-out
+				// because roots are the same.
+				debug_assert_eq!(target_root_path.last().unwrap(), voter_root_path.last().unwrap());
 				debug_assert!(common_count > 0);
 
 				// cycle part of each path will be `path[path.len() - common_count - 1 : 0]`
 				// NOTE: the order of chaining is important! it is always build from [target, ...,
 				// voter]
-				// TODO: check borrows panic!
 				let cycle =
 					target_root_path.iter().take(target_root_path.len() - common_count + 1).cloned()
 					.chain(voter_root_path.iter().take(voter_root_path.len() - common_count).rev().cloned())
 					.collect::<Vec<NodeRef<AccountId>>>();
+				// a cycle's length shall always be multiple of two.
+				debug_assert_eq!(cycle.len() % 2, 0);
 
-
-				// TODO: a cycle struct that gives you min + to which chunk it belonged.
 				// find minimum of cycle.
 				let mut min_value: ExtendedBalance = Bounded::max_value();
 				// The voter and the target pair that create the min edge.
@@ -363,7 +376,7 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 				let mut min_voter: AccountId = Default::default();
 				// The index of the min in opaque cycle list.
 				let mut min_index = 0usize;
-				// 1 -> next // 0 -> prev  TODO: I have some ideas of fixing this.
+				// 1 -> next // 0 -> prev
 				let mut min_direction = 0u32;
 				// helpers
 				let next_index = |i| { if i < (cycle.len() - 1) { i + 1 } else { 0 } };
@@ -398,27 +411,18 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 						});
 					}
 				}
-				// TODO: this is tricky and needs a test.
+
 				// if the min edge is in the voter's sub-chain.
-				let target_chunk = target_root_path.len() - common_count;
 				// [target, ..., X, Y, ... voter]
+				let target_chunk = target_root_path.len() - common_count;
 				let min_chain_in_voter = (min_index + min_direction as usize) > target_chunk;
 
-				println!("#### cycle = {:?}", cycle.iter().map(|e| e.borrow().who.clone()).collect::<Vec<AccountId>>());
-				println!("target_root_path = {:?}", target_root_path);
-				println!("voter_root_path = {:?}", voter_root_path);
-				dbg!(min_index, min_direction);
-				dbg!(&min_target);
-
 				// walk over the cycle and update the weights
-				// TODO: or at least unify and merge the process of adding this flow in both places. and surely add dedicated tests for this supply demand circulation math
-				// if the circulation begins with an addition. It is assumed that a cycle always starts with a target.
 				let start_operation_add = ((min_index % 2) + min_direction as usize) % 2 == 1;
 				let mut additional_removed = Vec::new();
 				for i in 0..cycle.len() {
 					let current = cycle[i].borrow();
 					if current.role == NodeRole::Voter {
-
 						let prev = cycle[prev_index(i)].borrow();
 						assignments.iter_mut().filter(|a| a.who == current.who).for_each(|ass| {
 							ass.distribution.iter_mut().position(|(t, _)| *t == prev.who).map(|idx| {
@@ -435,7 +439,7 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 										ass.distribution[idx].1.saturating_add(min_value)
 									}
 								};
-								println!("next value of {:?} -> {:?} is {:?}", &current.who, &prev.who, next_value);
+
 								if next_value.is_zero() {
 									ass.distribution.remove(idx);
 									num_changed += 1;
@@ -465,7 +469,7 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 										ass.distribution[idx].1.saturating_sub(min_value)
 									}
 								};
-								println!("next value of {:?} -> {:?} is {:?}", &current.who, &next.who, next_value);
+
 								if next_value.is_zero() {
 									ass.distribution.remove(idx);
 									num_changed += 1;
@@ -480,12 +484,11 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 					}
 				};
 
-				dbg!(&additional_removed);
 
-				// don't do anything if the edge removed itself. This is always the first and last element
+				// don't do anything if the edge removed itself. This is always the first and last
+				// element
 				let should_reorg = !(min_index == (cycle.len() - 1) && min_direction == 1);
 
-				// TODO: this is most likely buggy
 				// re-org.
 				if should_reorg {
 					dbg!(min_chain_in_voter);

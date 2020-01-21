@@ -34,19 +34,11 @@ type AccountId = u64;
 const KSM: Balance = 1_000_000_000_000;
 
 fn main() {
-	// let (assignments, winners) = generate_random_phragmen_assignment(
-    //     10,
-    //     10,
-    //     5,
-    //     1,
-	// );
-    // reduce_and_compare(&assignments, &winners);
-
 	loop {
 		fuzz!(|_data: _| {
 	 		let (assignments, winners) = generate_random_phragmen_assignment(
-	 			rr(100, 500),
-	 			rr(100, 200),
+	 			rr(100, 1000),
+	 			rr(100, 2000),
 	 			10,
 	 			6,
 	 		);
@@ -104,14 +96,12 @@ fn assert_assignments_equal(
 	ass1: &Vec<StakedAssignment<AccountId>>,
 	ass2: &Vec<StakedAssignment<AccountId>>,
 ) {
+
 	let (support_1, _) = build_support_map::<Balance, AccountId>(winners, ass1);
 	let (support_2, _) = build_support_map::<Balance, AccountId>(winners, ass2);
 
 	for (who, support) in support_1.iter() {
 		assert_eq!(support.total, support_2.get(who).unwrap().total);
-		// TODO: assert on length as well.
-		// Why am I so stupid... Only the total need to be the same.
-		// assert_eq!(support.voters, support_2.get(who).unwrap().voters);
 	}
 }
 
@@ -120,7 +110,8 @@ fn reduce_and_compare(
 	winners: &Vec<AccountId>,
 ) {
 	let mut altered_assignment = assignment.clone();
-	reduce(&mut altered_assignment);
+	let num_changed = reduce(&mut altered_assignment);
+	// TODO: give a report of how many edges were removed on average.
 	assert_assignments_equal(
 		winners,
 		&assignment,
