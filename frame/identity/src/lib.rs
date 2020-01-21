@@ -931,12 +931,14 @@ impl<T: Trait> Benchmarking for Module<T> {
 		let components = benchmarking::set_identity::components();
 		// Select the component we will be benchmarking. Each component will be benchmarked.
 		for (name, low, high) in components.iter() {
-			// Select create up to `STEPS` steps for that component between high and low.
+			// Create up to `STEPS` steps for that component between high and low.
 			let step_size = ((high - low) / Self::STEPS).min(1);
 			let num_of_steps = Self::STEPS / step_size;
 			for s in 0..num_of_steps {
+				// This is the value we will be testing for component `name`
 				let component_value = step_size * s;
 
+				// Select the mid value for all the other components.
 				let c: Vec<(&'static str, u32)> = components.iter()
 					.map(|(n, l, h)|
 						(*n, if n == name { component_value } else { (h - l) / 2 + l })
