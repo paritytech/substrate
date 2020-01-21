@@ -25,10 +25,7 @@ pub const CURRENT_VERSION: VersionNumber = 2;
 /// The inner logic of migrations.
 #[cfg(any(test, feature = "migrate"))]
 pub mod inner {
-	use crate::{
-		Store, Module, Trait, EraRewardPoints, SessionInterface, BalanceOf, StakingLedger,
-		UnlockChunk,
-	};
+	use crate::{Store, Module, Trait, EraRewardPoints, BalanceOf, StakingLedger, UnlockChunk};
 	use frame_support::{
 		StorageLinkedMap, StoragePrefixedMap, StorageValue, StorageDoubleMap, StorageMap,
 	};
@@ -118,15 +115,24 @@ pub mod inner {
 	}
 
 	// migrate storage from v2 to v3:
+	//
+	// In version 2 the staking module has several issue about handling session delay.
+	// In V2 the current era is considered the active one.
+	//
+	// After the migration the current era will still be considered the active one. And the delay
+	// issue will be fixed when planning the next era.
+	//
 	// * create:
 	//   * ActiveEraStart
 	//   * ErasRewardPoints
 	//   * ActiveEra
-	//   * ErasStakers,
+	//   * ErasStakers
 	//   * ErasValidatorPrefs
 	//   * ErasTotalStake
-	//   * StakingLedger
+	//   * ErasStartSessionIndex
+	// * translate StakingLedger
 	// * removal of:
+	//   * Stakers
 	//   * SlotStake
 	//   * CurrentElected
 	//   * CurrentEraStart
@@ -146,22 +152,16 @@ pub mod inner {
 		if *version != 2 { return }
 		*version += 1;
 
-		// Fill new storages.
-
-		// Do ActiveEra
 		let current_era_start_index = <Module<T> as Store>::CurrentEraStartSessionIndex::get();
 		let current_era = <Module<T> as Store>::CurrentEra::get();
-		let active_era = if current_era_start_index > T::SessionInterface::current_index() {
-			current_era - 1
-		} else {
-			current_era
-		};
-		<Module<T> as Store>::ActiveEra::put(active_era);
+		println!("{:?}", current_era);
+		<Module<T> as Store>::ErasStartSessionIndex::insert(current_era, current_era_start_index);
+		<Module<T> as Store>::ActiveEra::put(current_era);
+		<Module<T> as Store>::ActiveEraStart::put(<Module<T> as Store>::CurrentEraStart::get());
 
-		// Do ErasStakers, ErasValidatorPrefs and ErasTotalStake
-		let old_current_elected = <Module<T> as Store>::CurrentElected::get();
+		let current_elected = <Module<T> as Store>::CurrentElected::get();
 		let mut current_total_stake = <BalanceOf<T>>::zero();
-		for validator in &old_current_elected {
+		for validator in &current_elected {
 			let exposure = <Module<T> as Store>::Stakers::get(validator);
 			current_total_stake += exposure.total;
 			let pref = <Module<T> as Store>::Validators::get(validator);
@@ -169,27 +169,13 @@ pub mod inner {
 			<Module<T> as Store>::ErasValidatorPrefs::insert(current_era, validator, pref);
 		}
 		<Module<T> as Store>::ErasTotalStake::insert(current_era, current_total_stake);
-		let mut active_total_stake = <BalanceOf<T>>::zero();
-		for validator in &T::SessionInterface::validators() {
-			let exposure = <Module<T> as Store>::Stakers::get(validator);
-			active_total_stake += exposure.total;
-			let pref = <Module<T> as Store>::Validators::get(validator);
-			<Module<T> as Store>::ErasStakers::insert(active_era, validator, exposure);
-			<Module<T> as Store>::ErasValidatorPrefs::insert(active_era, validator, pref);
-		}
-		<Module<T> as Store>::ErasTotalStake::insert(active_era, active_total_stake);
 
-		// Do ErasRewardPoints
 		let points = <Module<T> as Store>::CurrentEraPointsEarned::get();
-		<Module<T> as Store>::ErasRewardPoints::insert(active_era, EraRewardPoints {
+		<Module<T> as Store>::ErasRewardPoints::insert(current_era, EraRewardPoints {
 			total: points.total,
-			individual: old_current_elected.iter().cloned().zip(points.individual.iter().cloned()).collect(),
+			individual: current_elected.iter().cloned().zip(points.individual.iter().cloned()).collect(),
 		});
 
-		// Do ActiveEraStart
-		<Module<T> as Store>::ActiveEraStart::put(<Module<T> as Store>::CurrentEraStart::get());
-
-		// Do StakingLedger
 		let res = <Module<T> as Store>::Ledger::translate_values(
 			|old: StakingLedgerV1<T::AccountId, BalanceOf<T>>| StakingLedger {
 				stash: old.stash,
@@ -207,6 +193,7 @@ pub mod inner {
 
 
 		// Kill old storages
+		<Module<T> as Store>::Stakers::remove_all();
 		<Module<T> as Store>::SlotStake::kill();
 		<Module<T> as Store>::CurrentElected::kill();
 		<Module<T> as Store>::CurrentEraStart::kill();

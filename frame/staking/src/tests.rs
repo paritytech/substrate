@@ -2860,6 +2860,72 @@ fn migration_v2() {
 }
 
 #[test]
+fn migration_v3() {
+	ExtBuilder::default().build().execute_with(|| {
+		start_era(3);
+
+		assert_eq!(Session::validators(), vec![21, 11]);
+
+		// Insert fake data to check the migration
+		<Staking as Store>::CurrentElected::put(vec![21, 31]);
+		<Staking as Store>::CurrentEraStartSessionIndex::put(5);
+		<Staking as Store>::CurrentEraStart::put(777);
+		<Staking as Store>::Stakers::insert(11, Exposure {
+			total: 10,
+			own: 10,
+			others: vec![],
+		});
+		<Staking as Store>::Stakers::insert(21, Exposure {
+			total: 20,
+			own: 20,
+			others: vec![],
+		});
+		<Staking as Store>::Stakers::insert(31, Exposure {
+			total: 30,
+			own: 30,
+			others: vec![],
+		});
+		<Staking as Store>::CurrentEraPointsEarned::put(EraPoints {
+			total: 12,
+			individual: vec![2, 10],
+		});
+		<Staking as Store>::ErasStakers::remove_all();
+
+		<Staking as Store>::StorageVersion::put(2);
+		// Perform migration.
+		crate::migration::inner::to_v3::<Test>(&mut 2);
+
+		// Check migration
+		assert_eq!(<Staking as Store>::ActiveEraStart::get(), 777);
+		assert_eq!(<Staking as Store>::ErasStartSessionIndex::get(3), 5);
+		assert_eq!(<Staking as Store>::ErasRewardPoints::get(3), EraRewardPoints {
+			total: 12,
+			individual: vec![(21, 2), (31, 10)].into_iter().collect(),
+		});
+		assert_eq!(<Staking as Store>::ActiveEra::get(), 3);
+		assert_eq!(<Staking as Store>::CurrentEra::get(), 3);
+		assert_eq!(<Staking as Store>::ErasStakers::get(3, 11), Exposure {
+			total: 0,
+			own: 0,
+			others: vec![],
+		});
+		assert_eq!(<Staking as Store>::ErasStakers::get(3, 21), Exposure {
+			total: 20,
+			own: 20,
+			others: vec![],
+		});
+		assert_eq!(<Staking as Store>::ErasStakers::get(3, 31), Exposure {
+			total: 30,
+			own: 30,
+			others: vec![],
+		});
+		assert_eq!(<Staking as Store>::ErasValidatorPrefs::get(3, 21), Staking::validators(21));
+		assert_eq!(<Staking as Store>::ErasValidatorPrefs::get(3, 31), Staking::validators(31));
+		assert_eq!(<Staking as Store>::ErasTotalStake::get(3), 50);
+	})
+}
+
+#[test]
 fn zero_slash_keeps_nominators() {
 	ExtBuilder::default().build().execute_with(|| {
 		start_era(1);
@@ -2896,6 +2962,3 @@ fn zero_slash_keeps_nominators() {
 		assert!(nominations.submitted_in >= last_slash);
 	});
 }
-
-// TODO TODO: test migration
-// TODO TODO: test asynchronous creation and deletion of session

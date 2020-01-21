@@ -571,8 +571,6 @@ pub trait SessionInterface<AccountId>: frame_system::Trait {
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
 	fn prune_historical_up_to(up_to: SessionIndex);
-	/// The current session index.
-	fn current_index() -> SessionIndex;
 }
 
 impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T where
@@ -595,10 +593,6 @@ impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T whe
 
 	fn prune_historical_up_to(up_to: SessionIndex) {
 		<pallet_session::historical::Module<T>>::prune_up_to(up_to);
-	}
-
-	fn current_index() -> SessionIndex {
-		<pallet_session::Module<T>>::current_index()
 	}
 }
 
@@ -812,12 +806,13 @@ decl_storage! {
 		//
 		// This is keyed by the stash account.
 		Stakers: map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
-
-}
-add_extra_genesis {
-config(stakers):
-		Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
+	}
+	add_extra_genesis {
+		config(stakers):
+			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|config: &GenesisConfig<T>| {
+			StorageVersion::put(migration::CURRENT_VERSION);
+
 			for &(ref stash, ref controller, balance, ref status) in &config.stakers {
 				assert!(
 					T::Currency::free_balance(&stash) >= balance,
@@ -844,8 +839,6 @@ config(stakers):
 					}, _ => Ok(())
 				};
 			}
-
-			StorageVersion::put(migration::CURRENT_VERSION);
 		});
 	}
 }
