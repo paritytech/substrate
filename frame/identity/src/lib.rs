@@ -78,6 +78,8 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
+mod benchmarking;
+
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
@@ -862,65 +864,6 @@ decl_module! {
 	}
 }
 
-#[cfg(test)]
-pub mod benchmarking {
-
-	pub mod set_identity {
-		use crate::*;
-		use crate::tests::*;
-		use frame_support::{
-			assert_ok
-		};
-
-		pub fn components() -> Vec<(&'static str, u32, u32)> {
-			vec![
-				// Registrar Count
-				("R", 1, 16),
-				// Additional Field Count
-				("X", 1, 20)
-			]
-		}
-
-		/// Assumes externalities are set up with a mutable state.
-		///
-		/// Panics if `component_name` isn't from `set_identity::components` or `component_value` is out of
-		/// the range of `set_identity::components`.
-		///
-		/// Sets up state randomly and returns a randomly generated `set_identity` with sensible (fixed)
-		/// values for all complexity components except those mentioned in the identity.
-		pub fn instance(components: &[(&'static str, u32)]) -> Call<Test>
-		{
-			// Add r registrars
-			let r = components.iter().find(|&c| c.0 == "R").unwrap();
-			for i in 0..r.1 {
-				assert_ok!(Identity::add_registrar(Origin::signed(1), i.into()));
-				assert_ok!(Identity::set_fee(Origin::signed(i.into()), 0, 10));
-				let fields = IdentityFields(IdentityField::Display | IdentityField::Legal);
-				assert_ok!(Identity::set_fields(Origin::signed(i.into()), 0, fields));
-			}
-			
-			// Create identity info with x additional fields
-			let x = components.iter().find(|&c| c.0 == "R").unwrap();
-			let data = Data::Raw(vec![0; x.1 as usize]);
-			let info = IdentityInfo {
-				additional: vec![(data.clone(), data.clone()); 3],
-				display: data.clone(),
-				legal: data.clone(),
-				web: data.clone(),
-				riot: data.clone(),
-				email: data.clone(),
-				pgp_fingerprint: Some([0; 20]),
-				image: data.clone(),
-				twitter: data.clone(),
-			};
-
-			// Return the `set_identity` call
-			return Call::set_identity(info)
-		}
-	}
-}
-
-#[cfg(test)]
 impl<T: Trait> Benchmarking for Module<T> {
 	type BenchmarkResults = bool;
 	const STEPS: u32 = 100;
