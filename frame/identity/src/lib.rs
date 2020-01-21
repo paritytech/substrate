@@ -876,7 +876,7 @@ impl<T: Trait> Benchmarking for Module<T> {
 		for (name, low, high) in components.iter() {
 			// Create up to `STEPS` steps for that component between high and low.
 			let step_size = ((high - low) / Self::STEPS).min(1);
-			let num_of_steps = Self::STEPS / step_size;
+			let num_of_steps = (high - low) / step_size;
 			for s in 0..num_of_steps {
 				// This is the value we will be testing for component `name`
 				let component_value = step_size * s;
