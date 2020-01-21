@@ -70,7 +70,7 @@ use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug};
-use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput, Benchmarking};
+use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput, Benchmarking, Dispatchable};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
@@ -888,7 +888,7 @@ pub mod benchmarking {
 		///
 		/// Sets up state randomly and returns a randomly generated `set_identity` with sensible (fixed)
 		/// values for all complexity components except those mentioned in the identity.
-		fn instance(components: &[(&'static str, u32)]) -> Call<Test>
+		pub fn instance(components: &[(&'static str, u32)]) -> Call<Test>
 		{
 			// Add r registrars
 			let r = components.iter().find(|&c| c.0 == "R").unwrap();
@@ -923,33 +923,35 @@ pub mod benchmarking {
 #[cfg(test)]
 impl<T: Trait> Benchmarking for Module<T> {
 	type BenchmarkResults = bool;
-	const STEPS: usize = 100;
-	const REPEATS: usize = 10;
+	const STEPS: u32 = 100;
+	const REPEATS: u32 = 10;
 
 	fn run_benchmarks() -> Vec<Self::BenchmarkResults> {
 		// first one is set_identity.
 		let components = benchmarking::set_identity::components();
-		for (i, (name, low, high)) in components.iter().enumerate() {
-			for j in 0..STEPS {
-				let step = j * (high - low) / 100 + low;
+		// Select the component we will be benchmarking. Each component will be benchmarked.
+		for (name, low, high) in components.iter() {
+			// Select create up to `STEPS` steps for that component between high and low.
+			let step_size = ((high - low) / Self::STEPS).min(1);
+			let num_of_steps = Self::STEPS / step_size;
+			for s in 0..num_of_steps {
+				let component_value = step_size * s;
 
-
-				let c = components.iter().enumerate()
-					.map(|(j, (n, low, high))|
-						(n, if x == y { step } else { (high - low) / 2 + low })
+				let c: Vec<(&'static str, u32)> = components.iter()
+					.map(|(n, l, h)|
+						(*n, if n == name { component_value } else { (h - l) / 2 + l })
 					).collect();
 				
 				
-		// 		for x in 0..REPEATS {
-		// 			let instance = set_identity::instance(&c);
-		// 			timer.begin();
-		// 			assert_ok!(instance.dispatch());
-		// 			let t = timer.elapsed();
-		// 			BenchmarkResults.calls["set_identity"].push((c, t));
-		// 		}
-		// 	}
-		// 	}
-		// }
+				for _r in 0..Self::REPEATS {
+					let instance = benchmarking::set_identity::instance(&c);
+					//timer.begin();
+					frame_support::assert_ok!(instance.dispatch(Some(0).into()));
+					//let t = timer.elapsed();
+					//BenchmarkResults.calls["set_identity"].push((c, t));
+				}
+			}
+		}
 		return vec![true];
 	}
 }
