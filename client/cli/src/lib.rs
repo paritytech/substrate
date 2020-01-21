@@ -956,11 +956,11 @@ pub fn fill_import_params<C, G, E>(
 
 	let exec = &cli.execution_strategies;
 	let exec_all_or = |strat: ExecutionStrategy, default: ExecutionStrategy| {
-		if strat == default && is_dev {
-			exec.execution.unwrap_or(ExecutionStrategy::Native)
+		exec.execution.unwrap_or(if strat == default && is_dev {
+			ExecutionStrategy::Native
 		} else {
-			exec.execution.unwrap_or(strat)
-		}.into()
+			strat
+		}).into()
 	};
 
 	config.execution_strategies = ExecutionStrategies {
