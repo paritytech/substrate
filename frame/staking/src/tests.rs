@@ -2962,3 +2962,10 @@ fn zero_slash_keeps_nominators() {
 		assert!(nominations.submitted_in >= last_slash);
 	});
 }
+
+// This test will make simulate a session module which delay 4 session.
+#[test]
+fn multiple_new_session_end_session() {
+	ExtBuilder::default().build().execute_with(|| {
+	});
+}
