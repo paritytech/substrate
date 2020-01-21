@@ -58,12 +58,12 @@ impl<TBlock: Block> PrettyPrinter<TBlock> for DebugPrinter {
 	fn fmt_block(&self, fmt: &mut fmt::Formatter, block: &TBlock) -> fmt::Result {
 		writeln!(fmt, "Header:")?;
 		writeln!(fmt, "{:?}", block.header())?;
+		writeln!(fmt, "Block bytes: {:?}", HexDisplay::from(&block.encode()))?;
 		writeln!(fmt, "Extrinsics ({})", block.extrinsics().len())?;
 		for (idx, ex) in block.extrinsics().iter().enumerate() {
 			writeln!(fmt, "- {}:", idx)?;
 			<DebugPrinter as PrettyPrinter<TBlock>>::fmt_extrinsic(self, fmt, ex)?;
 		}
-		writeln!(fmt, "Bytes: {:?}", HexDisplay::from(&block.encode()))?;
 		Ok(())
 	}
 
