@@ -91,7 +91,7 @@ impl InspectCmd {
 			None,
 		)?;
 		// make sure to configure keystore
-		config.keystore = sc_service::config::KeystoreConfig::InMemory;
+		sc_cli::fill_config_keystore_in_memory(&mut config)?;
 		// and all import params (especially pruning that has to match db meta)
 		sc_cli::fill_import_params(
 			&mut config,
