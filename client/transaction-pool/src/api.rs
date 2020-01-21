@@ -19,7 +19,7 @@
 use std::{marker::PhantomData, pin::Pin, sync::Arc};
 use codec::{Decode, Encode};
 use futures::{
-	channel::oneshot, executor::{ThreadPool, ThreadPoolBuilder}, future::{Future, FutureExt, ready},
+	channel::oneshot, executor::{ThreadPool, ThreadPoolBuilder}, future::{Future, FutureExt, ready, Ready},
 };
 
 use sc_client_api::{
@@ -72,12 +72,10 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 	type Hash = Block::Hash;
 	type Error = error::Error;
 	type ValidationFuture = Pin<Box<dyn Future<Output = error::Result<TransactionValidity>> + Send>>;
-	type BodyFuture = Pin<Box<dyn Future<Output = error::Result<Option<Vec<<Self::Block as BlockT>::Extrinsic>>>> + Send>>;
+	type BodyFuture = Ready<error::Result<Option<Vec<<Self::Block as BlockT>::Extrinsic>>>>;
 
 	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
-		Box::pin(ready(
-			self.client.block_body(&id).map_err(|e| error::Error::from(e))
-		))
+		ready(self.client.block_body(&id).map_err(|e| error::Error::from(e)))
 	}
 
 	fn validate_transaction(
