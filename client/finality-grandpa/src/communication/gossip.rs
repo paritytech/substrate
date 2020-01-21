@@ -90,7 +90,6 @@ use sp_finality_grandpa::AuthorityId;
 
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug};
-use futures::prelude::*;
 use futures03::channel::mpsc;
 use rand::seq::SliceRandom;
 
