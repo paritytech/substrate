@@ -154,7 +154,6 @@ pub mod inner {
 
 		let current_era_start_index = <Module<T> as Store>::CurrentEraStartSessionIndex::get();
 		let current_era = <Module<T> as Store>::CurrentEra::get();
-		println!("{:?}", current_era);
 		<Module<T> as Store>::ErasStartSessionIndex::insert(current_era, current_era_start_index);
 		<Module<T> as Store>::ActiveEra::put(current_era);
 		<Module<T> as Store>::ActiveEraStart::put(<Module<T> as Store>::CurrentEraStart::get());
