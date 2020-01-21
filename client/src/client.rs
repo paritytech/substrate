@@ -1175,7 +1175,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				.trigger(
 					&notify_import.hash,
 					storage_changes.0.into_iter(),
-					storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
+					storage_changes.1.into_iter().map(|(sk, v, ci)| (sk, v.into_iter(), ci)),
 				);
 		}
 

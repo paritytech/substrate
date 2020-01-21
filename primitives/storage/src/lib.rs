@@ -176,6 +176,7 @@ impl<'a> ChildStorageKey<'a> {
 }
 
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 /// Information related to a child state.
 pub enum ChildInfo<'a> {
 	Default(ChildTrie<'a>),
@@ -188,6 +189,13 @@ pub enum ChildInfo<'a> {
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub enum OwnedChildInfo {
 	Default(OwnedChildTrie),
+	// TODO put root as option in childinfo and put also a calc_next:
+	// - current_root
+	// - cached_next_root
+	// then method get_root hitting cached_root
+	// & method apply_cache that replace current.
+	// Also remove the `DefaultWithRoot` variant from owned.
+	// keep not owned as is
 	DefaultWithRoot(OwnedChildTrie, Vec<u8>),
 }
 
@@ -276,6 +284,28 @@ impl<'a> ChildInfo<'a> {
 			ChildInfo::DefaultWithRoot(_child_trie, root) => Some(root),
 		}
 	}
+
+	#[cfg(feature = "std")]
+	/// Check if this is compatible with an existing
+	/// child trie.
+	pub fn valid_as(&self, other: &Self) -> bool {
+		match self {
+			ChildInfo::Default(data) => {
+				match other {
+					ChildInfo::DefaultWithRoot(other_data, _)
+					| ChildInfo::Default(other_data) => data == other_data,
+				}
+			},
+			ChildInfo::DefaultWithRoot(data, root) => {
+				match other {
+					ChildInfo::Default(other_data) => data == other_data,
+					ChildInfo::DefaultWithRoot(other_data, other_root) => {
+						other_data == data && other_root == root
+					},
+				}
+			},
+		}
+	}
 }
 
 /// Type of child.
@@ -349,6 +379,7 @@ impl OwnedChildInfo {
 /// and its unique id needs to be collision free (eg strong
 /// crypto hash).
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub struct ChildTrie<'a> {
 	/// Data containing unique id.
 	/// Unique id must but unique and free of any possible key collision

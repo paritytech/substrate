@@ -23,14 +23,14 @@ use std::{
 
 use fnv::{FnvHashSet, FnvHashMap};
 use futures::channel::mpsc;
-use sp_core::storage::{StorageKey, StorageData};
+use sp_core::storage::{StorageKey, StorageData, OwnedChildInfo};
 use sp_runtime::traits::Block as BlockT;
 
 /// Storage change set
 #[derive(Debug)]
 pub struct StorageChangeSet {
 	changes: Arc<Vec<(StorageKey, Option<StorageData>)>>,
-	child_changes: Arc<Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>>,
+	child_changes: Arc<Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>, OwnedChildInfo)>>,
 	filter: Option<HashSet<StorageKey>>,
 	child_filters: Option<HashMap<StorageKey, Option<HashSet<StorageKey>>>>,
 }
@@ -48,7 +48,7 @@ impl StorageChangeSet {
 			.map(move |(k,v)| (None, k, v.as_ref()));
 		let children = self.child_changes
 			.iter()
-			.filter_map(move |(sk, changes)| {
+			.filter_map(move |(sk, changes, _ci)| {
 				if let Some(cf) = self.child_filters.as_ref() {
 					if let Some(filter) = cf.get(sk) {
 						Some(changes
@@ -110,7 +110,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 		hash: &Block::Hash,
 		changeset: impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		child_changeset: impl Iterator<
-			Item=(Vec<u8>, impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>)
+			Item=(Vec<u8>, impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>, OwnedChildInfo),
 		>,
 	) {
 		let has_wildcard = !self.wildcard_listeners.is_empty();
@@ -137,10 +137,10 @@ impl<Block: BlockT> StorageNotifications<Block> {
 				changes.push((k, v.map(StorageData)));
 			}
 		}
-		for (sk, changeset) in child_changeset {
+		for (sk, changeset, ci) in child_changeset {
 			let sk = StorageKey(sk);
 			if let Some((cl, cw)) = self.child_listeners.get(&sk) {
-				let mut changes = Vec::new();
+				let mut changes = (Vec::new(), ci);
 				for (k, v) in changeset {
 					let k = StorageKey(k);
 					let listeners = cl.get(&k);
@@ -152,11 +152,14 @@ impl<Block: BlockT> StorageNotifications<Block> {
 					subscribers.extend(cw.iter());
 
 					if !cw.is_empty() || listeners.is_some() {
-						changes.push((k, v.map(StorageData)));
+						let item = (k, v.map(StorageData));
+						changes.0.push(item);
 					}
 				}
-				if !changes.is_empty() {
-					child_changes.push((sk, changes));
+				// At this point there is no child_info modification,
+				// so we do not need it when there is no changes.
+				if changes.0.len() > 0 {
+					child_changes.push((sk, changes.0, changes.1));
 				}
 			}
 		}

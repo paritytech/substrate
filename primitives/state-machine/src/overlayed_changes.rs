@@ -43,7 +43,7 @@ pub type StorageValue = Vec<u8>;
 pub type StorageCollection = Vec<(StorageKey, Option<StorageValue>)>;
 
 /// In memory arrays of storage values for multiple child tries.
-pub type ChildStorageCollection = Vec<(StorageKey, StorageCollection)>;
+pub type ChildStorageCollection = Vec<(StorageKey, StorageCollection, OwnedChildInfo)>;
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -478,7 +478,8 @@ impl OverlayedChanges {
 
 		Ok(StorageChanges {
 			main_storage_changes: main_storage_changes.collect(),
-			child_storage_changes: child_storage_changes.map(|(sk, it)| (sk, it.0.collect())).collect(),
+			child_storage_changes: child_storage_changes
+				.map(|(sk, it)| (sk, it.0.collect(), it.1)).collect(),
 			transaction,
 			transaction_storage_root,
 			changes_trie_transaction,
