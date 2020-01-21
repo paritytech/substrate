@@ -141,7 +141,12 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 				&version,
 				None,
 			)?;
-			sc_cli::fill_import_params(&mut config, &cli_args.import_params, ServiceRoles::FULL)?;
+			sc_cli::fill_import_params(
+				&mut config,
+				&cli_args.import_params,
+				ServiceRoles::FULL,
+				cli_args.shared_params.dev,
+			)?;
 
 			match ChainSpec::from(config.chain_spec.id()) {
 				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
