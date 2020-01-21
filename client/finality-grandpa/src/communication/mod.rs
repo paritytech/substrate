@@ -273,7 +273,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		has_voted: HasVoted<B>,
 	) -> (
 		impl Stream03<Item=SignedMessage<B>> + Unpin,
-		impl Sink03<Message<B>, Error=Error> + Unpin,
+		OutgoingMessages<B>,
 	) {
 		self.note_round(
 			round,
@@ -630,7 +630,7 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 /// use the same raw message and key to sign. This is currently true for
 /// `ed25519` and `BLS` signatures (which we might use in the future), care must
 /// be taken when switching to different key types.
-struct OutgoingMessages<Block: BlockT> {
+pub(crate) struct OutgoingMessages<Block: BlockT> {
 	round: RoundNumber,
 	set_id: SetIdNumber,
 	locals: Option<(AuthorityPair, AuthorityId)>,
@@ -642,8 +642,6 @@ struct OutgoingMessages<Block: BlockT> {
 impl<B: BlockT> Unpin for OutgoingMessages<B> {}
 
 impl<Block: BlockT> Sink03<Message<Block>> for OutgoingMessages<Block>
-where
-	Message<Block>: Sized,
 {
 	type Error = Error;
 
