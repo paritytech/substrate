@@ -43,7 +43,6 @@ mod mock;
 mod tests;
 
 mod node;
-mod cycle;
 pub mod reduce;
 
 /// A type in which performing operations on balances and stakes of candidates and voters are safe.
