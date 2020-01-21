@@ -150,7 +150,7 @@ impl IntoFFIValue for bool {
 ///
 /// The `u64` value is build by `length 32bit << 32 | pointer 32bit`
 ///
-/// If `T == u8` the length and the pointer are taken directly from the `Self`.
+/// If `T == u8` the length and the pointer are taken directly from `Self`.
 /// Otherwise `Self` is encoded and the length and the pointer are taken from the encoded vector.
 impl<T> RIType for Vec<T> {
 	type FFIType = u64;
@@ -209,7 +209,7 @@ impl<T: 'static + Decode> FromFFIValue for Vec<T> {
 ///
 /// The `u64` value is build by `length 32bit << 32 | pointer 32bit`
 ///
-/// If `T == u8` the length and the pointer are taken directly from the `Self`.
+/// If `T == u8` the length and the pointer are taken directly from `Self`.
 /// Otherwise `Self` is encoded and the length and the pointer are taken from the encoded vector.
 impl<T> RIType for [T] {
 	type FFIType = u64;
@@ -400,7 +400,7 @@ for_primitive_types! {
 ///
 /// The `u64` value is build by `length 32bit << 32 | pointer 32bit`
 ///
-/// The length and the pointer are taken directly from the `Self`.
+/// The length and the pointer are taken directly from `Self`.
 impl RIType for str {
 	type FFIType = u64;
 }

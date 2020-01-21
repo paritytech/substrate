@@ -30,7 +30,7 @@ pub use sc_client::LongestChain;
 
 pub use self::block_builder_ext::BlockBuilderExt;
 
-use sp_core::sr25519;
+use sp_core::{sr25519, ChangesTrieConfiguration};
 use sp_core::storage::{ChildInfo, Storage, StorageChild};
 use substrate_test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor, HasherFor};
@@ -41,7 +41,6 @@ use sc_client::{
 		RemoteCallRequest, RemoteChangesRequest, RemoteBodyRequest,
 	},
 };
-
 
 /// A prelude to import in tests.
 pub mod prelude {
@@ -59,20 +58,11 @@ pub mod prelude {
 	pub use super::{AccountKeyring, Sr25519Keyring};
 }
 
-mod local_executor {
-	#![allow(missing_docs)]
-	use substrate_test_runtime;
-	use crate::sc_executor::native_executor_instance;
-	// FIXME #1576 change the macro and pass in the `BlakeHasher` that dispatch needs from here instead
-	native_executor_instance!(
-		pub LocalExecutor,
-		substrate_test_runtime::api::dispatch,
-		substrate_test_runtime::native_version
-	);
+sc_executor::native_executor_instance! {
+	pub LocalExecutor,
+	substrate_test_runtime::api::dispatch,
+	substrate_test_runtime::native_version,
 }
-
-/// Native executor used for tests.
-pub use self::local_executor::LocalExecutor;
 
 /// Test client database backend.
 pub type Backend = substrate_test_client::Backend<substrate_test_runtime::Block>;
@@ -101,7 +91,7 @@ pub type LightExecutor = sc_client::light::call_executor::GenesisCallExecutor<
 /// Parameters of test-client builder with test-runtime.
 #[derive(Default)]
 pub struct GenesisParameters {
-	support_changes_trie: bool,
+	changes_trie_config: Option<ChangesTrieConfiguration>,
 	heap_pages_override: Option<u64>,
 	extra_storage: Storage,
 }
@@ -109,7 +99,7 @@ pub struct GenesisParameters {
 impl GenesisParameters {
 	fn genesis_config(&self) -> GenesisConfig {
 		GenesisConfig::new(
-			self.support_changes_trie,
+			self.changes_trie_config.clone(),
 			vec![
 				sr25519::Public::from(Sr25519Keyring::Alice).into(),
 				sr25519::Public::from(Sr25519Keyring::Bob).into(),
@@ -180,9 +170,9 @@ pub trait TestClientBuilderExt<B>: Sized {
 	/// Returns a mutable reference to the genesis parameters.
 	fn genesis_init_mut(&mut self) -> &mut GenesisParameters;
 
-	/// Enable or disable support for changes trie in genesis.
-	fn set_support_changes_trie(mut self, support_changes_trie: bool) -> Self {
-		self.genesis_init_mut().support_changes_trie = support_changes_trie;
+	/// Set changes trie configuration for genesis.
+	fn changes_trie_config(mut self, config: Option<ChangesTrieConfiguration>) -> Self {
+		self.genesis_init_mut().changes_trie_config = config;
 		self
 	}
 
@@ -245,7 +235,7 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	sc_client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
 	B
 > where
-	B: sc_client_api::backend::Backend<substrate_test_runtime::Block>,
+	B: sc_client_api::backend::Backend<substrate_test_runtime::Block> + 'static,
 	// Rust bug: https://github.com/rust-lang/rust/issues/24159
 	<B as sc_client_api::backend::Backend<substrate_test_runtime::Block>>::State:
 		sp_api::StateBackend<HasherFor<substrate_test_runtime::Block>>,
@@ -353,7 +343,7 @@ pub fn new_light() -> (
 	let storage = sc_client_db::light::LightStorage::new_test();
 	let blockchain = Arc::new(sc_client::light::blockchain::Blockchain::new(storage));
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));
-	let executor = NativeExecutor::new(WasmExecutionMethod::Interpreted, None);
+	let executor = new_native_executor();
 	let local_call_executor = sc_client::LocalCallExecutor::new(backend.clone(), executor);
 	let call_executor = LightExecutor::new(
 		backend.clone(),
@@ -371,4 +361,9 @@ pub fn new_light() -> (
 /// Creates new light client fetcher used for tests.
 pub fn new_light_fetcher() -> LightFetcher {
 	LightFetcher::default()
+}
+
+/// Create a new native executor.
+pub fn new_native_executor() -> sc_executor::NativeExecutor<LocalExecutor> {
+	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None)
 }

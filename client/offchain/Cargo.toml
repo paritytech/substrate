@@ -30,7 +30,7 @@ hyper = "0.13.1"
 hyper-rustls = "0.19.1"
 
 [dev-dependencies]
-sc-client-db = { version = "2.0.0", default-features = true, path = "../db/" }
+sc-client-db = { version = "0.8", default-features = true, path = "../db/" }
 env_logger = "0.7.0"
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 tokio = { version = "0.2.9", features = ["rt-core"] }
