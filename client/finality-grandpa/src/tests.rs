@@ -25,7 +25,7 @@ use sc_network_test::{
 use sc_network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
 use futures_timer::Delay;
-use futures03::{StreamExt as _, TryStreamExt as _};
+use futures03::TryStreamExt as _;
 use tokio::runtime::current_thread;
 use sp_keyring::Ed25519Keyring;
 use sc_client::LongestChain;
@@ -1270,7 +1270,6 @@ fn voter_persists_its_votes() {
 			config.clone(),
 			set_state,
 			&threads_pool,
-			Exit,
 		);
 
 		let (round_rx, round_tx) = network.round_communication(
@@ -1675,7 +1674,6 @@ fn grandpa_environment_respects_voting_rules() {
 			config.clone(),
 			set_state.clone(),
 			&threads_pool,
-			Exit,
 		);
 
 		Environment {
