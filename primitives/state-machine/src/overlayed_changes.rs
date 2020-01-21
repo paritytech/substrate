@@ -492,7 +492,7 @@ impl OverlayedChanges {
 	/// Inserts the given key-value pair into the prospective change set.
 	///
 	/// `None` can be used to delete a value specified by the given key.
-	pub(crate) fn set_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
+	pub fn set_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
 		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(value.as_ref());
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.changes.top.entry(key).or_default();
@@ -507,7 +507,7 @@ impl OverlayedChanges {
 	/// Inserts the given key-value pair into the prospective child change set.
 	///
 	/// `None` can be used to delete a value specified by the given key.
-	pub(crate) fn set_child_storage(
+	pub fn set_child_storage(
 		&mut self,
 		storage_key: StorageKey,
 		child_info: ChildInfo,
@@ -533,10 +533,12 @@ impl OverlayedChanges {
 	/// Clear child storage of given storage key.
 	///
 	/// NOTE that this doesn't take place immediately but written into the prospective
-	/// change set, and still can be reverted by [`discard_prospective`].
+	/// change set, and still can be reverted by [`discard_prospective`]
+	/// or [`discard_transaction`]
 	///
 	/// [`discard_prospective`]: #method.discard_prospective
-	pub(crate) fn clear_child_storage(
+	/// [`discard_transaction`]: #method.discard_transaction
+	pub fn clear_child_storage(
 		&mut self,
 		storage_key: &[u8],
 		child_info: ChildInfo,
@@ -556,10 +558,12 @@ impl OverlayedChanges {
 	/// Removes all key-value pairs which keys share the given prefix.
 	///
 	/// NOTE that this doesn't take place immediately but written into the prospective
-	/// change set, and still can be reverted by [`discard_prospective`].
+	/// change set, and still can be reverted by [`discard_prospective`]
+	/// or [`discard_transaction`]
 	///
 	/// [`discard_prospective`]: #method.discard_prospective
-	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
+	/// [`discard_transaction`]: #method.discard_transaction
+	pub fn clear_prefix(&mut self, prefix: &[u8]) {
 		let extrinsic_index = self.extrinsic_index();
 
 		let mut number_removed = 0;
@@ -572,7 +576,16 @@ impl OverlayedChanges {
 		self.operation_from_last_gc += number_removed;
 	}
 
-	pub(crate) fn clear_child_prefix(
+	/// Removes all key-value pairs which keys share the given prefix for
+	/// a given child trie.
+	///
+	/// NOTE that this doesn't take place immediately but written into the prospective
+	/// change set, and still can be reverted by [`discard_prospective`]
+	/// or [`discard_transaction`]
+	///
+	/// [`discard_prospective`]: #method.discard_prospective
+	/// [`discard_transaction`]: #method.discard_transaction
+	pub fn clear_child_prefix(
 		&mut self,
 		storage_key: &[u8],
 		child_info: ChildInfo,
