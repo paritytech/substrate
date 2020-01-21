@@ -221,13 +221,18 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, 
 		let fetcher = self.fetcher.clone();
 		async move {
 			let transactions = fetcher.remote_body({
-				RemoteBodyRequest {
-					header,
-					retry_count: None,
-				}
-			}).await;
+					RemoteBodyRequest {
+						header,
+						retry_count: None,
+					}
+				})
+				.await
+				.unwrap_or_else(|e| {
+					log::warn!(target: "txpool", "Failed to fetch block body: {:?}", e);
+					Vec::new()
+				});
 
-			Ok(Some(transactions.unwrap_or(Vec::new())))
+			Ok(Some(transactions))
 		}.boxed()
 	}
 }

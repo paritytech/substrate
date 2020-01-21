@@ -34,7 +34,7 @@ use parking_lot::Mutex;
 
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor, SimpleArithmetic},
+	traits::{Block as BlockT, NumberFor, SimpleArithmetic, Extrinsic},
 };
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream,
@@ -278,7 +278,7 @@ where
 		let block_number = match api.block_id_to_number(&id) {
 			Ok(Some(number)) => number,
 			_ => {
-				log::trace!(target: "txqueue", "Skipping chain event - no numbrer for that block {:?}", id);
+				log::trace!(target: "txqueue", "Skipping chain event - no number for that block {:?}", id);
 				return Box::pin(ready(()));
 			}
 		};
@@ -292,18 +292,21 @@ where
 		let retracted = retracted.to_vec();
 
 		async move {
-			let hashes = api.block_body(&id).await
-				.unwrap_or_else(|e| {
-					log::warn!("Prune known transactions: error request {:?}!", e);
-					None
-				})
+			// We don't query block if we won't prune anything
+			if !pool.status().is_empty() {
+				let hashes = api.block_body(&id).await
+					.unwrap_or_else(|e| {
+						log::warn!("Prune known transactions: error request {:?}!", e);
+						None
+					})
 				.unwrap_or_default()
 				.into_iter()
 				.map(|tx| pool.hash_of(&tx))
 				.collect::<Vec<_>>();
 
-			if let Err(e) = pool.prune_known(&id, &hashes) {
-				log::error!("Cannot prune known in the pool {:?}!", e);
+				if let Err(e) = pool.prune_known(&id, &hashes) {
+					log::error!("Cannot prune known in the pool {:?}!", e);
+				}
 			}
 
 			if next_action.resubmit {
@@ -315,7 +318,9 @@ where
 							log::warn!("Failed to fetch block body {:?}!", e);
 							None
 						})
-						.unwrap_or_default();
+						.unwrap_or_default()
+						.into_iter()
+						.filter(|tx| tx.is_signed().unwrap_or(true));
 
 					resubmit_transactions.extend(block_transactions);
 				}
