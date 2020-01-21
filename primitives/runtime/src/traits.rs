@@ -102,7 +102,7 @@ impl Verify for sp_core::ecdsa::Signature {
 			self.as_ref(),
 			&sp_io::hashing::blake2_256(msg.get()),
 		) {
-			Ok(pubkey) => signer.as_compressed().map(|s| &s[..] == &pubkey[..]).unwrap_or(false),
+			Ok(pubkey) => &signer.as_ref()[..] == &pubkey[..],
 			_ => false,
 		}
 	}
@@ -1357,6 +1357,6 @@ mod tests {
 		assert!(ecdsa::Pair::verify(&signature, msg, &pair.public()));
 
 		assert!(signature.verify(msg, &pair.public()));
-		assert!(signature.verify(msg, &pair.public().into_compressed().unwrap()));
+		assert!(signature.verify(msg, &pair.public()));
 	}
 }
