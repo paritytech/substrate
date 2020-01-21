@@ -862,9 +862,17 @@ decl_module! {
 	}
 }
 
-mod benchmarking {
-	mod set_identity {
-		fn components() -> Vec<(&'static str, u32, u32)> {
+#[cfg(test)]
+pub mod benchmarking {
+
+	pub mod set_identity {
+		use crate::*;
+		use crate::tests::*;
+		use frame_support::{
+			assert_ok
+		};
+
+		pub fn components() -> Vec<(&'static str, u32, u32)> {
 			vec![
 				// Registrar Count
 				("R", 1, 16),
@@ -880,16 +888,69 @@ mod benchmarking {
 		///
 		/// Sets up state randomly and returns a randomly generated `set_identity` with sensible (fixed)
 		/// values for all complexity components except those mentioned in the identity.
-		fn instance(components: &[(&'static str, u32)]) -> Call {
-			Call::set_identity::default()
+		fn instance(components: &[(&'static str, u32)]) -> Call<Test>
+		{
+			// Add r registrars
+			let r = components.iter().find(|&c| c.0 == "R").unwrap();
+			for i in 0..r.1 {
+				assert_ok!(Identity::add_registrar(Origin::signed(1), i.into()));
+				assert_ok!(Identity::set_fee(Origin::signed(i.into()), 0, 10));
+				let fields = IdentityFields(IdentityField::Display | IdentityField::Legal);
+				assert_ok!(Identity::set_fields(Origin::signed(i.into()), 0, fields));
+			}
+			
+			// Create identity info with x additional fields
+			let x = components.iter().find(|&c| c.0 == "R").unwrap();
+			let data = Data::Raw(vec![0; x.1 as usize]);
+			let info = IdentityInfo {
+				additional: vec![(data.clone(), data.clone()); 3],
+				display: data.clone(),
+				legal: data.clone(),
+				web: data.clone(),
+				riot: data.clone(),
+				email: data.clone(),
+				pgp_fingerprint: Some([0; 20]),
+				image: data.clone(),
+				twitter: data.clone(),
+			};
+
+			// Return the `set_identity` call
+			return Call::set_identity(info)
 		}
 	}
 }
 
+#[cfg(test)]
 impl<T: Trait> Benchmarking for Module<T> {
 	type BenchmarkResults = bool;
+	const STEPS: usize = 100;
+	const REPEATS: usize = 10;
+
 	fn run_benchmarks() -> Vec<Self::BenchmarkResults> {
-		return vec![true]
+		// first one is set_identity.
+		let components = benchmarking::set_identity::components();
+		for (i, (name, low, high)) in components.iter().enumerate() {
+			for j in 0..STEPS {
+				let step = j * (high - low) / 100 + low;
+
+
+				let c = components.iter().enumerate()
+					.map(|(j, (n, low, high))|
+						(n, if x == y { step } else { (high - low) / 2 + low })
+					).collect();
+				
+				
+		// 		for x in 0..REPEATS {
+		// 			let instance = set_identity::instance(&c);
+		// 			timer.begin();
+		// 			assert_ok!(instance.dispatch());
+		// 			let t = timer.elapsed();
+		// 			BenchmarkResults.calls["set_identity"].push((c, t));
+		// 		}
+		// 	}
+		// 	}
+		// }
+		return vec![true];
 	}
 }
 
@@ -900,7 +961,7 @@ pub mod tests {
 	use sp_runtime::traits::BadOrigin;
 	use frame_support::{
 		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
-		ord_parameter_types
+		ord_parameter_types, impl_outer_dispatch,
 	};
 	use sp_core::H256;
 	use frame_system::EnsureSignedBy;
@@ -912,6 +973,14 @@ pub mod tests {
 
 	impl_outer_origin! {
 		pub enum Origin for Test  where system = frame_system {}
+	}
+
+	impl_outer_dispatch! {
+		pub enum Call for Test where origin: Origin {
+			frame_system::System,
+			pallet_balances::Balances,
+			pallet_identity::Identity,
+		}
 	}
 
 	// For testing the module, we construct most of a mock runtime. This means
@@ -930,7 +999,7 @@ pub mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Call = ();
+		type Call = Call;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
@@ -983,7 +1052,7 @@ pub mod tests {
 	}
 	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
-	type Identity = Module<Test>;
+	pub type Identity = Module<Test>;
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.

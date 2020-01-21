@@ -1267,6 +1267,10 @@ pub trait BlockIdTo<Block: self::Block> {
 pub trait Benchmarking {
 	/// Type for the results of benchmarks.
 	type BenchmarkResults;
+	/// Number of steps to take between variable ranges.
+	const STEPS: usize;
+	/// Number of benchmarking repetitions.
+	const REPEATS: usize;
 	/// Run the benchmarks for this module.
 	fn run_benchmarks() -> Vec<Self::BenchmarkResults>;
 }
