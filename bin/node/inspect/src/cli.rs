@@ -84,6 +84,7 @@ impl InspectCmd {
 			spec_factory,
 			&self.shared_params,
 			version,
+			None,
 		)?;
 		// make sure to configure keystore
 		config.keystore = sc_service::config::KeystoreConfig::InMemory;
