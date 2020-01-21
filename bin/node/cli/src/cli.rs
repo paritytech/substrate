@@ -27,13 +27,7 @@ use node_transaction_factory::RuntimeAdapter;
 
 #[derive(Clone, Debug, StructOpt)]
 #[structopt(settings = &[structopt::clap::AppSettings::GlobalVersion, structopt::clap::AppSettings::ArgsNegateSubcommands, structopt::clap::AppSettings::SubcommandsNegateReqs])]
-struct Cli {
-	#[structopt(subcommand)]
-	subcommand: Option<Subcommands>,
-}
-
-#[derive(Clone, Debug, StructOpt)]
-enum Subcommands {
+enum Cli {
 	#[structopt(flatten)]
 	SubstrateCli(CoreParams),
 	/// The custom factory subcommmand for manufacturing transactions.
@@ -96,20 +90,20 @@ where
 	type Config<A, B> = Configuration<A, B>;
 
 	let args: Vec<_> = args.collect();
-	let opt = sc_cli::from_iter::<Cli, _>(args.clone(), &version);
-	let subcommand = opt.subcommand.unwrap_or_else(|| {
-		let opt = sc_cli::from_iter::<RunCmd, _>(args, &version);
-
-		eprintln!(
-			"WARNING: running this command without the subcommand `run` is deprecated, please \
-			use run:\n{} run [node_arguments]",
-			version.executable_name,
-		);
-		Subcommands::SubstrateCli(CoreParams::Run(opt))
-	});
+	let subcommand = match sc_cli::try_from_iter::<RunCmd, _>(args.clone(), &version) {
+		Ok(opt) => {
+			eprintln!(
+				"WARNING: running this command without the subcommand `run` is deprecated, please \
+				use run:\n{} run [node_arguments]",
+				version.executable_name,
+			);
+			Cli::SubstrateCli(CoreParams::Run(opt))
+		},
+		Err(_) => sc_cli::from_iter::<Cli, _>(args.clone(), &version),
+	};
 
 	match subcommand {
-		Subcommands::SubstrateCli(cli) => sc_cli::run(
+		Cli::SubstrateCli(cli) => sc_cli::run(
 			cli,
 			service::new_light,
 			service::new_full,
@@ -118,7 +112,7 @@ where
 			"substrate-node",
 			&version,
 		),
-		Subcommands::Factory(cli_args) => {
+		Cli::Factory(cli_args) => {
 			let mut config: Config<_, _> = sc_cli::create_config_with_db_path(
 				load_spec,
 				&cli_args.shared_params,

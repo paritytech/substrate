@@ -205,6 +205,37 @@ where
 	T::from_clap(&app.get_matches_from(iter))
 }
 
+/// Gets the struct from any iterator such as a `Vec` of your making.
+/// Print the error message and quit the program in case of failure.
+///
+/// **NOTE:** This method WILL NOT exit when `--help` or `--version` (or short versions) are
+/// used. It will return a [`clap::Error`], where the [`kind`] is a
+/// [`ErrorKind::HelpDisplayed`] or [`ErrorKind::VersionDisplayed`] respectively. You must call
+/// [`Error::exit`] or perform a [`std::process::exit`].
+pub fn try_from_iter<T, I>(iter: I, version: &VersionInfo) -> structopt::clap::Result<T>
+where
+	T: StructOpt + Sized,
+	I: IntoIterator,
+	I::Item: Into<std::ffi::OsString> + Clone,
+{
+	let app = T::clap();
+
+	let mut full_version = sc_service::config::full_version_from_strs(
+		version.version,
+		version.commit
+	);
+	full_version.push_str("\n");
+
+	let app = app
+		.name(version.executable_name)
+		.author(version.author)
+		.about(version.description)
+		.version(full_version.as_str());
+
+	let matches = app.get_matches_from_safe(iter)?;
+
+	Ok(T::from_clap(&matches))
+}
 pub fn run<F, G, E, FNL, FNF, B, SL, SF, BC, BB>(
 	core_params: CoreParams,
 	new_light: FNL,
