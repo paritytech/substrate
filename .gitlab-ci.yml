@@ -376,7 +376,7 @@ trigger-contracts-ci:
   stage:                           publish
   needs:
     - job:                         build-linux-substrate
-      artifacts:                   false
+      artifacts:                   true
   trigger:
     project:                       parity/srml-contracts-waterfall
     branch:                        master
