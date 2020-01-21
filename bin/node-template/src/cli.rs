@@ -19,7 +19,7 @@ where
 		service::new_full,
 		load_spec,
 		|config: _| Ok(new_full_start!(config).0),
-		"substrate-node",
+		"node-template",
 		&version,
 	)
 }
