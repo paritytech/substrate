@@ -30,7 +30,6 @@ use sp_consensus::import_queue::ImportQueue;
 use futures::{
 	Future, FutureExt, StreamExt,
 	channel::mpsc,
-	executor::ThreadPoolBuilder,
 	future::{select, ready}
 };
 use sc_keystore::{Store as Keystore};
@@ -1149,15 +1148,10 @@ ServiceBuilder<
 			to_spawn_tx,
 			to_spawn_rx,
 			tasks_executor: if let Some(exec) = config.tasks_executor {
-				Some(exec)
+				exec
 			} else {
-				ThreadPoolBuilder::new()
-					.name_prefix("main-task-")
-					.create()
-					.ok()
-					.map(|tp| Box::new(move |fut| tp.spawn_ok(fut)) as Box<_>)
+				return Err(Error::TasksExecutorRequired);
 			},
-			to_poll: Vec::new(),
 			rpc_handlers,
 			_rpc: rpc,
 			_telemetry: telemetry,

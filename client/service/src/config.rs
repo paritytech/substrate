@@ -38,8 +38,7 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub impl_commit: &'static str,
 	/// Node roles.
 	pub roles: Roles,
-	/// How to spawn background tasks.
-	/// If `None`, will try to use a threads pool.
+	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
 	pub tasks_executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
