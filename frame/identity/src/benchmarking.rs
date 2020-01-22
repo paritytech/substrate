@@ -1,7 +1,7 @@
 use super::*;
 
 use frame_support::{
-	assert_ok, impl_outer_origin, parameter_types, weights::Weight,
+	impl_outer_origin, parameter_types, weights::Weight,
 	ord_parameter_types, impl_outer_dispatch,
 };
 use sp_core::H256;
@@ -9,7 +9,7 @@ use frame_system::EnsureSignedBy;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 use sp_runtime::{
-	Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup},
+	Perbill, generic::Header, traits::{BlakeTwo256, IdentityLookup},
 };
 
 impl_outer_origin! {
@@ -44,7 +44,7 @@ impl frame_system::Trait for Benchmark {
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Header = Header<Self::BlockNumber, BlakeTwo256>;
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
@@ -121,10 +121,10 @@ pub mod set_identity {
 		// Add r registrars
 		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap();
 		for i in 0..r.1 {
-			assert_ok!(Identity::add_registrar(Origin::signed(1), i.into()));
-			assert_ok!(Identity::set_fee(Origin::signed(i.into()), 0, 10));
+			assert_eq!(Identity::add_registrar(Origin::signed(1), i.into()), Ok(()));
+			assert_eq!(Identity::set_fee(Origin::signed(i.into()), 0, 10), Ok(()));
 			let fields = IdentityFields(IdentityField::Display | IdentityField::Legal);
-			assert_ok!(Identity::set_fields(Origin::signed(i.into()), 0, fields));
+			assert_eq!(Identity::set_fields(Origin::signed(i.into()), 0, fields), Ok(()));
 		}
 		
 		// Create identity info with x additional fields

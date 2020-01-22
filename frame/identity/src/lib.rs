@@ -891,7 +891,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 				for _r in 0..Self::REPEATS {
 					let instance = benchmarking::set_identity::instance(&c);
 					let start = sp_io::benchmark::now();
-					frame_support::assert_ok!(instance.dispatch(Some(0).into()));
+					assert_eq!(instance.dispatch(Some(0).into()), Ok(()));
 					let finish = sp_io::benchmark::now();
 					let elapsed = finish - start;
 					results.push((c.clone(), elapsed));
@@ -905,7 +905,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 sp_api::decl_runtime_apis! {
 	pub trait IdentityBenchmarks
 	{
-		fn run_benchmarks() -> BenchmarkResults;
+		fn run_benchmarks() -> Vec<BenchmarkResults>;
 	}
 }
 

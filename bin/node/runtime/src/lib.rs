@@ -30,13 +30,14 @@ use sp_core::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Moment, Signature};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Percent, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str
+	Permill, Perbill, Percent, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str,
+	BenchmarkResults,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::TransactionValidity;
 use sp_runtime::traits::{
 	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion,
-	OpaqueKeys,
+	OpaqueKeys, Benchmarking,
 };
 use sp_version::RuntimeVersion;
 #[cfg(any(feature = "std", test))]
@@ -800,8 +801,8 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl pallet_identity::IdentityBenchmarks for Runtime {
-		fn run_benchmarks() -> BenchmarkResults {
+	impl pallet_identity::IdentityBenchmarks<Block> for Runtime {
+		fn run_benchmarks() -> Vec<BenchmarkResults> {
 			Identity::run_benchmarks()
 		}
 	}
