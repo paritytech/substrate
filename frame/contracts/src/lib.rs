@@ -998,6 +998,9 @@ pub struct Schedule {
 	/// Gas cost per one byte written to the sandbox memory.
 	pub sandbox_data_write_cost: Gas,
 
+	/// Cost for a simple balance transfer.
+	pub transfer_cost: Gas,
+
 	/// The maximum number of topics supported by an event.
 	pub max_event_topics: u32,
 
@@ -1036,6 +1039,7 @@ impl Default for Schedule {
 			instantiate_base_cost: 175,
 			sandbox_data_read_cost: 1,
 			sandbox_data_write_cost: 1,
+			transfer_cost: 100,
 			max_event_topics: 4,
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,

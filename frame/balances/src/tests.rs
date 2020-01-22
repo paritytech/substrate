@@ -599,7 +599,6 @@ fn cannot_set_genesis_value_below_ed() {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	let _ = GenesisConfig::<Test> {
 		balances: vec![(1, 10)],
-		vesting: vec![],
 	}.assimilate_storage(&mut t).unwrap();
 }
 

@@ -448,6 +448,23 @@ mod tests {
 				assert_eq!(user1_free_balance, 100); // Account 1 has free balance
 				// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
 				assert_eq!(Vesting::vesting_balance(&1), 45);
+				assert_ok!(Vesting::vest(Some(1).into()));
+				assert_ok!(Balances::transfer(Some(1).into(), 2, 55));
+			});
+	}
+
+	#[test]
+	fn vested_balance_should_transfer_using_vest_other() {
+		ExtBuilder::default()
+			.existential_deposit(10)
+			.build()
+			.execute_with(|| {
+				assert_eq!(System::block_number(), 1);
+				let user1_free_balance = Balances::free_balance(&1);
+				assert_eq!(user1_free_balance, 100); // Account 1 has free balance
+				// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
+				assert_eq!(Vesting::vesting_balance(&1), 45);
+				assert_ok!(Vesting::vest_other(Some(2).into(), 1));
 				assert_ok!(Balances::transfer(Some(1).into(), 2, 55));
 			});
 	}
@@ -470,10 +487,12 @@ mod tests {
 
 				// Account 1 has only 5 units vested at block 1 (plus 150 unvested)
 				assert_eq!(Vesting::vesting_balance(&1), 45);
+				assert_ok!(Vesting::vest(Some(1).into()));
 				assert_ok!(Balances::transfer(Some(1).into(), 3, 155)); // Account 1 can send extra units gained
 
 				// Account 2 has no units vested at block 1, but gained 100
 				assert_eq!(Vesting::vesting_balance(&2), 200);
+				assert_ok!(Vesting::vest(Some(2).into()));
 				assert_ok!(Balances::transfer(Some(2).into(), 3, 100)); // Account 2 can send extra units gained
 			});
 	}
