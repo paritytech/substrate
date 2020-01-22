@@ -34,7 +34,7 @@ use std::{
 };
 
 use futures::prelude::*;
-use futures_channel::mpsc::state_channel as state;
+use futures_channel as state;
 use parking_lot::Mutex;
 use log::{debug, info, trace};
 

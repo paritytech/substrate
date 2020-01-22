@@ -106,7 +106,7 @@ use sp_blockchain::{
 	HeaderBackend, ProvideCache, HeaderMetadata
 };
 use schnorrkel::SignatureError;
-use futures_channel::mpsc::state_channel as state;
+use futures_channel as state;
 
 use sp_api::ApiExt;
 
@@ -344,7 +344,12 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	Ok(slot_worker.map(|_| Ok::<(), ()>(())).compat())
 }
 
-type BabeClaim = (BabePreDigest, AuthorityPair);
+#[derive(Clone)]
+struct BabeClaim {
+	digest: BabePreDigest,
+	pair: AuthorityPair,
+	thresholds: Vec<u128>,
+}
 
 struct BabeWorker<B: BlockT, C, E, I, SO> {
 	client: Arc<C>,
@@ -374,6 +379,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	type SyncOracle = SO;
 	type Proposer = E::Proposer;
 	type BlockImport = I;
+	type EventSink = state::Sender<SlotWorkerEvents<Self::Claim>>;
 
 	fn logging_target(&self) -> &'static str {
 		"babe"
@@ -411,29 +417,15 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		epoch_data: &Epoch,
 	) -> Option<Self::Claim> {
 		debug!(target: "babe", "Attempting to claim slot {}", slot_number);
-		let (thresholds, s) = authorship::claim_slot(
+		let s = authorship::claim_slot(
 			slot_number,
 			epoch_data,
 			&*self.config,
 			&self.keystore,
 		);
 
-		match s {
-			Some((ref digest, ref pair)) => {
-				debug!(target: "babe", "Claimed slot {}", slot_number);
-
-				self.sender().send(SlotWorkerEvent::ClaimedSlot {
-					thresholds,
-					slot_number,
-					claim: ((digest.clone(), pair.clone()))
-				});
-			},
-			None => {
-				self.sender().send(SlotWorkerEvent::UnClaimedSlot {
-					thresholds,
-					slot_number,
-				});
-			}
+		if let Some(_) = s {
+			debug!(target: "babe", "Claimed slot {}", slot_number);
 		}
 
 		s

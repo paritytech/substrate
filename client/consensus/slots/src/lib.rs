@@ -34,7 +34,7 @@ use codec::{Decode, Encode};
 use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData};
 use futures::{prelude::*, future::{self, Either}};
 use futures_timer::Delay;
-use futures_channel::mpsc::state_channel as state;
+use futures_channel as state;
 use sp_inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
 use sp_runtime::generic::BlockId;
@@ -73,8 +73,11 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Epoch data necessary for authoring.
 	type EpochData;
 
+	/// Event sink
+	type EventSink: Sink<SlotWorkerEvent<Self::Claim>>;
+
 	/// get the sender for events
-	fn sender(&self) -> state::Sender<SlotWorkerEvent<Self::Claim>>;
+	fn sender(&self) -> Self::EventSink;
 
 	/// The logging target to use when logging messages.
 	fn logging_target(&self) -> &'static str;
@@ -142,120 +145,135 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		Self: Send + Sync,
 		<Self::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
 	{
-		let (timestamp, slot_number, slot_duration) =
-			(slot_info.timestamp, slot_info.number, slot_info.duration);
+		async {
+			let (timestamp, slot_number, slot_duration) =
+				(slot_info.timestamp, slot_info.number, slot_info.duration);
 
-		self.sender().send(SlotWorkerEvent::NewSlot {
-			slot_number,
-		});
+			// spawn these on an executor
+			self.sender().send(SlotWorkerEvent::NewSlot {
+				slot_number,
+			}).await;
 
-		{
-			let slot_now = SignedDuration::default().slot_now(slot_duration);
-			if slot_now > slot_number {
-				// if this is behind, return.
-				debug!(target: self.logging_target(),
-					"Skipping proposal slot {} since our current view is {}",
-					slot_number, slot_now,
-				);
+			{
+				let slot_now = SignedDuration::default().slot_now(slot_duration);
+				if slot_now > slot_number {
+					// if this is behind, return.
+					debug!(target: self.logging_target(),
+					       "Skipping proposal slot {} since our current view is {}",
+					       slot_number, slot_now,
+					);
 
-				return Box::pin(future::ready(Ok(())));
+					return Ok(())
+				}
 			}
-		}
 
-		let epoch_data = match self.epoch_data(&chain_head, slot_number) {
-			Ok(epoch_data) => epoch_data,
-			Err(err) => {
-				warn!("Unable to fetch epoch data at block {:?}: {:?}", chain_head.hash(), err);
+			let epoch_data = match self.epoch_data(&chain_head, slot_number) {
+				Ok(epoch_data) => epoch_data,
+				Err(err) => {
+					warn!("Unable to fetch epoch data at block {:?}: {:?}", chain_head.hash(), err);
 
-				telemetry!(
+					telemetry!(
 					CONSENSUS_WARN; "slots.unable_fetching_authorities";
 					"slot" => ?chain_head.hash(),
 					"err" => ?err,
 				);
 
-				return Box::pin(future::ready(Ok(())));
+					return Ok(())
+				}
+			};
+
+			let authorities_len = self.authorities_len(&epoch_data);
+
+			if !self.force_authoring() && self.sync_oracle().is_offline() && authorities_len > 1 {
+				debug!(target: self.logging_target(), "Skipping proposal slot. Waiting for the network.");
+				telemetry!(
+					CONSENSUS_DEBUG;
+					"slots.skipping_proposal_slot";
+					"authorities_len" => authorities_len,
+				);
+				return Ok(())
 			}
-		};
 
-		let authorities_len = self.authorities_len(&epoch_data);
+			let claim = match self.claim_slot(&chain_head, slot_number, &epoch_data) {
+				None => {
+					self.sender().send(SlotWorkerEvent::UnClaimedSlot {
+						slot_number,
+						// fixme: get thresholds somehow.
+						thresholds: Vec::new(),
+					}).await;
+					return Ok(())
+				},
+				Some(claim) => {
+					self.sender().send(SlotWorkerEvent::ClaimedSlot {
+						slot_number,
+						claim: claim.clone(),
+					}).await;
 
-		if !self.force_authoring() && self.sync_oracle().is_offline() && authorities_len > 1 {
-			debug!(target: self.logging_target(), "Skipping proposal slot. Waiting for the network.");
-			telemetry!(
-				CONSENSUS_DEBUG;
-				"slots.skipping_proposal_slot";
-				"authorities_len" => authorities_len,
+					claim
+				},
+			};
+
+			debug!(
+				target: self.logging_target(), "Starting authorship at slot {}; timestamp = {}",
+				slot_number,
+				timestamp,
 			);
 
-			return Box::pin(future::ready(Ok(())));
-		}
-
-		let claim = match self.claim_slot(&chain_head, slot_number, &epoch_data) {
-			None => return Box::pin(future::ready(Ok(()))),
-			Some(claim) => claim,
-		};
-
-		debug!(
-			target: self.logging_target(), "Starting authorship at slot {}; timestamp = {}",
-			slot_number,
-			timestamp,
-		);
-
-		telemetry!(CONSENSUS_DEBUG; "slots.starting_authorship";
+			telemetry!(CONSENSUS_DEBUG; "slots.starting_authorship";
 			"slot_num" => slot_number,
 			"timestamp" => timestamp,
 		);
 
-		let mut proposer = match self.proposer(&chain_head) {
-			Ok(proposer) => proposer,
-			Err(err) => {
-				warn!("Unable to author block in slot {:?}: {:?}", slot_number, err);
+			let mut proposer = match self.proposer(&chain_head) {
+				Ok(proposer) => proposer,
+				Err(err) => {
+					warn!("Unable to author block in slot {:?}: {:?}", slot_number, err);
 
-				telemetry!(CONSENSUS_WARN; "slots.unable_authoring_block";
+					telemetry!(CONSENSUS_WARN; "slots.unable_authoring_block";
 					"slot" => slot_number, "err" => ?err
 				);
 
-				return Box::pin(future::ready(Ok(())));
-			},
-		};
+					return Box::pin(future::ready(Ok(())));
+				},
+			};
 
-		let slot_remaining_duration = self.slot_remaining_duration(&slot_info);
-		let proposing_remaining_duration = self.proposing_remaining_duration(&chain_head, &slot_info);
-		let logs = self.pre_digest_data(slot_number, &claim);
+			let slot_remaining_duration = self.slot_remaining_duration(&slot_info);
+			let proposing_remaining_duration = self.proposing_remaining_duration(&chain_head, &slot_info);
+			let logs = self.pre_digest_data(slot_number, &claim);
 
-		// deadline our production to approx. the end of the slot
-		let proposing = proposer.propose(
-			slot_info.inherent_data,
-			sp_runtime::generic::Digest {
-				logs,
-			},
-			slot_remaining_duration,
-		).map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
-		let delay: Box<dyn Future<Output=()> + Unpin + Send> = match proposing_remaining_duration {
-			Some(r) => Box::new(Delay::new(r)),
-			None => Box::new(future::pending()),
-		};
+			// deadline our production to approx. the end of the slot
+			let proposing = proposer.propose(
+				slot_info.inherent_data,
+				sp_runtime::generic::Digest {
+					logs,
+				},
+				slot_remaining_duration,
+			).map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
+			let delay: Box<dyn Future<Output=()> + Unpin + Send> = match proposing_remaining_duration {
+				Some(r) => Box::new(Delay::new(r)),
+				None => Box::new(future::pending()),
+			};
 
-		let proposal_work =
-			Box::new(futures::future::select(proposing, delay).map(move |v| match v {
+			let v = futures::future::select(proposing, delay).await;
+
+			let (block, claim) = match v {
 				futures::future::Either::Left((b, _)) => b.map(|b| (b, claim)),
 				futures::future::Either::Right(_) => {
 					info!("Discarding proposal for slot {}; block production took too long", slot_number);
 					// If the node was compiled with debug, tell the user to use release optimizations.
-					#[cfg(build_type="debug")]
+					#[cfg(build_type = "debug")]
 					info!("Recompile your node in `--release` mode to mitigate this problem.");
 					telemetry!(CONSENSUS_INFO; "slots.discarding_proposal_took_too_long";
 						"slot" => slot_number,
 					);
 					Err(sp_consensus::Error::ClientImport("Timeout in the Slots proposer".into()))
 				},
-			}));
+			}?;
 
-		let block_import_params_maker = self.block_import_params();
-		let block_import = self.block_import();
-		let logging_target = self.logging_target();
+			let block_import_params_maker = self.block_import_params();
+			let block_import = self.block_import();
+			let logging_target = self.logging_target();
 
-		Box::pin(proposal_work.map_ok(move |(block, claim)| {
 			let (header, body) = block.deconstruct();
 			let header_num = *header.number();
 			let header_hash = header.hash();
@@ -269,9 +287,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			);
 
 			info!("Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
-					header_num,
-					block_import_params.post_header().hash(),
-					header_hash,
+			      header_num,
+			      block_import_params.post_header().hash(),
+			      header_hash,
 			);
 
 			telemetry!(CONSENSUS_INFO; "slots.pre_sealed_block";
@@ -282,16 +300,16 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 			if let Err(err) = block_import.lock().import_block(block_import_params, Default::default()) {
 				warn!(target: logging_target,
-					"Error with block built on {:?}: {:?}",
-					parent_hash,
-					err,
+				      "Error with block built on {:?}: {:?}",
+				      parent_hash,
+				      err,
 				);
 
 				telemetry!(CONSENSUS_WARN; "slots.err_with_block_built_on";
 					"hash" => ?parent_hash, "err" => ?err,
 				);
 			}
-		}))
+		}.boxed()
 	}
 }
 
@@ -314,8 +332,6 @@ pub enum SlotWorkerEvent<T> {
 	ClaimedSlot {
 		/// claim data
 		claim: T,
-		/// slot threshold
-		thresholds: Vec<u128>,
 		/// slot number of the epoch
 		slot_number: u64,
 	},
