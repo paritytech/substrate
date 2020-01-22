@@ -212,6 +212,11 @@ sp_core::wasm_export_functions! {
 
 		run().is_some()
 	}
+
+	// Just some test to make sure that `sp-allocator` compiles on `no_std`.
+	fn test_sp_allocator_compiles() {
+		sp_allocator::FreeingBumpHeapAllocator::new(0);
+	}
  }
 
 #[cfg(not(feature = "std"))]
