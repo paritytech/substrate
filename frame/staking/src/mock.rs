@@ -162,14 +162,13 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(25);
 }
 impl pallet_session::Trait for Test {
-	type OnSessionEnding = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
+	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = UintAuthorityId;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
 	type Event = ();
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
-	type SelectInitialValidators = Staking;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }
 

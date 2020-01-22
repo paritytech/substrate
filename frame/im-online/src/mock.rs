@@ -43,28 +43,25 @@ thread_local! {
 	pub static VALIDATORS: RefCell<Option<Vec<u64>>> = RefCell::new(Some(vec![1, 2, 3]));
 }
 
-pub struct TestOnSessionEnding;
-impl pallet_session::OnSessionEnding<u64> for TestOnSessionEnding {
-	fn on_session_ending(_ending_index: SessionIndex, _will_apply_at: SessionIndex)
-		-> Option<Vec<u64>>
-	{
+pub struct TestSessionManager;
+impl pallet_session::SessionManager<u64> for TestSessionManager {
+	fn new_session(_new_index: SessionIndex) -> Option<Vec<u64>> {
 		VALIDATORS.with(|l| l.borrow_mut().take())
 	}
+	fn end_session(_: SessionIndex) {}
 }
 
-impl pallet_session::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
-	fn on_session_ending(_ending_index: SessionIndex, _will_apply_at: SessionIndex)
-		-> Option<(Vec<u64>, Vec<(u64, u64)>)>
-	{
+impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager {
+	fn new_session(_new_index: SessionIndex) -> Option<Vec<(u64, u64)>> {
 		VALIDATORS.with(|l| l
 			.borrow_mut()
 			.take()
 			.map(|validators| {
-				let full_identification = validators.iter().map(|v| (*v, *v)).collect();
-				(validators, full_identification)
+				validators.iter().map(|v| (*v, *v)).collect()
 			})
 		)
 	}
+	fn end_session(_: SessionIndex) {}
 }
 
 /// An extrinsic type used for tests.
@@ -131,13 +128,12 @@ parameter_types! {
 
 impl pallet_session::Trait for Runtime {
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-	type OnSessionEnding = pallet_session::historical::NoteHistoricalRoot<Runtime, TestOnSessionEnding>;
+	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Runtime, TestSessionManager>;
 	type SessionHandler = (ImOnline, );
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
 	type Event = ();
-	type SelectInitialValidators = ();
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }
 

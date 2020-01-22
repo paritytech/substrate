@@ -25,7 +25,7 @@ use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
 	default_child_trie_root, read_trie_value, read_child_trie_value,
 	for_keys_in_child_trie, KeySpacedDB};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
-use crate::backend::Consolidate;
+use crate::{backend::Consolidate, StorageKey, StorageValue};
 use sp_core::storage::ChildInfo;
 use codec::Encode;
 
@@ -67,7 +67,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	/// Return the next key in the trie i.e. the minimum key that is strictly superior to `key` in
 	/// lexicographic order.
-	pub fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+	pub fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, String> {
 		self.next_storage_key_from_root(&self.root, None, key)
 	}
 
@@ -78,7 +78,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		key: &[u8],
-	) -> Result<Option<Vec<u8>>, String> {
+	) -> Result<Option<StorageKey>, String> {
 		let child_root = match self.storage(storage_key)? {
 			Some(child_root) => child_root,
 			None => return Ok(None),
@@ -101,7 +101,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		root: &H::Out,
 		child_info: Option<ChildInfo>,
 		key: &[u8],
-	) -> Result<Option<Vec<u8>>, String> {
+	) -> Result<Option<StorageKey>, String> {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
 			storage: &self.storage,
@@ -146,7 +146,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	}
 
 	/// Get the value of storage at given key.
-	pub fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+	pub fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, String> {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
 			storage: &self.storage,
@@ -164,7 +164,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		key: &[u8],
-	) -> Result<Option<Vec<u8>>, String> {
+	) -> Result<Option<StorageValue>, String> {
 		let root = self.storage(storage_key)?
 			.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key).encode());
 

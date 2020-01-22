@@ -30,7 +30,7 @@ pub use sc_client::LongestChain;
 
 pub use self::block_builder_ext::BlockBuilderExt;
 
-use sp_core::sr25519;
+use sp_core::{sr25519, ChangesTrieConfiguration};
 use sp_core::storage::{ChildInfo, Storage, StorageChild};
 use substrate_test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor, HasherFor};
@@ -41,7 +41,6 @@ use sc_client::{
 		RemoteCallRequest, RemoteChangesRequest, RemoteBodyRequest,
 	},
 };
-
 
 /// A prelude to import in tests.
 pub mod prelude {
@@ -92,7 +91,7 @@ pub type LightExecutor = sc_client::light::call_executor::GenesisCallExecutor<
 /// Parameters of test-client builder with test-runtime.
 #[derive(Default)]
 pub struct GenesisParameters {
-	support_changes_trie: bool,
+	changes_trie_config: Option<ChangesTrieConfiguration>,
 	heap_pages_override: Option<u64>,
 	extra_storage: Storage,
 }
@@ -100,7 +99,7 @@ pub struct GenesisParameters {
 impl GenesisParameters {
 	fn genesis_config(&self) -> GenesisConfig {
 		GenesisConfig::new(
-			self.support_changes_trie,
+			self.changes_trie_config.clone(),
 			vec![
 				sr25519::Public::from(Sr25519Keyring::Alice).into(),
 				sr25519::Public::from(Sr25519Keyring::Bob).into(),
@@ -171,9 +170,9 @@ pub trait TestClientBuilderExt<B>: Sized {
 	/// Returns a mutable reference to the genesis parameters.
 	fn genesis_init_mut(&mut self) -> &mut GenesisParameters;
 
-	/// Enable or disable support for changes trie in genesis.
-	fn set_support_changes_trie(mut self, support_changes_trie: bool) -> Self {
-		self.genesis_init_mut().support_changes_trie = support_changes_trie;
+	/// Set changes trie configuration for genesis.
+	fn changes_trie_config(mut self, config: Option<ChangesTrieConfiguration>) -> Self {
+		self.genesis_init_mut().changes_trie_config = config;
 		self
 	}
 

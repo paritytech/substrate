@@ -26,7 +26,7 @@ use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
 use crate::{
 	trie_backend::TrieBackend,
 	trie_backend_essence::TrieBackendStorage,
-	UsageInfo,
+	UsageInfo, StorageKey, StorageValue, StorageCollection,
 };
 
 /// A state backend is used to read state data and can have changes committed
@@ -44,7 +44,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	type TrieBackendStorage: TrieBackendStorage<H>;
 
 	/// Get keyed storage or None if there is nothing associated.
-	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error>;
 
 	/// Get keyed storage value hash or None if there is nothing associated.
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
@@ -57,7 +57,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		key: &[u8],
-	) -> Result<Option<Vec<u8>>, Self::Error>;
+	) -> Result<Option<StorageValue>, Self::Error>;
 
 	/// Get child keyed storage value hash or None if there is nothing associated.
 	fn child_storage_hash(
@@ -85,7 +85,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Return the next key in storage in lexicographic order or `None` if there is no value.
-	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error>;
 
 	/// Return the next key in child storage in lexicographic order or `None` if there is no value.
 	fn next_child_storage_key(
@@ -93,7 +93,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		key: &[u8]
-	) -> Result<Option<Vec<u8>>, Self::Error>;
+	) -> Result<Option<StorageKey>, Self::Error>;
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
@@ -129,7 +129,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Does not include child storage updates.
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		H::Out: Ord;
 
 	/// Calculate the child storage root, with given delta over what is already stored in
@@ -142,14 +142,14 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		H::Out: Ord;
 
 	/// Get all key/value pairs into a Vec.
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
+	fn pairs(&self) -> Vec<(StorageKey, StorageValue)>;
 
 	/// Get all keys with given prefix
-	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
+	fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
 		let mut all = Vec::new();
 		self.for_keys_with_prefix(prefix, |k| all.push(k.to_vec()));
 		all
@@ -161,7 +161,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		prefix: &[u8],
-	) -> Vec<Vec<u8>> {
+	) -> Vec<StorageKey> {
 		let mut all = Vec::new();
 		self.for_child_keys_with_prefix(storage_key, child_info, prefix, |k| all.push(k.to_vec()));
 		all
@@ -181,9 +181,9 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		child_deltas: I2)
 	-> (H::Out, Self::Transaction)
 	where
-		I1: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		I2i: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		I2: IntoIterator<Item=(Vec<u8>, I2i, OwnedChildInfo)>,
+		I1: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
+		I2i: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
+		I2: IntoIterator<Item=(StorageKey, I2i, OwnedChildInfo)>,
 		H::Out: Ord + Encode,
 	{
 		let mut txs: Self::Transaction = Default::default();
@@ -220,7 +220,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	type Transaction = T::Transaction;
 	type TrieBackendStorage = T::TrieBackendStorage;
 
-	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn storage(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
 		(*self).storage(key)
 	}
 
@@ -229,7 +229,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		key: &[u8],
-	) -> Result<Option<Vec<u8>>, Self::Error> {
+	) -> Result<Option<StorageKey>, Self::Error> {
 		(*self).child_storage(storage_key, child_info, key)
 	}
 
@@ -242,7 +242,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).for_keys_in_child_storage(storage_key, child_info, f)
 	}
 
-	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
 		(*self).next_storage_key(key)
 	}
 
@@ -251,7 +251,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		key: &[u8],
-	) -> Result<Option<Vec<u8>>, Self::Error> {
+	) -> Result<Option<StorageKey>, Self::Error> {
 		(*self).next_child_storage_key(storage_key, child_info, key)
 	}
 
@@ -271,7 +271,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		H::Out: Ord,
 	{
 		(*self).storage_root(delta)
@@ -284,13 +284,13 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		H::Out: Ord,
 	{
 		(*self).child_storage_root(storage_key, child_info, delta)
 	}
 
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
 		(*self).pairs()
 	}
 
@@ -316,8 +316,8 @@ impl Consolidate for () {
 }
 
 impl Consolidate for Vec<(
-		Option<(Vec<u8>, OwnedChildInfo)>,
-		Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		Option<(StorageKey, OwnedChildInfo)>,
+		StorageCollection,
 	)> {
 	fn consolidate(&mut self, mut other: Self) {
 		self.append(&mut other);
@@ -334,7 +334,7 @@ impl<H: Hasher, KF: sp_trie::KeyFunction<H>> Consolidate for sp_trie::GenericMem
 pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I) -> Option<H::Out>
 	where
 		H: Hasher,
-		I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>,
+		I: IntoIterator<Item=(StorageKey, StorageValue)>,
 {
 	let mut root = <H as Hasher>::Out::default();
 	{

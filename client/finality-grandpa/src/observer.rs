@@ -178,7 +178,6 @@ pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
 		config.clone(),
 		persistent_data.set_state.clone(),
 		&executor,
-		on_exit.clone(),
 	);
 
 	let observer_work = ObserverWork::new(
