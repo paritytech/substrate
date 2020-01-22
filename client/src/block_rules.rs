@@ -55,6 +55,7 @@ impl<B: BlockT> BlockRules<B> {
 		}
 	}
 
+	/// Check if there's any rule affecting the given block.
 	pub fn lookup(&self, number: NumberFor<B>, hash: &B::Hash) -> LookupResult<B> {
 		if let Some(hash_for_height) = self.forks.get(&number) {
 			if hash_for_height != hash {
