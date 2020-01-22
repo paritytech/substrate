@@ -12,7 +12,6 @@ hyper = { version = "0.13.1", default-features = false, features = ["stream"] }
 prometheus = { version = "0.7", features = ["nightly", "process"]}
 tokio = "0.2"
 futures-util = { version = "0.3.1", default-features = false, features = ["io"] }
-lazy_static = "1.4"
 derive_more = "0.99"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]

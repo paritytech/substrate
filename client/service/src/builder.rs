@@ -51,46 +51,72 @@ use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer};
 use sp_blockchain;
-use prometheus_exporter::{create_gauge, Gauge, U64, F64, Registry};
+use prometheus_exporter::{create_gauge, Gauge, U64, F64, Registry, PrometheusError};
 
-prometheus_exporter::lazy_static! {
-	pub static ref FINALITY_HEIGHT: Gauge<U64> = create_gauge(
-		"finality_block_height_number",
-		"Height of the highest finalized block"
-	);
-	pub static ref BEST_HEIGHT: Gauge<U64> = create_gauge(
-		"best_block_height_number",
-		"Height of the highest block"
-	);
-	pub static ref PEERS_NUM: Gauge<U64> = create_gauge(
-		"peers_count",
-		"Number of network gossip peers"
-	);
-	pub static ref TX_COUNT: Gauge<U64> = create_gauge(
-		"transaction_count",
-		"Number of transactions"
-	);
-	pub static ref NODE_MEMORY: Gauge<U64> = create_gauge(
-		"memory_usage",
-		"Node memory usage"
-	);
-	pub static ref NODE_CPU: Gauge<F64> = create_gauge(
-		"cpu_usage",
-		"Node CPU usage"
-	);
-	pub static ref NODE_DOWNLOAD: Gauge<U64> = create_gauge(
-		"receive_byte_per_sec",
-		"Received bytes per second"
-	);
-	pub static ref NODE_UPLOAD: Gauge<U64> = create_gauge(
-		"sent_byte_per_sec",
-		"Sent bytes per second"
-	);
-	pub static ref SYNC_TARGET: Gauge<U64> = create_gauge(
-		"sync_target_number",
-		"Block sync target number"
-	);
+struct ServiceMetrics {
+	finality_height: Gauge<U64>,
+	best_height: Gauge<U64>,
+	peers_num: Gauge<U64>,
+	tx_count: Gauge<U64>,
+	node_memory: Gauge<U64>,
+	node_cpu: Gauge<F64>,
+	node_download: Gauge<U64>,
+	node_upload: Gauge<U64>,
+	sync_target: Gauge<U64>,
 }
+
+impl ServiceMetrics {
+	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			finality_height: create_gauge(
+				"finality_block_height_number",
+				"Height of the highest finalized block",
+				registry
+			)?,
+			best_height: create_gauge(
+				"best_block_height_number",
+				"Height of the highest block",
+				registry
+			)?,
+			peers_num: create_gauge(
+				"peers_count",
+				"Number of network gossip peers",
+				registry
+			)?,
+			tx_count: create_gauge(
+				"transaction_count",
+				"Number of transactions",
+				registry
+			)?,
+			node_memory: create_gauge(
+				"memory_usage",
+				"Node memory usage",
+				registry
+			)?,
+			node_cpu: create_gauge(
+				"cpu_usage",
+				"Node CPU usage",
+				registry
+			)?,
+			node_download: create_gauge(
+				"receive_byte_per_sec",
+				"Received bytes per second",
+				registry
+			)?,
+			node_upload: create_gauge(
+				"sent_byte_per_sec",
+				"Sent bytes per second",
+				registry
+			)?,
+			sync_target: create_gauge(
+				"sync_target_number",
+				"Block sync target number",
+				registry
+			)?,
+		})
+	}
+}
+
 /// Aggregator for the components required to build a service.
 ///
 /// # Usage
@@ -993,6 +1019,27 @@ ServiceBuilder<
 			let _ = to_spawn_tx.unbounded_send(Box::pin(select(events, exit.clone()).map(drop)));
 		}
 
+		// Prometheus exporter and metrics
+		let metrics = if let Some(port) = config.prometheus_port {
+			let registry = match prometheus_registry {
+				Some(registry) => registry,
+				None => Registry::new_custom(Some("substrate".into()), None)?
+			};
+
+			let metrics = ServiceMetrics::register(&registry)?;
+
+			let future = select(
+				prometheus_exporter::init_prometheus(port, registry).boxed(),
+				exit.clone()
+			).map(drop);
+
+			let _ = to_spawn_tx.unbounded_send(Box::pin(future));
+
+			Some(metrics)
+		} else {
+			None
+		};
+
 		// Periodically notify the telemetry.
 		let transaction_pool_ = transaction_pool.clone();
 		let client_ = client.clone();
@@ -1039,16 +1086,18 @@ ServiceBuilder<
 				"disk_read_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_read).unwrap_or(0),
 				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
 			);
-			NODE_MEMORY.set(memory);
-			NODE_CPU.set(f64::from(cpu_usage));
-			TX_COUNT.set(txpool_status.ready as u64);
-			FINALITY_HEIGHT.set(finalized_number);
-			BEST_HEIGHT.set(best_number);
-			PEERS_NUM.set(num_peers as u64);
-			NODE_DOWNLOAD.set(net_status.average_download_per_sec);
-			NODE_UPLOAD.set(net_status.average_upload_per_sec);
-			if let Some(best_seen_block) = best_seen_block {
-				SYNC_TARGET.set(best_seen_block);
+			if let Some(metrics) = metrics.as_ref() {
+				metrics.node_memory.set(memory);
+				metrics.node_cpu.set(f64::from(cpu_usage));
+				metrics.tx_count.set(txpool_status.ready as u64);
+				metrics.finality_height.set(finalized_number);
+				metrics.best_height.set(best_number);
+				metrics.peers_num.set(num_peers as u64);
+				metrics.node_download.set(net_status.average_download_per_sec);
+				metrics.node_upload.set(net_status.average_upload_per_sec);
+				if let Some(best_seen_block) = best_seen_block {
+					metrics.sync_target.set(best_seen_block);
+				}
 			}
 
 			ready(())
@@ -1182,29 +1231,6 @@ ServiceBuilder<
 			).map(drop)));
 			telemetry
 		});
-		// Prometheus exporter
-		if let Some(port) = config.prometheus_port {
-			let registry = match prometheus_registry {
-				Some(registry) => registry,
-				None => Registry::new_custom(Some("substrate".into()), None)?
-			};
-
-			registry.register(Box::new(NODE_MEMORY.clone()))?;
-			registry.register(Box::new(NODE_CPU.clone()))?;
-			registry.register(Box::new(TX_COUNT.clone()))?;
-			registry.register(Box::new(FINALITY_HEIGHT.clone()))?;
-			registry.register(Box::new(BEST_HEIGHT.clone()))?;
-			registry.register(Box::new(PEERS_NUM.clone()))?;
-			registry.register(Box::new(NODE_DOWNLOAD.clone()))?;
-			registry.register(Box::new(NODE_UPLOAD.clone()))?;
-
-			let future = select(
-				prometheus_exporter::init_prometheus(port, registry).boxed(),
-				exit.clone()
-			).map(drop);
-
-			let _ = to_spawn_tx.unbounded_send(Box::pin(future));
-    	}
 
 		// Instrumentation
 		if let Some(tracing_targets) = config.tracing_targets.as_ref() {
