@@ -320,7 +320,7 @@ impl<Hash, Number, Epoch> EpochChanges<Hash, Number, Epoch> where
 
 	/// Return the inner fork tree, useful for testing purposes.
 	#[cfg(test)]
-	pub fn tree(&self) -> &ForkTree<Hash, Number, PersistedEpoch> {
+	pub fn tree(&self) -> &ForkTree<Hash, Number, PersistedEpoch<Epoch>> {
 		&self.inner
 	}
 }
@@ -330,3 +330,318 @@ pub type EpochChangesFor<Block, Epoch> = EpochChanges<<Block as BlockT>::Hash, N
 
 /// A shared epoch changes tree.
 pub type SharedEpochChanges<Block, Epoch> = Arc<Mutex<EpochChangesFor<Block, Epoch>>>;
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use super::Epoch as EpochT;
+
+	#[derive(Debug, PartialEq)]
+	pub struct TestError;
+
+	impl std::fmt::Display for TestError {
+		fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+			write!(f, "TestError")
+		}
+	}
+
+	impl std::error::Error for TestError {}
+
+	impl<'a, F: 'a , H: 'a + PartialEq + std::fmt::Debug> IsDescendentOfBuilder<H> for &'a F
+		where F: Fn(&H, &H) -> Result<bool, TestError>
+	{
+		type Error = TestError;
+		type IsDescendentOf = Box<dyn Fn(&H, &H) -> Result<bool, TestError> + 'a>;
+
+		fn build_is_descendent_of(&self, current: Option<(H, H)>)
+			-> Self::IsDescendentOf
+		{
+			let f = *self;
+			Box::new(move |base, head| {
+				let mut head = head;
+
+				if let Some((ref c_head, ref c_parent)) = current {
+					if head == c_head {
+						if base == c_parent {
+							return Ok(true);
+						} else {
+							head = c_parent;
+						}
+					}
+				}
+
+				f(base, head)
+			})
+		}
+	}
+
+	type Hash = [u8; 1];
+
+	#[derive(Debug, Clone, Eq, PartialEq)]
+	struct Epoch {
+		start_slot: SlotNumber,
+		duration: SlotNumber,
+	}
+
+	impl EpochT for Epoch {
+		type NextEpochDescriptor = ();
+
+		fn increment(&self, _: ()) -> Self {
+			Epoch {
+				start_slot: self.start_slot + self.duration,
+				duration: self.duration,
+			}
+		}
+
+		fn end_slot(&self) -> SlotNumber {
+			self.start_slot + self.duration
+		}
+
+		fn start_slot(&self) -> SlotNumber {
+			self.start_slot
+		}
+	}
+
+	#[test]
+	fn genesis_epoch_is_created_but_not_imported() {
+		//
+		// A - B
+		//  \
+		//   — C
+		//
+		let is_descendent_of = |base: &Hash, block: &Hash| -> Result<bool, TestError> {
+			match (base, *block) {
+				(b"A", b) => Ok(b == *b"B" || b == *b"C" || b == *b"D"),
+				(b"B", b) | (b"C", b) => Ok(b == *b"D"),
+				(b"0", _) => Ok(true),
+				_ => Ok(false),
+			}
+		};
+
+		let make_genesis = |slot| Epoch {
+			start_slot: slot,
+			duration: 100,
+		};
+
+		let epoch_changes = EpochChanges::new();
+		let genesis_epoch = epoch_changes.epoch_for_child_of(
+			&is_descendent_of,
+			b"0",
+			0,
+			10101,
+			&make_genesis,
+		).unwrap().unwrap();
+
+		match genesis_epoch {
+			ViableEpoch::Genesis(_) => {},
+			_ => panic!("should be unimported genesis"),
+		};
+		assert_eq!(genesis_epoch.as_ref(), &make_genesis(10101));
+
+		let genesis_epoch_2 = epoch_changes.epoch_for_child_of(
+			&is_descendent_of,
+			b"0",
+			0,
+			10102,
+			&make_genesis,
+		).unwrap().unwrap();
+
+		match genesis_epoch_2 {
+			ViableEpoch::Genesis(_) => {},
+			_ => panic!("should be unimported genesis"),
+		};
+		assert_eq!(genesis_epoch_2.as_ref(), &make_genesis(10102));
+	}
+
+	#[test]
+	fn epoch_changes_between_blocks() {
+		//
+		// A - B
+		//  \
+		//   — C
+		//
+		let is_descendent_of = |base: &Hash, block: &Hash| -> Result<bool, TestError> {
+			match (base, *block) {
+				(b"A", b) => Ok(b == *b"B" || b == *b"C" || b == *b"D"),
+				(b"B", b) | (b"C", b) => Ok(b == *b"D"),
+				(b"0", _) => Ok(true),
+				_ => Ok(false),
+			}
+		};
+
+		let make_genesis = |slot| Epoch {
+			start_slot: slot,
+			duration: 100,
+		};
+
+		let mut epoch_changes = EpochChanges::new();
+		let genesis_epoch = epoch_changes.epoch_for_child_of(
+			&is_descendent_of,
+			b"0",
+			0,
+			100,
+			&make_genesis,
+		).unwrap().unwrap();
+
+		assert_eq!(genesis_epoch.as_ref(), &make_genesis(100));
+
+		let import_epoch_1 = genesis_epoch.increment(());
+		let epoch_1 = import_epoch_1.as_ref().clone();
+
+		epoch_changes.import(
+			&is_descendent_of,
+			*b"A",
+			1,
+			*b"0",
+			import_epoch_1,
+		).unwrap();
+		let genesis_epoch = genesis_epoch.into_inner();
+
+		assert!(is_descendent_of(b"0", b"A").unwrap());
+
+		let end_slot = genesis_epoch.end_slot();
+		assert_eq!(end_slot, epoch_1.start_slot);
+
+		{
+			// x is still within the genesis epoch.
+			let x = epoch_changes.epoch_for_child_of(
+				&is_descendent_of,
+				b"A",
+				1,
+				end_slot - 1,
+				&make_genesis,
+			).unwrap().unwrap().into_inner();
+
+			assert_eq!(x, genesis_epoch);
+		}
+
+		{
+			// x is now at the next epoch, because the block is now at the
+			// start slot of epoch 1.
+			let x = epoch_changes.epoch_for_child_of(
+				&is_descendent_of,
+				b"A",
+				1,
+				end_slot,
+				&make_genesis,
+			).unwrap().unwrap().into_inner();
+
+			assert_eq!(x, epoch_1);
+		}
+
+		{
+			// x is now at the next epoch, because the block is now after
+			// start slot of epoch 1.
+			let x = epoch_changes.epoch_for_child_of(
+				&is_descendent_of,
+				b"A",
+				1,
+				epoch_1.end_slot() - 1,
+				&make_genesis,
+			).unwrap().unwrap().into_inner();
+
+			assert_eq!(x, epoch_1);
+		}
+	}
+
+	#[test]
+	fn two_block_ones_dont_conflict() {
+		//     X - Y
+		//   /
+		// 0 - A - B
+		//
+		let is_descendent_of = |base: &Hash, block: &Hash| -> Result<bool, TestError> {
+			match (base, *block) {
+				(b"A", b) => Ok(b == *b"B"),
+				(b"X", b) => Ok(b == *b"Y"),
+				(b"0", _) => Ok(true),
+				_ => Ok(false),
+			}
+		};
+
+		let duration = 100;
+
+		let make_genesis = |slot| Epoch {
+			start_slot: slot,
+			duration,
+		};
+
+		let mut epoch_changes = EpochChanges::new();
+		let next_descriptor = ();
+
+		// insert genesis epoch for A
+		{
+			let genesis_epoch_a = epoch_changes.epoch_for_child_of(
+				&is_descendent_of,
+				b"0",
+				0,
+				100,
+				&make_genesis,
+			).unwrap().unwrap();
+
+			epoch_changes.import(
+				&is_descendent_of,
+				*b"A",
+				1,
+				*b"0",
+				genesis_epoch_a.increment(next_descriptor.clone()),
+			).unwrap();
+
+		}
+
+		// insert genesis epoch for X
+		{
+			let genesis_epoch_x = epoch_changes.epoch_for_child_of(
+				&is_descendent_of,
+				b"0",
+				0,
+				1000,
+				&make_genesis,
+			).unwrap().unwrap();
+
+			epoch_changes.import(
+				&is_descendent_of,
+				*b"X",
+				1,
+				*b"0",
+				genesis_epoch_x.increment(next_descriptor.clone()),
+			).unwrap();
+		}
+
+		// now check that the genesis epochs for our respective block 1s
+		// respect the chain structure.
+		{
+			let epoch_for_a_child = epoch_changes.epoch_for_child_of(
+				&is_descendent_of,
+				b"A",
+				1,
+				101,
+				&make_genesis,
+			).unwrap().unwrap();
+
+			assert_eq!(epoch_for_a_child.into_inner(), make_genesis(100));
+
+			let epoch_for_x_child = epoch_changes.epoch_for_child_of(
+				&is_descendent_of,
+				b"X",
+				1,
+				1001,
+				&make_genesis,
+			).unwrap().unwrap();
+
+			assert_eq!(epoch_for_x_child.into_inner(), make_genesis(1000));
+
+			let epoch_for_x_child_before_genesis = epoch_changes.epoch_for_child_of(
+				&is_descendent_of,
+				b"X",
+				1,
+				101,
+				&make_genesis,
+			).unwrap();
+
+			// even though there is a genesis epoch at that slot, it's not in
+			// this chain.
+			assert!(epoch_for_x_child_before_genesis.is_none());
+		}
+	}
+}
