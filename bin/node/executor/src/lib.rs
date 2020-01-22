@@ -348,14 +348,16 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		for i in extrinsics.iter() {
+		for extrinsic in extrinsics.iter() {
+			// Try to apply the `extrinsic`. It should be valid, in the sense that it passes
+			// all pre-inclusion checks.
 			let r = executor_call::<NeverNativeValue, fn() -> _>(
 				env,
 				"BlockBuilder_apply_extrinsic",
-				&i.encode(),
+				&extrinsic.encode(),
 				true,
 				None,
-			).0.expect("execution failed").into_encoded();
+			).0.expect("application of an extrinsic failed").into_encoded();
 			match ApplyExtrinsicResult::decode(&mut &r[..]).expect("apply result deserialization failed") {
 				Ok(_) => {},
 				Err(e) => panic!("panic while applying extrinsic: {:?}", e),
