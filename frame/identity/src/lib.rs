@@ -865,13 +865,15 @@ decl_module! {
 }
 
 impl<T: Trait> Benchmarking for Module<T> {
-	type BenchmarkResults = bool;
+	type BenchmarkResults = (Vec<(&'static str, u32)>, u128);
 	const STEPS: u32 = 100;
 	const REPEATS: u32 = 10;
 
 	fn run_benchmarks() -> Vec<Self::BenchmarkResults> {
 		// first one is set_identity.
 		let components = benchmarking::set_identity::components();
+		// results go here
+		let mut results: Vec<Self::BenchmarkResults> = Vec::new();
 		// Select the component we will be benchmarking. Each component will be benchmarked.
 		for (name, low, high) in components.iter() {
 			// Create up to `STEPS` steps for that component between high and low.
@@ -888,16 +890,18 @@ impl<T: Trait> Benchmarking for Module<T> {
 					).collect();
 				
 				
+
 				for _r in 0..Self::REPEATS {
 					let instance = benchmarking::set_identity::instance(&c);
-					//timer.begin();
+					let start = sp_io::benchmark::now();
 					frame_support::assert_ok!(instance.dispatch(Some(0).into()));
-					//let t = timer.elapsed();
-					//BenchmarkResults.calls["set_identity"].push((c, t));
+					let finish = sp_io::benchmark::now();
+					let elapsed = finish - start;
+					results.push((c.clone(), elapsed));
 				}
 			}
 		}
-		return vec![true];
+		return results;
 	}
 }
 
