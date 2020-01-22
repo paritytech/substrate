@@ -391,6 +391,12 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	}
 }
 
+impl<T: Trait> frame_support::traits::Author<T::AccountId> for Module<T> {
+	fn author() -> T::AccountId {
+		Self::author()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

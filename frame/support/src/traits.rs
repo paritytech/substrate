@@ -102,6 +102,19 @@ impl<A> FindAuthor<A> for () {
 	}
 }
 
+/// A trait to get the author of the block.
+pub trait Author<AccountId> {
+	/// Return the account of the author of the block.
+	fn author() -> AccountId;
+}
+
+/// Return the default account id as author.
+impl<A: Default> Author<A> for () {
+	fn author() -> A {
+		A::default()
+	}
+}
+
 /// A trait for verifying the seal of a header and returning the author.
 pub trait VerifySeal<Header, Author> {
 	/// Verify a header and return the author, if any.
