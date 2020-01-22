@@ -21,7 +21,7 @@ use self::error::Error;
 use std::sync::Arc;
 use assert_matches::assert_matches;
 use futures01::stream::Stream;
-use sp_core::storage::{well_known_keys, ChildInfo};
+use sp_core::{storage::{well_known_keys, ChildInfo}, ChangesTrieConfiguration};
 use sp_core::hash::H256;
 use sp_io::hashing::blake2_256;
 use substrate_test_runtime_client::{
@@ -378,7 +378,9 @@ fn should_query_storage() {
 	}
 
 	run_tests(Arc::new(substrate_test_runtime_client::new()));
-	run_tests(Arc::new(TestClientBuilder::new().set_support_changes_trie(true).build()));
+	run_tests(Arc::new(TestClientBuilder::new()
+		.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
+		.build()));
 }
 
 #[test]

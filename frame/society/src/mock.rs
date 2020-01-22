@@ -44,7 +44,6 @@ parameter_types! {
 	pub const PeriodSpend: u64 = 1000;
 	pub const MaxLockDuration: u64 = 100;
 	pub const ChallengePeriod: u64 = 8;
-	pub const MaxMembers: u32 = 100;
 
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 1024;

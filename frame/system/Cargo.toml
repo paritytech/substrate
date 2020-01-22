@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
@@ -25,7 +24,6 @@ substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/ru
 default = ["std"]
 std = [
 	"serde",
-	"safe-mix/std",
 	"codec/std",
 	"sp-core/std",
 	"sp-std/std",

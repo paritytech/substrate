@@ -25,7 +25,7 @@ use sc_network_test::{
 use sc_network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
 use futures_timer::Delay;
-use futures03::{StreamExt as _, TryStreamExt as _};
+use futures03::TryStreamExt as _;
 use tokio::runtime::current_thread;
 use sp_keyring::Ed25519Keyring;
 use sc_client::LongestChain;
@@ -287,12 +287,10 @@ impl ApiExt<Block> for RuntimeApi {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn into_storage_changes<
-		T: sp_api::ChangesTrieStorage<sp_api::HasherFor<Block>, sp_api::NumberFor<Block>>
-	>(
+	fn into_storage_changes(
 		&self,
 		_: &Self::StateBackend,
-		_: Option<&T>,
+		_: Option<&sp_api::ChangesTrieState<sp_api::HasherFor<Block>, sp_api::NumberFor<Block>>>,
 		_: <Block as sp_api::BlockT>::Hash,
 	) -> std::result::Result<sp_api::StorageChanges<Self::StateBackend, Block>, String>
 		where Self: Sized
@@ -1272,7 +1270,6 @@ fn voter_persists_its_votes() {
 			config.clone(),
 			set_state,
 			&threads_pool,
-			Exit,
 		);
 
 		let (round_rx, round_tx) = network.round_communication(
@@ -1677,7 +1674,6 @@ fn grandpa_environment_respects_voting_rules() {
 			config.clone(),
 			set_state.clone(),
 			&threads_pool,
-			Exit,
 		);
 
 		Environment {

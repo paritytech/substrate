@@ -45,7 +45,7 @@ use parking_lot::Mutex;
 
 /// The changes that need to applied to the storage to create the state for a block.
 ///
-/// See [`state_machine::StorageChanges`] for more information.
+/// See [`sp_state_machine::StorageChanges`] for more information.
 pub type StorageChanges<Transaction, Block> =
 	sp_state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>;
 

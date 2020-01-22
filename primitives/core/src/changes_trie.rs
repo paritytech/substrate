@@ -38,6 +38,17 @@ pub struct ChangesTrieConfiguration {
 	pub digest_levels: u32,
 }
 
+/// Substrate changes trie configuration range.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChangesTrieConfigurationRange<Number, Hash> {
+	/// Zero block of configuration.
+	pub zero: (Number, Hash),
+	/// Last block of configuration (if configuration has been deactivated at some point).
+	pub end: Option<(Number, Hash)>,
+	/// The configuration itself. None if changes tries were disabled in this range.
+	pub config: Option<ChangesTrieConfiguration>,
+}
+
 impl ChangesTrieConfiguration {
 	/// Create new configuration given digest interval and levels.
 	pub fn new(digest_interval: u32, digest_levels: u32) -> Self {

@@ -238,9 +238,7 @@ impl traits::IdentifyAccount for MultiSigner {
 		match self {
 			MultiSigner::Ed25519(who) => <[u8; 32]>::from(who).into(),
 			MultiSigner::Sr25519(who) => <[u8; 32]>::from(who).into(),
-			MultiSigner::Ecdsa(who) => sp_io::hashing::blake2_256(
-				&who.as_compressed().expect("`who` is a valid `ECDSA` public key; qed")[..],
-			).into(),
+			MultiSigner::Ecdsa(who) => sp_io::hashing::blake2_256(&who.as_ref()[..]).into(),
 		}
 	}
 }
@@ -724,7 +722,7 @@ mod tests {
 		let multi_signer = MultiSigner::from(pair.public());
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
 
-		let multi_signer = MultiSigner::from(pair.public().into_compressed().unwrap());
+		let multi_signer = MultiSigner::from(pair.public());
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
 	}
 }
