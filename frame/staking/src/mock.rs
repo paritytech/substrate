@@ -21,6 +21,7 @@ use sp_runtime::{Perbill, KeyTypeId};
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::traits::{
 	IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion, Extrinsic as ExtrinsicT,
+	Zero,
 };
 use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
@@ -35,16 +36,14 @@ use frame_support::{
 use frame_system::offchain::{
 	TransactionSubmitter, Signer, CreateTransaction,
 };
-use crate::{
-	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
-	Nominators, inflation
-};
+use crate::*;
+use sp_phragmen::{StakedAssignment, reduce, evaluate_support, build_support_map, ExtendedBalance};
 
 /// The AccountId alias in this test module.
-type AccountId = u64;
-type AccountIndex = u64;
-type BlockNumber = u64;
-type Balance = u64;
+pub(crate) type AccountId = u64;
+pub(crate) type AccountIndex = u64;
+pub(crate) type BlockNumber = u64;
+pub(crate) type Balance = u64;
 
 /// Simple structure that exposes how u64 currency can be represented as... u64.
 pub struct CurrencyToVoteHandler;
@@ -62,6 +61,7 @@ thread_local! {
 	static SLASH_DEFER_DURATION: RefCell<EraIndex> = RefCell::new(0);
 	static ELECTION_LOOKAHEAD: RefCell<BlockNumber> = RefCell::new(0);
 	static PERIOD: RefCell<BlockNumber> = RefCell::new(1);
+	static LOCAL_KEY_ACCOUNT: RefCell<AccountId> = RefCell::new(10);
 }
 
 pub struct TestSessionHandler;
@@ -290,17 +290,22 @@ impl Trait for Test {
 	type SubmitTransaction = SubmitTransaction;
 }
 
-mod dummy_sr25519 {
+pub(crate) mod dummy_sr25519 {
+	use super::LOCAL_KEY_ACCOUNT;
+
 	mod app_sr25519 {
 		use sp_application_crypto::{app_crypto, key_types::DUMMY, sr25519};
 		app_crypto!(sr25519, DUMMY);
 	}
 	pub type AuthoritySignature = app_sr25519::Signature;
 	pub type AuthorityId = app_sr25519::Public;
+	pub type AuthorityPair = app_sr25519::Pair;
 
 	impl sp_runtime::traits::IdentifyAccount for AuthorityId {
 		type AccountId = u64;
-		fn into_account(self) -> Self::AccountId { 11u64 }
+		fn into_account(self) -> Self::AccountId {
+			LOCAL_KEY_ACCOUNT.with(|v| *v.borrow())
+		}
 	}
 }
 
@@ -325,7 +330,7 @@ pub struct ExtBuilder {
 	session_length: BlockNumber,
 	election_lookahead: BlockNumber,
 	session_per_era: SessionIndex,
-	existential_deposit: u64,
+	existential_deposit: Balance,
 	validator_pool: bool,
 	nominate: bool,
 	validator_count: u32,
@@ -333,7 +338,9 @@ pub struct ExtBuilder {
 	slash_defer_duration: EraIndex,
 	fair: bool,
 	num_validators: Option<u32>,
-	invulnerables: Vec<u64>,
+	invulnerables: Vec<AccountId>,
+	has_stakers: bool,
+	local_key_account: AccountId
 }
 
 impl Default for ExtBuilder {
@@ -351,6 +358,8 @@ impl Default for ExtBuilder {
 			fair: true,
 			num_validators: None,
 			invulnerables: vec![],
+			has_stakers: true,
+			local_key_account: 10,
 		}
 	}
 }
@@ -404,12 +413,21 @@ impl ExtBuilder {
 		self.session_length = length;
 		self
 	}
+	pub fn has_stakers(mut self, has: bool) -> Self {
+		self.has_stakers = has;
+		self
+	}
+	pub fn local_key_account(mut self, key: AccountId) -> Self {
+		self.local_key_account = key;
+		self
+	}
 	pub fn set_associated_constants(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		SLASH_DEFER_DURATION.with(|v| *v.borrow_mut() = self.slash_defer_duration);
 		SESSION_PER_ERA.with(|v| *v.borrow_mut() = self.session_per_era);
 		ELECTION_LOOKAHEAD.with(|v| *v.borrow_mut() = self.election_lookahead);
 		PERIOD.with(|v| *v.borrow_mut() = self.session_length);
+		LOCAL_KEY_ACCOUNT.with(|v| *v.borrow_mut() = self.local_key_account);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_constants();
@@ -457,15 +475,19 @@ impl ExtBuilder {
 		let nominated = if self.nominate { vec![11, 21] } else { vec![] };
 		let _ = GenesisConfig::<Test>{
 			current_era: 0,
-			stakers: vec![
-				// (stash, controller, staked_amount, status)
-				(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
-				(21, 20, stake_21, StakerStatus::<AccountId>::Validator),
-				(31, 30, stake_31, StakerStatus::<AccountId>::Validator),
-				(41, 40, balance_factor * 1000, status_41),
-				// nominator
-				(101, 100, balance_factor * 500, StakerStatus::<AccountId>::Nominator(nominated))
-			],
+			stakers: if self.has_stakers {
+				vec![
+					// (stash, controller, staked_amount, status)
+					(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
+					(21, 20, stake_21, StakerStatus::<AccountId>::Validator),
+					(31, 30, stake_31, StakerStatus::<AccountId>::Validator),
+					(41, 40, balance_factor * 1000, status_41),
+					// nominator
+					(101, 100, balance_factor * 500, StakerStatus::<AccountId>::Nominator(nominated))
+				]
+			} else {
+				vec![]
+			},
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
 			invulnerables: self.invulnerables,
@@ -522,7 +544,8 @@ pub fn check_nominator_exposure(stash: u64) {
 		.map(|v| Staking::stakers(v))
 		.for_each(|e| e.others.iter()
 			.filter(|i| i.who == stash)
-			.for_each(|i| sum += i.value));
+			.for_each(|i| sum += i.value)
+		);
 	let nominator_stake = Staking::slashable_balance_of(&stash);
 	// a nominator cannot over-spend.
 	assert!(
@@ -543,20 +566,16 @@ pub fn assert_ledger_consistent(stash: u64) {
 	assert_eq!(real_total, ledger.total);
 }
 
-pub fn bond_validator(acc: u64, val: u64) {
-	// a = controller
-	// a + 1 = stash
-	let _ = Balances::make_free_balance_be(&(acc + 1), val);
-	assert_ok!(Staking::bond(Origin::signed(acc + 1), acc, val, RewardDestination::Controller));
-	assert_ok!(Staking::validate(Origin::signed(acc), ValidatorPrefs::default()));
+pub fn bond_validator(stash: u64, ctrl: u64, val: u64) {
+	let _ = Balances::make_free_balance_be(&stash, val);
+	assert_ok!(Staking::bond(Origin::signed(stash), ctrl, val, RewardDestination::Controller));
+	assert_ok!(Staking::validate(Origin::signed(ctrl), ValidatorPrefs::default()));
 }
 
-pub fn bond_nominator(acc: u64, val: u64, target: Vec<u64>) {
-	// a = controller
-	// a + 1 = stash
-	let _ = Balances::make_free_balance_be(&(acc + 1), val);
-	assert_ok!(Staking::bond(Origin::signed(acc + 1), acc, val, RewardDestination::Controller));
-	assert_ok!(Staking::nominate(Origin::signed(acc), target));
+pub fn bond_nominator(stash: u64, ctrl: u64, val: u64, target: Vec<u64>) {
+	let _ = Balances::make_free_balance_be(&stash, val);
+	assert_ok!(Staking::bond(Origin::signed(stash), ctrl, val, RewardDestination::Controller));
+	assert_ok!(Staking::nominate(Origin::signed(ctrl), target));
 }
 
 pub fn run_to_block(n: BlockNumber) {
@@ -639,4 +658,124 @@ pub fn on_offence_now(
 ) {
 	let now = Staking::current_era();
 	on_offence_in_era(offenders, slash_fraction, now)
+}
+
+// winners will be chosen by simply their unweighted total backing stake. Nominator stake is
+// distributed evenly.
+pub fn horrible_phragmen_with_post_processing(do_reduce: bool)
+	-> (CompactAssignments<AccountId, ExtendedBalance>, Vec<AccountId>)
+{
+	use std::collections::BTreeMap;
+
+	let mut backing_stake_of: BTreeMap<AccountId, Balance> = BTreeMap::new();
+
+	// self stake
+	<Validators<Test>>::enumerate().for_each(|(who, _p)|
+		*backing_stake_of.entry(who).or_insert(Zero::zero()) +=
+			Staking::slashable_balance_of(&who)
+	);
+
+	// add nominator stuff
+	<Nominators<Test>>::enumerate().for_each(|(who, nomination)|
+		nomination.targets.iter().for_each(|v|
+			*backing_stake_of.entry(*v).or_insert(Zero::zero()) +=
+				Staking::slashable_balance_of(&who)
+		)
+	);
+
+	// elect winners
+	let mut sorted: Vec<AccountId> = backing_stake_of.keys().cloned().collect();
+	sorted.sort_by_key(|x| backing_stake_of.get(x).unwrap());
+	let winners: Vec<AccountId> = sorted.iter()
+		.cloned()
+		.take(Staking::validator_count() as usize)
+		.collect();
+
+	// create assignments
+	let mut assignments: Vec<StakedAssignment<AccountId>> = Vec::new();
+	<Nominators<Test>>::enumerate().for_each(|(who, nomination)| {
+		let mut dist: Vec<(AccountId, ExtendedBalance)> = Vec::new();
+		nomination.targets.iter().for_each(|v|
+			if winners.iter().find(|w| *w == v).is_some() {
+				dist.push((*v, ExtendedBalance::zero()));
+			}
+		);
+
+		if dist.len() == 0 { return; }
+
+		// assign real stakes. just split the stake.
+		let stake = Staking::slashable_balance_of(&who) as ExtendedBalance;
+		let mut sum: ExtendedBalance = Zero::zero();
+		let dist_len = dist.len();
+		{
+			dist.iter_mut().for_each(|(_, w)| {
+				let partial = stake / (dist_len as ExtendedBalance);
+				*w = partial;
+				sum += partial;
+			});
+		}
+
+		// assign the leftover to last.
+		{
+			let leftover = stake - sum;
+			let last = dist.last_mut().unwrap();
+			last.1 += leftover;
+		}
+
+		assignments.push(StakedAssignment { who, distribution: dist });
+	});
+
+	// Ensure that this result is worse than seq-phragmen. Otherwise, it should not have been used
+	// for testing.
+	{
+		let (better_compact, better_winners) = do_phragmen_with_post_processing(true);
+		let better_assignments = better_compact.into_staked::<
+			_,
+			_,
+			CurrencyToVoteHandler,
+		>(Staking::slashable_balance_of);
+
+		let support = build_support_map::<Balance, AccountId>(&winners, &assignments).0;
+		let better_support = build_support_map::<Balance, AccountId>(&better_winners, &better_assignments).0;
+
+		let score = evaluate_support(&support);
+		let better_score = evaluate_support(&better_support);
+
+		assert!(Staking::is_score_better(score, better_score));
+	}
+
+	if do_reduce { reduce(&mut assignments); }
+	let compact = <CompactAssignments<AccountId, ExtendedBalance>>::from_staked(assignments);
+
+	(compact, winners)
+}
+
+pub fn do_phragmen_with_post_processing(do_reduce: bool)
+	-> (CompactAssignments<AccountId, ExtendedBalance>, Vec<AccountId>)
+{
+	// run phragmen on the default stuff.
+	let sp_phragmen::PhragmenResult {
+		winners,
+		assignments,
+	} = Staking::do_phragmen().unwrap();
+	let winners = winners.into_iter().map(|(w, _)| w).collect();
+
+	let mut staked: Vec<StakedAssignment<AccountId>> = assignments
+		.into_iter()
+		.map(|a| a.into_staked::<_, _, CurrencyToVoteHandler>(Staking::slashable_balance_of))
+		.collect();
+
+	if do_reduce { reduce(&mut staked); }
+
+	let compact = <CompactAssignments<AccountId, ExtendedBalance>>::from_staked(staked);
+
+	(compact, winners)
+}
+
+#[macro_export]
+macro_rules! assert_session_era {
+	($session:expr, $era:expr) => {
+		assert_eq!(Session::current_index(), $session);
+		assert_eq!(Staking::current_era(), $era);
+	}
 }

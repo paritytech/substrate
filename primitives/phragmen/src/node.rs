@@ -1,7 +1,7 @@
 use sp_std::{cell::RefCell, rc::Rc, prelude::*};
 use sp_runtime::RuntimeDebug;
 
-#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
+#[derive(PartialEq, Eq, Ord, PartialOrd, Clone, RuntimeDebug)]
 pub(crate) enum NodeRole {
 	Voter,
 	Target,
@@ -10,17 +10,43 @@ pub(crate) enum NodeRole {
 pub(crate) type RefCellOf<T> = Rc<RefCell<T>>;
 pub(crate) type NodeRef<A> = RefCellOf<Node<A>>;
 
+#[derive(PartialOrd, Ord, Clone)]
+pub(crate) struct NodeId<A> {
+	/// Assumed to be unique.
+	pub who: A,
+	pub role: NodeRole,
+}
+
+impl<A> NodeId<A> {
+	pub fn from(who: A, role: NodeRole) -> Self {
+		Self { who, role }
+	}
+}
+
+impl<A: PartialEq> PartialEq for NodeId<A> {
+	fn eq(&self, other: &NodeId<A>) -> bool {
+		self.who == other.who && self.role == other.role
+	}
+}
+
+#[cfg(feature = "std")]
+impl<A: sp_std::fmt::Debug + Clone> sp_std::fmt::Debug for NodeId<A> {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+		write!(f, "Node({:?}, {:?})", self.who, if self.role == NodeRole::Voter { "V" } else { "T" })
+	}
+}
+
+impl<A: PartialEq> Eq for NodeId<A> {}
+
 #[derive(Clone)]
 pub(crate) struct Node<A> {
-	/// Assumed to be unique.
-	pub(crate) who: A,
-	pub(crate) role: NodeRole,
+	pub(crate) id: NodeId<A>,
 	pub(crate) parent: Option<NodeRef<A>>,
 }
 
 impl<A: PartialEq> PartialEq for Node<A> {
 	fn eq(&self, other: &Node<A>) -> bool {
-		self.who == other.who
+		self.id == other.id
 	}
 }
 
@@ -29,21 +55,13 @@ impl<A: PartialEq> Eq for Node<A> {}
 #[cfg(feature = "std")]
 impl<A: sp_std::fmt::Debug + Clone> sp_std::fmt::Debug for Node<A> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
-		write!(f, "({:?} --> {:?})", self.who, self.parent.as_ref().map(|p| p.borrow().who.clone()))
+		write!(f, "({:?} --> {:?})", self.id, self.parent.as_ref().map(|p| p.borrow().id.clone()))
 	}
 }
 
 impl<A: PartialEq + Eq + Clone + sp_std::fmt::Debug> Node<A> {
-	pub fn new(who: A, role: NodeRole) -> Node<A> {
-		Self {
-			who,
-			role,
-			parent: None,
-		}
-	}
-
-	pub fn has_parent(&self) -> bool {
-		self.parent.is_some()
+	pub fn new(id: NodeId<A>) -> Node<A> {
+		Self { id, parent: None }
 	}
 
 	pub fn is_parent_of(who: &NodeRef<A>, other: &NodeRef<A>) -> bool {
@@ -76,10 +94,6 @@ impl<A: PartialEq + Eq + Clone + sp_std::fmt::Debug> Node<A> {
 		(current, parent_path)
 	}
 
-	pub fn parent(&self) -> Option<A> {
-		self.parent.as_ref().map(|r| r.borrow().who.clone())
-	}
-
 	pub fn into_ref(self) -> NodeRef<A> {
 		Rc::from(RefCell::from(self))
 	}
@@ -89,16 +103,20 @@ impl<A: PartialEq + Eq + Clone + sp_std::fmt::Debug> Node<A> {
 mod tests {
 	use super::*;
 
+	fn id(i: u32) -> NodeId<u32> {
+		NodeId::from(i, NodeRole::Target)
+	}
+
 	#[test]
 	fn basic_create_works() {
-		let node = Node::new(10u32, NodeRole::Target);
-		assert_eq!(node, Node { who: 10u32, parent: None, role: NodeRole::Target });
+		let node = Node::new(id(10));
+		assert_eq!(node, Node { id: NodeId { who: 10, role: NodeRole::Target }, parent: None });
 	}
 
 	#[test]
 	fn set_parent_works() {
-		let a = Node::new(10u32, NodeRole::Target).into_ref();
-		let b = Node::new(20u32, NodeRole::Target).into_ref();
+		let a = Node::new(id(10)).into_ref();
+		let b = Node::new(id(20)).into_ref();
 
 		assert_eq!(a.borrow().parent, None);
 		Node::set_parent_of(&a, &b);
@@ -107,7 +125,7 @@ mod tests {
 
 	#[test]
 	fn get_root_singular() {
-		let a = Node::new(1u32, NodeRole::Target).into_ref();
+		let a = Node::new(id(1)).into_ref();
 		assert_eq!(Node::root(&a), (a.clone(), vec![a.clone()]));
 	}
 
@@ -116,12 +134,12 @@ mod tests {
 		//	D <-- A <-- B <-- C
 		//			\
 		//			 <-- E
-		let a = Node::new(1u32, NodeRole::Target).into_ref();
-		let b = Node::new(2u32, NodeRole::Target).into_ref();
-		let c = Node::new(3u32, NodeRole::Target).into_ref();
-		let d = Node::new(4u32, NodeRole::Target).into_ref();
-		let e = Node::new(5u32, NodeRole::Target).into_ref();
-		let f = Node::new(6u32, NodeRole::Target).into_ref();
+		let a = Node::new(id(1)).into_ref();
+		let b = Node::new(id(2)).into_ref();
+		let c = Node::new(id(3)).into_ref();
+		let d = Node::new(id(4)).into_ref();
+		let e = Node::new(id(5)).into_ref();
+		let f = Node::new(id(6)).into_ref();
 
 		Node::set_parent_of(&c, &b);
 		Node::set_parent_of(&b, &a);
@@ -164,9 +182,9 @@ mod tests {
 		// A ---> B
 		// |      |
 		//  <---- C
-		let a = Node::new(1u32, NodeRole::Target).into_ref();
-		let b = Node::new(2u32, NodeRole::Target).into_ref();
-		let c = Node::new(3u32, NodeRole::Target).into_ref();
+		let a = Node::new(id(1)).into_ref();
+		let b = Node::new(id(2)).into_ref();
+		let c = Node::new(id(3)).into_ref();
 
 		Node::set_parent_of(&a, &b);
 		Node::set_parent_of(&b, &c);
@@ -181,9 +199,9 @@ mod tests {
 	fn node_cmp_stack_overflows_on_non_unique_elements() {
 		// To make sure we don't stack overflow on duplicate who. This needs manual impl of
 		// PartialEq.
-		let a = Node::new(1u32, NodeRole::Target).into_ref();
-		let b = Node::new(1u32, NodeRole::Target).into_ref();
-		let c = Node::new(1u32, NodeRole::Target).into_ref();
+		let a = Node::new(id(1)).into_ref();
+		let b = Node::new(id(2)).into_ref();
+		let c = Node::new(id(3)).into_ref();
 
 		Node::set_parent_of(&a, &b);
 		Node::set_parent_of(&b, &c);

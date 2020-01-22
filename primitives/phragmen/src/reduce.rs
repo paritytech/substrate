@@ -47,12 +47,14 @@
 //!
 //! 1. https://hackmd.io/JOn9x98iS0e0DPWQ87zGWg?view
 
+// TODO: should be able to handle self votes. + Fuzzer should randomly create them
+
 use sp_std::{
 	prelude::*,
 	collections::{btree_map::{Entry::*, BTreeMap}},
 };
 
-use crate::node::{Node, NodeRef, NodeRole};
+use crate::node::{Node, NodeRef, NodeRole, NodeId};
 
 use sp_runtime::traits::{Zero, Bounded};
 use crate::{ExtendedBalance, StakedAssignment};
@@ -294,7 +296,7 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 	assignments: &mut Vec<StakedAssignment<AccountId>>,
 ) -> u32 {
 	let mut num_changed: u32 = Zero::zero();
-	let mut tree: BTreeMap<AccountId, NodeRef<AccountId>> = BTreeMap::new();
+	let mut tree: BTreeMap<NodeId<AccountId>, NodeRef<AccountId>> = BTreeMap::new();
 
 	// NOTE: This code can heavily use an index cache. Looking up a pair of (voter, target) in the
 	// assignments happens numerous times and and we can save time. For now it is written as such
@@ -317,14 +319,16 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 			let (target, _) = maybe_dist.expect("Value checked to be some").clone();
 
 			// store if they existed already.
-			let voter_exists = tree.contains_key(&voter);
-			let target_exists = tree.contains_key(&target);
+			let voter_id = NodeId::from(voter.clone(), NodeRole::Voter);
+			let target_id = NodeId::from(target.clone(), NodeRole::Target);
+			let voter_exists = tree.contains_key(&voter_id);
+			let target_exists = tree.contains_key(&target_id);
 
 			// create both.
-			let voter_node = tree.entry(voter.clone())
-				.or_insert(Node::new(voter.clone(), NodeRole::Voter).into_ref()).clone();
-			let target_node = tree.entry(target.clone())
-				.or_insert(Node::new(target.clone(), NodeRole::Target).into_ref()).clone();
+			let voter_node = tree.entry(voter_id.clone())
+				.or_insert(Node::new(voter_id).into_ref()).clone();
+			let target_node = tree.entry(target_id.clone())
+				.or_insert(Node::new(target_id).into_ref()).clone();
 
 			// If one exists but the other one doesn't, or if both does not, then set the existing
 			// one as the parent of the non-existing one and move on. Else, continue with the rest
@@ -382,11 +386,11 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 				let next_index = |i| { if i < (cycle.len() - 1) { i + 1 } else { 0 } };
 				let prev_index = |i| { if i > 0 { i - 1 } else { cycle.len() - 1 } };
 				for i in 0..cycle.len() {
-					if cycle[i].borrow().role == NodeRole::Voter {
+					if cycle[i].borrow().id.role == NodeRole::Voter {
 						// NOTE: sadly way too many clones since I don't want to make AccountId: Copy
-						let current = cycle[i].borrow().who.clone();
-						let next = cycle[next_index(i)].borrow().who.clone();
-						let prev = cycle[prev_index(i)].borrow().who.clone();
+						let current = cycle[i].borrow().id.who.clone();
+						let next = cycle[next_index(i)].borrow().id.who.clone();
+						let prev = cycle[prev_index(i)].borrow().id.who.clone();
 						assignments.iter().find(|a| a.who == current).map(|ass| {
 							ass.distribution.iter().find(|d| d.0 == next).map(|(_, w)| {
 								if *w < min_value {
@@ -422,10 +426,10 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 				let mut additional_removed = Vec::new();
 				for i in 0..cycle.len() {
 					let current = cycle[i].borrow();
-					if current.role == NodeRole::Voter {
+					if current.id.role == NodeRole::Voter {
 						let prev = cycle[prev_index(i)].borrow();
-						assignments.iter_mut().filter(|a| a.who == current.who).for_each(|ass| {
-							ass.distribution.iter_mut().position(|(t, _)| *t == prev.who).map(|idx| {
+						assignments.iter_mut().filter(|a| a.who == current.id.who).for_each(|ass| {
+							ass.distribution.iter_mut().position(|(t, _)| *t == prev.id.who).map(|idx| {
 								let next_value = if i % 2 == 0 {
 									if start_operation_add {
 										ass.distribution[idx].1.saturating_add(min_value)
@@ -454,8 +458,8 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 						});
 
 						let next = cycle[next_index(i)].borrow();
-						assignments.iter_mut().filter(|a| a.who == current.who).for_each(|ass| {
-							ass.distribution.iter_mut().position(|(t, _)| *t == next.who).map(|idx| {
+						assignments.iter_mut().filter(|a| a.who == current.id.who).for_each(|ass| {
+							ass.distribution.iter_mut().position(|(t, _)| *t == next.id.who).map(|idx| {
 								let next_value = if i % 2 == 0 {
 									if start_operation_add {
 										ass.distribution[idx].1.saturating_sub(min_value)
@@ -491,14 +495,12 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 
 				// re-org.
 				if should_reorg {
-					dbg!(min_chain_in_voter);
 					let min_edge = vec![min_voter, min_target];
-					dbg!(&min_edge);
 					if min_chain_in_voter {
 						// NOTE: safe; voter_root_path is always bigger than 1 element.
 						for i in 0..voter_root_path.len()-1 {
-							let current = voter_root_path[i].clone().borrow().who.clone();
-							let next = voter_root_path[i + 1].clone().borrow().who.clone();
+							let current = voter_root_path[i].clone().borrow().id.who.clone();
+							let next = voter_root_path[i + 1].clone().borrow().id.who.clone();
 							if min_edge.contains(&current) && min_edge.contains(&next) {
 								break;
 							}
@@ -508,8 +510,8 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 					} else {
 						// NOTE: safe; target_root_path is always bigger than 1 element.
 						for i in 0..target_root_path.len()-1 {
-							let current = target_root_path[i].clone().borrow().who.clone();
-							let next = target_root_path[i + 1].clone().borrow().who.clone();
+							let current = target_root_path[i].clone().borrow().id.who.clone();
+							let next = target_root_path[i + 1].clone().borrow().id.who.clone();
 							if min_edge.contains(&current) && min_edge.contains(&next) {
 								break;
 							}
@@ -554,22 +556,18 @@ pub fn reduce<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::build_support_map;
-
-	type AccountId = u64;
-	type Balance = u128;
 
 	#[test]
 	fn merging_works() {
 		//	D <-- A <-- B <-- C
 		//
 		//		F <-- E
-		let d = Node::new(1u32, NodeRole::Target).into_ref();
-		let a = Node::new(2u32, NodeRole::Target).into_ref();
-		let b = Node::new(3u32, NodeRole::Target).into_ref();
-		let c = Node::new(4u32, NodeRole::Target).into_ref();
-		let e = Node::new(5u32, NodeRole::Target).into_ref();
-		let f = Node::new(6u32, NodeRole::Target).into_ref();
+		let d = Node::new(NodeId::from(1, NodeRole::Target)).into_ref();
+		let a = Node::new(NodeId::from(2, NodeRole::Target)).into_ref();
+		let b = Node::new(NodeId::from(3, NodeRole::Target)).into_ref();
+		let c = Node::new(NodeId::from(4, NodeRole::Target)).into_ref();
+		let e = Node::new(NodeId::from(5, NodeRole::Target)).into_ref();
+		let f = Node::new(NodeId::from(6, NodeRole::Target)).into_ref();
 
 		Node::set_parent_of(&c, &b);
 		Node::set_parent_of(&b, &a);
@@ -583,7 +581,7 @@ mod tests {
 		//	D <-- A <-- B <-- C
 		//					  |
 		//		F --> E --> -->
-		assert_eq!(e.borrow().parent(), Some(4u32)); // c
+		assert_eq!(e.borrow().clone().parent.unwrap().borrow().id.who, 4u32); // c
 	}
 
 	#[test]
@@ -794,6 +792,93 @@ mod tests {
 	}
 
 	#[test]
+	fn should_deal_with_self_vote() {
+		let mut assignments = vec![
+			StakedAssignment {
+				who: 1,
+				distribution: vec![(10, 10)]
+			},
+			StakedAssignment {
+				who: 2,
+				distribution: vec![
+					(10, 15),
+					(20, 5),
+				],
+			},
+			StakedAssignment {
+				who: 3,
+				distribution: vec![
+					(20, 15),
+					(40, 15)
+				],
+			},
+			StakedAssignment {
+				who: 4, distribution:
+				vec![
+					(20, 10),
+					(30, 10),
+					(40, 20),
+				]
+			},
+			StakedAssignment {
+				who: 5,
+				distribution: vec![
+					(20, 20),
+					(30, 10),
+					(40, 20),
+				],
+			},
+			// self vote from 10 and 20 to itself.
+			StakedAssignment { who: 10, distribution: vec![(10, 100)] },
+			StakedAssignment { who: 20, distribution: vec![(20, 200)] },
+		];
+
+		assert_eq!(3, reduce(&mut assignments));
+
+		assert_eq!(
+			assignments,
+			vec![
+				StakedAssignment {
+					who: 1,
+					distribution: vec![
+						(10, 10),
+					]
+				},
+				StakedAssignment {
+					who: 2,
+					distribution: vec![
+						(10, 15),
+						(20, 5),
+					],
+				},
+				StakedAssignment {
+					who: 3,
+					distribution: vec![
+						(20, 30),
+					],
+				},
+				StakedAssignment {
+					who: 4, distribution:
+					vec![
+						(40, 40),
+					]
+				},
+				StakedAssignment {
+					who: 5,
+					distribution: vec![
+						(20, 15),
+						(30, 20),
+						(40, 15),
+					],
+				},
+				// should stay untouched.
+				StakedAssignment { who: 10, distribution: vec![(10, 100)] },
+				StakedAssignment { who: 20, distribution: vec![(20, 200)] },
+			],
+		)
+	}
+
+	#[test]
 	fn reduce_3_common_votes_same_weight() {
 		let mut assignments = vec![
 			StakedAssignment {
@@ -830,12 +915,6 @@ mod tests {
 					),
 				],
 			},
-		];
-
-		let winners = vec![
-			1000000,
-			1000002,
-			1000004,
 		];
 
 		reduce_4(&mut  assignments);

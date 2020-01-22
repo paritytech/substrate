@@ -255,10 +255,10 @@ mod slashing;
 
 pub mod inflation;
 
-use sp_std::{prelude::*, result};
+use sp_std::{prelude::*, result, cmp::Ordering};
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
-	decl_module, decl_event, decl_storage, ensure, decl_error,
+	decl_module, decl_event, decl_storage, ensure, decl_error, debug,
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
@@ -573,19 +573,15 @@ pub struct ElectionResult<AccountId, Balance: HasCompact> {
 
 /// The status of the upcoming (offchain) election.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum OffchainElectionStatus<BlockNumber> {
-	/// Nothing has happened yet. An offchain worker might be triggered now.
+pub enum ElectionStatus<BlockNumber> {
+	/// Nothing has and will happen for now. We don't have a solution for next era, and submission
+	/// window is also not open.
 	None,
-	/// An offchain worker as been triggered but no result has been observed yet. No further
-	/// offchain workers shall be dispatched now.
-	Triggered(BlockNumber),
-	/// A result has been returned and should be used in the upcoming era.
-	Received,
+	/// The submission window has been open since the contained block number.
+	Open(BlockNumber),
 }
 
-impl OffchainElectionStatus
-
-impl<BlockNumber> Default for OffchainElectionStatus<BlockNumber> {
+impl<BlockNumber> Default for ElectionStatus<BlockNumber> {
 	fn default() -> Self {
 		Self::None
 	}
@@ -774,7 +770,7 @@ decl_storage! {
 		pub QueuedElected get(fn queued_elected): Option<ElectionResult<T::AccountId, BalanceOf<T>>>;
 
 		/// Flag to control the execution of the offchain election.
-		pub ElectionStatus get(fn election_status): OffchainElectionStatus<T::BlockNumber>;
+		pub EraElectionStatus get(fn era_election_status): ElectionStatus<T::BlockNumber>;
 
 		/// The current era index.
 		pub CurrentEra get(fn current_era) config(): EraIndex;
@@ -910,8 +906,20 @@ decl_error! {
 		NoMoreChunks,
 		/// Can not rebond without unlocking chunks.
 		NoUnlockChunk,
+		/// The submitted result is received out of the open window.
+		PhragmenEarlySubmission,
 		/// The submitted result is not as good as the one stored on chain.
-		WeakPhragmenResult
+		PhragmenWeakSubmission,
+		/// The submitted result has unknown edges that are not among the presented winners.
+		PhragmenBogusEdge,
+		/// One of the submitted winners is not an active candidate on chain.
+		PhragmenBogusWinner,
+		/// One of the submitted nominators is not an active nominator on chain.
+		PhragmenBogusNominator,
+		/// One of the submitted nominators stake distribution does not add up to their ledger.
+		PhragmenBogusNominatorStake,
+		/// One of the submitted nominators has an edge to which they have not voted on chain.
+		PhragmenBogusNomination,
 	}
 }
 
@@ -927,71 +935,86 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		/// Does the following:
+		///
+		/// 1. potential storage migration
+		/// 2. sets `ElectionStatus` to `Triggered(now)` where `now` is the block number at which
+		/// the election window has opened. The offchain worker, if applicable, will execute at the
+		/// end of the current block. `submit_election_solution` will accept solutions from this block
+		/// until the end of the era.
 		fn on_initialize(now: T::BlockNumber) {
 			Self::ensure_storage_upgraded();
 			if
 				// if we don't have any ongoing offchain compute.
-				Self::election_status() == OffchainElectionStatus::None &&
+				Self::era_election_status() == ElectionStatus::None &&
 				// and an era is about to be changed.
 				Self::is_current_session_final()
 			{
-				// TODO: maybe we can be naive like im-online and just assume block == slot?
 				let next_session_change =
 					T::NextSessionChange::predict_next_session_change(now);
 				if let Some(remaining) = next_session_change.checked_sub(&now) {
 					if remaining <= T::ElectionLookahead::get() && !remaining.is_zero() {
 						// Set the flag to make sure we don't waste any compute here in the same era
 						// after we have triggered the offline compute.
-						<ElectionStatus<T>>::put(
-							OffchainElectionStatus::<T::BlockNumber>::Triggered(now)
+						<EraElectionStatus<T>>::put(
+							ElectionStatus::<T::BlockNumber>::Open(now)
 						);
-						frame_support::print("detected a good block to trigger offchain worker.");
+						debug::native::info!(
+							target: "staking",
+							"detected a good block to trigger offchain election. Submission will \
+							be allowed from the next block.",
+						);
 					}
-				} else {
-					frame_support::print("predicted next authority set change to be in the past.");
 				}
 			}
 		}
 
 		fn offchain_worker(now: T::BlockNumber) {
-			// TODO: add runtime logging.
-			if sp_io::offchain::is_validator() {
-				if Self::election_status() == OffchainElectionStatus::<T::BlockNumber>::Triggered(now) {
-					// get all local keys that are among the current elected stakers.
-					// TODO: well this is outdated, neh?
-					let current_elected = Self::current_elected();
-					if T::SubmitTransaction::can_sign_with(Some(current_elected.clone())) {
-						// We have at least some local key which corresponds to an elected
-						// validator. run phragmen
-						if let Some(sp_phragmen::PhragmenResult {
-							winners,
-							assignments,
-						}) = Self::do_phragmen() {
-							let winners = winners.into_iter().map(|(w, _)| w).collect();
+			// consult and make sure this is okay.
+			// debug::RuntimeLogger::init();
+			// TODO: make sure that we don't need that is_validator here.
+			if Self::era_election_status() == ElectionStatus::<T::BlockNumber>::Open(now) {
+				// TODO: well this is outdated, neh? need to get the correct one from session.
+				let current_elected = Self::current_elected();
 
-							// convert into staked. This is needed to be able to reduce.
-							let mut staked: Vec<StakedAssignment<T::AccountId>> = assignments
-								.into_iter()
-								.map(|a| a.into_staked::<_, _, T::CurrencyToVote>(Self::slashable_balance_of))
-								.collect();
+				// Check if current node can sign with any of the keys which correspond to a
+				// validator. This basically says: proceed if the node is a validator.
+				if T::SubmitTransaction::can_sign_with(Some(current_elected.clone())) {
+					// We have at least some local key which corresponds to an elected
+					// validator. run phragmen
+					if let Some(sp_phragmen::PhragmenResult {
+						winners,
+						assignments,
+					}) = Self::do_phragmen() {
+						let winners = winners.into_iter().map(|(w, _)| w).collect();
 
-							// reduce the assignments. This will remove some additional edges.
-							sp_phragmen::reduce::reduce(&mut staked);
+						// convert into staked. This is needed to be able to reduce.
+						let mut staked: Vec<StakedAssignment<T::AccountId>> = assignments
+							.into_iter()
+							.map(|a| a.into_staked::<_, _, T::CurrencyToVote>(Self::slashable_balance_of))
+							.collect();
 
-							// compact encode the assignment.
-							let compact = <CompactAssignments<T::AccountId, ExtendedBalance>>::from_staked(staked);
+						// reduce the assignments. This will remove some additional edges.
+						sp_phragmen::reduce(&mut staked);
 
-							let call: <T as Trait>::Call = Call::submit_election_result(winners, compact).into();
-							// TODO: maybe we want to send from just one of them? we'll see.
-							let _result = T::SubmitTransaction::submit_signed_from(call, current_elected);
-						} else {
-							frame_support::print("ran phragmen offchain, but None was returned.");
-						}
+						// compact encode the assignment.
+						let compact = <CompactAssignments<T::AccountId, ExtendedBalance>>::from_staked(staked);
+
+						let call: <T as Trait>::Call = Call::submit_election_solution(winners, compact).into();
+						// TODO: maybe we want to send from just one of them? we'll see.
+						let _result = T::SubmitTransaction::submit_signed_from(call, current_elected);
+						dbg!(_result);
 					} else {
-						frame_support::print("Have no key to sign this with");
+						debug::native::warn!(
+							target: "staking",
+							"Ran offchain phragmen but none was returned",
+						);
 					}
 				} else {
-					frame_support::print("validator did not start offchain election.");
+					debug::native::warn!(
+						target: "staking",
+						"Have no key to sign this with",
+					);
 				}
 			}
 		}
@@ -1003,12 +1026,58 @@ decl_module! {
 			}
 		}
 
-		fn submit_election_result(
+		/// Submit a phragmen result to the chain. If the solution:
+		/// 1. is valid
+		/// 2. has a better score than a potentially existing solution on chain
+		///
+		/// it will replace it.
+		///
+		/// A solution consists of two pieces of data:
+		/// 1. `winners`: a flat vector of all the winners of the round.
+		/// 2. `assignments`: the compact version of an assignment vector that encodes the edge
+		///    weights.
+		///
+		/// Both of which may be computed using the [`phragmen`], or any other algorithm.
+		///
+		/// A solution is valid if
+		/// 1. All the presented winners are actually on-chain candidates.
+		/// 2. All the presented edges contain:
+		///   - a voter who is an on-chain nominator.
+		///   - a target who is an on-chain candidate.
+		///   - that target must actually be among the nominations of the voter.
+		///
+		/// A solutions score is consisted of 3 parameters:
+		/// 1. `min { support.total }` for each support of a winner. This value should be maximized.
+		/// 2. `sum { support.total }` for each support of a winner. This value should be minimized.
+		/// 3. `sum { support.total^2 }` for each support of a winner. This value should be minimized
+		///    (to ensure less variance)
+		///
+		/// # <weight>
+		/// major steps:
+		/// - decode from compact: E(E)
+		/// - build_support_map: O(E)
+		/// - evaluate_support: E(E)
+		/// - 1 read which decodes a `ElectionResult` from storage.
+		/// - 1 read which decodes a `ElectionStatus` from storage.
+		/// - `2*W` reads each of which decodes an `AccountId` and a `ValidatorPrefs` to ensure
+		///   winner veracity.
+		/// - N reads from `Bonded`, `Validators` and `Nominators` to ensure nominator veracity. N
+		///   is the number of nominators.
+		/// - O(N * E') to ensure nomination veracity. (E' is the average voter count per nominator
+		///   and it is less than `MAX_NOMINATIONS`)
+		/// # </weight>
+		fn submit_election_solution(
 			origin,
 			winners: Vec<T::AccountId>,
 			compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
 		) {
 			let _who = ensure_signed(origin)?;
+
+			// discard early solutions
+			match Self::era_election_status() {
+				ElectionStatus::None => Err(Error::<T>::PhragmenEarlySubmission)?,
+				ElectionStatus::Open(_) => { /* Open and no solutions received. Allowed. */ },
+			}
 
 			// convert into staked.
 			let staked_assignments = compact_assignments.into_staked::<
@@ -1025,7 +1094,7 @@ decl_module! {
 				&staked_assignments,
 			);
 
-			ensure!(num_error == 0, "bogus edge pointed to a non-winner in assignments.");
+			ensure!(num_error == 0, Error::<T>::PhragmenBogusEdge);
 
 			// score the result. Go further only if it is better than what we already have.
 			let submitted_score = sp_phragmen::evaluate_support(&supports);
@@ -1033,13 +1102,12 @@ decl_module! {
 				score,
 				..
 			}) = Self::queued_elected() {
+				// OPTIMIZATION: we can read first the score and then the rest to do less decoding.
 				// if the local score is better in any of the three parameters.
-				if
-					submitted_score.iter().enumerate().take(2).any(|(i, s)| score[i] > *s) ||
-					score[2] < submitted_score[2]
-				{
-					Err(Error::<T>::WeakPhragmenResult)?
-				}
+				ensure!(
+					Self::is_score_better(score, submitted_score),
+					Error::<T>::PhragmenWeakSubmission,
+				)
 			}
 
 			// Either the result is better than the one on chain, or we don't have an any on chain.
@@ -1049,24 +1117,61 @@ decl_module! {
 			// check all winners being actual validators.
 			for w in winners.iter() {
 				ensure!(
-					Self::bonded(&w).is_some(),
-					"presented winner is not a validator candidate",
+					<Validators<T>>::exists(&w),
+					Error::<T>::PhragmenBogusWinner,
 				)
 			}
 
-			// check all nominators being bonded, and actually including the claimed vote.
+			// check all nominators being bonded, and actually including the claimed vote, and
+			// summing up to their ledger stake.
 			for StakedAssignment { who, distribution } in staked_assignments.iter() {
+				let maybe_bonded = Self::bonded(&who);
+				let is_validator = <Validators<T>>::exists(&who);
 				let maybe_nomination = Self::nominators(&who);
+
+				// it must be bonded.
 				ensure!(
-					maybe_nomination.is_some(),
-					"presented nominator is invalid",
+					maybe_bonded.is_some(),
+					Error::<T>::PhragmenBogusNominator
 				);
-				let nomination = maybe_nomination.expect("value is checked to be 'Some'");
+
+				// it must be either of
 				ensure!(
-					distribution.into_iter().all(|(v, _)| nomination.targets.iter().find(|t| *t == v).is_some()),
-					"assignment contains an edge from non-nominator",
+					maybe_nomination.is_some() ^ is_validator,
+					Error::<T>::PhragmenBogusNominator
 				);
+
+				let ctrl = maybe_bonded.expect("value is checked to be 'Some'; qed");
+				let ledger = Self::ledger(ctrl).ok_or(Error::<T>::NotController)?;
+
+				if !is_validator {
+					// a normal vote
+					let nomination = maybe_nomination.expect(
+						"exactly one of maybe_validator and maybe_nomination is true. \
+						is_validator is false; maybe_nomination is some; qed"
+					);
+					let mut total_stake: ExtendedBalance = Zero::zero();
+					ensure!(
+						distribution.into_iter().all(|(v, w)| {
+							total_stake += w;
+							nomination.targets.iter().find(|t| *t == v).is_some()
+						}),
+						Error::<T>::PhragmenBogusNomination,
+					);
+
+					let active_extended_stake = <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(ledger.active) as u128;
+					ensure!(total_stake == active_extended_stake, Error::<T>::PhragmenBogusNominatorStake);
+				} else {
+					// a self vote
+					ensure!(distribution.len() == 1, Error::<T>::PhragmenBogusNomination);
+				}
 			}
+			// Note that we don't need to check again ^^ if a particular target in a nomination was
+			// actually a candidate. we don't explicitly check this but instead do it indirectly.
+			// build_support_map tells if any target was not in the winners. Also, we check that all
+			// the winners were actually candidates. Hence, all of the claimed votes are actually
+			// voting for valid candidates. All we have to check is if they actually come from the
+			// claimed nominator or not.
 
 			// Endlich alles Ok. Exposures and store the result.
 			let to_balance = |e: ExtendedBalance|
@@ -1096,13 +1201,17 @@ decl_module! {
 				(validator, exposure)
 			}).collect::<Vec<(T::AccountId, Exposure<_, _>)>>();
 
+			debug::native::info!(
+				target: "staking",
+				"A better solution has been validated and stored on chain.",
+			);
+
 			<QueuedElected<T>>::put(ElectionResult {
 				compute: ElectionCompute::Submitted,
 				elected_stashes: winners,
 				score: submitted_score,
 				exposures,
 				slot_stake,
-
 			});
 		}
 
@@ -1529,6 +1638,25 @@ impl<T: Trait> Module<T> {
 		era_length >= session_per_era
 	}
 
+	/// Compares two sets of phragmen scores based on desirability and returns true if `that` is
+	/// better `this`.
+	///
+	/// Evaluation is done in a lexicographic manner.
+	fn is_score_better(this: [ExtendedBalance; 3], that: [ExtendedBalance; 3]) -> bool {
+		match that
+			.iter()
+			.enumerate()
+			.map(|(i, e)| e.cmp(&this[i]))
+			.collect::<Vec<Ordering>>()
+			.as_slice()
+		{
+			[Ordering::Greater, _, _] => true,
+			[Ordering::Equal, Ordering::Greater, _] => true,
+			[Ordering::Equal, Ordering::Equal, Ordering::Less] => true,
+			_ => false
+		}
+	}
+
 	// MUTABLES (DANGEROUS)
 
 	/// Update the ledger for a controller. This will also update the stash lock. The lock will
@@ -1743,6 +1871,9 @@ impl<T: Trait> Module<T> {
 			compute,
 			.. // TODO: this means that we are never storing the score of a winning chain. It this okay?
 		}) = Self::try_do_phragmen() {
+			// We have chosen the new validator set. Submission is no longer allowed.
+			<EraElectionStatus<T>>::put(ElectionStatus::None);
+
 			// Clear Stakers.
 			for v in Self::current_elected().iter() {
 				<Stakers<T>>::remove(v);
@@ -1775,17 +1906,8 @@ impl<T: Trait> Module<T> {
 	/// No storage item is updated.
 	fn try_do_phragmen() -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
 		// a phragmen result from either a stored submission or locally executed one.
-		let somehow_phragmen_results = <QueuedElected<T>>::take().map(|offchain_result| {
-			debug_assert!(
-				Self::election_status() == OffchainElectionStatus::Received,
-				"offchain result exist but should not.",
-			);
-
-			offchain_result
-		}).or_else(|| Self::do_phragmen_with_post_processing(ElectionCompute::OnChain));
-
-		// Either way, kill the flag. No more submitted solutions until further notice.
-		<ElectionStatus<T>>::kill();
+		let somehow_phragmen_results = <QueuedElected<T>>::take()
+			.or_else(|| Self::do_phragmen_with_post_processing(ElectionCompute::OnChain));
 
 		somehow_phragmen_results
 	}

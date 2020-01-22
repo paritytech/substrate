@@ -43,7 +43,10 @@ mod mock;
 mod tests;
 
 mod node;
-pub mod reduce;
+mod reduce;
+
+// re-export reduce stuff
+pub use reduce::reduce;
 
 /// A type in which performing operations on balances and stakes of candidates and voters are safe.
 ///
@@ -407,6 +410,8 @@ pub fn elect<AccountId, Balance, FS, C>(
 /// The second returned flag indicates the number of edges who corresponded to an actual winner from
 /// the given winner set. A value in this place larger than 0 indicates a potentially faulty
 /// assignment.
+///
+/// `O(E)` where `E` is the total number of edges.
 pub fn build_support_map<Balance, AccountId>(
 	winners: &Vec<AccountId>,
 	assignments: &Vec<StakedAssignment<AccountId>>,
@@ -441,7 +446,7 @@ pub fn build_support_map<Balance, AccountId>(
 /// - Sum of all supports. This value must be **maximized**.
 /// - Sum of all supports squared. This value must be **minimized**.
 ///
-/// O(E)
+/// `O(E)` where `E` is the total number of edges.
 pub fn evaluate_support<AccountId>(
 	support: &SupportMap<AccountId>,
 ) -> [ExtendedBalance; 3] {
