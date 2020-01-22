@@ -89,7 +89,7 @@
 //! # fn not_executed<T: session::Trait>() {
 //!
 //! fn validators() -> Vec<<T as frame_system::Trait>::AccountId> {
-//!	<pallet_session::Module<T>>::validators()
+//!	<pallet_session::Module>::validators()
 //!}
 //! # }
 //! # fn main(){}
