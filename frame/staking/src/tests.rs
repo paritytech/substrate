@@ -2963,9 +2963,46 @@ fn zero_slash_keeps_nominators() {
 	});
 }
 
-// This test will make simulate a session module which delay 4 session.
 #[test]
-fn multiple_new_session_end_session() {
+fn six_session_delay() {
 	ExtBuilder::default().build().execute_with(|| {
+		use pallet_session::SessionManager;
+
+		let val_set = Session::validators();
+		let init_session = Session::current_index();
+		let init_active_era = Staking::active_era();
+		// pallet-session is delaying session by one, thus the next session to plan is +2.
+		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 2), None);
+		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 3), Some(val_set.clone()));
+		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 4), None);
+		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 5), None);
+		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 6), Some(val_set.clone()));
+
+		<Staking as SessionManager<_>>::end_session(init_session);
+		assert_eq!(Staking::active_era(), init_active_era);
+		<Staking as SessionManager<_>>::end_session(init_session + 1);
+		assert_eq!(Staking::active_era(), init_active_era);
+
+		// Reward current era
+		Staking::reward_by_ids(vec![(11, 1)]);
+
+		// New active era is triggered here.
+		<Staking as SessionManager<_>>::end_session(init_session + 2);
+		assert_eq!(Staking::active_era(), init_active_era + 1);
+		<Staking as SessionManager<_>>::end_session(init_session + 3);
+		assert_eq!(Staking::active_era(), init_active_era + 1);
+		<Staking as SessionManager<_>>::end_session(init_session + 4);
+		assert_eq!(Staking::active_era(), init_active_era + 1);
+
+		// Reward current era
+		Staking::reward_by_ids(vec![(21, 2)]);
+
+		// New active era is triggered here.
+		<Staking as SessionManager<_>>::end_session(init_session + 5);
+		assert_eq!(Staking::active_era(), init_active_era + 2);
+
+		// That reward are correct
+		assert_eq!(Staking::eras_reward_points(init_active_era).total, 1);
+		assert_eq!(Staking::eras_reward_points(init_active_era + 1).total, 2);
 	});
 }
