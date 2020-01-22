@@ -1576,7 +1576,7 @@ dependencies = [
 [[package]]
 name = "futures-timer"
 version = "2.0.2"
-source = "git+https://github.com/expenses/futures-timer?branch=wasm-support#2746e4d21a3c685e185c16e56aae0c2a82e3323f"
+source = "git+https://github.com/expenses/futures-timer?branch=wasm-support#4cf9125d5ebdc620c7186c62abfea61bfdd13f11"
 dependencies = [
  "gloo-timers 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "send_wrapper 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
