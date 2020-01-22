@@ -323,7 +323,7 @@ pub struct IdentityInfo {
 ///
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
 /// backwards compatible way through a specialized `Decode` impl.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug)]
 pub struct Registration<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
 > {
@@ -348,8 +348,17 @@ impl <
 	}
 }
 
+impl<
+	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq,
+> Decode for Registration<Balance> {
+	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
+		let (judgements, deposit, info) = Decode::decode(&mut AppendZerosInput::new(input))?;
+		Ok(Self { judgements, deposit, info })
+	}
+}
+
 /// Information concerning a registrar.
-#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct RegistrarInfo<
 	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
 	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
@@ -363,16 +372,6 @@ pub struct RegistrarInfo<
 	/// Relevant fields for this registrar. Registrar judgements are limited to attestations on
 	/// these fields.
 	pub fields: IdentityFields,
-}
-
-impl<
-	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
-	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
-> Decode for RegistrarInfo<Balance, AccountId> {
-	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
-		let (account, fee, fields) = Decode::decode(&mut AppendZerosInput::new(input))?;
-		Ok(Self { account, fee, fields })
-	}
 }
 
 decl_storage! {
@@ -540,6 +539,7 @@ decl_module! {
 		/// - At most O(2 * S + 1) storage mutations; codec complexity `O(1 * S + S * 1)`);
 		///   one storage-exists.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn set_subs(origin, subs: Vec<(T::AccountId, Data)>) {
 			let sender = ensure_signed(origin)?;
 			ensure!(<IdentityOf<T>>::exists(&sender), Error::<T>::NotFound);
@@ -586,6 +586,7 @@ decl_module! {
 		/// - `S + 2` storage deletions.
 		/// - One event.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn clear_identity(origin) {
 			let sender = ensure_signed(origin)?;
 
@@ -866,7 +867,10 @@ mod tests {
 	use super::*;
 
 	use sp_runtime::traits::BadOrigin;
-	use frame_support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::{
+		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
+		ord_parameter_types
+	};
 	use sp_core::H256;
 	use frame_system::EnsureSignedBy;
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -916,6 +920,7 @@ mod tests {
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
 		type TransferPayment = ();
@@ -929,6 +934,8 @@ mod tests {
 		pub const FieldDeposit: u64 = 10;
 		pub const SubAccountDeposit: u64 = 10;
 		pub const MaximumSubAccounts: u32 = 2;
+	}
+	ord_parameter_types! {
 		pub const One: u64 = 1;
 		pub const Two: u64 = 2;
 	}
@@ -943,6 +950,7 @@ mod tests {
 		type RegistrarOrigin = EnsureSignedBy<One, u64>;
 		type ForceOrigin = EnsureSignedBy<Two, u64>;
 	}
+	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
 	type Identity = Module<Test>;
 

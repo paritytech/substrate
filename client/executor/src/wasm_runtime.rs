@@ -191,10 +191,11 @@ pub fn create_wasm_runtime_with_code(
 	heap_pages: u64,
 	code: &[u8],
 	host_functions: Vec<&'static dyn Function>,
+	allow_missing_imports: bool,
 ) -> Result<Box<dyn WasmRuntime>, WasmError> {
 	match wasm_method {
 		WasmExecutionMethod::Interpreted =>
-			sc_executor_wasmi::create_instance(code, heap_pages, host_functions)
+			sc_executor_wasmi::create_instance(code, heap_pages, host_functions, allow_missing_imports)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled =>
@@ -212,7 +213,7 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 	let code = ext
 		.original_storage(well_known_keys::CODE)
 		.ok_or(WasmError::CodeNotFound)?;
-	let mut runtime = create_wasm_runtime_with_code(wasm_method, heap_pages, &code, host_functions)?;
+	let mut runtime = create_wasm_runtime_with_code(wasm_method, heap_pages, &code, host_functions, false)?;
 
 	// Call to determine runtime version.
 	let version_result = {
@@ -222,8 +223,9 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 		// The following unwind safety assertion is OK because if the method call panics, the
 		// runtime will be dropped.
 		let mut runtime = AssertUnwindSafe(runtime.as_mut());
-		crate::native_executor::safe_call(
-			move || runtime.call(&mut **ext, "Core_version", &[])
+		crate::native_executor::with_externalities_safe(
+			&mut **ext,
+			move || runtime.call("Core_version", &[])
 		).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
 	};
 	let encoded_version = version_result

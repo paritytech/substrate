@@ -54,4 +54,3 @@ impl RuntimePublic for Public {
 		sp_io::crypto::ed25519_verify(&signature, msg.as_ref(), self)
 	}
 }
-

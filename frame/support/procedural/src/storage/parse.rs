@@ -167,11 +167,11 @@ struct DeclStorageLinkedMap {
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageDoubleMap {
 	pub map_keyword: keyword::double_map,
-	pub hasher: ext::Opt<SetHasher>,
+	pub hasher1: ext::Opt<SetHasher>,
 	pub key1: syn::Type,
 	pub comma_keyword: Token![,],
-	pub key2_hasher: Hasher,
-	pub key2: ext::Parens<syn::Type>,
+	pub hasher2: ext::Opt<SetHasher>,
+	pub key2: syn::Type,
 	pub ass_keyword: Token![=>],
 	pub value: syn::Type,
 }
@@ -380,11 +380,12 @@ fn parse_storage_line_defs(
 			),
 			DeclStorageType::DoubleMap(map) => super::StorageLineTypeDef::DoubleMap(
 				super::DoubleMapDef {
-					hasher1: map.hasher.inner.map(Into::into)
+					hasher1: map.hasher1.inner.map(Into::into)
 						.unwrap_or(super::HasherKind::Blake2_256),
-					hasher2: map.key2_hasher.into(),
+					hasher2: map.hasher2.inner.map(Into::into)
+						.unwrap_or(super::HasherKind::Blake2_256),
 					key1: map.key1,
-					key2: map.key2.content,
+					key2: map.key2,
 					value: map.value,
 				}
 			),

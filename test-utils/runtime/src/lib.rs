@@ -25,7 +25,7 @@ pub mod system;
 use sp_std::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
-use sp_core::{Blake2Hasher, OpaqueMetadata, RuntimeDebug};
+use sp_core::{Blake2Hasher, OpaqueMetadata, RuntimeDebug, ChangesTrieConfiguration};
 use sp_application_crypto::{ed25519, sr25519, RuntimeAppPublic};
 use trie_db::{TrieMut, Trie};
 use sp_trie::PrefixedMemoryDB;
@@ -65,7 +65,10 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_name: create_runtime_str!("parity-test"),
 	authoring_version: 1,
 	spec_version: 1,
+	#[cfg(feature = "std")]
 	impl_version: 1,
+	#[cfg(not(feature = "std"))]
+	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -108,6 +111,7 @@ pub enum Extrinsic {
 	Transfer(Transfer, AccountSignature),
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
+	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
 }
 
 #[cfg(feature = "std")]
@@ -132,6 +136,8 @@ impl BlindCheckable for Extrinsic {
 			},
 			Extrinsic::IncludeData(_) => Err(InvalidTransaction::BadProof.into()),
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
+			Extrinsic::ChangesTrieConfigUpdate(new_config) =>
+				Ok(Extrinsic::ChangesTrieConfigUpdate(new_config)),
 		}
 	}
 }
@@ -191,14 +197,6 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	let stxs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
 	print("reserialized transactions.");
 	[stxs.len() as u8].encode()
-}
-
-/// Changes trie configuration (optionally) used in tests.
-pub fn changes_trie_config() -> sp_core::ChangesTrieConfiguration {
-	sp_core::ChangesTrieConfiguration {
-		digest_interval: 4,
-		digest_levels: 2,
-	}
 }
 
 /// A type that can not be decoded.
@@ -623,8 +621,8 @@ cfg_if! {
 			}
 
 			impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
-				fn offchain_worker(block: u64) {
-					let ex = Extrinsic::IncludeData(block.encode());
+				fn offchain_worker(header: &<Block as BlockT>::Header) {
+					let ex = Extrinsic::IncludeData(header.number.encode());
 					sp_io::offchain::submit_transaction(ex.encode()).unwrap();
 				}
 			}
@@ -839,8 +837,8 @@ cfg_if! {
 			}
 
 			impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
-				fn offchain_worker(block: u64) {
-					let ex = Extrinsic::IncludeData(block.encode());
+				fn offchain_worker(header: &<Block as BlockT>::Header) {
+					let ex = Extrinsic::IncludeData(header.number.encode());
 					sp_io::offchain::submit_transaction(ex.encode()).unwrap()
 				}
 			}
@@ -954,17 +952,17 @@ mod tests {
 		DefaultTestClientBuilderExt, TestClientBuilder,
 		runtime::TestAPI,
 	};
-	use sp_runtime::{
-		generic::BlockId,
-		traits::ProvideRuntimeApi,
-	};
+	use sp_api::ProvideRuntimeApi;
+	use sp_runtime::generic::BlockId;
 	use sp_core::storage::well_known_keys::HEAP_PAGES;
 	use sp_state_machine::ExecutionStrategy;
 	use codec::Encode;
 
 	#[test]
 	fn returns_mutable_static() {
-		let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+			.build();
 		let runtime_api = client.runtime_api();
 		let block_id = BlockId::Number(client.chain_info().best_number);
 
@@ -1013,31 +1011,31 @@ mod tests {
 		// This tests that the on-chain HEAP_PAGES parameter is respected.
 
 		// Create a client devoting only 8 pages of wasm memory. This gives us ~512k of heap memory.
-		let client = TestClientBuilder::new()
+		let mut client = TestClientBuilder::new()
 			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
 			.set_heap_pages(8)
 			.build();
-		let runtime_api = client.runtime_api();
 		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
-		let ret = runtime_api.vec_with_capacity(&block_id, 1048576);
+		let ret = client.runtime_api().vec_with_capacity(&block_id, 1048576);
 		assert!(ret.is_err());
 
 		// Create a block that sets the `:heap_pages` to 32 pages of memory which corresponds to
 		// ~2048k of heap memory.
-		let new_block_id = {
+		let (new_block_id, block) = {
 			let mut builder = client.new_block(Default::default()).unwrap();
 			builder.push_storage_change(HEAP_PAGES.to_vec(), Some(32u64.encode())).unwrap();
-			let block = builder.bake().unwrap();
+			let block = builder.build().unwrap().block;
 			let hash = block.header.hash();
-			client.import(BlockOrigin::Own, block).unwrap();
-			BlockId::Hash(hash)
+			(BlockId::Hash(hash), block)
 		};
 
+		client.import(BlockOrigin::Own, block).unwrap();
+
 		// Allocation of 1024k while having ~2048k should succeed.
-		let ret = runtime_api.vec_with_capacity(&new_block_id, 1048576);
+		let ret = client.runtime_api().vec_with_capacity(&new_block_id, 1048576);
 		assert!(ret.is_ok());
 	}
 

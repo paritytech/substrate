@@ -22,33 +22,30 @@ use sc_client_api::{
 	self,
 	BlockchainEvents,
 	backend::RemoteBackend, light::RemoteBlockchain,
+	execution_extensions::ExtensionsFactory,
 };
 use sc_client::Client;
 use sc_chain_spec::{RuntimeGenesis, Extension};
 use sp_consensus::import_queue::ImportQueue;
-use futures::{prelude::*, sync::mpsc};
-use futures03::{
-	compat::Compat,
-	FutureExt as _, TryFutureExt as _,
-	StreamExt as _, TryStreamExt as _,
-	future::{select, Either}
+use futures::{
+	Future, FutureExt, StreamExt,
+	channel::mpsc,
+	future::{select, ready}
 };
 use sc_keystore::{Store as Keystore};
 use log::{info, warn, error};
 use sc_network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo};
 use sc_network::{config::BoxFinalityProofRequestBuilder, specialization::NetworkSpecialization};
 use parking_lot::{Mutex, RwLock};
-use sp_core::{Blake2Hasher, H256, Hasher};
-use sc_rpc;
-use sp_api::ConstructRuntimeApi;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, ProvideRuntimeApi, NumberFor, Header, SaturatedConversion,
+	Block as BlockT, NumberFor, SaturatedConversion, HasherFor,
 };
+use sp_api::ProvideRuntimeApi;
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
 	io::{Read, Write, Seek},
-	marker::PhantomData, sync::Arc, time::SystemTime
+	marker::PhantomData, sync::Arc, time::SystemTime, pin::Pin
 };
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
@@ -121,19 +118,19 @@ pub type TLightClient<TBl, TRtApi, TExecDisp> = Client<
 /// Light client backend type.
 pub type TLightBackend<TBl> = sc_client::light::backend::Backend<
 	sc_client_db::light::LightStorage<TBl>,
-	Blake2Hasher,
+	HasherFor<TBl>,
 >;
 
 /// Light call executor type.
 pub type TLightCallExecutor<TBl, TExecDisp> = sc_client::light::call_executor::GenesisCallExecutor<
 	sc_client::light::backend::Backend<
 		sc_client_db::light::LightStorage<TBl>,
-		Blake2Hasher
+		HasherFor<TBl>
 	>,
 	sc_client::LocalCallExecutor<
 		sc_client::light::backend::Backend<
 			sc_client_db::light::LightStorage<TBl>,
-			Blake2Hasher
+			HasherFor<TBl>
 		>,
 		NativeExecutor<TExecDisp>
 	>,
@@ -149,8 +146,8 @@ type TFullParts<TBl, TRtApi, TExecDisp> = (
 pub fn new_full_client<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 	config: &Configuration<TCfg, TGen, TCSExt>,
 ) -> Result<TFullClient<TBl, TRtApi, TExecDisp>, Error> where
-	TBl: BlockT<Hash=H256>,
-	TExecDisp: NativeExecutionDispatch,
+	TBl: BlockT,
+	TExecDisp: NativeExecutionDispatch + 'static,
 	TGen: sp_runtime::BuildStorage + serde::Serialize + for<'de> serde::Deserialize<'de>,
 	TCSExt: Extension,
 {
@@ -160,17 +157,18 @@ pub fn new_full_client<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 	config: &Configuration<TCfg, TGen, TCSExt>,
 ) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
-	TBl: BlockT<Hash=H256>,
-	TExecDisp: NativeExecutionDispatch,
+	TBl: BlockT,
+	TExecDisp: NativeExecutionDispatch + 'static,
 	TGen: sp_runtime::BuildStorage + serde::Serialize + for<'de> serde::Deserialize<'de>,
 	TCSExt: Extension,
 {
 	let keystore = match &config.keystore {
 		KeystoreConfig::Path { path, password } => Keystore::open(
-			path.clone().ok_or("No basepath configured")?,
+			path.clone(),
 			password.clone()
 		)?,
-		KeystoreConfig::InMemory => Keystore::new_in_memory()
+		KeystoreConfig::InMemory => Keystore::new_in_memory(),
+		KeystoreConfig::None => return Err("No keystore config provided!".into()),
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -228,7 +226,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TCfg, TGen, TCSExt>(
 impl<TCfg, TGen, TCSExt> ServiceBuilder<(), (), TCfg, TGen, TCSExt, (), (), (), (), (), (), (), (), (), ()>
 where TGen: RuntimeGenesis, TCSExt: Extension {
 	/// Start the service builder with a configuration.
-	pub fn new_full<TBl: BlockT<Hash=H256>, TRtApi, TExecDisp: NativeExecutionDispatch>(
+	pub fn new_full<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch + 'static>(
 		config: Configuration<TCfg, TGen, TCSExt>
 	) -> Result<ServiceBuilder<
 		TBl,
@@ -270,7 +268,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 	}
 
 	/// Start the service builder with a configuration.
-	pub fn new_light<TBl: BlockT<Hash=H256>, TRtApi, TExecDisp: NativeExecutionDispatch + 'static>(
+	pub fn new_light<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch + 'static>(
 		config: Configuration<TCfg, TGen, TCSExt>
 	) -> Result<ServiceBuilder<
 		TBl,
@@ -291,10 +289,11 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 	>, Error> {
 		let keystore = match &config.keystore {
 			KeystoreConfig::Path { path, password } => Keystore::open(
-				path.clone().ok_or("No basepath configured")?,
+				path.clone(),
 				password.clone()
 			)?,
-			KeystoreConfig::InMemory => Keystore::new_in_memory()
+			KeystoreConfig::InMemory => Keystore::new_in_memory(),
+			KeystoreConfig::None => return Err("No keystore config provided!".into()),
 		};
 
 		let executor = NativeExecutor::<TExecDisp>::new(
@@ -321,7 +320,12 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			sc_client_db::light::LightStorage::new(db_settings)?
 		};
 		let light_blockchain = sc_client::light::new_light_blockchain(db_storage);
-		let fetch_checker = Arc::new(sc_client::light::new_fetch_checker(light_blockchain.clone(), executor.clone()));
+		let fetch_checker = Arc::new(
+			sc_client::light::new_fetch_checker::<_, TBl, _>(
+				light_blockchain.clone(),
+				executor.clone(),
+			),
+		);
 		let fetcher = Arc::new(sc_network::OnDemand::new(fetch_checker));
 		let backend = sc_client::light::new_light_backend(light_blockchain);
 		let remote_blockchain = backend.remote_blockchain();
@@ -676,7 +680,7 @@ pub trait ServiceBuilderCommand {
 		self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
-	) -> Box<dyn Future<Item = (), Error = Error> + Send>;
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 
 	/// Performs the blocks export.
 	fn export_blocks(
@@ -685,7 +689,7 @@ pub trait ServiceBuilderCommand {
 		from: NumberFor<Self::Block>,
 		to: Option<NumberFor<Self::Block>>,
 		json: bool
-	) -> Box<dyn Future<Item = (), Error = Error>>;
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>>;
 
 	/// Performs a revert of `blocks` blocks.
 	fn revert_chain(
@@ -697,7 +701,7 @@ pub trait ServiceBuilderCommand {
 	fn check_block(
 		self,
 		block: BlockId<Self::Block>
-	) -> Box<dyn Future<Item = (), Error = Error> + Send>;
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 }
 
 impl<TBl, TRtApi, TCfg, TGen, TCSExt, TBackend, TExec, TSc, TImpQu, TNetP, TExPool, TRpc>
@@ -718,20 +722,21 @@ ServiceBuilder<
 	TRpc,
 	TBackend,
 > where
-	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi,
-	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi>::Api:
+	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi<TBl>,
+	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi<TBl>>::Api:
 		sp_api::Metadata<TBl> +
 		sc_offchain::OffchainWorkerApi<TBl> +
 		sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl> +
 		sp_session::SessionKeys<TBl> +
-		sp_api::ApiExt<TBl, Error = sp_blockchain::Error>,
-	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	TRtApi: ConstructRuntimeApi<TBl, Client<TBackend, TExec, TBl, TRtApi>> + 'static + Send + Sync,
+		sp_api::ApiErrorExt<Error = sp_blockchain::Error> +
+		sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
+	TBl: BlockT,
+	TRtApi: 'static + Send + Sync,
 	TCfg: Default,
 	TGen: RuntimeGenesis,
 	TCSExt: Extension,
-	TBackend: 'static + sc_client_api::backend::Backend<TBl, Blake2Hasher> + Send,
-	TExec: 'static + sc_client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
+	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
+	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
 	TSc: Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TNetP: NetworkSpecialization<TBl>,
@@ -740,6 +745,13 @@ ServiceBuilder<
 		+ TransactionPoolMaintainer<Block=TBl, Hash = <TBl as BlockT>::Hash>,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata> + Clone,
 {
+
+	/// Set an ExecutionExtensionsFactory
+	pub fn with_execution_extensions_factory(self, execution_extensions_factory: Box<dyn ExtensionsFactory>) -> Result<Self, Error> {
+		self.client.execution_extensions().set_extensions_factory(execution_extensions_factory);
+		Ok(self)
+	}
+
 	/// Builds the service.
 	pub fn build(self) -> Result<Service<
 		TBl,
@@ -781,7 +793,7 @@ ServiceBuilder<
 
 		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
 		let (to_spawn_tx, to_spawn_rx) =
-			mpsc::unbounded::<Box<dyn Future<Item = (), Error = ()> + Send>>();
+			mpsc::unbounded::<Pin<Box<dyn Future<Output = ()> + Send>>>();
 
 		// A side-channel for essential tasks to communicate shutdown.
 		let (essential_failed_tx, essential_failed_rx) = mpsc::unbounded();
@@ -850,7 +862,7 @@ ServiceBuilder<
 				Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone(), db)))
 			},
 			(true, None) => {
-				log::warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
+				warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
 				None
 			},
 			_ => None,
@@ -865,31 +877,30 @@ ServiceBuilder<
 			let is_validator = config.roles.is_authority();
 
 			let events = client.import_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |notification| {
-					let number = *notification.header.number();
 					let txpool = txpool.upgrade();
 
 					if let Some(txpool) = txpool.as_ref() {
 						let future = txpool.maintain(
 							&BlockId::hash(notification.hash),
 							&notification.retracted,
-						).map(|_| Ok(())).compat();
-						let _ = to_spawn_tx_.unbounded_send(Box::new(future));
+						);
+						let _ = to_spawn_tx_.unbounded_send(Box::pin(future));
 					}
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
 					if let Some(offchain) = offchain {
-						let future = offchain.on_block_imported(&number, network_state_info.clone(), is_validator)
-							.map(|()| Ok(()));
-						let _ = to_spawn_tx_.unbounded_send(Box::new(Compat::new(future)));
+						let future = offchain.on_block_imported(
+							&notification.header,
+							network_state_info.clone(),
+							is_validator
+						);
+						let _ = to_spawn_tx_.unbounded_send(Box::pin(future));
 					}
 
-					Ok(())
-				})
-				.select(exit.clone().map(Ok).compat())
-				.then(|_| Ok(()));
-			let _ = to_spawn_tx.unbounded_send(Box::new(events));
+					ready(())
+				});
+			let _ = to_spawn_tx.unbounded_send(Box::pin(select(events, exit.clone()).map(drop)));
 		}
 
 		{
@@ -897,7 +908,6 @@ ServiceBuilder<
 			let network = Arc::downgrade(&network);
 			let transaction_pool_ = transaction_pool.clone();
 			let events = transaction_pool.import_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |_| {
 					if let Some(network) = network.upgrade() {
 						network.trigger_repropagate();
@@ -907,12 +917,10 @@ ServiceBuilder<
 						"ready" => status.ready,
 						"future" => status.future
 					);
-					Ok(())
-				})
-				.select(exit.clone().map(Ok).compat())
-				.then(|_| Ok(()));
+					ready(())
+				});
 
-			let _ = to_spawn_tx.unbounded_send(Box::new(events));
+			let _ = to_spawn_tx.unbounded_send(Box::pin(select(events, exit.clone()).map(drop)));
 		}
 
 		// Periodically notify the telemetry.
@@ -974,9 +982,9 @@ ServiceBuilder<
 				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
 			);
 
-			Ok(())
-		}).select(exit.clone().map(Ok).compat()).then(|_| Ok(()));
-		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
+			ready(())
+		});
+		let _ = to_spawn_tx.unbounded_send(Box::pin(select(tel_task, exit.clone()).map(drop)));
 
 		// Periodically send the network state to the telemetry.
 		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
@@ -987,12 +995,12 @@ ServiceBuilder<
 				"system.network_state";
 				"state" => network_state,
 			);
-			Ok(())
-		}).select(exit.clone().map(Ok).compat()).then(|_| Ok(()));
-		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task_2));
+			ready(())
+		});
+		let _ = to_spawn_tx.unbounded_send(Box::pin(select(tel_task_2, exit.clone()).map(drop)));
 
 		// RPC
-		let (system_rpc_tx, system_rpc_rx) = futures03::channel::mpsc::unbounded();
+		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
 		let gen_handler = || {
 			use sc_rpc::{chain, state, author, system};
 
@@ -1052,17 +1060,14 @@ ServiceBuilder<
 		let rpc = start_rpc_servers(&config, gen_handler)?;
 
 
-		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future(
+		let _ = to_spawn_tx.unbounded_send(Box::pin(select(build_network_future(
 			config.roles,
 			network_mut,
 			client.clone(),
 			network_status_sinks.clone(),
 			system_rpc_rx,
 			has_bootnodes,
-		)
-			.map_err(|_| ())
-			.select(exit.clone().map(Ok).compat())
-			.then(|_| Ok(()))));
+		), exit.clone()).map(drop)));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
@@ -1083,8 +1088,6 @@ ServiceBuilder<
 				.map(|dur| dur.as_millis())
 				.unwrap_or(0);
 			let future = telemetry.clone()
-				.map(|ev| Ok::<_, ()>(ev))
-				.compat()
 				.for_each(move |event| {
 					// Safe-guard in case we add more events in the future.
 					let sc_telemetry::TelemetryEvent::Connected = event;
@@ -1103,11 +1106,11 @@ ServiceBuilder<
 					telemetry_connection_sinks_.lock().retain(|sink| {
 						sink.unbounded_send(()).is_ok()
 					});
-					Ok(())
+					ready(())
 				});
-			let _ = to_spawn_tx.unbounded_send(Box::new(future
-				.select(exit.clone().map(Ok).compat())
-				.then(|_| Ok(()))));
+			let _ = to_spawn_tx.unbounded_send(Box::pin(select(
+				future, exit.clone()
+			).map(drop)));
 			telemetry
 		});
 
@@ -1116,13 +1119,10 @@ ServiceBuilder<
 			let future = select(
 				grafana_data_source::run_server(port).boxed(),
 				exit.clone()
-			).map(|either| match either {
-				Either::Left((result, _)) => result.map_err(|_| ()),
-				Either::Right(_) => Ok(())
-			}).compat();
+			).map(drop);
 
-			let _ = to_spawn_tx.unbounded_send(Box::new(future));
-    }
+			let _ = to_spawn_tx.unbounded_send(Box::pin(future));
+    	}
 
 		// Instrumentation
 		if let Some(tracing_targets) = config.tracing_targets.as_ref() {
@@ -1147,7 +1147,11 @@ ServiceBuilder<
 			essential_failed_rx,
 			to_spawn_tx,
 			to_spawn_rx,
-			to_poll: Vec::new(),
+			tasks_executor: if let Some(exec) = config.tasks_executor {
+				exec
+			} else {
+				return Err(Error::TasksExecutorRequired);
+			},
 			rpc_handlers,
 			_rpc: rpc,
 			_telemetry: telemetry,

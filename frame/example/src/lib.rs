@@ -301,8 +301,8 @@ impl<T: pallet_balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightFor
 	}
 }
 
-impl<T: pallet_balances::Trait> PaysFee for WeightForSetDummy<T> {
-	fn pays_fee(&self) -> bool {
+impl<T: pallet_balances::Trait> PaysFee<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
+	fn pays_fee(&self, _target: (&BalanceOf<T>,)) -> bool {
 		true
 	}
 }
@@ -695,6 +695,7 @@ mod tests {
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
 		type TransferPayment = ();
@@ -706,6 +707,7 @@ mod tests {
 	impl Trait for Test {
 		type Event = ();
 	}
+	type System = frame_system::Module<Test>;
 	type Example = Module<Test>;
 
 	// This function basically just builds a genesis storage key/value store according to

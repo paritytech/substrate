@@ -1,5 +1,5 @@
 use crate::service;
-use futures::{future::{select, Map}, FutureExt, TryFutureExt, channel::oneshot, compat::Future01CompatExt};
+use futures::{future::{select, Map, Either}, FutureExt, channel::oneshot};
 use std::cell::RefCell;
 use tokio::runtime::Runtime;
 pub use sc_cli::{VersionInfo, IntoExit, error};
@@ -18,7 +18,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 	type Config<T> = Configuration<(), T>;
 	match parse_and_prepare::<NoCustom, NoCustom, _>(&version, "substrate-node", args) {
 		ParseAndPrepare::Run(cmd) => cmd.run(load_spec, exit,
-		|exit, _cli_args, _custom_args, config: Config<_>| {
+		|exit, _cli_args, _custom_args, mut config: Config<_>| {
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
 			info!("  by {}, 2017, 2018", version.author);
@@ -26,6 +26,10 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 			info!("Node name: {}", config.name);
 			info!("Roles: {}", display_role(&config));
 			let runtime = Runtime::new().map_err(|e| format!("{:?}", e))?;
+			config.tasks_executor = {
+				let runtime_handle = runtime.handle().clone();
+				Some(Box::new(move |fut| { runtime_handle.spawn(fut); }))
+			};
 			match config.roles {
 				ServiceRoles::LIGHT => run_until_exit(
 					runtime,
@@ -75,36 +79,23 @@ where
 
 	let informant = informant::build(&service);
 
-	let future = select(exit, informant)
-		.map(|_| Ok(()))
-		.compat();
-
-	runtime.executor().spawn(future);
+	let handle = runtime.spawn(select(exit, informant));
 
 	// we eagerly drop the service so that the internal exit future is fired,
 	// but we need to keep holding a reference to the global telemetry guard
 	let _telemetry = service.telemetry();
 
-	let service_res = {
-		let exit = e.into_exit();
-		let service = service
-			.map_err(|err| error::Error::Service(err))
-			.compat();
-		let select = select(service, exit)
-			.map(|_| Ok(()))
-			.compat();
-		runtime.block_on(select)
-	};
+	let exit = e.into_exit();
+	let service_res = runtime.block_on(select(service, exit));
 
 	let _ = exit_send.send(());
 
-	// TODO [andre]: timeout this future #1318
+	runtime.block_on(handle);
 
-	use futures01::Future;
-
-	let _ = runtime.shutdown_on_idle().wait();
-
-	service_res
+	match service_res {
+		Either::Left((res, _)) => res.map_err(error::Error::Service),
+		Either::Right((_, _)) => Ok(())
+	}
 }
 
 // handles ctrl-c

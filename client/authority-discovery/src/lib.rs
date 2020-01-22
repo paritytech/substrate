@@ -65,8 +65,8 @@ use sc_network::{DhtEvent, ExHashT, NetworkStateInfo};
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use sp_core::crypto::{key_types, Pair};
 use sp_core::traits::BareCryptoStorePtr;
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, ProvideRuntimeApi};
+use sp_runtime::{traits::Block as BlockT, generic::BlockId};
+use sp_api::ProvideRuntimeApi;
 use addr_cache::AddrCache;
 
 #[cfg(test)]
@@ -93,8 +93,8 @@ pub struct AuthorityDiscovery<Client, Network, Block>
 where
 	Block: BlockT + 'static,
 	Network: NetworkProvider,
-	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block>,
+	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
+	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
 {
 	client: Arc<Client>,
 
@@ -126,8 +126,9 @@ impl<Client, Network, Block> AuthorityDiscovery<Client, Network, Block>
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
+	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
+	<Client as ProvideRuntimeApi<Block>>::Api:
+		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
 	Self: Future<Output = ()>,
 {
 	/// Return a new authority discovery.
@@ -314,10 +315,10 @@ where
 
 		let remote_addresses: Vec<Multiaddr> = values.into_iter()
 			.map(|(_k, v)| {
-				let schema::SignedAuthorityAddresses {
-					signature,
-					addresses,
-				} = schema::SignedAuthorityAddresses::decode(v).map_err(Error::DecodingProto)?;
+				let schema::SignedAuthorityAddresses { signature, addresses } =
+					schema::SignedAuthorityAddresses::decode(v.as_slice())
+					.map_err(Error::DecodingProto)?;
+
 				let signature = AuthoritySignature::decode(&mut &signature[..])
 					.map_err(Error::EncodingDecodingScale)?;
 
@@ -325,7 +326,7 @@ where
 					return Err(Error::VerifyingDhtPayload);
 				}
 
-				let addresses: Vec<libp2p::Multiaddr> = schema::AuthorityAddresses::decode(addresses)
+				let addresses = schema::AuthorityAddresses::decode(addresses.as_slice())
 					.map(|a| a.addresses)
 					.map_err(Error::DecodingProto)?
 					.into_iter()
@@ -413,8 +414,9 @@ impl<Client, Network, Block> Future for AuthorityDiscovery<Client, Network, Bloc
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
+	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
+	<Client as ProvideRuntimeApi<Block>>::Api:
+		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
 {
 	type Output = ();
 
