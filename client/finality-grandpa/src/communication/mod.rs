@@ -31,7 +31,7 @@ use futures::prelude::*;
 use futures03::{
 	channel::mpsc as mpsc03,
 	compat::Compat,
-	future::{Future as Future03, ready},
+	future::{self as future03, Future as Future03},
 	sink::Sink as Sink03,
 	stream::{Stream as Stream03, StreamExt},
 };
@@ -298,13 +298,13 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 				match decoded {
 					Err(ref e) => {
 						debug!(target: "afg", "Skipping malformed message {:?}: {}", notification, e);
-						return ready(None);
+						return future03::ready(None);
 					}
 					Ok(GossipMessage::Vote(msg)) => {
 						// check signature.
 						if !voters.contains_key(&msg.message.id) {
 							debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
-							return ready(None);
+							return future03::ready(None);
 						}
 
 						match &msg.message.message {
@@ -331,11 +331,11 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 							},
 						};
 
-						ready(Some(msg.message))
+						future03::ready(Some(msg.message))
 					}
 					_ => {
 						debug!(target: "afg", "Skipping unknown message type");
-						return ready(None);
+						return future03::ready(None);
 					}
 				}
 			});
