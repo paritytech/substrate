@@ -3221,8 +3221,6 @@ dependencies = [
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-template-runtime 2.0.0",
- "parity-scale-codec 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-basic-authorship 0.8.0",
  "sc-cli 0.8.0",
  "sc-client 0.8.0",
@@ -3237,12 +3235,10 @@ dependencies = [
  "sp-core 2.0.0",
  "sp-finality-grandpa 2.0.0",
  "sp-inherents 2.0.0",
- "sp-io 2.0.0",
  "sp-runtime 2.0.0",
  "sp-transaction-pool 2.0.0",
  "substrate-build-script-utils 2.0.0",
  "tokio 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "trie-root 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "vergen 3.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
