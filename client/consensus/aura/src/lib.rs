@@ -34,7 +34,7 @@ use std::{
 };
 
 use futures::prelude::*;
-use futures_channel as state;
+use futures_shared_state_channel as state;
 use parking_lot::Mutex;
 use log::{debug, info, trace};
 
@@ -62,7 +62,7 @@ use sp_timestamp::{
 	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
 };
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
-use sc_consensus_slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible};
+use sc_consensus_slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, SlotWorkerEvent};
 use sc_consensus_slots::check_equivocation;
 use sc_keystore::KeyStorePtr;
 use sp_api::ApiExt;
@@ -148,6 +148,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error, H>(
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 	keystore: KeyStorePtr,
+	sender: state::Sender<SlotWorkerEvent<AuraClaim<P>>>,
 	can_author_with: CAW,
 ) -> Result<impl futures01::Future<Item = (), Error = ()>, sp_consensus::Error> where
 	B: BlockT<Header=H>,
@@ -173,6 +174,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error, H>(
 		keystore,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
+		sender,
 		_key_type: PhantomData::<P>,
 	};
 	register_aura_inherent_data_provider(
@@ -197,7 +199,20 @@ struct AuraWorker<C, E, I, P, SO> {
 	keystore: KeyStorePtr,
 	sync_oracle: SO,
 	force_authoring: bool,
+	sender: state::Sender<SlotWorkerEvent<AuraClaim<P>>>,
 	_key_type: PhantomData<P>,
+}
+
+/// Aura clone
+#[derive(Clone)]
+pub struct AuraClaim<P> {
+	pair: Option<P>
+}
+
+impl<P> sc_consensus_slots::Claim for AuraClaim<P> {
+	fn is_claimed(&self) -> bool {
+		self.pair.is_some()
+	}
 }
 
 impl<H, B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraWorker<C, E, I, P, SO> where
@@ -218,11 +233,12 @@ impl<H, B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for Au
 	type BlockImport = I;
 	type SyncOracle = SO;
 	type Proposer = E::Proposer;
-	type Claim = P;
+	type Claim = AuraClaim<P>;
+	type EventSink = state::Sender<SlotWorkerEvent<Self::Claim>>;
 	type EpochData = Vec<AuthorityId<P>>;
 
-	fn sender(&self) -> state::Sender<SlotWorkerEvent<P>> {
-		unimplemented!()
+	fn sender(&self) -> state::Sender<SlotWorkerEvent<Self::Claim>> {
+		self.sender.clone()
 	}
 
 	fn logging_target(&self) -> &'static str {
@@ -246,13 +262,15 @@ impl<H, B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for Au
 		_header: &B::Header,
 		slot_number: u64,
 		epoch_data: &Self::EpochData,
-	) -> Option<Self::Claim> {
+	) -> Self::Claim {
 		let expected_author = slot_author::<P>(slot_number, epoch_data);
 
-		expected_author.and_then(|p| {
+		let pair = expected_author.and_then(|p| {
 			self.keystore.read()
 				.key_pair_by_type::<P>(&p, sp_application_crypto::key_types::AURA).ok()
-		})
+		});
+
+		AuraClaim { pair }
 	}
 
 	fn pre_digest_data(&self, slot_number: u64, _claim: &Self::Claim) -> Vec<sp_runtime::DigestItem<B::Hash>> {
@@ -270,7 +288,7 @@ impl<H, B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for Au
 		Box::new(|header, header_hash, body, pair| {
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
-			let signature = pair.sign(header_hash.as_ref());
+			let signature = pair.pair.as_ref().unwrap().sign(header_hash.as_ref());
 			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(signature);
 
 			BlockImportParams {
@@ -987,6 +1005,7 @@ mod tests {
 			register_aura_inherent_data_provider(
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
+			let (sender, _) = state::channel();
 
 			let aura = start_aura::<_, _, _, _, _, AuthorityPair, _, _, _, _>(
 				slot_duration,
@@ -998,6 +1017,7 @@ mod tests {
 				inherent_data_providers,
 				false,
 				keystore,
+				sender,
 				sp_consensus::AlwaysCanAuthor,
 			).expect("Starts aura");
 

@@ -1,5 +1,6 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
+use futures_shared_state_channel as state;
 use std::sync::Arc;
 use std::time::Duration;
 use sc_client::LongestChain;
@@ -99,6 +100,7 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 		import_setup.take()
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
+	let (sender, _) = state::channel();
 	let service = builder.with_network_protocol(|_| Ok(NodeProtocol::new()))?
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
@@ -128,6 +130,7 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 			inherent_data_providers.clone(),
 			force_authoring,
 			service.keystore(),
+			sender,
 			can_author_with,
 		)?;
 

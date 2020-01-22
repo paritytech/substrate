@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 futures = "0.3.1"
 futures01 = { package = "futures", version = "0.1.29" }
+futures-shared-state-channel = { git = "https://github.com/seunlanlege/futures-shared-state-channel" }
 ctrlc = { version = "3.1.3", features = ["termination"] }
 log = "0.4.8"
 tokio = "0.1.22"

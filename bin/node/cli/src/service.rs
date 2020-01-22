@@ -153,6 +153,8 @@ macro_rules! new_full {
 
 		($with_startup_data)(&block_import, &babe_link);
 
+		let (sender, _) = futures_shared_state_channel::channel();
+
 		if participates_in_consensus {
 			let proposer = sc_basic_authority::ProposerFactory {
 				client: service.client(),
@@ -176,6 +178,7 @@ macro_rules! new_full {
 				inherent_data_providers: inherent_data_providers.clone(),
 				force_authoring,
 				babe_link,
+				sender,
 				can_author_with,
 			};
 

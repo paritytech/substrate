@@ -28,6 +28,7 @@ use sp_consensus::NoNetwork as DummyOracle;
 use sp_consensus::import_queue::{
 	BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
 };
+use futures_shared_state_channel::channel;
 use sc_network_test::*;
 use sc_network_test::{Block as TestBlock, PeersClient};
 use sc_network::config::{BoxFinalityProofRequestBuilder, ProtocolConfig};
@@ -320,7 +321,7 @@ impl TestNetFactory for BabeTestNet {
 #[test]
 #[should_panic]
 fn rejects_empty_block() {
-	env_logger::try_init().unwrap();
+	let _ = env_logger::try_init();
 	let mut net = BabeTestNet::new(3);
 	let block_builder = |builder: BlockBuilder<_, _>| {
 		builder.bake().unwrap()
@@ -391,6 +392,7 @@ fn run_one_test(
 				.for_each(|_| future::ready(()) )
 		);
 
+		let (sender, _) = channel();
 
 		runtime.spawn(start_babe(BabeParams {
 			block_import: data.block_import.lock().take().expect("import set up during init"),
@@ -402,6 +404,7 @@ fn run_one_test(
 			force_authoring: false,
 			babe_link: data.link.clone(),
 			keystore,
+			sender,
 			can_author_with: sp_consensus::AlwaysCanAuthor,
 		}).expect("Starts babe"));
 	}
@@ -505,18 +508,20 @@ fn can_author_block() {
 	};
 
 	// with secondary slots enabled it should never be empty
-	match claim_slot(i, &epoch, &config, &keystore) {
-		(_, None) => i += 1,
-		(_, Some(s)) => debug!(target: "babe", "Authored block {:?}", s.0),
+	let claim = claim_slot(i, &epoch, &config, &keystore);
+	match claim.inner {
+		None => i += 1,
+		Some(s) => debug!(target: "babe", "Authored block {:?}", s.0),
 	}
 
 	// otherwise with only vrf-based primary slots we might need to try a couple
 	// of times.
 	config.secondary_slots = false;
 	loop {
-		match claim_slot(i, &epoch, &config, &keystore) {
-			(_, None) => i += 1,
-			(_, Some(s)) => {
+		let claim = claim_slot(i, &epoch, &config, &keystore);
+		match claim.inner {
+			None => i += 1,
+			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s.0);
 				break;
 			}

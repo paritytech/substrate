@@ -106,7 +106,7 @@ use sp_blockchain::{
 	HeaderBackend, ProvideCache, HeaderMetadata
 };
 use schnorrkel::SignatureError;
-use futures_channel as state;
+use futures_shared_state_channel as state;
 
 use sp_api::ApiExt;
 
@@ -344,11 +344,20 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	Ok(slot_worker.map(|_| Ok::<(), ()>(())).compat())
 }
 
+/// Babe claim
 #[derive(Clone)]
-struct BabeClaim {
-	digest: BabePreDigest,
-	pair: AuthorityPair,
-	thresholds: Vec<u128>,
+pub struct BabeClaim {
+	/// claim data
+	pub inner: Option<(BabePreDigest, AuthorityPair)>,
+	/// computed thresholds,
+	/// 0 = computed, 1 = required threshold
+	pub thresholds: Vec<(u128, u128)>,
+}
+
+impl sc_consensus_slots::Claim for BabeClaim {
+	fn is_claimed(&self) -> bool {
+		self.inner.is_some()
+	}
 }
 
 struct BabeWorker<B: BlockT, C, E, I, SO> {
@@ -379,7 +388,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	type SyncOracle = SO;
 	type Proposer = E::Proposer;
 	type BlockImport = I;
-	type EventSink = state::Sender<SlotWorkerEvents<Self::Claim>>;
+	type EventSink = state::Sender<SlotWorkerEvent<Self::Claim>>;
 
 	fn logging_target(&self) -> &'static str {
 		"babe"
@@ -415,25 +424,25 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		_parent_header: &B::Header,
 		slot_number: SlotNumber,
 		epoch_data: &Epoch,
-	) -> Option<Self::Claim> {
+	) -> Self::Claim {
 		debug!(target: "babe", "Attempting to claim slot {}", slot_number);
-		let s = authorship::claim_slot(
+		let babe_claim = authorship::claim_slot(
 			slot_number,
 			epoch_data,
 			&*self.config,
 			&self.keystore,
 		);
 
-		if let Some(_) = s {
+		if let Some(_) = babe_claim.inner {
 			debug!(target: "babe", "Claimed slot {}", slot_number);
 		}
 
-		s
+		babe_claim
 	}
 
 	fn pre_digest_data(&self, _slot_number: u64, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem<B::Hash>> {
 		vec![
-			<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(claim.0.clone()),
+			<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(claim.inner.as_ref().unwrap().0.clone()),
 		]
 	}
 
@@ -443,10 +452,10 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		Vec<B::Extrinsic>,
 		Self::Claim,
 	) -> sp_consensus::BlockImportParams<B> + Send> {
-		Box::new(|header, header_hash, body, (_, pair)| {
+		Box::new(|header, header_hash, body, claim| {
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
-			let signature = pair.sign(header_hash.as_ref());
+			let signature = claim.inner.as_ref().unwrap().1.sign(header_hash.as_ref());
 			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem>::babe_seal(signature);
 
 			BlockImportParams {
@@ -1259,13 +1268,13 @@ pub mod test_helpers {
 			|slot| link.config.genesis_epoch(slot),
 		).unwrap().unwrap();
 
-		let (_, claim) = authorship::claim_slot(
+		let claim = authorship::claim_slot(
 			slot_number,
 			epoch.as_ref(),
 			&link.config,
 			keystore,
 		);
 
-		claim.map(|(digest, _)| digest)
+		claim.inner.map(|(digest, _)| digest)
 	}
 }

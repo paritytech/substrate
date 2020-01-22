@@ -17,7 +17,7 @@
 //! rpc api for babe.
 
 use crate::BabeClaim;
-use futures_channel as state;
+use futures_shared_state_channel as state;
 use futures::{prelude::*, future};
 use jsonrpc_core::{BoxFuture, Error, ErrorCode};
 use jsonrpc_derive::rpc;

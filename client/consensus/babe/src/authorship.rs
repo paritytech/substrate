@@ -24,6 +24,7 @@ use codec::Encode;
 use schnorrkel::vrf::VRFInOut;
 use sp_core::Pair;
 use sc_keystore::KeyStorePtr;
+use crate::BabeClaim;
 
 /// Calculates the primary selection threshold for a given authority, taking
 /// into account `c` (`1 - c` represents the probability of a slot being empty).
@@ -145,7 +146,7 @@ pub(super) fn claim_slot(
 	epoch: &Epoch,
 	config: &BabeConfiguration,
 	keystore: &KeyStorePtr,
-) -> (Vec<u128>, Option<(BabePreDigest, AuthorityPair)>) {
+) -> BabeClaim  {
 	let (thresholds, claim) = claim_primary_slot(slot_number, epoch, config.c, keystore);
 	let claim = claim.or_else(|| {
 		if config.secondary_slots {
@@ -158,8 +159,12 @@ pub(super) fn claim_slot(
 		} else {
 			None
 		}
-		});
-	(thresholds, claim)
+	});
+
+	BabeClaim {
+		inner: claim,
+		thresholds
+	}
 }
 
 fn get_keypair(q: &AuthorityPair) -> &schnorrkel::Keypair {
@@ -176,7 +181,7 @@ fn claim_primary_slot(
 	epoch: &Epoch,
 	c: (u64, u64),
 	keystore: &KeyStorePtr,
-) -> (Vec<u128>, Option<(BabePreDigest, AuthorityPair)>) {
+) -> (Vec<(u128, u128)>, Option<(BabePreDigest, AuthorityPair)>) {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
 	let keystore = keystore.read();
 
@@ -194,22 +199,20 @@ fn claim_primary_slot(
 		// We already checked that authorities contains `key.public()`, so it can't
 		// be empty.  Therefore, this division in `calculate_threshold` is safe.
 		let threshold = super::authorship::calculate_primary_threshold(c, authorities, authority_index);
-		thresholds.push(threshold);
+		let (inout, proof, _) = get_keypair(&pair).vrf_sign(transcript);
 
-		let pre_digest = get_keypair(&pair)
-			.vrf_sign_after_check(transcript, |inout| super::authorship::check_primary_threshold(inout, threshold))
-			.map(|s| {
-				BabePreDigest::Primary {
-					slot_number,
-					vrf_output: s.0.to_output(),
-					vrf_proof: s.1,
-					authority_index: authority_index as u32,
-				}
-			});
+		let out = u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(BABE_VRF_PREFIX));
+		thresholds.push((out, threshold));
 
-		// early exit on first successful claim
-		if let Some(pre_digest) = pre_digest {
-			return (thresholds, Some((pre_digest, pair)));
+		if out < threshold {
+			let pre_digest = BabePreDigest::Primary {
+				slot_number,
+				vrf_output: inout.to_output(),
+				vrf_proof: proof,
+				authority_index: authority_index as u32,
+			};
+
+			return (thresholds, Some((pre_digest, pair)))
 		}
 	}
 
