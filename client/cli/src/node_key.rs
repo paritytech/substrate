@@ -17,7 +17,7 @@
 use sc_network::{
 	self,
 	config::{
-		NodeKeyConfig, build_multiaddr,
+		NodeKeyConfig,
 	},
 };
 use sp_core::H256;

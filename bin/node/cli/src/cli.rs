@@ -15,10 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use sc_cli::VersionInfo;
-use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
 use sc_cli::{SharedParams, ImportParams, error};
 use sc_service::{Roles as ServiceRoles, Configuration};
-use log::info;
 use structopt::StructOpt;
 use sc_cli::{CoreParams, RunCmd};
 use crate::{service, ChainSpec, load_spec};
@@ -26,7 +24,11 @@ use crate::factory_impl::FactoryState;
 use node_transaction_factory::RuntimeAdapter;
 
 #[derive(Clone, Debug, StructOpt)]
-#[structopt(settings = &[structopt::clap::AppSettings::GlobalVersion, structopt::clap::AppSettings::ArgsNegateSubcommands, structopt::clap::AppSettings::SubcommandsNegateReqs])]
+#[structopt(settings = &[
+	structopt::clap::AppSettings::GlobalVersion,
+	structopt::clap::AppSettings::ArgsNegateSubcommands,
+	structopt::clap::AppSettings::SubcommandsNegateReqs,
+])]
 enum Cli {
 	#[structopt(flatten)]
 	SubstrateCli(CoreParams),
@@ -91,14 +93,7 @@ where
 
 	let args: Vec<_> = args.collect();
 	let subcommand = match sc_cli::try_from_iter::<RunCmd, _>(args.clone(), &version) {
-		Ok(opt) => {
-			eprintln!(
-				"WARNING: running this command without the subcommand `run` is deprecated, please \
-				use run:\n{} run [node_arguments]",
-				version.executable_name,
-			);
-			Cli::SubstrateCli(CoreParams::Run(opt))
-		},
+		Ok(opt) => Cli::SubstrateCli(CoreParams::Run(opt)),
 		Err(_) => sc_cli::from_iter::<Cli, _>(args.clone(), &version),
 	};
 
@@ -116,7 +111,7 @@ where
 			&version,
 		),
 		Cli::Factory(cli_args) => {
-			sc_cli::init(&mut config, load_spec, &cli_args.shared_params, &version);
+			sc_cli::init(&mut config, load_spec, &cli_args.shared_params, &version)?;
 
 			sc_cli::fill_import_params(&mut config, &cli_args.import_params, ServiceRoles::FULL)?;
 

@@ -14,13 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::traits::GetSharedParams;
-
 use std::{str::FromStr, path::PathBuf};
-use structopt::{StructOpt, clap::{arg_enum, App}};
+use structopt::{StructOpt, clap::arg_enum};
 use sc_service::{
 	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
-	ChainSpec, config::DatabaseConfig,
+	config::DatabaseConfig,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use crate::VersionInfo;
@@ -596,40 +594,6 @@ pub struct RunCmd {
 	pub password_filename: Option<PathBuf>
 }
 
-/// Stores all required Cli values for a keyring test account.
-struct KeyringTestAccountCliValues {
-	help: String,
-	conflicts_with: Vec<String>,
-	name: String,
-	variant: sp_keyring::Sr25519Keyring,
-}
-
-lazy_static::lazy_static! {
-	/// The Cli values for all test accounts.
-	static ref TEST_ACCOUNTS_CLI_VALUES: Vec<KeyringTestAccountCliValues> = {
-		sp_keyring::Sr25519Keyring::iter().map(|a| {
-			let help = format!(
-				"Shortcut for `--name {} --validator` with session keys for `{}` added to keystore.",
-				a,
-				a,
-			);
-			let conflicts_with = sp_keyring::Sr25519Keyring::iter()
-				.filter(|b| a != *b)
-				.map(|b| b.to_string().to_lowercase())
-				.chain(std::iter::once("name".to_string()))
-				.collect::<Vec<_>>();
-			let name = a.to_string().to_lowercase();
-
-			KeyringTestAccountCliValues {
-				help,
-				conflicts_with,
-				name,
-				variant: a,
-			}
-		}).collect()
-	};
-}
-
 /// Wrapper for exposing the keyring test accounts into the Cli.
 #[derive(Debug, Clone, StructOpt)]
 pub struct Keyring {
@@ -914,17 +878,18 @@ impl CoreParams {
 
 		match self {
 			CoreParams::Run(cmd) => cmd.run(config, new_light, new_full, version),
-			CoreParams::BuildSpec(cmd) => cmd.run(config, builder),
+			CoreParams::BuildSpec(cmd) => cmd.run(config),
 			CoreParams::ExportBlocks(cmd) => cmd.run(config, builder),
 			CoreParams::ImportBlocks(cmd) => cmd.run(config, builder),
 			CoreParams::CheckBlock(cmd) => cmd.run(config, builder),
-			CoreParams::PurgeChain(cmd) => cmd.run(config, builder),
+			CoreParams::PurgeChain(cmd) => cmd.run(config),
 			CoreParams::Revert(cmd) => cmd.run(config, builder),
 		}
 	}
 }
 
 impl RunCmd {
+	/// Run the command that runs the node
 	pub fn run<G, E, FNL, FNF, SL, SF>(
 		self,
 		mut config: Configuration<G, E>,
@@ -953,19 +918,13 @@ impl RunCmd {
 
 impl BuildSpecCmd {
 	/// Run the build-spec command
-	pub fn run<G, E, B, BC, BB>(
+	pub fn run<G, E>(
 		self,
 		config: Configuration<G, E>,
-		builder: B,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
@@ -1125,19 +1084,13 @@ impl CheckBlockCmd {
 
 impl PurgeChainCmd {
 	/// Run the purge command
-	pub fn run<G, E, B, BC, BB>(
+	pub fn run<G, E>(
 		self,
 		config: Configuration<G, E>,
-		builder: B,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 

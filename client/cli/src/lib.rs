@@ -44,8 +44,8 @@ use sc_network::{
 };
 
 use std::{
-	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fmt::Debug, fs::{self, File},
-	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr
+	io::{Write}, iter, fmt::Debug, fs,
+	net::{Ipv4Addr, SocketAddr}, path::PathBuf,
 };
 
 use regex::Regex;
@@ -64,7 +64,6 @@ use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
 use sc_telemetry::TelemetryEndpoints;
-use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 pub use crate::runtime::{run_until_exit, run_service_until_exit};
 

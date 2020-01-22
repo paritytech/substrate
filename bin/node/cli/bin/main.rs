@@ -18,8 +18,6 @@
 
 #![warn(missing_docs)]
 
-use futures::channel::oneshot;
-use futures::{future, FutureExt};
 use sc_cli::VersionInfo;
 
 fn main() -> Result<(), sc_cli::error::Error> {

@@ -81,7 +81,6 @@ node-primitives = { version = "2.0.0", path = "../primitives" }
 node-executor = { version = "2.0.0", path = "../executor" }
 
 # CLI-specific dependencies
-tokio = { version = "0.1.22", optional = true }
 sc-cli = { version = "2.0.0", optional = true, path = "../../../client/cli" }
 node-transaction-factory = { version = "2.0.0", optional = true, path = "../transaction-factory" }
 
@@ -113,7 +112,6 @@ browser = [
 cli = [
 	"sc-cli",
 	"node-transaction-factory",
-	"tokio",
 	"sc-service/rocksdb",
 	"node-executor/wasmi-errno",
 ]

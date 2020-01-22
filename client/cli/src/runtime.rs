@@ -17,7 +17,7 @@
 use futures::{Future, compat::Future01CompatExt, future, future::FutureExt};
 use futures::select;
 use futures::pin_mut;
-use sc_service::{AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec};
+use sc_service::AbstractService;
 use crate::error;
 
 struct Runtime<F, E: 'static>(F)

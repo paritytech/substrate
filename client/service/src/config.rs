@@ -149,7 +149,7 @@ impl<G, E> Default for Configuration<G, E> where
 {
 	/// Create a default config
 	fn default() -> Self {
-		let mut configuration = Configuration {
+		let configuration = Configuration {
 			impl_name: "parity-substrate",
 			impl_version: "0.0.0",
 			impl_commit: "",
@@ -213,6 +213,11 @@ impl<G, E> Configuration<G, E> {
 		})
 	}
 
+	/// Return a reference to the `ChainSpec` of this `Configuration`.
+	///
+	/// ### Panics
+	///
+	/// This method panic if the `chain_spec` is `None`
 	pub fn expect_chain_spec(&self) -> &ChainSpec<G, E> {
 		self.chain_spec.as_ref().expect("chain_spec must be specified")
 	}
