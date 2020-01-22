@@ -80,7 +80,7 @@ sp_externalities::decl_extension! {
 }
 
 /// Code execution engine.
-pub trait CodeExecutor: Sized + Send + Sync {
+pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
 	/// Externalities error type.
 	type Error: Display + Debug + Send + 'static;
 
@@ -98,4 +98,31 @@ pub trait CodeExecutor: Sized + Send + Sync {
 		use_native: bool,
 		native_call: Option<NC>,
 	) -> (Result<crate::NativeOrEncoded<R>, Self::Error>, bool);
+}
+
+/// Something that can call a method in a WASM blob.
+pub trait CallInWasm: Send + Sync {
+	/// Call the given `method` in the given `wasm_blob` using `call_data` (SCALE encoded arguments)
+	/// to decode the arguments for the method.
+	///
+	/// Returns the SCALE encoded return value of the method.
+	fn call_in_wasm(
+		&self,
+		wasm_blob: &[u8],
+		method: &str,
+		call_data: &[u8],
+		ext: &mut dyn Externalities,
+	) -> Result<Vec<u8>, String>;
+}
+
+sp_externalities::decl_extension! {
+	/// The call-in-wasm extension to register/retrieve from the externalities.
+	pub struct CallInWasmExt(Box<dyn CallInWasm>);
+}
+
+impl CallInWasmExt {
+	/// Creates a new instance of `Self`.
+	pub fn new<T: CallInWasm + 'static>(inner: T) -> Self {
+		Self(Box::new(inner))
+	}
 }

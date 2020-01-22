@@ -222,7 +222,9 @@ mod meta {
 				unfinalized.push(&entry.valid_from);
 			},
 			CommitOperation::BlockFinalized(_, ref finalizing_entry, ref forks) => {
-				finalized = finalizing_entry.as_ref().map(|entry| &entry.valid_from);
+				if let Some(finalizing_entry) = finalizing_entry.as_ref() {
+					finalized = Some(&finalizing_entry.valid_from);
+				}
 				for fork_index in forks.iter().rev() {
 					unfinalized.remove(*fork_index);
 				}
