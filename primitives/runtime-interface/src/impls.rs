@@ -494,7 +494,7 @@ macro_rules! for_u128_i128 {
 		#[cfg(not(feature = "std"))]
 		impl FromFFIValue for $type {
 			fn from_ffi_value(arg: u32) -> $type {
-				unsafe { mem::transmute::<[u8; 16], $type>(<[u8; 16]>::from_ffi_value(arg)) }
+				<$type>::from_le_bytes(<[u8; mem::size_of::<$type>()]>::from_ffi_value(arg))
 			}
 		}
 
@@ -503,19 +503,18 @@ macro_rules! for_u128_i128 {
 			type SelfInstance = $type;
 
 			fn from_ffi_value(context: &mut dyn FunctionContext, arg: u32) -> Result<$type> {
-				let data = context.read_memory(Pointer::new(arg), 16)?;
-				let mut res = [0u8; 16];
+				let data = context.read_memory(Pointer::new(arg), mem::size_of::<$type>() as u32)?;
+				let mut res = [0u8; mem::size_of::<$type>()];
 				res.copy_from_slice(&data);
-				Ok(unsafe { mem::transmute::<[u8; 16], $type>(res) })
+				Ok(<$type>::from_le_bytes(res))
 			}
 		}
 
 		#[cfg(feature = "std")]
 		impl IntoFFIValue for $type {
 			fn into_ffi_value(self, context: &mut dyn FunctionContext) -> Result<u32> {
-				let addr = context.allocate_memory(16)?;
-				let data = unsafe { mem::transmute::<$type, [u8; 16]>(self) };
-				context.write_memory(addr, &data)?;
+				let addr = context.allocate_memory(mem::size_of::<$type>() as u32)?;
+				context.write_memory(addr, &self.to_le_bytes())?;
 				Ok(addr.into())
 			}
 		}
