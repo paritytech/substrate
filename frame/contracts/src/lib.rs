@@ -745,7 +745,7 @@ impl<T: Trait> Module<T> {
 			DirectAccountDb.commit(ctx.overlay.into_change_set());
 		}
 
-		// Save the gas usage report.
+		// Save the gas usage report. It will be inspected later on at the post dispatch stage.
 		let gas_spent = gas_meter.spent();
 		let gas_left = gas_meter.gas_left();
 		GasUsageReport::put((gas_left, gas_spent));
@@ -1178,6 +1178,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 			transactor,
 			imbalance,
 		}) = pre {
+			// Take the report of consumed and left gas after the execution of the current
+			// transaction.
 			let (gas_left, gas_spent) = GasUsageReport::take();
 
 			// These should be OK since we don't buy more
