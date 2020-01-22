@@ -146,7 +146,7 @@ test-linux-stable:                 &test-linux
     - awk '/^warning:/,/^$/ { print }' output.log > ${CI_COMMIT_SHORT_SHA}_warnings.log
   artifacts:
     name:                          $CI_COMMIT_SHORT_SHA
-    expire_in:                     24 hrs
+    expire_in:                     3 days
     paths:
       - ${CI_COMMIT_SHORT_SHA}_warnings.log
 
@@ -210,7 +210,7 @@ test-linux-stable-int:
   artifacts:
     name:                          $CI_COMMIT_SHORT_SHA
     when:                          on_failure
-    expire_in:                     24 hrs
+    expire_in:                     3 days
     paths:
       - ${CI_COMMIT_SHORT_SHA}_int_failure.log
 

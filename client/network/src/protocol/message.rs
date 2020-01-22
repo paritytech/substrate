@@ -252,7 +252,29 @@ pub mod generic {
 	}
 
 	/// Status sent on connection.
+	// TODO https://github.com/paritytech/substrate/issues/4674: replace the `Status`
+	// struct with this one, after waiting a few releases beyond `NetworkSpecialization`'s
+	// removal (https://github.com/paritytech/substrate/pull/4665)
+	//
+	// and set MIN_VERSION to 6.
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	pub struct CompactStatus<Hash, Number> {
+		/// Protocol version.
+		pub version: u32,
+		/// Minimum supported version.
+		pub min_supported_version: u32,
+		/// Supported roles.
+		pub roles: Roles,
+		/// Best block number.
+		pub best_number: Number,
+		/// Best block hash.
+		pub best_hash: Hash,
+		/// Genesis block hash.
+		pub genesis_hash: Hash,
+	}
+
+	/// Status sent on connection.
+	#[derive(Debug, PartialEq, Eq, Clone, Encode)]
 	pub struct Status<Hash, Number> {
 		/// Protocol version.
 		pub version: u32,
@@ -266,8 +288,42 @@ pub mod generic {
 		pub best_hash: Hash,
 		/// Genesis block hash.
 		pub genesis_hash: Hash,
-		/// Chain-specific status.
+		/// DEPRECATED. Chain-specific status.
 		pub chain_status: Vec<u8>,
+	}
+
+	impl<Hash: Decode, Number: Decode> Decode for Status<Hash, Number> {
+		fn decode<I: Input>(value: &mut I) -> Result<Self, codec::Error> {
+			const LAST_CHAIN_STATUS_VERSION: u32 = 5;
+			let compact = CompactStatus::decode(value)?;
+			let chain_status = match <Vec<u8>>::decode(value) {
+				Ok(v) => v,
+				Err(e) => if compact.version <= LAST_CHAIN_STATUS_VERSION {
+					return Err(e)
+				} else {
+					Vec::new()
+				}
+			};
+
+			let CompactStatus {
+				version,
+				min_supported_version,
+				roles,
+				best_number,
+				best_hash,
+				genesis_hash,
+			} = compact;
+
+			Ok(Status {
+				version,
+				min_supported_version,
+				roles,
+				best_number,
+				best_hash,
+				genesis_hash,
+				chain_status,
+			})
+		}
 	}
 
 	/// Request block data from a peer.

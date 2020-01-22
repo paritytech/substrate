@@ -1147,7 +1147,11 @@ ServiceBuilder<
 			essential_failed_rx,
 			to_spawn_tx,
 			to_spawn_rx,
-			to_poll: Vec::new(),
+			tasks_executor: if let Some(exec) = config.tasks_executor {
+				exec
+			} else {
+				return Err(Error::TasksExecutorRequired);
+			},
 			rpc_handlers,
 			_rpc: rpc,
 			_telemetry: telemetry,

@@ -357,7 +357,7 @@ fn is_release_build() -> bool {
 			),
 		}
 	} else {
-		!build_helper::debug()
+		true
 	}
 }
 

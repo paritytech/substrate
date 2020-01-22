@@ -109,7 +109,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 			Err(ExecError { reason: "validation error".into(), buffer: runtime.scratch_buf }),
 		// Any other kind of a trap should result in a failure.
 		Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
-			Err(ExecError { reason: "during execution".into(), buffer: runtime.scratch_buf }),
+			Err(ExecError { reason: "contract trapped during execution".into(), buffer: runtime.scratch_buf }),
 	}
 }
 
