@@ -23,18 +23,21 @@ use sp_io;
 use std::fmt::Display;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use sp_core::{self, Hasher, Blake2Hasher, TypeId, RuntimeDebug};
+use sp_core::{self, Hasher, Blake2Hasher, TypeId, RuntimeDebug, H256, H160, U256, ChangesTrieConfiguration};
+use sp_core::crypto::AccountId32;
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
-use crate::generic::{Digest, DigestItem};
+use crate::generic::{self, Digest, DigestItem};
 pub use sp_arithmetic::traits::{
 	SimpleArithmetic, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
 	CheckedShl, CheckedShr, IntegerSquareRoot
 };
-use sp_application_crypto::AppKey;
+pub use sp_core::BenchType;
+
+use sp_application_crypto::{AppKey, RuntimeAppPublic};
 use impl_trait_for_tuples::impl_for_tuples;
 
 /// A lazy value.
@@ -187,7 +190,7 @@ pub trait Lookup {
 /// context.
 pub trait StaticLookup {
 	/// Type to lookup from.
-	type Source: Codec + Clone + PartialEq + Debug + Default;
+	type Source: Codec + Clone + PartialEq + Debug + Default + BenchType;
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
@@ -199,7 +202,7 @@ pub trait StaticLookup {
 /// A lookup implementation returning the input value.
 #[derive(Default)]
 pub struct IdentityLookup<T>(PhantomData<T>);
-impl<T: Codec + Clone + PartialEq + Debug + Default> StaticLookup for IdentityLookup<T> {
+impl<T: Codec + Clone + PartialEq + Debug + Default + BenchType> StaticLookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
 	fn lookup(x: T) -> Result<T, LookupError> { Ok(x) }
@@ -391,9 +394,12 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 }
 
 /// Blake2-256 Hash implementation.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Default)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
+
+impl BenchType for BlakeTwo256 {}
+
 
 impl Hash for BlakeTwo256 {
 	type Output = sp_core::H256;
@@ -1143,6 +1149,8 @@ macro_rules! impl_opaque_keys {
 			)*
 		}
 
+		impl BenchType for $name {}
+
 		impl $name {
 			/// Generate a set of keys with optionally using the given seed.
 			///
@@ -1262,6 +1270,7 @@ pub trait BlockIdTo<Block: self::Block> {
 		block_id: &crate::generic::BlockId<Block>,
 	) -> Result<Option<NumberFor<Block>>, Self::Error>;
 }
+
 
 #[cfg(test)]
 mod tests {

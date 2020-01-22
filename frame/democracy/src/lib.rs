@@ -24,6 +24,7 @@ use sp_runtime::{
 	RuntimeDebug, DispatchResult,
 	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable, Saturating},
 };
+use sp_core::BenchType;
 use codec::{Ref, Encode, Decode, Input, Output};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
@@ -70,6 +71,8 @@ impl Default for Conviction {
 		Conviction::None
 	}
 }
+
+impl BenchType for Conviction {}
 
 impl From<Conviction> for u8 {
 	fn from(c: Conviction) -> u8 {
@@ -159,6 +162,7 @@ impl Encode for Vote {
 }
 
 impl codec::EncodeLike for Vote {}
+impl BenchType for Vote {}
 
 impl Decode for Vote {
 	fn decode<I: Input>(input: &mut I) -> core::result::Result<Self, codec::Error> {

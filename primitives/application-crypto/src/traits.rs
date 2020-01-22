@@ -16,6 +16,7 @@
 
 #[cfg(feature = "full_crypto")]
 use sp_core::crypto::Pair;
+use sp_core::BenchType;
 
 use codec::Codec;
 use sp_core::crypto::{KeyTypeId, CryptoType, IsWrappedBy, Public};
@@ -114,7 +115,7 @@ pub trait RuntimeAppPublic: Sized  {
 	const ID: KeyTypeId;
 
 	/// The signature that will be generated when signing with the corresponding private key.
-	type Signature: Codec + Debug + MaybeHash + Eq + PartialEq + Clone + Default;
+	type Signature: Codec + Debug + MaybeHash + Eq + PartialEq + Clone + Default + BenchType;
 
 	/// Returns all public keys for this application in the keystore.
 	fn all() -> crate::Vec<Self>;

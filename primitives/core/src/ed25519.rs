@@ -41,6 +41,7 @@ use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
 use sp_runtime_interface::pass_by::PassByInner;
 use sp_std::ops::Deref;
+use crate::BenchType;
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
@@ -231,6 +232,8 @@ impl Default for Signature {
 		Signature([0u8; 64])
 	}
 }
+
+impl BenchType for Signature {}
 
 impl PartialEq for Signature {
 	fn eq(&self, b: &Self) -> bool {

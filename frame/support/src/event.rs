@@ -18,6 +18,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
+pub use sp_core::BenchType;
 
 /// Implement the `Event` for a module.
 ///
@@ -138,6 +139,7 @@ macro_rules! decl_event {
 		impl From<Event> for () {
 			fn from(_: Event) -> () { () }
 		}
+
 		impl Event {
 			#[allow(dead_code)]
 			#[doc(hidden)]

@@ -78,6 +78,7 @@ pub use self::uint::U256;
 pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
 #[cfg(feature = "full_crypto")]
 pub use crypto::{DeriveJunction, Pair, Public};
+use crypto::AccountId32;
 
 pub use hash_db::Hasher;
 // Switch back to Blake after PoC-3 is out
@@ -308,4 +309,36 @@ pub fn to_substrate_wasm_fn_return_value(value: &impl Encode) -> u64 {
 	sp_std::mem::forget(encoded);
 
 	res
+}
+
+
+pub trait BenchType: Default {
+	fn test_value(_name: &str) -> Self {
+		Self::default()
+	}
+}
+
+impl BenchType for bool {}
+impl BenchType for u8 {}
+impl BenchType for u16 {}
+impl BenchType for u32 {}
+impl BenchType for u64 {}
+impl BenchType for () {}
+impl BenchType for H256 {}
+impl BenchType for H160 {}
+impl BenchType for U256 {}
+impl BenchType for ChangesTrieConfiguration {}
+impl BenchType for [u8; 32] {}
+impl BenchType for AccountId32 {}
+
+impl<T: BenchType> BenchType for Vec<T> {}
+impl<T: BenchType> BenchType for Box<T> {}
+impl<A: BenchType, B: BenchType> BenchType for (A, B) {}
+impl<T: BenchType> BenchType for Option<T> {}
+
+
+impl BenchType for u128 {
+	fn test_value(_name: &str) -> Self {
+		42_000_000_000_000_000
+	}
 }

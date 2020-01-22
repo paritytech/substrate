@@ -234,6 +234,9 @@ where
 			};
 
 			if let Some((module, function, _args)) = next_state {
+				if ["Timestamp"].contains(&module.as_str()) {
+					continue
+				}
 				println!("Creating a {}::{} extrinsic. Extrinsic {}/{} in this block.",
 					module,
 					function,
@@ -251,9 +254,12 @@ where
 				);
 				let e = Decode::decode(&mut &extrinsic.encode()[..])
 					.expect("decode failed");
-				if block.push(e).is_ok() { // TODO: figure out heartbeat.
-					self.runtime_state.increase_index();
-					tx_pushed += 1;
+				match block.push(e) { // TODO: figure out heartbeat.
+					Ok(_) => {
+						self.runtime_state.increase_index();
+						tx_pushed += 1;
+					}
+					Err(e) => println!("Error on push: {:?}", e),
 				}
 			} else {
 				// We reset the automaton, comming back to starting state,

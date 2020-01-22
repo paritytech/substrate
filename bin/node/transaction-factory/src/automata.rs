@@ -112,7 +112,7 @@ impl Automaton {
 				None
 			}
 		} else {
-			panic!("automaton current state is undefined, check your bench file!");
+			panic!("automaton {} node is undefined, check your file!", self.current_node);
 		}
 	}
 

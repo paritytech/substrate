@@ -27,7 +27,8 @@ pub use crate::weights::{
 	SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch,
 	TransactionPriority, Weight, WeighBlock, PaysFee,
 };
-pub use sp_runtime::{traits::Dispatchable, DispatchError, DispatchResult};
+pub use sp_runtime::{traits::{Dispatchable}, DispatchError, DispatchResult};
+pub use sp_core::BenchType;
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -1457,7 +1458,7 @@ macro_rules! decl_module {
 					$( 
 						stringify!($fn_name) => {
 							$(
-								let $param_name = <$param>::default();
+								let $param_name = <$param as $crate::sp_core::BenchType>::test_value("");
 							)*
 							$call_type::$fn_name($( $param_name ),* )
 						}
@@ -1543,6 +1544,7 @@ macro_rules! impl_outer_dispatch {
 				<Self as $crate::benchmarking::Module>::get_call("Balances", "transfer")
 			}
 		}
+		impl $crate::sp_core::BenchType for $call_type {}
 		impl $crate::benchmarking::Module for $call_type {
 			fn all_modules() -> &'static [&'static str] {
 				&[$(

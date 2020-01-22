@@ -21,10 +21,11 @@ use serde::{Deserialize, Serialize};
 use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef, Error};
 use crate::traits::{
 	self, Member, SimpleArithmetic, SimpleBitOps, Hash as HashT,
-	MaybeSerializeDeserialize, MaybeSerialize, MaybeDisplay,
+	MaybeSerializeDeserialize, MaybeSerialize, MaybeDisplay
 };
 use crate::generic::Digest;
 use sp_core::U256;
+use sp_core::BenchType;
 use sp_std::{
 	convert::TryFrom,
 	fmt::Debug,
@@ -50,6 +51,8 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
 	pub digest: Digest<Hash::Output>,
 }
+
+impl<N: Copy + Into<U256> + TryFrom<U256> + Default, H: HashT + Default> BenchType for Header<N, H> {}
 
 #[cfg(feature = "std")]
 pub fn serialize_number<S, T: Copy + Into<U256> + TryFrom<U256>>(

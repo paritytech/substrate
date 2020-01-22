@@ -20,6 +20,7 @@
 
 use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
 use sp_runtime::traits::{One, Zero, SaturatedConversion};
+use sp_core::BenchType;
 use sp_std::{prelude::*, result, cmp, vec};
 use frame_support::{decl_module, decl_storage, decl_error, ensure};
 use frame_support::traits::Get;

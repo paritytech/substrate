@@ -272,9 +272,10 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
-		SimpleArithmetic, EnsureOrigin,
+		SimpleArithmetic, EnsureOrigin
 	}
 };
+use sp_core::BenchType;
 use sp_staking::{
 	SessionIndex,
 	offence::{OnOffenceHandler, OffenceDetails, Offence, ReportOffence},
@@ -347,6 +348,8 @@ impl Default for RewardDestination {
 	}
 }
 
+impl BenchType for RewardDestination {}
+
 /// Preference of what happens regarding validation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct ValidatorPrefs {
@@ -363,6 +366,8 @@ impl Default for ValidatorPrefs {
 		}
 	}
 }
+
+impl BenchType for ValidatorPrefs {}
 
 /// Just a Balance/BlockNumber tuple to encode when a chunk of funds will be unlocked.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -527,6 +532,8 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	/// The portions of nominators stashes that are exposed.
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
+
+impl<AccountId: Default, Balance: HasCompact + Default> BenchType for Exposure<AccountId, Balance> {}
 
 /// A pending slash record. The value of the slash has been computed but not applied yet,
 /// rather deferred for several eras.

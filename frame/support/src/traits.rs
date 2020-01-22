@@ -21,6 +21,7 @@
 use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode};
 use sp_core::u32_trait::Value as U32;
+use sp_core::BenchType;
 use sp_runtime::{
 	ConsensusEngineId, DispatchResult, DispatchError,
 	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating, TrailingZeroInput},
@@ -330,7 +331,7 @@ impl<
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
+	type Balance: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + BenchType;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.

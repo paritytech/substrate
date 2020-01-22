@@ -100,6 +100,7 @@ use sp_runtime::{
 		SimpleArithmetic, Zero, SaturatedConversion, Scale
 	}
 };
+use sp_core::BenchType;
 use frame_support::weights::SimpleDispatchInfo;
 use frame_system::ensure_none;
 use sp_timestamp::{
@@ -111,7 +112,7 @@ use sp_timestamp::{
 pub trait Trait: frame_system::Trait {
 	/// Type used for expressing timestamp.
 	type Moment: Parameter + Default + SimpleArithmetic
-		+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy;
+		+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy + BenchType;
 
 	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 	type OnTimestampSet: OnTimestampSet<Self::Moment>;

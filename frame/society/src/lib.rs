@@ -256,9 +256,10 @@ use codec::{Encode, Decode};
 use sp_runtime::{Percent, ModuleId, RuntimeDebug,
 	traits::{
 		StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot, Hash,
-		TrailingZeroInput, CheckedSub, EnsureOrigin
+		TrailingZeroInput, CheckedSub, EnsureOrigin,
 	}
 };
+use sp_core::BenchType;
 use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
 use frame_support::weights::SimpleDispatchInfo;
 use frame_support::traits::{
@@ -343,6 +344,8 @@ impl Default for Judgement {
 		Self::Rebid
 	}
 }
+
+impl BenchType for Judgement {}
 
 /// Details of a payout given as a per-block linear "trickle".
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, Default)]

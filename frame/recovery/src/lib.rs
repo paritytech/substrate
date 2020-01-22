@@ -155,6 +155,7 @@ use sp_runtime::{
 	traits::{Dispatchable, SaturatedConversion, CheckedAdd, CheckedMul},
 	DispatchResult
 };
+use sp_core::BenchType;
 use codec::{Encode, Decode};
 
 use frame_support::{
@@ -182,7 +183,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The overarching call type.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo + Default;
+	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo + Default + BenchType;
 
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;

@@ -88,7 +88,7 @@
 
 use sp_std::prelude::*;
 use sp_runtime::{traits::{StaticLookup, Dispatchable}, DispatchError};
-
+use sp_core::BenchType;
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 	weights::SimpleDispatchInfo,
@@ -100,7 +100,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// A sudo-able call.
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + Default;
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + Default + BenchType;
 }
 
 decl_module! {

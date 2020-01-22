@@ -6326,6 +6326,7 @@ dependencies = [
  "parity-scale-codec 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-api 2.0.0",
  "sp-application-crypto 2.0.0",
+ "sp-core 2.0.0",
  "sp-inherents 2.0.0",
  "sp-runtime 2.0.0",
  "sp-std 2.0.0",

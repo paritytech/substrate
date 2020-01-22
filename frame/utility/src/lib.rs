@@ -71,6 +71,7 @@ use frame_support::{traits::{Get, ReservableCurrency, Currency}, weights::{
 }};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
+use sp_core::BenchType;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
@@ -80,7 +81,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The overarching call type.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo + Default;
+	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo + Default + BenchType;
 
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -110,6 +111,8 @@ pub struct Timepoint<BlockNumber> {
 	/// The index of the extrinsic at the point in time.
 	index: u32,
 }
+
+impl<BlockNumber: Default> BenchType for Timepoint<BlockNumber> {}
 
 /// An open multisig operation.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]

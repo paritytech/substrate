@@ -43,7 +43,7 @@ use sp_runtime::{
 	},
 };
 use sp_version::RuntimeVersion;
-pub use sp_core::{hash::H256};
+pub use sp_core::{hash::H256, BenchType};
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
 use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
@@ -339,8 +339,10 @@ impl_outer_origin!{
 	pub enum Origin for Runtime where system = frame_system {}
 }
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
 pub struct Event;
+
+impl BenchType for Event {}
 
 impl From<frame_system::Event> for Event {
 	fn from(_evt: frame_system::Event) -> Self {

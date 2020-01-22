@@ -19,6 +19,7 @@
 #[cfg(feature = "std")]
 use std::fmt;
 use sp_std::convert::TryInto;
+use sp_core::BenchType;
 use crate::Member;
 use codec::{Encode, Decode, Input, Output, Error};
 
@@ -128,6 +129,11 @@ impl<AccountId, AccountIndex> Default for Address<AccountId, AccountIndex> where
 		Address::Id(Default::default())
 	}
 }
+
+impl<AccountId, AccountIndex> BenchType for Address<AccountId, AccountIndex> where
+	AccountId: Member + Default,
+	AccountIndex: Member,
+{}
 
 #[cfg(test)]
 mod tests {

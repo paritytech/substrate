@@ -136,6 +136,7 @@ use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error
 use sp_runtime::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::traits::One;
+use sp_core::BenchType;
 
 /// The module configuration trait.
 pub trait Trait: frame_system::Trait {
@@ -143,10 +144,10 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The units in which we record balances.
-	type Balance: Member + Parameter + SimpleArithmetic + Default + Copy;
+	type Balance: Member + Parameter + SimpleArithmetic + Default + Copy + BenchType;
 
 	/// The arithmetic type of asset identifier.
-	type AssetId: Parameter + SimpleArithmetic + Default + Copy;
+	type AssetId: Parameter + SimpleArithmetic + Default + Copy + BenchType;
 }
 
 decl_module! {

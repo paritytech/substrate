@@ -157,9 +157,9 @@ use codec::{Decode, Encode, HasCompact, Input, Output, Error as CodecError};
 use sp_runtime::{RuntimeDebug, DispatchResult, DispatchError};
 use sp_runtime::traits::{
 	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, SimpleArithmetic,
-	Zero, Bounded,
+	Zero, Bounded
 };
-
+use sp_core::BenchType;
 use sp_std::prelude::*;
 use sp_std::{cmp, result, fmt::Debug};
 use frame_support::{
@@ -184,8 +184,9 @@ pub trait Trait: frame_system::Trait {
 		+ Default
 		+ Copy
 		+ MaybeSerializeDeserialize
-		+ Debug;
-	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
+		+ Debug
+		+ BenchType;
+	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy + BenchType;
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
@@ -196,8 +197,9 @@ pub trait Subtrait: frame_system::Trait {
 		+ Default
 		+ Copy
 		+ MaybeSerializeDeserialize
-		+ Debug;
-	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
+		+ Debug
+		+ BenchType;
+	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy + BenchType;
 }
 
 impl<T: Trait> Subtrait for T {
@@ -214,6 +216,8 @@ pub struct AssetOptions<Balance: HasCompact, AccountId> {
 	/// Which accounts are allowed to possess this asset.
 	pub permissions: PermissionLatest<AccountId>,
 }
+
+impl<Balance: HasCompact + Default, AccountId: Default> BenchType for AssetOptions<Balance, AccountId> {}
 
 /// Owner of an asset.
 #[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
@@ -305,6 +309,8 @@ impl<AccountId> Default for PermissionsV1<AccountId> {
 		}
 	}
 }
+
+impl<AccountId: Default> BenchType for PermissionsV1<AccountId> {}
 
 impl<AccountId> Into<PermissionLatest<AccountId>> for PermissionVersions<AccountId> {
 	fn into(self) -> PermissionLatest<AccountId> {

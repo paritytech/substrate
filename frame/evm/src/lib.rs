@@ -30,7 +30,7 @@ use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::ModuleId;
 use frame_support::weights::SimpleDispatchInfo;
-use sp_core::{U256, H256, H160, Hasher};
+use sp_core::{U256, H256, H160, Hasher, BenchType};
 use sp_runtime::{
 	DispatchResult, traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion},
 };

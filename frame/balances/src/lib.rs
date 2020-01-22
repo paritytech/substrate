@@ -175,9 +175,10 @@ use sp_runtime::{
 	RuntimeDebug, DispatchResult, DispatchError,
 	traits::{
 		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
-		Saturating, Bounded,
+		Saturating, Bounded
 	},
 };
+use sp_core::BenchType;
 use frame_system::{self as system, IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 #[cfg(test)]
@@ -190,7 +191,7 @@ pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
-		MaybeSerializeDeserialize + Debug + From<Self::BlockNumber>;
+		MaybeSerializeDeserialize + Debug + From<Self::BlockNumber> + BenchType;
 
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
@@ -220,7 +221,7 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
-		MaybeSerializeDeserialize + Debug + From<Self::BlockNumber>;
+		MaybeSerializeDeserialize + Debug + From<Self::BlockNumber> + BenchType;
 
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
@@ -875,7 +876,7 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
 where
-	T::Balance: MaybeSerializeDeserialize + Debug
+	T::Balance: MaybeSerializeDeserialize + Debug + BenchType
 {
 	type Balance = T::Balance;
 	type PositiveImbalance = PositiveImbalance<T, I>;
@@ -1155,7 +1156,7 @@ where
 
 impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 where
-	T::Balance: MaybeSerializeDeserialize + Debug
+	T::Balance: MaybeSerializeDeserialize + Debug + BenchType
 {
 	// Check if `who` can reserve `value` from their free balance.
 	// Is a no-op if value to be reserved is zero.
@@ -1234,7 +1235,7 @@ where
 
 impl<T: Trait<I>, I: Instance> LockableCurrency<T::AccountId> for Module<T, I>
 where
-	T::Balance: MaybeSerializeDeserialize + Debug
+	T::Balance: MaybeSerializeDeserialize + Debug + BenchType
 {
 	type Moment = T::BlockNumber;
 
@@ -1311,7 +1312,7 @@ where
 
 impl<T: Trait<I>, I: Instance> VestingCurrency<T::AccountId> for Module<T, I>
 where
-	T::Balance: MaybeSerializeDeserialize + Debug
+	T::Balance: MaybeSerializeDeserialize + Debug + BenchType
 {
 	type Moment = T::BlockNumber;
 
@@ -1357,7 +1358,7 @@ where
 
 impl<T: Trait<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I>
 where
-	T::Balance: MaybeSerializeDeserialize + Debug
+	T::Balance: MaybeSerializeDeserialize + Debug + BenchType
 {
 	fn is_dead_account(who: &T::AccountId) -> bool {
 		Self::total_balance(who).is_zero()

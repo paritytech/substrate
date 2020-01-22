@@ -110,13 +110,13 @@ use sp_runtime::{
 	},
 };
 
-use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
+use sp_core::{ChangesTrieConfiguration, storage::well_known_keys, BenchType};
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
 	traits::{Contains, Get, ModuleToIndex, OnReapAccount},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
 };
-use codec::{Encode, Decode};
+use codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 
 #[cfg(any(feature = "std", test))]
 use sp_io::TestExternalities;
@@ -171,19 +171,19 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The block number type used by the runtime.
 	type BlockNumber:
 		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleArithmetic
-		+ Default + Bounded + Copy + sp_std::hash::Hash + sp_std::str::FromStr;
+		+ Default + Bounded + Copy + sp_std::hash::Hash + sp_std::str::FromStr + BenchType;
 
 	/// The output of the `Hashing` function.
 	type Hash:
 		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps + Ord
-		+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
+		+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + BenchType;
 
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;
 
 	/// The user account identifier type for the runtime.
 	type AccountId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + Ord
-		+ Default;
+		+ Default + BenchType;
 
 	/// Converting trait to take a source type and convert to `AccountId`.
 	///
@@ -197,7 +197,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
 		Hash = Self::Hash,
-	>;
+	> + BenchType;
 
 	/// The aggregated event type of the runtime.
 	type Event: Parameter + Member + From<Event> + Debug;

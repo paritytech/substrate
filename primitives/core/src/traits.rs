@@ -23,7 +23,9 @@ use std::{
 	panic::UnwindSafe,
 	sync::Arc,
 };
-
+use primitive_types::{H256, H160, U256};
+use crate::changes_trie::ChangesTrieConfiguration;
+use crate::crypto::AccountId32;
 pub use sp_externalities::{Externalities, ExternalitiesExt};
 
 /// Something that generates, stores and provides access to keys.

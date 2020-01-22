@@ -73,6 +73,7 @@ mod tests;
 use sp_application_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
 use sp_core::offchain::{OpaqueNetworkState, StorageKind};
+use sp_core::BenchType;
 use sp_std::prelude::*;
 use sp_std::convert::TryInto;
 use pallet_session::historical::IdentificationTuple;
@@ -180,6 +181,8 @@ pub struct Heartbeat<BlockNumber>
 	/// An index of the authority on the list of validators.
 	pub authority_index: AuthIndex,
 }
+
+impl<BlockNumber: PartialEq + Eq + Decode + Encode + Default> BenchType for Heartbeat<BlockNumber> {}
 
 pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {
 	/// The identifier type for an authority.

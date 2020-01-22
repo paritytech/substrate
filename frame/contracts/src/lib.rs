@@ -109,6 +109,7 @@ pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use sp_core::crypto::UncheckedFrom;
+use sp_core::BenchType;
 use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use sp_io::hashing::blake2_256;
@@ -1053,6 +1054,8 @@ impl Default for Schedule {
 		}
 	}
 }
+
+impl BenchType for Schedule {}
 
 /// `SignedExtension` that checks if a transaction would exhausts the block gas limit.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]

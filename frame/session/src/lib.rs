@@ -125,6 +125,7 @@ use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
 use frame_support::weights::SimpleDispatchInfo;
 use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};
 use sp_staking::SessionIndex;
+use sp_core::BenchType;
 use frame_support::{dispatch, ConsensusEngineId, decl_module, decl_event, decl_storage, decl_error};
 use frame_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor, ValidatorRegistration}, Parameter};
 use frame_system::{self as system, ensure_signed};
@@ -345,7 +346,7 @@ pub trait Trait: frame_system::Trait {
 	type SessionHandler: SessionHandler<Self::ValidatorId>;
 
 	/// The keys.
-	type Keys: OpaqueKeys + Member + Parameter + Default;
+	type Keys: OpaqueKeys + Member + Parameter + Default + BenchType;
 
 	/// The fraction of validators set that is safe to be disabled.
 	///

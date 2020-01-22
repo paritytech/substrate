@@ -71,6 +71,7 @@ use enumflags2::BitFlags;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug};
 use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput};
+use sp_core::BenchType;
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
@@ -180,6 +181,8 @@ impl Default for Data {
 	}
 }
 
+impl BenchType for Data {}
+
 /// An identifier for a single name registrar/identity verification service.
 pub type RegistrarIndex = u32;
 
@@ -219,6 +222,10 @@ impl<
 		Self::Unknown
 	}
 }
+
+impl<
+	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
+> BenchType for Judgement<Balance> {}
 
 impl<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
@@ -262,6 +269,7 @@ pub enum IdentityField {
 #[derive(Clone, Copy, PartialEq, Default, RuntimeDebug)]
 pub struct IdentityFields(BitFlags<IdentityField>);
 
+impl BenchType for IdentityFields {}
 impl Eq for IdentityFields {}
 impl Encode for IdentityFields {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
@@ -325,6 +333,8 @@ pub struct IdentityInfo {
 	/// The Twitter identity. The leading `@` character may be elided.
 	pub twitter: Data,
 }
+
+impl BenchType for IdentityInfo {}
 
 /// Information concerning the identity of the controller of an account.
 ///
