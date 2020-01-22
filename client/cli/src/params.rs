@@ -18,6 +18,24 @@ use crate::traits::GetSharedParams;
 
 use std::{str::FromStr, path::PathBuf};
 use structopt::{StructOpt, clap::{arg_enum, App}};
+use sc_service::{
+	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand,
+	ChainSpec, config::DatabaseConfig,
+};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use crate::VersionInfo;
+use crate::error;
+use std::fmt::Debug;
+use log::info;
+use sc_network::config::build_multiaddr;
+use futures::pin_mut;
+use futures::{future::FutureExt, compat::Future01CompatExt};
+use std::io;
+use std::fs;
+use std::io::{Read, Write, Seek};
+use sp_runtime::generic::BlockId;
+use crate::runtime::run_until_exit;
+use crate::node_key::node_key_config;
 
 pub use crate::execution_strategy::ExecutionStrategy;
 
@@ -855,6 +873,7 @@ pub enum CoreParams {
 }
 
 impl CoreParams {
+	/// Get the shared parameters of a `CoreParams` command
 	pub fn get_shared_params(&self) -> &SharedParams {
 		use CoreParams::*;
 
@@ -867,5 +886,321 @@ impl CoreParams {
 			Revert(params) => &params.shared_params,
 			PurgeChain(params) => &params.shared_params,
 		}
+	}
+
+	/// Run any `CoreParams` command
+	pub fn run<G, E, FNL, FNF, B, SL, SF, BC, BB>(
+		self,
+		config: Configuration<G, E>,
+		new_light: FNL,
+		new_full: FNF,
+		builder: B,
+		version: &VersionInfo,
+	) -> error::Result<()>
+	where
+		FNL: FnOnce(Configuration<G, E>) -> Result<SL, sc_service::error::Error>,
+		FNF: FnOnce(Configuration<G, E>) -> Result<SF, sc_service::error::Error>,
+		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		SL: AbstractService + Unpin,
+		SF: AbstractService + Unpin,
+		BC: ServiceBuilderCommand<Block = BB> + Unpin,
+		BB: sp_runtime::traits::Block + Debug,
+		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<BB as BlockT>::Hash: std::str::FromStr,
+	{
+		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+
+		match self {
+			CoreParams::Run(cmd) => cmd.run(config, new_light, new_full, version),
+			CoreParams::BuildSpec(cmd) => cmd.run(config, builder),
+			CoreParams::ExportBlocks(cmd) => cmd.run(config, builder),
+			CoreParams::ImportBlocks(cmd) => cmd.run(config, builder),
+			CoreParams::CheckBlock(cmd) => cmd.run(config, builder),
+			CoreParams::PurgeChain(cmd) => cmd.run(config, builder),
+			CoreParams::Revert(cmd) => cmd.run(config, builder),
+		}
+	}
+}
+
+impl RunCmd {
+	pub fn run<G, E, FNL, FNF, SL, SF>(
+		self,
+		mut config: Configuration<G, E>,
+		new_light: FNL,
+		new_full: FNF,
+		version: &VersionInfo,
+	) -> error::Result<()>
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		FNL: FnOnce(Configuration<G, E>) -> Result<SL, sc_service::error::Error>,
+		FNF: FnOnce(Configuration<G, E>) -> Result<SF, sc_service::error::Error>,
+		SL: AbstractService + Unpin,
+		SF: AbstractService + Unpin,
+	{
+		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+
+		crate::update_config_for_running_node(
+			&mut config,
+			self,
+		)?;
+
+		crate::run_node(config, new_light, new_full, &version)
+	}
+}
+
+impl BuildSpecCmd {
+	/// Run the build-spec command
+	pub fn run<G, E, B, BC, BB>(
+		self,
+		config: Configuration<G, E>,
+		builder: B,
+	) -> error::Result<()>
+	where
+		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		BC: ServiceBuilderCommand<Block = BB> + Unpin,
+		BB: sp_runtime::traits::Block + Debug,
+		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<BB as BlockT>::Hash: std::str::FromStr,
+	{
+		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+
+		info!("Building chain spec");
+		let mut spec = config.expect_chain_spec().clone();
+		let raw_output = self.raw;
+
+		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
+			let node_key = node_key_config(
+				self.node_key_params.clone(),
+				&Some(config
+					.in_chain_config_dir(crate::DEFAULT_NETWORK_CONFIG_PATH)
+					.expect("We provided a base_path")),
+			)?;
+			let keys = node_key.into_keypair()?;
+			let peer_id = keys.public().into_peer_id();
+			let addr = build_multiaddr![
+				Ip4([127, 0, 0, 1]),
+				Tcp(30333u16),
+				P2p(peer_id)
+			];
+			spec.add_boot_node(addr)
+		}
+
+		let json = sc_service::chain_ops::build_spec(spec, raw_output)?;
+
+		print!("{}", json);
+
+		Ok(())
+	}
+}
+
+impl ExportBlocksCmd {
+	/// Run the export-blocks command
+	pub fn run<G, E, B, BC, BB>(
+		self,
+		config: Configuration<G, E>,
+		builder: B,
+	) -> error::Result<()>
+	where
+		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		BC: ServiceBuilderCommand<Block = BB> + Unpin,
+		BB: sp_runtime::traits::Block + Debug,
+		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<BB as BlockT>::Hash: std::str::FromStr,
+	{
+		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+
+		if let DatabaseConfig::Path { ref path, .. } = &config.database {
+			info!("DB path: {}", path.display());
+		}
+		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
+		let to = self.to.as_ref().and_then(|t| t.parse().ok());
+
+		let json = self.json;
+
+		let file: Box<dyn io::Write> = match &self.output {
+			Some(filename) => Box::new(fs::File::create(filename)?),
+			None => Box::new(io::stdout()),
+		};
+
+		let f = builder(config)?
+			.export_blocks(file, from.into(), to, json)
+			.compat();
+		let f = f.fuse();
+		pin_mut!(f);
+
+		run_until_exit(f)
+	}
+}
+
+/// Internal trait used to cast to a dynamic type that implements Read and Seek.
+trait ReadPlusSeek: Read + Seek {}
+
+impl<T: Read + Seek> ReadPlusSeek for T {}
+
+impl ImportBlocksCmd {
+	/// Run the import-blocks command
+	pub fn run<G, E, B, BC, BB>(
+		self,
+		mut config: Configuration<G, E>,
+		builder: B,
+	) -> error::Result<()>
+	where
+		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		BC: ServiceBuilderCommand<Block = BB> + Unpin,
+		BB: sp_runtime::traits::Block + Debug,
+		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<BB as BlockT>::Hash: std::str::FromStr,
+	{
+		crate::fill_import_params(&mut config, &self.import_params, sc_service::Roles::FULL)?;
+
+		let file: Box<dyn ReadPlusSeek + Send> = match &self.input {
+			Some(filename) => Box::new(fs::File::open(filename)?),
+			None => {
+				let mut buffer = Vec::new();
+				io::stdin().read_to_end(&mut buffer)?;
+				Box::new(io::Cursor::new(buffer))
+			},
+		};
+
+		let f = builder(config)?
+			.import_blocks(file, false)
+			.compat();
+		let f = f.fuse();
+		pin_mut!(f);
+
+		run_until_exit(f)
+	}
+}
+
+impl CheckBlockCmd {
+	/// Run the check-block command
+	pub fn run<G, E, B, BC, BB>(
+		self,
+		mut config: Configuration<G, E>,
+		builder: B,
+	) -> error::Result<()>
+	where
+		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		BC: ServiceBuilderCommand<Block = BB> + Unpin,
+		BB: sp_runtime::traits::Block + Debug,
+		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<BB as BlockT>::Hash: std::str::FromStr,
+	{
+		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+
+		crate::fill_import_params(&mut config, &self.import_params, sc_service::Roles::FULL)?;
+
+		let input = if self.input.starts_with("0x") { &self.input[2..] } else { &self.input[..] };
+		let block_id = match FromStr::from_str(input) {
+			Ok(hash) => BlockId::hash(hash),
+			Err(_) => match self.input.parse::<u32>() {
+				Ok(n) => BlockId::number((n as u32).into()),
+				Err(_) => return Err(error::Error::Input("Invalid hash or number specified".into())),
+			}
+		};
+
+		let start = std::time::Instant::now();
+		let f = builder(config)?
+			.check_block(block_id)
+			.compat();
+		let f = f.fuse();
+		pin_mut!(f);
+		run_until_exit(f)?;
+		println!("Completed in {} ms.", start.elapsed().as_millis());
+
+		Ok(())
+	}
+}
+
+impl PurgeChainCmd {
+	/// Run the purge command
+	pub fn run<G, E, B, BC, BB>(
+		self,
+		config: Configuration<G, E>,
+		builder: B,
+	) -> error::Result<()>
+	where
+		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		BC: ServiceBuilderCommand<Block = BB> + Unpin,
+		BB: sp_runtime::traits::Block + Debug,
+		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<BB as BlockT>::Hash: std::str::FromStr,
+	{
+		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+
+		let db_path = match config.database {
+			DatabaseConfig::Path { path, .. } => path,
+			_ => {
+				eprintln!("Cannot purge custom database implementation");
+				return Ok(());
+			}
+		};
+
+		if !self.yes {
+			print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
+			io::stdout().flush().expect("failed to flush stdout");
+
+			let mut input = String::new();
+			io::stdin().read_line(&mut input)?;
+			let input = input.trim();
+
+			match input.chars().nth(0) {
+				Some('y') | Some('Y') => {},
+				_ => {
+					println!("Aborted");
+					return Ok(());
+				},
+			}
+		}
+
+		match fs::remove_dir_all(&db_path) {
+			Result::Ok(_) => {
+				println!("{:?} removed.", &db_path);
+				Ok(())
+			},
+			Result::Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
+				eprintln!("{:?} did not exist.", &db_path);
+				Ok(())
+			},
+			Result::Err(err) => Result::Err(err.into())
+		}
+	}
+}
+
+impl RevertCmd {
+	/// Run the revert command
+	pub fn run<G, E, B, BC, BB>(
+		self,
+		config: Configuration<G, E>,
+		builder: B,
+	) -> error::Result<()>
+	where
+		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		BC: ServiceBuilderCommand<Block = BB> + Unpin,
+		BB: sp_runtime::traits::Block + Debug,
+		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<BB as BlockT>::Hash: std::str::FromStr,
+	{
+		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+
+		let blocks = self.num.parse()?;
+		builder(config)?.revert_chain(blocks)?;
+
+		Ok(())
 	}
 }

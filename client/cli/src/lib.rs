@@ -25,6 +25,8 @@ mod params;
 mod execution_strategy;
 pub mod error;
 pub mod informant;
+mod runtime;
+mod node_key;
 
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
@@ -37,36 +39,34 @@ use sc_network::{
 	self,
 	multiaddr::Protocol,
 	config::{
-		NetworkConfiguration, TransportConfig, NonReservedPeerMode, NodeKeyConfig, build_multiaddr
+		NetworkConfiguration, TransportConfig, NonReservedPeerMode,
 	},
 };
-use sp_core::H256;
 
 use std::{
 	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fmt::Debug, fs::{self, File},
 	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr
 };
 
-use names::{Generator, Name};
 use regex::Regex;
 pub use structopt::StructOpt;
 #[doc(hidden)]
 pub use structopt::clap::App;
 use params::{
-	NetworkConfigurationParams, TransactionPoolParams,
-	NodeKeyParams, NodeKeyType, Cors,
+	NetworkConfigurationParams, TransactionPoolParams, Cors,
 };
-pub use params::{CoreParams, SharedParams, ImportParams, ExecutionStrategy, RunCmd};
+pub use params::{
+	CoreParams, SharedParams, ImportParams, ExecutionStrategy,
+	RunCmd, BuildSpecCmd, ExportBlocksCmd, ImportBlocksCmd, CheckBlockCmd, PurgeChainCmd, RevertCmd,
+};
 pub use traits::GetSharedParams;
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
-use futures::{Future, compat::Future01CompatExt, future, future::FutureExt};
 use sc_telemetry::TelemetryEndpoints;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use futures::select;
-use futures::pin_mut;
+pub use crate::runtime::{run_until_exit, run_service_until_exit};
 
 /// default sub directory to store network config
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
@@ -74,14 +74,6 @@ const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str =  "keystore";
-
-/// The maximum number of characters for a node name.
-const NODE_NAME_MAX_LENGTH: usize = 32;
-
-/// The file name of the node's Ed25519 secret key inside the chain-specific
-/// network config directory, if neither `--node-key` nor `--node-key-file`
-/// is specified in combination with `--node-key-type=ed25519`.
-const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
 
 /// Executable version. Used to pass version information from the root crate.
 #[derive(Clone)]
@@ -109,19 +101,6 @@ fn get_chain_key(cli: &SharedParams) -> String {
 	}
 }
 
-fn generate_node_name() -> String {
-	let result = loop {
-		let node_name = Generator::with_naming(Name::Numbered).next().unwrap();
-		let count = node_name.chars().count();
-
-		if count < NODE_NAME_MAX_LENGTH {
-			break node_name
-		}
-	};
-
-	result
-}
-
 /// Load spec give shared params and spec factory.
 pub fn load_spec<F, G, E>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec<G, E>> where
 	G: RuntimeGenesis,
@@ -147,28 +126,6 @@ fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
 				}
 			).expect("app directories exist on all supported platforms; qed")
 		)
-}
-
-/// Check whether a node name is considered as valid
-fn is_node_name_valid(_name: &str) -> Result<(), &str> {
-	let name = _name.to_string();
-	if name.chars().count() >= NODE_NAME_MAX_LENGTH {
-		return Err("Node name too long");
-	}
-
-	let invalid_chars = r"[\\.@]";
-	let re = Regex::new(invalid_chars).unwrap();
-	if re.is_match(&name) {
-		return Err("Node name should not contain invalid chars such as '.' and '@'");
-	}
-
-	let invalid_patterns = r"(https?:\\/+)?(www)+";
-	let re = Regex::new(invalid_patterns).unwrap();
-	if re.is_match(&name) {
-		return Err("Node name should not contain urls");
-	}
-
-	Ok(())
 }
 
 /// Gets the struct from the command line arguments.  Print the
@@ -237,13 +194,16 @@ where
 	Ok(T::from_clap(&matches))
 }
 
+/// A helper function that:
+/// 1.  initialize
+/// 2.  runs any of the command variant of `CoreParams`
 pub fn run<F, G, E, FNL, FNF, B, SL, SF, BC, BB>(
+	mut config: Configuration<G, E>,
 	core_params: CoreParams,
 	new_light: FNL,
 	new_full: FNF,
 	spec_factory: F,
 	builder: B,
-	mut config: Configuration<G, E>,
 	version: &VersionInfo,
 ) -> error::Result<()>
 where
@@ -262,157 +222,18 @@ where
 {
 	init(&mut config, spec_factory, core_params.get_shared_params(), version)?;
 
-	assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
-
-	match &core_params {
-		CoreParams::Run(params) => {
-			update_config_for_running_node(
-				&mut config,
-				params.clone(),
-			)?;
-
-			run_node(config, new_light, new_full, &version)
-		},
-		CoreParams::BuildSpec(params) => {
-			info!("Building chain spec");
-			let mut spec = config.expect_chain_spec().clone();
-			let raw_output = params.raw;
-
-			if spec.boot_nodes().is_empty() && !params.disable_default_bootnode {
-				let node_key = node_key_config(
-					params.node_key_params.clone(),
-					&Some(config.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a base_path")),
-				)?;
-				let keys = node_key.into_keypair()?;
-				let peer_id = keys.public().into_peer_id();
-				let addr = build_multiaddr![
-					Ip4([127, 0, 0, 1]),
-					Tcp(30333u16),
-					P2p(peer_id)
-				];
-				spec.add_boot_node(addr)
-			}
-
-			let json = sc_service::chain_ops::build_spec(spec, raw_output)?;
-
-			print!("{}", json);
-
-			Ok(())
-		},
-		CoreParams::ExportBlocks(params) => {
-			if let DatabaseConfig::Path { ref path, .. } = &config.database {
-				info!("DB path: {}", path.display());
-			}
-			let from = params.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
-			let to = params.to.as_ref().and_then(|t| t.parse().ok());
-
-			let json = params.json;
-
-			let file: Box<dyn Write> = match &params.output {
-				Some(filename) => Box::new(File::create(filename)?),
-				None => Box::new(stdout()),
-			};
-
-			let f = builder(config)?
-				.export_blocks(file, from.into(), to, json)
-				.compat();
-			let f = f.fuse();
-			pin_mut!(f);
-
-			run_until_exit(f)
-		},
-		CoreParams::ImportBlocks(params) => {
-			fill_import_params(&mut config, &params.import_params, sc_service::Roles::FULL)?;
-
-			let file: Box<dyn ReadPlusSeek + Send> = match &params.input {
-				Some(filename) => Box::new(File::open(filename)?),
-				None => {
-					let mut buffer = Vec::new();
-					stdin().read_to_end(&mut buffer)?;
-					Box::new(Cursor::new(buffer))
-				},
-			};
-
-			let f = builder(config)?
-				.import_blocks(file, false)
-				.compat();
-			let f = f.fuse();
-			pin_mut!(f);
-
-			run_until_exit(f)
-		},
-		CoreParams::CheckBlock(params) => {
-			fill_import_params(&mut config, &params.import_params, sc_service::Roles::FULL)?;
-
-			let input = if params.input.starts_with("0x") { &params.input[2..] } else { &params.input[..] };
-			let block_id = match FromStr::from_str(input) {
-				Ok(hash) => BlockId::hash(hash),
-				Err(_) => match params.input.parse::<u32>() {
-					Ok(n) => BlockId::number((n as u32).into()),
-					Err(_) => return Err(error::Error::Input("Invalid hash or number specified".into())),
-				}
-			};
-
-			let start = std::time::Instant::now();
-			let f = builder(config)?
-				.check_block(block_id)
-				.compat();
-			let f = f.fuse();
-			pin_mut!(f);
-			run_until_exit(f)?;
-			println!("Completed in {} ms.", start.elapsed().as_millis());
-
-			Ok(())
-		},
-		CoreParams::PurgeChain(params) => {
-			let db_path = match config.database {
-				DatabaseConfig::Path { path, .. } => path,
-				_ => {
-					eprintln!("Cannot purge custom database implementation");
-					return Ok(());
-				}
-			};
-
-			if !params.yes {
-				print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
-				stdout().flush().expect("failed to flush stdout");
-
-				let mut input = String::new();
-				stdin().read_line(&mut input)?;
-				let input = input.trim();
-
-				match input.chars().nth(0) {
-					Some('y') | Some('Y') => {},
-					_ => {
-						println!("Aborted");
-						return Ok(());
-					},
-				}
-			}
-
-			match fs::remove_dir_all(&db_path) {
-				Result::Ok(_) => {
-					println!("{:?} removed.", &db_path);
-					Ok(())
-				},
-				Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
-					eprintln!("{:?} did not exist.", &db_path);
-					Ok(())
-				},
-				Result::Err(err) => Result::Err(err.into())
-			}
-		},
-		CoreParams::Revert(params) => {
-			let blocks = params.num.parse()?;
-			builder(config)?.revert_chain(blocks)?;
-
-			Ok(())
-		},
-	};
-
-	Ok(())
+	core_params.run(config, new_light, new_full, builder, version)
 }
 
+/// Initialize substrate and its configuration
+///
+/// This method:
+///
+/// 1.  set the panic handler
+/// 2.  raise the FD limit
+/// 3.  initialize the logger
+/// 4.  update the configuration provided with the chain specification, config directory,
+///     information (version, commit), database's path, boot nodes and telemetry endpoints
 pub fn init<G, E, F>(
 	mut config: &mut Configuration<G, E>,
 	spec_factory: F,
@@ -451,19 +272,22 @@ where
 	Ok(())
 }
 
-pub fn run_node<G, E, F2, F3, T1, T2>(
+/// Run the node
+///
+/// Run the light node if the role is "light", otherwise run the full node.
+pub fn run_node<G, E, FNL, FNF, SL, SF>(
 	config: Configuration<G, E>,
-	new_light: F2,
-	new_full: F3,
+	new_light: FNL,
+	new_full: FNF,
 	version: &VersionInfo,
 ) -> error::Result<()>
 where
-	F2: FnOnce(Configuration<G, E>) -> Result<T1, sc_service::error::Error>,
-	F3: FnOnce(Configuration<G, E>) -> Result<T2, sc_service::error::Error>,
+	FNL: FnOnce(Configuration<G, E>) -> Result<SL, sc_service::error::Error>,
+	FNF: FnOnce(Configuration<G, E>) -> Result<SF, sc_service::error::Error>,
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
-	T1: AbstractService + Unpin,
-	T2: AbstractService + Unpin,
+	SL: AbstractService + Unpin,
+	SF: AbstractService + Unpin,
 {
 	info!("{}", version.name);
 	info!("  version {}", config.full_version());
@@ -471,6 +295,7 @@ where
 	info!("Chain specification: {}", config.expect_chain_spec().name());
 	info!("Node name: {}", config.name);
 	info!("Roles: {}", display_role(&config));
+
 	match config.roles {
 		ServiceRoles::LIGHT => run_service_until_exit(
 			new_light(config)?,
@@ -479,73 +304,6 @@ where
 			new_full(config)?,
 		),
 	}
-}
-
-struct Runtime<F, E: 'static>(F)
-where
-	F: Future<Output = Result<(), E>> + future::FusedFuture + Unpin,
-	E: std::error::Error;
-
-impl<F, E: 'static> Runtime<F, E>
-where
-	F: Future<Output = Result<(), E>> + future::FusedFuture + Unpin,
-	E: std::error::Error,
-{
-	async fn main(self) -> Result<(), Box<dyn std::error::Error>>
-	{
-		use tokio::signal::unix::{signal, SignalKind};
-
-		let mut stream_int = signal(SignalKind::interrupt())?;
-		let mut stream_term = signal(SignalKind::terminate())?;
-
-		let t1 = stream_int.recv().fuse();
-		let t2 = stream_term.recv().fuse();
-		let mut t3 = self.0;
-
-		pin_mut!(t1, t2);
-
-		select! {
-			_ = t1 => println!("Caught SIGINT"),
-			_ = t2 => println!("Caught SIGTERM"),
-			res = t3 => res?,
-		}
-
-		Ok(())
-	}
-
-	fn run(self) -> Result<(), Box<dyn std::error::Error>> {
-		let mut r = tokio::runtime::Runtime::new()?;
-		r.block_on(self.main())
-	}
-}
-
-pub fn run_until_exit<F, E>(
-	future: F,
-) -> error::Result<()>
-where
-	F: Future<Output = Result<(), E>> + future::FusedFuture + Unpin,
-	E: 'static + std::error::Error,
-{
-	let runtime = Runtime(future);
-	runtime.run().map_err(|e| e.to_string())?;
-
-	Ok(())
-}
-
-pub fn run_service_until_exit<T>(
-	service: T,
-) -> error::Result<()>
-where
-	T: AbstractService + Unpin,
-{
-	// we eagerly drop the service so that the internal exit future is fired,
-	// but we need to keep holding a reference to the global telemetry guard
-	let _telemetry = service.telemetry();
-
-	let runtime = Runtime(service.compat().fuse());
-	runtime.run().map_err(|e| e.to_string())?;
-
-	Ok(())
 }
 
 /// Returns a string displaying the node role, special casing the sentry mode
@@ -557,44 +315,6 @@ pub fn display_role<G, E>(config: &Configuration<G, E>) -> String {
 	} else {
 		format!("{:?}", config.roles)
 	}
-}
-
-/// Create a `NodeKeyConfig` from the given `NodeKeyParams` in the context
-/// of an optional network config storage directory.
-fn node_key_config<P>(params: NodeKeyParams, net_config_dir: &Option<P>)
-	-> error::Result<NodeKeyConfig>
-where
-	P: AsRef<Path>
-{
-	match params.node_key_type {
-		NodeKeyType::Ed25519 =>
-			params.node_key.as_ref().map(parse_ed25519_secret).unwrap_or_else(||
-				Ok(params.node_key_file
-					.or_else(|| net_config_file(net_config_dir, NODE_KEY_ED25519_FILE))
-					.map(sc_network::config::Secret::File)
-					.unwrap_or(sc_network::config::Secret::New)))
-				.map(NodeKeyConfig::Ed25519)
-	}
-}
-
-fn net_config_file<P>(net_config_dir: &Option<P>, name: &str) -> Option<PathBuf>
-where
-	P: AsRef<Path>
-{
-	net_config_dir.as_ref().map(|d| d.as_ref().join(name))
-}
-
-/// Create an error caused by an invalid node key argument.
-fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
-	error::Error::Input(format!("Invalid node key: {}", e))
-}
-
-/// Parse a Ed25519 secret key from a hex string into a `sc_network::Secret`.
-fn parse_ed25519_secret(hex: &String) -> error::Result<sc_network::config::Ed25519Secret> {
-	H256::from_str(&hex).map_err(invalid_node_key).and_then(|bytes|
-		sc_network::config::identity::ed25519::SecretKey::from_bytes(bytes)
-			.map(sc_network::config::Secret::Input)
-			.map_err(invalid_node_key))
 }
 
 /// Fill the given `PoolConfiguration` by looking at the cli parameters.
@@ -654,7 +374,7 @@ fn fill_network_configuration(
 	config.public_addresses = Vec::new();
 
 	config.client_version = client_id;
-	config.node_key = node_key_config(cli.node_key_params, &config.net_config_path)?;
+	config.node_key = node_key::node_key_config(cli.node_key_params, &config.net_config_path)?;
 
 	config.in_peers = cli.in_peers;
 	config.out_peers = cli.out_peers;
@@ -762,7 +482,8 @@ pub fn fill_import_params<G, E>(
 	Ok(())
 }
 
-fn update_config_for_running_node<G, E>(
+/// Update and prepare a `Configuration` with command line parameters of `RunCmd`
+pub fn update_config_for_running_node<G, E>(
 	mut config: &mut Configuration<G, E>,
 	cli: RunCmd,
 ) -> error::Result<()>
@@ -786,10 +507,10 @@ where
 	fill_import_params(&mut config, &cli.import_params, role)?;
 
 	config.name = match cli.name.or(cli.keyring.account.map(|a| a.to_string())) {
-		None => generate_node_name(),
+		None => node_key::generate_node_name(),
 		Some(name) => name,
 	};
-	match is_node_name_valid(&config.name) {
+	match node_key::is_node_name_valid(&config.name) {
 		Ok(_) => (),
 		Err(msg) => Err(
 			error::Error::Input(
@@ -896,11 +617,6 @@ fn interface_str(
 	}
 }
 
-/// Internal trait used to cast to a dynamic type that implements Read and Seek.
-trait ReadPlusSeek: Read + Seek {}
-
-impl<T: Read + Seek> ReadPlusSeek for T {}
-
 fn parse_address(
 	address: &str,
 	port: Option<u16>,
@@ -987,118 +703,6 @@ fn kill_color(s: &str) -> String {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_network::config::identity::ed25519;
-
-	#[test]
-	fn tests_node_name_good() {
-		assert!(is_node_name_valid("short name").is_ok());
-	}
-
-	#[test]
-	fn tests_node_name_bad() {
-		assert!(is_node_name_valid("long names are not very cool for the ui").is_err());
-		assert!(is_node_name_valid("Dots.not.Ok").is_err());
-		assert!(is_node_name_valid("http://visit.me").is_err());
-		assert!(is_node_name_valid("https://visit.me").is_err());
-		assert!(is_node_name_valid("www.visit.me").is_err());
-		assert!(is_node_name_valid("email@domain").is_err());
-	}
-
-	#[test]
-	fn test_node_key_config_input() {
-		fn secret_input(net_config_dir: Option<String>) -> error::Result<()> {
-			NodeKeyType::variants().into_iter().try_for_each(|t| {
-				let node_key_type = NodeKeyType::from_str(t).unwrap();
-				let sk = match node_key_type {
-					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec()
-				};
-				let params = NodeKeyParams {
-					node_key_type,
-					node_key: Some(format!("{:x}", H256::from_slice(sk.as_ref()))),
-					node_key_file: None
-				};
-				node_key_config(params, &net_config_dir).and_then(|c| match c {
-					NodeKeyConfig::Ed25519(sc_network::config::Secret::Input(ref ski))
-						if node_key_type == NodeKeyType::Ed25519 &&
-							&sk[..] == ski.as_ref() => Ok(()),
-					_ => Err(error::Error::Input("Unexpected node key config".into()))
-				})
-			})
-		}
-
-		assert!(secret_input(None).is_ok());
-		assert!(secret_input(Some("x".to_string())).is_ok());
-	}
-
-	#[test]
-	fn test_node_key_config_file() {
-		fn secret_file(net_config_dir: Option<String>) -> error::Result<()> {
-			NodeKeyType::variants().into_iter().try_for_each(|t| {
-				let node_key_type = NodeKeyType::from_str(t).unwrap();
-				let tmp = tempfile::Builder::new().prefix("alice").tempdir()?;
-				let file = tmp.path().join(format!("{}_mysecret", t)).to_path_buf();
-				let params = NodeKeyParams {
-					node_key_type,
-					node_key: None,
-					node_key_file: Some(file.clone())
-				};
-				node_key_config(params, &net_config_dir).and_then(|c| match c {
-					NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
-						if node_key_type == NodeKeyType::Ed25519 && f == &file => Ok(()),
-					_ => Err(error::Error::Input("Unexpected node key config".into()))
-				})
-			})
-		}
-
-		assert!(secret_file(None).is_ok());
-		assert!(secret_file(Some("x".to_string())).is_ok());
-	}
-
-	#[test]
-	fn test_node_key_config_default() {
-		fn with_def_params<F>(f: F) -> error::Result<()>
-		where
-			F: Fn(NodeKeyParams) -> error::Result<()>
-		{
-			NodeKeyType::variants().into_iter().try_for_each(|t| {
-				let node_key_type = NodeKeyType::from_str(t).unwrap();
-				f(NodeKeyParams {
-					node_key_type,
-					node_key: None,
-					node_key_file: None
-				})
-			})
-		}
-
-		fn no_config_dir() -> error::Result<()> {
-			with_def_params(|params| {
-				let typ = params.node_key_type;
-				node_key_config::<String>(params, &None)
-					.and_then(|c| match c {
-						NodeKeyConfig::Ed25519(sc_network::config::Secret::New)
-							if typ == NodeKeyType::Ed25519 => Ok(()),
-						_ => Err(error::Error::Input("Unexpected node key config".into()))
-					})
-			})
-		}
-
-		fn some_config_dir(net_config_dir: String) -> error::Result<()> {
-			with_def_params(|params| {
-				let dir = PathBuf::from(net_config_dir.clone());
-				let typ = params.node_key_type;
-				node_key_config(params, &Some(net_config_dir.clone()))
-					.and_then(move |c| match c {
-						NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
-							if typ == NodeKeyType::Ed25519 &&
-								f == &dir.join(NODE_KEY_ED25519_FILE) => Ok(()),
-						_ => Err(error::Error::Input("Unexpected node key config".into()))
-				})
-			})
-		}
-
-		assert!(no_config_dir().is_ok());
-		assert!(some_config_dir("x".to_string()).is_ok());
-	}
 
 	#[test]
 	fn keystore_path_is_generated_correctly() {

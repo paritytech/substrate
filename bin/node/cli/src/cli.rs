@@ -107,12 +107,12 @@ where
 
 	match subcommand {
 		Cli::SubstrateCli(cli) => sc_cli::run(
+			config,
 			cli,
 			service::new_light,
 			service::new_full,
 			load_spec,
 			|config: Config<_, _>| Ok(new_full_start!(config).0),
-			config,
 			&version,
 		),
 		Cli::Factory(cli_args) => {

@@ -185,7 +185,7 @@ fn node_config<G, E: Clone> (
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		pruning: Default::default(),
-		chain_spec: (*spec).clone(),
+		chain_spec: Some((*spec).clone()),
 		name: format!("Node {}", index),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
