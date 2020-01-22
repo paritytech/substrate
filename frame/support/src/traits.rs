@@ -610,13 +610,17 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	);
 }
 
-/// A currency whose accounts can have balances which vest over time.
-pub trait VestingCurrency<AccountId>: Currency<AccountId> {
+/// A vesting schedule over a currency. This allows a particular currency to have vesting limits
+/// applied to it.
+pub trait VestingSchedule<AccountId> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
 	type Moment;
 
+	/// The currency that this schedule applies to.
+	type Currency: Currency<AccountId>;
+
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
-	fn vesting_balance(who: &AccountId) -> Self::Balance;
+	fn vesting_balance(who: &AccountId) -> <Self::Currency as Currency<AccountId>>::Balance;
 
 	/// Adds a vesting schedule to a given account.
 	///
@@ -624,8 +628,8 @@ pub trait VestingCurrency<AccountId>: Currency<AccountId> {
 	/// and nothing is updated.
 	fn add_vesting_schedule(
 		who: &AccountId,
-		locked: Self::Balance,
-		per_block: Self::Balance,
+		locked: <Self::Currency as Currency<AccountId>>::Balance,
+		per_block: <Self::Currency as Currency<AccountId>>::Balance,
 		starting_block: Self::Moment,
 	) -> DispatchResult;
 

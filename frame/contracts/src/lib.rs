@@ -943,7 +943,6 @@ pub struct Config<T: Trait> {
 	pub max_value_size: u32,
 	pub contract_account_instantiate_fee: BalanceOf<T>,
 	pub account_create_fee: BalanceOf<T>,
-	pub transfer_fee: BalanceOf<T>,
 }
 
 impl<T: Trait> Config<T> {
@@ -955,7 +954,6 @@ impl<T: Trait> Config<T> {
 			max_value_size: T::MaxValueSize::get(),
 			contract_account_instantiate_fee: T::ContractFee::get(),
 			account_create_fee: T::CreationFee::get(),
-			transfer_fee: T::TransferFee::get(),
 		}
 	}
 }

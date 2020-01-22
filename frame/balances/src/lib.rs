@@ -166,7 +166,7 @@ use frame_support::{
 	traits::{
 		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnReapAccount, OnUnbalanced, TryDrop,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
-		Imbalance, SignedImbalance, ReservableCurrency, Get, VestingCurrency,
+		Imbalance, SignedImbalance, ReservableCurrency, Get,
 	},
 	weights::SimpleDispatchInfo,
 };
@@ -189,7 +189,7 @@ pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
-		MaybeSerializeDeserialize + Debug + From<Self::BlockNumber>;
+		MaybeSerializeDeserialize + Debug;
 
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
@@ -217,7 +217,7 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
-		MaybeSerializeDeserialize + Debug + From<Self::BlockNumber>;
+		MaybeSerializeDeserialize + Debug;
 
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
@@ -296,34 +296,6 @@ decl_error! {
 		ExistingVestingSchedule,
 		/// Beneficiary account must pre-exist
 		DeadAccount,
-	}
-}
-
-/// Struct to encode the vesting schedule of an individual account.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct VestingSchedule<Balance, BlockNumber> {
-	/// Locked amount at genesis.
-	pub locked: Balance,
-	/// Amount that gets unlocked every block after `starting_block`.
-	pub per_block: Balance,
-	/// Starting block for unlocking(vesting).
-	pub starting_block: BlockNumber,
-}
-
-impl<Balance: SimpleArithmetic + Copy, BlockNumber: SimpleArithmetic + Copy> VestingSchedule<Balance, BlockNumber> {
-	/// Amount locked at block `n`.
-	pub fn locked_at(&self, n: BlockNumber) -> Balance
-		where Balance: From<BlockNumber>
-	{
-		// Number of blocks that count toward vesting
-		// Saturating to 0 when n < starting_block
-		let vested_block_count = n.saturating_sub(self.starting_block);
-		// Return amount that is still locked in vesting
-		if let Some(x) = Balance::from(vested_block_count).checked_mul(&self.per_block) {
-			self.locked.max(x) - x
-		} else {
-			Zero::zero()
-		}
 	}
 }
 
@@ -431,35 +403,6 @@ decl_storage! {
 			config.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n)
 		}): T::Balance;
 
-		// TODO: should be in a different pallet and just use the locking system.
-
-		/// Information regarding the vesting of a given account.
-		pub Vesting get(fn vesting) build(|config: &GenesisConfig<T, I>| {
-			// Generate initial vesting configuration
-			// * who - Account which we are generating vesting configuration for
-			// * begin - Block when the account will start to vest
-			// * length - Number of blocks from `begin` until fully vested
-			// * liquid - Number of units which can be spent before vesting begins
-			config.vesting.iter().filter_map(|&(ref who, begin, length, liquid)| {
-				let length = <T::Balance as From<T::BlockNumber>>::from(length);
-
-				config.balances.iter()
-					.find(|&&(ref w, _)| w == who)
-					.map(|&(_, balance)| {
-						// Total genesis `balance` minus `liquid` equals funds locked for vesting
-						let locked = balance.saturating_sub(liquid);
-						// Number of units unlocked per block after `begin`
-						let per_block = locked / length.max(sp_runtime::traits::One::one());
-
-						(who.clone(), VestingSchedule {
-							locked: locked,
-							per_block: per_block,
-							starting_block: begin
-						})
-					})
-			}).collect::<Vec<_>>()
-		}): map T::AccountId => Option<VestingSchedule<T::Balance, T::BlockNumber>>;
-
 		/// The balance of an account.
 		pub Balance get(fn balance)
 			build(|config: &GenesisConfig<T, I>| config.balances.iter()
@@ -467,10 +410,8 @@ decl_storage! {
 				.collect::<Vec<_>>()
 			): map T::AccountId => Account<T::Balance>;
 
-		// TODO: amalgamate the next two into a single item, and also include:
-		//  - fees-locked (min balance to be kept regarding payment of fees - paying a
-		//    fee may not result in the balance being reduced to below this amount)
-		//  - locked (min balance to be kept for any other use)
+		// TODO: Will need to migrate from old FreeBalance, ReservedBalance and the Locks.
+		// TODO: Will need to migrate from Locks.
 
 		/// Any liquidity locks on some account balances.
 		/// NOTE: Should only be accessed when setting, changing and freeing a lock.
@@ -483,7 +424,6 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
-		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber, T::Balance)>;
 		// ^^ begin, length, amount liquid at genesis
 		build(|config: &GenesisConfig<T, I>| {
 			for (_, balance) in &config.balances {
@@ -1070,20 +1010,9 @@ where
 		new_balance: T::Balance,
 	) -> DispatchResult {
 		if amount.is_zero() { return Ok(()) }
-
-		// TODO: remove once there's a vesting pallet.
-		if reasons.intersects(WithdrawReason::Reserve | WithdrawReason::Transfer)
-			&& Self::vesting_balance(who) > new_balance
-		{
-			Err(Error::<T, I>::VestingBalance)?
-		}
-
-		let reasons = reasons.into();
-		if new_balance >= Balance::<T, I>::get(who).frozen(reasons) {
-			Ok(())
-		} else {
-			Err(Error::<T, I>::LiquidityRestrictions.into())
-		}
+		let min_balance = Balance::<T, I>::get(who).frozen(reasons.into());
+		ensure!(new_balance >= min_balance, Error::<T, I>::LiquidityRestrictions);
+		Ok(())
 	}
 
 	// Transfer some free balance from `transactor` to `dest`, respecting existence requirements.
@@ -1438,52 +1367,6 @@ where
 		let mut locks = Self::locks(who);
 		locks.retain(|l| l.id != id);
 		Self::update_locks(who, &locks[..]);
-	}
-}
-
-impl<T: Trait<I>, I: Instance> VestingCurrency<T::AccountId> for Module<T, I>
-where
-	T::Balance: MaybeSerializeDeserialize + Debug
-{
-	type Moment = T::BlockNumber;
-
-	/// Get the amount that is currently being vested and cannot be transferred out of this account.
-	fn vesting_balance(who: &T::AccountId) -> T::Balance {
-		if let Some(v) = Self::vesting(who) {
-			Self::free_balance(who)
-				.min(v.locked_at(<frame_system::Module<T>>::block_number()))
-		} else {
-			Zero::zero()
-		}
-	}
-
-	/// Adds a vesting schedule to a given account.
-	///
-	/// If there already exists a vesting schedule for the given account, an `Err` is returned
-	/// and nothing is updated.
-	/// Is a no-op if the amount to be vested is zero.
-	fn add_vesting_schedule(
-		who: &T::AccountId,
-		locked: T::Balance,
-		per_block: T::Balance,
-		starting_block: T::BlockNumber
-	) -> DispatchResult {
-		if locked.is_zero() { return Ok(()) }
-		if <Vesting<T, I>>::exists(who) {
-			Err(Error::<T, I>::ExistingVestingSchedule)?
-		}
-		let vesting_schedule = VestingSchedule {
-			locked,
-			per_block,
-			starting_block
-		};
-		<Vesting<T, I>>::insert(who, vesting_schedule);
-		Ok(())
-	}
-
-	/// Remove a vesting schedule for a given account.
-	fn remove_vesting_schedule(who: &T::AccountId) {
-		<Vesting<T, I>>::remove(who);
 	}
 }
 
