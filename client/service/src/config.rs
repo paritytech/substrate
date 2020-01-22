@@ -143,9 +143,7 @@ pub enum DatabaseConfig {
 	Custom(Arc<dyn KeyValueDB>),
 }
 
-impl<G, E> Default for Configuration<G, E> where
-	G: RuntimeGenesis,
-	E: Extension,
+impl<G, E> Default for Configuration<G, E>
 {
 	/// Create a default config
 	fn default() -> Self {

@@ -433,9 +433,8 @@ pub fn fill_import_params<G, E>(
 	cli: &ImportParams,
 	role: sc_service::Roles,
 ) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+where
+	G: RuntimeGenesis,
 {
 	match config.database {
 		DatabaseConfig::Path { ref mut cache_size, .. } =>
@@ -488,7 +487,6 @@ pub fn update_config_for_running_node<G, E>(
 ) -> error::Result<()>
 where
 	G: RuntimeGenesis,
-	E: ChainSpecExtension,
 {
 	fill_config_keystore_password_and_path(&mut config, &cli)?;
 
@@ -713,29 +711,20 @@ mod tests {
 			None,
 			None,
 			None,
-			None,
+			None::<()>,
 		);
 
-		let version_info = VersionInfo {
-			name: "test",
-			version: "42",
-			commit: "234234",
-			executable_name: "test",
-			description: "cool test",
-			author: "universe",
-			support_url: "com",
-		};
-
 		for keystore_path in vec![None, Some("/keystore/path")] {
-			let mut run_cmds = RunCmd::from_args();
-			run_cmds.shared_params.base_path = Some(PathBuf::from("/test/path"));
+			let args: Vec<&str> = vec![];
+			let mut run_cmds = RunCmd::from_iter(args);
 			run_cmds.keystore_path = keystore_path.clone().map(PathBuf::from);
 
-			let node_config = create_run_node_config(
+			let mut node_config = Configuration::default();
+			node_config.config_dir = Some(PathBuf::from("/test/path"));
+			node_config.chain_spec = Some(chain_spec.clone());
+			update_config_for_running_node(
+				&mut node_config,
 				run_cmds.clone(),
-				|_| Ok(Some(chain_spec.clone())),
-				"test",
-				&version_info,
 			).unwrap();
 
 			let expected_path = match keystore_path {
@@ -745,40 +734,5 @@ mod tests {
 
 			assert_eq!(expected_path, node_config.keystore.path().unwrap().to_owned());
 		}
-	}
-
-	#[test]
-	fn parse_and_prepare_into_configuration() {
-		let chain_spec = ChainSpec::from_genesis(
-			"test",
-			"test-id",
-			|| (),
-			Vec::new(),
-			None,
-			None,
-			None,
-			None,
-		);
-		let version = VersionInfo {
-			name: "test",
-			version: "42",
-			commit: "234234",
-			executable_name: "test",
-			description: "cool test",
-			author: "universe",
-			support_url: "com",
-		};
-		let spec_factory = |_: &str| Ok(Some(chain_spec.clone()));
-
-		let args = vec!["substrate", "run", "--dev", "--state-cache-size=42"];
-		let core_params = from_iter(args, &version);
-		let config = get_config(&core_params, spec_factory, "substrate", &version).unwrap();
-		assert_eq!(config.roles, sc_service::Roles::AUTHORITY);
-		assert_eq!(config.state_cache_size, 42);
-
-		let args = vec!["substrate", "import-blocks", "--dev"];
-		let core_params = from_iter(args, &version);
-		let config = get_config(&core_params, spec_factory, "substrate", &version).unwrap();
-		assert_eq!(config.roles, sc_service::Roles::FULL);
 	}
 }
