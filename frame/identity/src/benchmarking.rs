@@ -100,12 +100,12 @@ pub type IdentityCall = crate::Call<Benchmark>;
 pub mod set_identity {
 	use super::*;
 
-	pub fn components() -> Vec<(&'static str, u32, u32)> {
+	pub fn components() -> Vec<(BenchmarkParameter, u32, u32)> {
 		vec![
 			// Registrar Count
-			("R", 1, 16),
+			(BenchmarkParameter::R, 1, 16),
 			// Additional Field Count
-			("X", 1, 20)
+			(BenchmarkParameter::X, 1, 20)
 		]
 	}
 
@@ -116,10 +116,10 @@ pub mod set_identity {
 	///
 	/// Sets up state randomly and returns a randomly generated `set_identity` with sensible (fixed)
 	/// values for all complexity components except those mentioned in the identity.
-	pub fn instance(components: &[(&'static str, u32)]) -> Call
+	pub fn instance(components: &[(BenchmarkParameter, u32)]) -> Call
 	{
 		// Add r registrars
-		let r = components.iter().find(|&c| c.0 == "R").unwrap();
+		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap();
 		for i in 0..r.1 {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), i.into()));
 			assert_ok!(Identity::set_fee(Origin::signed(i.into()), 0, 10));
@@ -128,7 +128,7 @@ pub mod set_identity {
 		}
 		
 		// Create identity info with x additional fields
-		let x = components.iter().find(|&c| c.0 == "R").unwrap();
+		let x = components.iter().find(|&c| c.0 == BenchmarkParameter::X).unwrap();
 		// 32 byte data that we reuse below
 		let data = Data::Raw(vec![0; 32]);
 		let info = IdentityInfo {

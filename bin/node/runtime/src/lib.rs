@@ -799,6 +799,12 @@ impl_runtime_apis! {
 			SessionKeys::generate(seed)
 		}
 	}
+
+	impl pallet_identity::IdentityBenchmarks for Runtime {
+		fn run_benchmarks() -> BenchmarkResults {
+			Identity::run_benchmarks()
+		}
+	}
 }
 
 #[cfg(test)]

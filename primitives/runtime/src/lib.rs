@@ -678,6 +678,19 @@ pub fn print(print: impl traits::Printable) {
 	print.print();
 }
 
+/// Parameters for this module.
+#[derive(Encode, Decode, Clone, Copy, PartialEq)]
+pub enum BenchmarkParameter {
+	/// Registrar Count
+	R,
+	/// Additional Field Count
+	X,
+}
+
+/// Results from running benchmarks on a FRAME pallet.
+/// Contains the parameters used when running the benchmark, and the duration of the function call in nanoseconds.
+pub type BenchmarkResults = (Vec<(BenchmarkParameter, u32)>, u128);
+
 #[cfg(test)]
 mod tests {
 	use super::*;
