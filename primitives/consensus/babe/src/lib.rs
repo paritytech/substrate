@@ -27,8 +27,8 @@ use sp_std::vec::Vec;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 
 #[cfg(feature = "std")]
-pub use digest::{BabePreDigest, CompatibleDigestItem};
-pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest, NextEpochDescriptor};
+pub use digest::{PreDigest, CompatibleDigestItem};
+pub use digest::{RawPreDigest, NextEpochDescriptor};
 
 mod app {
 	use sp_application_crypto::{app_crypto, key_types::BABE, sr25519};
@@ -80,40 +80,6 @@ pub type BabeAuthorityWeight = u64;
 
 /// The weight of a BABE block.
 pub type BabeBlockWeight = u32;
-
-/// BABE epoch information
-#[derive(Decode, Encode, Default, PartialEq, Eq, Clone, RuntimeDebug)]
-pub struct Epoch {
-	/// The epoch index
-	pub epoch_index: u64,
-	/// The starting slot of the epoch,
-	pub start_slot: SlotNumber,
-	/// The duration of this epoch
-	pub duration: SlotNumber,
-	/// The authorities and their weights
-	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
-	/// Randomness for this epoch
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
-}
-
-impl Epoch {
-	/// "increment" the epoch, with given descriptor for the next.
-	pub fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
-		Epoch {
-			epoch_index: self.epoch_index + 1,
-			start_slot: self.start_slot + self.duration,
-			duration: self.duration,
-			authorities: descriptor.authorities,
-			randomness: descriptor.randomness,
-		}
-	}
-
-	/// Produce the "end slot" of the epoch. This is NOT inclusive to the epoch,
-	// i.e. the slots covered by the epoch are `self.start_slot .. self.end_slot()`.
-	pub fn end_slot(&self) -> SlotNumber {
-		self.start_slot + self.duration
-	}
-}
 
 /// An consensus log item for BABE.
 #[derive(Decode, Encode, Clone, PartialEq, Eq)]

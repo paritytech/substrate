@@ -179,16 +179,20 @@ fn fake_head_hash<H: AsRef<[u8]> + AsMut<[u8]> + Clone>(parent_hash: &H) -> H {
 	h
 }
 
+impl<Hash, Number, Epoch> Default for EpochChanges<Hash, Number, Epoch> where
+	Hash: PartialEq,
+	Number: Ord,
+{
+	fn default() -> Self {
+		EpochChanges { inner: ForkTree::new() }
+	}
+}
+
 impl<Hash, Number, Epoch> EpochChanges<Hash, Number, Epoch> where
 	Hash: PartialEq + AsRef<[u8]> + AsMut<[u8]> + Copy,
 	Number: Ord + One + Zero + Add<Output=Number> + Copy,
 	Epoch: crate::Epoch + Clone,
 {
-	/// Create a new epoch-change tracker.
-	pub fn new() -> Self {
-		EpochChanges { inner: ForkTree::new() }
-	}
-
 	/// Rebalances the tree of epoch changes so that it is sorted by length of
 	/// fork (longest fork first).
 	pub fn rebalance(&mut self) {

@@ -67,16 +67,16 @@ impl PreDigest {
 	/// Returns the slot number of the pre digest.
 	pub fn authority_index(&self) -> AuthorityIndex {
 		match self {
-			BabePreDigest::Primary { authority_index, .. } => *authority_index,
-			BabePreDigest::Secondary { authority_index, .. } => *authority_index,
+			PreDigest::Primary { authority_index, .. } => *authority_index,
+			PreDigest::Secondary { authority_index, .. } => *authority_index,
 		}
 	}
 
 	/// Returns the slot number of the pre digest.
 	pub fn slot_number(&self) -> SlotNumber {
 		match self {
-			BabePreDigest::Primary { slot_number, .. } => *slot_number,
-			BabePreDigest::Secondary { slot_number, .. } => *slot_number,
+			PreDigest::Primary { slot_number, .. } => *slot_number,
+			PreDigest::Secondary { slot_number, .. } => *slot_number,
 		}
 	}
 
@@ -84,8 +84,8 @@ impl PreDigest {
 	/// of the chain.
 	pub fn added_weight(&self) -> crate::BabeBlockWeight {
 		match self {
-			BabePreDigest::Primary { .. } => 1,
-			BabePreDigest::Secondary { .. } => 0,
+			PreDigest::Primary { .. } => 1,
+			PreDigest::Secondary { .. } => 0,
 		}
 	}
 }
@@ -124,8 +124,8 @@ impl RawPreDigest {
 	/// Returns the slot number of the pre digest.
 	pub fn slot_number(&self) -> SlotNumber {
 		match self {
-			RawBabePreDigest::Primary { slot_number, .. } => *slot_number,
-			RawBabePreDigest::Secondary { slot_number, .. } => *slot_number,
+			RawPreDigest::Primary { slot_number, .. } => *slot_number,
+			RawPreDigest::Secondary { slot_number, .. } => *slot_number,
 		}
 	}
 }
@@ -169,20 +169,20 @@ impl codec::EncodeLike for PreDigest {}
 impl Decode for PreDigest {
 	fn decode<R: Input>(i: &mut R) -> Result<Self, Error> {
 		let pre_digest = match Decode::decode(i)? {
-			RawBabePreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number } => {
+			RawPreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number } => {
 				// Verify (at compile time) that the sizes in babe_primitives are correct
 				let _: [u8; super::VRF_OUTPUT_LENGTH] = vrf_output;
 				let _: [u8; super::VRF_PROOF_LENGTH] = vrf_proof;
 
-				BabePreDigest::Primary {
+				PreDigest::Primary {
 					vrf_proof: VRFProof::from_bytes(&vrf_proof).map_err(convert_error)?,
 					vrf_output: VRFOutput::from_bytes(&vrf_output).map_err(convert_error)?,
 					authority_index,
 					slot_number,
 				}
 			},
-			RawBabePreDigest::Secondary { authority_index, slot_number } => {
-				BabePreDigest::Secondary { authority_index, slot_number }
+			RawPreDigest::Secondary { authority_index, slot_number } => {
+				PreDigest::Secondary { authority_index, slot_number }
 			},
 		};
 
@@ -224,11 +224,11 @@ pub trait CompatibleDigestItem: Sized {
 impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 	Hash: Debug + Send + Sync + Eq + Clone + Codec + 'static
 {
-	fn babe_pre_digest(digest: BabePreDigest) -> Self {
+	fn babe_pre_digest(digest: PreDigest) -> Self {
 		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())
 	}
 
-	fn as_babe_pre_digest(&self) -> Option<BabePreDigest> {
+	fn as_babe_pre_digest(&self) -> Option<PreDigest> {
 		self.try_to(OpaqueDigestItemId::PreRuntime(&BABE_ENGINE_ID))
 	}
 
