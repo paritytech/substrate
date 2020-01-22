@@ -57,7 +57,7 @@ pub struct BasicPool<PoolApi, Block>
 pub enum RevalidationType {
 	/// Light revalidation type.
 	///
-	/// During maintaince, transaction pool makes periodic revalidation
+	/// During maintenance, transaction pool makes periodic revalidation
 	/// of all transactions depending on number of blocks or time passed.
 	/// Also this kind of revalidation does not resubmit transactions from
 	/// retracted blocks, since it is too expensive.
@@ -65,7 +65,7 @@ pub enum RevalidationType {
 
 	/// Full revalidation type.
 	///
-	/// During maintaince, transaction pool revalidates some fixed amount of
+	/// During maintenance, transaction pool revalidates some fixed amount of
 	/// transactions from the pool of valid transactions.
 	Full,
 }
@@ -201,7 +201,9 @@ struct RevalidationAction {
 
 impl<N: Clone + Copy + SimpleArithmetic> RevalidationStrategy<N> {
 	pub fn clear(&mut self) {
-		if let Self::Light(status) = self { status.clear() }
+		if let Self::Light(status) = self {
+			status.clear()
+		}
 	}
 
 	pub fn next(

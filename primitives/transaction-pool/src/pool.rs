@@ -226,9 +226,9 @@ pub trait TransactionPool: Send + Sync {
 	fn hash_of(&self, xt: &TransactionFor<Self>) -> TxHash<Self>;
 }
 
-/// Trait for transaction pool maintaince.
+/// Trait for transaction pool maintenance.
 pub trait MaintainedTransactionPool : TransactionPool {
-	/// Perform maintaince
+	/// Perform maintenance
 	fn maintain(&self, block: &BlockId<Self::Block>, retracted: &[BlockHash<Self>])
 		-> Pin<Box<dyn Future<Output=()> + Send>>;
 }
