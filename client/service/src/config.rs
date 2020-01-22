@@ -56,7 +56,7 @@ pub struct Configuration<G, E = NoExtension> {
 	/// Pruning settings.
 	pub pruning: PruningMode,
 	/// Chain configuration.
-	pub chain_spec: ChainSpec<G, E>,
+	pub chain_spec: Option<ChainSpec<G, E>>,
 	/// Node name.
 	pub name: String,
 	/// Wasm execution method.
@@ -143,18 +143,18 @@ pub enum DatabaseConfig {
 	Custom(Arc<dyn KeyValueDB>),
 }
 
-impl<G, E> Configuration<G, E> where
+impl<G, E> Default for Configuration<G, E> where
 	G: RuntimeGenesis,
 	E: Extension,
 {
-	/// Create a default config for given chain spec and path to configuration dir
-	pub fn default_with_spec_and_base_path(chain_spec: ChainSpec<G, E>, config_dir: Option<PathBuf>) -> Self {
+	/// Create a default config
+	fn default() -> Self {
 		let mut configuration = Configuration {
 			impl_name: "parity-substrate",
 			impl_version: "0.0.0",
 			impl_commit: "",
-			chain_spec,
-			config_dir: config_dir.clone(),
+			chain_spec: None,
+			config_dir: None,
 			name: Default::default(),
 			roles: Roles::FULL,
 			transaction_pool: Default::default(),
@@ -185,9 +185,6 @@ impl<G, E> Configuration<G, E> where
 			tracing_targets: Default::default(),
 			tracing_receiver: Default::default(),
 		};
-		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
-
-		configuration.telemetry_endpoints = configuration.chain_spec.telemetry_endpoints().clone();
 
 		configuration
 	}
@@ -210,10 +207,14 @@ impl<G, E> Configuration<G, E> {
 	pub fn in_chain_config_dir(&self, sub: &str) -> Option<PathBuf> {
 		self.config_dir.clone().map(|mut path| {
 			path.push("chains");
-			path.push(self.chain_spec.id());
+			path.push(self.expect_chain_spec().id());
 			path.push(sub);
 			path
 		})
+	}
+
+	pub fn expect_chain_spec(&self) -> &ChainSpec<G, E> {
+		self.chain_spec.as_ref().expect("chain_spec must be specified")
 	}
 }
 

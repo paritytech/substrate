@@ -49,7 +49,7 @@ use std::{
 
 use names::{Generator, Name};
 use regex::Regex;
-use structopt::StructOpt;
+pub use structopt::StructOpt;
 #[doc(hidden)]
 pub use structopt::clap::App;
 use params::{
@@ -236,13 +236,14 @@ where
 
 	Ok(T::from_clap(&matches))
 }
+
 pub fn run<F, G, E, FNL, FNF, B, SL, SF, BC, BB>(
 	core_params: CoreParams,
 	new_light: FNL,
 	new_full: FNF,
 	spec_factory: F,
 	builder: B,
-	impl_name: &'static str,
+	mut config: Configuration<G, E>,
 	version: &VersionInfo,
 ) -> error::Result<()>
 where
@@ -259,35 +260,28 @@ where
 	<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 	<BB as BlockT>::Hash: std::str::FromStr,
 {
-	let full_version = sc_service::config::full_version_from_strs(
-		version.version,
-		version.commit
-	);
-	sp_panic_handler::set(version.support_url, &full_version);
+	init(&mut config, spec_factory, core_params.get_shared_params(), version)?;
 
-	fdlimit::raise_fd_limit();
-	init_logger(core_params.get_shared_params().log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
+	assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
 	match &core_params {
-		CoreParams::Run(_params) => {
-			let config = get_config(&core_params, spec_factory, impl_name, &version)?;
+		CoreParams::Run(params) => {
+			update_config_for_running_node(
+				&mut config,
+				params.clone(),
+			)?;
 
 			run_node(config, new_light, new_full, &version)
 		},
 		CoreParams::BuildSpec(params) => {
 			info!("Building chain spec");
+			let mut spec = config.expect_chain_spec().clone();
 			let raw_output = params.raw;
-			let mut spec = load_spec(&params.shared_params, spec_factory)?;
 
 			if spec.boot_nodes().is_empty() && !params.disable_default_bootnode {
-				let cfg = create_build_spec_config(
-					&spec,
-					&params.shared_params,
-					version,
-				)?;
 				let node_key = node_key_config(
 					params.node_key_params.clone(),
-					&Some(cfg.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a base_path"))
+					&Some(config.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a base_path")),
 				)?;
 				let keys = node_key.into_keypair()?;
 				let peer_id = keys.public().into_peer_id();
@@ -306,8 +300,6 @@ where
 			Ok(())
 		},
 		CoreParams::ExportBlocks(params) => {
-			let config = get_config(&core_params, spec_factory, impl_name, &version)?;
-
 			if let DatabaseConfig::Path { ref path, .. } = &config.database {
 				info!("DB path: {}", path.display());
 			}
@@ -330,7 +322,6 @@ where
 			run_until_exit(f)
 		},
 		CoreParams::ImportBlocks(params) => {
-			let mut config = get_config(&core_params, spec_factory, impl_name, &version)?;
 			fill_import_params(&mut config, &params.import_params, sc_service::Roles::FULL)?;
 
 			let file: Box<dyn ReadPlusSeek + Send> = match &params.input {
@@ -351,7 +342,6 @@ where
 			run_until_exit(f)
 		},
 		CoreParams::CheckBlock(params) => {
-			let mut config = get_config(&core_params, spec_factory, impl_name, &version)?;
 			fill_import_params(&mut config, &params.import_params, sc_service::Roles::FULL)?;
 
 			let input = if params.input.starts_with("0x") { &params.input[2..] } else { &params.input[..] };
@@ -375,8 +365,6 @@ where
 			Ok(())
 		},
 		CoreParams::PurgeChain(params) => {
-			let config = get_config(&core_params, spec_factory, impl_name, &version)?;
-
 			let db_path = match config.database {
 				DatabaseConfig::Path { path, .. } => path,
 				_ => {
@@ -415,14 +403,50 @@ where
 			}
 		},
 		CoreParams::Revert(params) => {
-			let config = get_config(&core_params, spec_factory, impl_name, &version)?;
-
 			let blocks = params.num.parse()?;
 			builder(config)?.revert_chain(blocks)?;
 
 			Ok(())
 		},
 	};
+
+	Ok(())
+}
+
+pub fn init<G, E, F>(
+	mut config: &mut Configuration<G, E>,
+	spec_factory: F,
+	shared_params: &SharedParams,
+	version: &VersionInfo,
+) -> error::Result<()>
+where
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
+	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+{
+	let full_version = sc_service::config::full_version_from_strs(
+		version.version,
+		version.commit
+	);
+	sp_panic_handler::set(version.support_url, &full_version);
+
+	fdlimit::raise_fd_limit();
+	init_logger(shared_params.log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
+
+	config.chain_spec = Some(load_spec(shared_params, spec_factory)?);
+	config.config_dir = Some(base_path(shared_params, version));
+	config.impl_commit = version.commit;
+	config.impl_version = version.version;
+
+	config.database = DatabaseConfig::Path {
+		path: config
+			.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH)
+			.expect("We provided a base_path/config_dir."),
+		cache_size: None,
+	};
+
+	config.network.boot_nodes = config.expect_chain_spec().boot_nodes().to_vec();
+	config.telemetry_endpoints = config.expect_chain_spec().telemetry_endpoints().clone();
 
 	Ok(())
 }
@@ -444,7 +468,7 @@ where
 	info!("{}", version.name);
 	info!("  version {}", config.full_version());
 	info!("  by {}, 2017, 2018", version.author);
-	info!("Chain specification: {}", config.chain_spec.name());
+	info!("Chain specification: {}", config.expect_chain_spec().name());
 	info!("Node name: {}", config.name);
 	info!("Roles: {}", display_role(&config));
 	match config.roles {
@@ -532,67 +556,6 @@ pub fn display_role<G, E>(config: &Configuration<G, E>) -> String {
 		"SENTRY".to_string()
 	} else {
 		format!("{:?}", config.roles)
-	}
-}
-
-pub fn get_config<G, E, F>(
-	core_params: &CoreParams,
-	spec_factory: F,
-	impl_name: &'static str,
-	version: &VersionInfo,
-) -> error::Result<Configuration<G, E>>
-where
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-{
-	match core_params {
-		CoreParams::Run(params) =>
-			create_run_node_config(
-				params.clone(),
-				spec_factory,
-				impl_name,
-				version
-			),
-		CoreParams::BuildSpec(params) => {
-			let spec = load_spec(&params.shared_params, spec_factory)?;
-
-			create_build_spec_config(
-				&spec,
-				&params.shared_params,
-				version,
-			)
-		},
-		CoreParams::ExportBlocks(params) =>
-			create_config_with_db_path(
-				spec_factory,
-				&params.shared_params,
-				version,
-			),
-		CoreParams::ImportBlocks(params) =>
-			create_config_with_db_path(
-				spec_factory,
-				&params.shared_params,
-				version,
-			),
-		CoreParams::CheckBlock(params) =>
-			create_config_with_db_path(
-				spec_factory,
-				&params.shared_params,
-				version,
-			),
-		CoreParams::PurgeChain(params) =>
-			create_config_with_db_path(
-				spec_factory,
-				&params.shared_params,
-				version
-			),
-		CoreParams::Revert(params) =>
-			create_config_with_db_path(
-				spec_factory,
-				&params.shared_params,
-				version,
-			),
 	}
 }
 
@@ -799,16 +762,14 @@ pub fn fill_import_params<G, E>(
 	Ok(())
 }
 
-fn create_run_node_config<G, E, S>(
-	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo,
-) -> error::Result<Configuration<G, E>>
+fn update_config_for_running_node<G, E>(
+	mut config: &mut Configuration<G, E>,
+	cli: RunCmd,
+) -> error::Result<()>
 where
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 {
-	let mut config = create_config_with_db_path(spec_factory, &cli.shared_params, &version)?;
-
 	fill_config_keystore_password_and_path(&mut config, &cli)?;
 
 	let is_dev = cli.shared_params.dev;
@@ -823,10 +784,6 @@ where
 		};
 
 	fill_import_params(&mut config, &cli.import_params, role)?;
-
-	config.impl_name = impl_name;
-	config.impl_commit = version.commit;
-	config.impl_version = version.version;
 
 	config.name = match cli.name.or(cli.keyring.account.map(|a| a.to_string())) {
 		None => generate_node_name(),
@@ -915,7 +872,7 @@ where
 	// Imply forced authoring on --dev
 	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
 
-	Ok(config)
+	Ok(())
 }
 
 fn interface_str(
@@ -937,50 +894,6 @@ fn interface_str(
 	} else {
 		Ok("127.0.0.1")
 	}
-}
-
-/// Creates a configuration including the database path.
-pub fn create_config_with_db_path<G, E, S>(
-	spec_factory: S, cli: &SharedParams, version: &VersionInfo,
-) -> error::Result<Configuration<G, E>>
-where
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-{
-	let spec = load_spec(cli, spec_factory)?;
-	let base_path = base_path(cli, version);
-
-	let mut config = sc_service::Configuration::default_with_spec_and_base_path(
-		spec.clone(),
-		Some(base_path),
-	);
-
-	config.database = DatabaseConfig::Path {
-		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
-		cache_size: None,
-	};
-
-	Ok(config)
-}
-
-/// Creates a configuration including the base path and the shared params
-fn create_build_spec_config<G, E>(
-	spec: &ChainSpec<G, E>,
-	cli: &SharedParams,
-	version: &VersionInfo,
-) -> error::Result<Configuration<G, E>>
-where
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-{
-	let base_path = base_path(&cli, version);
-	let cfg = sc_service::Configuration::default_with_spec_and_base_path(
-		spec.clone(),
-		Some(base_path),
-	);
-
-	Ok(cfg)
 }
 
 /// Internal trait used to cast to a dynamic type that implements Read and Seek.

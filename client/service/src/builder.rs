@@ -177,13 +177,14 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 		config.default_heap_pages,
 	);
 
-	let fork_blocks = config.chain_spec
+	let chain_spec = config.expect_chain_spec();
+	let fork_blocks = chain_spec
 		.extensions()
 		.get::<sc_client::ForkBlocks<TBl>>()
 		.cloned()
 		.unwrap_or_default();
 
-	let bad_blocks = config.chain_spec
+	let bad_blocks = chain_spec
 		.extensions()
 		.get::<sc_client::BadBlocks<TBl>>()
 		.cloned()
@@ -214,7 +215,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 		sc_client_db::new_client(
 			db_config,
 			executor,
-			&config.chain_spec,
+			config.expect_chain_spec(),
 			fork_blocks,
 			bad_blocks,
 			extensions,
@@ -330,7 +331,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		let remote_blockchain = backend.remote_blockchain();
 		let client = Arc::new(sc_client::light::new_light(
 			backend.clone(),
-			&config.chain_spec,
+			config.expect_chain_spec(),
 			executor,
 		)?);
 
@@ -788,6 +789,7 @@ ServiceBuilder<
 
 		let import_queue = Box::new(import_queue);
 		let chain_info = client.chain_info();
+		let chain_spec = config.expect_chain_spec();
 
 		let version = config.full_version();
 		info!("Highest known block at #{}", chain_info.best_number);
@@ -810,7 +812,7 @@ ServiceBuilder<
 		});
 
 		let protocol_id = {
-			let protocol_id_full = match config.chain_spec.protocol_id() {
+			let protocol_id_full = match chain_spec.protocol_id() {
 				Some(pid) => pid,
 				None => {
 					warn!("Using default protocol ID {:?} because none is configured in the \
@@ -999,10 +1001,10 @@ ServiceBuilder<
 			use sc_rpc::{chain, state, author, system};
 
 			let system_info = sc_rpc::system::SystemInfo {
-				chain_name: config.chain_spec.name().into(),
+				chain_name: chain_spec.name().into(),
 				impl_name: config.impl_name.into(),
 				impl_version: config.impl_version.into(),
-				properties: config.chain_spec.properties().clone(),
+				properties: chain_spec.properties().clone(),
 			};
 
 			let subscriptions = sc_rpc::Subscriptions::new(Arc::new(SpawnTaskHandle {
@@ -1075,7 +1077,7 @@ ServiceBuilder<
 			let name = config.name.clone();
 			let impl_name = config.impl_name.to_owned();
 			let version = version.clone();
-			let chain_name = config.chain_spec.name().to_owned();
+			let chain_name = config.expect_chain_spec().name().to_owned();
 			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
 			let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
 				endpoints,

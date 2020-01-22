@@ -102,6 +102,9 @@ where
 		Err(_) => sc_cli::from_iter::<Cli, _>(args.clone(), &version),
 	};
 
+	let mut config = sc_service::Configuration::default();
+	config.impl_name = "substrate-node";
+
 	match subcommand {
 		Cli::SubstrateCli(cli) => sc_cli::run(
 			cli,
@@ -109,19 +112,15 @@ where
 			service::new_full,
 			load_spec,
 			|config: Config<_, _>| Ok(new_full_start!(config).0),
-			"substrate-node",
+			config,
 			&version,
 		),
 		Cli::Factory(cli_args) => {
-			let mut config: Config<_, _> = sc_cli::create_config_with_db_path(
-				load_spec,
-				&cli_args.shared_params,
-				&version,
-			)?;
+			sc_cli::init(&mut config, load_spec, &cli_args.shared_params, &version);
 
 			sc_cli::fill_import_params(&mut config, &cli_args.import_params, ServiceRoles::FULL)?;
 
-			match ChainSpec::from(config.chain_spec.id()) {
+			match ChainSpec::from(config.expect_chain_spec().id()) {
 				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
 				_ => panic!("Factory is only supported for development and local testnet."),
 			}
