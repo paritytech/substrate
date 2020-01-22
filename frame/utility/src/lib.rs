@@ -738,7 +738,6 @@ mod tests {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 10)],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}

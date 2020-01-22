@@ -322,7 +322,6 @@ impl ExtBuilder {
 					// This allow us to have a total_payout different from 0.
 					(999, 1_000_000_000_000),
 			],
-			vesting: vec![],
 		}.assimilate_storage(&mut storage);
 
 		let stake_21 = if self.fair { 1000 } else { 2000 };

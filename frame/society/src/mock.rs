@@ -145,7 +145,6 @@ impl EnvBuilder {
 		self.balances.push((Society::account_id(), self.balance.max(self.pot)));
 		pallet_balances::GenesisConfig::<Test> {
 			balances: self.balances,
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		GenesisConfig::<Test>{
 			members: self.members,

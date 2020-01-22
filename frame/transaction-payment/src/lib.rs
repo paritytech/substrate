@@ -404,7 +404,6 @@ mod tests {
 					(5, 50 * self.balance_factor),
 					(6, 60 * self.balance_factor)
 				],
-				vesting: vec![],
 			}.assimilate_storage(&mut t).unwrap();
 			t.into()
 		}

@@ -142,7 +142,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			(40, 500_000),
 			(99, 1),
 		],
-		vesting: vec![],
 	}.assimilate_storage(&mut t).unwrap();
 	GenesisConfig::<Test>{
 		pool: vec![

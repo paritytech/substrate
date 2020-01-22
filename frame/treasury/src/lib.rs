@@ -816,7 +816,6 @@ mod tests {
 		pallet_balances::GenesisConfig::<Test>{
 			// Total issuance will be 200 with treasury account initialized at ED.
 			balances: vec![(0, 100), (1, 98), (2, 1)],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		GenesisConfig::default().assimilate_storage::<Test>(&mut t).unwrap();
 		t.into()
@@ -1142,7 +1141,6 @@ mod tests {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		pallet_balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		// Treasury genesis config is not build thus treasury account does not exist
 		let mut t: sp_io::TestExternalities = t.into();

@@ -966,7 +966,6 @@ mod tests {
 				(20, 100),
 				(30, 100),
 			],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}

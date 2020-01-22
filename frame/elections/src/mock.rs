@@ -220,7 +220,6 @@ impl ExtBuilder {
 					(5, 50 * self.balance_factor),
 					(6, 60 * self.balance_factor)
 				],
-				vesting: vec![],
 			}),
 			elections: Some(elections::GenesisConfig::<Test>{
 				members: vec![],

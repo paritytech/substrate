@@ -100,7 +100,6 @@ pub struct ExtBuilder {
 	existential_deposit: u64,
 	creation_fee: u64,
 	monied: bool,
-	vesting: bool,
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
@@ -108,7 +107,6 @@ impl Default for ExtBuilder {
 			existential_deposit: 0,
 			creation_fee: 0,
 			monied: false,
-			vesting: false,
 		}
 	}
 }
@@ -128,10 +126,6 @@ impl ExtBuilder {
 		}
 		self
 	}
-	pub fn vesting(mut self, vesting: bool) -> Self {
-		self.vesting = vesting;
-		self
-	}
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
@@ -147,15 +141,6 @@ impl ExtBuilder {
 					(3, 30 * self.existential_deposit),
 					(4, 40 * self.existential_deposit),
 					(12, 10 * self.existential_deposit)
-				]
-			} else {
-				vec![]
-			},
-			vesting: if self.vesting && self.monied {
-				vec![
-					(1, 0, 10, 5 * self.existential_deposit),
-					(2, 10, 20, 0),
-					(12, 10, 20, 5 * self.existential_deposit)
 				]
 			} else {
 				vec![]

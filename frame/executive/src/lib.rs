@@ -527,7 +527,6 @@ mod tests {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 211)],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		let xt = sp_runtime::testing::TestXt(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(2, 69)));
 		let weight = xt.get_dispatch_info().weight as u64;
@@ -551,7 +550,6 @@ mod tests {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111 * balance_factor)],
-			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
