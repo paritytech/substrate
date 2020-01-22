@@ -1074,8 +1074,7 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 				// if this transaction depleted all provided gas to zero.
 				let gas_weight_limit = Weight::try_from(gas_limit)
 					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
-				let weight_available = <T as system::Trait>::MaximumBlockWeight::get()
-					.saturating_sub(<system::Module<T>>::all_extrinsics_weight()).into();
+				let weight_available = <system::Module<T>>::remaining_weight().into();
 				if gas_weight_limit > weight_available {
 					// We discard the transaction if the requested limit exceeds the available
 					// amount of weight in the current block.
