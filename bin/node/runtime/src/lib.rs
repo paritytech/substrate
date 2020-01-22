@@ -391,7 +391,7 @@ impl pallet_treasury::Trait for Runtime {
 }
 
 parameter_types! {
-	// NOTE Those are significantly lower than than corresponding fees for transferring funds.
+	// NOTE Those are significantly lower than the corresponding fees for transferring funds.
 	// Since if we charge the fee in gas there is basically not enough gas even to make one simple
 	// transfer.
 	//
