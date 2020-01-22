@@ -1307,12 +1307,15 @@ decl_module! {
 		///
 		/// WARNING: Incorrect arguments here can result in loss of payout. Be very careful.
 		///
-		/// 1 balance transfer
-		/// Up to 16 storage reads, each of `O(N)` size and decode complexity; `N` is maximum
-		/// nominations that can be given to a single validator. (`MAX_NOMINATIONS` is the maximum
-		/// number of validators that may be nominated by a single nominator.) This is bounded only
-		/// economically (all nominators are required to place a minimum stake).
-		/// Compute: O(MAX_NOMINATIONS * logN).
+		/// # <weight>
+		/// - Number of storage read of `O(validators)`; `validators` is the argument of the call.
+		/// - Each storage read is `O(N)` size and decode complexity; `N` is the  maximum
+		///   nominations that can be given to a single validator.
+		/// - Computation complexity: `O(MAX_NOMINATIONS * logN)`; `MAX_NOMINATIONS` is the
+		///   maximum number of validators that may be nominated by a single nominator, it is
+		///   bounded only economically (all nominators are required to place a minimum stake).
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		// TODO: Limit the amount of nominators that can be assigned to a validator by Phragmen.
 		fn payout_nominator(origin, era: EraIndex, validators: Vec<T::AccountId>)
 			-> DispatchResult
@@ -1331,6 +1334,12 @@ decl_module! {
 		/// previous era.
 		///
 		/// WARNING: Incorrect arguments here can result in loss of payout. Be very careful.
+		///
+		/// # <weight>
+		/// - Time complexity: O(1).
+		/// - Contains a limited number of reads and writes.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn payout_validator(origin, era: EraIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::do_payout_validator(who, era)
