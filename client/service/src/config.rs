@@ -23,7 +23,7 @@ pub use sc_executor::WasmExecutionMethod;
 
 use std::{path::{PathBuf, Path}, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
-use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension, NoExtension};
+use sc_chain_spec::{ChainSpec, NoExtension};
 use sp_core::crypto::Protected;
 use target_info::Target;
 use sc_telemetry::TelemetryEndpoints;
