@@ -1308,15 +1308,16 @@ decl_module! {
 		/// WARNING: Incorrect arguments here can result in loss of payout. Be very careful.
 		///
 		/// # <weight>
-		/// - Number of storage read of `O(validators)`; `validators` is the argument of the call.
+		/// - Number of storage read of `O(validators)`; `validators` is the argument of the call,
+		///   and is bounded by `MAX_NOMINATIONS`.
 		/// - Each storage read is `O(N)` size and decode complexity; `N` is the  maximum
 		///   nominations that can be given to a single validator.
 		/// - Computation complexity: `O(MAX_NOMINATIONS * logN)`; `MAX_NOMINATIONS` is the
 		///   maximum number of validators that may be nominated by a single nominator, it is
 		///   bounded only economically (all nominators are required to place a minimum stake).
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		// TODO: Limit the amount of nominators that can be assigned to a validator by Phragmen.
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn payout_nominator(origin, era: EraIndex, validators: Vec<T::AccountId>)
 			-> DispatchResult
 		{
