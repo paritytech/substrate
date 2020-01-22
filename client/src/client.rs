@@ -1551,7 +1551,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 				);
 				return Ok(ImportResult::KnownBad);
 			},
-			BlockLookupResult::ExpectedForkTo(expected_hash) => {
+			BlockLookupResult::Expected(expected_hash) => {
 				trace!(
 					"Rejecting block from known invalid fork. Got {:?}, expected: {:?} at height {}",
 					hash,
@@ -3087,7 +3087,7 @@ pub(crate) mod tests {
 		let mut known_bad = HashSet::new();
 		let mut fork_rules = Vec::new();
 
-		// records what bad_blocks and fork_blocks hashe should be
+		// records what bad_blocks and fork_blocks hashes should be
 		run_test(true, &mut known_bad, &mut fork_rules);
 
 		// enforces rules and actually makes assertions

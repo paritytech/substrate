@@ -141,7 +141,10 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 
 /// A `TestClient` with `test-runtime` builder.
 pub type TestClientBuilder<E, B> = substrate_test_client::TestClientBuilder<
-	substrate_test_runtime::Block, E, B, GenesisParameters
+	substrate_test_runtime::Block,
+	E,
+	B,
+	GenesisParameters,
 >;
 
 /// Test client type with `LocalExecutor` and generic Backend.

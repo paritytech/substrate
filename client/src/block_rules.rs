@@ -14,33 +14,33 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Client fixed specification rules
+//! Client fixed chain specification rules
 
 use std::collections::{HashMap, HashSet};
 
 use sp_runtime::{
-	traits::{Block as BlockT, NumberFor, BlockHashFor},
+	traits::{Block as BlockT, NumberFor},
 };
 
 use sc_client_api::{ForkBlocks, BadBlocks};
 
-/// Specification rules lookup result.
+/// Chain specification rules lookup result.
 pub enum LookupResult<B: BlockT> {
 	/// Specification rules do not contain any special rules about this block
 	NotSpecial,
 	/// The bock is known to be bad and should not be imported
 	KnownBad,
-	/// There is a fork expected to different fork
-	ExpectedForkTo(BlockHashFor<B>)
+	/// There is a specified canonical block hash for the given height
+	Expected(B::Hash)
 }
 
-/// Block special rules.
+/// Chain-specific block filtering rules.
 ///
 /// This holds known bad blocks and known good forks, and
-/// usually part of the chain spec.
+/// is usually part of the chain spec.
 pub struct BlockRules<B: BlockT> {
-	bad: HashSet<BlockHashFor<B>>,
-	forks: HashMap<NumberFor<B>, BlockHashFor<B>>,
+	bad: HashSet<B::Hash>,
+	forks: HashMap<NumberFor<B>, B::Hash>,
 }
 
 impl<B: BlockT> BlockRules<B> {
@@ -55,10 +55,10 @@ impl<B: BlockT> BlockRules<B> {
 		}
 	}
 
-	pub fn lookup(&self, number: NumberFor<B>, hash: &BlockHashFor<B>) -> LookupResult<B> {
+	pub fn lookup(&self, number: NumberFor<B>, hash: &B::Hash) -> LookupResult<B> {
 		if let Some(hash_for_height) = self.forks.get(&number) {
 			if hash_for_height != hash {
-				return LookupResult::ExpectedForkTo(hash_for_height.clone());
+				return LookupResult::Expected(hash_for_height.clone());
 			}
 		}
 
