@@ -81,10 +81,7 @@ pub type HostFuncType<T> = fn(&mut T, &[TypedValue]) -> Result<ReturnValue, Host
 /// will be used by the guest module.
 ///
 /// The memory can't be directly accessed by supervisor, but only
-/// through designated functions [`get`] and [`set`].
-///
-/// [`get`]: #method.get
-/// [`set`]: #method.set
+/// through designated functions [`get`](Memory::get) and [`set`](Memory::set).
 #[derive(Clone)]
 pub struct Memory {
 	inner: imp::Memory,

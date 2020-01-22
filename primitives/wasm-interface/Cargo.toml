@@ -5,5 +5,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-wasmi = "0.6.2"
+wasmi = { version = "0.6.2", optional = true }
 impl-trait-for-tuples = "0.1.2"
+sp-std = { version = "2.0.0", path = "../std", default-features = false }
+
+[features]
+default = [ "std" ]
+std = [ "wasmi", "sp-std/std" ]
