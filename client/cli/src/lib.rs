@@ -869,7 +869,7 @@ fn input_keystore_password() -> Result<String, String> {
 }
 
 /// Use in memory keystore config when it is not required at all.
-fn fill_config_keystore_in_memory<C, G, E>(config: &mut sc_service::Configuration<C, G, E>)
+pub fn fill_config_keystore_in_memory<C, G, E>(config: &mut sc_service::Configuration<C, G, E>)
 	-> Result<(), String>
 {
 	match &mut config.keystore {
