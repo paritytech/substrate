@@ -5286,6 +5286,7 @@ dependencies = [
  "sc-block-builder 0.8.0",
  "sc-client 0.8.0",
  "sc-client-api 2.0.0",
+ "sc-consensus-epochs 0.8.0",
  "sc-consensus-slots 0.8.0",
  "sc-consensus-uncles 0.8.0",
  "sc-executor 0.8.0",
