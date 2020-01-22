@@ -400,6 +400,8 @@ parameter_types! {
 	//
 	// This should be fixed in nearest future by using the synchronous transfer directly. It will
 	// cut fees from the senders account balance directly.
+	//
+	// TODO: https://github.com/paritytech/substrate/issues/4713
 	pub const ContractTransferFee: Balance = 1000;
 	pub const ContractCreationFee: Balance = 1000;
 	pub const ContractFee: Balance = 1000;
