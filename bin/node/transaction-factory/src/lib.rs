@@ -242,6 +242,9 @@ where
 				if ["Timestamp"].contains(&module.as_str()) {
 					continue
 				}
+				if module.as_str() == "Benchmark" && function == "next_block" {
+					break
+				}
 				println!("Creating a {}::{} extrinsic. Extrinsic {}/{} in this block.",
 					module,
 					function,

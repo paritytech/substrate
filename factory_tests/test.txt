@@ -1,4 +1,5 @@
 0 1 Democracy propose
 1 2 Democracy second
 2 3 Democracy note_preimage
+3 3 Benchmark next_block
 3 0 Democracy vote
