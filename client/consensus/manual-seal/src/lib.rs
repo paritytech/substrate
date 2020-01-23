@@ -119,8 +119,8 @@ pub fn import_queue<B: BlockT>(block_import: BoxBlockImport<B, ()>) -> BasicQueu
 }
 
 /// Creates the background authorship task for the manual seal engine.
-pub async fn run_manual_seal<B, CB, E, A, C, S>(
-	mut block_import: BoxBlockImport<B, ()>,
+pub async fn run_manual_seal<B, CB, E, A, C, S, T>(
+	mut block_import: BoxBlockImport<B, T>,
 	mut env: E,
 	back_end: Arc<CB>,
 	pool: Arc<txpool::Pool<A>>,
@@ -178,8 +178,8 @@ pub async fn run_manual_seal<B, CB, E, A, C, S>(
 /// runs the background authorship task for the instant seal engine.
 /// instant-seal creates a new block for every transaction imported into
 /// the transaction pool.
-pub async fn run_instant_seal<B, CB, E, A, C>(
-	block_import: BoxBlockImport<B, ()>,
+pub async fn run_instant_seal<B, CB, E, A, C, T>(
+	block_import: BoxBlockImport<B, T>,
 	env: E,
 	back_end: Arc<CB>,
 	pool: Arc<txpool::Pool<A>>,
@@ -238,7 +238,7 @@ mod tests {
 	use sp_consensus::ImportedAux;
 	use sc_client::LongestChain;
 	use sp_inherents::InherentDataProviders;
-	use sc_basic_authority::ProposerFactory;
+	use sc_basic_authorship::ProposerFactory;
 
 	fn api() -> TestApi {
 		let mut api = TestApi::default();

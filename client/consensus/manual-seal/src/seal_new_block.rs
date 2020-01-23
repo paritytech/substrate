@@ -39,7 +39,7 @@ use std::time::Duration;
 use sp_inherents::InherentDataProviders;
 
 /// params for sealing a new block
-pub struct SealBlockParams<'a, B: BlockT, C, CB, E, P: txpool::ChainApi> {
+pub struct SealBlockParams<'a, B: BlockT, C, CB, E, T, P: txpool::ChainApi> {
 	/// if true, empty blocks(without extrinsics) will be created.
 	/// otherwise, will return Error::EmptyTransactionPool.
 	pub create_empty: bool,
@@ -58,13 +58,13 @@ pub struct SealBlockParams<'a, B: BlockT, C, CB, E, P: txpool::ChainApi> {
 	/// SelectChain object
 	pub select_chain: &'a C,
 	/// block import object
-	pub block_import: &'a mut BoxBlockImport<B, ()>,
+	pub block_import: &'a mut BoxBlockImport<B, T>,
 	/// inherent data provider
 	pub inherent_data_provider: &'a InherentDataProviders,
 }
 
 /// seals a new block with the given params
-pub async fn seal_new_block<B, SC, CB, E, P>(
+pub async fn seal_new_block<B, SC, CB, E, T, P>(
 	SealBlockParams {
 		create_empty,
 		finalize,
@@ -77,7 +77,7 @@ pub async fn seal_new_block<B, SC, CB, E, P>(
 		inherent_data_provider,
 		mut sender,
 		..
-	}: SealBlockParams<'_, B, SC, CB, E, P>
+	}: SealBlockParams<'_, B, SC, CB, E, T, P>
 )
 	where
 		B: BlockT,
