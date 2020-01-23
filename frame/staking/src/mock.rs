@@ -420,6 +420,12 @@ impl ExtBuilder {
 		self.local_key_account = key;
 		self
 	}
+	pub fn offchain_phragmen_ext(self) -> Self {
+		self.session_per_era(3)
+			.session_length(5)
+			.election_lookahead(3)
+			.local_key_account(11)
+	}
 	pub fn set_associated_constants(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		SLASH_DEFER_DURATION.with(|v| *v.borrow_mut() = self.slash_defer_duration);

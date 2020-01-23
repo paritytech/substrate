@@ -265,7 +265,7 @@ use frame_support::{
 		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time, PredictNextSessionChange,
 	}
 };
-use pallet_session::{historical, SelectInitialValidators};
+use pallet_session::historical;
 use sp_runtime::{
 	Perbill, RuntimeDebug,
 	curve::PiecewiseLinear,
@@ -919,6 +919,8 @@ decl_error! {
 		PhragmenBogusNominatorStake,
 		/// One of the submitted nominators has an edge to which they have not voted on chain.
 		PhragmenBogusNomination,
+		/// A self vote must only be originated from a validator to ONLY themselves.
+		PhragmenBogusSelfVote,
 	}
 }
 
@@ -1142,6 +1144,8 @@ decl_module! {
 
 				let ctrl = maybe_bonded.expect("value is checked to be 'Some'; qed");
 				let ledger = Self::ledger(ctrl).ok_or(Error::<T>::NotController)?;
+				let active_extended_stake =
+					<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(ledger.active) as u128;
 
 				if !is_validator {
 					// a normal vote
@@ -1157,12 +1161,20 @@ decl_module! {
 						}),
 						Error::<T>::PhragmenBogusNomination,
 					);
-
-					let active_extended_stake = <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(ledger.active) as u128;
-					ensure!(total_stake == active_extended_stake, Error::<T>::PhragmenBogusNominatorStake);
+					ensure!(
+						total_stake == active_extended_stake,
+						Error::<T>::PhragmenBogusNominatorStake
+					);
 				} else {
 					// a self vote
-					ensure!(distribution.len() == 1, Error::<T>::PhragmenBogusNomination);
+					ensure!(distribution.len() == 1, Error::<T>::PhragmenBogusSelfVote);
+					ensure!(distribution[0].0 == *who, Error::<T>::PhragmenBogusSelfVote);
+					// defensive only. A compact assignment of length one does NOT encode the stake
+					// and it is actually read from chain. Hence, this must always be correct.
+					ensure!(
+						distribution[0].1 == active_extended_stake,
+						Error::<T>::PhragmenBogusSelfVote,
+					);
 				}
 			}
 			// Note that we don't need to check again ^^ if a particular target in a nomination was
@@ -1756,7 +1768,7 @@ impl<T: Trait> Module<T> {
 		// available yet.
 		CurrentEraStartSessionIndex::put(0);
 		BondedEras::mutate(|bonded| bonded.push((0, 0)));
-		Self::select_validators().1
+		Self::select_and_update_validators()
 	}
 
 	/// The era has changed - enact new staking set.
@@ -2022,7 +2034,7 @@ impl<T: Trait> Module<T> {
 			targets.retain(|stash| {
 				<Self as Store>::SlashingSpans::get(&stash).map_or(
 					true,
-					|spans| submitted_in >= spans.last_start(),
+					|spans| submitted_in >= spans.last_nonzero_slash(),
 				)
 			});
 
