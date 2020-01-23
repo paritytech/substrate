@@ -90,7 +90,7 @@ where
 
 	service.await?;
 
-	handle.await;
+	handle.await?;
 
 	Ok(())
 }

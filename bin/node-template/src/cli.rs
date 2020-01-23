@@ -13,13 +13,16 @@ where
 	let args: Vec<_> = args.collect();
 	let core_params = sc_cli::from_iter::<CoreParams, _>(args.clone(), &version);
 
+	let mut config = sc_service::Configuration::default();
+	config.impl_name = "node-template";
+
 	sc_cli::run(
+		config,
 		core_params,
 		service::new_light,
 		service::new_full,
 		load_spec,
 		|config: _| Ok(new_full_start!(config).0),
-		"node-template",
 		&version,
 	)
 }
