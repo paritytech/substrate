@@ -168,15 +168,38 @@ decl_module! {
 
 		/// Unlock any vested funds of the sender account.
 		///
-		/// Origin must be signed with an account that still has funds to vest.
+		/// The dispatch origin for this call must be _Signed_ and the sender must have funds still
+		/// locked under this module.
+		///
+		/// Emits either `VestingCompleted` or `VestingUpdated`.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// - One balance-lock operation.
+		/// - One storage read (codec `O(1)`) and up to one removal.
+		/// - One event.
+		/// # </weight>
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::unlock_vested(who)
 		}
 
-		/// Unlock any vested funds of a target account.
+		/// Unlock any vested funds of a `target` account.
 		///
-		/// Origin must be signed with an account that still has funds to vest.
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `target`: The account whose vested funds should be unlocked. Must have funds still
+		/// locked under this module.
+		///
+		/// Emits either `VestingCompleted` or `VestingUpdated`.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// - Up to one account lookup.
+		/// - One balance-lock operation.
+		/// - One storage read (codec `O(1)`) and up to one removal.
+		/// - One event.
+		/// # </weight>
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::unlock_vested(T::Lookup::lookup(target)?)
@@ -192,6 +215,7 @@ impl<T: Trait> Module<T> {
 		let unvested = Self::vesting_balance(&who);
 		if unvested.is_zero() {
 			T::Currency::remove_lock(VESTING_ID, &who);
+			Vesting::<T>::kill(&who);
 			Self::deposit_event(RawEvent::VestingCompleted(who));
 		} else {
 			let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
