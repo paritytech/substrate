@@ -62,7 +62,9 @@ pub struct NotificationsOut {
 ///
 /// When creating, this struct starts in a state in which we must first send back a handshake
 /// message to the remote. No message will come before this has been done.
+#[pin_project::pin_project]
 pub struct NotificationsInSubstream<TSubstream> {
+	#[pin]
 	socket: Framed<TSubstream, UviBytes<Vec<u8>>>,
 	handshake: NotificationsInSubstreamHandshake,
 }
@@ -80,8 +82,10 @@ enum NotificationsInSubstreamHandshake {
 }
 
 /// A substream for outgoing notification messages.
+#[pin_project::pin_project]
 pub struct NotificationsOutSubstream<TSubstream> {
 	/// Substream where to send messages.
+	#[pin]
 	socket: Framed<TSubstream, UviBytes<Vec<u8>>>,
 	/// Queue of messages waiting to be sent.
 	messages_queue: VecDeque<Vec<u8>>,
@@ -132,7 +136,7 @@ where TSubstream: AsyncRead + AsyncWrite + 'static,
 }
 
 impl<TSubstream> NotificationsInSubstream<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite + 'static,
+where TSubstream: AsyncRead + AsyncWrite,
 {
 	/// Sends the handshake in order to inform the remote that we accept the substream.
 	// TODO: doesn't seem to work if `message` is empty
@@ -150,36 +154,38 @@ where TSubstream: AsyncRead + AsyncWrite + 'static,
 }
 
 impl<TSubstream> Stream for NotificationsInSubstream<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite + Unpin + 'static,
+where TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
 	type Item = Result<BytesMut, io::Error>;
 
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+		let this = self.project();
+
 		// This `Stream` implementation first tries to send back the handshake if necessary.
 		loop {
-			match mem::replace(&mut self.handshake, NotificationsInSubstreamHandshake::Sent) {
+			match mem::replace(this.handshake, NotificationsInSubstreamHandshake::Sent) {
 				NotificationsInSubstreamHandshake::Sent =>
-					return self.socket.poll(cx),
+					return Stream::poll_next(this.socket, cx),
 				NotificationsInSubstreamHandshake::NotSent =>
 					return Poll::Pending,
 				NotificationsInSubstreamHandshake::PendingSend(msg) =>
-					match self.socket.poll_ready(cx) {
+					match Sink::poll_ready(this.socket, cx) {
 						Poll::Ready(_) => {
-							self.handshake = NotificationsInSubstreamHandshake::Close;
-							match self.socket.start_send(msg, cx) {
+							*this.handshake = NotificationsInSubstreamHandshake::Close;
+							match Sink::start_send(this.socket, msg) {
 								Ok(()) => {},
 								Err(err) => return Poll::Ready(Some(Err(err))),
 							}
 						},
 						Poll::Pending =>
-							self.handshake = NotificationsInSubstreamHandshake::PendingSend(msg),
+							*this.handshake = NotificationsInSubstreamHandshake::PendingSend(msg),
 					},
 				NotificationsInSubstreamHandshake::Close =>
-					match self.socket.poll_close(cx)? {
+					match Sink::poll_close(this.socket, cx)? {
 						Poll::Ready(()) =>
-							self.handshake = NotificationsInSubstreamHandshake::Sent,
+							*this.handshake = NotificationsInSubstreamHandshake::Sent,
 						Poll::Pending =>
-							self.handshake = NotificationsInSubstreamHandshake::Close,
+							*this.handshake = NotificationsInSubstreamHandshake::Close,
 					},
 			}
 		}
@@ -235,7 +241,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 }
 
 impl<TSubstream> NotificationsOutSubstream<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite + Unpin + 'static,
+where TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
 	/// Pushes a message to the queue of messages.
 	pub fn push_message(&mut self, message: Vec<u8>) {
@@ -244,22 +250,26 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + 'static,
 	}
 
 	/// Processes the substream.
-	pub fn process(&mut self, cx: &mut Context) -> Result<(), io::Error> {
-		while let Some(msg) = self.messages_queue.pop_front() {
-			match self.socket.poll_read(cx) {
+	pub fn process(self: Pin<&mut Self>, cx: &mut Context) -> Result<(), io::Error> {
+		let this = self.project();
+
+		while !this.messages_queue.is_empty() {
+			match Sink::poll_ready(this.socket, cx) {
 				Poll::Ready(Err(err)) => return Err(err),
-				Poll::Ready(Ok(())) => self.socket.start_send(msg, cx)?,
-				Poll::Pending => {
-					self.messages_queue.push_front(msg);
-					return Ok(());
-				}
+				Poll::Ready(Ok(())) => {
+					let msg = this.messages_queue.pop_front()
+						.expect("checked for !is_empty above; qed");
+					Sink::start_send(this.socket, msg)?;
+					*this.need_flush = true;
+				},
+				Poll::Pending => return Ok(()),
 			}
 		}
 
-		if self.need_flush {
-			match self.socket.poll_complete(cx) {
+		if *this.need_flush {
+			match Sink::poll_flush(this.socket, cx) {
 				Poll::Ready(Err(err)) => return Err(err),
-				Poll::Ready(Ok(())) => self.need_flush = false,
+				Poll::Ready(Ok(())) => *this.need_flush = false,
 				Poll::Pending => {},
 			}
 		}

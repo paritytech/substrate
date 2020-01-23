@@ -28,7 +28,7 @@ use libp2p::swarm::{
 };
 use log::error;
 use smallvec::SmallVec;
-use std::{borrow::Cow, fmt, io, marker::PhantomData, mem, task::Poll, time::{Duration, Instant}};
+use std::{borrow::Cow, fmt, io, marker::PhantomData, mem, task::{Context, Poll}, time::{Duration, Instant}};
 
 /// Maximum duration to open a substream and receive the handshake message. After that, we
 /// consider that we failed to open the substream.
@@ -294,7 +294,8 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	}
 
 	fn poll(
-		&mut self,
+		self: Pin<&mut Self>,
+		cx: &mut Context,
 	) -> Poll<ProtocolsHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::OutEvent, Self::Error>> {
 		// Flush the events queue if necessary.
 		if !self.events_queue.is_empty() {
@@ -303,7 +304,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 		}
 
 		match &mut self.state {
-			State::Open(sub) => match sub.process() {
+			State::Open(sub) => match NotificationsOutSubstream::process(sub, cx) {
 				Ok(()) => {},
 				Err(err) => {
 					// We try to re-open a substream.
@@ -317,7 +318,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(ev));
 				}
 			},
-			State::DisabledOpen(sub) => match sub.process() {
+			State::DisabledOpen(sub) => match sub.process(cx) {
 				Ok(()) => {},
 				Err(_) => {
 					self.state = State::Disabled;

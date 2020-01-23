@@ -19,10 +19,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures::prelude::*;
-use libp2p::core::{
-	upgrade::{InboundUpgrade, ProtocolName, UpgradeInfo},
-	Negotiated
-};
+use libp2p::core::upgrade::{InboundUpgrade, ProtocolName, UpgradeInfo};
 use std::{iter::FromIterator, pin::Pin, task::{Context, Poll}, vec};
 
 // TODO: move this to libp2p

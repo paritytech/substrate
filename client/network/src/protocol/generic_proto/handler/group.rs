@@ -183,7 +183,8 @@ pub enum NotifsHandlerOut {
 	},
 }
 
-impl<TSubstream> NotifsHandlerProto<TSubstream> {
+impl<TSubstream> NotifsHandlerProto<TSubstream>
+where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	pub fn new(legacy: RegisteredProtocol, list: impl Into<Vec<(Cow<'static, [u8]>, Vec<u8>)>>) -> Self {
 		let list = list.into();
 
