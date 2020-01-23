@@ -1342,9 +1342,7 @@ fn voter_persists_its_votes() {
 					// by `Sink::poll_complete` to make sure items are being flushed. Given that
 					// we send in a loop including a delay until items are received, this can be
 					// ignored for the sake of reduced complexity.
-					Pin::new(&mut *round_tx.lock())
-						.start_send(finality_grandpa::Message::Prevote(prevote))
-						.unwrap();
+					Pin::new(&mut *round_tx.lock()).start_send(finality_grandpa::Message::Prevote(prevote)).unwrap();
 				} else if state.compare_and_swap(1, 2, Ordering::SeqCst) == 1 {
 					// the next message we receive should be our own prevote
 					let prevote = match signed.message {

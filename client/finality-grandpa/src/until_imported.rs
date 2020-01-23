@@ -186,7 +186,7 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 		}
 
 		let mut update_interval = false;
-		while let Poll::Ready(Some(Ok(()))) = Stream::poll_next(Pin::new(&mut this.check_pending), cx) {
+		while let Poll::Ready(Some(Ok(()))) = this.check_pending.poll_next_unpin(cx) {
 			update_interval = true;
 		}
 

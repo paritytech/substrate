@@ -610,8 +610,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT, N, RA, SC, VR, X, Sp>(
 					}
 				);
 				future::ready(())
-			})
-			.then(|_| { future::ready(()) });
+			});
 		future::Either::Left(events)
 	} else {
 		future::Either::Right(future::pending())
