@@ -30,7 +30,6 @@ sc-client = { version = "0.8", path = "../../client/" }
 node-template-runtime = { version = "2.0.0", path = "runtime" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sc-basic-authorship = { path = "../../client/basic-authorship" }
-structopt = "=0.3.8"
 
 [build-dependencies]
 vergen = "3.0.4"
