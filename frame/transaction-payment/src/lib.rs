@@ -265,7 +265,8 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 		let balance_to_u32_divisor = (T::Currency::total_issuance() / u32::max_value().into())
 			.max(1.into());
 
-		// Balance expressed as fraction of total issuance in u32
+		// Balance expressed as fraction of total issuance in u32:
+		// i.e. `author_balance_diff / total_issuance == author_balance_diff_u32 / max_u32`
 		let author_balance_diff_u32 = (author_balance_diff / balance_to_u32_divisor)
 			.saturated_into::<u32>();
 
@@ -298,6 +299,7 @@ mod tests {
 	use pallet_balances::Call as BalancesCall;
 	use sp_std::cell::RefCell;
 	use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+	use sp_core::u32_trait::{_1, _4};
 
 	const CALL: &<Runtime as frame_system::Trait>::Call = &Call::Balances(BalancesCall::transfer(2, 69));
 
@@ -384,11 +386,38 @@ mod tests {
 		}
 	}
 
+	// Author is fixed and has account id 42.
+	pub struct Author;
+
+	impl OnUnbalanced<NegativeImbalance> for Author {
+		fn on_nonzero_unbalanced(amount: NegativeImbalance) {
+			Balances::resolve_creating(&42, amount);
+		}
+	}
+
+	impl frame_support::traits::Author<u64> for Author {
+		fn author() -> u64 { 42 }
+	}
+
+	type DealWithFees = frame_support::traits::SplitTwoWays<
+		Balance,
+		NegativeImbalance,
+		_4, (), // 4 parts (80%) is burned.
+		_1, Author, // 1 part (20%) goes to the block author.
+	>;
+
+	type DealWithTip = frame_support::traits::SplitTwoWays<
+		Balance,
+		NegativeImbalance,
+		_1, (), // 1 parts (50%) is burned.
+		_1, Author, // 1 part (50%) goes to the block author.
+	>;
+
 	impl Trait for Runtime {
 		type Currency = pallet_balances::Module<Runtime>;
-		type Author = ();
-		type OnTransactionFeePayment = ();
-		type OnTransactionTipPayment = ();
+		type Author = Author;
+		type OnTransactionFeePayment = DealWithFees;
+		type OnTransactionTipPayment = DealWithTip;
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = WeightToFee;
@@ -398,6 +427,8 @@ mod tests {
 	type Balances = pallet_balances::Module<Runtime>;
 	type System = frame_system::Module<Runtime>;
 	type TransactionPayment = Module<Runtime>;
+	type NegativeImbalance = NegativeImbalanceOf<Runtime>;
+	type Balance = BalanceOf<Runtime>;
 
 	pub struct ExtBuilder {
 		balance_factor: u64,
@@ -655,7 +686,7 @@ mod tests {
 			// 123 weight, 456 length, 100 base
 			// adjustable fee = (123 * 1) + (456 * 10) = 4683
 			// adjusted fee = (4683 * .5) + 4683 = 7024.5 -> 7024
-			// final fee = 100 + 7024 = 7913
+			// final fee = 100 + 7024 = 7124
 			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(456, dispatch_info), 7124);
 		});
 	}
@@ -681,6 +712,43 @@ mod tests {
 				),
 				<u64>::max_value()
 			);
+		});
+	}
+
+	// Test that the priority of a transaction is correctly computed.
+	#[test]
+	fn priority_works() {
+		ExtBuilder::default()
+		.fees(100, 10, 1)
+		.balance_factor(100)
+		.build()
+		.execute_with(|| {
+			let tip_divisor = 2;
+			let fee_divisor = 5;
+			let tip = 200u32;
+			let len = 24u32;
+			let weight = 130u32;
+			let charge_transaction = ChargeTransactionPayment::<Runtime>(tip as u64);
+			let dispatch_info = DispatchInfo {
+				weight,
+				class: DispatchClass::Operational,
+				pays_fee: true,
+			};
+			let call = Call::System(frame_system::Call::fill_block());
+
+			let priority = charge_transaction.validate(&1, &call, dispatch_info, len as usize)
+				.unwrap().priority;
+
+			let author_balance_diff = tip/tip_divisor + (100 + (weight + 10 * len))/fee_divisor;
+			let author_balance_diff_u32 =
+				(
+					author_balance_diff as u64
+					/ (Balances::total_issuance() / u32::max_value() as u64).max(1u64)
+				).saturated_into::<u32>();
+
+			let priority_res = author_balance_diff_u32 * MaximumBlockWeight::get() / weight;
+
+			assert_eq!(priority, priority_res as u64);
 		});
 	}
 }
