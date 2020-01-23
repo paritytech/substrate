@@ -26,7 +26,6 @@ use crate::error;
 use std::fmt::Debug;
 use log::info;
 use sc_network::config::build_multiaddr;
-use futures::{pin_mut, future::FutureExt};
 use std::io;
 use std::fs;
 use std::io::{Read, Write, Seek};
@@ -990,12 +989,9 @@ impl ExportBlocksCmd {
 			None => Box::new(io::stdout()),
 		};
 
-		let f = builder(config)?
-			.export_blocks(file, from.into(), to, json);
-		let f = f.fuse();
-		pin_mut!(f);
-
-		run_until_exit(f)
+		run_until_exit(config, |config| {
+			Ok(builder(config)?.export_blocks(file, from.into(), to, json))
+		})
 	}
 }
 
@@ -1036,12 +1032,9 @@ impl ImportBlocksCmd {
 			},
 		};
 
-		let f = builder(config)?
-			.import_blocks(file, false);
-		let f = f.fuse();
-		pin_mut!(f);
-
-		run_until_exit(f)
+		run_until_exit(config, |config| {
+			Ok(builder(config)?.import_blocks(file, false))
+		})
 	}
 }
 
@@ -1081,11 +1074,9 @@ impl CheckBlockCmd {
 		};
 
 		let start = std::time::Instant::now();
-		let f = builder(config)?
-			.check_block(block_id);
-		let f = f.fuse();
-		pin_mut!(f);
-		run_until_exit(f)?;
+		run_until_exit(config, |config| {
+			Ok(builder(config)?.check_block(block_id))
+		})?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
 
 		Ok(())

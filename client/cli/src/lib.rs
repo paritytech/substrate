@@ -298,10 +298,12 @@ where
 
 	match config.roles {
 		ServiceRoles::LIGHT => run_service_until_exit(
-			new_light(config)?,
+			config,
+			new_light,
 		),
 		_ => run_service_until_exit(
-			new_full(config)?,
+			config,
+			new_full,
 		),
 	}
 }
