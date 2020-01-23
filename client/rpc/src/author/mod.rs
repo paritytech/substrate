@@ -117,9 +117,8 @@ where
 		let keys = self.client.runtime_api().decode_session_keys(
 			&generic::BlockId::Hash(best_block_hash),
 			session_keys.to_vec(),
-		)
-		.map_err(|e| Error::Client(Box::new(e)))?
-		.ok_or_else(|| Error::InvalidSessionKeys)?;
+		).map_err(|e| Error::Client(Box::new(e)))?
+			.ok_or_else(|| Error::InvalidSessionKeys)?;
 
 		Ok(self.keystore.read().has_keys(&keys))
 	}
