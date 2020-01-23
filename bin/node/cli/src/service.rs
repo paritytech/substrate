@@ -565,7 +565,8 @@ mod tests {
 					storage_changes: None,
 					finalized: false,
 					auxiliary: Vec::new(),
-					fork_choice: ForkChoiceStrategy::LongestChain,
+					intermediates: Default::default(),
+					fork_choice: Some(ForkChoiceStrategy::LongestChain),
 					allow_missing_state: false,
 					import_existing: false,
 				};
