@@ -48,7 +48,7 @@ pub use sp_core::traits::Externalities;
 pub use sp_wasm_interface;
 pub use wasm_runtime::WasmExecutionMethod;
 
-pub use sc_executor_common::{error, allocator, sandbox};
+pub use sc_executor_common::{error, sandbox};
 
 /// Call the given `function` in the given wasm `code`.
 ///

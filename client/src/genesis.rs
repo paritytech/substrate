@@ -45,7 +45,7 @@ mod tests {
 	use codec::{Encode, Decode, Joiner};
 	use sc_executor::native_executor_instance;
 	use sp_state_machine::{
-		StateMachine, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage,
+		StateMachine, OverlayedChanges, ExecutionStrategy,
 		InMemoryBackend,
 	};
 	use substrate_test_runtime_client::{
@@ -92,7 +92,7 @@ mod tests {
 
 		StateMachine::new(
 			backend,
-			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"Core_initialize_block",
@@ -105,7 +105,7 @@ mod tests {
 		for tx in transactions.iter() {
 			StateMachine::new(
 				backend,
-				Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+				sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 				&mut overlay,
 				&executor(),
 				"BlockBuilder_apply_extrinsic",
@@ -118,7 +118,7 @@ mod tests {
 
 		let ret_data = StateMachine::new(
 			backend,
-			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"BlockBuilder_finalize_block",
@@ -150,7 +150,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_with_native() {
 		let mut storage = GenesisConfig::new(
-			false,
+			None,
 			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
@@ -165,7 +165,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let _ = StateMachine::new(
 			&backend,
-			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
@@ -178,7 +178,7 @@ mod tests {
 
 	#[test]
 	fn construct_genesis_should_work_with_wasm() {
-		let mut storage = GenesisConfig::new(false,
+		let mut storage = GenesisConfig::new(None,
 			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
@@ -193,7 +193,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let _ = StateMachine::new(
 			&backend,
-			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
@@ -206,7 +206,7 @@ mod tests {
 
 	#[test]
 	fn construct_genesis_with_bad_transaction_should_panic() {
-		let mut storage = GenesisConfig::new(false,
+		let mut storage = GenesisConfig::new(None,
 			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			68,
@@ -221,7 +221,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let r = StateMachine::new(
 			&backend,
-			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",

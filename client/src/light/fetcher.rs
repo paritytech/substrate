@@ -25,12 +25,12 @@ use codec::{Decode, Encode};
 use sp_core::{convert_hash, traits::CodeExecutor};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
-	SimpleArithmetic, CheckedConversion, Zero,
+	SimpleArithmetic, CheckedConversion,
 };
 use sp_state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
-	TrieBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage,
-	read_child_proof_check,
+	InMemoryChangesTrieStorage, TrieBackend, read_proof_check, key_changes_proof_check_with_db,
+	create_proof_check_backend_storage, read_child_proof_check,
 };
 pub use sp_state_machine::StorageProof;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
@@ -113,30 +113,34 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 			)?;
 		}
 
-		// FIXME: remove this in https://github.com/paritytech/substrate/pull/3201
-		let changes_trie_config_range = ChangesTrieConfigurationRange {
-			config: &request.changes_trie_config,
-			zero: Zero::zero(),
-			end: None,
-		};
-
 		// and now check the key changes proof + get the changes
-		key_changes_proof_check::<H, _>(
-			changes_trie_config_range,
-			&RootsStorage {
-				roots: (request.tries_roots.0, &request.tries_roots.2),
-				prev_roots: remote_roots,
-			},
-			remote_proof,
-			request.first_block.0,
-			&ChangesTrieAnchorBlockId {
-				hash: convert_hash(&request.last_block.1),
-				number: request.last_block.0,
-			},
-			remote_max_block,
-			request.storage_key.as_ref().map(Vec::as_slice),
-			&request.key)
-		.map_err(|err| ClientError::ChangesTrieAccessFailed(err))
+		let mut result = Vec::new();
+		let proof_storage = InMemoryChangesTrieStorage::with_proof(remote_proof);
+		for config_range in &request.changes_trie_configs {
+			let result_range = key_changes_proof_check_with_db::<H, _>(
+				ChangesTrieConfigurationRange {
+					config: config_range.config.as_ref().ok_or(ClientError::ChangesTriesNotSupported)?,
+					zero: config_range.zero.0,
+					end: config_range.end.map(|(n, _)| n),
+				},
+				&RootsStorage {
+					roots: (request.tries_roots.0, &request.tries_roots.2),
+					prev_roots: &remote_roots,
+				},
+				&proof_storage,
+				request.first_block.0,
+				&ChangesTrieAnchorBlockId {
+					hash: convert_hash(&request.last_block.1),
+					number: request.last_block.0,
+				},
+				remote_max_block,
+				request.storage_key.as_ref().map(Vec::as_slice),
+				&request.key)
+			.map_err(|err| ClientError::ChangesTrieAccessFailed(err))?;
+			result.extend(result_range);
+		}
+
+		Ok(result)
 	}
 
 	/// Check CHT-based proof for changes tries roots.
@@ -284,7 +288,7 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 /// A view of BTreeMap<Number, Hash> as a changes trie roots storage.
 struct RootsStorage<'a, Number: SimpleArithmetic, Hash: 'a> {
 	roots: (Number, &'a [Hash]),
-	prev_roots: BTreeMap<Number, Hash>,
+	prev_roots: &'a BTreeMap<Number, Hash>,
 }
 
 impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a, Number, Hash>
@@ -340,7 +344,7 @@ pub mod tests {
 	use crate::in_mem::{Blockchain as InMemoryBlockchain};
 	use crate::light::fetcher::{FetchChecker, LightDataChecker, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
-	use sp_core::{blake2_256, Blake2Hasher, H256};
+	use sp_core::{blake2_256, Blake2Hasher, ChangesTrieConfiguration, H256};
 	use sp_core::storage::{well_known_keys, StorageKey, ChildInfo};
 	use sp_runtime::generic::BlockId;
 	use sp_state_machine::Backend;
@@ -569,8 +573,13 @@ pub mod tests {
 
 			// check proof on local client
 			let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
+			let config = ChangesTrieConfiguration::new(4, 2);
 			let request = RemoteChangesRequest::<Header> {
-				changes_trie_config: runtime::changes_trie_config(),
+				changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
+					zero: (0, Default::default()),
+					end: None,
+					config: Some(config),
+				}],
 				first_block: (begin, begin_hash),
 				last_block: (end, end_hash),
 				max_block: (max, max_hash),
@@ -624,8 +633,13 @@ pub mod tests {
 		);
 
 		// check proof on local client
+		let config = ChangesTrieConfiguration::new(4, 2);
 		let request = RemoteChangesRequest::<Header> {
-			changes_trie_config: runtime::changes_trie_config(),
+			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
+				zero: (0, Default::default()),
+				end: None,
+				config: Some(config),
+			}],
 			first_block: (1, b1),
 			last_block: (4, b4),
 			max_block: (4, b4),
@@ -665,8 +679,13 @@ pub mod tests {
 			begin_hash, end_hash, begin_hash, max_hash, None, &key).unwrap();
 
 		let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
+		let config = ChangesTrieConfiguration::new(4, 2);
 		let request = RemoteChangesRequest::<Header> {
-			changes_trie_config: runtime::changes_trie_config(),
+			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
+				zero: (0, Default::default()),
+				end: None,
+				config: Some(config),
+			}],
 			first_block: (begin, begin_hash),
 			last_block: (end, end_hash),
 			max_block: (max, max_hash),

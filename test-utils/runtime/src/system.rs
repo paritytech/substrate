@@ -35,7 +35,7 @@ use frame_system::Trait;
 use crate::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };
-use sp_core::storage::well_known_keys;
+use sp_core::{storage::well_known_keys, ChangesTrieConfiguration};
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -51,6 +51,7 @@ decl_storage! {
 		Number get(fn number): Option<BlockNumber>;
 		ParentHash get(fn parent_hash): Hash;
 		NewAuthorities get(fn new_authorities): Option<Vec<AuthorityId>>;
+		NewChangesTrieConfig get(fn new_changes_trie_config): Option<Option<ChangesTrieConfiguration>>;
 		StorageDigest get(fn storage_digest): Option<Digest>;
 		Authorities get(fn authorities) config(): Vec<AuthorityId>;
 	}
@@ -206,6 +207,8 @@ pub fn finalize_block() -> Header {
 	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
 
 	let o_new_authorities = <NewAuthorities>::take();
+	let new_changes_trie_config = <NewChangesTrieConfig>::take();
+
 	// This MUST come after all changes to storage are done. Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
 	let storage_root = Hash::decode(&mut &storage_root()[..])
@@ -220,6 +223,12 @@ pub fn finalize_block() -> Header {
 	if let Some(new_authorities) = o_new_authorities {
 		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
 		digest.push(generic::DigestItem::Consensus(*b"babe", new_authorities.encode()));
+	}
+
+	if let Some(new_config) = new_changes_trie_config {
+		digest.push(generic::DigestItem::ChangesTrieSignal(
+			generic::ChangesTrieSignal::NewConfiguration(new_config)
+		));
 	}
 
 	Header {
@@ -244,6 +253,8 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyExtrinsicResult {
 		Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
 		Extrinsic::IncludeData(_) => Ok(Ok(())),
 		Extrinsic::StorageChange(key, value) => execute_storage_change(key, value.as_ref().map(|v| &**v)),
+		Extrinsic::ChangesTrieConfigUpdate(ref new_config) =>
+			execute_changes_trie_config_update(new_config.clone()),
 	}
 }
 
@@ -283,6 +294,18 @@ fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyExtrinsicRes
 		Some(value) => storage::unhashed::put_raw(key, value),
 		None => storage::unhashed::kill(key),
 	}
+	Ok(Ok(()))
+}
+
+fn execute_changes_trie_config_update(new_config: Option<ChangesTrieConfiguration>) -> ApplyExtrinsicResult {
+	match new_config.clone() {
+		Some(new_config) => storage::unhashed::put_raw(
+			well_known_keys::CHANGES_TRIE_CONFIG,
+			&new_config.encode(),
+		),
+		None => storage::unhashed::kill(well_known_keys::CHANGES_TRIE_CONFIG),
+	}
+	<NewChangesTrieConfig>::put(new_config);
 	Ok(Ok(()))
 }
 

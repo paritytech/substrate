@@ -20,12 +20,14 @@
 pub type VersionNumber = u32;
 
 // the current expected version of the storage
-pub const CURRENT_VERSION: VersionNumber = 1;
+pub const CURRENT_VERSION: VersionNumber = 2;
 
+/// The inner logic of migrations.
 #[cfg(any(test, feature = "migrate"))]
-mod inner {
+pub mod inner {
 	use crate::{Store, Module, Trait};
-	use frame_support::{StorageLinkedMap, StorageValue};
+	use frame_support::{StorageLinkedMap, StoragePrefixedMap, StorageValue};
+	use codec::{Encode, Decode};
 	use sp_std::vec::Vec;
 	use super::{CURRENT_VERSION, VersionNumber};
 
@@ -60,6 +62,55 @@ mod inner {
 		frame_support::print("Finished migrating Staking storage to v1.");
 	}
 
+	// migrate storage from v1 to v2: adds another field to the `SlashingSpans`
+	// struct.
+	pub fn to_v2<T: Trait>(version: &mut VersionNumber) {
+		use crate::{EraIndex, slashing::SpanIndex};
+		#[derive(Decode)]
+		struct V1SlashingSpans {
+			span_index: SpanIndex,
+			last_start: EraIndex,
+			prior: Vec<EraIndex>,
+		}
+
+		#[derive(Encode)]
+		struct V2SlashingSpans {
+			span_index: SpanIndex,
+			last_start: EraIndex,
+			last_nonzero_slash: EraIndex,
+			prior: Vec<EraIndex>,
+		}
+
+		if *version != 1 { return }
+		*version += 1;
+
+		let prefix = <Module<T> as Store>::SlashingSpans::final_prefix();
+		let mut current_key = prefix.to_vec();
+		loop {
+			let maybe_next_key = sp_io::storage::next_key(&current_key[..])
+				.filter(|v| v.starts_with(&prefix[..]));
+
+			match maybe_next_key {
+				Some(next_key) => {
+					let maybe_spans = sp_io::storage::get(&next_key[..])
+						.and_then(|v| V1SlashingSpans::decode(&mut &v[..]).ok());
+					if let Some(spans) = maybe_spans {
+						let new_val = V2SlashingSpans {
+							span_index: spans.span_index,
+							last_start: spans.last_start,
+							last_nonzero_slash: spans.last_start,
+							prior: spans.prior,
+						}.encode();
+
+						sp_io::storage::set(&next_key[..], &new_val[..]);
+					}
+					current_key = next_key;
+				}
+				None => break,
+			}
+		}
+	}
+
 	pub(super) fn perform_migrations<T: Trait>() {
 		<Module<T> as Store>::StorageVersion::mutate(|version| {
 			if *version < MIN_SUPPORTED_VERSION {
@@ -72,6 +123,7 @@ mod inner {
 			if *version == CURRENT_VERSION { return }
 
 			to_v1::<T>(version);
+			to_v2::<T>(version);
 		});
 	}
 }

@@ -202,7 +202,8 @@ fn import_block<Backend, Exec, Block, RtApi>(
 		finalized: false,
 		justification: None,
 		auxiliary: Vec::new(),
-		fork_choice: ForkChoiceStrategy::LongestChain,
+		intermediates: Default::default(),
+		fork_choice: Some(ForkChoiceStrategy::LongestChain),
 		allow_missing_state: false,
 		import_existing: false,
 	};

@@ -290,7 +290,8 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 				storage_changes: Some(storage_changes),
 				finalized: false,
 				auxiliary: Vec::new(),
-				fork_choice: ForkChoiceStrategy::LongestChain,
+				intermediates: Default::default(),
+				fork_choice: Some(ForkChoiceStrategy::LongestChain),
 				allow_missing_state: false,
 				import_existing: false,
 			}
@@ -644,7 +645,8 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 					finalized: false,
 					justification,
 					auxiliary: Vec::new(),
-					fork_choice: ForkChoiceStrategy::LongestChain,
+					intermediates: Default::default(),
+					fork_choice: Some(ForkChoiceStrategy::LongestChain),
 					allow_missing_state: false,
 					import_existing: false,
 				};
@@ -675,19 +677,21 @@ fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusErro
 	};
 
 	// check if we already have initialized the cache
-	let genesis_id = BlockId::Number(Zero::zero());
-	let genesis_authorities: Option<Vec<A>> = cache
-		.get_at(&well_known_cache_keys::AUTHORITIES, &genesis_id)
-		.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok());
-	if genesis_authorities.is_some() {
-		return Ok(());
-	}
-
 	let map_err = |error| sp_consensus::Error::from(sp_consensus::Error::ClientImport(
 		format!(
 			"Error initializing authorities cache: {}",
 			error,
 		)));
+
+	let genesis_id = BlockId::Number(Zero::zero());
+	let genesis_authorities: Option<Vec<A>> = cache
+		.get_at(&well_known_cache_keys::AUTHORITIES, &genesis_id)
+		.unwrap_or(None)
+		.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok());
+	if genesis_authorities.is_some() {
+		return Ok(());
+	}
+
 	let genesis_authorities = authorities(client, &genesis_id)?;
 	cache.initialize(&well_known_cache_keys::AUTHORITIES, genesis_authorities.encode())
 		.map_err(map_err)?;
@@ -706,6 +710,7 @@ fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, Consensus
 		.cache()
 		.and_then(|cache| cache
 			.get_at(&well_known_cache_keys::AUTHORITIES, at)
+			.unwrap_or(None)
 			.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok())
 		)
 		.or_else(|| AuraApi::authorities(&*client.runtime_api(), at).ok())
