@@ -11,7 +11,6 @@ path = "src/main.rs"
 
 [dependencies]
 futures = "0.3.1"
-futures01 = { package = "futures", version = "0.1.29" }
 log = "0.4.8"
 sc-cli = { version = "0.8.0", path = "../../client/cli" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }

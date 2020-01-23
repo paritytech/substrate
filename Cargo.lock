@@ -3194,7 +3194,6 @@ dependencies = [
 name = "node-template"
 version = "2.0.0"
 dependencies = [
- "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-template-runtime 2.0.0",
