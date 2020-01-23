@@ -318,6 +318,8 @@ impl TypeId for IndexedUtilityModuleId {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
