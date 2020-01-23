@@ -775,9 +775,9 @@ pub trait Logging {
 /// Interface that provides functions for benchmarking the runtime.
 #[runtime_interface]
 pub trait Benchmarking {
-		/// Get the current system time in nanoseconds.
+		/// Get the number of nanoseconds passed since the UNIX epoch
 		///
-		/// WARNING! This is a non-determinisic call. Do not use this within
+		/// WARNING! This is a non-deterministic call. Do not use this within
 		/// consensus critical logic.
 		fn current_time() -> u128 {
 			std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)
