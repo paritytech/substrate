@@ -623,6 +623,17 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
+	// Stores the balance required to create a tombstone upon contract eviction
+	// into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch
+	// buffer are overwritten.
+	ext_tombstone_deposit(ctx) => {
+		ctx.scratch_buf.clear();
+		ctx.ext.tombstone_deposit().encode_to(&mut ctx.scratch_buf);
+		Ok(())
+	},
+
 	// Decodes the given buffer as a `T::Call` and adds it to the list
 	// of to-be-dispatched calls.
 	//
