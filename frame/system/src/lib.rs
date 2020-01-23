@@ -450,6 +450,9 @@ decl_storage! {
 		/// Extrinsics root of the current block, also part of the block header.
 		ExtrinsicsRoot get(fn extrinsics_root): T::Hash;
 		/// Digest of the current block, also part of the block header.
+		///
+		/// Put in on_initialize and removed in on_finalize, thus returns Default in between
+		/// blocks.
 		Digest get(fn digest): DigestOf<T>;
 		/// Events deposited for the current block.
 		Events get(fn events): Vec<EventRecord<T::Event, T::Hash>>;

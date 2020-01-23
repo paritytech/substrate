@@ -223,8 +223,8 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// Fetch the author of the block.
 	///
-	/// This is safe to invoke in `on_initialize` implementations, as well
-	/// as afterwards.
+	/// This is safe to invoke from `System::on_initialize` until `Authorship::on_finalize`.
+	/// Returns default account id in between blocks.
 	pub fn author() -> T::AccountId {
 		// Check the memoized storage value.
 		if let Some(author) = <Self as Store>::Author::get() {
@@ -392,6 +392,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 }
 
 impl<T: Trait> frame_support::traits::Author<T::AccountId> for Module<T> {
+	/// This implementation has same property as `Module::author`.
 	fn author() -> T::AccountId {
 		Self::author()
 	}
