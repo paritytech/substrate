@@ -706,6 +706,8 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> CachingState<S, B> {
 
 	/// Fetch root for child info if needed, return the updated value.
 	/// Set child info as missing if no root found.
+	/// Warning this use self.storage internally and can easilly
+	/// deadlock.
 	fn fetch_and_set_root(
 		&self,
 		child_key: &[u8],
@@ -734,8 +736,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> CachingState<S, B> {
 		child_key: &[u8],
 		child_info: ChildInfo,
 	) -> Result<(Option<Arc<OwnedChildInfo>>, bool), S::Error> {
-		let local_cache = self.cache.local_cache.read();
-		if let Some(entry) = get_child_info(&local_cache.child_infos, child_key) {
+		if let Some(entry) = get_child_info(&self.cache.local_cache.read().child_infos, child_key) {
 			trace!("Found in local cache: {:?}", HexDisplay::from(&child_key));
 			let entry = self.usage.tally_child_info_key_read(child_key, entry, true);
 			if let Some(cached_info) = entry.as_ref() {
@@ -751,23 +752,25 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> CachingState<S, B> {
 			}
 			return Ok((entry, false));
 		}
-		let mut cache = self.cache.shared_cache.lock();
-		if Self::is_allowed(None, None, Some(child_key), &self.cache.parent_hash, &cache.modifications) {
-			if let Some(entry) = get_child_info(&cache.child_infos, child_key) {
-				let entry = self.usage.tally_child_info_key_read(child_key, entry, true);
-				trace!("Found in shared cache: {:?}", HexDisplay::from(&child_key));
-				if let Some(cached_info) = entry.as_ref() {
-					if !child_info.valid_as(&cached_info.as_ref().as_ref()) {
-						return Ok((None, false));
+		{
+		let cache = self.cache.shared_cache.lock();
+			if Self::is_allowed(None, None, Some(child_key), &self.cache.parent_hash, &cache.modifications) {
+				if let Some(entry) = get_child_info(&cache.child_infos, child_key) {
+					let entry = self.usage.tally_child_info_key_read(child_key, entry, true);
+					trace!("Found in shared cache: {:?}", HexDisplay::from(&child_key));
+					if let Some(cached_info) = entry.as_ref() {
+						if !child_info.valid_as(&cached_info.as_ref().as_ref()) {
+							return Ok((None, false));
+						}
+						match self.fetch_and_set_root(child_key, child_info)? {
+							Some(updated_info) => {
+								return Ok((updated_info, true));
+							},
+							None => (),
+						}
 					}
-					match self.fetch_and_set_root(child_key, child_info)? {
-						Some(updated_info) => {
-							return Ok((updated_info, true));
-						},
-						None => (),
-					}
+					return Ok((entry, false));
 				}
-				return Ok((entry, false));
 			}
 		}
 		trace!("Cache miss: {:?}", HexDisplay::from(&child_key));
