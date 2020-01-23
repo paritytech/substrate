@@ -156,15 +156,16 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 				_ => panic!("Benchmark command is only supported for development and local testnet."),
 			}
 
-			let automaton = Automaton::new_from_file(String::from("./factory_tests/test.txt"));
-			let runtime_state = RuntimeState::new();
-
+			
 			let options = FactoryOptions {
 				bench_file: cli_args.bench_file,
 				blocks: cli_args.blocks,
 				tx_per_block: cli_args.tx_per_block,
 				mode: cli_args.mode,
 			};
+			let automaton = Automaton::new_from_file(&options.bench_file);
+			let runtime_state = RuntimeState::new();
+
 			let service_builder = new_full_start!(config).0;
 			let mut factory_state = FactoryState::new(
 				service_builder.client().clone(),

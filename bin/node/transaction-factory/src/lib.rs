@@ -59,8 +59,11 @@ pub trait RuntimeAdapter {
 
 	fn index(&self) -> u32;
 	fn increase_index(&mut self);
+	fn clear_index(&mut self);
 
 	fn block_number(&self) -> u32;
+	fn clear_block_number(&mut self);
+
 	fn block_in_round(&self) -> Self::Number;
 	fn round(&self) -> Self::Number;
 	fn start_number(&self) -> Self::Number;
@@ -122,6 +125,12 @@ where
 	options: Options,
 }
 
+pub enum CreateResult<Block> {
+	Block(Block),
+	Clear,
+	End,
+}
+
 impl<RA, Backend, Exec, Block, RtApi, Sc> FactoryState<RA, Backend, Exec, Block, RtApi, Sc>
 where 
 	Block: BlockT,
@@ -160,49 +169,54 @@ where
 		let runtime_version = self.client.runtime_version_at(&best_block_id)?.spec_version;
 		let genesis_hash = self.client.block_hash(Zero::zero())?
 			.expect("genesis should exist");
-		let mut one = false;
+		let genesis_block_id = BlockId::<Block>::hash(genesis_hash);
+		let mut blocks = 0;
 		loop {
-			if self.runtime_state.block_number() >= self.options.blocks {
+			if blocks >= self.options.blocks {
 				break
 			}
-			if let Some(block) = self.create_block(
+			match self.create_block(
 				runtime_version,
 				genesis_hash,
 				best_hash,
 				best_block_id,
 			) {
-				self.runtime_state.increase_block_number();
+				CreateResult::Block(block) => {
+					self.runtime_state.increase_block_number();
 
-				info!("Created block {} with hash {}.",
-					self.runtime_state.block_number(),
-					best_hash,
-				);
-				if !one {
+					info!("Created block {} with hash {}.",
+						self.runtime_state.block_number(),
+						best_hash,
+					);
+
 					best_hash = block.header().hash();
 					best_block_id = BlockId::<Block>::hash(best_hash);
-					one = true;
+
+					let import = BlockImportParams {
+						origin: BlockOrigin::File,
+						header: block.header().clone(),
+						post_digests: Vec::new(),
+						body: Some(block.extrinsics().to_vec()),
+						storage_changes: None,
+						finalized: false,
+						justification: None,
+						auxiliary: Vec::new(),
+						fork_choice: ForkChoiceStrategy::LongestChain,
+						allow_missing_state: false,
+						import_existing: false,
+					};
+
+					self.client.clone().import_block(import, HashMap::new())
+						.expect("Failed to import block");
+					blocks += 1;
+					info!("Imported block at {}\n\n", self.runtime_state.block_number());
 				}
-
-				let import = BlockImportParams {
-					origin: BlockOrigin::File,
-					header: block.header().clone(),
-					post_digests: Vec::new(),
-					body: Some(block.extrinsics().to_vec()),
-					storage_changes: None,
-					finalized: false,
-					justification: None,
-					auxiliary: Vec::new(),
-					fork_choice: ForkChoiceStrategy::LongestChain,
-					allow_missing_state: false,
-					import_existing: false,
-				};
-
-				self.client.clone().import_block(import, HashMap::new())
-					.expect("Failed to import block");
-
-				info!("Imported block at {}\n\n", self.runtime_state.block_number());
-			} else {
-				break
+				_ => {
+					best_hash = genesis_hash;
+					best_block_id = genesis_block_id;
+					self.runtime_state.clear_index();
+					self.runtime_state.clear_block_number();
+				}
 			}
 		}
 
@@ -215,7 +229,7 @@ where
 		genesis_hash: <RA::Block as BlockT>::Hash,
 		prior_block_hash: <RA::Block as BlockT>::Hash,
 		prior_block_id: BlockId<Block>,
-	) -> Option<Block> {
+	) -> CreateResult<Block> {
 		let mut block = self.client.new_block_at(
 			&prior_block_id,
 			Default::default(),
@@ -244,6 +258,9 @@ where
 				}
 				if module.as_str() == "Benchmark" && function == "next_block" {
 					break
+				}
+				if module.as_str() == "Benchmark" && function == "clear" {
+					return CreateResult::Clear
 				}
 				println!("Creating a {}::{} extrinsic. Extrinsic {}/{} in this block.",
 					module,
@@ -280,7 +297,8 @@ where
 			block.push(inherent).expect("Failed ...");
 		}
 
-		Some(block.build().expect("Failed to bake block").block)
+		let block = block.build().expect("Failed to bake block").block;
+		CreateResult::Block(block)
 	}
 
 	fn random_state(&self) -> Option<(String, String, Vec<String>)> {

@@ -54,7 +54,7 @@ impl Automaton {
 		}
 	}
 
-	pub fn new_from_file(file_name_path: String) -> Self {
+	pub fn new_from_file(file_name_path: &str) -> Self {
 		let contents = fs::read_to_string(file_name_path)
 			.expect("something went wrong reading the bench file");
 		let mut automaton = Automaton::new();

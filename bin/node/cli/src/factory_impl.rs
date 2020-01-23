@@ -94,6 +94,14 @@ impl RuntimeAdapter for RuntimeState {
 		self.index += 1;
 	}
 
+	fn clear_index(&mut self) {
+		self.index = 0;
+	}
+
+	fn clear_block_number(&mut self) {
+		self.block_number = 0;
+	}
+
 	fn block_number(&self) -> Self::Number {
 		self.block_number
 	}

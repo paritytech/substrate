@@ -1111,8 +1111,6 @@ impl<T: Trait> Module<T> {
 	/// Current era is ending; we should finish up any proposals.
 	fn begin_block(now: T::BlockNumber) -> DispatchResult {
 		// pick out another public referendum if it's time.
-		#[cfg(feature = "std")]
-		println!("now={:?} launch_period={:?}", now, T::LaunchPeriod::get());
 		if (now % T::LaunchPeriod::get()).is_zero() {
 			// Errors come from the queue being empty. we don't really care about that, and even if
 			// we did, there is nothing we can do here.
