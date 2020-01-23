@@ -33,7 +33,6 @@ use sp_std::vec::Vec;
 use sp_std::ops::Deref;
 
 #[cfg(feature = "std")]
-#[cfg(feature = "std")]
 use sp_core::{
 	crypto::Pair,
 	traits::{KeystoreExt, CallInWasmExt},
