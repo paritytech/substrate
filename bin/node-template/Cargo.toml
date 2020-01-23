@@ -18,10 +18,10 @@ parking_lot = "0.9.0"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 trie-root = "0.15.2"
 sp-io = { version = "2.0.0", path = "../../primitives/io" }
-sc-cli = { version = "2.0.0", path = "../../client/cli" }
+sc-cli = { version = "0.8.0", path = "../../client/cli" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sc-executor = { version = "2.0.0", path = "../../client/executor" }
-sc-service = { version = "2.0.0", path = "../../client/service" }
+sc-executor = { version = "0.8", path = "../../client/executor" }
+sc-service = { version = "0.8", path = "../../client/service" }
 sp-inherents = { version = "2.0.0", path = "../../primitives/inherents" }
 sc-transaction-pool = { version = "2.0.0", path = "../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
@@ -29,9 +29,9 @@ sc-network = { version = "0.8", path = "../../client/network" }
 sc-consensus-aura = { version = "0.8", path = "../../client/consensus/aura" }
 sp-consensus-aura = { version = "0.8", path = "../../primitives/consensus/aura" }
 sp-consensus = { version = "0.8", path = "../../primitives/consensus/common" }
-grandpa = { version = "2.0.0", package = "sc-finality-grandpa", path = "../../client/finality-grandpa" }
+grandpa = { version = "0.8", package = "sc-finality-grandpa", path = "../../client/finality-grandpa" }
 grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
-sc-client = { version = "2.0.0", path = "../../client/" }
+sc-client = { version = "0.8", path = "../../client/" }
 node-template-runtime = { version = "2.0.0", path = "runtime" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sc-basic-authority = { path  = "../../client/basic-authorship" }
