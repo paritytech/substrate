@@ -404,4 +404,23 @@ impl OwnedChildTrie {
 			| ChildInfo::Default(other) => self.data[..] == other.data[..],
 		}
 	}
+
+	/// Evaluate occupied memory for this struct.
+	/// It does not account for allocated memory or
+	/// small struct related overhead.
+	pub fn len(&self) -> usize {
+		self.data.len()
+	}
+}
+
+impl OwnedChildInfo {
+	/// Evaluate occupied memory for this struct.
+	/// It does not account for allocated memory or
+	/// small struct related overhead.
+	pub fn len(&self) -> usize {
+		match self {
+			OwnedChildInfo::Default(ct) => ct.len(),
+			OwnedChildInfo::DefaultWithRoot(ct, r) => ct.len() + r.len(),
+		}
+	}
 }

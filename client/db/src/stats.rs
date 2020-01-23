@@ -17,6 +17,8 @@
 //! Database usage statistics
 
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::Arc;
+use sp_core::storage::OwnedChildInfo;
 
 /// Accumulated usage statistics for state queries.
 pub struct StateUsageStats {
@@ -61,6 +63,17 @@ impl StateUsageStats {
 	/// Tally one child key read.
 	pub fn tally_child_key_read(&self, key: &(Vec<u8>, Vec<u8>), val: Option<Vec<u8>>, cache: bool) -> Option<Vec<u8>> {
 		self.tally_read(key.0.len() as u64 + key.1.len() as u64 + val.as_ref().map(|x| x.len() as u64).unwrap_or(0), cache);
+		val
+	}
+
+	/// Tally one child info key read.
+	pub fn tally_child_info_key_read(
+		&self,
+		key: &[u8],
+		val: Option<Arc<OwnedChildInfo>>,
+		cache: bool,
+	) -> Option<Arc<OwnedChildInfo>> {
+		self.tally_read(key.len() as u64 + val.as_ref().map(|x| x.len() as u64).unwrap_or(0), cache);
 		val
 	}
 

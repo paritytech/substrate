@@ -45,7 +45,7 @@ pub struct Cache<B: BlockT> {
 	/// Storage cache for child trie. `None` indicates that key is known to be missing.
 	lru_child_storage: LRUMap<ChildStorageKey, (Option<StorageValue>, Arc<OwnedChildInfo>)>,
 	/// Storage of current child infos.
-	child_infos: HashMap<StorageKey, Weak<OwnedChildInfo>>,
+	child_infos: HashMap<StorageKey, Option<Weak<OwnedChildInfo>>>,
 	/// Information on the modifications in recently committed blocks; specifically which keys
 	/// changed in which block. Ordered by block number.
 	modifications: VecDeque<BlockChanges<B::Header>>,
@@ -288,7 +288,7 @@ struct LocalCache<H: Hasher> {
 	/// `None` indicates that key is known to be missing.
 	child_storage: HashMap<ChildStorageKey, (Option<StorageValue>, Arc<OwnedChildInfo>)>,
 	/// Storage of current child infos.
-	child_infos: HashMap<StorageKey, Weak<OwnedChildInfo>>,
+	child_infos: HashMap<StorageKey, Option<Weak<OwnedChildInfo>>>,
 }
 
 /// Cache changes.
@@ -466,6 +466,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> CachingState<S, B> {
 	fn is_allowed(
 		key: Option<&[u8]>,
 		child_key: Option<&ChildStorageKey>,
+		child_infos: Option<&[u8]>,
 		parent_hash: &Option<B::Hash>,
 		modifications: &VecDeque<BlockChanges<B::Header>>
 	) -> bool
@@ -492,6 +493,15 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> CachingState<S, B> {
 			if let Some(key) = key {
 				if m.storage.contains(key) {
 					trace!("Cache lookup skipped for {:?}: modified in a later block", HexDisplay::from(&key));
+					return false;
+				}
+			}
+			if let Some(child_key) = child_infos {
+				if m.child_infos.contains(child_key) {
+					trace!(
+						"Cache lookup skipped for {:?}: modified in a later block",
+						HexDisplay::from(&child_key),
+					);
 					return false;
 				}
 			}
@@ -527,7 +537,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 			return Ok(entry)
 		}
 		let mut cache = self.cache.shared_cache.lock();
-		if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
+		if Self::is_allowed(Some(key), None, None, &self.cache.parent_hash, &cache.modifications) {
 			if let Some(entry) = cache.lru_storage.get(key).map(|a| a.clone()) {
 				trace!("Found in shared cache: {:?}", HexDisplay::from(&key));
 				self.usage.tally_key_read(key, entry.as_ref(), true);
@@ -548,7 +558,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 			return Ok(entry)
 		}
 		let mut cache = self.cache.shared_cache.lock();
-		if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
+		if Self::is_allowed(Some(key), None, None, &self.cache.parent_hash, &cache.modifications) {
 			if let Some(entry) = cache.lru_hashes.get(key).map(|a| a.0.clone()) {
 				trace!("Found hash in shared cache: {:?}", HexDisplay::from(&key));
 				return Ok(entry)
@@ -566,37 +576,32 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		let child_info = if let Some(child_info) = self.child_info(storage_key, child_info)? {
-			child_info
-		} else {
-			return Ok(None)
+		let (child_info, child_info_update) = match self.child_info(storage_key, child_info)? {
+			(Some(child_info), child_info_update) => (child_info, child_info_update),
+			(None, child_info_update) => {
+				if child_info_update {
+					let mut local_cache = self.cache.local_cache.write();
+					local_cache.child_infos.insert(storage_key.to_vec(), None);
+				}
+				return Ok(None)
+			},
 		};
-		let key = (storage_key.to_vec(), key.to_vec());
-		let local_cache = self.cache.local_cache.upgradable_read();
-		if let Some(entry) = local_cache.child_storage.get(&key).cloned() {
-			trace!("Found in local cache: {:?}", key);
-			return Ok(
-				self.usage.tally_child_key_read(&key, entry.0, true)
-			)
-		}
-		let mut cache = self.cache.shared_cache.lock();
-		if Self::is_allowed(None, Some(&key), &self.cache.parent_hash, &cache.modifications) {
-			if let Some(entry) = cache.lru_child_storage.get(&key).map(|a| a.clone()) {
-				trace!("Found in shared cache: {:?}", key);
-				return Ok(
-					self.usage.tally_child_key_read(&key, entry.0, true)
-				)
+		let (result, full_child_key, need_update) = self.child_storage_inner(
+			storage_key,
+			child_info.as_ref().as_ref(),
+			key,
+		)?;
+		if need_update || child_info_update {
+			let mut local_cache = self.cache.local_cache.write();
+			if child_info_update {
+				let weak = Arc::downgrade(&child_info);
+				local_cache.child_infos.insert(storage_key.to_vec(), Some(weak));
 			}
+			// we always update value (even if we just need new child info, we need to
+			// store at least an Arc pointer to it.
+			local_cache.child_storage.insert(full_child_key, (result.clone(), child_info));
 		}
-
-		let value = self.state.child_storage(storage_key, child_info.as_ref().as_ref(), &key.1[..])?;
-
-		// just pass it through the usage counter
-		let value =	self.usage.tally_child_key_read(&key, value, false);
-
-		RwLockUpgradableReadGuard::upgrade(local_cache)
-			.child_storage.insert(key, (value.clone(), child_info));
-		Ok(value)
+		Ok(result)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -698,57 +703,143 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 }
 
 impl<S: StateBackend<HasherFor<B>>, B: BlockT> CachingState<S, B> {
+
+	/// Fetch root for child info if needed, return the updated value.
+	/// Set child info as missing if no root found.
+	fn fetch_and_set_root(
+		&self,
+		child_key: &[u8],
+		child_info: ChildInfo,
+	) -> Result<Option<Option<Arc<OwnedChildInfo>>>, S::Error> {
+		Ok(if child_info.can_set_root() && child_info.root().is_none() {
+			if let Some(fetched_root) = self.storage(child_key)? {
+				let mut result = child_info.to_owned();
+				result.set_root(fetched_root.as_slice());
+				Some(Some(Arc::new(result)))
+			} else {
+				Some(None)
+			}
+		} else {
+			None
+		})
+	}
+
+	/// Access ChildInfo.
+	/// Return an associated boolean est to true if the value returned is a new value.
+	/// This function also attach child root to stored child info.
+	/// This function also do check child info input parameter against cache,
+	/// returning `None` if parameter child info is incorrect.
 	fn child_info(
+		&self,
+		child_key: &[u8],
+		child_info: ChildInfo,
+	) -> Result<(Option<Arc<OwnedChildInfo>>, bool), S::Error> {
+		let local_cache = self.cache.local_cache.read();
+		if let Some(entry) = get_child_info(&local_cache.child_infos, child_key) {
+			trace!("Found in local cache: {:?}", HexDisplay::from(&child_key));
+			let entry = self.usage.tally_child_info_key_read(child_key, entry, true);
+			if let Some(cached_info) = entry.as_ref() {
+				if !child_info.valid_as(&cached_info.as_ref().as_ref()) {
+					return Ok((None, false));
+				}
+				match self.fetch_and_set_root(child_key, child_info)? {
+					Some(updated_info) => {
+						return Ok((updated_info, true));
+					},
+					None => (),
+				}
+			}
+			return Ok((entry, false));
+		}
+		let mut cache = self.cache.shared_cache.lock();
+		if Self::is_allowed(None, None, Some(child_key), &self.cache.parent_hash, &cache.modifications) {
+			if let Some(entry) = get_child_info(&cache.child_infos, child_key) {
+				let entry = self.usage.tally_child_info_key_read(child_key, entry, true);
+				trace!("Found in shared cache: {:?}", HexDisplay::from(&child_key));
+				if let Some(cached_info) = entry.as_ref() {
+					if !child_info.valid_as(&cached_info.as_ref().as_ref()) {
+						return Ok((None, false));
+					}
+					match self.fetch_and_set_root(child_key, child_info)? {
+						Some(updated_info) => {
+							return Ok((updated_info, true));
+						},
+						None => (),
+					}
+				}
+				return Ok((entry, false));
+			}
+		}
+		trace!("Cache miss: {:?}", HexDisplay::from(&child_key));
+		let result = match self.fetch_and_set_root(child_key, child_info)? {
+			Some(opt_owned) => opt_owned,
+			// Not in cache but already with a root, note that
+			// this would be unsafe it it was possible to pass root
+			// by rpc (would need to validate again).
+			None => Some(Arc::new(child_info.to_owned())),
+		};
+		Ok((self.usage.tally_child_info_key_read(child_key, result, false), true))
+	}
+
+	/// Access child storage and return value, full instatiated key and
+	/// a boolean indicating if value need an update.
+	fn child_storage_inner(
 		&self,
 		storage_key: &[u8],
 		child_info: ChildInfo,
-	) -> Result<Option<Arc<OwnedChildInfo>>, S::Error> {
-		let local_cache = self.cache.local_cache.upgradable_read();
-		if let Some(cached_child_info) = local_cache.child_infos.get(storage_key) {
-			if let Some(cached_child_info) = cached_child_info.upgrade() {
-				if !child_info.valid_as(&cached_child_info.as_ref().as_ref()) {
-					return Ok(None);
-				}
-			}
-//			if !cached_child_info.
+		key: &[u8],
+	) -> Result<(Option<Vec<u8>>, (Vec<u8>, Vec<u8>), bool), S::Error> {
+		let key = (storage_key.to_vec(), key.to_vec());
+		let local_cache = self.cache.local_cache.read();
+		if let Some(entry) = local_cache.child_storage.get(&key).cloned() {
+			trace!("Found in local cache: {:?}", key);
+			return Ok((
+				self.usage.tally_child_key_read(&key, entry.0, true), key, false,
+			))
 		}
-/*		if let Some(cached_child_info) = cache.child_infos.get(storage_key) {
-			if !child_info.valid_as(cached_child_info.as_ref()) {
-				return Err(());
+		let mut cache = self.cache.shared_cache.lock();
+		if Self::is_allowed(None, Some(&key), None, &self.cache.parent_hash, &cache.modifications) {
+			if let Some(entry) = cache.lru_child_storage.get(&key).map(|a| a.clone()) {
+				trace!("Found in shared cache: {:?}", key);
+				return Ok((
+					self.usage.tally_child_key_read(&key, entry.0, true), key, false,
+				))
 			}
-		}*/
-/*		let child_info_entry = cache.child_infos.entry(storage_key);
-		let value = if child_info.can_set_root() {
-			if let Some(fetched_root) = self.storage(storage_key)? {
-				let child_info = child_info_entry.or_insert_with(|| {
-					child_info.to_owned()
-				});
-				if child_info.root().is_none() {
-					child_info.set_root(fetched_root);
-				}
-				self.state.child_storage(storage_key, child_info, &key.1[..])?
-			} else {
-				self.state.child_storage(storage_key, child_info, &key.1[..])?
-			}
+		}
+
+		let value = self.state.child_storage(storage_key, child_info, &key.1[..])?;
+
+		// just pass it through the usage counter
+		let value =	self.usage.tally_child_key_read(&key, value, false);
+
+		Ok((value, key, true))
+	}
+}
+
+/// Access to child info from a map, it skips missing child info.
+fn get_child_info(
+	child_infos: &HashMap<StorageKey, Option<Weak<OwnedChildInfo>>>,
+	child_key: &[u8],
+) -> Option<Option<Arc<OwnedChildInfo>>> {
+	match child_infos.get(child_key) {
+		Some(Some(weak_child_info)) => if let Some(old_child_info) = weak_child_info.upgrade() {
+			Some(Some(old_child_info))
 		} else {
-			self.state.child_storage(storage_key, child_info, &key.1[..])?
-		};*/
-/*		let cache = RwLockUpgradableReadGuard::upgrade(local_cache);
-		let child_info = update_child_info_ref(&mut cache.child_infos, &key.0, child_info);
-		cache.child_storage.insert(key, (value.clone(), child_info));*/
-	
-		unimplemented!()
+			None
+		},
+		Some(None) => Some(None),
+		None => None,
 	}
 }
 
 /// Update child info, it change the stored value if different, and return
 /// reference count to stored value and wether the value was updated.
 fn update_child_info(
-	child_infos: &mut HashMap<StorageKey, Weak<OwnedChildInfo>>,
+	child_infos: &mut HashMap<StorageKey, Option<Weak<OwnedChildInfo>>>,
 	storage_key: &[u8],
 	child_info: OwnedChildInfo,
 ) -> (Arc<OwnedChildInfo>, bool) {
-	if let Some(weak_child_info) = child_infos.get_mut(storage_key) {
+	if let Some(Some(weak_child_info)) = child_infos.get_mut(storage_key) {
 		if let Some(old_child_info) = weak_child_info.upgrade() {
 				if child_info != *old_child_info {
 				let child_info = Arc::new(child_info);
@@ -764,39 +855,10 @@ fn update_child_info(
 		}
 	} else {
 		let child_info = Arc::new(child_info);
-		child_infos.insert(storage_key.to_vec(), Arc::downgrade(&child_info));
+		child_infos.insert(storage_key.to_vec(), Some(Arc::downgrade(&child_info)));
 		(child_info, true)
 	}
 }
-
-// TODO make childinfo borrow of owned child info and fuse this with
-// update_child_info.
-fn update_child_info_ref(
-	child_infos: &mut HashMap<StorageKey, Weak<OwnedChildInfo>>,
-	storage_key: &[u8],
-	child_info: ChildInfo,
-) -> Arc<OwnedChildInfo> {
-	if let Some(weak_child_info) = child_infos.get_mut(storage_key) {
-		if let Some(old_child_info) = weak_child_info.upgrade() {
-			if child_info != old_child_info.as_ref().as_ref() {
-				let child_info = Arc::new(child_info.to_owned());
-				*weak_child_info = Arc::downgrade(&child_info);
-				child_info
-			} else {
-				old_child_info.clone()
-			}
-		} else {
-			let child_info = Arc::new(child_info.to_owned());
-			*weak_child_info = Arc::downgrade(&child_info);
-			child_info
-		}
-	} else {
-		let child_info = Arc::new(child_info.to_owned());
-		child_infos.insert(storage_key.to_vec(), Arc::downgrade(&child_info));
-		child_info
-	}
-}
-
 
 #[cfg(test)]
 mod tests {
@@ -808,8 +870,7 @@ mod tests {
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
-	const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2");
-	
+
 	#[test]
 	fn smoke() {
 		//init_log();

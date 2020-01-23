@@ -313,11 +313,14 @@ mod tests {
 	use sp_runtime::testing::{H256 as Hash, Block as RawBlock, ExtrinsicWrapper};
 	use super::*;
 	use std::iter::{empty, Empty};
+	use sp_core::storage::{OwnedChildInfo, ChildInfo};
 
 	type TestChangeSet = (
 		Vec<(StorageKey, Option<StorageData>)>,
-		Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>,
+		Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>, OwnedChildInfo)>,
 	);
+
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 
 	#[cfg(test)]
 	impl From<TestChangeSet> for StorageChangeSet {
@@ -360,14 +363,14 @@ mod tests {
 			(vec![3], None),
 		];
 		let c_changeset_1 = vec![
-			(vec![5], Some(vec![4])),
-			(vec![6], None),
+			(vec![5], Some(vec![4]), ),
+			(vec![6], None, ),
 		];
-		let c_changeset = vec![(vec![4], c_changeset_1)];
+		let c_changeset = vec![(vec![4], c_changeset_1, CHILD_INFO_1.to_owned())];
 		notifications.trigger(
 			&Hash::from_low_u64_be(1),
 			changeset.into_iter(),
-			c_changeset.into_iter().map(|(a,b)| (a, b.into_iter())),
+			c_changeset.into_iter().map(|(a,b,c)| (a, b.into_iter(), c)),
 		);
 
 		// then
@@ -377,7 +380,7 @@ mod tests {
 		], vec![(StorageKey(vec![4]), vec![
 			(StorageKey(vec![5]), Some(StorageData(vec![4]))),
 			(StorageKey(vec![6]), None),
-		])]).into()));
+		], CHILD_INFO_1.to_owned())]).into()));
 	}
 
 	#[test]
@@ -405,11 +408,11 @@ mod tests {
 			(vec![6], None),
 		];
 
-		let c_changeset = vec![(vec![4], c_changeset_1)];
+		let c_changeset = vec![(vec![4], c_changeset_1, CHILD_INFO_1.to_owned())];
 		notifications.trigger(
 			&Hash::from_low_u64_be(1),
 			changeset.into_iter(),
-			c_changeset.into_iter().map(|(a,b)| (a, b.into_iter())),
+			c_changeset.into_iter().map(|(a,b,c)| (a, b.into_iter(), c)),
 		);
 
 		// then
@@ -420,9 +423,11 @@ mod tests {
 			(StorageKey(vec![2]), Some(StorageData(vec![3]))),
 		], vec![]).into()));
 		assert_eq!(recv3.next().unwrap(), (Hash::from_low_u64_be(1), (vec![],
-		vec![
-			(StorageKey(vec![4]), vec![(StorageKey(vec![5]), Some(StorageData(vec![4])))]),
-		]).into()));
+		vec![(
+			StorageKey(vec![4]),
+			vec![(StorageKey(vec![5]), Some(StorageData(vec![4])))],
+			CHILD_INFO_1.to_owned(),
+		)]).into()));
 
 	}
 
@@ -454,7 +459,7 @@ mod tests {
 			(vec![2], Some(vec![3])),
 			(vec![1], None),
 		];
-		let c_changeset = empty::<(_, Empty<_>)>();
+		let c_changeset = empty::<(_, Empty<_>, _)>();
 		notifications.trigger(&Hash::from_low_u64_be(1), changeset.into_iter(), c_changeset);
 
 		// then
@@ -472,7 +477,7 @@ mod tests {
 
 			// when
 			let changeset = vec![];
-			let c_changeset = empty::<(_, Empty<_>)>();
+			let c_changeset = empty::<(_, Empty<_>, _)>();
 			notifications.trigger(&Hash::from_low_u64_be(1), changeset.into_iter(), c_changeset);
 			recv
 		};
