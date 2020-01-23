@@ -96,9 +96,17 @@ futures = "0.3.1"
 tempfile = "3.1.0"
 
 [build-dependencies]
-sc-cli = { version = "0.8.0", package = "sc-cli", path = "../../../client/cli" }
 build-script-utils = { version = "2.0.0", package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
-vergen = "3.0.4"
+
+[build-dependencies.sc-cli]
+version = "0.8.0"
+package = "sc-cli"
+path = "../../../client/cli"
+optional = true
+
+[build-dependencies.vergen]
+version = "3.0.4"
+optional = true
 
 [features]
 default = ["cli", "wasmtime"]
@@ -112,6 +120,7 @@ cli = [
 	"node-transaction-factory",
 	"sc-service/rocksdb",
 	"node-executor/wasmi-errno",
+	"vergen",
 ]
 wasmtime = [
 	"cli",
