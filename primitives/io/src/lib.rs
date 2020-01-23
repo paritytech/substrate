@@ -930,6 +930,7 @@ pub type SubstrateHostFunctions = (
 	logging::HostFunctions,
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
+	benchmarking::HostFunctions,
 );
 
 #[cfg(test)]
