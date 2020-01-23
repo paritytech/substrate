@@ -160,7 +160,7 @@ where
 		let runtime_version = self.client.runtime_version_at(&best_block_id)?.spec_version;
 		let genesis_hash = self.client.block_hash(Zero::zero())?
 			.expect("genesis should exist");
-
+		let mut one = false;
 		loop {
 			if self.runtime_state.block_number() >= self.options.blocks {
 				break
@@ -177,9 +177,11 @@ where
 					self.runtime_state.block_number(),
 					best_hash,
 				);
-
-				best_hash = block.header().hash();
-				best_block_id = BlockId::<Block>::hash(best_hash);
+				if !one {
+					best_hash = block.header().hash();
+					best_block_id = BlockId::<Block>::hash(best_hash);
+					one = true;
+				}
 
 				let import = BlockImportParams {
 					origin: BlockOrigin::File,
@@ -214,8 +216,11 @@ where
 		prior_block_hash: <RA::Block as BlockT>::Hash,
 		prior_block_id: BlockId<Block>,
 	) -> Option<Block> {
-		let mut block = self.client.new_block(Default::default())
-			.expect("Failed to create new block");
+		let mut block = self.client.new_block_at(
+			&prior_block_id,
+			Default::default(),
+			sp_consensus::RecordProof::No,
+		).expect("Failed to create new block");
 		let account_id = RA::master_account_id();
 		let account_secret = RA::master_account_secret();
 

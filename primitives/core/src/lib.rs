@@ -321,7 +321,11 @@ pub trait BenchType: Default {
 impl BenchType for bool {}
 impl BenchType for u8 {}
 impl BenchType for u16 {}
-impl BenchType for u32 {}
+impl BenchType for u32 {
+	fn test_value(_name: &str) -> Self {
+		0
+	}
+}
 impl BenchType for u64 {}
 impl BenchType for () {}
 impl BenchType for H256 {}
