@@ -398,6 +398,9 @@ decl_storage! {
 		}): T::Balance;
 
 		/// The balance of an account.
+		///
+		/// NOTE: THIS MAY NEVER BE IN EXISTENCE AND YET HAVE A `total().is_zero()`. If the total
+		/// is ever zero, then the entry *MUST* be removed.
 		pub Balance get(fn balance)
 			build(|config: &GenesisConfig<T, I>| config.balances.iter()
 				.map(|&(ref who, free)| (who.clone(), Account { free, .. Default::default() }))
@@ -563,51 +566,10 @@ decl_module! {
 impl<T: Trait<I>, I: Instance> Module<T, I> {
 	// PRIVATE MUTABLES
 
-	/// Set the reserved balance of an account to some new value. Will enforce `ExistentialDeposit`
-	/// law, annulling the account as needed.
-	///
-	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
-	/// is known that the account already exists.
-	///
-	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
-	/// the caller will do this.
-	fn set_reserved_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
-		Balance::<T, I>::mutate(who, |b| b.reserved = balance);
-		if balance < T::ExistentialDeposit::get() {
-			Self::on_reserved_too_low(who)
-		} else {
-			UpdateBalanceOutcome::Updated
-		}
-	}
-
-	/// Set the free balance of an account to some new value. Will enforce `ExistentialDeposit`
-	/// law, annulling the account as needed.
-	///
-	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
-	/// is known that the account already exists.
-	///
-	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
-	/// the caller will do this.
-	fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
-		// Commented out for now - but consider it instructive.
-		// assert!(!Self::total_balance(who).is_zero());
-		// assert!(Self::free_balance(who) > T::ExistentialDeposit::get());
-		Balance::<T, I>::mutate(who, |b| b.free = balance);
-		if balance < T::ExistentialDeposit::get() {
-			Self::on_free_too_low(who)
-		} else {
-			UpdateBalanceOutcome::Updated
-		}
-	}
-
 	/// Set both the free and reserved balance of an account to some new value. Will enforce
 	/// `ExistentialDeposit` law, annulling the account as needed.
 	///
 	/// Will return `AccountKilled` if either reserved or free are too low.
-	///
-	/// This is generally faster than calling `set_free_balance` or `set_reserved_balance` since
-	/// it avoids the need for a storage `get`. It should be used in preference when an up-to-date
-	/// `Account` value is available.
 	///
 	/// NOTE: This assumes that `account` is the same as `Self::balance(who)` except for altered
 	/// values of `free` and `balance`.
@@ -617,17 +579,55 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
-	fn set_balances(who: &T::AccountId, account: &Account<T::Balance>) -> UpdateBalanceOutcome {
+	fn set_balances(
+		who: &T::AccountId,
+		mut account: Account<T::Balance>,
+		old: Account<T::Balance>,
+	) -> UpdateBalanceOutcome {
+		println!("Setting balance of {:?} to {:?} from {:?}", who, account, Self::balance(who));
 		// Commented out for now - but consider it instructive.
 		// assert!(!Self::total_balance(who).is_zero());
 		// assert!(Self::free_balance(who) > T::ExistentialDeposit::get());
-		Balance::<T, I>::insert(who, account);
-		if account.free < T::ExistentialDeposit::get() {
-			Self::on_free_too_low(who)
-		} else if account.reserved < T::ExistentialDeposit::get() {
-			Self::on_reserved_too_low(who)
+		let mut outcome = UpdateBalanceOutcome::Updated;
+
+		let ed = T::ExistentialDeposit::get();
+		if account.free < ed {
+			account.reserved += account.free;
+			account.free = Zero::zero();
+			if old.free >= ed {
+				T::OnFreeBalanceZero::on_free_balance_zero(who);
+				outcome = UpdateBalanceOutcome::FreeBalanceZero;
+			}
+		}
+		let mut dust = Zero::zero();
+		if account.reserved < ed {
+			if account.free >= ed {
+				account.free += account.reserved;
+			} else {
+				dust = account.reserved;
+			}
+			account.reserved = Zero::zero();
+			if old.reserved >= ed {
+				outcome = UpdateBalanceOutcome::ReservedBalanceZero;
+			}
+		}
+		if !dust.is_zero() {
+			T::DustRemoval::on_unbalanced(NegativeImbalance::new(dust));
+		}
+
+		if account.total().is_zero() {
+			if !old.total().is_zero() {
+				Self::reap_account(who, dust);
+				UpdateBalanceOutcome::AccountKilled
+			} else {
+				UpdateBalanceOutcome::StillDead
+			}
 		} else {
-			UpdateBalanceOutcome::Updated
+			if old.total().is_zero() {
+				Self::about_to_create_account(who, account.free);
+			}
+			Balance::<T, I>::insert(who, account);
+			outcome
 		}
 	}
 
@@ -647,67 +647,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		Balance::<T, I>::remove(who);
 		T::OnReapAccount::on_reap_account(who);
 		Self::deposit_event(RawEvent::ReapedAccount(who.clone(), dust));
-	}
-
-	/// Account's free balance has dropped below existential deposit. Kill its
-	/// free side and the account completely if its reserved size is already dead.
-	///
-	/// Will maintain total issuance.
-	fn on_free_too_low(who: &T::AccountId) -> UpdateBalanceOutcome {
-		let mut b = Balance::<T, I>::get(who);
-		let mut dust = Zero::zero();
-		if !b.free.is_zero() {
-			if b.reserved >= T::ExistentialDeposit::get() {
-				// any individual account cannot cause overflow in balance.
-				b.reserved += b.free;
-			} else {
-				// underflow should never happen, but if it does, there's not much we can do.
-				dust = b.free + b.reserved;
-				T::DustRemoval::on_unbalanced(NegativeImbalance::new(dust));
-				b.reserved = Zero::zero();
-			}
-			b.free = Zero::zero();
-		}
-		Balance::<T, I>::insert(who, &b);
-
-		T::OnFreeBalanceZero::on_free_balance_zero(who);
-
-		if b.reserved.is_zero() {
-			Self::reap_account(who, dust);
-			UpdateBalanceOutcome::AccountKilled
-		} else {
-			UpdateBalanceOutcome::FreeBalanceZero
-		}
-	}
-
-	/// Account's reserved balance has dropped below existential deposit. Kill its
-	/// reserved side and the account completely if its free size is already dead.
-	///
-	/// Will maintain total issuance.
-	fn on_reserved_too_low(who: &T::AccountId) -> UpdateBalanceOutcome {
-		let mut b = Balance::<T, I>::get(who);
-		let mut dust = Zero::zero();
-
-		if !b.reserved.is_zero() {
-			if b.free >= T::ExistentialDeposit::get() {
-				// any individual account cannot cause overflow in balance.
-				b.free += b.reserved;
-			} else {
-				// underflow should never happen, but if it does, there's not much we can do.
-				dust = b.free + b.reserved;
-				T::DustRemoval::on_unbalanced(NegativeImbalance::new(dust));
-				b.free = Zero::zero();
-			}
-			b.reserved = Zero::zero();
-		}
-		Balance::<T, I>::insert(who, &b);
-
-		if b.free.is_zero() {
-			Self::reap_account(who, dust);
-			UpdateBalanceOutcome::AccountKilled
-		} else {
-			UpdateBalanceOutcome::ReservedBalanceZero
-		}
 	}
 
 	/// Update the account entry for `who`, given the locks.
@@ -932,8 +871,7 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type CreationFee = T::CreationFee;
 }
 
-impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
-where
+impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	type Balance = T::Balance;
@@ -1019,8 +957,10 @@ where
 	) -> DispatchResult {
 		if value.is_zero() || transactor == dest { return Ok(()) }
 
-		let mut from_balance = Self::balance(transactor);
-		let mut to_balance = Self::balance(dest);
+		let old_from_balance = Self::balance(transactor);
+		let mut from_balance = old_from_balance.clone();
+		let old_to_balance = Self::balance(dest);
+		let mut to_balance = old_to_balance.clone();
 
 		let would_create = to_balance.total().is_zero();
 		let fee = if would_create { T::CreationFee::get() } else { Zero::zero() };
@@ -1046,17 +986,14 @@ where
 		let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
 		ensure!(allow_death || from_balance.free >= ed, Error::<T, I>::KeepAlive);
 
-		Self::set_balances(transactor, &from_balance);
+		Self::set_balances(transactor, from_balance, old_from_balance);
 
 		// Emit transfer event.
 		Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
 
-		if would_create {
-			Self::about_to_create_account(dest, to_balance.free);
-		}
-		// Take action on the set_free_balance call.
+		// Take action on the set_balances call.
 		// This will emit events that _resulted_ from the transfer.
-		Self::set_balances(dest, &to_balance);
+		Self::set_balances(dest, to_balance, old_to_balance);
 
 		T::TransferPayment::on_unbalanced(NegativeImbalance::new(fee));
 
@@ -1073,105 +1010,122 @@ where
 	) -> result::Result<Self::NegativeImbalance, DispatchError> {
 		if value.is_zero() { return Ok(NegativeImbalance::zero()); }
 
-		// TODO: rewrite using composite balance.
-
-		let old_balance = Self::free_balance(who);
-		if let Some(new_balance) = old_balance.checked_sub(&value) {
+		let old_balance = Self::balance(who);
+		let mut balance = old_balance.clone();
+		if let Some(new_free_balance) = balance.free.checked_sub(&value) {
 			// if we need to keep the account alive...
 			if liveness == ExistenceRequirement::KeepAlive
 				// ...and it would be dead afterwards...
-				&& new_balance < T::ExistentialDeposit::get()
+				&& new_free_balance < T::ExistentialDeposit::get()
 				// ...yet is was alive before
-				&& old_balance >= T::ExistentialDeposit::get()
+				&& balance.free >= T::ExistentialDeposit::get()
 			{
 				Err(Error::<T, I>::KeepAlive)?
 			}
-			Self::ensure_can_withdraw(who, value, reasons, new_balance)?;
-			Self::set_free_balance(who, new_balance);
+			Self::ensure_can_withdraw(who, value, reasons, new_free_balance)?;
+			balance.free = new_free_balance;
+			Self::set_balances(who, balance, old_balance);
 			Ok(NegativeImbalance::new(value))
 		} else {
 			Err(Error::<T, I>::InsufficientBalance)?
 		}
 	}
 
-	// Slash an account, returning the negative imbalance created and any left over
-	// amount that could not be slashed.
-	// Is a no-op if value to be slashed is zero.
+	/// Slash a target account `who`, returning the negative imbalance created and any left over
+	/// amount that could not be slashed.
+	///
+	/// Is a no-op if `value` to be slashed is zero.
+	///
+	/// NOTE: `slash()` prefers free balance, but assumes that reserve balance can be drawn
+	/// from in extreme circumstances. `can_slash()` should be used prior to `slash()` to avoid having
+	/// to draw from reserved funds, however we err on the side of punishment if things are inconsistent
+	/// or `can_slash` wasn't used appropriately.
 	fn slash(
 		who: &T::AccountId,
 		value: Self::Balance
 	) -> (Self::NegativeImbalance, Self::Balance) {
 		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
 
-		// TODO: rewrite using composite balance.
+		let old_balance = Self::balance(who);
+		let mut balance = old_balance.clone();
 
-		let free_balance = Self::free_balance(who);
-		let free_slash = cmp::min(free_balance, value);
+		let free_slash = cmp::min(balance.free, value);
+		balance.free -= free_slash;
 
-		Self::set_free_balance(who, free_balance - free_slash);
 		let remaining_slash = value - free_slash;
-		// NOTE: `slash()` prefers free balance, but assumes that reserve balance can be drawn
-		// from in extreme circumstances. `can_slash()` should be used prior to `slash()` to avoid having
-		// to draw from reserved funds, however we err on the side of punishment if things are inconsistent
-		// or `can_slash` wasn't used appropriately.
-		if !remaining_slash.is_zero() {
-			let reserved_balance = Self::reserved_balance(who);
-			let reserved_slash = cmp::min(reserved_balance, remaining_slash);
-			Self::set_reserved_balance(who, reserved_balance - reserved_slash);
+		let result = if !remaining_slash.is_zero() {
+			let reserved_slash = cmp::min(balance.reserved, remaining_slash);
+			balance.reserved -= reserved_slash;
 			(NegativeImbalance::new(free_slash + reserved_slash), remaining_slash - reserved_slash)
 		} else {
 			(NegativeImbalance::new(value), Zero::zero())
-		}
+		};
+		Self::set_balances(who, balance, old_balance);
+		result
 	}
 
-	// Deposit some `value` into the free balance of an existing account.
-	// Is a no-op if the value to be deposited is zero.
+	/// Deposit some `value` into the free balance of an existing target account `who`.
+	///
+	/// Is a no-op if the `value` to be deposited is zero.
 	fn deposit_into_existing(
 		who: &T::AccountId,
 		value: Self::Balance
 	) -> result::Result<Self::PositiveImbalance, DispatchError> {
 		if value.is_zero() { return Ok(PositiveImbalance::zero()) }
 
-		// TODO: rewrite using composite balance.
+		let old_balance = Self::balance(who);
+		let mut balance = old_balance.clone();
+		ensure!(!balance.total().is_zero(), Error::<T, I>::DeadAccount);
+		balance.free = balance.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
 
-		if Self::total_balance(who).is_zero() {
-			Err(Error::<T, I>::DeadAccount)?
-		}
-		Self::set_free_balance(who, Self::free_balance(who) + value);
+		Self::set_balances(who, balance, old_balance);
 		Ok(PositiveImbalance::new(value))
 	}
 
-	// Deposit some `value` into the free balance of `who`, possibly creating a new account.
-	// Is a no-op if the value to be deposited is zero.
+	/// Deposit some `value` into the free balance of `who`, possibly creating a new account.
+	///
+	/// This function is a no-op if:
+	/// - the `value` to be deposited is zero; or
+	/// - if the `value` to be deposited is less than the ED and the account does not yet exist; or
+	/// - `value` is so large it would cause the balance of `who` to overflow.
 	fn deposit_creating(
 		who: &T::AccountId,
 		value: Self::Balance,
 	) -> Self::PositiveImbalance {
 		if value.is_zero() { return Self::PositiveImbalance::zero() }
 
-		// TODO: rewrite using composite balance.
+		let old_balance = Self::balance(who);
+		let mut balance = old_balance.clone();
+		let ed = T::ExistentialDeposit::get();
 
-		let (imbalance, _) = Self::make_free_balance_be(who, Self::free_balance(who) + value);
-		if let SignedImbalance::Positive(p) = imbalance {
-			p
-		} else {
-			// Impossible, but be defensive.
-			Self::PositiveImbalance::zero()
-		}
+		// bail if not yet created and this operation wouldn't be enough to create it.
+		if value < ed && balance.total().is_zero() { return Self::PositiveImbalance::zero() }
+
+		// defensive only: overflow should never happen, however in case it does, then this
+		// operation is a no-op.
+		balance.free = match balance.free.checked_add(&value) {
+			Some(f) => f,
+			None => return Self::PositiveImbalance::zero(),
+		};
+
+		Self::set_balances(who, balance, old_balance);
+
+		PositiveImbalance::new(value)
 	}
 
-	fn make_free_balance_be(who: &T::AccountId, balance: Self::Balance) -> (
+	/// Force the new free balance of a target account `who` to some new value `balance`.
+	fn make_free_balance_be(who: &T::AccountId, value: Self::Balance) -> (
 		SignedImbalance<Self::Balance, Self::PositiveImbalance>,
 		UpdateBalanceOutcome
 	) {
-		// TODO: rewrite using composite balance.
+		let old_balance = Self::balance(who);
+		let mut balance = old_balance.clone();
 
-		let original = Self::free_balance(who);
-		if balance < T::ExistentialDeposit::get() && original.is_zero() {
+		if value < T::ExistentialDeposit::get() && balance.free.is_zero() {
 			// If we're attempting to set an existing account to less than ED, then
 			// bypass the entire operation. It's a no-op if you follow it through, but
 			// since this is an instance where we might account for a negative imbalance
-			// (in the dust cleaner of set_free_balance) before we account for its actual
+			// (in the dust cleaner of set_balances) before we account for its actual
 			// equal and opposite cause (returned as an Imbalance), then in the
 			// instance that there's no other accounts on the system at all, we might
 			// underflow the issuance and our arithmetic will be off.
@@ -1180,29 +1134,18 @@ where
 				UpdateBalanceOutcome::AccountKilled,
 			)
 		}
-		let imbalance = if original <= balance {
-			SignedImbalance::Positive(PositiveImbalance::new(balance - original))
+		let imbalance = if balance.free <= value {
+			SignedImbalance::Positive(PositiveImbalance::new(value - balance.free))
 		} else {
-			SignedImbalance::Negative(NegativeImbalance::new(original - balance))
+			SignedImbalance::Negative(NegativeImbalance::new(balance.free - value))
 		};
+		balance.free = value;
+
 		// If the balance is too low, then the account is reaped.
-		// NOTE: There are two balances for every account: `reserved_balance` and
-		// `free_balance`. This contract subsystem only cares about the latter: whenever
-		// the term "balance" is used *here* it should be assumed to mean "free balance"
-		// in the rest of the module.
 		// Free balance can never be less than ED. If that happens, it gets reduced to zero
 		// and the account information relevant to this subsystem is deleted (i.e. the
 		// account is reaped).
-		let outcome = if balance < T::ExistentialDeposit::get() {
-			Self::set_free_balance(who, balance);
-			UpdateBalanceOutcome::AccountKilled
-		} else {
-			if !Balance::<T, I>::exists(who) {
-				Self::about_to_create_account(&who, balance);
-			}
-			Self::set_free_balance(who, balance);
-			UpdateBalanceOutcome::Updated
-		};
+		let outcome = Self::set_balances(who, balance, old_balance);
 		(imbalance, outcome)
 	}
 }
@@ -1211,8 +1154,9 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
-	// Check if `who` can reserve `value` from their free balance.
-	// Is a no-op if value to be reserved is zero.
+	/// Check if `who` can reserve `value` from their free balance.
+	///
+	/// Always `true` if value to be reserved is zero.
 	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
 		if value.is_zero() { return true }
 		Self::free_balance(who)
@@ -1223,61 +1167,71 @@ where
 	}
 
 	fn reserved_balance(who: &T::AccountId) -> Self::Balance {
-		Balance::<T, I>::get(who).reserved
+		Self::balance(who).reserved
 	}
 
-	// Move `value` from the free balance from `who` to their reserved balance.
-	// Is a no-op if value to be reserved is zero.
+	/// Move `value` from the free balance from `who` to their reserved balance.
+	///
+	/// Is a no-op if value to be reserved is zero.
 	fn reserve(who: &T::AccountId, value: Self::Balance) -> result::Result<(), DispatchError> {
 		if value.is_zero() { return Ok(()) }
 
-		// TODO: rewrite using composite balance.
+		let old_balance = Self::balance(who);
+		let mut balance = old_balance.clone();
 
-		let b = Self::free_balance(who);
-		if b < value {
-			Err(Error::<T, I>::InsufficientBalance)?
-		}
-		let new_balance = b - value;
-		Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), new_balance)?;
-		Self::set_reserved_balance(who, Self::reserved_balance(who) + value);
-		Self::set_free_balance(who, new_balance);
+		balance.free = balance.free.checked_sub(&value).ok_or(Error::<T, I>::InsufficientBalance)?;
+		balance.reserved = balance.reserved.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
+		Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), balance.free)?;
+
+		Self::set_balances(who, balance, old_balance);
 		Ok(())
 	}
 
-	// Unreserve some funds, returning any amount that was unable to be unreserved.
-	// Is a no-op if the value to be unreserved is zero.
+	/// Unreserve some funds, returning any amount that was unable to be unreserved.
+	///
+	/// Is a no-op if the value to be unreserved is zero.
 	fn unreserve(who: &T::AccountId, value: Self::Balance) -> Self::Balance {
 		if value.is_zero() { return Zero::zero() }
 
-		// TODO: rewrite using composite balance.
+		let old_balance = Self::balance(who);
+		let mut balance = old_balance.clone();
 
-		let b = Self::reserved_balance(who);
-		let actual = cmp::min(b, value);
-		Self::set_free_balance(who, Self::free_balance(who) + actual);
-		Self::set_reserved_balance(who, b - actual);
+		let actual = cmp::min(balance.reserved, value);
+		balance.reserved -= actual;
+		// defensive only: this can never fail since total issuance which is at least free+reservred
+		// fits into the same datatype.
+		balance.free = balance.free.saturating_add(actual);
+
+		Self::set_balances(who, balance, old_balance);
+
 		value - actual
 	}
 
-	// Slash from reserved balance, returning the negative imbalance created,
-	// and any amount that was unable to be slashed.
-	// Is a no-op if the value to be slashed is zero.
+	/// Slash from reserved balance, returning the negative imbalance created,
+	/// and any amount that was unable to be slashed.
+	///
+	/// Is a no-op if the value to be slashed is zero.
 	fn slash_reserved(
 		who: &T::AccountId,
 		value: Self::Balance
 	) -> (Self::NegativeImbalance, Self::Balance) {
 		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
 
-		// TODO: rewrite using composite balance.
+		let old_balance = Self::balance(who);
+		let mut balance = old_balance.clone();
 
-		let b = Self::reserved_balance(who);
-		let slash = cmp::min(b, value);
 		// underflow should never happen, but it if does, there's nothing to be done here.
-		Self::set_reserved_balance(who, b - slash);
-		(NegativeImbalance::new(slash), value - slash)
+		let actual = cmp::min(balance.reserved, value);
+		balance.reserved -= actual;
+
+		Self::set_balances(who, balance, old_balance);
+
+		(NegativeImbalance::new(actual), value - actual)
 	}
 
-	// Move the reserved balance of one account into the free balance of another.
-	// Is a no-op if the value to be moved is zero.
+	/// Move the reserved balance of one account into the free balance of another.
+	///
+	/// Is a no-op if the value to be moved is zero.
 	fn repatriate_reserved(
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
@@ -1285,16 +1239,21 @@ where
 	) -> result::Result<Self::Balance, DispatchError> {
 		if value.is_zero() { return Ok (Zero::zero()) }
 
-		// TODO: rewrite using composite balance.
+		let old_to_balance = Self::balance(beneficiary);
+		let mut to_balance = old_to_balance.clone();
+		ensure!(!to_balance.total().is_zero(), Error::<T, I>::DeadAccount);
 
-		if Self::total_balance(beneficiary).is_zero() {
-			Err(Error::<T, I>::DeadAccount)?
-		}
-		let b = Self::reserved_balance(slashed);
-		let slash = cmp::min(b, value);
-		Self::set_free_balance(beneficiary, Self::free_balance(beneficiary) + slash);
-		Self::set_reserved_balance(slashed, b - slash);
-		Ok(value - slash)
+		let old_from_balance = Self::balance(slashed);
+		let mut from_balance = old_from_balance.clone();
+		let actual = cmp::min(from_balance.reserved, value);
+
+		to_balance.free = to_balance.free.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?;
+		from_balance.reserved -= actual;
+
+		Self::set_balances(slashed, from_balance, old_from_balance);
+		Self::set_balances(beneficiary, to_balance, old_to_balance);
+
+		Ok(value - actual)
 	}
 }
 
@@ -1369,6 +1328,7 @@ where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	fn is_dead_account(who: &T::AccountId) -> bool {
+		// this should always be exactly equivalent to `Self::balance(who).total().is_zero()`
 		!Balance::<T, I>::exists(who)
 	}
 }

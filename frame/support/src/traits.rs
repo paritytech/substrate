@@ -88,6 +88,8 @@ pub enum UpdateBalanceOutcome {
 	FreeBalanceZero,
 	/// Reserved balance became zero as a result of this update.
 	ReservedBalanceZero,
+	/// The account started and ended non-existent.
+	StillDead,
 }
 
 /// A trait for finding the author of a block header based on the `PreRuntime` digests contained
