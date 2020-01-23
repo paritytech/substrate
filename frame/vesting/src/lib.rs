@@ -107,7 +107,7 @@ impl<
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Sudo {
+	trait Store for Module<T: Trait> as Vesting {
 		/// Information regarding the vesting of a given account.
 		pub Vesting get(fn vesting):
 			map T::AccountId => Option<VestingInfo<BalanceOf<T>, T::BlockNumber>>;
