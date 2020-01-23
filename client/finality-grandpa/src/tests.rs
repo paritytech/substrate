@@ -37,15 +37,17 @@ use sp_consensus::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
 	import_queue::{BoxJustificationImport, BoxFinalityProofImport},
 };
-use std::collections::{HashMap, HashSet};
-use std::result;
+use std::{
+	collections::{HashMap, HashSet},
+	result,
+	pin::Pin, task,
+};
 use parity_scale_codec::Decode;
-use sp_runtime::traits::{Header as HeaderT, HasherFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HasherFor};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::{H256, NativeOrEncoded, ExecutionContext, crypto::Public};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
-use std::{pin::Pin, task};
 
 use authorities::AuthoritySet;
 use finality_proof::{
@@ -1282,6 +1284,9 @@ fn voter_persists_its_votes() {
 			HasVoted::No,
 		);
 
+		let round_rx = futures03::compat::Compat::new(round_rx.map(|item| Ok::<_, Error>(item)));
+		let round_tx = futures03::compat::CompatSink::new(round_tx);
+
 		let round_tx = Arc::new(Mutex::new(round_tx));
 		let exit_tx = Arc::new(Mutex::new(Some(exit_tx)));
 
@@ -1332,7 +1337,17 @@ fn voter_persists_its_votes() {
 							target_hash: block_30_hash,
 						};
 
-						round_tx.lock().start_send(finality_grandpa::Message::Prevote(prevote)).unwrap();
+						// One should either be calling `Sink::send` or `Sink::start_send` followed
+						// by `Sink::poll_complete` to make sure items are being flushed. Given that
+						// we send in a loop including a delay until items are received, this can be
+						// ignored for the sake of reduced complexity.
+						if !round_tx.lock()
+							.start_send(finality_grandpa::Message::Prevote(prevote))
+							.unwrap()
+							.is_ready() {
+								panic!("expected sink to be ready to write to.");
+							}
+
 						Ok(())
 					}).map_err(|_| panic!()))
 
