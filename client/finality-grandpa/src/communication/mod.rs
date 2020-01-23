@@ -270,7 +270,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		local_key: Option<AuthorityPair>,
 		has_voted: HasVoted<B>,
 	) -> (
-		impl Stream<Item = SignedMessage<B>>,
+		impl Stream<Item = SignedMessage<B>> + Unpin,
 		OutgoingMessages<B>,
 	) {
 		self.note_round(
@@ -290,16 +290,15 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		let topic = round_topic::<B>(round.0, set_id.0);
 		let incoming = self.gossip_engine.messages_for(topic)
-			.filter_map(|notification| {
+			.filter_map(move |notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
-				if let Err(ref e) = decoded {
-					debug!(target: "afg", "Skipping malformed message {:?}: {}", notification, e);
-				}
-				future::ready(decoded.ok())
-			})
-			.filter_map(move |msg| {
-				match msg {
-					GossipMessage::Vote(msg) => {
+
+				match decoded {
+					Err(ref e) => {
+						debug!(target: "afg", "Skipping malformed message {:?}: {}", notification, e);
+						return future::ready(None);
+					}
+					Ok(GossipMessage::Vote(msg)) => {
 						// check signature.
 						if !voters.contains_key(&msg.message.id) {
 							debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
@@ -336,12 +335,12 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 					}
 					_ => {
 						debug!(target: "afg", "Skipping unknown message type");
-						future::ready(None)
+						return future::ready(None);
 					}
 				}
 			});
 
-		let (tx, out_rx) = mpsc::unbounded();
+		let (tx, out_rx) = mpsc::channel(0);
 		let outgoing = OutgoingMessages::<B> {
 			round: round.0,
 			set_id: set_id.0,
@@ -677,25 +676,29 @@ pub(crate) fn check_message_sig_with_buffer<Block: BlockT>(
 /// use the same raw message and key to sign. This is currently true for
 /// `ed25519` and `BLS` signatures (which we might use in the future), care must
 /// be taken when switching to different key types.
-pub struct OutgoingMessages<Block: BlockT> {
+pub(crate) struct OutgoingMessages<Block: BlockT> {
 	round: RoundNumber,
 	set_id: SetIdNumber,
 	locals: Option<(AuthorityPair, AuthorityId)>,
-	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
+	sender: mpsc::Sender<SignedMessage<Block>>,
 	network: GossipEngine<Block>,
 	has_voted: HasVoted<Block>,
 }
 
-impl<Block: BlockT> Unpin for OutgoingMessages<Block> {}
+impl<B: BlockT> Unpin for OutgoingMessages<B> {}
 
-impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block> {
+impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
+{
 	type Error = Error;
 
-	fn poll_ready(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
-		Poll::Ready(Ok(()))
+	fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+		Sink::poll_ready(Pin::new(&mut self.sender), cx)
+			.map(|elem| { elem.map_err(|e| {
+				Error::Network(format!("Failed to poll_ready channel sender: {:?}", e))
+			})})
 	}
 
-	fn start_send(self: Pin<&mut Self>, mut msg: Message<Block>) -> Result<(), Self::Error> {
+	fn start_send(mut self: Pin<&mut Self>, mut msg: Message<Block>) -> Result<(), Self::Error> {
 		// if we've voted on this round previously under the same key, send that vote instead
 		match &mut msg {
 			finality_grandpa::Message::PrimaryPropose(ref mut vote) =>
@@ -751,20 +754,23 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block> {
 			self.network.gossip_message(topic, message.encode(), false);
 
 			// forward the message to the inner sender.
-			let _ = self.sender.unbounded_send(signed);
-		}
+			return self.sender.start_send(signed).map_err(|e| {
+				Error::Network(format!("Failed to start_send on channel sender: {:?}", e))
+			});
+		};
 
 		Ok(())
 	}
 
-	fn poll_flush(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
+	fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Result<(), Self::Error>> {
 		Poll::Ready(Ok(()))
- 	}
+	}
 
-	fn poll_close(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
- 		// ignore errors since we allow this inner sender to be closed already.
-		Pin::into_inner(self).sender.disconnect();
-		Poll::Ready(Ok(()))
+	fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+		Sink::poll_close(Pin::new(&mut self.sender), cx)
+			.map(|elem| { elem.map_err(|e| {
+				Error::Network(format!("Failed to poll_close channel sender: {:?}", e))
+			})})
 	}
 }
 

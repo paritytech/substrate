@@ -16,11 +16,7 @@
 
 //! This crate provides an implementation of `WasmRuntime` that is baked by wasmi.
 
-use sc_executor_common::{
-	error::{Error, WasmError},
-	sandbox,
-	allocator,
-};
+use sc_executor_common::{error::{Error, WasmError}, sandbox};
 use std::{str, mem, cell::RefCell};
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
@@ -38,7 +34,7 @@ use sc_executor_common::wasm_runtime::WasmRuntime;
 
 struct FunctionExecutor<'a> {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,
-	heap: allocator::FreeingBumpHeapAllocator,
+	heap: sp_allocator::FreeingBumpHeapAllocator,
 	memory: MemoryRef,
 	table: Option<TableRef>,
 	host_functions: &'a [&'static dyn Function],
@@ -57,7 +53,7 @@ impl<'a> FunctionExecutor<'a> {
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: allocator::FreeingBumpHeapAllocator::new(heap_base),
+			heap: sp_allocator::FreeingBumpHeapAllocator::new(heap_base),
 			memory: m,
 			table: t,
 			host_functions,
@@ -79,13 +75,13 @@ impl<'a> sandbox::SandboxCapabilities for FunctionExecutor<'a> {
 	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>, Error> {
 		let heap = &mut self.heap;
 		self.memory.with_direct_access_mut(|mem| {
-			heap.allocate(mem, len)
+			heap.allocate(mem, len).map_err(Into::into)
 		})
 	}
 	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<(), Error> {
 		let heap = &mut self.heap;
 		self.memory.with_direct_access_mut(|mem| {
-			heap.deallocate(mem, ptr)
+			heap.deallocate(mem, ptr).map_err(Into::into)
 		})
 	}
 	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<(), Error> {

@@ -36,15 +36,17 @@ use sp_consensus::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
 	import_queue::{BoxJustificationImport, BoxFinalityProofImport},
 };
-use std::collections::{HashMap, HashSet};
-use std::result;
+use std::{
+	collections::{HashMap, HashSet},
+	result,
+	pin::Pin, task,
+};
 use parity_scale_codec::Decode;
-use sp_runtime::traits::{Header as HeaderT, HasherFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HasherFor};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::{H256, NativeOrEncoded, ExecutionContext, crypto::Public};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
-use std::{pin::Pin, task};
 use futures01::Async;
 use futures::compat::Future01CompatExt;
 
@@ -1031,7 +1033,8 @@ fn allows_reimporting_change_blocks() {
 			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::LongestChain,
+			intermediates: Default::default(),
+			fork_choice: Some(ForkChoiceStrategy::LongestChain),
 			allow_missing_state: false,
 			import_existing: false,
 		}
@@ -1090,7 +1093,8 @@ fn test_bad_justification() {
 			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::LongestChain,
+			intermediates: Default::default(),
+			fork_choice: Some(ForkChoiceStrategy::LongestChain),
 			allow_missing_state: false,
 			import_existing: false,
 		}
@@ -1334,7 +1338,13 @@ fn voter_persists_its_votes() {
 						target_hash: block_30_hash,
 					};
 
-					Pin::new(&mut *round_tx.lock()).start_send(finality_grandpa::Message::Prevote(prevote)).unwrap();
+					// One should either be calling `Sink::send` or `Sink::start_send` followed
+					// by `Sink::poll_complete` to make sure items are being flushed. Given that
+					// we send in a loop including a delay until items are received, this can be
+					// ignored for the sake of reduced complexity.
+					Pin::new(&mut *round_tx.lock())
+						.start_send(finality_grandpa::Message::Prevote(prevote))
+						.unwrap();
 				} else if state.compare_and_swap(1, 2, Ordering::SeqCst) == 1 {
 					// the next message we receive should be our own prevote
 					let prevote = match signed.message {
@@ -1826,7 +1836,8 @@ fn imports_justification_for_regular_blocks_on_import() {
 		storage_changes: None,
 		finalized: false,
 		auxiliary: Vec::new(),
-		fork_choice: ForkChoiceStrategy::LongestChain,
+		intermediates: Default::default(),
+		fork_choice: Some(ForkChoiceStrategy::LongestChain),
 		allow_missing_state: false,
 		import_existing: false,
 	};
