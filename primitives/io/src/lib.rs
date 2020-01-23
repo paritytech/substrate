@@ -375,7 +375,7 @@ pub trait Misc {
 	}
 
 	/// Get the current system time in nanoseconds.
-	fn system_time() -> u128 {
+	fn current_time() -> u128 {
 		time::SystemTime::now().duration_since(time::SystemTime::UNIX_EPOCH)
 		.expect("Unix time doesn't go backwards; qed")
 		.as_nanos()
