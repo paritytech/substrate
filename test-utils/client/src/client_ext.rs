@@ -96,7 +96,8 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::LongestChain,
+			intermediates: Default::default(),
+			fork_choice: Some(ForkChoiceStrategy::LongestChain),
 			allow_missing_state: false,
 			import_existing: false,
 		};
@@ -115,7 +116,8 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::Custom(true),
+			intermediates: Default::default(),
+			fork_choice: Some(ForkChoiceStrategy::Custom(true)),
 			allow_missing_state: false,
 			import_existing: false,
 		};
@@ -134,7 +136,8 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 			storage_changes: None,
 			finalized: true,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::Custom(true),
+			intermediates: Default::default(),
+			fork_choice: Some(ForkChoiceStrategy::Custom(true)),
 			allow_missing_state: false,
 			import_existing: false,
 		};
@@ -158,7 +161,8 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 			storage_changes: None,
 			finalized: true,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::LongestChain,
+			intermediates: Default::default(),
+			fork_choice: Some(ForkChoiceStrategy::LongestChain),
 			allow_missing_state: false,
 			import_existing: false,
 		};
@@ -182,7 +186,8 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::LongestChain,
+			intermediates: Default::default(),
+			fork_choice: Some(ForkChoiceStrategy::LongestChain),
 			allow_missing_state: false,
 			import_existing: false,
 		};
@@ -201,7 +206,8 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::Custom(true),
+			intermediates: Default::default(),
+			fork_choice: Some(ForkChoiceStrategy::Custom(true)),
 			allow_missing_state: false,
 			import_existing: false,
 		};
@@ -220,7 +226,8 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 			storage_changes: None,
 			finalized: true,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::Custom(true),
+			intermediates: Default::default(),
+			fork_choice: Some(ForkChoiceStrategy::Custom(true)),
 			allow_missing_state: false,
 			import_existing: false,
 		};
@@ -244,7 +251,8 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 			storage_changes: None,
 			finalized: true,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::LongestChain,
+			intermediates: Default::default(),
+			fork_choice: Some(ForkChoiceStrategy::LongestChain),
 			allow_missing_state: false,
 			import_existing: false,
 		};
