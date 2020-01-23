@@ -399,9 +399,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		(incoming, outgoing)
 	}
-}
 
-impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Notifies the sync service to try and sync the given block from the given
 	/// peers.
 	///

@@ -74,14 +74,12 @@ pub(crate) trait BlockUntilImported<Block: BlockT>: Sized {
 /// Buffering imported messages until blocks with given hashes are imported.
 #[pin_project::pin_project]
 pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, I, M: BlockUntilImported<Block>> {
-	#[pin]
 	import_notifications: Fuse<UnboundedReceiver<BlockImportNotification<Block>>>,
 	block_sync_requester: BlockSyncRequester,
 	status_check: BlockStatus,
 	#[pin]
 	inner: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
-	#[pin]
 	check_pending: Pin<Box<dyn Stream<Item = Result<(), std::io::Error>> + Send>>,
 	/// Mapping block hashes to their block number, the point in time it was
 	/// first encountered (Instant) and a list of GRANDPA messages referencing
