@@ -1032,7 +1032,8 @@ fn allows_reimporting_change_blocks() {
 			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::LongestChain,
+			intermediates: Default::default(),
+			fork_choice: Some(ForkChoiceStrategy::LongestChain),
 			allow_missing_state: false,
 			import_existing: false,
 		}
@@ -1091,7 +1092,8 @@ fn test_bad_justification() {
 			storage_changes: None,
 			finalized: false,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::LongestChain,
+			intermediates: Default::default(),
+			fork_choice: Some(ForkChoiceStrategy::LongestChain),
 			allow_missing_state: false,
 			import_existing: false,
 		}
@@ -1829,7 +1831,8 @@ fn imports_justification_for_regular_blocks_on_import() {
 		storage_changes: None,
 		finalized: false,
 		auxiliary: Vec::new(),
-		fork_choice: ForkChoiceStrategy::LongestChain,
+		intermediates: Default::default(),
+		fork_choice: Some(ForkChoiceStrategy::LongestChain),
 		allow_missing_state: false,
 		import_existing: false,
 	};

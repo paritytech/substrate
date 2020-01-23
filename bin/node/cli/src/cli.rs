@@ -87,7 +87,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 
 	match parse_and_prepare::<CustomSubcommands, NoCustom, _>(&version, "substrate-node", args) {
 		ParseAndPrepare::Run(cmd) => cmd.run(load_spec, exit,
-		|exit, _cli_args, _custom_args, config: Config<_, _>| {
+		|exit, _cli_args, _custom_args, mut config: Config<_, _>| {
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
 			info!("  by Parity Technologies, 2017-2019");
@@ -100,6 +100,10 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 				.enable_all()
 				.build()
 				.map_err(|e| format!("{:?}", e))?;
+			config.tasks_executor = {
+				let runtime_handle = runtime.handle().clone();
+				Some(Box::new(move |fut| { runtime_handle.spawn(fut); }))
+			};
 			match config.roles {
 				ServiceRoles::LIGHT => run_until_exit(
 					runtime,
@@ -130,7 +134,12 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 				&version,
 				None,
 			)?;
-			sc_cli::fill_import_params(&mut config, &cli_args.import_params, ServiceRoles::FULL)?;
+			sc_cli::fill_import_params(
+				&mut config,
+				&cli_args.import_params,
+				ServiceRoles::FULL,
+				cli_args.shared_params.dev,
+			)?;
 
 			config.keystore = KeystoreConfig::Path {
 				path: config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH).unwrap(),

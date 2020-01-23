@@ -106,6 +106,11 @@ mod benefit {
 	pub(super) const PER_EQUIVOCATION: i32 = 10;
 }
 
+/// If the voter set is larger than this value some telemetry events are not
+/// sent to avoid increasing usage resource on the node and flooding the
+/// telemetry server (e.g. received votes, received commits.)
+const TELEMETRY_VOTERS_LIMIT: usize = 10;
+
 /// A handle to the network.
 ///
 /// Something that provides both the capabilities needed for the `gossip_network::Network` trait as
@@ -308,29 +313,31 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 							return Ok(None);
 						}
 
-						match &msg.message.message {
-							PrimaryPropose(propose) => {
-								telemetry!(CONSENSUS_INFO; "afg.received_propose";
-									"voter" => ?format!("{}", msg.message.id),
-									"target_number" => ?propose.target_number,
-									"target_hash" => ?propose.target_hash,
-								);
-							},
-							Prevote(prevote) => {
-								telemetry!(CONSENSUS_INFO; "afg.received_prevote";
-									"voter" => ?format!("{}", msg.message.id),
-									"target_number" => ?prevote.target_number,
-									"target_hash" => ?prevote.target_hash,
-								);
-							},
-							Precommit(precommit) => {
-								telemetry!(CONSENSUS_INFO; "afg.received_precommit";
-									"voter" => ?format!("{}", msg.message.id),
-									"target_number" => ?precommit.target_number,
-									"target_hash" => ?precommit.target_hash,
-								);
-							},
-						};
+						if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+							match &msg.message.message {
+								PrimaryPropose(propose) => {
+									telemetry!(CONSENSUS_INFO; "afg.received_propose";
+										"voter" => ?format!("{}", msg.message.id),
+										"target_number" => ?propose.target_number,
+										"target_hash" => ?propose.target_hash,
+									);
+								},
+								Prevote(prevote) => {
+									telemetry!(CONSENSUS_INFO; "afg.received_prevote";
+										"voter" => ?format!("{}", msg.message.id),
+										"target_number" => ?prevote.target_number,
+										"target_hash" => ?prevote.target_hash,
+									);
+								},
+								Precommit(precommit) => {
+									telemetry!(CONSENSUS_INFO; "afg.received_precommit";
+										"voter" => ?format!("{}", msg.message.id),
+										"target_number" => ?precommit.target_number,
+										"target_hash" => ?precommit.target_hash,
+									);
+								},
+							};
+						}
 
 						Ok(Some(msg.message))
 					}
@@ -474,11 +481,13 @@ fn incoming_global<B: BlockT>(
 				format!("{}", a)
 			}).collect();
 
-		telemetry!(CONSENSUS_INFO; "afg.received_commit";
-			"contains_precommits_signed_by" => ?precommits_signed_by,
-			"target_number" => ?msg.message.target_number.clone(),
-			"target_hash" => ?msg.message.target_hash.clone(),
-		);
+		if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+			telemetry!(CONSENSUS_INFO; "afg.received_commit";
+				"contains_precommits_signed_by" => ?precommits_signed_by,
+				"target_number" => ?msg.message.target_number.clone(),
+				"target_hash" => ?msg.message.target_hash.clone(),
+			);
+		}
 
 		if let Err(cost) = check_compact_commit::<B>(
 			&msg.message,
@@ -600,8 +609,28 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 	}
 }
 
-pub(crate) fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
-	(message, round, set_id).encode()
+/// Encode round message localized to a given round and set id.
+pub(crate) fn localized_payload<E: Encode>(
+	round: RoundNumber,
+	set_id: SetIdNumber,
+	message: &E,
+) -> Vec<u8> {
+	let mut buf = Vec::new();
+	localized_payload_with_buffer(round, set_id, message, &mut buf);
+	buf
+}
+
+/// Encode round message localized to a given round and set id using the given
+/// buffer. The given buffer will be cleared and the resulting encoded payload
+/// will always be written to the start of the buffer.
+pub(crate) fn localized_payload_with_buffer<E: Encode>(
+	round: RoundNumber,
+	set_id: SetIdNumber,
+	message: &E,
+	buf: &mut Vec<u8>,
+) {
+	buf.clear();
+	(message, round, set_id).encode_to(buf)
 }
 
 /// Type-safe wrapper around a round number.
@@ -612,7 +641,8 @@ pub struct Round(pub RoundNumber);
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
 pub struct SetId(pub SetIdNumber);
 
-// check a message.
+/// Check a message signature by encoding the message as a localized payload and
+/// verifying the provided signature using the expected authority id.
 pub(crate) fn check_message_sig<Block: BlockT>(
 	message: &Message<Block>,
 	id: &AuthorityId,
@@ -620,9 +650,32 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 	round: RoundNumber,
 	set_id: SetIdNumber,
 ) -> Result<(), ()> {
+	check_message_sig_with_buffer::<Block>(
+		message,
+		id,
+		signature,
+		round,
+		set_id,
+		&mut Vec::new(),
+	)
+}
+
+/// Check a message signature by encoding the message as a localized payload and
+/// verifying the provided signature using the expected authority id.
+/// The encoding necessary to verify the signature will be done using the given
+/// buffer, the original content of the buffer will be cleared.
+pub(crate) fn check_message_sig_with_buffer<Block: BlockT>(
+	message: &Message<Block>,
+	id: &AuthorityId,
+	signature: &AuthoritySignature,
+	round: RoundNumber,
+	set_id: SetIdNumber,
+	buf: &mut Vec<u8>,
+) -> Result<(), ()> {
 	let as_public = id.clone();
-	let encoded_raw = localized_payload(round, set_id, message);
-	if AuthorityPair::verify(signature, &encoded_raw, &as_public) {
+	localized_payload_with_buffer(round, set_id, message, buf);
+
+	if AuthorityPair::verify(signature, buf, &as_public) {
 		Ok(())
 	} else {
 		debug!(target: "afg", "Bad signature on message from {:?}", id);
@@ -752,6 +805,7 @@ fn check_compact_commit<Block: BlockT>(
 	}
 
 	// check signatures on all contained precommits.
+	let mut buf = Vec::new();
 	for (i, (precommit, &(ref sig, ref id))) in msg.precommits.iter()
 		.zip(&msg.auth_data)
 		.enumerate()
@@ -759,12 +813,13 @@ fn check_compact_commit<Block: BlockT>(
 		use crate::communication::gossip::Misbehavior;
 		use finality_grandpa::Message as GrandpaMessage;
 
-		if let Err(()) = check_message_sig::<Block>(
+		if let Err(()) = check_message_sig_with_buffer::<Block>(
 			&GrandpaMessage::Precommit(precommit.clone()),
 			id,
 			sig,
 			round.0,
 			set_id.0,
+			&mut buf,
 		) {
 			debug!(target: "afg", "Bad commit message signature {}", id);
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_commit_msg_signature"; "id" => ?id);
@@ -836,6 +891,7 @@ fn check_catch_up<Block: BlockT>(
 		round: RoundNumber,
 		set_id: SetIdNumber,
 		mut signatures_checked: usize,
+		buf: &mut Vec<u8>,
 	) -> Result<usize, ReputationChange> where
 		B: BlockT,
 		I: Iterator<Item=(Message<B>, &'a AuthorityId, &'a AuthoritySignature)>,
@@ -845,12 +901,13 @@ fn check_catch_up<Block: BlockT>(
 		for (msg, id, sig) in messages {
 			signatures_checked += 1;
 
-			if let Err(()) = check_message_sig::<B>(
+			if let Err(()) = check_message_sig_with_buffer::<B>(
 				&msg,
 				id,
 				sig,
 				round,
 				set_id,
+				buf,
 			) {
 				debug!(target: "afg", "Bad catch up message signature {}", id);
 				telemetry!(CONSENSUS_DEBUG; "afg.bad_catch_up_msg_signature"; "id" => ?id);
@@ -866,6 +923,8 @@ fn check_catch_up<Block: BlockT>(
 		Ok(signatures_checked)
 	}
 
+	let mut buf = Vec::new();
+
 	// check signatures on all contained prevotes.
 	let signatures_checked = check_signatures::<Block, _>(
 		msg.prevotes.iter().map(|vote| {
@@ -874,6 +933,7 @@ fn check_catch_up<Block: BlockT>(
 		msg.round_number,
 		set_id.0,
 		0,
+		&mut buf,
 	)?;
 
 	// check signatures on all contained precommits.
@@ -884,6 +944,7 @@ fn check_catch_up<Block: BlockT>(
 		msg.round_number,
 		set_id.0,
 		signatures_checked,
+		&mut buf,
 	)?;
 
 	Ok(())

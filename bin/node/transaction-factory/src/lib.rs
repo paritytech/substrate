@@ -201,9 +201,10 @@ where
 						finalized: false,
 						justification: None,
 						auxiliary: Vec::new(),
-						fork_choice: ForkChoiceStrategy::LongestChain,
+						fork_choice: Some(ForkChoiceStrategy::LongestChain),
 						allow_missing_state: false,
 						import_existing: false,
+						intermediates: Default::default(),
 					};
 
 					self.client.clone().import_block(import, HashMap::new())
