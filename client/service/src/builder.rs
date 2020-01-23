@@ -147,7 +147,7 @@ pub fn new_full_client<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 	config: &Configuration<TGen, TCSExt>,
 ) -> Result<TFullClient<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
-	TExecDisp: NativeExecutionDispatch,
+	TExecDisp: NativeExecutionDispatch + 'static,
 	TGen: sp_runtime::BuildStorage + serde::Serialize + for<'de> serde::Deserialize<'de>,
 	TCSExt: Extension,
 {
@@ -158,7 +158,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 	config: &Configuration<TGen, TCSExt>,
 ) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
 	TBl: BlockT,
-	TExecDisp: NativeExecutionDispatch,
+	TExecDisp: NativeExecutionDispatch + 'static,
 	TGen: sp_runtime::BuildStorage + serde::Serialize + for<'de> serde::Deserialize<'de>,
 	TCSExt: Extension,
 {
@@ -227,7 +227,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp, TGen, TCSExt>(
 impl<TGen, TCSExt> ServiceBuilder<(), (), TGen, TCSExt, (), (), (), (), (), (), (), (), (), ()>
 where TGen: RuntimeGenesis, TCSExt: Extension {
 	/// Start the service builder with a configuration.
-	pub fn new_full<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch>(
+	pub fn new_full<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch + 'static>(
 		config: Configuration<TGen, TCSExt>
 	) -> Result<ServiceBuilder<
 		TBl,

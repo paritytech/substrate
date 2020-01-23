@@ -223,8 +223,9 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 		// The following unwind safety assertion is OK because if the method call panics, the
 		// runtime will be dropped.
 		let mut runtime = AssertUnwindSafe(runtime.as_mut());
-		crate::native_executor::safe_call(
-			move || runtime.call(&mut **ext, "Core_version", &[])
+		crate::native_executor::with_externalities_safe(
+			&mut **ext,
+			move || runtime.call("Core_version", &[])
 		).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
 	};
 	let encoded_version = version_result

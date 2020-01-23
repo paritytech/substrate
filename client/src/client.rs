@@ -156,7 +156,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		E: CodeExecutor + RuntimeInfo,
 		S: BuildStorage,
 		Block: BlockT,
-		B: backend::LocalBackend<Block>
+		B: backend::LocalBackend<Block> + 'static,
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
 	let extensions = ExecutionExtensions::new(Default::default(), keystore);
@@ -750,7 +750,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> sp_blockchain::Result<ImportResult> where
-		E: CallExecutor<Block> + Send + Sync + Clone,
 		Self: ProvideRuntimeApi<Block>,
 		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
 			ApiExt<Block, StateBackend = B::State>,
@@ -829,7 +828,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		fork_choice: ForkChoiceStrategy,
 		import_existing: bool,
 	) -> sp_blockchain::Result<ImportResult> where
-		E: CallExecutor<Block> + Send + Sync + Clone,
 		Self: ProvideRuntimeApi<Block>,
 		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
 				ApiExt<Block, StateBackend = B::State>,
@@ -1387,7 +1385,7 @@ impl<B, E, Block, RA> ProvideCache<Block> for Client<B, E, Block, RA> where
 
 impl<B, E, Block, RA> ProvideRuntimeApi<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block, Backend = B> + Clone + Send + Sync,
+	E: CallExecutor<Block, Backend = B> + Send + Sync,
 	Block: BlockT,
 	RA: ConstructRuntimeApi<Block, Self>,
 {
@@ -1400,7 +1398,7 @@ impl<B, E, Block, RA> ProvideRuntimeApi<Block> for Client<B, E, Block, RA> where
 
 impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block, Backend = B> + Clone + Send + Sync,
+	E: CallExecutor<Block, Backend = B> + Send + Sync,
 	Block: BlockT,
 {
 	type Error = Error;
@@ -1448,7 +1446,7 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 /// important verification work.
 impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block> + Clone + Send + Sync,
+	E: CallExecutor<Block> + Send + Sync,
 	Block: BlockT,
 	Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
@@ -1552,7 +1550,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 
 impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block> + Clone + Send + Sync,
+	E: CallExecutor<Block> + Send + Sync,
 	Block: BlockT,
 	Self: ProvideRuntimeApi<Block>,
 	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
