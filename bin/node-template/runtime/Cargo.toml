@@ -18,7 +18,6 @@ transaction-payment = { version = "2.0.0", default-features = false, package = "
 
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 frame-executive = { version = "2.0.0", default-features = false, path = "../../../frame/executive" }
-safe-mix = { version = "1.0.0", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-api = { version = "2.0.0", default-features = false, path = "../../../primitives/api" }
 sp-block-builder = { path = "../../../primitives/block-builder", default-features = false}
@@ -47,7 +46,6 @@ std = [
 	"grandpa/std",
 	"indices/std",
 	"randomness-collective-flip/std",
-	"safe-mix/std",
 	"serde",
 	"sp-api/std",
 	"sp-block-builder/std",
