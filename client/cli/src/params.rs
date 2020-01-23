@@ -960,7 +960,7 @@ impl ExportBlocksCmd {
 	/// Run the export-blocks command
 	pub fn run<G, E, B, BC, BB>(
 		self,
-		config: Configuration<G, E>,
+		mut config: Configuration<G, E>,
 		builder: B,
 	) -> error::Result<()>
 	where
@@ -973,6 +973,8 @@ impl ExportBlocksCmd {
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+
+		crate::fill_config_keystore_in_memory(&mut config)?;
 
 		if let DatabaseConfig::Path { ref path, .. } = &config.database {
 			info!("DB path: {}", path.display());
@@ -1056,6 +1058,7 @@ impl CheckBlockCmd {
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
 		crate::fill_import_params(&mut config, &self.import_params, sc_service::Roles::FULL)?;
+		crate::fill_config_keystore_in_memory(&mut config)?;
 
 		let input = if self.input.starts_with("0x") { &self.input[2..] } else { &self.input[..] };
 		let block_id = match FromStr::from_str(input) {
@@ -1082,13 +1085,15 @@ impl PurgeChainCmd {
 	/// Run the purge command
 	pub fn run<G, E>(
 		self,
-		config: Configuration<G, E>,
+		mut config: Configuration<G, E>,
 	) -> error::Result<()>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+
+		crate::fill_config_keystore_in_memory(&mut config)?;
 
 		let db_path = match config.database {
 			DatabaseConfig::Path { path, .. } => path,
@@ -1133,7 +1138,7 @@ impl RevertCmd {
 	/// Run the revert command
 	pub fn run<G, E, B, BC, BB>(
 		self,
-		config: Configuration<G, E>,
+		mut config: Configuration<G, E>,
 		builder: B,
 	) -> error::Result<()>
 	where
@@ -1146,6 +1151,8 @@ impl RevertCmd {
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
+
+		crate::fill_config_keystore_in_memory(&mut config)?;
 
 		let blocks = self.num.parse()?;
 		builder(config)?.revert_chain(blocks)?;

@@ -395,6 +395,16 @@ fn input_keystore_password() -> Result<String, String> {
 		.map_err(|e| format!("{:?}", e))
 }
 
+/// Use in memory keystore config when it is not required at all.
+fn fill_config_keystore_in_memory<G, E>(config: &mut sc_service::Configuration<G, E>)
+	-> Result<(), String>
+{
+	match &mut config.keystore {
+		 cfg @ KeystoreConfig::None => { *cfg = KeystoreConfig::InMemory; Ok(()) },
+		 _ => Err("Keystore config specified when it should not be!".into()),
+	}
+}
+
 /// Fill the password field of the given config instance.
 fn fill_config_keystore_password_and_path<G, E>(
 	config: &mut sc_service::Configuration<G, E>,
