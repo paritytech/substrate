@@ -50,8 +50,8 @@ fn set_recovered_works() {
 		let call = Box::new(Call::Balances(BalancesCall::transfer(1, 100)));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
 		// Account 1 has successfully drained the funds from account 5
-		assert_eq!(Balances::free_balance(1), 200);
-		assert_eq!(Balances::free_balance(5), 0);
+		assert_eq!(Balances::free_balance(&1), 200);
+		assert_eq!(Balances::free_balance(&5), 0);
 	});
 }
 
@@ -85,12 +85,12 @@ fn recovery_lifecycle_works() {
 		let call = Box::new(Call::Recovery(RecoveryCall::remove_recovery()));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
 		// Account 1 should now be able to make a call through account 5 to get all of their funds
-		assert_eq!(Balances::free_balance(5), 110);
+		assert_eq!(Balances::free_balance(&5), 110);
 		let call = Box::new(Call::Balances(BalancesCall::transfer(1, 110)));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
 		// All funds have been fully recovered!
-		assert_eq!(Balances::free_balance(1), 200);
-		assert_eq!(Balances::free_balance(5), 0);
+		assert_eq!(Balances::free_balance(&1), 200);
+		assert_eq!(Balances::free_balance(&5), 0);
 		// All storage items are removed from the module
 		assert!(!<ActiveRecoveries<Test>>::exists(&5, &1));
 		assert!(!<Recoverable<Test>>::exists(&5));
@@ -190,7 +190,7 @@ fn create_recovery_works() {
 		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
 		// Deposit is taken, and scales with the number of friends they pick
 		// Base 10 + 1 per friends = 13 total reserved
-		assert_eq!(Balances::reserved_balance(5), 13);
+		assert_eq!(Balances::reserved_balance(&5), 13);
 		// Recovery configuration is correctly stored
 		let recovery_config = RecoveryConfig {
 			delay_period,

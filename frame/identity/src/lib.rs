@@ -1007,9 +1007,9 @@ type OnReapAccount = System;
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_eq!(Identity::identity(10).unwrap().info, ten());
-			assert_eq!(Balances::free_balance(10), 90);
+			assert_eq!(Balances::free_balance(&10), 90);
 			assert_ok!(Identity::clear_identity(Origin::signed(10)));
-			assert_eq!(Balances::free_balance(10), 100);
+			assert_eq!(Balances::free_balance(&10), 100);
 			assert_noop!(Identity::clear_identity(Origin::signed(10)), Error::<Test>::NotNamed);
 		});
 	}
@@ -1061,7 +1061,7 @@ type OnReapAccount = System;
 			assert_noop!(Identity::kill_identity(Origin::signed(1), 10), BadOrigin);
 			assert_ok!(Identity::kill_identity(Origin::signed(2), 10));
 			assert_eq!(Identity::identity(10), None);
-			assert_eq!(Balances::free_balance(10), 90);
+			assert_eq!(Balances::free_balance(&10), 90);
 			assert_noop!(Identity::kill_identity(Origin::signed(2), 10), Error::<Test>::NotNamed);
 		});
 	}
@@ -1074,14 +1074,14 @@ type OnReapAccount = System;
 
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
-			assert_eq!(Balances::free_balance(10), 80);
+			assert_eq!(Balances::free_balance(&10), 80);
 			assert_eq!(Identity::subs(10), (10, vec![20]));
 			assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1]))));
 
 			// push another item and re-set it.
 			subs.push((30, Data::Raw(vec![50; 1])));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
-			assert_eq!(Balances::free_balance(10), 70);
+			assert_eq!(Balances::free_balance(&10), 70);
 			assert_eq!(Identity::subs(10), (20, vec![20, 30]));
 			assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1]))));
 			assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1]))));
@@ -1089,7 +1089,7 @@ type OnReapAccount = System;
 			// switch out one of the items and re-set.
 			subs[0] = (40, Data::Raw(vec![60; 1]));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
-			assert_eq!(Balances::free_balance(10), 70); // no change in the balance
+			assert_eq!(Balances::free_balance(&10), 70); // no change in the balance
 			assert_eq!(Identity::subs(10), (20, vec![40, 30]));
 			assert_eq!(Identity::super_of(20), None);
 			assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1]))));
@@ -1097,7 +1097,7 @@ type OnReapAccount = System;
 
 			// clear
 			assert_ok!(Identity::set_subs(Origin::signed(10), vec![]));
-			assert_eq!(Balances::free_balance(10), 90);
+			assert_eq!(Balances::free_balance(&10), 90);
 			assert_eq!(Identity::subs(10), (0, vec![]));
 			assert_eq!(Identity::super_of(30), None);
 			assert_eq!(Identity::super_of(40), None);
@@ -1113,7 +1113,7 @@ type OnReapAccount = System;
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1]))]));
 			assert_ok!(Identity::clear_identity(Origin::signed(10)));
-			assert_eq!(Balances::free_balance(10), 100);
+			assert_eq!(Balances::free_balance(&10), 100);
 			assert!(Identity::super_of(20).is_none());
 		});
 	}
@@ -1124,7 +1124,7 @@ type OnReapAccount = System;
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1]))]));
 			assert_ok!(Identity::kill_identity(Origin::ROOT, 10));
-			assert_eq!(Balances::free_balance(10), 80);
+			assert_eq!(Balances::free_balance(&10), 80);
 			assert!(Identity::super_of(20).is_none());
 		});
 	}
@@ -1138,7 +1138,7 @@ type OnReapAccount = System;
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 			assert_ok!(Identity::cancel_request(Origin::signed(10), 0));
-			assert_eq!(Balances::free_balance(10), 90);
+			assert_eq!(Balances::free_balance(&10), 90);
 			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), Error::<Test>::NotFound);
 
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
@@ -1155,13 +1155,13 @@ type OnReapAccount = System;
 			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 9), Error::<Test>::FeeChanged);
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 			// 10 for the judgement request, 10 for the identity.
-			assert_eq!(Balances::free_balance(10), 80);
+			assert_eq!(Balances::free_balance(&10), 80);
 
 			// Re-requesting won't work as we already paid.
 			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10), Error::<Test>::StickyJudgement);
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Erroneous));
 			// Registrar got their payment now.
-			assert_eq!(Balances::free_balance(3), 20);
+			assert_eq!(Balances::free_balance(&3), 20);
 
 			// Re-requesting still won't work as it's erroneous.
 			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10), Error::<Test>::StickyJudgement);
@@ -1187,7 +1187,7 @@ type OnReapAccount = System;
 					(Data::Raw(b"text".to_vec()), Data::Raw(b"10".to_vec())),
 				], .. Default::default()
 			}));
-			assert_eq!(Balances::free_balance(10), 70);
+			assert_eq!(Balances::free_balance(&10), 70);
 		});
 	}
 

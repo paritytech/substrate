@@ -763,12 +763,12 @@ type OnReapAccount = System;
 
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
 			assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], None, call.clone()));
-			assert_eq!(Balances::free_balance(1), 2);
-			assert_eq!(Balances::reserved_balance(1), 3);
+			assert_eq!(Balances::free_balance(&1), 2);
+			assert_eq!(Balances::reserved_balance(&1), 3);
 
 			assert_ok!(Utility::as_multi(Origin::signed(2), 2, vec![1, 3], Some(now()), call));
-			assert_eq!(Balances::free_balance(1), 5);
-			assert_eq!(Balances::reserved_balance(1), 0);
+			assert_eq!(Balances::free_balance(&1), 5);
+			assert_eq!(Balances::reserved_balance(&1), 0);
 		});
 	}
 
@@ -779,13 +779,13 @@ type OnReapAccount = System;
 			let hash = call.using_encoded(blake2_256);
 			assert_ok!(Utility::approve_as_multi(Origin::signed(1), 3, vec![2, 3], None, hash.clone()));
 			assert_ok!(Utility::approve_as_multi(Origin::signed(2), 3, vec![1, 3], Some(now()), hash.clone()));
-			assert_eq!(Balances::free_balance(1), 6);
-			assert_eq!(Balances::reserved_balance(1), 4);
+			assert_eq!(Balances::free_balance(&1), 6);
+			assert_eq!(Balances::reserved_balance(&1), 4);
 			assert_ok!(
 				Utility::cancel_as_multi(Origin::signed(1), 3, vec![2, 3], now(), hash.clone()),
 			);
-			assert_eq!(Balances::free_balance(1), 10);
-			assert_eq!(Balances::reserved_balance(1), 0);
+			assert_eq!(Balances::free_balance(&1), 10);
+			assert_eq!(Balances::reserved_balance(&1), 0);
 		});
 	}
 
@@ -830,10 +830,10 @@ type OnReapAccount = System;
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
 			let hash = call.using_encoded(blake2_256);
 			assert_ok!(Utility::approve_as_multi(Origin::signed(1), 2, vec![2, 3], None, hash));
-			assert_eq!(Balances::free_balance(6), 0);
+			assert_eq!(Balances::free_balance(&6), 0);
 
 			assert_ok!(Utility::as_multi(Origin::signed(2), 2, vec![1, 3], Some(now()), call));
-			assert_eq!(Balances::free_balance(6), 15);
+			assert_eq!(Balances::free_balance(&6), 15);
 		});
 	}
 
@@ -849,10 +849,10 @@ type OnReapAccount = System;
 			let hash = call.using_encoded(blake2_256);
 			assert_ok!(Utility::approve_as_multi(Origin::signed(1), 3, vec![2, 3], None, hash.clone()));
 			assert_ok!(Utility::approve_as_multi(Origin::signed(2), 3, vec![1, 3], Some(now()), hash.clone()));
-			assert_eq!(Balances::free_balance(6), 0);
+			assert_eq!(Balances::free_balance(&6), 0);
 
 			assert_ok!(Utility::as_multi(Origin::signed(3), 3, vec![1, 2], Some(now()), call));
-			assert_eq!(Balances::free_balance(6), 15);
+			assert_eq!(Balances::free_balance(&6), 15);
 		});
 	}
 
@@ -883,10 +883,10 @@ type OnReapAccount = System;
 
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
 			assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], None, call.clone()));
-			assert_eq!(Balances::free_balance(6), 0);
+			assert_eq!(Balances::free_balance(&6), 0);
 
 			assert_ok!(Utility::as_multi(Origin::signed(2), 2, vec![1, 3], Some(now()), call));
-			assert_eq!(Balances::free_balance(6), 15);
+			assert_eq!(Balances::free_balance(&6), 15);
 		});
 	}
 
@@ -906,8 +906,8 @@ type OnReapAccount = System;
 			assert_ok!(Utility::as_multi(Origin::signed(3), 2, vec![1, 2], Some(now()), call2));
 			assert_ok!(Utility::as_multi(Origin::signed(3), 2, vec![1, 2], Some(now()), call1));
 
-			assert_eq!(Balances::free_balance(6), 10);
-			assert_eq!(Balances::free_balance(7), 5);
+			assert_eq!(Balances::free_balance(&6), 10);
+			assert_eq!(Balances::free_balance(&7), 5);
 		});
 	}
 
@@ -922,7 +922,7 @@ type OnReapAccount = System;
 			let call = Box::new(Call::Balances(BalancesCall::transfer(6, 10)));
 			assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], None, call.clone()));
 			assert_ok!(Utility::as_multi(Origin::signed(2), 2, vec![1, 3], Some(now()), call.clone()));
-			assert_eq!(Balances::free_balance(multi), 5);
+			assert_eq!(Balances::free_balance(&multi), 5);
 
 			assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], None, call.clone()));
 			assert_ok!(Utility::as_multi(Origin::signed(3), 2, vec![1, 2], Some(now()), call));
@@ -992,7 +992,7 @@ type OnReapAccount = System;
 			);
 			assert_ok!(Utility::as_multi(Origin::signed(1), 1, vec![2, 3], None, call));
 
-			assert_eq!(Balances::free_balance(6), 15);
+			assert_eq!(Balances::free_balance(&6), 15);
 		});
 	}
 
@@ -1011,46 +1011,46 @@ type OnReapAccount = System;
 				0,
 				Box::new(Call::Balances(BalancesCall::transfer(2, 3))),
 			));
-			assert_eq!(Balances::free_balance(sub_1_0), 2);
-			assert_eq!(Balances::free_balance(2), 13);
+			assert_eq!(Balances::free_balance(&sub_1_0), 2);
+			assert_eq!(Balances::free_balance(&2), 13);
 		});
 	}
 
 	#[test]
 	fn batch_with_root_works() {
 		new_test_ext().execute_with(|| {
-			assert_eq!(Balances::free_balance(1), 10);
-			assert_eq!(Balances::free_balance(2), 10);
+			assert_eq!(Balances::free_balance(&1), 10);
+			assert_eq!(Balances::free_balance(&2), 10);
 			assert_ok!(Utility::batch(Origin::ROOT, vec![
 				Call::Balances(BalancesCall::force_transfer(1, 2, 5)),
 				Call::Balances(BalancesCall::force_transfer(1, 2, 5))
 			]));
-			assert_eq!(Balances::free_balance(1), 0);
-			assert_eq!(Balances::free_balance(2), 20);
+			assert_eq!(Balances::free_balance(&1), 0);
+			assert_eq!(Balances::free_balance(&2), 20);
 		});
 	}
 
 	#[test]
 	fn batch_with_signed_works() {
 		new_test_ext().execute_with(|| {
-			assert_eq!(Balances::free_balance(1), 10);
-			assert_eq!(Balances::free_balance(2), 10);
+			assert_eq!(Balances::free_balance(&1), 10);
+			assert_eq!(Balances::free_balance(&2), 10);
 			assert_ok!(
 				Utility::batch(Origin::signed(1), vec![
 					Call::Balances(BalancesCall::transfer(2, 5)),
 					Call::Balances(BalancesCall::transfer(2, 5))
 				]),
 			);
-			assert_eq!(Balances::free_balance(1), 0);
-			assert_eq!(Balances::free_balance(2), 20);
+			assert_eq!(Balances::free_balance(&1), 0);
+			assert_eq!(Balances::free_balance(&2), 20);
 		});
 	}
 
 	#[test]
 	fn batch_early_exit_works() {
 		new_test_ext().execute_with(|| {
-			assert_eq!(Balances::free_balance(1), 10);
-			assert_eq!(Balances::free_balance(2), 10);
+			assert_eq!(Balances::free_balance(&1), 10);
+			assert_eq!(Balances::free_balance(&2), 10);
 			assert_ok!(
 				Utility::batch(Origin::signed(1), vec![
 					Call::Balances(BalancesCall::transfer(2, 5)),
@@ -1058,8 +1058,8 @@ type OnReapAccount = System;
 					Call::Balances(BalancesCall::transfer(2, 5)),
 				]),
 			);
-			assert_eq!(Balances::free_balance(1), 5);
-			assert_eq!(Balances::free_balance(2), 15);
+			assert_eq!(Balances::free_balance(&1), 5);
+			assert_eq!(Balances::free_balance(&2), 15);
 		});
 	}
 }
