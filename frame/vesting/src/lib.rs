@@ -99,7 +99,7 @@ impl<
 		// Return amount that is still locked in vesting
 		let maybe_balance = vested_block_count.checked_mul(&self.per_block);
 		if let Some(balance) = maybe_balance {
-			self.locked.max(balance) - balance
+			self.locked.saturating_sub(balance)
 		} else {
 			Zero::zero()
 		}
@@ -107,7 +107,7 @@ impl<
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Sudo {
+	trait Store for Module<T: Trait> as Vesting {
 		/// Information regarding the vesting of a given account.
 		pub Vesting get(fn vesting):
 			map T::AccountId => Option<VestingInfo<BalanceOf<T>, T::BlockNumber>>;
