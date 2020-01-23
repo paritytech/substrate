@@ -104,7 +104,7 @@ impl Trait for Test {
 	type MembershipChanged = ();
 	type RotationPeriod = RotationPeriod;
 	type MaxLockDuration = MaxLockDuration;
-	type FounderOrigin = EnsureSignedBy<FounderSetAccount, u128>;
+	type FounderSetOrigin = EnsureSignedBy<FounderSetAccount, u128>;
 	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
 	type ChallengePeriod = ChallengePeriod;
 }
@@ -133,6 +133,9 @@ impl EnvBuilder {
 				(40, 50),
 				(50, 50),
 				(60, 50),
+				(70, 50),
+				(80, 50),
+				(90, 50),
 			],
 			pot: 0,
 			max_members: 100,
