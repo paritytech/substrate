@@ -67,7 +67,8 @@ pub mod traits;
 pub mod weights;
 
 pub use self::hash::{
-	Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Blake2_128Concat, Hashable
+	Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Blake2_128Concat, Hashable,
+	StorageHasher
 };
 pub use self::storage::{
 	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap, StoragePrefixedMap

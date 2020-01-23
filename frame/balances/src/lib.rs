@@ -171,8 +171,6 @@ mod mock;
 mod tests;
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
-use frame_support::storage::child::kill_storage;
-use frame_support::storage::unhashed;
 
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
@@ -527,8 +525,8 @@ decl_module! {
 		}
 
 		fn on_initialize() {
-			if !IsUpgraded::get() {
-				IsUgraded()::put(true);
+			if !IsUpgraded::<I>::get() {
+				IsUpgraded::<I>::put(true);
 				Self::do_upgrade();
 			}
 		}
@@ -539,14 +537,17 @@ pub struct StorageIterator<T> {
 	prefix: [u8; 32],
 	previous_key: Vec<u8>,
 	drain: bool,
+	_phantom: ::sp_std::marker::PhantomData<T>,
 }
+
+use frame_support::StorageHasher;
 
 impl<T> StorageIterator<T> {
 	fn new(module: &[u8], item: &[u8]) -> Self {
 		let mut prefix = [0u8; 32];
 		prefix[0..16].copy_from_slice(&Twox128::hash(module));
 		prefix[16..32].copy_from_slice(&Twox128::hash(item));
-		Self { prefix, previous_key: prefix[..].to_vec(), drain: false }
+		Self { prefix, previous_key: prefix[..].to_vec(), drain: false, _phantom: Default::default() }
 	}
 	fn drain(mut self) -> Self {
 		self.drain = true;
@@ -554,7 +555,7 @@ impl<T> StorageIterator<T> {
 	}
 }
 
-impl<T: Decode> Iterator for StorageIterator<T> {
+impl<T: Decode + Sized> Iterator for StorageIterator<T> {
 	type Item = (Vec<u8>, T);
 	fn next(&mut self) -> Option<(Vec<u8>, T)> {
 		loop {
@@ -562,9 +563,8 @@ impl<T: Decode> Iterator for StorageIterator<T> {
 				.filter(|n| n.starts_with(&self.prefix));
 			break match maybe_next {
 				Some(next) => {
-					self.previous_key = next;
-					let maybe_value = frame_support::storage::unhashed::get(&next)
-						.and_then(|d| T::decode(d).ok());
+					self.previous_key = next.clone();
+					let maybe_value = frame_support::storage::unhashed::get::<T>(&next);
 					match maybe_value {
 						Some(value) => {
 							if self.drain {
@@ -581,28 +581,46 @@ impl<T: Decode> Iterator for StorageIterator<T> {
 	}
 }
 
-fn get_storage_value<T: Decode>(module: &[u8], item: &[u8], hash: &[u8]) -> Option<T> {
-	let mut key = [0u8; 32 + hash.len()];
-	prefix[0..16].copy_from_slice(&Twox128::hash(module));
-	prefix[16..32].copy_from_slice(&Twox128::hash(item));
-	prefix[32..].copy_from_slice(hash);
-	frame_support::storage::unhashed::get(&key).and_then(|d| T::decode(d).ok())
+fn get_storage_value<T: Decode + Sized>(module: &[u8], item: &[u8], hash: &[u8]) -> Option<T> {
+	let mut key = vec![0u8; 32 + hash.len()];
+	key[0..16].copy_from_slice(&Twox128::hash(module));
+	key[16..32].copy_from_slice(&Twox128::hash(item));
+	key[32..].copy_from_slice(hash);
+	frame_support::storage::unhashed::get::<T>(&key)
 }
 
 fn put_storage_value<T: Encode>(module: &[u8], item: &[u8], hash: &[u8], value: T) {
-	let mut key = [0u8; 32 + hash.len()];
-	prefix[0..16].copy_from_slice(&Twox128::hash(module));
-	prefix[16..32].copy_from_slice(&Twox128::hash(item));
-	prefix[32..].copy_from_slice(hash);
+	let mut key = vec![0u8; 32 + hash.len()];
+	key[0..16].copy_from_slice(&Twox128::hash(module));
+	key[16..32].copy_from_slice(&Twox128::hash(item));
+	key[32..].copy_from_slice(hash);
 	value.using_encoded(|value| frame_support::storage::unhashed::put(&key, value));
 }
 
 fn kill_storage_value(module: &[u8], item: &[u8], hash: &[u8]) {
-	let mut key = [0u8; 32 + hash.len()];
-	prefix[0..16].copy_from_slice(&Twox128::hash(module));
-	prefix[16..32].copy_from_slice(&Twox128::hash(item));
-	prefix[32..].copy_from_slice(hash);
+	let mut key = vec![0u8; 32 + hash.len()];
+	key[0..16].copy_from_slice(&Twox128::hash(module));
+	key[16..32].copy_from_slice(&Twox128::hash(item));
+	key[32..].copy_from_slice(hash);
 	frame_support::storage::unhashed::kill(&key);
+}
+
+#[derive(Decode)]
+struct OldBalanceLock<Balance, BlockNumber> {
+	id: LockIdentifier,
+	amount: Balance,
+	until: BlockNumber,
+	reasons: WithdrawReasons,
+}
+
+impl<Balance, BlockNumber> OldBalanceLock<Balance, BlockNumber> {
+	fn upgraded(self) -> (BalanceLock<Balance>, BlockNumber) {
+		(BalanceLock {
+			id: self.id,
+			amount: self.amount,
+			reasons: self.reasons.into(),
+		}, self.until)
+	}
 }
 
 impl<T: Trait<I>, I: Instance> Module<T, I> {
@@ -610,21 +628,27 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	// Upgrade from the pre-#4649 balances/vesting into the new balances.
 	pub fn do_upgrade() {
+		// TODO: Handle Instance parameter in storage access.
 		// First, migrate from old FreeBalance to new Account.
 		// We also move all locks across since only accounts with FreeBalance values have locks.
 		// FreeBalance: map T::AccountId => T::Balance
-		for (hash, free) in storage_drainer::<T::Balance>(b"Balances", b"FreeBalance").drain() {
+		for (hash, free) in StorageIterator::<T::Balance>::new(b"Balances", b"FreeBalance").drain() {
 			let mut account = AccountData { free, ..Default::default() };
 			// Locks: map T::AccountId => Vec<BalanceLock>
-			struct BalanceLock {
-				id: LockIdentifier,
-				amount: T::Balance,
-				until: T::BlockNumber,
-				reasons: WithdrawReasons,
-			}
-			let old_locks = get_storage_value::<Vec<BalanceLock>>(b"Balances", b"Locks", hash);
+			let old_locks = get_storage_value::<Vec<OldBalanceLock<T::Balance, T::BlockNumber>>>(b"Balances", b"Locks", &hash);
 			if let Some(locks) = old_locks {
-				let locks = locks.into_iter().map(Into::into).collect::<Vec<_>>();
+				let locks = locks.into_iter()
+					.map(|i| {
+						let (result, expiry) = i.upgraded();
+						if expiry != T::BlockNumber::max_value() {
+							// Any `until`s that are not T::BlockNumber::max_value come from
+							// democracy and need to be migrated over there.
+							// Democracy: Locks get(locks): map T::AccountId => Option<T::BlockNumber>;
+							put_storage_value(b"Democracy", b"Locks", &hash, expiry);
+						}
+						result
+					})
+					.collect::<Vec<_>>();
 				for l in locks.iter() {
 					if l.reasons == Reasons::All || l.reasons == Reasons::Misc {
 						account.misc_frozen = account.misc_frozen.max(l.amount);
@@ -639,32 +663,31 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 		// Second, migrate old ReservedBalance into new Account.
 		// ReservedBalance: map T::AccountId => T::Balance
-		for (hash, reserved) in storage_drainer::<T::Balance>(b"Balances", b"ReservedBalance").drain() {
-			let mut account = get_storage_value::<AccountInfo<T::AccountId>>(b"Balances", b"Account", hash).unwrap_or_default();
+		for (hash, reserved) in StorageIterator::<T::Balance>::new(b"Balances", b"ReservedBalance").drain() {
+			let mut account = get_storage_value::<AccountData<T::Balance>>(b"Balances", b"Account", &hash).unwrap_or_default();
 			account.reserved = reserved;
-			put_storage_value(b"Balances", b"Account", hash, account);
+			put_storage_value(b"Balances", b"Account", &hash, account);
 		}
 
 		// Finally, migrate vesting and ensure locks are in place. We will be lazy and just lock
 		// for the maximum amount (i.e. at genesis). Users will need to call "vest" to reduce the
 		// lock to something sensible.
 		// pub Vesting: map T::AccountId => Option<VestingSchedule>;
-		struct VestingSchedule {
-			locked: T::Balance,
-			per_block: T::Balance,
-			starting_block: T::BlockNumber,
-		}
-		for (hash, vesting) in storage_drainer::<VestingSchedule>(b"Balances", b"Vesting").drain() {
-			let mut account = get_storage_value::<AccountInfo<T::AccountId>>(b"Balances", b"Account", hash).unwrap_or_default();
-			account.locks.push(BalanceLock {
+		for (hash, vesting) in StorageIterator::<(T::Balance, T::Balance, T::BlockNumber)>::new(b"Balances", b"Vesting").drain() {
+			let mut account = get_storage_value::<AccountData<T::Balance>>(b"Balances", b"Account", &hash).unwrap_or_default();
+			let mut locks = get_storage_value::<Vec<BalanceLock<T::Balance>>>(b"Balances", b"Locks", &hash).unwrap_or_default();
+			locks.push(BalanceLock {
 				id: *b"vesting ",
-				amount: locked,
-				reasons: WithdrawReason::Transfer | WithdrawReason::Reserve,
+				amount: vesting.0.clone(),
+				reasons: Reasons::Misc,
 			});
-			put_storage_value(b"Vesting", b"Account", hash, vesting);
-			put_storage_value(b"Balances", b"Account", hash, account);
+			account.misc_frozen = account.misc_frozen.max(vesting.0.clone());
+			put_storage_value(b"Vesting", b"Vesting", &hash, vesting);
+			put_storage_value(b"Balances", b"Locks", &hash, locks);
+			put_storage_value(b"Balances", b"Account", &hash, account);
 		}
 	}
+
 	/// Set both the free and reserved balance of an account to some new value. Will enforce
 	/// `ExistentialDeposit` law, annulling the account as needed.
 	///

@@ -65,7 +65,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The currency trait.
-	type Currency: Currency<Self::AccountId> + LockableCurrency<Self::AccountId>;
+	type Currency: LockableCurrency<Self::AccountId>;
 
 	/// Convert the block number into a balance.
 	type BlockNumberToBalance: Convert<Self::BlockNumber, BalanceOf<Self>>;
@@ -182,7 +182,7 @@ decl_module! {
 		/// # </weight>
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Self::unlock_vested(who)
+			Self::update_lock(who)
 		}
 
 		/// Unlock any vested funds of a `target` account.
@@ -203,7 +203,7 @@ decl_module! {
 		/// # </weight>
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
-			Self::unlock_vested(T::Lookup::lookup(target)?)
+			Self::update_lock(T::Lookup::lookup(target)?)
 		}
 	}
 }
@@ -211,7 +211,7 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// (Re)set or remove the module's currency lock on `who`'s account in accordance with their
 	/// current unvested amount.
-	fn unlock_vested(who: T::AccountId) -> DispatchResult {
+	fn update_lock(who: T::AccountId) -> DispatchResult {
 		ensure!(Vesting::<T>::exists(&who), Error::<T>::NotVesting);
 		let unvested = Self::vesting_balance(&who);
 		if unvested.is_zero() {
@@ -257,7 +257,7 @@ impl<T: Trait> VestingSchedule<T::AccountId> for Module<T> where
 		starting_block: T::BlockNumber
 	) -> DispatchResult {
 		if locked.is_zero() { return Ok(()) }
-		if <Vesting<T>>::exists(who) {
+		if Vesting::<T>::exists(who) {
 			Err(Error::<T>::ExistingVestingSchedule)?
 		}
 		let vesting_schedule = VestingInfo {
@@ -265,13 +265,17 @@ impl<T: Trait> VestingSchedule<T::AccountId> for Module<T> where
 			per_block,
 			starting_block
 		};
-		<Vesting<T>>::insert(who, vesting_schedule);
+		Vesting::<T>::insert(who, vesting_schedule);
+		// it can't fail, but even if somehow it did, we don't really care.
+		let _ = Self::update_lock(who.clone());
 		Ok(())
 	}
 
 	/// Remove a vesting schedule for a given account.
 	fn remove_vesting_schedule(who: &T::AccountId) {
-		<Vesting<T>>::remove(who);
+		Vesting::<T>::remove(who);
+		// it can't fail, but even if somehow it did, we don't really care.
+		let _ = Self::update_lock(who.clone());
 	}
 }
 
@@ -280,13 +284,10 @@ mod tests {
 	use super::*;
 
 	use std::cell::RefCell;
-	use sp_runtime::traits::BadOrigin;
 	use frame_support::{
-		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
-		ord_parameter_types, traits::Get
+		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight, traits::Get
 	};
 	use sp_core::H256;
-	use frame_system::EnsureSignedBy;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
