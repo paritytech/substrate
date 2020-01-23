@@ -576,15 +576,21 @@ where
 			}
 		});
 
-	let rpc_interface: &str = interface_str(cli.rpc_external, cli.unsafe_rpc_external, cli.validator)?;
-	let ws_interface: &str = interface_str(cli.ws_external, cli.unsafe_ws_external, cli.validator)?;
-	let grafana_interface: &str = if cli.grafana_external { "0.0.0.0" } else { "127.0.0.1" };
+	if config.rpc_http.is_none() {
+		let rpc_interface: &str = interface_str(cli.rpc_external, cli.unsafe_rpc_external, cli.validator)?;
+		config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
+	}
+	if config.rpc_ws.is_none() {
+		let ws_interface: &str = interface_str(cli.ws_external, cli.unsafe_ws_external, cli.validator)?;
+		config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
+	}
 
-	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
-	config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
-	config.grafana_port = Some(
-		parse_address(&format!("{}:{}", grafana_interface, 9955), cli.grafana_port)?
-	);
+	if config.grafana_port.is_none() {
+		let grafana_interface: &str = if cli.grafana_external { "0.0.0.0" } else { "127.0.0.1" };
+		config.grafana_port = Some(
+			parse_address(&format!("{}:{}", grafana_interface, 9955), cli.grafana_port)?
+		);
+	}
 
 	config.rpc_ws_max_connections = cli.ws_max_connections;
 	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
