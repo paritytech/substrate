@@ -782,7 +782,7 @@ where
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
 		self.ctx.deferred.push(DeferredAction::DepositEvent {
 			topics,
-			event: RawEvent::Contract(self.ctx.self_account.clone(), data),
+			event: RawEvent::ContractExecution(self.ctx.self_account.clone(), data),
 		});
 	}
 
