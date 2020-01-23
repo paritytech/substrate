@@ -544,8 +544,36 @@ pub struct RunCmd {
 	pub pool_config: TransactionPoolParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub keyring: Keyring,
+	#[structopt(long, conflicts_with_all = &["bob", "charlie", "dave", "eve", "ferdie", "one", "two"])]
+	pub alice: bool,
+
+	#[allow(missing_docs)]
+	#[structopt(long, conflicts_with_all = &["alice", "charlie", "dave", "eve", "ferdie", "one", "two"])]
+	pub bob: bool,
+
+	#[allow(missing_docs)]
+	#[structopt(long, conflicts_with_all = &["alice", "bob", "dave", "eve", "ferdie", "one", "two"])]
+	pub charlie: bool,
+
+	#[allow(missing_docs)]
+	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "eve", "ferdie", "one", "two"])]
+	pub dave: bool,
+
+	#[allow(missing_docs)]
+	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "ferdie", "one", "two"])]
+	pub eve: bool,
+
+	#[allow(missing_docs)]
+	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "one", "two"])]
+	pub ferdie: bool,
+
+	#[allow(missing_docs)]
+	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "ferdie", "two"])]
+	pub one: bool,
+
+	#[allow(missing_docs)]
+	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "ferdie", "one"])]
+	pub two: bool,
 
 	/// Enable authoring even when offline.
 	#[structopt(long = "force-authoring")]
@@ -593,10 +621,20 @@ pub struct RunCmd {
 	pub password_filename: Option<PathBuf>
 }
 
-/// Wrapper for exposing the keyring test accounts into the Cli.
-#[derive(Debug, Clone, StructOpt)]
-pub struct Keyring {
-	pub account: Option<sp_keyring::Sr25519Keyring>,
+impl RunCmd {
+	pub fn get_keyring(&self) -> Option<sp_keyring::Sr25519Keyring> {
+		use sp_keyring::Sr25519Keyring::*;
+
+		if self.alice { Some(Alice) }
+		else if self.bob { Some(Bob) }
+		else if self.charlie { Some(Charlie) }
+		else if self.dave { Some(Dave) }
+		else if self.eve { Some(Eve) }
+		else if self.ferdie { Some(Ferdie) }
+		else if self.one { Some(One) }
+		else if self.two { Some(Two) }
+		else { None }
+	}
 }
 
 /// Default to verbosity level 0, if none is provided.

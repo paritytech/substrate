@@ -513,8 +513,9 @@ where
 {
 	fill_config_keystore_password_and_path(&mut config, &cli)?;
 
+	let keyring = cli.get_keyring();
 	let is_dev = cli.shared_params.dev;
-	let is_authority = cli.validator || cli.sentry || is_dev || cli.keyring.account.is_some();
+	let is_authority = cli.validator || cli.sentry || is_dev || keyring.is_some();
 	let role =
 		if cli.light {
 			sc_service::Roles::LIGHT
@@ -526,9 +527,10 @@ where
 
 	fill_import_params(&mut config, &cli.import_params, role, is_dev)?;
 
-	config.name = match cli.name.or(cli.keyring.account.map(|a| a.to_string())) {
-		None => node_key::generate_node_name(),
-		Some(name) => name,
+	config.name = match (cli.name.as_ref(), keyring) {
+		(Some(name), _) => name.to_string(),
+		(_, Some(keyring)) => keyring.to_string(),
+		(None, None) => node_key::generate_node_name(),
 	};
 	match node_key::is_node_name_valid(&config.name) {
 		Ok(_) => (),
@@ -566,7 +568,7 @@ where
 
 	fill_transaction_pool_configuration(&mut config, cli.pool_config)?;
 
-	config.dev_key_seed = cli.keyring.account
+	config.dev_key_seed = keyring
 		.map(|a| format!("//{}", a)).or_else(|| {
 			if is_dev {
 				Some("//Alice".into())
