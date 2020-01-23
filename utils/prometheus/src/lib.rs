@@ -17,20 +17,23 @@
 use futures_util::{FutureExt, future::Future};
 use hyper::http::StatusCode;
 use hyper::{Server, Body, Response, service::{service_fn, make_service_fn}};
-use prometheus::{Encoder, Opts, TextEncoder, core::Atomic};
+use prometheus::{Encoder, TextEncoder, core::Collector};
 use std::net::SocketAddr;
 #[cfg(not(target_os = "unknown"))]
 mod networking;
 
 pub use prometheus::{
-	Registry, Error as PrometheusError,
-	core::{GenericGauge as Gauge, AtomicF64 as F64, AtomicI64 as I64, AtomicU64 as U64}
+	Registry, Error as PrometheusError, Opts,
+	core::{
+		GenericGauge as Gauge, GenericCounter as Counter,
+		GenericGaugeVec as GaugeVec, GenericCounterVec as CounterVec,
+		AtomicF64 as F64, AtomicI64 as I64, AtomicU64 as U64,
+	}
 };
 
-pub fn create_gauge<T: Atomic + 'static>(name: &str, description: &str, registry: &Registry) -> Result<Gauge<T>, PrometheusError> {
-	let gauge = Gauge::with_opts(Opts::new(name, description))?;
-	registry.register(Box::new(gauge.clone()))?;
-	Ok(gauge)
+pub fn register<T: Clone + Collector + 'static>(metric: T, registry: &Registry) -> Result<T, PrometheusError> {
+	registry.register(Box::new(metric.clone()))?;
+	Ok(metric)
 }
 
 #[derive(Debug, derive_more::Display, derive_more::From)]
