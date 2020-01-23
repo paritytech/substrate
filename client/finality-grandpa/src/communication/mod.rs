@@ -365,7 +365,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		voters: Arc<VoterSet<AuthorityId>>,
 		is_voter: bool,
 	) -> (
-		impl Stream<Item = CommunicationIn<B>,>,
+		impl Stream<Item = CommunicationIn<B>>,
 		impl Sink<CommunicationOutH<B, B::Hash>, Error = Error> + Unpin,
 	) {
 		self.validator.note_set(
