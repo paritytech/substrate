@@ -14,11 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use futures::{Future, compat::Future01CompatExt, future, future::FutureExt};
+use futures::{Future, future, future::FutureExt};
 use futures::select;
 use futures::pin_mut;
 use sc_service::AbstractService;
 use crate::error;
+use crate::informant;
 
 struct Runtime<F, E: 'static>(F)
 where
@@ -73,6 +74,20 @@ where
 	Ok(())
 }
 
+async fn run_service_with_informant<T>(service: T) -> error::Result<()>
+where
+	T: AbstractService + Unpin,
+{
+	let informant_future = informant::build(&service);
+	let handle = tokio::spawn(informant_future);
+
+	service.await?;
+
+	handle.await;
+
+	Ok(())
+}
+
 /// A helper function that runs an `AbstractService` with tokio and stops if the process receives
 /// the signal SIGTERM or SIGINT
 pub fn run_service_until_exit<T>(
@@ -85,7 +100,10 @@ where
 	// but we need to keep holding a reference to the global telemetry guard
 	let _telemetry = service.telemetry();
 
-	let runtime = Runtime(service.compat().fuse());
+	let f = run_service_with_informant(service).fuse();
+	pin_mut!(f);
+
+	let runtime = Runtime(f);
 	runtime.run().map_err(|e| e.to_string())?;
 
 	Ok(())

@@ -26,8 +26,7 @@ use crate::error;
 use std::fmt::Debug;
 use log::info;
 use sc_network::config::build_multiaddr;
-use futures::pin_mut;
-use futures::{future::FutureExt, compat::Future01CompatExt};
+use futures::{pin_mut, future::FutureExt};
 use std::io;
 use std::fs;
 use std::io::{Read, Write, Seek};
@@ -989,8 +988,7 @@ impl ExportBlocksCmd {
 		};
 
 		let f = builder(config)?
-			.export_blocks(file, from.into(), to, json)
-			.compat();
+			.export_blocks(file, from.into(), to, json);
 		let f = f.fuse();
 		pin_mut!(f);
 
@@ -1031,8 +1029,7 @@ impl ImportBlocksCmd {
 		};
 
 		let f = builder(config)?
-			.import_blocks(file, false)
-			.compat();
+			.import_blocks(file, false);
 		let f = f.fuse();
 		pin_mut!(f);
 
@@ -1071,8 +1068,7 @@ impl CheckBlockCmd {
 
 		let start = std::time::Instant::now();
 		let f = builder(config)?
-			.check_block(block_id)
-			.compat();
+			.check_block(block_id);
 		let f = f.fuse();
 		pin_mut!(f);
 		run_until_exit(f)?;
