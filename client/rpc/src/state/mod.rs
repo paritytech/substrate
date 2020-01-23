@@ -61,6 +61,13 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>>;
 
+	/// Returns the next key in storage after the given one in lexicographic order.
+	fn storage_next_key(
+		&self,
+		block: Option<Block::Hash>,
+		key: StorageKey,
+	) -> FutureResult<Option<StorageKey>>;
+
 	/// Returns a storage entry at a specific block's state.
 	fn storage(
 		&self,
@@ -242,6 +249,14 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		block: Option<Block::Hash>,
 	) -> FutureResult<Vec<StorageKey>> {
 		self.backend.storage_keys(block, key_prefix)
+	}
+
+	fn storage_next_key(
+		&self,
+		key: StorageKey,
+		block: Option<Block::Hash>,
+	) -> FutureResult<Option<StorageKey>> {
+		self.backend.storage_next_key(block, key)
 	}
 
 	fn storage(&self, key: StorageKey, block: Option<Block::Hash>) -> FutureResult<Option<StorageData>> {

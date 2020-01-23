@@ -43,6 +43,10 @@ pub trait StateApi<Hash> {
 	#[rpc(name = "state_getKeys")]
 	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<StorageKey>>;
 
+	/// Returns the next key in storage after the given one in lexicographic order.
+	#[rpc(name = "state_getNextKey")]
+	fn storage_next_key(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<StorageKey>>;
+
 	/// Returns a storage entry at a specific block's state.
 	#[rpc(name = "state_getStorage", alias("state_getStorageAt"))]
 	fn storage(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<StorageData>>;

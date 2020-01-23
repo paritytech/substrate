@@ -236,10 +236,19 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.backend.state_at(*block)
 	}
 
-	/// Given a `BlockId` and a key prefix, return the matching child storage keys in that block.
+	/// Given a `BlockId` and a key prefix, return the matching storage keys in that block.
 	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> sp_blockchain::Result<Vec<StorageKey>> {
 		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
 		Ok(keys)
+	}
+
+	/// Given a `BlockId` and a key, return the next key in storage after the given one in lexicographic order.
+	pub fn storage_next_key(&self, id: &BlockId<Block>, key: &StorageKey) -> sp_blockchain::Result<Option<StorageKey>> {
+		Ok(self.state_at(id)?
+			.next_storage_key(&key.0)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+			.map(StorageKey)
+		)
 	}
 
 	/// Given a `BlockId` and a key, return the value under the key in that block.
