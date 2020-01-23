@@ -113,7 +113,12 @@ where
 		Cli::Factory(cli_args) => {
 			sc_cli::init(&mut config, load_spec, &cli_args.shared_params, &version)?;
 
-			sc_cli::fill_import_params(&mut config, &cli_args.import_params, ServiceRoles::FULL)?;
+			sc_cli::fill_import_params(
+				&mut config,
+				&cli_args.import_params,
+				ServiceRoles::FULL,
+				cli_args.shared_params.dev,
+			)?;
 
 			match ChainSpec::from(config.expect_chain_spec().id()) {
 				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},

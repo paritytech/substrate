@@ -66,6 +66,7 @@ use lazy_static::lazy_static;
 use sc_telemetry::TelemetryEndpoints;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 pub use crate::runtime::{run_until_exit, run_service_until_exit};
+use execution_strategy::*;
 
 /// default sub directory to store network config
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
@@ -442,6 +443,7 @@ pub fn fill_import_params<G, E>(
 	config: &mut Configuration<G, E>,
 	cli: &ImportParams,
 	role: sc_service::Roles,
+	is_dev: bool,
 ) -> error::Result<()>
 where
 	G: RuntimeGenesis,
@@ -479,13 +481,22 @@ where
 	config.wasm_method = cli.wasm_method.into();
 
 	let exec = &cli.execution_strategies;
-	let exec_all_or = |strat: ExecutionStrategy| exec.execution.unwrap_or(strat).into();
+	let exec_all_or = |strat: ExecutionStrategy, default: ExecutionStrategy| {
+		exec.execution.unwrap_or(if strat == default && is_dev {
+			ExecutionStrategy::Native
+		} else {
+			strat
+		}).into()
+	};
+
 	config.execution_strategies = ExecutionStrategies {
-		syncing: exec_all_or(exec.execution_syncing),
-		importing: exec_all_or(exec.execution_import_block),
-		block_construction: exec_all_or(exec.execution_block_construction),
-		offchain_worker: exec_all_or(exec.execution_offchain_worker),
-		other: exec_all_or(exec.execution_other),
+		syncing: exec_all_or(exec.execution_syncing, DEFAULT_EXECUTION_SYNCING),
+		importing: exec_all_or(exec.execution_import_block, DEFAULT_EXECUTION_IMPORT_BLOCK),
+		block_construction:
+			exec_all_or(exec.execution_block_construction, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION),
+		offchain_worker:
+			exec_all_or(exec.execution_offchain_worker, DEFAULT_EXECUTION_OFFCHAIN_WORKER),
+		other: exec_all_or(exec.execution_other, DEFAULT_EXECUTION_OTHER),
 	};
 	Ok(())
 }
@@ -511,7 +522,7 @@ where
 			sc_service::Roles::FULL
 		};
 
-	fill_import_params(&mut config, &cli.import_params, role)?;
+	fill_import_params(&mut config, &cli.import_params, role, is_dev)?;
 
 	config.name = match cli.name.or(cli.keyring.account.map(|a| a.to_string())) {
 		None => node_key::generate_node_name(),

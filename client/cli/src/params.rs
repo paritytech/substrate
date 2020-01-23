@@ -33,6 +33,7 @@ use std::io::{Read, Write, Seek};
 use sp_runtime::generic::BlockId;
 use crate::runtime::run_until_exit;
 use crate::node_key::node_key_config;
+use crate::execution_strategy::*;
 
 pub use crate::execution_strategy::ExecutionStrategy;
 
@@ -336,7 +337,7 @@ pub struct ExecutionStrategies {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "NativeElseWasm"
+		default_value = DEFAULT_EXECUTION_SYNCING.as_str(),
 	)]
 	pub execution_syncing: ExecutionStrategy,
 
@@ -346,7 +347,7 @@ pub struct ExecutionStrategies {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "NativeElseWasm"
+		default_value = DEFAULT_EXECUTION_IMPORT_BLOCK.as_str(),
 	)]
 	pub execution_import_block: ExecutionStrategy,
 
@@ -356,7 +357,7 @@ pub struct ExecutionStrategies {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "Wasm"
+		default_value = DEFAULT_EXECUTION_BLOCK_CONSTRUCTION.as_str(),
 	)]
 	pub execution_block_construction: ExecutionStrategy,
 
@@ -366,7 +367,7 @@ pub struct ExecutionStrategies {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "Native"
+		default_value = DEFAULT_EXECUTION_OFFCHAIN_WORKER.as_str(),
 	)]
 	pub execution_offchain_worker: ExecutionStrategy,
 
@@ -376,7 +377,7 @@ pub struct ExecutionStrategies {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "Native"
+		default_value = DEFAULT_EXECUTION_OTHER.as_str(),
 	)]
 	pub execution_other: ExecutionStrategy,
 
@@ -1019,7 +1020,12 @@ impl ImportBlocksCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		crate::fill_import_params(&mut config, &self.import_params, sc_service::Roles::FULL)?;
+		crate::fill_import_params(
+			&mut config,
+			&self.import_params,
+			sc_service::Roles::FULL,
+			self.shared_params.dev,
+		)?;
 
 		let file: Box<dyn ReadPlusSeek + Send> = match &self.input {
 			Some(filename) => Box::new(fs::File::open(filename)?),
@@ -1057,7 +1063,12 @@ impl CheckBlockCmd {
 	{
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
-		crate::fill_import_params(&mut config, &self.import_params, sc_service::Roles::FULL)?;
+		crate::fill_import_params(
+			&mut config,
+			&self.import_params,
+			sc_service::Roles::FULL,
+			self.shared_params.dev,
+		)?;
 		crate::fill_config_keystore_in_memory(&mut config)?;
 
 		let input = if self.input.starts_with("0x") { &self.input[2..] } else { &self.input[..] };
