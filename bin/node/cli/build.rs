@@ -15,8 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{fs, env, path::Path};
-use structopt::{StructOpt, clap::Shell};
-use sc_cli::CoreParams;
+use sc_cli::{CoreParams, structopt::{StructOpt, clap::Shell}};
 use vergen::{ConstantsFlags, generate_cargo_keys};
 
 fn main() {

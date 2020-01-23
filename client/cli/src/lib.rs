@@ -49,9 +49,8 @@ use std::{
 };
 
 use regex::Regex;
-pub use structopt::StructOpt;
-#[doc(hidden)]
-pub use structopt::clap::App;
+use structopt::{StructOpt, clap};
+pub use structopt;
 use params::{
 	NetworkConfigurationParams, TransactionPoolParams, Cors,
 };
@@ -169,7 +168,7 @@ where
 /// used. It will return a [`clap::Error`], where the [`kind`] is a
 /// [`ErrorKind::HelpDisplayed`] or [`ErrorKind::VersionDisplayed`] respectively. You must call
 /// [`Error::exit`] or perform a [`std::process::exit`].
-pub fn try_from_iter<T, I>(iter: I, version: &VersionInfo) -> structopt::clap::Result<T>
+pub fn try_from_iter<T, I>(iter: I, version: &VersionInfo) -> clap::Result<T>
 where
 	T: StructOpt + Sized,
 	I: IntoIterator,
