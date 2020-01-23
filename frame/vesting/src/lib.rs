@@ -99,7 +99,7 @@ impl<
 		// Return amount that is still locked in vesting
 		let maybe_balance = vested_block_count.checked_mul(&self.per_block);
 		if let Some(balance) = maybe_balance {
-			self.locked.max(balance) - balance
+			self.locked.saturating_sub(balance)
 		} else {
 			Zero::zero()
 		}
