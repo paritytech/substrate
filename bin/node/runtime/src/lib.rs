@@ -172,8 +172,7 @@ parameter_types! {
 
 impl pallet_balances::Trait for Runtime {
 	type Balance = Balance;
-	type OnFreeBalanceZero = ((Staking, Contracts), Session);
-	type OnReapAccount = (System, Recovery);
+	type OnReapAccount = ((((System, Staking), Contracts), Session), Recovery);
 	type OnNewAccount = Indices;
 	type Event = Event;
 	type DustRemoval = ();

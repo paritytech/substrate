@@ -30,7 +30,7 @@ use frame_support::{
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
-		OnFreeBalanceZero, OnUnbalanced
+		OnReapAccount, OnUnbalanced
 	}
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -1155,8 +1155,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
-	fn on_free_balance_zero(who: &T::AccountId) {
+impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
+	fn on_reap_account(who: &T::AccountId) {
 		<Proxy<T>>::remove(who)
 	}
 }
@@ -1226,8 +1226,7 @@ mod tests {
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
-		type OnFreeBalanceZero = ();
-		type OnReapAccount = System;
+type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
 		type TransferPayment = ();

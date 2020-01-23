@@ -64,13 +64,6 @@ pub trait Contains<T: Ord> {
 	fn count() -> usize { Self::sorted_members().len() }
 }
 
-/// The account with the given id was killed.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
-pub trait OnFreeBalanceZero<AccountId> {
-	/// The account with the given id was killed.
-	fn on_free_balance_zero(who: &AccountId);
-}
-
 /// The account with the given id was reaped.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnReapAccount<AccountId> {
@@ -382,9 +375,7 @@ pub trait Currency<AccountId> {
 	/// This is the only balance that matters in terms of most operations on tokens. It alone
 	/// is used to determine the balance when in the contract execution environment. When this
 	/// balance falls below the value of `ExistentialDeposit`, then the 'current account' is
-	/// deleted: specifically `FreeBalance`. Further, the `OnFreeBalanceZero` callback
-	/// is invoked, giving a chance to external modules to clean up data associated with
-	/// the deleted account.
+	/// deleted: specifically `FreeBalance`.
 	///
 	/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
 	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.

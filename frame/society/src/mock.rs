@@ -80,7 +80,6 @@ impl frame_system::Trait for Test {
 
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type Event = ();
 	type TransferPayment = ();

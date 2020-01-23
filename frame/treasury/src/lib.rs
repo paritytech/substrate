@@ -764,8 +764,7 @@ mod tests {
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnNewAccount = ();
-		type OnFreeBalanceZero = ();
-		type OnReapAccount = System;
+type OnReapAccount = System;
 		type Event = ();
 		type TransferPayment = ();
 		type DustRemoval = ();

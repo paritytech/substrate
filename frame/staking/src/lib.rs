@@ -261,7 +261,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	weights::SimpleDispatchInfo,
 	traits::{
-		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
+		Currency, LockIdentifier, LockableCurrency,
 		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };
@@ -284,6 +284,7 @@ use sp_runtime::{Serialize, Deserialize};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 use sp_phragmen::ExtendedBalance;
+use frame_support::traits::OnReapAccount;
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -1673,8 +1674,8 @@ impl<T: Trait> SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>
 	}
 }
 
-impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
-	fn on_free_balance_zero(stash: &T::AccountId) {
+impl<T: Trait> OnReapAccount<T::AccountId> for Module<T> {
+	fn on_reap_account(stash: &T::AccountId) {
 		Self::ensure_storage_upgraded();
 		Self::kill_stash(stash);
 	}

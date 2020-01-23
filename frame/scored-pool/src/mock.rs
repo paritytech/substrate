@@ -75,7 +75,6 @@ impl frame_system::Trait for Test {
 
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type OnFreeBalanceZero = ();
 	type OnReapAccount = System;
 	type OnNewAccount = ();
 	type Event = ();

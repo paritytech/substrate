@@ -38,33 +38,29 @@
 //! ### Terminology
 //!
 //! - **Existential Deposit:** The minimum balance required to create or keep an account open. This prevents
-//! "dust accounts" from filling storage.
-//! - **Total Issuance:** The total number of units in existence in a system.
-//! - **Reaping an account:** The act of removing an account by resetting its nonce. Happens after its balance is set
-//! to zero.
-//! - **Free Balance:** The portion of a balance that is not reserved. The free balance is the only
-//!   balance that matters for most operations. When this balance falls below the existential
-//!   deposit, most functionality of the account is removed. When both it and the reserved balance
-//!   are deleted, then the account is said to be dead.
-//!
-//!   No account should ever have a free balance that is strictly between 0 and the existential
+//! "dust accounts" from filling storage. When the free plus the reserved balance (i.e. the total balance)
+//!   fall below this, then the account is said to be dead; and it loses its functionality as well as any
+//!   prior history and all information on it is removed from the chain's state.
+//!   No account should ever have a total balance that is strictly between 0 and the existential
 //!   deposit (exclusive). If this ever happens, it indicates either a bug in this module or an
 //!   erroneous raw mutation of storage.
+//!
+//! - **Total Issuance:** The total number of units in existence in a system.
+//!
+//! - **Reaping an account:** The act of removing an account by resetting its nonce. Happens after its
+//! total balance has become zero (or, strictly speaking, less than the Existential Deposit).
+//!
+//! - **Free Balance:** The portion of a balance that is not reserved. The free balance is the only
+//!   balance that matters for most operations.
 //!
 //! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended.
 //!   Reserved balance can still be slashed, but only after all the free balance has been slashed.
-//!   If the reserved balance falls below the existential deposit, it and any related functionality
-//!   will be deleted. When both it and the free balance are deleted, then the account is said to
-//!   be dead.
-//!
-//!   No account should ever have a reserved balance that is strictly between 0 and the existential
-//!   deposit (exclusive). If this ever happens, it indicates either a bug in this module or an
-//!   erroneous raw mutation of storage.
 //!
 //! - **Imbalance:** A condition when some funds were credited or debited without equal and opposite accounting
 //! (i.e. a difference between total issuance and account balances). Functions that result in an imbalance will
 //! return an object of the `Imbalance` trait that can be managed within your runtime logic. (If an imbalance is
 //! simply dropped, it should automatically maintain any book-keeping such as total issuance.)
+//!
 //! - **Lock:** A freeze on a specified amount of an account's free balance until a specified block number. Multiple
 //! locks always operate over the same funds, so they "overlay" rather than "stack".
 //!
@@ -158,7 +154,7 @@ use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
 	traits::{
-		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnReapAccount, OnUnbalanced, TryDrop,
+		UpdateBalanceOutcome, Currency, OnReapAccount, OnUnbalanced, TryDrop,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get,
 	},
@@ -185,12 +181,6 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
 
-	/// A function that is invoked when the free-balance has fallen below the existential deposit and
-	/// has been reduced to zero.
-	///
-	/// Gives a chance to clean up resources associated with the given account.
-	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
-
 	/// A function that is invoked when the free-balance and the reserved-balance has fallen below
 	/// the existential deposit and both have been reduced to zero.
 	///
@@ -212,12 +202,6 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
-
-	/// A function that is invoked when the free-balance has fallen below the existential deposit and
-	/// has been reduced to zero.
-	///
-	/// Gives a chance to clean up resources associated with the given account.
-	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
 
 	/// A function that is invoked when the free-balance and the reserved-balance has fallen below
 	/// the existential deposit and both have been reduced to zero.
@@ -247,7 +231,6 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type Balance = T::Balance;
-	type OnFreeBalanceZero = T::OnFreeBalanceZero;
 	type OnReapAccount = T::OnReapAccount;
 	type OnNewAccount = T::OnNewAccount;
 	type ExistentialDeposit = T::ExistentialDeposit;
@@ -343,14 +326,7 @@ pub struct AccountData<Balance> {
 	/// total pool what may in principle be transferred, reserved and used for tipping.
 	///
 	/// This is the only balance that matters in terms of most operations on tokens. It
-	/// alone is used to determine the balance when in the contract execution environment. When this
-	/// balance falls below the value of `ExistentialDeposit`, then the 'current account' is
-	/// deleted: specifically `free`. Further, the `OnFreeBalanceZero` callback
-	/// is invoked, giving a chance to external modules to clean up data associated with
-	/// the deleted account.
-	///
-	/// `frame_system::AccountNonce` is also deleted if `reserved` is also zero (it also gets
-	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
+	/// alone is used to determine the balance when in the contract execution environment.
 	pub free: Balance,
 	/// Balance which is reserved and may not be used at all.
 	///
@@ -358,9 +334,6 @@ pub struct AccountData<Balance> {
 	///
 	/// This balance is a 'reserve' balance that other subsystems use in order to set aside tokens
 	/// that are still 'owned' by the account holder, but which are suspendable.
-	///
-	/// When this balance falls below the value of `ExistentialDeposit`, then any remainder is
-	/// coalesced into `free`.
 	pub reserved: Balance,
 	/// The amount that `free` may not drop below when withdrawing for *anything except transaction
 	/// fee payment*.
@@ -464,8 +437,7 @@ decl_module! {
 		///   - `ensure_can_withdraw` is always called internally but has a bounded complexity.
 		///   - Transferring balances to accounts that did not exist before will cause
 		///      `T::OnNewAccount::on_new_account` to be called.
-		///   - Removing enough funds from an account will trigger
-		///     `T::DustRemoval::on_unbalanced` and `T::OnFreeBalanceZero::on_free_balance_zero`.
+		///   - Removing enough funds from an account will trigger `T::DustRemoval::on_unbalanced`.
 		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional
 		///     check that the transfer will not kill the origin account.
 		///
@@ -590,7 +562,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		if total < T::ExistentialDeposit::get() {
 			T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
 			if !old.total().is_zero() {
-				T::OnFreeBalanceZero::on_free_balance_zero(who);
 				Self::reap_account(who, total);
 				UpdateBalanceOutcome::AccountKilled
 			} else {
@@ -835,7 +806,6 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
-	type OnFreeBalanceZero = T::OnFreeBalanceZero;
 	type OnReapAccount = T::OnReapAccount;
 	type OnNewAccount = T::OnNewAccount;
 	type Event = ();

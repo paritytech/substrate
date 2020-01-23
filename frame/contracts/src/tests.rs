@@ -121,8 +121,7 @@ impl frame_system::Trait for Test {
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type OnFreeBalanceZero = Contract;
-	type OnReapAccount = System;
+	type OnReapAccount = (System, Contract);
 	type OnNewAccount = ();
 	type Event = MetaEvent;
 	type DustRemoval = ();
