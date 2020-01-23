@@ -55,7 +55,7 @@ pub enum Error {
 	#[display(fmt="The key store is unavailable")]
 	KeyStoreUnavailable,
 	/// Invalid session keys encoding.
-	#[display(fmt="The session keys are not encoded correctly")]
+	#[display(fmt="Session keys are not encoded correctly")]
 	InvalidSessionKeys,
 }
 
