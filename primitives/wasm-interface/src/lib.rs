@@ -16,12 +16,20 @@
 
 //! Types and traits for interfacing between the host and the wasm runtime.
 
-use std::{borrow::Cow, marker::PhantomData, mem, iter::Iterator, result};
+#![cfg_attr(not(feature = "std"), no_std)]
 
+use sp_std::{
+	borrow::Cow, marker::PhantomData, mem, iter::Iterator, result, vec::Vec,
+};
+
+#[cfg(feature = "std")]
 mod wasmi_impl;
 
 /// Result type used by traits in this crate.
+#[cfg(feature = "std")]
 pub type Result<T> = result::Result<T, String>;
+#[cfg(not(feature = "std"))]
+pub type Result<T> = result::Result<T, &'static str>;
 
 /// Value types supported by Substrate on the boundary between host/Wasm.
 #[derive(Copy, Clone, PartialEq, Debug, Eq)]
@@ -189,11 +197,22 @@ impl Signature {
 			return_value: None,
 		}
 	}
-
 }
 
+/// A trait that requires `RefUnwindSafe` when `feature = std`.
+#[cfg(feature = "std")]
+pub trait MaybeRefUnwindSafe: std::panic::RefUnwindSafe {}
+#[cfg(feature = "std")]
+impl<T: std::panic::RefUnwindSafe> MaybeRefUnwindSafe for T {}
+
+/// A trait that requires `RefUnwindSafe` when `feature = std`.
+#[cfg(not(feature = "std"))]
+pub trait MaybeRefUnwindSafe {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeRefUnwindSafe for T {}
+
 /// Something that provides a function implementation on the host for a wasm function.
-pub trait Function: std::panic::RefUnwindSafe + Send + Sync {
+pub trait Function: MaybeRefUnwindSafe + Send + Sync {
 	/// Returns the name of this function.
 	fn name(&self) -> &str;
 	/// Returns the signature of this function.

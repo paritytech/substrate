@@ -100,7 +100,7 @@ impl<B: BlockT> GossipEngine<B> {
 						let inner = &mut *inner;
 						inner.state_machine.new_peer(&mut *inner.network, remote, roles);
 					}
-					Event::NotificationsStreamClosed { remote, engine_id: msg_engine_id } => {
+					Event::NotificationStreamClosed { remote, engine_id: msg_engine_id } => {
 						if msg_engine_id != engine_id {
 							continue;
 						}

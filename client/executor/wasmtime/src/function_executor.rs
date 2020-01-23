@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_executor_common::allocator::FreeingBumpHeapAllocator;
+use sp_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::error::{Error, Result};
 use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
 use crate::util::{
@@ -127,11 +127,11 @@ impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 	}
 
 	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>> {
-		self.heap.allocate(self.memory, len)
+		self.heap.allocate(self.memory, len).map_err(Into::into)
 	}
 
 	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<()> {
-		self.heap.deallocate(self.memory, ptr)
+		self.heap.deallocate(self.memory, ptr).map_err(Into::into)
 	}
 
 	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<()> {
