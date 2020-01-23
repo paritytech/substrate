@@ -180,7 +180,6 @@ impl<'a> ChildStorageKey<'a> {
 /// Information related to a child state.
 pub enum ChildInfo<'a> {
 	Default(ChildTrie<'a>),
-	DefaultWithRoot(ChildTrie<'a>, &'a [u8]),
 }
 
 /// Owned version of `ChildInfo`.
@@ -189,14 +188,6 @@ pub enum ChildInfo<'a> {
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub enum OwnedChildInfo {
 	Default(OwnedChildTrie),
-	// TODO put root as option in childinfo and put also a calc_next:
-	// - current_root
-	// - cached_next_root
-	// then method get_root hitting cached_root
-	// & method apply_cache that replace current.
-	// Also remove the `DefaultWithRoot` variant from owned.
-	// keep not owned as is
-	DefaultWithRoot(OwnedChildTrie, Vec<u8>),
 }
 
 impl<'a> ChildInfo<'a> {
@@ -204,20 +195,18 @@ impl<'a> ChildInfo<'a> {
 	pub const fn new_default(unique_id: &'a[u8]) -> Self {
 		ChildInfo::Default(ChildTrie {
 			data: unique_id,
+			root: None,
 		})
 	}
 
 	/// Instantiates a owned version of this child info.
 	pub fn to_owned(&self) -> OwnedChildInfo {
 		match self {
-			ChildInfo::Default(ChildTrie { data })
+			ChildInfo::Default(ChildTrie { data, root })
 				=> OwnedChildInfo::Default(OwnedChildTrie {
 					data: data.to_vec(),
+					root: root.map(|r| r.to_vec()),
 				}),
-			ChildInfo::DefaultWithRoot(ChildTrie { data }, root)
-							=> OwnedChildInfo::DefaultWithRoot(OwnedChildTrie {
-					data: data.to_vec(),
-				}, root.to_vec()),
 		}
 	}
 
@@ -233,11 +222,8 @@ impl<'a> ChildInfo<'a> {
 	/// This can be use as input for `resolve_child_info`.
 	pub fn info(&self) -> (&[u8], u32) {
 		match self {
-			ChildInfo::DefaultWithRoot(ChildTrie {
-				data,
-			}, ..)
-			| ChildInfo::Default(ChildTrie {
-				data,
+			ChildInfo::Default(ChildTrie {
+				data, ..
 			}) => (data, ChildType::CryptoUniqueId as u32),
 		}
 	}
@@ -247,11 +233,8 @@ impl<'a> ChildInfo<'a> {
 	/// depends on the type of child info use. For `ChildInfo::Default` it is and need to be.
 	pub fn keyspace(&self) -> &[u8] {
 		match self {
-			ChildInfo::DefaultWithRoot(ChildTrie {
-				data,
-			}, ..)
-			| ChildInfo::Default(ChildTrie {
-				data,
+			ChildInfo::Default(ChildTrie {
+				data, ..
 			}) => &data[..],
 		}
 	}
@@ -261,18 +244,14 @@ impl<'a> ChildInfo<'a> {
 	pub fn can_set_root(&self) -> bool {
 		match self {
 			ChildInfo::Default(..) => true,
-			ChildInfo::DefaultWithRoot(..) => true,
 		}
 	}
 
 	/// Associate root to child info, to avoid querying twice.
 	pub fn set_root(&'a mut self, new_root: &'a [u8]) {
 		match self {
-			ChildInfo::Default(data) => {
-				*self = ChildInfo::DefaultWithRoot(*data, new_root);
-			},
-			ChildInfo::DefaultWithRoot(_child_trie, root) => {
-				*root = new_root;
+			ChildInfo::Default(ChildTrie { data: _, root }) => {
+				*root = Some(new_root);
 			},
 		}
 	}
@@ -280,8 +259,7 @@ impl<'a> ChildInfo<'a> {
 	/// Return stored root if there is one.
 	pub fn root(&self) -> Option<&[u8]> {
 		match self {
-			ChildInfo::Default( .. ) => None,
-			ChildInfo::DefaultWithRoot(_child_trie, root) => Some(root),
+			ChildInfo::Default(ChildTrie { data: _, root }) => *root,
 		}
 	}
 
@@ -290,17 +268,12 @@ impl<'a> ChildInfo<'a> {
 	/// child trie.
 	pub fn valid_as(&self, other: &Self) -> bool {
 		match self {
-			ChildInfo::Default(data) => {
+			ChildInfo::Default(ChildTrie { data, root: _ }) => {
 				match other {
-					ChildInfo::DefaultWithRoot(other_data, _)
-					| ChildInfo::Default(other_data) => data == other_data,
-				}
-			},
-			ChildInfo::DefaultWithRoot(data, root) => {
-				match other {
-					ChildInfo::Default(other_data) => data == other_data,
-					ChildInfo::DefaultWithRoot(other_data, other_root) => {
-						other_data == data && other_root == root
+					ChildInfo::Default(ChildTrie { data: other_data, root: _ }) => {
+						// ignore root (update are allowed as should never be set from
+						// external query or untrusted source)
+						data == other_data
 					},
 				}
 			},
@@ -322,6 +295,7 @@ impl OwnedChildInfo {
 	pub fn new_default(unique_id: Vec<u8>) -> Self {
 		OwnedChildInfo::Default(OwnedChildTrie {
 			data: unique_id,
+			root: None,
 		})
 	}
 
@@ -329,16 +303,6 @@ impl OwnedChildInfo {
 	/// are not compatible.
 	pub fn try_update(&mut self, other: ChildInfo) -> bool {
 		match self {
-			OwnedChildInfo::DefaultWithRoot(owned_child_trie, _root) => {
-				if owned_child_trie.try_update(other) {
-					if let Some(root) = other.root() {
-						self.set_root(root);
-					}
-					true
-				} else {
-					false
-				}
-			}
 			OwnedChildInfo::Default(owned_child_trie) => owned_child_trie.try_update(other),
 		}
 	}
@@ -346,13 +310,10 @@ impl OwnedChildInfo {
 	/// Get `ChildInfo` reference to this owned child info.
 	pub fn as_ref(&self) -> ChildInfo {
 		match self {
-			OwnedChildInfo::DefaultWithRoot(OwnedChildTrie { data }, root)
-				=> ChildInfo::DefaultWithRoot(ChildTrie {
-					data: data.as_slice(),
-				}, root.as_slice()),
-			OwnedChildInfo::Default(OwnedChildTrie { data })
+			OwnedChildInfo::Default(OwnedChildTrie { data, root })
 				=> ChildInfo::Default(ChildTrie {
 					data: data.as_slice(),
+					root: root.as_ref().map(|r| r.as_slice()),
 				}),
 		}
 	}
@@ -360,13 +321,9 @@ impl OwnedChildInfo {
 	/// Associate root to child info, to avoid querying twice.
 	pub fn set_root(&mut self, new_root: &[u8]) {
 		match self {
-			OwnedChildInfo::Default(data) => {
-				let data = sp_std::mem::replace(data, Default::default());
-				*self = OwnedChildInfo::DefaultWithRoot(data, new_root.to_vec());
-			},
-			OwnedChildInfo::DefaultWithRoot(_child_trie, root) => {
-				if root.as_slice() != new_root {
-					*root = new_root.to_vec();
+			OwnedChildInfo::Default(OwnedChildTrie { data: _, root }) => {
+				if root.as_ref().map(|r| r.as_slice()) != Some(new_root) {
+					*root = Some(new_root.to_vec());
 				}
 			},
 		}
@@ -385,6 +342,9 @@ pub struct ChildTrie<'a> {
 	/// Unique id must but unique and free of any possible key collision
 	/// (depending on its storage behavior).
 	data: &'a[u8],
+	/// Possibility to associate a root value for the child trie.
+	/// This can be use to avoid fetching root.
+	root: Option<&'a[u8]>,
 }
 
 /// Owned version of default child trie `ChildTrie`.
@@ -393,6 +353,8 @@ pub struct ChildTrie<'a> {
 pub struct OwnedChildTrie {
 	/// See `ChildTrie` reference field documentation.
 	data: Vec<u8>,
+	/// See `ChildTrie` reference field documentation.
+	root: Option<Vec<u8>>,
 }
 
 impl OwnedChildTrie {
@@ -400,8 +362,13 @@ impl OwnedChildTrie {
 	/// are not compatible.
 	fn try_update(&mut self, other: ChildInfo) -> bool {
 		match other {
-			ChildInfo::DefaultWithRoot(other, ..)
-			| ChildInfo::Default(other) => self.data[..] == other.data[..],
+			ChildInfo::Default(ChildTrie { data, root }) => {
+				if let Some(root) = root {
+					// allow changing root
+					self.root = Some(root.to_vec());
+				}
+				self.data.as_slice() == data
+			}
 		}
 	}
 
@@ -419,8 +386,9 @@ impl OwnedChildInfo {
 	/// small struct related overhead.
 	pub fn len(&self) -> usize {
 		match self {
-			OwnedChildInfo::Default(ct) => ct.len(),
-			OwnedChildInfo::DefaultWithRoot(ct, r) => ct.len() + r.len(),
+			OwnedChildInfo::Default(OwnedChildTrie{ data, root }) => {
+				data.len() + root.as_ref().map(Vec::len).unwrap_or(0)
+			},
 		}
 	}
 }
