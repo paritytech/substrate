@@ -109,7 +109,7 @@ impl From<ContractExecResult> for RpcContractExecResult {
 
 /// Contracts RPC methods.
 #[rpc]
-pub trait ContractsApi<BlockHash, AccountId, Balance> {
+pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance> {
 	/// Executes a call to a contract.
 	///
 	/// This call is performed locally without submitting any transactions. Thus executing this
@@ -132,6 +132,13 @@ pub trait ContractsApi<BlockHash, AccountId, Balance> {
 		key: H256,
 		at: Option<BlockHash>,
 	) -> Result<Option<Bytes>>;
+
+	#[rpc(name = "contracts_rentProjection")]
+	fn rent_projection(
+		&self,
+		address: AccountId,
+		at: Option<BlockHash>,
+	) -> Result<BlockNumber>;
 }
 
 /// An implementation of contract specific RPC methods.
@@ -149,15 +156,15 @@ impl<C, B> Contracts<C, B> {
 		}
 	}
 }
-
-impl<C, Block, AccountId, Balance> ContractsApi<<Block as BlockT>::Hash, AccountId, Balance>
-	for Contracts<C, Block>
+impl<C, Block, AccountId, Balance, BlockNumber>
+	ContractsApi<<Block as BlockT>::Hash, BlockNumber, AccountId, Balance> for Contracts<C, Block>
 where
 	Block: BlockT,
 	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-	C::Api: ContractsRuntimeApi<Block, AccountId, Balance>,
+	C::Api: ContractsRuntimeApi<Block, AccountId, Balance, BlockNumber>,
 	AccountId: Codec,
 	Balance: Codec,
+	BlockNumber: Codec,
 {
 	fn call(
 		&self,
@@ -188,8 +195,7 @@ where
 				code: ErrorCode::InvalidParams,
 				message: format!(
 					"Requested gas limit is greater than maximum allowed: {} > {}",
-					gas_limit,
-					max_gas_limit
+					gas_limit, max_gas_limit
 				),
 				data: None,
 			});
@@ -197,11 +203,7 @@ where
 
 		let exec_result = api
 			.call(&at, origin, dest, value, gas_limit, input_data.to_vec())
-			.map_err(|e| Error {
-				code: ErrorCode::ServerError(RUNTIME_ERROR),
-				message: "Runtime trapped while executing a contract.".into(),
-				data: Some(format!("{:?}", e).into()),
-			})?;
+			.map_err(|e| runtime_error_into_rpc_err(e))?;
 
 		Ok(exec_result.into())
 	}
@@ -217,21 +219,43 @@ where
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash));
 
-		let get_storage_result = api
+		let result = api
 			.get_storage(&at, address, key.into())
-			.map_err(|e|
-				// Handle general API calling errors.
-				Error {
-					code: ErrorCode::ServerError(RUNTIME_ERROR),
-					message: "Runtime trapped while querying storage.".into(),
-					data: Some(format!("{:?}", e).into()),
-				})?
+			.map_err(|e| runtime_error_into_rpc_err(e))?
 			.map_err(GetStorageError)?
 			.map(Bytes);
 
-		Ok(get_storage_result)
+		Ok(result)
+	}
+
+	fn rent_projection(
+		&self,
+		address: AccountId,
+		at: Option<<Block as BlockT>::Hash>,
+	) -> Result<BlockNumber> {
+		let api = self.client.runtime_api();
+		let at = BlockId::hash(at.unwrap_or_else(||
+			// If the block hash is not supplied assume the best block.
+			self.client.info().best_hash));
+
+		let result = api
+			.rent_projection(&at, address)
+			.map_err(|e| runtime_error_into_rpc_err(e))?
+			.map_err(GetStorageError)?;
+
+		Ok(result)
 	}
 }
+
+/// Converts a runtime trap into an RPC error.
+fn runtime_error_into_rpc_err(err: impl std::fmt::Debug) -> Error {
+	Error {
+		code: ErrorCode::ServerError(RUNTIME_ERROR),
+		message: "Runtime trapped".into(),
+		data: Some(format!("{:?}", err).into()),
+	}
+}
+
 
 #[cfg(test)]
 mod tests {

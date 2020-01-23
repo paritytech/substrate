@@ -724,6 +724,17 @@ impl<T: Trait> Module<T> {
 		);
 		Ok(maybe_value)
 	}
+
+	pub fn rent_projection(
+		address: T::AccountId,
+	) -> sp_std::result::Result<T::BlockNumber, GetStorageError> {
+		let _contract_info = <ContractInfoOf<T>>::get(&address)
+			.ok_or(GetStorageError::ContractDoesntExist)?
+			.get_alive()
+			.ok_or(GetStorageError::IsTombstone)?;
+
+		rent::rent_projection(&address)
+	}
 }
 
 impl<T: Trait> Module<T> {

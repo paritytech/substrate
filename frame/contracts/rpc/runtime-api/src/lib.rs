@@ -58,11 +58,16 @@ pub enum GetStorageError {
 	IsTombstone,
 }
 
+// TODO: Rename `GetStorageError` to `ContractAccessError`?
+// TODO: Document
+pub type RentProjectionResult<BlockNumber> = Result<BlockNumber, GetStorageError>;
+
 sp_api::decl_runtime_apis! {
 	/// The API to interact with contracts without using executive.
-	pub trait ContractsApi<AccountId, Balance> where
+	pub trait ContractsApi<AccountId, Balance, BlockNumber> where
 		AccountId: Codec,
 		Balance: Codec,
+		BlockNumber: Codec,
 	{
 		/// Perform a call from a specified account to a given contract.
 		///
@@ -85,5 +90,8 @@ sp_api::decl_runtime_apis! {
 			address: AccountId,
 			key: [u8; 32],
 		) -> GetStorageResult;
+
+		// TODO: Document
+		fn rent_projection(address: AccountId) -> RentProjectionResult<BlockNumber>;
 	}
 }
