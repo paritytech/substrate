@@ -370,13 +370,6 @@ pub trait Misc {
 			.call_in_wasm(wasm, "Core_version", &[], &mut ext)
 			.ok()
 	}
-
-	/// Get the current system time in nanoseconds.
-	fn current_time() -> u128 {
-		std::time::SystemTime::now().duration_since(time::SystemTime::UNIX_EPOCH)
-		.expect("Unix time doesn't go backwards; qed")
-		.as_nanos()
-	}
 }
 
 /// Interfaces for working with crypto related types from within the runtime.
@@ -777,6 +770,20 @@ pub trait Logging {
 			)
 		}
 	}
+}
+
+/// Interface that provides functions for benchmarking the runtime.
+#[runtime_interface]
+pub trait Benchmarking {
+		/// Get the current system time in nanoseconds.
+		///
+		/// WARNING! This is a non-determinisic call. Do not use this within
+		/// consensus critical logic.
+		fn current_time() -> u128 {
+			std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)
+				.expect("Unix time doesn't go backwards; qed")
+				.as_nanos()
+		}
 }
 
 /// Wasm-only interface that provides functions for interacting with the sandbox.
