@@ -67,8 +67,6 @@
 //! simply dropped, it should automatically maintain any book-keeping such as total issuance.)
 //! - **Lock:** A freeze on a specified amount of an account's free balance until a specified block number. Multiple
 //! locks always operate over the same funds, so they "overlay" rather than "stack".
-//! - **Vesting:** Similar to a lock, this is another, but independent, liquidity restriction that reduces linearly
-//! over time.
 //!
 //! ### Implementations
 //!
@@ -93,10 +91,6 @@
 //!
 //! - `transfer` - Transfer some liquid free balance to another account.
 //! - `set_balance` - Set the balances of a given account. The origin of this call must be root.
-//!
-//! ### Public Functions
-//!
-//! - `vesting_balance` - Get the amount that is currently being vested and cannot be transferred out of this account.
 //!
 //! ## Usage
 //!

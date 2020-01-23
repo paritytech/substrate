@@ -21,13 +21,25 @@
 //!
 //! ## Overview
 //!
+//! A simple module providing a means of placing a linear curve on an account's locked balance. This
+//! module ensures that there is a lock in place preventing the balance to drop below the *unvested*
+//! amount for any reason other than transaction fee payment.
+//!
+//! As the amount vested increases over time, the amount unvested reduces. However, locks remain in
+//! place and explicit action is needed on behalf of the user to ensure that the amount locked is
+//! equivalent to the amount remaining to be vested. This is done through a dispatchable function,
+//! either `vest` (in typical case where the sender is calling on their own behalf) or `vest_other`
+//! in case the sender is calling on another account's behalf.
+//!
 //! ## Interface
+//!
+//! This module implements the `VestingSchedule` trait.
 //!
 //! ### Dispatchable Functions
 //!
-//! #### For general users
-//!
-//! #### For super-users
+//! - `vest` - Update the lock, reducing it in line with the amount "vested" so far.
+//! - `vest_other` - Update the lock of another account, reducing it in line with the amount
+//!   "vested" so far.
 //!
 //! [`Call`]: ./enum.Call.html
 //! [`Trait`]: ./trait.Trait.html
@@ -38,16 +50,12 @@ use sp_std::prelude::*;
 use sp_std::fmt::Debug;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
-	StaticLookup, Zero, SimpleArithmetic, MaybeSerializeDeserialize, Saturating, CheckedConversion,
-	Convert
+	StaticLookup, Zero, SimpleArithmetic, MaybeSerializeDeserialize, Saturating, Convert
 }};
-use frame_support::{
-	decl_module, decl_event, decl_storage, ensure, decl_error, weights::SimpleDispatchInfo,
-	traits::{
-		Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier
-	}
-};
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_support::{decl_module, decl_event, decl_storage, ensure, decl_error, traits::{
+	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier
+}};
+use frame_system::{self as system, ensure_signed};
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
@@ -169,14 +177,16 @@ decl_module! {
 		/// Unlock any vested funds of a target account.
 		///
 		/// Origin must be signed with an account that still has funds to vest.
-		fn vest_other(origin, target: T::AccountId) -> DispatchResult {
+		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
-			Self::unlock_vested(target)
+			Self::unlock_vested(T::Lookup::lookup(target)?)
 		}
 	}
 }
 
 impl<T: Trait> Module<T> {
+	/// (Re)set or remove the module's currency lock on `who`'s account in accordance with their
+	/// current unvested amount.
 	fn unlock_vested(who: T::AccountId) -> DispatchResult {
 		ensure!(Vesting::<T>::exists(&who), Error::<T>::NotVesting);
 		let unvested = Self::vesting_balance(&who);
