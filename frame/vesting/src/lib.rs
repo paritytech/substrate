@@ -52,9 +52,10 @@ use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
 	StaticLookup, Zero, SimpleArithmetic, MaybeSerializeDeserialize, Saturating, Convert
 }};
-use frame_support::{decl_module, decl_event, decl_storage, ensure, decl_error, traits::{
+use frame_support::{decl_module, decl_event, decl_storage, ensure, decl_error};
+use frame_support::traits::{
 	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier
-}};
+};
 use frame_system::{self as system, ensure_signed};
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -215,7 +216,7 @@ impl<T: Trait> Module<T> {
 		let unvested = Self::vesting_balance(&who);
 		if unvested.is_zero() {
 			T::Currency::remove_lock(VESTING_ID, &who);
-			Vesting::<T>::kill(&who);
+			Vesting::<T>::remove(&who);
 			Self::deposit_event(RawEvent::VestingCompleted(who));
 		} else {
 			let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;

@@ -557,7 +557,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		account: &AccountData<T::Balance>,
 		old: &AccountData<T::Balance>,
 	) -> UpdateBalanceOutcome {
-		println!("Setting balance of {:?} to {:?} from {:?}", who, account, Self::account(who));
 		let total = account.free + account.reserved;
 		if total < T::ExistentialDeposit::get() {
 			T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
