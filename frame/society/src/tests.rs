@@ -21,6 +21,7 @@ use mock::*;
 
 use frame_support::{assert_ok, assert_noop};
 use sp_runtime::traits::BadOrigin;
+use sp_core::blake2_256;
 
 #[test]
 fn founding_works() {
@@ -31,9 +32,9 @@ fn founding_works() {
 		assert_eq!(Society::pot(), 0);
 		// Account 1 is set as the founder origin
 		// Account 5 cannot start a society
-		assert_noop!(Society::found(Origin::signed(5), 20, 100), BadOrigin);
+		assert_noop!(Society::found(Origin::signed(5), 20, 100, vec![]), BadOrigin);
 		// Account 1 can start a society, where 10 is the founding member
-		assert_ok!(Society::found(Origin::signed(1), 10, 100));
+		assert_ok!(Society::found(Origin::signed(1), 10, 100, b"be cool".to_vec()));
 		// Society members only include 10
 		assert_eq!(Society::members(), vec![10]);
 		// 10 is the head of the society
@@ -42,11 +43,39 @@ fn founding_works() {
 		assert_eq!(Society::founder(), Some(10));
 		// 100 members max
 		assert_eq!(Society::max_members(), 100);
+		// rules are correct
+		assert_eq!(Society::rules(), Some(blake2_256(b"be cool").into()));
 		// Pot grows after first rotation period
 		run_to_block(4);
 		assert_eq!(Society::pot(), 1000);
 		// Cannot start another society
-		assert_noop!(Society::found(Origin::signed(1), 20, 100), Error::<Test, _>::AlreadyFounded);
+		assert_noop!(
+			Society::found(Origin::signed(1), 20, 100, vec![]),
+			Error::<Test, _>::AlreadyFounded
+		);
+	});
+}
+
+#[test]
+fn unfounding_works() {
+	EnvBuilder::new().with_max_members(0).with_members(vec![]).execute(|| {
+		// Account 1 sets the founder...
+		assert_ok!(Society::found(Origin::signed(1), 10, 100, vec![]));
+		// Account 2 cannot unfound it as it's not the founder.
+		assert_noop!(Society::unfound(Origin::signed(2)), Error::<Test, _>::NotFounder);
+		// Account 10 can, though.
+		assert_ok!(Society::unfound(Origin::signed(10)));
+
+		// 1 sets the founder to 20 this time
+		assert_ok!(Society::found(Origin::signed(1), 20, 100, vec![]));
+		// Bring in a new member...
+		assert_ok!(Society::bid(Origin::signed(10), 0));
+		run_to_block(4);
+		assert_ok!(Society::vote(Origin::signed(20), 10, true));
+		run_to_block(8);
+
+		// Unfounding won't work now, even though it's from 20.
+		assert_noop!(Society::unfound(Origin::signed(20)), Error::<Test, _>::NotHead);
 	});
 }
 

@@ -54,7 +54,11 @@ where
 	}
 
 	fn run(self) -> Result<(), Box<dyn std::error::Error>> {
-		let mut r = tokio::runtime::Runtime::new()?;
+		let mut r = tokio::runtime::Builder::new()
+			.thread_name("main-tokio-")
+			.threaded_scheduler()
+			.enable_all()
+			.build()?;
 		r.block_on(self.main())
 	}
 }
