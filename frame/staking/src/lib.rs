@@ -265,7 +265,7 @@ use frame_support::{
 		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };
-use pallet_session::{historical::OnSessionEnding, SelectInitialValidators};
+use pallet_session::historical::SessionManager;
 use sp_runtime::{
 	Perbill,
 	RuntimeDebug,
@@ -575,8 +575,7 @@ impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T whe
 		FullIdentificationOf = ExposureOf<T>,
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Trait>::AccountId>,
-	T::OnSessionEnding: pallet_session::OnSessionEnding<<T as frame_system::Trait>::AccountId>,
-	T::SelectInitialValidators: pallet_session::SelectInitialValidators<<T as frame_system::Trait>::AccountId>,
+	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Trait>::AccountId>,
 	T::ValidatorIdOf: Convert<<T as frame_system::Trait>::AccountId, Option<<T as frame_system::Trait>::AccountId>>
 {
 	fn disable_validator(validator: &<T as frame_system::Trait>::AccountId) -> Result<bool, ()> {
@@ -1346,11 +1345,8 @@ impl<T: Trait> Module<T> {
 		imbalance
 	}
 
-	/// Session has just ended. Provide the validator set for the next session if it's an era-end, along
-	/// with the exposure of the prior validator set.
-	fn new_session(session_index: SessionIndex)
-		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
-	{
+	/// Session has just ended. Provide the validator set for the next session if it's an era-end.
+	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		let era_length = session_index.checked_sub(Self::current_era_start_session_index()).unwrap_or(0);
 		match ForceEra::get() {
 			Forcing::ForceNew => ForceEra::kill(),
@@ -1358,12 +1354,17 @@ impl<T: Trait> Module<T> {
 			Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
 			_ => return None,
 		}
-		let validators = T::SessionInterface::validators();
-		let prior = validators.into_iter()
-			.map(|v| { let e = Self::stakers(&v); (v, e) })
-			.collect();
 
-		Self::new_era(session_index).map(move |new| (new, prior))
+		Self::new_era(session_index)
+	}
+
+	/// Initialise the first session (and consequently the first era)
+	fn initial_session() -> Option<Vec<T::AccountId>> {
+		// note: `CurrentEraStart` is set in `on_finalize` of the first block because now is not
+		// available yet.
+		CurrentEraStartSessionIndex::put(0);
+		BondedEras::mutate(|bonded| bonded.push((0, 0)));
+		Self::select_validators().1
 	}
 
 	/// The era has changed - enact new staking set.
@@ -1646,19 +1647,30 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> pallet_session::OnSessionEnding<T::AccountId> for Module<T> {
-	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex) -> Option<Vec<T::AccountId>> {
+impl<T: Trait> pallet_session::SessionManager<T::AccountId> for Module<T> {
+	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		Self::ensure_storage_upgraded();
-		Self::new_session(start_session - 1).map(|(new, _old)| new)
+		if new_index == 0 {
+			return Self::initial_session();
+		}
+		Self::new_session(new_index - 1)
 	}
+	fn end_session(_end_index: SessionIndex) {}
 }
 
-impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
-	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex)
-		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
+impl<T: Trait> SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
+	fn new_session(new_index: SessionIndex)
+		-> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>>
 	{
-		Self::ensure_storage_upgraded();
-		Self::new_session(start_session - 1)
+		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
+			validators.into_iter().map(|v| {
+				let exposure = <Stakers<T>>::get(&v);
+				(v, exposure)
+			}).collect()
+		})
+	}
+	fn end_session(end_index: SessionIndex) {
+		<Self as pallet_session::SessionManager<_>>::end_session(end_index)
 	}
 }
 
@@ -1707,12 +1719,6 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 	}
 }
 
-impl<T: Trait> SelectInitialValidators<T::AccountId> for Module<T> {
-	fn select_initial_validators() -> Option<Vec<T::AccountId>> {
-		<Module<T>>::select_validators().1
-	}
-}
-
 /// This is intended to be used with `FilterHistoricalOffences`.
 impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::IdentificationTuple<T>> for Module<T> where
 	T: pallet_session::Trait<ValidatorId = <T as frame_system::Trait>::AccountId>,
@@ -1721,8 +1727,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 		FullIdentificationOf = ExposureOf<T>,
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Trait>::AccountId>,
-	T::OnSessionEnding: pallet_session::OnSessionEnding<<T as frame_system::Trait>::AccountId>,
-	T::SelectInitialValidators: pallet_session::SelectInitialValidators<<T as frame_system::Trait>::AccountId>,
+	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Trait>::AccountId>,
 	T::ValidatorIdOf: Convert<<T as frame_system::Trait>::AccountId, Option<<T as frame_system::Trait>::AccountId>>
 {
 	fn on_offence(

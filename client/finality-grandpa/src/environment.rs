@@ -22,7 +22,11 @@ use std::time::Duration;
 use log::{debug, warn, info};
 use parity_scale_codec::{Decode, Encode};
 use futures::prelude::*;
-use futures03::future::{FutureExt as _, TryFutureExt as _};
+use futures03::{
+	compat::{Compat, CompatSink},
+	future::{FutureExt as _, TryFutureExt as _},
+	stream::StreamExt as _,
+};
 use futures_timer::Delay;
 use parking_lot::RwLock;
 use sp_blockchain::{HeaderBackend, Error as ClientError};
@@ -607,6 +611,9 @@ where
 			local_key.clone(),
 			has_voted,
 		);
+
+		let incoming = Compat::new(incoming.map(|item| Ok::<_, Error>(item)));
+		let outgoing = CompatSink::new(outgoing);
 
 		// schedule incoming messages from the network to be held until
 		// corresponding blocks are imported.

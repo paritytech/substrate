@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,17 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use wasm_builder_runner::{build_current_project_with_rustflags, WasmBuilderSource};
+//! Collection of allocator implementations.
+//!
+//! This crate provides the following allocator implementations:
+//! - A freeing-bump allocator: [`FreeingBumpHeapAllocator`](freeing_bump::FreeingBumpHeapAllocator)
 
-fn main() {
-	build_current_project_with_rustflags(
-		"wasm_binary.rs",
-		WasmBuilderSource::CratesOrPath {
-			path: "../../../utils/wasm-builder",
-			version: "1.0.9",
-		},
-		// This instructs LLD to export __heap_base as a global variable, which is used by the
-		// external memory allocator.
-		"-Clink-arg=--export=__heap_base",
-	);
-}
+#![cfg_attr(not(feature = "std"), no_std)]
+#![warn(missing_docs)]
+
+mod error;
+mod freeing_bump;
+
+pub use freeing_bump::FreeingBumpHeapAllocator;
+pub use error::Error;

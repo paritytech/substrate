@@ -27,12 +27,13 @@
 //! In the future, there will be a fallback for allowing sending the same message
 //! under certain conditions that are used to un-stick the protocol.
 
-use futures::{prelude::*, sync::mpsc};
+use futures::prelude::*;
 use futures03::{
 	channel::mpsc as mpsc03,
 	compat::Compat,
-	future::{Future as Future03},
-	stream::StreamExt,
+	future::{self as future03, Future as Future03},
+	sink::Sink as Sink03,
+	stream::{Stream as Stream03, StreamExt},
 };
 use log::{debug, trace};
 use parking_lot::Mutex;
@@ -105,6 +106,11 @@ mod benefit {
 	pub(super) const BASIC_VALIDATED_COMMIT: Rep = Rep::new(100, "Grandpa: Commit");
 	pub(super) const PER_EQUIVOCATION: i32 = 10;
 }
+
+/// If the voter set is larger than this value some telemetry events are not
+/// sent to avoid increasing usage resource on the node and flooding the
+/// telemetry server (e.g. received votes, received commits.)
+const TELEMETRY_VOTERS_LIMIT: usize = 10;
 
 /// A handle to the network.
 ///
@@ -271,8 +277,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		local_key: Option<AuthorityPair>,
 		has_voted: HasVoted<B>,
 	) -> (
-		impl Stream<Item=SignedMessage<B>,Error=Error>,
-		impl Sink<SinkItem=Message<B>,SinkError=Error>,
+		impl Stream03<Item=SignedMessage<B>> + Unpin,
+		OutgoingMessages<B>,
 	) {
 		self.note_round(
 			round,
@@ -290,60 +296,58 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		});
 
 		let topic = round_topic::<B>(round.0, set_id.0);
-		let incoming = Compat::new(self.gossip_engine.messages_for(topic)
-			.map(|item| Ok::<_, ()>(item)))
-			.filter_map(|notification| {
+		let incoming = self.gossip_engine.messages_for(topic)
+			.filter_map(move |notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
-				if let Err(ref e) = decoded {
-					debug!(target: "afg", "Skipping malformed message {:?}: {}", notification, e);
-				}
-				decoded.ok()
-			})
-			.and_then(move |msg| {
-				match msg {
-					GossipMessage::Vote(msg) => {
+
+				match decoded {
+					Err(ref e) => {
+						debug!(target: "afg", "Skipping malformed message {:?}: {}", notification, e);
+						return future03::ready(None);
+					}
+					Ok(GossipMessage::Vote(msg)) => {
 						// check signature.
 						if !voters.contains_key(&msg.message.id) {
 							debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
-							return Ok(None);
+							return future03::ready(None);
 						}
 
-						match &msg.message.message {
-							PrimaryPropose(propose) => {
-								telemetry!(CONSENSUS_INFO; "afg.received_propose";
-									"voter" => ?format!("{}", msg.message.id),
-									"target_number" => ?propose.target_number,
-									"target_hash" => ?propose.target_hash,
-								);
-							},
-							Prevote(prevote) => {
-								telemetry!(CONSENSUS_INFO; "afg.received_prevote";
-									"voter" => ?format!("{}", msg.message.id),
-									"target_number" => ?prevote.target_number,
-									"target_hash" => ?prevote.target_hash,
-								);
-							},
-							Precommit(precommit) => {
-								telemetry!(CONSENSUS_INFO; "afg.received_precommit";
-									"voter" => ?format!("{}", msg.message.id),
-									"target_number" => ?precommit.target_number,
-									"target_hash" => ?precommit.target_hash,
-								);
-							},
-						};
+						if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+							match &msg.message.message {
+								PrimaryPropose(propose) => {
+									telemetry!(CONSENSUS_INFO; "afg.received_propose";
+										"voter" => ?format!("{}", msg.message.id),
+										"target_number" => ?propose.target_number,
+										"target_hash" => ?propose.target_hash,
+									);
+								},
+								Prevote(prevote) => {
+									telemetry!(CONSENSUS_INFO; "afg.received_prevote";
+										"voter" => ?format!("{}", msg.message.id),
+										"target_number" => ?prevote.target_number,
+										"target_hash" => ?prevote.target_hash,
+									);
+								},
+								Precommit(precommit) => {
+									telemetry!(CONSENSUS_INFO; "afg.received_precommit";
+										"voter" => ?format!("{}", msg.message.id),
+										"target_number" => ?precommit.target_number,
+										"target_hash" => ?precommit.target_hash,
+									);
+								},
+							};
+						}
 
-						Ok(Some(msg.message))
+						future03::ready(Some(msg.message))
 					}
 					_ => {
 						debug!(target: "afg", "Skipping unknown message type");
-						return Ok(None);
+						return future03::ready(None);
 					}
 				}
-			})
-			.filter_map(|x| x)
-			.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")));
+			});
 
-		let (tx, out_rx) = mpsc::unbounded();
+		let (tx, out_rx) = mpsc03::channel(0);
 		let outgoing = OutgoingMessages::<B> {
 			round: round.0,
 			set_id: set_id.0,
@@ -353,14 +357,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			has_voted,
 		};
 
-		let out_rx = out_rx.map_err(move |()| Error::Network(
-			format!("Failed to receive on unbounded receiver for round {}", round.0)
-		));
-
 		// Combine incoming votes from external GRANDPA nodes with outgoing
 		// votes from our own GRANDPA voter to have a single
 		// vote-import-pipeline.
-		let incoming = incoming.select(out_rx);
+		let incoming = futures03::stream::select(incoming, out_rx);
 
 		(incoming, outgoing)
 	}
@@ -474,11 +474,13 @@ fn incoming_global<B: BlockT>(
 				format!("{}", a)
 			}).collect();
 
-		telemetry!(CONSENSUS_INFO; "afg.received_commit";
-			"contains_precommits_signed_by" => ?precommits_signed_by,
-			"target_number" => ?msg.message.target_number.clone(),
-			"target_hash" => ?msg.message.target_hash.clone(),
-		);
+		if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+			telemetry!(CONSENSUS_INFO; "afg.received_commit";
+				"contains_precommits_signed_by" => ?precommits_signed_by,
+				"target_number" => ?msg.message.target_number.clone(),
+				"target_hash" => ?msg.message.target_hash.clone(),
+			);
+		}
 
 		if let Err(cost) = check_compact_commit::<B>(
 			&msg.message,
@@ -600,8 +602,28 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 	}
 }
 
-pub(crate) fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
-	(message, round, set_id).encode()
+/// Encode round message localized to a given round and set id.
+pub(crate) fn localized_payload<E: Encode>(
+	round: RoundNumber,
+	set_id: SetIdNumber,
+	message: &E,
+) -> Vec<u8> {
+	let mut buf = Vec::new();
+	localized_payload_with_buffer(round, set_id, message, &mut buf);
+	buf
+}
+
+/// Encode round message localized to a given round and set id using the given
+/// buffer. The given buffer will be cleared and the resulting encoded payload
+/// will always be written to the start of the buffer.
+pub(crate) fn localized_payload_with_buffer<E: Encode>(
+	round: RoundNumber,
+	set_id: SetIdNumber,
+	message: &E,
+	buf: &mut Vec<u8>,
+) {
+	buf.clear();
+	(message, round, set_id).encode_to(buf)
 }
 
 /// Type-safe wrapper around a round number.
@@ -612,7 +634,8 @@ pub struct Round(pub RoundNumber);
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
 pub struct SetId(pub SetIdNumber);
 
-// check a message.
+/// Check a message signature by encoding the message as a localized payload and
+/// verifying the provided signature using the expected authority id.
 pub(crate) fn check_message_sig<Block: BlockT>(
 	message: &Message<Block>,
 	id: &AuthorityId,
@@ -620,9 +643,32 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 	round: RoundNumber,
 	set_id: SetIdNumber,
 ) -> Result<(), ()> {
+	check_message_sig_with_buffer::<Block>(
+		message,
+		id,
+		signature,
+		round,
+		set_id,
+		&mut Vec::new(),
+	)
+}
+
+/// Check a message signature by encoding the message as a localized payload and
+/// verifying the provided signature using the expected authority id.
+/// The encoding necessary to verify the signature will be done using the given
+/// buffer, the original content of the buffer will be cleared.
+pub(crate) fn check_message_sig_with_buffer<Block: BlockT>(
+	message: &Message<Block>,
+	id: &AuthorityId,
+	signature: &AuthoritySignature,
+	round: RoundNumber,
+	set_id: SetIdNumber,
+	buf: &mut Vec<u8>,
+) -> Result<(), ()> {
 	let as_public = id.clone();
-	let encoded_raw = localized_payload(round, set_id, message);
-	if AuthorityPair::verify(signature, &encoded_raw, &as_public) {
+	localized_payload_with_buffer(round, set_id, message, buf);
+
+	if AuthorityPair::verify(signature, buf, &as_public) {
 		Ok(())
 	} else {
 		debug!(target: "afg", "Bad signature on message from {:?}", id);
@@ -637,21 +683,29 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 /// use the same raw message and key to sign. This is currently true for
 /// `ed25519` and `BLS` signatures (which we might use in the future), care must
 /// be taken when switching to different key types.
-struct OutgoingMessages<Block: BlockT> {
+pub(crate) struct OutgoingMessages<Block: BlockT> {
 	round: RoundNumber,
 	set_id: SetIdNumber,
 	locals: Option<(AuthorityPair, AuthorityId)>,
-	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
+	sender: mpsc03::Sender<SignedMessage<Block>>,
 	network: GossipEngine<Block>,
 	has_voted: HasVoted<Block>,
 }
 
-impl<Block: BlockT> Sink for OutgoingMessages<Block>
-{
-	type SinkItem = Message<Block>;
-	type SinkError = Error;
+impl<B: BlockT> Unpin for OutgoingMessages<B> {}
 
-	fn start_send(&mut self, mut msg: Message<Block>) -> StartSend<Message<Block>, Error> {
+impl<Block: BlockT> Sink03<Message<Block>> for OutgoingMessages<Block>
+{
+	type Error = Error;
+
+	fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll03<Result<(), Self::Error>> {
+		Sink03::poll_ready(Pin::new(&mut self.sender), cx)
+			.map(|elem| { elem.map_err(|e| {
+				Error::Network(format!("Failed to poll_ready channel sender: {:?}", e))
+			})})
+	}
+
+	fn start_send(mut self: Pin<&mut Self>, mut msg: Message<Block>) -> Result<(), Self::Error> {
 		// if we've voted on this round previously under the same key, send that vote instead
 		match &mut msg {
 			finality_grandpa::Message::PrimaryPropose(ref mut vote) =>
@@ -707,17 +761,23 @@ impl<Block: BlockT> Sink for OutgoingMessages<Block>
 			self.network.gossip_message(topic, message.encode(), false);
 
 			// forward the message to the inner sender.
-			let _ = self.sender.unbounded_send(signed);
-		}
+			return self.sender.start_send(signed).map_err(|e| {
+				Error::Network(format!("Failed to start_send on channel sender: {:?}", e))
+			});
+		};
 
-		Ok(AsyncSink::Ready)
+		Ok(())
 	}
 
-	fn poll_complete(&mut self) -> Poll<(), Error> { Ok(Async::Ready(())) }
+	fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context) -> Poll03<Result<(), Self::Error>> {
+		Poll03::Ready(Ok(()))
+	}
 
-	fn close(&mut self) -> Poll<(), Error> {
-		// ignore errors since we allow this inner sender to be closed already.
-		self.sender.close().or_else(|_| Ok(Async::Ready(())))
+	fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll03<Result<(), Self::Error>> {
+		Sink03::poll_close(Pin::new(&mut self.sender), cx)
+			.map(|elem| { elem.map_err(|e| {
+				Error::Network(format!("Failed to poll_close channel sender: {:?}", e))
+			})})
 	}
 }
 
@@ -752,6 +812,7 @@ fn check_compact_commit<Block: BlockT>(
 	}
 
 	// check signatures on all contained precommits.
+	let mut buf = Vec::new();
 	for (i, (precommit, &(ref sig, ref id))) in msg.precommits.iter()
 		.zip(&msg.auth_data)
 		.enumerate()
@@ -759,12 +820,13 @@ fn check_compact_commit<Block: BlockT>(
 		use crate::communication::gossip::Misbehavior;
 		use finality_grandpa::Message as GrandpaMessage;
 
-		if let Err(()) = check_message_sig::<Block>(
+		if let Err(()) = check_message_sig_with_buffer::<Block>(
 			&GrandpaMessage::Precommit(precommit.clone()),
 			id,
 			sig,
 			round.0,
 			set_id.0,
+			&mut buf,
 		) {
 			debug!(target: "afg", "Bad commit message signature {}", id);
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_commit_msg_signature"; "id" => ?id);
@@ -836,6 +898,7 @@ fn check_catch_up<Block: BlockT>(
 		round: RoundNumber,
 		set_id: SetIdNumber,
 		mut signatures_checked: usize,
+		buf: &mut Vec<u8>,
 	) -> Result<usize, ReputationChange> where
 		B: BlockT,
 		I: Iterator<Item=(Message<B>, &'a AuthorityId, &'a AuthoritySignature)>,
@@ -845,12 +908,13 @@ fn check_catch_up<Block: BlockT>(
 		for (msg, id, sig) in messages {
 			signatures_checked += 1;
 
-			if let Err(()) = check_message_sig::<B>(
+			if let Err(()) = check_message_sig_with_buffer::<B>(
 				&msg,
 				id,
 				sig,
 				round,
 				set_id,
+				buf,
 			) {
 				debug!(target: "afg", "Bad catch up message signature {}", id);
 				telemetry!(CONSENSUS_DEBUG; "afg.bad_catch_up_msg_signature"; "id" => ?id);
@@ -866,6 +930,8 @@ fn check_catch_up<Block: BlockT>(
 		Ok(signatures_checked)
 	}
 
+	let mut buf = Vec::new();
+
 	// check signatures on all contained prevotes.
 	let signatures_checked = check_signatures::<Block, _>(
 		msg.prevotes.iter().map(|vote| {
@@ -874,6 +940,7 @@ fn check_catch_up<Block: BlockT>(
 		msg.round_number,
 		set_id.0,
 		0,
+		&mut buf,
 	)?;
 
 	// check signatures on all contained precommits.
@@ -884,6 +951,7 @@ fn check_catch_up<Block: BlockT>(
 		msg.round_number,
 		set_id.0,
 		signatures_checked,
+		&mut buf,
 	)?;
 
 	Ok(())

@@ -818,11 +818,18 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			finalized,
 			auxiliary,
 			fork_choice,
+			intermediates,
 			import_existing,
 			..
 		} = import_block;
 
 		assert!(justification.is_some() && finalized || justification.is_none());
+
+		if !intermediates.is_empty() {
+			return Err(Error::IncompletePipeline)
+		}
+
+		let fork_choice = fork_choice.ok_or(Error::IncompletePipeline)?;
 
 		let import_headers = if post_digests.is_empty() {
 			PrePostHeader::Same(header)
