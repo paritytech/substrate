@@ -33,6 +33,9 @@ use sp_std::vec::Vec;
 use sp_std::ops::Deref;
 
 #[cfg(feature = "std")]
+use std::time;
+
+#[cfg(feature = "std")]
 use sp_core::{
 	crypto::Pair,
 	traits::{KeystoreExt, CallInWasmExt},
@@ -369,6 +372,13 @@ pub trait Misc {
 			.expect("No `CallInWasmExt` associated for the current context!")
 			.call_in_wasm(wasm, "Core_version", &[], &mut ext)
 			.ok()
+	}
+
+	/// Get the current system time in nanoseconds.
+	fn system_time() -> u128 {
+		time::SystemTime::now().duration_since(time::SystemTime::UNIX_EPOCH)
+		.expect("Unix time doesn't go backwards; qed")
+		.as_nanos()
 	}
 }
 
