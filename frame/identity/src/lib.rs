@@ -876,7 +876,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 		// Select the component we will be benchmarking. Each component will be benchmarked.
 		for (name, low, high) in components.iter() {
 			// Create up to `STEPS` steps for that component between high and low.
-			let step_size = ((high - low) / Self::STEPS).min(1);
+			let step_size = ((high - low) / Self::STEPS).max(1);
 			let num_of_steps = (high - low) / step_size;
 			for s in 0..num_of_steps {
 				// This is the value we will be testing for component `name`
@@ -890,10 +890,10 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 
 				for _r in 0..Self::REPEATS {
 					let instance = benchmarking::set_identity::instance(&c);
-					let start = sp_io::benchmark::now();
-					assert_eq!(instance.dispatch(Some(0).into()), Ok(()));
-					let finish = sp_io::benchmark::now();
-					let elapsed = finish - start;
+					let start = sp_io::offchain::timestamp();
+					instance.dispatch(Some(0).into());
+					let finish = sp_io::offchain::timestamp();
+					let elapsed = finish.0 - start.0;
 					results.push((c.clone(), elapsed));
 				}
 			}

@@ -293,6 +293,14 @@ pub struct TransactionPoolParams {
 	pub pool_kbytes: usize,
 }
 
+/// Parameters used to benchmark the runtime.
+#[derive(Debug, StructOpt, Clone)]
+pub struct BenchmarkRuntimeParams {
+	/// Enable benchmarking of the runtime.
+	#[structopt(long = "benchmark")]
+	pub benchmark: bool,
+}
+
 arg_enum! {
 	#[allow(missing_docs)]
 	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -528,6 +536,10 @@ pub struct RunCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub pool_config: TransactionPoolParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub benchmark_config: BenchmarkRuntimeParams,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]

@@ -58,9 +58,6 @@ use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use sp_externalities::{ExternalitiesExt, Externalities};
 
-#[cfg(feature = "std")]
-use std::time;
-
 /// Error verifying ECDSA signature
 #[derive(Encode, Decode)]
 pub enum EcdsaVerifyError {
@@ -372,17 +369,6 @@ pub trait Misc {
 			.expect("No `CallInWasmExt` associated for the current context!")
 			.call_in_wasm(wasm, "Core_version", &[], &mut ext)
 			.ok()
-	}
-}
-
-/// Interface provides functionality to fetch the system time for benchmarking.
-#[runtime_interface]
-pub trait Benchmark {
-	/// Get the current system time in nanoseconds.
-	fn now() -> u128 {
-		time::SystemTime::now().duration_since(time::SystemTime::UNIX_EPOCH)
-		.expect("Unix time doesn't go backwards; qed")
-		.as_nanos()
 	}
 }
 
@@ -930,7 +916,6 @@ pub type SubstrateHostFunctions = (
 	logging::HostFunctions,
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
-	benchmark::HostFunctions,
 );
 
 #[cfg(test)]

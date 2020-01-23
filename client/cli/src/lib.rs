@@ -57,7 +57,7 @@ use params::{
 	NetworkConfigurationParams, MergeParameters, TransactionPoolParams,
 	NodeKeyParams, NodeKeyType, Cors, CheckBlockCmd,
 };
-pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy};
+pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy, BenchmarkRuntimeParams};
 pub use traits::GetSharedParams;
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
@@ -806,6 +806,11 @@ fn fill_transaction_pool_configuration<C, G, E>(
 	Ok(())
 }
 
+/// Run the runtime benchmarks.
+fn run_benchmark(params: BenchmarkRuntimeParams) -> error::Result<()> {
+	Ok(())
+}
+
 /// Fill the given `NetworkConfiguration` by looking at the cli parameters.
 fn fill_network_configuration(
 	cli: NetworkConfigurationParams,
@@ -1053,6 +1058,8 @@ where
 	)?;
 
 	fill_transaction_pool_configuration(&mut config, cli.pool_config)?;
+
+	run_benchmark(cli.benchmark_config)?;
 
 	config.dev_key_seed = cli.keyring.account
 		.map(|a| format!("//{}", a)).or_else(|| {
