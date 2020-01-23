@@ -258,7 +258,7 @@ pub mod inflation;
 use sp_std::{prelude::*, result, cmp::Ordering};
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
-	decl_module, decl_event, decl_storage, ensure, decl_error, debug,
+	decl_module, decl_event, decl_storage, ensure, decl_error, debug, Parameter,
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
@@ -271,8 +271,11 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
-		SimpleArithmetic, EnsureOrigin,
-	}
+		SimpleArithmetic, EnsureOrigin, Member,
+	},
+	transaction_validity::{
+		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionPriority,
+	},
 };
 use sp_staking::{
 	SessionIndex,
@@ -281,9 +284,10 @@ use sp_staking::{
 #[cfg(feature = "std")]
 use sp_runtime::{Serialize, Deserialize};
 use frame_system::{
-	self as system, ensure_signed, ensure_root,
-	offchain::{SignAndSubmitTransaction, SubmitSignedTransaction},
+	self as system, ensure_signed, ensure_root, ensure_none,
+	offchain::{SubmitSignedTransaction, CreateTransaction, SubmitUnsignedTransaction, PublicOf, SignerOf, SignatureOf, SignAndSubmitTransaction, Signer},
 };
+use sp_application_crypto::RuntimeAppPublic;
 
 use sp_phragmen::{ExtendedBalance, Assignment, StakedAssignment};
 
@@ -701,7 +705,13 @@ pub trait Trait: frame_system::Trait {
 	type Call: From<Call<Self>> + Clone;
 
 	/// A transaction submitter.
-	type SubmitTransaction: SignAndSubmitTransaction<Self, <Self as Trait>::Call> + SubmitSignedTransaction<Self, <Self as Trait>::Call>;
+	type SubmitTransaction:
+		SubmitSignedTransaction<Self, <Self as Trait>::Call> +
+		SubmitUnsignedTransaction<Self, <Self as Trait>::Call> +
+		SignAndSubmitTransaction<Self, <Self as Trait>::Call>;
+
+	/// The key type. Must be the same as given to `SubmitTransaction`. TODO: we can probably extract it from it
+	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
 }
 
 /// Mode of era-forcing.
@@ -975,20 +985,18 @@ decl_module! {
 			// debug::RuntimeLogger::init();
 			// TODO: make sure that we don't need that is_validator here.
 			if Self::era_election_status() == ElectionStatus::<T::BlockNumber>::Open(now) {
+
 				// TODO: well this is outdated, neh? need to get the correct one from session.
 				let current_elected = Self::current_elected();
 
 				// Check if current node can sign with any of the keys which correspond to a
 				// validator. This basically says: proceed if the node is a validator.
 				if T::SubmitTransaction::can_sign_with(Some(current_elected.clone())) {
-					// We have at least some local key which corresponds to an elected
-					// validator. run phragmen
 					if let Some(sp_phragmen::PhragmenResult {
 						winners,
 						assignments,
 					}) = Self::do_phragmen() {
-						let winners = winners.into_iter().map(|(w, _)| w).collect();
-
+						let winners: Vec<T::AccountId> = winners.into_iter().map(|(w, _)| w).collect();
 						// convert into staked. This is needed to be able to reduce.
 						let mut staked: Vec<StakedAssignment<T::AccountId>> = assignments
 							.into_iter()
@@ -1001,10 +1009,37 @@ decl_module! {
 						// compact encode the assignment.
 						let compact = <CompactAssignments<T::AccountId, ExtendedBalance>>::from_staked(staked);
 
-						let call: <T as Trait>::Call = Call::submit_election_solution(winners, compact).into();
-						// TODO: maybe we want to send from just one of them? we'll see.
-						let _result = T::SubmitTransaction::submit_signed_from(call, current_elected);
-						dbg!(_result);
+						#[cfg(feature = "signed")]
+						{
+							// TODO: maybe we want to send from just one of them? we'll see.
+							let call: <T as Trait>::Call = Call::submit_election_solution(winners, compact).into();
+							let _result = T::SubmitTransaction::submit_signed_from(call, current_elected);
+							dbg!(_result);
+						}
+						#[cfg(not(feature = "signed"))]
+						{
+							// TODO: this call is really not needed, we can do it manually instead
+							// of `can_sign_with`. TODO: we could use some error handling here.
+							let maybe_signing_key = T::SubmitTransaction::find_local_keys(Some(current_elected));
+							if maybe_signing_key.len() > 0 {
+								let signing_key = maybe_signing_key[0].1;
+								let signature_payload = (winners.clone(), compact.clone()).encode();
+								let maybe_signature = <SignerOf<T, <T as Trait>::Call, T::SubmitTransaction>>::sign(signing_key, &signature_payload);
+								if let Some(signature) = maybe_signature {
+									let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
+										winners,
+										compact,
+										signature,
+									).into();
+									let _result = T::SubmitTransaction::submit_unsigned(call);
+								}
+							} else {
+								debug::native::warn!(
+									target: "staking",
+									"[unsigned] Have no key to sign this with",
+								);
+							}
+						}
 					} else {
 						debug::native::warn!(
 							target: "staking",
@@ -1224,6 +1259,17 @@ decl_module! {
 				exposures,
 				slot_stake,
 			});
+		}
+
+		/// Unsigned version of `submit_election_solution`
+		fn submit_election_solution_unsigned(
+			origin,
+			winners: Vec<T::AccountId>,
+			compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
+			signature: SignatureOf<T, <T as Trait>::Call, T::SubmitTransaction>,
+		) {
+			ensure_none(origin)?;
+
 		}
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
@@ -2299,3 +2345,52 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 		}
 	}
 }
+
+// TODO: do we need BoundToRuntimeAppPublic stuff?
+#[allow(deprecated)]
+impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
+	type Call = Call<T>;
+
+	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+		Ok(TransactionValidity::Ok(ValidTransaction::default()))
+		// if let Call::heartbeat(heartbeat, signature) = call {
+		// 	if <Module<T>>::is_online(heartbeat.authority_index) {
+		// 		// we already received a heartbeat for this authority
+		// 		return InvalidTransaction::Stale.into();
+		// 	}
+
+		// 	// check if session index from heartbeat is recent
+		// 	let current_session = <pallet_session::Module<T>>::current_index();
+		// 	if heartbeat.session_index != current_session {
+		// 		return InvalidTransaction::Stale.into();
+		// 	}
+
+		// 	// verify that the incoming (unverified) pubkey is actually an authority id
+		// 	let keys = Keys::<T>::get();
+		// 	let authority_id = match keys.get(heartbeat.authority_index as usize) {
+		// 		Some(id) => id,
+		// 		None => return InvalidTransaction::BadProof.into(),
+		// 	};
+
+		// 	// check signature (this is expensive so we do it last).
+		// 	let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
+		// 		authority_id.verify(&encoded_heartbeat, &signature)
+		// 	});
+
+		// 	if !signature_valid {
+		// 		return InvalidTransaction::BadProof.into();
+		// 	}
+
+		// 	Ok(ValidTransaction {
+		// 		priority: TransactionPriority::max_value(),
+		// 		requires: vec![],
+		// 		provides: vec![(current_session, authority_id).encode()],
+		// 		longevity: TryInto::<u64>::try_into(T::SessionDuration::get() / 2.into()).unwrap_or(64_u64),
+		// 		propagate: true,
+		// 	})
+		// } else {
+		// 	InvalidTransaction::Call.into()
+		// }
+	}
+}
+
