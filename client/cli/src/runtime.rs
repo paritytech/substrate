@@ -90,7 +90,7 @@ where
 
 	service.await?;
 
-	handle.await?;
+	handle.await.map_err(|e| e.to_string())?;
 
 	Ok(())
 }
