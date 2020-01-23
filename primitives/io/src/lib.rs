@@ -34,7 +34,6 @@ use sp_std::ops::Deref;
 
 #[cfg(feature = "std")]
 use std::time;
-
 #[cfg(feature = "std")]
 use sp_core::{
 	crypto::Pair,
