@@ -40,6 +40,9 @@ pub enum Error {
 	/// Best chain selection strategy is missing.
 	#[display(fmt="Best chain selection strategy (SelectChain) is not provided.")]
 	SelectChainRequired,
+	/// Tasks executor is missing.
+	#[display(fmt="Tasks executor hasn't been provided.")]
+	TasksExecutorRequired,
 	/// Other error.
 	Other(String),
 }
