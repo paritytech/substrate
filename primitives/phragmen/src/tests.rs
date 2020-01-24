@@ -24,11 +24,7 @@ use crate::{
 	Support, StakedAssignment, Assignment, PhragmenResult,
 };
 use substrate_test_utils::assert_eq_uvec;
-use sp_runtime::{Perbill, Saturating, traits::Convert};
-use codec::{Encode, Decode};
-use sp_phragmen_compact::generate_compact_solution_type;
-
-generate_compact_solution_type!(TestCompact, 16);
+use sp_runtime::Perbill;
 
 #[test]
 fn float_phragmen_poc_works() {
@@ -450,144 +446,6 @@ fn minimum_to_elect_is_respected() {
 }
 
 #[test]
-fn compact_struct_is_codec() {
-	let compact = TestCompact {
-		votes1: vec![(2, 20), (4, 40)],
-		votes2: vec![
-			(1, (10, Perbill::from_percent(80)), 11),
-			(5, (50, Perbill::from_percent(85)), 51),
-		],
-		..Default::default()
-	};
-
-	let encoded = compact.encode();
-
-	assert_eq!(
-		compact,
-		Decode::decode(&mut &encoded[..]).unwrap(),
-	);
-}
-
-#[test]
-fn basic_from_and_into_compact_works_assignments() {
-	let assignments = vec![
-		Assignment {
-			who: 2u64,
-			distribution: vec![(20, Perbill::from_percent(100))]
-		},
-		Assignment {
-			who: 4u64,
-			distribution: vec![(40, Perbill::from_percent(100))],
-		},
-		Assignment {
-			who: 1u64,
-			distribution: vec![
-				(10, Perbill::from_percent(80)),
-				(11, Perbill::from_percent(20))
-			],
-		},
-		Assignment {
-			who: 5u64, distribution:
-			vec![
-				(50, Perbill::from_percent(85)),
-				(51, Perbill::from_percent(15)),
-			]
-		},
-		Assignment {
-			who: 3u64,
-			distribution: vec![
-				(30, Perbill::from_percent(50)),
-				(31, Perbill::from_percent(25)),
-				(32, Perbill::from_percent(25)),
-			],
-		},
-	];
-
-	let compacted: TestCompact<u64, Perbill> = assignments.clone().into();
-
-	assert_eq!(
-		compacted,
-		TestCompact {
-			votes1: vec![(2, 20), (4, 40)],
-			votes2: vec![
-				(1, (10, Perbill::from_percent(80)), 11),
-				(5, (50, Perbill::from_percent(85)), 51),
-			],
-			votes3: vec![
-				(3, [(30, Perbill::from_percent(50)), (31, Perbill::from_percent(25))], 32),
-			],
-			..Default::default()
-		}
-	);
-
-	assert_eq!(
-		<TestCompact<u64, Perbill> as Into<Vec<Assignment<u64>>>>::into(compacted),
-		assignments
-	);
-}
-
-#[test]
-fn basic_from_and_into_compact_works_staked_assignments() {
-	let assignments = vec![
-		StakedAssignment {
-			who: 2u64,
-			distribution: vec![(20, 100u128)]
-		},
-		StakedAssignment {
-			who: 4u64,
-			distribution: vec![(40, 100)],
-		},
-		StakedAssignment {
-			who: 1u64,
-			distribution: vec![
-				(10, 80),
-				(11, 20)
-			],
-		},
-		StakedAssignment {
-			who: 5u64, distribution:
-			vec![
-				(50, 85),
-				(51, 15),
-			]
-		},
-		StakedAssignment {
-			who: 3u64,
-			distribution: vec![
-				(30, 50),
-				(31, 25),
-				(32, 25),
-			],
-		},
-	];
-
-	let compacted = <TestCompact<u64, u128>>::from_staked(assignments.clone());
-
-	assert_eq!(
-		compacted,
-		TestCompact {
-			votes1: vec![(2, 20), (4, 40)],
-			votes2: vec![
-				(1, (10, 80), 11),
-				(5, (50, 85), 51),
-			],
-			votes3: vec![
-				(3, [(30, 50), (31, 25)], 32),
-			],
-			..Default::default()
-		}
-	);
-
-	let max_of_fn = |_: &AccountId| -> Balance { 100u128 };
-	let max_of: Box<dyn Fn(&AccountId) -> Balance> = Box::new(max_of_fn);
-
-	assert_eq!(
-		compacted.into_staked::<Balance, _, TestCurrencyToVote>(&max_of),
-		assignments
-	);
-}
-
-#[test]
 fn self_votes_should_be_kept() {
 	let candidates = vec![5, 10, 20, 30];
 	let voters = vec![
@@ -664,4 +522,155 @@ fn self_votes_should_be_kept() {
 		supports.get(&20u64).unwrap(),
 		&Support { total: 20u128, voters: vec![(20u64, 20u128)] },
 	);
+}
+
+mod compact {
+	use crate::generate_compact_solution_type;
+	// these need to come from the same dev-dependency `sp-phragmen`, not from the crate.
+	use sp_phragmen::{Assignment, StakedAssignment};
+
+	use super::{AccountId, Balance};
+	use sp_runtime::Perbill;
+	use codec::{Decode, Encode};
+	use crate::mock::{TestCurrencyToVote};
+
+	generate_compact_solution_type!(TestCompact, 16);
+
+	#[test]
+	fn compact_struct_is_codec() {
+		let compact = TestCompact {
+			votes1: vec![(2, 20), (4, 40)],
+			votes2: vec![
+				(1, (10, Perbill::from_percent(80)), 11),
+				(5, (50, Perbill::from_percent(85)), 51),
+			],
+			..Default::default()
+		};
+
+		let encoded = compact.encode();
+
+		assert_eq!(
+			compact,
+			Decode::decode(&mut &encoded[..]).unwrap(),
+		);
+	}
+
+	#[test]
+	fn basic_from_and_into_compact_works_assignments() {
+		let assignments = vec![
+			Assignment {
+				who: 2u64,
+				distribution: vec![(20, Perbill::from_percent(100))]
+			},
+			Assignment {
+				who: 4u64,
+				distribution: vec![(40, Perbill::from_percent(100))],
+			},
+			Assignment {
+				who: 1u64,
+				distribution: vec![
+					(10, Perbill::from_percent(80)),
+					(11, Perbill::from_percent(20))
+				],
+			},
+			Assignment {
+				who: 5u64, distribution:
+				vec![
+					(50, Perbill::from_percent(85)),
+					(51, Perbill::from_percent(15)),
+				]
+			},
+			Assignment {
+				who: 3u64,
+				distribution: vec![
+					(30, Perbill::from_percent(50)),
+					(31, Perbill::from_percent(25)),
+					(32, Perbill::from_percent(25)),
+				],
+			},
+		];
+
+		let compacted: TestCompact<u64, Perbill> = assignments.clone().into();
+
+		assert_eq!(
+			compacted,
+			TestCompact {
+				votes1: vec![(2, 20), (4, 40)],
+				votes2: vec![
+					(1, (10, Perbill::from_percent(80)), 11),
+					(5, (50, Perbill::from_percent(85)), 51),
+				],
+				votes3: vec![
+					(3, [(30, Perbill::from_percent(50)), (31, Perbill::from_percent(25))], 32),
+				],
+				..Default::default()
+			}
+		);
+
+		assert_eq!(
+			<TestCompact<u64, Perbill> as Into<Vec<Assignment<u64>>>>::into(compacted),
+			assignments
+		);
+	}
+
+	#[test]
+	fn basic_from_and_into_compact_works_staked_assignments() {
+		let assignments = vec![
+			StakedAssignment {
+				who: 2u64,
+				distribution: vec![(20, 100u128)]
+			},
+			StakedAssignment {
+				who: 4u64,
+				distribution: vec![(40, 100)],
+			},
+			StakedAssignment {
+				who: 1u64,
+				distribution: vec![
+					(10, 80),
+					(11, 20)
+				],
+			},
+			StakedAssignment {
+				who: 5u64, distribution:
+				vec![
+					(50, 85),
+					(51, 15),
+				]
+			},
+			StakedAssignment {
+				who: 3u64,
+				distribution: vec![
+					(30, 50),
+					(31, 25),
+					(32, 25),
+				],
+			},
+		];
+
+		let compacted = <TestCompact<u64, u128>>::from_staked(assignments.clone());
+
+		assert_eq!(
+			compacted,
+			TestCompact {
+				votes1: vec![(2, 20), (4, 40)],
+				votes2: vec![
+					(1, (10, 80), 11),
+					(5, (50, 85), 51),
+				],
+				votes3: vec![
+					(3, [(30, 50), (31, 25)], 32),
+				],
+				..Default::default()
+			}
+		);
+
+		let max_of_fn = |_: &AccountId| -> Balance { 100u128 };
+		let max_of: Box<dyn Fn(&AccountId) -> Balance> = Box::new(max_of_fn);
+
+		assert_eq!(
+			compacted.into_staked::<Balance, _, TestCurrencyToVote>(&max_of),
+			assignments
+		);
+	}
 }

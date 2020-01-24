@@ -15,6 +15,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
 sp-io ={ version = "2.0.0", path = "../../primitives/io" }
 rand = "0.7.3"
+sp-phragmen = { path = "." }
 
 [features]
 default = ["std"]

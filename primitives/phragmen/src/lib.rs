@@ -48,6 +48,9 @@ mod reduce;
 // re-export reduce stuff
 pub use reduce::reduce;
 
+// re-export the compact macro
+pub use sp_phragmen_compact::generate_compact_solution_type;
+
 /// A type in which performing operations on balances and stakes of candidates and voters are safe.
 ///
 /// This module's functions expect a `Convert` type to convert all balances to u64. Hence, u128 is

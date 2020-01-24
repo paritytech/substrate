@@ -22,46 +22,31 @@ use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, Span, Ident};
 use proc_macro_crate::crate_name;
 use quote::quote;
-use syn::parse::{Parse, ParseStream};
-// use codec::{Encode, Decode};
+use syn::{GenericArgument, Type, parse::{Parse, ParseStream, Result}};
 
+// prefix used for struct fields in compact.
 const PREFIX: &'static str = "votes";
-
-struct CompactSolutionDef {
-	vis: syn::Visibility,
-	ident: syn::Ident,
-	count: usize,
-}
-
-impl Parse for CompactSolutionDef {
-	fn parse(input: ParseStream) -> syn::Result<Self> {
-		let vis: syn::Visibility = input.parse()?;
-		let ident: syn::Ident = input.parse()?;
-		let _ = <syn::Token![,]>::parse(input)?;
-		let count_literal: syn::LitInt = input.parse()?;
-		let count = count_literal.base10_parse::<usize>()?;
-		Ok(Self { vis, ident, count } )
-	}
-}
-
-fn field_name_for(n: usize) -> Ident {
-	Ident::new(&format!("{}{}", PREFIX, n), Span::call_site())
-}
 
 /// Generates a struct to store the phragmen assignments in a compact way. The struct can only store
 /// distributions up to the given input count. The given count must be greater than 2.
 ///
+/// ```rust
+/// // generate a struct with account Identifier u32 and edge weight u128, with maximum supported
+/// // edge per voter of 32.
+/// generate_compact_solution_type(TestCompact<u32, u128>, 32)
+/// ```
+///
 /// The generated structure creates one key for each possible count of distributions from 1 up to
-/// the given length. A normal distribution is a tuple of `(candidate, weight)` where `candidate` is
-/// a generic `AccountId` and `weight` is an encodable `T`. Typically, the weight can refer to
-/// either the ratio of the voter's support or its absolute value. The following rules hold
-/// regarding the compact representation:
+/// the given length. A normal distribution is a tuple of `(candidate, weight)`. Typically, the
+/// weight can refer to either the ratio of the voter's support or its absolute value. The following
+/// rules hold regarding the compact representation:
 ///   - For single distribution, no weight is stored. The weight is known to be 100%.
 ///   - For all the rest, the weight if the last distribution is omitted. This value can be computed
 ///     from the rest.
 ///
 /// An example expansion of length 16 is as follows:
 ///
+/// ```rust
 /// struct TestCompact<AccountId, W> {
 /// 	votes1: Vec<(AccountId, AccountId)>,
 /// 	votes2: Vec<(AccountId, (AccountId, W), AccountId)>,
@@ -79,7 +64,8 @@ fn field_name_for(n: usize) -> Ident {
 /// 	votes14: Vec<(AccountId, [(AccountId, W); 13usize], AccountId)>,
 /// 	votes15: Vec<(AccountId, [(AccountId, W); 14usize], AccountId)>,
 /// 	votes16: Vec<(AccountId, [(AccountId, W); 15usize], AccountId)>,
-/// 	}
+/// }
+/// ```
 #[proc_macro]
 pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 	let CompactSolutionDef {
@@ -87,44 +73,19 @@ pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 		ident,
 		count,
 	} = syn::parse_macro_input!(item as CompactSolutionDef);
-	let account_type = quote!(AccountId);
-	let weight = quote!(W);
 
-	if count <= 2 {
-		panic!("cannot build compact solution struct with capacity less than 2.");
-	}
+	let account_type = GenericArgument::Type(Type::Verbatim(quote!(AccountId)));
+	let weight_type = GenericArgument::Type(Type::Verbatim(quote!(weight)));
 
-	let imports = imports();
+	let imports = imports().unwrap_or_else(|e| e.to_compile_error());
 
-	let singles = {
-		let name = field_name_for(1);
-		quote!(#name: Vec<(#account_type, #account_type)>,)
-	};
-	let doubles = {
-		let name = field_name_for(2);
-		quote!(#name: Vec<(#account_type, (#account_type, #weight), #account_type)>,)
-	};
-	let rest = (3..=count).map(|c| {
-		let field_name = field_name_for(c);
-		let array_len = c - 1;
-		quote!(
-			#field_name: Vec<(
-				#account_type,
-				[(#account_type, #weight); #array_len],
-				#account_type
-			)>,
-		)
-	}).collect::<TokenStream2>();
-
-	let compact_def = quote! (
-		#imports
-		#[derive(Default, PartialEq, Eq, Clone, _sp_runtime::RuntimeDebug, _codec::Encode, _codec::Decode)]
-		#vis struct #ident<#account_type, #weight> {
-			#singles
-			#doubles
-			#rest
-		}
-	);
+	let compact_def = struct_def(
+		vis,
+		ident.clone(),
+		count,
+		account_type.clone(),
+		weight_type,
+	).unwrap_or_else(|e| e.to_compile_error());
 
 	let from_into_impl_assignment = convert_impl_for_assignment(
 		ident.clone(),
@@ -138,39 +99,97 @@ pub fn generate_compact_solution_type(item: TokenStream) -> TokenStream {
 		count,
 	);
 
-
 	quote!(
+		#imports
 		#compact_def
 		#from_into_impl_assignment
 		#from_into_impl_staked_assignment
 	).into()
 }
 
-fn imports() -> TokenStream2 {
+fn struct_def(
+	vis: syn::Visibility,
+	ident: syn::Ident,
+	count: usize,
+	account_type: GenericArgument,
+	weight_type: GenericArgument,
+) -> Result<TokenStream2> {
+	if count <= 2 {
+		Err(syn::Error::new(
+			Span::call_site(),
+			"cannot build compact solution struct with capacity less than 2."
+		))?
+	}
+
+	let singles = {
+		let name = field_name_for(1);
+		quote!(#name: Vec<(#account_type, #account_type)>,)
+	};
+
+	let doubles = {
+		let name = field_name_for(2);
+		quote!(#name: Vec<(#account_type, (#account_type, #weight_type), #account_type)>,)
+	};
+
+	let rest = (3..=count).map(|c| {
+		let field_name = field_name_for(c);
+		let array_len = c - 1;
+		quote!(
+			#field_name: Vec<(
+				#account_type,
+				[(#account_type, #weight_type); #array_len],
+				#account_type
+			)>,
+		)
+	}).collect::<TokenStream2>();
+
+	let compact_def = quote! (
+		/// A struct to encode a `Vec<StakedAssignment>` or `Vec<Assignment>` of the phragmen module
+		/// in a compact way.
+		#[derive(Default, PartialEq, Eq, Clone, _sp_runtime::RuntimeDebug, _codec::Encode, _codec::Decode)]
+		#vis struct #ident<#account_type, #weight_type> {
+			#singles
+			#doubles
+			#rest
+		}
+	);
+
+	Ok(compact_def)
+}
+
+fn imports() -> Result<TokenStream2> {
 	let runtime_imports = match crate_name("sp-runtime") {
 		Ok(sp_runtime) => {
 			let ident = syn::Ident::new(&sp_runtime, Span::call_site());
 			quote!( extern crate #ident as _sp_runtime; )
 		},
-		Err(e) => syn::Error::new(Span::call_site(), &e).to_compile_error(),
+		Err(e) => return Err(syn::Error::new(Span::call_site(), &e)),
 	};
 	let codec_imports = match crate_name("parity-scale-codec") {
 		Ok(codec) => {
 			let ident = syn::Ident::new(&codec, Span::call_site());
 			quote!( extern crate #ident as _codec; )
 		},
-		Err(e) => syn::Error::new(Span::call_site(), &e).to_compile_error(),
+		Err(e) => return Err(syn::Error::new(Span::call_site(), &e)),
+	};
+	let sp_phragmen_imports = match crate_name("sp-phragmen") {
+		Ok(sp_phragmen) => {
+			let ident = syn::Ident::new(&sp_phragmen, Span::call_site());
+			quote!( extern crate #ident as _phragmen; )
+		}
+		Err(e) => return Err(syn::Error::new(Span::call_site(), &e)),
 	};
 
-	quote!(
+	Ok(quote!(
 		#runtime_imports
 		#codec_imports
-	)
+		#sp_phragmen_imports
+	))
 }
 
 fn convert_impl_for_assignment(
 	ident: syn::Ident,
-	account_type: TokenStream2,
+	account_type: GenericArgument,
 	count: usize
 ) -> TokenStream2 {
 	let from_impl_single = {
@@ -194,7 +213,7 @@ fn convert_impl_for_assignment(
 	}).collect::<TokenStream2>();
 
 	let from_impl = quote!(
-		impl<#account_type: codec::Codec + Default + Clone>
+		impl<#account_type: _codec::Codec + Default + Clone>
 		From<Vec<Assignment<#account_type>>>
 		for #ident<#account_type, Perbill>
 		{
@@ -232,7 +251,7 @@ fn convert_impl_for_assignment(
 		let name = field_name_for(2);
 		quote!(
 			for (who, (t1, p1), t2) in self.#name {
-				let p2 = Perbill::one().saturating_sub(p1);
+				let p2 = _sp_runtime::traits::Saturating::saturating_sub(Perbill::one(), p1);
 				assignments.push( Assignment {
 					who,
 					distribution: vec![
@@ -251,11 +270,11 @@ fn convert_impl_for_assignment(
 				let mut inners_parsed = inners
 					.into_iter()
 					.map(|(ref c, p)| {
-						sum = sum.saturating_add(*p);
+						sum = _sp_runtime::traits::Saturating::saturating_add(sum, *p);
 						(c.clone(), *p)
 					}).collect::<Vec<(#account_type, Perbill)>>();
 
-				let p_last = Perbill::one().saturating_sub(sum);
+				let p_last = _sp_runtime::traits::Saturating::saturating_sub(Perbill::one(), sum);
 				inners_parsed.push((t_last, p_last));
 
 				assignments.push(Assignment {
@@ -267,7 +286,7 @@ fn convert_impl_for_assignment(
 	}).collect::<TokenStream2>();
 
 	let into_impl = quote!(
-		impl<#account_type: codec::Codec + Default + Clone>
+		impl<#account_type: _codec::Codec + Default + Clone>
 		Into<Vec<Assignment<#account_type>>>
 		for #ident<#account_type, Perbill>
 		{
@@ -290,7 +309,7 @@ fn convert_impl_for_assignment(
 
 fn convert_impl_for_staked_assignment(
 	ident: syn::Ident,
-	account_type: TokenStream2,
+	account_type: GenericArgument,
 	count: usize
 ) -> TokenStream2 {
 	let from_impl_single = {
@@ -324,7 +343,7 @@ fn convert_impl_for_staked_assignment(
 		quote!(
 			for (who, target) in self.#name {
 				let all_stake = C::convert(max_of(&who)) as u128;
-				assignments.push(StakedAssignment {
+				assignments.push(_phragmen::StakedAssignment {
 					who,
 					distribution: vec![(target, all_stake)],
 				})
@@ -337,7 +356,7 @@ fn convert_impl_for_staked_assignment(
 			for (who, (t1, w1), t2) in self.#name {
 				let all_stake = C::convert(max_of(&who)) as u128;
 				let w2 = all_stake.saturating_sub(w1);
-				assignments.push( StakedAssignment {
+				assignments.push( _phragmen::StakedAssignment {
 					who,
 					distribution: vec![
 						(t1, w1),
@@ -363,7 +382,7 @@ fn convert_impl_for_staked_assignment(
 				let w_last = all_stake.saturating_sub(sum);
 				inners_parsed.push((t_last, w_last));
 
-				assignments.push(StakedAssignment {
+				assignments.push(_phragmen::StakedAssignment {
 					who,
 					distribution: inners_parsed,
 				});
@@ -372,16 +391,19 @@ fn convert_impl_for_staked_assignment(
 	}).collect::<TokenStream2>();
 
 	let final_impl = quote!(
-		impl<#account_type: codec::Codec + Default + Clone>
+		impl<#account_type: _codec::Codec + Default + Clone>
 		#ident<#account_type, u128>
 		{
+			/// Convert self into `StakedAssignment`. The given function should return the total
+			/// weight of a voter. It is used to subtract the sum of all the encoded weights to
+			/// infer the last one.
 			fn into_staked<Balance, FM, C>(self, max_of: FM)
-			-> Vec<StakedAssignment<#account_type>>
+				-> Vec<_phragmen::StakedAssignment<#account_type>>
 			where
 				for<'r> FM: Fn(&'r #account_type) -> Balance,
-				C: Convert<Balance, u64>
+				C: _sp_runtime::traits::Convert<Balance, u64>
 			{
-				let mut assignments: Vec<StakedAssignment<#account_type>> = Default::default();
+				let mut assignments: Vec<_phragmen::StakedAssignment<#account_type>> = Default::default();
 				#into_impl_single
 				#into_impl_double
 				#into_impl_rest
@@ -389,9 +411,10 @@ fn convert_impl_for_staked_assignment(
 				assignments
 			}
 
-			fn from_staked(assignments: Vec<StakedAssignment<#account_type>>) -> Self {
+			/// Generate self from a vector of `StakedAssignment`.
+			fn from_staked(assignments: Vec<_phragmen::StakedAssignment<#account_type>>) -> Self {
 				let mut compact: #ident<#account_type, u128> = Default::default();
-				assignments.into_iter().for_each(|StakedAssignment { who, distribution } | {
+				assignments.into_iter().for_each(|_phragmen::StakedAssignment { who, distribution } | {
 					match distribution.len() {
 						#from_impl_single
 						#from_impl_double
@@ -409,4 +432,25 @@ fn convert_impl_for_staked_assignment(
 	quote!(
 		#final_impl
 	)
+}
+
+struct CompactSolutionDef {
+	vis: syn::Visibility,
+	ident: syn::Ident,
+	count: usize,
+}
+
+impl Parse for CompactSolutionDef {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		let vis: syn::Visibility = input.parse()?;
+		let ident: syn::Ident = input.parse()?;
+		let _ = <syn::Token![,]>::parse(input)?;
+		let count_literal: syn::LitInt = input.parse()?;
+		let count = count_literal.base10_parse::<usize>()?;
+		Ok(Self { vis, ident, count } )
+	}
+}
+
+fn field_name_for(n: usize) -> Ident {
+	Ident::new(&format!("{}{}", PREFIX, n), Span::call_site())
 }
