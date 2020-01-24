@@ -1340,6 +1340,10 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 	) -> result::Result<Self::Balance, DispatchError> {
 		if value.is_zero() { return Ok (Zero::zero()) }
 
+		if slashed == beneficiary {
+			return Ok(Self::unreserve(slashed, value));
+		}
+
 		let old_to_account = Self::account(beneficiary);
 		let mut to_account = old_to_account.clone();
 		ensure!(!to_account.total().is_zero(), Error::<T, I>::DeadAccount);

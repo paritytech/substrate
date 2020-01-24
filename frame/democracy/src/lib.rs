@@ -1417,8 +1417,8 @@ type OnReapAccount = System;
 			next_block();
 			assert_ok!(Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)));
 
-			assert_eq!(Balances::reserved_balance(&6), 0);
 			assert_eq!(Balances::free_balance(&6), 60);
+			assert_eq!(Balances::reserved_balance(&6), 0);
 		});
 	}
 
