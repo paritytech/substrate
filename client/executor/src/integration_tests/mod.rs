@@ -31,48 +31,6 @@ use sp_trie::{TrieConfiguration, trie_types::Layout};
 use crate::WasmExecutionMethod;
 
 pub type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
-
-#[cfg(feature = "wasmtime")]
-mod wasmtime_missing_externals {
-	use sp_wasm_interface::{Function, FunctionContext, HostFunctions, Result, Signature, Value};
-
-	pub struct WasmtimeHostFunctions;
-
-	impl HostFunctions for WasmtimeHostFunctions {
-		fn host_functions() -> Vec<&'static dyn Function> {
-			vec![MISSING_EXTERNAL_FUNCTION, YET_ANOTHER_MISSING_EXTERNAL_FUNCTION]
-		}
-	}
-
-	struct MissingExternalFunction(&'static str);
-
-	impl Function for MissingExternalFunction {
-		fn name(&self) -> &str { self.0 }
-
-		fn signature(&self) -> Signature {
-			Signature::new(vec![], None)
-		}
-
-		fn execute(
-			&self,
-			_context: &mut dyn FunctionContext,
-			_args: &mut dyn Iterator<Item = Value>,
-		) -> Result<Option<Value>> {
-			panic!("should not be called");
-		}
-	}
-
-	static MISSING_EXTERNAL_FUNCTION: &'static MissingExternalFunction =
-		&MissingExternalFunction("missing_external");
-	static YET_ANOTHER_MISSING_EXTERNAL_FUNCTION: &'static MissingExternalFunction =
-		&MissingExternalFunction("yet_another_missing_external");
-}
-
-#[cfg(feature = "wasmtime")]
-type HostFunctions =
-	(sp_io::SubstrateHostFunctions);
-
-#[cfg(not(feature = "wasmtime"))]
 type HostFunctions = sp_io::SubstrateHostFunctions;
 
 fn call_in_wasm<E: Externalities>(

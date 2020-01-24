@@ -140,10 +140,6 @@ impl MissingFunctionStubs {
 			sig,
 		});
 	}
-
-	fn stubs(&self, module: &str) -> &[MissingFunction] {
-		self.stubs.get(module).map(|stubs| &*stubs as &[_]).unwrap_or(&[])
-	}
 }
 
 fn scan_missing_functions(
@@ -153,7 +149,6 @@ fn scan_missing_functions(
 	let isa = target_isa()?;
 	let call_conv = isa.default_call_conv();
 
-	// TODO:
 	let module = parity_wasm::elements::Module::from_bytes(code)
 		.map_err(|e| WasmError::Other(format!("cannot deserialize error: {}", e)))?;
 
@@ -184,12 +179,10 @@ fn scan_missing_functions(
 		};
 
 		if import_entry.module() == "env" {
-			if host_functions
+			if let Some(hf) = host_functions
 				.iter()
 				.find(|hf| hf.name() == import_entry.field())
-				.is_some()
 			{
-				// TODO: Check the signature.
 				continue;
 			}
 		}
@@ -246,7 +239,7 @@ fn create_compiled_unit(
 	let compiler = new_compiler(compilation_strategy)?;
 
 	let mut missing_functions_stubs = if allow_missing_func_imports {
-		dbg!(scan_missing_functions(code, host_functions)?)
+		scan_missing_functions(code, host_functions)?
 	} else {
 		// If there are in fact missing functions they will be detected at the instantiation time
 		// and the module will be rejected.
@@ -256,13 +249,13 @@ fn create_compiled_unit(
 	let env_missing_functions = missing_functions_stubs.stubs.remove("env").unwrap_or_else(|| Vec::new());
 	context.name_instance(
 		"env".to_owned(),
-		instantiate_env_module(global_exports, compiler, host_functions, &env_missing_functions)?
+		instantiate_env_module(global_exports, compiler, host_functions, env_missing_functions)?
 	);
 
 	for (module, missing_functions_stubs) in missing_functions_stubs.stubs {
 		let compiler = new_compiler(compilation_strategy)?;
 		let global_exports = context.get_global_exports();
-		let instance = instantiate_env_module(global_exports, compiler, &[], &env_missing_functions)?;
+		let instance = instantiate_env_module(global_exports, compiler, &[], missing_functions_stubs)?;
 		context.name_instance(module, instance);
 	}
 
@@ -332,7 +325,7 @@ fn instantiate_env_module(
 	global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
 	compiler: Compiler,
 	host_functions: &[&'static dyn Function],
-	missing_functions_stubs: &[MissingFunction],
+	missing_functions_stubs: Vec<MissingFunction>,
 ) -> std::result::Result<InstanceHandle, WasmError>
 {
 	let isa = target_isa()?;
@@ -367,14 +360,14 @@ fn instantiate_env_module(
 
 	for MissingFunction { name, sig } in missing_functions_stubs {
 		let sig = translate_signature(
-			sig.clone(), // TODO: Unnecessary clone
+			sig,
 			pointer_type
 		);
 		let sig_id = module.signatures.push(sig.clone());
 		let func_id = module.functions.push(sig_id);
 		module
 			.exports
-			.insert(name.to_string(), wasmtime_environ::Export::Function(func_id));
+			.insert(name, wasmtime_environ::Export::Function(func_id));
 		let trampoline = make_trampoline(
 			isa.as_ref(),
 			&mut code_memory,
