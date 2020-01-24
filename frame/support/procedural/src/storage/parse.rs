@@ -50,6 +50,7 @@ impl<P: syn::export::ToTokens> syn::export::ToTokens for Opt<P> {
 		}
 	}
 }
+
 macro_rules! impl_parse_for_opt {
 	($struct:ident => $token:path) => {
 		impl syn::parse::Parse for Opt<$struct> {
@@ -103,6 +104,7 @@ struct AddExtraGenesis {
 	pub extragenesis_keyword: keyword::add_extra_genesis,
 	pub content: ext::Braces<AddExtraGenesisContent>,
 }
+
 impl_parse_for_opt!(AddExtraGenesis => keyword::add_extra_genesis);
 
 #[derive(Parse, ToTokens, Debug)]
@@ -115,6 +117,7 @@ enum AddExtraGenesisLineEnum {
 	AddExtraGenesisLine(AddExtraGenesisLine),
 	AddExtraGenesisBuild(DeclStorageBuild),
 }
+
 impl syn::parse::Parse for AddExtraGenesisLineEnum {
 	fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
 		let input_fork = input.fork();
@@ -169,6 +172,7 @@ struct DeclStorageGetter {
 	pub getter_keyword: keyword::get,
 	pub getfn: ext::Parens<DeclStorageGetterBody>,
 }
+
 impl_parse_for_opt!(DeclStorageGetter => keyword::get);
 
 #[derive(Parse, ToTokens, Debug)]
@@ -176,6 +180,7 @@ struct DeclStorageConfig {
 	pub config_keyword: keyword::config,
 	pub expr: ext::Parens<Option<syn::Ident>>,
 }
+
 impl_parse_for_opt!(DeclStorageConfig => keyword::config);
 
 #[derive(Parse, ToTokens, Debug)]
@@ -183,6 +188,7 @@ struct DeclStorageBuild {
 	pub build_keyword: keyword::build,
 	pub expr: ext::Parens<syn::Expr>,
 }
+
 impl_parse_for_opt!(DeclStorageBuild => keyword::build);
 
 #[derive(ToTokens, Debug)]
@@ -192,6 +198,7 @@ enum DeclStorageType {
 	DoubleMap(DeclStorageDoubleMap),
 	Simple(syn::Type),
 }
+
 impl syn::parse::Parse for DeclStorageType {
 	fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
 		if input.peek(keyword::map) {
@@ -245,6 +252,7 @@ enum Hasher {
 	Twox128(keyword::twox_128),
 	Twox64Concat(keyword::twox_64_concat),
 }
+
 impl syn::parse::Parse for Hasher {
 	fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
 		let lookahead = input.lookahead1();
@@ -271,6 +279,7 @@ struct DeclStorageDefault {
 	pub equal_token: Token![=],
 	pub expr: syn::Expr,
 }
+
 impl syn::parse::Parse for Opt<DeclStorageDefault> {
 	fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
 		if input.peek(Token![=]) {
@@ -286,6 +295,7 @@ struct SetHasher {
 	pub hasher_keyword: keyword::hasher,
 	pub inner: ext::Parens<Hasher>,
 }
+
 impl_parse_for_opt!(SetHasher => keyword::hasher);
 
 impl From<SetHasher> for super::HasherKind {
