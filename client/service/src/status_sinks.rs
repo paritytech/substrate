@@ -122,28 +122,17 @@ mod tests {
 		let (tx, rx) = mpsc::unbounded();
 		status_sinks.push(Duration::from_millis(100), tx);
 
-		let mut runtime = tokio::runtime::Runtime::new().unwrap();
-
 		let mut val_order = 5;
-		runtime.spawn(futures::future::poll_fn(move |cx| {
-			status_sinks.poll(cx, || { val_order += 1; val_order });
-			Poll::<()>::Pending
-		}));
 
-		let done = rx
-			.into_future()
-			.then(|(item, rest)| {
-				assert_eq!(item, Some(6));
-				rest.into_future()
+		futures::executor::block_on(futures::future::select(
+			futures::future::poll_fn(move |cx| {
+				status_sinks.poll(cx, || { val_order += 1; val_order });
+				Poll::<()>::Pending
+			}),
+			Box::pin(async {
+				let items: Vec<i32> = rx.take(3).collect().await;
+				assert_eq!(items, [6, 7, 8]);
 			})
-			.then(|(item, rest)| {
-				assert_eq!(item, Some(7));
-				rest.into_future()
-			})
-			.map(|(item, _)| {
-				assert_eq!(item, Some(8));
-			});
-
-		runtime.block_on(done);
+		));
 	}
 }

@@ -147,7 +147,6 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 	set_state.into()
 }
 
-// needs to run in a tokio runtime.
 fn make_test_network(executor: &impl futures::task::Spawn) -> (
 	impl Future<Output = Tester>,
 	TestNetwork,
