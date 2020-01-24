@@ -70,7 +70,7 @@ mod wasmtime_missing_externals {
 
 #[cfg(feature = "wasmtime")]
 type HostFunctions =
-	(wasmtime_missing_externals::WasmtimeHostFunctions, sp_io::SubstrateHostFunctions);
+	(sp_io::SubstrateHostFunctions);
 
 #[cfg(not(feature = "wasmtime"))]
 type HostFunctions = sp_io::SubstrateHostFunctions;
@@ -114,8 +114,14 @@ fn returning_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
-#[should_panic(expected = "Function `missing_external` is only a stub. Calling a stub is not allowed.")]
-#[cfg(not(feature = "wasmtime"))]
+#[cfg_attr(
+	feature = "wasmtime",
+	should_panic(expected = "call to undefined external function with index 67")
+)]
+#[cfg_attr(
+	not(feature = "wasmtime"),
+	should_panic(expected = "Function `missing_external` is only a stub. Calling a stub is not allowed.")
+)]
 fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -133,8 +139,14 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
-#[should_panic(expected = "Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.")]
-#[cfg(not(feature = "wasmtime"))]
+#[cfg_attr(
+	feature = "wasmtime",
+	should_panic(expected = "call to undefined external function with index 68")
+)]
+#[cfg_attr(
+	not(feature = "wasmtime"),
+	should_panic(expected = "Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.")
+)]
 fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
