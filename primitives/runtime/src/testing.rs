@@ -115,6 +115,10 @@ impl sp_application_crypto::RuntimeAppPublic for UintAuthorityId {
 
 		u64::from_le_bytes(msg_signature) == *signature
 	}
+
+	fn to_raw_vec(&self) -> Vec<u8> {
+		AsRef::<[u8]>::as_ref(self).to_vec()
+	}
 }
 
 impl OpaqueKeys for UintAuthorityId {

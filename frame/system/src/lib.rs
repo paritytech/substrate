@@ -281,6 +281,7 @@ decl_module! {
 			}
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
+			Self::deposit_event(Event::CodeUpdated);
 		}
 
 		/// Set the new runtime code without doing any checks of the given `code`.
@@ -288,6 +289,7 @@ decl_module! {
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
+			Self::deposit_event(Event::CodeUpdated);
 		}
 
 		/// Set the new changes trie configuration.
@@ -364,6 +366,8 @@ decl_event!(
 		ExtrinsicSuccess(DispatchInfo),
 		/// An extrinsic failed.
 		ExtrinsicFailed(DispatchError, DispatchInfo),
+		/// `:code` was updated.
+		CodeUpdated,
 	}
 );
 
@@ -1282,6 +1286,7 @@ mod tests {
 			match e {
 				Event::ExtrinsicSuccess(..) => 100,
 				Event::ExtrinsicFailed(..) => 101,
+				Event::CodeUpdated => 102,
 			}
 		}
 	}
@@ -1688,6 +1693,11 @@ mod tests {
 				RawOrigin::Root.into(),
 				substrate_test_runtime_client::runtime::WASM_BINARY.to_vec(),
 			).unwrap();
+
+			assert_eq!(
+				System::events(),
+				vec![EventRecord { phase: Phase::ApplyExtrinsic(0), event: 102u16, topics: vec![] }],
+			);
 		});
 	}
 }

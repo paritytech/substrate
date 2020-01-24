@@ -16,17 +16,13 @@
 
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
 use log::{debug, warn, info};
 use parity_scale_codec::{Decode, Encode};
 use futures::prelude::*;
-use futures03::{
-	compat::{Compat, CompatSink},
-	future::{FutureExt as _, TryFutureExt as _},
-	stream::StreamExt as _,
-};
 use futures_timer::Delay;
 use parking_lot::RwLock;
 use sp_blockchain::{HeaderBackend, Error as ClientError};
@@ -568,19 +564,18 @@ where
 	NumberFor<Block>: BlockNumberOps,
 	Client<B, E, Block, RA>: AuxStore,
 {
-	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
+	type Timer = Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>>;
 	type Id = AuthorityId;
 	type Signature = AuthoritySignature;
 
 	// regular round message streams
-	type In = Box<dyn Stream<
-		Item = ::finality_grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
+	type In = Pin<Box<dyn Stream<
+		Item = Result<::finality_grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>, Self::Error>
+	> + Send>>;
+	type Out = Pin<Box<dyn Sink<
+		::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
 		Error = Self::Error,
-	> + Send>;
-	type Out = Box<dyn Sink<
-		SinkItem = ::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
-		SinkError = Self::Error,
-	> + Send>;
+	> + Send>>;
 
 	type Error = CommandOrError<Block::Hash, NumberFor<Block>>;
 
@@ -612,12 +607,9 @@ where
 			has_voted,
 		);
 
-		let incoming = Compat::new(incoming.map(|item| Ok::<_, Error>(item)));
-		let outgoing = CompatSink::new(outgoing);
-
 		// schedule incoming messages from the network to be held until
 		// corresponding blocks are imported.
-		let incoming = Box::new(UntilVoteTargetImported::new(
+		let incoming = Box::pin(UntilVoteTargetImported::new(
 			self.client.import_notification_stream(),
 			self.network.clone(),
 			self.client.clone(),
@@ -626,12 +618,12 @@ where
 		).map_err(Into::into));
 
 		// schedule network message cleanup when sink drops.
-		let outgoing = Box::new(outgoing.sink_map_err(Into::into));
+		let outgoing = Box::pin(outgoing.sink_err_into());
 
 		voter::RoundData {
 			voter_id: local_key.map(|pair| pair.public()),
-			prevote_timer: Box::new(prevote_timer.map(Ok).compat()),
-			precommit_timer: Box::new(precommit_timer.map(Ok).compat()),
+			prevote_timer: Box::pin(prevote_timer.map(Ok)),
+			precommit_timer: Box::pin(precommit_timer.map(Ok)),
 			incoming,
 			outgoing,
 		}
@@ -905,7 +897,7 @@ where
 
 		//random between 0-1 seconds.
 		let delay: u64 = thread_rng().gen_range(0, 1000);
-		Box::new(Delay::new(Duration::from_millis(delay)).map(Ok).compat())
+		Box::pin(Delay::new(Duration::from_millis(delay)).map(Ok))
 	}
 
 	fn prevote_equivocation(
