@@ -245,8 +245,9 @@ decl_module! {
 
 		/// Make some on-chain remark.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn remark(origin, _remark: Vec<u8>) {
+		fn remark(origin, remark: Vec<u8>) {
 			ensure_signed(origin)?;
+			let r = remark;
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
@@ -317,21 +318,21 @@ decl_module! {
 			}
 		}
 
-		/// Kill some items from storage.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
-		fn kill_storage(origin, keys: Vec<Key>) {
-			ensure_root(origin)?;
-			for key in &keys {
-				storage::unhashed::kill(&key);
-			}
-		}
+		// /// Kill some items from storage.
+		// #[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		// fn kill_storage(origin, keys: Vec<Key>) {
+		// 	ensure_root(origin)?;
+		// 	for key in &keys {
+		// 		storage::unhashed::kill(&key);
+		// 	}
+		// }
 
-		/// Kill all storage items with a key that starts with the given prefix.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
-		fn kill_prefix(origin, prefix: Key) {
-			ensure_root(origin)?;
-			storage::unhashed::kill_prefix(&prefix);
-		}
+		// /// Kill all storage items with a key that starts with the given prefix.
+		// #[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		// fn kill_prefix(origin, prefix: Key) {
+		// 	ensure_root(origin)?;
+		// 	storage::unhashed::kill_prefix(&prefix);
+		// }
 	}
 }
 
