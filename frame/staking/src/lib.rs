@@ -981,11 +981,7 @@ decl_module! {
 		}
 
 		fn offchain_worker(now: T::BlockNumber) {
-			// consult and make sure this is okay.
-			// debug::RuntimeLogger::init();
-			// TODO: make sure that we don't need that is_validator here.
 			if Self::era_election_status() == ElectionStatus::<T::BlockNumber>::Open(now) {
-
 				// TODO: well this is outdated, neh? need to get the correct one from session.
 				let current_elected = Self::current_elected();
 
@@ -1002,10 +998,8 @@ decl_module! {
 							.into_iter()
 							.map(|a| a.into_staked::<_, _, T::CurrencyToVote>(Self::slashable_balance_of))
 							.collect();
-
 						// reduce the assignments. This will remove some additional edges.
 						sp_phragmen::reduce(&mut staked);
-
 						// compact encode the assignment.
 						let compact = <CompactAssignments<T::AccountId, ExtendedBalance>>::from_staked(staked);
 
@@ -1020,25 +1014,23 @@ decl_module! {
 						{
 							// TODO: this call is really not needed, we can do it manually instead
 							// of `can_sign_with`. TODO: we could use some error handling here.
-							let maybe_signing_key = T::SubmitTransaction::find_local_keys(Some(current_elected));
-							if maybe_signing_key.len() > 0 {
-								let signing_key = maybe_signing_key[0].1;
-								let signature_payload = (winners.clone(), compact.clone()).encode();
-								let maybe_signature = <SignerOf<T, <T as Trait>::Call, T::SubmitTransaction>>::sign(signing_key, &signature_payload);
-								if let Some(signature) = maybe_signature {
+							let local_keys = T::SubmitTransaction::find_all_local_keys();
+							// loop for at least one account in the validators to sign with.
+							local_keys
+								.into_iter()
+								.enumerate()
+								.find(|(_, (acc, _))| current_elected.contains(&acc))
+								.map(|(index, (_, pubkey))| {
+									let signature_payload = (winners.clone(), compact.clone()).encode();
+									let signature = <SignerOf<T, <T as Trait>::Call, T::SubmitTransaction>>::sign(pubkey, &signature_payload).unwrap();
 									let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
 										winners,
 										compact,
+										index as u32,
 										signature,
 									).into();
 									let _result = T::SubmitTransaction::submit_unsigned(call);
-								}
-							} else {
-								debug::native::warn!(
-									target: "staking",
-									"[unsigned] Have no key to sign this with",
-								);
-							}
+								});
 						}
 					} else {
 						debug::native::warn!(
@@ -1085,8 +1077,8 @@ decl_module! {
 		/// A solutions score is consisted of 3 parameters:
 		/// 1. `min { support.total }` for each support of a winner. This value should be maximized.
 		/// 2. `sum { support.total }` for each support of a winner. This value should be minimized.
-		/// 3. `sum { support.total^2 }` for each support of a winner. This value should be minimized
-		///    (to ensure less variance)
+		/// 3. `sum { support.total^2 }` for each support of a winner. This value should be
+		///    minimized (to ensure less variance)
 		///
 		/// # <weight>
 		/// major steps:
@@ -1108,157 +1100,7 @@ decl_module! {
 			compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
 		) {
 			let _who = ensure_signed(origin)?;
-
-			// discard early solutions
-			match Self::era_election_status() {
-				ElectionStatus::None => Err(Error::<T>::PhragmenEarlySubmission)?,
-				ElectionStatus::Open(_) => { /* Open and no solutions received. Allowed. */ },
-			}
-
-			// convert into staked.
-			let staked_assignments = compact_assignments.into_staked::<
-				_,
-				_,
-				T::CurrencyToVote,
-			>(Self::slashable_balance_of);
-
-			// build the support map thereof in order to evaluate.
-			// OPTIMIZATION: we could merge this with the `staked_assignments.iter()` below and
-			// iterate only once.
-			let (supports, num_error) = sp_phragmen::build_support_map::<BalanceOf<T>, T::AccountId>(
-				&winners,
-				&staked_assignments,
-			);
-
-			ensure!(num_error == 0, Error::<T>::PhragmenBogusEdge);
-
-			// score the result. Go further only if it is better than what we already have.
-			let submitted_score = sp_phragmen::evaluate_support(&supports);
-			if let Some(ElectionResult::<T::AccountId, BalanceOf<T>> {
-				score,
-				..
-			}) = Self::queued_elected() {
-				// OPTIMIZATION: we can read first the score and then the rest to do less decoding.
-				// if the local score is better in any of the three parameters.
-				ensure!(
-					Self::is_score_better(score, submitted_score),
-					Error::<T>::PhragmenWeakSubmission,
-				)
-			}
-
-			// Either the result is better than the one on chain, or we don't have an any on chain.
-			// do the sanity check. Each claimed edge must exist. Also, each claimed winner must
-			// have a support associated.
-
-			// check all winners being actual validators.
-			for w in winners.iter() {
-				ensure!(
-					<Validators<T>>::exists(&w),
-					Error::<T>::PhragmenBogusWinner,
-				)
-			}
-
-			// check all nominators being bonded, and actually including the claimed vote, and
-			// summing up to their ledger stake.
-			for StakedAssignment { who, distribution } in staked_assignments.iter() {
-				let maybe_bonded = Self::bonded(&who);
-				let is_validator = <Validators<T>>::exists(&who);
-				let maybe_nomination = Self::nominators(&who);
-
-				// it must be bonded.
-				ensure!(
-					maybe_bonded.is_some(),
-					Error::<T>::PhragmenBogusNominator
-				);
-
-				// it must be either of
-				ensure!(
-					maybe_nomination.is_some() ^ is_validator,
-					Error::<T>::PhragmenBogusNominator
-				);
-
-				let ctrl = maybe_bonded.expect("value is checked to be 'Some'; qed");
-				let ledger = Self::ledger(ctrl).ok_or(Error::<T>::NotController)?;
-				let active_extended_stake =
-					<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(ledger.active) as u128;
-
-				if !is_validator {
-					// a normal vote
-					let nomination = maybe_nomination.expect(
-						"exactly one of maybe_validator and maybe_nomination is true. \
-						is_validator is false; maybe_nomination is some; qed"
-					);
-					let mut total_stake: ExtendedBalance = Zero::zero();
-					ensure!(
-						distribution.into_iter().all(|(v, w)| {
-							total_stake += w;
-							nomination.targets.iter().find(|t| *t == v).is_some()
-						}),
-						Error::<T>::PhragmenBogusNomination,
-					);
-					ensure!(
-						total_stake == active_extended_stake,
-						Error::<T>::PhragmenBogusNominatorStake
-					);
-				} else {
-					// a self vote
-					ensure!(distribution.len() == 1, Error::<T>::PhragmenBogusSelfVote);
-					ensure!(distribution[0].0 == *who, Error::<T>::PhragmenBogusSelfVote);
-					// defensive only. A compact assignment of length one does NOT encode the stake
-					// and it is actually read from chain. Hence, this must always be correct.
-					ensure!(
-						distribution[0].1 == active_extended_stake,
-						Error::<T>::PhragmenBogusSelfVote,
-					);
-				}
-			}
-			// Note that we don't need to check again ^^ if a particular target in a nomination was
-			// actually a candidate. we don't explicitly check this but instead do it indirectly.
-			// build_support_map tells if any target was not in the winners. Also, we check that all
-			// the winners were actually candidates. Hence, all of the claimed votes are actually
-			// voting for valid candidates. All we have to check is if they actually come from the
-			// claimed nominator or not.
-
-			// Endlich alles Ok. Exposures and store the result.
-			let to_balance = |e: ExtendedBalance|
-				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
-			let mut slot_stake: BalanceOf<T> = Bounded::max_value();
-
-			let exposures = supports.into_iter().map(|(validator, support)| {
-				let mut others = Vec::new();
-				let mut own: BalanceOf<T> = Zero::zero();
-				let mut total: BalanceOf<T> = Zero::zero();
-				support.voters
-					.into_iter()
-					.map(|(target, weight)| (target, to_balance(weight)))
-					.for_each(|(nominator, stake)| {
-						if nominator == validator {
-							own = own.saturating_add(stake);
-						} else {
-							others.push(IndividualExposure { who: nominator, value: stake });
-						}
-						total = total.saturating_add(stake);
-					});
-				let exposure = Exposure { own, others, total };
-
-				if exposure.total < slot_stake {
-					slot_stake = exposure.total;
-				}
-				(validator, exposure)
-			}).collect::<Vec<(T::AccountId, Exposure<_, _>)>>();
-
-			debug::native::info!(
-				target: "staking",
-				"A better solution has been validated and stored on chain.",
-			);
-
-			<QueuedElected<T>>::put(ElectionResult {
-				compute: ElectionCompute::Submitted,
-				elected_stashes: winners,
-				score: submitted_score,
-				exposures,
-				slot_stake,
-			});
+			Self::check_and_replace_solution(winners, compact_assignments)?
 		}
 
 		/// Unsigned version of `submit_election_solution`
@@ -1266,10 +1108,12 @@ decl_module! {
 			origin,
 			winners: Vec<T::AccountId>,
 			compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
-			signature: SignatureOf<T, <T as Trait>::Call, T::SubmitTransaction>,
+			validator_index: u32,
+			// already checked.
+			_signature: SignatureOf<T, <T as Trait>::Call, T::SubmitTransaction>,
 		) {
 			ensure_none(origin)?;
-
+			Self::check_and_replace_solution(winners, compact_assignments)?
 		}
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
@@ -1284,8 +1128,8 @@ decl_module! {
 		/// - O(1).
 		/// - Three extra DB entries.
 		///
-		/// NOTE: Two of the storage writes (`Self::bonded`, `Self::payee`) are _never_ cleaned unless
-		/// the `origin` falls below _existential deposit_ and gets removed as dust.
+		/// NOTE: Two of the storage writes (`Self::bonded`, `Self::payee`) are _never_ cleaned
+		/// unless the `origin` falls below _existential deposit_ and gets removed as dust.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn bond(origin,
@@ -1815,6 +1659,166 @@ impl<T: Trait> Module<T> {
 		CurrentEraStartSessionIndex::put(0);
 		BondedEras::mutate(|bonded| bonded.push((0, 0)));
 		Self::select_and_update_validators()
+	}
+
+	/// Checks a given solution and if correct and improved, writes it on chain as the queued result
+	/// of the next round. This may be called by both a signed and an unsigned transaction.
+	fn check_and_replace_solution(
+		winners: Vec<T::AccountId>,
+		compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
+	) -> Result<(), Error<T>> {
+		// discard early solutions
+		match Self::era_election_status() {
+			ElectionStatus::None => Err(Error::<T>::PhragmenEarlySubmission)?,
+			ElectionStatus::Open(_) => { /* Open and no solutions received. Allowed. */ },
+		}
+
+		// convert into staked.
+		let staked_assignments = compact_assignments.into_staked::<
+			_,
+			_,
+			T::CurrencyToVote,
+		>(Self::slashable_balance_of);
+
+		// build the support map thereof in order to evaluate.
+		// OPTIMIZATION: we could merge this with the `staked_assignments.iter()` below and
+		// iterate only once.
+		let (supports, num_error) = sp_phragmen::build_support_map::<BalanceOf<T>, T::AccountId>(
+			&winners,
+			&staked_assignments,
+		);
+
+		ensure!(num_error == 0, Error::<T>::PhragmenBogusEdge);
+
+		// score the result. Go further only if it is better than what we already have.
+		let submitted_score = sp_phragmen::evaluate_support(&supports);
+		if let Some(ElectionResult::<T::AccountId, BalanceOf<T>> {
+			score,
+			..
+		}) = Self::queued_elected() {
+			// OPTIMIZATION: we can read first the score and then the rest to do less decoding.
+			// if the local score is better in any of the three parameters.
+			ensure!(
+				Self::is_score_better(score, submitted_score),
+				Error::<T>::PhragmenWeakSubmission,
+			)
+		}
+
+		// Either the result is better than the one on chain, or we don't have an any on chain.
+		// do the sanity check. Each claimed edge must exist. Also, each claimed winner must
+		// have a support associated.
+
+		// check all winners being actual validators.
+		for w in winners.iter() {
+			ensure!(
+				<Validators<T>>::exists(&w),
+				Error::<T>::PhragmenBogusWinner,
+			)
+		}
+
+		// check all nominators being bonded, and actually including the claimed vote, and
+		// summing up to their ledger stake.
+		for StakedAssignment { who, distribution } in staked_assignments.iter() {
+			let maybe_bonded = Self::bonded(&who);
+			let is_validator = <Validators<T>>::exists(&who);
+			let maybe_nomination = Self::nominators(&who);
+
+			// it must be bonded.
+			ensure!(
+				maybe_bonded.is_some(),
+				Error::<T>::PhragmenBogusNominator
+			);
+
+			// it must be either of
+			ensure!(
+				maybe_nomination.is_some() ^ is_validator,
+				Error::<T>::PhragmenBogusNominator
+			);
+
+			let ctrl = maybe_bonded.expect("value is checked to be 'Some'; qed");
+			let ledger = Self::ledger(ctrl).ok_or(Error::<T>::NotController)?;
+			let active_extended_stake =
+				<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(ledger.active) as u128;
+
+			if !is_validator {
+				// a normal vote
+				let nomination = maybe_nomination.expect(
+					"exactly one of maybe_validator and maybe_nomination is true. \
+					is_validator is false; maybe_nomination is some; qed"
+				);
+				let mut total_stake: ExtendedBalance = Zero::zero();
+				ensure!(
+					distribution.into_iter().all(|(v, w)| {
+						total_stake += w;
+						nomination.targets.iter().find(|t| *t == v).is_some()
+					}),
+					Error::<T>::PhragmenBogusNomination,
+				);
+				ensure!(
+					total_stake == active_extended_stake,
+					Error::<T>::PhragmenBogusNominatorStake
+				);
+			} else {
+				// a self vote
+				ensure!(distribution.len() == 1, Error::<T>::PhragmenBogusSelfVote);
+				ensure!(distribution[0].0 == *who, Error::<T>::PhragmenBogusSelfVote);
+				// defensive only. A compact assignment of length one does NOT encode the stake
+				// and it is actually read from chain. Hence, this must always be correct.
+				ensure!(
+					distribution[0].1 == active_extended_stake,
+					Error::<T>::PhragmenBogusSelfVote,
+				);
+			}
+		}
+		// Note that we don't need to check again ^^ if a particular target in a nomination was
+		// actually a candidate. we don't explicitly check this but instead do it indirectly.
+		// build_support_map tells if any target was not in the winners. Also, we check that all
+		// the winners were actually candidates. Hence, all of the claimed votes are actually
+		// voting for valid candidates. All we have to check is if they actually come from the
+		// claimed nominator or not.
+
+		// Endlich alles Ok. Exposures and store the result.
+		let to_balance = |e: ExtendedBalance|
+			<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
+		let mut slot_stake: BalanceOf<T> = Bounded::max_value();
+
+		let exposures = supports.into_iter().map(|(validator, support)| {
+			let mut others = Vec::new();
+			let mut own: BalanceOf<T> = Zero::zero();
+			let mut total: BalanceOf<T> = Zero::zero();
+			support.voters
+				.into_iter()
+				.map(|(target, weight)| (target, to_balance(weight)))
+				.for_each(|(nominator, stake)| {
+					if nominator == validator {
+						own = own.saturating_add(stake);
+					} else {
+						others.push(IndividualExposure { who: nominator, value: stake });
+					}
+					total = total.saturating_add(stake);
+				});
+			let exposure = Exposure { own, others, total };
+
+			if exposure.total < slot_stake {
+				slot_stake = exposure.total;
+			}
+			(validator, exposure)
+		}).collect::<Vec<(T::AccountId, Exposure<_, _>)>>();
+
+		debug::native::info!(
+			target: "staking",
+			"A better solution has been validated and stored on chain.",
+		);
+
+		<QueuedElected<T>>::put(ElectionResult {
+			compute: ElectionCompute::Submitted,
+			elected_stashes: winners,
+			score: submitted_score,
+			exposures,
+			slot_stake,
+		});
+
+		Ok(())
 	}
 
 	/// The era has changed - enact new staking set.
@@ -2352,45 +2356,32 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
-		Ok(TransactionValidity::Ok(ValidTransaction::default()))
-		// if let Call::heartbeat(heartbeat, signature) = call {
-		// 	if <Module<T>>::is_online(heartbeat.authority_index) {
-		// 		// we already received a heartbeat for this authority
-		// 		return InvalidTransaction::Stale.into();
-		// 	}
+		if let Call::submit_election_solution_unsigned(winners, compact, validator_index, signature) = call {
+			// TODO: since unsigned is only for validators, and it is not increasing the block
+			// weight and fee etc. maybe we should only accept an unsigned solution when we don't
+			// have ANY solutions. Otherwise each block will get a LOT of these.
 
-		// 	// check if session index from heartbeat is recent
-		// 	let current_session = <pallet_session::Module<T>>::current_index();
-		// 	if heartbeat.session_index != current_session {
-		// 		return InvalidTransaction::Stale.into();
-		// 	}
+			// check signature
+			// let payload = (winners, compact);
+			// let signature_valid = payload.using_encoded(|encoded_payload| {
+			// 	authority_id.verify(&encoded_heartbeat, &signature)
+			// });
 
-		// 	// verify that the incoming (unverified) pubkey is actually an authority id
-		// 	let keys = Keys::<T>::get();
-		// 	let authority_id = match keys.get(heartbeat.authority_index as usize) {
-		// 		Some(id) => id,
-		// 		None => return InvalidTransaction::BadProof.into(),
-		// 	};
+			// if !signature_valid {
+			// 	return InvalidTransaction::BadProof.into();
+			// }
 
-		// 	// check signature (this is expensive so we do it last).
-		// 	let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
-		// 		authority_id.verify(&encoded_heartbeat, &signature)
-		// 	});
-
-		// 	if !signature_valid {
-		// 		return InvalidTransaction::BadProof.into();
-		// 	}
-
-		// 	Ok(ValidTransaction {
-		// 		priority: TransactionPriority::max_value(),
-		// 		requires: vec![],
-		// 		provides: vec![(current_session, authority_id).encode()],
-		// 		longevity: TryInto::<u64>::try_into(T::SessionDuration::get() / 2.into()).unwrap_or(64_u64),
-		// 		propagate: true,
-		// 	})
-		// } else {
-		// 	InvalidTransaction::Call.into()
-		// }
+			// Ok(ValidTransaction {
+			// 	priority: TransactionPriority::max_value(),
+			// 	requires: vec![],
+			// 	provides: vec![(current_session, authority_id).encode()],
+			// 	longevity: TryInto::<u64>::try_into(T::SessionDuration::get() / 2.into()).unwrap_or(64_u64),
+			// 	propagate: true,
+			// })
+			TransactionValidity::Ok(ValidTransaction::default())
+		} else {
+			InvalidTransaction::Call.into()
+		}
 	}
 }
 
