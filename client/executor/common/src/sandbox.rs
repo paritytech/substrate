@@ -421,7 +421,7 @@ pub struct GuestEnvironment {
 }
 
 impl GuestEnvironment {
-	/// Decodes an envrionment definition from the given raw bytes.
+	/// Decodes an environment definition from the given raw bytes.
 	///
 	/// Returns `Err` if the definition cannot be decoded.
 	pub fn decode<FR>(

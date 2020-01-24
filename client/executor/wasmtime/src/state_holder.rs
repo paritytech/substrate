@@ -21,7 +21,7 @@ use std::rc::Rc;
 /// A common place to store a reference to the `HostState`.
 ///
 /// This structure is passed into each host function handler and retained in the implementation of
-/// `WasmRuntime`. Whenever, a call into a runtime method is initiated the host state is populated
+/// `WasmRuntime`. Whenever a call into a runtime method is initiated, the host state is populated
 /// with the state for that runtime method call.
 ///
 /// During the execution of the runtime method call, wasm can call imported host functions. When
