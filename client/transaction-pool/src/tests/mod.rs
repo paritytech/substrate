@@ -1,4 +1,4 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,21 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Tests for top-level transaction pool api
+
 mod api;
 
 use crate::*;
 use codec::Encode;
 use futures::executor::block_on;
-use parking_lot::RwLock;
-use sc_transaction_graph::{self, ExHash, Pool};
+use sc_transaction_graph::{self, Pool};
 use sp_runtime::{
-	generic::{self, BlockId},
-	traits::{BlakeTwo256, Hash as HashT},
-	transaction_validity::{TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction},
+	generic::BlockId,
+	transaction_validity::ValidTransaction,
 };
-use std::collections::HashSet;
 use substrate_test_runtime_client::{
-	runtime::{AccountId, Block, BlockNumber, Extrinsic, Hash, Header, Index, Transfer},
+	runtime::{AccountId, Block, Extrinsic, Hash, Index, Transfer},
 	AccountKeyring::{self, *},
 };
 use api::TestApi;
@@ -55,7 +54,6 @@ fn maintained_pool() -> BasicPool<TestApi, Block> {
 #[test]
 fn submission_should_work() {
 	let pool = pool();
-	assert_eq!(209, api::index(&BlockId::number(0)));
 	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 209))).unwrap();
 
 	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
@@ -97,13 +95,19 @@ fn late_nonce_should_be_queued() {
 #[test]
 fn prune_tags_should_work() {
 	let pool = pool();
-	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 209))).unwrap();
+	let hash209 = block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 209))).unwrap();
 	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 210))).unwrap();
 
 	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![209, 210]);
 
-	block_on(pool.prune_tags(&BlockId::number(1), vec![vec![209]], vec![])).unwrap();
+	block_on(
+		pool.prune_tags(
+			&BlockId::number(1),
+			vec![vec![209]],
+			vec![hash209],
+		)
+	).expect("Prune tags");
 
 	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![210]);
@@ -127,22 +131,24 @@ fn should_ban_invalid_transactions() {
 
 #[test]
 fn should_correctly_prune_transactions_providing_more_than_one_tag() {
-	let api = TestApi::default();
+	let api = Arc::new(TestApi::default());
 	*api.valid_modifier.write() = Box::new(|v: &mut ValidTransaction| {
 		v.provides.push(vec![155]);
 	});
-	let pool = Pool::new(Default::default(), Arc::new(api));
+	let pool = Pool::new(Default::default(), api.clone());
 	let xt = uxt(Alice, 209);
 	block_on(pool.submit_one(&BlockId::number(0), xt.clone())).expect("1. Imported");
 	assert_eq!(pool.status().ready, 1);
 
 	// remove the transaction that just got imported.
+	api.inc_nonce(Alice.into());
 	block_on(pool.prune_tags(&BlockId::number(1), vec![vec![209]], vec![])).expect("1. Pruned");
 	assert_eq!(pool.status().ready, 0);
 	// it's re-imported to future
 	assert_eq!(pool.status().future, 1);
 
 	// so now let's insert another transaction that also provides the 155
+	api.inc_nonce(Alice.into());
 	let xt = uxt(Alice, 211);
 	block_on(pool.submit_one(&BlockId::number(2), xt.clone())).expect("2. Imported");
 	assert_eq!(pool.status().ready, 1);
@@ -151,6 +157,7 @@ fn should_correctly_prune_transactions_providing_more_than_one_tag() {
 	assert_eq!(pending, vec![211]);
 
 	// prune it and make sure the pool is empty
+	api.inc_nonce(Alice.into());
 	block_on(pool.prune_tags(&BlockId::number(3), vec![vec![155]], vec![])).expect("2. Pruned");
 	assert_eq!(pool.status().ready, 0);
 	assert_eq!(pool.status().future, 2);
@@ -188,4 +195,39 @@ fn should_revalidate_during_maintenance() {
 	assert_eq!(pool.status().ready, 1);
 	// test that pool revalidated transaction that left ready and not included in the block
 	assert_eq!(pool.api.validation_requests().len(), 3);
+}
+
+#[test]
+fn should_resubmit_from_retracted_during_maintaince() {
+	let xt = uxt(Alice, 209);
+	let retracted_hash = Hash::random();
+
+	let pool = maintained_pool();
+
+	block_on(pool.submit_one(&BlockId::number(0), xt.clone())).expect("1. Imported");
+	assert_eq!(pool.status().ready, 1);
+
+	pool.api.push_block(1, vec![]);
+	pool.api.push_fork_block(retracted_hash, vec![xt.clone()]);
+
+	block_on(pool.maintain(&BlockId::number(1), &[retracted_hash]));
+	assert_eq!(pool.status().ready, 1);
+}
+
+#[test]
+fn should_not_retain_invalid_hashes_from_retracted() {
+	let xt = uxt(Alice, 209);
+	let retracted_hash = Hash::random();
+
+	let pool = maintained_pool();
+
+	block_on(pool.submit_one(&BlockId::number(0), xt.clone())).expect("1. Imported");
+	assert_eq!(pool.status().ready, 1);
+
+	pool.api.push_block(1, vec![]);
+	pool.api.push_fork_block(retracted_hash, vec![xt.clone()]);
+	pool.api.add_invalid(&xt);
+
+	block_on(pool.maintain(&BlockId::number(1), &[retracted_hash]));
+	assert_eq!(pool.status().ready, 0);
 }
