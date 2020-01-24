@@ -68,6 +68,8 @@ pub trait ChainApi: Send + Sync {
 	type Error: From<error::Error> + error::IntoPoolError;
 	/// Validate transaction future.
 	type ValidationFuture: Future<Output=Result<TransactionValidity, Self::Error>> + Send + Unpin;
+	/// Body future (since block body might be remote)
+	type BodyFuture: Future<Output = Result<Option<Vec<<Self::Block as traits::Block>::Extrinsic>>, Self::Error>> + Unpin + Send + 'static;
 
 	/// Verify extrinsic at given block.
 	fn validate_transaction(
@@ -84,6 +86,9 @@ pub trait ChainApi: Send + Sync {
 
 	/// Returns hash and encoding length of the extrinsic.
 	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize);
+
+	/// Returns a block body given the block id.
+	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture;
 }
 
 /// Pool configuration options.
@@ -120,7 +125,7 @@ pub struct Pool<B: ChainApi> {
 
 impl<B: ChainApi> Pool<B> {
 	/// Create a new transaction pool.
-	pub fn new(options: Options, api: B) -> Self {
+	pub fn new(options: Options, api: Arc<B>) -> Self {
 		Pool {
 			validated_pool: Arc::new(ValidatedPool::new(options, api)),
 		}
@@ -488,6 +493,7 @@ mod tests {
 		type Hash = u64;
 		type Error = error::Error;
 		type ValidationFuture = futures::future::Ready<error::Result<TransactionValidity>>;
+		type BodyFuture = futures::future::Ready<error::Result<Option<Vec<Extrinsic>>>>;
 
 		/// Verify extrinsic at given block.
 		fn validate_transaction(
@@ -560,6 +566,10 @@ mod tests {
 				len
 			)
 		}
+
+		fn block_body(&self, _id: &BlockId<Self::Block>) -> Self::BodyFuture {
+			futures::future::ready(Ok(None))
+		}
 	}
 
 	fn uxt(transfer: Transfer) -> Extrinsic {
@@ -567,7 +577,7 @@ mod tests {
 	}
 
 	fn pool() -> Pool<TestApi> {
-		Pool::new(Default::default(), TestApi::default())
+		Pool::new(Default::default(), TestApi::default().into())
 	}
 
 	#[test]
@@ -713,7 +723,7 @@ mod tests {
 			ready: limit.clone(),
 			future: limit.clone(),
 			..Default::default()
-		}, TestApi::default());
+		}, TestApi::default().into());
 
 		let hash1 = block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
 			from: AccountId::from_h256(H256::from_low_u64_be(1)),
@@ -748,7 +758,7 @@ mod tests {
 			ready: limit.clone(),
 			future: limit.clone(),
 			..Default::default()
-		}, TestApi::default());
+		}, TestApi::default().into());
 
 		// when
 		block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
@@ -924,7 +934,7 @@ mod tests {
 				ready: limit.clone(),
 				future: limit.clone(),
 				..Default::default()
-			}, TestApi::default());
+			}, TestApi::default().into());
 
 			let xt = uxt(Transfer {
 				from: AccountId::from_h256(H256::from_low_u64_be(1)),
@@ -958,7 +968,7 @@ mod tests {
 			let (tx, rx) = std::sync::mpsc::sync_channel(1);
 			let mut api = TestApi::default();
 			api.delay = Arc::new(Mutex::new(rx.into()));
-			let pool = Arc::new(Pool::new(Default::default(), api));
+			let pool = Arc::new(Pool::new(Default::default(), api.into()));
 
 			// when
 			let xt = uxt(Transfer {

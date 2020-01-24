@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,10 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! A set of common definitions that are needed for defining execution engines.
+//! Collection of allocator implementations.
+//!
+//! This crate provides the following allocator implementations:
+//! - A freeing-bump allocator: [`FreeingBumpHeapAllocator`](freeing_bump::FreeingBumpHeapAllocator)
 
+#![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
-pub mod sandbox;
-pub mod error;
-pub mod wasm_runtime;
+mod error;
+mod freeing_bump;
+
+pub use freeing_bump::FreeingBumpHeapAllocator;
+pub use error::Error;

@@ -142,13 +142,21 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// Is this block finalized already?
 	/// `true` implies instant finality.
 	pub finalized: bool,
+	/// Intermediate values that are interpreted by block importers. Each block importer,
+	/// upon handling a value, removes it from the intermediate list. The final block importer
+	/// rejects block import if there are still intermediate values that remain unhandled.
+	pub intermediates: HashMap<Vec<u8>, Vec<u8>>,
 	/// Auxiliary consensus data produced by the block.
 	/// Contains a list of key-value pairs. If values are `None`, the keys
 	/// will be deleted.
 	pub auxiliary: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	/// Fork choice strategy of this import. This should only be set by a
 	/// synchronous import, otherwise it may race against other imports.
-	pub fork_choice: ForkChoiceStrategy,
+	/// `None` indicates that the current verifier or importer cannot yet
+	/// determine the fork choice value, and it expects subsequent importer
+	/// to modify it. If `None` is passed all the way down to bottom block
+	/// importer, the import fails with an `IncompletePipeline` error.
+	pub fork_choice: Option<ForkChoiceStrategy>,
 	/// Allow importing the block skipping state verification if parent state is missing.
 	pub allow_missing_state: bool,
 	/// Re-validate existing block.
@@ -210,6 +218,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 			storage_changes: None,
 			finalized: self.finalized,
 			auxiliary: self.auxiliary,
+			intermediates: self.intermediates,
 			allow_missing_state: self.allow_missing_state,
 			fork_choice: self.fork_choice,
 			import_existing: self.import_existing,
