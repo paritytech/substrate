@@ -688,6 +688,16 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 	}
 
+	/// Get the free balance of an account.
+	pub fn free_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
+		Account::<T, I>::get(who.borrow()).free
+	}
+
+	/// Get the reserved balance of an account.
+	pub fn reserved_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
+		Account::<T, I>::get(who.borrow()).reserved
+	}
+
 	/// Set both the free and reserved balance of an account to some new value. Will enforce
 	/// `ExistentialDeposit` law, annulling the account as needed.
 	///
@@ -1080,12 +1090,12 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 
 		Self::set_account(transactor, &from_account, &old_from_account);
 
-		// Emit transfer event.
-		Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
-
 		// Take action on the set_account call.
 		// This will emit events that _resulted_ from the transfer.
 		Self::set_account(dest, &to_account, &old_to_account);
+
+		// Emit transfer event.
+		Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
 
 		T::TransferPayment::on_unbalanced(NegativeImbalance::new(fee));
 
@@ -1242,8 +1252,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	}
 }
 
-impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
-where
+impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>  where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	/// Check if `who` can reserve `value` from their free balance.

@@ -178,9 +178,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee);
 
 			let base_fee = T::TransactionBaseFee::get();
-			let final_fee = base_fee.saturating_add(adjusted_fee).saturating_add(tip);
-
-			final_fee
+			base_fee.saturating_add(adjusted_fee).saturating_add(tip)
 		} else {
 			tip
 		}

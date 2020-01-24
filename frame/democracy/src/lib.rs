@@ -1389,14 +1389,14 @@ type OnReapAccount = System;
 			);
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
-			assert_eq!(Balances::reserved_balance(6), 12);
+			assert_eq!(Balances::reserved_balance(&6), 12);
 
 			next_block();
 			next_block();
 
-			assert_eq!(Balances::reserved_balance(6), 0);
-			assert_eq!(Balances::free_balance(6), 60);
-			assert_eq!(Balances::free_balance(42), 2);
+			assert_eq!(Balances::reserved_balance(&6), 0);
+			assert_eq!(Balances::free_balance(&6), 60);
+			assert_eq!(Balances::free_balance(&42), 2);
 		});
 	}
 
@@ -1407,7 +1407,7 @@ type OnReapAccount = System;
 			PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
 			assert_ok!(Democracy::note_preimage(Origin::signed(6), set_balance_proposal(2)));
 
-			assert_eq!(Balances::reserved_balance(6), 12);
+			assert_eq!(Balances::reserved_balance(&6), 12);
 
 			next_block();
 			assert_noop!(
@@ -1417,8 +1417,8 @@ type OnReapAccount = System;
 			next_block();
 			assert_ok!(Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)));
 
-			assert_eq!(Balances::reserved_balance(6), 0);
-			assert_eq!(Balances::free_balance(6), 60);
+			assert_eq!(Balances::reserved_balance(&6), 0);
+			assert_eq!(Balances::free_balance(&6), 60);
 		});
 	}
 
@@ -1433,7 +1433,7 @@ type OnReapAccount = System;
 
 			PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
 			assert_ok!(Democracy::note_preimage(Origin::signed(6), set_balance_proposal(2)));
-			assert_eq!(Balances::reserved_balance(6), 12);
+			assert_eq!(Balances::reserved_balance(&6), 12);
 
 			next_block();
 			next_block();
@@ -1445,9 +1445,9 @@ type OnReapAccount = System;
 
 			next_block();
 			assert_ok!(Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)));
-			assert_eq!(Balances::reserved_balance(6), 0);
-			assert_eq!(Balances::free_balance(6), 48);
-			assert_eq!(Balances::free_balance(5), 62);
+			assert_eq!(Balances::reserved_balance(&6), 0);
+			assert_eq!(Balances::free_balance(&6), 48);
+			assert_eq!(Balances::free_balance(&5), 62);
 		});
 	}
 
@@ -1477,7 +1477,7 @@ type OnReapAccount = System;
 
 			next_block();
 
-			assert_eq!(Balances::free_balance(42), 2);
+			assert_eq!(Balances::free_balance(&42), 2);
 		});
 	}
 
@@ -2411,22 +2411,19 @@ type OnReapAccount = System;
 			assert_eq!(Balances::locks(2), vec![BalanceLock {
 				id: DEMOCRACY_ID,
 				amount: u64::max_value(),
-				until: u64::max_value(),
-				reasons: WithdrawReason::Transfer.into()
+				reasons: pallet_balances::Reasons::Misc,
 			}]);
 			assert_eq!(Democracy::locks(2), Some(18));
 			assert_eq!(Balances::locks(3), vec![BalanceLock {
 				id: DEMOCRACY_ID,
 				amount: u64::max_value(),
-				until: u64::max_value(),
-				reasons: WithdrawReason::Transfer.into()
+				reasons: pallet_balances::Reasons::Misc,
 			}]);
 			assert_eq!(Democracy::locks(3), Some(10));
 			assert_eq!(Balances::locks(4), vec![BalanceLock {
 				id: DEMOCRACY_ID,
 				amount: u64::max_value(),
-				until: u64::max_value(),
-				reasons: WithdrawReason::Transfer.into()
+				reasons: pallet_balances::Reasons::Misc,
 			}]);
 			assert_eq!(Democracy::locks(4), Some(6));
 			assert_eq!(Balances::locks(5), vec![]);

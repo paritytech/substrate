@@ -82,11 +82,11 @@ fn unfounding_works() {
 #[test]
 fn basic_new_member_works() {
 	EnvBuilder::new().execute(|| {
-		assert_eq!(Balances::free_balance(20), 50);
+		assert_eq!(Balances::free_balance(&20), 50);
 		// Bid causes Candidate Deposit to be reserved.
 		assert_ok!(Society::bid(Origin::signed(20), 0));
-		assert_eq!(Balances::free_balance(20), 25);
-		assert_eq!(Balances::reserved_balance(20), 25);
+		assert_eq!(Balances::free_balance(&20), 25);
+		assert_eq!(Balances::reserved_balance(&20), 25);
 		// Rotate period every 4 blocks
 		run_to_block(4);
 		// 20 is now a candidate
@@ -98,8 +98,8 @@ fn basic_new_member_works() {
 		// 20 is now a member of the society
 		assert_eq!(Society::members(), vec![10, 20]);
 		// Reserved balance is returned
-		assert_eq!(Balances::free_balance(20), 50);
-		assert_eq!(Balances::reserved_balance(20), 0);
+		assert_eq!(Balances::free_balance(&20), 50);
+		assert_eq!(Balances::reserved_balance(&20), 0);
 	});
 }
 
@@ -115,7 +115,7 @@ fn bidding_works() {
 		run_to_block(4);
 		// Pot is 1000 after "PeriodSpend"
 		assert_eq!(Society::pot(), 1000);
-		assert_eq!(Balances::free_balance(Society::account_id()), 10_000);
+		assert_eq!(Balances::free_balance(&Society::account_id()), 10_000);
 		// Choose smallest bidding users whose total is less than pot
 		assert_eq!(Society::candidates(), vec![
 			create_bid(300, 30, BidKind::Deposit(25)),
@@ -128,7 +128,7 @@ fn bidding_works() {
 		// Candidates become members after a period rotation
 		assert_eq!(Society::members(), vec![10, 30, 40]);
 		// Pot is increased by 1000, but pays out 700 to the members
-		assert_eq!(Balances::free_balance(Society::account_id()), 9_300);
+		assert_eq!(Balances::free_balance(&Society::account_id()), 9_300);
 		assert_eq!(Society::pot(), 1_300);
 		// Left over from the original bids is 50 who satisfies the condition of bid less than pot.
 		assert_eq!(Society::candidates(), vec![ create_bid(500, 50, BidKind::Deposit(25)) ]);
@@ -139,7 +139,7 @@ fn bidding_works() {
 		assert_eq!(Society::members(), vec![10, 30, 40, 50]);
 		// Pot is increased by 1000, and 500 is paid out. Total payout so far is 1200.
 		assert_eq!(Society::pot(), 1_800);
-		assert_eq!(Balances::free_balance(Society::account_id()), 8_800);
+		assert_eq!(Balances::free_balance(&Society::account_id()), 8_800);
 		// No more candidates satisfy the requirements
 		assert_eq!(Society::candidates(), vec![]);
 		assert_ok!(Society::defender_vote(Origin::signed(10), true)); // Keep defender around
@@ -150,7 +150,7 @@ fn bidding_works() {
 		// Pot is increased by 1000 again
 		assert_eq!(Society::pot(), 2_800);
 		// No payouts
-		assert_eq!(Balances::free_balance(Society::account_id()), 8_800);
+		assert_eq!(Balances::free_balance(&Society::account_id()), 8_800);
 		// Candidate 60 now qualifies based on the increased pot size.
 		assert_eq!(Society::candidates(), vec![ create_bid(1900, 60, BidKind::Deposit(25)) ]);
 		// Candidate 60 is voted in.
@@ -160,7 +160,7 @@ fn bidding_works() {
 		assert_eq!(Society::members(), vec![10, 30, 40, 50, 60]);
 		// Pay them
 		assert_eq!(Society::pot(), 1_900);
-		assert_eq!(Balances::free_balance(Society::account_id()), 6_900);
+		assert_eq!(Balances::free_balance(&Society::account_id()), 6_900);
 	});
 }
 
@@ -171,15 +171,15 @@ fn unbidding_works() {
 		assert_ok!(Society::bid(Origin::signed(20), 1000));
 		assert_ok!(Society::bid(Origin::signed(30), 0));
 		// Balances are reserved
-		assert_eq!(Balances::free_balance(30), 25);
-		assert_eq!(Balances::reserved_balance(30), 25);
+		assert_eq!(Balances::free_balance(&30), 25);
+		assert_eq!(Balances::reserved_balance(&30), 25);
 		// Must know right position to unbid + cannot unbid someone else
 		assert_noop!(Society::unbid(Origin::signed(30), 1), Error::<Test, _>::BadPosition);
 		// Can unbid themselves with the right position
 		assert_ok!(Society::unbid(Origin::signed(30), 0));
 		// Balance is returned
-		assert_eq!(Balances::free_balance(30), 50);
-		assert_eq!(Balances::reserved_balance(30), 0);
+		assert_eq!(Balances::free_balance(&30), 50);
+		assert_eq!(Balances::reserved_balance(&30), 0);
 		// 20 wins candidacy
 		run_to_block(4);
 		assert_eq!(Society::candidates(), vec![ create_bid(1000, 20, BidKind::Deposit(25)) ]);
@@ -190,7 +190,7 @@ fn unbidding_works() {
 fn payout_works() {
 	EnvBuilder::new().execute(|| {
 		// Original balance of 50
-		assert_eq!(Balances::free_balance(20), 50);
+		assert_eq!(Balances::free_balance(&20), 50);
 		assert_ok!(Society::bid(Origin::signed(20), 1000));
 		run_to_block(4);
 		assert_ok!(Society::vote(Origin::signed(10), 20, true));
@@ -200,7 +200,7 @@ fn payout_works() {
 		run_to_block(9);
 		// payout should be here
 		assert_ok!(Society::payout(Origin::signed(20)));
-		assert_eq!(Balances::free_balance(20), 1050);
+		assert_eq!(Balances::free_balance(&20), 1050);
 	});
 }
 
@@ -221,11 +221,11 @@ fn basic_new_member_skeptic_works() {
 fn basic_new_member_reject_works() {
 	EnvBuilder::new().execute(|| {
 		// Starting Balance
-		assert_eq!(Balances::free_balance(20), 50);
+		assert_eq!(Balances::free_balance(&20), 50);
 		// 20 makes a bid
 		assert_ok!(Society::bid(Origin::signed(20), 0));
-		assert_eq!(Balances::free_balance(20), 25);
-		assert_eq!(Balances::reserved_balance(20), 25);
+		assert_eq!(Balances::free_balance(&20), 25);
+		assert_eq!(Balances::reserved_balance(&20), 25);
 		// Rotation Period
 		run_to_block(4);
 		assert_eq!(Society::candidates(), vec![create_bid(0, 20, BidKind::Deposit(25))]);
@@ -243,7 +243,7 @@ fn basic_new_member_reject_works() {
 #[test]
 fn slash_payout_works() {
 	EnvBuilder::new().execute(|| {
-		assert_eq!(Balances::free_balance(20), 50);
+		assert_eq!(Balances::free_balance(&20), 50);
 		assert_ok!(Society::bid(Origin::signed(20), 1000));
 		run_to_block(4);
 		assert_ok!(Society::vote(Origin::signed(10), 20, true));
@@ -257,14 +257,14 @@ fn slash_payout_works() {
 		run_to_block(9);
 		// payout should be here, but 500 less
 		assert_ok!(Society::payout(Origin::signed(20)));
-		assert_eq!(Balances::free_balance(20), 550);
+		assert_eq!(Balances::free_balance(&20), 550);
 	});
 }
 
 #[test]
 fn slash_payout_multi_works() {
 	EnvBuilder::new().execute(|| {
-		assert_eq!(Balances::free_balance(20), 50);
+		assert_eq!(Balances::free_balance(&20), 50);
 		// create a few payouts
 		Society::bump_payout(&20, 5, 100);
 		Society::bump_payout(&20, 10, 100);
@@ -330,12 +330,12 @@ fn suspended_member_lifecycle_works() {
 fn suspended_candidate_rejected_works() {
 	EnvBuilder::new().execute(|| {
 		// Starting Balance
-		assert_eq!(Balances::free_balance(20), 50);
-		assert_eq!(Balances::free_balance(Society::account_id()), 10000);
+		assert_eq!(Balances::free_balance(&20), 50);
+		assert_eq!(Balances::free_balance(&Society::account_id()), 10000);
 		// 20 makes a bid
 		assert_ok!(Society::bid(Origin::signed(20), 0));
-		assert_eq!(Balances::free_balance(20), 25);
-		assert_eq!(Balances::reserved_balance(20), 25);
+		assert_eq!(Balances::free_balance(&20), 25);
+		assert_eq!(Balances::reserved_balance(&20), 25);
 		// Rotation Period
 		run_to_block(4);
 		assert_eq!(Society::candidates(), vec![create_bid(0, 20, BidKind::Deposit(25))]);
@@ -369,10 +369,10 @@ fn suspended_candidate_rejected_works() {
 		// Suspension judgement origin rejects the candidate
 		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Judgement::Reject));
 		// User is slashed
-		assert_eq!(Balances::free_balance(20), 25);
-		assert_eq!(Balances::reserved_balance(20), 0);
+		assert_eq!(Balances::free_balance(&20), 25);
+		assert_eq!(Balances::reserved_balance(&20), 0);
 		// Funds are deposited to society account
-		assert_eq!(Balances::free_balance(Society::account_id()), 10025);
+		assert_eq!(Balances::free_balance(&Society::account_id()), 10025);
 		// Cleaned up
 		assert_eq!(Society::candidates(), vec![]);
 		assert_eq!(<SuspendedCandidates<Test>>::get(20), None);
@@ -837,7 +837,7 @@ fn zero_bid_works() {
 		run_to_block(4);
 		// Pot is 1000 after "PeriodSpend"
 		assert_eq!(Society::pot(), 1000);
-		assert_eq!(Balances::free_balance(Society::account_id()), 10_000);
+		assert_eq!(Balances::free_balance(&Society::account_id()), 10_000);
 		// Choose smallest bidding users whose total is less than pot, with only one zero bid.
 		assert_eq!(Society::candidates(), vec![
 			create_bid(0, 30, BidKind::Deposit(25)),

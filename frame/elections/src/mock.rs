@@ -266,7 +266,8 @@ pub(crate) fn create_candidate(i: u64, index: u32) {
 }
 
 pub(crate) fn balances(who: &u64) -> (u64, u64) {
-	(Balances::free_balance(who), Balances::reserved_balance(who))
+	let a = Balances::account(who);
+	(a.free, a.reserved)
 }
 
 pub(crate) fn locks(who: &u64) -> Vec<u64> {
