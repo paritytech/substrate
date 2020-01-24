@@ -39,8 +39,10 @@ use sp_runtime::{
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream,
 	TxHash, TransactionFor, TransactionStatusStreamFor, BlockHash,
-	MaintainedTransactionPool,
+	MaintainedTransactionPool, PoolFuture,
 };
+
+type PoolResult<T> = PoolFuture<T, error::Error>;
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
 pub struct BasicPool<PoolApi, Block>
@@ -129,28 +131,40 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	fn submit_at(
 		&self,
 		at: &BlockId<Self::Block>,
-		xts: impl IntoIterator<Item=TransactionFor<Self>> + 'static,
-	) -> Box<dyn Future<Output=Result<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error>> + Send + Unpin> {
-		Box::new(self.pool.submit_at(at, xts, false))
+		xts: Vec<TransactionFor<Self>>,
+	) -> PoolResult<Vec<Result<TxHash<Self>, Self::Error>>> {
+		let pool = self.pool.clone();
+		let at = *at;
+		async move {
+			pool.submit_at(&at, xts, false).await
+		}.boxed()
 	}
 
 	fn submit_one(
 		&self,
 		at: &BlockId<Self::Block>,
 		xt: TransactionFor<Self>,
-	) -> Box<dyn Future<Output=Result<TxHash<Self>, Self::Error>> + Send + Unpin> {
-		Box::new(self.pool.submit_one(at, xt))
+	) -> PoolResult<TxHash<Self>> {
+		let pool = self.pool.clone();
+		let at = *at;
+		async move {
+			pool.submit_one(&at, xt).await
+		}.boxed()
 	}
 
 	fn submit_and_watch(
 		&self,
 		at: &BlockId<Self::Block>,
 		xt: TransactionFor<Self>,
-	) -> Box<dyn Future<Output=Result<Box<TransactionStatusStreamFor<Self>>, Self::Error>> + Send + Unpin> {
-		Box::new(
-			self.pool.submit_and_watch(at, xt)
+	) -> PoolResult<Box<TransactionStatusStreamFor<Self>>> {
+		let at = *at;
+		let pool = self.pool.clone();
+
+		async move {
+			pool.submit_and_watch(&at, xt)
 				.map(|result| result.map(|watcher| Box::new(watcher.into_stream()) as _))
-		)
+				.await
+		}.boxed()
 	}
 
 	fn remove_invalid(&self, hashes: &[TxHash<Self>]) -> Vec<Arc<Self::InPoolTransaction>> {
