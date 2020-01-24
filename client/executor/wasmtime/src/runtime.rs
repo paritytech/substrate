@@ -18,7 +18,12 @@
 
 use crate::function_executor::FunctionExecutorState;
 use crate::trampoline::{EnvState, make_trampoline};
-use crate::util::{cranelift_ir_signature, read_memory_into, write_memory_from};
+use crate::util::{
+	cranelift_ir_signature,
+	convert_parity_wasm_signature,
+	read_memory_into,
+	write_memory_from
+};
 
 use sc_executor_common::{
 	error::{Error, Result, WasmError},
@@ -177,39 +182,22 @@ fn scan_missing_functions(
 				)));
 			}
 		};
+		let signature = convert_parity_wasm_signature(func_ty);
 
 		if import_entry.module() == "env" {
 			if let Some(hf) = host_functions
 				.iter()
 				.find(|hf| hf.name() == import_entry.field())
 			{
-				continue;
-			}
-		}
-
-		fn cranelift_ir_type(val_ty: &parity_wasm::elements::ValueType) -> ir::types::Type {
-			use parity_wasm::elements::ValueType::*;
-			match *val_ty {
-				I32 => ir::types::I32,
-				I64 => ir::types::I64,
-				F32 => ir::types::F32,
-				F64 => ir::types::F64,
+				if signature == hf.signature() {
+					continue;
+				}
 			}
 		}
 
 		// This import is not a function, not from env module, or doesn't have a corresponding host
 		// function, or the signature is not matching.
-		let sig = ir::Signature {
-			params: func_ty.params().iter()
-				.map(cranelift_ir_type)
-				.map(ir::AbiParam::new)
-				.collect(),
-			returns: func_ty.return_type().iter()
-				.map(cranelift_ir_type)
-				.map(ir::AbiParam::new)
-				.collect(),
-			call_conv: call_conv.clone(),
-		};
+		let sig = cranelift_ir_signature(signature, &call_conv);
 
 		missing_functions.insert(
 			import_entry.module().to_string(),
