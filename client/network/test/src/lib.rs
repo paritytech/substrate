@@ -62,6 +62,7 @@ use substrate_test_runtime_client::{self, AccountKeyring};
 
 pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use substrate_test_runtime_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
+pub use sc_network::specialization::DummySpecialization;
 
 type AuthorityId = sp_consensus_babe::AuthorityId;
 
@@ -99,32 +100,6 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			import_existing: false,
 		}, maybe_keys))
 	}
-}
-
-/// The test specialization.
-#[derive(Clone)]
-pub struct DummySpecialization;
-
-impl NetworkSpecialization<Block> for DummySpecialization {
-	fn status(&self) -> Vec<u8> {
-		vec![]
-	}
-
-	fn on_connect(
-		&mut self,
-		_ctx: &mut dyn Context<Block>,
-		_peer_id: PeerId,
-		_status: sc_network::message::Status<Block>
-	) {}
-
-	fn on_disconnect(&mut self, _ctx: &mut dyn Context<Block>, _peer_id: PeerId) {}
-
-	fn on_message(
-		&mut self,
-		_ctx: &mut dyn Context<Block>,
-		_peer_id: PeerId,
-		_message: Vec<u8>,
-	) {}
 }
 
 pub type PeersFullClient =
