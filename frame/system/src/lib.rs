@@ -1695,7 +1695,7 @@ mod tests {
 			).unwrap();
 
 			assert_eq!(
-				System::events()
+				System::events(),
 				vec![EventRecord { phase: Phase::ApplyExtrinsic(0), event: 102u16, topics: vec![] }],
 			);
 		});
