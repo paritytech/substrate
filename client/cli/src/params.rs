@@ -18,6 +18,7 @@ use crate::traits::GetSharedParams;
 
 use std::{str::FromStr, path::PathBuf};
 use structopt::{StructOpt, StructOptInternal, clap::{arg_enum, App, AppSettings, SubCommand, Arg}};
+use crate::execution_strategy::*;
 
 pub use crate::execution_strategy::ExecutionStrategy;
 
@@ -321,7 +322,7 @@ pub struct ExecutionStrategies {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "NativeElseWasm"
+		default_value = DEFAULT_EXECUTION_SYNCING.as_str(),
 	)]
 	pub execution_syncing: ExecutionStrategy,
 
@@ -331,7 +332,7 @@ pub struct ExecutionStrategies {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "NativeElseWasm"
+		default_value = DEFAULT_EXECUTION_IMPORT_BLOCK.as_str(),
 	)]
 	pub execution_import_block: ExecutionStrategy,
 
@@ -341,7 +342,7 @@ pub struct ExecutionStrategies {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "Wasm"
+		default_value = DEFAULT_EXECUTION_BLOCK_CONSTRUCTION.as_str(),
 	)]
 	pub execution_block_construction: ExecutionStrategy,
 
@@ -351,7 +352,7 @@ pub struct ExecutionStrategies {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "Native"
+		default_value = DEFAULT_EXECUTION_OFFCHAIN_WORKER.as_str(),
 	)]
 	pub execution_offchain_worker: ExecutionStrategy,
 
@@ -361,7 +362,7 @@ pub struct ExecutionStrategies {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "Native"
+		default_value = DEFAULT_EXECUTION_OTHER.as_str(),
 	)]
 	pub execution_other: ExecutionStrategy,
 

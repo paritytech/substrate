@@ -81,10 +81,12 @@
 //! | `u16` | `u16` | `Identity` |
 //! | `u32` | `u32` | `Identity` |
 //! | `u64` | `u64` | `Identity` |
+//! | `i128` | `u32` | `v.as_ptr()` (pointer to a 16 byte array) |
 //! | `i8` | `i8` | `Identity` |
 //! | `i16` | `i16` | `Identity` |
 //! | `i32` | `i32` | `Identity` |
 //! | `i64` | `i64` | `Identity` |
+//! | `u128` | `u32` | `v.as_ptr()` (pointer to a 16 byte array) |
 //! | `bool` | `u8` | `if v { 1 } else { 0 }` |
 //! | `&str` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
 //! | `&[u8]` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
@@ -93,6 +95,7 @@
 //! | `&[T] where T: Encode` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
 //! | `[u8; N]` | `u32` | `v.as_ptr()` |
 //! | `*const T` | `u32` | `Identity` |
+//! | `Option<T>` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
 //! | [`T where T: PassBy<PassBy=Inner>`](pass_by::Inner) | Depends on inner | Depends on inner |
 //! | [`T where T: PassBy<PassBy=Codec>`](pass_by::Codec) | `u64`| <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
 //!
