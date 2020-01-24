@@ -56,7 +56,7 @@ use sc_network::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::Justification;
-use sc_network::TransactionPool;
+use sc_network::{DummyBehaviour, TransactionPool};
 use sc_network::specialization::NetworkSpecialization;
 use substrate_test_runtime_client::{self, AccountKeyring};
 
@@ -189,7 +189,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	block_import: BlockImportAdapter<()>,
 	select_chain: Option<LongestChain<substrate_test_runtime_client::Backend, Block>>,
 	backend: Option<Arc<substrate_test_runtime_client::Backend>>,
-	network: NetworkWorker<Block, S, <Block as BlockT>::Hash>,
+	network: NetworkWorker<Block, S, <Block as BlockT>::Hash, DummyBehaviour>,
 	imported_blocks_stream: Box<dyn Stream<Item = BlockImportNotification<Block>, Error = ()> + Send>,
 	finality_notification_stream: Box<dyn Stream<Item = FinalityNotification<Block>, Error = ()> + Send>,
 }
@@ -637,7 +637,8 @@ pub trait TestNetFactory: Sized {
 			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
 			import_queue,
 			specialization: self::SpecializationFactory::create(),
-			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
+			additional_behaviour: DummyBehaviour::default(),
+			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -713,7 +714,8 @@ pub trait TestNetFactory: Sized {
 			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
 			import_queue,
 			specialization: self::SpecializationFactory::create(),
-			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
+			additional_behaviour: DummyBehaviour::default(),
+			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
 		}).unwrap();
 
 		self.mut_peers(|peers| {

@@ -380,10 +380,11 @@ fn build_network_future<
 	B: BlockT,
 	C: sc_client::BlockchainEvents<B>,
 	S: sc_network::specialization::NetworkSpecialization<B>,
-	H: sc_network::ExHashT
+	H: sc_network::ExHashT,
+	O: sc_network::NetworkBehaviour,
 > (
 	roles: Roles,
-	mut network: sc_network::NetworkWorker<B, S, H>,
+	mut network: sc_network::NetworkWorker<B, S, H, O>,
 	client: Arc<C>,
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
 	mut rpc_rx: mpsc::UnboundedReceiver<sc_rpc::system::Request<B>>,

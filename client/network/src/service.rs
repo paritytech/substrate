@@ -122,13 +122,14 @@ pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>, H: E
 	_marker: PhantomData<H>,
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT, O: NetworkBehaviour>
+NetworkWorker<B, S, H, O> {
 	/// Creates the network service.
 	///
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(params: Params<B, S, H>) -> Result<NetworkWorker<B, S, H>, Error> {
+	pub fn new(params: Params<B, S, H, O>) -> Result<Self, Error> {
 		let (to_worker, from_worker) = mpsc::unbounded();
 
 		if let Some(ref path) = params.network_config.net_config_path {
@@ -215,7 +216,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		)?;
 
 		// Build the swarm.
-		let (mut swarm, bandwidth): (Swarm::<B, S, H>, _) = {
+		let (mut swarm, bandwidth): (Swarm::<B, S, H, O>, _) = {
 			let user_agent = format!(
 				"{} ({})",
 				params.network_config.client_version,
@@ -231,6 +232,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			};
 			let behaviour = futures::executor::block_on(Behaviour::new(
 				protocol,
+				params.additional_behaviour,
 				user_agent,
 				local_public,
 				known_addresses,
@@ -263,14 +265,14 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 
 		// Listen on multiaddresses.
 		for addr in &params.network_config.listen_addresses {
-			if let Err(err) = Swarm::<B, S, H>::listen_on(&mut swarm, addr.clone()) {
+			if let Err(err) = Swarm::<B, S, H, O>::listen_on(&mut swarm, addr.clone()) {
 				warn!(target: "sub-libp2p", "Can't listen on {} because: {:?}", addr, err)
 			}
 		}
 
 		// Add external addresses.
 		for addr in &params.network_config.public_addresses {
-			Swarm::<B, S, H>::add_external_address(&mut swarm, addr.clone());
+			Swarm::<B, S, H, O>::add_external_address(&mut swarm, addr.clone());
 		}
 
 		let external_addresses = Arc::new(Mutex::new(Vec::new()));
@@ -415,9 +417,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		};
 
 		NetworkState {
-			peer_id: Swarm::<B, S, H>::local_peer_id(&swarm).to_base58(),
-			listened_addresses: Swarm::<B, S, H>::listeners(&swarm).cloned().collect(),
-			external_addresses: Swarm::<B, S, H>::external_addresses(&swarm).cloned().collect(),
+			peer_id: Swarm::<B, S, H, O>::local_peer_id(&swarm).to_base58(),
+			listened_addresses: Swarm::<B, S, H, O>::listeners(&swarm).cloned().collect(),
+			external_addresses: Swarm::<B, S, H, O>::external_addresses(&swarm).cloned().collect(),
 			average_download_per_sec: self.service.bandwidth.average_download_per_sec(),
 			average_upload_per_sec: self.service.bandwidth.average_upload_per_sec(),
 			connected_peers,
@@ -718,7 +720,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT, S: NetworkSpecialization<B>> {
 ///
 /// You are encouraged to poll this in a separate background thread or task.
 #[must_use = "The NetworkWorker must be polled in order for the network to work"]
-pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
+pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT, O: NetworkBehaviour> {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
@@ -728,7 +730,7 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	/// The network service that can be extracted and shared through the codebase.
 	service: Arc<NetworkService<B, S, H>>,
 	/// The *actual* network.
-	network_service: Swarm<B, S, H>,
+	network_service: Swarm<B, S, H, O>,
 	/// The import queue that was passed as initialization.
 	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the `NetworkService` and that must be processed.
@@ -739,7 +741,8 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	event_streams: Vec<mpsc::UnboundedSender<Event>>,
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for NetworkWorker<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT, O: NetworkBehaviour> Future
+for NetworkWorker<B, S, H, O> {
 	type Output = Result<(), io::Error>;
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
@@ -818,6 +821,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 					this.import_queue.import_finality_proof(origin, hash, nb, proof),
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Event(ev))) =>
 					this.event_streams.retain(|sender| sender.unbounded_send(ev.clone()).is_ok()),
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Other(_))) => {},
 				Poll::Ready(SwarmEvent::Connected(peer_id)) =>
 					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id),
 				Poll::Ready(SwarmEvent::Disconnected(peer_id)) =>
@@ -836,7 +840,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 		// Update the variables shared with the `NetworkService`.
 		this.num_connected.store(this.network_service.user_protocol_mut().num_connected_peers(), Ordering::Relaxed);
 		{
-			let external_addresses = Swarm::<B, S, H>::external_addresses(&this.network_service).cloned().collect();
+			let external_addresses = Swarm::<B, S, H, O>::external_addresses(&this.network_service).cloned().collect();
 			*this.external_addresses.lock() = external_addresses;
 		}
 		this.is_major_syncing.store(match this.network_service.user_protocol_mut().sync_state() {
@@ -848,20 +852,20 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 	}
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Unpin for NetworkWorker<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT, O: NetworkBehaviour> Unpin for
+NetworkWorker<B, S, H, O> {
 }
 
 /// The libp2p swarm, customized for our needs.
-type Swarm<B, S, H> = libp2p::swarm::Swarm<
-	Behaviour<B, S, H>
->;
+type Swarm<B, S, H, O> = libp2p::swarm::Swarm<Behaviour<B, S, H, O>>;
 
 // Implementation of `import_queue::Link` trait using the available local variables.
-struct NetworkLink<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
-	protocol: &'a mut Swarm<B, S, H>,
+struct NetworkLink<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT, O: NetworkBehaviour> {
+	protocol: &'a mut Swarm<B, S, H, O>,
 }
 
-impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for NetworkLink<'a, B, S, H> {
+impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT, O: NetworkBehaviour> Link<B>
+for NetworkLink<'a, B, S, H, O> {
 	fn blocks_processed(
 		&mut self,
 		imported: usize,

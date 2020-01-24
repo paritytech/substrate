@@ -189,7 +189,7 @@ pub use service::{
 pub use protocol::{PeerInfo, Context, ProtocolConfig, message, specialization};
 pub use protocol::event::{Event, DhtEvent};
 pub use protocol::sync::SyncState;
-pub use libp2p::{Multiaddr, PeerId};
+pub use libp2p::{swarm::{DummyBehaviour, NetworkBehaviour}, Multiaddr, PeerId};
 #[doc(inline)]
 pub use libp2p::multiaddr;
 

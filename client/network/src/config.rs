@@ -37,7 +37,7 @@ use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathB
 use zeroize::Zeroize;
 
 /// Network initialization parameters.
-pub struct Params<B: BlockT, S, H: ExHashT> {
+pub struct Params<B: BlockT, S, H: ExHashT, O> {
 	/// Assigned roles for our node (full, light, ...).
 	pub roles: Roles,
 
@@ -47,6 +47,9 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
+
+	/// Additional `NetworkBehaviour` for the network. Allows customization.
+	pub additional_behaviour: O,
 
 	/// Client that contains the blockchain.
 	pub chain: Arc<dyn Client<B>>,
