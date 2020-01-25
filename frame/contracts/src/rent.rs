@@ -277,11 +277,7 @@ pub fn snitch_contract_should_be_evicted<T: Trait>(
 
 	// Enact the verdict only if the contract gets removed.
 	match verdict {
-		Verdict::Kill => {
-			enact_verdict(account, alive_contract_info, current_block_number, verdict);
-			true
-		}
-		Verdict::Evict { .. } => {
+		Verdict::Kill | Verdict::Evict { .. } => {
 			enact_verdict(account, alive_contract_info, current_block_number, verdict);
 			true
 		}
