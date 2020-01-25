@@ -59,6 +59,10 @@ impl<T: Trait> OutstandingAmount<T> {
 }
 
 enum Verdict<T: Trait> {
+	/// The contract is exempted from paying rent.
+	///
+	/// For example, it already paid its rent in the current block, or it has enough deposit for not
+	/// paying rent at all.
 	Exempt,
 	/// Funds dropped below the subsistence deposit.
 	///
