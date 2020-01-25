@@ -77,6 +77,8 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 	);
 	/// Notify the pool about transactions broadcast.
 	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>);
+	/// Get transaction by hash.
+	fn transaction(&self, hash: &H) -> Option<B::Extrinsic>;
 }
 
 /// A cloneable handle for reporting cost/benefits of peers.
