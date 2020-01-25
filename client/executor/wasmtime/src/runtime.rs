@@ -174,12 +174,9 @@ fn scan_missing_functions(
 				func_ty
 			}
 			_ => {
-				// The executor doesn't provide any non function imports!
-				return Err(WasmError::Other(format!(
-					"{}:{} is not a function",
-					import_entry.module(),
-					import_entry.field()
-				)));
+				// We are looking only for missing **functions** here. Any other items, be they
+				// missing or not, will be handled at the resolution stage later.
+				continue;
 			}
 		};
 		let signature = convert_parity_wasm_signature(func_ty);
@@ -195,8 +192,8 @@ fn scan_missing_functions(
 			}
 		}
 
-		// This import is a function, not from env module, or doesn't have a corresponding host
-		// function, or the signature is not matching.
+		// This function is either not from the env module, or doesn't have a corresponding host
+		// function, or the signature is not matching. Add it to the list.
 		let sig = cranelift_ir_signature(signature, &call_conv);
 
 		missing_functions.insert(
