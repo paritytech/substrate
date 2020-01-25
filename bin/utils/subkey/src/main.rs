@@ -33,13 +33,15 @@ use sp_runtime::{traits::{IdentifyAccount, Verify}, generic::Era};
 use std::{
 	convert::{TryInto, TryFrom}, io::{stdin, Read}, str::FromStr, path::PathBuf, fs, fmt,
 };
+use libp2p_core::{identity::ed25519::SecretKey, PeerId};
+use sc_network::config::{NodeKeyConfig, NetworkConfiguration, Secret};
 
 mod rpc;
 mod vanity;
 
 trait Crypto: Sized {
 	type Pair: Pair<Public = Self::Public>;
-	type Public: Public + Ss58Codec + AsRef<[u8]> + std::hash::Hash;
+	type Public: Public + Ss58Codec + AsRef<[u8]> + AsMut<[u8]> + std::hash::Hash;
 	fn pair_from_suri(suri: &str, password: Option<&str>) -> Self::Pair {
 		Self::Pair::from_string(suri, password).expect("Invalid phrase")
 	}
@@ -50,6 +52,13 @@ trait Crypto: Sized {
 	}
 	fn public_from_pair(pair: &Self::Pair) -> Self::Public {
 		pair.public()
+	}
+	fn libp2p_id_from_public(public: Self::Public) -> PeerId {
+		let secret = Secret::Input(SecretKey::from_bytes(public).unwrap());
+		let node_key = NodeKeyConfig::Ed25519(secret);
+		let config = NetworkConfiguration{node_key, ..Default::default()};
+		let local_identity = config.node_key.into_keypair();
+		local_identity.unwrap().public().into_peer_id()
 	}
 	fn print_from_uri(
 		uri: &str,
@@ -64,12 +73,14 @@ trait Crypto: Sized {
 				Secret seed:      {}\n  \
 				Public key (hex): {}\n  \
 				Account ID:       {}\n  \
-				SS58 Address:     {}",
+				S58 Address:      {}\n  \
+				Peer ID:          {}",
 				uri,
 				format_seed::<Self>(seed),
 				format_public_key::<Self>(public_key.clone()),
-				format_account_id::<Self>(public_key),
-				Self::ss58_from_pair(&pair)
+				format_account_id::<Self>(public_key.clone()),
+				Self::ss58_from_pair(&pair),
+				Self::libp2p_id_from_public(public_key).to_base58()
 			);
 		} else if let Ok((pair, seed)) = Self::Pair::from_string_with_seed(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
@@ -77,12 +88,14 @@ trait Crypto: Sized {
 				Secret seed:      {}\n  \
 				Public key (hex): {}\n  \
 				Account ID:       {}\n  \
-				SS58 Address:     {}",
+				S58 Address:      {}\n  \
+				Peer ID:          {}",
 				uri,
 				if let Some(seed) = seed { format_seed::<Self>(seed) } else { "n/a".into() },
 				format_public_key::<Self>(public_key.clone()),
-				format_account_id::<Self>(public_key),
-				Self::ss58_from_pair(&pair)
+				format_account_id::<Self>(public_key.clone()),
+				Self::ss58_from_pair(&pair),
+				Self::libp2p_id_from_public(public_key).to_base58()
 			);
 		} else if let Ok((public_key, v)) =
 			<Self::Pair as Pair>::Public::from_string_with_version(uri)
@@ -92,12 +105,14 @@ trait Crypto: Sized {
 				Network ID/version: {}\n  \
 				Public key (hex):   {}\n  \
 				Account ID:         {}\n  \
-				SS58 Address:       {}",
+				SS58 Address:       {}\n  \
+				Peer ID:            {}",
 				uri,
 				String::from(v),
 				format_public_key::<Self>(public_key.clone()),
 				format_account_id::<Self>(public_key.clone()),
-				public_key.to_ss58check_with_version(v)
+				public_key.clone().to_ss58check_with_version(v),
+				Self::libp2p_id_from_public(public_key).to_base58()
 			);
 		} else {
 			println!("Invalid phrase/URI given");
@@ -141,7 +156,7 @@ trait SignatureT: AsRef<[u8]> + AsMut<[u8]> + Default {
 		panic!("This cryptography isn't supported for this runtime.")
 	}
 }
-trait PublicT: Sized + AsRef<[u8]> + Ss58Codec {
+trait PublicT: Sized + AsRef<[u8]> + AsMut<[u8]> + Ss58Codec {
 	/// Converts the public key into a runtime account public key, if possible. If not possible, bombs out.
 	fn into_runtime(self) -> AccountPublic {
 		panic!("This cryptography isn't supported for this runtime.")
