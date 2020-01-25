@@ -969,6 +969,7 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 pub struct Config<T: Trait> {
 	pub schedule: Schedule,
 	pub existential_deposit: BalanceOf<T>,
+	pub tombstone_deposit: BalanceOf<T>,
 	pub max_depth: u32,
 	pub max_value_size: u32,
 	pub contract_account_instantiate_fee: BalanceOf<T>,
@@ -981,6 +982,7 @@ impl<T: Trait> Config<T> {
 		Config {
 			schedule: <Module<T>>::current_schedule(),
 			existential_deposit: T::Currency::minimum_balance(),
+			tombstone_deposit: T::TombstoneDeposit::get(),
 			max_depth: T::MaxDepth::get(),
 			max_value_size: T::MaxValueSize::get(),
 			contract_account_instantiate_fee: T::ContractFee::get(),
