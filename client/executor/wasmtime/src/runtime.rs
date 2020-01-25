@@ -195,14 +195,14 @@ fn scan_missing_functions(
 			}
 		}
 
-		// This import is not a function, not from env module, or doesn't have a corresponding host
+		// This import is a function, not from env module, or doesn't have a corresponding host
 		// function, or the signature is not matching.
 		let sig = cranelift_ir_signature(signature, &call_conv);
 
 		missing_functions.insert(
 			import_entry.module().to_string(),
 			import_entry.field().to_string(),
-			sig
+			sig,
 		);
 	}
 
@@ -237,7 +237,7 @@ fn create_compiled_unit(
 	let env_missing_functions = missing_functions_stubs.stubs.remove("env").unwrap_or_else(|| Vec::new());
 	context.name_instance(
 		"env".to_owned(),
-		instantiate_env_module(global_exports, compiler, host_functions, env_missing_functions)?
+		instantiate_env_module(global_exports, compiler, host_functions, env_missing_functions)?,
 	);
 
 	for (module, missing_functions_stubs) in missing_functions_stubs.stubs {
@@ -349,7 +349,7 @@ fn instantiate_env_module(
 	for MissingFunction { name, sig } in missing_functions_stubs {
 		let sig = translate_signature(
 			sig,
-			pointer_type
+			pointer_type,
 		);
 		let sig_id = module.signatures.push(sig.clone());
 		let func_id = module.functions.push(sig_id);
