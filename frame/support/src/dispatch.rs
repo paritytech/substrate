@@ -1039,20 +1039,20 @@ macro_rules! decl_module {
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
-			let c = || {
-				$crate::sp_std::if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
-					let _enter = span.enter();
-				}
-				{ $( $impl )* }
-				Ok(())
-			};
-			let r = c();
-			$crate::sp_std::if_std! {
-				println!("Result = {:?}", r);
+			#[cfg(feature = "std")]
+			{
+				use std::time::{Duration, Instant};
+				let now = Instant::now();
+				let c = || { { $( $impl )* }; Ok(()) };
+				let r = c();
+				println!("{}, {}, {:?}", stringify!($name), now.elapsed().as_nanos(), r);
+				r
 			}
-			r
+			#[cfg(not(feature = "std"))]
+			{
+				{ $( $impl )* };
+				Ok(())
+			}
 		}
 	};
 
@@ -1069,19 +1069,19 @@ macro_rules! decl_module {
 	) => {
 		$(#[doc = $doc_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-			let c = || {
-				$crate::sp_std::if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
-					let _enter = span.enter();
-				}
-				$( $impl )* 
-			};
-			let r = c();
-			$crate::sp_std::if_std! {
-				println!("Result = {:?}", r);
+			#[cfg(feature = "std")]
+			{
+				use std::time::{Duration, Instant};
+				let now = Instant::now();
+				let c = || { { $( $impl )* } };
+				let r = c();
+				println!("{}, {}, {:?}", stringify!($name), now.elapsed().as_nanos(), r);
+				r
 			}
-			r
+			#[cfg(not(feature = "std"))]
+			{
+				{ $( $impl )* }
+			}
 		}
 	};
 
@@ -1541,7 +1541,7 @@ macro_rules! impl_outer_dispatch {
 		}
 		impl $crate::dispatch::Default for $call_type {
 			fn default() -> Self {
-				<Self as $crate::benchmarking::Module>::get_call("Balances", "transfer")
+				<Self as $crate::benchmarking::Module>::get_call("System", "remark")
 			}
 		}
 		impl $crate::sp_core::BenchType for $call_type {}

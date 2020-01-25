@@ -245,9 +245,8 @@ decl_module! {
 
 		/// Make some on-chain remark.
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn remark(origin, remark: Vec<u8>) {
+		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
-			let r = remark;
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
@@ -284,12 +283,12 @@ decl_module! {
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
 		}
 
-		/// Set the new runtime code without doing any checks of the given `code`.
-		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
-		pub fn set_code_without_checks(origin, code: Vec<u8>) {
-			ensure_root(origin)?;
-			storage::unhashed::put_raw(well_known_keys::CODE, &code);
-		}
+		// /// Set the new runtime code without doing any checks of the given `code`.
+		// #[weight = SimpleDispatchInfo::FixedOperational(200_000)]
+		// pub fn set_code_without_checks(origin, code: Vec<u8>) {
+		// 	ensure_root(origin)?;
+		// 	storage::unhashed::put_raw(well_known_keys::CODE, &code);
+		// }
 
 		/// Set the new changes trie configuration.
 		#[weight = SimpleDispatchInfo::FixedOperational(20_000)]
