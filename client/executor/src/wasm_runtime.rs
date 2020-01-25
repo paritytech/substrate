@@ -191,15 +191,15 @@ pub fn create_wasm_runtime_with_code(
 	heap_pages: u64,
 	code: &[u8],
 	host_functions: Vec<&'static dyn Function>,
-	allow_missing_imports: bool,
+	allow_missing_func_imports: bool,
 ) -> Result<Box<dyn WasmRuntime>, WasmError> {
 	match wasm_method {
 		WasmExecutionMethod::Interpreted =>
-			sc_executor_wasmi::create_instance(code, heap_pages, host_functions, allow_missing_imports)
+			sc_executor_wasmi::create_instance(code, heap_pages, host_functions, allow_missing_func_imports)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled =>
-			sc_executor_wasmtime::create_instance(code, heap_pages, host_functions)
+			sc_executor_wasmtime::create_instance(code, heap_pages, host_functions, allow_missing_func_imports)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 	}
 }
