@@ -263,7 +263,7 @@ where
 				if module.as_str() == "Benchmark" && function == "clear" {
 					return CreateResult::Clear
 				}
-				println!("Creating a {}::{} extrinsic. Extrinsic {}/{} in this block.",
+				print!("-> {}::{}. {}/{}.",
 					module,
 					function,
 					tx_pushed + 1,

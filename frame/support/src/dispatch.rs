@@ -1045,7 +1045,7 @@ macro_rules! decl_module {
 				let now = Instant::now();
 				let c = || { { $( $impl )* }; Ok(()) };
 				let r = c();
-				println!("{}, {}, {:?}", stringify!($name), now.elapsed().as_nanos(), r);
+				println!("{name:>name_width$} {elapsed:>elapsed_width$} {:?}", r, name=stringify!($name), elapsed=now.elapsed().as_nanos(), name_width=20, elapsed_width=10);
 				r
 			}
 			#[cfg(not(feature = "std"))]
@@ -1075,7 +1075,7 @@ macro_rules! decl_module {
 				let now = Instant::now();
 				let c = || { { $( $impl )* } };
 				let r = c();
-				println!("{}, {}, {:?}", stringify!($name), now.elapsed().as_nanos(), r);
+				println!("{name:>name_width$} {elapsed:>elapsed_width$} {:?}", r, name=stringify!($name), elapsed=now.elapsed().as_nanos(), name_width=20, elapsed_width=10);
 				r
 			}
 			#[cfg(not(feature = "std"))]
