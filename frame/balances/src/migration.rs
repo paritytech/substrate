@@ -16,6 +16,7 @@
 
 //! Some utilities for helping access storage with arbitrary key types.
 
+use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use frame_support::{StorageHasher, Twox128};
 
