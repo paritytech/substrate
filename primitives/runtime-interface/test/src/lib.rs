@@ -41,7 +41,7 @@ fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
 		sc_executor::WasmExecutionMethod::Interpreted,
 		&mut ext_ext,
 		&WASM_BINARY[..],
-		8,
+		1024,
 		false,
 	).expect(&format!("Executes `{}`", method));
 

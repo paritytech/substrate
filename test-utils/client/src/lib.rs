@@ -169,7 +169,6 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		Backend: sc_client_api::backend::Backend<Block>,
 		Block: BlockT,
 	{
-
 		let storage = {
 			let mut storage = self.genesis_init.genesis_storage();
 
@@ -229,7 +228,7 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 		Block: BlockT,
 	{
 		let executor = executor.into().unwrap_or_else(||
-			NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+			NativeExecutor::new(WasmExecutionMethod::Compiled, None)
 		);
 		let executor = LocalCallExecutor::new(self.backend.clone(), executor);
 
