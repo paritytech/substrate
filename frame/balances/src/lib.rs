@@ -597,7 +597,7 @@ fn put_storage_value<T: Encode>(module: &[u8], item: &[u8], hash: &[u8], value: 
 	key[0..16].copy_from_slice(&Twox128::hash(module));
 	key[16..32].copy_from_slice(&Twox128::hash(item));
 	key[32..].copy_from_slice(hash);
-	value.using_encoded(|value| frame_support::storage::unhashed::put(&key, value));
+	frame_support::storage::unhashed::put(&key, &value);
 }
 
 fn kill_storage_value(module: &[u8], item: &[u8], hash: &[u8]) {
