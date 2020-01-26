@@ -151,16 +151,19 @@
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
 use codec::{Codec, Encode, Decode};
-use frame_support::{StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure, traits::{
-	UpdateBalanceOutcome, Currency, OnReapAccount, OnUnbalanced, TryDrop,
-	WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
-	Imbalance, SignedImbalance, ReservableCurrency, Get,
-}, weights::SimpleDispatchInfo, Twox128};
+use frame_support::{
+	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
+		weights::SimpleDispatchInfo, Twox128, traits::{
+		UpdateBalanceOutcome, Currency, OnReapAccount, OnUnbalanced, TryDrop,
+		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
+		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive
+	}
+};
 use sp_runtime::{
 	RuntimeDebug, DispatchResult, DispatchError,
 	traits::{
-		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
-		Saturating, Bounded,
+		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
+		MaybeSerializeDeserialize, Saturating, Bounded,
 	},
 };
 use frame_system::{self as system, IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
@@ -521,7 +524,7 @@ decl_module! {
 		) {
 			let transactor = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			<Self as Currency<_>>::transfer(&transactor, &dest, value, ExistenceRequirement::KeepAlive)?;
+			<Self as Currency<_>>::transfer(&transactor, &dest, value, KeepAlive)?;
 		}
 
 		fn on_initialize() {
@@ -628,7 +631,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	// Upgrade from the pre-#4649 balances/vesting into the new balances.
 	pub fn do_upgrade() {
-		// TODO: Handle Instance parameter in storage access.
 		// First, migrate from old FreeBalance to new Account.
 		// We also move all locks across since only accounts with FreeBalance values have locks.
 		// FreeBalance: map T::AccountId => T::Balance
