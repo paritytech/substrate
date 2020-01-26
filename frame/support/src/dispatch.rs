@@ -1042,10 +1042,11 @@ macro_rules! decl_module {
 			#[cfg(feature = "std")]
 			{
 				use std::time::{Duration, Instant};
-				let now = Instant::now();
 				let c = || { { $( $impl )* }; Ok(()) };
+				let now = Instant::now();
 				let r = c();
-				println!("{name:>name_width$} {elapsed:>elapsed_width$} {:?}", r, name=stringify!($name), elapsed=now.elapsed().as_nanos(), name_width=20, elapsed_width=10);
+				let elapsed = now.elapsed().as_nanos();
+				$crate::sc_tracing::push_data(std::module_path!(), stringify!($name), elapsed);
 				r
 			}
 			#[cfg(not(feature = "std"))]
@@ -1072,10 +1073,11 @@ macro_rules! decl_module {
 			#[cfg(feature = "std")]
 			{
 				use std::time::{Duration, Instant};
-				let now = Instant::now();
 				let c = || { { $( $impl )* } };
+				let now = Instant::now();
 				let r = c();
-				println!("{name:>name_width$} {elapsed:>elapsed_width$} {:?}", r, name=stringify!($name), elapsed=now.elapsed().as_nanos(), name_width=20, elapsed_width=10);
+				let elapsed = now.elapsed().as_nanos();
+				$crate::sc_tracing::push_data(std::module_path!(), stringify!($name), elapsed);
 				r
 			}
 			#[cfg(not(feature = "std"))]

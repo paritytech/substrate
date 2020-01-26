@@ -1338,6 +1338,7 @@ dependencies = [
  "parity-scale-codec 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "paste 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_assertions 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sc-tracing 2.0.0",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-arithmetic 2.0.0",
  "sp-core 2.0.0",
@@ -5857,6 +5858,7 @@ version = "2.0.0"
 dependencies = [
  "erased-serde 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "grafana-data-source 0.8.0",
+ "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-telemetry 2.0.0",

@@ -184,6 +184,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 				options,
 			);
 			factory_state.run().map_err(|e| format!("Error in transaction factory: {}", e))?;
+			sc_tracing::print_data();
 
 			Ok(())
 		}

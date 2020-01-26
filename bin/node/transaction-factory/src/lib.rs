@@ -263,9 +263,7 @@ where
 				if module.as_str() == "Benchmark" && function == "clear" {
 					return CreateResult::Clear
 				}
-				print!("-> {}::{}. {}/{}.",
-					module,
-					function,
+				println!("Progress {}/{}",
 					tx_pushed + 1,
 					self.options.tx_per_block,
 				);

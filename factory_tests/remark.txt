@@ -1,2 +1,2 @@
 0 1 Benchmark next_block
-1 1 System remark 30000
+1 1 System remark 50000
