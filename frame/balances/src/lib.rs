@@ -148,12 +148,18 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
+mod migration;
+
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
-		weights::SimpleDispatchInfo, Twox128, traits::{
+		weights::SimpleDispatchInfo, traits::{
 		UpdateBalanceOutcome, Currency, OnReapAccount, OnUnbalanced, TryDrop,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive
@@ -167,11 +173,7 @@ use sp_runtime::{
 	},
 };
 use frame_system::{self as system, IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
-
-#[cfg(test)]
-mod mock;
-#[cfg(test)]
-mod tests;
+use migration::{get_storage_value, put_storage_value, StorageIterator};
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
@@ -344,7 +346,7 @@ pub struct AccountData<Balance> {
 
 impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
 	/// How much this account's balance can be reduced for the given `reasons`.
-	pub fn usable(&self, reasons: Reasons) -> Balance {
+	fn usable(&self, reasons: Reasons) -> Balance {
 		self.free.saturating_sub(self.frozen(reasons))
 	}
 	/// The amount that this account's free balance may not be reduced beyond for the given
@@ -536,78 +538,6 @@ decl_module! {
 	}
 }
 
-pub struct StorageIterator<T> {
-	prefix: [u8; 32],
-	previous_key: Vec<u8>,
-	drain: bool,
-	_phantom: ::sp_std::marker::PhantomData<T>,
-}
-
-use frame_support::StorageHasher;
-
-impl<T> StorageIterator<T> {
-	fn new(module: &[u8], item: &[u8]) -> Self {
-		let mut prefix = [0u8; 32];
-		prefix[0..16].copy_from_slice(&Twox128::hash(module));
-		prefix[16..32].copy_from_slice(&Twox128::hash(item));
-		Self { prefix, previous_key: prefix[..].to_vec(), drain: false, _phantom: Default::default() }
-	}
-	fn drain(mut self) -> Self {
-		self.drain = true;
-		self
-	}
-}
-
-impl<T: Decode + Sized> Iterator for StorageIterator<T> {
-	type Item = (Vec<u8>, T);
-	fn next(&mut self) -> Option<(Vec<u8>, T)> {
-		loop {
-			let maybe_next = sp_io::storage::next_key(&self.previous_key)
-				.filter(|n| n.starts_with(&self.prefix));
-			break match maybe_next {
-				Some(next) => {
-					self.previous_key = next.clone();
-					let maybe_value = frame_support::storage::unhashed::get::<T>(&next);
-					match maybe_value {
-						Some(value) => {
-							if self.drain {
-								frame_support::storage::unhashed::kill(&next);
-							}
-							Some((self.previous_key[32..].to_vec(), value))
-						}
-						None => continue,
-					}
-				}
-				None => None,
-			}
-		}
-	}
-}
-
-fn get_storage_value<T: Decode + Sized>(module: &[u8], item: &[u8], hash: &[u8]) -> Option<T> {
-	let mut key = vec![0u8; 32 + hash.len()];
-	key[0..16].copy_from_slice(&Twox128::hash(module));
-	key[16..32].copy_from_slice(&Twox128::hash(item));
-	key[32..].copy_from_slice(hash);
-	frame_support::storage::unhashed::get::<T>(&key)
-}
-
-fn put_storage_value<T: Encode>(module: &[u8], item: &[u8], hash: &[u8], value: T) {
-	let mut key = vec![0u8; 32 + hash.len()];
-	key[0..16].copy_from_slice(&Twox128::hash(module));
-	key[16..32].copy_from_slice(&Twox128::hash(item));
-	key[32..].copy_from_slice(hash);
-	frame_support::storage::unhashed::put(&key, &value);
-}
-
-fn kill_storage_value(module: &[u8], item: &[u8], hash: &[u8]) {
-	let mut key = vec![0u8; 32 + hash.len()];
-	key[0..16].copy_from_slice(&Twox128::hash(module));
-	key[16..32].copy_from_slice(&Twox128::hash(item));
-	key[32..].copy_from_slice(hash);
-	frame_support::storage::unhashed::kill(&key);
-}
-
 #[derive(Decode)]
 struct OldBalanceLock<Balance, BlockNumber> {
 	id: LockIdentifier,
@@ -693,6 +623,18 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Get the free balance of an account.
 	pub fn free_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
 		Account::<T, I>::get(who.borrow()).free
+	}
+
+	/// Get the balance of an account that can be used for transfers, reservations, or any other
+	/// non-locking, non-transaction-fee activity. Will be at most `free_balance`.
+	pub fn usable_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
+		Account::<T, I>::get(who.borrow()).usable(Reasons::Misc)
+	}
+
+	/// Get the balance of an account that can be used for paying transaction fees (not tipping,
+	/// or any other kind of fees, though). Will be at most `free_balance`.
+	pub fn usable_balance_for_fees(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
+		Account::<T, I>::get(who.borrow()).usable(Reasons::Fee)
 	}
 
 	/// Get the reserved balance of an account.

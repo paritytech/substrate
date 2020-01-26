@@ -1167,7 +1167,7 @@ mod tests {
 	use std::cell::RefCell;
 	use frame_support::{
 		impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
-		ord_parameter_types, traits::{Contains, ExistenceRequirement::AllowDeath}, weights::Weight,
+		ord_parameter_types, traits::Contains, weights::Weight,
 	};
 	use sp_core::H256;
 	use sp_runtime::{
@@ -1297,9 +1297,12 @@ mod tests {
 	type Democracy = Module<Test>;
 
 	#[test]
-	fn refresh_from_data() {
+	fn lock_info_via_migration_should_work() {
 		let mut s = Storage::default();
-		use hex_literal::*;
+		use hex_literal::hex;
+		// A dump of data from the previous version for which we know account 1 has 5 of its 10
+		// reserved and 3 of the rest is locked for misc. Account 2 has all 20 locked until block 5
+		// for everything and additionally 3 locked for just fees.
 		let data = vec![
 			(hex!["26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac"].to_vec(), hex!["0100000000000000"].to_vec()),
 			(hex!["26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850"].to_vec(), hex!["02000000"].to_vec()),
@@ -1314,6 +1317,7 @@ mod tests {
 			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f218f26c73add634897550b4003b26bc6e88b43fded6323ef02ffeffbd8c40846ee09bf316271bd22369659c959dd733a"].to_vec(), hex!["08616c6c20202020200300000000000000ffffffffffffffff1f64656d6f63726163ffffffffffffffff030000000000000002"].to_vec()),
 			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f3c22813def93ef32c365b55cb92f10f91dbd7d0b561a41d23c2a469ad42fbd70d5438bae826f6fd607413190c37c363b"].to_vec(), hex!["0500000000000000"].to_vec()),
 			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80"].to_vec(), hex!["d200000000000000"].to_vec()),
+			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f5f27b51b5ec208ee9cb25b55d8728243b8788bb218b185b63e3e92653953f29b6b143fb8cf5159fc908632e6fe490501"].to_vec(), hex!["1e0000000000000006000000000000000200000000000000"].to_vec()),
 			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b41dbd7d0b561a41d23c2a469ad42fbd70d5438bae826f6fd607413190c37c363b"].to_vec(), hex!["0500000000000000"].to_vec()),
 			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b46cddb367afbd583bb48f9bbd7d5ba3b1d0738b4881b1cddd38169526d8158137"].to_vec(), hex!["1e00000000000000"].to_vec()),
 			(hex!["c2261276cc9d1f8598ea4b6a74b15c2f6482b9ade7bc6657aaca787ba1add3b4b8788bb218b185b63e3e92653953f29b6b143fb8cf5159fc908632e6fe490501"].to_vec(), hex!["3c00000000000000"].to_vec()),
@@ -1329,16 +1333,15 @@ mod tests {
 			Balances::on_initialize(1);
 			assert_eq!(Balances::free_balance(&1), 5);
 			assert_eq!(Balances::reserved_balance(&1), 5);
+			assert_eq!(Balances::usable_balance(&1), 2);
+			assert_eq!(Balances::usable_balance_for_fees(&1), 5);
 			assert_eq!(Balances::free_balance(&2), 20);
 			assert_eq!(Balances::reserved_balance(&2), 0);
-			// only 7 available for xfer
-			assert!(<Balances as Currency<_>>::transfer(&1, &2, 8, AllowDeath).is_err());
-			// all 20 locked until #5.
-			assert!(<Balances as Currency<_>>::transfer(&2, &1, 1, AllowDeath).is_err());
-			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 2, AllowDeath));
+			assert_eq!(Balances::usable_balance(&2), 0);
+			assert_eq!(Balances::usable_balance_for_fees(&2), 17);
 			fast_forward_to(5);
 			assert_ok!(Democracy::unlock(Origin::signed(2), 2));
-			assert_ok!(<Balances as Currency<_>>::transfer(&2, &1, 17, AllowDeath));
+			assert_eq!(Balances::usable_balance(&2), 17);
 		});
 	}
 

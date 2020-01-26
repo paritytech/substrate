@@ -98,6 +98,7 @@ members = [
 	"frame/transaction-payment/rpc/runtime-api",
 	"frame/treasury",
 	"frame/utility",
+	"frame/vesting",
 	"primitives/allocator",
 	"primitives/application-crypto",
 	"primitives/application-crypto/test",
