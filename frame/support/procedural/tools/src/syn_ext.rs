@@ -164,39 +164,6 @@ impl ToTokens for OuterAttributes {
 	}
 }
 
-#[derive(Debug)]
-pub struct Opt<P> {
-	pub inner: Option<P>,
-}
-
-impl<P: Parse> Parse for Opt<P> {
-	// Note that it cost a double parsing (same as enum derive)
-	fn parse(input: ParseStream) -> Result<Self> {
-		let inner = match input.fork().parse::<P>() {
-			Ok(_item) => Some(input.parse().expect("Same parsing ran before")),
-			Err(_e) => None,
-		};
-
-		Ok(Opt { inner })
-	}
-}
-
-impl<P: ToTokens> ToTokens for Opt<P> {
-	fn to_tokens(&self, tokens: &mut TokenStream) {
-		if let Some(ref p) = self.inner {
-			p.to_tokens(tokens);
-		}
-	}
-}
-
-impl <P: Clone> Clone for Opt<P> {
-	fn clone(&self) -> Self {
-		Self {
-			inner: self.inner.clone()
-		}
-	}
-}
-
 pub fn extract_type_option(typ: &syn::Type) -> Option<syn::Type> {
 	if let syn::Type::Path(ref path) = typ {
 		let v = path.path.segments.last()?;

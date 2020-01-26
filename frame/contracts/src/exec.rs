@@ -161,6 +161,9 @@ pub trait Ext {
 	/// Returns the minimum balance that is required for creating an account.
 	fn minimum_balance(&self) -> BalanceOf<Self::T>;
 
+	/// Returns the deposit required to create a tombstone upon contract eviction.
+	fn tombstone_deposit(&self) -> BalanceOf<Self::T>;
+
 	/// Returns a random number for the current block with the given subject.
 	fn random(&self, subject: &[u8]) -> SeedOf<Self::T>;
 
@@ -777,6 +780,10 @@ where
 
 	fn minimum_balance(&self) -> BalanceOf<T> {
 		self.ctx.config.existential_deposit
+	}
+
+	fn tombstone_deposit(&self) -> BalanceOf<T> {
+		self.ctx.config.tombstone_deposit
 	}
 
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {

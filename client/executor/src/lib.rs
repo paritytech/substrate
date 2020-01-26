@@ -48,7 +48,7 @@ pub use sp_core::traits::Externalities;
 pub use sp_wasm_interface;
 pub use wasm_runtime::WasmExecutionMethod;
 
-pub use sc_executor_common::{error, allocator, sandbox};
+pub use sc_executor_common::{error, sandbox};
 
 /// Call the given `function` in the given wasm `code`.
 ///
@@ -68,7 +68,7 @@ pub fn call_in_wasm<HF: sp_wasm_interface::HostFunctions>(
 	ext: &mut dyn Externalities,
 	code: &[u8],
 	heap_pages: u64,
-	allow_missing_imports: bool,
+	allow_missing_func_imports: bool,
 ) -> error::Result<Vec<u8>> {
 	call_in_wasm_with_host_functions(
 		function,
@@ -78,7 +78,7 @@ pub fn call_in_wasm<HF: sp_wasm_interface::HostFunctions>(
 		code,
 		heap_pages,
 		HF::host_functions(),
-		allow_missing_imports,
+		allow_missing_func_imports,
 	)
 }
 
@@ -92,14 +92,14 @@ pub fn call_in_wasm_with_host_functions(
 	code: &[u8],
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn sp_wasm_interface::Function>,
-	allow_missing_imports: bool,
+	allow_missing_func_imports: bool,
 ) -> error::Result<Vec<u8>> {
 	let instance = wasm_runtime::create_wasm_runtime_with_code(
 		execution_method,
 		heap_pages,
 		code,
 		host_functions,
-		allow_missing_imports,
+		allow_missing_func_imports,
 	)?;
 
 	// It is safe, as we delete the instance afterwards.

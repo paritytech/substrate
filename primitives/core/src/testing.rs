@@ -127,6 +127,10 @@ impl crate::traits::BareCryptoStore for KeyStore {
 	fn password(&self) -> Option<&str> {
 		None
 	}
+
+	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+		public_keys.iter().all(|(k, t)| self.keys.get(&t).and_then(|s| s.get(k)).is_some())
+	}
 }
 
 /// Macro for exporting functions from wasm in with the expected signature for using it with the
