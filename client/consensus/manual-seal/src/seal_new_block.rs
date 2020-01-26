@@ -38,6 +38,9 @@ use std::collections::HashMap;
 use std::time::Duration;
 use sp_inherents::InherentDataProviders;
 
+/// max duration for creating a proposal in secs
+const MAX_PROPOSAL_DURATION: u64 = 10;
+
 /// params for sealing a new block
 pub struct SealBlockParams<'a, B: BlockT, C, CB, E, T, P: txpool::ChainApi> {
 	/// if true, empty blocks(without extrinsics) will be created.
@@ -52,7 +55,7 @@ pub struct SealBlockParams<'a, B: BlockT, C, CB, E, T, P: txpool::ChainApi> {
 	/// transaction pool
 	pub pool: Arc<txpool::Pool<P>>,
 	/// client backend
-	pub back_end: Arc<CB>,
+	pub backend: Arc<CB>,
 	/// Environment trait object for creating a proposer
 	pub env: &'a mut E,
 	/// SelectChain object
@@ -70,7 +73,7 @@ pub async fn seal_new_block<B, SC, CB, E, T, P>(
 		finalize,
 		pool,
 		parent_hash,
-		back_end,
+		backend: back_end,
 		select_chain,
 		block_import,
 		env,
@@ -90,7 +93,7 @@ pub async fn seal_new_block<B, SC, CB, E, T, P>(
 {
 	let future = async {
 		if pool.status().ready == 0 && !create_empty {
-			return Err(Error::EmptyTransactionPool);
+			return Err(Error::EmptyTransactionPool)
 		}
 
 		// get the header to build this new block on.
@@ -107,19 +110,13 @@ pub async fn seal_new_block<B, SC, CB, E, T, P>(
 		};
 
 		let mut proposer = env.init(&header)
-			.map_err(|err| {
-				// <E as Environment<B>::Error>: fmt::Display
-				Error::StringError(format!("{}", err))
-			}).await?;
+			.map_err(|err| Error::StringError(format!("{}", err))).await?;
 		let id = inherent_data_provider.create_inherent_data()?;
-		let proposal = proposer.propose(id, Default::default(), Duration::from_secs(5), false.into())
-			.map_err(|err| {
-				// <<<E as Environment<B>::Proposer> as Proposer<B>>::Error: fmt::Display
-				Error::StringError(format!("{}", err))
-			}).await?;
+		let proposal = proposer.propose(id, Default::default(), Duration::from_secs(MAX_PROPOSAL_DURATION), false.into())
+			.map_err(|err| Error::StringError(format!("{}", err))).await?;
 
 		if proposal.block.extrinsics().is_empty() && !create_empty {
-			return Err(Error::EmptyTransactionPool);
+			return Err(Error::EmptyTransactionPool)
 		}
 
 		let (header, body) = proposal.block.deconstruct();

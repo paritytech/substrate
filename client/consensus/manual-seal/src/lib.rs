@@ -122,7 +122,7 @@ pub fn import_queue<B: BlockT>(block_import: BoxBlockImport<B, ()>) -> BasicQueu
 pub async fn run_manual_seal<B, CB, E, A, C, S, T>(
 	mut block_import: BoxBlockImport<B, T>,
 	mut env: E,
-	back_end: Arc<CB>,
+	backend: Arc<CB>,
 	pool: Arc<txpool::Pool<A>>,
 	mut seal_block_channel: S,
 	select_chain: C,
@@ -157,7 +157,7 @@ pub async fn run_manual_seal<B, CB, E, A, C, S, T>(
 						block_import: &mut block_import,
 						inherent_data_provider: &inherent_data_providers,
 						pool: pool.clone(),
-						back_end: back_end.clone(),
+						backend: backend.clone(),
 					}
 				).await;
 			}
@@ -167,7 +167,7 @@ pub async fn run_manual_seal<B, CB, E, A, C, S, T>(
 						hash,
 						sender,
 						justification,
-						back_end: back_end.clone(),
+						backend: backend.clone(),
 					}
 				).await
 			}
@@ -181,7 +181,7 @@ pub async fn run_manual_seal<B, CB, E, A, C, S, T>(
 pub async fn run_instant_seal<B, CB, E, A, C, T>(
 	block_import: BoxBlockImport<B, T>,
 	env: E,
-	back_end: Arc<CB>,
+	backend: Arc<CB>,
 	pool: Arc<txpool::Pool<A>>,
 	select_chain: C,
 	inherent_data_providers: InherentDataProviders,
@@ -210,7 +210,7 @@ pub async fn run_instant_seal<B, CB, E, A, C, T>(
 	run_manual_seal(
 		block_import,
 		env,
-		back_end,
+		backend,
 		pool,
 		seal_block_channel,
 		select_chain,

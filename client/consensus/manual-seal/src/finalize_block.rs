@@ -34,7 +34,7 @@ pub struct FinalizeBlockParams<B: BlockT, CB> {
 	/// finalization justification
 	pub justification: Option<Justification>,
 	/// client backend
-	pub back_end: Arc<CB>,
+	pub backend: Arc<CB>,
 }
 
 /// finalizes a block in the backend with the given params.
@@ -47,7 +47,7 @@ pub async fn finalize_block<B, CB>(params: FinalizeBlockParams<B, CB>)
 		hash,
 		mut sender,
 		justification,
-		back_end,
+		backend: back_end,
 		..
 	} = params;
 

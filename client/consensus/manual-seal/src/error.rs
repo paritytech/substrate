@@ -16,17 +16,25 @@
 
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
-use derive_more::{Display, From};
 use sp_consensus::{Error as ConsensusError, ImportResult};
 use sp_blockchain::Error as BlockchainError;
 use sp_inherents::Error as InherentsError;
 use futures::channel::{oneshot, mpsc::SendError};
 
 /// Error code for rpc
-const SERVER_SHUTTING_DOWN: i64 = -54321;
+mod codes {
+	pub const SERVER_SHUTTING_DOWN: i64 = 10_000;
+	pub const BLOCK_IMPORT_FAILED: i64 = 11_000;
+	pub const EMPTY_TRANSACTION_POOL: i64 = 12_000;
+	pub const BLOCK_NOT_FOUND: i64 = 13_000;
+	pub const CONSENSUS_ERROR: i64 = 14_000;
+	pub const INHERENTS_ERROR: i64 = 15_000;
+	pub const BLOCKCHAIN_ERROR: i64 = 16_000;
+	pub const UNKNOWN_ERROR: i64 = 20_000;
+}
 
 /// errors encountered by background block authorship task
-#[derive(Display, Debug, From)]
+#[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// An error occurred while importing the block
 	#[display(fmt = "Block import failed: {:?}", _0)]
@@ -63,18 +71,27 @@ pub enum Error {
 	Other(Box<dyn std::error::Error + Send>),
 }
 
+impl Error {
+	fn to_code(&self) -> i64 {
+		use Error::*;
+		match self {
+			BlockImportError(_) => codes::BLOCK_IMPORT_FAILED,
+			BlockNotFound(_) => codes::BLOCK_NOT_FOUND,
+			EmptyTransactionPool => codes::EMPTY_TRANSACTION_POOL,
+			ConsensusError(_) => codes::CONSENSUS_ERROR,
+			InherentError(_) => codes::INHERENTS_ERROR,
+			BlockchainError(_) => codes::BLOCKCHAIN_ERROR,
+			SendError(_) | Canceled(_) => codes::SERVER_SHUTTING_DOWN,
+			_ => codes::UNKNOWN_ERROR
+		}
+	}
+}
+
 impl std::convert::From<Error> for jsonrpc_core::Error {
 	fn from(error: Error) -> Self {
-		use Error::*;
-
-		let (code, message) = match error {
-			SendError(_) | Canceled(_) => (SERVER_SHUTTING_DOWN, "Consensus process is terminating".into()),
-			other => (500, format!("{}", other))
-		};
-
 		jsonrpc_core::Error {
-			code: jsonrpc_core::ErrorCode::ServerError(code),
-			message,
+			code: jsonrpc_core::ErrorCode::ServerError(error.to_code()),
+			message: format!("{}", error),
 			data: None
 		}
 	}
