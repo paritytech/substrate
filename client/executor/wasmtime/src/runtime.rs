@@ -18,7 +18,12 @@
 
 use crate::function_executor::FunctionExecutorState;
 use crate::trampoline::{EnvState, make_trampoline};
-use crate::util::{cranelift_ir_signature, read_memory_into, write_memory_from};
+use crate::util::{
+	cranelift_ir_signature,
+	convert_parity_wasm_signature,
+	read_memory_into,
+	write_memory_from
+};
 
 use sc_executor_common::{
 	error::{Error, Result, WasmError},
@@ -86,8 +91,9 @@ pub fn create_instance(
 	code: &[u8],
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
+	allow_missing_func_imports: bool,
 ) -> std::result::Result<WasmtimeRuntime, WasmError> {
-	let (compiled_module, context) = create_compiled_unit(code, &host_functions)?;
+	let (compiled_module, context) = create_compiled_unit(code, &host_functions, allow_missing_func_imports)?;
 
 	// Inspect the module for the min and max memory sizes.
 	let (min_memory_size, max_memory_size) = {
@@ -115,9 +121,95 @@ pub fn create_instance(
 	})
 }
 
+#[derive(Debug)]
+struct MissingFunction {
+	name: String,
+	sig: cranelift_codegen::ir::Signature,
+}
+
+#[derive(Debug)]
+struct MissingFunctionStubs {
+	stubs: HashMap<String, Vec<MissingFunction>>,
+}
+
+impl MissingFunctionStubs {
+	fn new() -> Self {
+		Self {
+			stubs: HashMap::new(),
+		}
+	}
+
+	fn insert(&mut self, module: String, name: String, sig: cranelift_codegen::ir::Signature) {
+		self.stubs.entry(module).or_insert_with(Vec::new).push(MissingFunction {
+			name,
+			sig,
+		});
+	}
+}
+
+fn scan_missing_functions(
+	code: &[u8],
+	host_functions: &[&'static dyn Function],
+) -> std::result::Result<MissingFunctionStubs, WasmError> {
+	let isa = target_isa()?;
+	let call_conv = isa.default_call_conv();
+
+	let module = parity_wasm::elements::Module::from_bytes(code)
+		.map_err(|e| WasmError::Other(format!("cannot deserialize error: {}", e)))?;
+
+	let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
+	let import_entries = module
+		.import_section()
+		.map(|is| is.entries())
+		.unwrap_or(&[]);
+
+	let mut missing_functions = MissingFunctionStubs::new();
+	for import_entry in import_entries {
+		let func_ty = match import_entry.external() {
+			parity_wasm::elements::External::Function(func_ty_idx) => {
+				let parity_wasm::elements::Type::Function(ref func_ty) =
+					types.get(*func_ty_idx as usize).ok_or_else(|| {
+						WasmError::Other(format!("corrupted module, type out of bounds"))
+					})?;
+				func_ty
+			}
+			_ => {
+				// We are looking only for missing **functions** here. Any other items, be they
+				// missing or not, will be handled at the resolution stage later.
+				continue;
+			}
+		};
+		let signature = convert_parity_wasm_signature(func_ty);
+
+		if import_entry.module() == "env" {
+			if let Some(hf) = host_functions
+				.iter()
+				.find(|hf| hf.name() == import_entry.field())
+			{
+				if signature == hf.signature() {
+					continue;
+				}
+			}
+		}
+
+		// This function is either not from the env module, or doesn't have a corresponding host
+		// function, or the signature is not matching. Add it to the list.
+		let sig = cranelift_ir_signature(signature, &call_conv);
+
+		missing_functions.insert(
+			import_entry.module().to_string(),
+			import_entry.field().to_string(),
+			sig,
+		);
+	}
+
+	Ok(missing_functions)
+}
+
 fn create_compiled_unit(
 	code: &[u8],
 	host_functions: &[&'static dyn Function],
+	allow_missing_func_imports: bool,
 ) -> std::result::Result<(CompiledModule, Context), WasmError> {
 	let compilation_strategy = CompilationStrategy::Cranelift;
 
@@ -130,8 +222,27 @@ fn create_compiled_unit(
 	// Instantiate and link the env module.
 	let global_exports = context.get_global_exports();
 	let compiler = new_compiler(compilation_strategy)?;
-	let env_module = instantiate_env_module(global_exports, compiler, host_functions)?;
-	context.name_instance("env".to_owned(), env_module);
+
+	let mut missing_functions_stubs = if allow_missing_func_imports {
+		scan_missing_functions(code, host_functions)?
+	} else {
+		// If there are in fact missing functions they will be detected at the instantiation time
+		// and the module will be rejected.
+		MissingFunctionStubs::new()
+	};
+
+	let env_missing_functions = missing_functions_stubs.stubs.remove("env").unwrap_or_else(|| Vec::new());
+	context.name_instance(
+		"env".to_owned(),
+		instantiate_env_module(global_exports, compiler, host_functions, env_missing_functions)?,
+	);
+
+	for (module, missing_functions_stubs) in missing_functions_stubs.stubs {
+		let compiler = new_compiler(compilation_strategy)?;
+		let global_exports = context.get_global_exports();
+		let instance = instantiate_env_module(global_exports, compiler, &[], missing_functions_stubs)?;
+		context.name_instance(module, instance);
+	}
 
 	// Compile the wasm module.
 	let module = context.compile_module(&code)
@@ -199,6 +310,7 @@ fn instantiate_env_module(
 	global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
 	compiler: Compiler,
 	host_functions: &[&'static dyn Function],
+	missing_functions_stubs: Vec<MissingFunction>,
 ) -> std::result::Result<InstanceHandle, WasmError>
 {
 	let isa = target_isa()?;
@@ -221,6 +333,26 @@ fn instantiate_env_module(
 			.exports
 			.insert(function.name().to_string(), wasmtime_environ::Export::Function(func_id));
 
+		let trampoline = make_trampoline(
+			isa.as_ref(),
+			&mut code_memory,
+			&mut fn_builder_ctx,
+			func_id.index() as u32,
+			&sig,
+		)?;
+		finished_functions.push(trampoline);
+	}
+
+	for MissingFunction { name, sig } in missing_functions_stubs {
+		let sig = translate_signature(
+			sig,
+			pointer_type,
+		);
+		let sig_id = module.signatures.push(sig.clone());
+		let func_id = module.functions.push(sig_id);
+		module
+			.exports
+			.insert(name, wasmtime_environ::Export::Function(func_id));
 		let trampoline = make_trampoline(
 			isa.as_ref(),
 			&mut code_memory,

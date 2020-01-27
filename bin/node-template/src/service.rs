@@ -43,9 +43,7 @@ macro_rules! new_full_start {
 			.with_transaction_pool(|config, client, _fetcher| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
 				let pool = sc_transaction_pool::BasicPool::new(config, pool_api);
-				let maintainer = sc_transaction_pool::FullBasicPoolMaintainer::new(pool.pool().clone(), client);
-				let maintainable_pool = sp_transaction_pool::MaintainableTransactionPool::new(pool, maintainer);
-				Ok(maintainable_pool)
+				Ok(pool)
 			})?
 			.with_import_queue(|_config, client, mut select_chain, transaction_pool| {
 				let select_chain = select_chain.take()
@@ -163,7 +161,7 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 				service.network(),
 				service.on_exit(),
 				service.spawn_task_handle(),
-			)?.compat().map(drop));
+			)?);
 		},
 		(true, false) => {
 			// start the full GRANDPA voter
@@ -180,7 +178,7 @@ pub fn new_full(config: Configuration<GenesisConfig>)
 
 			// the GRANDPA voter task is considered infallible, i.e.
 			// if it fails we take down the service with it.
-			service.spawn_essential_task(grandpa::run_grandpa_voter(voter_config)?.compat().map(drop));
+			service.spawn_essential_task(grandpa::run_grandpa_voter(voter_config)?);
 		},
 		(_, true) => {
 			grandpa::setup_disabled_grandpa(
@@ -207,11 +205,12 @@ pub fn new_light(config: Configuration<GenesisConfig>)
 		.with_transaction_pool(|config, client, fetcher| {
 			let fetcher = fetcher
 				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
+
 			let pool_api = sc_transaction_pool::LightChainApi::new(client.clone(), fetcher.clone());
-			let pool = sc_transaction_pool::BasicPool::new(config, pool_api);
-			let maintainer = sc_transaction_pool::LightBasicPoolMaintainer::with_defaults(pool.pool().clone(), client, fetcher);
-			let maintainable_pool = sp_transaction_pool::MaintainableTransactionPool::new(pool, maintainer);
-			Ok(maintainable_pool)
+			let pool = sc_transaction_pool::BasicPool::with_revalidation_type(
+				config, pool_api, sc_transaction_pool::RevalidationType::Light,
+			);
+			Ok(pool)
 		})?
 		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
 			let fetch_checker = fetcher

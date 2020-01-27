@@ -197,8 +197,6 @@ where
 		)?;
 		let parent_hash = self.parent_hash;
 
-		// The unsafe is required because the consume requires that we drop/consume the inner api
-		// (what we do here).
 		let storage_changes = self.api.into_storage_changes(
 			&state,
 			changes_trie_state.as_ref(),
