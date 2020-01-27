@@ -54,7 +54,7 @@ use sp_blockchain;
 use prometheus_exporter::{register, Gauge, Counter, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
 
 struct ServiceMetrics {
-	block_height: GaugeVec<U64>,
+	block_height_number: GaugeVec<U64>,
 	peers_count: Gauge<U64>,
 	transactions_total: Counter<U64>,
 	memory_usage_bytes: Gauge<U64>,
@@ -65,9 +65,9 @@ struct ServiceMetrics {
 impl ServiceMetrics {
 	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
-			block_height: register(GaugeVec::new(
-				Opts::new("block_height", "Height of the chain"),
-				&["number"]
+			block_height_number: register(GaugeVec::new(
+				Opts::new("block_height_number", "Height of the chain"),
+				&["status"]
 			)?, registry)?,
 			peers_count: register(Gauge::new(
 				"peers_count", "Number of network gossip peers",
@@ -1067,11 +1067,11 @@ ServiceBuilder<
 				metrics.network_per_sec_bytes.with_label_values(&["download"]).set(net_status.average_download_per_sec);
 				metrics.network_per_sec_bytes.with_label_values(&["upload"]).set(net_status.average_upload_per_sec);
 
-				metrics.block_height.with_label_values(&["finalized"]).set(finalized_number);
-				metrics.block_height.with_label_values(&["best"]).set(best_number);
+				metrics.block_height_number.with_label_values(&["finalized"]).set(finalized_number);
+				metrics.block_height_number.with_label_values(&["best"]).set(best_number);
 
 				if let Some(best_seen_block) = best_seen_block {
-					metrics.block_height.with_label_values(&["sync_target"]).set(best_seen_block);
+					metrics.block_height_number.with_label_values(&["sync_target"]).set(best_seen_block);
 				}
 			}
 
