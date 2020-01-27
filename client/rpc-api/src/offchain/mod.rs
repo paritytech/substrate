@@ -14,20 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Substrate RPC implementation.
-//!
-//! A core implementation of Substrate RPC interfaces.
+//! Substrate offchain API.
 
-#![warn(missing_docs)]
+pub mod error;
 
-mod metadata;
+use jsonrpc_derive::rpc;
+use self::error::Result;
+use sp_core::offchain::StorageKind;
 
-pub use sc_rpc_api::Subscriptions;
-pub use self::metadata::Metadata;
-pub use rpc::IoHandlerExtension as RpcExtension;
+pub use self::gen_client::Client as OffchainClient;
 
-pub mod author;
-pub mod chain;
-pub mod offchain;
-pub mod state;
-pub mod system;
+/// Substrate offchain RPC API
+#[rpc]
+pub trait OffchainApi {
+	/// Set offchain local storage under given key and prefix.
+	#[rpc(name = "offchain_localStorageSet")]
+	fn set_local_storage(&self, kind: StorageKind, key: Vec<u8>, value: Vec<u8>) -> Result<()>;
+
+	/// Get offchain local storage under given key and prefix.
+	#[rpc(name = "offchain_localStorageGet")]
+	fn get_local_storage(&self, kind: StorageKind, key: Vec<u8>) -> Result<Option<Vec<u8>>>;
+}
