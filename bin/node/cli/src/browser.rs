@@ -43,7 +43,7 @@ async fn start_inner(wasm_ext: Transport) -> Result<Client, Box<dyn std::error::
 
 	info!("Substrate browser node");
 	info!("  version {}", config.full_version());
-	info!("  by Parity Technologies, 2017-2019");
+	info!("  by Parity Technologies, 2017-2020");
 	info!("Chain specification: {}", config.chain_spec.name());
 	info!("Node name: {}", config.name);
 	info!("Roles: {:?}", config.roles);
