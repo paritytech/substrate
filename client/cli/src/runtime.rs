@@ -35,7 +35,7 @@ where
 	let t2 = stream_term.recv().fuse();
 	let mut t3 = func;
 
-	pin_mut!(t1, t2);
+	pin_mut!(t1, t2, t3);
 
 	select! {
 		_ = t1 => println!("Caught SIGINT"),
