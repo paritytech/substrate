@@ -109,8 +109,8 @@ impl Default for Options {
 				total_bytes: 20 * 1024 * 1024,
 			},
 			future: base::Limit {
-				count: 2048,
-				total_bytes: 5 * 1024 * 1024,
+				count: 512,
+				total_bytes: 1 * 1024 * 1024,
 			},
 			reject_future_transactions: false,
 		}
