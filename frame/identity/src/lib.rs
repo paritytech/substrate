@@ -890,10 +890,10 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 
 				for _r in 0..Self::REPEATS {
 					let instance = benchmarking::set_identity::instance(&c);
-					let start = sp_io::offchain::timestamp();
+					let start = sp_io::benchmarking::current_time();
 					instance.dispatch(Some(0).into());
-					let finish = sp_io::offchain::timestamp();
-					let elapsed = finish.0 - start.0;
+					let finish = sp_io::benchmarking::current_time();
+					let elapsed = finish - start;
 					results.push((c.clone(), elapsed));
 				}
 			}

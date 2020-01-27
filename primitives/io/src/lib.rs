@@ -772,6 +772,20 @@ pub trait Logging {
 	}
 }
 
+/// Interface that provides functions for benchmarking the runtime.
+#[runtime_interface]
+pub trait Benchmarking {
+		/// Get the number of nanoseconds passed since the UNIX epoch
+		///
+		/// WARNING! This is a non-deterministic call. Do not use this within
+		/// consensus critical logic.
+		fn current_time() -> u128 {
+			std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)
+				.expect("Unix time doesn't go backwards; qed")
+				.as_nanos()
+		}
+}
+
 /// Wasm-only interface that provides functions for interacting with the sandbox.
 #[runtime_interface(wasm_only)]
 pub trait Sandbox {
@@ -916,6 +930,7 @@ pub type SubstrateHostFunctions = (
 	logging::HostFunctions,
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
+	benchmarking::HostFunctions,
 );
 
 #[cfg(test)]

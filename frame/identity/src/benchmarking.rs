@@ -120,11 +120,13 @@ pub mod set_identity {
 	{
 		// Add r registrars
 		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap();
+		assert_eq!(Balances::set_balance(Origin::ROOT, 1u64.into(), 1_000_000_000_000, 0), Ok(()));
 		for i in 0..r.1 {
+			assert_eq!(Balances::set_balance(Origin::ROOT, i.into(), 1_000_000_000_000, 0), Ok(()));
 			assert_eq!(Identity::add_registrar(Origin::signed(1), i.into()), Ok(()));
-			assert_eq!(Identity::set_fee(Origin::signed(i.into()), 0, 10), Ok(()));
-			let fields = IdentityFields(IdentityField::Display | IdentityField::Legal);
-			assert_eq!(Identity::set_fields(Origin::signed(i.into()), 0, fields), Ok(()));
+//			assert_eq!(Identity::set_fee(Origin::signed(i.into()), i, 10), Ok(()));
+//			let fields = IdentityFields(IdentityField::Display | IdentityField::Legal);
+//			assert_eq!(Identity::set_fields(Origin::signed(i.into()), 0, fields), Ok(()));
 		}
 		
 		// Create identity info with x additional fields
