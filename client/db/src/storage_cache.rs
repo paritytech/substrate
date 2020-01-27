@@ -933,7 +933,7 @@ fn update_child_info(
 ) -> (Arc<OwnedChildInfo>, bool) {
 	if let Some(Some(weak_child_info)) = child_infos.get_mut(storage_key) {
 		if let Some(old_child_info) = weak_child_info.upgrade() {
-				if child_info != *old_child_info {
+			if child_info != *old_child_info {
 				let child_info = Arc::new(child_info);
 				*weak_child_info = Arc::downgrade(&child_info);
 				(child_info, true)
@@ -1419,44 +1419,6 @@ mod tests {
 			child_info.0.map(|ci| ci.as_ref().as_ref().root() == Some(child_root1.as_ref())),
 			Some(true),
 		);
-
-		// canonicalize last change that did forbid cache
-		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
-			shared.clone(),
-			Some(h2),
-		);
-		// change child root this time
-		s.cache.sync_cache(
-			&[],
-			&[],
-			vec![(child_key_1_vec(), Some(child_root2.as_ref().to_vec()))],
-			vec![(child_key_1_vec(), vec![(key.clone(), Some(vec![1]))], CHILD_INFO_1.to_owned())],
-			Some(h3),
-			Some(3),
-			true,
-		);
-		// cache do not work until canonicalized, this is rather unexpected to me
-		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
-		assert!(child_info.2 == true);
-
-		// canonicalize last block
-		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
-			shared.clone(),
-			Some(h3),
-		);
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h4), Some(4), true);
-
-		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
-		assert!(child_info.0.is_some());
-		assert!(child_info.1 == true);
-		assert!(child_info.2 == false);
-		// changed to new root
-		assert_eq!(
-			child_info.0.map(|ci| ci.as_ref().as_ref().root() == Some(child_root2.as_ref())),
-			Some(true),
-		);
 	}
 
 	#[test]
@@ -1468,79 +1430,87 @@ mod tests {
 		let h2 = H256::random();
 		let child_root1 = H256::random();
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
-			shared.clone(),
-			Some(root_parent),
-		);
-		// child info not here, this operation do cache in top child
-		// a 11 b key and None.
-		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
-		// untrusted (no match it uses the input).
-		assert!(child_info.2 == true);
-
-		let key = H256::random()[..].to_vec();
-		s.cache.sync_cache(
-			&[],
-			&[],
-			// we need a root (because the state does not have it and no child info will be returned).
-			vec![(child_key_1_vec(), Some(child_root1.as_ref().to_vec()))],
-			vec![(child_key_1_vec(), vec![(key.clone(), Some(vec![1, 2, 3, 4]))], CHILD_INFO_1.to_owned())],
-			Some(h0),
-			Some(0),
-			true,
-		);
-		// 11 + 32 key, 4 byte size (plus top 11 and 32 root)
-		assert_eq!(shared.lock().used_storage_cache_size(), 47 + 43 /* bytes */);
-		// cache do not work until canonicalized, this is rather unexpected to me
-		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
-		// no match
-		assert!(child_info.2 == true);
-		// canonicalize last block
-		let mut s = CachingState::new(
-			InMemoryBackend::<Blake2Hasher>::default(),
-			shared.clone(),
-			Some(h0),
-		);
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1), Some(1), true);
 		{
-			// child info already here
-			let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
-			assert!(child_info.0.is_some());
-			assert!(child_info.1 == true);
-			assert!(child_info.2 == false);
-			assert_eq!(
-				child_info.0.map(|ci| ci.as_ref().as_ref().root() == Some(child_root1.as_ref())),
-				Some(true),
+			let mut s = CachingState::new(
+				InMemoryBackend::<Blake2Hasher>::default(),
+				shared.clone(),
+				Some(root_parent),
 			);
-			let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_2).unwrap();
-			// mismatch on valid_as
-			assert!(child_info.0.is_none());
-		}	
+			// child info not here, this operation do cache in top child
+			// a 11 b key and None.
+			let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
+			// untrusted (no match it uses the input).
+			assert!(child_info.2 == true);
 
+			let key = H256::random()[..].to_vec();
+			s.cache.sync_cache(
+				&[],
+				&[],
+				// we need a root (because the state does not have it and no child info will be returned).
+				vec![(child_key_1_vec(), Some(child_root1.as_ref().to_vec()))],
+				vec![(child_key_1_vec(), vec![(key.clone(), Some(vec![1, 2, 3, 4]))], CHILD_INFO_1.to_owned())],
+				Some(h0),
+				Some(0),
+				true,
+			);
+			// 11 + 32 key, 4 byte size (plus top 11 and 32 root)
+			assert_eq!(shared.lock().used_storage_cache_size(), 47 + 43 /* bytes */);
+			// cache do not work until canonicalized, this is rather unexpected to me
+			let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
+			// no match
+			assert!(child_info.2 == true);
+			// canonicalize last block
+			let mut s = CachingState::new(
+				InMemoryBackend::<Blake2Hasher>::default(),
+				shared.clone(),
+				Some(h0),
+			);
+			s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1), Some(1), true);
+			{
+				// child info already here
+				let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
+				assert!(child_info.0.is_some());
+				assert!(child_info.1 == true);
+				assert!(child_info.2 == false);
+				assert_eq!(
+					child_info.0.map(|ci| ci.as_ref().as_ref().root() == Some(child_root1.as_ref())),
+					Some(true),
+				);
+				let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_2).unwrap();
+				// mismatch on valid_as
+				assert!(child_info.0.is_none());
+			}	
+
+			let mut s = CachingState::new(
+				InMemoryBackend::<Blake2Hasher>::default(),
+				shared.clone(),
+				Some(h1),
+			);
+			let key = H256::random()[..].to_vec();
+			s.cache.sync_cache(
+				&[],
+				&[],
+				vec![],
+				vec![(vec![0, 1, 2, 3], vec![(key.clone(), Some(vec![1, 2]))], CHILD_INFO_2.to_owned())],
+				Some(h2),
+				Some(2),
+				true,
+			);
+			// 4 + 32 key, 2 byte size (plus top 11 and 32 root)
+			assert_eq!(shared.lock().used_storage_cache_size(), 38 + 43 /* bytes */);
+		}
+		assert_eq!(shared.lock().clean_child_info(), 1);
 		let mut s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
 			shared.clone(),
 			Some(h1),
 		);
-		let key = H256::random()[..].to_vec();
-		s.cache.sync_cache(
-			&[],
-			&[],
-			vec![],
-			vec![(vec![0, 1, 2, 3], vec![(key.clone(), Some(vec![1, 2]))], CHILD_INFO_2.to_owned())],
-			Some(h2),
-			Some(2),
-			true,
-		);
-		// 4 + 32 key, 2 byte size (plus top 11 and 32 root)
-		assert_eq!(shared.lock().used_storage_cache_size(), 38 + 43 /* bytes */);
-		assert_eq!(shared.lock().clean_child_info(), 1);
-		// query back did init it as untrusted
 		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
 		assert!(child_info.0.is_some());
-		assert!(child_info.1 == false);
+		assert!(child_info.1 == true);
+		// not in cache so untrusted
 		assert!(child_info.2 == true);
+
 	}
 
 	#[test]
