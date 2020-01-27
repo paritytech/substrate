@@ -98,7 +98,8 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 			storage_changes: None,
 			finalized: true,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::LongestChain,
+			intermediates: HashMap::new(),
+			fork_choice: Some(ForkChoiceStrategy::LongestChain),
 			allow_missing_state: false,
 			import_existing: false,
 		};

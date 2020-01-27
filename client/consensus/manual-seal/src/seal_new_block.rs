@@ -116,7 +116,7 @@ pub async fn seal_new_block<B, SC, CB, E, T, P>(
 		let proposal = proposer.propose(id, Default::default(), Duration::from_secs(MAX_PROPOSAL_DURATION), false.into())
 			.map_err(|err| Error::StringError(format!("{}", err))).await?;
 
-		if proposal.block.extrinsics() == inherents_len && !create_empty {
+		if proposal.block.extrinsics().len() == inherents_len && !create_empty {
 			return Err(Error::EmptyTransactionPool)
 		}
 
@@ -130,7 +130,8 @@ pub async fn seal_new_block<B, SC, CB, E, T, P>(
 			finalized: finalize,
 			storage_changes: None,
 			auxiliary: Vec::new(),
-			fork_choice: ForkChoiceStrategy::LongestChain,
+			intermediates: HashMap::new(),
+			fork_choice: Some(ForkChoiceStrategy::LongestChain),
 			allow_missing_state: false,
 			import_existing: false,
 		};

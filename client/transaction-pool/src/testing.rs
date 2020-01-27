@@ -31,16 +31,24 @@ use substrate_test_runtime_client::{
 	AccountKeyring,
 };
 
+/// `ChainApi` for test environments
 pub struct TestApi {
+	/// transaction modifier
 	pub modifier: RwLock<Box<dyn Fn(&mut ValidTransaction) + Send + Sync>>,
+	/// cache of block number to extrinsics
 	pub chain_block_by_number: RwLock<HashMap<BlockNumber, Vec<Extrinsic>>>,
+	/// cache of block number to header
 	pub chain_headers_by_number: RwLock<HashMap<BlockNumber, Header>>,
+	/// cache of invalid hashes
 	pub invalid_hashes: RwLock<HashSet<ExHash<Self>>>,
+	/// validation requests
 	pub validation_requests: RwLock<Vec<Extrinsic>>,
+	/// used for calculating nonce for extrinsics
 	pub nonce_offset: u64,
 }
 
 impl TestApi {
+	/// create an instance of `TestApi`
 	pub fn default() -> Self {
 		TestApi {
 			modifier: RwLock::new(Box::new(|_| {})),
@@ -52,6 +60,7 @@ impl TestApi {
 		}
 	}
 
+	/// add a block to `TestApi`
 	pub fn push_block(&self, block_number: BlockNumber, xts: Vec<Extrinsic>) {
 		self.chain_block_by_number.write().insert(block_number, xts);
 		self.chain_headers_by_number.write().insert(block_number, Header {
@@ -140,6 +149,8 @@ impl sc_transaction_graph::ChainApi for TestApi {
 	}
 }
 
+/// get an instance of `BasicPool` with default options and `TestApi`
+/// as the `ChainApi`
 pub fn maintained_pool() -> BasicPool<TestApi, Block> {
 	BasicPool::new(Default::default(), TestApi::default())
 }
