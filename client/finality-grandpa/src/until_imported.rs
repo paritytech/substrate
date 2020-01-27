@@ -33,13 +33,15 @@ use sc_client_api::{BlockImportNotification, ImportNotifications};
 use futures::prelude::*;
 use futures::stream::Fuse;
 use futures_timer::Delay;
-use futures03::{StreamExt as _, TryStreamExt as _};
+use futures::channel::mpsc::UnboundedReceiver;
 use finality_grandpa::voter;
 use parking_lot::Mutex;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 use std::collections::{HashMap, VecDeque};
+use std::pin::Pin;
 use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
+use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use sp_finality_grandpa::AuthorityId;
 
@@ -70,13 +72,15 @@ pub(crate) trait BlockUntilImported<Block: BlockT>: Sized {
 }
 
 /// Buffering imported messages until blocks with given hashes are imported.
+#[pin_project::pin_project]
 pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, I, M: BlockUntilImported<Block>> {
-	import_notifications: Fuse<Box<dyn Stream<Item = BlockImportNotification<Block>, Error = ()> + Send>>,
+	import_notifications: Fuse<UnboundedReceiver<BlockImportNotification<Block>>>,
 	block_sync_requester: BlockSyncRequester,
 	status_check: BlockStatus,
+	#[pin]
 	inner: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
-	check_pending: Box<dyn Stream<Item = (), Error = std::io::Error> + Send>,
+	check_pending: Pin<Box<dyn Stream<Item = Result<(), std::io::Error>> + Send>>,
 	/// Mapping block hashes to their block number, the point in time it was
 	/// first encountered (Instant) and a list of GRANDPA messages referencing
 	/// the block hash.
@@ -87,8 +91,9 @@ pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, 
 impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> where
 	Block: BlockT,
 	BlockStatus: BlockStatusT<Block>,
+	BlockSyncRequester: BlockSyncRequesterT<Block>,
+	I: Stream<Item = M::Blocked>,
 	M: BlockUntilImported<Block>,
-	I: Stream,
 {
 	/// Create a new `UntilImported` wrapper.
 	pub(crate) fn new(
@@ -105,22 +110,19 @@ impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockSta
 		// used in the event of missed import notifications
 		const CHECK_PENDING_INTERVAL: Duration = Duration::from_secs(5);
 
-		let check_pending = futures03::stream::unfold(Delay::new(CHECK_PENDING_INTERVAL), |delay|
+		let check_pending = futures::stream::unfold(Delay::new(CHECK_PENDING_INTERVAL), |delay|
 			Box::pin(async move {
 				delay.await;
-				Some(((), Delay::new(CHECK_PENDING_INTERVAL)))
-			})).map(Ok).compat();
+				Some((Ok(()), Delay::new(CHECK_PENDING_INTERVAL)))
+			}));
 
 		UntilImported {
-			import_notifications: {
-				let stream = import_notifications.map::<_, fn(_) -> _>(|v| Ok::<_, ()>(v)).compat();
-				Box::new(stream) as Box<dyn Stream<Item = _, Error = _> + Send>
-			}.fuse(),
+			import_notifications: import_notifications.fuse(),
 			block_sync_requester,
 			status_check,
 			inner: stream.fuse(),
 			ready: VecDeque::new(),
-			check_pending: Box::new(check_pending),
+			check_pending: Box::pin(check_pending),
 			pending: HashMap::new(),
 			identifier,
 		}
@@ -131,24 +133,27 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 	Block: BlockT,
 	BStatus: BlockStatusT<Block>,
 	BSyncRequester: BlockSyncRequesterT<Block>,
-	I: Stream<Item=M::Blocked,Error=Error>,
+	I: Stream<Item = M::Blocked>,
 	M: BlockUntilImported<Block>,
 {
-	type Item = M::Blocked;
-	type Error = Error;
+	type Item = Result<M::Blocked, Error>;
 
-	fn poll(&mut self) -> Poll<Option<M::Blocked>, Error> {
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+		// We are using a `this` variable in order to allow multiple simultaneous mutable borrow
+		// to `self`.
+		let mut this = self.project();
+
 		loop {
-			match self.inner.poll()? {
-				Async::Ready(None) => return Ok(Async::Ready(None)),
-				Async::Ready(Some(input)) => {
+			match Stream::poll_next(Pin::new(&mut this.inner), cx) {
+				Poll::Ready(None) => return Poll::Ready(None),
+				Poll::Ready(Some(input)) => {
 					// new input: schedule wait of any parts which require
 					// blocks to be known.
-					let ready = &mut self.ready;
-					let pending = &mut self.pending;
+					let ready = &mut this.ready;
+					let pending = &mut this.pending;
 					M::schedule_wait(
 						input,
-						&self.status_check,
+						this.status_check,
 						|target_hash, target_number, wait| pending
 							.entry(target_hash)
 							.or_insert_with(|| (target_number, Instant::now(), Vec::new()))
@@ -157,37 +162,36 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 						|ready_item| ready.push_back(ready_item),
 					)?;
 				}
-				Async::NotReady => break,
+				Poll::Pending => break,
 			}
 		}
 
 		loop {
-			match self.import_notifications.poll() {
-				Err(_) => return Err(Error::Network(format!("Failed to get new message"))),
-				Ok(Async::Ready(None)) => return Ok(Async::Ready(None)),
-				Ok(Async::Ready(Some(notification))) => {
+			match Stream::poll_next(Pin::new(&mut this.import_notifications), cx) {
+				Poll::Ready(None) => return Poll::Ready(None),
+				Poll::Ready(Some(notification)) => {
 					// new block imported. queue up all messages tied to that hash.
-					if let Some((_, _, messages)) = self.pending.remove(&notification.hash) {
+					if let Some((_, _, messages)) = this.pending.remove(&notification.hash) {
 						let canon_number = notification.header.number().clone();
 						let ready_messages = messages.into_iter()
 							.filter_map(|m| m.wait_completed(canon_number));
 
-						self.ready.extend(ready_messages);
+						this.ready.extend(ready_messages);
 				 	}
 				}
-				Ok(Async::NotReady) => break,
+				Poll::Pending => break,
 			}
 		}
 
 		let mut update_interval = false;
-		while let Async::Ready(Some(_)) = self.check_pending.poll().map_err(Error::Timer)? {
+		while let Poll::Ready(Some(Ok(()))) = this.check_pending.poll_next_unpin(cx) {
 			update_interval = true;
 		}
 
 		if update_interval {
 			let mut known_keys = Vec::new();
-			for (&block_hash, &mut (block_number, ref mut last_log, ref v)) in &mut self.pending {
-				if let Some(number) = self.status_check.block_number(block_hash)? {
+			for (&block_hash, &mut (block_number, ref mut last_log, ref v)) in this.pending.iter_mut() {
+				if let Some(number) = this.status_check.block_number(block_hash)? {
 					known_keys.push((block_hash, number));
 				} else {
 					let next_log = *last_log + LOG_PENDING_INTERVAL;
@@ -199,13 +203,13 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 							Possible fork?",
 							block_hash,
 							v.len(),
-							self.identifier,
+							this.identifier,
 						);
 
 						// NOTE: when sending an empty vec of peers the
 						// underlying should make a best effort to sync the
 						// block from any peers it knows about.
-						self.block_sync_requester.set_sync_fork_request(
+						this.block_sync_requester.set_sync_fork_request(
 							vec![],
 							block_hash,
 							block_number,
@@ -217,23 +221,23 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 			}
 
 			for (known_hash, canon_number) in known_keys {
-				if let Some((_, _, pending_messages)) = self.pending.remove(&known_hash) {
+				if let Some((_, _, pending_messages)) = this.pending.remove(&known_hash) {
 					let ready_messages = pending_messages.into_iter()
 						.filter_map(|m| m.wait_completed(canon_number));
 
-					self.ready.extend(ready_messages);
+					this.ready.extend(ready_messages);
 				}
 			}
 		}
 
-		if let Some(ready) = self.ready.pop_front() {
-			return Ok(Async::Ready(Some(ready)))
+		if let Some(ready) = this.ready.pop_front() {
+			return Poll::Ready(Some(Ok(ready)))
 		}
 
-		if self.import_notifications.is_done() && self.inner.is_done() {
-			Ok(Async::Ready(None))
+		if this.import_notifications.is_done() && this.inner.is_done() {
+			Poll::Ready(None)
 		} else {
-			Ok(Async::NotReady)
+			Poll::Pending
 		}
 	}
 }
@@ -307,6 +311,8 @@ pub(crate) struct BlockGlobalMessage<Block: BlockT> {
 	inner: Arc<(AtomicUsize, Mutex<Option<CommunicationIn<Block>>>)>,
 	target_number: NumberFor<Block>,
 }
+
+impl<Block: BlockT> Unpin for BlockGlobalMessage<Block> {}
 
 impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 	type Blocked = CommunicationIn<Block>;
@@ -474,13 +480,12 @@ pub(crate) type UntilGlobalMessageBlocksImported<Block, BlockStatus, BlockSyncRe
 mod tests {
 	use super::*;
 	use crate::{CatchUp, CompactCommit};
-	use tokio::runtime::current_thread::Runtime;
 	use substrate_test_runtime_client::runtime::{Block, Hash, Header};
 	use sp_consensus::BlockOrigin;
 	use sc_client_api::BlockImportNotification;
 	use futures::future::Either;
 	use futures_timer::Delay;
-	use futures03::{channel::mpsc, future::FutureExt as _, future::TryFutureExt as _};
+	use futures::channel::mpsc;
 	use finality_grandpa::Precommit;
 
 	#[derive(Clone)]
@@ -588,13 +593,13 @@ mod tests {
 		// enact all dependencies before importing the message
 		enact_dependencies(&chain_state);
 
-		let (global_tx, global_rx) = futures::sync::mpsc::unbounded();
+		let (global_tx, global_rx) = futures::channel::mpsc::unbounded();
 
 		let until_imported = UntilGlobalMessageBlocksImported::new(
 			import_notifications,
 			TestBlockSyncRequester::default(),
 			block_status,
-			global_rx.map_err(|_| panic!("should never error")),
+			global_rx,
 			"global",
 		);
 
@@ -602,8 +607,7 @@ mod tests {
 
 		let work = until_imported.into_future();
 
-		let mut runtime = Runtime::new().unwrap();
-		runtime.block_on(work).map_err(|(e, _)| e).unwrap().0.unwrap()
+		futures::executor::block_on(work).0.unwrap().unwrap()
 	}
 
 	fn blocking_message_on_dependencies<F>(
@@ -615,13 +619,13 @@ mod tests {
 		let (chain_state, import_notifications) = TestChainState::new();
 		let block_status = chain_state.block_status();
 
-		let (global_tx, global_rx) = futures::sync::mpsc::unbounded();
+		let (global_tx, global_rx) = futures::channel::mpsc::unbounded();
 
 		let until_imported = UntilGlobalMessageBlocksImported::new(
 			import_notifications,
 			TestBlockSyncRequester::default(),
 			block_status,
-			global_rx.map_err(|_| panic!("should never error")),
+			global_rx,
 			"global",
 		);
 
@@ -630,13 +634,10 @@ mod tests {
 		// NOTE: needs to be cloned otherwise it is moved to the stream and
 		// dropped too early.
 		let inner_chain_state = chain_state.clone();
-		let work = until_imported
-			.into_future()
-			.select2(Delay::new(Duration::from_millis(100)).unit_error().compat())
+		let work = future::select(until_imported.into_future(), Delay::new(Duration::from_millis(100)))
 			.then(move |res| match res {
-				Err(_) => panic!("neither should have had error"),
-				Ok(Either::A(_)) => panic!("timeout should have fired first"),
-				Ok(Either::B((_, until_imported))) => {
+				Either::Left(_) => panic!("timeout should have fired first"),
+				Either::Right((_, until_imported)) => {
 					// timeout fired. push in the headers.
 					enact_dependencies(&inner_chain_state);
 
@@ -644,8 +645,7 @@ mod tests {
 				}
 			});
 
-		let mut runtime = Runtime::new().unwrap();
-		runtime.block_on(work).map_err(|(e, _)| e).unwrap().0.unwrap()
+		futures::executor::block_on(work).0.unwrap().unwrap()
 	}
 
 	#[test]
@@ -871,7 +871,7 @@ mod tests {
 		let (chain_state, import_notifications) = TestChainState::new();
 		let block_status = chain_state.block_status();
 
-		let (global_tx, global_rx) = futures::sync::mpsc::unbounded();
+		let (global_tx, global_rx) = futures::channel::mpsc::unbounded();
 
 		let block_sync_requester = TestBlockSyncRequester::default();
 
@@ -879,7 +879,7 @@ mod tests {
 			import_notifications,
 			block_sync_requester.clone(),
 			block_status,
-			global_rx.map_err(|_| panic!("should never error")),
+			global_rx,
 			"global",
 		);
 
@@ -914,31 +914,31 @@ mod tests {
 		// we send the commit message and spawn the until_imported stream
 		global_tx.unbounded_send(unknown_commit()).unwrap();
 
-		let mut runtime = Runtime::new().unwrap();
-		runtime.spawn(until_imported.into_future().map(|_| ()).map_err(|_| ()));
+		let threads_pool = futures::executor::ThreadPool::new().unwrap();
+		threads_pool.spawn_ok(until_imported.into_future().map(|_| ()));
 
 		// assert that we will make sync requests
-		let assert = futures::future::poll_fn::<(), (), _>(|| {
+		let assert = futures::future::poll_fn(|_| {
 			let block_sync_requests = block_sync_requester.requests.lock();
 
 			// we request blocks targeted by the precommits that aren't imported
 			if block_sync_requests.contains(&(h2.hash(), *h2.number())) &&
 				block_sync_requests.contains(&(h3.hash(), *h3.number()))
 			{
-				return Ok(Async::Ready(()));
+				return Poll::Ready(());
 			}
 
-			Ok(Async::NotReady)
+			Poll::Pending
 		});
 
 		// the `until_imported` stream doesn't request the blocks immediately,
 		// but it should request them after a small timeout
-		let timeout = Delay::new(Duration::from_secs(60)).unit_error().compat();
-		let test = assert.select2(timeout).map(|res| match res {
-			Either::A(_) => {},
-			Either::B(_) => panic!("timed out waiting for block sync request"),
-		}).map_err(|_| ());
+		let timeout = Delay::new(Duration::from_secs(60));
+		let test = future::select(assert, timeout).map(|res| match res {
+			Either::Left(_) => {},
+			Either::Right(_) => panic!("timed out waiting for block sync request"),
+		}).map(drop);
 
-		runtime.block_on(test).unwrap();
+		futures::executor::block_on(test);
 	}
 }

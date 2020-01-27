@@ -631,6 +631,12 @@ cfg_if! {
 				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
 					SessionKeys::generate(None)
 				}
+
+				fn decode_session_keys(
+					encoded: Vec<u8>,
+				) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
+					SessionKeys::decode_into_raw_public_keys(&encoded)
+				}
 			}
 
 			impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
@@ -846,6 +852,12 @@ cfg_if! {
 			impl sp_session::SessionKeys<Block> for Runtime {
 				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
 					SessionKeys::generate(None)
+				}
+
+				fn decode_session_keys(
+					encoded: Vec<u8>,
+				) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
+					SessionKeys::decode_into_raw_public_keys(&encoded)
 				}
 			}
 

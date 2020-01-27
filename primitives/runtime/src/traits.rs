@@ -1106,12 +1106,14 @@ macro_rules! count {
 #[macro_export]
 macro_rules! impl_opaque_keys {
 	(
+		$( #[ $attr:meta ] )*
 		pub struct $name:ident {
 			$(
 				pub $field:ident: $type:ty,
 			)*
 		}
 	) => {
+		$( #[ $attr ] )*
 		#[derive(
 			Default, Clone, PartialEq, Eq,
 			$crate::codec::Encode,
@@ -1142,6 +1144,37 @@ macro_rules! impl_opaque_keys {
 					)*
 				};
 				$crate::codec::Encode::encode(&keys)
+			}
+
+			/// Converts `Self` into a `Vec` of `(raw public key, KeyTypeId)`.
+			pub fn into_raw_public_keys(
+				self,
+			) -> $crate::sp_std::vec::Vec<($crate::sp_std::vec::Vec<u8>, $crate::KeyTypeId)> {
+				let mut keys = Vec::new();
+				$(
+					keys.push((
+						$crate::RuntimeAppPublic::to_raw_vec(&self.$field),
+						<
+							<
+								$type as $crate::BoundToRuntimeAppPublic
+							>::Public as $crate::RuntimeAppPublic
+						>::ID,
+					));
+				)*
+
+				keys
+			}
+
+			/// Decode `Self` from the given `encoded` slice and convert `Self` into the raw public
+			/// keys (see [`Self::into_raw_public_keys`]).
+			///
+			/// Returns `None` when the decoding failed, otherwise `Some(_)`.
+			pub fn decode_into_raw_public_keys(
+				encoded: &[u8],
+			) -> Option<$crate::sp_std::vec::Vec<($crate::sp_std::vec::Vec<u8>, $crate::KeyTypeId)>> {
+				<Self as $crate::codec::Decode>::decode(&mut &encoded[..])
+					.ok()
+					.map(|s| s.into_raw_public_keys())
 			}
 		}
 
