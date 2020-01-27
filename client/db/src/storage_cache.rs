@@ -738,7 +738,10 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> CachingState<S, B> {
 			if let Some(fetched_root) = self.storage(child_key)? {
 				let mut result = child_info.to_owned();
 				result.set_root(fetched_root.as_slice());
-				Some(Some(Arc::new(result)))
+				let result = Arc::new(result);
+				let weak = Arc::downgrade(&result);
+				self.cache.local_cache.write().child_infos.insert(child_key.to_vec(), Some(weak));
+				Some(Some(result))
 			} else {
 				Some(None)
 			}
@@ -764,14 +767,8 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> CachingState<S, B> {
 				if !child_info.valid_as(&cached_info.as_ref().as_ref()) {
 					return Ok(None);
 				}
-				match self.fetch_and_set_root(child_key, cached_info.as_ref().as_ref())? {
-					Some(updated_info) => {
-						let mut local_cache = self.cache.local_cache.write();
-						let weak = updated_info.as_ref().map(|i| Arc::downgrade(i));
-						local_cache.child_infos.insert(child_key.to_vec(), weak);
-						return Ok(updated_info);
-					},
-					None => (),
+				if let Some(updated_info) = self.fetch_and_set_root(child_key, cached_info.as_ref().as_ref())? {
+					return Ok(updated_info);
 				}
 			}
 			return Ok(entry);
@@ -791,14 +788,8 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> CachingState<S, B> {
 				if !child_info.valid_as(&cached_info.as_ref().as_ref()) {
 					return Ok(None);
 				}
-				match self.fetch_and_set_root(child_key, cached_info.as_ref().as_ref())? {
-					Some(updated_info) => {
-						let mut local_cache = self.cache.local_cache.write();
-						let weak = updated_info.as_ref().map(|i| Arc::downgrade(i));
-						local_cache.child_infos.insert(child_key.to_vec(), weak);
-						return Ok(updated_info);
-					},
-					None => (),
+				if let Some(updated_info) = self.fetch_and_set_root(child_key, cached_info.as_ref().as_ref())? {
+					return Ok(updated_info);
 				}
 			}
 			return Ok(entry);
@@ -809,13 +800,13 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> CachingState<S, B> {
 			// Not in cache but already with a root, note that
 			// this would be unsafe it it was possible to pass root
 			// by rpc (would need to validate again).
-			None => Some(Arc::new(child_info.to_owned())),
+			None => {
+				let result = Arc::new(child_info.to_owned());
+				let weak = Arc::downgrade(&result);
+				self.cache.local_cache.write().child_infos.insert(child_key.to_vec(), Some(weak));
+				Some(result)
+			},
 		};
-
-		let mut local_cache = self.cache.local_cache.write();
-		let weak = result.as_ref().map(|i| Arc::downgrade(i));
-		local_cache.child_infos.insert(child_key.to_vec(), weak);
-
 		Ok(self.usage.tally_child_info_key_read(child_key, result, false))
 	}
 
