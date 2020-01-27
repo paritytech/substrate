@@ -385,11 +385,25 @@ impl BenchType for () {
 	}
 }
 impl BenchType for H256 {
-	fn test_value(_name: &str) -> Self {
-		let r = Default::default();
+	fn test_value(name: &str) -> Self {
 		#[cfg(feature = "std")]
-		println!("test_value for H256 {:?}", r);
-		r
+		{
+			let r = match name {
+				"" => Default::default(),
+				num => {
+					let n = num.parse().expect("failed to parse number in input file");
+					let mut v = vec![];
+					(0..n).map(|_| v.push(u8::default()));
+					Blake2Hasher::hash(&v)
+				}
+			};
+			println!("test_value for H256 {:?}", r);
+			r
+		}
+		#[cfg(not(feature = "std"))]
+		{
+			Default::default()
+		}
 	}
 }
 impl BenchType for H160 {
@@ -451,11 +465,25 @@ impl BenchType for AccountId32 {
 }
 
 impl<T: BenchType> BenchType for Vec<T> {
-	fn test_value(_name: &str) -> Self {
-		let r = Default::default();
+	fn test_value(name: &str) -> Self {
 		#[cfg(feature = "std")]
-		println!("test_value for Vec<{}>", std::any::type_name::<T>());
-		r
+		{
+			let r = match name {
+				"" => vec![],
+				num => {
+					let n: usize = num.parse().expect("can't parse number in input file");
+					let mut v = vec![];
+					(0..n).map(|_| v.push(Default::default()));
+					v
+				}
+			};
+			println!("test_value for Vec<{}> size={}", std::any::type_name::<T>(), r.len());
+			r
+		}
+		#[cfg(not(feature = "std"))]
+		{
+			vec![]
+		}
 	}
 }
 impl<T: BenchType> BenchType for Box<T> {

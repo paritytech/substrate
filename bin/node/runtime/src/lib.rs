@@ -294,11 +294,11 @@ impl pallet_staking::Trait for Runtime {
 
 parameter_types! {
 	pub const LaunchPeriod: BlockNumber = 1;
-	pub const VotingPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
+	pub const VotingPeriod: BlockNumber = 1;
 	pub const EmergencyVotingPeriod: BlockNumber = 3 * 24 * 60 * MINUTES;
 	pub const MinimumDeposit: Balance = 100 * DOLLARS;
-	pub const EnactmentPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
-	pub const CooloffPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
+	pub const EnactmentPeriod: BlockNumber = 0;
+	pub const CooloffPeriod: BlockNumber = 1;
 	// One cent: $10,000 / MB
 	pub const PreimageByteDeposit: Balance = 1 * CENTS;
 }
