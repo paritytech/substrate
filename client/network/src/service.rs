@@ -77,6 +77,8 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 	);
 	/// Notify the pool about transactions broadcast.
 	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>);
+	/// Get transaction by hash.
+	fn transaction(&self, hash: &H) -> Option<B::Extrinsic>;
 }
 
 /// A cloneable handle for reporting cost/benefits of peers.
@@ -115,7 +117,7 @@ pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>, H: E
 	/// nodes it should be connected to or not.
 	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
-	to_worker: mpsc::UnboundedSender<ServiceToWorkerMsg<B, S>>,
+	to_worker: mpsc::UnboundedSender<ServiceToWorkerMsg<B, H, S>>,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -477,12 +479,20 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		});
 	}
 
-	/// You must call this when new transactons are imported by the transaction pool.
+	/// You may call this when new transactons are imported by the transaction pool.
 	///
-	/// The latest transactions will be fetched from the `TransactionPool` that was passed at
-	/// initialization as part of the configuration.
+	/// All transactions will be fetched from the `TransactionPool` that was passed at
+	/// initialization as part of the configuration and propagated to peers.
 	pub fn trigger_repropagate(&self) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateExtrinsics);
+	}
+
+	/// You must call when new transaction is imported by the transaction pool.
+	///
+	/// This transaction will be fetched from the `TransactionPool` that was passed at
+	/// initialization as part of the configuration and propagated to peers.
+	pub fn propagate_extrinsic(&self, hash: H) {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateExtrinsic(hash));
 	}
 
 	/// Make sure an important block is propagated to peers.
@@ -665,7 +675,8 @@ impl<B, S, H> NetworkStateInfo for NetworkService<B, S, H>
 /// Messages sent from the `NetworkService` to the `NetworkWorker`.
 ///
 /// Each entry corresponds to a method of `NetworkService`.
-enum ServiceToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
+enum ServiceToWorkerMsg<B: BlockT, H: ExHashT, S: NetworkSpecialization<B>> {
+	PropagateExtrinsic(H),
 	PropagateExtrinsics,
 	RequestJustification(B::Hash, NumberFor<B>),
 	AnnounceBlock(B::Hash, Vec<u8>),
@@ -704,7 +715,7 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	/// The import queue that was passed as initialization.
 	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the `NetworkService` and that must be processed.
-	from_worker: mpsc::UnboundedReceiver<ServiceToWorkerMsg<B, S>>,
+	from_worker: mpsc::UnboundedReceiver<ServiceToWorkerMsg<B, H, S>>,
 	/// Receiver for queries from the light client that must be processed.
 	light_client_rqs: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
 	/// Senders for events that happen on the network.
@@ -747,6 +758,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 					this.network_service.user_protocol_mut().announce_block(hash, data),
 				ServiceToWorkerMsg::RequestJustification(hash, number) =>
 					this.network_service.user_protocol_mut().request_justification(&hash, number),
+				ServiceToWorkerMsg::PropagateExtrinsic(hash) =>
+					this.network_service.user_protocol_mut().propagate_extrinsic(&hash),
 				ServiceToWorkerMsg::PropagateExtrinsics =>
 					this.network_service.user_protocol_mut().propagate_extrinsics(),
 				ServiceToWorkerMsg::GetValue(key) =>
