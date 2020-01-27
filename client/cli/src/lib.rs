@@ -44,7 +44,7 @@ use sc_network::{
 };
 
 use std::{
-	io::{Write}, iter, fmt::Debug, fs,
+	io::Write, iter, fmt::Debug, fs,
 	net::{Ipv4Addr, SocketAddr}, path::PathBuf,
 };
 
