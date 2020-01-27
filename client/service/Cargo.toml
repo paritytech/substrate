@@ -22,7 +22,7 @@ lazy_static = "1.4.0"
 log = "0.4.8"
 slog = { version = "2.5.2", features = ["nested-values"] }
 tokio-executor = "0.1.8"
-futures-timer = { git = "https://github.com/expenses/futures-timer", branch = "wasm-support" }
+futures-timer = { git = "https://github.com/expenses/futures-timer", branch = "fix-wasm" }
 wasm-timer = "0.2"
 exit-future = "0.2.0"
 serde = "1.0.101"

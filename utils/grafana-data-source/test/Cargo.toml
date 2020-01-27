@@ -9,5 +9,5 @@ edition = "2018"
 [dependencies]
 grafana-data-source = { version = "0.8", path = ".." }
 futures = "0.3"
-futures-timer = { git = "https://github.com/expenses/futures-timer", branch = "wasm-support" }
+futures-timer = { git = "https://github.com/expenses/futures-timer", branch = "fix-wasm" }
 rand = "0.7"

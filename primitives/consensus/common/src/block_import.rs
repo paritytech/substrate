@@ -16,10 +16,9 @@
 
 //! Block import helpers.
 
-use sp_runtime::{
-	Justification,
-	traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor, HasherFor},
-};
+use sp_runtime::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor, HasherFor};
+use sp_runtime::Justification;
+use serde::{Serialize, Deserialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -42,7 +41,7 @@ pub enum ImportResult {
 }
 
 /// Auxiliary data associated with an imported block result.
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImportedAux {
 	/// Only the header has been imported. Block body verification was skipped.
 	pub header_only: bool,

@@ -38,7 +38,7 @@ struct FunctionExecutor<'a> {
 	memory: MemoryRef,
 	table: Option<TableRef>,
 	host_functions: &'a [&'static dyn Function],
-	allow_missing_imports: bool,
+	allow_missing_func_imports: bool,
 	missing_functions: &'a [String],
 }
 
@@ -48,7 +48,7 @@ impl<'a> FunctionExecutor<'a> {
 		heap_base: u32,
 		t: Option<TableRef>,
 		host_functions: &'a [&'static dyn Function],
-		allow_missing_imports: bool,
+		allow_missing_func_imports: bool,
 		missing_functions: &'a [String],
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
@@ -57,7 +57,7 @@ impl<'a> FunctionExecutor<'a> {
 			memory: m,
 			table: t,
 			host_functions,
-			allow_missing_imports,
+			allow_missing_func_imports,
 			missing_functions,
 		})
 	}
@@ -273,15 +273,15 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 
 struct Resolver<'a> {
 	host_functions: &'a[&'static dyn Function],
-	allow_missing_imports: bool,
+	allow_missing_func_imports: bool,
 	missing_functions: RefCell<Vec<String>>,
 }
 
 impl<'a> Resolver<'a> {
-	fn new(host_functions: &'a[&'static dyn Function], allow_missing_imports: bool) -> Resolver<'a> {
+	fn new(host_functions: &'a[&'static dyn Function], allow_missing_func_imports: bool) -> Resolver<'a> {
 		Resolver {
 			host_functions,
-			allow_missing_imports,
+			allow_missing_func_imports,
 			missing_functions: RefCell::new(Vec::new()),
 		}
 	}
@@ -311,7 +311,7 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 			}
 		}
 
-		if self.allow_missing_imports {
+		if self.allow_missing_func_imports {
 			trace!(target: "wasm-executor", "Could not find function `{}`, a stub will be provided instead.", name);
 			let id = self.missing_functions.borrow().len() + self.host_functions.len();
 			self.missing_functions.borrow_mut().push(name.to_string());
@@ -336,7 +336,7 @@ impl<'a> wasmi::Externals for FunctionExecutor<'a> {
 				.map_err(|msg| Error::FunctionExecution(function.name().to_string(), msg))
 				.map_err(wasmi::Trap::from)
 				.map(|v| v.map(Into::into))
-		} else if self.allow_missing_imports
+		} else if self.allow_missing_func_imports
 			&& index >= self.host_functions.len()
 			&& index < self.host_functions.len() + self.missing_functions.len()
 		{
@@ -381,7 +381,7 @@ fn call_in_wasm_module(
 	method: &str,
 	data: &[u8],
 	host_functions: &[&'static dyn Function],
-	allow_missing_imports: bool,
+	allow_missing_func_imports: bool,
 	missing_functions: &Vec<String>,
 ) -> Result<Vec<u8>, Error> {
 	// extract a reference to a linear memory, optional reference to a table
@@ -397,7 +397,7 @@ fn call_in_wasm_module(
 		heap_base,
 		table,
 		host_functions,
-		allow_missing_imports,
+		allow_missing_func_imports,
 		missing_functions,
 	)?;
 
@@ -433,9 +433,9 @@ fn instantiate_module(
 	heap_pages: usize,
 	module: &Module,
 	host_functions: &[&'static dyn Function],
-	allow_missing_imports: bool,
+	allow_missing_func_imports: bool,
 ) -> Result<(ModuleRef, Vec<String>), Error> {
-	let resolver = Resolver::new(host_functions, allow_missing_imports);
+	let resolver = Resolver::new(host_functions, allow_missing_func_imports);
 	// start module instantiation. Don't run 'start' function yet.
 	let intermediate_instance = ModuleInstance::new(
 		module,
@@ -575,7 +575,7 @@ pub struct WasmiRuntime {
 	host_functions: Vec<&'static dyn Function>,
 	/// Enable stub generation for functions that are not available in `host_functions`.
 	/// These stubs will error when the wasm blob tries to call them.
-	allow_missing_imports: bool,
+	allow_missing_func_imports: bool,
 	/// List of missing functions detected during function resolution
 	missing_functions: Vec<String>,
 }
@@ -607,7 +607,7 @@ impl WasmRuntime for WasmiRuntime {
 			method,
 			data,
 			&self.host_functions,
-			self.allow_missing_imports,
+			self.allow_missing_func_imports,
 			&self.missing_functions,
 		)
 	}
@@ -617,7 +617,7 @@ pub fn create_instance(
 	code: &[u8],
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
-	allow_missing_imports: bool,
+	allow_missing_func_imports: bool,
 ) -> Result<WasmiRuntime, WasmError> {
 	let module = Module::from_buffer(&code).map_err(|_| WasmError::InvalidModule)?;
 
@@ -632,7 +632,7 @@ pub fn create_instance(
 		heap_pages as usize,
 		&module,
 		&host_functions,
-		allow_missing_imports,
+		allow_missing_func_imports,
 	).map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
 	// Take state snapshot before executing anything.
@@ -648,7 +648,7 @@ pub fn create_instance(
 		instance,
 		state_snapshot,
 		host_functions,
-		allow_missing_imports,
+		allow_missing_func_imports,
 		missing_functions,
 	})
 }

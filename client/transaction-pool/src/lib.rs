@@ -22,8 +22,8 @@
 mod api;
 pub mod error;
 
-#[cfg(test)]
-mod tests;
+#[cfg(any(feature = "test-helpers", test))]
+pub mod testing;
 
 pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
@@ -112,7 +112,8 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		&self.pool
 	}
 
-	#[cfg(test)]
+	/// Get reference to the inner chain api, for tests only.
+	#[cfg(any(feature = "test-helpers", test))]
 	pub fn api(&self) -> &Arc<PoolApi> {
 		&self.api
 	}
