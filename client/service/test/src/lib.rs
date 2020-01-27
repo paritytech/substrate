@@ -120,7 +120,7 @@ where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
 			.timeout(MAX_WAIT_TIME);
 
 		match futures::executor::block_on(interval) {
-			Ok(()) => unreachable!("interval always fails; qed"),
+			Ok(()) => {},
 			Err(_) => panic!("Waited for too long"),
 		}
 	}
