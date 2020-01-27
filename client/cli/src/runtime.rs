@@ -67,7 +67,7 @@ where
 {
 	let mut runtime = build_runtime()?;
 
-	config.tasks_executor = {
+	config.task_executor = {
 		let runtime_handle = runtime.handle().clone();
 		Some(Box::new(move |fut| { runtime_handle.spawn(fut); }))
 	};
@@ -105,7 +105,7 @@ where
 {
 	let mut runtime = build_runtime()?;
 
-	config.tasks_executor = {
+	config.task_executor = {
 		let runtime_handle = runtime.handle().clone();
 		Some(Box::new(move |fut| { runtime_handle.spawn(fut); }))
 	};

@@ -1141,7 +1141,7 @@ ServiceBuilder<
 			essential_failed_rx,
 			to_spawn_tx,
 			to_spawn_rx,
-			tasks_executor: if let Some(exec) = config.tasks_executor {
+			task_executor: if let Some(exec) = config.task_executor {
 				exec
 			} else {
 				return Err(Error::TasksExecutorRequired);

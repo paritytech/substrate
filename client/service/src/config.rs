@@ -39,7 +39,7 @@ pub struct Configuration<G, E = NoExtension> {
 	/// Node roles.
 	pub roles: Roles,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
-	pub tasks_executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
+	pub task_executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
@@ -155,7 +155,7 @@ impl<G, E> Default for Configuration<G, E> {
 			config_dir: None,
 			name: Default::default(),
 			roles: Roles::FULL,
-			tasks_executor: None,
+			task_executor: None,
 			transaction_pool: Default::default(),
 			network: Default::default(),
 			keystore: KeystoreConfig::None,

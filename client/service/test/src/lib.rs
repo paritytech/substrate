@@ -133,7 +133,7 @@ fn node_config<G, E: Clone> (
 	index: usize,
 	spec: &ChainSpec<G, E>,
 	role: Roles,
-	tasks_executor: Box<dyn Fn(Pin<Box<dyn futures::Future<Output = ()> + Send>>) + Send>,
+	task_executor: Box<dyn Fn(Pin<Box<dyn futures::Future<Output = ()> + Send>>) + Send>,
 	key_seed: Option<String>,
 	base_port: u16,
 	root: &TempDir,
@@ -175,7 +175,7 @@ fn node_config<G, E: Clone> (
 		impl_version: "0.1",
 		impl_commit: "",
 		roles: role,
-		tasks_executor: Some(tasks_executor),
+		task_executor: Some(task_executor),
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore: KeystoreConfig::Path {
@@ -254,7 +254,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		let executor = self.runtime.executor();
 
 		for (key, authority) in authorities {
-			let tasks_executor = {
+			let task_executor = {
 				let executor = executor.clone();
 				Box::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
 			};
@@ -262,7 +262,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 				self.nodes,
 				&self.chain_spec,
 				Roles::AUTHORITY,
-				tasks_executor,
+				task_executor,
 				Some(key),
 				self.base_port,
 				&temp,
@@ -278,11 +278,11 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		}
 
 		for full in full {
-			let tasks_executor = {
+			let task_executor = {
 				let executor = executor.clone();
 				Box::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
 			};
-			let node_config = node_config(self.nodes, &self.chain_spec, Roles::FULL, tasks_executor, None, self.base_port, &temp);
+			let node_config = node_config(self.nodes, &self.chain_spec, Roles::FULL, task_executor, None, self.base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let (service, user_data) = full(node_config).expect("Error creating test node service");
 			let service = SyncService::from(service);
@@ -294,11 +294,11 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		}
 
 		for light in light {
-			let tasks_executor = {
+			let task_executor = {
 				let executor = executor.clone();
 				Box::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
 			};
-			let node_config = node_config(self.nodes, &self.chain_spec, Roles::LIGHT, tasks_executor, None, self.base_port, &temp);
+			let node_config = node_config(self.nodes, &self.chain_spec, Roles::LIGHT, task_executor, None, self.base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let service = SyncService::from(light(node_config).expect("Error creating test node service"));
 
