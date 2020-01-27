@@ -24,7 +24,6 @@ use std::time::Duration;
 use std::task::{Poll, Context};
 use log::info;
 use tempfile::TempDir;
-use tokio::runtime::Runtime;
 use futures::prelude::*;
 use futures::future::ready;
 use async_std::stream::interval;
@@ -46,7 +45,6 @@ use sp_transaction_pool::TransactionPool;
 const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
 
 struct TestNet<G, E, F, L, U> {
-	runtime: Runtime,
 	authority_nodes: Vec<(usize, SyncService<F>, U, Multiaddr)>,
 	full_nodes: Vec<(usize, SyncService<F>, U, Multiaddr)>,
 	light_nodes: Vec<(usize, SyncService<L>, Multiaddr)>,
@@ -120,7 +118,7 @@ where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
 			})
 			.timeout(MAX_WAIT_TIME);
 
-		match self.runtime.block_on(interval) {
+		match futures::executor::block_on(interval) {
 			Ok(()) => unreachable!("interval always fails; qed"),
 			Err(_) => panic!("Waited for too long"),
 		}
@@ -229,9 +227,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	) -> TestNet<G, E, F, L, U> {
 		let _ = env_logger::try_init();
 		fdlimit::raise_fd_limit();
-		let runtime = Runtime::new().expect("Error creating tokio runtime");
 		let mut net = TestNet {
-			runtime,
 			authority_nodes: Default::default(),
 			full_nodes: Default::default(),
 			light_nodes: Default::default(),
@@ -250,18 +246,14 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		light: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<L, Error>>,
 		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>)>
 	) {
-		let handle = self.runtime.handle();
+		let tasks_executor = Box::new(|fut | { async_std::task::spawn(fut); });
 
 		for (key, authority) in authorities {
-			let tasks_executor = {
-				let handle = handle.clone();
-				Box::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| { handle.spawn(fut); })
-			};
 			let node_config = node_config(
 				self.nodes,
 				&self.chain_spec,
 				Roles::AUTHORITY,
-				tasks_executor,
+				tasks_executor.clone(),
 				Some(key),
 				self.base_port,
 				&temp,
@@ -270,38 +262,30 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 			let (service, user_data) = authority(node_config).expect("Error creating test node service");
 			let service = SyncService::from(service);
 
-			self.runtime.spawn(service.clone().map_err(|_| ()));
+			async_std::task::spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
 			self.authority_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
 
 		for full in full {
-			let tasks_executor = {
-				let handle = handle.clone();
-				Box::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| { handle.spawn(fut); })
-			};
-			let node_config = node_config(self.nodes, &self.chain_spec, Roles::FULL, tasks_executor, None, self.base_port, &temp);
+			let node_config = node_config(self.nodes, &self.chain_spec, Roles::FULL, tasks_executor.clone(), None, self.base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let (service, user_data) = full(node_config).expect("Error creating test node service");
 			let service = SyncService::from(service);
 
-			self.runtime.spawn(service.clone().map_err(|_| ()));
+			async_std::task::spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
 			self.full_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
 
 		for light in light {
-			let tasks_executor = {
-				let handle = handle.clone();
-				Box::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| { handle.spawn(fut); })
-			};
-			let node_config = node_config(self.nodes, &self.chain_spec, Roles::LIGHT, tasks_executor, None, self.base_port, &temp);
+			let node_config = node_config(self.nodes, &self.chain_spec, Roles::LIGHT, tasks_executor.clone(), None, self.base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let service = SyncService::from(light(node_config).expect("Error creating test node service"));
 
-			self.runtime.spawn(service.clone().map_err(|_| ()));
+			async_std::task::spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
 			self.light_nodes.push((self.nodes, service, addr));
 			self.nodes += 1;
