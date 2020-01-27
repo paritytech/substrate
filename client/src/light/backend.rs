@@ -326,7 +326,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		}
 
 		let storage_update = InMemoryBackend::from(storage);
-		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta);
+		let (storage_root, _, _) = storage_update.full_storage_root(std::iter::empty(), child_delta, false);
 		self.storage_update = Some(storage_update);
 
 		Ok(storage_root)

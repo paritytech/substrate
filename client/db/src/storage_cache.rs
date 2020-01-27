@@ -618,8 +618,8 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		)?;
 		if need_update {
 			let mut local_cache = self.cache.local_cache.write();
-			// we always update value (even if we just need new child info, we need to
-			// store at least an Arc pointer to it.
+			// We always update value (even if we just need new child info, we need to
+			// store at least an Arc pointer to it).
 			local_cache.child_storage.insert(full_child_key, (result.clone(), child_info));
 		}
 		Ok(result)
@@ -861,8 +861,8 @@ fn get_child_info(
 	}
 }
 
-/// Update child info, it change the stored value if different, and return
-/// reference count to stored value and wether the value was updated.
+/// Update child info, it changes the stored value if it is different,
+/// and return reference count to stored value and wether the value was updated.
 fn update_child_info(
 	child_infos: &mut HashMap<StorageKey, Option<Weak<OwnedChildInfo>>>,
 	storage_key: &[u8],
