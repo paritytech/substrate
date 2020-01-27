@@ -21,32 +21,15 @@ use sc_network::{
 	},
 };
 use sp_core::H256;
-use names::{Generator, Name};
 use regex::Regex;
 use std::{path::{Path, PathBuf}, str::FromStr};
 use crate::error;
 use crate::params::{NodeKeyParams, NodeKeyType};
 
-/// The maximum number of characters for a node name.
-const NODE_NAME_MAX_LENGTH: usize = 32;
-
 /// The file name of the node's Ed25519 secret key inside the chain-specific
 /// network config directory, if neither `--node-key` nor `--node-key-file`
 /// is specified in combination with `--node-key-type=ed25519`.
 const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
-
-pub fn generate_node_name() -> String {
-	let result = loop {
-		let node_name = Generator::with_naming(Name::Numbered).next().unwrap();
-		let count = node_name.chars().count();
-
-		if count < NODE_NAME_MAX_LENGTH {
-			break node_name
-		}
-	};
-
-	result
-}
 
 /// Check whether a node name is considered as valid
 pub fn is_node_name_valid(_name: &str) -> Result<(), &str> {

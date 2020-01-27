@@ -66,6 +66,7 @@ use sc_telemetry::TelemetryEndpoints;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 pub use crate::runtime::{run_until_exit, run_service_until_exit};
 use execution_strategy::*;
+use names::{Generator, Name};
 
 /// default sub directory to store network config
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
@@ -73,6 +74,9 @@ const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str =  "keystore";
+
+/// The maximum number of characters for a node name.
+const NODE_NAME_MAX_LENGTH: usize = 32;
 
 /// Executable version. Used to pass version information from the root crate.
 #[derive(Clone)]
@@ -98,6 +102,19 @@ fn get_chain_key(cli: &SharedParams) -> String {
 		Some(ref chain) => chain.clone(),
 		None => if cli.dev { "dev".into() } else { "".into() }
 	}
+}
+
+fn generate_node_name() -> String {
+	let result = loop {
+		let node_name = Generator::with_naming(Name::Numbered).next().unwrap();
+		let count = node_name.chars().count();
+
+		if count < NODE_NAME_MAX_LENGTH {
+			break node_name
+		}
+	};
+
+	result
 }
 
 /// Load spec give shared params and spec factory.
