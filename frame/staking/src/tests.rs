@@ -2989,7 +2989,8 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn offchain_worker_runs_when_window_open() {
+	#[cfg(feature = "signed")]
+	fn offchain_worker_runs_when_window_open_signed() {
 		// at the end of the first finalized block with ElectionStatus::open(_), it should execute.
 		let mut ext = ExtBuilder::default()
 			.offchain_phragmen_ext()
@@ -3016,12 +3017,44 @@ mod offchain_phragmen {
 				mock::Call::Staking(crate::Call::submit_election_solution(_, _)) => {},
 				_ => panic!("wrong call submitted"),
 			};
+
+			// TODO: dispatch the call
 		})
 	}
 
 	#[test]
-	fn offchain_submits_unsigned_transaction_if_validator() {
-		unimplemented!();
+	#[cfg(not(feature = "signed"))]
+	fn offchain_worker_runs_when_window_open_unsigned() {
+		// at the end of the first finalized block with ElectionStatus::open(_), it should execute.
+		let mut ext = ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(4)
+			.build();
+		let state = offchainify(&mut ext);
+		ext.execute_with(||{
+			run_to_block(12);
+
+			// local key 11 is in the elected set.
+			assert_eq_uvec!(Staking::current_elected(), vec![11, 21, 31]);
+			assert_eq!(state.read().transactions.len(), 0);
+			Staking::offchain_worker(12);
+			assert_eq!(state.read().transactions.len(), 1);
+
+			let encoded = state.read().transactions[0].clone();
+			// WTF just happened? I changed Extrinsic::decode() to this and now it works?
+			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
+
+			let call = extrinsic.1;
+			match call {
+				mock::Call::Staking(crate::Call::submit_election_solution_unsigned(_, _, _, _)) => {},
+				_ => panic!("wrong call submitted"),
+			};
+		})
+	}
+
+	#[test]
+	fn validate_unsigned_works() {
+		unimplemented!()
 	}
 
 	#[test]

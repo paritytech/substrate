@@ -713,7 +713,9 @@ pub trait Trait: frame_system::Trait {
 		SubmitSignedTransaction<Self, <Self as Trait>::Call> +
 		SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
-	type KeyType: sp_runtime::RuntimeAppPublic + sp_runtime::traits::Member + frame_support::Parameter;
+	type KeyType:
+		std::convert::From<<<<<Self as Trait>::SubmitTransaction as frame_system::offchain::SubmitSignedTransaction<Self, <Self as Trait>::Call>>::SignAndSubmit as frame_system::offchain::SignAndSubmitTransaction<Self, <Self as Trait>::Call>>::CreateTransaction as frame_system::offchain::CreateTransaction<Self, <<<Self as Trait>::SubmitTransaction as frame_system::offchain::SubmitSignedTransaction<Self, <Self as Trait>::Call>>::SignAndSubmit as frame_system::offchain::SignAndSubmitTransaction<Self, <Self as Trait>::Call>>::Extrinsic>>::Public> +
+		sp_runtime::RuntimeAppPublic + sp_runtime::traits::Member + frame_support::Parameter;
 }
 
 /// Mode of era-forcing.
@@ -1058,7 +1060,7 @@ decl_module! {
 			compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
 			// already used and checked.
 			_validator_index: u32,
-			_signature: offchain_election::SignatureOf<T>,
+			_signature: <T::KeyType as sp_runtime::RuntimeAppPublic>::Signature,
 		) {
 			ensure_none(origin)?;
 			Encode::encode(&_signature);
@@ -2282,30 +2284,32 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 
 // TODO: do we need BoundToRuntimeAppPublic stuff?
 #[allow(deprecated)]
-impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T>
-where
-	offchain_election::SignatureOf<T>: Verify<Signer = offchain_election::PublicOf<T>>,
-{
+impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
-		if let Call::submit_election_solution_unsigned(winners, compact, validator_index, signature) = call {
+		if let Call::submit_election_solution_unsigned(
+			winners,
+			compact,
+			validator_index,
+			signature,
+		) = call {
 			// TODO: since unsigned is only for validators, and it is not increasing the block
 			// weight and fee etc. maybe we should only accept an unsigned solution when we don't
 			// have ANY solutions. Otherwise each block will get a LOT of these.
 
 			// check signature
-			let payload = (winners, compact, validator_index);
-			let current_validators = T::SessionInterface::validators();
-			let validator_id = current_validators.get(*validator_index as usize)
-				.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(0u8).into()))?;
+			// let payload = (winners, compact, validator_index);
+			// let current_validators = T::SessionInterface::validators();
+			// let validator_id = current_validators.get(*validator_index as usize)
+			// 	.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(0u8).into()))?;
 
-			let signature_valid = payload.using_encoded(|encoded_payload| {
-				signature.verify(encoded_payload, &validator_id)
-			});
+			// let signature_valid = payload.using_encoded(|encoded_payload| {
+			// 	signature.verify(encoded_payload, &validator_id)
+			// });
 
-			if !signature_valid {
-				return InvalidTransaction::BadProof.into();
-			}
+			// if !signature_valid {
+			// 	return InvalidTransaction::BadProof.into();
+			// }
 
 			Ok(ValidTransaction {
 				priority: TransactionPriority::max_value(),

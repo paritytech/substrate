@@ -103,20 +103,6 @@ pub type PublicOf<T, Call, X> =
 	CreateTransaction<T, <X as SignAndSubmitTransaction<T, Call>>::Extrinsic>
 >::Public;
 
-pub type SignerOf<T, Call, X> =
-<
-	<X as SubmitSignedTransaction<T, Call>>::SignAndSubmit
-	as
-	SignAndSubmitTransaction<T, Call>
->::Signer;
-
-pub type SignatureOf<T, Call, X> =
-<
-	<X as SignAndSubmitTransaction<T, Call>>::CreateTransaction
-	as
-	CreateTransaction<T, <X as SignAndSubmitTransaction<T, Call>>::Extrinsic>
->::Signature;
-
 /// A trait to sign and submit transactions in off-chain calls.
 ///
 /// NOTE: Most likely you should not implement this trait yourself.
@@ -133,7 +119,7 @@ pub trait SignAndSubmitTransaction<T: crate::Trait, Call> {
 	/// A type used to sign transactions created using `CreateTransaction`.
 	type Signer: Signer<
 		PublicOf<T, Call, Self>,
-		SignatureOf<T, Call, Self>,
+		<Self::CreateTransaction as CreateTransaction<T, Self::Extrinsic>>::Signature,
 	>;
 
 	/// Sign given call and submit it to the transaction pool.
@@ -179,7 +165,8 @@ pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 	/// and `Err` if transaction was rejected from the pool.
 	fn submit_unsigned(call: impl Into<Call>) -> Result<(), ()> {
 		let xt = Self::Extrinsic::new(call.into(), None).ok_or(())?;
-		sp_io::offchain::submit_transaction(xt.encode())
+		let encoded_xt = xt.encode();
+		sp_io::offchain::submit_transaction(encoded_xt)
 	}
 }
 

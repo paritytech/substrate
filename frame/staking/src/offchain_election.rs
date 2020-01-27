@@ -18,32 +18,30 @@
 
 use crate::{Call, CompactAssignments, Module, SessionInterface, Trait};
 use codec::Encode;
-use frame_system::offchain::{Signer, SubmitSignedTransaction, SubmitUnsignedTransaction};
+use frame_system::offchain::{
+	Signer, SubmitSignedTransaction, SubmitUnsignedTransaction, SignAndSubmitTransaction,
+	CreateTransaction,
+};
 use sp_phragmen::{reduce, ExtendedBalance, PhragmenResult, StakedAssignment};
 use sp_std::cmp::Ordering;
 use sp_runtime::RuntimeAppPublic;
 
-pub(crate) type SignatureOf<T> = frame_system::offchain::SignatureOf
+type SignAndSubmitOf<T> =
 <
-	T,
-	<T as Trait>::Call,
-	<
-		<T as Trait>::SubmitTransaction as SubmitSignedTransaction<T, <T as Trait>::Call>
-	>::SignAndSubmit,
->;
-pub(crate) type SignerOf<T> = frame_system::offchain::SignerOf
-<
-	T,
-	<T as Trait>::Call,
-	<T as Trait>::SubmitTransaction,
->;
+	<T as Trait>::SubmitTransaction
+	as
+	SubmitSignedTransaction<T, <T as Trait>::Call>
+>::SignAndSubmit;
 
-pub(crate) type PublicOf<T> = frame_system::offchain::PublicOf
+pub(crate) type PublicOf<T> =
 <
-	T,
-	<T as Trait>::Call,
-	<T as Trait>::SubmitTransaction,
->;
+	<SignAndSubmitOf<T> as SignAndSubmitTransaction<T, <T as Trait>::Call>>::CreateTransaction
+	as
+	CreateTransaction<
+		T,
+		<SignAndSubmitOf<T> as SignAndSubmitTransaction<T, <T as Trait>::Call>>::Extrinsic
+	>
+>::Public;
 
 #[derive(Debug)]
 pub(crate) enum OffchainElectionError {
@@ -75,7 +73,10 @@ pub(super) fn is_score_better(this: [ExtendedBalance; 3], that: [ExtendedBalance
 }
 
 /// The internal logic of the offchain worker of this module.
-pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElectionError> {
+pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElectionError>
+where
+	<T as Trait>::KeyType: From<PublicOf<T>>
+{
 	let validators = T::SessionInterface::validators();
 
 	// Check if current node can sign with any of the keys which correspond to a
@@ -122,7 +123,8 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 				.map(|(index, (_, pubkey))| {
 					let signature_payload =
 						(winners.clone(), compact.clone(), index as u32).encode();
-					let signature = <SignerOf<T>>::sign(pubkey, &signature_payload).unwrap();
+					let pubkey: T::KeyType = pubkey.into();
+					let signature = pubkey.sign(&signature_payload).unwrap();
 					let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
 						winners,
 						compact,
@@ -131,6 +133,7 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 					)
 					.into();
 					let _result = T::SubmitTransaction::submit_unsigned(call);
+					dbg!(_result);
 				});
 		}
 	} else {

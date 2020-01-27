@@ -297,6 +297,7 @@ impl Trait for Test {
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
 	type SubmitTransaction = SubmitTransaction;
+	type KeyType = dummy_sr25519::AuthorityId;
 }
 
 pub(crate) mod dummy_sr25519 {
