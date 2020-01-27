@@ -135,13 +135,14 @@ impl RuntimeAdapter for RuntimeState {
 		sender: &Self::AccountId,
 		module: String,
 		extrinsic_name: String,
+		extrinsic_parameters: Vec<String>,
 		key: &Self::Secret,
 		runtime_version: u32,
 		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic {
 		let phase = self.extract_phase(*prior_block_hash);
-		let function = Call::get_call(&module, &extrinsic_name);
+		let function = Call::get_call(&module, &extrinsic_name, extrinsic_parameters);
 
 		let extrinsic = CheckedExtrinsic {
 			signed: Some((sender.clone(), Self::build_extra(self.index, phase))),

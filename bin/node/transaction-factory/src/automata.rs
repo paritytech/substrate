@@ -65,8 +65,11 @@ impl Automaton {
 			let target = line[1].parse().expect("target value can't be parsed");
 			let tx_module = line[2].to_string();
 			let tx_name = line[3].to_string();
-			let tx_params = vec![];
-			let repeat = line.get(4).unwrap_or(&"1").parse().expect("repeat value can't be parsed");
+			let tx_params = line.get(4).unwrap_or(&",")
+				.split(",")
+				.map(|s| s.to_string())
+				.collect::<Vec<String>>();
+			let repeat = line.get(5).unwrap_or(&"1").parse().expect("repeat value can't be parsed");
 			
 			let edge = Edge {
 				target,

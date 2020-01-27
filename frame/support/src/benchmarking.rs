@@ -18,13 +18,16 @@
 // #[allow(deprecated)]
 // pub use crate::sp_runtime::traits::Benchmarking;
 
+pub use crate::sp_std::prelude::Vec;
+pub use crate::sp_std::prelude::String;
+
 pub trait Module {
 	fn all_modules() -> &'static [&'static str];
 	fn all_calls(module: &str) -> &'static [&'static str];
-	fn get_call(module: &str, function: &str) -> Self;
+	fn get_call(module: &str, function: &str, parameters: Vec<String>) -> Self;
 }
 
 pub trait Call {
 	fn all_calls() -> &'static [&'static str];
-	fn get_call(function: &str) -> Self;
+	fn get_call(function: &str, parameters: Vec<String>) -> Self;
 }

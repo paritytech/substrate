@@ -4,8 +4,9 @@
 3 4 Democracy note_preimage
 4 5 Benchmark next_block
 5 6 Democracy vote
-6 7 Democracy cancel_referendum
-7 8 Democracy set_proxy
-8 9 Democracy remove_proxy
-9 10 Benchmark next_block
-10 1 Benchmark clear
+6 7 Democracy set_proxy Alice
+7 8 Democracy proxy_vote
+8 9 Democracy cancel_referendum
+9 10 Democracy remove_proxy Alice
+10 11 Benchmark next_block
+11 1 Benchmark clear

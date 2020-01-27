@@ -52,7 +52,7 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 	pub digest: Digest<Hash::Output>,
 }
 
-impl<N: Copy + Into<U256> + TryFrom<U256> + Default, H: HashT + Default> BenchType for Header<N, H> {}
+impl<N: Copy + Into<U256> + TryFrom<U256> + Default + core::fmt::Debug, H: HashT + Default + core::fmt::Debug> BenchType for Header<N, H> {}
 
 #[cfg(feature = "std")]
 pub fn serialize_number<S, T: Copy + Into<U256> + TryFrom<U256>>(

@@ -17,7 +17,7 @@
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
 
-pub use crate::sp_std::{ result, fmt, prelude::{Vec, Clone, Eq, PartialEq, Default}, marker};
+pub use crate::sp_std::{result, fmt, prelude::{Clone, Eq, PartialEq, Default}, marker};
 pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use frame_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
@@ -29,6 +29,8 @@ pub use crate::weights::{
 };
 pub use sp_runtime::{traits::{Dispatchable}, DispatchError, DispatchResult};
 pub use sp_core::BenchType;
+pub use sp_std::prelude::Vec;
+pub use sp_std::prelude::String;
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -1046,7 +1048,7 @@ macro_rules! decl_module {
 				let now = Instant::now();
 				let r = c();
 				let elapsed = now.elapsed().as_nanos();
-				$crate::sc_tracing::push_data(std::module_path!(), stringify!($name), elapsed);
+				$crate::sc_tracing::push_data(std::module_path!(), stringify!($name), elapsed, format!("{:?}", r).as_str());
 				r
 			}
 			#[cfg(not(feature = "std"))]
@@ -1077,7 +1079,7 @@ macro_rules! decl_module {
 				let now = Instant::now();
 				let r = c();
 				let elapsed = now.elapsed().as_nanos();
-				$crate::sc_tracing::push_data(std::module_path!(), stringify!($name), elapsed);
+				$crate::sc_tracing::push_data(std::module_path!(), stringify!($name), elapsed, format!("{:?}", r).as_str());
 				r
 			}
 			#[cfg(not(feature = "std"))]
@@ -1455,12 +1457,13 @@ macro_rules! decl_module {
 				]
 			}
 
-			fn get_call(function: &str) -> Self {
+			fn get_call(function: &str, mut parameters: $crate::sp_std::prelude::Vec<$crate::sp_std::prelude::String>) -> Self {
 				match function {
 					$( 
 						stringify!($fn_name) => {
 							$(
-								let $param_name = <$param as $crate::sp_core::BenchType>::test_value("");
+								let value = parameters.pop().unwrap_or("".into());
+								let $param_name = <$param as $crate::sp_core::BenchType>::test_value(value.as_str());
 							)*
 							$call_type::$fn_name($( $param_name ),* )
 						}
@@ -1543,7 +1546,7 @@ macro_rules! impl_outer_dispatch {
 		}
 		impl $crate::dispatch::Default for $call_type {
 			fn default() -> Self {
-				<Self as $crate::benchmarking::Module>::get_call("System", "remark")
+				<Self as $crate::benchmarking::Module>::get_call("System", "remark", vec![])
 			}
 		}
 		impl $crate::sp_core::BenchType for $call_type {}
@@ -1565,11 +1568,11 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 
-			fn get_call(module: &str, function: &str) -> Self {
+			fn get_call(module: &str, function: &str, parameters: $crate::sp_std::prelude::Vec<$crate::sp_std::prelude::String>) -> Self {
 				match module {
 					$(
 						stringify!($camelcase) => $call_type::$camelcase(
-							$crate::benchmarking::Call::get_call(function)
+							$crate::benchmarking::Call::get_call(function, parameters)
 						),
 					)*
 					_ => unreachable!(),

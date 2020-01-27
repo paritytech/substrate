@@ -58,21 +58,22 @@ use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use lazy_static::lazy_static;
 
 lazy_static! {
-	static ref TIMINGS: Mutex<Vec<(String, String, u128)>> = Mutex::new(vec![]);
+	static ref TIMINGS: Mutex<Vec<(String, String, u128, String)>> = Mutex::new(vec![]);
 }
 
-pub fn push_data(module: &str, name: &str, time: u128) {
+pub fn push_data(module: &str, name: &str, time: u128, result: &str) {
 	let mut timings = TIMINGS.lock();
-	timings.push((module.to_string(), name.to_string(), time));
+	timings.push((module.to_string(), name.to_string(), time, result.to_string()));
 }
 
 pub fn print_data() {
-	let timings = TIMINGS.lock();
-	for (module, name, time) in timings.iter() {
+	let mut timings = TIMINGS.lock();
+	timings.sort();
+	for (module, name, time, result) in timings.iter() {
 		let mut full_name = module.clone();
 		full_name.push_str("::");
 		full_name.push_str(name);
-		println!("{:<name_width$} {:>time_width$}", full_name, time, name_width=40, time_width=10);
+		println!("{:<name_width$} {:>time_width$} {}", full_name, time, result, name_width=40, time_width=10);
 	}
 }
 

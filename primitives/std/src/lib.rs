@@ -69,6 +69,7 @@ include!("../without_std.rs");
 /// This should include only things which are in the normal std prelude.
 pub mod prelude {
 	pub use crate::vec::Vec;
+	pub use crate::string::String;
 	pub use crate::boxed::Box;
 	pub use crate::cmp::{Eq, PartialEq, Reverse};
 	pub use crate::clone::Clone;

@@ -314,37 +314,178 @@ pub fn to_substrate_wasm_fn_return_value(value: &impl Encode) -> u64 {
 
 pub trait BenchType: Default {
 	fn test_value(_name: &str) -> Self {
-		Self::default()
+		let r = Self::default();
+		#[cfg(feature = "std")]
+		println!("test_value for default {}", std::any::type_name::<Self>());
+		r
 	}
 }
 
-impl BenchType for bool {}
-impl BenchType for u8 {}
-impl BenchType for u16 {}
-impl BenchType for u32 {
+impl BenchType for bool {
 	fn test_value(_name: &str) -> Self {
+		let r = Self::default();
+		#[cfg(feature = "std")]
+		println!("test_value for bool {}", r);
+		r
+	}
+}
+impl BenchType for u8 {
+	fn test_value(_name: &str) -> Self {
+		let r = Self::default();
+		#[cfg(feature = "std")]
+		println!("test_value for u8 {}", r);
+		r
+	}
+}
+impl BenchType for u16 {
+	fn test_value(_name: &str) -> Self {
+		let r = Self::default();
+		#[cfg(feature = "std")]
+		println!("test_value for u16 {}", r);
+		r
+	}
+}
+impl BenchType for u32 {
+	fn test_value(name: &str) -> Self {
+		#[cfg(feature = "std")]
+		{
+			let r = match name {
+				"" => Default::default(),
+				_ => name.parse().expect("wrong number in input file"),
+			};
+			println!("test_value for u32 {}", r);
+			r
+		}
+		#[cfg(not(feature = "std"))]
+		{
+			0
+		}
+	}
+}
+impl BenchType for u64 {
+	fn test_value(_name: &str) -> Self {
+		#[cfg(feature = "std")]
+		println!("test_value for u64 0");
 		0
 	}
 }
-impl BenchType for u64 {}
-impl BenchType for i32 {}
-impl BenchType for () {}
-impl BenchType for H256 {}
-impl BenchType for H160 {}
-impl BenchType for U256 {}
-impl BenchType for ChangesTrieConfiguration {}
-impl BenchType for [u8; 32] {}
-impl BenchType for AccountId32 {}
+impl BenchType for i32 {
+	fn test_value(_name: &str) -> Self {
+		#[cfg(feature = "std")]
+		println!("test_value for i32 0");
+		0
+	}
+}
+impl BenchType for () {
+	fn test_value(_name: &str) -> Self {
+		let r = Default::default();
+		#[cfg(feature = "std")]
+		println!("test_value for () {:?}", r);
+		r
+	}
+}
+impl BenchType for H256 {
+	fn test_value(_name: &str) -> Self {
+		let r = Default::default();
+		#[cfg(feature = "std")]
+		println!("test_value for H256 {:?}", r);
+		r
+	}
+}
+impl BenchType for H160 {
+	fn test_value(_name: &str) -> Self {
+		let r = Default::default();
+		#[cfg(feature = "std")]
+		println!("test_value for H160 {:?}", r);
+		r
+	}
+}
+impl BenchType for U256 {
+	fn test_value(_name: &str) -> Self {
+		let r = Default::default();
+		#[cfg(feature = "std")]
+		println!("test_value for U256 {:?}", r);
+		r
+	}
+}
+impl BenchType for ChangesTrieConfiguration {
+	fn test_value(_name: &str) -> Self {
+		let r = Default::default();
+		#[cfg(feature = "std")]
+		println!("test_value for ChangesTrieConfiguration {:?}", r);
+		r
+	}
+}
+impl BenchType for [u8; 32] {
+	fn test_value(_name: &str) -> Self {
+		let r = Default::default();
+		#[cfg(feature = "std")]
+		println!("test_value for [u8; 32] {:?}", r);
+		r
+	}
+}
 
-impl<T: BenchType> BenchType for Vec<T> {}
-impl<T: BenchType> BenchType for Box<T> {}
-impl<A: BenchType, B: BenchType> BenchType for (A, B) {}
-impl<T: BenchType> BenchType for Option<T> {}
+// Pair::from_string("/Alice", None).unwrap().public()
+impl BenchType for AccountId32 {
+	fn test_value(name: &str) -> Self {
+		#[cfg(feature = "std")]
+		{
+			let r = match name {
+				"" => Default::default(),
+				seed => {
+					let raw: [u8; 32] = sr25519::Pair::from_string(&format!("//{}", seed), None)
+						.expect("static values are valid; qed")
+						.public()
+						.into();
+					AccountId32::from(raw)
+				},
+			};
+			println!("test_value for AccountId32 {:?}", r);
+			r
+		}
+		#[cfg(not(feature = "std"))]
+		{
+			Default::default()
+		}
+	}
+}
+
+impl<T: BenchType> BenchType for Vec<T> {
+	fn test_value(_name: &str) -> Self {
+		let r = Default::default();
+		#[cfg(feature = "std")]
+		println!("test_value for Vec<{}>", std::any::type_name::<T>());
+		r
+	}
+}
+impl<T: BenchType> BenchType for Box<T> {
+	fn test_value(_name: &str) -> Self {
+		#[cfg(feature = "std")]
+		println!("test_value for Box<{}>", std::any::type_name::<T>());
+		Default::default()
+	}
+}
+impl<A: BenchType, B: BenchType> BenchType for (A, B) {
+	fn test_value(_name: &str) -> Self {
+		#[cfg(feature = "std")]
+		println!("test_value for ({}, {})", std::any::type_name::<A>(), std::any::type_name::<B>());
+		Default::default()
+	}
+}
+impl<T: BenchType> BenchType for Option<T> {
+	fn test_value(_name: &str) -> Self {
+		#[cfg(feature = "std")]
+		println!("test_value for Option<{}>", std::any::type_name::<T>());
+		Default::default()
+	}
+}
 
 
 impl BenchType for u128 {
 	fn test_value(_name: &str) -> Self {
-		42_000_000_000_000_000
+		#[cfg(feature = "std")]
+		println!("test_value for u128");
+		42_000_000_000_000_000 // should be >= MinimumDeposit
 	}
 }
 

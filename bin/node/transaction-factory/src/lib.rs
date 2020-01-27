@@ -77,6 +77,7 @@ pub trait RuntimeAdapter {
 		sender: &Self::AccountId,
 		module: String,
 		extrinsic_name: String,
+		extrinsic_parameters: Vec<String>,
 		key: &Self::Secret,
 		runtime_version: u32,
 		genesis_hash: &<Self::Block as BlockT>::Hash,
@@ -253,7 +254,7 @@ where
 				Mode::Sequential => self.next_sequential_state(),
 			};
 
-			if let Some((module, function, _args)) = next_state {
+			if let Some((module, function, parameters)) = next_state {
 				if ["Timestamp"].contains(&module.as_str()) {
 					continue
 				}
@@ -271,6 +272,7 @@ where
 					&account_id,
 					module,
 					function,
+					parameters,
 					&account_secret,
 					runtime_version,
 					&genesis_hash,
