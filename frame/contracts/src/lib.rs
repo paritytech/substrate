@@ -942,13 +942,13 @@ decl_storage! {
 		/// Current cost schedule for contracts.
 		CurrentSchedule get(fn current_schedule) config(): Schedule = Schedule::default();
 		/// A mapping from an original code hash to the original code, untouched by instrumentation.
-		pub PristineCode: map CodeHash<T> => Option<Vec<u8>>;
+		pub PristineCode: map hasher(blake2_256) CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for execution.
-		pub CodeStorage: map CodeHash<T> => Option<wasm::PrefabWasmModule>;
+		pub CodeStorage: map hasher(blake2_256) CodeHash<T> => Option<wasm::PrefabWasmModule>;
 		/// The subtrie counter.
 		pub AccountCounter: u64 = 0;
 		/// The code associated with a given account.
-		pub ContractInfoOf: map T::AccountId => Option<ContractInfo<T>>;
+		pub ContractInfoOf: map hasher(blake2_256) T::AccountId => Option<ContractInfo<T>>;
 		/// The price of one unit of gas.
 		GasPrice get(fn gas_price) config(): BalanceOf<T> = 1.into();
 	}
