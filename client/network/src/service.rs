@@ -36,7 +36,7 @@ use futures::{prelude::*, channel::mpsc};
 use log::{warn, error, info, trace};
 use libp2p::{PeerId, Multiaddr, kad::record};
 use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
-use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
+use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent};
 use parking_lot::Mutex;
 use sc_peerset::PeersetHandle;
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
@@ -213,7 +213,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		)?;
 
 		// Build the swarm.
-		let (mut swarm, bandwidth) = {
+		let (mut swarm, bandwidth): (Swarm::<B, S, H>, _) = {
 			let user_agent = format!(
 				"{} ({})",
 				params.network_config.client_version,
@@ -241,7 +241,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 				};
 				transport::build_transport(local_identity, config_mem, config_wasm)
 			};
-			(Swarm::<B, S, H>::new(transport, behaviour, local_peer_id.clone()), bandwidth)
+			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone());
+			if let Some(spawner) = params.executor {
+				builder = builder.executor_fn(spawner);
+			}
+			(builder.build(), bandwidth)
 		};
 
 		// Listen on multiaddresses.
