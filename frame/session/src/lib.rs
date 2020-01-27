@@ -52,7 +52,7 @@
 //! - **Session rotation process:** At the beginning of each block, the `on_initialize` function
 //! queries the provided implementation of `ShouldEndSession`. If the session is to end the newly
 //! activated validator IDs and session keys are taken from storage and passed to the
-//! `SessionHandler`. The validator set supplied by `OnSessionEnding` and the corresponding session
+//! `SessionHandler`. The validator set supplied by `SessionManager::new_session` and the corresponding session
 //! keys, which may have been registered via `set_keys` during the previous session, are written
 //! to storage where they will wait one session before being passed to the `SessionHandler`
 //! themselves.
