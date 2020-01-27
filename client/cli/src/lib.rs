@@ -205,7 +205,7 @@ where
 	Ok(T::from_clap(&matches))
 }
 
-/// A helper function that:
+/// A helper function that initializes and runs any of the command variants of `CoreParams`.
 /// 1.  initialize
 /// 2.  runs any of the command variant of `CoreParams`
 pub fn run<F, G, E, FNL, FNF, B, SL, SF, BC, BB>(
