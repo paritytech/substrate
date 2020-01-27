@@ -329,7 +329,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Get ready transaction by hash
-	pub fn get(&self, hash: &ExHash<B>) -> Option<TransactionFor<B>> {
+	pub fn ready_by_hash(&self, hash: &ExHash<B>) -> Option<TransactionFor<B>> {
 		self.pool.read().ready_by_hash(hash)
 	}
 

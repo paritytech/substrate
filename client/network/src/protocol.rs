@@ -1135,11 +1135,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
+	/// Propagate one extrinsic.
 	pub fn propagate_extrinsic(
 		&mut self,
 		hash: &H,
 	) {
-		debug!(target: "sync", "Propagating extrinsic");
+		debug!(target: "sync", "Propagating extrinsic [{:?}]", hash);
 		// Accept transactions only when fully synced
 		if self.sync.status().state != SyncState::Idle {
 			return;

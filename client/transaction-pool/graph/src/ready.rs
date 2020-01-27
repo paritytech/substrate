@@ -232,7 +232,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 
 	/// Retrive transaction by hash
 	pub fn by_hash(&self, hash: &Hash) -> Option<Arc<Transaction<Hash, Ex>>> {
-		self.ready.read().get(hash).map(|x| x.transaction.transaction.clone())
+		self.by_hashes(&[hash.clone()]).into_iter().next().unwrap_or(None)
 	}
 
 	/// Retrieve transactions by hash

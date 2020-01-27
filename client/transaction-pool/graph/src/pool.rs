@@ -106,11 +106,11 @@ impl Default for Options {
 		Options {
 			ready: base::Limit {
 				count: 8192,
-				total_bytes: 50 * 1024 * 1024,
+				total_bytes: 20 * 1024 * 1024,
 			},
 			future: base::Limit {
 				count: 2048,
-				total_bytes: 10 * 1024 * 1024,
+				total_bytes: 5 * 1024 * 1024,
 			},
 			reject_future_transactions: false,
 		}
@@ -440,7 +440,7 @@ impl<B: ChainApi> Pool<B> {
 
 	/// Get ready transaction by hash, if it present in the pool.
 	pub fn ready_transaction(&self, hash: &ExHash<B>) -> Option<TransactionFor<B>> {
-		self.validated_pool.get(hash)
+		self.validated_pool.ready_by_hash(hash)
 	}
 }
 
