@@ -2,44 +2,15 @@
 
 ## Introduction
 
-Prometheus is one of the most widely used monitoring tool for managing highly available services supported by [Cloud Native Computing Foundation](https://www.cncf.io/). By providing Prometheus metrics in Substrate, node operators can easily adopt widely used display/alert tools such as Grafana and Alertmanager without setting-up/operating external Prometheus push gateways (which is an antipattern in the first place) through RPC connections. Easy access to such monitoring tools will benefit parachain developers/operators and validators to have much higher availability of their services.
+[Prometheus](https://prometheus.io/) is one of the most widely used monitoring tools for managing highly available services supported by [Cloud Native Computing Foundation](https://www.cncf.io/). By providing Prometheus metrics in Substrate, node operators can easily adopt widely used display/alert tools such
+as [Grafana](https://grafana.com/) and [Alertmanager](https://prometheus.io/docs/alerting/alertmanager/). Easy access to such monitoring tools will benefit parachain developers/operators and validators to have much higher availability of their services.
 
-## Table of Contents
+Metrics will be served under `/metrics` on TCP port 9615 by default.
 
-Metrics
+## Quick Start
+ 
+1. From the root of the repository start Substrate `cargo run --release`.
 
-Start Prometheus
- - Edit Prometheus config file
+2. In another terminal run `curl localhost:9615/metrics` to retrieve the metrics.
 
-
-## Metrics
-
-Substrate can report and serve the Prometheus metrics, which in their turn can be consumed by Prometheus collector(s).
-
-This functionality is disabled by default.
-
-Metrics will be served under /metrics on 9615 port by default.
-
-
-## Start Prometheus
-### Edit Prometheus config file
-
-You can visit [prometheus.yml](https://github.com/prometheus/prometheus/blob/master/documentation/examples/prometheus.yml) to download default `prometheus.yml`.
-
-Then edit `prometheus.yml` and add `jobs` :
-
-```yaml
-      - job_name: kusama
-          static_configs:
-          - targets: ['localhost:9615']
-            labels:
-              instance: local-validator
-```
-
-> Note：value of targets is ip:port which used by substrate monitor 
-
-### Start Prometheus
-
-> The above example, you can save `prometheus.yml` at `~/volumes/prometheus` on your host machine
-
-You can visit `http://localhost:9090` to see prometheus data.
+To learn how to configure Prometheus see the Prometheus [Getting Started](https://prometheus.io/docs/prometheus/latest/getting_started/) guide.

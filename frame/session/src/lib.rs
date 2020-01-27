@@ -162,29 +162,30 @@ impl<
 	}
 }
 
-/// An event handler for when the session is ending.
-/// TODO [slashing] consider renaming to OnSessionStarting
-pub trait OnSessionEnding<ValidatorId> {
-	/// Handle the fact that the session is ending, and optionally provide the new validator set.
+/// A trait for managing creation of new validator set.
+pub trait SessionManager<ValidatorId> {
+	/// Plan a new session, and optionally provide the new validator set.
 	///
 	/// Even if the validator-set is the same as before, if any underlying economic
 	/// conditions have changed (i.e. stake-weights), the new validator set must be returned.
 	/// This is necessary for consensus engines making use of the session module to
 	/// issue a validator-set change so misbehavior can be provably associated with the new
 	/// economic conditions as opposed to the old.
+	/// The returned validator set, if any, will not be applied until `new_index`.
+	/// `new_index` is strictly greater than from previous call.
 	///
-	/// `ending_index` is the index of the currently ending session.
-	/// The returned validator set, if any, will not be applied until `will_apply_at`.
-	/// `will_apply_at` is guaranteed to be at least `ending_index + 1`, since session indices don't
-	/// repeat, but it could be some time after in case we are staging authority set changes.
-	fn on_session_ending(
-		ending_index: SessionIndex,
-		will_apply_at: SessionIndex
-	) -> Option<Vec<ValidatorId>>;
+	/// The first session start at index 0.
+	fn new_session(new_index: SessionIndex) -> Option<Vec<ValidatorId>>;
+	/// End the session.
+	///
+	/// Because the session pallet can queue validator set the ending session can be lower than the
+	/// last new session index.
+	fn end_session(end_index: SessionIndex);
 }
 
-impl<A> OnSessionEnding<A> for () {
-	fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<A>> { None }
+impl<A> SessionManager<A> for () {
+	fn new_session(_: SessionIndex) -> Option<Vec<A>> { None }
+	fn end_session(_: SessionIndex) {}
 }
 
 /// Handler for session lifecycle events.
@@ -214,7 +215,7 @@ pub trait SessionHandler<ValidatorId> {
 
 	/// A notification for end of the session.
 	///
-	/// Note it is triggered before any `OnSessionEnding` handlers,
+	/// Note it is triggered before any `SessionManager::end_session` handlers,
 	/// so we can still affect the validator set.
 	fn on_before_session_ending() {}
 
@@ -248,7 +249,7 @@ pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 
 	/// A notification for end of the session.
 	///
-	/// Note it is triggered before any `OnSessionEnding` handlers,
+	/// Note it is triggered before any `SessionManager::end_session` handlers,
 	/// so we can still affect the validator set.
 	fn on_before_session_ending() {}
 
@@ -318,21 +319,6 @@ impl<AId> SessionHandler<AId> for TestSessionHandler {
 	fn on_disabled(_: usize) {}
 }
 
-/// Handler for selecting the genesis validator set.
-pub trait SelectInitialValidators<ValidatorId> {
-	/// Returns the initial validator set. If `None` is returned
-	/// all accounts that have session keys set in the genesis block
-	/// will be validators.
-	fn select_initial_validators() -> Option<Vec<ValidatorId>>;
-}
-
-/// Implementation of `SelectInitialValidators` that does nothing.
-impl<V> SelectInitialValidators<V> for () {
-	fn select_initial_validators() -> Option<Vec<V>> {
-		None
-	}
-}
-
 impl<T: Trait> ValidatorRegistration<T::ValidatorId> for Module<T> {
 	fn is_registered(id: &T::ValidatorId) -> bool {
 		Self::load_keys(id).is_some()
@@ -352,8 +338,8 @@ pub trait Trait: frame_system::Trait {
 	/// Indicator for when to end the session.
 	type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;
 
-	/// Handler for when a session is about to end.
-	type OnSessionEnding: OnSessionEnding<Self::ValidatorId>;
+	/// Handler for managing new session.
+	type SessionManager: SessionManager<Self::ValidatorId>;
 
 	/// Handler when a session has changed.
 	type SessionHandler: SessionHandler<Self::ValidatorId>;
@@ -366,9 +352,6 @@ pub trait Trait: frame_system::Trait {
 	/// After the threshold is reached `disabled` method starts to return true,
 	/// which in combination with `pallet_staking` forces a new era.
 	type DisabledValidatorsThreshold: Get<Perbill>;
-
-	/// Select initial validators.
-	type SelectInitialValidators: SelectInitialValidators<Self::ValidatorId>;
 }
 
 const DEDUP_KEY_PREFIX: &[u8] = b":session:keys";
@@ -435,12 +418,19 @@ decl_storage! {
 					.expect("genesis config must not contain duplicates; qed");
 			}
 
-			let initial_validators = T::SelectInitialValidators::select_initial_validators()
-				.unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
+			let initial_validators_0 = T::SessionManager::new_session(0)
+				.unwrap_or_else(|| {
+					frame_support::print("No initial validator provided by `SessionManager`, use \
+						session config keys to generate initial validator set.");
+					config.keys.iter().map(|(ref v, _)| v.clone()).collect()
+				});
+			assert!(!initial_validators_0.is_empty(), "Empty validator set for session 0 in genesis block!");
 
-			assert!(!initial_validators.is_empty(), "Empty validator set in genesis block!");
+			let initial_validators_1 = T::SessionManager::new_session(1)
+				.unwrap_or_else(|| initial_validators_0.clone());
+			assert!(!initial_validators_1.is_empty(), "Empty validator set for session 1 in genesis block!");
 
-			let queued_keys: Vec<_> = initial_validators
+			let queued_keys: Vec<_> = initial_validators_1
 				.iter()
 				.cloned()
 				.map(|v| (
@@ -452,7 +442,7 @@ decl_storage! {
 			// Tell everyone about the genesis session keys
 			T::SessionHandler::on_genesis_session::<T::Keys>(&queued_keys);
 
-			<Validators<T>>::put(initial_validators);
+			<Validators<T>>::put(initial_validators_0);
 			<QueuedKeys<T>>::put(queued_keys);
 		});
 	}
@@ -545,10 +535,14 @@ impl<T: Trait> Module<T> {
 			DisabledValidators::take();
 		}
 
-		let applied_at = session_index + 2;
+		T::SessionManager::end_session(session_index);
+
+		// Increment session index.
+		let session_index = session_index + 1;
+		CurrentIndex::put(session_index);
 
 		// Get next validator set.
-		let maybe_next_validators = T::OnSessionEnding::on_session_ending(session_index, applied_at);
+		let maybe_next_validators = T::SessionManager::new_session(session_index + 1);
 		let (next_validators, next_identities_changed)
 			= if let Some(validators) = maybe_next_validators
 		{
@@ -559,10 +553,6 @@ impl<T: Trait> Module<T> {
 		} else {
 			(<Validators<T>>::get(), false)
 		};
-
-		// Increment session index.
-		let session_index = session_index + 1;
-		CurrentIndex::put(session_index);
 
 		// Queue next session keys.
 		let (queued_amalgamated, next_changed) = {
