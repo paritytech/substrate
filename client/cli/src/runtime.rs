@@ -33,7 +33,7 @@ where
 
 	let t1 = stream_int.recv().fuse();
 	let t2 = stream_term.recv().fuse();
-	let mut t3 = func;
+	let t3 = func;
 
 	pin_mut!(t1, t2, t3);
 
@@ -86,11 +86,9 @@ where
 	T: AbstractService + Unpin,
 {
 	let informant_future = informant::build(&service);
-	let handle = tokio::spawn(informant_future);
+	let handle = async { informant_future.await };
 
 	service.await?;
-
-	handle.await.map_err(|e| e.to_string())?;
 
 	Ok(())
 }
