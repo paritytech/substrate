@@ -97,13 +97,13 @@ where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
 		let full_nodes = self.full_nodes.clone();
 		let light_nodes = self.light_nodes.clone();
 		let interval = interval(Duration::from_millis(100))
-			.for_each(move |_| {
+			.take_while(move |_| {
 				let full_ready = full_nodes.iter().all(|&(ref id, ref service, _, _)|
 					full_predicate(*id, service)
 				);
 
 				if !full_ready {
-					return ready(());
+					return ready(true);
 				}
 
 				let light_ready = light_nodes.iter().all(|&(ref id, ref service, _)|
@@ -111,11 +111,12 @@ where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
 				);
 
 				if !light_ready {
-					ready(())
+					ready(true)
 				} else {
-					ready(())
+					ready(false)
 				}
 			})
+			.for_each(|_| ready(()))
 			.timeout(MAX_WAIT_TIME);
 
 		match futures::executor::block_on(interval) {

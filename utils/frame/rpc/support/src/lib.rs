@@ -33,6 +33,7 @@ use sc_rpc_api::state::StateClient;
 /// A typed query on chain state usable from an RPC client.
 ///
 /// ```no_run
+/// # use futures::compat::Future01CompatExt;
 /// # use jsonrpc_client_transports::RpcError;
 /// # use jsonrpc_client_transports::transports::http;
 /// # use codec::Encode;
