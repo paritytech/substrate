@@ -23,7 +23,7 @@ use crate::informant;
 
 async fn main<F, E>(func: F) -> Result<(), Box<dyn std::error::Error>>
 where
-	F: Future<Output = Result<(), E>> + future::FusedFuture + Unpin,
+	F: Future<Output = Result<(), E>> + future::FusedFuture,
 	E: 'static + std::error::Error,
 {
 	use tokio::signal::unix::{signal, SignalKind};
