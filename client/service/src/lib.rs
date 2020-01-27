@@ -608,7 +608,7 @@ where
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
 	E: 'static + IntoPoolError + From<sp_transaction_pool::error::Error>,
 {
-	fn transactions(&self) -> Vec<(H, <B as BlockT>::Extrinsic)> {
+	fn transactions(&self) -> Vec<(H, B::Extrinsic)> {
 		transactions_to_propagate(&*self.pool)
 	}
 
@@ -659,6 +659,10 @@ where
 
 	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>) {
 		self.pool.on_broadcasted(propagations)
+	}
+
+	fn transaction(&self, hash: &H) -> Option<B::Extrinsic> {
+		self.pool.ready_transaction(hash).map(|tx| tx.data().clone())
 	}
 }
 
