@@ -419,7 +419,7 @@ mod tests {
 			finalize: false,
 		}).await.unwrap();
 		let created_block = rx.await.unwrap().unwrap();
-		pool.api().inc_nonce(Alice.into());
+		pool.api().increment_nonce(Alice.into());
 
 		// assert that the background task returns ok
 		assert_eq!(
@@ -449,7 +449,7 @@ mod tests {
 		}).await.is_ok());
 		assert!(rx1.await.unwrap().is_ok());
 		assert!(backend.blockchain().header(BlockId::Number(1)).unwrap().is_some());
-		pool.api().inc_nonce(Alice.into());
+		pool.api().increment_nonce(Alice.into());
 
 		assert!(pool.submit_one(&BlockId::Number(2), uxt(Alice, 2)).await.is_ok());
 		let (tx2, rx2) = futures::channel::oneshot::channel();

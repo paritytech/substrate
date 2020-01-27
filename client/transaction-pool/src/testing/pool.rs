@@ -110,14 +110,14 @@ fn should_correctly_prune_transactions_providing_more_than_one_tag() {
 	assert_eq!(pool.status().ready, 1);
 
 	// remove the transaction that just got imported.
-	api.inc_nonce(Alice.into());
+	api.increment_nonce(Alice.into());
 	block_on(pool.prune_tags(&BlockId::number(1), vec![vec![209]], vec![])).expect("1. Pruned");
 	assert_eq!(pool.status().ready, 0);
 	// it's re-imported to future
 	assert_eq!(pool.status().future, 1);
 
 	// so now let's insert another transaction that also provides the 155
-	api.inc_nonce(Alice.into());
+	api.increment_nonce(Alice.into());
 	let xt = uxt(Alice, 211);
 	block_on(pool.submit_one(&BlockId::number(2), xt.clone())).expect("2. Imported");
 	assert_eq!(pool.status().ready, 1);
@@ -126,7 +126,7 @@ fn should_correctly_prune_transactions_providing_more_than_one_tag() {
 	assert_eq!(pending, vec![211]);
 
 	// prune it and make sure the pool is empty
-	api.inc_nonce(Alice.into());
+	api.increment_nonce(Alice.into());
 	block_on(pool.prune_tags(&BlockId::number(3), vec![vec![155]], vec![])).expect("2. Pruned");
 	assert_eq!(pool.status().ready, 0);
 	assert_eq!(pool.status().future, 2);

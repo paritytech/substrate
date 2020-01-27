@@ -119,7 +119,7 @@ impl TestApi {
 	}
 
 	/// Increment nonce in the inner state.
-	pub fn inc_nonce(&self, account: AccountId) {
+	pub fn increment_nonce(&self, account: AccountId) {
 		let mut chain = self.chain.write();
 		chain.nonces.entry(account).and_modify(|n| *n += 1).or_insert(1);
 	}
