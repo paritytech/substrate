@@ -144,8 +144,7 @@ pub enum DatabaseConfig {
 	Custom(Arc<dyn KeyValueDB>),
 }
 
-impl<G, E> Default for Configuration<G, E>
-{
+impl<G, E> Default for Configuration<G, E> {
 	/// Create a default config
 	fn default() -> Self {
 		let configuration = Configuration {
