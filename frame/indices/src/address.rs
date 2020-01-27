@@ -131,9 +131,13 @@ impl<AccountId, AccountIndex> Default for Address<AccountId, AccountIndex> where
 }
 
 impl<AccountId, AccountIndex> BenchType for Address<AccountId, AccountIndex> where
-	AccountId: Member + Default,
+	AccountId: Member + Default + BenchType,
 	AccountIndex: Member,
-{}
+{
+	fn test_value(name: &str) -> Self {
+		Address::Id(AccountId::test_value(name))
+	}
+}
 
 #[cfg(test)]
 mod tests {
