@@ -101,7 +101,7 @@ mod tests {
 	use super::*;
 
 	use sp_core::H256;
-	use frame_support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
+	use frame_support::{impl_outer_origin, assert_ok, assert_noop, parameter_types, weights::Weight};
 	use sp_runtime::{
 		traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill,
 	};
@@ -158,6 +158,17 @@ mod tests {
 			assert_ok!(TemplateModule::do_something(Origin::signed(1), 42));
 			// asserting that the stored value is equal to what we stored
 			assert_eq!(TemplateModule::something(), Some(42));
+		});
+	}
+
+	#[test]
+	fn correct_error_for_none_value() {
+		new_test_ext().execute_with(|| {
+			// Ensure the correct error is thrown on None value
+			assert_noop!(
+				TemplateModule::cause_error(Origin::signed(1)),
+				Error::<Test>::NoneValue
+			);
 		});
 	}
 }
