@@ -86,7 +86,7 @@ where
 	T: AbstractService + Unpin,
 {
 	let informant_future = informant::build(&service);
-	let handle = async { informant_future.await };
+	async { informant_future.await };
 
 	service.await?;
 
