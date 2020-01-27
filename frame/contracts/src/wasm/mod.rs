@@ -299,6 +299,10 @@ mod tests {
 			666
 		}
 
+		fn tombstone_deposit(&self) -> u64 {
+			16
+		}
+
 		fn random(&self, subject: &[u8]) -> H256 {
 			H256::from_slice(subject)
 		}
@@ -396,6 +400,9 @@ mod tests {
 		}
 		fn minimum_balance(&self) -> u64 {
 			(**self).minimum_balance()
+		}
+		fn tombstone_deposit(&self) -> u64 {
+			(**self).tombstone_deposit()
 		}
 		fn random(&self, subject: &[u8]) -> H256 {
 			(**self).random(subject)
@@ -1271,6 +1278,65 @@ mod tests {
 		).unwrap();
 	}
 
+	const CODE_TOMBSTONE_DEPOSIT: &str = r#"
+(module
+	(import "env" "ext_tombstone_deposit" (func $ext_tombstone_deposit))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		(call $ext_tombstone_deposit)
+
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_read
+			(i32.const 8)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		;; assert that contents of the buffer is equal to the i64 value of 16.
+		(call $assert
+			(i64.eq
+				(i64.load
+					(i32.const 8)
+				)
+				(i64.const 16)
+			)
+		)
+	)
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	fn tombstone_deposit() {
+		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		let _ = execute(
+			CODE_TOMBSTONE_DEPOSIT,
+			vec![],
+			MockExt::default(),
+			&mut gas_meter,
+		).unwrap();
+	}
+
 	const CODE_RANDOM: &str = r#"
 (module
 	(import "env" "ext_random" (func $ext_random (param i32 i32)))
@@ -1430,7 +1496,9 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(ExecError { reason: DispatchError::Other("during execution"), buffer: _ })
+			Err(ExecError {
+				reason: DispatchError::Other("contract trapped during execution"), buffer: _
+			})
 		);
 	}
 
@@ -1472,7 +1540,7 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(ExecError { reason: DispatchError::Other("during execution"), buffer: _ })
+			Err(ExecError { reason: DispatchError::Other("contract trapped during execution"), buffer: _ })
 		);
 	}
 

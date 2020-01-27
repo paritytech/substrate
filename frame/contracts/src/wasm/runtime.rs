@@ -109,7 +109,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 			Err(ExecError { reason: "validation error".into(), buffer: runtime.scratch_buf }),
 		// Any other kind of a trap should result in a failure.
 		Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
-			Err(ExecError { reason: "during execution".into(), buffer: runtime.scratch_buf }),
+			Err(ExecError { reason: "contract trapped during execution".into(), buffer: runtime.scratch_buf }),
 	}
 }
 
@@ -620,6 +620,23 @@ define_env!(Env, <E: Ext>,
 	ext_minimum_balance(ctx) => {
 		ctx.scratch_buf.clear();
 		ctx.ext.minimum_balance().encode_to(&mut ctx.scratch_buf);
+		Ok(())
+	},
+
+	// Stores the tombstone deposit into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch
+	// buffer are overwritten.
+	//
+	// # Note
+	//
+	// The tombstone deposit is on top of the existential deposit. So in order for
+	// a contract to leave a tombstone the balance of the contract must not go
+	// below the sum of existential deposit and the tombstone deposit. The sum
+	// is commonly referred as subsistence threshold in code.
+	ext_tombstone_deposit(ctx) => {
+		ctx.scratch_buf.clear();
+		ctx.ext.tombstone_deposit().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 

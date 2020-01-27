@@ -52,18 +52,13 @@ pub(crate) fn fields_access(
 	})
 }
 
-/// self defined parsing struct or enum.
-/// not meant for any struct/enum, just for fast
+/// self defined parsing struct.
+/// not meant for any struct, just for fast
 /// parse implementation.
-/// For enums:
-///   variant are tested in order of definition.
-///   Empty variant is always true.
-///   Please use carefully, this will fully parse successful variant twice.
 #[proc_macro_derive(Parse)]
 pub fn derive_parse(input: TokenStream) -> TokenStream {
 	let item = parse_macro_input!(input as syn::Item);
 	match item {
-		syn::Item::Enum(input) => derive_parse_enum(input),
 		syn::Item::Struct(input) => derive_parse_struct(input),
 		_ => TokenStream::new(), // ignore
 	}
@@ -96,71 +91,6 @@ fn derive_parse_struct(input: syn::ItemStruct) -> TokenStream {
 				})
 			}
 		}
-	};
-	tokens.into()
-}
-
-fn derive_parse_enum(input: syn::ItemEnum) -> TokenStream {
-	let syn::ItemEnum {
-		ident,
-		generics,
-		variants,
-		..
-	} = input;
-	let variants = variants.iter().map(|v| {
-		let variant_ident = v.ident.clone();
-		let fields_build = if v.fields.iter().count() > 0 {
-			let fields_id = fields_idents(v.fields.iter().map(Clone::clone));
-			quote!( (#(#fields_id), *) )
-		} else {
-			quote!()
-		};
-
-		let fields_procs = fields_idents(v.fields.iter().map(Clone::clone))
-			.map(|fident| {
-				quote!{
-					let mut #fident = match fork.parse() {
-						Ok(r) => r,
-						Err(_e) => break,
-					};
-				}
-			});
-		let fields_procs_again = fields_idents(v.fields.iter().map(Clone::clone))
-			.map(|fident| {
-				quote!{
-					#fident = input.parse().expect("was parsed just before");
-				}
-			});
-
-		// double parse to update input cursor position
-		// next syn crate version should be checked for a way
-		// to copy position/state from a fork
-		quote!{
-			let mut fork = input.fork();
-			loop {
-				#(#fields_procs)*
-				#(#fields_procs_again)*
-				return Ok(#ident::#variant_ident#fields_build);
-			}
-		}
-	});
-
-	let tokens = quote! {
-		impl #generics syn::parse::Parse for #ident #generics {
-			fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
-				#(
-					#variants
-				)*
-				// no early return from any variants
-				Err(
-					syn::parse::Error::new(
-						proc_macro2::Span::call_site(),
-						"derived enum no matching variants"
-					)
-				)
-			}
-		}
-
 	};
 	tokens.into()
 }

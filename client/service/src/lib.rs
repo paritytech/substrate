@@ -38,7 +38,7 @@ use parking_lot::Mutex;
 use sc_client::Client;
 use exit_future::Signal;
 use futures::{
-	Future, FutureExt, Stream, StreamExt, TryFutureExt,
+	Future, FutureExt, Stream, StreamExt,
 	future::select, channel::mpsc,
 	compat::*,
 	sink::SinkExt,
@@ -61,7 +61,7 @@ pub use self::builder::{
 };
 pub use config::{Configuration, Roles, PruningMode};
 pub use sc_chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
-pub use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, error::IntoPoolError};
+pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoolError};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 pub use sc_client::FinalityNotifications;
 pub use sc_rpc::Metadata as RpcMetadata;
@@ -95,14 +95,12 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	to_spawn_tx: mpsc::UnboundedSender<Pin<Box<dyn Future<Output = ()> + Send>>>,
 	/// Receiver for futures that must be spawned as background tasks.
 	to_spawn_rx: mpsc::UnboundedReceiver<Pin<Box<dyn Future<Output = ()> + Send>>>,
-	/// List of futures to poll from `poll`.
-	/// If spawning a background task is not possible, we instead push the task into this `Vec`.
-	/// The elements must then be polled manually.
-	to_poll: Vec<Pin<Box<dyn Future<Output = ()> + Send>>>,
+	/// How to spawn background tasks.
+	tasks_executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
 	rpc_handlers: sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<sc_telemetry::Telemetry>,
-	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
+	_telemetry_on_connect_sinks: Arc<Mutex<Vec<futures::channel::mpsc::UnboundedSender<()>>>>,
 	_offchain_workers: Option<Arc<TOc>>,
 	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
@@ -150,13 +148,12 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	/// Chain selection algorithm.
 	type SelectChain: sp_consensus::SelectChain<Self::Block>;
 	/// Transaction pool.
-	type TransactionPool: TransactionPool<Block = Self::Block>
-		+ TransactionPoolMaintainer<Block = Self::Block>;
+	type TransactionPool: TransactionPool<Block = Self::Block>;
 	/// Network specialization.
 	type NetworkSpecialization: NetworkSpecialization<Self::Block>;
 
 	/// Get event stream for telemetry connection established events.
-	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()>;
+	fn telemetry_on_connect_stream(&self) -> futures::channel::mpsc::UnboundedReceiver<()>;
 
 	/// return a shared instance of Telemetry (if enabled)
 	fn telemetry(&self) -> Option<sc_telemetry::Telemetry>;
@@ -215,8 +212,7 @@ where
 	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
 	TSc: sp_consensus::SelectChain<TBl> + 'static + Clone + Send + Unpin,
-	TExPool: 'static + TransactionPool<Block = TBl>
-		+ TransactionPoolMaintainer<Block = TBl>,
+	TExPool: 'static + TransactionPool<Block = TBl>,
 	TOc: 'static + Send + Sync,
 	TNetSpec: NetworkSpecialization<TBl>,
 {
@@ -228,8 +224,8 @@ where
 	type TransactionPool = TExPool;
 	type NetworkSpecialization = TNetSpec;
 
-	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()> {
-		let (sink, stream) = mpsc::unbounded();
+	fn telemetry_on_connect_stream(&self) -> futures::channel::mpsc::UnboundedReceiver<()> {
+		let (sink, stream) = futures::channel::mpsc::unbounded();
 		self._telemetry_on_connect_sinks.lock().push(sink);
 		stream
 	}
@@ -322,22 +318,7 @@ impl<TBl: Unpin, TCl, TSc: Unpin, TNetStatus, TNet, TTxPool, TOc> Future for
 		}
 
 		while let Poll::Ready(Some(task_to_spawn)) = Pin::new(&mut this.to_spawn_rx).poll_next(cx) {
-			// TODO: Update to tokio 0.2 when libp2p get switched to std futures (#4383)
-			let executor = tokio_executor::DefaultExecutor::current();
-			use futures01::future::Executor;
-			if let Err(err) = executor.execute(task_to_spawn.unit_error().compat()) {
-				debug!(
-					target: "service",
-					"Failed to spawn background task: {:?}; falling back to manual polling",
-					err
-				);
-				this.to_poll.push(Box::pin(err.into_future().compat().map(drop)));
-			}
-		}
-
-		// Polling all the `to_poll` futures.
-		while let Some(pos) = this.to_poll.iter_mut().position(|t| Pin::new(t).poll(cx).is_ready()) {
-			let _ = this.to_poll.remove(pos);
+			(this.tasks_executor)(task_to_spawn);
 		}
 
 		// The service future never ends.

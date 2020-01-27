@@ -82,7 +82,7 @@ use sp_blockchain::Error;
 use crate::{
 	call_executor::LocalCallExecutor,
 	light::{call_executor::prove_execution, fetcher::ChangesProof},
-	in_mem, genesis, cht,
+	in_mem, genesis, cht, block_rules::{BlockRules, LookupResult as BlockLookupResult},
 };
 
 /// Substrate Client
@@ -94,8 +94,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
-	fork_blocks: ForkBlocks<Block>,
-	bad_blocks: BadBlocks<Block>,
+	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	_phantom: PhantomData<RA>,
 }
@@ -219,8 +218,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
 			importing_block: Default::default(),
-			fork_blocks,
-			bad_blocks,
+			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
 			_phantom: Default::default(),
 		})
@@ -818,11 +816,18 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			finalized,
 			auxiliary,
 			fork_choice,
+			intermediates,
 			import_existing,
 			..
 		} = import_block;
 
 		assert!(justification.is_some() && finalized || justification.is_none());
+
+		if !intermediates.is_empty() {
+			return Err(Error::IncompletePipeline)
+		}
+
+		let fork_choice = fork_choice.ok_or(Error::IncompletePipeline)?;
 
 		let import_headers = if post_digests.is_empty() {
 			PrePostHeader::Same(header)
@@ -1544,32 +1549,25 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 
 		// Check the block against white and black lists if any are defined
 		// (i.e. fork blocks and bad blocks respectively)
-		let fork_block = self.fork_blocks.as_ref()
-			.and_then(|fs| fs.iter().find(|(n, _)| *n == number));
-
-		if let Some((_, h)) = fork_block {
-			if &hash != h  {
+		match self.block_rules.lookup(number, &hash) {
+			BlockLookupResult::KnownBad => {
+				trace!(
+					"Rejecting known bad block: #{} {:?}",
+					number,
+					hash,
+				);
+				return Ok(ImportResult::KnownBad);
+			},
+			BlockLookupResult::Expected(expected_hash) => {
 				trace!(
 					"Rejecting block from known invalid fork. Got {:?}, expected: {:?} at height {}",
 					hash,
-					h,
+					expected_hash,
 					number
 				);
 				return Ok(ImportResult::KnownBad);
-			}
-		}
-
-		let bad_block = self.bad_blocks.as_ref()
-			.filter(|bs| bs.contains(&hash))
-			.is_some();
-
-		if bad_block {
-			trace!(
-				"Rejecting known bad block: #{} {:?}",
-				number,
-				hash,
-			);
-			return Ok(ImportResult::KnownBad);
+			},
+			BlockLookupResult::NotSpecial => {}
 		}
 
 		// Own status must be checked first. If the block and ancestry is pruned
@@ -3000,6 +2998,107 @@ pub(crate) mod tests {
 			import_err.to_string(),
 			expected_err.to_string(),
 		);
+	}
+
+
+	#[test]
+	fn respects_block_rules() {
+
+		fn run_test(
+			record_only: bool,
+			known_bad: &mut HashSet<H256>,
+			fork_rules: &mut Vec<(u64, H256)>,
+		) {
+			let mut client = if record_only {
+				TestClientBuilder::new().build()
+			} else {
+				TestClientBuilder::new()
+					.set_block_rules(
+						Some(fork_rules.clone()),
+						Some(known_bad.clone()),
+					)
+					.build()
+			};
+
+			let block_ok = client.new_block_at(&BlockId::Number(0), Default::default(), false)
+				.unwrap().build().unwrap().block;
+
+			let params = BlockCheckParams {
+				hash: block_ok.hash().clone(),
+				number: 0,
+				parent_hash: block_ok.header().parent_hash().clone(),
+				allow_missing_state: false,
+				import_existing: false,
+			};
+			assert_eq!(client.check_block(params).unwrap(), ImportResult::imported(false));
+
+			// this is 0x0d6d6612a10485370d9e085aeea7ec427fb3f34d961c6a816cdbe5cde2278864
+			let mut block_not_ok = client.new_block_at(&BlockId::Number(0), Default::default(), false)
+				.unwrap();
+			block_not_ok.push_storage_change(vec![0], Some(vec![1])).unwrap();
+			let block_not_ok = block_not_ok.build().unwrap().block;
+
+			let params = BlockCheckParams {
+				hash: block_not_ok.hash().clone(),
+				number: 0,
+				parent_hash: block_not_ok.header().parent_hash().clone(),
+				allow_missing_state: false,
+				import_existing: false,
+			};
+			if record_only {
+				known_bad.insert(block_not_ok.hash());
+			} else {
+				assert_eq!(client.check_block(params).unwrap(), ImportResult::KnownBad);
+			}
+
+			// Now going to the fork
+			client.import_as_final(BlockOrigin::Own, block_ok).unwrap();
+
+			// And check good fork
+			let mut block_ok = client.new_block_at(&BlockId::Number(1), Default::default(), false)
+				.unwrap();
+			block_ok.push_storage_change(vec![0], Some(vec![2])).unwrap();
+			let block_ok = block_ok.build().unwrap().block;
+
+			let params = BlockCheckParams {
+				hash: block_ok.hash().clone(),
+				number: 1,
+				parent_hash: block_ok.header().parent_hash().clone(),
+				allow_missing_state: false,
+				import_existing: false,
+			};
+			if record_only {
+				fork_rules.push((1, block_ok.hash().clone()));
+			}
+			assert_eq!(client.check_block(params).unwrap(), ImportResult::imported(false));
+
+			// And now try bad fork
+			let mut block_not_ok = client.new_block_at(&BlockId::Number(1), Default::default(), false)
+				.unwrap();
+			block_not_ok.push_storage_change(vec![0], Some(vec![3])).unwrap();
+			let block_not_ok = block_not_ok.build().unwrap().block;
+
+			let params = BlockCheckParams {
+				hash: block_not_ok.hash().clone(),
+				number: 1,
+				parent_hash: block_not_ok.header().parent_hash().clone(),
+				allow_missing_state: false,
+				import_existing: false,
+			};
+
+			if !record_only {
+				assert_eq!(client.check_block(params).unwrap(), ImportResult::KnownBad);
+			}
+		}
+
+		let mut known_bad = HashSet::new();
+		let mut fork_rules = Vec::new();
+
+		// records what bad_blocks and fork_blocks hashes should be
+		run_test(true, &mut known_bad, &mut fork_rules);
+
+		// enforces rules and actually makes assertions
+		run_test(false, &mut known_bad, &mut fork_rules);
 	}
 
 	#[test]

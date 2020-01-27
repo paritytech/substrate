@@ -49,7 +49,7 @@ use std::{
 };
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer};
+use sp_transaction_pool::MaintainedTransactionPool;
 use sp_blockchain;
 use grafana_data_source::{self, record_metrics};
 
@@ -740,9 +740,7 @@ ServiceBuilder<
 	TSc: Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TNetP: NetworkSpecialization<TBl>,
-	TExPool: 'static
-		+ TransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>
-		+ TransactionPoolMaintainer<Block=TBl, Hash = <TBl as BlockT>::Hash>,
+	TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata> + Clone,
 {
 
@@ -1069,7 +1067,7 @@ ServiceBuilder<
 			has_bootnodes,
 		), exit.clone()).map(drop)));
 
-		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
+		let telemetry_connection_sinks: Arc<Mutex<Vec<futures::channel::mpsc::UnboundedSender<()>>>> = Default::default();
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
@@ -1147,7 +1145,11 @@ ServiceBuilder<
 			essential_failed_rx,
 			to_spawn_tx,
 			to_spawn_rx,
-			to_poll: Vec::new(),
+			tasks_executor: if let Some(exec) = config.tasks_executor {
+				exec
+			} else {
+				return Err(Error::TasksExecutorRequired);
+			},
 			rpc_handlers,
 			_rpc: rpc,
 			_telemetry: telemetry,

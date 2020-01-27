@@ -74,7 +74,7 @@ const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
 const MAX_KNOWN_EXTRINSICS: usize = 4096; // ~128kb per peer + overhead
 
 /// Current protocol version.
-pub(crate) const CURRENT_VERSION: u32 = 5;
+pub(crate) const CURRENT_VERSION: u32 = 6;
 /// Lowest version we support
 pub(crate) const MIN_VERSION: u32 = 3;
 
@@ -1792,7 +1792,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened { remote: PeerId, protocols: Vec<ConsensusEngineId>, roles: Roles },
 	/// Notification protocols have been closed with a remote.
-	NotificationsStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
+	NotificationStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
 	/// Messages have been received on one or more notifications protocols.
 	NotificationsReceived { remote: PeerId, messages: Vec<(ConsensusEngineId, Bytes)> },
 	None,
@@ -1931,7 +1931,7 @@ Protocol<B, S, H> {
 			LegacyProtoOut::CustomProtocolClosed { peer_id, .. } => {
 				self.on_peer_disconnected(peer_id.clone());
 				// Notify all the notification protocols as closed.
-				CustomMessageOutcome::NotificationsStreamClosed {
+				CustomMessageOutcome::NotificationStreamClosed {
 					remote: peer_id,
 					protocols: self.registered_notif_protocols.iter().cloned().collect(),
 				}
