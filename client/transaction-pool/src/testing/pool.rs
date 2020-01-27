@@ -1,54 +1,23 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
-// This file is part of Substrate.
-
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
-//! Tests for top-level transaction pool api
-
-mod api;
 
 use crate::*;
-use codec::Encode;
-use futures::executor::block_on;
 use sc_transaction_graph::{self, Pool};
+use futures::executor::block_on;
 use sp_runtime::{
 	generic::BlockId,
 	transaction_validity::ValidTransaction,
 };
 use substrate_test_runtime_client::{
-	runtime::{AccountId, Block, Extrinsic, Hash, Index, Transfer},
-	AccountKeyring::{self, *},
+	runtime::{Block, Hash, Index},
+	AccountKeyring::*,
 };
-use api::TestApi;
-
-fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
-	let transfer = Transfer {
-		from: who.into(),
-		to: AccountId::default(),
-		nonce,
-		amount: 1,
-	};
-	let signature = transfer.using_encoded(|e| who.sign(e));
-	Extrinsic::Transfer(transfer, signature.into())
-}
+use crate::testing::api::{TestApi, uxt};
 
 fn pool() -> Pool<TestApi> {
-	Pool::new(Default::default(), TestApi::default().into())
+	Pool::new(Default::default(), TestApi::with_alice_nonce(209).into())
 }
 
 fn maintained_pool() -> BasicPool<TestApi, Block> {
-	BasicPool::new(Default::default(), TestApi::default())
+	BasicPool::new(Default::default(), TestApi::with_alice_nonce(209))
 }
 
 #[test]
@@ -131,10 +100,10 @@ fn should_ban_invalid_transactions() {
 
 #[test]
 fn should_correctly_prune_transactions_providing_more_than_one_tag() {
-	let api = Arc::new(TestApi::default());
-	*api.valid_modifier.write() = Box::new(|v: &mut ValidTransaction| {
+	let api = Arc::new(TestApi::with_alice_nonce(209));
+	api.set_valid_modifier(Box::new(|v: &mut ValidTransaction| {
 		v.provides.push(vec![155]);
-	});
+	}));
 	let pool = Pool::new(Default::default(), api.clone());
 	let xt = uxt(Alice, 209);
 	block_on(pool.submit_one(&BlockId::number(0), xt.clone())).expect("1. Imported");

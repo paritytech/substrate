@@ -26,12 +26,12 @@ use sp_runtime::{
 };
 use std::collections::HashSet;
 use substrate_test_runtime_client::{
-	runtime::{AccountId, Block, BlockNumber, Extrinsic, Hash, Header},
-	AccountKeyring::*,
+	runtime::{Index, AccountId, Block, BlockNumber, Extrinsic, Hash, Header, Transfer},
+	AccountKeyring::{self, *},
 };
 
 #[derive(Default)]
-pub struct ChainState {
+struct ChainState {
 	pub block_by_number: HashMap<BlockNumber, Vec<Extrinsic>>,
 	pub block_by_hash: HashMap<Hash, Vec<Extrinsic>>,
 	pub header_by_number: HashMap<BlockNumber, Header>,
@@ -39,25 +39,45 @@ pub struct ChainState {
 	pub invalid_hashes: HashSet<Hash>,
 }
 
+/// Test Api for transaction pool.
 pub struct TestApi {
-	pub valid_modifier: RwLock<Box<dyn Fn(&mut ValidTransaction) + Send + Sync>>,
+	valid_modifier: RwLock<Box<dyn Fn(&mut ValidTransaction) + Send + Sync>>,
 	chain: RwLock<ChainState>,
 	validation_requests: RwLock<Vec<Extrinsic>>,
 }
 
 impl TestApi {
-	pub fn default() -> Self {
+
+	/// Test Api with Alice nonce set initially.
+	pub fn with_alice_nonce(nonce: u64) -> Self {
 		let api = TestApi {
 			valid_modifier: RwLock::new(Box::new(|_| {})),
 			chain: Default::default(),
 			validation_requests: RwLock::new(Default::default()),
 		};
 
-		api.chain.write().nonces.insert(Alice.into(), 209);
+		api.chain.write().nonces.insert(Alice.into(), nonce);
 
 		api
 	}
 
+	/// Default Test Api
+	pub fn empty() -> Self {
+		let api = TestApi {
+			valid_modifier: RwLock::new(Box::new(|_| {})),
+			chain: Default::default(),
+			validation_requests: RwLock::new(Default::default()),
+		};
+
+		api
+	}
+
+	/// Set hook on modify valid result of transaction.
+	pub fn set_valid_modifier(&self, modifier: Box<dyn Fn(&mut ValidTransaction) + Send + Sync>) {
+		*self.valid_modifier.write() = modifier;
+	}
+
+	/// Push block as a part of canonical chain under given number.
 	pub fn push_block(&self, block_number: BlockNumber, xts: Vec<Extrinsic>) {
 		let mut chain = self.chain.write();
 		chain.block_by_number.insert(block_number, xts);
@@ -70,6 +90,9 @@ impl TestApi {
 		});
 	}
 
+	/// Push a block without a number.
+	///
+	/// As a part of non-canonical chain.
 	pub fn push_fork_block(&self, block_hash: Hash, xts: Vec<Extrinsic>) {
 		let mut chain = self.chain.write();
 		chain.block_by_hash.insert(block_hash, xts);
@@ -80,16 +103,22 @@ impl TestApi {
 		(BlakeTwo256::hash(&encoded), encoded.len())
 	}
 
+	/// Mark some transaction is invalid.
+	///
+	/// Next time transaction pool will try to validate this
+	/// extrinsic, api will return invalid result.
 	pub fn add_invalid(&self, xts: &Extrinsic) {
 		self.chain.write().invalid_hashes.insert(
 			Self::hash_and_length_inner(xts).0
 		);
 	}
 
+	/// Query validation requests received.
 	pub fn validation_requests(&self) -> Vec<Extrinsic> {
 		self.validation_requests.read().clone()
 	}
 
+	/// Increment nonce in the inner state.
 	pub fn inc_nonce(&self, account: AccountId) {
 		let mut chain = self.chain.write();
 		chain.nonces.entry(account).and_modify(|n| *n += 1).or_insert(1);
@@ -176,3 +205,18 @@ fn number_of(at: &BlockId<Block>) -> u64 {
 		_ => 0,
 	}
 }
+
+/// Generate transfer extrinsic with a given nonce.
+///
+/// Part of the test api.
+pub fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
+	let transfer = Transfer {
+		from: who.into(),
+		to: AccountId::default(),
+		nonce,
+		amount: 1,
+	};
+	let signature = transfer.using_encoded(|e| who.sign(e));
+	Extrinsic::Transfer(transfer, signature.into())
+}
+
