@@ -33,6 +33,8 @@ use std::hash::Hash as StdHash;
 use crate::stats::StateUsageStats;
 
 const STATE_CACHE_BLOCKS: usize = 12;
+// Clean child infos every `CHILD_INFO_CLEAN_RATE` sync.
+const CHILD_INFO_CLEAN_RATE: usize = 100;
 
 type ChildStorageKey = (Vec<u8>, Vec<u8>);
 
@@ -46,6 +48,8 @@ pub struct Cache<B: BlockT> {
 	lru_child_storage: LRUMap<ChildStorageKey, (Option<StorageValue>, Arc<OwnedChildInfo>)>,
 	/// Storage of current child infos.
 	child_infos: HashMap<StorageKey, Option<Weak<OwnedChildInfo>>>,
+	/// Number of sync before cleaning child infos map.
+	next_child_infos_clean: usize,
 	/// Information on the modifications in recently committed blocks; specifically which keys
 	/// changed in which block. Ordered by block number.
 	modifications: VecDeque<BlockChanges<B::Header>>,
@@ -176,6 +180,7 @@ impl<B: BlockT> Cache<B> {
 
 		// Purge changes from re-enacted and retracted blocks.
 		let mut clear = false;
+		let mut clean_child_infos = false;
 		for block in enacted {
 			clear = clear || {
 				if let Some(m) = self.modifications.iter_mut().find(|m| &m.hash == block) {
@@ -188,6 +193,7 @@ impl<B: BlockT> Cache<B> {
 					for a in &m.child_storage {
 						trace!("Reverting enacted child key {:?}", a);
 						self.lru_child_storage.remove(a);
+						clean_child_infos = true;
 					}
 					false
 				} else {
@@ -208,6 +214,7 @@ impl<B: BlockT> Cache<B> {
 					for a in &m.child_storage {
 						trace!("Retracted child key {:?}", a);
 						self.lru_child_storage.remove(a);
+						clean_child_infos = true;
 					}
 					false
 				} else {
@@ -222,9 +229,31 @@ impl<B: BlockT> Cache<B> {
 			self.lru_child_storage.clear();
 			self.lru_hashes.clear();
 			self.modifications.clear();
+			self.child_infos.clear();
+			self.next_child_infos_clean = CHILD_INFO_CLEAN_RATE;
+		} else if clean_child_infos {
+			self.next_child_infos_clean -= 1;
+			if self.next_child_infos_clean == 0 {
+				self.clean_child_info();
+				self.next_child_infos_clean = CHILD_INFO_CLEAN_RATE;
+			}
 		}
 	}
 
+	/// Remove invalid child info from cache (invalid happen when the child cache
+	/// no longer have reference to this child info).
+	/// Return the number of removed entries.
+	fn clean_child_info(
+		&mut self,
+	) -> usize {
+		let bef = self.child_infos.len();
+		self.child_infos.retain(|_k, v| if let Some(weak) = v.as_ref() {
+			weak.upgrade().is_some()
+		} else {
+			true
+		});
+		bef - self.child_infos.len()
+	}
 }
 
 pub type SharedCache<B> = Arc<Mutex<Cache<B>>>;
@@ -249,6 +278,7 @@ pub fn new_shared_cache<B: BlockT>(
 					LinkedHashMap::new(), 0, shared_cache_size * child_ratio.0 / child_ratio.1
 				),
 				child_infos: HashMap::new(),
+				next_child_infos_clean: CHILD_INFO_CLEAN_RATE,
 				modifications: VecDeque::new(),
 			}
 		)
@@ -878,7 +908,9 @@ mod tests {
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
 	const CHILD_KEY_1: &'static [u8] = b"unique_id_1";
+	const CHILD_KEY_2: &'static [u8] = b"unique_id_2";
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(CHILD_KEY_1);
+	const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(CHILD_KEY_2);
 
 	fn child_key_1_vec() -> Vec<u8> {
 		let mut res = CHILD_KEY_1.to_vec();
@@ -1366,6 +1398,78 @@ mod tests {
 		);
 	}
 
+	#[test]
+	fn dropped_child_remove_child_info() {
+		let shared = new_shared_cache::<Block>(47*3, (1,3));
+		let root_parent = H256::random();
+		let h0 = H256::random();
+		let h1 = H256::random();
+		let h2 = H256::random();
+		let child_root1 = H256::random();
+
+		let mut s = CachingState::new(
+			InMemoryBackend::<Blake2Hasher>::default(),
+			shared.clone(),
+			Some(root_parent),
+		);
+		// child info not here, this operation do cache in top child
+		// a 11 b key and None.
+		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
+		assert!(child_info.is_none());
+
+		let key = H256::random()[..].to_vec();
+		s.cache.sync_cache(
+			&[],
+			&[],
+			// we need a root (because the state does not have it and no child info will be returned).
+			vec![(child_key_1_vec(), Some(child_root1.as_ref().to_vec()))],
+			vec![(child_key_1_vec(), vec![(key.clone(), Some(vec![1, 2, 3, 4]))], CHILD_INFO_1.to_owned())],
+			Some(h0),
+			Some(0),
+			true,
+		);
+		// 11 + 32 key, 4 byte size (plus top 11 and 32 root)
+		assert_eq!(shared.lock().used_storage_cache_size(), 47 + 43 /* bytes */);
+		// cache do not work until canonicalized, this is rather unexpected to me
+		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
+		assert!(child_info.is_none());
+		// canonicalize last block
+		let mut s = CachingState::new(
+			InMemoryBackend::<Blake2Hasher>::default(),
+			shared.clone(),
+			Some(h0),
+		);
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1), Some(1), true);
+		// child info already here
+		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
+		assert!(child_info.is_some());
+		assert_eq!(
+			child_info.map(|ci| ci.as_ref().as_ref().root() == Some(child_root1.as_ref())),
+			Some(true),
+		);
+
+		let mut s = CachingState::new(
+			InMemoryBackend::<Blake2Hasher>::default(),
+			shared.clone(),
+			Some(h1),
+		);
+		let key = H256::random()[..].to_vec();
+		s.cache.sync_cache(
+			&[],
+			&[],
+			vec![],
+			vec![(vec![0, 1, 2, 3], vec![(key.clone(), Some(vec![1, 2]))], CHILD_INFO_2.to_owned())],
+			Some(h2),
+			Some(2),
+			true,
+		);
+		// 4 + 32 key, 2 byte size (plus top 11 and 32 root)
+		assert_eq!(shared.lock().used_storage_cache_size(), 38 + 43 /* bytes */);
+		assert_eq!(shared.lock().clean_child_info(), 1);
+		// query back did init it
+		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
+		assert!(child_info.is_some());
+	}
 
 	#[test]
 	fn fix_storage_mismatch_issue() {
