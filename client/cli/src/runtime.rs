@@ -81,18 +81,6 @@ where
 	Ok(())
 }
 
-async fn run_service_with_informant<T>(service: T) -> error::Result<()>
-where
-	T: AbstractService + Unpin,
-{
-	let informant_future = informant::build(&service);
-	async { informant_future.await };
-
-	service.await?;
-
-	Ok(())
-}
-
 /// A helper function that runs an `AbstractService` with tokio and stops if the process receives
 /// the signal SIGTERM or SIGINT
 pub fn run_service_until_exit<T, G, E, F>(
@@ -112,11 +100,14 @@ where
 
 	let service = service_builder(config)?;
 
+	let informant_future = informant::build(&service);
+	let _informant_handle = runtime.spawn(informant_future);
+
 	// we eagerly drop the service so that the internal exit future is fired,
 	// but we need to keep holding a reference to the global telemetry guard
 	let _telemetry = service.telemetry();
 
-	let f = run_service_with_informant(service).fuse();
+	let f = service.fuse();
 	pin_mut!(f);
 
 	runtime.block_on(main(f)).map_err(|e| e.to_string())?;
