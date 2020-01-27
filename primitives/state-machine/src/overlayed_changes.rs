@@ -257,7 +257,7 @@ impl OverlayedChanges {
 	) {
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.prospective.children.entry(storage_key)
-			.or_insert_with(|| (Default::default(), child_info.to_owned()));
+			.or_insert_with(|| (Default::default(), child_info.to_owned_no_root()));
 		let updatable = map_entry.1.try_update(child_info);
 		debug_assert!(updatable);
 
@@ -283,7 +283,7 @@ impl OverlayedChanges {
 	) {
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.prospective.children.entry(storage_key.to_vec())
-			.or_insert_with(|| (Default::default(), child_info.to_owned()));
+			.or_insert_with(|| (Default::default(), child_info.to_owned_no_root()));
 		let updatable = map_entry.1.try_update(child_info);
 		debug_assert!(updatable);
 
@@ -358,7 +358,7 @@ impl OverlayedChanges {
 	) {
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.prospective.children.entry(storage_key.to_vec())
-			.or_insert_with(|| (Default::default(), child_info.to_owned()));
+			.or_insert_with(|| (Default::default(), child_info.to_owned_no_root()));
 		let updatable = map_entry.1.try_update(child_info);
 		debug_assert!(updatable);
 

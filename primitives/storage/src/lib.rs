@@ -210,6 +210,19 @@ impl<'a> ChildInfo<'a> {
 		}
 	}
 
+	/// Instantiates a owned version of this child info, ommitting
+	/// root.
+	pub fn to_owned_no_root(&self) -> OwnedChildInfo {
+		match self {
+			ChildInfo::Default(ChildTrie { data, root: _ })
+				=> OwnedChildInfo::Default(OwnedChildTrie {
+					data: data.to_vec(),
+					root: None,
+				}),
+		}
+	}
+
+
 	/// Create child info from a linear byte packed value and a given type. 
 	pub fn resolve_child_info(child_type: u32, data: &'a[u8]) -> Option<Self> {
 		match child_type {
