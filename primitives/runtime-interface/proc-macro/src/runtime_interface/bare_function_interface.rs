@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,10 +21,10 @@
 //! functions will prepare the parameters for the FFI boundary, call the external host function
 //! exported into wasm and convert back the result.
 //!
-//! [`generate`](bare_function_interface::generate) is the entry point for generating for each
+//! [`generate`] is the entry point for generating for each
 //! trait method one bare function.
 //!
-//! [`function_for_method`](bare_function_interface::function_for_method) generates the bare
+//! [`function_for_method`] generates the bare
 //! function per trait method. Each bare function contains both implementations. The implementations
 //! are feature-gated, so that one is compiled for the native and the other for the wasm side.
 

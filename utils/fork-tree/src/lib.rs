@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@
 
 #![warn(missing_docs)]
 
+use std::cmp::Reverse;
 use std::fmt;
 use codec::{Decode, Encode};
 
@@ -124,6 +125,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 			self.roots = vec![root];
 		}
 
+		self.rebalance();
+
 		Ok(())
 	}
 }
@@ -137,6 +140,22 @@ impl<H, N, V> ForkTree<H, N, V> where
 		ForkTree {
 			roots: Vec::new(),
 			best_finalized_number: None,
+		}
+	}
+
+	/// Rebalance the tree, i.e. sort child nodes by max branch depth
+	/// (decreasing).
+	///
+	/// Most operations in the tree are performed with depth-first search
+	/// starting from the leftmost node at every level, since this tree is meant
+	/// to be used in a blockchain context, a good heuristic is that the node
+	/// we'll be looking
+	/// for at any point will likely be in one of the deepest chains (i.e. the
+	/// longest ones).
+	pub fn rebalance(&mut self) {
+		self.roots.sort_by_key(|n| Reverse(n.max_depth()));
+		for root in &mut self.roots {
+			root.rebalance();
 		}
 	}
 
@@ -183,6 +202,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 			number: number,
 			children:  Vec::new(),
 		});
+
+		self.rebalance();
 
 		Ok(true)
 	}
@@ -523,6 +544,25 @@ mod node_implementation {
 	}
 
 	impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
+		/// Rebalance the tree, i.e. sort child nodes by max branch depth (decreasing).
+		pub fn rebalance(&mut self) {
+			self.children.sort_by_key(|n| Reverse(n.max_depth()));
+			for child in &mut self.children {
+				child.rebalance();
+			}
+		}
+
+		/// Finds the max depth among all branches descendent from this node.
+		pub fn max_depth(&self) -> usize {
+			let mut max = 0;
+
+			for node in &self.children {
+				max = node.max_depth().max(max)
+			}
+
+			max + 1
+		}
+
 		pub fn import<F, E: std::error::Error>(
 			&mut self,
 			mut hash: H,
@@ -638,7 +678,10 @@ impl<'a, H, N, V> Iterator for ForkTreeIterator<'a, H, N, V> {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		self.stack.pop().map(|node| {
-			self.stack.extend(node.children.iter());
+			// child nodes are stored ordered by max branch height (decreasing),
+			// we want to keep this ordering while iterating but since we're
+			// using a stack for iterator state we need to reverse it.
+			self.stack.extend(node.children.iter().rev());
 			node
 		})
 	}
@@ -1091,12 +1134,12 @@ mod test {
 			tree.iter().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 			vec![
 				("A", 1),
-				("J", 2), ("K", 3),
-				("F", 2), ("H", 3), ("L", 4), ("O", 5),
-				("M", 5),
-				("I", 4),
-				("G", 3),
 				("B", 2), ("C", 3), ("D", 4), ("E", 5),
+				("F", 2),
+				("G", 3),
+				("H", 3), ("I", 4),
+				("L", 4), ("M", 5), ("O", 5),
+				("J", 2), ("K", 3)
 			],
 		);
 	}
@@ -1260,5 +1303,25 @@ mod test {
 		).unwrap();
 
 		assert_eq!(node.unwrap().hash, "B");
+	}
+
+	#[test]
+	fn tree_rebalance() {
+		let (mut tree, _) = test_fork_tree();
+
+		assert_eq!(
+			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
+			vec!["A", "B", "C", "D", "E", "F", "G", "H", "I", "L", "M", "O", "J", "K"],
+		);
+
+		// after rebalancing the tree we should iterate in preorder exploring
+		// the longest forks first. check the ascii art above to understand the
+		// expected output below.
+		tree.rebalance();
+
+		assert_eq!(
+			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
+			["A", "B", "C", "D", "E", "F", "H", "L", "M", "O", "I", "G", "J", "K"]
+		);
 	}
 }

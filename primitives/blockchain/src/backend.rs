@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -228,11 +228,13 @@ pub trait Cache<Block: BlockT>: Send + Sync {
 	/// Returns cached value by the given key.
 	///
 	/// Returned tuple is the range where value has been active and the value itself.
+	/// Fails if read from cache storage fails or if the value for block is discarded
+	/// (i.e. if block is earlier that best finalized, but it is not in canonical chain).
 	fn get_at(
 		&self,
 		key: &well_known_cache_keys::Id,
 		block: &BlockId<Block>,
-	) -> Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)>;
+	) -> Result<Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)>>;
 }
 
 /// Blockchain info

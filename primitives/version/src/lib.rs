@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -24,14 +24,12 @@ use serde::{Serialize, Deserialize};
 use std::fmt;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
-#[cfg(feature = "std")]
-use sp_runtime::traits::RuntimeApiInfo;
 
-use codec::Encode;
-#[cfg(feature = "std")]
-use codec::Decode;
+use codec::{Encode, Decode};
 use sp_runtime::RuntimeString;
 pub use sp_runtime::create_runtime_str;
+#[doc(hidden)]
+pub use sp_std;
 
 #[cfg(feature = "std")]
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
@@ -39,25 +37,13 @@ use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 /// The identity of a particular API interface that the runtime might provide.
 pub type ApiId = [u8; 8];
 
-/// A vector of pairs of `ApiId` and a `u32` for version. For `"std"` builds, this
-/// is a `Cow`.
-#[cfg(feature = "std")]
-pub type ApisVec = ::std::borrow::Cow<'static, [(ApiId, u32)]>;
-/// A vector of pairs of `ApiId` and a `u32` for version. For `"no-std"` builds, this
-/// is just a reference.
-#[cfg(not(feature = "std"))]
-pub type ApisVec = &'static [(ApiId, u32)];
+/// A vector of pairs of `ApiId` and a `u32` for version.
+pub type ApisVec = sp_std::borrow::Cow<'static, [(ApiId, u32)]>;
 
 /// Create a vector of Api declarations.
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! create_apis_vec {
-	( $y:expr ) => { std::borrow::Cow::Borrowed(& $y) }
-}
-#[macro_export]
-#[cfg(not(feature = "std"))]
-macro_rules! create_apis_vec {
-	( $y:expr ) => { & $y }
+	( $y:expr ) => { $crate::sp_std::borrow::Cow::Borrowed(& $y) }
 }
 
 /// Runtime version.
@@ -65,8 +51,8 @@ macro_rules! create_apis_vec {
 /// This triplet have different semantics and mis-interpretation could cause problems.
 /// In particular: bug fixes should result in an increment of `spec_version` and possibly `authoring_version`,
 /// absolutely not `impl_version` since they change the semantics of the runtime.
-#[derive(Clone, PartialEq, Eq, Encode, Default, sp_runtime::RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Decode))]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Default, sp_runtime::RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct RuntimeVersion {
 	/// Identifies the different Substrate runtimes. There'll be at least polkadot and node.
@@ -131,21 +117,14 @@ impl RuntimeVersion {
 		self.authoring_version == other.authoring_version
 	}
 
-	/// Check if this version supports a particular API.
-	pub fn has_api<A: RuntimeApiInfo + ?Sized>(&self) -> bool {
-		self.apis.iter().any(|(s, v)| {
-			s == &A::ID && *v == A::VERSION
-		})
-	}
-
-	/// Check if the given api is implemented and the version passes a predicate.
-	pub fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
+	/// Check if the given api with `api_id` is implemented and the version passes the given
+	/// `predicate`.
+	pub fn has_api_with<P: Fn(u32) -> bool>(
 		&self,
-		pred: P,
+		id: &ApiId,
+		predicate: P,
 	) -> bool {
-		self.apis.iter().any(|(s, v)| {
-			s == &A::ID && pred(*v)
-		})
+		self.apis.iter().any(|(s, v)| s == id && predicate(*v))
 	}
 }
 

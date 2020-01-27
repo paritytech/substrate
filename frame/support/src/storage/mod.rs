@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ use crate::{traits::Len, hash::{Twox128, StorageHasher}};
 pub mod unhashed;
 pub mod hashed;
 pub mod child;
+#[doc(hidden)]
 pub mod generator;
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
@@ -305,6 +306,9 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: ?Sized + EncodeLike<K1>;
 
+	fn iter_prefix<KArg1>(k1: KArg1) -> PrefixIterator<V>
+		where KArg1: ?Sized + EncodeLike<K1>;
+
 	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
 	where
 		KArg1: EncodeLike<K1>,
@@ -400,6 +404,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	/// Storage prefix. Used for generating final key.
 	fn storage_prefix() -> &'static [u8];
 
+	/// Final full prefix that prefixes all keys.
 	fn final_prefix() -> [u8; 32] {
 		let mut final_key = [0u8; 32];
 		final_key[0..16].copy_from_slice(&Twox128::hash(Self::module_prefix()));
@@ -407,16 +412,63 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 		final_key
 	}
 
+	/// Remove all value of the storage.
 	fn remove_all() {
 		sp_io::storage::clear_prefix(&Self::final_prefix())
 	}
 
+	/// Iter over all value of the storage.
 	fn iter() -> PrefixIterator<Value> {
 		let prefix = Self::final_prefix();
 		PrefixIterator {
 			prefix: prefix.to_vec(),
 			previous_key: prefix.to_vec(),
 			phantom_data: Default::default(),
+		}
+	}
+
+	/// Translate the values from some previous `OldValue` to the current type.
+	///
+	/// `TV` translates values.
+	///
+	/// Returns `Err` if the map could not be interpreted as the old type, and Ok if it could.
+	/// The `Err` contains the number of value that couldn't be interpreted, those value are
+	/// removed from the map.
+	///
+	/// # Warning
+	///
+	/// This function must be used with care, before being updated the storage still contains the
+	/// old type, thus other calls (such as `get`) will fail at decoding it.
+	///
+	/// # Usage
+	///
+	/// This would typically be called inside the module implementation of on_initialize, while
+	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
+	/// precisely prior initialized modules doesn't make use of this storage).
+	fn translate_values<OldValue, TV>(translate_val: TV) -> Result<(), u32>
+		where OldValue: Decode, TV: Fn(OldValue) -> Value
+	{
+		let prefix = Self::final_prefix();
+		let mut previous_key = prefix.to_vec();
+		let mut errors = 0;
+		while let Some(next_key) = sp_io::storage::next_key(&previous_key)
+			.filter(|n| n.starts_with(&prefix[..]))
+		{
+			if let Some(value) = unhashed::get(&next_key) {
+				unhashed::put(&next_key[..], &translate_val(value));
+			} else {
+				// We failed to read the value. Remove the key and increment errors.
+				unhashed::kill(&next_key[..]);
+				errors += 1;
+			}
+
+			previous_key = next_key;
+		}
+
+		if errors == 0 {
+			Ok(())
+		} else {
+			Err(errors)
 		}
 	}
 }
@@ -460,6 +512,7 @@ mod test {
 			let k = [twox_128(b"MyModule"), twox_128(b"MyStorage")].concat();
 			assert_eq!(MyStorage::final_prefix().to_vec(), k);
 
+			// test iteration
 			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![]);
 
 			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u64);
@@ -469,9 +522,32 @@ mod test {
 
 			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![1, 2, 3, 4]);
 
+			// test removal
 			MyStorage::remove_all();
+			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![]);
+
+			// test migration
+			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u32);
+			unhashed::put(&[&k[..], &vec![8][..]].concat(), &2u32);
 
 			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![]);
+			MyStorage::translate_values(|v: u32| v as u64).unwrap();
+			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![1, 2]);
+			MyStorage::remove_all();
+
+			// test migration 2
+			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u128);
+			unhashed::put(&[&k[..], &vec![1, 1][..]].concat(), &2u64);
+			unhashed::put(&[&k[..], &vec![8][..]].concat(), &3u128);
+			unhashed::put(&[&k[..], &vec![10][..]].concat(), &4u32);
+
+			// (contains some value that successfully decoded to u64)
+			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![1, 2, 3]);
+			assert_eq!(MyStorage::translate_values(|v: u128| v as u64), Err(2));
+			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![1, 3]);
+			MyStorage::remove_all();
+
+			// test that other values are not modified.
 			assert_eq!(unhashed::get(&key_before[..]), Some(32u64));
 			assert_eq!(unhashed::get(&key_after[..]), Some(33u64));
 		});

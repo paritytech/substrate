@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -61,7 +61,7 @@ pub enum Event {
 
 	/// Closed a substream with the given node. Always matches a corresponding previous
 	/// `NotificationStreamOpened` message.
-	NotificationsStreamClosed {
+	NotificationStreamClosed {
 		/// Node we closed the substream with.
 		remote: PeerId,
 		/// The concerned protocol. Each protocol uses a different substream.

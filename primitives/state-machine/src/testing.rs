@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,40 +17,61 @@
 //! Test implementation for Externalities.
 
 use std::any::{Any, TypeId};
+use codec::Decode;
 use hash_db::Hasher;
 use crate::{
-	backend::{InMemory, Backend}, OverlayedChanges,
+	backend::Backend, OverlayedChanges, StorageTransactionCache, ext::Ext, InMemoryBackend,
+	StorageKey, StorageValue,
 	changes_trie::{
+		Configuration as ChangesTrieConfiguration,
 		InMemoryStorage as ChangesTrieInMemoryStorage,
 		BlockNumber as ChangesTrieBlockNumber,
+		State as ChangesTrieState,
 	},
-	ext::Ext,
 };
 use sp_core::{
 	storage::{
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
 		Storage,
 	},
-	hash::H256, Blake2Hasher,
+	Blake2Hasher,
 };
 use codec::Encode;
 use sp_externalities::{Extensions, Extension};
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher<Out=H256>=Blake2Hasher, N: ChangesTrieBlockNumber=u64> {
+pub struct TestExternalities<H: Hasher = Blake2Hasher, N: ChangesTrieBlockNumber = u64>
+where
+	H::Out: codec::Codec,
+{
 	overlay: OverlayedChanges,
-	backend: InMemory<H>,
+	storage_transaction_cache: StorageTransactionCache<
+		<InMemoryBackend<H> as Backend<H>>::Transaction, H, N
+	>,
+	backend: InMemoryBackend<H>,
+	changes_trie_config: Option<ChangesTrieConfiguration>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	extensions: Extensions,
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
+	where
+		H::Out: Ord + 'static + codec::Codec
+{
 	/// Get externalities implementation.
-	pub fn ext(&mut self) -> Ext<H, N, InMemory<H>, ChangesTrieInMemoryStorage<H, N>> {
+	pub fn ext(&mut self) -> Ext<H, N, InMemoryBackend<H>> {
 		Ext::new(
 			&mut self.overlay,
+			&mut self.storage_transaction_cache,
 			&self.backend,
-			Some(&self.changes_trie_storage),
+			match self.changes_trie_config.clone() {
+				Some(config) => Some(ChangesTrieState {
+					config,
+					zero: 0.into(),
+					storage: &self.changes_trie_storage,
+				}),
+				None => None,
+			},
 			Some(&mut self.extensions),
 		)
 	}
@@ -63,29 +84,28 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	/// Create a new instance of `TestExternalities` with code and storage.
 	pub fn new_with_code(code: &[u8], mut storage: Storage) -> Self {
 		let mut overlay = OverlayedChanges::default();
+		let changes_trie_config = storage.top.get(CHANGES_TRIE_CONFIG)
+			.and_then(|v| Decode::decode(&mut &v[..]).ok());
+		overlay.set_collect_extrinsics(changes_trie_config.is_some());
 
 		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
 		assert!(storage.children.keys().all(|key| is_child_storage_key(key)));
-
-		super::set_changes_trie_config(
-			&mut overlay,
-			storage.top.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned(),
-			false,
-		).expect("changes trie configuration is correct in test env; qed");
 
 		storage.top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		storage.top.insert(CODE.to_vec(), code.to_vec());
 
 		TestExternalities {
 			overlay,
+			changes_trie_config,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			backend: storage.into(),
 			extensions: Default::default(),
+			storage_transaction_cache: Default::default(),
 		}
 	}
 
 	/// Insert key/value into backend
-	pub fn insert(&mut self, k: Vec<u8>, v: Vec<u8>) {
+	pub fn insert(&mut self, k: StorageKey, v: StorageValue) {
 		self.backend = self.backend.update(vec![(None, vec![(k, Some(v))])]);
 	}
 
@@ -100,7 +120,7 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	}
 
 	/// Return a new backend with all pending value.
-	pub fn commit_all(&self) -> InMemory<H> {
+	pub fn commit_all(&self) -> InMemoryBackend<H> {
 		let top: Vec<_> = self.overlay.committed.top.clone().into_iter()
 			.chain(self.overlay.prospective.top.clone().into_iter())
 			.map(|(k, v)| (k, v.value)).collect();
@@ -129,13 +149,18 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	}
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N> {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl<H: Hasher, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N>
+	where H::Out: codec::Codec,
+{
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, self.backend.pairs())
 	}
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N>
+	where
+		H::Out: Ord + 'static + codec::Codec
+{
 	/// This doesn't test if they are in the same state, only if they contains the
 	/// same data at this state
 	fn eq(&self, other: &TestExternalities<H, N>) -> bool {
@@ -143,18 +168,25 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> PartialEq for TestExternali
 	}
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N>
+	where
+		H::Out: Ord + 'static + codec::Codec,
+{
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> From<Storage> for TestExternalities<H, N> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> From<Storage> for TestExternalities<H, N>
+	where
+		H::Out: Ord + 'static + codec::Codec,
+{
 	fn from(storage: Storage) -> Self {
 		Self::new(storage)
 	}
 }
 
 impl<H, N> sp_externalities::ExtensionStore for TestExternalities<H, N> where
-	H: Hasher<Out=H256>,
+	H: Hasher,
+	H::Out: codec::Codec,
 	N: ChangesTrieBlockNumber,
 {
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {

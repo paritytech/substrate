@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -255,7 +255,7 @@
 
 use sp_std::marker::PhantomData;
 use frame_support::{
-	dispatch::Result, decl_module, decl_storage, decl_event,
+	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -301,8 +301,8 @@ impl<T: pallet_balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightFor
 	}
 }
 
-impl<T: pallet_balances::Trait> PaysFee for WeightForSetDummy<T> {
-	fn pays_fee(&self) -> bool {
+impl<T: pallet_balances::Trait> PaysFee<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
+	fn pays_fee(&self, _target: (&BalanceOf<T>,)) -> bool {
 		true
 	}
 }
@@ -460,7 +460,7 @@ decl_module! {
 		// transaction and the latter demonstrates the [`DispatchClass`] of the call. A higher
 		// weight means a larger transaction (less of which can be placed in a single block).
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result {
+		fn accumulate_dummy(origin, increase_by: T::Balance) -> DispatchResult {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
 
@@ -543,7 +543,7 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	// Add public immutables and private mutables.
 	#[allow(dead_code)]
-	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> Result {
+	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> DispatchResult {
 		let _sender = ensure_signed(origin)?;
 
 		let prev = <Foo<T>>::get();
@@ -685,6 +685,7 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -694,6 +695,7 @@ mod tests {
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
+		type OnReapAccount = System;
 		type OnNewAccount = ();
 		type Event = ();
 		type TransferPayment = ();
@@ -705,6 +707,7 @@ mod tests {
 	impl Trait for Test {
 		type Event = ();
 	}
+	type System = frame_system::Module<Test>;
 	type Example = Module<Test>;
 
 	// This function basically just builds a genesis storage key/value store according to

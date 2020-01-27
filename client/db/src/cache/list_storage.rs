@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -84,13 +84,13 @@ pub trait StorageTransaction<Block: BlockT, T: CacheItemT> {
 #[derive(Debug)]
 pub struct DbColumns {
 	/// Column holding cache meta.
-	pub meta: Option<u32>,
+	pub meta: u32,
 	/// Column holding the mapping of { block number => block hash } for blocks of the best chain.
-	pub key_lookup: Option<u32>,
+	pub key_lookup: u32,
 	/// Column holding the mapping of { block hash => block header }.
-	pub header: Option<u32>,
+	pub header: u32,
 	/// Column holding cache entries.
-	pub cache: Option<u32>,
+	pub cache: u32,
 }
 
 /// Database-backed list cache storage.
@@ -222,7 +222,9 @@ mod meta {
 				unfinalized.push(&entry.valid_from);
 			},
 			CommitOperation::BlockFinalized(_, ref finalizing_entry, ref forks) => {
-				finalized = finalizing_entry.as_ref().map(|entry| &entry.valid_from);
+				if let Some(finalizing_entry) = finalizing_entry.as_ref() {
+					finalized = Some(&finalizing_entry.valid_from);
+				}
 				for fork_index in forks.iter().rev() {
 					unfinalized.remove(*fork_index);
 				}

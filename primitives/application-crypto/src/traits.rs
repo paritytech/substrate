@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -71,7 +71,7 @@ pub trait AppPublic:
 #[cfg(feature = "full_crypto")]
 pub trait AppPair: AppKey + Pair<Public=<Self as AppKey>::Public> {
 	/// The wrapped type which is just a plain instance of `Pair`.
-	type Generic: IsWrappedBy<Self> + Pair<Public=<<Self as AppKey>::Public as AppPublic>::Generic>;
+	type Generic: IsWrappedBy<Self> + Pair<Public = <<Self as AppKey>::Public as AppPublic>::Generic>;
 }
 
 /// A application's signature.
@@ -106,10 +106,13 @@ pub trait RuntimePublic: Sized {
 
 	/// Verify that the given signature matches the given message using this public key.
 	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool;
+
+	/// Returns `Self` as raw vec.
+	fn to_raw_vec(&self) -> Vec<u8>;
 }
 
 /// A runtime interface for an application's public key.
-pub trait RuntimeAppPublic: Sized  {
+pub trait RuntimeAppPublic: Sized {
 	/// An identifier for this application-specific key type.
 	const ID: KeyTypeId;
 
@@ -136,6 +139,9 @@ pub trait RuntimeAppPublic: Sized  {
 
 	/// Verify that the given signature matches the given message using this public key.
 	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool;
+
+	/// Returns `Self` as raw vec.
+	fn to_raw_vec(&self) -> Vec<u8>;
 }
 
 /// Something that bound to a fixed `RuntimeAppPublic`.

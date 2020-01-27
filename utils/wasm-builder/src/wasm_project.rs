@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -172,17 +172,68 @@ fn get_wasm_workspace_root() -> PathBuf {
 	panic!("Could not find target dir in: {}", build_helper::out_dir().display())
 }
 
-fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
-	let members = WalkDir::new(wasm_workspace)
+/// Find all workspace members.
+///
+/// Each folder in `wasm_workspace` is seen as a member of the workspace. Exceptions are
+/// folders starting with "." and the "target" folder.
+///
+/// Every workspace member that is not valid anymore is deleted (the folder of it). A
+/// member is not valid anymore when the `wasm-project` dependency points to an non-existing
+/// folder or the package name is not valid.
+fn find_and_clear_workspace_members(wasm_workspace: &Path) -> Vec<String> {
+	let mut members = WalkDir::new(wasm_workspace)
 		.min_depth(1)
 		.max_depth(1)
 		.into_iter()
 		.filter_map(|p| p.ok())
 		.map(|d| d.into_path())
-		.filter(|p| p.is_dir() && !p.ends_with("target"))
+		.filter(|p| p.is_dir())
 		.filter_map(|p| p.file_name().map(|f| f.to_owned()).and_then(|s| s.into_string().ok()))
-		.filter(|f| !f.starts_with("."))
+		.filter(|f| !f.starts_with(".") && f != "target")
 		.collect::<Vec<_>>();
+
+	let mut i = 0;
+	while i != members.len() {
+		let path = wasm_workspace.join(&members[i]).join("Cargo.toml");
+
+		// Extract the `wasm-project` dependency.
+		// If the path can be extracted and is valid and the package name matches,
+		// the member is valid.
+		if let Some(mut wasm_project) = fs::read_to_string(path)
+			.ok()
+			.and_then(|s| toml::from_str::<Table>(&s).ok())
+			.and_then(|mut t| t.remove("dependencies"))
+			.and_then(|p| p.try_into::<Table>().ok())
+			.and_then(|mut t| t.remove("wasm_project"))
+			.and_then(|p| p.try_into::<Table>().ok())
+		{
+			if let Some(path) = wasm_project.remove("path")
+				.and_then(|p| p.try_into::<String>().ok())
+			{
+				if let Some(name) = wasm_project.remove("package")
+					.and_then(|p| p.try_into::<String>().ok())
+				{
+					let path = PathBuf::from(path);
+					if path.exists() {
+						if name == get_crate_name(&path.join("Cargo.toml")) {
+							i += 1;
+							continue
+						}
+					}
+				}
+			}
+		}
+
+		fs::remove_dir_all(wasm_workspace.join(&members[i]))
+			.expect("Removing invalid workspace member can not fail; qed");
+		members.remove(i);
+	}
+
+	members
+}
+
+fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
+	let members = find_and_clear_workspace_members(wasm_workspace);
 
 	let crate_metadata = MetadataCommand::new()
 		.manifest_path(cargo_manifest)
@@ -306,7 +357,7 @@ fn is_release_build() -> bool {
 			),
 		}
 	} else {
-		!build_helper::debug()
+		true
 	}
 }
 

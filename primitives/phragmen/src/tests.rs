@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use crate::mock::*;
-use crate::{elect, PhragmenResult};
+use crate::{elect, PhragmenResult, PhragmenStakedAssignment, build_support_map, Support, equalize};
 use substrate_test_utils::assert_eq_uvec;
 use sp_runtime::Perbill;
 
@@ -46,7 +46,7 @@ fn float_phragmen_poc_works() {
 		]
 	);
 
-	let mut support_map = build_support_map(&mut phragmen_result, &stake_of);
+	let mut support_map = build_support_map_float(&mut phragmen_result, &stake_of);
 
 	assert_eq!(
 		support_map.get(&2).unwrap(),
@@ -353,4 +353,142 @@ fn phragmen_linear_equalize() {
 	]);
 
 	run_and_compare(candidates, voters, stake_of, 2, 2);
+}
+
+#[test]
+fn elect_has_no_entry_barrier() {
+	let candidates = vec![10, 20, 30];
+	let voters = vec![
+		(1, vec![10]),
+		(2, vec![20]),
+	];
+	let stake_of = create_stake_of(&[
+		(1, 10),
+		(2, 10),
+	]);
+
+	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote>(
+		3,
+		3,
+		candidates,
+		voters,
+		stake_of,
+	).unwrap();
+
+	// 30 is elected with stake 0. The caller is responsible for stripping this.
+	assert_eq_uvec!(winners, vec![
+		(10, 10),
+		(20, 10),
+		(30, 0),
+	]);
+}
+
+#[test]
+fn minimum_to_elect_is_respected() {
+	let candidates = vec![10, 20, 30];
+	let voters = vec![
+		(1, vec![10]),
+		(2, vec![20]),
+	];
+	let stake_of = create_stake_of(&[
+		(1, 10),
+		(2, 10),
+	]);
+
+	let maybe_result = elect::<_, _, _, TestCurrencyToVote>(
+		10,
+		10,
+		candidates,
+		voters,
+		stake_of,
+	);
+
+	assert!(maybe_result.is_none());
+}
+
+#[test]
+fn self_votes_should_be_kept() {
+	let candidates = vec![5, 10, 20, 30];
+	let voters = vec![
+		(5, vec![5]),
+		(10, vec![10]),
+		(20, vec![20]),
+		(1, vec![10, 20])
+	];
+	let stake_of = create_stake_of(&[
+		(5, 5),
+		(10, 10),
+		(20, 20),
+		(1, 8),
+	]);
+
+	let result = elect::<_, _, _, TestCurrencyToVote>(
+		2,
+		2,
+		candidates,
+		voters,
+		&stake_of,
+	).unwrap();
+
+	assert_eq!(result.winners, vec![(20, 28), (10, 18)]);
+	assert_eq!(
+		result.assignments,
+		vec![
+			(10, vec![(10, Perbill::from_percent(100))]),
+			(20, vec![(20, Perbill::from_percent(100))]),
+			(1, vec![
+					(10, Perbill::from_percent(50)),
+					(20, Perbill::from_percent(50))
+				]
+			)
+		],
+	);
+
+	let mut supports = build_support_map::<
+		Balance,
+		AccountId,
+		_,
+		TestCurrencyToVote
+		>(
+			&result.winners.into_iter().map(|(who, _)| who).collect(),
+			&result.assignments,
+			&stake_of
+		);
+
+	assert_eq!(supports.get(&5u64), None);
+	assert_eq!(
+		supports.get(&10u64).unwrap(),
+		&Support { total: 14u128, voters: vec![(10u64, 10u128), (1u64, 4u128)] },
+	);
+	assert_eq!(
+		supports.get(&20u64).unwrap(),
+		&Support { total: 24u128, voters: vec![(20u64, 20u128), (1u64, 4u128)] },
+	);
+
+	let assignments = result.assignments;
+	let mut staked_assignments
+		: Vec<(AccountId, Vec<PhragmenStakedAssignment<AccountId>>)>
+		= Vec::with_capacity(assignments.len());
+	for (n, assignment) in assignments.iter() {
+		let mut staked_assignment
+			: Vec<PhragmenStakedAssignment<AccountId>>
+			= Vec::with_capacity(assignment.len());
+		let stake = stake_of(&n);
+		for (c, per_thing) in assignment.iter() {
+			let vote_stake = *per_thing * stake;
+			staked_assignment.push((c.clone(), vote_stake));
+		}
+		staked_assignments.push((n.clone(), staked_assignment));
+	}
+
+	equalize::<Balance, AccountId, TestCurrencyToVote, _>(staked_assignments, &mut supports, 0, 2usize, &stake_of);
+
+	assert_eq!(
+		supports.get(&10u64).unwrap(),
+		&Support { total: 18u128, voters: vec![(10u64, 10u128), (1u64, 8u128)] },
+	);
+	assert_eq!(
+		supports.get(&20u64).unwrap(),
+		&Support { total: 20u128, voters: vec![(20u64, 20u128)] },
+	);
 }

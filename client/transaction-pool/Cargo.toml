@@ -17,7 +17,10 @@ sc-transaction-graph = { path = "./graph" }
 sp-transaction-pool = { path = "../../primitives/transaction-pool" }
 sc-client-api = { path = "../api" }
 sp-blockchain = { path = "../../primitives/blockchain" }
+substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
 
 [dev-dependencies]
-sp-keyring = { path = "../../primitives/keyring" }
-substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
+sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
+
+[features]
+test-helpers = []

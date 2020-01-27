@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -31,6 +31,7 @@ use sp_trie::{TrieConfiguration, trie_types::Layout};
 use crate::WasmExecutionMethod;
 
 pub type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
+type HostFunctions = sp_io::SubstrateHostFunctions;
 
 fn call_in_wasm<E: Externalities>(
 	function: &str,
@@ -40,13 +41,14 @@ fn call_in_wasm<E: Externalities>(
 	code: &[u8],
 	heap_pages: u64,
 ) -> crate::error::Result<Vec<u8>> {
-	crate::call_in_wasm::<E, sp_io::SubstrateHostFunctions>(
+	crate::call_in_wasm::<HostFunctions>(
 		function,
 		call_data,
 		execution_method,
 		ext,
 		code,
 		heap_pages,
+		true,
 	)
 }
 
@@ -66,6 +68,70 @@ fn returning_should_work(wasm_method: WasmExecutionMethod) {
 		8,
 	).unwrap();
 	assert_eq!(output, vec![0u8; 0]);
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
+    let mut ext = TestExternalities::default();
+    let mut ext = ext.ext();
+    let test_code = WASM_BINARY;
+
+    match call_in_wasm(
+		"test_calling_missing_external",
+		&[],
+		wasm_method,
+		&mut ext,
+		&test_code[..],
+		8,
+	) {
+		Ok(_) => panic!("was expected an `Err`"),
+		Err(e) => {
+			match wasm_method {
+				WasmExecutionMethod::Interpreted => assert_eq!(
+					&format!("{:?}", e),
+					"Wasmi(Trap(Trap { kind: Host(Other(\"Function `missing_external` is only a stub. Calling a stub is not allowed.\")) }))"
+				),
+				#[cfg(feature = "wasmtime")]
+				WasmExecutionMethod::Compiled => assert_eq!(
+					&format!("{:?}", e),
+					"Other(\"call to undefined external function with index 67\")"
+				),
+			}
+		}
+	}
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+	let test_code = WASM_BINARY;
+
+	match call_in_wasm(
+		"test_calling_yet_another_missing_external",
+		&[],
+		wasm_method,
+		&mut ext,
+		&test_code[..],
+		8,
+	) {
+		Ok(_) => panic!("was expected an `Err`"),
+		Err(e) => {
+			match wasm_method {
+				WasmExecutionMethod::Interpreted => assert_eq!(
+					&format!("{:?}", e),
+					"Wasmi(Trap(Trap { kind: Host(Other(\"Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.\")) }))"
+				),
+				#[cfg(feature = "wasmtime")]
+				WasmExecutionMethod::Compiled => assert_eq!(
+					&format!("{:?}", e),
+					"Other(\"call to undefined external function with index 68\")"
+				),
+			}
+		}
+	}
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]

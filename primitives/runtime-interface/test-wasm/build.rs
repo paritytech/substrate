@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@ fn main() {
 		"wasm_binary.rs",
 		WasmBuilderSource::CratesOrPath {
 			path: "../../../utils/wasm-builder",
-			version: "1.0.6",
+			version: "1.0.9",
 		},
 		// This instructs LLD to export __heap_base as a global variable, which is used by the
 		// external memory allocator.

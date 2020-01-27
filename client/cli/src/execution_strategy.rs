@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ use structopt::clap::arg_enum;
 
 arg_enum! {
 	/// How to execute blocks
-	#[derive(Debug, Clone, Copy)]
+	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 	pub enum ExecutionStrategy {
 		// Execute with native build (if available, WebAssembly otherwise).
 		Native,
@@ -33,3 +33,25 @@ arg_enum! {
 	}
 }
 
+impl ExecutionStrategy {
+	/// Returns the variant as `'&static str`.
+	pub fn as_str(&self) -> &'static str {
+		match self {
+			Self::Native => "Native",
+			Self::Wasm => "Wasm",
+			Self::Both => "Both",
+			Self::NativeElseWasm => "NativeElseWasm",
+		}
+	}
+}
+
+/// Default value for the `--execution-syncing` parameter.
+pub const DEFAULT_EXECUTION_SYNCING: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
+/// Default value for the `--execution-import-block` parameter.
+pub const DEFAULT_EXECUTION_IMPORT_BLOCK: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
+/// Default value for the `--execution-block-construction` parameter.
+pub const DEFAULT_EXECUTION_BLOCK_CONSTRUCTION: ExecutionStrategy = ExecutionStrategy::Wasm;
+/// Default value for the `--execution-offchain-worker` parameter.
+pub const DEFAULT_EXECUTION_OFFCHAIN_WORKER: ExecutionStrategy = ExecutionStrategy::Native;
+/// Default value for the `--execution-other` parameter.
+pub const DEFAULT_EXECUTION_OTHER: ExecutionStrategy = ExecutionStrategy::Native;

@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -296,16 +296,32 @@ pub fn check_equivocation_report<H, N>(
 	}
 }
 
-// round message localized to a given round and set id.
+/// Encode round message localized to a given round and set id.
 pub fn localized_payload<E: Encode>(
 	round: RoundNumber,
 	set_id: SetId,
 	message: &E,
 ) -> Vec<u8> {
-	(message, round, set_id).encode()
+	let mut buf = Vec::new();
+	localized_payload_with_buffer(round, set_id, message, &mut buf);
+	buf
 }
 
-// check a message.
+/// Encode round message localized to a given round and set id using the given
+/// buffer. The given buffer will be cleared and the resulting encoded payload
+/// will always be written to the start of the buffer.
+pub fn localized_payload_with_buffer<E: Encode>(
+	round: RoundNumber,
+	set_id: SetId,
+	message: &E,
+	buf: &mut Vec<u8>,
+) {
+	buf.clear();
+	(message, round, set_id).encode_to(buf)
+}
+
+/// Check a message signature by encoding the message as a localized payload and
+/// verifying the provided signature using the expected authority id.
 pub fn check_message_signature<H, N>(
 	message: &grandpa::Message<H, N>,
 	id: &AuthorityId,
@@ -316,18 +332,43 @@ pub fn check_message_signature<H, N>(
 	H: Encode,
 	N: Encode,
 {
-	let encoded_raw = localized_payload(round, set_id, message);
+	check_message_signature_with_buffer(
+		message,
+		id,
+		signature,
+		round,
+		set_id,
+		&mut Vec::new(),
+	)
+}
+
+/// Check a message signature by encoding the message as a localized payload and
+/// verifying the provided signature using the expected authority id.
+/// The encoding necessary to verify the signature will be done using the given
+/// buffer, the original content of the buffer will be cleared.
+pub fn check_message_signature_with_buffer<H, N>(
+	message: &grandpa::Message<H, N>,
+	id: &AuthorityId,
+	signature: &AuthoritySignature,
+	round: RoundNumber,
+	set_id: SetId,
+	buf: &mut Vec<u8>,
+) -> Result<(), ()> where
+	H: Encode,
+	N: Encode,
+{
+	localized_payload_with_buffer(round, set_id, message, buf);
 
 	#[cfg(not(feature = "std"))]
 	let verify = || {
 		use app_crypto::RuntimeAppPublic;
-		id.verify(&encoded_raw, signature)
+		id.verify(&buf, signature)
 	};
 
 	#[cfg(feature = "std")]
 	let verify = || {
 		use app_crypto::Pair;
-		AuthorityPair::verify(signature, &encoded_raw, &id)
+		AuthorityPair::verify(signature, &buf, &id)
 	};
 
 	if verify() {

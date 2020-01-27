@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -36,16 +36,16 @@ use sp_std::{
 };
 
 use app_crypto::{key_types::GRANDPA, RuntimeAppPublic};
-use codec::{self as codec, Encode, Decode, Error};
+use codec::{self as codec, Encode, Decode};
 use frame_support::{
-	decl_event, decl_storage, decl_module, dispatch, storage,
+	decl_event, decl_storage, decl_module, decl_error, storage,
 	traits::KeyOwnerProofSystem,
 	weights::SimpleDispatchInfo,
 };
 use sp_runtime::{
 	generic::{DigestItem, OpaqueDigestItemId},
 	traits::{IdentifyAccount, Zero},
-	KeyTypeId, Perbill,
+	DispatchResult, KeyTypeId, Perbill,
 };
 use sp_staking::{
 	SessionIndex,
@@ -92,7 +92,7 @@ pub trait HandleEquivocation<T: Trait> {
 	fn submit_equivocation_report(
 		equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
 		key_owner_proof: Self::KeyOwnerProof,
-	) -> dispatch::Result;
+	) -> DispatchResult;
 }
 
 impl<T: Trait> HandleEquivocation<T> for () {
@@ -116,7 +116,7 @@ impl<T: Trait> HandleEquivocation<T> for () {
 	fn submit_equivocation_report(
 		_equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
 		_key_owner_proof: Self::KeyOwnerProof,
-	) -> dispatch::Result {
+	) -> DispatchResult {
 		Ok(())
 	}
 }
@@ -184,7 +184,7 @@ impl<T, P, S, R, K> HandleEquivocation<T> for EquivocationHandler<P, S, R, K> wh
 	fn submit_equivocation_report(
 		equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
 		key_owner_proof: Self::KeyOwnerProof,
-	) -> dispatch::Result {
+	) -> DispatchResult {
 		let call = Call::report_equivocation(
 			equivocation_report.clone(),
 			key_owner_proof.encode(),
@@ -198,7 +198,7 @@ impl<T, P, S, R, K> HandleEquivocation<T> for EquivocationHandler<P, S, R, K> wh
 		if res.iter().any(|(_, r)| r.is_ok()) {
 			Ok(())
 		} else {
-			Err("Error submitting equivocation report.")
+			Err("Error submitting equivocation report.".into())
 		}
 	}
 }
@@ -231,7 +231,7 @@ pub struct StoredPendingChange<N> {
 }
 
 impl<N: Decode> Decode for StoredPendingChange<N> {
-	fn decode<I: codec::Input>(value: &mut I) -> core::result::Result<Self, Error> {
+	fn decode<I: codec::Input>(value: &mut I) -> core::result::Result<Self, codec::Error> {
 		let old = OldStoredPendingChange::decode(value)?;
 		let forced = <Option<N>>::decode(value).unwrap_or(None);
 
@@ -272,7 +272,7 @@ pub enum StoredState<N> {
 	},
 }
 
-decl_event!(
+decl_event! {
 	pub enum Event {
 		/// New authority set has been applied.
 		NewAuthorities(AuthorityList),
@@ -281,7 +281,22 @@ decl_event!(
 		/// Current authority set has been resumed.
 		Resumed,
 	}
-);
+}
+
+decl_error! {
+	pub enum Error for Module<T: Trait> {
+		/// Attempt to signal GRANDPA pause when the authority set isn't live
+		/// (either paused or already pending pause).
+		PauseFailed,
+		/// Attempt to signal GRANDPA resume when the authority set isn't paused
+		/// (either live or already pending resume).
+		ResumeFailed,
+		/// Attempt to signal GRANDPA change with one already pending.
+		ChangePending,
+		/// Cannot signal forced change so soon after last.
+		TooSoon,
+	}
+}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
@@ -326,6 +341,8 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		fn deposit_event() = default;
 
 		/// Report some misbehavior.
@@ -384,7 +401,7 @@ decl_module! {
 					.map(|previous_index| session_index <= previous_index)
 					.unwrap_or(false)
 			{
-				return Err("Invalid equivocation set id provided.");
+				return Err("Invalid equivocation set id provided.".into());
 			}
 
 			// report to the offences module rewarding the sender.
@@ -488,7 +505,7 @@ impl<T: Trait> Module<T> {
 
 	/// Schedule GRANDPA to pause starting in the given number of blocks.
 	/// Cannot be done when already paused.
-	pub fn schedule_pause(in_blocks: T::BlockNumber) -> dispatch::Result {
+	pub fn schedule_pause(in_blocks: T::BlockNumber) -> DispatchResult {
 		if let StoredState::Live = <State<T>>::get() {
 			let scheduled_at = <frame_system::Module<T>>::block_number();
 			<State<T>>::put(StoredState::PendingPause {
@@ -498,13 +515,12 @@ impl<T: Trait> Module<T> {
 
 			Ok(())
 		} else {
-			Err("Attempt to signal GRANDPA pause when the authority set isn't live \
-				(either paused or already pending pause).")
+			Err(Error::<T>::PauseFailed)?
 		}
 	}
 
 	/// Schedule a resume of GRANDPA after pausing.
-	pub fn schedule_resume(in_blocks: T::BlockNumber) -> dispatch::Result {
+	pub fn schedule_resume(in_blocks: T::BlockNumber) -> DispatchResult {
 		if let StoredState::Paused = <State<T>>::get() {
 			let scheduled_at = <frame_system::Module<T>>::block_number();
 			<State<T>>::put(StoredState::PendingResume {
@@ -514,8 +530,7 @@ impl<T: Trait> Module<T> {
 
 			Ok(())
 		} else {
-			Err("Attempt to signal GRANDPA resume when the authority set isn't paused \
-				(either live or already pending resume).")
+			Err(Error::<T>::ResumeFailed)?
 		}
 	}
 
@@ -537,13 +552,13 @@ impl<T: Trait> Module<T> {
 		next_authorities: AuthorityList,
 		in_blocks: T::BlockNumber,
 		forced: Option<T::BlockNumber>,
-	) -> dispatch::Result {
+	) -> DispatchResult {
 		if !<PendingChange<T>>::exists() {
 			let scheduled_at = <frame_system::Module<T>>::block_number();
 
 			if let Some(_) = forced {
 				if Self::next_forced().map_or(false, |next| next > scheduled_at) {
-					return Err("Cannot signal forced change so soon after last.");
+					Err(Error::<T>::TooSoon)?
 				}
 
 				// only allow the next forced change when twice the window has passed since
@@ -560,7 +575,7 @@ impl<T: Trait> Module<T> {
 
 			Ok(())
 		} else {
-			Err("Attempt to signal GRANDPA change with one already pending.")
+			Err(Error::<T>::ChangePending)?
 		}
 	}
 

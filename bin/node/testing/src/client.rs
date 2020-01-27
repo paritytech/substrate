@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -57,6 +57,7 @@ pub trait TestClientBuilderExt: Sized {
 }
 
 impl TestClientBuilderExt for substrate_test_client::TestClientBuilder<
+	node_primitives::Block,
 	sc_client::LocalCallExecutor<Backend, Executor>,
 	Backend,
 	GenesisParameters,

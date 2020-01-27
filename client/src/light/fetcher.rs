@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,15 +22,15 @@ use std::marker::PhantomData;
 
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use codec::{Decode, Encode};
-use sp_core::{convert_hash, traits::CodeExecutor, H256};
+use sp_core::{convert_hash, traits::CodeExecutor};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
-	SimpleArithmetic, CheckedConversion, Zero,
+	SimpleArithmetic, CheckedConversion,
 };
 use sp_state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
-	TrieBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage,
-	read_child_proof_check,
+	InMemoryChangesTrieStorage, TrieBackend, read_proof_check, key_changes_proof_check_with_db,
+	create_proof_check_backend_storage, read_child_proof_check,
 };
 pub use sp_state_machine::StorageProof;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
@@ -113,30 +113,34 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 			)?;
 		}
 
-		// FIXME: remove this in https://github.com/paritytech/substrate/pull/3201
-		let changes_trie_config_range = ChangesTrieConfigurationRange {
-			config: &request.changes_trie_config,
-			zero: Zero::zero(),
-			end: None,
-		};
-
 		// and now check the key changes proof + get the changes
-		key_changes_proof_check::<H, _>(
-			changes_trie_config_range,
-			&RootsStorage {
-				roots: (request.tries_roots.0, &request.tries_roots.2),
-				prev_roots: remote_roots,
-			},
-			remote_proof,
-			request.first_block.0,
-			&ChangesTrieAnchorBlockId {
-				hash: convert_hash(&request.last_block.1),
-				number: request.last_block.0,
-			},
-			remote_max_block,
-			request.storage_key.as_ref().map(Vec::as_slice),
-			&request.key)
-		.map_err(|err| ClientError::ChangesTrieAccessFailed(err))
+		let mut result = Vec::new();
+		let proof_storage = InMemoryChangesTrieStorage::with_proof(remote_proof);
+		for config_range in &request.changes_trie_configs {
+			let result_range = key_changes_proof_check_with_db::<H, _>(
+				ChangesTrieConfigurationRange {
+					config: config_range.config.as_ref().ok_or(ClientError::ChangesTriesNotSupported)?,
+					zero: config_range.zero.0,
+					end: config_range.end.map(|(n, _)| n),
+				},
+				&RootsStorage {
+					roots: (request.tries_roots.0, &request.tries_roots.2),
+					prev_roots: &remote_roots,
+				},
+				&proof_storage,
+				request.first_block.0,
+				&ChangesTrieAnchorBlockId {
+					hash: convert_hash(&request.last_block.1),
+					number: request.last_block.0,
+				},
+				remote_max_block,
+				request.storage_key.as_ref().map(Vec::as_slice),
+				&request.key)
+			.map_err(|err| ClientError::ChangesTrieAccessFailed(err))?;
+			result.extend(result_range);
+		}
+
+		Ok(result)
 	}
 
 	/// Check CHT-based proof for changes tries roots.
@@ -153,7 +157,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 		// all the checks are sharing the same storage
 		let storage = create_proof_check_backend_storage(remote_roots_proof);
 
-		// we remote_roots.keys() are sorted => we can use this to group changes tries roots
+		// remote_roots.keys() are sorted => we can use this to group changes tries roots
 		// that are belongs to the same CHT
 		let blocks = remote_roots.keys().cloned();
 		cht::for_each_cht_group::<B::Header, _, _, _>(cht_size, blocks, |mut storage, _, cht_blocks| {
@@ -162,7 +166,8 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 			// when required header has been pruned (=> replaced with CHT)
 			let first_block = cht_blocks.first().cloned()
 				.expect("for_each_cht_group never calls callback with empty groups");
-			let local_cht_root = self.blockchain.storage().changes_trie_cht_root(cht_size, first_block)?;
+			let local_cht_root = self.blockchain.storage().changes_trie_cht_root(cht_size, first_block)?
+				.ok_or(ClientError::InvalidCHTProof)?;
 
 			// check changes trie root for every block within CHT range
 			for block in cht_blocks {
@@ -196,8 +201,9 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 	where
 		Block: BlockT,
-		E: CodeExecutor,
-		H: Hasher<Out=H256>,
+		E: CodeExecutor + Clone + 'static,
+		H: Hasher,
+		H::Out: Ord + codec::Codec + 'static,
 		S: BlockchainStorage<Block>,
 {
 	fn check_header_proof(
@@ -213,8 +219,8 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 			request.cht_root,
 			request.block,
 			remote_header_hash,
-			remote_proof)
-			.map(|_| remote_header)
+			remote_proof,
+		).map(|_| remote_header)
 	}
 
 	fn check_read_proof(
@@ -282,7 +288,7 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 /// A view of BTreeMap<Number, Hash> as a changes trie roots storage.
 struct RootsStorage<'a, Number: SimpleArithmetic, Hash: 'a> {
 	roots: (Number, &'a [Hash]),
-	prev_roots: BTreeMap<Number, Hash>,
+	prev_roots: &'a BTreeMap<Number, Hash>,
 }
 
 impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a, Number, Hash>
@@ -330,7 +336,7 @@ pub mod tests {
 	use sp_blockchain::Error as ClientError;
 	use sc_client_api::backend::NewBlockState;
 	use substrate_test_runtime_client::{
-		self, ClientExt, blockchain::HeaderBackend, AccountKeyring,
+		blockchain::HeaderBackend, AccountKeyring, ClientBlockImportExt,
 		runtime::{self, Hash, Block, Header, Extrinsic}
 	};
 	use sp_consensus::BlockOrigin;
@@ -338,7 +344,7 @@ pub mod tests {
 	use crate::in_mem::{Blockchain as InMemoryBlockchain};
 	use crate::light::fetcher::{FetchChecker, LightDataChecker, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
-	use sp_core::{blake2_256, Blake2Hasher, H256};
+	use sp_core::{blake2_256, Blake2Hasher, ChangesTrieConfiguration, H256};
 	use sp_core::storage::{well_known_keys, StorageKey, ChildInfo};
 	use sp_runtime::generic::BlockId;
 	use sp_state_machine::Backend;
@@ -441,13 +447,15 @@ pub mod tests {
 
 	fn prepare_for_header_proof_check(insert_cht: bool) -> (TestChecker, Hash, Header, StorageProof) {
 		// prepare remote client
-		let remote_client = substrate_test_runtime_client::new();
+		let mut remote_client = substrate_test_runtime_client::new();
 		let mut local_headers_hashes = Vec::new();
 		for i in 0..4 {
-			let builder = remote_client.new_block(Default::default()).unwrap();
-			remote_client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
-			local_headers_hashes.push(remote_client.block_hash(i + 1)
-				.map_err(|_| ClientError::Backend("TestError".into())));
+			let block = remote_client.new_block(Default::default()).unwrap().build().unwrap().block;
+			remote_client.import(BlockOrigin::Own, block).unwrap();
+			local_headers_hashes.push(
+				remote_client.block_hash(i + 1)
+					.map_err(|_| ClientError::Backend("TestError".into()))
+			);
 		}
 
 		// 'fetch' header proof from remote node
@@ -550,8 +558,8 @@ pub mod tests {
 			local_executor(),
 		);
 		let local_checker = &local_checker as &dyn FetchChecker<Block>;
-		let max = remote_client.info().chain.best_number;
-		let max_hash = remote_client.info().chain.best_hash;
+		let max = remote_client.chain_info().best_number;
+		let max_hash = remote_client.chain_info().best_hash;
 
 		for (index, (begin, end, key, expected_result)) in test_cases.into_iter().enumerate() {
 			let begin_hash = remote_client.block_hash(begin).unwrap().unwrap();
@@ -565,8 +573,13 @@ pub mod tests {
 
 			// check proof on local client
 			let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
+			let config = ChangesTrieConfiguration::new(4, 2);
 			let request = RemoteChangesRequest::<Header> {
-				changes_trie_config: runtime::changes_trie_config(),
+				changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
+					zero: (0, Default::default()),
+					end: None,
+					config: Some(config),
+				}],
 				first_block: (begin, begin_hash),
 				last_block: (end, end_hash),
 				max_block: (max, max_hash),
@@ -620,8 +633,13 @@ pub mod tests {
 		);
 
 		// check proof on local client
+		let config = ChangesTrieConfiguration::new(4, 2);
 		let request = RemoteChangesRequest::<Header> {
-			changes_trie_config: runtime::changes_trie_config(),
+			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
+				zero: (0, Default::default()),
+				end: None,
+				config: Some(config),
+			}],
 			first_block: (1, b1),
 			last_block: (4, b4),
 			max_block: (4, b4),
@@ -648,8 +666,8 @@ pub mod tests {
 			local_executor(),
 		);
 		let local_checker = &local_checker as &dyn FetchChecker<Block>;
-		let max = remote_client.info().chain.best_number;
-		let max_hash = remote_client.info().chain.best_hash;
+		let max = remote_client.chain_info().best_number;
+		let max_hash = remote_client.chain_info().best_hash;
 
 		let (begin, end, key, _) = test_cases[0].clone();
 		let begin_hash = remote_client.block_hash(begin).unwrap().unwrap();
@@ -661,8 +679,13 @@ pub mod tests {
 			begin_hash, end_hash, begin_hash, max_hash, None, &key).unwrap();
 
 		let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
+		let config = ChangesTrieConfiguration::new(4, 2);
 		let request = RemoteChangesRequest::<Header> {
-			changes_trie_config: runtime::changes_trie_config(),
+			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
+				zero: (0, Default::default()),
+				end: None,
+				config: Some(config),
+			}],
 			first_block: (begin, begin_hash),
 			last_block: (end, end_hash),
 			max_block: (max, max_hash),

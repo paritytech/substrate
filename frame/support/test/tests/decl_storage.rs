@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -79,7 +79,7 @@ mod tests {
 
 			COMPLEXTYPE1: ::std::vec::Vec<<T as Trait>::Origin>;
 			COMPLEXTYPE2: (Vec<Vec<(u16,Box<(  )>)>>, u32);
-			COMPLEXTYPE3: ([u32;25]);
+			COMPLEXTYPE3: [u32;25];
 		}
 		add_extra_genesis {
 			build(|_| {});
@@ -430,7 +430,7 @@ mod tests {
 				StorageEntryMetadata {
 					name: DecodeDifferent::Encode("COMPLEXTYPE3"),
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("([u32; 25])")),
+					ty: StorageEntryType::Plain(DecodeDifferent::Encode("[u32; 25]")),
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructCOMPLEXTYPE3(PhantomData::<TraitImpl>))
 					),
@@ -562,9 +562,9 @@ mod test_append_and_len {
 			MapVecWithDefault: map u32 => Vec<u32> = vec![6, 9];
 			OptionMapVec: map u32 => Option<Vec<u32>>;
 
-			DoubleMapVec: double_map u32, blake2_256(u32) => Vec<u32>;
-			DoubleMapVecWithDefault: double_map u32, blake2_256(u32) => Vec<u32> = vec![6, 9];
-			OptionDoubleMapVec: double_map u32, blake2_256(u32) => Option<Vec<u32>>;
+			DoubleMapVec: double_map u32, u32 => Vec<u32>;
+			DoubleMapVecWithDefault: double_map u32, u32 => Vec<u32> = vec![6, 9];
+			OptionDoubleMapVec: double_map u32, u32 => Option<Vec<u32>>;
 
 			LinkedMapVec: linked_map u32 => Vec<u32>;
 			LinkedMapVecWithDefault: linked_map u32 => Vec<u32> = vec![6, 9];

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -58,7 +58,7 @@
 //!
 //! decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//!         pub fn privileged_function(origin) -> dispatch::Result {
+//!         pub fn privileged_function(origin) -> dispatch::DispatchResult {
 //!             ensure_root(origin)?;
 //!
 //!             // do something...
@@ -77,7 +77,6 @@
 //!
 //! ## Related Modules
 //!
-//! * [Consensus](../frame_consensus/index.html)
 //! * [Democracy](../pallet_democracy/index.html)
 //!
 //! [`Call`]: ./enum.Call.html
@@ -87,11 +86,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::{
-	traits::{StaticLookup, Dispatchable}, DispatchError,
-};
+use sp_runtime::{traits::{StaticLookup, Dispatchable}, DispatchError};
+
 use frame_support::{
-	Parameter, decl_module, decl_event, decl_storage, ensure,
+	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 	weights::SimpleDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed};
@@ -107,6 +105,8 @@ pub trait Trait: frame_system::Trait {
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		fn deposit_event() = default;
 
 		/// Authenticates the sudo key and dispatches a function call with `Root` origin.
@@ -123,7 +123,7 @@ decl_module! {
 		fn sudo(origin, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
-			ensure!(sender == Self::key(), "only the current sudo key can sudo");
+			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
 			let res = match proposal.dispatch(frame_system::RawOrigin::Root.into()) {
 				Ok(_) => true,
@@ -149,7 +149,7 @@ decl_module! {
 		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
-			ensure!(sender == Self::key(), "only the current sudo key can change the sudo key");
+			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 			let new = T::Lookup::lookup(new)?;
 
 			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
@@ -171,7 +171,7 @@ decl_module! {
 		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
-			ensure!(sender == Self::key(), "only the current sudo key can sudo");
+			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
 			let who = T::Lookup::lookup(who)?;
 
@@ -204,5 +204,13 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Sudo {
 		/// The `AccountId` of the sudo key.
 		Key get(fn key) config(): T::AccountId;
+	}
+}
+
+decl_error! {
+	/// Error for the Sudo module
+	pub enum Error for Module<T: Trait> {
+		/// Sender must be the Sudo account
+		RequireSudo,
 	}
 }

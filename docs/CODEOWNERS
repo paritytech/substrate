@@ -46,23 +46,28 @@
 /client/finality-grandpa/ @andresilva @DemiMarie-parity
 /client/consensus/babe/ @andresilva @DemiMarie-parity
 /client/consensus/slots/ @andresilva @DemiMarie-parity
+/client/consensus/pow/ @sorpaas
+/primitives/consensus/pow/ @sorpaas
 
 # Contracts
-/frame/contracts/ @pepyakin @thiolliere @jimpo
+/frame/contracts/ @pepyakin @thiolliere
 /frame/contracts/src/wasm/runtime.rs @Robbepop
+
+# EVM
+/frame/evm/ @sorpaas
 
 # Inflation points
 /frame/staking/src/inflation.rs @thiolliere
 
 # NPoS and Governance
 /frame/staking/ @kianenigma
-/frame/election/ @kianenigma
+/frame/elections/ @kianenigma
 
 # End to end testing of substrate node
 /bin/node/executor/ @kianenigma
 
 # Transaction weight stuff
-/primitives/runtime/src/weights.rs @kianenigma
+/frame/support/src/weights.rs @kianenigma
 
 # Support crates
 /frame/support/ @thiolliere @kianenigma

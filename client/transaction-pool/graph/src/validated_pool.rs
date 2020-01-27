@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -63,7 +63,7 @@ pub type ValidatedTransactionFor<B> = ValidatedTransaction<
 
 /// Pool that deals with validated transactions.
 pub(crate) struct ValidatedPool<B: ChainApi> {
-	api: B,
+	api: Arc<B>,
 	options: Options,
 	listener: RwLock<Listener<ExHash<B>, BlockHash<B>>>,
 	pool: RwLock<base::BasePool<
@@ -76,7 +76,7 @@ pub(crate) struct ValidatedPool<B: ChainApi> {
 
 impl<B: ChainApi> ValidatedPool<B> {
 	/// Create a new transaction pool.
-	pub fn new(options: Options, api: B) -> Self {
+	pub fn new(options: Options, api: Arc<B>) -> Self {
 		let base_pool = base::BasePool::new(options.reject_future_transactions);
 		ValidatedPool {
 			api,
@@ -470,11 +470,14 @@ impl<B: ChainApi> ValidatedPool<B> {
 			return vec![]
 		}
 
+		debug!(target: "txpool", "Removing invalid transactions: {:?}", hashes);
+
 		// temporarily ban invalid transactions
-		debug!(target: "txpool", "Banning invalid transactions: {:?}", hashes);
 		self.rotator.ban(&time::Instant::now(), hashes.iter().cloned());
 
 		let invalid = self.pool.write().remove_subtree(hashes);
+
+		debug!(target: "txpool", "Removed invalid transactions: {:?}", invalid);
 
 		let mut listener = self.listener.write();
 		for tx in &invalid {

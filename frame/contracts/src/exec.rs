@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ use crate::rent;
 use sp_std::prelude::*;
 use sp_runtime::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
 use frame_support::{
-	storage::unhashed,
+	storage::unhashed, dispatch::DispatchError,
 	traits::{WithdrawReason, Currency, Time, Randomness},
 };
 
@@ -66,7 +66,7 @@ impl ExecReturnValue {
 /// non-existent destination contract, etc.).
 #[cfg_attr(test, derive(sp_runtime::RuntimeDebug))]
 pub struct ExecError {
-	pub reason: &'static str,
+	pub reason: DispatchError,
 	/// This is an allocated buffer that may be reused. The buffer must be cleared explicitly
 	/// before reuse.
 	pub buffer: Vec<u8>,
@@ -83,7 +83,9 @@ macro_rules! try_or_exec_error {
 	($e:expr, $buffer:expr) => {
 		match $e {
 			Ok(val) => val,
-			Err(reason) => return Err($crate::exec::ExecError { reason, buffer: $buffer }),
+			Err(reason) => return Err(
+				$crate::exec::ExecError { reason: reason.into(), buffer: $buffer }
+			),
 		}
 	}
 }
@@ -158,6 +160,9 @@ pub trait Ext {
 
 	/// Returns the minimum balance that is required for creating an account.
 	fn minimum_balance(&self) -> BalanceOf<Self::T>;
+
+	/// Returns the deposit required to create a tombstone upon contract eviction.
+	fn tombstone_deposit(&self) -> BalanceOf<Self::T>;
 
 	/// Returns a random number for the current block with the given subject.
 	fn random(&self, subject: &[u8]) -> SeedOf<Self::T>;
@@ -336,7 +341,7 @@ where
 	) -> ExecResult {
 		if self.depth == self.config.max_depth as usize {
 			return Err(ExecError {
-				reason: "reached maximum depth, cannot make a call",
+				reason: "reached maximum depth, cannot make a call".into(),
 				buffer: input_data,
 			});
 		}
@@ -346,20 +351,20 @@ where
 			.is_out_of_gas()
 		{
 			return Err(ExecError {
-				reason: "not enough gas to pay base call fee",
+				reason: "not enough gas to pay base call fee".into(),
 				buffer: input_data,
 			});
 		}
 
-		// Assumption: pay_rent doesn't collide with overlay because
-		// pay_rent will be done on first call and dest contract and balance
+		// Assumption: `collect_rent` doesn't collide with overlay because
+		// `collect_rent` will be done on first call and destination contract and balance
 		// cannot be changed before the first call
-		let contract_info = rent::pay_rent::<T>(&dest);
+		let contract_info = rent::collect_rent::<T>(&dest);
 
 		// Calls to dead contracts always fail.
 		if let Some(ContractInfo::Tombstone(_)) = contract_info {
 			return Err(ExecError {
-				reason: "contract has been evicted",
+				reason: "contract has been evicted".into(),
 				buffer: input_data,
 			});
 		};
@@ -404,7 +409,7 @@ where
 							.expect("a nested execution context must have a parent; qed");
 						if parent.is_live(&dest) {
 							return Err(ExecError {
-								reason: "contract cannot be destroyed during recursive execution",
+								reason: "contract cannot be destroyed during recursive execution".into(),
 								buffer: output.data,
 							});
 						}
@@ -428,7 +433,7 @@ where
 	) -> Result<(T::AccountId, ExecReturnValue), ExecError> {
 		if self.depth == self.config.max_depth as usize {
 			return Err(ExecError {
-				reason: "reached maximum depth, cannot instantiate",
+				reason: "reached maximum depth, cannot instantiate".into(),
 				buffer: input_data,
 			});
 		}
@@ -438,7 +443,7 @@ where
 			.is_out_of_gas()
 		{
 			return Err(ExecError {
-				reason: "not enough gas to pay base instantiate fee",
+				reason: "not enough gas to pay base instantiate fee".into(),
 				buffer: input_data,
 			});
 		}
@@ -488,7 +493,7 @@ where
 			// Error out if insufficient remaining balance.
 			if nested.overlay.get_balance(&dest) < nested.config.existential_deposit {
 				return Err(ExecError {
-					reason: "insufficient remaining balance",
+					reason: "insufficient remaining balance".into(),
 					buffer: output.data,
 				});
 			}
@@ -603,7 +608,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	dest: &T::AccountId,
 	value: BalanceOf<T>,
 	ctx: &mut ExecutionContext<'a, T, V, L>,
-) -> Result<(), &'static str> {
+) -> Result<(), DispatchError> {
 	use self::TransferCause::*;
 	use self::TransferFeeKind::*;
 
@@ -637,23 +642,28 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	};
 
 	if gas_meter.charge(ctx.config, token).is_out_of_gas() {
-		return Err("not enough gas to pay transfer fee");
+		Err("not enough gas to pay transfer fee")?
 	}
 
 	// We allow balance to go below the existential deposit here:
 	let from_balance = ctx.overlay.get_balance(transactor);
 	let new_from_balance = match from_balance.checked_sub(&value) {
 		Some(b) => b,
-		None => return Err("balance too low to send value"),
+		None => Err("balance too low to send value")?,
 	};
 	if would_create && value < ctx.config.existential_deposit {
-		return Err("value too low to create account");
+		Err("value too low to create account")?
 	}
-	T::Currency::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer.into(), new_from_balance)?;
+	T::Currency::ensure_can_withdraw(
+		transactor,
+		value,
+		WithdrawReason::Transfer.into(),
+		new_from_balance,
+	)?;
 
 	let new_to_balance = match to_balance.checked_add(&value) {
 		Some(b) => b,
-		None => return Err("destination balance too high to receive value"),
+		None => Err("destination balance too high to receive value")?,
 	};
 
 	if transactor != dest {
@@ -772,10 +782,14 @@ where
 		self.ctx.config.existential_deposit
 	}
 
+	fn tombstone_deposit(&self) -> BalanceOf<T> {
+		self.ctx.config.tombstone_deposit
+	}
+
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
 		self.ctx.deferred.push(DeferredAction::DepositEvent {
 			topics,
-			event: RawEvent::Contract(self.ctx.self_account.clone(), data),
+			event: RawEvent::ContractExecution(self.ctx.self_account.clone(), data),
 		});
 	}
 
@@ -821,6 +835,7 @@ mod tests {
 	};
 	use std::{cell::RefCell, rc::Rc, collections::HashMap, marker::PhantomData};
 	use assert_matches::assert_matches;
+	use sp_runtime::DispatchError;
 
 	const ALICE: u64 = 1;
 	const BOB: u64 = 2;
@@ -1176,7 +1191,10 @@ mod tests {
 
 			assert_matches!(
 				result,
-				Err(ExecError { reason: "balance too low to send value", buffer: _ })
+				Err(ExecError {
+					reason: DispatchError::Other("balance too low to send value"),
+					buffer: _,
+				})
 			);
 			assert_eq!(ctx.overlay.get_balance(&origin), 0);
 			assert_eq!(ctx.overlay.get_balance(&dest), 0);
@@ -1313,7 +1331,10 @@ mod tests {
 				// Verify that we've got proper error and set `reached_bottom`.
 				assert_matches!(
 					r,
-					Err(ExecError { reason: "reached maximum depth, cannot make a call", buffer: _ })
+					Err(ExecError {
+						reason: DispatchError::Other("reached maximum depth, cannot make a call"),
+						buffer: _,
+					})
 				);
 				*reached_bottom = true;
 			} else {
@@ -1583,7 +1604,7 @@ mod tests {
 
 		let mut loader = MockLoader::empty();
 		let dummy_ch = loader.insert(
-			|_| Err(ExecError { reason: "It's a trap!", buffer: Vec::new() })
+			|_| Err(ExecError { reason: "It's a trap!".into(), buffer: Vec::new() })
 		);
 		let instantiator_ch = loader.insert({
 			let dummy_ch = dummy_ch.clone();
@@ -1596,7 +1617,7 @@ mod tests {
 						ctx.gas_meter,
 						vec![]
 					),
-					Err(ExecError { reason: "It's a trap!", buffer: _ })
+					Err(ExecError { reason: DispatchError::Other("It's a trap!"), buffer: _ })
 				);
 
 				exec_success()

@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -15,16 +15,16 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use sc_cli::VersionInfo;
-use tokio::prelude::Future;
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
 use sc_cli::{IntoExit, NoCustom, SharedParams, ImportParams, error};
 use sc_service::{AbstractService, Roles as ServiceRoles, Configuration};
 use log::info;
-use structopt::{StructOpt, clap::App};
-use sc_cli::{display_role, parse_and_prepare, AugmentClap, GetLogFilter, ParseAndPrepare};
+use structopt::StructOpt;
+use sc_cli::{display_role, parse_and_prepare, GetSharedParams, ParseAndPrepare};
 use crate::{service, ChainSpec, load_spec};
 use crate::factory_impl::FactoryState;
 use node_transaction_factory::RuntimeAdapter;
+use futures::{channel::oneshot, future::{select, Either}};
 
 /// Custom subcommands.
 #[derive(Clone, Debug, StructOpt)]
@@ -38,9 +38,11 @@ pub enum CustomSubcommands {
 	Factory(FactoryCmd),
 }
 
-impl GetLogFilter for CustomSubcommands {
-	fn get_log_filter(&self) -> Option<String> {
-		None
+impl GetSharedParams for CustomSubcommands {
+	fn shared_params(&self) -> Option<&SharedParams> {
+		match self {
+			CustomSubcommands::Factory(cmd) => Some(&cmd.shared_params),
+		}
 	}
 }
 
@@ -86,12 +88,6 @@ pub struct FactoryCmd {
 	pub import_params: ImportParams,
 }
 
-impl AugmentClap for FactoryCmd {
-	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
-		FactoryCmd::augment_clap(app)
-	}
-}
-
 /// Parse command line arguments into service configuration.
 pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
@@ -102,15 +98,23 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 
 	match parse_and_prepare::<CustomSubcommands, NoCustom, _>(&version, "substrate-node", args) {
 		ParseAndPrepare::Run(cmd) => cmd.run(load_spec, exit,
-		|exit, _cli_args, _custom_args, config: Config<_, _>| {
+		|exit, _cli_args, _custom_args, mut config: Config<_, _>| {
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
-			info!("  by Parity Technologies, 2017-2019");
+			info!("  by Parity Technologies, 2017-2020");
 			info!("Chain specification: {}", config.chain_spec.name());
 			info!("Node name: {}", config.name);
 			info!("Roles: {}", display_role(&config));
-			let runtime = RuntimeBuilder::new().name_prefix("main-tokio-").build()
+			let runtime = RuntimeBuilder::new()
+				.thread_name("main-tokio-")
+				.threaded_scheduler()
+				.enable_all()
+				.build()
 				.map_err(|e| format!("{:?}", e))?;
+			config.tasks_executor = {
+				let runtime_handle = runtime.handle().clone();
+				Some(Box::new(move |fut| { runtime_handle.spawn(fut); }))
+			};
 			match config.roles {
 				ServiceRoles::LIGHT => run_until_exit(
 					runtime,
@@ -139,9 +143,14 @@ pub fn run<I, T, E>(args: I, exit: E, version: sc_cli::VersionInfo) -> error::Re
 				load_spec,
 				&cli_args.shared_params,
 				&version,
+				None,
 			)?;
-
-			sc_cli::fill_import_params(&mut config, &cli_args.import_params, ServiceRoles::FULL)?;
+			sc_cli::fill_import_params(
+				&mut config,
+				&cli_args.import_params,
+				ServiceRoles::FULL,
+				cli_args.shared_params.dev,
+			)?;
 
 			match ChainSpec::from(config.chain_spec.id()) {
 				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
@@ -176,37 +185,25 @@ where
 	T: AbstractService,
 	E: IntoExit,
 {
-	use futures::{FutureExt, TryFutureExt, channel::oneshot, future::select, compat::Future01CompatExt};
-
 	let (exit_send, exit) = oneshot::channel();
 
 	let informant = sc_cli::informant::build(&service);
 
-	let future = select(informant, exit)
-		.map(|_| Ok(()))
-		.compat();
-
-	runtime.executor().spawn(future);
+	let handle = runtime.spawn(select(exit, informant));
 
 	// we eagerly drop the service so that the internal exit future is fired,
 	// but we need to keep holding a reference to the global telemetry guard
 	let _telemetry = service.telemetry();
 
-	let service_res = {
-		let exit = e.into_exit();
-		let service = service
-			.map_err(|err| error::Error::Service(err))
-			.compat();
-		let select = select(service, exit)
-			.map(|_| Ok(()))
-			.compat();
-		runtime.block_on(select)
-	};
+	let exit = e.into_exit();
+	let service_res = runtime.block_on(select(service, exit));
 
 	let _ = exit_send.send(());
 
-	// TODO [andre]: timeout this future #1318
-	let _ = runtime.shutdown_on_idle().wait();
+	runtime.block_on(handle);
 
-	service_res
+	match service_res {
+		Either::Left((res, _)) => res.map_err(error::Error::Service),
+		Either::Right((_, _)) => Ok(())
+	}
 }

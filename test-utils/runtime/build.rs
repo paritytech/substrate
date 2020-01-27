@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@ fn main() {
 		"wasm_binary.rs",
 		WasmBuilderSource::CratesOrPath {
 			path: "../../utils/wasm-builder",
-			version: "1.0.8",
+			version: "1.0.9",
 		},
 		// Note that we set the stack-size to 1MB explicitly even though it is set
 		// to this value by default. This is because some of our tests (`restoration_of_globals`)

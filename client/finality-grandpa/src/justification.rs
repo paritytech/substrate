@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -24,8 +24,7 @@ use finality_grandpa::voter_set::VoterSet;
 use finality_grandpa::{Error as GrandpaError};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT, Header as HeaderT};
-use sp_core::{H256, Blake2Hasher};
-use sp_finality_grandpa::{check_message_signature, AuthorityId};
+use sp_finality_grandpa::AuthorityId;
 
 use crate::{Commit, Error};
 
@@ -44,7 +43,7 @@ pub struct GrandpaJustification<Block: BlockT> {
 	votes_ancestries: Vec<Block::Header>,
 }
 
-impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
+impl<Block: BlockT> GrandpaJustification<Block> {
 	/// Create a GRANDPA justification from the given commit. This method
 	/// assumes the commit is valid and well-formed.
 	pub(crate) fn from_commit<B, E, RA>(
@@ -52,8 +51,8 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		round: u64,
 		commit: Commit<Block>,
 	) -> Result<GrandpaJustification<Block>, Error> where
-		B: Backend<Block, Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+		B: Backend<Block>,
+		E: CallExecutor<Block> + Send + Sync,
 		RA: Send + Sync,
 	{
 		let mut votes_ancestries_hashes = HashSet::new();
@@ -132,14 +131,16 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			}
 		}
 
+		let mut buf = Vec::new();
 		let mut visited_hashes = HashSet::new();
 		for signed in self.commit.precommits.iter() {
-			if let Err(_) = check_message_signature(
+			if let Err(_) = sp_finality_grandpa::check_message_signature_with_buffer(
 				&finality_grandpa::Message::Precommit(signed.precommit.clone()),
 				&signed.id,
 				&signed.signature,
 				self.round,
 				set_id,
+				&mut buf,
 			) {
 				return Err(ClientError::BadJustification(
 					"invalid signature for precommit in grandpa justification".to_string()).into());

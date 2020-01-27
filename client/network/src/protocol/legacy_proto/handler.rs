@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 use super::upgrade::{RegisteredProtocol, RegisteredProtocolEvent, RegisteredProtocolSubstream};
 use bytes::BytesMut;
 use futures::prelude::*;
-use futures03::{compat::Compat, TryFutureExt as _};
 use futures_timer::Delay;
 use libp2p::core::{ConnectedPoint, PeerId, Endpoint};
 use libp2p::core::upgrade::{InboundUpgrade, OutboundUpgrade};
@@ -31,7 +30,7 @@ use libp2p::swarm::{
 use log::{debug, error};
 use smallvec::{smallvec, SmallVec};
 use std::{borrow::Cow, error, fmt, io, marker::PhantomData, mem, time::Duration};
-use tokio_io::{AsyncRead, AsyncWrite};
+use std::{pin::Pin, task::{Context, Poll}};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
@@ -97,7 +96,7 @@ pub struct CustomProtoHandlerProto<TSubstream> {
 
 impl<TSubstream> CustomProtoHandlerProto<TSubstream>
 where
-	TSubstream: AsyncRead + AsyncWrite,
+	TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
 	/// Builds a new `CustomProtoHandlerProto`.
 	pub fn new(protocol: RegisteredProtocol) -> Self {
@@ -110,7 +109,7 @@ where
 
 impl<TSubstream> IntoProtocolsHandler for CustomProtoHandlerProto<TSubstream>
 where
-	TSubstream: AsyncRead + AsyncWrite,
+	TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
 	type Handler = CustomProtoHandler<TSubstream>;
 
@@ -125,7 +124,7 @@ where
 			remote_peer_id: remote_peer_id.clone(),
 			state: ProtocolState::Init {
 				substreams: SmallVec::new(),
-				init_deadline: Delay::new(Duration::from_secs(5)).compat()
+				init_deadline: Delay::new(Duration::from_secs(5))
 			},
 			events_queue: SmallVec::new(),
 		}
@@ -152,7 +151,7 @@ pub struct CustomProtoHandler<TSubstream> {
 	///
 	/// This queue must only ever be modified to insert elements at the back, or remove the first
 	/// element.
-	events_queue: SmallVec<[ProtocolsHandlerEvent<RegisteredProtocol, (), CustomProtoHandlerOut>; 16]>,
+	events_queue: SmallVec<[ProtocolsHandlerEvent<RegisteredProtocol, (), CustomProtoHandlerOut, ConnectionKillError>; 16]>,
 }
 
 /// State of the handler.
@@ -162,14 +161,14 @@ enum ProtocolState<TSubstream> {
 		/// List of substreams opened by the remote but that haven't been processed yet.
 		substreams: SmallVec<[RegisteredProtocolSubstream<TSubstream>; 6]>,
 		/// Deadline after which the initialization is abnormally long.
-		init_deadline: Compat<Delay>,
+		init_deadline: Delay,
 	},
 
 	/// Handler is opening a substream in order to activate itself.
 	/// If we are in this state, we haven't sent any `CustomProtocolOpen` yet.
 	Opening {
 		/// Deadline after which the opening is abnormally long.
-		deadline: Compat<Delay>,
+		deadline: Delay,
 	},
 
 	/// Normal operating mode. Contains the substreams that are open.
@@ -260,7 +259,7 @@ pub enum CustomProtoHandlerOut {
 
 impl<TSubstream> CustomProtoHandler<TSubstream>
 where
-	TSubstream: AsyncRead + AsyncWrite,
+	TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
 	/// Enables the handler.
 	fn enable(&mut self) {
@@ -280,7 +279,7 @@ where
 						});
 					}
 					ProtocolState::Opening {
-						deadline: Delay::new(Duration::from_secs(60)).compat()
+						deadline: Delay::new(Duration::from_secs(60))
 					}
 
 				} else {
@@ -337,8 +336,8 @@ where
 
 	/// Polls the state for events. Optionally returns an event to produce.
 	#[must_use]
-	fn poll_state(&mut self)
-		-> Option<ProtocolsHandlerEvent<RegisteredProtocol, (), CustomProtoHandlerOut>> {
+	fn poll_state(&mut self, cx: &mut Context)
+		-> Option<ProtocolsHandlerEvent<RegisteredProtocol, (), CustomProtoHandlerOut, ConnectionKillError>> {
 		match mem::replace(&mut self.state, ProtocolState::Poisoned) {
 			ProtocolState::Poisoned => {
 				error!(target: "sub-libp2p", "Handler with {:?} is in poisoned state",
@@ -348,14 +347,14 @@ where
 			}
 
 			ProtocolState::Init { substreams, mut init_deadline } => {
-				match init_deadline.poll() {
-					Ok(Async::Ready(())) => {
-						init_deadline = Delay::new(Duration::from_secs(60)).compat();
+				match Pin::new(&mut init_deadline).poll(cx) {
+					Poll::Ready(Ok(())) => {
+						init_deadline = Delay::new(Duration::from_secs(60));
 						error!(target: "sub-libp2p", "Handler initialization process is too long \
 							with {:?}", self.remote_peer_id)
 					},
-					Ok(Async::NotReady) => {}
-					Err(_) => error!(target: "sub-libp2p", "Tokio timer has errored")
+					Poll::Pending => {}
+					Poll::Ready(Err(_)) => error!(target: "sub-libp2p", "Tokio timer has errored")
 				}
 
 				self.state = ProtocolState::Init { substreams, init_deadline };
@@ -363,9 +362,9 @@ where
 			}
 
 			ProtocolState::Opening { mut deadline } => {
-				match deadline.poll() {
-					Ok(Async::Ready(())) => {
-						deadline = Delay::new(Duration::from_secs(60)).compat();
+				match Pin::new(&mut deadline).poll(cx) {
+					Poll::Ready(Ok(())) => {
+						deadline = Delay::new(Duration::from_secs(60));
 						let event = CustomProtoHandlerOut::ProtocolError {
 							is_severe: true,
 							error: "Timeout when opening protocol".to_string().into(),
@@ -373,13 +372,13 @@ where
 						self.state = ProtocolState::Opening { deadline };
 						Some(ProtocolsHandlerEvent::Custom(event))
 					},
-					Ok(Async::NotReady) => {
+					Poll::Pending => {
 						self.state = ProtocolState::Opening { deadline };
 						None
 					},
-					Err(_) => {
+					Poll::Ready(Err(_)) => {
 						error!(target: "sub-libp2p", "Tokio timer has errored");
-						deadline = Delay::new(Duration::from_secs(60)).compat();
+						deadline = Delay::new(Duration::from_secs(60));
 						self.state = ProtocolState::Opening { deadline };
 						None
 					},
@@ -389,9 +388,9 @@ where
 			ProtocolState::Normal { mut substreams, mut shutdown } => {
 				for n in (0..substreams.len()).rev() {
 					let mut substream = substreams.swap_remove(n);
-					match substream.poll() {
-						Ok(Async::NotReady) => substreams.push(substream),
-						Ok(Async::Ready(Some(RegisteredProtocolEvent::Message(message)))) => {
+					match Pin::new(&mut substream).poll_next(cx) {
+						Poll::Pending => substreams.push(substream),
+						Poll::Ready(Some(Ok(RegisteredProtocolEvent::Message(message)))) => {
 							let event = CustomProtoHandlerOut::CustomMessage {
 								message
 							};
@@ -399,7 +398,7 @@ where
 							self.state = ProtocolState::Normal { substreams, shutdown };
 							return Some(ProtocolsHandlerEvent::Custom(event));
 						},
-						Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged { messages }))) => {
+						Poll::Ready(Some(Ok(RegisteredProtocolEvent::Clogged { messages }))) => {
 							let event = CustomProtoHandlerOut::Clogged {
 								messages,
 							};
@@ -407,7 +406,7 @@ where
 							self.state = ProtocolState::Normal { substreams, shutdown };
 							return Some(ProtocolsHandlerEvent::Custom(event));
 						}
-						Ok(Async::Ready(None)) => {
+						Poll::Ready(None) => {
 							shutdown.push(substream);
 							if substreams.is_empty() {
 								let event = CustomProtoHandlerOut::CustomProtocolClosed {
@@ -420,7 +419,7 @@ where
 								return Some(ProtocolsHandlerEvent::Custom(event));
 							}
 						}
-						Err(err) => {
+						Poll::Ready(Some(Err(err))) => {
 							if substreams.is_empty() {
 								let event = CustomProtoHandlerOut::CustomProtocolClosed {
 									reason: format!("Error on the last substream: {:?}", err).into(),
@@ -443,12 +442,12 @@ where
 			}
 
 			ProtocolState::Disabled { mut shutdown, reenable } => {
-				shutdown_list(&mut shutdown);
+				shutdown_list(&mut shutdown, cx);
 				// If `reenable` is `true`, that means we should open the substreams system again
 				// after all the substreams are closed.
 				if reenable && shutdown.is_empty() {
 					self.state = ProtocolState::Opening {
-						deadline: Delay::new(Duration::from_secs(60)).compat()
+						deadline: Delay::new(Duration::from_secs(60))
 					};
 					Some(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 						protocol: SubstreamProtocol::new(self.protocol.clone()),
@@ -524,7 +523,7 @@ where
 }
 
 impl<TSubstream> ProtocolsHandler for CustomProtoHandler<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite {
+where TSubstream: AsyncRead + AsyncWrite + Unpin {
 	type InEvent = CustomProtoHandlerIn;
 	type OutEvent = CustomProtoHandlerOut;
 	type Substream = TSubstream;
@@ -585,33 +584,33 @@ where TSubstream: AsyncRead + AsyncWrite {
 
 	fn poll(
 		&mut self,
+		cx: &mut Context,
 	) -> Poll<
-		ProtocolsHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::OutEvent>,
-		Self::Error,
+		ProtocolsHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::OutEvent, Self::Error>
 	> {
 		// Flush the events queue if necessary.
 		if !self.events_queue.is_empty() {
 			let event = self.events_queue.remove(0);
-			return Ok(Async::Ready(event))
+			return Poll::Ready(event)
 		}
 
 		// Kill the connection if needed.
 		if let ProtocolState::KillAsap = self.state {
-			return Err(ConnectionKillError);
+			return Poll::Ready(ProtocolsHandlerEvent::Close(ConnectionKillError));
 		}
 
 		// Process all the substreams.
-		if let Some(event) = self.poll_state() {
-			return Ok(Async::Ready(event))
+		if let Some(event) = self.poll_state(cx) {
+			return Poll::Ready(event)
 		}
 
-		Ok(Async::NotReady)
+		Poll::Pending
 	}
 }
 
 impl<TSubstream> fmt::Debug for CustomProtoHandler<TSubstream>
 where
-	TSubstream: AsyncRead + AsyncWrite,
+	TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		f.debug_struct("CustomProtoHandler")
@@ -622,15 +621,16 @@ where
 /// Given a list of substreams, tries to shut them down. The substreams that have been successfully
 /// shut down are removed from the list.
 fn shutdown_list<TSubstream>
-	(list: &mut SmallVec<impl smallvec::Array<Item = RegisteredProtocolSubstream<TSubstream>>>)
-where TSubstream: AsyncRead + AsyncWrite {
+	(list: &mut SmallVec<impl smallvec::Array<Item = RegisteredProtocolSubstream<TSubstream>>>,
+	cx: &mut Context)
+where TSubstream: AsyncRead + AsyncWrite + Unpin {
 	'outer: for n in (0..list.len()).rev() {
 		let mut substream = list.swap_remove(n);
 		loop {
-			match substream.poll() {
-				Ok(Async::Ready(Some(_))) => {}
-				Ok(Async::NotReady) => break,
-				Err(_) | Ok(Async::Ready(None)) => continue 'outer,
+			match substream.poll_next_unpin(cx) {
+				Poll::Ready(Some(Ok(_))) => {}
+				Poll::Pending => break,
+				Poll::Ready(Some(Err(_))) | Poll::Ready(None) => continue 'outer,
 			}
 		}
 		list.push(substream);

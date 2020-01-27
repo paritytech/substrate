@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -55,16 +55,17 @@
 //! used to inform peers of a current view of protocol state.
 
 pub use self::bridge::GossipEngine;
-pub use self::state_machine::{TopicNotification, MessageIntent};
-pub use self::state_machine::{Validator, ValidatorContext, ValidationResult};
-pub use self::state_machine::DiscardAll;
+pub use self::state_machine::TopicNotification;
+pub use self::validator::{DiscardAll, MessageIntent, Validator, ValidatorContext, ValidationResult};
 
+use futures::prelude::*;
 use sc_network::{specialization::NetworkSpecialization, Event, ExHashT, NetworkService, PeerId, ReputationChange};
-use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
+use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::sync::Arc;
 
 mod bridge;
 mod state_machine;
+mod validator;
 
 /// Abstraction over a network.
 pub trait Network<B: BlockT> {
@@ -93,22 +94,11 @@ pub trait Network<B: BlockT> {
 	/// Note: this method isn't strictly related to gossiping and should eventually be moved
 	/// somewhere else.
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>);
-
-	/// Notifies the sync service to try and sync the given block from the given
-	/// peers.
-	///
-	/// If the given vector of peers is empty then the underlying implementation
-	/// should make a best effort to fetch the block from any peers it is
-	/// connected to (NOTE: this assumption will change in the future #3629).
-	///
-	/// Note: this method isn't strictly related to gossiping and should eventually be moved
-	/// somewhere else.
-	fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>);
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network<B> for Arc<NetworkService<B, S, H>> {
 	fn event_stream(&self) -> Box<dyn futures01::Stream<Item = Event, Error = ()> + Send> {
-		Box::new(NetworkService::event_stream(self))
+		Box::new(NetworkService::event_stream(self).map(|v| Ok::<_, ()>(v)).compat())
 	}
 
 	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange) {
@@ -132,9 +122,5 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network<B> for Arc<Netw
 
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
 		NetworkService::announce_block(self, block, associated_data)
-	}
-
-	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		NetworkService::set_sync_fork_request(self, peers, hash, number)
 	}
 }

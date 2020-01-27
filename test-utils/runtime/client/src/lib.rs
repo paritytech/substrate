@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -26,13 +26,14 @@ use std::sync::Arc;
 use std::collections::HashMap;
 pub use substrate_test_client::*;
 pub use substrate_test_runtime as runtime;
+pub use sc_client::LongestChain;
 
 pub use self::block_builder_ext::BlockBuilderExt;
 
-use sp_core::sr25519;
+use sp_core::{sr25519, ChangesTrieConfiguration};
 use sp_core::storage::{ChildInfo, Storage, StorageChild};
 use substrate_test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor, HasherFor};
 use sc_client::{
 	light::fetcher::{
 		Fetcher,
@@ -41,11 +42,13 @@ use sc_client::{
 	},
 };
 
-
 /// A prelude to import in tests.
 pub mod prelude {
 	// Trait extensions
-	pub use super::{BlockBuilderExt, DefaultTestClientBuilderExt, TestClientBuilderExt, ClientExt};
+	pub use super::{
+		BlockBuilderExt, DefaultTestClientBuilderExt, TestClientBuilderExt, ClientExt,
+		ClientBlockImportExt,
+	};
 	// Client structs
 	pub use super::{
 		TestClient, TestClientBuilder, Backend, LightBackend,
@@ -55,20 +58,11 @@ pub mod prelude {
 	pub use super::{AccountKeyring, Sr25519Keyring};
 }
 
-mod local_executor {
-	#![allow(missing_docs)]
-	use substrate_test_runtime;
-	use crate::sc_executor::native_executor_instance;
-	// FIXME #1576 change the macro and pass in the `BlakeHasher` that dispatch needs from here instead
-	native_executor_instance!(
-		pub LocalExecutor,
-		substrate_test_runtime::api::dispatch,
-		substrate_test_runtime::native_version
-	);
+sc_executor::native_executor_instance! {
+	pub LocalExecutor,
+	substrate_test_runtime::api::dispatch,
+	substrate_test_runtime::native_version,
 }
-
-/// Native executor used for tests.
-pub use self::local_executor::LocalExecutor;
 
 /// Test client database backend.
 pub type Backend = substrate_test_client::Backend<substrate_test_runtime::Block>;
@@ -88,7 +82,7 @@ pub type LightExecutor = sc_client::light::call_executor::GenesisCallExecutor<
 	sc_client::LocalCallExecutor<
 		sc_client::light::backend::Backend<
 			sc_client_db::light::LightStorage<substrate_test_runtime::Block>,
-			Blake2Hasher,
+			HasherFor<substrate_test_runtime::Block>
 		>,
 		NativeExecutor<LocalExecutor>
 	>
@@ -97,7 +91,7 @@ pub type LightExecutor = sc_client::light::call_executor::GenesisCallExecutor<
 /// Parameters of test-client builder with test-runtime.
 #[derive(Default)]
 pub struct GenesisParameters {
-	support_changes_trie: bool,
+	changes_trie_config: Option<ChangesTrieConfiguration>,
 	heap_pages_override: Option<u64>,
 	extra_storage: Storage,
 }
@@ -105,7 +99,7 @@ pub struct GenesisParameters {
 impl GenesisParameters {
 	fn genesis_config(&self) -> GenesisConfig {
 		GenesisConfig::new(
-			self.support_changes_trie,
+			self.changes_trie_config.clone(),
 			vec![
 				sr25519::Public::from(Sr25519Keyring::Alice).into(),
 				sr25519::Public::from(Sr25519Keyring::Bob).into(),
@@ -146,7 +140,12 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 }
 
 /// A `TestClient` with `test-runtime` builder.
-pub type TestClientBuilder<E, B> = substrate_test_client::TestClientBuilder<E, B, GenesisParameters>;
+pub type TestClientBuilder<E, B> = substrate_test_client::TestClientBuilder<
+	substrate_test_runtime::Block,
+	E,
+	B,
+	GenesisParameters,
+>;
 
 /// Test client type with `LocalExecutor` and generic Backend.
 pub type Client<B> = sc_client::Client<
@@ -165,10 +164,7 @@ pub trait DefaultTestClientBuilderExt: Sized {
 	fn new() -> Self;
 }
 
-impl DefaultTestClientBuilderExt for TestClientBuilder<
-	Executor,
-	Backend,
-> {
+impl DefaultTestClientBuilderExt for TestClientBuilder<Executor, Backend> {
 	fn new() -> Self {
 		Self::with_default_backend()
 	}
@@ -176,64 +172,26 @@ impl DefaultTestClientBuilderExt for TestClientBuilder<
 
 /// A `test-runtime` extensions to `TestClientBuilder`.
 pub trait TestClientBuilderExt<B>: Sized {
-	/// Enable or disable support for changes trie in genesis.
-	fn set_support_changes_trie(self, support_changes_trie: bool) -> Self;
+	/// Returns a mutable reference to the genesis parameters.
+	fn genesis_init_mut(&mut self) -> &mut GenesisParameters;
+
+	/// Set changes trie configuration for genesis.
+	fn changes_trie_config(mut self, config: Option<ChangesTrieConfiguration>) -> Self {
+		self.genesis_init_mut().changes_trie_config = config;
+		self
+	}
 
 	/// Override the default value for Wasm heap pages.
-	fn set_heap_pages(self, heap_pages: u64) -> Self;
+	fn set_heap_pages(mut self, heap_pages: u64) -> Self {
+		self.genesis_init_mut().heap_pages_override = Some(heap_pages);
+		self
+	}
 
 	/// Add an extra value into the genesis storage.
 	///
 	/// # Panics
 	///
 	/// Panics if the key is empty.
-	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
-		self,
-		storage_key: SK,
-		child_info: ChildInfo,
-		key: K,
-		value: V,
-	) -> Self;
-
-	/// Add an extra child value into the genesis storage.
-	///
-	/// # Panics
-	///
-	/// Panics if the key is empty.
-	fn add_extra_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(self, key: K, value: V) -> Self;
-
-	/// Build the test client.
-	fn build(self) -> Client<B> {
-		self.build_with_longest_chain().0
-	}
-
-	/// Build the test client and longest chain selector.
-	fn build_with_longest_chain(self) -> (Client<B>, sc_client::LongestChain<B, substrate_test_runtime::Block>);
-}
-
-impl<B> TestClientBuilderExt<B> for TestClientBuilder<
-	sc_client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
-	B
-> where
-	B: sc_client_api::backend::Backend<substrate_test_runtime::Block, Blake2Hasher>,
-{
-	fn set_heap_pages(mut self, heap_pages: u64) -> Self {
-		self.genesis_init_mut().heap_pages_override = Some(heap_pages);
-		self
-	}
-
-	fn set_support_changes_trie(mut self, support_changes_trie: bool) -> Self {
-		self.genesis_init_mut().support_changes_trie = support_changes_trie;
-		self
-	}
-
-	fn add_extra_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(mut self, key: K, value: V) -> Self {
-		let key = key.into();
-		assert!(!key.is_empty());
-		self.genesis_init_mut().extra_storage.top.insert(key, value.into());
-		self
-	}
-
 	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
 		mut self,
 		storage_key: SK,
@@ -254,9 +212,50 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 		self
 	}
 
+	/// Add an extra child value into the genesis storage.
+	///
+	/// # Panics
+	///
+	/// Panics if the key is empty.
+	fn add_extra_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(mut self, key: K, value: V) -> Self {
+		let key = key.into();
+		assert!(!key.is_empty());
+		self.genesis_init_mut().extra_storage.top.insert(key, value.into());
+		self
+	}
+
+	/// Build the test client.
+	fn build(self) -> Client<B> {
+		self.build_with_longest_chain().0
+	}
+
+	/// Build the test client and longest chain selector.
+	fn build_with_longest_chain(self) -> (Client<B>, sc_client::LongestChain<B, substrate_test_runtime::Block>);
+
+	/// Build the test client and the backend.
+	fn build_with_backend(self) -> (Client<B>, Arc<B>);
+}
+
+impl<B> TestClientBuilderExt<B> for TestClientBuilder<
+	sc_client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
+	B
+> where
+	B: sc_client_api::backend::Backend<substrate_test_runtime::Block> + 'static,
+	// Rust bug: https://github.com/rust-lang/rust/issues/24159
+	<B as sc_client_api::backend::Backend<substrate_test_runtime::Block>>::State:
+		sp_api::StateBackend<HasherFor<substrate_test_runtime::Block>>,
+{
+	fn genesis_init_mut(&mut self) -> &mut GenesisParameters {
+		Self::genesis_init_mut(self)
+	}
 
 	fn build_with_longest_chain(self) -> (Client<B>, sc_client::LongestChain<B, substrate_test_runtime::Block>) {
 		self.build_with_native_executor(None)
+	}
+
+	fn build_with_backend(self) -> (Client<B>, Arc<B>) {
+		let backend = self.backend();
+		(self.build_with_native_executor(None).0, backend)
 	}
 }
 
@@ -349,7 +348,7 @@ pub fn new_light() -> (
 	let storage = sc_client_db::light::LightStorage::new_test();
 	let blockchain = Arc::new(sc_client::light::blockchain::Blockchain::new(storage));
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));
-	let executor = NativeExecutor::new(WasmExecutionMethod::Interpreted, None);
+	let executor = new_native_executor();
 	let local_call_executor = sc_client::LocalCallExecutor::new(backend.clone(), executor);
 	let call_executor = LightExecutor::new(
 		backend.clone(),
@@ -367,4 +366,9 @@ pub fn new_light() -> (
 /// Creates new light client fetcher used for tests.
 pub fn new_light_fetcher() -> LightFetcher {
 	LightFetcher::default()
+}
+
+/// Create a new native executor.
+pub fn new_native_executor() -> sc_executor::NativeExecutor<LocalExecutor> {
+	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None)
 }

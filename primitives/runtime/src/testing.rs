@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -114,6 +114,10 @@ impl sp_application_crypto::RuntimeAppPublic for UintAuthorityId {
 			.for_each(|(i, v)| { msg_signature[i] = *v; });
 
 		u64::from_le_bytes(msg_signature) == *signature
+	}
+
+	fn to_raw_vec(&self) -> Vec<u8> {
+		AsRef::<[u8]>::as_ref(self).to_vec()
 	}
 }
 

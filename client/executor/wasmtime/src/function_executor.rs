@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::allocator::FreeingBumpHeapAllocator;
-use crate::error::{Error, Result};
-use crate::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
-use crate::wasmtime::util::{
+use sp_allocator::FreeingBumpHeapAllocator;
+use sc_executor_common::error::{Error, Result};
+use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
+use crate::util::{
 	checked_range, cranelift_ir_signature, read_memory_into, write_memory_from,
 };
 
@@ -127,11 +127,11 @@ impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 	}
 
 	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>> {
-		self.heap.allocate(self.memory, len)
+		self.heap.allocate(self.memory, len).map_err(Into::into)
 	}
 
 	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<()> {
-		self.heap.deallocate(self.memory, ptr)
+		self.heap.deallocate(self.memory, ptr).map_err(Into::into)
 	}
 
 	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<()> {
@@ -173,7 +173,7 @@ impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 		let exec_code_buf = self.compiler
 			.get_published_trampoline(func_ptr, &signature, value_size)
 			.map_err(ActionError::Setup)
-			.map_err(Error::Wasmtime)?;
+			.map_err(|e| Error::Other(e.to_string()))?;
 
 		// Call the trampoline.
 		if let Err(message) = unsafe {

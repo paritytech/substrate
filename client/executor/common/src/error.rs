@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,8 +18,6 @@
 
 use sp_serializer;
 use wasmi;
-#[cfg(feature = "wasmtime")]
-use wasmtime_jit::{ActionError, SetupError};
 
 /// Result type alias.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -33,9 +31,6 @@ pub enum Error {
 	Trap(wasmi::Trap),
 	/// Wasmi loading/instantiating error
 	Wasmi(wasmi::Error),
-	/// Wasmtime action error
-	#[cfg(feature = "wasmtime")]
-	Wasmtime(ActionError),
 	/// Error in the API. Parameter is an error message.
 	#[from(ignore)]
 	ApiError(String),
@@ -62,6 +57,10 @@ pub enum Error {
 	/// Runtime failed.
 	#[display(fmt="Runtime error")]
 	Runtime,
+	/// Runtime panicked.
+	#[display(fmt="Runtime panicked: {}", _0)]
+	#[from(ignore)]
+	RuntimePanicked(String),
 	/// Invalid memory reference.
 	#[display(fmt="Invalid memory reference")]
 	InvalidMemoryReference,
@@ -73,17 +72,10 @@ pub enum Error {
 	#[display(fmt="The runtime has the `start` function")]
 	RuntimeHasStartFn,
 	/// Some other error occurred
-	#[from(ignore)]
 	Other(String),
 	/// Some error occurred in the allocator
 	#[display(fmt="Error in allocator: {}", _0)]
-	Allocator(&'static str),
-	/// The allocator ran out of space.
-	#[display(fmt="Allocator ran out of space")]
-	AllocatorOutOfSpace,
-	/// Someone tried to allocate more memory than the allowed maximum per allocation.
-	#[display(fmt="Requested allocation size is too large")]
-	RequestedAllocationTooLarge,
+	Allocator(sp_allocator::Error),
 	/// Execution of a host function failed.
 	#[display(fmt="Host function {} execution failed with: {}", _0, _1)]
 	FunctionExecution(String, String),
@@ -102,9 +94,9 @@ impl std::error::Error for Error {
 
 impl wasmi::HostError for Error {}
 
-impl From<String> for Error {
-	fn from(err: String) -> Error {
-		Error::Other(err)
+impl From<&'static str> for Error {
+	fn from(err: &'static str) -> Error {
+		Error::Other(err.into())
 	}
 }
 
@@ -135,10 +127,6 @@ pub enum WasmError {
 	InvalidHeapPages,
 	/// Instantiation error.
 	Instantiation(String),
-	/// The compiler does not support the host machine as a target.
-	#[cfg(feature = "wasmtime")]
-	MissingCompilerSupport(&'static str),
-	/// Wasmtime setup error.
-	#[cfg(feature = "wasmtime")]
-	WasmtimeSetup(SetupError),
+	/// Other error happenend.
+	Other(String),
 }

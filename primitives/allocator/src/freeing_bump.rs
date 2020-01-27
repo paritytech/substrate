@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -46,10 +46,8 @@
 //! To deallocate we use the preceding 8 bytes of the allocation to knit
 //! back the allocation into the linked list from the head.
 
-use crate::error::{Error, Result};
-use log::trace;
-use std::convert::{TryFrom, TryInto};
-use std::ops::Range;
+use crate::Error;
+use sp_std::{convert::{TryFrom, TryInto}, ops::Range};
 use sp_wasm_interface::{Pointer, WordSize};
 
 // The pointers need to be aligned to 8 bytes. This is because the
@@ -69,6 +67,9 @@ const MIN_POSSIBLE_ALLOCATION: u32 = 8;
 // to which it belongs.
 const PREFIX_SIZE: u32 = 8;
 
+/// An implementation of freeing bump allocator.
+///
+/// Refer to the module-level documentation for further details.
 pub struct FreeingBumpHeapAllocator {
 	bumper: u32,
 	heads: [u32; N],
@@ -78,7 +79,18 @@ pub struct FreeingBumpHeapAllocator {
 
 /// Create an allocator error.
 fn error(msg: &'static str) -> Error {
-	Error::Allocator(msg)
+	Error::Other(msg)
+}
+
+/// A custom "trace" implementation that is only activated when `feature = std`.
+///
+/// Uses `wasm-heap` as default target.
+macro_rules! trace {
+	( $( $args:expr ),+ ) => {
+		sp_std::if_std! {
+			log::trace!(target: "wasm-heap", $( $args ),+);
+		}
+	}
 }
 
 impl FreeingBumpHeapAllocator {
@@ -110,9 +122,9 @@ impl FreeingBumpHeapAllocator {
 	///
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `size` - size in bytes of the allocation request
-	pub fn allocate(&mut self, mem: &mut [u8], size: WordSize) -> Result<Pointer<u8>> {
+	pub fn allocate(&mut self, mem: &mut [u8], size: WordSize) -> Result<Pointer<u8>, Error> {
 		let mem_size = u32::try_from(mem.len())
-			.expect("size of Wasm linear memory is <2^32");
+			.expect("size of Wasm linear memory is <2^32; qed");
 		let max_heap_size = mem_size - self.ptr_offset;
 
 		if size > MAX_POSSIBLE_ALLOCATION {
@@ -148,7 +160,7 @@ impl FreeingBumpHeapAllocator {
 		self.set_heap_u64(mem, ptr - PREFIX_SIZE, list_index as u64)?;
 
 		self.total_size = self.total_size + item_size + PREFIX_SIZE;
-		trace!(target: "wasm-heap", "Heap size is {} bytes after allocation", self.total_size);
+		trace!("Heap size is {} bytes after allocation", self.total_size);
 
 		Ok(Pointer::new(self.ptr_offset + ptr))
 	}
@@ -159,7 +171,7 @@ impl FreeingBumpHeapAllocator {
 	///
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `ptr` - pointer to the allocated chunk
-	pub fn deallocate(&mut self, mem: &mut [u8], ptr: Pointer<u8>) -> Result<()> {
+	pub fn deallocate(&mut self, mem: &mut [u8], ptr: Pointer<u8>) -> Result<(), Error> {
 		let ptr = u32::from(ptr) - self.ptr_offset;
 		if ptr < PREFIX_SIZE {
 			return Err(error("Invalid pointer for deallocation"));
@@ -177,7 +189,7 @@ impl FreeingBumpHeapAllocator {
 		let item_size = Self::get_item_size_from_index(list_index);
 		self.total_size = self.total_size.checked_sub(item_size as u32 + PREFIX_SIZE)
 			.ok_or_else(|| error("Unable to subtract from total heap size without overflow"))?;
-		trace!(target: "wasm-heap", "Heap size is {} bytes after deallocation", self.total_size);
+		trace!("Heap size is {} bytes after deallocation", self.total_size);
 
 		Ok(())
 	}
@@ -187,7 +199,7 @@ impl FreeingBumpHeapAllocator {
 	/// Returns the `bumper` from before the increase.
 	/// Returns an `Error::AllocatorOutOfSpace` if the operation
 	/// would exhaust the heap.
-	fn bump(&mut self, item_size: u32, max_heap_size: u32) -> Result<u32> {
+	fn bump(&mut self, item_size: u32, max_heap_size: u32) -> Result<u32, Error> {
 		if self.bumper + PREFIX_SIZE + item_size > max_heap_size {
 			return Err(Error::AllocatorOutOfSpace);
 		}
@@ -203,7 +215,7 @@ impl FreeingBumpHeapAllocator {
 	}
 
 	// Read a u64 from the heap in LE form. Used to read heap allocation prefixes.
-	fn get_heap_u64(&self, heap: &[u8], offset: u32) -> Result<u64> {
+	fn get_heap_u64(&self, heap: &[u8], offset: u32) -> Result<u64, Error> {
 		let range = self.heap_range(offset, 8, heap.len())
 			.ok_or_else(|| error("read out of heap bounds"))?;
 		let bytes = heap[range].try_into()
@@ -212,7 +224,7 @@ impl FreeingBumpHeapAllocator {
 	}
 
 	// Write a u64 to the heap in LE form. Used to write heap allocation prefixes.
-	fn set_heap_u64(&self, heap: &mut [u8], offset: u32, val: u64) -> Result<()> {
+	fn set_heap_u64(&self, heap: &mut [u8], offset: u32, val: u64) -> Result<(), Error> {
 		let range = self.heap_range(offset, 8, heap.len())
 			.ok_or_else(|| error("write out of heap bounds"))?;
 		let bytes = val.to_le_bytes();

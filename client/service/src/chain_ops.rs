@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,10 +22,6 @@ use crate::error::Error;
 use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension};
 use log::{warn, info};
 use futures::{future, prelude::*};
-use futures03::{
-	TryFutureExt as _,
-};
-use sp_core::{Blake2Hasher, Hasher};
 use sp_runtime::traits::{
 	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
 };
@@ -35,9 +31,7 @@ use sc_client::Client;
 use sp_consensus::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};
 use sp_consensus::BlockOrigin;
 
-use std::{
-	io::{Read, Write, Seek},
-};
+use std::{io::{Read, Write, Seek}, pin::Pin};
 
 use sc_network::message;
 
@@ -57,9 +51,9 @@ impl<
 	TBl, TRtApi, TCfg, TGen, TCSExt, Client<TBackend, TExec, TBl, TRtApi>,
 	TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend
 > where
-	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	TBackend: 'static + sc_client_api::backend::Backend<TBl, Blake2Hasher> + Send,
-	TExec: 'static + sc_client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
+	TBl: BlockT,
+	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
+	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TRtApi: 'static + Send + Sync,
 {
@@ -69,7 +63,7 @@ impl<
 		self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
-	) -> Box<dyn Future<Item = (), Error = Error> + Send> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
 		struct WaitLink {
 			imported_blocks: u64,
 			has_error: bool,
@@ -118,7 +112,7 @@ impl<
 		// queue, the `Future` re-schedules itself and returns `Poll::Pending`.
 		// This makes it possible either to interleave other operations in-between the block imports,
 		// or to stop the operation completely.
-		let import = futures03::future::poll_fn(move |cx| {
+		let import = future::poll_fn(move |cx| {
 			// Start by reading the number of blocks if not done so already.
 			let count = match count {
 				Some(c) => c,
@@ -198,7 +192,7 @@ impl<
 			}
 
 			if link.imported_blocks >= count {
-				info!("Imported {} blocks. Best: #{}", read_block_count, client.info().chain.best_number);
+				info!("Imported {} blocks. Best: #{}", read_block_count, client.chain_info().best_number);
 				return std::task::Poll::Ready(Ok(()));
 
 			} else {
@@ -206,7 +200,7 @@ impl<
 				return std::task::Poll::Pending;
 			}
 		});
-		Box::new(import.compat())
+		Box::pin(import)
 	}
 
 	fn export_blocks(
@@ -215,14 +209,14 @@ impl<
 		from: NumberFor<TBl>,
 		to: Option<NumberFor<TBl>>,
 		json: bool
-	) -> Box<dyn Future<Item = (), Error = Error>> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
 		let client = self.client;
 		let mut block = from;
 
 		let last = match to {
 			Some(v) if v.is_zero() => One::one(),
 			Some(v) => v,
-			None => client.info().chain.best_number,
+			None => client.chain_info().best_number,
 		};
 
 		let mut wrote_header = false;
@@ -234,7 +228,7 @@ impl<
 		// `Poll::Pending`.
 		// This makes it possible either to interleave other operations in-between the block exports,
 		// or to stop the operation completely.
-		let export = futures03::future::poll_fn(move |cx| {
+		let export = future::poll_fn(move |cx| {
 			if last < block {
 				return std::task::Poll::Ready(Err("Invalid block range specified".into()));
 			}
@@ -275,7 +269,7 @@ impl<
 			std::task::Poll::Pending
 		});
 
-		Box::new(export.compat())
+		Box::pin(export)
 	}
 
 	fn revert_chain(
@@ -283,7 +277,7 @@ impl<
 		blocks: NumberFor<TBl>
 	) -> Result<(), Error> {
 		let reverted = self.client.revert(blocks)?;
-		let info = self.client.info().chain;
+		let info = self.client.chain_info();
 
 		if reverted.is_zero() {
 			info!("There aren't any non-finalized blocks to revert.");
@@ -296,7 +290,7 @@ impl<
 	fn check_block(
 		self,
 		block_id: BlockId<TBl>
-	) -> Box<dyn Future<Item = (), Error = Error> + Send> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
 		match self.client.block(&block_id) {
 			Ok(Some(block)) => {
 				let mut buf = Vec::new();
@@ -305,9 +299,8 @@ impl<
 				let reader = std::io::Cursor::new(buf);
 				self.import_blocks(reader, true)
 			}
-			Ok(None) => Box::new(future::err("Unknown block".into())),
-			Err(e) => Box::new(future::err(format!("Error reading block: {:?}", e).into())),
+			Ok(None) => Box::pin(future::err("Unknown block".into())),
+			Err(e) => Box::pin(future::err(format!("Error reading block: {:?}", e).into())),
 		}
 	}
 }
-

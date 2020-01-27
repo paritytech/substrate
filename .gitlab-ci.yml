@@ -15,7 +15,7 @@ stages:
 
 variables:
   GIT_STRATEGY:                    fetch
-  GIT_DEPTH:                       "3"
+  GIT_DEPTH:                       100
   CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
   SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
   CARGO_INCREMENTAL:               0
@@ -146,11 +146,11 @@ test-linux-stable:                 &test-linux
     - awk '/^warning:/,/^$/ { print }' output.log > ${CI_COMMIT_SHORT_SHA}_warnings.log
   artifacts:
     name:                          $CI_COMMIT_SHORT_SHA
-    expire_in:                     24 hrs
+    expire_in:                     3 days
     paths:
       - ${CI_COMMIT_SHORT_SHA}_warnings.log
 
-test-dependency-rules:             &test-linux
+test-dependency-rules:
   stage:                           test
   <<:                              *docker-env
   except:
@@ -159,7 +159,7 @@ test-dependency-rules:             &test-linux
   script:
     - .maintain/ensure-deps.sh
 
-test-frame-staking:                 &test-frame-staking
+test-frame-staking:
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -175,7 +175,7 @@ test-frame-staking:                 &test-frame-staking
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features std
     - sccache -s
 
-test-wasmtime:                 &test-wasmtime
+test-wasmtime:
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -202,7 +202,7 @@ test-linux-stable-int:
     - echo "___Logs will be partly shown at the end in case of failure.___"
     - echo "___Full log will be saved to the job artifacts only in case of failure.___"
     - WASM_BUILD_NO_COLOR=1 RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
-        time cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
+        time cargo test -p node-cli --release --verbose --locked -- --ignored
         &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
     - sccache -s
   after_script:
@@ -210,7 +210,7 @@ test-linux-stable-int:
   artifacts:
     name:                          $CI_COMMIT_SHORT_SHA
     when:                          on_failure
-    expire_in:                     24 hrs
+    expire_in:                     3 days
     paths:
       - ${CI_COMMIT_SHORT_SHA}_int_failure.log
 
@@ -244,7 +244,7 @@ node-exits:
     - ./.maintain/check_for_exit.sh
 
 
-test-full-crypto-feature:          &test-full-crypto-feature
+test-full-crypto-feature:
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -265,17 +265,18 @@ test-full-crypto-feature:          &test-full-crypto-feature
 
 #### stage:                        build
 
-build-linux-substrate:
+build-linux-substrate:             &build-binary
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
   <<:                              *build-only
+  before_script:
+    - mkdir -p ./artifacts/substrate/
   except:
     variables:
       - $DEPLOY_TAG
   script:
     - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
-    - mkdir -p ./artifacts/substrate/
     - mv ./target/release/substrate ./artifacts/substrate/.
     - echo -n "Substrate version = "
     - if [ "${CI_COMMIT_TAG}" ]; then
@@ -292,19 +293,13 @@ build-linux-substrate:
     - sccache -s
 
 build-linux-subkey:
-  stage:                           build
-  <<:                              *collect-artifacts
-  <<:                              *docker-env
-  <<:                              *build-only
-  except:
-    variables:
-      - $DEPLOY_TAG
+  <<:                              *build-binary
+  before_script:
+    - mkdir -p ./artifacts/subkey
   script:
     - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
     - cd -
-    - sccache -s
-    - mkdir -p ./artifacts/subkey
     - mv ./target/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
     - ./artifacts/subkey/subkey --version |
@@ -351,11 +346,14 @@ check_warnings:
       fi
   allow_failure:                   true
 
-# Check whether Polkadot 'master' branch builds using this Substrate commit.
+# Nightly check whether Polkadot 'master' branch builds.
 check_polkadot:
   stage:                           build
   <<:                              *docker-env
   allow_failure:                   true
+  only:
+    - master
+    - schedules
   script:
     - SUBSTRATE_PATH=$(pwd)
     # Clone the current Polkadot master branch into ./polkadot.
@@ -372,6 +370,21 @@ check_polkadot:
     - time cargo check
     - cd -
     - sccache -s
+
+trigger-contracts-ci:
+  stage:                           publish
+  needs:
+    - job:                         build-linux-substrate
+      artifacts:                   false
+    - job:                         test-linux-stable
+      artifacts:                   false
+  trigger:
+    project:                       parity/srml-contracts-waterfall
+    branch:                        master
+    strategy:                      depend
+  only:
+    - master
+    - schedules
 
 #### stage:                        publish
 

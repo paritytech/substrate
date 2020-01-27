@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ use sp_io;
 use std::fmt::Display;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use sp_core::{self, Hasher, Blake2Hasher, TypeId};
+use sp_core::{self, Hasher, Blake2Hasher, TypeId, RuntimeDebug};
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
@@ -49,8 +49,8 @@ impl<'a> Lazy<[u8]> for &'a [u8] {
 	fn get(&mut self) -> &[u8] { &**self }
 }
 
-/// Some type that is able to be collapsed into an account ID. It is not possible to recreate the original value from
-/// the account ID.
+/// Some type that is able to be collapsed into an account ID. It is not possible to recreate the
+/// original value from the account ID.
 pub trait IdentifyAccount {
 	/// The account ID that this can be transformed into.
 	type AccountId;
@@ -102,7 +102,7 @@ impl Verify for sp_core::ecdsa::Signature {
 			self.as_ref(),
 			&sp_io::hashing::blake2_256(msg.get()),
 		) {
-			Ok(pubkey) => <dyn AsRef<[u8]>>::as_ref(signer) == &pubkey[..],
+			Ok(pubkey) => &signer.as_ref()[..] == &pubkey[..],
 			_ => false,
 		}
 	}
@@ -117,7 +117,7 @@ pub trait AppVerify {
 }
 
 impl<
-	S: Verify<Signer=<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic> + From<T>,
+	S: Verify<Signer = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic> + From<T>,
 	T: sp_application_crypto::Wraps<Inner=S> + sp_application_crypto::AppKey + sp_application_crypto::AppSignature +
 		AsRef<S> + AsMut<S> + From<S>,
 > AppVerify for T where
@@ -136,11 +136,11 @@ impl<
 
 /// An error type that indicates that the origin is invalid.
 #[derive(Encode, Decode)]
-pub struct InvalidOrigin;
+pub struct BadOrigin;
 
-impl From<InvalidOrigin> for &'static str {
-	fn from(_: InvalidOrigin) -> &'static str {
-		"Invalid origin"
+impl From<BadOrigin> for &'static str {
+	fn from(_: BadOrigin) -> &'static str {
+		"Bad origin"
 	}
 }
 
@@ -149,15 +149,15 @@ pub trait EnsureOrigin<OuterOrigin> {
 	/// A return type.
 	type Success;
 	/// Perform the origin check.
-	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, InvalidOrigin> {
-		Self::try_origin(o).map_err(|_| InvalidOrigin)
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, BadOrigin> {
+		Self::try_origin(o).map_err(|_| BadOrigin)
 	}
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
 }
 
 /// An error that indicates that a lookup failed.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, RuntimeDebug)]
 pub struct LookupError;
 
 impl From<LookupError> for &'static str {
@@ -358,7 +358,7 @@ pub trait OffchainWorker<BlockNumber> {
 	/// This function is being called after every block import (when fully synced).
 	///
 	/// Implement this and use any of the `Offchain` `sp_io` set of APIs
-	/// to perform offchain computations, calls and submit transactions
+	/// to perform off-chain computations, calls and submit transactions
 	/// with results to trigger any on-chain changes.
 	/// Any state alterations are lost and are not persisted.
 	fn offchain_worker(_n: BlockNumber) {}
@@ -391,7 +391,7 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 }
 
 /// Blake2-256 Hash implementation.
-#[derive(PartialEq, Eq, Clone, sp_core::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
@@ -458,36 +458,18 @@ impl<H: PartialEq + Eq + Debug> CheckEqual for super::generic::DigestItem<H> whe
 	}
 }
 
-macro_rules! impl_maybe_marker {
-	( $( $(#[$doc:meta])+ $trait_name:ident: $($trait_bound:path),+ );+ ) => {
-		$(
-			$(#[$doc])+
-			#[cfg(feature = "std")]
-			pub trait $trait_name: $($trait_bound +)+ {}
-			#[cfg(feature = "std")]
-			impl<T: $($trait_bound +)+> $trait_name for T {}
-
-			$(#[$doc])+
-			#[cfg(not(feature = "std"))]
-			pub trait $trait_name {}
-			#[cfg(not(feature = "std"))]
-			impl<T> $trait_name for T {}
-		)+
-	}
-}
-
-impl_maybe_marker!(
+sp_core::impl_maybe_marker!(
 	/// A type that implements Display when in std environment.
-	MaybeDisplay: Display;
+	trait MaybeDisplay: Display;
 
 	/// A type that implements Hash when in std environment.
-	MaybeHash: sp_std::hash::Hash;
+	trait MaybeHash: sp_std::hash::Hash;
 
 	/// A type that implements Serialize when in std environment.
-	MaybeSerialize: Serialize;
+	trait MaybeSerialize: Serialize;
 
 	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
-	MaybeSerializeDeserialize: DeserializeOwned, Serialize
+	trait MaybeSerializeDeserialize: DeserializeOwned, Serialize;
 );
 
 /// A type that provides a randomness beacon.
@@ -498,9 +480,9 @@ pub trait RandomnessBeacon {
 	/// # Security
 	///
 	/// This MUST NOT be used for gambling, as it can be influenced by a
-	/// malicious validator in the short term.  It MAY be used in many
+	/// malicious validator in the short term. It MAY be used in many
 	/// cryptographic protocols, however, so long as one remembers that this
-	/// (like everything else on-chain) is public.  For example, it can be
+	/// (like everything else on-chain) is public. For example, it can be
 	/// used where a number is needed that cannot have been chosen by an
 	/// adversary, for purposes such as public-coin zero-knowledge proofs.
 	fn random() -> [u8; 32];
@@ -524,9 +506,9 @@ pub trait IsMember<MemberId> {
 pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Header number.
 	type Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
-		+ Copy + MaybeDisplay + SimpleArithmetic + Codec;
+		+ Copy + MaybeDisplay + SimpleArithmetic + Codec + sp_std::str::FromStr;
 	/// Header hash type
-	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
+	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
@@ -571,17 +553,17 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 	}
 }
 
-/// Something which fulfills the abstract idea of a Substrate block. It has types for an
-/// `Extrinsic` piece of information as well as a `Header`.
+/// Something which fulfills the abstract idea of a Substrate block. It has types for
+/// `Extrinsic` pieces of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
 pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
-	/// Type of extrinsics.
+	/// Type for extrinsics.
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	/// Header type.
 	type Header: Header<Hash=Self::Hash>;
 	/// Block hash type.
-	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
+	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// Returns a reference to the header.
@@ -596,7 +578,8 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 	fn hash(&self) -> Self::Hash {
 		<<Self::Header as Header>::Hashing as Hash>::hash_of(self.header())
 	}
-	/// Create an encoded block from the given `header` and `extrinsics` without requiring to create an instance.
+	/// Creates an encoded block from the given `header` and `extrinsics` without requiring the
+	/// creation of an instance.
 	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8>;
 }
 
@@ -625,6 +608,8 @@ pub trait Extrinsic: Sized {
 	fn new(_call: Self::Call, _signed_data: Option<Self::SignaturePayload>) -> Option<Self> { None }
 }
 
+/// Extract the hasher type for a block.
+pub type HasherFor<B> = <HashFor<B> as Hash>::Hasher;
 /// Extract the hashing type for a block.
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
@@ -667,10 +652,6 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	}
 }
 
-/// Result of a module function call; either nothing (functions are only called for "side effects")
-/// or an error message.
-pub type DispatchResult<Error> = result::Result<(), Error>;
-
 /// A lazy call (module function and argument values) that can be executed via its `dispatch`
 /// method.
 pub trait Dispatchable {
@@ -680,10 +661,8 @@ pub trait Dispatchable {
 	type Origin;
 	/// ...
 	type Trait;
-	/// The error type returned by this dispatchable.
-	type Error: Into<crate::DispatchError>;
 	/// Actually dispatch this call and result the result of it.
-	fn dispatch(self, origin: Self::Origin) -> DispatchResult<Self::Error>;
+	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResult;
 }
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
@@ -703,7 +682,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	type Pre: Default;
 
 	/// An opaque set of information attached to the transaction. This could be constructed anywhere
-	/// down the line in a runtime. The current substrate runtime uses a struct with the same name
+	/// down the line in a runtime. The current Substrate runtime uses a struct with the same name
 	/// to represent the dispatch class and weight.
 	type DispatchInfo: Clone;
 
@@ -716,7 +695,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	/// This function can be called frequently by the transaction queue,
 	/// to obtain transaction validity against current state.
 	/// It should perform all checks that determine a valid transaction,
-	/// that can pay for it's execution and quickly eliminate ones
+	/// that can pay for its execution and quickly eliminate ones
 	/// that are stale or incorrect.
 	///
 	/// Make sure to perform the same checks in `pre_dispatch` function.
@@ -752,7 +731,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Validate an unsigned transaction for the transaction queue.
 	///
-	/// This function can be called frequently by the transaction queue,
+	/// This function can be called frequently by the transaction queue
 	/// to obtain transaction validity against current state.
 	/// It should perform all checks that determine a valid unsigned transaction,
 	/// and quickly eliminate ones that are stale or incorrect.
@@ -786,17 +765,6 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Do any post-flight stuff for a transaction.
 	fn post_dispatch(_pre: Self::Pre, _info: Self::DispatchInfo, _len: usize) { }
-}
-
-/// An error that is returned by a dispatchable function of a module.
-pub trait ModuleDispatchError {
-	/// Convert this error to an `u8`.
-	///
-	/// The `u8` corresponds to the index of the variant in the error enum.
-	fn as_u8(&self) -> u8;
-
-	/// Convert the error to a `&'static str`.
-	fn as_str(&self) -> &'static str;
 }
 
 #[impl_for_tuples(1, 12)]
@@ -875,10 +843,10 @@ impl SignedExtension for () {
 /// Also provides information on to whom this information is attributable and an index that allows
 /// each piece of attributable information to be disambiguated.
 pub trait Applyable: Sized + Send + Sync {
-	/// Id of the account that is responsible for this piece of information (sender).
+	/// ID of the account that is responsible for this piece of information (sender).
 	type AccountId: Member + MaybeDisplay;
 
-	/// Type by which we can dispatch. Restricts the UnsignedValidator type.
+	/// Type by which we can dispatch. Restricts the `UnsignedValidator` type.
 	type Call;
 
 	/// An opaque set of information attached to the transaction.
@@ -905,42 +873,6 @@ pub trait Applyable: Sized + Send + Sync {
 	) -> crate::ApplyExtrinsicResult;
 }
 
-/// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
-pub struct ApiRef<'a, T>(T, sp_std::marker::PhantomData<&'a ()>);
-
-impl<'a, T> From<T> for ApiRef<'a, T> {
-	fn from(api: T) -> Self {
-		ApiRef(api, Default::default())
-	}
-}
-
-impl<'a, T> sp_std::ops::Deref for ApiRef<'a, T> {
-	type Target = T;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-impl<'a, T> sp_std::ops::DerefMut for ApiRef<'a, T> {
-	fn deref_mut(&mut self) -> &mut T {
-		&mut self.0
-	}
-}
-
-/// Something that provides a runtime api.
-pub trait ProvideRuntimeApi {
-	/// The concrete type that provides the api.
-	type Api;
-
-	/// Returns the runtime api.
-	/// The returned instance will keep track of modifications to the storage. Any successful
-	/// call to an api function, will `commit` its changes to an internal buffer. Otherwise,
-	/// the modifications will be `discarded`. The modifications will not be applied to the
-	/// storage, even on a `commit`.
-	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
-}
-
 /// A marker trait for something that knows the type of the runtime block.
 pub trait GetRuntimeBlockType {
 	/// The `RuntimeBlock` type.
@@ -951,14 +883,6 @@ pub trait GetRuntimeBlockType {
 pub trait GetNodeBlockType {
 	/// The `NodeBlock` type.
 	type NodeBlock: self::Block;
-}
-
-/// Something that provides information about a runtime api.
-pub trait RuntimeApiInfo {
-	/// The identifier of the runtime api.
-	const ID: [u8; 8];
-	/// The version of the runtime api.
-	const VERSION: u32;
 }
 
 /// Something that can validate unsigned extrinsics for the transaction pool.
@@ -1013,6 +937,52 @@ pub trait OpaqueKeys: Clone {
 	}
 	/// Verify a proof of ownership for the keys.
 	fn ownership_proof_is_valid(&self, _proof: &[u8]) -> bool { true }
+}
+
+/// Input that adds infinite number of zero after wrapped input.
+///
+/// This can add an infinite stream of zeros onto any input, not just a slice as with
+/// `TrailingZerosInput`.
+pub struct AppendZerosInput<'a, T>(&'a mut T);
+
+impl<'a, T> AppendZerosInput<'a, T> {
+	/// Create a new instance from the given byte array.
+	pub fn new(input: &'a mut T) -> Self {
+		Self(input)
+	}
+}
+
+impl<'a, T: codec::Input> codec::Input for AppendZerosInput<'a, T> {
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+		Ok(None)
+	}
+
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+		let remaining = self.0.remaining_len()?;
+		let completed = if let Some(n) = remaining {
+			let readable = into.len().min(n);
+			// this should never fail if `remaining_len` API is implemented correctly.
+			self.0.read(&mut into[..readable])?;
+			readable
+		} else {
+			// Fill it byte-by-byte.
+			let mut i = 0;
+			while i < into.len() {
+				if let Ok(b) = self.0.read_byte() {
+					into[i] = b;
+					i += 1;
+				} else {
+					break;
+				}
+			}
+			i
+		};
+		// Fill the rest with zeros.
+		for i in &mut into[completed..] {
+			*i = 0;
+		}
+		Ok(())
+	}
 }
 
 /// Input that adds infinite number of zero after wrapped input.
@@ -1136,12 +1106,14 @@ macro_rules! count {
 #[macro_export]
 macro_rules! impl_opaque_keys {
 	(
+		$( #[ $attr:meta ] )*
 		pub struct $name:ident {
 			$(
 				pub $field:ident: $type:ty,
 			)*
 		}
 	) => {
+		$( #[ $attr ] )*
 		#[derive(
 			Default, Clone, PartialEq, Eq,
 			$crate::codec::Encode,
@@ -1172,6 +1144,37 @@ macro_rules! impl_opaque_keys {
 					)*
 				};
 				$crate::codec::Encode::encode(&keys)
+			}
+
+			/// Converts `Self` into a `Vec` of `(raw public key, KeyTypeId)`.
+			pub fn into_raw_public_keys(
+				self,
+			) -> $crate::sp_std::vec::Vec<($crate::sp_std::vec::Vec<u8>, $crate::KeyTypeId)> {
+				let mut keys = Vec::new();
+				$(
+					keys.push((
+						$crate::RuntimeAppPublic::to_raw_vec(&self.$field),
+						<
+							<
+								$type as $crate::BoundToRuntimeAppPublic
+							>::Public as $crate::RuntimeAppPublic
+						>::ID,
+					));
+				)*
+
+				keys
+			}
+
+			/// Decode `Self` from the given `encoded` slice and convert `Self` into the raw public
+			/// keys (see [`Self::into_raw_public_keys`]).
+			///
+			/// Returns `None` when the decoding failed, otherwise `Some(_)`.
+			pub fn decode_into_raw_public_keys(
+				encoded: &[u8],
+			) -> Option<$crate::sp_std::vec::Vec<($crate::sp_std::vec::Vec<u8>, $crate::KeyTypeId)>> {
+				<Self as $crate::codec::Decode>::decode(&mut &encoded[..])
+					.ok()
+					.map(|s| s.into_raw_public_keys())
 			}
 		}
 
@@ -1277,8 +1280,9 @@ pub trait BlockIdTo<Block: self::Block> {
 
 #[cfg(test)]
 mod tests {
-	use super::AccountIdConversion;
+	use super::*;
 	use crate::codec::{Encode, Decode, Input};
+	use sp_core::{crypto::Pair, ecdsa};
 
 	mod t {
 		use sp_core::crypto::KeyTypeId;
@@ -1357,5 +1361,17 @@ mod tests {
 		assert_eq!(t.read(&mut buffer), Ok(()));
 		assert_eq!(t.remaining_len(), Ok(None));
 		assert_eq!(buffer, [0, 0]);
+	}
+
+	#[test]
+	fn ecdsa_verify_works() {
+		let msg = &b"test-message"[..];
+		let (pair, _) = ecdsa::Pair::generate();
+
+		let signature = pair.sign(&msg);
+		assert!(ecdsa::Pair::verify(&signature, msg, &pair.public()));
+
+		assert!(signature.verify(msg, &pair.public()));
+		assert!(signature.verify(msg, &pair.public()));
 	}
 }
