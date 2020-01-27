@@ -38,7 +38,7 @@ use sp_transaction_pool::{error, PoolStatus};
 use crate::validated_pool::{ValidatedPool, ValidatedTransaction};
 
 /// Modification notification event stream type;
-pub type EventStream = mpsc::UnboundedReceiver<()>;
+pub type EventStream<H> = mpsc::UnboundedReceiver<H>;
 
 /// Extrinsic hash type for a pool.
 pub type ExHash<A> = <A as ChainApi>::Hash;
@@ -105,11 +105,11 @@ impl Default for Options {
 	fn default() -> Self {
 		Options {
 			ready: base::Limit {
-				count: 512,
-				total_bytes: 10 * 1024 * 1024,
+				count: 8192,
+				total_bytes: 20 * 1024 * 1024,
 			},
 			future: base::Limit {
-				count: 128,
+				count: 512,
 				total_bytes: 1 * 1024 * 1024,
 			},
 			reject_future_transactions: false,
@@ -331,7 +331,7 @@ impl<B: ChainApi> Pool<B> {
 	///
 	/// Consumers of this stream should use the `ready` method to actually get the
 	/// pending transactions in the right order.
-	pub fn import_notification_stream(&self) -> EventStream {
+	pub fn import_notification_stream(&self) -> EventStream<ExHash<B>> {
 		self.validated_pool.import_notification_stream()
 	}
 
@@ -436,6 +436,11 @@ impl<B: ChainApi> Pool<B> {
 		};
 
 		(hash, validity)
+	}
+
+	/// Get ready transaction by hash, if it present in the pool.
+	pub fn ready_transaction(&self, hash: &ExHash<B>) -> Option<TransactionFor<B>> {
+		self.validated_pool.ready_by_hash(hash)
 	}
 }
 
@@ -638,8 +643,8 @@ mod tests {
 
 		// then
 		let mut it = futures::executor::block_on_stream(stream);
-		assert_eq!(it.next(), Some(()));
-		assert_eq!(it.next(), Some(()));
+		assert_eq!(it.next(), Some(32));
+		assert_eq!(it.next(), Some(33));
 		assert_eq!(it.next(), None);
 	}
 

@@ -9,10 +9,11 @@
 set -e # fail on any error
 
 
-# give some context
-git log --graph --oneline --decorate=short -n 10
 
 VERSIONS_FILE="bin/node/runtime/src/lib.rs"
+
+boldprint () { printf "|\n| \033[1m${@}\033[0m\n|\n" ; }
+boldcat () { printf "|\n"; while read l; do printf "| \033[1m${l}\033[0m\n"; done; printf "|\n" ; }
 
 github_label () {
 	echo
@@ -26,21 +27,19 @@ github_label () {
 }
 
 
+boldprint "latest 10 commits of ${CI_COMMIT_REF_NAME}"
+git log --graph --oneline --decorate=short -n 10
 
+boldprint "make sure the master branch is available in shallow clones"
 git fetch --depth=${GIT_DEPTH:-100} origin master
 
-# check if master is part of this checkout
-if ! git log -n 1 origin/master
-then
-	echo "unable to check for runtime changes: checkout does not contain origin/master branch"
-	exit 3
-fi
 
-# check if the wasm sources changed
+boldprint "check if the wasm sources changed"
 if ! git diff --name-only origin/master...${CI_COMMIT_SHA} \
-	| grep -q -e '^bin/node/src/runtime' -e '^frame/' -e '^primitives/sr-' | grep -v -e '^primitives/sr-arithmetic/fuzzer'
+	| grep -v -e '^primitives/sr-arithmetic/fuzzer' \
+	| grep -q -e '^bin/node/src/runtime' -e '^frame/' -e '^primitives/sr-'
 then
-	cat <<-EOT
+	boldcat <<-EOT
 	
 	no changes to the runtime source code detected
 
@@ -61,13 +60,13 @@ sub_spec_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
 	| sed -n -r "s/^\-[[:space:]]+spec_version: +([0-9]+),$/\1/p")"
 
 
-# see if the version and the binary blob changed
+
 if [ "${add_spec_version}" != "${sub_spec_version}" ]
 then
 
 	github_label "B2-breaksapi"
 
-	cat <<-EOT
+	boldcat <<-EOT
 		
 		changes to the runtime sources and changes in the spec version.
 	
@@ -89,7 +88,7 @@ else
 	# see if the impl version changed
 	if [ "${add_impl_version}" != "${sub_impl_version}" ]
 	then
-		cat <<-EOT
+		boldcat <<-EOT
 		
 		changes to the runtime sources and changes in the impl version.
 
@@ -100,7 +99,7 @@ else
 	fi
 
 
-	cat <<-EOT
+	boldcat <<-EOT
 
 	wasm source files changed but not the spec/impl version and the runtime
 	binary blob. If changes made do not alter logic, just bump 'impl_version'.
@@ -114,8 +113,6 @@ else
 	versions file: ${VERSIONS_FILE}
 
 	EOT
-
-	# drop through into pushing `gotissues` and exit 1...
 fi
 
 # dropped through. there's something wrong;  exit 1.
