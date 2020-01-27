@@ -37,6 +37,7 @@ use sp_runtime::{
 	transaction_validity::TransactionTag as Tag,
 };
 use sp_transaction_pool::{error, PoolStatus};
+use wasm_timer::Instant;
 
 use crate::base_pool::PruneStatus;
 use crate::pool::{EventStream, Options, ChainApi, BlockHash, ExHash, ExtrinsicFor, TransactionFor};
@@ -89,7 +90,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Bans given set of hashes.
-	pub fn ban(&self, now: &std::time::Instant, hashes: impl IntoIterator<Item=ExHash<B>>) {
+	pub fn ban(&self, now: &Instant, hashes: impl IntoIterator<Item=ExHash<B>>) {
 		self.rotator.ban(now, hashes)
 	}
 
@@ -134,7 +135,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				Ok(imported.hash().clone())
 			}
 			ValidatedTransaction::Invalid(hash, err) => {
-				self.rotator.ban(&std::time::Instant::now(), std::iter::once(hash));
+				self.rotator.ban(&Instant::now(), std::iter::once(hash));
 				Err(err.into())
 			},
 			ValidatedTransaction::Unknown(hash, err) => {
@@ -159,7 +160,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				let removed = pool.enforce_limits(ready_limit, future_limit)
 					.into_iter().map(|x| x.hash.clone()).collect::<HashSet<_>>();
 				// ban all removed transactions
-				self.rotator.ban(&std::time::Instant::now(), removed.iter().map(|x| x.clone()));
+				self.rotator.ban(&Instant::now(), removed.iter().map(|x| x.clone()));
 				removed
 			};
 			// run notifications
@@ -189,7 +190,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 					.map(|_| watcher)
 			},
 			ValidatedTransaction::Invalid(hash, err) => {
-				self.rotator.ban(&std::time::Instant::now(), std::iter::once(hash));
+				self.rotator.ban(&Instant::now(), std::iter::once(hash));
 				Err(err.into())
 			},
 			ValidatedTransaction::Unknown(_, err) => Err(err.into()),
@@ -406,7 +407,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		let block_number = self.api.block_id_to_number(at)?
 			.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?
 			.saturated_into::<u64>();
-		let now = time::Instant::now();
+		let now = Instant::now();
 		let to_remove = {
 			self.ready()
 				.filter(|tx| self.rotator.ban_if_stale(&now, block_number, &tx))
@@ -473,7 +474,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		debug!(target: "txpool", "Removing invalid transactions: {:?}", hashes);
 
 		// temporarily ban invalid transactions
-		self.rotator.ban(&time::Instant::now(), hashes.iter().cloned());
+		self.rotator.ban(&Instant::now(), hashes.iter().cloned());
 
 		let invalid = self.pool.write().remove_subtree(hashes);
 

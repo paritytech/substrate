@@ -5920,6 +5920,7 @@ dependencies = [
  "sp-runtime 2.0.0",
  "sp-transaction-pool 2.0.0",
  "substrate-test-runtime 2.0.0",
+ "wasm-timer 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -5940,6 +5941,7 @@ dependencies = [
  "sp-runtime 2.0.0",
  "sp-transaction-pool 2.0.0",
  "substrate-test-runtime-client 2.0.0",
+ "wasm-timer 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
