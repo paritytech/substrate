@@ -607,20 +607,23 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		let child_info = match self.child_info(storage_key, child_info)? {
-			Some(child_info) => child_info,
-			None => return Ok(None),
+		let (child_info, need_update_info, untrusted) = match self.child_info(storage_key, child_info)? {
+			(Some(child_info), need_update, untrusted) => (child_info, need_update, untrusted),
+			(None, _, _) => return Ok(None),
 		};
 		let (result, full_child_key, need_update) = self.child_storage_inner(
 			storage_key,
 			child_info.as_ref().as_ref(),
 			key,
 		)?;
-		if need_update {
-			let mut local_cache = self.cache.local_cache.write();
-			// We always update value (even if we just need new child info, we need to
-			// store at least an Arc pointer to it).
-			local_cache.child_storage.insert(full_child_key, (result.clone(), child_info));
+		if need_update || need_update_info {
+			// child info get trusted only if it got a valid result.
+			if !result.is_none() && untrusted {
+				let mut local_cache = self.cache.local_cache.write();
+				// We always update value (even if we just need new child info, we need to
+				// store at least an Arc pointer to it).
+				local_cache.child_storage.insert(full_child_key, (result.clone(), child_info));
+			}
 		}
 		Ok(result)
 	}
@@ -635,7 +638,7 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
-		self.state.exists_child_storage(storage_key, child_info, key)
+		Ok(self.child_storage(storage_key, child_info, key)?.is_some())
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
@@ -644,7 +647,10 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		child_info: ChildInfo,
 		f: F,
 	) {
-		self.state.for_keys_in_child_storage(storage_key, child_info, f)
+		match self.cached_child_info(storage_key, child_info) {
+			Some(child_info) => self.state.for_keys_in_child_storage(storage_key, child_info.as_ref().as_ref(), f),
+			None => self.state.for_keys_in_child_storage(storage_key, child_info, f),
+		}
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -657,7 +663,10 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.next_child_storage_key(storage_key, child_info, key)
+		match self.cached_child_info(storage_key, child_info) {
+			Some(child_info) => self.state.next_child_storage_key(storage_key, child_info.as_ref().as_ref(), key),
+			None => self.state.next_child_storage_key(storage_key, child_info, key),
+		}
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -675,7 +684,10 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		prefix: &[u8],
 		f: F,
 	) {
-		self.state.for_child_keys_with_prefix(storage_key, child_info, prefix, f)
+		match self.cached_child_info(storage_key, child_info) {
+			Some(child_info) => self.state.for_child_keys_with_prefix(storage_key, child_info.as_ref().as_ref(), prefix, f),
+			None => self.state.for_child_keys_with_prefix(storage_key, child_info, prefix, f),
+		}
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (B::Hash, Self::Transaction)
@@ -694,7 +706,10 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
-		self.state.child_storage_root(storage_key, child_info, delta)
+		match self.cached_child_info(storage_key, child_info) {
+			Some(child_info) => self.state.child_storage_root(storage_key, child_info.as_ref().as_ref(), delta),
+			None => self.state.child_storage_root(storage_key, child_info, delta),
+		}
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -711,7 +726,10 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> StateBackend<HasherFor<B>> for Ca
 		child_info: ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
-		self.state.child_keys(storage_key, child_info, prefix)
+		match self.cached_child_info(storage_key, child_info) {
+			Some(child_info) => self.state.child_keys(storage_key, child_info.as_ref().as_ref(), prefix),
+			None => self.state.child_keys(storage_key, child_info, prefix),
+		}
 	}
 
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HasherFor<B>>> {
@@ -751,27 +769,32 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> CachingState<S, B> {
 	}
 
 	/// Access ChildInfo.
-	/// Return an associated boolean set to true if the value returned is a new value.
 	/// This function also attach child root to stored child info.
 	/// This function also do check child info input parameter against cache,
 	/// returning `None` if parameter child info is incorrect.
+	/// It returns an associated boolean set to true if the returned value need
+	/// an update.
+	/// It returns a second boolean in case the child info was build from input parameter
+	/// which makes it untrusted.
 	fn child_info(
 		&self,
 		child_key: &[u8],
 		child_info: ChildInfo,
-	) -> Result<Option<Arc<OwnedChildInfo>>, S::Error> {
+	) -> Result<(Option<Arc<OwnedChildInfo>>, bool, bool), S::Error> {
 		if let Some(entry) = get_child_info(&self.cache.local_cache.read().child_infos, child_key) {
 			trace!("Found in local cache: {:?}", HexDisplay::from(&child_key));
 			let entry = self.usage.tally_child_info_key_read(child_key, entry, true);
 			if let Some(cached_info) = entry.as_ref() {
 				if !child_info.valid_as(&cached_info.as_ref().as_ref()) {
-					return Ok(None);
+					return Ok((None, false, false));
 				}
-				if let Some(updated_info) = self.fetch_and_set_root(child_key, cached_info.as_ref().as_ref())? {
-					return Ok(updated_info);
+				match self.fetch_and_set_root(child_key, cached_info.as_ref().as_ref())? {
+					Some(Some(new_value)) => return Ok((Some(new_value), true, false)),
+					Some(None) => return Ok((Some(cached_info.clone()), false, false)),
+					None => (),
 				}
 			}
-			return Ok(entry);
+			return Ok((entry, false, false));
 		}
 		let entry = {
 			let cache = self.cache.shared_cache.lock();
@@ -786,28 +809,68 @@ impl<S: StateBackend<HasherFor<B>>, B: BlockT> CachingState<S, B> {
 			trace!("Found in shared cache: {:?}", HexDisplay::from(&child_key));
 			if let Some(cached_info) = entry.as_ref() {
 				if !child_info.valid_as(&cached_info.as_ref().as_ref()) {
-					return Ok(None);
+					return Ok((None, false, false));
 				}
-				if let Some(updated_info) = self.fetch_and_set_root(child_key, cached_info.as_ref().as_ref())? {
-					return Ok(updated_info);
+				match self.fetch_and_set_root(child_key, cached_info.as_ref().as_ref())? {
+					Some(Some(new_value)) => return Ok((Some(new_value), true, false)),
+					Some(None) => return Ok((Some(cached_info.clone()), false, false)),
+					None => (),
 				}
 			}
-			return Ok(entry);
+			return Ok((entry, false, false));
 		}
 		trace!("Cache miss: {:?}", HexDisplay::from(&child_key));
 		let result = match self.fetch_and_set_root(child_key, child_info)? {
-			Some(opt_owned) => opt_owned,
-			// Not in cache but already with a root, note that
-			// this would be unsafe it it was possible to pass root
-			// by rpc (would need to validate again).
-			None => {
+			Some(Some(new)) => Some(new),
+			// Set child info to cache.
+			Some(None)
+			| None => {
 				let result = Arc::new(child_info.to_owned());
 				let weak = Arc::downgrade(&result);
 				self.cache.local_cache.write().child_infos.insert(child_key.to_vec(), Some(weak));
 				Some(result)
 			},
 		};
-		Ok(self.usage.tally_child_info_key_read(child_key, result, false))
+		Ok((self.usage.tally_child_info_key_read(child_key, result, false), true, true))
+	}
+
+	/// Access cached child info, do not attempt to update
+	/// root.
+	fn cached_child_info(
+		&self,
+		child_key: &[u8],
+		child_info: ChildInfo,
+	) -> Option<Arc<OwnedChildInfo>> {
+		if let Some(entry) = get_child_info(&self.cache.local_cache.read().child_infos, child_key) {
+			trace!("Found in local cache: {:?}", HexDisplay::from(&child_key));
+			let entry = self.usage.tally_child_info_key_read(child_key, entry, true);
+			if let Some(cached_info) = entry.as_ref() {
+				if !child_info.valid_as(&cached_info.as_ref().as_ref()) {
+					return None;
+				}
+			}
+			return entry;
+		}
+		let entry = {
+			let cache = self.cache.shared_cache.lock();
+			if Self::is_allowed(None, None, Some(child_key), &self.cache.parent_hash, &cache.modifications) {
+				get_child_info(&cache.child_infos, child_key)
+			} else {
+				None
+			}
+		};
+		if let Some(entry) = entry {
+			let entry = self.usage.tally_child_info_key_read(child_key, entry, true);
+			trace!("Found in shared cache: {:?}", HexDisplay::from(&child_key));
+			if let Some(cached_info) = entry.as_ref() {
+				if !child_info.valid_as(&cached_info.as_ref().as_ref()) {
+					return None;
+				}
+			}
+			return entry;
+		}
+		trace!("Cache miss: {:?}", HexDisplay::from(&child_key));
+		None
 	}
 
 	/// Access child storage and return value, full instatiated key and
@@ -1295,7 +1358,8 @@ mod tests {
 		// child info not here, this operation do cache in top child
 		// a 11 b key and None.
 		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
-		assert!(child_info.is_none());
+		// no hit, untrusted
+		assert!(child_info.2 == true);
 
 		let key = H256::random()[..].to_vec();
 		s.cache.sync_cache(
@@ -1312,7 +1376,7 @@ mod tests {
 		assert_eq!(shared.lock().used_storage_cache_size(), 47 + 43 /* bytes */);
 		// cache do not work until canonicalized, this is rather unexpected to me
 		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
-		assert!(child_info.is_none());
+		assert!(child_info.2 == true);
 		// canonicalize last block
 		let mut s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
@@ -1322,9 +1386,11 @@ mod tests {
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1), Some(1), true);
 		// child info already here
 		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
-		assert!(child_info.is_some());
+		assert!(child_info.0.is_some());
+		assert!(child_info.1 == true);
+		assert!(child_info.2 == false);
 		assert_eq!(
-			child_info.map(|ci| ci.as_ref().as_ref().root() == Some(child_root1.as_ref())),
+			child_info.0.map(|ci| ci.as_ref().as_ref().root() == Some(child_root1.as_ref())),
 			Some(true),
 		);
 
@@ -1346,9 +1412,11 @@ mod tests {
 		// 11 + 32 key, 2 byte size (plus top 11 and 32 root)
 		assert_eq!(shared.lock().used_storage_cache_size(), 45 + 43 /* bytes */);
 		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
-		assert!(child_info.is_some());
+		assert!(child_info.0.is_some());
+		assert!(child_info.1 == true);
+		assert!(child_info.2 == false);
 		assert_eq!(
-			child_info.map(|ci| ci.as_ref().as_ref().root() == Some(child_root1.as_ref())),
+			child_info.0.map(|ci| ci.as_ref().as_ref().root() == Some(child_root1.as_ref())),
 			Some(true),
 		);
 
@@ -1370,7 +1438,7 @@ mod tests {
 		);
 		// cache do not work until canonicalized, this is rather unexpected to me
 		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
-		assert!(child_info.is_none());
+		assert!(child_info.2 == true);
 
 		// canonicalize last block
 		let mut s = CachingState::new(
@@ -1381,10 +1449,12 @@ mod tests {
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h4), Some(4), true);
 
 		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
-		assert!(child_info.is_some());
+		assert!(child_info.0.is_some());
+		assert!(child_info.1 == true);
+		assert!(child_info.2 == false);
 		// changed to new root
 		assert_eq!(
-			child_info.map(|ci| ci.as_ref().as_ref().root() == Some(child_root2.as_ref())),
+			child_info.0.map(|ci| ci.as_ref().as_ref().root() == Some(child_root2.as_ref())),
 			Some(true),
 		);
 	}
@@ -1406,7 +1476,8 @@ mod tests {
 		// child info not here, this operation do cache in top child
 		// a 11 b key and None.
 		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
-		assert!(child_info.is_none());
+		// untrusted (no match it uses the input).
+		assert!(child_info.2 == true);
 
 		let key = H256::random()[..].to_vec();
 		s.cache.sync_cache(
@@ -1423,7 +1494,8 @@ mod tests {
 		assert_eq!(shared.lock().used_storage_cache_size(), 47 + 43 /* bytes */);
 		// cache do not work until canonicalized, this is rather unexpected to me
 		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
-		assert!(child_info.is_none());
+		// no match
+		assert!(child_info.2 == true);
 		// canonicalize last block
 		let mut s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
@@ -1431,13 +1503,20 @@ mod tests {
 			Some(h0),
 		);
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1), Some(1), true);
-		// child info already here
-		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
-		assert!(child_info.is_some());
-		assert_eq!(
-			child_info.map(|ci| ci.as_ref().as_ref().root() == Some(child_root1.as_ref())),
-			Some(true),
-		);
+		{
+			// child info already here
+			let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
+			assert!(child_info.0.is_some());
+			assert!(child_info.1 == true);
+			assert!(child_info.2 == false);
+			assert_eq!(
+				child_info.0.map(|ci| ci.as_ref().as_ref().root() == Some(child_root1.as_ref())),
+				Some(true),
+			);
+			let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_2).unwrap();
+			// mismatch on valid_as
+			assert!(child_info.0.is_none());
+		}	
 
 		let mut s = CachingState::new(
 			InMemoryBackend::<Blake2Hasher>::default(),
@@ -1457,9 +1536,11 @@ mod tests {
 		// 4 + 32 key, 2 byte size (plus top 11 and 32 root)
 		assert_eq!(shared.lock().used_storage_cache_size(), 38 + 43 /* bytes */);
 		assert_eq!(shared.lock().clean_child_info(), 1);
-		// query back did init it
+		// query back did init it as untrusted
 		let child_info = s.child_info(CHILD_KEY_1, CHILD_INFO_1).unwrap();
-		assert!(child_info.is_some());
+		assert!(child_info.0.is_some());
+		assert!(child_info.1 == false);
+		assert!(child_info.2 == true);
 	}
 
 	#[test]
