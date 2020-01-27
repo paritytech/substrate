@@ -425,14 +425,14 @@ mod tests {
 					.pre_dispatch(&1, CALL, info_from_weight(5), len)
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(&1), 100 - 5 - 5 - 10);
+			assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
 
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 					.pre_dispatch(&2, CALL, info_from_weight(3), len)
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(&2), 200 - 5 - 10 - 3 - 5);
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 3 - 5);
 		});
 	}
 
@@ -467,7 +467,7 @@ mod tests {
 			.execute_with(||
 		{
 			// 1 ain't have a penny.
-			assert_eq!(Balances::free_balance(&1), 0);
+			assert_eq!(Balances::free_balance(1), 0);
 
 			let len = 100;
 
@@ -514,7 +514,7 @@ mod tests {
 					.pre_dispatch(&1, CALL, info_from_weight(3), len)
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(&1), 100 - 10 - 5 - (10 + 3) * 3 / 2);
+			assert_eq!(Balances::free_balance(1), 100 - 10 - 5 - (10 + 3) * 3 / 2);
 		})
 	}
 

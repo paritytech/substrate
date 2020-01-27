@@ -33,7 +33,7 @@ const ID_2: LockIdentifier = *b"2       ";
 #[test]
 fn basic_locking_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
-		assert_eq!(Balances::free_balance(&1), 10);
+		assert_eq!(Balances::free_balance(1), 10);
 		Balances::set_lock(ID_1, &1, 9, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 5, AllowDeath),
@@ -217,7 +217,7 @@ fn default_indexing_on_new_accounts_should_not_work2() {
 				Error::<Test, _>::ExistentialDeposit,
 			);
 			assert_eq!(Balances::is_dead_account(&5), true); // account 5 should not exist
-			assert_eq!(Balances::free_balance(&1), 100);
+			assert_eq!(Balances::free_balance(1), 100);
 		});
 }
 
@@ -234,7 +234,7 @@ fn reserved_balance_should_prevent_reclaim_count() {
 			assert_eq!(Balances::total_balance(&2), 256 * 20);
 
 			assert_ok!(Balances::reserve(&2, 256 * 19 + 1)); // account 2 becomes mostly reserved
-			assert_eq!(Balances::free_balance(&2), 255); // "free" account deleted."
+			assert_eq!(Balances::free_balance(2), 255); // "free" account deleted."
 			assert_eq!(Balances::total_balance(&2), 256 * 20); // reserve still exists.
 			assert_eq!(Balances::is_dead_account(&2), false);
 			assert_eq!(System::account_nonce(&2), 1);
@@ -309,11 +309,11 @@ fn dust_account_removal_should_work2() {
 fn balance_works() {
 	ExtBuilder::default().build().execute_with(|| {
 		let _ = Balances::deposit_creating(&1, 42);
-		assert_eq!(Balances::free_balance(&1), 42);
-		assert_eq!(Balances::reserved_balance(&1), 0);
+		assert_eq!(Balances::free_balance(1), 42);
+		assert_eq!(Balances::reserved_balance(1), 0);
 		assert_eq!(Balances::total_balance(&1), 42);
-		assert_eq!(Balances::free_balance(&2), 0);
-		assert_eq!(Balances::reserved_balance(&2), 0);
+		assert_eq!(Balances::free_balance(2), 0);
+		assert_eq!(Balances::reserved_balance(2), 0);
 		assert_eq!(Balances::total_balance(&2), 0);
 	});
 }
@@ -348,14 +348,14 @@ fn reserving_balance_should_work() {
 		let _ = Balances::deposit_creating(&1, 111);
 
 		assert_eq!(Balances::total_balance(&1), 111);
-		assert_eq!(Balances::free_balance(&1), 111);
-		assert_eq!(Balances::reserved_balance(&1), 0);
+		assert_eq!(Balances::free_balance(1), 111);
+		assert_eq!(Balances::reserved_balance(1), 0);
 
 		assert_ok!(Balances::reserve(&1, 69));
 
 		assert_eq!(Balances::total_balance(&1), 111);
-		assert_eq!(Balances::free_balance(&1), 42);
-		assert_eq!(Balances::reserved_balance(&1), 69);
+		assert_eq!(Balances::free_balance(1), 42);
+		assert_eq!(Balances::reserved_balance(1), 69);
 	});
 }
 
@@ -376,7 +376,7 @@ fn deducting_balance_should_work() {
 	ExtBuilder::default().build().execute_with(|| {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 69));
-		assert_eq!(Balances::free_balance(&1), 42);
+		assert_eq!(Balances::free_balance(1), 42);
 	});
 }
 
@@ -387,8 +387,8 @@ fn refunding_balance_should_work() {
 		let account = Balances::account(&1);
 		Balances::set_account(&1, &AccountData { reserved: 69, ..account }, &account);
 		Balances::unreserve(&1, 69);
-		assert_eq!(Balances::free_balance(&1), 111);
-		assert_eq!(Balances::reserved_balance(&1), 0);
+		assert_eq!(Balances::free_balance(1), 111);
+		assert_eq!(Balances::reserved_balance(1), 0);
 	});
 }
 
@@ -398,8 +398,8 @@ fn slashing_balance_should_work() {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 69));
 		assert!(Balances::slash(&1, 69).1.is_zero());
-		assert_eq!(Balances::free_balance(&1), 0);
-		assert_eq!(Balances::reserved_balance(&1), 42);
+		assert_eq!(Balances::free_balance(1), 0);
+		assert_eq!(Balances::reserved_balance(1), 42);
 		assert_eq!(<TotalIssuance<Test>>::get(), 42);
 	});
 }
@@ -410,8 +410,8 @@ fn slashing_incomplete_balance_should_work() {
 		let _ = Balances::deposit_creating(&1, 42);
 		assert_ok!(Balances::reserve(&1, 21));
 		assert_eq!(Balances::slash(&1, 69).1, 27);
-		assert_eq!(Balances::free_balance(&1), 0);
-		assert_eq!(Balances::reserved_balance(&1), 0);
+		assert_eq!(Balances::free_balance(1), 0);
+		assert_eq!(Balances::reserved_balance(1), 0);
 		assert_eq!(<TotalIssuance<Test>>::get(), 0);
 	});
 }
@@ -422,8 +422,8 @@ fn unreserving_balance_should_work() {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 111));
 		Balances::unreserve(&1, 42);
-		assert_eq!(Balances::reserved_balance(&1), 69);
-		assert_eq!(Balances::free_balance(&1), 42);
+		assert_eq!(Balances::reserved_balance(1), 69);
+		assert_eq!(Balances::free_balance(1), 42);
 	});
 }
 
@@ -433,8 +433,8 @@ fn slashing_reserved_balance_should_work() {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 111));
 		assert_eq!(Balances::slash_reserved(&1, 42).1, 0);
-		assert_eq!(Balances::reserved_balance(&1), 69);
-		assert_eq!(Balances::free_balance(&1), 0);
+		assert_eq!(Balances::reserved_balance(1), 69);
+		assert_eq!(Balances::free_balance(1), 0);
 		assert_eq!(<TotalIssuance<Test>>::get(), 69);
 	});
 }
@@ -445,8 +445,8 @@ fn slashing_incomplete_reserved_balance_should_work() {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 42));
 		assert_eq!(Balances::slash_reserved(&1, 69).1, 27);
-		assert_eq!(Balances::free_balance(&1), 69);
-		assert_eq!(Balances::reserved_balance(&1), 0);
+		assert_eq!(Balances::free_balance(1), 69);
+		assert_eq!(Balances::reserved_balance(1), 0);
 		assert_eq!(<TotalIssuance<Test>>::get(), 69);
 	});
 }
@@ -458,10 +458,10 @@ fn transferring_reserved_balance_should_work() {
 		let _ = Balances::deposit_creating(&2, 1);
 		assert_ok!(Balances::reserve(&1, 110));
 		assert_ok!(Balances::repatriate_reserved(&1, &2, 41), 0);
-		assert_eq!(Balances::reserved_balance(&1), 69);
-		assert_eq!(Balances::free_balance(&1), 0);
-		assert_eq!(Balances::reserved_balance(&2), 0);
-		assert_eq!(Balances::free_balance(&2), 42);
+		assert_eq!(Balances::reserved_balance(1), 69);
+		assert_eq!(Balances::free_balance(1), 0);
+		assert_eq!(Balances::reserved_balance(2), 0);
+		assert_eq!(Balances::free_balance(2), 42);
 	});
 }
 
@@ -481,10 +481,10 @@ fn transferring_incomplete_reserved_balance_should_work() {
 		let _ = Balances::deposit_creating(&2, 1);
 		assert_ok!(Balances::reserve(&1, 41));
 		assert_ok!(Balances::repatriate_reserved(&1, &2, 69), 28);
-		assert_eq!(Balances::reserved_balance(&1), 0);
-		assert_eq!(Balances::free_balance(&1), 69);
-		assert_eq!(Balances::reserved_balance(&2), 0);
-		assert_eq!(Balances::free_balance(&2), 42);
+		assert_eq!(Balances::reserved_balance(1), 0);
+		assert_eq!(Balances::free_balance(1), 69);
+		assert_eq!(Balances::reserved_balance(2), 0);
+		assert_eq!(Balances::free_balance(2), 42);
 	});
 }
 
@@ -499,8 +499,8 @@ fn transferring_too_high_value_should_not_panic() {
 			Error::<Test, _>::Overflow,
 		);
 
-		assert_eq!(Balances::free_balance(&1), u64::max_value());
-		assert_eq!(Balances::free_balance(&2), 1);
+		assert_eq!(Balances::free_balance(1), u64::max_value());
+		assert_eq!(Balances::free_balance(2), 1);
 	});
 }
 
@@ -512,7 +512,7 @@ fn account_create_on_free_too_low_with_other() {
 
 		// No-op.
 		let _ = Balances::deposit_creating(&2, 50);
-		assert_eq!(Balances::free_balance(&2), 0);
+		assert_eq!(Balances::free_balance(2), 0);
 		assert_eq!(<TotalIssuance<Test>>::get(), 100);
 	})
 }
@@ -523,7 +523,7 @@ fn account_create_on_free_too_low() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		// No-op.
 		let _ = Balances::deposit_creating(&2, 50);
-		assert_eq!(Balances::free_balance(&2), 0);
+		assert_eq!(Balances::free_balance(2), 0);
 		assert_eq!(<TotalIssuance<Test>>::get(), 0);
 	})
 }
@@ -537,8 +537,8 @@ fn account_removal_on_free_too_low() {
 		let _ = Balances::deposit_creating(&1, 110);
 		let _ = Balances::deposit_creating(&2, 110);
 
-		assert_eq!(Balances::free_balance(&1), 110);
-		assert_eq!(Balances::free_balance(&2), 110);
+		assert_eq!(Balances::free_balance(1), 110);
+		assert_eq!(Balances::free_balance(2), 110);
 		assert_eq!(<TotalIssuance<Test>>::get(), 220);
 
 		// Transfer funds from account 1 of such amount that after this transfer
@@ -547,8 +547,8 @@ fn account_removal_on_free_too_low() {
 		assert_ok!(Balances::transfer(Some(1).into(), 2, 20));
 
 		// Verify free balance removal of account 1.
-		assert_eq!(Balances::free_balance(&1), 0);
-		assert_eq!(Balances::free_balance(&2), 130);
+		assert_eq!(Balances::free_balance(1), 0);
+		assert_eq!(Balances::free_balance(2), 130);
 
 		// Verify that TotalIssuance tracks balance removal when free balance is too low.
 		assert_eq!(<TotalIssuance<Test>>::get(), 130);
@@ -612,26 +612,26 @@ fn dust_moves_between_free_and_reserved() {
 			// Set balance to free and reserved at the existential deposit
 			assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
 			// Check balance
-			assert_eq!(Balances::free_balance(&1), 100);
-			assert_eq!(Balances::reserved_balance(&1), 0);
+			assert_eq!(Balances::free_balance(1), 100);
+			assert_eq!(Balances::reserved_balance(1), 0);
 
 			// Reserve some free balance
 			assert_ok!(Balances::reserve(&1, 50));
 			// Check balance, the account should be ok.
-			assert_eq!(Balances::free_balance(&1), 50);
-			assert_eq!(Balances::reserved_balance(&1), 50);
+			assert_eq!(Balances::free_balance(1), 50);
+			assert_eq!(Balances::reserved_balance(1), 50);
 
 			// Reserve the rest of the free balance
 			assert_ok!(Balances::reserve(&1, 50));
 			// Check balance, the account should be ok.
-			assert_eq!(Balances::free_balance(&1), 0);
-			assert_eq!(Balances::reserved_balance(&1), 100);
+			assert_eq!(Balances::free_balance(1), 0);
+			assert_eq!(Balances::reserved_balance(1), 100);
 
 			// Unreserve everything
 			Balances::unreserve(&1, 100);
 			// Check balance, all 100 should move to free_balance
-			assert_eq!(Balances::free_balance(&1), 100);
-			assert_eq!(Balances::reserved_balance(&1), 0);
+			assert_eq!(Balances::free_balance(1), 100);
+			assert_eq!(Balances::reserved_balance(1), 0);
 		});
 }
 
@@ -644,14 +644,14 @@ fn account_deleted_when_just_dust() {
 			// Set balance to free and reserved at the existential deposit
 			assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 50, 50));
 			// Check balance
-			assert_eq!(Balances::free_balance(&1), 50);
-			assert_eq!(Balances::reserved_balance(&1), 50);
+			assert_eq!(Balances::free_balance(1), 50);
+			assert_eq!(Balances::reserved_balance(1), 50);
 
 			// Reserve some free balance
 			let _ = Balances::slash(&1, 1);
 			// The account should be dead.
 			assert!(Balances::is_dead_account(&1));
-			assert_eq!(Balances::free_balance(&1), 0);
-			assert_eq!(Balances::reserved_balance(&1), 0);
+			assert_eq!(Balances::free_balance(1), 0);
+			assert_eq!(Balances::reserved_balance(1), 0);
 		});
 }

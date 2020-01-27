@@ -431,7 +431,7 @@ mod tests {
 		s.top = data.into_iter().collect();
 		sp_io::TestExternalities::new(s).execute_with(|| {
 			Balances::on_initialize(1);
-			assert_eq!(Balances::free_balance(&6), 60);
+			assert_eq!(Balances::free_balance(6), 60);
 			assert_eq!(Balances::usable_balance(&6), 30);
 			System::set_block_number(2);
 			assert_ok!(Vesting::vest(Origin::signed(6)));

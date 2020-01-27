@@ -1331,12 +1331,12 @@ mod tests {
 		s.top = data.into_iter().collect();
 		sp_io::TestExternalities::new(s).execute_with(|| {
 			Balances::on_initialize(1);
-			assert_eq!(Balances::free_balance(&1), 5);
-			assert_eq!(Balances::reserved_balance(&1), 5);
+			assert_eq!(Balances::free_balance(1), 5);
+			assert_eq!(Balances::reserved_balance(1), 5);
 			assert_eq!(Balances::usable_balance(&1), 2);
 			assert_eq!(Balances::usable_balance_for_fees(&1), 5);
-			assert_eq!(Balances::free_balance(&2), 20);
-			assert_eq!(Balances::reserved_balance(&2), 0);
+			assert_eq!(Balances::free_balance(2), 20);
+			assert_eq!(Balances::reserved_balance(2), 0);
 			assert_eq!(Balances::usable_balance(&2), 0);
 			assert_eq!(Balances::usable_balance_for_fees(&2), 17);
 			fast_forward_to(5);
@@ -1349,7 +1349,7 @@ mod tests {
 	fn params_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_eq!(Democracy::referendum_count(), 0);
-			assert_eq!(Balances::free_balance(&42), 0);
+			assert_eq!(Balances::free_balance(42), 0);
 			assert_eq!(Balances::total_issuance(), 210);
 		});
 	}
@@ -1415,7 +1415,7 @@ mod tests {
 			next_block();
 			next_block();
 
-			assert_eq!(Balances::free_balance(&42), 0);
+			assert_eq!(Balances::free_balance(42), 0);
 		});
 	}
 
@@ -1439,14 +1439,14 @@ mod tests {
 			);
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
-			assert_eq!(Balances::reserved_balance(&6), 12);
+			assert_eq!(Balances::reserved_balance(6), 12);
 
 			next_block();
 			next_block();
 
-			assert_eq!(Balances::reserved_balance(&6), 0);
-			assert_eq!(Balances::free_balance(&6), 60);
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::reserved_balance(6), 0);
+			assert_eq!(Balances::free_balance(6), 60);
+			assert_eq!(Balances::free_balance(42), 2);
 		});
 	}
 
@@ -1457,7 +1457,7 @@ mod tests {
 			PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
 			assert_ok!(Democracy::note_preimage(Origin::signed(6), set_balance_proposal(2)));
 
-			assert_eq!(Balances::reserved_balance(&6), 12);
+			assert_eq!(Balances::reserved_balance(6), 12);
 
 			next_block();
 			assert_noop!(
@@ -1467,8 +1467,8 @@ mod tests {
 			next_block();
 			assert_ok!(Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)));
 
-			assert_eq!(Balances::free_balance(&6), 60);
-			assert_eq!(Balances::reserved_balance(&6), 0);
+			assert_eq!(Balances::free_balance(6), 60);
+			assert_eq!(Balances::reserved_balance(6), 0);
 		});
 	}
 
@@ -1483,7 +1483,7 @@ mod tests {
 
 			PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
 			assert_ok!(Democracy::note_preimage(Origin::signed(6), set_balance_proposal(2)));
-			assert_eq!(Balances::reserved_balance(&6), 12);
+			assert_eq!(Balances::reserved_balance(6), 12);
 
 			next_block();
 			next_block();
@@ -1495,9 +1495,9 @@ mod tests {
 
 			next_block();
 			assert_ok!(Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)));
-			assert_eq!(Balances::reserved_balance(&6), 0);
-			assert_eq!(Balances::free_balance(&6), 48);
-			assert_eq!(Balances::free_balance(&5), 62);
+			assert_eq!(Balances::reserved_balance(6), 0);
+			assert_eq!(Balances::free_balance(6), 48);
+			assert_eq!(Balances::free_balance(5), 62);
 		});
 	}
 
@@ -1527,7 +1527,7 @@ mod tests {
 
 			next_block();
 
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::free_balance(42), 2);
 		});
 	}
 
@@ -1931,7 +1931,7 @@ mod tests {
 			// referendum passes and wait another two blocks for enactment.
 			fast_forward_to(6);
 
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::free_balance(42), 2);
 		});
 	}
 
@@ -2004,7 +2004,7 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (1, 0, 1));
 
 			fast_forward_to(6);
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::free_balance(42), 2);
 		});
 	}
 
@@ -2029,7 +2029,7 @@ mod tests {
 
 			fast_forward_to(6);
 
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::free_balance(42), 2);
 		});
 	}
 
@@ -2055,7 +2055,7 @@ mod tests {
 
 			fast_forward_to(6);
 
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::free_balance(42), 2);
 		});
 	}
 
@@ -2082,7 +2082,7 @@ mod tests {
 
 			fast_forward_to(6);
 
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::free_balance(42), 2);
 		});
 	}
 
@@ -2110,7 +2110,7 @@ mod tests {
 
 			fast_forward_to(6);
 
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::free_balance(42), 2);
 		});
 	}
 
@@ -2142,7 +2142,7 @@ mod tests {
 
 			fast_forward_to(6);
 
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::free_balance(42), 2);
 		});
 	}
 
@@ -2155,9 +2155,9 @@ mod tests {
 			assert_ok!(Democracy::second(Origin::signed(5), 0));
 			assert_ok!(Democracy::second(Origin::signed(5), 0));
 			assert_ok!(Democracy::second(Origin::signed(5), 0));
-			assert_eq!(Balances::free_balance(&1), 5);
-			assert_eq!(Balances::free_balance(&2), 15);
-			assert_eq!(Balances::free_balance(&5), 35);
+			assert_eq!(Balances::free_balance(1), 5);
+			assert_eq!(Balances::free_balance(2), 15);
+			assert_eq!(Balances::free_balance(5), 35);
 		});
 	}
 
@@ -2171,9 +2171,9 @@ mod tests {
 			assert_ok!(Democracy::second(Origin::signed(5), 0));
 			assert_ok!(Democracy::second(Origin::signed(5), 0));
 			fast_forward_to(3);
-			assert_eq!(Balances::free_balance(&1), 10);
-			assert_eq!(Balances::free_balance(&2), 20);
-			assert_eq!(Balances::free_balance(&5), 50);
+			assert_eq!(Balances::free_balance(1), 10);
+			assert_eq!(Balances::free_balance(2), 20);
+			assert_eq!(Balances::free_balance(5), 50);
 		});
 	}
 
@@ -2241,7 +2241,7 @@ mod tests {
 			assert_eq!(Democracy::tally(r2), (1, 0, 1));
 
 			next_block();
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::free_balance(42), 2);
 
 			assert_ok!(Democracy::vote(Origin::signed(1), r1, AYE));
 			assert_eq!(Democracy::voters_for(r1), vec![1]);
@@ -2249,7 +2249,7 @@ mod tests {
 			assert_eq!(Democracy::tally(r1), (1, 0, 1));
 
 			next_block();
-			assert_eq!(Balances::free_balance(&42), 3);
+			assert_eq!(Balances::free_balance(42), 3);
 		});
 	}
 
@@ -2272,7 +2272,7 @@ mod tests {
 			next_block();
 			next_block();
 
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::free_balance(42), 2);
 		});
 	}
 
@@ -2292,7 +2292,7 @@ mod tests {
 			next_block();
 			next_block();
 
-			assert_eq!(Balances::free_balance(&42), 0);
+			assert_eq!(Balances::free_balance(42), 0);
 		});
 	}
 
@@ -2315,7 +2315,7 @@ mod tests {
 			next_block();
 			next_block();
 
-			assert_eq!(Balances::free_balance(&42), 0);
+			assert_eq!(Balances::free_balance(42), 0);
 		});
 	}
 
@@ -2342,7 +2342,7 @@ mod tests {
 			next_block();
 			next_block();
 
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::free_balance(42), 2);
 		});
 	}
 
@@ -2366,11 +2366,11 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (21, 0, 21));
 
 			next_block();
-			assert_eq!(Balances::free_balance(&42), 0);
+			assert_eq!(Balances::free_balance(42), 0);
 
 			next_block();
 
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::free_balance(42), 2);
 		});
 	}
 
@@ -2392,14 +2392,14 @@ mod tests {
 			next_block();
 			next_block();
 
-			assert_eq!(Balances::free_balance(&42), 0);
+			assert_eq!(Balances::free_balance(42), 0);
 		});
 	}
 
 	#[test]
 	fn passing_low_turnout_voting_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_eq!(Balances::free_balance(&42), 0);
+			assert_eq!(Balances::free_balance(42), 0);
 			assert_eq!(Balances::total_issuance(), 210);
 
 			System::set_block_number(1);
@@ -2418,7 +2418,7 @@ mod tests {
 			next_block();
 			next_block();
 
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::free_balance(42), 2);
 		});
 	}
 
@@ -2478,7 +2478,7 @@ mod tests {
 			assert_eq!(Democracy::locks(4), Some(6));
 			assert_eq!(Balances::locks(5), vec![]);
 
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::free_balance(42), 2);
 
 			assert_noop!(Democracy::unlock(Origin::signed(1), 1), Error::<Test>::NotLocked);
 
@@ -2535,7 +2535,7 @@ mod tests {
 			next_block();
 			next_block();
 
-			assert_eq!(Balances::free_balance(&42), 2);
+			assert_eq!(Balances::free_balance(42), 2);
 		});
 	}
 }

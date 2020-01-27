@@ -307,7 +307,7 @@ fn refunds_unused_gas() {
 		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, Vec::new()));
 
 		// 2 * 135 - gas price multiplied by the call base fee.
-		assert_eq!(Balances::free_balance(&ALICE), 100_000_000 - (2 * 135));
+		assert_eq!(Balances::free_balance(ALICE), 100_000_000 - (2 * 135));
 	});
 }
 
@@ -1014,7 +1014,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		// Trigger rent must have no effect
 		assert!(trigger_call());
 		assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
-		assert_eq!(Balances::free_balance(&BOB), 100);
+		assert_eq!(Balances::free_balance(BOB), 100);
 
 		// Advance blocks
 		initialize_block(10);
@@ -1022,7 +1022,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		// Trigger rent through call
 		assert!(trigger_call());
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
-		assert_eq!(Balances::free_balance(&BOB), subsistence_threshold);
+		assert_eq!(Balances::free_balance(BOB), subsistence_threshold);
 
 		// Advance blocks
 		initialize_block(20);
@@ -1030,7 +1030,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		// Trigger rent must have no effect
 		assert!(trigger_call());
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
-		assert_eq!(Balances::free_balance(&BOB), subsistence_threshold);
+		assert_eq!(Balances::free_balance(BOB), subsistence_threshold);
 	});
 
 	// Allowance exceeded
@@ -1048,7 +1048,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		// Trigger rent must have no effect
 		assert!(trigger_call());
 		assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 100);
-		assert_eq!(Balances::free_balance(&BOB), 1_000);
+		assert_eq!(Balances::free_balance(BOB), 1_000);
 
 		// Advance blocks
 		initialize_block(10);
@@ -1057,7 +1057,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		assert!(trigger_call());
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 		// Balance should be initial balance - initial rent_allowance
-		assert_eq!(Balances::free_balance(&BOB), 900);
+		assert_eq!(Balances::free_balance(BOB), 900);
 
 		// Advance blocks
 		initialize_block(20);
@@ -1065,7 +1065,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		// Trigger rent must have no effect
 		assert!(trigger_call());
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
-		assert_eq!(Balances::free_balance(&BOB), 900);
+		assert_eq!(Balances::free_balance(BOB), 900);
 	});
 
 	// Balance reached and inferior to subsistence threshold
@@ -1083,12 +1083,12 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		// Trigger rent must have no effect
 		assert!(trigger_call());
 		assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
-		assert_eq!(Balances::free_balance(&BOB), 50 + Balances::minimum_balance());
+		assert_eq!(Balances::free_balance(BOB), 50 + Balances::minimum_balance());
 
 		// Transfer funds
 		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::transfer()));
 		assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
-		assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
+		assert_eq!(Balances::free_balance(BOB), Balances::minimum_balance());
 
 		// Advance blocks
 		initialize_block(10);
@@ -1096,7 +1096,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		// Trigger rent through call
 		assert!(trigger_call());
 		assert!(ContractInfoOf::<Test>::get(BOB).is_none());
-		assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
+		assert_eq!(Balances::free_balance(BOB), Balances::minimum_balance());
 
 		// Advance blocks
 		initialize_block(20);
@@ -1104,7 +1104,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		// Trigger rent must have no effect
 		assert!(trigger_call());
 		assert!(ContractInfoOf::<Test>::get(BOB).is_none());
-		assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
+		assert_eq!(Balances::free_balance(BOB), Balances::minimum_balance());
 	});
 }
 
