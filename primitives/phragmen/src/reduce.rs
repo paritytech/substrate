@@ -53,13 +53,12 @@ use sp_std::{
 	prelude::*,
 	collections::{btree_map::{Entry::*, BTreeMap}},
 };
-
-use crate::node::{Node, NodeRef, NodeRole, NodeId};
-
 use sp_runtime::traits::{Zero, Bounded};
-use crate::{ExtendedBalance, StakedAssignment};
+use crate::node::{Node, NodeRef, NodeRole, NodeId};
+use crate::{ExtendedBalance, StakedAssignment, IdentifierT};
 
-/// Map type used for caching. Can be easily swapped with HashMap.
+
+/// Map type used for reduce_4. Can be easily swapped with HashMap.
 type Map<A> = BTreeMap<(A, A), A>;
 
 /// Returns all combinations of size two in the collection `input` with no repetition.
@@ -78,7 +77,7 @@ fn combinations_2<T: Clone>(input: &[T]) -> Vec<(T, T)> {
 	comb
 }
 
-/// Returns the count of trailing common elements in a slice.
+/// Returns the count of trailing common elements in two slices.
 pub(crate) fn trailing_common<T: Eq>(t1: &[T], t2: &[T]) -> usize {
 	let mut t1_pointer = t1.len() - 1;
 	let mut t2_pointer = t2.len() - 1;
@@ -96,25 +95,63 @@ pub(crate) fn trailing_common<T: Eq>(t1: &[T], t2: &[T]) -> usize {
 	common
 }
 
+/// Merges two parent roots as described by the reduce algorithm.
+fn merge<A: IdentifierT>(
+	voter_root_path: Vec<NodeRef<A>>,
+	target_root_path: Vec<NodeRef<A>>
+) {
+	if voter_root_path.len() <= target_root_path.len() {
+		// iterate from last to beginning, skipping the first one. This asserts that
+		// indexing is always correct.
+		voter_root_path
+			.iter()
+			.take(voter_root_path.len() - 1) // take all except for last.
+			.enumerate()
+			.map(|(i, n)| (n, voter_root_path[i+1].clone()))
+			.for_each(|(voter, next)| {
+				Node::set_parent_of(&next, &voter)
+			});
+		Node::set_parent_of(&voter_root_path[0], &target_root_path[0]);
+	} else {
+		target_root_path
+			.iter()
+			.take(target_root_path.len() - 1) // take all except for last.
+			.enumerate()
+			.map(|(i, n)| (n, target_root_path[i+1].clone()))
+			.for_each(|(target, next)| {
+				Node::set_parent_of(&next, &target)
+			});
+		Node::set_parent_of(&target_root_path[0], &voter_root_path[0]);
+	}
+}
+
 /// Reduce only redundant edges with cycle length of 4.
 ///
+/// Returns the number of edges removed.
+///
+/// It is strictly assumed that the `who` attribute of all provided assignments are unique. The
+/// result will most likely be corrupt otherwise.
+///
 /// O(|E_w| ⋅ k).
-fn reduce_4<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
-	assignments: &mut Vec<StakedAssignment<AccountId>>,
+fn reduce_4<A: IdentifierT>(
+	assignments: &mut Vec<StakedAssignment<A>>,
 ) -> u32 {
 
-	let mut combination_map: Map<AccountId> = Map::new();
+	let mut combination_map: Map<A> = Map::new();
 	let mut num_changed: u32 = Zero::zero();
 
-	// NOTE: we have to use the old fashioned style loops here with manual indexing. Borrowing
-	// assignments will not work since then there is NO way to mutate it inside.
+	// we have to use the old fashioned loops here with manual indexing. Borrowing assignments will
+	// not work since then there is NO way to mutate it inside.
 	for assignment_index in 0..assignments.len() {
 		let who = assignments[assignment_index].who.clone();
 
 		// all combinations for this particular voter
-		let candidate_combinations = combinations_2(
-			&assignments[assignment_index].distribution.iter().map(|(t, _p)| t.clone()).collect::<Vec<AccountId>>(),
-		);
+		let distribution_ids = &assignments[assignment_index]
+			.distribution
+			.iter()
+			.map(|(t, _p)| t.clone())
+			.collect::<Vec<A>>();
+		let candidate_combinations = combinations_2(distribution_ids);
 
 		for (v1, v2) in candidate_combinations {
 			match combination_map.entry((v1.clone(), v2.clone())) {
@@ -125,7 +162,10 @@ fn reduce_4<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 					let other_who = entry.get_mut();
 
 					// double check if who is still voting for this pair. If not, it means that this
-					// pair is no longer valid and must have been removed in previous rounds.
+					// pair is no longer valid and must have been removed in previous rounds. The
+					// reason for this is subtle; candidate_combinations is created once while the
+					// inner loop might remove some edges. Note that if count() > 2, the we have
+					// duplicates.
 					if assignments[assignment_index].distribution
 						.iter()
 						.filter(|(t, _)| *t == v1 || *t == v2)
@@ -137,29 +177,34 @@ fn reduce_4<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 					// check if other_who voted for the same pair v1, v2.
 					let maybe_other_assignments = assignments.iter().find(|a| a.who == *other_who);
 					if maybe_other_assignments.is_none() {
-						// This combination is not a cycle.
 						continue;
 					}
-					let other_assignment = maybe_other_assignments.expect("value is checked to be 'Some'");
+					let other_assignment = maybe_other_assignments
+						.expect("value is checked to be 'Some'");
 
 					// Collect potential cycle votes
-					let mut other_cycle_votes: Vec<(AccountId, ExtendedBalance)> = Vec::with_capacity(2);
-					other_assignment.distribution.iter().for_each(|(t, w)| {
-						if *t == v1 || *t == v2  { other_cycle_votes.push((t.clone(), *w)); }
-					});
+					let mut other_cycle_votes = other_assignment.distribution
+						.iter()
+						.filter_map(|(t, w)| {
+							if *t == v1 || *t == v2  { Some((t.clone(), *w)) }
+							else { None }
+						})
+						.collect::<Vec<(A, ExtendedBalance)>>();
 
-					// This is not a cycle. Replace and continue.
 					let other_votes_count = other_cycle_votes.len();
-					// TODO Duplicates will fuck us up here.
+
+					// If the length is more than 2, then we have identified duplicates. For now, we
+					// just skip. Later on we can early exit and stop processing this data since it
+					// is corrupt anyhow.
 					debug_assert!(other_votes_count <= 2);
 
 					if other_votes_count < 2 {
-						// Not a cycle. Replace and move on.
+						// This is not a cycle. Replace and continue.
 						*other_who = who.clone();
 						continue;
-					} else {
+					} else if other_votes_count == 2 {
 						// This is a cycle.
-						let mut who_cycle_votes: Vec<(AccountId, ExtendedBalance)> = Vec::with_capacity(2);
+						let mut who_cycle_votes: Vec<(A, ExtendedBalance)> = Vec::with_capacity(2);
 						assignments[assignment_index].distribution.iter().for_each(|(t, w)| {
 							if *t == v1 || *t == v2  { who_cycle_votes.push((t.clone(), *w)); }
 						});
@@ -171,9 +216,6 @@ fn reduce_4<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 							other_cycle_votes.swap(0, 1);
 						}
 
-						debug_assert_eq!(who_cycle_votes[0].0, other_cycle_votes[0].0);
-						debug_assert_eq!(who_cycle_votes[1].0, other_cycle_votes[1].0);
-
 						// Find min
 						let mut min_value: ExtendedBalance = Bounded::max_value();
 						let mut min_index: usize = 0;
@@ -184,7 +226,7 @@ fn reduce_4<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 							.map(|(index, (t, w))| {
 								if *w <= min_value { min_value = *w; min_index = index; }
 								(t.clone(), *w)
-							}).collect::<Vec<(AccountId, ExtendedBalance)>>();
+							}).collect::<Vec<(A, ExtendedBalance)>>();
 
 						// min was in the first part of the chained iters
 						let mut increase_indices: Vec<usize> = Vec::new();
@@ -214,6 +256,9 @@ fn reduce_4<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 						let mut remove_indices: Vec<usize> = Vec::with_capacity(1);
 						increase_indices.into_iter().for_each(|i| {
 							let voter = if i < 2 { who.clone() } else { other_who.clone() };
+							// Note: so this is pretty ambiguous. We should only look for one
+							// assignment that meets this criteria and if we find multiple then that
+							// is a corrupt input. Same goes for the next block.
 							assignments.iter_mut().filter(|a| a.who == voter).for_each(|ass| {
 								ass.distribution
 									.iter_mut()
@@ -222,24 +267,24 @@ fn reduce_4<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 										let next_value = ass.distribution[idx].1.saturating_add(min_value);
 										ass.distribution[idx].1 = next_value;
 									});
-								});
 							});
-							decrease_indices.into_iter().for_each(|i| {
-								let voter = if i < 2 { who.clone() } else { other_who.clone() };
-								assignments.iter_mut().filter(|a| a.who == voter).for_each(|ass| {
-									ass.distribution
-									.iter_mut()
-									.position(|(t, _)| *t == cycle[i].0)
-									.map(|idx| {
-										let next_value = ass.distribution[idx].1.saturating_sub(min_value);
-										if next_value.is_zero() {
-											ass.distribution.remove(idx);
-											remove_indices.push(i);
-											num_changed += 1;
-										} else {
-											ass.distribution[idx].1 = next_value;
-										}
-									});
+						});
+						decrease_indices.into_iter().for_each(|i| {
+							let voter = if i < 2 { who.clone() } else { other_who.clone() };
+							assignments.iter_mut().filter(|a| a.who == voter).for_each(|ass| {
+								ass.distribution
+								.iter_mut()
+								.position(|(t, _)| *t == cycle[i].0)
+								.map(|idx| {
+									let next_value = ass.distribution[idx].1.saturating_sub(min_value);
+									if next_value.is_zero() {
+										ass.distribution.remove(idx);
+										remove_indices.push(i);
+										num_changed += 1;
+									} else {
+										ass.distribution[idx].1 = next_value;
+									}
+								});
 							});
 						});
 
@@ -251,7 +296,10 @@ fn reduce_4<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 							(false, true) => { *other_who = who.clone(); },
 							(true, false) => {}, // nothing, other_who can stay there.
 							(true, true) => { entry.remove(); }, // remove and don't replace
-							_ => { debug_assert!(false, "this should be unreachable"); },
+							(false, false) => {
+								// Neither of the edges was removed? impossible.
+								debug_assert!(false, "Duplicate voter (or other corrupt input).");
+							},
 						}
 					}
 				}
@@ -262,41 +310,19 @@ fn reduce_4<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 	num_changed
 }
 
-/// Merges two parent roots as described by the reduce algorithm.
-fn merge<A: Eq + Clone + sp_std::fmt::Debug>(voter_root_path: Vec<NodeRef<A>>, target_root_path: Vec<NodeRef<A>>) {
-	if voter_root_path.len() <= target_root_path.len() {
-		// iterate from last to beginning, skipping the first one. This asserts that
-		// indexing is always correct.
-		voter_root_path
-			.iter()
-			.take(voter_root_path.len() - 1) // take all except for last.
-			.enumerate()
-			.map(|(i, n)| (n, voter_root_path[i+1].clone()))
-			.for_each(|(voter, next)| {
-				Node::set_parent_of(&next, &voter)
-			});
-		Node::set_parent_of(&voter_root_path[0], &target_root_path[0]);
-	} else {
-		target_root_path
-			.iter()
-			.take(target_root_path.len() - 1) // take all except for last.
-			.enumerate()
-			.map(|(i, n)| (n, target_root_path[i+1].clone()))
-			.for_each(|(target, next)| {
-				Node::set_parent_of(&next, &target)
-			});
-		Node::set_parent_of(&target_root_path[0], &voter_root_path[0]);
-	}
-}
-
 /// Reduce all redundant edges from the edge weight graph.
 ///
+/// Returns the number of edges removed.
+///
+/// It is strictly assumed that the `who` attribute of all provided assignments are unique. The
+/// result will most likely be corrupt otherwise.
+///
 /// O(|Ew| ⋅ m)
-fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
-	assignments: &mut Vec<StakedAssignment<AccountId>>,
+fn reduce_all<A: IdentifierT>(
+	assignments: &mut Vec<StakedAssignment<A>>,
 ) -> u32 {
 	let mut num_changed: u32 = Zero::zero();
-	let mut tree: BTreeMap<NodeId<AccountId>, NodeRef<AccountId>> = BTreeMap::new();
+	let mut tree: BTreeMap<NodeId<A>, NodeRef<A>> = BTreeMap::new();
 
 	// NOTE: This code can heavily use an index cache. Looking up a pair of (voter, target) in the
 	// assignments happens numerous times and and we can save time. For now it is written as such
@@ -369,15 +395,15 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 				let cycle =
 					target_root_path.iter().take(target_root_path.len() - common_count + 1).cloned()
 					.chain(voter_root_path.iter().take(voter_root_path.len() - common_count).rev().cloned())
-					.collect::<Vec<NodeRef<AccountId>>>();
+					.collect::<Vec<NodeRef<A>>>();
 				// a cycle's length shall always be multiple of two.
 				debug_assert_eq!(cycle.len() % 2, 0);
 
 				// find minimum of cycle.
 				let mut min_value: ExtendedBalance = Bounded::max_value();
 				// The voter and the target pair that create the min edge.
-				let mut min_target: AccountId = Default::default();
-				let mut min_voter: AccountId = Default::default();
+				let mut min_target: A = Default::default();
+				let mut min_voter: A = Default::default();
 				// The index of the min in opaque cycle list.
 				let mut min_index = 0usize;
 				// 1 -> next // 0 -> prev
@@ -387,7 +413,7 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 				let prev_index = |i| { if i > 0 { i - 1 } else { cycle.len() - 1 } };
 				for i in 0..cycle.len() {
 					if cycle[i].borrow().id.role == NodeRole::Voter {
-						// NOTE: sadly way too many clones since I don't want to make AccountId: Copy
+						// NOTE: sadly way too many clones since I don't want to make A: Copy
 						let current = cycle[i].borrow().id.who.clone();
 						let next = cycle[next_index(i)].borrow().id.who.clone();
 						let prev = cycle[prev_index(i)].borrow().id.who.clone();
@@ -542,11 +568,13 @@ fn reduce_all<AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug>(
 ///
 /// Returns the number of edges removed.
 ///
+/// It is strictly assumed that the `who` attribute of all provided assignments are unique. The
+/// result will most likely be corrupt otherwise. Furthermore, if the _distribution vector_ contains
+/// duplicate ids, only the first instance is ever updates.
+///
 /// O(min{ |Ew| ⋅ k + m3 , |Ew| ⋅ m })
-pub fn reduce<
-	AccountId: Clone + Eq + Default + Ord + sp_std::fmt::Debug,
->(
-	assignments: &mut Vec<StakedAssignment<AccountId>>,
+pub fn reduce<A: IdentifierT>(
+	assignments: &mut Vec<StakedAssignment<A>>,
 ) -> u32 where {
 	let mut num_changed = reduce_4(assignments);
 	num_changed += reduce_all(assignments);
@@ -953,5 +981,83 @@ mod tests {
 
 
 
+	}
+
+	#[test]
+	#[should_panic]
+	fn should_deal_with_duplicates_voter() {
+		let mut assignments = vec![
+			StakedAssignment {
+				who: 1,
+				distribution: vec![
+					(10, 10),
+					(20, 10)
+				]
+			},
+			StakedAssignment {
+				who: 1,
+				distribution: vec![
+					(10, 15),
+					(20, 5),
+				],
+			},
+			StakedAssignment {
+				who: 2,
+				distribution: vec![
+					(10, 15),
+					(20, 15)
+				],
+			},
+		];
+
+		reduce(&mut assignments);
+	}
+
+	#[test]
+	fn should_deal_with_duplicates_target() {
+		let mut assignments = vec![
+			StakedAssignment {
+				who: 1,
+				distribution: vec![
+					(10, 15),
+					(20, 5),
+				],
+			},
+			StakedAssignment {
+				who: 2,
+				distribution: vec![
+					(10, 15),
+					(20, 15),
+					// duplicate
+					(10, 1),
+					// duplicate
+					(20, 1),
+				],
+			},
+		];
+
+		reduce(&mut assignments);
+
+		assert_eq!(
+			assignments,
+			vec![
+				StakedAssignment {
+					who: 1,
+					distribution: vec![
+						(10, 20),
+					],
+				},
+				StakedAssignment {
+					who: 2,
+					distribution: vec![
+						(10, 10),
+						(20, 20),
+						// duplicate votes are silently ignored.
+						(10, 1),
+						(20, 1),
+					],
+				},
+			],
+		)
 	}
 }

@@ -285,11 +285,14 @@ use sp_staking::{
 use sp_runtime::{Serialize, Deserialize};
 use frame_system::{
 	self as system, ensure_signed, ensure_root, ensure_none,
-	offchain::{SubmitSignedTransaction, CreateTransaction, SubmitUnsignedTransaction, PublicOf, SignerOf, SignatureOf, SignAndSubmitTransaction, Signer},
+	offchain::{SubmitSignedTransaction, SubmitUnsignedTransaction, SignerOf, SignatureOf, Signer},
 };
 use sp_application_crypto::RuntimeAppPublic;
 
-use sp_phragmen::{ExtendedBalance, Assignment, StakedAssignment};
+use sp_phragmen::{
+	ExtendedBalance, Assignment, StakedAssignment,
+	generate_compact_solution_type,
+};
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 // ------------- IMPORTANT NOTE: must be the same as `generate_compact_solution_type`.
@@ -592,7 +595,7 @@ impl<BlockNumber> Default for ElectionStatus<BlockNumber> {
 }
 
 // ------------- IMPORTANT NOTE: must be the same as `MAX_NOMINATIONS`.
-sp_phragmen_compact::generate_compact_solution_type!(pub CompactAssignments, 16);
+generate_compact_solution_type!(pub CompactAssignments, 16);
 
 pub type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -707,11 +710,7 @@ pub trait Trait: frame_system::Trait {
 	/// A transaction submitter.
 	type SubmitTransaction:
 		SubmitSignedTransaction<Self, <Self as Trait>::Call> +
-		SubmitUnsignedTransaction<Self, <Self as Trait>::Call> +
-		SignAndSubmitTransaction<Self, <Self as Trait>::Call>;
-
-	/// The key type. Must be the same as given to `SubmitTransaction`. TODO: we can probably extract it from it
-	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
+		SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 }
 
 /// Mode of era-forcing.
@@ -1013,7 +1012,8 @@ decl_module! {
 						#[cfg(not(feature = "signed"))]
 						{
 							// TODO: this call is really not needed, we can do it manually instead
-							// of `can_sign_with`. TODO: we could use some error handling here.
+							// of `can_sign_with`.
+							// TODO: we could use some error handling here.
 							let local_keys = T::SubmitTransaction::find_all_local_keys();
 							// loop for at least one account in the validators to sign with.
 							local_keys
@@ -1021,7 +1021,7 @@ decl_module! {
 								.enumerate()
 								.find(|(_, (acc, _))| current_elected.contains(&acc))
 								.map(|(index, (_, pubkey))| {
-									let signature_payload = (winners.clone(), compact.clone()).encode();
+									let signature_payload = (winners.clone(), compact.clone(), index as u32).encode();
 									let signature = <SignerOf<T, <T as Trait>::Call, T::SubmitTransaction>>::sign(pubkey, &signature_payload).unwrap();
 									let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
 										winners,
@@ -1110,7 +1110,7 @@ decl_module! {
 			compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
 			validator_index: u32,
 			// already checked.
-			_signature: SignatureOf<T, <T as Trait>::Call, T::SubmitTransaction>,
+			_signature: SignatureOf<T, <T as Trait>::Call, <T::SubmitTransaction as SubmitSignedTransaction<T, <T as Trait>::Call>>::SignAndSubmit>,
 		) {
 			ensure_none(origin)?;
 			Self::check_and_replace_solution(winners, compact_assignments)?
@@ -2362,10 +2362,14 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			// have ANY solutions. Otherwise each block will get a LOT of these.
 
 			// check signature
-			// let payload = (winners, compact);
-			// let signature_valid = payload.using_encoded(|encoded_payload| {
-			// 	authority_id.verify(&encoded_heartbeat, &signature)
-			// });
+			let payload = (winners, compact, validator_index);
+			let validator_id = Self::current_elected().get(*validator_index as usize).unwrap();
+
+
+			let signature_valid = payload.using_encoded(|encoded_payload| {
+				// validator_id need to be converted to a key type.
+				validator_id.verify(&payload, &signature)
+			});
 
 			// if !signature_valid {
 			// 	return InvalidTransaction::BadProof.into();

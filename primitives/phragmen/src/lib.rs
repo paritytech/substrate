@@ -33,7 +33,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{prelude::*, collections::btree_map::BTreeMap};
+use sp_std::{prelude::*, collections::btree_map::BTreeMap, fmt::Debug};
 use sp_runtime::{helpers_128bit::multiply_by_rational, Perbill, Rational128, RuntimeDebug};
 use sp_runtime::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating, Bounded};
 
@@ -50,6 +50,12 @@ pub use reduce::reduce;
 
 // re-export the compact macro
 pub use sp_phragmen_compact::generate_compact_solution_type;
+
+// an aggregator trait for a generic type of a voter/target identifier. This usually maps to
+// substrate's account id.
+pub trait IdentifierT: Clone + Eq + Default + Ord + Debug {}
+
+impl<T: Clone + Eq + Default + Ord + Debug> IdentifierT for T {}
 
 /// A type in which performing operations on balances and stakes of candidates and voters are safe.
 ///

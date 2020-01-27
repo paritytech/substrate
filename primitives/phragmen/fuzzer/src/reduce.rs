@@ -24,7 +24,7 @@
 //! `cargo hfuzz run-debug reduce hfuzz_workspace/reduce/*.fuzz`.
 
 use honggfuzz::fuzz;
-use sp_phragmen::{StakedAssignment, ExtendedBalance, build_support_map, reduce::reduce};
+use sp_phragmen::{StakedAssignment, ExtendedBalance, build_support_map, reduce};
 use rand::{self, Rng};
 
 type Balance = u128;
@@ -42,7 +42,8 @@ fn main() {
 	 			10,
 	 			6,
 	 		);
-	 		reduce_and_compare(&assignments, &winners);
+			reduce_and_compare(&assignments, &winners);
+			dbg!("Spme");
 	 	});
 	}
 }
@@ -111,7 +112,6 @@ fn reduce_and_compare(
 ) {
 	let mut altered_assignment = assignment.clone();
 	let num_changed = reduce(&mut altered_assignment);
-	// TODO: give a report of how many edges were removed on average.
 	assert_assignments_equal(
 		winners,
 		&assignment,
