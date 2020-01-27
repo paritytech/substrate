@@ -356,10 +356,10 @@ where
 			});
 		}
 
-		// Assumption: pay_rent doesn't collide with overlay because
-		// pay_rent will be done on first call and dest contract and balance
+		// Assumption: `collect_rent` doesn't collide with overlay because
+		// `collect_rent` will be done on first call and destination contract and balance
 		// cannot be changed before the first call
-		let contract_info = rent::pay_rent::<T>(&dest);
+		let contract_info = rent::collect_rent::<T>(&dest);
 
 		// Calls to dead contracts always fail.
 		if let Some(ContractInfo::Tombstone(_)) = contract_info {
