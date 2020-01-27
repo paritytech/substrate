@@ -112,10 +112,11 @@ pub async fn seal_new_block<B, SC, CB, E, T, P>(
 		let mut proposer = env.init(&header)
 			.map_err(|err| Error::StringError(format!("{}", err))).await?;
 		let id = inherent_data_provider.create_inherent_data()?;
+		let inherents_len = id.len();
 		let proposal = proposer.propose(id, Default::default(), Duration::from_secs(MAX_PROPOSAL_DURATION), false.into())
 			.map_err(|err| Error::StringError(format!("{}", err))).await?;
 
-		if proposal.block.extrinsics().is_empty() && !create_empty {
+		if proposal.block.extrinsics() == inherents_len && !create_empty {
 			return Err(Error::EmptyTransactionPool)
 		}
 
