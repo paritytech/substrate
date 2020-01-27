@@ -357,7 +357,7 @@ where
 		}
 
 		// Assumption: `collect_rent` doesn't collide with overlay because
-		// `collect_rent` will be done on first call and dest contract and balance
+		// `collect_rent` will be done on first call and destination contract and balance
 		// cannot be changed before the first call
 		let contract_info = rent::collect_rent::<T>(&dest);
 
