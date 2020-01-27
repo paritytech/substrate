@@ -2771,25 +2771,25 @@ mod offchain_phragmen {
 	fn score_comparison_is_lexicographical() {
 		// only better in the fist parameter, worse in the other two ✅
 		assert_eq!(
-			Staking::is_score_better([10, 20, 30], [12, 10, 35]),
+			offchain_election::is_score_better([10, 20, 30], [12, 10, 35]),
 			true,
 		);
 
 		// worse in the first, better in the other two ❌
 		assert_eq!(
-			Staking::is_score_better([10, 20, 30], [9, 30, 10]),
+			offchain_election::is_score_better([10, 20, 30], [9, 30, 10]),
 			false,
 		);
 
 		// equal in the first, the second one dictates.
 		assert_eq!(
-			Staking::is_score_better([10, 20, 30], [10, 25, 40]),
+			offchain_election::is_score_better([10, 20, 30], [10, 25, 40]),
 			true,
 		);
 
 		// equal in the first two, the last one dictates.
 		assert_eq!(
-			Staking::is_score_better([10, 20, 30], [10, 20, 40]),
+			offchain_election::is_score_better([10, 20, 30], [10, 20, 40]),
 			false,
 		);
 	}

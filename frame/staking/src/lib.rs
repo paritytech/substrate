@@ -252,13 +252,14 @@ mod mock;
 mod tests;
 mod migration;
 mod slashing;
+mod offchain_election;
 
 pub mod inflation;
 
-use sp_std::{prelude::*, result, cmp::Ordering};
+use sp_std::{prelude::*, result, convert::TryInto};
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
-	decl_module, decl_event, decl_storage, ensure, decl_error, debug, Parameter,
+	decl_module, decl_event, decl_storage, ensure, decl_error, debug,
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
@@ -271,10 +272,10 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
-		SimpleArithmetic, EnsureOrigin, Member,
+		SimpleArithmetic, EnsureOrigin, Verify,
 	},
 	transaction_validity::{
-		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionPriority,
+		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction, TransactionPriority,
 	},
 };
 use sp_staking::{
@@ -285,9 +286,8 @@ use sp_staking::{
 use sp_runtime::{Serialize, Deserialize};
 use frame_system::{
 	self as system, ensure_signed, ensure_root, ensure_none,
-	offchain::{SubmitSignedTransaction, SubmitUnsignedTransaction, SignerOf, SignatureOf, Signer},
+	offchain::{SubmitSignedTransaction, SubmitUnsignedTransaction, SignAndSubmitTransaction},
 };
-use sp_application_crypto::RuntimeAppPublic;
 
 use sp_phragmen::{
 	ExtendedBalance, Assignment, StakedAssignment,
@@ -709,8 +709,11 @@ pub trait Trait: frame_system::Trait {
 
 	/// A transaction submitter.
 	type SubmitTransaction:
+		SignAndSubmitTransaction<Self, <Self as Trait>::Call> +
 		SubmitSignedTransaction<Self, <Self as Trait>::Call> +
 		SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
+
+	type KeyType: sp_runtime::RuntimeAppPublic + sp_runtime::traits::Member + frame_support::Parameter;
 }
 
 /// Mode of era-forcing.
@@ -733,7 +736,6 @@ impl Default for Forcing {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
-
 		/// The ideal number of staking participants.
 		pub ValidatorCount get(fn validator_count) config(): u32;
 		/// Minimum number of staking participants before emergency conditions are imposed.
@@ -949,9 +951,9 @@ decl_module! {
 		///
 		/// 1. potential storage migration
 		/// 2. sets `ElectionStatus` to `Triggered(now)` where `now` is the block number at which
-		/// the election window has opened. The offchain worker, if applicable, will execute at the
-		/// end of the current block. `submit_election_solution` will accept solutions from this block
-		/// until the end of the era.
+		///    the election window has opened. The offchain worker, if applicable, will execute at
+		///    the end of the current block. `submit_election_solution` will accept solutions from
+		///    this block until the end of the era.
 		fn on_initialize(now: T::BlockNumber) {
 			Self::ensure_storage_upgraded();
 			if
@@ -979,71 +981,17 @@ decl_module! {
 			}
 		}
 
+		/// Check if the current block number is the one at which the election window has been set
+		/// to open. If so, it runs the offchain worker code.
 		fn offchain_worker(now: T::BlockNumber) {
+			// runs only once.
 			if Self::era_election_status() == ElectionStatus::<T::BlockNumber>::Open(now) {
-				// TODO: well this is outdated, neh? need to get the correct one from session.
-				let current_elected = Self::current_elected();
-
-				// Check if current node can sign with any of the keys which correspond to a
-				// validator. This basically says: proceed if the node is a validator.
-				if T::SubmitTransaction::can_sign_with(Some(current_elected.clone())) {
-					if let Some(sp_phragmen::PhragmenResult {
-						winners,
-						assignments,
-					}) = Self::do_phragmen() {
-						let winners: Vec<T::AccountId> = winners.into_iter().map(|(w, _)| w).collect();
-						// convert into staked. This is needed to be able to reduce.
-						let mut staked: Vec<StakedAssignment<T::AccountId>> = assignments
-							.into_iter()
-							.map(|a| a.into_staked::<_, _, T::CurrencyToVote>(Self::slashable_balance_of))
-							.collect();
-						// reduce the assignments. This will remove some additional edges.
-						sp_phragmen::reduce(&mut staked);
-						// compact encode the assignment.
-						let compact = <CompactAssignments<T::AccountId, ExtendedBalance>>::from_staked(staked);
-
-						#[cfg(feature = "signed")]
-						{
-							// TODO: maybe we want to send from just one of them? we'll see.
-							let call: <T as Trait>::Call = Call::submit_election_solution(winners, compact).into();
-							let _result = T::SubmitTransaction::submit_signed_from(call, current_elected);
-							dbg!(_result);
-						}
-						#[cfg(not(feature = "signed"))]
-						{
-							// TODO: this call is really not needed, we can do it manually instead
-							// of `can_sign_with`.
-							// TODO: we could use some error handling here.
-							let local_keys = T::SubmitTransaction::find_all_local_keys();
-							// loop for at least one account in the validators to sign with.
-							local_keys
-								.into_iter()
-								.enumerate()
-								.find(|(_, (acc, _))| current_elected.contains(&acc))
-								.map(|(index, (_, pubkey))| {
-									let signature_payload = (winners.clone(), compact.clone(), index as u32).encode();
-									let signature = <SignerOf<T, <T as Trait>::Call, T::SubmitTransaction>>::sign(pubkey, &signature_payload).unwrap();
-									let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
-										winners,
-										compact,
-										index as u32,
-										signature,
-									).into();
-									let _result = T::SubmitTransaction::submit_unsigned(call);
-								});
-						}
-					} else {
-						debug::native::warn!(
-							target: "staking",
-							"Ran offchain phragmen but none was returned",
-						);
-					}
-				} else {
+				let _ = offchain_election::compute_offchain_election::<T>().map_err(|e|
 					debug::native::warn!(
 						target: "staking",
-						"Have no key to sign this with",
-					);
-				}
+						"{:?}", e
+					)
+				);
 			}
 		}
 
@@ -1108,11 +1056,12 @@ decl_module! {
 			origin,
 			winners: Vec<T::AccountId>,
 			compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
-			validator_index: u32,
-			// already checked.
-			_signature: SignatureOf<T, <T as Trait>::Call, <T::SubmitTransaction as SubmitSignedTransaction<T, <T as Trait>::Call>>::SignAndSubmit>,
+			// already used and checked.
+			_validator_index: u32,
+			_signature: offchain_election::SignatureOf<T>,
 		) {
 			ensure_none(origin)?;
+			Encode::encode(&_signature);
 			Self::check_and_replace_solution(winners, compact_assignments)?
 		}
 
@@ -1539,25 +1488,6 @@ impl<T: Trait> Module<T> {
 		era_length >= session_per_era
 	}
 
-	/// Compares two sets of phragmen scores based on desirability and returns true if `that` is
-	/// better `this`.
-	///
-	/// Evaluation is done in a lexicographic manner.
-	fn is_score_better(this: [ExtendedBalance; 3], that: [ExtendedBalance; 3]) -> bool {
-		match that
-			.iter()
-			.enumerate()
-			.map(|(i, e)| e.cmp(&this[i]))
-			.collect::<Vec<Ordering>>()
-			.as_slice()
-		{
-			[Ordering::Greater, _, _] => true,
-			[Ordering::Equal, Ordering::Greater, _] => true,
-			[Ordering::Equal, Ordering::Equal, Ordering::Less] => true,
-			_ => false
-		}
-	}
-
 	// MUTABLES (DANGEROUS)
 
 	/// Update the ledger for a controller. This will also update the stash lock. The lock will
@@ -1699,7 +1629,7 @@ impl<T: Trait> Module<T> {
 			// OPTIMIZATION: we can read first the score and then the rest to do less decoding.
 			// if the local score is better in any of the three parameters.
 			ensure!(
-				Self::is_score_better(score, submitted_score),
+				offchain_election::is_score_better(score, submitted_score),
 				Error::<T>::PhragmenWeakSubmission,
 			)
 		}
@@ -2352,9 +2282,11 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 
 // TODO: do we need BoundToRuntimeAppPublic stuff?
 #[allow(deprecated)]
-impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
+impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T>
+where
+	offchain_election::SignatureOf<T>: Verify<Signer = offchain_election::PublicOf<T>>,
+{
 	type Call = Call<T>;
-
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		if let Call::submit_election_solution_unsigned(winners, compact, validator_index, signature) = call {
 			// TODO: since unsigned is only for validators, and it is not increasing the block
@@ -2363,26 +2295,25 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 
 			// check signature
 			let payload = (winners, compact, validator_index);
-			let validator_id = Self::current_elected().get(*validator_index as usize).unwrap();
-
+			let current_validators = T::SessionInterface::validators();
+			let validator_id = current_validators.get(*validator_index as usize)
+				.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(0u8).into()))?;
 
 			let signature_valid = payload.using_encoded(|encoded_payload| {
-				// validator_id need to be converted to a key type.
-				validator_id.verify(&payload, &signature)
+				signature.verify(encoded_payload, &validator_id)
 			});
 
-			// if !signature_valid {
-			// 	return InvalidTransaction::BadProof.into();
-			// }
+			if !signature_valid {
+				return InvalidTransaction::BadProof.into();
+			}
 
-			// Ok(ValidTransaction {
-			// 	priority: TransactionPriority::max_value(),
-			// 	requires: vec![],
-			// 	provides: vec![(current_session, authority_id).encode()],
-			// 	longevity: TryInto::<u64>::try_into(T::SessionDuration::get() / 2.into()).unwrap_or(64_u64),
-			// 	propagate: true,
-			// })
-			TransactionValidity::Ok(ValidTransaction::default())
+			Ok(ValidTransaction {
+				priority: TransactionPriority::max_value(),
+				requires: vec![],
+				provides: vec![],
+				longevity: TryInto::<u64>::try_into(T::ElectionLookahead::get()).unwrap_or(150_u64),
+				propagate: true,
+			})
 		} else {
 			InvalidTransaction::Call.into()
 		}
