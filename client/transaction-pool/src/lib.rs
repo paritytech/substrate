@@ -37,9 +37,8 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor, SimpleArithmetic, Extrinsic},
 };
 use sp_transaction_pool::{
-	TransactionPool, PoolStatus, ImportNotificationStream,
-	TxHash, TransactionFor, TransactionStatusStreamFor, BlockHash,
-	MaintainedTransactionPool, PoolFuture,
+	TransactionPool, PoolStatus, ImportNotificationStream, TxHash, TransactionFor,
+	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent, BlockHash
 };
 use wasm_timer::Instant;
 
@@ -115,7 +114,6 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 				}
 			)),
 		}
-
 	}
 
 	/// Gets shared reference to the underlying pool.
@@ -162,7 +160,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		&self,
 		at: &BlockId<Self::Block>,
 		xt: TransactionFor<Self>,
-	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error> {
+	) -> PoolResult<Box<TransactionStatusStreamFor<Self>>> {
 		let at = *at;
 		let pool = self.pool.clone();
 
@@ -214,7 +212,7 @@ enum RevalidationStatus<N> {
 
 enum RevalidationStrategy<N> {
 	Always,
-	Light(RevalidationStatus<N>)
+	Light(RevalidationStatus<N>),
 }
 
 struct RevalidationAction {
@@ -241,7 +239,7 @@ impl<N: Clone + Copy + SimpleArithmetic> RevalidationStrategy<N> {
 				revalidate: status.next_required(
 					block,
 					revalidate_time_period,
-					revalidate_block_period
+					revalidate_block_period,
 				),
 				resubmit: false,
 				revalidate_amount: None,
@@ -275,7 +273,7 @@ impl<N: Clone + Copy + SimpleArithmetic> RevalidationStatus<N> {
 					revalidate_block_period.map(|period| block + period),
 				);
 				false
-			},
+			}
 			Self::Scheduled(revalidate_at_time, revalidate_at_block) => {
 				let is_required = revalidate_at_time.map(|at| Instant::now() >= at).unwrap_or(false)
 					|| revalidate_at_block.map(|at| block >= at).unwrap_or(false);
@@ -283,87 +281,96 @@ impl<N: Clone + Copy + SimpleArithmetic> RevalidationStatus<N> {
 					*self = Self::InProgress;
 				}
 				is_required
-			},
+			}
 			Self::InProgress => false,
 		}
 	}
 }
 
 impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
-where
-	Block: BlockT,
-	PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
+	where
+		Block: BlockT,
+		PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash, Error=error::Error>,
 {
-	fn maintain(&self, id: &BlockId<Self::Block>, retracted: &[BlockHash<Self>])
-		-> Pin<Box<dyn Future<Output=()> + Send>>
-	{
-		let id = id.clone();
-		let pool = self.pool.clone();
-		let api = self.api.clone();
+	fn maintain(&self, event: &ChainEvent<Self>) -> Pin<Box<dyn Future<Output=()> + Send>> {
+		match event {
+			ChainEvent::Canonical {
+				id, retracted, ..
+			} => {
+				let id = id.clone();
+				let pool = self.pool.clone();
+				let api = self.api.clone();
 
-		let block_number = match api.block_id_to_number(&id) {
-			Ok(Some(number)) => number,
-			_ => {
-				log::trace!(target: "txqueue", "Skipping chain event - no number for that block {:?}", id);
-				return Box::pin(ready(()));
+				let block_number = match api.block_id_to_number(&id) {
+					Ok(Some(number)) => number,
+					_ => {
+						log::trace!(target: "txqueue", "Skipping chain event - no number for that block {:?}", id);
+						return Box::pin(ready(()));
+					}
+				};
+
+				let next_action = self.revalidation_strategy.lock().next(
+					block_number,
+					Some(std::time::Duration::from_secs(60)),
+					Some(20.into()),
+				);
+				let revalidation_strategy = self.revalidation_strategy.clone();
+				let retracted = retracted.clone();
+
+				async move {
+					// We don't query block if we won't prune anything
+					if !pool.status().is_empty() {
+						let hashes = api.block_body(&id).await
+							.unwrap_or_else(|e| {
+								log::warn!("Prune known transactions: error request {:?}!", e);
+								None
+							})
+							.unwrap_or_default()
+							.into_iter()
+							.map(|tx| pool.hash_of(&tx))
+							.collect::<Vec<_>>();
+
+						if let Err(e) = pool.prune_known(&id, &hashes) {
+							log::error!("Cannot prune known in the pool {:?}!", e);
+						}
+					}
+
+					if next_action.resubmit {
+						let mut resubmit_transactions = Vec::new();
+
+						for retracted_hash in retracted {
+							let block_transactions = api.block_body(&BlockId::hash(retracted_hash.clone())).await
+								.unwrap_or_else(|e| {
+									log::warn!("Failed to fetch block body {:?}!", e);
+									None
+								})
+								.unwrap_or_default()
+								.into_iter()
+								.filter(|tx| tx.is_signed().unwrap_or(true));
+
+							resubmit_transactions.extend(block_transactions);
+						}
+						if let Err(e) = pool.submit_at(&id, resubmit_transactions, true).await {
+							log::debug!(
+								target: "txpool",
+								"[{:?}] Error re-submitting transactions: {:?}", id, e
+							)
+						}
+					}
+
+					if next_action.revalidate {
+						if let Err(e) = pool.revalidate_ready(&id, next_action.revalidate_amount).await {
+							log::warn!("Revalidate ready failed {:?}", e);
+						}
+					}
+
+					revalidation_strategy.lock().clear();
+				}.boxed()
 			}
-		};
-
-		let next_action = self.revalidation_strategy.lock().next(
-			block_number,
-			Some(std::time::Duration::from_secs(60)),
-			Some(20.into()),
-		);
-		let revalidation_strategy = self.revalidation_strategy.clone();
-		let retracted = retracted.to_vec();
-
-		async move {
-			// We don't query block if we won't prune anything
-			if !pool.status().is_empty() {
-				let hashes = api.block_body(&id).await
-					.unwrap_or_else(|e| {
-						log::warn!("Prune known transactions: error request {:?}!", e);
-						None
-					})
-				.unwrap_or_default()
-				.into_iter()
-				.map(|tx| pool.hash_of(&tx))
-				.collect::<Vec<_>>();
-
-				if let Err(e) = pool.prune_known(&id, &hashes) {
-					log::error!("Cannot prune known in the pool {:?}!", e);
-				}
+			ChainEvent::Finalized { hash } => {
+				self.pool().finalized(hash);
+				Box::pin(ready(()))
 			}
-
-			if next_action.resubmit {
-				let mut resubmit_transactions = Vec::new();
-
-				for retracted_hash in retracted {
-					let block_transactions = api.block_body(&BlockId::hash(retracted_hash.clone())).await
-						.unwrap_or_else(|e| {
-							log::warn!("Failed to fetch block body {:?}!", e);
-							None
-						})
-						.unwrap_or_default()
-						.into_iter()
-						.filter(|tx| tx.is_signed().unwrap_or(true));
-
-					resubmit_transactions.extend(block_transactions);
-				}
-				if let Err(e) = pool.submit_at(&id, resubmit_transactions, true).await {
-					log::debug!(target: "txpool",
-						"[{:?}] Error re-submitting transactions: {:?}", id, e
-					)
-				}
-			}
-
-			if next_action.revalidate {
-				if let Err(e) = pool.revalidate_ready(&id, next_action.revalidate_amount).await {
-					log::warn!("Revalidate ready failed {:?}", e);
-				}
-			}
-
-			revalidation_strategy.lock().clear();
-		}.boxed()
+		}
 	}
 }

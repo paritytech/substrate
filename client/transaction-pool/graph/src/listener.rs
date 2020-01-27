@@ -17,29 +17,30 @@
 
 use std::{
 	collections::HashMap,
-	fmt,
 	hash,
 };
 use serde::Serialize;
-use crate::watcher;
-use sp_runtime::traits;
+use crate::{watcher, ChainApi, BlockHash};
 use log::{debug, trace, warn};
+use sp_runtime::traits;
 
 /// Extrinsic pool default listener.
-pub struct Listener<H: hash::Hash + Eq, H2> {
-	watchers: HashMap<H, watcher::Sender<H, H2>>
+pub struct Listener<H: hash::Hash + Eq, C: ChainApi> {
+	watchers: HashMap<H, watcher::Sender<H, BlockHash<C>>>,
+	finality_watchers: HashMap<BlockHash<C>, Vec<watcher::Sender<H, BlockHash<C>>>>,
 }
 
-impl<H: hash::Hash + Eq, H2> Default for Listener<H, H2> {
+impl<H: hash::Hash + Eq, C: ChainApi> Default for Listener<H, C> {
 	fn default() -> Self {
 		Listener {
 			watchers: Default::default(),
+			finality_watchers: Default::default(),
 		}
 	}
 }
 
-impl<H: hash::Hash + traits::Member + Serialize, H2: Clone + fmt::Debug> Listener<H, H2> {
-	fn fire<F>(&mut self, hash: &H, fun: F) where F: FnOnce(&mut watcher::Sender<H, H2>) {
+impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
+	fn fire<F>(&mut self, hash: &H, fun: F) where F: FnOnce(&mut watcher::Sender<H, BlockHash<C>>) {
 		let clean = if let Some(h) = self.watchers.get_mut(hash) {
 			fun(h);
 			h.is_done()
@@ -55,7 +56,7 @@ impl<H: hash::Hash + traits::Member + Serialize, H2: Clone + fmt::Debug> Listene
 	/// Creates a new watcher for given verified extrinsic.
 	///
 	/// The watcher can be used to subscribe to lifecycle events of that extrinsic.
-	pub fn create_watcher(&mut self, hash: H) -> watcher::Watcher<H, H2> {
+	pub fn create_watcher(&mut self, hash: H) -> watcher::Watcher<H, BlockHash<C>> {
 		let sender = self.watchers.entry(hash.clone()).or_insert_with(watcher::Sender::default);
 		sender.new_watcher(hash)
 	}
@@ -101,8 +102,24 @@ impl<H: hash::Hash + traits::Member + Serialize, H2: Clone + fmt::Debug> Listene
 	}
 
 	/// Transaction was pruned from the pool.
-	pub fn pruned(&mut self, header_hash: H2, tx: &H) {
-		debug!(target: "txpool", "[{:?}] Pruned at {:?}", tx, header_hash);
-		self.fire(tx, |watcher| watcher.in_block(header_hash))
+	pub fn pruned(&mut self, block_hash: BlockHash<C>, tx: &H) {
+		debug!(target: "txpool", "[{:?}] Pruned at {:?}", tx, block_hash);
+		self.fire(tx, |watcher| watcher.in_block(block_hash.clone()));
+
+		if let Some(sender) = self.watchers.remove(tx) {
+			let senders = self.finality_watchers
+				.entry(block_hash.clone())
+				.or_insert_with(Vec::new);
+			senders.push(sender);
+		}
+	}
+
+	/// Notify all watchers that transactions in the block with hash have been finalized
+	pub fn finalized(&mut self, block_hash: &BlockHash<C>) {
+		if let Some(senders) = self.finality_watchers.remove(block_hash) {
+			for mut sender in senders {
+				sender.finalized();
+			}
+		}
 	}
 }

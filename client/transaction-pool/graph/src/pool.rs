@@ -454,6 +454,11 @@ impl<B: ChainApi> Pool<B> {
 		(hash, validity)
 	}
 
+	/// Notify all watchers that transactions in the block with hash been finalized
+	pub fn finalized(&self, block_hash: &BlockHash<B>) {
+		self.validated_pool.finalized(block_hash);
+	}
+
 	/// Get ready transaction by hash, if it present in the pool.
 	pub fn ready_transaction(&self, hash: &ExHash<B>) -> Option<TransactionFor<B>> {
 		self.validated_pool.ready_by_hash(hash)

@@ -16,12 +16,11 @@
 
 use std::{
 	collections::{HashSet, HashMap},
-	fmt,
 	hash,
 	sync::Arc,
 };
 
-use crate::base_pool as base;
+use crate::{base_pool as base, BlockHash};
 use crate::listener::Listener;
 use crate::rotator::PoolRotator;
 use crate::watcher::Watcher;
@@ -39,7 +38,7 @@ use sp_transaction_pool::{error, PoolStatus};
 use wasm_timer::Instant;
 
 use crate::base_pool::PruneStatus;
-use crate::pool::{EventStream, Options, ChainApi, BlockHash, ExHash, ExtrinsicFor, TransactionFor};
+use crate::pool::{EventStream, Options, ChainApi, ExHash, ExtrinsicFor, TransactionFor};
 
 /// Pre-validated transaction. Validated pool only accepts transactions wrapped in this enum.
 #[derive(Debug)]
@@ -65,7 +64,7 @@ pub type ValidatedTransactionFor<B> = ValidatedTransaction<
 pub(crate) struct ValidatedPool<B: ChainApi> {
 	api: Arc<B>,
 	options: Options,
-	listener: RwLock<Listener<ExHash<B>, BlockHash<B>>>,
+	listener: RwLock<Listener<ExHash<B>, B>>,
 	pool: RwLock<base::BasePool<
 		ExHash<B>,
 		ExtrinsicFor<B>,
@@ -148,7 +147,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 			ValidatedTransaction::Invalid(hash, err) => {
 				self.rotator.ban(&Instant::now(), std::iter::once(hash));
 				Err(err.into())
-			},
+			}
 			ValidatedTransaction::Unknown(hash, err) => {
 				self.listener.write().invalid(&hash, false);
 				Err(err.into())
@@ -207,11 +206,11 @@ impl<B: ChainApi> ValidatedPool<B> {
 					.pop()
 					.expect("One extrinsic passed; one result returned; qed")
 					.map(|_| watcher)
-			},
+			}
 			ValidatedTransaction::Invalid(hash, err) => {
 				self.rotator.ban(&Instant::now(), std::iter::once(hash));
 				Err(err.into())
-			},
+			}
 			ValidatedTransaction::Unknown(_, err) => Err(err.into()),
 		}
 	}
@@ -287,10 +286,10 @@ impl<B: ChainApi> ValidatedPool<B> {
 									for tx in removed {
 										final_statuses.insert(tx.hash.clone(), Status::Dropped);
 									}
-								},
+								}
 								base::Imported::Future { .. } => {
 									final_statuses.insert(hash, Status::Future);
-								},
+								}
 							},
 							Err(err) => {
 								// we do not want to fail if single transaction import has failed
@@ -303,11 +302,11 @@ impl<B: ChainApi> ValidatedPool<B> {
 									err,
 								);
 								final_statuses.insert(hash, Status::Failed);
-							},
+							}
 						},
 						ValidatedTransaction::Invalid(_, _) | ValidatedTransaction::Unknown(_, _) => {
 							final_statuses.insert(hash, Status::Failed);
-						},
+						}
 					}
 				}
 
@@ -344,7 +343,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 			.into_iter()
 			.map(|existing_in_pool| existing_in_pool
 				.map(|transaction| transaction.provides.iter().cloned()
-				.collect()))
+					.collect()))
 			.collect()
 	}
 
@@ -492,7 +491,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	pub fn remove_invalid(&self, hashes: &[ExHash<B>]) -> Vec<TransactionFor<B>> {
 		// early exit in case there is no invalid transactions.
 		if hashes.is_empty() {
-			return vec![]
+			return vec![];
 		}
 
 		debug!(target: "txpool", "Removing invalid transactions: {:?}", hashes);
@@ -521,14 +520,19 @@ impl<B: ChainApi> ValidatedPool<B> {
 	pub fn status(&self) -> PoolStatus {
 		self.pool.read().status()
 	}
+
+	/// Notify all watchers that transactions in the block with hash been finalized
+	pub fn finalized(&self, block_hash: &BlockHash<B>) {
+		self.listener.write().finalized(block_hash);
+	}
 }
 
-fn fire_events<H, H2, Ex>(
-	listener: &mut Listener<H, H2>,
+fn fire_events<H, B, Ex>(
+	listener: &mut Listener<H, B>,
 	imported: &base::Imported<H, Ex>,
 ) where
 	H: hash::Hash + Eq + traits::Member + Serialize,
-	H2: Clone + fmt::Debug,
+	B: ChainApi,
 {
 	match *imported {
 		base::Imported::Ready { ref promoted, ref failed, ref removed, ref hash } => {
@@ -542,9 +546,9 @@ fn fire_events<H, H2, Ex>(
 			for p in promoted {
 				listener.ready(p, None);
 			}
-		},
+		}
 		base::Imported::Future { ref hash } => {
 			listener.future(hash)
-		},
+		}
 	}
 }

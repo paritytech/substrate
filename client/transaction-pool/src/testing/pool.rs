@@ -15,14 +15,14 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::*;
-use sc_transaction_graph::Pool;
 use futures::executor::block_on;
+use txpool::{self, Pool};
 use sp_runtime::{
 	generic::BlockId,
 	transaction_validity::ValidTransaction,
 };
 use substrate_test_runtime_client::{
-	runtime::{Block, Hash, Index},
+	runtime::{Block, Hash, Index, Header},
 	AccountKeyring::*,
 };
 use substrate_test_runtime_transaction_pool::{TestApi, uxt};
@@ -33,6 +33,16 @@ fn pool() -> Pool<TestApi> {
 
 fn maintained_pool() -> BasicPool<TestApi, Block> {
 	BasicPool::new(Default::default(), std::sync::Arc::new(TestApi::with_alice_nonce(209)))
+}
+
+fn header(number: u64) -> Header {
+	Header {
+		number,
+		digest: Default::default(),
+		extrinsics_root:  Default::default(),
+		parent_hash: Default::default(),
+		state_root: Default::default(),
+	}
 }
 
 #[test]
@@ -157,8 +167,20 @@ fn should_prune_old_during_maintenance() {
 	assert_eq!(pool.status().ready, 1);
 
 	pool.api.push_block(1, vec![xt.clone()]);
+	let header = Header {
+		number: 1,
+		digest: Default::default(),
+		extrinsics_root:  Default::default(),
+		parent_hash: Default::default(),
+		state_root: Default::default(),
+	};
+	let event = ChainEvent::Canonical {
+		id: BlockId::number(1),
+		retracted: vec![],
+		header,
+	};
 
-	block_on(pool.maintain(&BlockId::number(1), &[]));
+	block_on(pool.maintain(&event));
 	assert_eq!(pool.status().ready, 0);
 }
 
@@ -173,9 +195,21 @@ fn should_revalidate_during_maintenance() {
 	assert_eq!(pool.status().ready, 2);
 	assert_eq!(pool.api.validation_requests().len(), 2);
 
+	let header = Header {
+		number: 1,
+		digest: Default::default(),
+		extrinsics_root:  Default::default(),
+		parent_hash: Default::default(),
+		state_root: Default::default(),
+	};
 	pool.api.push_block(1, vec![xt1.clone()]);
+	let event = ChainEvent::Canonical {
+		id: BlockId::number(1),
+		retracted: vec![],
+		header,
+	};
 
-	block_on(pool.maintain(&BlockId::number(1), &[]));
+	block_on(pool.maintain(&event));
 	assert_eq!(pool.status().ready, 1);
 	// test that pool revalidated transaction that left ready and not included in the block
 	assert_eq!(pool.api.validation_requests().len(), 3);
@@ -193,8 +227,13 @@ fn should_resubmit_from_retracted_during_maintaince() {
 
 	pool.api.push_block(1, vec![]);
 	pool.api.push_fork_block(retracted_hash, vec![xt.clone()]);
+	let event = ChainEvent::Canonical {
+		id: BlockId::Number(1),
+		header: header(1),
+		retracted: vec![retracted_hash]
+	};
 
-	block_on(pool.maintain(&BlockId::number(1), &[retracted_hash]));
+	block_on(pool.maintain(&event));
 	assert_eq!(pool.status().ready, 1);
 }
 
@@ -212,7 +251,13 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 	pool.api.push_fork_block(retracted_hash, vec![xt.clone()]);
 	pool.api.add_invalid(&xt);
 
-	block_on(pool.maintain(&BlockId::number(1), &[retracted_hash]));
+	let event = ChainEvent::Canonical {
+		id: BlockId::Number(1),
+		header: header(1),
+		retracted: vec![retracted_hash]
+	};
+
+	block_on(pool.maintain(&event));
 	assert_eq!(pool.status().ready, 0);
 }
 
