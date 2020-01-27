@@ -34,7 +34,7 @@ const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
 /// Check whether a node name is considered as valid
 pub fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	let name = _name.to_string();
-	if name.chars().count() >= NODE_NAME_MAX_LENGTH {
+	if name.chars().count() >= crate::NODE_NAME_MAX_LENGTH {
 		return Err("Node name too long");
 	}
 

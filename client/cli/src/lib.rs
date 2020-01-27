@@ -556,7 +556,7 @@ where
 	config.name = match (cli.name.as_ref(), keyring) {
 		(Some(name), _) => name.to_string(),
 		(_, Some(keyring)) => keyring.to_string(),
-		(None, None) => node_key::generate_node_name(),
+		(None, None) => generate_node_name(),
 	};
 	match node_key::is_node_name_valid(&config.name) {
 		Ok(_) => (),
