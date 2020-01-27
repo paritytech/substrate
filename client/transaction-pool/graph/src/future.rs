@@ -19,7 +19,6 @@ use std::{
 	fmt,
 	hash,
 	sync::Arc,
-	time,
 };
 
 use sp_core::hexdisplay::HexDisplay;

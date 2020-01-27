@@ -19,7 +19,6 @@ use std::{
 	fmt,
 	hash,
 	sync::Arc,
-	time,
 };
 
 use crate::base_pool as base;
