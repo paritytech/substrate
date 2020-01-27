@@ -127,7 +127,11 @@ fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
 		)
 }
 
-/// Gets the struct from the command line arguments.  Print the
+/// Helper function used to parse the command line arguments. This is the equivalent of
+/// `structopt`'s `from_args()` except that it takes a `VersionInfo` argument to provide the name of
+/// the application, author, "about" and version.
+///
+/// Gets the struct from the command line arguments. Print the
 /// error message and quit the program in case of failure.
 pub fn from_args<T>(version: &VersionInfo) -> T
 where
@@ -136,6 +140,10 @@ where
 	from_iter::<T, _>(&mut std::env::args_os(), version)
 }
 
+/// Helper function used to parse the command line arguments. This is the equivalent of
+/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
+/// the application, author, "about" and version.
+///
 /// Gets the struct from any iterator such as a `Vec` of your making.
 /// Print the error message and quit the program in case of failure.
 pub fn from_iter<T, I>(iter: I, version: &VersionInfo) -> T
@@ -161,6 +169,10 @@ where
 	T::from_clap(&app.get_matches_from(iter))
 }
 
+/// Helper function used to parse the command line arguments. This is the equivalent of
+/// `structopt`'s `try_from_iter()` except that it takes a `VersionInfo` argument to provide the
+/// name of the application, author, "about" and version.
+///
 /// Gets the struct from any iterator such as a `Vec` of your making.
 /// Print the error message and quit the program in case of failure.
 ///
