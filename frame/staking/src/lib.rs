@@ -259,7 +259,7 @@ pub mod inflation;
 use sp_std::{prelude::*, result, convert::{TryInto, From}};
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
-	decl_module, decl_event, decl_storage, ensure, decl_error, debug,
+	decl_module, decl_event, decl_storage, ensure, decl_error, debug, Parameter,
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
@@ -272,7 +272,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
-		SimpleArithmetic, EnsureOrigin
+		SimpleArithmetic, EnsureOrigin, Member, OpaqueKeys
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction, TransactionPriority,
@@ -646,15 +646,7 @@ impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T whe
 	fn keys<KeyT: RuntimeAppPublic + Decode + sp_std::fmt::Debug>()
 		-> Vec<(<T as frame_system::Trait>::AccountId, Option<KeyT>)>
 	{
-		use sp_runtime::traits::OpaqueKeys;
-		// dbg!(<T as pallet_session::Trait>::Keys::key_ids());
-		// dbg!(<KeyT as RuntimeAppPublic>::ID);
 		Self::validators().iter().map(|v| {
-			// let opkeys = <pallet_session::Module<T>>::load_keys(&v).unwrap();
-			// println!("Loaded stuff {:?} {:?}",
-			// 	opkeys.get::<KeyT>(<KeyT as RuntimeAppPublic>::ID),
-			// 	v
-			// );
 			let maybe_key = <pallet_session::Module<T>>::load_keys(&v)
 				.and_then(|opk| opk.get(KeyT::ID));
 			(v.clone(), maybe_key)
@@ -734,8 +726,7 @@ pub trait Trait: frame_system::Trait {
 		SubmitSignedTransaction<Self, <Self as Trait>::Call> +
 		SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
-	type KeyType: From<offchain_election::PublicOf<Self>> +
-		RuntimeAppPublic + sp_runtime::traits::Member + frame_support::Parameter;
+	type KeyType: RuntimeAppPublic + Member + Parameter;
 }
 
 /// Mode of era-forcing.

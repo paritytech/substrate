@@ -74,73 +74,60 @@ pub(super) fn is_score_better(this: [ExtendedBalance; 3], that: [ExtendedBalance
 
 /// The internal logic of the offchain worker of this module.
 pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElectionError> {
-	let validators = T::SessionInterface::validators();
+	let validator_keys = T::SessionInterface::keys::<T::KeyType>();
+	let local_keys = T::KeyType::all();
 
-	// Check if current node can sign with any of the keys which correspond to a
-	// validator. This basically says: proceed if the node is a validator.
-	if T::SubmitTransaction::can_sign_with(Some(validators.clone())) {
-		let PhragmenResult {
-			winners,
-			assignments,
-		} = <Module<T>>::do_phragmen().ok_or(OffchainElectionError::FailedElection)?;
+	if let Some((index, pubkey)) = local_keys
+		.into_iter()
+		.enumerate()
+		.find(|(_, k)|
+			validator_keys.iter().find(|(_acc, maybe_vk)|
+				maybe_vk.as_ref().map(|vk| vk == k).unwrap_or(false)
+			).is_some()
+		) {
+			// k is a local key who is also among the validators.
+			let PhragmenResult {
+				winners,
+				assignments,
+			} = <Module<T>>::do_phragmen().ok_or(OffchainElectionError::FailedElection)?;
 
-		// convert winners into just account ids.
-		let winners: Vec<T::AccountId> = winners.into_iter().map(|(w, _)| w).collect();
+			// convert winners into just account ids.
+			let winners: Vec<T::AccountId> = winners.into_iter().map(|(w, _)| w).collect();
 
-		// convert into staked. This is needed to be able to reduce.
-		let mut staked: Vec<StakedAssignment<T::AccountId>> = assignments
-			.into_iter()
-			.map(|a| a.into_staked::<_, _, T::CurrencyToVote>(<Module<T>>::slashable_balance_of))
-			.collect();
-
-		// reduce the assignments. This will remove some additional edges.
-		reduce(&mut staked);
-
-		// compact encode the assignment.
-		let compact = <CompactAssignments<T::AccountId, ExtendedBalance>>::from_staked(staked);
-
-		#[cfg(feature = "signed")]
-		{
-			// TODO: maybe we want to send from just one of them? we'll see.
-			let call: <T as Trait>::Call = Call::submit_election_solution(winners, compact).into();
-			let _result = T::SubmitTransaction::submit_signed_from(call, validators);
-			// dbg!(_result);
-		}
-		#[cfg(not(feature = "signed"))]
-		{
-			// TODO: this call is really not needed, we can do it manually instead
-			// of `can_sign_with`.
-			// TODO: we could use some error handling here.
-			let local_keys = T::SubmitTransaction::find_all_local_keys();
-			// loop for at least one account in the validators to sign with.
-			local_keys
+			// convert into staked. This is needed to be able to reduce.
+			let mut staked: Vec<StakedAssignment<T::AccountId>> = assignments
 				.into_iter()
-				.find_map(|(acc, pubkey)|
-					validators
-						.iter()
-						.position(|a| *a == acc)
-						.map(|idx| (idx, (acc, pubkey)))
-				).map(|(index, (_acc, pubkey))| {
-					// println!("Signing with {:?} {:?} {:?}", &_acc, &validators, index);
-					let signature_payload =
-						(winners.clone(), compact.clone(), index as u32).encode();
-					let pubkey: T::KeyType = pubkey.into();
-					// dbg!(&pubkey);
-					let signature = pubkey.sign(&signature_payload).unwrap();
-					let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
-						winners,
-						compact,
-						index as u32,
-						signature,
-					)
-					.into();
-					let _result = T::SubmitTransaction::submit_unsigned(call);
-					// dbg!(_result);
-				});
-		}
-	} else {
-		Err(OffchainElectionError::NoSigningKey)?;
-	}
+				.map(|a| a.into_staked::<_, _, T::CurrencyToVote>(<Module<T>>::slashable_balance_of))
+				.collect();
 
-	Ok(())
+			// reduce the assignments. This will remove some additional edges.
+			reduce(&mut staked);
+
+			// compact encode the assignment.
+			let compact = <CompactAssignments<T::AccountId, ExtendedBalance>>::from_staked(staked);
+
+			#[cfg(feature = "signed")]
+			{
+				unimplemented!();
+			}
+
+			#[cfg(not(feature = "signed"))]
+			{
+				let signature_payload =
+					(winners.clone(), compact.clone(), index as u32).encode();
+				let signature = pubkey.sign(&signature_payload).unwrap();
+				let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
+					winners,
+					compact,
+					index as u32,
+					signature,
+				)
+				.into();
+				let _result = T::SubmitTransaction::submit_unsigned(call);
+			}
+
+			Ok(())
+		} else {
+			Err(OffchainElectionError::NoSigningKey)
+		}
 }

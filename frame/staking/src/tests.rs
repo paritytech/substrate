@@ -2723,10 +2723,10 @@ mod offchain_phragmen {
 		let (offchain, _state) = TestOffchainExt::new();
 		let (pool, state) = TestTransactionPoolExt::new();
 		let keystore = KeyStore::new();
-		// keystore.write().sr25519_generate_new(<DummyT as sp_application_crypto::AppKey>::ID, Some(&format!("{}/staking1", PHRASE))).unwrap();
+
 		keystore.write().insert_unknown(
 			<DummyT as sp_application_crypto::AppKey>::ID,
-			"news slush supreme milk chapter athlete soap sausage put clutch what kitten/staking1",
+			&format!("{}/staking{}", mock::PHRASE, 11),
 			dummy_sr25519::dummy_key_for(11).as_ref(),
 		);
 		ext.register_extension(OffchainExt::new(offchain));

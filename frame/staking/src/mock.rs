@@ -46,6 +46,8 @@ pub(crate) type AccountIndex = u64;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u64;
 
+pub const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
+
 /// Simple structure that exposes how u64 currency can be represented as... u64.
 pub struct CurrencyToVoteHandler;
 impl Convert<u64, u64> for CurrencyToVoteHandler {
@@ -339,9 +341,11 @@ pub(crate) mod dummy_sr25519 {
 		use sp_core::Pair;
 		let mut raw_key = [0u8; 32];
 		raw_key[0] = x as u8;
-		let generic_key = sp_core::sr25519::Pair::from_seed(&raw_key).public();
+		let generic_key = sp_core::sr25519::Pair::from_string(
+			&format!("{}/staking{}", super::PHRASE, x),
+			None,
+		).unwrap().public();
 		generic_key.into()
-
 	}
 }
 
