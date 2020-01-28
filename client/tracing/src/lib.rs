@@ -52,7 +52,6 @@ use tracing_core::{
 	span::{Attributes, Id, Record},
 	subscriber::Subscriber
 };
-
 use grafana_data_source::{self, record_metrics};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use lazy_static::lazy_static;
@@ -66,14 +65,103 @@ pub fn push_data(module: &str, name: &str, time: u128, result: &str) {
 	timings.push((module.to_string(), name.to_string(), time, result.to_string()));
 }
 
+#[derive(Debug)]
+struct Stats {
+	/// Total execution time in nanoseconds.
+	total_time: u128,
+	/// Total number of executions.
+	total_executions: u128,
+	/// Minimum execution time.
+	min_time: u128,
+	/// Maximum execution time.
+	max_time: u128,
+	/// All execution times.
+	times: Vec<u128>,
+}
+
+impl Default for Stats {
+	fn default() -> Self {
+		Self {
+			total_time: 0,
+			total_executions: 0,
+			min_time: std::u128::MAX,
+			max_time: std::u128::MIN,
+			times: vec![],
+		}
+	}
+}
+
 pub fn print_data() {
-	let mut timings = TIMINGS.lock();
-	timings.sort();
+	let timings = TIMINGS.lock();
+	let mut stats: HashMap<String, Stats> = HashMap::new();
+
 	for (module, name, time, result) in timings.iter() {
 		let mut full_name = module.clone();
+		let time = *time;
 		full_name.push_str("::");
 		full_name.push_str(name);
+
 		println!("{:<name_width$} {:>time_width$} {}", full_name, time, result, name_width=40, time_width=10);
+
+		match stats.get_mut(&full_name) {
+			Some(stat) => {
+				stat.total_time += time;
+				stat.total_executions += 1;
+				if time > stat.max_time {
+					stat.max_time = time;
+				}
+				if time < stat.min_time {
+					stat.min_time = time;
+				}
+				stat.times.push(time);
+			}
+			None => {
+				let mut stat = Stats::default();
+				stat.total_time = time;
+				stat.total_executions = 1;
+				stat.max_time = time;
+				stat.min_time = time;
+				stat.times.push(time);
+				stats.insert(full_name, stat);
+			}
+		};
+	}
+
+	println!("\n\nSummary:");
+	println!("\n{:<name_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$}\n",
+		"Transaction",
+		"Executions",
+		"Total",
+		"Mean",
+		"Min",
+		"Max",
+		"Median",
+		"StdDev",
+		"Variance",
+		name_width=40,
+		time_width=20,
+	);
+
+	for (tx_name, stat) in stats.iter() {
+		// TODO: use another library for stats, statistical?
+		let median = format!("{:.2}", stats::median(stat.times.iter().cloned()).expect("failed to compute median"));
+		let mean = format!("{:.2}", stats::mean(stat.times.iter().cloned()));
+		let stddev = format!("{:.2}", stats::stddev(stat.times.iter().cloned()));
+		let variance = format!("{:.2}", stats::variance(stat.times.iter().cloned()));
+		
+		println!("{:<name_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$} {:>time_width$}",
+			tx_name,
+			stat.total_executions,
+			stat.total_time,
+			mean,
+			stat.min_time,
+			stat.max_time,
+			median,
+			stddev,
+			variance,
+			name_width=40,
+			time_width=20,
+		);
 	}
 }
 
