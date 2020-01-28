@@ -765,8 +765,6 @@ impl<'a> ParseAndPrepareBenchmark<'a> {
 			print!("Input is Empty");
 		}
 
-		pallet_identity::run_benchmarks();
-
 		Ok(())
 	}
 }
