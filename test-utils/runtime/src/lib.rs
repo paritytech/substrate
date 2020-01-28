@@ -40,7 +40,7 @@ use sp_runtime::{
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
+		GetNodeBlockType, GetRuntimeBlockType, NumberFor, Verify, IdentityLookup,
 	},
 };
 use sp_version::RuntimeVersion;
@@ -654,7 +654,10 @@ cfg_if! {
 				}
 
 				fn submit_report_equivocation_extrinsic(
-					_equivocation_report: sp_finality_grandpa::EquivocationReport<Hash, BlockNumber>,
+					_equivocation_report: sp_finality_grandpa::EquivocationReport<
+						<Block as BlockT>::Hash,
+						NumberFor<Block>,
+					>,
 					_key_owner_proof: Vec<u8>,
 				) -> Option<()> {
 					None

@@ -15,7 +15,8 @@ use sp_runtime::{
 	impl_opaque_keys, MultiSignature, KeyTypeId,
 };
 use sp_runtime::traits::{
-	BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto, IdentifyAccount
+	BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto,
+	IdentifyAccount, NumberFor,
 };
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -384,7 +385,10 @@ impl_runtime_apis! {
 		}
 
 		fn submit_report_equivocation_extrinsic(
-			_equivocation_report: fg_primitives::EquivocationReport<Hash, BlockNumber>,
+			_equivocation_report: fg_primitives::EquivocationReport<
+				<Block as BlockT>::Hash,
+				NumberFor<Block>,
+			>,
 			_key_owner_proof: Vec<u8>,
 		) -> Option<()> {
 			None
