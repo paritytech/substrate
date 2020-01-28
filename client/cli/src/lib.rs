@@ -57,7 +57,7 @@ use params::{
 	NetworkConfigurationParams, MergeParameters, TransactionPoolParams,
 	NodeKeyParams, NodeKeyType, Cors, CheckBlockCmd,
 };
-pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy, BenchmarkRuntimeParams};
+pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy};
 pub use traits::GetSharedParams;
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
@@ -1053,8 +1053,6 @@ where
 	)?;
 
 	fill_transaction_pool_configuration(&mut config, cli.pool_config)?;
-
-	run_benchmark(cli.benchmark_config)?;
 
 	config.dev_key_seed = cli.keyring.account
 		.map(|a| format!("//{}", a)).or_else(|| {
