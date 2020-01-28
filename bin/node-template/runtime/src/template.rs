@@ -8,18 +8,18 @@
 /// For more guidance on Substrate modules, see the example module
 /// https://github.com/paritytech/substrate/blob/master/frame/example/src/lib.rs
 
-use frame_support::{decl_module, decl_storage, decl_event, dispatch};
+use frame_support::{decl_module, decl_storage, decl_event, decl_error, dispatch};
 use system::ensure_signed;
 
-/// The module's configuration trait.
+/// The pallet's configuration trait.
 pub trait Trait: system::Trait {
-	// TODO: Add other types and constants required configure this module.
+	// Add other types and constants required to configure this pallet.
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-// This module's storage items.
+// This pallet's storage items.
 decl_storage! {
 	trait Store for Module<T: Trait> as TemplateModule {
 		// Just a dummy storage item.
@@ -29,48 +29,81 @@ decl_storage! {
 	}
 }
 
-// The module's dispatchable functions.
-decl_module! {
-	/// The module declaration.
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		// Initializing events
-		// this is needed only if you are using events in your module
-		fn deposit_event() = default;
-
-		// Just a dummy entry point.
-		// function that can be called by the external world as an extrinsics call
-		// takes a parameter of the type `AccountId`, stores it and emits an event
-		pub fn do_something(origin, something: u32) -> dispatch::DispatchResult {
-			// TODO: You only need this if you want to check it was signed.
-			let who = ensure_signed(origin)?;
-
-			// TODO: Code to execute when something calls this.
-			// For example: the following line stores the passed in u32 in the storage
-			Something::put(something);
-
-			// here we are raising the Something event
-			Self::deposit_event(RawEvent::SomethingStored(something, who));
-			Ok(())
-		}
-	}
-}
-
+// The pallet's events
 decl_event!(
 	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
-		// Just a dummy event.
-		// Event `Something` is declared with a parameter of the type `u32` and `AccountId`
-		// To emit this event, we call the deposit funtion, from our runtime funtions
+		/// Just a dummy event.
+		/// Event `Something` is declared with a parameter of the type `u32` and `AccountId`
+		/// To emit this event, we call the deposit funtion, from our runtime funtions
 		SomethingStored(u32, AccountId),
 	}
 );
 
-/// tests for this module
+// The pallet's errors
+decl_error! {
+	pub enum Error for Module<T: Trait> {
+		/// Value was None
+		NoneValue,
+		/// Value reached maximum and cannot be incremented further
+		StorageOverflow,
+	}
+}
+
+// The pallet's dispatchable functions.
+decl_module! {
+	/// The module declaration.
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		// Initializing errors
+		// this includes information about your errors in the node's metadata.
+		// it is needed only if you are using errors in your pallet
+		type Error = Error<T>;
+
+		// Initializing events
+		// this is needed only if you are using events in your pallet
+		fn deposit_event() = default;
+
+		/// Just a dummy entry point.
+		/// function that can be called by the external world as an extrinsics call
+		/// takes a parameter of the type `AccountId`, stores it, and emits an event
+		pub fn do_something(origin, something: u32) -> dispatch::DispatchResult {
+			// Check it was signed and get the signer. See also: ensure_root and ensure_none
+			let who = ensure_signed(origin)?;
+
+			// Code to execute when something calls this.
+			// For example: the following line stores the passed in u32 in the storage
+			Something::put(something);
+
+			// Here we are raising the Something event
+			Self::deposit_event(RawEvent::SomethingStored(something, who));
+			Ok(())
+		}
+
+		/// Another dummy entry point.
+		/// takes no parameters, attempts to increment storage value, and possibly throws an error
+		pub fn cause_error(origin) -> dispatch::DispatchResult {
+			// Check it was signed and get the signer. See also: ensure_root and ensure_none
+			let _who = ensure_signed(origin)?;
+
+			match Something::get() {
+				None => Err(Error::<T>::NoneValue)?,
+				Some(old) => {
+					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
+					Something::put(new);
+					Ok(())
+				},
+			}
+		}
+	}
+}
+
+
+/// Tests for this pallet
 #[cfg(test)]
 mod tests {
 	use super::*;
 
 	use sp_core::H256;
-	use frame_support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
+	use frame_support::{impl_outer_origin, assert_ok, assert_noop, parameter_types, weights::Weight};
 	use sp_runtime::{
 		traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill,
 	};
@@ -127,6 +160,17 @@ mod tests {
 			assert_ok!(TemplateModule::do_something(Origin::signed(1), 42));
 			// asserting that the stored value is equal to what we stored
 			assert_eq!(TemplateModule::something(), Some(42));
+		});
+	}
+
+	#[test]
+	fn correct_error_for_none_value() {
+		new_test_ext().execute_with(|| {
+			// Ensure the correct error is thrown on None value
+			assert_noop!(
+				TemplateModule::cause_error(Origin::signed(1)),
+				Error::<Test>::NoneValue
+			);
 		});
 	}
 }
