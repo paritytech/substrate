@@ -442,6 +442,8 @@ ss58_address_format!(
 		(16, "kulupu", "Kulupu mainnet, direct checksum, standard account (*25519).")
 	EdgewareAccountDirect =>
 		(7, "edgeware", "Edgeware mainnet, direct checksum, standard account (*25519).")
+	CentrifugeAccountDirect =>
+		(36, "centrifuge", "Centrifuge Chain mainnet, direct checksum, standard account (*25519).")
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
