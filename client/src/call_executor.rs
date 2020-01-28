@@ -181,7 +181,7 @@ where
 			let _lock = self.backend.get_import_lock().read();
 			self.backend.destroy_state(state)?;
 		}
-		Ok(result?)
+		result
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
