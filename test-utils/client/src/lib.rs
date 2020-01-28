@@ -184,7 +184,6 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		Executor: sc_client::CallExecutor<Block> + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 	{
-
 		let storage = {
 			let mut storage = self.genesis_init.genesis_storage();
 

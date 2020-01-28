@@ -3234,7 +3234,7 @@ dependencies = [
  "sp-std 2.0.0",
  "sp-transaction-pool 2.0.0",
  "sp-version 2.0.0",
- "substrate-wasm-builder-runner 1.0.4",
+ "substrate-wasm-builder-runner 1.0.5",
 ]
 
 [[package]]
@@ -3295,7 +3295,7 @@ dependencies = [
  "sp-std 2.0.0",
  "sp-transaction-pool 2.0.0",
  "sp-version 2.0.0",
- "substrate-wasm-builder-runner 1.0.4",
+ "substrate-wasm-builder-runner 1.0.5",
 ]
 
 [[package]]
@@ -5823,7 +5823,7 @@ dependencies = [
  "sp-runtime 2.0.0",
  "sp-sandbox 0.8.0",
  "sp-std 2.0.0",
- "substrate-wasm-builder-runner 1.0.4",
+ "substrate-wasm-builder-runner 1.0.5",
 ]
 
 [[package]]
@@ -6693,7 +6693,7 @@ dependencies = [
  "sp-io 2.0.0",
  "sp-runtime-interface 2.0.0",
  "sp-std 2.0.0",
- "substrate-wasm-builder-runner 1.0.4",
+ "substrate-wasm-builder-runner 1.0.5",
 ]
 
 [[package]]
@@ -7063,7 +7063,7 @@ dependencies = [
  "sp-trie 2.0.0",
  "sp-version 2.0.0",
  "substrate-test-runtime-client 2.0.0",
- "substrate-wasm-builder-runner 1.0.4",
+ "substrate-wasm-builder-runner 1.0.5",
  "trie-db 0.19.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -7104,7 +7104,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasm-builder-runner"
-version = "1.0.4"
+version = "1.0.5"
 
 [[package]]
 name = "subtle"

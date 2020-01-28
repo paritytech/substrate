@@ -852,7 +852,10 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(
 			match r {
 				Ok(()) => Event::ExtrinsicSuccess(info),
-				Err(err) => Event::ExtrinsicFailed(err.clone(), info),
+				Err(err) => {
+					sp_runtime::print(err);
+					Event::ExtrinsicFailed(err.clone(), info)
+				},
 			}
 		);
 
