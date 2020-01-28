@@ -25,6 +25,7 @@
 use sp_std::vec::Vec;
 use codec::{Encode, Decode, Codec};
 use sp_runtime::RuntimeDebug;
+use pallet_contracts_common::{GetStorageResult, RentProjectionResult};
 
 /// A result of execution of a contract.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
@@ -43,24 +44,6 @@ pub enum ContractExecResult {
 	/// The contract execution either trapped or returned an error.
 	Error,
 }
-
-/// A result type of the get storage call.
-///
-/// See [`ContractsApi::get_storage`] for more info.
-pub type GetStorageResult = Result<Option<Vec<u8>>, GetStorageError>;
-
-/// The possible errors that can happen querying the storage of a contract.
-#[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
-pub enum GetStorageError {
-	/// The given address doesn't point on a contract.
-	ContractDoesntExist,
-	/// The specified contract is a tombstone and thus cannot have any storage.
-	IsTombstone,
-}
-
-// TODO: Rename `GetStorageError` to `ContractAccessError`?
-// TODO: Document
-pub type RentProjectionResult<BlockNumber> = Result<BlockNumber, GetStorageError>;
 
 sp_api::decl_runtime_apis! {
 	/// The API to interact with contracts without using executive.

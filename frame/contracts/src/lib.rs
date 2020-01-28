@@ -680,14 +680,6 @@ decl_module! {
 	}
 }
 
-/// The possible errors that can happen querying the storage of a contract.
-pub enum GetStorageError {
-	/// The given address doesn't point on a contract.
-	ContractDoesntExist,
-	/// The specified contract is a tombstone and thus cannot have any storage.
-	IsTombstone,
-}
-
 /// Public APIs provided by the contracts module.
 impl<T: Trait> Module<T> {
 	/// Perform a call to a specified contract.
@@ -710,11 +702,11 @@ impl<T: Trait> Module<T> {
 	pub fn get_storage(
 		address: T::AccountId,
 		key: [u8; 32],
-	) -> sp_std::result::Result<Option<Vec<u8>>, GetStorageError> {
+	) -> sp_std::result::Result<Option<Vec<u8>>, pallet_contracts_common::GetStorageError> {
 		let contract_info = <ContractInfoOf<T>>::get(&address)
-			.ok_or(GetStorageError::ContractDoesntExist)?
+			.ok_or(pallet_contracts_common::GetStorageError::ContractDoesntExist)?
 			.get_alive()
-			.ok_or(GetStorageError::IsTombstone)?;
+			.ok_or(pallet_contracts_common::GetStorageError::IsTombstone)?;
 
 		let maybe_value = AccountDb::<T>::get_storage(
 			&DirectAccountDb,
@@ -727,13 +719,11 @@ impl<T: Trait> Module<T> {
 
 	pub fn rent_projection(
 		address: T::AccountId,
-	) -> sp_std::result::Result<T::BlockNumber, GetStorageError> {
-		let _contract_info = <ContractInfoOf<T>>::get(&address)
-			.ok_or(GetStorageError::ContractDoesntExist)?
-			.get_alive()
-			.ok_or(GetStorageError::IsTombstone)?;
-
-		rent::rent_projection(&address)
+	) -> sp_std::result::Result<
+		pallet_contracts_common::RentProjection<T::BlockNumber>,
+		pallet_contracts_common::GetStorageError,
+	> {
+		rent::compute_rent_projection::<T>(&address)
 	}
 }
 

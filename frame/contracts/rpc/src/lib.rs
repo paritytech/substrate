@@ -30,7 +30,7 @@ use sp_api::ProvideRuntimeApi;
 
 pub use self::gen_client::Client as ContractsClient;
 pub use pallet_contracts_rpc_runtime_api::{
-	self as runtime_api, ContractExecResult, ContractsApi as ContractsRuntimeApi, GetStorageResult,
+	self as runtime_api, ContractExecResult, ContractsApi as ContractsRuntimeApi,
 };
 
 const RUNTIME_ERROR: i64 = 1;
@@ -47,10 +47,10 @@ const CONTRACT_IS_A_TOMBSTONE: i64 = 3;
 const GAS_PER_SECOND: u64 = 1_000_000_000;
 
 /// A private newtype for converting `GetStorageError` into an RPC error.
-struct GetStorageError(runtime_api::GetStorageError);
+struct GetStorageError(pallet_contracts_common::GetStorageError);
 impl From<GetStorageError> for Error {
 	fn from(e: GetStorageError) -> Error {
-		use runtime_api::GetStorageError::*;
+		use pallet_contracts_common::GetStorageError::*;
 		match e.0 {
 			ContractDoesntExist => Error {
 				code: ErrorCode::ServerError(CONTRACT_DOESNT_EXIST),
@@ -138,7 +138,7 @@ pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance> {
 		&self,
 		address: AccountId,
 		at: Option<BlockHash>,
-	) -> Result<BlockNumber>;
+	) -> Result<Option<BlockNumber>>;
 }
 
 /// An implementation of contract specific RPC methods.
@@ -232,7 +232,7 @@ where
 		&self,
 		address: AccountId,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<BlockNumber> {
+	) -> Result<Option<BlockNumber>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
@@ -243,7 +243,10 @@ where
 			.map_err(|e| runtime_error_into_rpc_err(e))?
 			.map_err(GetStorageError)?;
 
-		Ok(result)
+		Ok(match result {
+			pallet_contracts_common::RentProjection::NoEviction => None,
+			pallet_contracts_common::RentProjection::EvictionDate(block_num) => Some(block_num),
+		})
 	}
 }
 
