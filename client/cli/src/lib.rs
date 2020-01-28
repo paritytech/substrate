@@ -685,7 +685,7 @@ fn parse_address(
 	Ok(address)
 }
 
-/// Initialized the logger
+/// Initialize the logger
 pub fn init_logger(pattern: &str) {
 	use ansi_term::Colour;
 
