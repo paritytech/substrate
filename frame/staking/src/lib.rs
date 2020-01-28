@@ -671,28 +671,32 @@ decl_storage! {
 		pub Invulnerables get(fn invulnerables) config(): Vec<T::AccountId>;
 
 		/// Map from all locked "stash" accounts to the controller account.
-		pub Bonded get(fn bonded): map T::AccountId => Option<T::AccountId>;
+		pub Bonded get(fn bonded): map hasher(blake2_256) T::AccountId => Option<T::AccountId>;
 		/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
 		pub Ledger get(fn ledger):
-			map T::AccountId => Option<StakingLedger<T::AccountId, BalanceOf<T>>>;
+			map hasher(blake2_256) T::AccountId
+			=> Option<StakingLedger<T::AccountId, BalanceOf<T>>>;
 
 		/// Where the reward payment should be made. Keyed by stash.
-		pub Payee get(fn payee): map T::AccountId => RewardDestination;
+		pub Payee get(fn payee): map hasher(blake2_256) T::AccountId => RewardDestination;
 
 		/// The map from (wannabe) validator stash key to the preferences of that validator.
-		pub Validators get(fn validators): linked_map T::AccountId => ValidatorPrefs;
+		pub Validators get(fn validators):
+			linked_map hasher(blake2_256) T::AccountId => ValidatorPrefs;
 
 		/// The map from nominator stash key to the set of stash keys of all validators to nominate.
 		///
 		/// NOTE: is private so that we can ensure upgraded before all typical accesses.
 		/// Direct storage APIs can still bypass this protection.
-		Nominators get(fn nominators): linked_map T::AccountId => Option<Nominations<T::AccountId>>;
+		Nominators get(fn nominators):
+			linked_map hasher(blake2_256) T::AccountId => Option<Nominations<T::AccountId>>;
 
 		/// Nominators for a particular account that is in action right now. You can't iterate
 		/// through validators here, but you can find them in the Session module.
 		///
 		/// This is keyed by the stash account.
-		pub Stakers get(fn stakers): map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
+		pub Stakers get(fn stakers):
+			map hasher(blake2_256) T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
 
 		/// The currently elected validator set keyed by stash account ID.
 		pub CurrentElected get(fn current_elected): Vec<T::AccountId>;
@@ -729,7 +733,8 @@ decl_storage! {
 		pub CanceledSlashPayout get(fn canceled_payout) config(): BalanceOf<T>;
 
 		/// All unapplied slashes that are queued for later.
-		pub UnappliedSlashes: map EraIndex => Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>;
+		pub UnappliedSlashes:
+			map hasher(blake2_256) EraIndex => Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>;
 
 		/// A mapping from still-bonded eras to the first session index of that era.
 		BondedEras: Vec<(EraIndex, SessionIndex)>;
@@ -737,19 +742,22 @@ decl_storage! {
 		/// All slashing events on validators, mapped by era to the highest slash proportion
 		/// and slash value of the era.
 		ValidatorSlashInEra:
-			double_map EraIndex, hasher(twox_128) T::AccountId => Option<(Perbill, BalanceOf<T>)>;
+			double_map hasher(blake2_256) EraIndex, hasher(twox_128) T::AccountId
+			=> Option<(Perbill, BalanceOf<T>)>;
 
 		/// All slashing events on nominators, mapped by era to the highest slash value of the era.
 		NominatorSlashInEra:
-			double_map EraIndex, hasher(twox_128) T::AccountId => Option<BalanceOf<T>>;
+			double_map hasher(blake2_256) EraIndex, hasher(twox_128) T::AccountId
+			=> Option<BalanceOf<T>>;
 
 		/// Slashing spans for stash accounts.
-		SlashingSpans: map T::AccountId => Option<slashing::SlashingSpans>;
+		SlashingSpans: map hasher(blake2_256) T::AccountId => Option<slashing::SlashingSpans>;
 
 		/// Records information about the maximum slash of a stash within a slashing span,
 		/// as well as how much reward has been paid out.
 		SpanSlash:
-			map (T::AccountId, slashing::SpanIndex) => slashing::SpanRecord<BalanceOf<T>>;
+			map hasher(blake2_256) (T::AccountId, slashing::SpanIndex)
+			=> slashing::SpanRecord<BalanceOf<T>>;
 
 		/// The earliest era for which we have a pending, unapplied slash.
 		EarliestUnappliedSlash: Option<EraIndex>;

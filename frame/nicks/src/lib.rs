@@ -78,7 +78,7 @@ pub trait Trait: frame_system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Sudo {
 		/// The lookup table for names.
-		NameOf: map T::AccountId => Option<(Vec<u8>, BalanceOf<T>)>;
+		NameOf: map hasher(blake2_256) T::AccountId => Option<(Vec<u8>, BalanceOf<T>)>;
 	}
 }
 
