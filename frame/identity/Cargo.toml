@@ -16,8 +16,8 @@ frame-system = { version = "2.0.0", default-features = false, path = "../system"
 sp-api = { version = "2.0.0", default-features = false, path = "../../primitives/api" }
 
 [dev-dependencies]
-sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
-pallet-balances = { version = "2.0.0", default-features = false, path = "../balances" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+pallet-balances = { version = "2.0.0", path = "../balances" }
 
 [features]
 default = ["std"]
@@ -26,10 +26,8 @@ std = [
 	"codec/std",
 	"sp-std/std",
 	"sp-io/std",
-	"sp-core/std",
 	"sp-api/std",
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
-	"pallet-balances/std",
 ]
