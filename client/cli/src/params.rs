@@ -293,14 +293,6 @@ pub struct TransactionPoolParams {
 	pub pool_kbytes: usize,
 }
 
-/// Parameters used to benchmark the runtime.
-#[derive(Debug, StructOpt, Clone)]
-pub struct BenchmarkRuntimeParams {
-	/// Enable benchmarking of the runtime.
-	#[structopt(long = "benchmark")]
-	pub benchmark: bool,
-}
-
 arg_enum! {
 	#[allow(missing_docs)]
 	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -536,10 +528,6 @@ pub struct RunCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub pool_config: TransactionPoolParams,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub benchmark_config: BenchmarkRuntimeParams,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -866,6 +854,18 @@ pub struct PurgeChainCmd {
 	pub shared_params: SharedParams,
 }
 
+/// The `benchmark` command used to benchmark FRAME pallets.
+#[derive(Debug, StructOpt, Clone)]
+pub struct BenchmarkCmd {
+	/// Select a FRAME pallet to benchmark.
+	#[structopt(short, long)]
+	pub pallet: Option<String>,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub shared_params: SharedParams,
+}
+
 /// All core commands that are provided by default.
 ///
 /// The core commands are split into multiple subcommands and `Run` is the default subcommand. From
@@ -893,6 +893,9 @@ pub enum CoreParams<CC, RP> {
 
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
+
+	/// Benchmark the runtime.
+	Benchmark(BenchmarkCmd),
 
 	/// Further custom subcommands.
 	Custom(CC),
@@ -933,6 +936,10 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 			PurgeChainCmd::augment_clap(SubCommand::with_name("purge-chain"))
 				.about("Remove the whole chain data.")
 		)
+		.subcommand(
+			BenchmarkCmd::augment_clap(SubCommand::with_name("benchmark"))
+				.about("Benchmark your FRAME pallets.")
+		)
 	}
 
 	fn from_clap(matches: &::structopt::clap::ArgMatches) -> Self {
@@ -948,6 +955,8 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 			("revert", Some(matches)) => CoreParams::Revert(RevertCmd::from_clap(matches)),
 			("purge-chain", Some(matches)) =>
 				CoreParams::PurgeChain(PurgeChainCmd::from_clap(matches)),
+			("benchmark", Some(matches)) =>
+				CoreParams::Benchmark(BenchmarkCmd::from_clap(matches)),
 			(_, None) => CoreParams::Run(MergeParameters::from_clap(matches)),
 			_ => CoreParams::Custom(CC::from_clap(matches)),
 		}
