@@ -133,7 +133,7 @@ mod tests {
 			WasmExecutionMethod::Interpreted,
 			&mut ext,
 			&WASM_BINARY,
-			1024,
+			8,
 			true,
 		).unwrap();
 		assert_eq!(res, vec![0u8; 0]);

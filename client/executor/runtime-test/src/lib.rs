@@ -61,7 +61,7 @@ sp_core::wasm_export_functions! {
 
 	fn test_empty_return() {}
 
-	fn test_exhaust_heap() -> Vec<u8> { Vec::with_capacity(18 * 64 * 1024) }
+	fn test_exhaust_heap() -> Vec<u8> { Vec::with_capacity(16777216) }
 
 	fn test_panic() { panic!("test panic") }
 
