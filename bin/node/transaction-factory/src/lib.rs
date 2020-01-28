@@ -74,25 +74,21 @@ pub trait RuntimeAdapter {
 
 	fn create_extrinsic(
 		&mut self,
-		sender: &Self::AccountId,
+		sender: String,
 		module: String,
 		extrinsic_name: String,
 		extrinsic_parameters: Vec<String>,
 		looping: Option<u32>,
-		key: &Self::Secret,
 		runtime_version: u32,
 		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic;
 
+	fn get_sender(&self, name: String) -> (Self::AccountId, Self::Secret);
 	fn all_modules(&self) -> Vec<String>;
 	fn all_calls(&self, module: String) -> Vec<String>;
-
 	fn inherent_extrinsics(&self) -> InherentData;
-
 	fn minimum_balance() -> Self::Balance;
-	fn master_account_id() -> Self::AccountId;
-	fn master_account_secret() -> Self::Secret;
 	fn extract_index(&self, account_id: &Self::AccountId, block_hash: &<Self::Block as BlockT>::Hash) -> Self::Index;
 	fn extract_phase(&self, block_hash: <Self::Block as BlockT>::Hash) -> Self::Phase;
 	fn gen_random_account_id(seed: &Self::Number) -> Self::AccountId;
@@ -238,8 +234,6 @@ where
 			Default::default(),
 			sp_consensus::RecordProof::No,
 		).expect("Failed to create new block");
-		let account_id = RA::master_account_id();
-		let account_secret = RA::master_account_secret();
 
 		let inherents = self.runtime_state.inherent_extrinsics();
 		let inherents = self.client.runtime_api()
@@ -255,7 +249,7 @@ where
 				Mode::Sequential => self.next_sequential_state(),
 			};
 
-			if let Some((module, function, parameters, looping)) = next_state {
+			if let Some((sender, module, function, parameters, looping)) = next_state {
 				if ["Timestamp"].contains(&module.as_str()) {
 					continue
 				}
@@ -270,12 +264,11 @@ where
 					self.options.tx_per_block,
 				);
 				let extrinsic = self.runtime_state.create_extrinsic(
-					&account_id,
+					sender,
 					module,
 					function,
 					parameters,
 					looping,
-					&account_secret,
 					runtime_version,
 					&genesis_hash,
 					&prior_block_hash,
@@ -304,7 +297,7 @@ where
 		CreateResult::Block(block)
 	}
 
-	fn random_state(&self) -> Option<(String, String, Vec<String>, Option<u32>)> {
+	fn random_state(&self) -> Option<(String, String, String, Vec<String>, Option<u32>)> {
 		let modules = self.runtime_state.all_modules();
 		loop {
 			let random_module = modules.choose(&mut rand::thread_rng())
@@ -312,13 +305,13 @@ where
 			let calls = self.runtime_state.all_calls(random_module.to_string());
 
 			if let Some(random_call) = calls.choose(&mut rand::thread_rng()) {
-				return Some((random_module.clone(), random_call.clone(), vec![], None))
+				return Some(("A".into(), random_module.clone(), random_call.clone(), vec![], None))
 			}
 		}
 	}
 
 	/// This should iterate over all modules and all extrinsics.
-	fn next_sequential_state(&self) -> Option<(String, String, Vec<String>, Option<u32>)> {
+	fn next_sequential_state(&self) -> Option<(String, String, String, Vec<String>, Option<u32>)> {
 		None
 	}
 }

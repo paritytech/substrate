@@ -21,6 +21,8 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Edge {
+	/// Sender name for this transaction.
+	sender: String,
 	/// Target state.
 	target: u32,
 	/// Module of the transaction to execute.
@@ -68,15 +70,17 @@ impl Automaton {
 			let source = line[0].parse().expect("source value can't be parsed");
 			let target = line[1].parse().expect("target value can't be parsed");
 			let tx_module = line[2].to_string();
-			let tx_name = line[3].to_string();
-			let tx_params = line.get(4).unwrap_or(&",")
+			let sender = line[3].to_string();
+			let tx_name = line[4].to_string();
+			let tx_params = line.get(5).unwrap_or(&",")
 				.split(",")
 				.map(|s| s.to_string())
 				.collect::<Vec<String>>();
-			let repeat = line.get(5).unwrap_or(&"1").parse().expect("repeat value can't be parsed");
+			let repeat = line.get(6).unwrap_or(&"1").parse().expect("repeat value can't be parsed");
 
 			let edge = Edge {
 				target,
+				sender,
 				tx_module,
 				tx_name,
 				tx_params,
@@ -95,7 +99,7 @@ impl Automaton {
 		automaton
 	}
 
-	pub fn next_state(&mut self) -> Option<(String, String, Vec<String>, Option<u32>)> {
+	pub fn next_state(&mut self) -> Option<(String, String, String, Vec<String>, Option<u32>)> {
 		if let Some(node) = self.nodes.get_mut(&self.current_node) {
 			let mut max_out: Option<&mut Edge> = None;
 
@@ -132,7 +136,7 @@ impl Automaton {
 					self.exit_state = 0;
 				}
 
-				Some((edge.tx_module.clone(), edge.tx_name.clone(), edge.tx_params.clone(), self.looping))
+				Some((edge.sender.clone(), edge.tx_module.clone(), edge.tx_name.clone(), edge.tx_params.clone(), self.looping))
 			} else {
 				None
 			}

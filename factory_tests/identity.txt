@@ -1,16 +1,16 @@
-0 1 Benchmark next_block
-1 2 Identity add_registrar Alice
-2 2 Identity add_registrar , 5
-2 3 Identity set_identity
-3 9 Identity set_subs
-4 5 Identity request_judgement
-5 6 Identity cancel_request
-6 7 Identity set_fee
-7 8 Identity set_account_id
-8 9 Identity set_fields
-9 10 Identity provide_judgement ,Alice,
-10 11 Identity clear_identity
-11 12 Identity set_identity
-12 13 Identity kill_identity Alice
-13 14 Benchmark next_block
-14 1 Benchmark clear
+0 1 Benchmark * next_block
+1 2 Identity A add_registrar Alice
+2 2 Identity A add_registrar , 5
+2 3 Identity A set_identity
+3 9 Identity A set_subs
+4 5 Identity A request_judgement
+5 6 Identity A cancel_request
+6 7 Identity A set_fee
+7 8 Identity A set_account_id
+8 9 Identity A set_fields
+9 10 Identity A provide_judgement ,Alice,
+10 11 Identity A clear_identity
+11 12 Identity A set_identity
+12 13 Identity A kill_identity Alice
+13 14 Benchmark * next_block
+14 1 Benchmark * clear

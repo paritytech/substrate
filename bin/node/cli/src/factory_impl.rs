@@ -132,21 +132,21 @@ impl RuntimeAdapter for RuntimeState {
 
 	fn create_extrinsic(
 		&mut self,
-		sender: &Self::AccountId,
+		sender: String,
 		module: String,
 		extrinsic_name: String,
 		extrinsic_parameters: Vec<String>,
 		looping: Option<u32>,
-		key: &Self::Secret,
 		runtime_version: u32,
 		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic {
 		let phase = self.extract_phase(*prior_block_hash);
+		let (account_id, pair) = self.get_sender(sender);
 		let function = Call::get_call(&module, &extrinsic_name, extrinsic_parameters, looping);
 
 		let extrinsic = CheckedExtrinsic {
-			signed: Some((sender.clone(), Self::build_extra(self.index, phase))),
+			signed: Some((account_id, Self::build_extra(self.index, phase))),
 			function,
 		};
 		let additional_signed = (
@@ -155,9 +155,18 @@ impl RuntimeAdapter for RuntimeState {
 			prior_block_hash.clone(),
 			(), (), (), (),
 		);
-		sign::<Self>(extrinsic, key, additional_signed)
+		sign::<Self>(extrinsic, &pair, additional_signed)
 	}
 
+	fn get_sender(&self, name: String) -> (Self::AccountId, Self::Secret) {
+		match name.as_str() { // TODO: super ugly
+			"A" => (Keyring::Alice.to_account_id(), Keyring::Alice.pair()),
+			"B" => (Keyring::Bob.to_account_id(), Keyring::Bob.pair()),
+			"C" => (Keyring::Charlie.to_account_id(), Keyring::Charlie.pair()),
+			"D" => (Keyring::Dave.to_account_id(), Keyring::Dave.pair()),
+			_ => (Keyring::Alice.to_account_id(), Keyring::Alice.pair()),
+		}
+	}
 
 	fn all_modules(&self) -> Vec<String> {
 		Call::all_modules().to_vec().iter().map(|m| m.to_string()).collect()
@@ -180,14 +189,6 @@ impl RuntimeAdapter for RuntimeState {
 
 	fn minimum_balance() -> Self::Balance {
 		ExistentialDeposit::get()
-	}
-
-	fn master_account_id() -> Self::AccountId {
-		Keyring::Alice.to_account_id()
-	}
-
-	fn master_account_secret() -> Self::Secret {
-		Keyring::Alice.pair()
 	}
 
 	/// Generates a random `AccountId` from `seed`.
