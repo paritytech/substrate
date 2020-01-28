@@ -1323,6 +1323,7 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::Comm
 			let child_info = child_info.as_ref();
 			let keyspace = child_info.keyspace();
 			let keyspace_len = keyspace.len();
+			key_buffer.resize(keyspace_len, 0);
 			key_buffer[..keyspace_len].copy_from_slice(keyspace);
 			for (key, val) in child_data.data.inserted.into_iter() {
 				key_buffer.resize(keyspace_len + key.len(), 0);
