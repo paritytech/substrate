@@ -260,7 +260,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			deleted,
 		};
 		let block = self.pending_number + self.death_rows.len() as u64;
-		let journal_key = to_old_journal_key(block);
+		let journal_key = to_journal_key_v1(block);
 		commit.meta.inserted.push((journal_key.clone(), journal_record.encode()));
 		self.import(&journal_record.hash, journal_key, journal_record.inserted.into_iter(), journal_record.deleted);
 		self.pending_canonicalizations += 1;
@@ -351,7 +351,8 @@ mod tests {
 		assert!(pruning.have_block(&h));
 		assert_eq!(commit.deleted_len(), 0);
 		assert_eq!(pruning.death_rows.len(), 1);
-		assert_eq!(pruning.death_index.len(), 2);
+		let death_index_len: usize = pruning.death_index.iter().map(|(_ct, map)| map.len()).sum();
+		assert_eq!(death_index_len, 2);
 		assert!(db.data_eq(&make_db(&[1, 2, 3, 4, 5])));
 		check_journal(&pruning, &db);
 
@@ -363,7 +364,8 @@ mod tests {
 		assert!(!pruning.have_block(&h));
 		assert!(db.data_eq(&make_db(&[2, 4, 5])));
 		assert!(pruning.death_rows.is_empty());
-		assert!(pruning.death_index.is_empty());
+		let death_index_len: usize = pruning.death_index.iter().map(|(_ct, map)| map.len()).sum();
+		assert!(death_index_len == 0);
 		assert_eq!(pruning.pending_number, 1);
 	}
 
