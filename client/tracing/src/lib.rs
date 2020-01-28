@@ -136,15 +136,15 @@ pub fn print_data() {
 		"Min",
 		"Max",
 		"Median",
-		"StdDev",
+		"SD",
 		"Variance",
 		name_width=40,
-		time_width=20,
+		time_width=15,
 	);
 
 	for (tx_name, stat) in stats.iter() {
 		// TODO: use another library for stats, statistical?
-		let median = format!("{:.2}", stats::median(stat.times.iter().cloned()).expect("failed to compute median"));
+		let median = format!("{:.1}", stats::median(stat.times.iter().cloned()).expect("failed to compute median"));
 		let mean = format!("{:.2}", stats::mean(stat.times.iter().cloned()));
 		let stddev = format!("{:.2}", stats::stddev(stat.times.iter().cloned()));
 		let variance = format!("{:.2}", stats::variance(stat.times.iter().cloned()));
@@ -160,7 +160,7 @@ pub fn print_data() {
 			stddev,
 			variance,
 			name_width=40,
-			time_width=20,
+			time_width=15,
 		);
 	}
 }

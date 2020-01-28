@@ -182,8 +182,9 @@ where
 				CreateResult::Block(block) => {
 					self.runtime_state.increase_block_number();
 
-					info!("Created block {} with hash {}.",
-						self.runtime_state.block_number(),
+					info!("Created block {}/{} with hash {}.",
+						blocks,
+						self.options.blocks,
 						best_hash,
 					);
 
@@ -259,7 +260,7 @@ where
 				if module.as_str() == "Benchmark" && function == "clear" {
 					return CreateResult::Clear
 				}
-				println!("Progress {}/{}",
+				println!("Transaction {}/{} in this block.",
 					tx_pushed + 1,
 					self.options.tx_per_block,
 				);
