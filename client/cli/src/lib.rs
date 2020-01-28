@@ -685,7 +685,8 @@ fn parse_address(
 	Ok(address)
 }
 
-fn init_logger(pattern: &str) {
+/// Initialized the logger
+pub fn init_logger(pattern: &str) {
 	use ansi_term::Colour;
 
 	let mut builder = env_logger::Builder::new();
