@@ -55,9 +55,9 @@ pub use structopt::clap::App;
 use params::{
 	RunCmd, PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
 	NetworkConfigurationParams, MergeParameters, TransactionPoolParams,
-	NodeKeyParams, NodeKeyType, Cors, CheckBlockCmd, BenchmarkCmd,
+	NodeKeyParams, NodeKeyType, Cors, CheckBlockCmd,
 };
-pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy};
+pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy, BenchmarkRuntimeParams};
 pub use traits::GetSharedParams;
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
@@ -244,9 +244,6 @@ where
 		params::CoreParams::PurgeChain(params) => ParseAndPrepare::PurgeChain(
 			ParseAndPreparePurge { params, version }
 		),
-		params::CoreParams::Benchmark(params) => ParseAndPrepare::Benchmark(
-			ParseAndPrepareBenchmark { params, version }
-		),
 		params::CoreParams::Revert(params) => ParseAndPrepare::RevertChain(
 			ParseAndPrepareRevert { params, version }
 		),
@@ -282,8 +279,6 @@ pub enum ParseAndPrepare<'a, CC, RP> {
 	CheckBlock(CheckBlock<'a>),
 	/// Command ready to purge the chain.
 	PurgeChain(ParseAndPreparePurge<'a>),
-	/// Command ready to benchmark the chain.
-	Benchmark(ParseAndPrepareBenchmark<'a>),
 	/// Command ready to revert the chain.
 	RevertChain(ParseAndPrepareRevert<'a>),
 	/// An additional custom command passed to `parse_and_prepare`.
@@ -300,7 +295,6 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> where CC: GetSharedParams {
 			ParseAndPrepare::ImportBlocks(c) => Some(&c.params.shared_params),
 			ParseAndPrepare::CheckBlock(c) => Some(&c.params.shared_params),
 			ParseAndPrepare::PurgeChain(c) => Some(&c.params.shared_params),
-			ParseAndPrepare::Benchmark(c) => Some(&c.params.shared_params),
 			ParseAndPrepare::RevertChain(c) => Some(&c.params.shared_params),
 			ParseAndPrepare::CustomCommand(c) => c.shared_params(),
 		}
@@ -361,13 +355,6 @@ impl<'a, CC, RP> ParseAndPrepare<'a, CC, RP> {
 					default_base_path,
 				)).transpose(),
 			ParseAndPrepare::PurgeChain(c) =>
-				Some(create_config_with_db_path(
-					spec_factory,
-					&c.params.shared_params,
-					c.version,
-					default_base_path,
-				)).transpose(),
-			ParseAndPrepare::Benchmark(c) =>
 				Some(create_config_with_db_path(
 					spec_factory,
 					&c.params.shared_params,
@@ -728,47 +715,6 @@ impl<'a> ParseAndPreparePurge<'a> {
 	}
 }
 
-/// Command ready to benchmark the runtime.
-pub struct ParseAndPrepareBenchmark<'a> {
-	params: BenchmarkCmd,
-	version: &'a VersionInfo,
-}
-
-impl<'a> ParseAndPrepareBenchmark<'a> {
-	/// Runs the command and benchmarks the chain.
-	pub fn run<G, E, S>(
-		self,
-		spec_factory: S
-	) -> error::Result<()> where
-		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		let mut config = create_config_with_db_path::<(), _, _, _>(
-			spec_factory,
-			&self.params.shared_params,
-			self.version,
-			None,
-		)?;
-		fill_config_keystore_in_memory(&mut config)?;
-		let db_path = match config.database {
-			DatabaseConfig::Path { path, .. } => path,
-			_ => {
-				eprintln!("Cannot purge custom database implementation");
-				return Ok(());
-			}
-		};
-
-		if self.params.pallet.is_some() {
-			print!("Input contains: {:?}", self.params.pallet.unwrap())
-		} else {
-			print!("Input is Empty");
-		}
-
-		Ok(())
-	}
-}
-
 /// Command ready to revert the chain.
 pub struct ParseAndPrepareRevert<'a> {
 	params: RevertCmd,
@@ -1107,6 +1053,8 @@ where
 	)?;
 
 	fill_transaction_pool_configuration(&mut config, cli.pool_config)?;
+
+	run_benchmark(cli.benchmark_config)?;
 
 	config.dev_key_seed = cli.keyring.account
 		.map(|a| format!("//{}", a)).or_else(|| {

@@ -51,7 +51,6 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 		ParseAndPrepare::CheckBlock(cmd) => cmd.run_with_builder(|config: Config<_>|
 			Ok(new_full_start!(config).0), load_spec, exit),
 		ParseAndPrepare::PurgeChain(cmd) => cmd.run(load_spec),
-		ParseAndPrepare::Benchmark(cmd) => cmd.run(load_spec),
 		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder(|config: Config<_>|
 			Ok(new_full_start!(config).0), load_spec),
 		ParseAndPrepare::CustomCommand(_) => Ok(())
