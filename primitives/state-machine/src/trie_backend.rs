@@ -24,7 +24,7 @@ use sp_core::storage::ChildInfo;
 use codec::{Codec, Decode};
 use crate::{
 	StorageKey, StorageValue, Backend,
-	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral},
+	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral, BackendStorageDBRef},
 };
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
@@ -128,8 +128,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	}
 
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
-		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
+		let eph = BackendStorageDBRef::new(self.essence.backend_storage());
 
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
 			let trie = TrieDB::<H>::new(&eph, self.essence.root())?;
@@ -152,8 +151,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
-		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
+		let eph = BackendStorageDBRef::new(self.essence.backend_storage());
 
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
 			let trie = TrieDB::<H>::new(&eph, self.essence.root())?;
@@ -215,14 +213,15 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		};
 
 		{
+			let keyspaced_backend = (self.essence.backend_storage(), child_info.keyspace());
+			// Do not write prefix in overlay.
 			let mut eph = Ephemeral::new(
-				self.essence.backend_storage(),
+				&keyspaced_backend,
 				&mut write_overlay,
 			);
 
 			match child_delta_trie_root::<Layout<H>, _, _, _, _, _>(
 				storage_key,
-				child_info.keyspace(),
 				&mut eph,
 				root,
 				delta

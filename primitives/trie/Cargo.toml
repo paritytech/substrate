@@ -28,6 +28,7 @@ hex-literal = "0.2.1"
 
 [features]
 default = ["std"]
+test-helpers = []
 std = [
 	"sp-std/std",
 	"codec/std",

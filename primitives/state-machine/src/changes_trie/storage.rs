@@ -23,7 +23,7 @@ use sp_trie::MemoryDB;
 use parking_lot::RwLock;
 use crate::{
 	StorageKey,
-	trie_backend_essence::TrieBackendStorage,
+	trie_backend_essence::TrieBackendStorageRef,
 	changes_trie::{BuildCache, RootsStorage, Storage, AnchorBlockId, BlockNumber},
 };
 
@@ -198,7 +198,7 @@ impl<'a, H: Hasher, Number: BlockNumber> TrieBackendAdapter<'a, H, Number> {
 	}
 }
 
-impl<'a, H, Number> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number>
+impl<'a, H, Number> TrieBackendStorageRef<H> for TrieBackendAdapter<'a, H, Number>
 	where
 		Number: BlockNumber,
 		H: Hasher,

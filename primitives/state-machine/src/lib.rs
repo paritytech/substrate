@@ -70,7 +70,7 @@ pub use proving_backend::{
 	create_proof_check_backend, create_proof_check_backend_storage, merge_storage_proofs,
 	ProofRecorder, ProvingBackend, ProvingBackendRecorder, StorageProof,
 };
-pub use trie_backend_essence::{TrieBackendStorage, Storage};
+pub use trie_backend_essence::{TrieBackendStorage, TrieBackendStorageRef, Storage};
 pub use trie_backend::TrieBackend;
 pub use error::{Error, ExecutionError};
 pub use in_memory_backend::InMemory as InMemoryBackend;
@@ -1026,7 +1026,7 @@ mod tests {
 		);
 	}
 
-	#[test]
+	//#[test] TODO this will not make sense when child transaction get separated
 	fn child_storage_uuid() {
 		const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
 		const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2");

@@ -40,6 +40,7 @@ use std::collections::{HashMap, hash_map::Entry};
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 use log::trace;
+use sp_core::storage::OwnedChildInfo;
 
 const PRUNING_MODE: &[u8] = b"mode";
 const PRUNING_MODE_ARCHIVE: &[u8] = b"archive";
@@ -120,12 +121,21 @@ pub struct ChangeSet<H: Hash> {
 	pub deleted: Vec<H>,
 }
 
+/// A set of state node changes for a child trie.
+#[derive(Debug, Clone)]
+pub struct ChildTrieChangeSet<H: Hash> {
+	/// Change set of this element.
+	pub data: ChangeSet<H>,
+	/// Child trie descripton.
+	/// If not set, this is the top trie.
+	pub info: Option<OwnedChildInfo>,
+}
 
 /// A set of changes to the backing database.
 #[derive(Default, Debug, Clone)]
 pub struct CommitSet<H: Hash> {
 	/// State node changes.
-	pub data: ChangeSet<H>,
+	pub data: Vec<ChildTrieChangeSet<H>>,
 	/// Metadata changes.
 	pub meta: ChangeSet<Vec<u8>>,
 }

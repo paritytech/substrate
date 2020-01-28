@@ -1308,11 +1308,32 @@ impl<Block: BlockT> Backend<Block> {
 }
 
 fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::CommitSet<Vec<u8>>) {
-	for (key, val) in commit.data.inserted.into_iter() {
-		transaction.put(columns::STATE, &key[..], &val);
-	}
-	for key in commit.data.deleted.into_iter() {
-		transaction.delete(columns::STATE, &key[..]);
+	let mut key_buffer = Vec::new(); 
+	for child_data in commit.data.into_iter() {
+		if let Some(child_info) = child_data.info {
+			// children tries with prefixes
+			let keyspace = child_info.keyspace();
+			let keyspace_len = keyspace.len();
+			key_buffer.copy_from_slice[..keyspace_len] = keyspace;
+			for (key, val) in commit.data.inserted.into_iter() {
+				key_buffer.resize(keyspace_len + key.len());
+				key_buffer[keyspace_len..].copy_from_slice(&key[..]);
+				transaction.put(columns::STATE, &key_buffer[..], &val);
+			}
+			for key in commit.data.deleted.into_iter() {
+				key_buffer.resize(keyspace_len + key.len());
+				key_buffer[keyspace_len..].copy_from_slice(&key[..]);
+				transaction.delete(columns::STATE, &key_buffer[..]);
+			}
+		} else {
+			// top trie without prefixes
+			for (key, val) in commit.data.inserted.into_iter() {
+				transaction.put(columns::STATE, &key[..], &val);
+			}
+			for key in commit.data.deleted.into_iter() {
+				transaction.delete(columns::STATE, &key[..]);
+			}
+		}
 	}
 	for (key, val) in commit.meta.inserted.into_iter() {
 		transaction.put(columns::STATE_META, &key[..], &val);

@@ -28,7 +28,7 @@ use sp_trie::{
 pub use sp_trie::Recorder;
 pub use sp_trie::trie_types::{Layout, TrieError};
 use crate::trie_backend::TrieBackend;
-use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
+use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage, TrieBackendStorageRef};
 use crate::{Error, ExecutionError, Backend};
 use std::collections::{HashMap, HashSet};
 use crate::DBValue;
@@ -132,7 +132,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_trie_value_with::<Layout<H>, _, Ephemeral<S, H>>(
+		read_trie_value_with::<Layout<H>, _, Ephemeral<S, H, _>>(
 			&eph,
 			self.backend.root(),
 			key,
@@ -238,7 +238,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorageRef<H>
 	for ProofRecorderBackend<'a, S, H>
 {
 	type Overlay = S::Overlay;

@@ -235,7 +235,6 @@ pub fn child_trie_root<L: TrieConfiguration, I, A, B>(
 /// but a generic implementation may ignore this type parameter and use other hashers.
 pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD>(
 	_storage_key: &[u8],
-	keyspace: &[u8],
 	db: &mut DB,
 	root_data: RD,
 	delta: I,
@@ -253,8 +252,7 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD>(
 	root.as_mut().copy_from_slice(root_data.as_ref());
 
 	{
-		let mut db = KeySpacedDBMut::new(&mut *db, keyspace);
-		let mut trie = TrieDBMut::<L>::from_existing(&mut db, &mut root)?;
+		let mut trie = TrieDBMut::<L>::from_existing(db, &mut root)?;
 
 		for (key, change) in delta {
 			match change {
@@ -363,6 +361,7 @@ pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, Item=D
 /// prefix of every key value.
 pub struct KeySpacedDB<'a, DB, H>(&'a DB, &'a [u8], PhantomData<H>);
 
+#[cfg(feature="test-helpers")]
 /// `HashDBMut` implementation that append a encoded prefix (unique id bytes) in addition to the
 /// prefix of every key value.
 ///
@@ -371,7 +370,7 @@ pub struct KeySpacedDBMut<'a, DB, H>(&'a mut DB, &'a [u8], PhantomData<H>);
 
 /// Utility function used to merge some byte data (keyspace) and `prefix` data
 /// before calling key value database primitives.
-fn keyspace_as_prefix_alloc(ks: &[u8], prefix: Prefix) -> (Vec<u8>, Option<u8>) {
+pub fn keyspace_as_prefix_alloc(ks: &[u8], prefix: Prefix) -> (Vec<u8>, Option<u8>) {
 	let mut result = sp_std::vec![0; ks.len() + prefix.0.len()];
 	result[..ks.len()].copy_from_slice(ks);
 	result[ks.len()..].copy_from_slice(prefix.0);
@@ -387,6 +386,7 @@ impl<'a, DB, H> KeySpacedDB<'a, DB, H> where
 	}
 }
 
+#[cfg(feature="test-helpers")]
 impl<'a, DB, H> KeySpacedDBMut<'a, DB, H> where
 	H: Hasher,
 {
@@ -412,6 +412,7 @@ impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB, H> where
 	}
 }
 
+#[cfg(feature="test-helpers")]
 impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 	DB: hash_db::HashDB<H, T>,
 	H: Hasher,
@@ -443,6 +444,7 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 	}
 }
 
+#[cfg(feature="test-helpers")] // TODO see if can be deleted
 impl<'a, DB, H, T> hash_db::AsHashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 	DB: hash_db::HashDB<H, T>,
 	H: Hasher,
