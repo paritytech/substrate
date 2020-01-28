@@ -1457,13 +1457,17 @@ macro_rules! decl_module {
 				]
 			}
 
-			fn get_call(function: &str, mut parameters: $crate::sp_std::prelude::Vec<$crate::sp_std::prelude::String>) -> Self {
+			fn get_call(function: &str, mut parameters: $crate::sp_std::prelude::Vec<$crate::sp_std::prelude::String>, looping: Option<u32>) -> Self {
 				match function {
 					$( 
 						stringify!($fn_name) => {
 							$(
 								let value = parameters.pop().unwrap_or("".into());
-								let $param_name = <$param as $crate::sp_core::BenchType>::test_value(value.as_str());
+								let $param_name = if let Some(iteration) = looping {
+									<$param as $crate::sp_core::BenchType>::test_value_loop(value.as_str(), iteration)
+								} else {
+									<$param as $crate::sp_core::BenchType>::test_value(value.as_str())
+								};
 							)*
 							$call_type::$fn_name($( $param_name ),* )
 						}
@@ -1546,7 +1550,7 @@ macro_rules! impl_outer_dispatch {
 		}
 		impl $crate::dispatch::Default for $call_type {
 			fn default() -> Self {
-				<Self as $crate::benchmarking::Module>::get_call("System", "remark", vec![])
+				<Self as $crate::benchmarking::Module>::get_call("System", "remark", vec![], None)
 			}
 		}
 		impl $crate::sp_core::BenchType for $call_type {}
@@ -1568,11 +1572,11 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 
-			fn get_call(module: &str, function: &str, parameters: $crate::sp_std::prelude::Vec<$crate::sp_std::prelude::String>) -> Self {
+			fn get_call(module: &str, function: &str, parameters: $crate::sp_std::prelude::Vec<$crate::sp_std::prelude::String>, looping: Option<u32>) -> Self {
 				match module {
 					$(
 						stringify!($camelcase) => $call_type::$camelcase(
-							$crate::benchmarking::Call::get_call(function, parameters)
+							$crate::benchmarking::Call::get_call(function, parameters, looping)
 						),
 					)*
 					_ => unreachable!(),

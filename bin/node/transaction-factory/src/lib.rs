@@ -78,6 +78,7 @@ pub trait RuntimeAdapter {
 		module: String,
 		extrinsic_name: String,
 		extrinsic_parameters: Vec<String>,
+		looping: Option<u32>,
 		key: &Self::Secret,
 		runtime_version: u32,
 		genesis_hash: &<Self::Block as BlockT>::Hash,
@@ -254,7 +255,7 @@ where
 				Mode::Sequential => self.next_sequential_state(),
 			};
 
-			if let Some((module, function, parameters)) = next_state {
+			if let Some((module, function, parameters, looping)) = next_state {
 				if ["Timestamp"].contains(&module.as_str()) {
 					continue
 				}
@@ -273,6 +274,7 @@ where
 					module,
 					function,
 					parameters,
+					looping,
 					&account_secret,
 					runtime_version,
 					&genesis_hash,
@@ -302,7 +304,7 @@ where
 		CreateResult::Block(block)
 	}
 
-	fn random_state(&self) -> Option<(String, String, Vec<String>)> {
+	fn random_state(&self) -> Option<(String, String, Vec<String>, Option<u32>)> {
 		let modules = self.runtime_state.all_modules();
 		loop {
 			let random_module = modules.choose(&mut rand::thread_rng())
@@ -310,13 +312,13 @@ where
 			let calls = self.runtime_state.all_calls(random_module.to_string());
 
 			if let Some(random_call) = calls.choose(&mut rand::thread_rng()) {
-				return Some((random_module.clone(), random_call.clone(), vec![]))
+				return Some((random_module.clone(), random_call.clone(), vec![], None))
 			}
 		}
 	}
 
 	/// This should iterate over all modules and all extrinsics.
-	fn next_sequential_state(&self) -> Option<(String, String, Vec<String>)> {
+	fn next_sequential_state(&self) -> Option<(String, String, Vec<String>, Option<u32>)> {
 		None
 	}
 }

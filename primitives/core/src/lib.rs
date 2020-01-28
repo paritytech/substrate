@@ -319,6 +319,12 @@ pub trait BenchType: Default {
 		println!("test_value for default {}", std::any::type_name::<Self>());
 		r
 	}
+
+	fn test_value_loop(name: &str, iteration: u32) -> Self {
+		#[cfg(feature = "std")]
+		println!("test_value_loop iteration {}", iteration);
+		Self::test_value(name)
+	}
 }
 
 impl BenchType for bool {

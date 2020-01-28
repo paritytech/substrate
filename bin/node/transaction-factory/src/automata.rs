@@ -44,6 +44,8 @@ pub struct Node {
 pub struct Automaton {
 	nodes: HashMap<u32, Node>,
 	current_node: u32,
+	looping: Option<u32>,
+	exit_state: u32,
 }
 
 impl Automaton {
@@ -51,6 +53,8 @@ impl Automaton {
 		Self {
 			nodes: HashMap::new(),
 			current_node: 0,
+			looping: None,
+			exit_state: 0,
 		}
 	}
 
@@ -70,7 +74,7 @@ impl Automaton {
 				.map(|s| s.to_string())
 				.collect::<Vec<String>>();
 			let repeat = line.get(5).unwrap_or(&"1").parse().expect("repeat value can't be parsed");
-			
+
 			let edge = Edge {
 				target,
 				tx_module,
@@ -91,7 +95,7 @@ impl Automaton {
 		automaton
 	}
 
-	pub fn next_state(&mut self) -> Option<(String, String, Vec<String>)> {
+	pub fn next_state(&mut self) -> Option<(String, String, Vec<String>, Option<u32>)> {
 		if let Some(node) = self.nodes.get_mut(&self.current_node) {
 			let mut max_out: Option<&mut Edge> = None;
 
@@ -108,9 +112,27 @@ impl Automaton {
 			}
 
 			if let Some(edge) = max_out {
+
+				if self.current_node <= edge.target && edge.used < edge.repeat {
+					// We're entering a loop.
+					if let Some(counter) = self.looping {
+						self.looping = Some(counter + 1);
+					} else {
+						self.looping = Some(0);
+						self.exit_state = self.current_node;
+					}
+				}
+
 				edge.used += 1;
 				self.current_node = edge.target;
-				Some((edge.tx_module.clone(), edge.tx_name.clone(), edge.tx_params.clone()))
+
+				if self.looping.is_some() && self.current_node > self.exit_state {
+					// We're exiting the loop.
+					self.looping = None;
+					self.exit_state = 0;
+				}
+
+				Some((edge.tx_module.clone(), edge.tx_name.clone(), edge.tx_params.clone(), self.looping))
 			} else {
 				None
 			}

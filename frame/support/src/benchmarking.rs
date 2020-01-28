@@ -24,10 +24,10 @@ pub use crate::sp_std::prelude::String;
 pub trait Module {
 	fn all_modules() -> &'static [&'static str];
 	fn all_calls(module: &str) -> &'static [&'static str];
-	fn get_call(module: &str, function: &str, parameters: Vec<String>) -> Self;
+	fn get_call(module: &str, function: &str, parameters: Vec<String>, looping: Option<u32>) -> Self;
 }
 
 pub trait Call {
 	fn all_calls() -> &'static [&'static str];
-	fn get_call(function: &str, parameters: Vec<String>) -> Self;
+	fn get_call(function: &str, parameters: Vec<String>, looping: Option<u32>) -> Self;
 }
