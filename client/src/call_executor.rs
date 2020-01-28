@@ -89,12 +89,12 @@ where
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			None,
-		)?;
+		);
 		{
 			let _lock = self.backend.get_import_lock().read();
 			self.backend.destroy_state(state)?;
 		}
-		Ok(return_data.into_encoded())
+		Ok(return_data?.into_encoded())
 	}
 
 	fn contextual_call<
@@ -173,12 +173,12 @@ where
 			)
 			.with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
 			.execute_using_consensus_failure_handler(execution_manager, native_call)
-		}?;
+		};
 		{
 			let _lock = self.backend.get_import_lock().read();
 			self.backend.destroy_state(state)?;
 		}
-		Ok(result)
+		Ok(result?)
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
