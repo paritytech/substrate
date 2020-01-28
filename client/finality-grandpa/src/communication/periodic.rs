@@ -17,7 +17,7 @@
 //! Periodic rebroadcast of neighbor packets.
 
 use futures_timer::Delay;
-use futures03::{channel::mpsc, future::{FutureExt as _}, prelude::*, ready, stream::Stream};
+use futures::{channel::mpsc, future::{FutureExt as _}, prelude::*, ready, stream::Stream};
 use log::debug;
 use std::{pin::Pin, task::{Context, Poll}, time::{Instant, Duration}};
 

@@ -39,7 +39,8 @@ pub trait AuthorApi<Hash, BlockHash> {
 
 	/// Insert a key into the keystore.
 	#[rpc(name = "author_insertKey")]
-	fn insert_key(&self,
+	fn insert_key(
+		&self,
 		key_type: String,
 		suri: String,
 		public: Bytes,
@@ -48,6 +49,20 @@ pub trait AuthorApi<Hash, BlockHash> {
 	/// Generate new session keys and returns the corresponding public keys.
 	#[rpc(name = "author_rotateKeys")]
 	fn rotate_keys(&self) -> Result<Bytes>;
+
+	/// Checks if the keystore has private keys for the given session public keys.
+	///
+	/// `session_keys` is the SCALE encoded session keys object from the runtime.
+	///
+	/// Returns `true` iff all private keys could be found.
+	#[rpc(name = "author_hasSessionKeys")]
+	fn has_session_keys(&self, session_keys: Bytes) -> Result<bool>;
+
+	/// Checks if the keystore has private keys for the given public key and key type.
+	///
+	/// Returns `true` if a private key could be found.
+	#[rpc(name = "author_hasKey")]
+	fn has_key(&self, public_key: Bytes, key_type: String) -> Result<bool>;
 
 	/// Returns all pending extrinsics, potentially grouped by sender.
 	#[rpc(name = "author_pendingExtrinsics")]

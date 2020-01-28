@@ -19,7 +19,6 @@
 // end::description[]
 
 use sp_std::hash::Hash;
-#[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use sp_std::convert::TryInto;
@@ -520,8 +519,7 @@ pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + Pa
 	fn from_slice(data: &[u8]) -> Self;
 
 	/// Return a `Vec<u8>` filled with raw data.
-	#[cfg(feature = "std")]
-	fn to_raw_vec(&self) -> Vec<u8> { self.as_slice().to_owned() }
+	fn to_raw_vec(&self) -> Vec<u8> { self.as_slice().to_vec() }
 
 	/// Return a slice filled with raw data.
 	fn as_slice(&self) -> &[u8] { self.as_ref() }

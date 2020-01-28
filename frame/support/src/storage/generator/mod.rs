@@ -65,7 +65,7 @@ mod tests {
 	crate::decl_storage! {
 		trait Store for Module<T: Trait> as Runtime {
 			Value get(fn value) config(): (u64, u64);
-			NumberMap: linked_map NumberNumber => u64;
+			NumberMap: linked_map hasher(blake2_256) NumberNumber => u64;
 		}
 	}
 
