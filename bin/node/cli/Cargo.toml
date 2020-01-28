@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node implementation in Rust."
 build = "build.rs"
 edition = "2018"
+license = "GPL-3.0"
 default-run = "substrate"
 
 [badges]

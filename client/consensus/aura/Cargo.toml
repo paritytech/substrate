@@ -4,6 +4,7 @@ version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Aura consensus algorithm for substrate"
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 sp-application-crypto = { version = "2.0.0", path = "../../../primitives/application-crypto" }
