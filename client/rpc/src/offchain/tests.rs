@@ -16,14 +16,14 @@
 
 use super::*;
 use assert_matches::assert_matches;
-use sp_core::offchain::storage::InMemOffchainStorage;
+use sp_core::{Bytes, offchain::storage::InMemOffchainStorage};
 
 #[test]
 fn local_storage_should_work() {
 	let storage = InMemOffchainStorage::default();
 	let offchain = Offchain::new(storage);
-	let key = b"offchain_storage".to_vec();
-	let value = b"offchain_value".to_vec();
+	let key = Bytes(b"offchain_storage".to_vec());
+	let value = Bytes(b"offchain_value".to_vec());
 
 	assert_matches!(
 		offchain.set_local_storage(StorageKind::PERSISTENT, key.clone(), value.clone()),

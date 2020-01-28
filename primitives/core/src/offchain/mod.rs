@@ -20,8 +20,6 @@ use codec::{Encode, Decode};
 use sp_std::{prelude::{Vec, Box}, convert::TryFrom};
 use crate::RuntimeDebug;
 use sp_runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
 
 pub use crate::crypto::KeyTypeId;
 
@@ -52,7 +50,7 @@ pub trait OffchainStorage: Clone + Send + Sync {
 
 /// A type of supported crypto.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug, PassByEnum)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub enum StorageKind {
 	/// Persistent storage is non-revertible and not fork-aware. It means that any value

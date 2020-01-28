@@ -22,43 +22,46 @@ mod tests;
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::offchain::*;
 use self::error::{Error, Result};
-use sp_core::offchain::{OffchainStorage, StorageKind};
-use parking_lot::Mutex;
+use sp_core::{
+	Bytes,
+	offchain::{OffchainStorage, StorageKind},
+};
+use parking_lot::RwLock;
 use std::sync::Arc;
 
 /// Offchain API
 #[derive(Debug)]
 pub struct Offchain<T: OffchainStorage> {
 	/// Offchain storage
-	storage: Arc<Mutex<T>>,
+	storage: Arc<RwLock<T>>,
 }
 
 impl<T: OffchainStorage> Offchain<T> {
 	/// Create new instance of Offchain API.
 	pub fn new(storage: T) -> Self {
 		Offchain {
-			storage: Arc::new(Mutex::new(storage)),
+			storage: Arc::new(RwLock::new(storage)),
 		}
 	}
 }
 
 impl<T: OffchainStorage + 'static> OffchainApi for Offchain<T> {
 	/// Set offchain local storage under given key and prefix.
-	fn set_local_storage(&self, kind: StorageKind, key: Vec<u8>, value: Vec<u8>) -> Result<()> {
+	fn set_local_storage(&self, kind: StorageKind, key: Bytes, value: Bytes) -> Result<()> {
 		let prefix = match kind {
 			StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
 			StorageKind::LOCAL => return Err(Error::UnavailableStorageKind),
 		};
-		self.storage.lock().set(prefix, key.as_slice(), value.as_slice());
+		self.storage.write().set(prefix, &*key, &*value);
 		Ok(())
 	}
 
 	/// Get offchain local storage under given key and prefix.
-	fn get_local_storage(&self, kind: StorageKind, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
+	fn get_local_storage(&self, kind: StorageKind, key: Bytes) -> Result<Option<Bytes>> {
 		let prefix = match kind {
 			StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
 			StorageKind::LOCAL => return Err(Error::UnavailableStorageKind),
 		};
-		Ok(self.storage.lock().get(prefix, key.as_slice()))
+		Ok(self.storage.read().get(prefix, &*key).map(Into::into))
 	}
 }
