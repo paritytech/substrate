@@ -54,7 +54,8 @@ decl_module! {
 	/// The module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		// Initializing errors
-		// this is needed only if you are using errors in your pallet
+		// this includes information about your errors in the node's metadata.
+		// it is needed only if you are using errors in your pallet
 		type Error = Error<T>;
 
 		// Initializing events
