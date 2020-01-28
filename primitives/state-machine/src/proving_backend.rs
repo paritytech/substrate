@@ -344,7 +344,12 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.0.storage_root(delta)
+		let (root, mut tx) = self.0.storage_root(delta);
+		// This is hacky, it supposes we return a single child
+		// transaction. Next move should be to change proving backend
+		// transaction to not merge the child trie datas and use
+		// separate proof for each trie.
+		(root, tx.remove(0).1)
 	}
 
 	fn child_storage_root<I>(
@@ -357,7 +362,8 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
-		self.0.child_storage_root(storage_key, child_info, delta)
+		let (root, is_empty, mut tx) = self.0.child_storage_root(storage_key, child_info, delta);
+		(root, is_empty, tx.remove(0).1)
 	}
 }
 
@@ -445,6 +451,7 @@ mod tests {
 		let (trie_root, mut trie_mdb) = trie_backend.storage_root(::std::iter::empty());
 		let (proving_root, mut proving_mdb) = proving_backend.storage_root(::std::iter::empty());
 		assert_eq!(trie_root, proving_root);
+		let mut trie_mdb = trie_mdb.remove(0).1;
 		assert_eq!(trie_mdb.drain(), proving_mdb.drain());
 	}
 

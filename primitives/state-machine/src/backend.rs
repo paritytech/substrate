@@ -26,7 +26,7 @@ use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
 use crate::{
 	trie_backend::TrieBackend,
 	trie_backend_essence::TrieBackendStorage,
-	UsageInfo, StorageKey, StorageValue, StorageCollection,
+	UsageInfo, StorageKey, StorageValue,
 };
 
 /// A state backend is used to read state data and can have changes committed
@@ -325,10 +325,7 @@ impl Consolidate for () {
 	}
 }
 
-impl Consolidate for Vec<(
-		Option<(StorageKey, OwnedChildInfo)>,
-		StorageCollection,
-	)> {
+impl<V> Consolidate for Vec<V> {
 	fn consolidate(&mut self, mut other: Self) {
 		self.append(&mut other);
 	}

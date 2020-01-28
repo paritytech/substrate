@@ -20,14 +20,15 @@ use log::{warn, debug};
 use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
-use sp_core::storage::ChildInfo;
+use sp_core::storage::{ChildInfo, OwnedChildInfo};
 use codec::{Codec, Decode};
 use crate::{
 	StorageKey, StorageValue, Backend,
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral, BackendStorageDBRef},
 };
 
-/// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
+/// Patricia trie-based backend. Transaction type is overlays of changes to commit
+/// for this trie and child tries.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	essence: TrieBackendEssence<S, H>,
 }
@@ -71,7 +72,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	H::Out: Ord + Codec,
 {
 	type Error = String;
-	type Transaction = S::Overlay;
+	type Transaction = Vec<(Option<OwnedChildInfo>, S::Overlay)>;
 	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
@@ -169,7 +170,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		collect_all().map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e)).unwrap_or_default()
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, S::Overlay)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Vec<(Option<OwnedChildInfo>, S::Overlay)>)
 		where I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>
 	{
 		let mut write_overlay = S::Overlay::default();
@@ -187,7 +188,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 			}
 		}
 
-		(root, write_overlay)
+		(root, vec![(None, write_overlay)])
 	}
 
 	fn child_storage_root<I>(
@@ -233,7 +234,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 		let is_default = root == default_root;
 
-		(root, is_default, write_overlay)
+		(root, is_default, vec![(Some(child_info.to_owned()), write_overlay)])
 	}
 
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
@@ -324,13 +325,18 @@ pub mod tests {
 
 	#[test]
 	fn storage_root_transaction_is_empty() {
-		assert!(test_trie().storage_root(::std::iter::empty()).1.drain().is_empty());
+		let tx = test_trie().storage_root(::std::iter::empty()).1;
+		for (_ct, mut tx) in tx.into_iter() {
+			assert!(tx.drain().is_empty());
+		}
 	}
 
 	#[test]
 	fn storage_root_transaction_is_non_empty() {
-		let (new_root, mut tx) = test_trie().storage_root(vec![(b"new-key".to_vec(), Some(b"new-value".to_vec()))]);
-		assert!(!tx.drain().is_empty());
+		let (new_root, tx) = test_trie().storage_root(vec![(b"new-key".to_vec(), Some(b"new-value".to_vec()))]);
+		for (_ct, mut tx) in tx.into_iter() {
+			assert!(!tx.drain().is_empty());
+		}
 		assert!(new_root != test_trie().storage_root(::std::iter::empty()).0);
 	}
 

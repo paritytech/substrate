@@ -79,6 +79,7 @@ use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use crate::stats::StateUsageStats;
 use log::{trace, debug, warn};
 pub use sc_state_db::PruningMode;
+use sp_core::storage::OwnedChildInfo;
 
 #[cfg(feature = "test-helpers")]
 use sc_client::in_mem::Backend as InMemoryBackend;
@@ -513,7 +514,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT> {
 	old_state: CachingState<RefTrackingState<Block>, Block>,
-	db_updates: PrefixedMemoryDB<HasherFor<Block>>,
+	db_updates: Vec<(Option<OwnedChildInfo>, PrefixedMemoryDB<HasherFor<Block>>)>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	changes_trie_updates: MemoryDB<HasherFor<Block>>,
@@ -568,7 +569,10 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		// Currently cache isn't implemented on full nodes.
 	}
 
-	fn update_db_storage(&mut self, update: PrefixedMemoryDB<HasherFor<Block>>) -> ClientResult<()> {
+	fn update_db_storage(
+		&mut self,
+		update: Vec<(Option<OwnedChildInfo>, PrefixedMemoryDB<HasherFor<Block>>)>,
+	) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
 	}
@@ -1103,26 +1107,30 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			let finalized = if operation.commit_state {
-				let mut changeset: sc_state_db::ChangeSet<Vec<u8>> = sc_state_db::ChangeSet::default();
+				let mut changesets = Vec::new();
 				let mut ops: u64 = 0;
 				let mut bytes: u64 = 0;
-				for (key, (val, rc)) in operation.db_updates.drain() {
-					if rc > 0 {
-						ops += 1;
-						bytes += key.len() as u64 + val.len() as u64;
+				for (info, mut updates) in operation.db_updates.into_iter() {
+					let mut data: sc_state_db::ChangeSet<Vec<u8>> = sc_state_db::ChangeSet::default();
+					for (key, (val, rc)) in updates.drain() {
+						if rc > 0 {
+							ops += 1;
+							bytes += key.len() as u64 + val.len() as u64;
 
-						changeset.inserted.push((key, val.to_vec()));
-					} else if rc < 0 {
-						ops += 1;
-						bytes += key.len() as u64;
+							data.inserted.push((key, val.to_vec()));
+						} else if rc < 0 {
+							ops += 1;
+							bytes += key.len() as u64;
 
-						changeset.deleted.push(key);
+							data.deleted.push(key);
+						}
 					}
+					changesets.push(sc_state_db::ChildTrieChangeSet{ info, data });
 				}
 				self.state_usage.tally_writes(ops, bytes);
 
 				let number_u64 = number.saturated_into::<u64>();
-				let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset)
+				let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changesets)
 					.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
 				apply_state_commit(&mut transaction, commit);
 
@@ -1312,25 +1320,26 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::Comm
 	for child_data in commit.data.into_iter() {
 		if let Some(child_info) = child_data.info {
 			// children tries with prefixes
+			let child_info = child_info.as_ref();
 			let keyspace = child_info.keyspace();
 			let keyspace_len = keyspace.len();
-			key_buffer.copy_from_slice[..keyspace_len] = keyspace;
-			for (key, val) in commit.data.inserted.into_iter() {
-				key_buffer.resize(keyspace_len + key.len());
+			key_buffer[..keyspace_len].copy_from_slice(keyspace);
+			for (key, val) in child_data.data.inserted.into_iter() {
+				key_buffer.resize(keyspace_len + key.len(), 0);
 				key_buffer[keyspace_len..].copy_from_slice(&key[..]);
 				transaction.put(columns::STATE, &key_buffer[..], &val);
 			}
-			for key in commit.data.deleted.into_iter() {
-				key_buffer.resize(keyspace_len + key.len());
+			for key in child_data.data.deleted.into_iter() {
+				key_buffer.resize(keyspace_len + key.len(), 0);
 				key_buffer[keyspace_len..].copy_from_slice(&key[..]);
 				transaction.delete(columns::STATE, &key_buffer[..]);
 			}
 		} else {
 			// top trie without prefixes
-			for (key, val) in commit.data.inserted.into_iter() {
+			for (key, val) in child_data.data.inserted.into_iter() {
 				transaction.put(columns::STATE, &key[..], &val);
 			}
-			for key in commit.data.deleted.into_iter() {
+			for key in child_data.data.deleted.into_iter() {
 				transaction.delete(columns::STATE, &key[..]);
 			}
 		}
@@ -1378,7 +1387,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Ok(BlockImportOperation {
 			pending_block: None,
 			old_state,
-			db_updates: PrefixedMemoryDB::default(),
+			db_updates: Default::default(),
 			storage_updates: Default::default(),
 			child_storage_updates: Default::default(),
 			changes_trie_config_update: None,
@@ -1898,7 +1907,9 @@ pub(crate) mod tests {
 				children: Default::default(),
 			}).unwrap();
 
-			key = op.db_updates.insert(EMPTY_PREFIX, b"hello");
+			let mut map: PrefixedMemoryDB<HasherFor<Block>> = Default::default();
+			key = map.insert(EMPTY_PREFIX, b"hello");
+			op.db_updates.push((None, map));
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -1934,8 +1945,11 @@ pub(crate) mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.db_updates.insert(EMPTY_PREFIX, b"hello");
-			op.db_updates.remove(&key, EMPTY_PREFIX);
+			let mut map: PrefixedMemoryDB<HasherFor<Block>> = Default::default();
+			map.insert(EMPTY_PREFIX, b"hello");
+			op.db_updates.iter_mut().for_each(|(ct, map)| if ct.is_none() {
+				map.remove(&key, EMPTY_PREFIX);
+			});
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -1971,7 +1985,9 @@ pub(crate) mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.db_updates.remove(&key, EMPTY_PREFIX);
+			op.db_updates.iter_mut().for_each(|(ct, map)| if ct.is_none() {
+				map.remove(&key, EMPTY_PREFIX);
+			});
 			op.set_block_data(
 				header,
 				Some(vec![]),
