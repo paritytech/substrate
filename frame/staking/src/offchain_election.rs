@@ -19,29 +19,11 @@
 use crate::{Call, CompactAssignments, Module, SessionInterface, Trait};
 use codec::Encode;
 use frame_system::offchain::{
-	Signer, SubmitSignedTransaction, SubmitUnsignedTransaction, SignAndSubmitTransaction,
-	CreateTransaction,
+	SubmitSignedTransaction, SubmitUnsignedTransaction, SignAndSubmitTransaction, CreateTransaction,
 };
 use sp_phragmen::{reduce, ExtendedBalance, PhragmenResult, StakedAssignment};
 use sp_std::{prelude::*, cmp::Ordering};
 use sp_runtime::RuntimeAppPublic;
-
-type SignAndSubmitOf<T> =
-<
-	<T as Trait>::SubmitTransaction
-	as
-	SubmitSignedTransaction<T, <T as Trait>::Call>
->::SignAndSubmit;
-
-pub(crate) type PublicOf<T> =
-<
-	<SignAndSubmitOf<T> as SignAndSubmitTransaction<T, <T as Trait>::Call>>::CreateTransaction
-	as
-	CreateTransaction<
-		T,
-		<SignAndSubmitOf<T> as SignAndSubmitTransaction<T, <T as Trait>::Call>>::Extrinsic
-	>
->::Public;
 
 #[derive(Debug)]
 pub(crate) enum OffchainElectionError {
@@ -77,13 +59,16 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 	let validator_keys = T::SessionInterface::keys::<T::KeyType>();
 	let local_keys = T::KeyType::all();
 
-	if let Some((index, pubkey)) = local_keys
+	if let Some((index, ref pubkey)) = local_keys
 		.into_iter()
-		.enumerate()
-		.find(|(_, k)|
-			validator_keys.iter().find(|(_acc, maybe_vk)|
-				maybe_vk.as_ref().map(|vk| vk == k).unwrap_or(false)
-			).is_some()
+		.find_map(|k|
+			validator_keys
+				.iter()
+				.enumerate()
+				.find_map(|(index, (_acc, maybe_vk))|
+					maybe_vk.as_ref()
+						.and_then(|vk| if *vk == k { Some((index, vk)) } else { None })
+				)
 		) {
 			// k is a local key who is also among the validators.
 			let PhragmenResult {

@@ -2314,7 +2314,6 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			let (validator_id, validator_key) = current_validators.get(*validator_index as usize)
 				.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(0u8).into()))?;
 
-			// dbg!(&validator_id, &validator_key);
 			// unwrap the key if it exists.
 			let validator_key = validator_key.as_ref()
 				.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(1u8).into()))?;
