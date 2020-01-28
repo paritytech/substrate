@@ -833,6 +833,14 @@ ServiceBuilder<
 
 		let network_params = sc_network::config::Params {
 			roles: config.roles,
+			executor: {
+				let to_spawn_tx = to_spawn_tx.clone();
+				Some(Box::new(move |fut| {
+					if let Err(e) = to_spawn_tx.unbounded_send(fut) {
+						error!("Failed to spawn libp2p background task: {:?}", e);
+					}
+				}))
+			},
 			network_config: config.network.clone(),
 			chain: client.clone(),
 			finality_proof_provider,
@@ -902,9 +910,9 @@ ServiceBuilder<
 			let network = Arc::downgrade(&network);
 			let transaction_pool_ = transaction_pool.clone();
 			let events = transaction_pool.import_notification_stream()
-				.for_each(move |_| {
+				.for_each(move |hash| {
 					if let Some(network) = network.upgrade() {
-						network.trigger_repropagate();
+						network.propagate_extrinsic(hash);
 					}
 					let status = transaction_pool_.status();
 					telemetry!(SUBSTRATE_INFO; "txpool.import";

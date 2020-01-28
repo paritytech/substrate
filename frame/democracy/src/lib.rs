@@ -268,9 +268,12 @@ decl_storage! {
 		pub PublicProps get(fn public_props): Vec<(PropIndex, T::Hash, T::AccountId)>;
 		/// Map of hashes to the proposal preimage, along with who registered it and their deposit.
 		/// The block number is the block at which it was deposited.
-		pub Preimages: map T::Hash => Option<(Vec<u8>, T::AccountId, BalanceOf<T>, T::BlockNumber)>;
+		pub Preimages:
+			map hasher(blake2_256) T::Hash
+			=> Option<(Vec<u8>, T::AccountId, BalanceOf<T>, T::BlockNumber)>;
 		/// Those who have locked a deposit.
-		pub DepositOf get(fn deposit_of): map PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
+		pub DepositOf get(fn deposit_of):
+			map hasher(blake2_256) PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
 
 		/// The next free referendum index, aka the number of referenda started so far.
 		pub ReferendumCount get(fn referendum_count) build(|_| 0 as ReferendumIndex): ReferendumIndex;
@@ -279,25 +282,28 @@ decl_storage! {
 		pub LowestUnbaked get(fn lowest_unbaked) build(|_| 0 as ReferendumIndex): ReferendumIndex;
 		/// Information concerning any given referendum.
 		pub ReferendumInfoOf get(fn referendum_info):
-			map ReferendumIndex => Option<ReferendumInfo<T::BlockNumber, T::Hash>>;
+			map hasher(blake2_256) ReferendumIndex
+			=> Option<ReferendumInfo<T::BlockNumber, T::Hash>>;
 		/// Queue of successful referenda to be dispatched. Stored ordered by block number.
 		pub DispatchQueue get(fn dispatch_queue): Vec<(T::BlockNumber, T::Hash, ReferendumIndex)>;
 
 		/// Get the voters for the current proposal.
-		pub VotersFor get(fn voters_for): map ReferendumIndex => Vec<T::AccountId>;
+		pub VotersFor get(fn voters_for):
+			map hasher(blake2_256) ReferendumIndex => Vec<T::AccountId>;
 
 		/// Get the vote in a given referendum of a particular voter. The result is meaningful only
 		/// if `voters_for` includes the voter when called with the referendum (you'll get the
 		/// default `Vote` value otherwise). If you don't want to check `voters_for`, then you can
 		/// also check for simple existence with `VoteOf::exists` first.
-		pub VoteOf get(fn vote_of): map (ReferendumIndex, T::AccountId) => Vote;
+		pub VoteOf get(fn vote_of): map hasher(blake2_256) (ReferendumIndex, T::AccountId) => Vote;
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
-		pub Proxy get(fn proxy): map T::AccountId => Option<T::AccountId>;
+		pub Proxy get(fn proxy): map hasher(blake2_256) T::AccountId => Option<T::AccountId>;
 
 		/// Get the account (and lock periods) to which another account is delegating vote.
-		pub Delegations get(fn delegations): linked_map T::AccountId => (T::AccountId, Conviction);
+		pub Delegations get(fn delegations):
+			linked_map hasher(blake2_256) T::AccountId => (T::AccountId, Conviction);
 
 		/// True if the last referendum tabled was submitted externally. False if it was a public
 		/// proposal.
@@ -311,10 +317,11 @@ decl_storage! {
 
 		/// A record of who vetoed what. Maps proposal hash to a possible existent block number
 		/// (until when it may not be resubmitted) and who vetoed it.
-		pub Blacklist get(fn blacklist): map T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
+		pub Blacklist get(fn blacklist):
+			map hasher(blake2_256) T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
 
 		/// Record of all proposals that have been subject to emergency cancellation.
-		pub Cancellations: map T::Hash => bool;
+		pub Cancellations: map hasher(blake2_256) T::Hash => bool;
 	}
 }
 

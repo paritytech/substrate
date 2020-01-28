@@ -242,7 +242,8 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Recovery {
 		/// The set of recoverable accounts and their recovery configuration.
 		pub Recoverable get(fn recovery_config):
-			map T::AccountId => Option<RecoveryConfig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
+			map hasher(blake2_256) T::AccountId
+			=> Option<RecoveryConfig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
 		/// Active recovery attempts.
 		///
 		/// First account is the account to be recovered, and the second account
@@ -253,7 +254,8 @@ decl_storage! {
 		/// The final list of recovered accounts.
 		///
 		/// Map from the recovered account to the user who can access it.
-		pub Recovered get(fn recovered_account): map T::AccountId => Option<T::AccountId>;
+		pub Recovered get(fn recovered_account):
+			map hasher(blake2_256) T::AccountId => Option<T::AccountId>;
 	}
 }
 
