@@ -5768,6 +5768,7 @@ dependencies = [
  "sp-blockchain 2.0.0",
  "sp-core 2.0.0",
  "sp-io 2.0.0",
+ "sp-offchain 2.0.0",
  "sp-rpc 2.0.0",
  "sp-runtime 2.0.0",
  "sp-session 2.0.0",
