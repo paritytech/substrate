@@ -51,7 +51,7 @@ pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
 /// An offchain workers manager.
 pub struct OffchainWorkers<Client, Storage, Block: traits::Block> {
 	client: Arc<Client>,
-	pub db: Storage,
+	db: Storage,
 	_block: PhantomData<Block>,
 	thread_pool: Mutex<ThreadPool>,
 }
