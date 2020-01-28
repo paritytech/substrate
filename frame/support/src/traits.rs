@@ -29,13 +29,13 @@ use sp_runtime::{
 use crate::dispatch::Parameter;
 
 /// Something that can predict at which block number the next era change will happen.
-pub trait PredictNextSessionChange<BlockNumber> {
+pub trait EstimateNextSessionChange<BlockNumber> {
 	/// Return the block number at which the next era change will happen.
-	fn predict_next_session_change(now: BlockNumber) -> BlockNumber;
+	fn estimate_next_session_change(now: BlockNumber) -> BlockNumber;
 }
 
-impl<BlockNumber: Bounded> PredictNextSessionChange<BlockNumber> for () {
-	fn predict_next_session_change(_: BlockNumber) -> BlockNumber {
+impl<BlockNumber: Bounded> EstimateNextSessionChange<BlockNumber> for () {
+	fn estimate_next_session_change(_: BlockNumber) -> BlockNumber {
 		// practically never
 		Bounded::max_value()
 	}

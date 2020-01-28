@@ -19,12 +19,12 @@
 use crate::*;
 use frame_support::{
 	assert_ok, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
-	traits::{Currency, FindAuthor, Get, PredictNextSessionChange},
+	traits::{Currency, FindAuthor, Get, EstimateNextSessionChange},
 	weights::Weight,
 	StorageLinkedMap, StorageValue,
 };
 use frame_system::offchain::{CreateTransaction, Signer, TransactionSubmitter};
-use sp_core::{crypto::key_types, H256};
+use sp_core::H256;
 use sp_io;
 use sp_phragmen::{build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment};
 use sp_runtime::curve::PiecewiseLinear;
@@ -169,11 +169,11 @@ impl_outer_event! {
 }
 
 pub struct PeriodicSessionChange<P>(sp_std::marker::PhantomData<P>);
-impl<P> PredictNextSessionChange<BlockNumber> for PeriodicSessionChange<P>
+impl<P> EstimateNextSessionChange<BlockNumber> for PeriodicSessionChange<P>
 where
 	P: Get<BlockNumber>,
 {
-	fn predict_next_session_change(now: BlockNumber) -> BlockNumber {
+	fn estimate_next_session_change(now: BlockNumber) -> BlockNumber {
 		let period = P::get();
 		let excess = now % period;
 		now - excess + period
@@ -184,13 +184,13 @@ where
 pub struct Author11;
 impl FindAuthor<u64> for Author11 {
 	fn find_author<'a, I>(_digests: I) -> Option<u64>
-	where
-		I: 'a + IntoIterator<Item = (frame_support::ConsensusEngineId, &'a [u8])>,
+		where I: 'a + IntoIterator<Item = (frame_support::ConsensusEngineId, &'a [u8])>,
 	{
 		Some(11)
 	}
 }
 
+// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
 
@@ -328,7 +328,6 @@ pub(crate) mod dummy_sr25519 {
 
 	pub type AuthoritySignature = app_sr25519::Signature;
 	pub type AuthorityId = app_sr25519::Public;
-	pub type AuthorityPair = app_sr25519::Pair;
 
 	impl sp_runtime::traits::IdentifyAccount for AuthorityId {
 		type AccountId = u64;
@@ -510,8 +509,7 @@ impl ExtBuilder {
 				(999, 1_000_000_000_000),
 			],
 			vesting: vec![],
-		}
-		.assimilate_storage(&mut storage);
+		}.assimilate_storage(&mut storage);
 
 		let stake_21 = if self.fair { 1000 } else { 2000 };
 		let stake_31 = if self.validator_pool {
@@ -530,22 +528,12 @@ impl ExtBuilder {
 			stakers: if self.has_stakers {
 				vec![
 					// (stash, controller, staked_amount, status)
-					(
-						11,
-						10,
-						balance_factor * 1000,
-						StakerStatus::<AccountId>::Validator,
-					),
+					(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
 					(21, 20, stake_21, StakerStatus::<AccountId>::Validator),
 					(31, 30, stake_31, StakerStatus::<AccountId>::Validator),
 					(41, 40, balance_factor * 1000, status_41),
 					// nominator
-					(
-						101,
-						100,
-						balance_factor * 500,
-						StakerStatus::<AccountId>::Nominator(nominated),
-					),
+					(101, 100, balance_factor * 500, StakerStatus::<AccountId>::Nominator(nominated)),
 				]
 			} else {
 				vec![]
@@ -559,18 +547,14 @@ impl ExtBuilder {
 		.assimilate_storage(&mut storage);
 
 		let _ = pallet_session::GenesisConfig::<Test> {
-			keys: validators
-				.iter()
-				.map(|x| (
-					*x,
-					SessionKeys {
-						// foo: UintAuthorityId(*x),
-						babe: dummy_sr25519::dummy_key_for(*x),
-					}
-				))
-				.collect(),
-		}
-		.assimilate_storage(&mut storage);
+			keys: validators.iter().map(|x| (
+				*x,
+				SessionKeys {
+					// foo: UintAuthorityId(*x),
+					babe: dummy_sr25519::dummy_key_for(*x),
+				}
+			)).collect(),
+		}.assimilate_storage(&mut storage);
 
 		let mut ext = sp_io::TestExternalities::from(storage);
 		ext.execute_with(|| {
@@ -588,9 +572,7 @@ pub type Timestamp = pallet_timestamp::Module<Test>;
 pub type Staking = Module<Test>;
 
 pub fn check_exposure_all() {
-	Staking::current_elected()
-		.into_iter()
-		.for_each(|acc| check_exposure(acc));
+	Staking::current_elected().into_iter().for_each(|acc| check_exposure(acc));
 }
 
 pub fn check_nominator_all() {
@@ -618,12 +600,7 @@ pub fn check_nominator_exposure(stash: u64) {
 	Staking::current_elected()
 		.iter()
 		.map(|v| Staking::stakers(v))
-		.for_each(|e| {
-			e.others
-				.iter()
-				.filter(|i| i.who == stash)
-				.for_each(|i| sum += i.value)
-		});
+		.for_each(|e| e.others.iter().filter(|i| i.who == stash).for_each(|i| sum += i.value));
 	let nominator_stake = Staking::slashable_balance_of(&stash);
 	// a nominator cannot over-spend.
 	assert!(
@@ -643,10 +620,7 @@ pub fn assert_ledger_consistent(stash: u64) {
 	assert_is_stash(stash);
 	let ledger = Staking::ledger(stash - 1).unwrap();
 
-	let real_total: Balance = ledger
-		.unlocking
-		.iter()
-		.fold(ledger.active, |a, c| a + c.value);
+	let real_total: Balance = ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
 	assert_eq!(real_total, ledger.total);
 }
 
@@ -689,7 +663,7 @@ pub fn advance_session() {
 }
 
 pub fn start_session(session_index: SessionIndex) {
-	// Compensate for session delay TODO: double check this.
+	// Compensate for session delay.
 	let session_index = session_index + 1;
 	for i in Session::current_index()..session_index {
 		System::set_block_number((i + 1).into());
@@ -712,8 +686,7 @@ pub fn current_total_payout_for_duration(duration: u64) -> u64 {
 		<Module<Test>>::slot_stake() * 2,
 		Balances::total_issuance(),
 		duration,
-	)
-	.0
+	).0
 }
 
 pub fn reward_all_elected() {
@@ -751,21 +724,14 @@ pub fn on_offence_in_era(
 	}
 
 	if Staking::current_era() == era {
-		Staking::on_offence(
-			offenders,
-			slash_fraction,
-			Staking::current_era_start_session_index(),
-		);
+		Staking::on_offence(offenders, slash_fraction, Staking::current_era_start_session_index());
 	} else {
 		panic!("cannot slash in era {}", era);
 	}
 }
 
 pub fn on_offence_now(
-	offenders: &[OffenceDetails<
-		AccountId,
-		pallet_session::historical::IdentificationTuple<Test>,
-	>],
+	offenders: &[OffenceDetails<AccountId, pallet_session::historical::IdentificationTuple<Test>>],
 	slash_fraction: &[Perbill],
 ) {
 	let now = Staking::current_era();

@@ -263,7 +263,7 @@ use frame_support::{
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
-		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time, PredictNextSessionChange,
+		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time, EstimateNextSessionChange,
 	}
 };
 use pallet_session::historical;
@@ -286,7 +286,7 @@ use sp_staking::{
 use sp_runtime::{Serialize, Deserialize};
 use frame_system::{
 	self as system, ensure_signed, ensure_root, ensure_none,
-	offchain::{SubmitSignedTransaction, SubmitUnsignedTransaction, SignAndSubmitTransaction},
+	offchain::SubmitUnsignedTransaction,
 };
 
 use sp_phragmen::{
@@ -618,7 +618,7 @@ pub trait SessionInterface<AccountId>: frame_system::Trait {
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
 	/// Get the validators and their corresponding keys from session.
-	fn keys<KeyType: RuntimeAppPublic + Decode + sp_std::fmt::Debug>() -> Vec<(AccountId, Option<KeyType>)>;
+	fn keys<KeyType: RuntimeAppPublic + Decode>() -> Vec<(AccountId, Option<KeyType>)>;
 	/// Prune historical session tries up to but not including the given index.
 	fn prune_historical_up_to(up_to: SessionIndex);
 	/// Current session index.
@@ -643,7 +643,7 @@ impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T whe
 		<pallet_session::Module<T>>::validators()
 	}
 
-	fn keys<KeyT: RuntimeAppPublic + Decode + sp_std::fmt::Debug>()
+	fn keys<KeyT: RuntimeAppPublic + Decode>()
 		-> Vec<(<T as frame_system::Trait>::AccountId, Option<KeyT>)>
 	{
 		Self::validators().iter().map(|v| {
@@ -710,22 +710,21 @@ pub trait Trait: frame_system::Trait {
 	type RewardCurve: Get<&'static PiecewiseLinear<'static>>;
 
 	/// Something that can predict the next session change.
-	type NextSessionChange: PredictNextSessionChange<Self::BlockNumber>;
+	type NextSessionChange: EstimateNextSessionChange<Self::BlockNumber>;
 
-	/// How many blocks ahead of the epoch do we try to run the phragmen offchain? Setting this to
+	/// How many blocks ahead of the era do we try to run the phragmen offchain? Setting this to
 	/// zero will disable the offchain compute and only on-chain seq-phragmen will be used.
 	type ElectionLookahead: Get<Self::BlockNumber>;
 
 	/// The overarching call type.
-	// TODO: This is needed just to bound it to `From<Call<Self>>`. Otherwise could have `Self as system`
 	type Call: From<Call<Self>> + Clone;
 
 	/// A transaction submitter.
-	type SubmitTransaction:
-		SignAndSubmitTransaction<Self, <Self as Trait>::Call> +
-		SubmitSignedTransaction<Self, <Self as Trait>::Call> +
-		SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
+	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
+	/// Key type used to sign and verify transaction.
+	// TODO: this cen be fetched from `SubmitTransaction` as well, but for now both me and @todr
+	// gave up.
 	type KeyType: RuntimeAppPublic + Member + Parameter;
 }
 
@@ -976,7 +975,7 @@ decl_module! {
 				Self::is_current_session_final()
 			{
 				let next_session_change =
-					T::NextSessionChange::predict_next_session_change(now);
+					T::NextSessionChange::estimate_next_session_change(now);
 				if let Some(remaining) = next_session_change.checked_sub(&now) {
 					if remaining <= T::ElectionLookahead::get() && !remaining.is_zero() {
 						// Set the flag to make sure we don't waste any compute here in the same era
@@ -2293,7 +2292,6 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 	}
 }
 
-// TODO: do we need BoundToRuntimeAppPublic stuff?
 #[allow(deprecated)]
 impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
@@ -2311,7 +2309,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			// check signature
 			let payload = (winners, compact, validator_index);
 			let current_validators = T::SessionInterface::keys::<T::KeyType>();
-			let (validator_id, validator_key) = current_validators.get(*validator_index as usize)
+			let (_, validator_key) = current_validators.get(*validator_index as usize)
 				.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(0u8).into()))?;
 
 			// unwrap the key if it exists.

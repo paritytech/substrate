@@ -18,9 +18,7 @@
 
 use crate::{Call, CompactAssignments, Module, SessionInterface, Trait};
 use codec::Encode;
-use frame_system::offchain::{
-	SubmitSignedTransaction, SubmitUnsignedTransaction, SignAndSubmitTransaction, CreateTransaction,
-};
+use frame_system::offchain::{SubmitUnsignedTransaction};
 use sp_phragmen::{reduce, ExtendedBalance, PhragmenResult, StakedAssignment};
 use sp_std::{prelude::*, cmp::Ordering};
 use sp_runtime::RuntimeAppPublic;

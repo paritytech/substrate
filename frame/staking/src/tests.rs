@@ -2684,7 +2684,7 @@ mod offchain_phragmen {
 	use mock::*;
 	use frame_support::{assert_ok, assert_noop};
 	use substrate_test_utils::assert_eq_uvec;
-	use sp_runtime::traits::{OffchainWorker, ValidateUnsigned} ;
+	use sp_runtime::traits::OffchainWorker;
 	use sp_core::offchain::{
 		OffchainExt,
 		TransactionPoolExt,
@@ -2693,7 +2693,6 @@ mod offchain_phragmen {
 	use sp_io::TestExternalities;
 	use sp_core::traits::KeystoreExt;
 	use sp_core::testing::KeyStore;
-	use sp_application_crypto::AppKey;
 	use std::sync::Arc;
 	use parking_lot::RwLock;
 
@@ -2724,11 +2723,11 @@ mod offchain_phragmen {
 		let (pool, state) = TestTransactionPoolExt::new();
 		let keystore = KeyStore::new();
 
-		keystore.write().insert_unknown(
+		let _ = keystore.write().insert_unknown(
 			<DummyT as sp_application_crypto::AppKey>::ID,
 			&format!("{}/staking{}", mock::PHRASE, 11),
 			dummy_sr25519::dummy_key_for(11).as_ref(),
-		);
+		).unwrap();
 		ext.register_extension(OffchainExt::new(offchain));
 		ext.register_extension(TransactionPoolExt::new(pool));
 		ext.register_extension(KeystoreExt(keystore));
@@ -3057,7 +3056,7 @@ mod offchain_phragmen {
 
 			// pass this call to ValidateUnsigned
 			assert_eq!(
-				<Staking as ValidateUnsigned>::validate_unsigned(&inner),
+				<Staking as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(&inner),
 				TransactionValidity::Ok(ValidTransaction {
 					priority: TransactionPriority::max_value(),
 					requires: vec![],

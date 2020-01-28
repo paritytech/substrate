@@ -272,8 +272,6 @@ parameter_types! {
 	pub const ElectionLookahead: BlockNumber = 150;
 }
 
-struct StakingTransactionSubmitter;
-
 impl pallet_staking::Trait for Runtime {
 	type Currency = Balances;
 	type Time = Timestamp;
@@ -466,7 +464,7 @@ impl pallet_im_online::Trait for Runtime {
 	type Call = Call;
 	type Event = Event;
 	type AuthorityId = ImOnlineId;
-	type SubmitTransaction = TransactionSubmitterOf<ImOnlineId>;
+	type SubmitTransaction = TransactionSubmitterOf<Self::AuthorityId>;
 	type ReportUnresponsiveness = Offences;
 	type SessionDuration = SessionDuration;
 }

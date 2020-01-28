@@ -320,7 +320,7 @@ impl<T: Trait> Module<T> {
 	/// -------------- IMPORTANT NOTE --------------
 	/// This implementation is linked to how [`should_epoch_change`] is working. This might need to
 	/// be updated accordingly, if the underlying mechanics of slot and epochs change.
-	pub fn next_epoch_change(now: T::BlockNumber) -> T::BlockNumber {
+	pub fn next_expected_epoch_change(now: T::BlockNumber) -> T::BlockNumber {
 		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
 		let slots_remaining = next_slot
 			.checked_sub(CurrentSlot::get())
@@ -487,9 +487,9 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
-impl<T: Trait> frame_support::traits::PredictNextSessionChange<T::BlockNumber> for Module<T> {
-	fn predict_next_session_change(now: T::BlockNumber) -> T::BlockNumber {
-		Self::next_epoch_change(now)
+impl<T: Trait> frame_support::traits::EstimateNextSessionChange<T::BlockNumber> for Module<T> {
+	fn estimate_next_session_change(now: T::BlockNumber) -> T::BlockNumber {
+		Self::next_expected_epoch_change(now)
 	}
 }
 
