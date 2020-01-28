@@ -49,7 +49,7 @@ use std::{
 };
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer};
+use sp_transaction_pool::MaintainedTransactionPool;
 use sp_blockchain;
 use grafana_data_source::{self, record_metrics};
 
@@ -740,9 +740,7 @@ ServiceBuilder<
 	TSc: Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TNetP: NetworkSpecialization<TBl>,
-	TExPool: 'static
-		+ TransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>
-		+ TransactionPoolMaintainer<Block=TBl, Hash = <TBl as BlockT>::Hash>,
+	TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata> + Clone,
 {
 
@@ -839,6 +837,14 @@ ServiceBuilder<
 
 		let network_params = sc_network::config::Params {
 			roles: config.roles,
+			executor: {
+				let to_spawn_tx = to_spawn_tx.clone();
+				Some(Box::new(move |fut| {
+					if let Err(e) = to_spawn_tx.unbounded_send(fut) {
+						error!("Failed to spawn libp2p background task: {:?}", e);
+					}
+				}))
+			},
 			network_config: config.network.clone(),
 			chain: client.clone(),
 			finality_proof_provider,
@@ -908,9 +914,9 @@ ServiceBuilder<
 			let network = Arc::downgrade(&network);
 			let transaction_pool_ = transaction_pool.clone();
 			let events = transaction_pool.import_notification_stream()
-				.for_each(move |_| {
+				.for_each(move |hash| {
 					if let Some(network) = network.upgrade() {
-						network.trigger_repropagate();
+						network.propagate_extrinsic(hash);
 					}
 					let status = transaction_pool_.status();
 					telemetry!(SUBSTRATE_INFO; "txpool.import";
@@ -1069,7 +1075,7 @@ ServiceBuilder<
 			has_bootnodes,
 		), exit.clone()).map(drop)));
 
-		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
+		let telemetry_connection_sinks: Arc<Mutex<Vec<futures::channel::mpsc::UnboundedSender<()>>>> = Default::default();
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {

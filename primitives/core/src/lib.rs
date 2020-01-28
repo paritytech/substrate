@@ -309,3 +309,43 @@ pub fn to_substrate_wasm_fn_return_value(value: &impl Encode) -> u64 {
 
 	res
 }
+
+/// Macro for creating `Maybe*` marker traits.
+///
+/// Such a maybe-marker trait requires the given bound when `feature = std` and doesn't require
+/// the bound on `no_std`. This is useful for situations where you require that a type implements
+/// a certain trait with `feature = std`, but not on `no_std`.
+///
+/// # Example
+///
+/// ```
+/// sp_core::impl_maybe_marker! {
+///     /// A marker for a type that implements `Debug` when `feature = std`.
+///     trait MaybeDebug: std::fmt::Debug;
+///     /// A marker for a type that implements `Debug + Display` when `feature = std`.
+///     trait MaybeDebugDisplay: std::fmt::Debug, std::fmt::Display;
+/// }
+/// ```
+#[macro_export]
+macro_rules! impl_maybe_marker {
+	(
+		$(
+			$(#[$doc:meta] )+
+			trait $trait_name:ident: $( $trait_bound:path ),+;
+		)+
+	) => {
+		$(
+			$(#[$doc])+
+			#[cfg(feature = "std")]
+			pub trait $trait_name: $( $trait_bound + )+ {}
+			#[cfg(feature = "std")]
+			impl<T: $( $trait_bound + )+> $trait_name for T {}
+
+			$(#[$doc])+
+			#[cfg(not(feature = "std"))]
+			pub trait $trait_name {}
+			#[cfg(not(feature = "std"))]
+			impl<T> $trait_name for T {}
+		)+
+	}
+}

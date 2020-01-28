@@ -329,7 +329,7 @@ decl_storage! {
 		//   `pub? Name get(fn getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
 		// where `<type>` is either:
 		//   - `Type` (a basic value item); or
-		//   - `map KeyType => ValueType` (a map item).
+		//   - `map hasher(HasherKind) KeyType => ValueType` (a map item).
 		//
 		// Note that there are two optional modifiers for the storage type declaration.
 		// - `Foo: Option<u32>`:
@@ -339,7 +339,7 @@ decl_storage! {
 		//   - `Foo::put(1); Foo::get()` returns `1`;
 		//   - `Foo::kill(); Foo::get()` returns `0` (u32::default()).
 		// e.g. Foo: u32;
-		// e.g. pub Bar get(fn bar): map T::AccountId => Vec<(T::Balance, u64)>;
+		// e.g. pub Bar get(fn bar): map hasher(blake2_256) T::AccountId => Vec<(T::Balance, u64)>;
 		//
 		// For basic value items, you'll get a type which implements
 		// `frame_support::StorageValue`. For map items, you'll get a type which
@@ -351,7 +351,7 @@ decl_storage! {
 		Dummy get(fn dummy) config(): Option<T::Balance>;
 
 		// A map that has enumerable entries.
-		Bar get(fn bar) config(): linked_map T::AccountId => T::Balance;
+		Bar get(fn bar) config(): linked_map hasher(blake2_256) T::AccountId => T::Balance;
 
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
 		Foo get(fn foo) config(): T::Balance;

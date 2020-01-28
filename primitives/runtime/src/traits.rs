@@ -458,36 +458,18 @@ impl<H: PartialEq + Eq + Debug> CheckEqual for super::generic::DigestItem<H> whe
 	}
 }
 
-macro_rules! impl_maybe_marker {
-	( $( $(#[$doc:meta])+ $trait_name:ident: $($trait_bound:path),+ );+ ) => {
-		$(
-			$(#[$doc])+
-			#[cfg(feature = "std")]
-			pub trait $trait_name: $($trait_bound +)+ {}
-			#[cfg(feature = "std")]
-			impl<T: $($trait_bound +)+> $trait_name for T {}
-
-			$(#[$doc])+
-			#[cfg(not(feature = "std"))]
-			pub trait $trait_name {}
-			#[cfg(not(feature = "std"))]
-			impl<T> $trait_name for T {}
-		)+
-	}
-}
-
-impl_maybe_marker!(
+sp_core::impl_maybe_marker!(
 	/// A type that implements Display when in std environment.
-	MaybeDisplay: Display;
+	trait MaybeDisplay: Display;
 
 	/// A type that implements Hash when in std environment.
-	MaybeHash: sp_std::hash::Hash;
+	trait MaybeHash: sp_std::hash::Hash;
 
 	/// A type that implements Serialize when in std environment.
-	MaybeSerialize: Serialize;
+	trait MaybeSerialize: Serialize;
 
 	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
-	MaybeSerializeDeserialize: DeserializeOwned, Serialize
+	trait MaybeSerializeDeserialize: DeserializeOwned, Serialize;
 );
 
 /// A type that provides a randomness beacon.
@@ -1124,12 +1106,14 @@ macro_rules! count {
 #[macro_export]
 macro_rules! impl_opaque_keys {
 	(
+		$( #[ $attr:meta ] )*
 		pub struct $name:ident {
 			$(
 				pub $field:ident: $type:ty,
 			)*
 		}
 	) => {
+		$( #[ $attr ] )*
 		#[derive(
 			Default, Clone, PartialEq, Eq,
 			$crate::codec::Encode,
@@ -1160,6 +1144,37 @@ macro_rules! impl_opaque_keys {
 					)*
 				};
 				$crate::codec::Encode::encode(&keys)
+			}
+
+			/// Converts `Self` into a `Vec` of `(raw public key, KeyTypeId)`.
+			pub fn into_raw_public_keys(
+				self,
+			) -> $crate::sp_std::vec::Vec<($crate::sp_std::vec::Vec<u8>, $crate::KeyTypeId)> {
+				let mut keys = Vec::new();
+				$(
+					keys.push((
+						$crate::RuntimeAppPublic::to_raw_vec(&self.$field),
+						<
+							<
+								$type as $crate::BoundToRuntimeAppPublic
+							>::Public as $crate::RuntimeAppPublic
+						>::ID,
+					));
+				)*
+
+				keys
+			}
+
+			/// Decode `Self` from the given `encoded` slice and convert `Self` into the raw public
+			/// keys (see [`Self::into_raw_public_keys`]).
+			///
+			/// Returns `None` when the decoding failed, otherwise `Some(_)`.
+			pub fn decode_into_raw_public_keys(
+				encoded: &[u8],
+			) -> Option<$crate::sp_std::vec::Vec<($crate::sp_std::vec::Vec<u8>, $crate::KeyTypeId)>> {
+				<Self as $crate::codec::Decode>::decode(&mut &encoded[..])
+					.ok()
+					.map(|s| s.into_raw_public_keys())
 			}
 		}
 

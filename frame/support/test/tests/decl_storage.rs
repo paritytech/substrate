@@ -59,23 +59,27 @@ mod tests {
 			GetOptU32WithBuilderNone get(fn opt_u32_with_builder_none) build(|_| None): Option<u32>;
 
 			// map non-getters: pub / $default
-			MAPU32 : map u32 => Option<String>;
-			pub PUBMAPU32 : map u32 => Option<String>;
-			MAPU32MYDEF : map u32 => Option<String>;
-			pub PUBMAPU32MYDEF : map u32 => Option<String>;
+			MAPU32 : map hasher(blake2_256) u32 => Option<String>;
+			pub PUBMAPU32 : map hasher(blake2_256) u32 => Option<String>;
+			MAPU32MYDEF : map hasher(blake2_256) u32 => Option<String>;
+			pub PUBMAPU32MYDEF : map hasher(blake2_256) u32 => Option<String>;
 
 			// map getters: pub / $default
-			GETMAPU32 get(fn map_u32_getter): map u32 => String;
-			pub PUBGETMAPU32 get(fn pub_map_u32_getter): map u32 => String;
+			GETMAPU32 get(fn map_u32_getter): map hasher(blake2_256) u32 => String;
+			pub PUBGETMAPU32 get(fn pub_map_u32_getter): map hasher(blake2_256) u32 => String;
 
-			GETMAPU32MYDEF get(fn map_u32_getter_mydef): map u32 => String = "map".into();
-			pub PUBGETMAPU32MYDEF get(fn pub_map_u32_getter_mydef): map u32 => String = "pubmap".into();
+			GETMAPU32MYDEF get(fn map_u32_getter_mydef):
+				map hasher(blake2_256) u32 => String = "map".into();
+			pub PUBGETMAPU32MYDEF get(fn pub_map_u32_getter_mydef):
+				map hasher(blake2_256) u32 => String = "pubmap".into();
 
 			// linked map
-			LINKEDMAPU32 : linked_map u32 => Option<String>;
-			pub PUBLINKEDMAPU32MYDEF : linked_map u32 => Option<String>;
-			GETLINKEDMAPU32 get(fn linked_map_u32_getter): linked_map u32 => String;
-			pub PUBGETLINKEDMAPU32MYDEF get(fn pub_linked_map_u32_getter_mydef): linked_map u32 => String = "pubmap".into();
+			LINKEDMAPU32 : linked_map hasher(blake2_256) u32 => Option<String>;
+			pub PUBLINKEDMAPU32MYDEF : linked_map hasher(blake2_256) u32 => Option<String>;
+			GETLINKEDMAPU32 get(fn linked_map_u32_getter):
+				linked_map hasher(blake2_256) u32 => String;
+			pub PUBGETLINKEDMAPU32MYDEF get(fn pub_linked_map_u32_getter_mydef):
+				linked_map hasher(blake2_256) u32 => String = "pubmap".into();
 
 			COMPLEXTYPE1: ::std::vec::Vec<<T as Trait>::Origin>;
 			COMPLEXTYPE2: (Vec<Vec<(u16,Box<(  )>)>>, u32);
@@ -558,17 +562,17 @@ mod test_append_and_len {
 			JustVecWithDefault: Vec<u32> = vec![6, 9];
 			OptionVec: Option<Vec<u32>>;
 
-			MapVec: map u32 => Vec<u32>;
-			MapVecWithDefault: map u32 => Vec<u32> = vec![6, 9];
-			OptionMapVec: map u32 => Option<Vec<u32>>;
+			MapVec: map hasher(blake2_256) u32 => Vec<u32>;
+			MapVecWithDefault: map hasher(blake2_256) u32 => Vec<u32> = vec![6, 9];
+			OptionMapVec: map hasher(blake2_256) u32 => Option<Vec<u32>>;
 
-			DoubleMapVec: double_map u32, u32 => Vec<u32>;
-			DoubleMapVecWithDefault: double_map u32, u32 => Vec<u32> = vec![6, 9];
-			OptionDoubleMapVec: double_map u32, u32 => Option<Vec<u32>>;
+			DoubleMapVec: double_map hasher(blake2_256) u32, hasher(blake2_256) u32 => Vec<u32>;
+			DoubleMapVecWithDefault: double_map hasher(blake2_256) u32, hasher(blake2_256) u32 => Vec<u32> = vec![6, 9];
+			OptionDoubleMapVec: double_map hasher(blake2_256) u32, hasher(blake2_256) u32 => Option<Vec<u32>>;
 
-			LinkedMapVec: linked_map u32 => Vec<u32>;
-			LinkedMapVecWithDefault: linked_map u32 => Vec<u32> = vec![6, 9];
-			OptionLinkedMapVec: linked_map u32 => Option<Vec<u32>>;
+			LinkedMapVec: linked_map hasher(blake2_256) u32 => Vec<u32>;
+			LinkedMapVecWithDefault: linked_map hasher(blake2_256) u32 => Vec<u32> = vec![6, 9];
+			OptionLinkedMapVec: linked_map hasher(blake2_256) u32 => Option<Vec<u32>>;
 		}
 	}
 
