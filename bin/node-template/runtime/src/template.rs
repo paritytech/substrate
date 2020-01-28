@@ -13,7 +13,7 @@ use system::ensure_signed;
 
 /// The pallet's configuration trait.
 pub trait Trait: system::Trait {
-	// TODO: Add other types and constants required to configure this pallet.
+	// Add other types and constants required to configure this pallet.
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -68,7 +68,7 @@ decl_module! {
 			// Check it was signed and get the signer. See also: ensure_root and ensure_none
 			let who = ensure_signed(origin)?;
 
-			// TODO: Code to execute when something calls this.
+			// Code to execute when something calls this.
 			// For example: the following line stores the passed in u32 in the storage
 			Something::put(something);
 
