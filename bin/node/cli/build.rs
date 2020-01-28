@@ -21,8 +21,10 @@ fn main() {
 
 #[cfg(feature = "cli")]
 mod cli {
+	include!("src/cli.rs");
+
 	use std::{fs, env, path::Path};
-	use sc_cli::{CoreParams, structopt::{StructOpt, clap::Shell}};
+	use sc_cli::{structopt::clap::Shell};
 	use vergen::{ConstantsFlags, generate_cargo_keys};
 
 	pub fn main() {
@@ -54,6 +56,6 @@ mod cli {
 
 		fs::create_dir(&path).ok();
 
-		CoreParams::clap().gen_completions("substrate-node", *shell, &path);
+		Cli::clap().gen_completions("substrate-node", *shell, &path);
 	}
 }

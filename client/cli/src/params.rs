@@ -851,10 +851,7 @@ pub struct PurgeChainCmd {
 /// the CLI user perspective, it is not visible that `Run` is a subcommand. So, all parameters of
 /// `Run` are exported as main executable parameters.
 #[derive(Debug, Clone, StructOpt)]
-pub enum CoreParams {
-	/// Run a node.
-	Run(RunCmd),
-
+pub enum Subcommand {
 	/// Build a spec.json file, outputing to stdout.
 	BuildSpec(BuildSpecCmd),
 
@@ -874,13 +871,12 @@ pub enum CoreParams {
 	PurgeChain(PurgeChainCmd),
 }
 
-impl CoreParams {
+impl Subcommand {
 	/// Get the shared parameters of a `CoreParams` command
 	pub fn get_shared_params(&self) -> &SharedParams {
-		use CoreParams::*;
+		use Subcommand::*;
 
 		match self {
-			Run(params) => &params.shared_params,
 			BuildSpec(params) => &params.shared_params,
 			ExportBlocks(params) => &params.shared_params,
 			ImportBlocks(params) => &params.shared_params,
@@ -891,22 +887,16 @@ impl CoreParams {
 	}
 
 	/// Run any `CoreParams` command
-	pub fn run<G, E, FNL, FNF, B, SL, SF, BC, BB>(
+	pub fn run<G, E, B, BC, BB>(
 		self,
 		config: Configuration<G, E>,
-		new_light: FNL,
-		new_full: FNF,
 		builder: B,
 		version: &VersionInfo,
 	) -> error::Result<()>
 	where
-		FNL: FnOnce(Configuration<G, E>) -> Result<SL, sc_service::error::Error>,
-		FNF: FnOnce(Configuration<G, E>) -> Result<SF, sc_service::error::Error>,
 		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
-		SL: AbstractService + Unpin,
-		SF: AbstractService + Unpin,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
 		BB: sp_runtime::traits::Block + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
@@ -915,13 +905,12 @@ impl CoreParams {
 		assert!(config.chain_spec.is_some(), "chain_spec must be present before continuing");
 
 		match self {
-			CoreParams::Run(cmd) => cmd.run(config, new_light, new_full, version),
-			CoreParams::BuildSpec(cmd) => cmd.run(config),
-			CoreParams::ExportBlocks(cmd) => cmd.run(config, builder),
-			CoreParams::ImportBlocks(cmd) => cmd.run(config, builder),
-			CoreParams::CheckBlock(cmd) => cmd.run(config, builder),
-			CoreParams::PurgeChain(cmd) => cmd.run(config),
-			CoreParams::Revert(cmd) => cmd.run(config, builder),
+			Subcommand::BuildSpec(cmd) => cmd.run(config),
+			Subcommand::ExportBlocks(cmd) => cmd.run(config, builder),
+			Subcommand::ImportBlocks(cmd) => cmd.run(config, builder),
+			Subcommand::CheckBlock(cmd) => cmd.run(config, builder),
+			Subcommand::PurgeChain(cmd) => cmd.run(config),
+			Subcommand::Revert(cmd) => cmd.run(config, builder),
 		}
 	}
 }

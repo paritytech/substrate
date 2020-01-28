@@ -14,14 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use sc_cli::VersionInfo;
-use sc_cli::{SharedParams, ImportParams, error};
-use sc_service::{Roles as ServiceRoles, Configuration};
+use sc_cli::{SharedParams, ImportParams, RunCmd};
 use structopt::StructOpt;
-use sc_cli::{CoreParams, RunCmd};
-use crate::{service, ChainSpec, load_spec};
-use crate::factory_impl::FactoryState;
-use node_transaction_factory::RuntimeAdapter;
 
 #[derive(Clone, Debug, StructOpt)]
 #[structopt(settings = &[
@@ -29,9 +23,17 @@ use node_transaction_factory::RuntimeAdapter;
 	structopt::clap::AppSettings::ArgsNegateSubcommands,
 	structopt::clap::AppSettings::SubcommandsNegateReqs,
 ])]
-enum Cli {
+pub struct Cli {
+	#[structopt(subcommand)]
+	pub subcommand: Option<Subcommand>,
 	#[structopt(flatten)]
-	SubstrateCli(CoreParams),
+	pub run: RunCmd,
+}
+
+#[derive(Clone, Debug, StructOpt)]
+pub enum Subcommand {
+	#[structopt(flatten)]
+	Base(sc_cli::Subcommand),
 	/// The custom factory subcommmand for manufacturing transactions.
 	#[structopt(
 		name = "factory",
@@ -81,65 +83,4 @@ pub struct FactoryCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub import_params: ImportParams,
-}
-
-/// Parse command line arguments into service configuration.
-pub fn run<I, T>(args: I, version: sc_cli::VersionInfo) -> error::Result<()>
-where
-	I: Iterator<Item = T>,
-	T: Into<std::ffi::OsString> + Clone,
-{
-	type Config<A, B> = Configuration<A, B>;
-
-	let args: Vec<_> = args.collect();
-	let subcommand = match sc_cli::try_from_iter::<RunCmd, _>(args.clone(), &version) {
-		Ok(opt) => Cli::SubstrateCli(CoreParams::Run(opt)),
-		Err(_) => sc_cli::from_iter::<Cli, _>(args.clone(), &version),
-	};
-
-	let mut config = sc_service::Configuration::default();
-	config.impl_name = "substrate-node";
-
-	match subcommand {
-		Cli::SubstrateCli(cli) => sc_cli::run(
-			config,
-			cli,
-			service::new_light,
-			service::new_full,
-			load_spec,
-			|config: Config<_, _>| Ok(new_full_start!(config).0),
-			&version,
-		),
-		Cli::Factory(cli_args) => {
-			sc_cli::init(&mut config, load_spec, &cli_args.shared_params, &version)?;
-
-			sc_cli::fill_import_params(
-				&mut config,
-				&cli_args.import_params,
-				ServiceRoles::FULL,
-				cli_args.shared_params.dev,
-			)?;
-
-			match ChainSpec::from(config.expect_chain_spec().id()) {
-				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
-				_ => panic!("Factory is only supported for development and local testnet."),
-			}
-
-			let factory_state = FactoryState::new(
-				cli_args.mode.clone(),
-				cli_args.num,
-				cli_args.rounds,
-			);
-
-			let service_builder = new_full_start!(config).0;
-			node_transaction_factory::factory::<FactoryState<_>, _, _, _, _, _>(
-				factory_state,
-				service_builder.client(),
-				service_builder.select_chain()
-					.expect("The select_chain is always initialized by new_full_start!; QED")
-			).map_err(|e| format!("Error in transaction factory: {}", e))?;
-
-			Ok(())
-		},
-	}
 }
