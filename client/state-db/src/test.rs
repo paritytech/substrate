@@ -18,11 +18,12 @@
 
 use std::collections::HashMap;
 use sp_core::H256;
-use crate::{DBValue, ChangeSet, CommitSet, MetaDb, NodeDb};
+use crate::{DBValue, ChangeSet, CommitSet, MetaDb, NodeDb, ChildTrieChangeSet};
+use sp_core::storage::OwnedChildInfo;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TestDb {
-	pub data: HashMap<H256, DBValue>,
+	pub data: HashMap<Option<OwnedChildInfo>, HashMap<H256, DBValue>>,
 	pub meta: HashMap<Vec<u8>, DBValue>,
 }
 
@@ -39,16 +40,23 @@ impl NodeDb for TestDb {
 	type Key = H256;
 
 	fn get(&self, key: &H256) -> Result<Option<DBValue>, ()> {
-		Ok(self.data.get(key).cloned())
+		Ok(self.data.get(&None).and_then(|data| data.get(key).cloned()))
 	}
 }
 
 impl TestDb {
 	pub fn commit(&mut self, commit: &CommitSet<H256>) {
-		self.data.extend(commit.data.inserted.iter().cloned());
+		for ct in commit.data.iter() {
+			self.data.entry(ct.info.clone()).or_default()
+				.extend(ct.data.inserted.iter().cloned())
+		}
 		self.meta.extend(commit.meta.inserted.iter().cloned());
-		for k in commit.data.deleted.iter() {
-			self.data.remove(k);
+		for ct in commit.data.iter() {
+			if let Some(self_data) = self.data.get_mut(&ct.info) {
+				for k in ct.data.deleted.iter() {
+					self_data.remove(k);
+				}
+			}
 		}
 		self.meta.extend(commit.meta.inserted.iter().cloned());
 		for k in commit.meta.deleted.iter() {
@@ -73,21 +81,29 @@ pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
 	}
 }
 
+pub fn make_childchangeset(inserted: &[u64], deleted: &[u64]) -> Vec<ChildTrieChangeSet<H256>> {
+	vec![ChildTrieChangeSet {
+		info: None,
+		data: make_changeset(inserted, deleted),
+	}]
+}
+
 pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 	CommitSet {
-		data: make_changeset(inserted, deleted),
+		data: make_childchangeset(inserted, deleted),
 		meta: ChangeSet::default(),
 	}
 }
 
 pub fn make_db(inserted: &[u64]) -> TestDb {
+	let mut data = HashMap::new();
+	data.insert(None, inserted.iter()
+		.map(|v| {
+			(H256::from_low_u64_be(*v), H256::from_low_u64_be(*v).as_bytes().to_vec())
+		})
+		.collect());
 	TestDb {
-		data: inserted
-			.iter()
-			.map(|v| {
-				(H256::from_low_u64_be(*v), H256::from_low_u64_be(*v).as_bytes().to_vec())
-			})
-			.collect(),
+		data,
 		meta: Default::default(),
 	}
 }

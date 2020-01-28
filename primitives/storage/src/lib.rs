@@ -19,6 +19,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
+use codec::{Decode, Encode};
+#[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use sp_debug_derive::RuntimeDebug;
 
@@ -184,7 +186,7 @@ pub enum ChildInfo<'a> {
 /// Owned version of `ChildInfo`.
 /// To be use in persistence layers.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
 pub enum OwnedChildInfo {
 	Default(OwnedChildTrie),
 }
@@ -288,7 +290,7 @@ pub struct ChildTrie<'a> {
 
 /// Owned version of default child trie `ChildTrie`.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
 pub struct OwnedChildTrie {
 	/// See `ChildTrie` reference field documentation.
 	data: Vec<u8>,

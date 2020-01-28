@@ -140,6 +140,18 @@ pub struct CommitSet<H: Hash> {
 	pub meta: ChangeSet<Vec<u8>>,
 }
 
+impl<H:Hash> CommitSet<H> {
+	/// Number of inserted key value element in the set.
+	pub fn inserted_len(&self) -> usize {
+		self.data.iter().map(|set| set.data.inserted.len()).sum()
+	}
+
+	/// Number of deleted key value element in the set.
+	pub fn deleted_len(&self) -> usize {
+		self.data.iter().map(|set| set.data.deleted.len()).sum()
+	}
+}
+
 /// Pruning constraints. If none are specified pruning is
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct Constraints {
@@ -244,7 +256,13 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	pub fn insert_block<E: fmt::Debug>(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, mut changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
+	pub fn insert_block<E: fmt::Debug>(
+		&mut self,
+		hash: &BlockHash,
+		number: u64,
+		parent_hash: &BlockHash,
+		mut changeset: Vec<ChildTrieChangeSet<Key>>,
+	) -> Result<CommitSet<Key>, Error<E>> {
 		let mut meta = ChangeSet::default();
 		if number == 0 {
 			// Save pruning mode when writing first block.
@@ -253,7 +271,9 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 
 		match self.mode {
 			PruningMode::ArchiveAll => {
-				changeset.deleted.clear();
+				for changeset in changeset.iter_mut() {
+					changeset.data.deleted.clear();
+				}
 				// write changes immediately
 				Ok(CommitSet {
 					data: changeset,
@@ -278,7 +298,9 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		match self.non_canonical.canonicalize(&hash, &mut commit) {
 			Ok(()) => {
 				if self.mode == PruningMode::ArchiveCanonical {
-					commit.data.deleted.clear();
+					for commit in commit.data.iter_mut() {
+						commit.data.deleted.clear();
+					}
 				}
 			}
 			Err(e) => return Err(e),
@@ -424,7 +446,13 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Add a new non-canonical block.
-	pub fn insert_block<E: fmt::Debug>(&self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
+	pub fn insert_block<E: fmt::Debug>(
+		&self,
+		hash: &BlockHash,
+		number: u64,
+		parent_hash: &BlockHash,
+		changeset: Vec<ChildTrieChangeSet<Key>>,
+	) -> Result<CommitSet<Key>, Error<E>> {
 		self.db.write().insert_block(hash, number, parent_hash, changeset)
 	}
 
@@ -483,7 +511,7 @@ mod tests {
 	use std::io;
 	use sp_core::H256;
 	use crate::{StateDb, PruningMode, Constraints};
-	use crate::test::{make_db, make_changeset, TestDb};
+	use crate::test::{make_db, make_childchangeset, TestDb};
 
 	fn make_test_db(settings: PruningMode) -> (TestDb, StateDb<H256, H256>) {
 		let mut db = make_db(&[91, 921, 922, 93, 94]);
@@ -495,7 +523,7 @@ mod tests {
 					&H256::from_low_u64_be(1),
 					1,
 					&H256::from_low_u64_be(0),
-					make_changeset(&[1], &[91]),
+					make_childchangeset(&[1], &[91]),
 				)
 				.unwrap(),
 		);
@@ -505,7 +533,7 @@ mod tests {
 					&H256::from_low_u64_be(21),
 					2,
 					&H256::from_low_u64_be(1),
-					make_changeset(&[21], &[921, 1]),
+					make_childchangeset(&[21], &[921, 1]),
 				)
 				.unwrap(),
 		);
@@ -515,7 +543,7 @@ mod tests {
 					&H256::from_low_u64_be(22),
 					2,
 					&H256::from_low_u64_be(1),
-					make_changeset(&[22], &[922]),
+					make_childchangeset(&[22], &[922]),
 				)
 				.unwrap(),
 		);
@@ -525,7 +553,7 @@ mod tests {
 					&H256::from_low_u64_be(3),
 					3,
 					&H256::from_low_u64_be(21),
-					make_changeset(&[3], &[93]),
+					make_childchangeset(&[3], &[93]),
 				)
 				.unwrap(),
 		);
@@ -538,7 +566,7 @@ mod tests {
 					&H256::from_low_u64_be(4),
 					4,
 					&H256::from_low_u64_be(3),
-					make_changeset(&[4], &[94]),
+					make_childchangeset(&[4], &[94]),
 				)
 				.unwrap(),
 		);
@@ -609,7 +637,7 @@ mod tests {
 				&H256::from_low_u64_be(0),
 				0,
 				&H256::from_low_u64_be(0),
-				make_changeset(&[], &[]),
+				make_childchangeset(&[], &[]),
 			)
 			.unwrap(),
 		);
