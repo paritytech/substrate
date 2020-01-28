@@ -422,7 +422,7 @@ pub struct RunCmd {
 	/// available to relay to private nodes.
 	#[structopt(
 		long = "sentry",
-		conflicts_with_all = &[ "validator" ]
+		conflicts_with_all = &[ "validator", "light" ]
 	)]
 	pub sentry: bool,
 
@@ -431,7 +431,7 @@ pub struct RunCmd {
 	pub no_grandpa: bool,
 
 	/// Experimental: Run in light client mode.
-	#[structopt(long = "light")]
+	#[structopt(long = "light", conflicts_with = "sentry")]
 	pub light: bool,
 
 	/// Listen to all RPC interfaces.
