@@ -2684,7 +2684,7 @@ mod offchain_phragmen {
 	use mock::*;
 	use frame_support::{assert_ok, assert_noop};
 	use substrate_test_utils::assert_eq_uvec;
-	use sp_runtime::{traits::OffchainWorker} ;
+	use sp_runtime::traits::{OffchainWorker, ValidateUnsigned} ;
 	use sp_core::offchain::{
 		OffchainExt,
 		TransactionPoolExt,
@@ -2697,9 +2697,8 @@ mod offchain_phragmen {
 	use std::sync::Arc;
 	use parking_lot::RwLock;
 
-	type KeyT = dummy_sr25519::AuthorityId;
+	type DummyT = dummy_sr25519::AuthorityId;
 
-	const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
 
 	/// setup a new set of validators and nominator storage items independent of the parent mock
 	/// file. This produces a edge graph that can be reduced.
@@ -2724,7 +2723,12 @@ mod offchain_phragmen {
 		let (offchain, _state) = TestOffchainExt::new();
 		let (pool, state) = TestTransactionPoolExt::new();
 		let keystore = KeyStore::new();
-		keystore.write().sr25519_generate_new(KeyT::ID, Some(&format!("{}/staking1", PHRASE))).unwrap();
+		// keystore.write().sr25519_generate_new(<DummyT as sp_application_crypto::AppKey>::ID, Some(&format!("{}/staking1", PHRASE))).unwrap();
+		keystore.write().insert_unknown(
+			<DummyT as sp_application_crypto::AppKey>::ID,
+			"news slush supreme milk chapter athlete soap sausage put clutch what kitten/staking1",
+			dummy_sr25519::dummy_key_for(11).as_ref(),
+		);
 		ext.register_extension(OffchainExt::new(offchain));
 		ext.register_extension(TransactionPoolExt::new(pool));
 		ext.register_extension(KeystoreExt(keystore));
@@ -3024,6 +3028,7 @@ mod offchain_phragmen {
 
 	#[test]
 	#[cfg(not(feature = "signed"))]
+	#[allow(deprecated)]
 	fn offchain_worker_runs_when_window_open_unsigned() {
 		// at the end of the first finalized block with ElectionStatus::open(_), it should execute.
 		let mut ext = ExtBuilder::default()
@@ -3045,16 +3050,25 @@ mod offchain_phragmen {
 			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
 
 			let call = extrinsic.1;
-			match call {
-				mock::Call::Staking(crate::Call::submit_election_solution_unsigned(_, _, _, _)) => {},
+			let inner = match call {
+				mock::Call::Staking(inner) => { inner },
 				_ => panic!("wrong call submitted"),
 			};
-		})
-	}
 
-	#[test]
-	fn validate_unsigned_works() {
-		unimplemented!()
+			// pass this call to ValidateUnsigned
+			assert_eq!(
+				<Staking as ValidateUnsigned>::validate_unsigned(&inner),
+				TransactionValidity::Ok(ValidTransaction {
+					priority: TransactionPriority::max_value(),
+					requires: vec![],
+					provides: vec![],
+					longevity: TryInto::<u64>::try_into(
+						<Test as Trait>::ElectionLookahead::get()
+					).unwrap_or(150_u64),
+					propagate: true,
+				})
+			)
+		})
 	}
 
 	#[test]

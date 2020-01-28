@@ -413,7 +413,6 @@ decl_storage! {
 					<Module<T>>::load_keys(&who).is_none(),
 					"genesis config contained duplicate validator {:?}", who,
 				);
-
 				<Module<T>>::do_set_keys(&who, keys)
 					.expect("genesis config must not contain duplicates; qed");
 			}
@@ -671,7 +670,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
+	pub fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
 		<NextKeys<T>>::get(DEDUP_KEY_PREFIX, v)
 	}
 

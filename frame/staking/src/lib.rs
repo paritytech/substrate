@@ -256,7 +256,7 @@ mod offchain_election;
 
 pub mod inflation;
 
-use sp_std::{prelude::*, result, convert::TryInto};
+use sp_std::{prelude::*, result, convert::{TryInto, From}};
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error, debug,
@@ -268,11 +268,11 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Perbill, RuntimeDebug,
+	Perbill, RuntimeDebug, RuntimeAppPublic,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
-		SimpleArithmetic, EnsureOrigin, Verify,
+		SimpleArithmetic, EnsureOrigin
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction, TransactionPriority,
@@ -617,6 +617,8 @@ pub trait SessionInterface<AccountId>: frame_system::Trait {
 	fn disable_validator(validator: &AccountId) -> Result<bool, ()>;
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
+	/// Get the validators and their corresponding keys from session.
+	fn keys<KeyType: RuntimeAppPublic + Decode + sp_std::fmt::Debug>() -> Vec<(AccountId, Option<KeyType>)>;
 	/// Prune historical session tries up to but not including the given index.
 	fn prune_historical_up_to(up_to: SessionIndex);
 	/// Current session index.
@@ -631,7 +633,7 @@ impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T whe
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Trait>::AccountId>,
 	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Trait>::AccountId>,
-	T::ValidatorIdOf: Convert<<T as frame_system::Trait>::AccountId, Option<<T as frame_system::Trait>::AccountId>>
+	T::ValidatorIdOf: Convert<<T as frame_system::Trait>::AccountId, Option<<T as frame_system::Trait>::AccountId>>,
 {
 	fn disable_validator(validator: &<T as frame_system::Trait>::AccountId) -> Result<bool, ()> {
 		<pallet_session::Module<T>>::disable(validator)
@@ -639,6 +641,25 @@ impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T whe
 
 	fn validators() -> Vec<<T as frame_system::Trait>::AccountId> {
 		<pallet_session::Module<T>>::validators()
+	}
+
+	fn keys<KeyT: RuntimeAppPublic + Decode + sp_std::fmt::Debug>()
+		-> Vec<(<T as frame_system::Trait>::AccountId, Option<KeyT>)>
+	{
+		use sp_runtime::traits::OpaqueKeys;
+		// dbg!(<T as pallet_session::Trait>::Keys::key_ids());
+		// dbg!(<KeyT as RuntimeAppPublic>::ID);
+		Self::validators().iter().map(|v| {
+			// let opkeys = <pallet_session::Module<T>>::load_keys(&v).unwrap();
+			// println!("Loaded stuff {:?} {:?}",
+			// 	opkeys.get::<KeyT>(<KeyT as RuntimeAppPublic>::ID),
+			// 	v
+			// );
+			let maybe_key = <pallet_session::Module<T>>::load_keys(&v)
+				.and_then(|opk| opk.get(KeyT::ID));
+			(v.clone(), maybe_key)
+		})
+		.collect::<Vec<(<T as frame_system::Trait>::AccountId, Option<KeyT>)>>()
 	}
 
 	fn prune_historical_up_to(up_to: SessionIndex) {
@@ -713,9 +734,8 @@ pub trait Trait: frame_system::Trait {
 		SubmitSignedTransaction<Self, <Self as Trait>::Call> +
 		SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
-	type KeyType:
-		std::convert::From<<<<<Self as Trait>::SubmitTransaction as frame_system::offchain::SubmitSignedTransaction<Self, <Self as Trait>::Call>>::SignAndSubmit as frame_system::offchain::SignAndSubmitTransaction<Self, <Self as Trait>::Call>>::CreateTransaction as frame_system::offchain::CreateTransaction<Self, <<<Self as Trait>::SubmitTransaction as frame_system::offchain::SubmitSignedTransaction<Self, <Self as Trait>::Call>>::SignAndSubmit as frame_system::offchain::SignAndSubmitTransaction<Self, <Self as Trait>::Call>>::Extrinsic>>::Public> +
-		sp_runtime::RuntimeAppPublic + sp_runtime::traits::Member + frame_support::Parameter;
+	type KeyType: From<offchain_election::PublicOf<Self>> +
+		RuntimeAppPublic + sp_runtime::traits::Member + frame_support::Parameter;
 }
 
 /// Mode of era-forcing.
@@ -988,12 +1008,12 @@ decl_module! {
 		fn offchain_worker(now: T::BlockNumber) {
 			// runs only once.
 			if Self::era_election_status() == ElectionStatus::<T::BlockNumber>::Open(now) {
-				let _ = offchain_election::compute_offchain_election::<T>().map_err(|e|
+				offchain_election::compute_offchain_election::<T>().map_err(|e| {
 					debug::native::warn!(
 						target: "staking",
 						"{:?}", e
-					)
-				);
+					);
+				});
 			}
 		}
 
@@ -1060,7 +1080,7 @@ decl_module! {
 			compact_assignments: CompactAssignments<T::AccountId, ExtendedBalance>,
 			// already used and checked.
 			_validator_index: u32,
-			_signature: <T::KeyType as sp_runtime::RuntimeAppPublic>::Signature,
+			_signature: <T::KeyType as RuntimeAppPublic>::Signature,
 		) {
 			ensure_none(origin)?;
 			Encode::encode(&_signature);
@@ -2298,18 +2318,23 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			// have ANY solutions. Otherwise each block will get a LOT of these.
 
 			// check signature
-			// let payload = (winners, compact, validator_index);
-			// let current_validators = T::SessionInterface::validators();
-			// let validator_id = current_validators.get(*validator_index as usize)
-			// 	.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(0u8).into()))?;
+			let payload = (winners, compact, validator_index);
+			let current_validators = T::SessionInterface::keys::<T::KeyType>();
+			let (validator_id, validator_key) = current_validators.get(*validator_index as usize)
+				.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(0u8).into()))?;
 
-			// let signature_valid = payload.using_encoded(|encoded_payload| {
-			// 	signature.verify(encoded_payload, &validator_id)
-			// });
+			// dbg!(&validator_id, &validator_key);
+			// unwrap the key if it exists.
+			let validator_key = validator_key.as_ref()
+				.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(1u8).into()))?;
 
-			// if !signature_valid {
-			// 	return InvalidTransaction::BadProof.into();
-			// }
+			let signature_valid = payload.using_encoded(|encoded_payload| {
+				validator_key.verify(&encoded_payload, &signature)
+			});
+
+			if !signature_valid {
+				return InvalidTransaction::BadProof.into();
+			}
 
 			Ok(ValidTransaction {
 				priority: TransactionPriority::max_value(),

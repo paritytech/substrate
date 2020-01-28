@@ -269,7 +269,10 @@ parameter_types! {
 	pub const BondingDuration: pallet_staking::EraIndex = 24 * 28;
 	pub const SlashDeferDuration: pallet_staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
+	pub const ElectionLookahead: BlockNumber = 150;
 }
+
+struct StakingTransactionSubmitter;
 
 impl pallet_staking::Trait for Runtime {
 	type Currency = Balances;
@@ -286,6 +289,11 @@ impl pallet_staking::Trait for Runtime {
 	type SlashCancelOrigin = pallet_collective::EnsureProportionAtLeast<_3, _4, AccountId, CouncilCollective>;
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
+	type NextSessionChange = Babe;
+	type ElectionLookahead = ElectionLookahead;
+	type Call = Call;
+	type SubmitTransaction = TransactionSubmitterOf<Self::KeyType>;
+	type KeyType = pallet_babe::AuthorityId;
 }
 
 parameter_types! {
@@ -455,9 +463,9 @@ parameter_types! {
 }
 
 impl pallet_im_online::Trait for Runtime {
-	type AuthorityId = ImOnlineId;
 	type Call = Call;
 	type Event = Event;
+	type AuthorityId = ImOnlineId;
 	type SubmitTransaction = TransactionSubmitterOf<ImOnlineId>;
 	type ReportUnresponsiveness = Offences;
 	type SessionDuration = SessionDuration;

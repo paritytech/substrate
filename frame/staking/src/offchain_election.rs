@@ -23,7 +23,7 @@ use frame_system::offchain::{
 	CreateTransaction,
 };
 use sp_phragmen::{reduce, ExtendedBalance, PhragmenResult, StakedAssignment};
-use sp_std::cmp::Ordering;
+use sp_std::{prelude::*, cmp::Ordering};
 use sp_runtime::RuntimeAppPublic;
 
 type SignAndSubmitOf<T> =
@@ -73,10 +73,7 @@ pub(super) fn is_score_better(this: [ExtendedBalance; 3], that: [ExtendedBalance
 }
 
 /// The internal logic of the offchain worker of this module.
-pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElectionError>
-where
-	<T as Trait>::KeyType: From<PublicOf<T>>
-{
+pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElectionError> {
 	let validators = T::SessionInterface::validators();
 
 	// Check if current node can sign with any of the keys which correspond to a
@@ -107,7 +104,7 @@ where
 			// TODO: maybe we want to send from just one of them? we'll see.
 			let call: <T as Trait>::Call = Call::submit_election_solution(winners, compact).into();
 			let _result = T::SubmitTransaction::submit_signed_from(call, validators);
-			dbg!(_result);
+			// dbg!(_result);
 		}
 		#[cfg(not(feature = "signed"))]
 		{
@@ -118,12 +115,17 @@ where
 			// loop for at least one account in the validators to sign with.
 			local_keys
 				.into_iter()
-				.enumerate()
-				.find(|(_, (acc, _))| validators.contains(&acc))
-				.map(|(index, (_, pubkey))| {
+				.find_map(|(acc, pubkey)|
+					validators
+						.iter()
+						.position(|a| *a == acc)
+						.map(|idx| (idx, (acc, pubkey)))
+				).map(|(index, (_acc, pubkey))| {
+					// println!("Signing with {:?} {:?} {:?}", &_acc, &validators, index);
 					let signature_payload =
 						(winners.clone(), compact.clone(), index as u32).encode();
 					let pubkey: T::KeyType = pubkey.into();
+					// dbg!(&pubkey);
 					let signature = pubkey.sign(&signature_payload).unwrap();
 					let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
 						winners,
@@ -133,7 +135,7 @@ where
 					)
 					.into();
 					let _result = T::SubmitTransaction::submit_unsigned(call);
-					dbg!(_result);
+					// dbg!(_result);
 				});
 		}
 	} else {

@@ -386,6 +386,7 @@ fn reduce_all<A: IdentifierT>(
 				let common_count = trailing_common(&voter_root_path, &target_root_path);
 
 				// because roots are the same.
+				#[cfg(feature = "std")]
 				debug_assert_eq!(target_root_path.last().unwrap(), voter_root_path.last().unwrap());
 				debug_assert!(common_count > 0);
 
@@ -393,10 +394,11 @@ fn reduce_all<A: IdentifierT>(
 				// NOTE: the order of chaining is important! it is always build from [target, ...,
 				// voter]
 				let cycle =
-					target_root_path.iter().take(target_root_path.len() - common_count + 1).cloned()
-					.chain(voter_root_path.iter().take(voter_root_path.len() - common_count).rev().cloned())
-					.collect::<Vec<NodeRef<A>>>();
+				target_root_path.iter().take(target_root_path.len() - common_count + 1).cloned()
+				.chain(voter_root_path.iter().take(voter_root_path.len() - common_count).rev().cloned())
+				.collect::<Vec<NodeRef<A>>>();
 				// a cycle's length shall always be multiple of two.
+				#[cfg(feature = "std")]
 				debug_assert_eq!(cycle.len() % 2, 0);
 
 				// find minimum of cycle.

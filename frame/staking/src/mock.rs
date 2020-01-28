@@ -71,7 +71,8 @@ thread_local! {
 
 pub struct TestSessionHandler;
 impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
-	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[key_types::DUMMY];
+	// EVEN if no tests break, I must have broken something here... TODO
+	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[dummy_sr25519::AuthorityId::ID];
 
 	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
 
@@ -236,9 +237,24 @@ parameter_types! {
 	pub const UncleGenerations: u64 = 0;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(25);
 }
+
+pub struct Babe;
+impl sp_runtime::BoundToRuntimeAppPublic for Babe {
+	type Public = dummy_sr25519::AuthorityId;
+}
+
+// insert one dummy key and one key as a representative of the babe key which we will use in reality
+// in here.
+sp_runtime::impl_opaque_keys! {
+	pub struct SessionKeys {
+		// pub foo: UintAuthorityId,
+		pub babe: Babe,
+	}
+}
+
 impl pallet_session::Trait for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
-	type Keys = UintAuthorityId;
+	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
 	type Event = MetaEvent;
@@ -301,8 +317,7 @@ impl Trait for Test {
 }
 
 pub(crate) mod dummy_sr25519 {
-	use super::LOCAL_KEY_ACCOUNT;
-	use sp_runtime::traits::{IdentifyAccount, Verify, Lazy};
+	use super::{LOCAL_KEY_ACCOUNT, AccountId};
 
 	mod app_sr25519 {
 		use sp_application_crypto::{app_crypto, key_types::DUMMY, sr25519};
@@ -320,16 +335,13 @@ pub(crate) mod dummy_sr25519 {
 		}
 	}
 
-	impl Verify for AuthoritySignature {
-		type Signer = AuthorityId;
+	pub fn dummy_key_for(x: AccountId) -> AuthorityId {
+		use sp_core::Pair;
+		let mut raw_key = [0u8; 32];
+		raw_key[0] = x as u8;
+		let generic_key = sp_core::sr25519::Pair::from_seed(&raw_key).public();
+		generic_key.into()
 
-		fn verify<L: Lazy<[u8]>>(
-			&self,
-			msg: L,
-			signer: &<Self::Signer as IdentifyAccount>::AccountId,
-		) -> bool {
-			LOCAL_KEY_ACCOUNT.with(|v| *v.borrow() == *signer)
-		}
 	}
 }
 
@@ -545,7 +557,13 @@ impl ExtBuilder {
 		let _ = pallet_session::GenesisConfig::<Test> {
 			keys: validators
 				.iter()
-				.map(|x| (*x, UintAuthorityId(*x)))
+				.map(|x| (
+					*x,
+					SessionKeys {
+						// foo: UintAuthorityId(*x),
+						babe: dummy_sr25519::dummy_key_for(*x),
+					}
+				))
 				.collect(),
 		}
 		.assimilate_storage(&mut storage);
