@@ -891,7 +891,7 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 				for _r in 0..Self::REPEATS {
 					let instance = benchmarking::set_identity::instance::<T>(&c);
 					let start = sp_io::benchmarking::current_time();
-					instance.dispatch(frame_system::RawOrigin::Signed(benchmarking::account::<T>(0)).into());
+					assert_eq!(instance.dispatch(frame_system::RawOrigin::Signed(benchmarking::account::<T>(0)).into()), Ok(()));
 					let finish = sp_io::benchmarking::current_time();
 					let elapsed = finish - start;
 					results.push((c.clone(), elapsed));
