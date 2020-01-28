@@ -178,8 +178,9 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn full_storage_root<I1, I2i, I2>(
 		&self,
 		delta: I1,
-		child_deltas: I2)
-	-> (H::Out, Self::Transaction)
+		child_deltas: I2,
+		return_child_roots: bool,
+	) -> (H::Out, Self::Transaction, Vec<(StorageKey, Option<H::Out>)>)
 	where
 		I1: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		I2i: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
@@ -188,22 +189,31 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	{
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
+		let mut result_child_roots: Vec<_> = Default::default();
 		// child first
 		for (storage_key, child_delta, child_info) in child_deltas {
 			let (child_root, empty, child_txs) =
 				self.child_storage_root(&storage_key[..], child_info.as_ref(), child_delta);
 			txs.consolidate(child_txs);
 			if empty {
+				if return_child_roots {
+					result_child_roots.push((storage_key.clone(), None));
+				}
 				child_roots.push((storage_key, None));
 			} else {
-				child_roots.push((storage_key, Some(child_root.encode())));
+				if return_child_roots {
+					child_roots.push((storage_key.clone(), Some(child_root.encode())));
+					result_child_roots.push((storage_key, Some(child_root)));
+				} else {
+					child_roots.push((storage_key, Some(child_root.encode())));
+				}
 			}
 		}
 		let (root, parent_txs) = self.storage_root(
 			delta.into_iter().chain(child_roots.into_iter())
 		);
 		txs.consolidate(parent_txs);
-		(root, txs)
+		(root, txs, result_child_roots)
 	}
 
 	/// Query backend usage statistics (i/o, memory)

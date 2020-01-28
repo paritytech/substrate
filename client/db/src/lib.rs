@@ -594,7 +594,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		);
 
 		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
-		let (root, transaction) = self.old_state.full_storage_root(
+		let (root, transaction, _) = self.old_state.full_storage_root(
 			storage.top.into_iter().map(|(k, v)| {
 				if k == well_known_keys::CHANGES_TRIE_CONFIG {
 					changes_trie_config = Some(
@@ -604,7 +604,8 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 				}
 				(k, Some(v))
 			}),
-			child_delta
+			child_delta,
+			false,
 		);
 
 		self.db_updates = transaction;

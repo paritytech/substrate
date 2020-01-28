@@ -493,23 +493,22 @@ where
 	) -> Vec<u8> {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		if self.storage_transaction_cache.transaction_storage_root.is_some() {
-			let root = self
-				.storage(storage_key.as_ref())
-				.and_then(|k| Decode::decode(&mut &k[..]).ok())
+			let root = self.storage_transaction_cache.transaction_child_storage_root.get(storage_key.as_ref())
+				.map(|root| root.encode())
 				.unwrap_or(
-					default_child_trie_root::<Layout<H>>(storage_key.as_ref())
+					default_child_trie_root::<Layout<H>>(storage_key.as_ref()).encode()
 				);
 			trace!(target: "state-trace", "{:04x}: ChildRoot({}) (cached) {}",
 				self.id,
 				HexDisplay::from(&storage_key.as_ref()),
 				HexDisplay::from(&root.as_ref()),
 			);
-			root.encode()
+			root
 		} else {
 			let storage_key = storage_key.as_ref();
 
 			if let Some(child_info) = self.overlay.child_info(storage_key).cloned() {
-				let (root, is_empty, _) = {
+				let (root, _is_empty, _) = {
 					let delta = self.overlay.committed.children.get(storage_key)
 						.into_iter()
 						.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
@@ -523,16 +522,6 @@ where
 				};
 
 				let root = root.encode();
-				// We store update in the overlay in order to be able to use 'self.storage_transaction'
-				// cache. This is brittle as it rely on Ext only querying the trie backend for
-				// storage root.
-				// A better design would be to manage 'child_storage_transaction' in a
-				// similar way as 'storage_transaction' but for each child trie.
-				if is_empty {
-					self.overlay.set_storage(storage_key.into(), None);
-				} else {
-					self.overlay.set_storage(storage_key.into(), Some(root.clone()));
-				}
 
 				trace!(target: "state-trace", "{:04x}: ChildRoot({}) {}",
 					self.id,

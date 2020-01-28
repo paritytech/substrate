@@ -43,7 +43,7 @@ pub type StorageValue = Vec<u8>;
 pub type StorageCollection = Vec<(StorageKey, Option<StorageValue>)>;
 
 /// In memory arrays of storage values for multiple child tries.
-pub type ChildStorageCollection = Vec<(StorageKey, StorageCollection)>;
+pub type ChildStorageCollection = Vec<(StorageKey, StorageCollection, OwnedChildInfo)>;
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -130,6 +130,8 @@ pub struct StorageTransactionCache<Transaction, H: Hasher, N: BlockNumber> {
 	pub(crate) transaction: Option<Transaction>,
 	/// The storage root after applying the transaction.
 	pub(crate) transaction_storage_root: Option<H::Out>,
+	/// The child root storage root after applying the transaction.
+	pub(crate) transaction_child_storage_root: BTreeMap<StorageKey, Option<H::Out>>,
 	/// Contains the changes trie transaction.
 	pub(crate) changes_trie_transaction: Option<Option<ChangesTrieTransaction<H, N>>>,
 	/// The storage root after applying the changes trie transaction.
@@ -148,6 +150,7 @@ impl<Transaction, H: Hasher, N: BlockNumber> Default for StorageTransactionCache
 		Self {
 			transaction: None,
 			transaction_storage_root: None,
+			transaction_child_storage_root: Default::default(),
 			changes_trie_transaction: None,
 			changes_trie_transaction_storage_root: None,
 		}
@@ -478,7 +481,8 @@ impl OverlayedChanges {
 
 		Ok(StorageChanges {
 			main_storage_changes: main_storage_changes.collect(),
-			child_storage_changes: child_storage_changes.map(|(sk, it)| (sk, it.0.collect())).collect(),
+			child_storage_changes: child_storage_changes
+				.map(|(sk, it)| (sk, it.0.collect(), it.1)).collect(),
 			transaction,
 			transaction_storage_root,
 			changes_trie_transaction,
@@ -542,10 +546,11 @@ impl OverlayedChanges {
 		let delta = self.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
 			.chain(self.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
 
-		let (root, transaction) = backend.full_storage_root(delta, child_delta_iter);
+		let (root, transaction, child_roots) = backend.full_storage_root(delta, child_delta_iter, true);
 
 		cache.transaction = Some(transaction);
 		cache.transaction_storage_root = Some(root);
+		cache.transaction_child_storage_root = child_roots.into_iter().collect();
 
 		root
 	}

@@ -379,7 +379,7 @@ impl<B: BlockT> CacheChanges<B> {
 			}
 			let mut modifications = HashSet::new();
 			let mut child_modifications = HashSet::new();
-			child_changes.into_iter().for_each(|(sk, changes)|
+			child_changes.into_iter().for_each(|(sk, changes, _ci)|
 				for (k, v) in changes.into_iter() {
 					let k = (sk.clone(), k);
 					if is_best {
@@ -676,6 +676,9 @@ mod tests {
 	use sp_core::Blake2Hasher;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
+
+	const CHILD_KEY_1: &'static [u8] = b"unique_id_1";
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(CHILD_KEY_1);
 
 	#[test]
 	fn smoke() {
@@ -993,7 +996,7 @@ mod tests {
 			&[],
 			&[],
 			vec![],
-			vec![(s_key.clone(), vec![(key.clone(), Some(vec![1, 2]))])],
+			vec![(s_key.clone(), vec![(key.clone(), Some(vec![1, 2]))], CHILD_INFO_1.to_owned())],
 			Some(h0),
 			Some(0),
 			true,
