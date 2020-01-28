@@ -374,7 +374,9 @@ decl_storage! {
 						})
 					})
 			}).collect::<Vec<_>>()
-		}): map T::AccountId => Option<VestingSchedule<T::Balance, T::BlockNumber>>;
+		}):
+			map hasher(blake2_256) T::AccountId
+			=> Option<VestingSchedule<T::Balance, T::BlockNumber>>;
 
 		/// The 'free' balance of a given account.
 		///
@@ -389,7 +391,7 @@ decl_storage! {
 		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 		pub FreeBalance get(fn free_balance)
 			build(|config: &GenesisConfig<T, I>| config.balances.clone()):
-			map T::AccountId => T::Balance;
+			map hasher(blake2_256) T::AccountId => T::Balance;
 
 		/// The amount of the balance of a given account that is externally reserved; this can still get
 		/// slashed, but gets slashed last of all.
@@ -402,10 +404,12 @@ decl_storage! {
 		///
 		/// `frame_system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
 		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.)
-		pub ReservedBalance get(fn reserved_balance): map T::AccountId => T::Balance;
+		pub ReservedBalance get(fn reserved_balance):
+			map hasher(blake2_256) T::AccountId => T::Balance;
 
 		/// Any liquidity locks on some account balances.
-		pub Locks get(fn locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
+		pub Locks get(fn locks):
+			map hasher(blake2_256) T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
