@@ -45,14 +45,14 @@ decl_module! {
 		/// function that can be called by the external world as an extrinsics call
 		/// takes a parameter of the type `AccountId`, stores it, and emits an event
 		pub fn do_something(origin, something: u32) -> dispatch::DispatchResult {
-			// TODO: You only need this if you want to check it was signed.
+			// Check it was signed and get the signer. See also: ensure_root and ensure_none
 			let who = ensure_signed(origin)?;
 
 			// TODO: Code to execute when something calls this.
 			// For example: the following line stores the passed in u32 in the storage
 			Something::put(something);
 
-			// here we are raising the Something event
+			// Here we are raising the Something event
 			Self::deposit_event(RawEvent::SomethingStored(something, who));
 			Ok(())
 		}
@@ -60,7 +60,7 @@ decl_module! {
 		/// Another dummy entry point.
 		/// takes no parameters, attempts to increment storage value, and possibly throws an error
 		pub fn cause_error(origin) -> dispatch::DispatchResult {
-			// TODO: You only need this if you want to check it was signed.
+			// Check it was signed and get the signer. See also: ensure_root and ensure_none
 			let _who = ensure_signed(origin)?;
 
 			match Something::get() {
