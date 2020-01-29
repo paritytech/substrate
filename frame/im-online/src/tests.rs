@@ -210,7 +210,7 @@ fn should_generate_heartbeats() {
 
 		// when
 		UintAuthorityId::set_all_keys(vec![0, 1, 2]);
-		ImOnline::offchain(2);
+		ImOnline::offchain(2).unwrap();
 
 		// then
 		let transaction = state.write().transactions.pop().unwrap();

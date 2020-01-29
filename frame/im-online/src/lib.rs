@@ -78,7 +78,7 @@ use sp_std::convert::TryInto;
 use pallet_session::historical::IdentificationTuple;
 use sp_runtime::{
 	RuntimeDebug,
-	traits::{Convert, Member, Printable, Saturating}, Perbill,
+	traits::{Convert, Member, Saturating, SimpleArithmetic}, Perbill,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, InvalidTransaction,
 		TransactionPriority,
@@ -89,7 +89,7 @@ use sp_staking::{
 	offence::{ReportOffence, Offence, Kind},
 };
 use frame_support::{
-	decl_module, decl_event, decl_storage, print, Parameter, debug, decl_error,
+	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
 	traits::Get,
 };
 use frame_system::{self as system, ensure_none};
@@ -129,37 +129,63 @@ pub mod ed25519 {
 	pub type AuthorityId = app_ed25519::Public;
 }
 
-/// The local storage database key under which the worker progress status
-/// is tracked.
-const DB_KEY: &[u8] = b"parity/im-online-worker-status";
+const DB_PREFIX: &[u8] = b"parity/im-online-heartbeat/";
+/// How many blocks do we wait for heartbeat transaction to be included
+/// before sending another one.
+const INCLUDE_THRESHOLD: u32 = 3;
 
-/// It's important to persist the worker state, since e.g. the
-/// server could be restarted while starting the gossip process, but before
-/// finishing it. With every execution of the off-chain worker we check
-/// if we need to recover and resume gossipping or if there is already
-/// another off-chain worker in the process of gossipping.
+/// Status of the offchain worker code.
+///
+/// This stores the block number at which heartbeat was requested and when the worker
+/// has actaully managed to produce it.
+/// Note we store such status for every `authority_index` separately.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-struct WorkerStatus<BlockNumber> {
-	done: bool,
-	gossipping_at: BlockNumber,
+struct HeartbeatStatus<BlockNumber> {
+	/// A block number at which we were supposed to send the heartbeat.
+	///
+	/// I.e. the block that was set as the threshold by `SessionHandler` via `HeartbeatAt`.
+	pub heartbeat_at: BlockNumber,
+	/// A block number at which the heartbeat was actually sent.
+	///
+	/// Note that this may be 0 in case sending failed.
+	pub sent_at: BlockNumber,
+}
+
+impl<BlockNumber: PartialEq + SimpleArithmetic + Copy> HeartbeatStatus<BlockNumber> {
+	/// Returns true if heartbeat has been recently sent.
+	///
+	/// Note this function will return `true` iff:
+	/// 1. the requested block number (`heartbeat_at`) is the same
+	/// 2. the heartbeat has been sent recently
+	fn is_recent(&self, heartbeat_at: BlockNumber, now: BlockNumber) -> bool {
+		self.heartbeat_at == heartbeat_at && self.sent_at + INCLUDE_THRESHOLD.into() > now
+	}
 }
 
 /// Error which may occur while executing the off-chain code.
-#[derive(RuntimeDebug)]
-enum OffchainErr {
-	DecodeWorkerStatus,
+enum OffchainErr<BlockNumber> {
+	TooEarly(BlockNumber),
+	WaitingForInclusion(BlockNumber),
+	AlreadyOnline(u32),
 	FailedSigning,
+	FailedToAcquireLock,
 	NetworkState,
 	SubmitTransaction,
 }
 
-impl Printable for OffchainErr {
-	fn print(&self) {
-		match self {
-			OffchainErr::DecodeWorkerStatus => print("Offchain error: decoding WorkerStatus failed!"),
-			OffchainErr::FailedSigning => print("Offchain error: signing failed!"),
-			OffchainErr::NetworkState => print("Offchain error: fetching network state failed!"),
-			OffchainErr::SubmitTransaction => print("Offchain error: submitting transaction failed!"),
+impl<BlockNumber: sp_std::fmt::Debug> sp_std::fmt::Debug for OffchainErr<BlockNumber> {
+	fn fmt(&self, fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		match *self {
+			OffchainErr::TooEarly(ref block) =>
+				write!(fmt, "Too early to send heartbeat, next expected at {:?}", block),
+			OffchainErr::WaitingForInclusion(ref block) =>
+				write!(fmt, "Heartbeat already sent at {:?}. Waiting for inclusion.", block),
+			OffchainErr::AlreadyOnline(auth_idx) =>
+				write!(fmt, "Authority {} is already online", auth_idx),
+			OffchainErr::FailedSigning => write!(fmt, "Failed to sign heartbeat"),
+			OffchainErr::FailedToAcquireLock => write!(fmt, "Failed to acquire lock"),
+			OffchainErr::NetworkState => write!(fmt, "Failed to fetch network state"),
+			OffchainErr::SubmitTransaction => write!(fmt, "Failed to submit transaction"),
 		}
 	}
 }
@@ -225,8 +251,8 @@ decl_event!(
 
 decl_storage! {
 	trait Store for Module<T: Trait> as ImOnline {
-		/// The block number when we should gossip.
-		GossipAt get(fn gossip_at): T::BlockNumber;
+		/// The block number when we should send heartbeat.
+		HeartbeatAt get(fn heartbeat_at): T::BlockNumber;
 
 		/// The current set of keys that may issue a heartbeat.
 		Keys get(fn keys): Vec<T::AuthorityId>;
@@ -302,7 +328,20 @@ decl_module! {
 
 			// Only send messages if we are a potential validator.
 			if sp_io::offchain::is_validator() {
-				Self::offchain(now);
+				if let Err(err) = Self::offchain(now) {
+					debug::debug!(
+						target: "imonline",
+						"Skipping heartbeat at {:?}: {:?}",
+						now,
+						err
+					)
+				}
+			} else {
+				debug::trace!(
+					target: "imonline",
+					"Skipping hearbeat at {:?}. Not a validator.",
+					now,
+				)
 			}
 		}
 	}
@@ -365,156 +404,147 @@ impl<T: Trait> Module<T> {
 		);
 	}
 
-	pub(crate) fn offchain(now: T::BlockNumber) {
-		let next_gossip = <GossipAt<T>>::get();
-		let check = Self::check_not_yet_gossipped(now, next_gossip);
-		let (curr_worker_status, not_yet_gossipped) = match check {
-			Ok((s, v)) => (s, v),
-			Err(err) => {
-				print(err);
-				return;
-			},
-		};
-		if next_gossip < now && not_yet_gossipped {
-			let value_set = Self::compare_and_set_worker_status(now, false, curr_worker_status);
-			if !value_set {
-				// value could not be set in local storage, since the value was
-				// different from `curr_worker_status`. this indicates that
-				// another worker was running in parallel.
-				return;
-			}
-
-			match Self::do_gossip_at(now) {
-				Ok(_) => {},
-				Err(err) => print(err),
-			}
-		} else {
-			debug::native::debug!(
-				target: "imonline",
-				"Skipping gossip at: {:?} >= {:?} || {:?}",
-				next_gossip,
-				now,
-				if not_yet_gossipped { "not gossipped" } else { "gossipped" }
-			);
+	pub(crate) fn offchain(block_number: T::BlockNumber) -> Result<(), OffchainErr<T::BlockNumber>> {
+		let heartbeat_at = <HeartbeatAt<T>>::get();
+		if block_number < heartbeat_at {
+			return Err(OffchainErr::TooEarly(heartbeat_at))
 		}
+
+		Self::local_authority_keys()
+			.map(|(authority_index, key)|
+				Self::send_heartbeat(authority_index, key, heartbeat_at, block_number)
+			)
+			// fail only after trying all keys.
+			.collect::<Result<Vec<_>, OffchainErr<T::BlockNumber>>>()
+			.map(|_| ())
 	}
 
-	fn do_gossip_at(block_number: T::BlockNumber) -> Result<(), OffchainErr> {
-		// we run only when a local authority key is configured
-		let authorities = Keys::<T>::get();
-		let mut results = Vec::new();
-		let mut local_keys = T::AuthorityId::all();
-		local_keys.sort();
 
-		for (authority_index, key) in authorities.into_iter()
-			.enumerate()
-			.filter_map(|(index, authority)| {
-				local_keys.binary_search(&authority)
-					.ok()
-					.map(|location| (index as u32, &local_keys[location]))
-			})
-		{
-			if Self::is_online(authority_index) {
-				debug::native::info!(
-					target: "imonline",
-					"[index: {:?}] Skipping sending heartbeat at block: {:?}. Already online.",
-					authority_index,
-					block_number
-				);
-				continue;
-			}
-
+	fn send_heartbeat(
+		authority_index: u32,
+		key: T::AuthorityId,
+		heartbeat_at: T::BlockNumber,
+		block_number: T::BlockNumber
+	) -> Result<(), OffchainErr<T::BlockNumber>> {
+		// A helper function to prepare hearbeat call.
+		let prepare_heartbeat = || -> Result<Call<T>, OffchainErr<T::BlockNumber>> {
 			let network_state = sp_io::offchain::network_state()
 				.map_err(|_| OffchainErr::NetworkState)?;
+			let session_index = <pallet_session::Module<T>>::current_index();
 			let heartbeat_data = Heartbeat {
 				block_number,
 				network_state,
-				session_index: <pallet_session::Module<T>>::current_index(),
+				session_index,
 				authority_index,
 			};
-
 			let signature = key.sign(&heartbeat_data.encode()).ok_or(OffchainErr::FailedSigning)?;
-			let call = Call::heartbeat(heartbeat_data, signature);
+			Ok(Call::heartbeat(heartbeat_data, signature))
+		};
 
-			debug::info!(
-				target: "imonline",
-				"[index: {:?}] Reporting im-online at block: {:?}",
-				authority_index,
-				block_number
-			);
-
-			results.push(
-				T::SubmitTransaction::submit_unsigned(call)
-					.map_err(|_| OffchainErr::SubmitTransaction)
-			);
+		if Self::is_online(authority_index) {
+			return Err(OffchainErr::AlreadyOnline(authority_index));
+			// debug::debug!(
+			// 	target: "imonline",
+			// 	authority_index,
+			// 	block_number
+			// );
 		}
 
-		// fail only after trying all keys.
-		results.into_iter().collect::<Result<Vec<_>, OffchainErr>>()?;
+		// acquire lock for that authority at current heartbeat to make sure we don't
+		// send concurrent heartbeats.
+		Self::with_heartbeat_lock(
+			authority_index,
+			heartbeat_at,
+			block_number,
+			|| {
+				let call = prepare_heartbeat()?;
+				debug::info!(
+					target: "imonline",
+					"[index: {:?}] Reporting im-online at block: {:?} (expected: {:?}): {:?}",
+					authority_index,
+					block_number,
+					heartbeat_at,
+					call,
+				);
 
-		// once finished we set the worker status without comparing
-		// if the existing value changed in the meantime. this is
-		// because at this point the heartbeat was definitely submitted.
-		Self::set_worker_status(block_number, true);
+				T::SubmitTransaction::submit_unsigned(call)
+					.map_err(|_| OffchainErr::SubmitTransaction)?;
 
-		Ok(())
-	}
-
-	fn compare_and_set_worker_status(
-		gossipping_at: T::BlockNumber,
-		done: bool,
-		curr_worker_status: Option<Vec<u8>>,
-	) -> bool {
-		let enc = WorkerStatus {
-			done,
-			gossipping_at,
-		};
-		sp_io::offchain::local_storage_compare_and_set(
-			StorageKind::PERSISTENT,
-			DB_KEY,
-			curr_worker_status,
-			&enc.encode()
+				Ok(())
+			},
 		)
 	}
 
-	fn set_worker_status(
-		gossipping_at: T::BlockNumber,
-		done: bool,
-	) {
-		let enc = WorkerStatus {
-			done,
-			gossipping_at,
-		};
-		sp_io::offchain::local_storage_set(StorageKind::PERSISTENT, DB_KEY, &enc.encode());
+	fn local_authority_keys() -> impl Iterator<Item=(u32, T::AuthorityId)> {
+		// we run only when a local authority key is configured
+		let authorities = Keys::<T>::get();
+		let mut local_keys = T::AuthorityId::all();
+		local_keys.sort();
+
+		authorities.into_iter()
+			.enumerate()
+			.filter_map(move |(index, authority)| {
+				local_keys.binary_search(&authority)
+					.ok()
+					.map(|location| (index as u32, local_keys[location].clone()))
+			})
 	}
 
-	// Checks if a heartbeat gossip already occurred at this block number.
-	// Returns a tuple of `(current worker status, bool)`, whereby the bool
-	// is true if not yet gossipped.
-	fn check_not_yet_gossipped(
+	fn with_heartbeat_lock<R>(
+		authority_index: u32,
+		heartbeat_at: T::BlockNumber,
 		now: T::BlockNumber,
-		next_gossip: T::BlockNumber,
-	) -> Result<(Option<Vec<u8>>, bool), OffchainErr> {
-		let last_gossip = sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, DB_KEY);
-		match last_gossip {
-			Some(last) => {
-				let worker_status: WorkerStatus<T::BlockNumber> = Decode::decode(&mut &last[..])
-					.map_err(|_| OffchainErr::DecodeWorkerStatus)?;
-
-				let was_aborted = !worker_status.done && worker_status.gossipping_at < now;
-
-				// another off-chain worker is currently in the process of submitting
-				let already_submitting =
-					!worker_status.done && worker_status.gossipping_at == now;
-
-				let not_yet_gossipped =
-					worker_status.done && worker_status.gossipping_at < next_gossip;
-
-				let ret = (was_aborted && !already_submitting) || not_yet_gossipped;
-				Ok((Some(last), ret))
+		f: impl FnOnce() -> Result<R, OffchainErr<T::BlockNumber>>,
+	) -> Result<R, OffchainErr<T::BlockNumber>> {
+		let key = {
+			let mut key = DB_PREFIX.to_vec();
+			key.extend(authority_index.encode());
+			key
+		};
+		let current_lock = sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, &key);
+		// Check if there is already a lock for that particular block.
+		// This means that the heartbeat has already been sent, and we are just waiting
+		// for it to be included. However if it doesn't get included for INCLUDE_THRESHOLD
+		// we will re-send it.
+		let status = current_lock.as_deref()
+			.and_then(|mut v| <HeartbeatStatus<T::BlockNumber>>::decode(&mut v).ok());
+		match status {
+			// we are still waiting for inclusion.
+			Some(status) if status.is_recent(heartbeat_at, now) => {
+				return Err(OffchainErr::WaitingForInclusion(status.sent_at));
 			},
-			None => Ok((None, true)),
+			_ => {},
 		}
+		let mut new_status = HeartbeatStatus {
+			heartbeat_at,
+			sent_at: now,
+		};
+		let lock_acquired = new_status.using_encoded(|new_lock| {
+			// now let's try to acquire the lock and send heartbeat.
+			sp_io::offchain::local_storage_compare_and_set(
+				StorageKind::PERSISTENT,
+				&key,
+				current_lock,
+				new_lock,
+			)
+		});
+
+		if !lock_acquired {
+			return Err(OffchainErr::FailedToAcquireLock);
+		}
+
+		// we got the lock, let's try to send the heartbeat.
+		let res = f();
+
+		// clear the lock in case we have failed to send transaction.
+		if res.is_err() {
+			new_status.sent_at = 0.into();
+			new_status.using_encoded(|new_lock| {
+				sp_io::offchain::local_storage_set(StorageKind::PERSISTENT, &key, new_lock)
+			});
+		}
+
+		res
 	}
 
 	fn initialize_keys(keys: &[T::AuthorityId]) {
@@ -547,7 +577,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 		// the hearbeat is defered a bit to prevent spaming.
 		let block_number = <frame_system::Module<T>>::block_number();
 		let half_session = T::SessionDuration::get() / 2.into();
-		<GossipAt<T>>::put(block_number + half_session);
+		<HeartbeatAt<T>>::put(block_number + half_session);
 
 		// Remember who the authorities are for the new session.
 		Keys::<T>::put(validators.map(|x| x.1).collect::<Vec<_>>());
