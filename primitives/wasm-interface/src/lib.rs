@@ -332,7 +332,7 @@ pub trait Sandbox {
 		state: u32,
 	) -> Result<u32>;
 
-	/// Get a global variable with `name` from the given `instance_idx` instance.
+	/// Get the value of a global variable with `name` from the given `instance_idx` instance.
 	///
 	/// Returns `Some(_)` when the requested global variable could be found.
 	fn get_global(&self, instance_idx: u32, name: &str) -> Result<Option<Value>>;
