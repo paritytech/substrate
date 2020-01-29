@@ -177,6 +177,19 @@ pub enum NotifsOutHandlerOut {
 }
 
 impl<TSubstream> NotifsOutHandler<TSubstream> {
+	/// Returns true if the handler is enabled.
+	pub fn is_enabled(&self) -> bool {
+		match &self.state {
+			State::Disabled => false,
+			State::DisabledOpening => false,
+			State::DisabledOpen(_) => false,
+			State::Opening => true,
+			State::Refused => true,
+			State::Open(_) => true,
+			State::Poisoned => false,
+		}
+	}
+
 	/// Returns true if the substream is open.
 	pub fn is_open(&self) -> bool {
 		match &self.state {

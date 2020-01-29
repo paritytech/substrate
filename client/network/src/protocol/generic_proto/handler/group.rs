@@ -263,7 +263,9 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 				self.enabled = EnabledState::Disabled;
 				self.legacy.inject_event(LegacyProtoHandlerIn::Disable);
 				for handler in &mut self.out_handlers {
-					handler.inject_event(NotifsOutHandlerIn::Disable);
+					if handler.is_enabled() {
+						handler.inject_event(NotifsOutHandlerIn::Disable);
+					}
 				}
 				for num in self.pending_in.drain(..) {
 					self.in_handlers[num].inject_event(NotifsInHandlerIn::Refuse);
@@ -294,7 +296,6 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 		num: Option<usize>,
 		err: ProtocolsHandlerUpgrErr<EitherError<ReadOneError, io::Error>>
 	) {
-		log::error!("Dial upgrade error: {:?}", err);
 		match (err, num) {
 			(ProtocolsHandlerUpgrErr::Timeout, Some(num)) =>
 				self.out_handlers[num].inject_dial_upgrade_error(
