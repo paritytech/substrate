@@ -57,7 +57,7 @@ pub trait StorageMap {
 	fn from_query_to_optional_value(v: Self::Query) -> Option<Self::Value>;
 
 	/// Generate the full key used in top storage.
-	fn storage_map_final_key<KeyArg>(key: KeyArg) -> Vec<u8>
+	fn top_trie_key<KeyArg>(key: KeyArg) -> Vec<u8>
 	where
 		KeyArg: EncodeLike<Self::Key>,
 	{
@@ -78,8 +78,8 @@ pub trait StorageMap {
 
 	/// Swap the values of two keys.
 	fn swap<KeyArg1: EncodeLike<Self::Key>, KeyArg2: EncodeLike<Self::Key>>(key1: KeyArg1, key2: KeyArg2) {
-		let k1 = Self::storage_map_final_key(key1);
-		let k2 = Self::storage_map_final_key(key2);
+		let k1 = Self::top_trie_key(key1);
+		let k2 = Self::top_trie_key(key2);
 
 		let v1 = top::get_raw(k1.as_ref());
 		if let Some(val) = top::get_raw(k2.as_ref()) {
@@ -96,27 +96,27 @@ pub trait StorageMap {
 
 	/// Does the value (explicitly) exist in storage?
 	fn exists<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> bool {
-		top::exists(Self::storage_map_final_key(key).as_ref())
+		top::exists(Self::top_trie_key(key).as_ref())
 	}
 
 	/// Load the value associated with the given key from the map.
 	fn get<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> Self::Query {
-		Self::from_optional_value_to_query(top::get(Self::storage_map_final_key(key).as_ref()))
+		Self::from_optional_value_to_query(top::get(Self::top_trie_key(key).as_ref()))
 	}
 
 	/// Store a value to be associated with the given key from the map.
 	fn insert<KeyArg: EncodeLike<Self::Key>, ValArg: EncodeLike<Self::Value>>(key: KeyArg, val: ValArg) {
-		top::put(Self::storage_map_final_key(key).as_ref(), &val.borrow())
+		top::put(Self::top_trie_key(key).as_ref(), &val.borrow())
 	}
 
 	/// Remove the value under a key.
 	fn remove<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) {
-		top::kill(Self::storage_map_final_key(key).as_ref())
+		top::kill(Self::top_trie_key(key).as_ref())
 	}
 
 	/// Mutate the value under a key.
 	fn mutate<KeyArg: EncodeLike<Self::Key>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
-		let final_key = Self::storage_map_final_key(key);
+		let final_key = Self::top_trie_key(key);
 		let mut val = Self::from_optional_value_to_query(top::get(final_key.as_ref()));
 
 		let ret = f(&mut val);
@@ -129,7 +129,7 @@ pub trait StorageMap {
 
 	/// Take the value under a key.
 	fn take<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> Self::Query {
-		let key = Self::storage_map_final_key(key);
+		let key = Self::top_trie_key(key);
 		let value = top::take(key.as_ref());
 		Self::from_optional_value_to_query(value)
 	}
@@ -146,7 +146,7 @@ pub trait StorageMap {
 		Items: IntoIterator<Item=EncodeLikeItem>,
 		Items::IntoIter: ExactSizeIterator,
 	{
-		let key = Self::storage_map_final_key(key);
+		let key = Self::top_trie_key(key);
 		let encoded_value = top::get_raw(key.as_ref())
 			.unwrap_or_else(|| {
 				match Self::from_query_to_optional_value(Self::from_optional_value_to_query(None)) {
@@ -190,7 +190,7 @@ pub trait StorageMap {
 	fn decode_len<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> Result<usize, &'static str>
 		where Self::Value: codec::DecodeLength + Len
 	{
-		let key = Self::storage_map_final_key(key);
+		let key = Self::top_trie_key(key);
 		if let Some(v) = top::get_raw(key.as_ref()) {
 			<Self::Value as codec::DecodeLength>::len(&v).map_err(|e| e.what())
 		} else {

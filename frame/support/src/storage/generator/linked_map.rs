@@ -54,7 +54,7 @@ pub trait KeyFormat {
 	fn head_prefix() -> &'static [u8];
 
 	/// Generate the full key used in top storage.
-	fn storage_linked_map_final_key<K>(key: &K) -> Vec<u8>
+	fn top_trie_key<K>(key: &K) -> Vec<u8>
 	where
 		K: Encode,
 	{
@@ -74,7 +74,7 @@ pub trait KeyFormat {
 	}
 
 	/// Generate the full key used in top storage to store the head of the linked map.
-	fn storage_linked_map_final_head_key() -> Vec<u8> {
+	fn top_trie_head_key() -> Vec<u8> {
 		[
 			Twox128::hash(Self::module_prefix()),
 			Twox128::hash(Self::head_prefix()),
@@ -140,7 +140,7 @@ where
 		let next = self.next.take()?;
 
 		let (val, linkage): (V, Linkage<K>) = {
-			let next_full_key = F::storage_linked_map_final_key(&next);
+			let next_full_key = F::top_trie_key(&next);
 			match read_with_linkage::<K, V>(next_full_key.as_ref()) {
 				Some(value) => value,
 				None => {
@@ -170,8 +170,8 @@ where
 	V: FullCodec,
 	F: KeyFormat,
 {
-	let next_key = linkage.next.as_ref().map(|k| F::storage_linked_map_final_key(k));
-	let prev_key = linkage.previous.as_ref().map(|k| F::storage_linked_map_final_key(k));
+	let next_key = linkage.next.as_ref().map(|k| F::top_trie_key(k));
+	let prev_key = linkage.previous.as_ref().map(|k| F::top_trie_key(k));
 
 	if let Some(prev_key) = prev_key {
 		// Retrieve previous element and update `next`
@@ -228,7 +228,7 @@ where
 	if let Some(head) = read_head::<K, F>() {
 		// update previous head predecessor
 		{
-			let head_key = F::storage_linked_map_final_key(&head);
+			let head_key = F::top_trie_key(&head);
 			if let Some((data, linkage)) = read_with_linkage::<K, V>(head_key.as_ref()) {
 				let new_linkage = EncodeLikeLinkage::<_, _, K> {
 					previous: Some(Ref::from(&key)),
@@ -268,7 +268,7 @@ where
 	K: Decode,
 	F: KeyFormat,
 {
-	top::get(F::storage_linked_map_final_head_key().as_ref())
+	top::get(F::top_trie_head_key().as_ref())
 }
 
 /// Overwrite current head pointer.
@@ -281,8 +281,8 @@ where
 	F: KeyFormat,
 {
 	match head.as_ref() {
-		Some(head) => top::put(F::storage_linked_map_final_head_key().as_ref(), head),
-		None => top::kill(F::storage_linked_map_final_head_key().as_ref()),
+		Some(head) => top::put(F::top_trie_head_key().as_ref(), head),
+		None => top::kill(F::top_trie_head_key().as_ref()),
 	}
 }
 
@@ -311,33 +311,33 @@ pub trait StorageLinkedMap {
 	fn from_query_to_optional_value(v: Self::Query) -> Option<Self::Value>;
 
 	/// Generate the full key used in top storage.
-	fn storage_linked_map_final_key<KeyArg>(key: KeyArg) -> Vec<u8>
+	fn top_trie_key<KeyArg>(key: KeyArg) -> Vec<u8>
 	where
 		KeyArg: EncodeLike<Self::Key>,
 	{
-		<Self::KeyFormat as KeyFormat>::storage_linked_map_final_key::<KeyArg>(&key)
+		<Self::KeyFormat as KeyFormat>::top_trie_key::<KeyArg>(&key)
 	}
 
 	/// Generate the hashed key for head
-	fn storage_linked_map_final_head_key() -> Vec<u8> {
-		<Self::KeyFormat as KeyFormat>::storage_linked_map_final_head_key()
+	fn top_trie_head_key() -> Vec<u8> {
+		<Self::KeyFormat as KeyFormat>::top_trie_head_key()
 	}
 
 	/// Does the value (explicitly) exist in storage?
 	fn exists<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> bool {
-		top::exists(Self::storage_linked_map_final_key(key).as_ref())
+		top::exists(Self::top_trie_key(key).as_ref())
 	}
 
 	/// Load the value associated with the given key from the map.
 	fn get<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> Self::Query {
-		let val = top::get(Self::storage_linked_map_final_key(key).as_ref());
+		let val = top::get(Self::top_trie_key(key).as_ref());
 		Self::from_optional_value_to_query(val)
 	}
 
 	/// Swap the values of two keys.
 	fn swap<KeyArg1: EncodeLike<Self::Key>, KeyArg2: EncodeLike<Self::Key>>(key1: KeyArg1, key2: KeyArg2) {
-		let final_key1 = Self::storage_linked_map_final_key(Ref::from(&key1));
-		let final_key2 = Self::storage_linked_map_final_key(Ref::from(&key2));
+		let final_key1 = Self::top_trie_key(Ref::from(&key1));
+		let final_key2 = Self::top_trie_key(Ref::from(&key2));
 		let full_value_1 = read_with_linkage::<Self::Key, Self::Value>(final_key1.as_ref());
 		let full_value_2 = read_with_linkage::<Self::Key, Self::Value>(final_key2.as_ref());
 
@@ -366,7 +366,7 @@ pub trait StorageLinkedMap {
 
 	/// Store a value to be associated with the given key from the map.
 	fn insert<KeyArg: EncodeLike<Self::Key>, ValArg: EncodeLike<Self::Value>>(key: KeyArg, val: ValArg) {
-		let final_key = Self::storage_linked_map_final_key(Ref::from(&key));
+		let final_key = Self::top_trie_key(Ref::from(&key));
 		let linkage = match read_with_linkage::<_, Self::Value>(final_key.as_ref()) {
 			// overwrite but reuse existing linkage
 			Some((_data, linkage)) => linkage,
@@ -383,7 +383,7 @@ pub trait StorageLinkedMap {
 
 	/// Mutate the value under a key.
 	fn mutate<KeyArg: EncodeLike<Self::Key>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
-		let final_key = Self::storage_linked_map_final_key(Ref::from(&key));
+		let final_key = Self::top_trie_key(Ref::from(&key));
 
 		let (mut val, _linkage) = read_with_linkage::<Self::Key, Self::Value>(final_key.as_ref())
 			.map(|(data, linkage)| (Self::from_optional_value_to_query(Some(data)), Some(linkage)))
@@ -399,7 +399,7 @@ pub trait StorageLinkedMap {
 
 	/// Take the value under a key.
 	fn take<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> Self::Query {
-		let final_key = Self::storage_linked_map_final_key(key);
+		let final_key = Self::top_trie_key(key);
 
 		let full_value: Option<(Self::Value, Linkage<Self::Key>)> = top::take(final_key.as_ref());
 
@@ -434,7 +434,7 @@ pub trait StorageLinkedMap {
 	fn decode_len<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> Result<usize, &'static str>
 		where Self::Value: codec::DecodeLength + Len
 	{
-		let key = Self::storage_linked_map_final_key(key);
+		let key = Self::top_trie_key(key);
 		if let Some(v) = top::get_raw(key.as_ref()) {
 			<Self::Value as codec::DecodeLength>::len(&v).map_err(|e| e.what())
 		} else {
@@ -482,7 +482,7 @@ pub trait StorageLinkedMap {
 		};
 
 		loop {
-			let old_raw_key = Self::KeyFormat::storage_linked_map_final_key(&current_key);
+			let old_raw_key = Self::KeyFormat::top_trie_key(&current_key);
 			let x = top::take(old_raw_key.as_ref());
 			let (val, linkage): (V2, Linkage<K2>) = match x {
 				Some(v) => v,
@@ -490,7 +490,7 @@ pub trait StorageLinkedMap {
 					// we failed to read value and linkage. Update the last key's linkage
 					// to end the map early, since it's impossible to iterate further.
 					if let Some(last_key) = last_key {
-						let last_raw_key = Self::storage_linked_map_final_key(&last_key);
+						let last_raw_key = Self::top_trie_key(&last_key);
 						if let Some((val, mut linkage))
 							= read_with_linkage::<Self::Key, Self::Value>(last_raw_key.as_ref())
 						{
@@ -511,7 +511,7 @@ pub trait StorageLinkedMap {
 
 			// and write in the value and linkage under the new key.
 			let new_key = translate_key(current_key.clone());
-			let new_raw_key = Self::storage_linked_map_final_key(&new_key);
+			let new_raw_key = Self::top_trie_key(&new_key);
 			top::put(new_raw_key.as_ref(), &(&val, &linkage));
 
 			match next {

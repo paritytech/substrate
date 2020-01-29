@@ -74,7 +74,7 @@ pub trait StorageDoubleMap {
 	fn from_query_to_optional_value(v: Self::Query) -> Option<Self::Value>;
 
 	/// Generate the first part of the key used in top storage.
-	fn storage_double_map_final_key1<KArg1>(k1: KArg1) -> Vec<u8>
+	fn top_trie_key1_prefix<KArg1>(k1: KArg1) -> Vec<u8>
 	where
 		KArg1: EncodeLike<Self::Key1>,
 	{
@@ -94,12 +94,12 @@ pub trait StorageDoubleMap {
 	}
 
 	/// Generate the full key used in top storage.
-	fn storage_double_map_final_key<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Vec<u8>
+	fn top_trie_key<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Vec<u8>
 	where
 		KArg1: EncodeLike<Self::Key1>,
 		KArg2: EncodeLike<Self::Key2>,
 	{
-		let mut final_key = Self::storage_double_map_final_key1(k1);
+		let mut final_key = Self::top_trie_key1_prefix(k1);
 		final_key.extend_from_slice(k2.using_encoded(Self::Hasher2::hash).as_ref());
 		final_key
 	}
@@ -109,7 +109,7 @@ pub trait StorageDoubleMap {
 		KArg1: EncodeLike<Self::Key1>,
 		KArg2: EncodeLike<Self::Key2>,
 	{
-		top::exists(&Self::storage_double_map_final_key(k1, k2))
+		top::exists(&Self::top_trie_key(k1, k2))
 	}
 
 	fn get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
@@ -117,7 +117,7 @@ pub trait StorageDoubleMap {
 		KArg1: EncodeLike<Self::Key1>,
 		KArg2: EncodeLike<Self::Key2>,
 	{
-		Self::from_optional_value_to_query(top::get(&Self::storage_double_map_final_key(k1, k2)))
+		Self::from_optional_value_to_query(top::get(&Self::top_trie_key(k1, k2)))
 	}
 
 	fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
@@ -125,7 +125,7 @@ pub trait StorageDoubleMap {
 		KArg1: EncodeLike<Self::Key1>,
 		KArg2: EncodeLike<Self::Key2>,
 	{
-		let final_key = Self::storage_double_map_final_key(k1, k2);
+		let final_key = Self::top_trie_key(k1, k2);
 
 		let value = top::take(&final_key);
 		Self::from_optional_value_to_query(value)
@@ -139,8 +139,8 @@ pub trait StorageDoubleMap {
 		YKArg1: EncodeLike<Self::Key1>,
 		YKArg2: EncodeLike<Self::Key2>
 	{
-		let final_x_key = Self::storage_double_map_final_key(x_k1, x_k2);
-		let final_y_key = Self::storage_double_map_final_key(y_k1, y_k2);
+		let final_x_key = Self::top_trie_key(x_k1, x_k2);
+		let final_y_key = Self::top_trie_key(y_k1, y_k2);
 
 		let v1 = top::get_raw(&final_x_key);
 		if let Some(val) = top::get_raw(&final_y_key) {
@@ -161,7 +161,7 @@ pub trait StorageDoubleMap {
 		KArg2: EncodeLike<Self::Key2>,
 		VArg: EncodeLike<Self::Value>,
 	{
-		top::put(&Self::storage_double_map_final_key(k1, k2), &val.borrow())
+		top::put(&Self::top_trie_key(k1, k2), &val.borrow())
 	}
 
 	fn remove<KArg1, KArg2>(k1: KArg1, k2: KArg2)
@@ -169,17 +169,17 @@ pub trait StorageDoubleMap {
 		KArg1: EncodeLike<Self::Key1>,
 		KArg2: EncodeLike<Self::Key2>,
 	{
-		top::kill(&Self::storage_double_map_final_key(k1, k2))
+		top::kill(&Self::top_trie_key(k1, k2))
 	}
 
 	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: EncodeLike<Self::Key1> {
-		top::kill_prefix(Self::storage_double_map_final_key1(k1).as_ref())
+		top::kill_prefix(Self::top_trie_key1_prefix(k1).as_ref())
 	}
 
 	fn iter_prefix<KArg1>(k1: KArg1) -> PrefixIterator<Self::Value>
 		where KArg1: ?Sized + EncodeLike<Self::Key1>
 	{
-		let prefix = Self::storage_double_map_final_key1(k1);
+		let prefix = Self::top_trie_key1_prefix(k1);
 		PrefixIterator::<Self::Value> {
 			prefix: prefix.clone(),
 			previous_key: prefix,
@@ -193,7 +193,7 @@ pub trait StorageDoubleMap {
 		KArg2: EncodeLike<Self::Key2>,
 		F: FnOnce(&mut Self::Query) -> R,
 	{
-		let final_key = Self::storage_double_map_final_key(k1, k2);
+		let final_key = Self::top_trie_key(k1, k2);
 		let mut val = Self::from_optional_value_to_query(top::get(final_key.as_ref()));
 
 		let ret = f(&mut val);
@@ -218,7 +218,7 @@ pub trait StorageDoubleMap {
 		Items: IntoIterator<Item=EncodeLikeItem>,
 		Items::IntoIter: ExactSizeIterator
 	{
-		let final_key = Self::storage_double_map_final_key(k1, k2);
+		let final_key = Self::top_trie_key(k1, k2);
 
 		let encoded_value = top::get_raw(&final_key)
 			.unwrap_or_else(|| {
@@ -267,7 +267,7 @@ pub trait StorageDoubleMap {
 		      KArg2: EncodeLike<Self::Key2>,
 		      Self::Value: codec::DecodeLength + Len,
 	{
-		let final_key = Self::storage_double_map_final_key(key1, key2);
+		let final_key = Self::top_trie_key(key1, key2);
 		if let Some(v) = top::get_raw(&final_key) {
 			<Self::Value as codec::DecodeLength>::len(&v).map_err(|e| e.what())
 		} else {

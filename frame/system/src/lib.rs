@@ -794,9 +794,9 @@ impl<T: Trait> Module<T> {
 	pub fn externalities() -> TestExternalities {
 		TestExternalities::new(sp_core::storage::Storage {
 			top: map![
-				<BlockHash<T>>::storage_map_final_key(T::BlockNumber::zero()) => [69u8; 32].encode(),
-				<Number<T>>::storage_value_final_key().to_vec() => T::BlockNumber::one().encode(),
-				<ParentHash<T>>::storage_value_final_key().to_vec() => [69u8; 32].encode()
+				<BlockHash<T>>::top_trie_key(T::BlockNumber::zero()) => [69u8; 32].encode(),
+				<Number<T>>::top_trie_key().to_vec() => T::BlockNumber::one().encode(),
+				<ParentHash<T>>::top_trie_key().to_vec() => [69u8; 32].encode()
 			],
 			children: map![],
 		})

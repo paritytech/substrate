@@ -35,7 +35,7 @@ pub trait StoragePrefixedMap {
 	fn storage_prefix() -> &'static [u8];
 
 	/// Final full prefix that prefixes all keys.
-	fn final_prefix() -> [u8; 32] {
+	fn top_trie_prefix() -> [u8; 32] {
 		let mut final_key = [0u8; 32];
 		final_key[0..16].copy_from_slice(&Twox128::hash(Self::module_prefix()));
 		final_key[16..32].copy_from_slice(&Twox128::hash(Self::storage_prefix()));
@@ -44,12 +44,12 @@ pub trait StoragePrefixedMap {
 
 	/// Remove all value of the storage.
 	fn remove_all() {
-		sp_io::storage::clear_prefix(&Self::final_prefix())
+		sp_io::storage::clear_prefix(&Self::top_trie_prefix())
 	}
 
 	/// Iter over all value of the storage.
 	fn iter() -> PrefixIterator<Self::Value> {
-		let prefix = Self::final_prefix();
+		let prefix = Self::top_trie_prefix();
 		PrefixIterator {
 			prefix: prefix.to_vec(),
 			previous_key: prefix.to_vec(),
@@ -78,7 +78,7 @@ pub trait StoragePrefixedMap {
 	fn translate_values<OldValue, TV>(translate_val: TV) -> Result<(), u32>
 		where OldValue: Decode, TV: Fn(OldValue) -> Self::Value
 	{
-		let prefix = Self::final_prefix();
+		let prefix = Self::top_trie_prefix();
 		let mut previous_key = prefix.to_vec();
 		let mut errors = 0;
 		while let Some(next_key) = sp_io::storage::next_key(&previous_key)
@@ -126,13 +126,13 @@ mod test {
 			}
 
 			let key_before = {
-				let mut k = MyStorage::final_prefix();
+				let mut k = MyStorage::top_trie_prefix();
 				let last = k.iter_mut().last().unwrap();
 				*last = last.checked_sub(1).unwrap();
 				k
 			};
 			let key_after = {
-				let mut k = MyStorage::final_prefix();
+				let mut k = MyStorage::top_trie_prefix();
 				let last = k.iter_mut().last().unwrap();
 				*last = last.checked_add(1).unwrap();
 				k
@@ -142,7 +142,7 @@ mod test {
 			top::put(&key_after[..], &33u64);
 
 			let k = [twox_128(b"MyModule"), twox_128(b"MyStorage")].concat();
-			assert_eq!(MyStorage::final_prefix().to_vec(), k);
+			assert_eq!(MyStorage::top_trie_prefix().to_vec(), k);
 
 			// test iteration
 			assert_eq!(MyStorage::iter().collect::<Vec<_>>(), vec![]);

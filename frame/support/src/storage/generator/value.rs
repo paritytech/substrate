@@ -47,7 +47,7 @@ pub trait StorageValue {
 	fn from_query_to_optional_value(v: Self::Query) -> Option<Self::Value>;
 
 	/// Generate the full key used in top storage.
-	fn storage_value_final_key() -> [u8; 32] {
+	fn top_trie_key() -> [u8; 32] {
 		let mut final_key = [0u8; 32];
 		final_key[0..16].copy_from_slice(&Twox128::hash(Self::module_prefix()));
 		final_key[16..32].copy_from_slice(&Twox128::hash(Self::storage_prefix()));
@@ -56,12 +56,12 @@ pub trait StorageValue {
 
 	/// Does the value (explicitly) exist in storage?
 	fn exists() -> bool {
-		top::exists(&Self::storage_value_final_key())
+		top::exists(&Self::top_trie_key())
 	}
 
 	/// Load the value from the provided storage instance.
 	fn get() -> Self::Query {
-		let value = top::get(&Self::storage_value_final_key());
+		let value = top::get(&Self::top_trie_key());
 		Self::from_optional_value_to_query(value)
 	}
 
@@ -86,7 +86,7 @@ pub trait StorageValue {
 	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
 	/// precisely prior initialized modules doesn't make use of this storage).
 	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<Self::Value>>(f: F) -> Result<Option<Self::Value>, ()> {
-		let key = Self::storage_value_final_key();
+		let key = Self::top_trie_key();
 
 		// attempt to get the length directly.
 		let maybe_old = match top::get_raw(&key) {
@@ -104,12 +104,12 @@ pub trait StorageValue {
 
 	/// Store a value under this key into the provided storage instance.
 	fn put<Arg: EncodeLike<Self::Value>>(val: Arg) {
-		top::put(&Self::storage_value_final_key(), &val)
+		top::put(&Self::top_trie_key(), &val)
 	}
 
 	/// Clear the storage value.
 	fn kill() {
-		top::kill(&Self::storage_value_final_key())
+		top::kill(&Self::top_trie_key())
 	}
 
 	/// Mutate the value
@@ -126,7 +126,7 @@ pub trait StorageValue {
 
 	/// Take a value from storage, removing it afterwards.
 	fn take() -> Self::Query {
-		let key = Self::storage_value_final_key();
+		let key = Self::top_trie_key();
 		let value = top::get(&key);
 		if value.is_some() {
 			top::kill(&key)
@@ -145,7 +145,7 @@ pub trait StorageValue {
 		Items: IntoIterator<Item=EncodeLikeItem>,
 		Items::IntoIter: ExactSizeIterator,
 	{
-		let key = Self::storage_value_final_key();
+		let key = Self::top_trie_key();
 		let encoded_value = top::get_raw(&key)
 			.unwrap_or_else(|| {
 				match Self::from_query_to_optional_value(Self::from_optional_value_to_query(None)) {
@@ -193,7 +193,7 @@ pub trait StorageValue {
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
 	/// function for this purpose.
 	fn decode_len() -> Result<usize, &'static str> where Self::Value: codec::DecodeLength, Self::Value: Len {
-		let key = Self::storage_value_final_key();
+		let key = Self::top_trie_key();
 
 		// attempt to get the length directly.
 		if let Some(k) = top::get_raw(&key) {

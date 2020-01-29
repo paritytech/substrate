@@ -2730,7 +2730,7 @@ fn migration_v2() {
 
 		// inject old-style values directly into storage.
 		let set = |stash, spans: V1SlashingSpans| {
-			let key = <Staking as Store>::SlashingSpans::storage_map_final_key(stash);
+			let key = <Staking as Store>::SlashingSpans::top_trie_key(stash);
 			sp_io::storage::set(&key, &spans.encode());
 		};
 

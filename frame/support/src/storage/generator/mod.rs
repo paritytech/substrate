@@ -107,7 +107,7 @@ mod tests {
 		let t = GenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			// put the old value `1111u32` in the storage.
-			let key = Value::storage_value_final_key();
+			let key = Value::top_trie_key();
 			top::put_raw(&key, &1111u32.encode());
 
 			// translate
@@ -131,7 +131,7 @@ mod tests {
 		TestExternalities::new(t).execute_with(|| {
 			// start with a map of u32 -> u32.
 			for i in 0u32..100u32 {
-				let final_key = <Format as KeyFormat>::storage_linked_map_final_key(&i);
+				let final_key = <Format as KeyFormat>::top_trie_key(&i);
 
 				let linkage = linked_map::new_head_linkage::<_, u32, u32, Format>(&i);
 				top::put(final_key.as_ref(), &(&i, linkage));
