@@ -113,7 +113,7 @@ pub enum TransactionStatus<Hash, BlockHash> {
 pub type TransactionStatusStream<Hash, BlockHash> = dyn Stream<Item=TransactionStatus<Hash, BlockHash>> + Send + Unpin;
 
 /// The import notification event stream.
-pub type ImportNotificationStream = mpsc::UnboundedReceiver<()>;
+pub type ImportNotificationStream<H> = mpsc::UnboundedReceiver<H>;
 
 /// Transaction hash type for a pool.
 pub type TxHash<P> = <P as TransactionPool>::Hash;
@@ -167,7 +167,7 @@ pub trait TransactionPool: Send + Sync {
 	/// Error type.
 	type Error: From<crate::error::Error> + crate::error::IntoPoolError;
 
-	// Networking
+	// *** RPC
 
 	/// Returns a future that imports a bunch of unverified transactions to the pool.
 	fn submit_at(
@@ -183,7 +183,6 @@ pub trait TransactionPool: Send + Sync {
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<TxHash<Self>, Self::Error>;
 
-	// *** RPC
 	/// Returns a future that import a single transaction and starts to watch their progress in the pool.
 	fn submit_and_watch(
 		&self,
@@ -205,7 +204,7 @@ pub trait TransactionPool: Send + Sync {
 
 	// *** logging / RPC / networking
 	/// Return an event stream of transactions imported to the pool.
-	fn import_notification_stream(&self) -> ImportNotificationStream;
+	fn import_notification_stream(&self) -> ImportNotificationStream<TxHash<Self>>;
 
 	// *** networking
 	/// Notify the pool about transactions broadcast.
@@ -213,6 +212,9 @@ pub trait TransactionPool: Send + Sync {
 
 	/// Returns transaction hash
 	fn hash_of(&self, xt: &TransactionFor<Self>) -> TxHash<Self>;
+
+	/// Return specific ready transaction by hash, if there is one.
+	fn ready_transaction(&self, hash: &TxHash<Self>) -> Option<Arc<Self::InPoolTransaction>>;
 }
 
 /// Trait for transaction pool maintenance.

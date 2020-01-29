@@ -461,29 +461,31 @@ fn parse_storage_line_defs(
 			})?;
 		}
 
+		let span = line.storage_type.span();
+		let no_hasher_error = || syn::Error::new(
+			span,
+			"Default hasher has been removed, use explicit hasher(blake2_256) instead."
+		);
+
 		let storage_type = match line.storage_type {
 			DeclStorageType::Map(map) => super::StorageLineTypeDef::Map(
 				super::MapDef {
-					hasher: map.hasher.inner.map(Into::into)
-						.unwrap_or(super::HasherKind::Blake2_256),
+					hasher: map.hasher.inner.ok_or_else(no_hasher_error)?.into(),
 					key: map.key,
 					value: map.value,
 				}
 			),
 			DeclStorageType::LinkedMap(map) => super::StorageLineTypeDef::LinkedMap(
 				super::MapDef {
-					hasher: map.hasher.inner.map(Into::into)
-						.unwrap_or(super::HasherKind::Blake2_256),
+					hasher: map.hasher.inner.ok_or_else(no_hasher_error)?.into(),
 					key: map.key,
 					value: map.value,
 				}
 			),
 			DeclStorageType::DoubleMap(map) => super::StorageLineTypeDef::DoubleMap(
 				super::DoubleMapDef {
-					hasher1: map.hasher1.inner.map(Into::into)
-						.unwrap_or(super::HasherKind::Blake2_256),
-					hasher2: map.hasher2.inner.map(Into::into)
-						.unwrap_or(super::HasherKind::Blake2_256),
+					hasher1: map.hasher1.inner.ok_or_else(no_hasher_error)?.into(),
+					hasher2: map.hasher2.inner.ok_or_else(no_hasher_error)?.into(),
 					key1: map.key1,
 					key2: map.key2,
 					value: map.value,

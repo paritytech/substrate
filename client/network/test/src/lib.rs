@@ -390,6 +390,8 @@ impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 	) {}
 
 	fn on_broadcasted(&self, _: HashMap<Hash, Vec<String>>) {}
+
+	fn transaction(&self, h: &Hash) -> Option<Extrinsic> { None }
 }
 
 pub trait SpecializationFactory {
@@ -610,6 +612,7 @@ pub trait TestNetFactory: Sized {
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			roles: config.roles,
+			executor: None,
 			network_config: NetworkConfiguration {
 				listen_addresses: vec![listen_addr.clone()],
 				transport: TransportConfig::MemoryOnly,
@@ -683,6 +686,7 @@ pub trait TestNetFactory: Sized {
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			roles: config.roles,
+			executor: None,
 			network_config: NetworkConfiguration {
 				listen_addresses: vec![listen_addr.clone()],
 				transport: TransportConfig::MemoryOnly,
