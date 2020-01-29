@@ -558,9 +558,11 @@ where
 
 	let keyring = cli.get_keyring();
 	let is_dev = cli.shared_params.dev;
-	let is_authority = cli.validator || cli.sentry || is_dev || keyring.is_some();
+	let is_light = cli.light;
+	let is_authority = (cli.validator || cli.sentry || is_dev || keyring.is_some())
+		&& !is_light;
 	let role =
-		if cli.light {
+		if is_light {
 			sc_service::Roles::LIGHT
 		} else if is_authority {
 			sc_service::Roles::AUTHORITY
@@ -613,7 +615,7 @@ where
 
 	config.dev_key_seed = keyring
 		.map(|a| format!("//{}", a)).or_else(|| {
-			if is_dev {
+			if is_dev && !is_light {
 				Some("//Alice".into())
 			} else {
 				None
