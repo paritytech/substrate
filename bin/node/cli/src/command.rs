@@ -17,8 +17,7 @@
 use sc_cli::{VersionInfo, error};
 use sc_service::{Roles as ServiceRoles};
 use node_transaction_factory::RuntimeAdapter;
-use crate::{Cli, service, ChainSpec, load_spec, Subcommand};
-use crate::factory_impl::FactoryState;
+use crate::{Cli, service, ChainSpec, load_spec, Subcommand, factory_impl::FactoryState};
 
 /// Parse command line arguments into service configuration.
 pub fn run<I, T>(args: I, version: sc_cli::VersionInfo) -> error::Result<()>
