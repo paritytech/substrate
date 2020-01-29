@@ -77,11 +77,11 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
 	// Per convention: if the runtime behavior changes, increment spec_version
-	// and set impl_version to equal spec_version. If only runtime
+	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 207,
-	impl_version: 208,
+	spec_version: 208,
+	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 };
 
