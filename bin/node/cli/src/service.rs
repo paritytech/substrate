@@ -172,7 +172,7 @@ macro_rules! new_full {
 			};
 
 			let babe = sc_consensus_babe::start_babe(babe_config)?;
-			service.spawn_essential_task(babe);
+			service.spawn_essential_task("babe-proposer", babe);
 
 			let network = service.network();
 			let dht_event_stream = network.event_stream().filter_map(|e| async move { match e {
@@ -187,7 +187,7 @@ macro_rules! new_full {
 				dht_event_stream,
 			);
 
-			service.spawn_task(authority_discovery);
+			service.spawn_task("authority-discovery", authority_discovery);
 		}
 
 		// if the node isn't actively participating in consensus then it doesn't
@@ -211,7 +211,7 @@ macro_rules! new_full {
 		match (is_authority, disable_grandpa) {
 			(false, false) => {
 				// start the lightweight GRANDPA observer
-				service.spawn_task(grandpa::run_grandpa_observer(
+				service.spawn_task("grandpa-observer", grandpa::run_grandpa_observer(
 					config,
 					grandpa_link,
 					service.network(),
@@ -234,6 +234,7 @@ macro_rules! new_full {
 				// the GRANDPA voter task is considered infallible, i.e.
 				// if it fails we take down the service with it.
 				service.spawn_essential_task(
+					"grandpa-voter",
 					grandpa::run_grandpa_voter(grandpa_config)?
 				);
 			},
