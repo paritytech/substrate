@@ -41,7 +41,7 @@ impl BuilderDef {
 
 		for line in def.storage_lines.iter() {
 			let storage_struct = &line.storage_struct;
-			let storage_trait = &line.storage_trait;
+			let storage_generator_trait = &line.storage_generator_trait;
 			let value_type = &line.value_type;
 
 			// Defines the data variable to use for insert at genesis either from build or config.
@@ -76,7 +76,7 @@ impl BuilderDef {
 							#data
 							let v: Option<&#value_type>= data;
 							if let Some(v) = v {
-								<#storage_struct as #scrate::#storage_trait>::put::<&#value_type>(v);
+								<#storage_struct as #scrate::#storage_generator_trait>::put::<&#value_type>(v);
 							}
 						}}
 					},
@@ -84,7 +84,7 @@ impl BuilderDef {
 						quote!{{
 							#data
 							let v: &#value_type = data;
-							<#storage_struct as #scrate::#storage_trait>::put::<&#value_type>(v);
+							<#storage_struct as #scrate::#storage_generator_trait>::put::<&#value_type>(v);
 						}}
 					},
 					StorageLineTypeDef::Simple(_) => unreachable!(),
@@ -94,7 +94,7 @@ impl BuilderDef {
 							#data
 							let data: &#scrate::sp_std::vec::Vec<(#key, #value_type)> = data;
 							data.iter().for_each(|(k, v)| {
-								<#storage_struct as #scrate::#storage_trait>::insert::<
+								<#storage_struct as #scrate::#storage_generator_trait>::insert::<
 									&#key, &#value_type
 								>(k, v);
 							});
@@ -107,7 +107,7 @@ impl BuilderDef {
 							#data
 							let data: &#scrate::sp_std::vec::Vec<(#key1, #key2, #value_type)> = data;
 							data.iter().for_each(|(k1, k2, v)| {
-								<#storage_struct as #scrate::#storage_trait>::insert::<
+								<#storage_struct as #scrate::#storage_generator_trait>::insert::<
 									&#key1, &#key2, &#value_type
 								>(k1, k2, v);
 							});

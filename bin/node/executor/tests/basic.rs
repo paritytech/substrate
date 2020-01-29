@@ -164,16 +164,16 @@ fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 fn panic_execution_with_foreign_code_gives_error() {
 	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, Storage {
 		top: map![
-			<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
+			<pallet_balances::FreeBalance<Runtime>>::storage_map_final_key(alice()) => {
 				69_u128.encode()
 			},
-			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
+			<pallet_balances::TotalIssuance<Runtime>>::storage_value_final_key().to_vec() => {
 				69_u128.encode()
 			},
-			<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => {
+			<pallet_indices::NextEnumSet<Runtime>>::storage_value_final_key().to_vec() => {
 				0_u128.encode()
 			},
-			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => {
+			<frame_system::BlockHash<Runtime>>::storage_map_final_key(0) => {
 				vec![0u8; 32]
 			}
 		],
@@ -203,16 +203,16 @@ fn panic_execution_with_foreign_code_gives_error() {
 fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, Storage {
 		top: map![
-			<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
+			<pallet_balances::FreeBalance<Runtime>>::storage_map_final_key(alice()) => {
 				69_u128.encode()
 			},
-			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
+			<pallet_balances::TotalIssuance<Runtime>>::storage_value_final_key().to_vec() => {
 				69_u128.encode()
 			},
-			<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => {
+			<pallet_indices::NextEnumSet<Runtime>>::storage_value_final_key().to_vec() => {
 				0_u128.encode()
 			},
-			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => {
+			<frame_system::BlockHash<Runtime>>::storage_map_final_key(0) => {
 				vec![0u8; 32]
 			}
 		],
@@ -242,14 +242,14 @@ fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 fn successful_execution_with_native_equivalent_code_gives_ok() {
 	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, Storage {
 		top: map![
-			<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
+			<pallet_balances::FreeBalance<Runtime>>::storage_map_final_key(alice()) => {
 				(111 * DOLLARS).encode()
 			},
-			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
+			<pallet_balances::TotalIssuance<Runtime>>::storage_value_final_key().to_vec() => {
 				(111 * DOLLARS).encode()
 			},
-			<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
-			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
+			<pallet_indices::NextEnumSet<Runtime>>::storage_value_final_key().to_vec() => vec![0u8; 16],
+			<frame_system::BlockHash<Runtime>>::storage_map_final_key(0) => vec![0u8; 32]
 		],
 		children: map![],
 	});
@@ -284,14 +284,14 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 fn successful_execution_with_foreign_code_gives_ok() {
 	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, Storage {
 		top: map![
-			<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
+			<pallet_balances::FreeBalance<Runtime>>::storage_map_final_key(alice()) => {
 				(111 * DOLLARS).encode()
 			},
-			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
+			<pallet_balances::TotalIssuance<Runtime>>::storage_value_final_key().to_vec() => {
 				(111 * DOLLARS).encode()
 			},
-			<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
-			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
+			<pallet_indices::NextEnumSet<Runtime>>::storage_value_final_key().to_vec() => vec![0u8; 16],
+			<frame_system::BlockHash<Runtime>>::storage_map_final_key(0) => vec![0u8; 32]
 		],
 		children: map![],
 	});
@@ -710,14 +710,14 @@ fn native_big_block_import_fails_on_fallback() {
 fn panic_execution_gives_error() {
 	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, Storage {
 		top: map![
-			<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
+			<pallet_balances::FreeBalance<Runtime>>::storage_map_final_key(alice()) => {
 				0_u128.encode()
 			},
-			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
+			<pallet_balances::TotalIssuance<Runtime>>::storage_value_final_key().to_vec() => {
 				0_u128.encode()
 			},
-			<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
-			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
+			<pallet_indices::NextEnumSet<Runtime>>::storage_value_final_key().to_vec() => vec![0u8; 16],
+			<frame_system::BlockHash<Runtime>>::storage_map_final_key(0) => vec![0u8; 32]
 		],
 		children: map![],
 	});
@@ -745,14 +745,14 @@ fn panic_execution_gives_error() {
 fn successful_execution_gives_ok() {
 	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, Storage {
 		top: map![
-			<pallet_balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
+			<pallet_balances::FreeBalance<Runtime>>::storage_map_final_key(alice()) => {
 				(111 * DOLLARS).encode()
 			},
-			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
+			<pallet_balances::TotalIssuance<Runtime>>::storage_value_final_key().to_vec() => {
 				(111 * DOLLARS).encode()
 			},
-			<pallet_indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
-			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
+			<pallet_indices::NextEnumSet<Runtime>>::storage_value_final_key().to_vec() => vec![0u8; 16],
+			<frame_system::BlockHash<Runtime>>::storage_map_final_key(0) => vec![0u8; 32]
 		],
 		children: map![],
 	});

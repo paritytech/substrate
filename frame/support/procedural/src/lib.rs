@@ -54,10 +54,7 @@ use proc_macro::TokenStream;
 /// Basic storage consists of a name and a type; supported types are:
 ///
 /// * Value: `Foo: type`: Implements the
-///   [`StorageValue`](../frame_support/storage/trait.StorageValue.html) trait using the
-///   [`StorageValue generator`](../frame_support/storage/generator/trait.StorageValue.html).
-///
-///   The generator is implemented with:
+///   [`StorageValue`](../frame_support/storage/trait.StorageValue.html) trait with
 ///   * `module_prefix`: module_prefix
 ///   * `storage_prefix`: storage_name
 ///
@@ -67,17 +64,16 @@ use proc_macro::TokenStream;
 ///   ```
 ///
 /// * Map: `Foo: map hasher($hash) type => type`: Implements the
-///   [`StorageMap`](../frame_support/storage/trait.StorageMap.html) trait using the
-///   [`StorageMap generator`](../frame_support/storage/generator/trait.StorageMap.html).
-///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
+///   [`StorageMap`](../frame_support/storage/trait.StorageMap.html) trait and
+///   [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
 ///
 ///   `$hash` representing a choice of hashing algorithms available in the
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait.
 ///
 ///   `blake2_256` and `blake2_128_concat` are strong hasher. One should use another hasher
-///   with care, see generator documentation.
+///   with care, see `StorageMap` documentation.
 ///
-///   The generator is implemented with:
+///   The generators are implemented with:
 ///   * `module_prefix`: $module_prefix
 ///   * `storage_prefix`: storage_name
 ///   * `Hasher`: $hash
@@ -88,15 +84,13 @@ use proc_macro::TokenStream;
 ///   ```
 ///
 /// * Linked map: `Foo: linked_map hasher($hash) type => type`: Implements the
-///   [`StorageLinkedMap`](../frame_support/storage/trait.StorageLinkedMap.html) trait using the
-///   [`StorageLinkedMap generator`](../frame_support/storage/generator/trait.StorageLinkedMap.html).
-///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
+///   [`StorageLinkedMap`](../frame_support/storage/trait.StorageLinkedMap.html) trait.
 ///
 ///   `$hash` representing a choice of hashing algorithms available in the
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait.
 ///
 ///   `blake2_256` and `blake2_128_concat` are strong hasher. One should use another hasher
-///   with care, see generator documentation.
+///   with care, see `StorageLinkedMap` documentation.
 ///
 ///   All key formatting logic can be accessed in a type-agnostic format via the
 ///   [`KeyFormat`](../srml_support/storage/generator/trait.KeyFormat.html) trait, which
@@ -118,13 +112,12 @@ use proc_macro::TokenStream;
 ///   ```
 ///
 /// * Double map: `Foo: double_map hasher($hash1) u32, hasher($hash2) u32 => u32`: Implements the
-///   [`StorageDoubleMap`](../frame_support/storage/trait.StorageDoubleMap.html) trait using the
-///   [`StorageDoubleMap generator`](../frame_support/storage/generator/trait.StorageDoubleMap.html).
-///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
+///   [`StorageDoubleMap`](../frame_support/storage/trait.StorageDoubleMap.html) trait and
+///   [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
 ///
 ///   `$hash1` and `$hash2` representing choices of hashing algorithms available in the
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait. They must be choosen with care, see
-///   generator documentation.
+///   `StorageDoubleMap` documentation.
 ///
 ///   If the first key is untrusted, a cryptographic `hasher` such as `blake2_256` or
 ///   `blake2_128_concat`  must be used.
@@ -134,7 +127,7 @@ use proc_macro::TokenStream;
 ///   `blake2_128_concat` must be used.
 ///   Otherwise, other items in storage with the same first key can be compromised.
 ///
-///   The generator is implemented with:
+///   The generator are implemented with:
 ///   * `module_prefix`: $module_prefix
 ///   * `storage_prefix`: storage_name
 ///   * `Hasher1`: $hash1

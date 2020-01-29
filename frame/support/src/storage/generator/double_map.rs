@@ -17,9 +17,12 @@
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
 use codec::{Ref, FullCodec, FullEncode, Encode, EncodeLike, EncodeAppend};
-use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}, traits::Len};
+use crate::{storage::{top, generator::PrefixIterator}, hash::{StorageHasher, Twox128}, traits::Len};
 
-/// Generator for `StorageDoubleMap` used by `decl_storage`.
+/// An implementation of a map with a two keys.
+///
+/// It provides an important ability to efficiently remove all entries
+/// that have a common first key.
 ///
 /// # Mapping of keys to a storage path
 ///
@@ -91,31 +94,13 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		final_key.extend_from_slice(k2.using_encoded(Self::Hasher2::hash).as_ref());
 		final_key
 	}
-}
-
-impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G
-where
-	K1: FullEncode,
-	K2: FullEncode,
-	V: FullCodec,
-	G: StorageDoubleMap<K1, K2, V>,
-{
-	type Query = G::Query;
-
-	fn hashed_key_for<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Vec<u8>
-	where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
-	{
-		Self::storage_double_map_final_key(k1, k2)
-	}
 
 	fn exists<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> bool
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 	{
-		unhashed::exists(&Self::storage_double_map_final_key(k1, k2))
+		top::exists(&Self::storage_double_map_final_key(k1, k2))
 	}
 
 	fn get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
@@ -123,7 +108,7 @@ where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 	{
-		G::from_optional_value_to_query(unhashed::get(&Self::storage_double_map_final_key(k1, k2)))
+		Self::from_optional_value_to_query(top::get(&Self::storage_double_map_final_key(k1, k2)))
 	}
 
 	fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
@@ -133,10 +118,11 @@ where
 	{
 		let final_key = Self::storage_double_map_final_key(k1, k2);
 
-		let value = unhashed::take(&final_key);
-		G::from_optional_value_to_query(value)
+		let value = top::take(&final_key);
+		Self::from_optional_value_to_query(value)
 	}
 
+	/// Swap the values of two key-pairs.
 	fn swap<XKArg1, XKArg2, YKArg1, YKArg2>(x_k1: XKArg1, x_k2: XKArg2, y_k1: YKArg1, y_k2: YKArg2)
 	where
 		XKArg1: EncodeLike<K1>,
@@ -147,16 +133,16 @@ where
 		let final_x_key = Self::storage_double_map_final_key(x_k1, x_k2);
 		let final_y_key = Self::storage_double_map_final_key(y_k1, y_k2);
 
-		let v1 = unhashed::get_raw(&final_x_key);
-		if let Some(val) = unhashed::get_raw(&final_y_key) {
-			unhashed::put_raw(&final_x_key, &val);
+		let v1 = top::get_raw(&final_x_key);
+		if let Some(val) = top::get_raw(&final_y_key) {
+			top::put_raw(&final_x_key, &val);
 		} else {
-			unhashed::kill(&final_x_key)
+			top::kill(&final_x_key)
 		}
 		if let Some(val) = v1 {
-			unhashed::put_raw(&final_y_key, &val);
+			top::put_raw(&final_y_key, &val);
 		} else {
-			unhashed::kill(&final_y_key)
+			top::kill(&final_y_key)
 		}
 	}
 
@@ -166,7 +152,7 @@ where
 		KArg2: EncodeLike<K2>,
 		VArg: EncodeLike<V>,
 	{
-		unhashed::put(&Self::storage_double_map_final_key(k1, k2), &val.borrow())
+		top::put(&Self::storage_double_map_final_key(k1, k2), &val.borrow())
 	}
 
 	fn remove<KArg1, KArg2>(k1: KArg1, k2: KArg2)
@@ -174,18 +160,18 @@ where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 	{
-		unhashed::kill(&Self::storage_double_map_final_key(k1, k2))
+		top::kill(&Self::storage_double_map_final_key(k1, k2))
 	}
 
 	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: EncodeLike<K1> {
-		unhashed::kill_prefix(Self::storage_double_map_final_key1(k1).as_ref())
+		top::kill_prefix(Self::storage_double_map_final_key1(k1).as_ref())
 	}
 
-	fn iter_prefix<KArg1>(k1: KArg1) -> storage::PrefixIterator<V>
+	fn iter_prefix<KArg1>(k1: KArg1) -> PrefixIterator<V>
 		where KArg1: ?Sized + EncodeLike<K1>
 	{
 		let prefix = Self::storage_double_map_final_key1(k1);
-		storage::PrefixIterator::<V> {
+		PrefixIterator::<V> {
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			phantom_data: Default::default(),
@@ -199,12 +185,12 @@ where
 		F: FnOnce(&mut Self::Query) -> R,
 	{
 		let final_key = Self::storage_double_map_final_key(k1, k2);
-		let mut val = G::from_optional_value_to_query(unhashed::get(final_key.as_ref()));
+		let mut val = Self::from_optional_value_to_query(top::get(final_key.as_ref()));
 
 		let ret = f(&mut val);
-		match G::from_query_to_optional_value(val) {
-			Some(ref val) => unhashed::put(final_key.as_ref(), val),
-			None => unhashed::kill(final_key.as_ref()),
+		match Self::from_query_to_optional_value(val) {
+			Some(ref val) => top::put(final_key.as_ref(), val),
+			None => top::kill(final_key.as_ref()),
 		}
 		ret
 	}
@@ -225,9 +211,9 @@ where
 	{
 		let final_key = Self::storage_double_map_final_key(k1, k2);
 
-		let encoded_value = unhashed::get_raw(&final_key)
+		let encoded_value = top::get_raw(&final_key)
 			.unwrap_or_else(|| {
-				match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
+				match Self::from_query_to_optional_value(Self::from_optional_value_to_query(None)) {
 					Some(value) => value.encode(),
 					None => Vec::new(),
 				}
@@ -237,7 +223,7 @@ where
 			encoded_value,
 			items,
 		).map_err(|_| "Could not append given item")?;
-		unhashed::put_raw(&final_key, &new_val);
+		top::put_raw(&final_key, &new_val);
 
 		Ok(())
 	}
@@ -260,16 +246,23 @@ where
 			.unwrap_or_else(|_| Self::insert(k1, k2, items));
 	}
 
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `V` is required to implement `Codec::DecodeLength`.
+	///
+	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
+	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
+	/// function for this purpose.
 	fn decode_len<KArg1, KArg2>(key1: KArg1, key2: KArg2) -> Result<usize, &'static str>
 		where KArg1: EncodeLike<K1>,
 		      KArg2: EncodeLike<K2>,
 		      V: codec::DecodeLength + Len,
 	{
 		let final_key = Self::storage_double_map_final_key(key1, key2);
-		if let Some(v) = unhashed::get_raw(&final_key) {
+		if let Some(v) = top::get_raw(&final_key) {
 			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
 		} else {
-			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
+			let len = Self::from_query_to_optional_value(Self::from_optional_value_to_query(None))
 				.map(|v| v.len())
 				.unwrap_or(0);
 
@@ -281,7 +274,7 @@ where
 #[cfg(test)]
 mod test {
 	use sp_io::TestExternalities;
-	use crate::storage::{self, StorageDoubleMap};
+	use crate::{StorageDoubleMap, storage};
 	use crate::hash::Twox128;
 
 	#[test]

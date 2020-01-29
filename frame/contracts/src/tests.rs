@@ -2528,7 +2528,7 @@ fn get_runtime_storage() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
 
-		frame_support::storage::unhashed::put_raw(
+		frame_support::storage::top::put_raw(
 			&[1, 2, 3, 4],
 			0x14144020u32.to_le_bytes().to_vec().as_ref()
 		);

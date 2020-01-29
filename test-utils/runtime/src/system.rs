@@ -62,11 +62,11 @@ pub fn balance_of_key(who: AccountId) -> Vec<u8> {
 }
 
 pub fn balance_of(who: AccountId) -> u64 {
-	storage::hashed::get_or(&blake2_256, &balance_of_key(who), 0)
+	storage::top_hashed::get_or(&blake2_256, &balance_of_key(who), 0)
 }
 
 pub fn nonce_of(who: AccountId) -> u64 {
-	storage::hashed::get_or(&blake2_256, &who.to_keyed_vec(NONCE_OF), 0)
+	storage::top_hashed::get_or(&blake2_256, &who.to_keyed_vec(NONCE_OF), 0)
 }
 
 pub fn initialize_block(header: &Header) {
@@ -74,12 +74,12 @@ pub fn initialize_block(header: &Header) {
 	<Number>::put(&header.number);
 	<ParentHash>::put(&header.parent_hash);
 	<StorageDigest>::put(header.digest());
-	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
+	storage::top::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 
 	// try to read something that depends on current header digest
 	// so that it'll be included in execution proof
 	if let Some(generic::DigestItem::Other(v)) = header.digest().logs().iter().next() {
-		let _: Option<u32> = storage::unhashed::get(&v);
+		let _: Option<u32> = storage::top::get(&v);
 	}
 }
 
@@ -161,7 +161,7 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 
 	let tx = utx.transfer();
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
-	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
+	let expected_nonce: u64 = storage::top_hashed::get_or(&blake2_256, &nonce_key, 0);
 	if tx.nonce < expected_nonce {
 		return InvalidTransaction::Stale.into();
 	}
@@ -190,16 +190,16 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
 pub fn execute_transaction(utx: Extrinsic) -> ApplyExtrinsicResult {
-	let extrinsic_index: u32 = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap();
+	let extrinsic_index: u32 = storage::top::get(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let result = execute_transaction_backend(&utx);
 	ExtrinsicData::insert(extrinsic_index, utx.encode());
-	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(extrinsic_index + 1));
+	storage::top::put(well_known_keys::EXTRINSIC_INDEX, &(extrinsic_index + 1));
 	result
 }
 
 /// Finalize the block.
 pub fn finalize_block() -> Header {
-	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
+	let extrinsic_index: u32 = storage::top::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
 	let extrinsics_root = trie::blake2_256_ordered_root(txs).into();
 	let number = <Number>::take().expect("Number is set by `initialize_block`");
@@ -261,26 +261,26 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyExtrinsicResult {
 fn execute_transfer_backend(tx: &Transfer) -> ApplyExtrinsicResult {
 	// check nonce
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
-	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
+	let expected_nonce: u64 = storage::top_hashed::get_or(&blake2_256, &nonce_key, 0);
 	if !(tx.nonce == expected_nonce) {
 		return Err(InvalidTransaction::Stale.into());
 	}
 
 	// increment nonce in storage
-	storage::hashed::put(&blake2_256, &nonce_key, &(expected_nonce + 1));
+	storage::top_hashed::put(&blake2_256, &nonce_key, &(expected_nonce + 1));
 
 	// check sender balance
 	let from_balance_key = tx.from.to_keyed_vec(BALANCE_OF);
-	let from_balance: u64 = storage::hashed::get_or(&blake2_256, &from_balance_key, 0);
+	let from_balance: u64 = storage::top_hashed::get_or(&blake2_256, &from_balance_key, 0);
 
 	// enact transfer
 	if !(tx.amount <= from_balance) {
 		return Err(InvalidTransaction::Payment.into());
 	}
 	let to_balance_key = tx.to.to_keyed_vec(BALANCE_OF);
-	let to_balance: u64 = storage::hashed::get_or(&blake2_256, &to_balance_key, 0);
-	storage::hashed::put(&blake2_256, &from_balance_key, &(from_balance - tx.amount));
-	storage::hashed::put(&blake2_256, &to_balance_key, &(to_balance + tx.amount));
+	let to_balance: u64 = storage::top_hashed::get_or(&blake2_256, &to_balance_key, 0);
+	storage::top_hashed::put(&blake2_256, &from_balance_key, &(from_balance - tx.amount));
+	storage::top_hashed::put(&blake2_256, &to_balance_key, &(to_balance + tx.amount));
 	Ok(Ok(()))
 }
 
@@ -291,19 +291,19 @@ fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyExtr
 
 fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyExtrinsicResult {
 	match value {
-		Some(value) => storage::unhashed::put_raw(key, value),
-		None => storage::unhashed::kill(key),
+		Some(value) => storage::top::put_raw(key, value),
+		None => storage::top::kill(key),
 	}
 	Ok(Ok(()))
 }
 
 fn execute_changes_trie_config_update(new_config: Option<ChangesTrieConfiguration>) -> ApplyExtrinsicResult {
 	match new_config.clone() {
-		Some(new_config) => storage::unhashed::put_raw(
+		Some(new_config) => storage::top::put_raw(
 			well_known_keys::CHANGES_TRIE_CONFIG,
 			&new_config.encode(),
 		),
-		None => storage::unhashed::kill(well_known_keys::CHANGES_TRIE_CONFIG),
+		None => storage::top::kill(well_known_keys::CHANGES_TRIE_CONFIG),
 	}
 	<NewChangesTrieConfig>::put(new_config);
 	Ok(Ok(()))

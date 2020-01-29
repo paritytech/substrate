@@ -215,8 +215,6 @@ pub struct StorageLineDefExt {
 	optional_storage_runtime_bound_comma: Option<proc_macro2::TokenStream>,
 	/// The where clause to use to constrain generics if storage is generic over runtime.
 	optional_storage_where_clause: Option<proc_macro2::TokenStream>,
-	/// Full trait, for example: `storage::StorageMap<u32, u32>`.
-	storage_trait: proc_macro2::TokenStream,
 	/// Full trait, for example: `storage::generator::StorageMap<u32, u32>`.
 	storage_generator_trait: proc_macro2::TokenStream,
 	/// Weither the storage is generic.
@@ -302,7 +300,6 @@ impl StorageLineDefExt {
 			},
 		};
 
-		let storage_trait = quote!( storage::#storage_trait_trunkated );
 		let storage_generator_trait = quote!( storage::generator::#storage_trait_trunkated );
 
 		let doc_attrs = storage_def.attrs.iter()
@@ -326,7 +323,6 @@ impl StorageLineDefExt {
 			optional_storage_runtime_comma,
 			optional_storage_runtime_bound_comma,
 			optional_storage_where_clause,
-			storage_trait,
 			storage_generator_trait,
 			is_generic,
 			is_option,
