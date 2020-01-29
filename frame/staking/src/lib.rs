@@ -1151,7 +1151,7 @@ decl_module! {
 		}
 
 		/// The ideal number of validators.
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
 			ValidatorCount::put(new);
@@ -1164,7 +1164,7 @@ decl_module! {
 		/// # <weight>
 		/// - No arguments.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn force_no_eras(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNone);
@@ -1176,21 +1176,21 @@ decl_module! {
 		/// # <weight>
 		/// - No arguments.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn force_new_era(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNew);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
 			ensure_root(origin)?;
 			<Invulnerables<T>>::put(validators);
 		}
 
 		/// Force a current staker to become completely unstaked, immediately.
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn force_unstake(origin, stash: T::AccountId) {
 			ensure_root(origin)?;
 
@@ -1205,7 +1205,7 @@ decl_module! {
 		/// # <weight>
 		/// - One storage write
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn force_new_era_always(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceAlways);
@@ -1218,7 +1218,7 @@ decl_module! {
 		/// # <weight>
 		/// - One storage write.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
 		fn cancel_deferred_slash(origin, era: EraIndex, slash_indices: Vec<u32>) {
 			T::SlashCancelOrigin::try_origin(origin)
 				.map(|_| ())

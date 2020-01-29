@@ -65,7 +65,7 @@ use sp_timestamp::{
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use sc_consensus_slots::{
-    CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
+	CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
 };
 
 use sc_keystore::KeyStorePtr;

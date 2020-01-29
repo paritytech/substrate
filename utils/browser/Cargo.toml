@@ -4,6 +4,7 @@ version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Utilities for creating a browser light-client."
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 futures = "0.3"

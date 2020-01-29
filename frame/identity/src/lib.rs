@@ -842,7 +842,7 @@ decl_module! {
 		/// - `S + 2` storage mutations.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn kill_identity(origin, target: <T::Lookup as StaticLookup>::Source) {
 			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
