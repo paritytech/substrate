@@ -18,7 +18,7 @@ use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;
 use sp_io::sandbox;
 use sp_std::{prelude::*, slice, marker, mem, vec, rc::Rc};
-use super::{Error, TypedValue, ReturnValue, HostFuncType};
+use super::{Error, Value, ReturnValue, HostFuncType};
 
 mod ffi {
 	use sp_std::mem;
@@ -183,7 +183,7 @@ extern "C" fn dispatch_thunk<T>(
 			slice::from_raw_parts(serialized_args_ptr, serialized_args_len)
 		}
 	};
-	let args = Vec::<TypedValue>::decode(&mut &serialized_args[..]).expect(
+	let args = Vec::<Value>::decode(&mut &serialized_args[..]).expect(
 		"serialized args should be provided by the runtime;
 			correctly serialized data should be deserializable;
 			qed",
@@ -244,11 +244,11 @@ impl<T> Instance<T> {
 	pub fn invoke(
 		&mut self,
 		name: &str,
-		args: &[TypedValue],
+		args: &[Value],
 		state: &mut T,
 	) -> Result<ReturnValue, Error> {
 		let serialized_args = args.to_vec().encode();
-		let mut return_val = vec![0u8; sandbox_primitives::ReturnValue::ENCODED_MAX_SIZE];
+		let mut return_val = vec![0u8; ReturnValue::ENCODED_MAX_SIZE];
 
 		let result = sandbox::invoke(
 			self.instance_idx,
@@ -261,13 +261,17 @@ impl<T> Instance<T> {
 
 		match result {
 			sandbox_primitives::ERR_OK => {
-				let return_val = sandbox_primitives::ReturnValue::decode(&mut &return_val[..])
+				let return_val = ReturnValue::decode(&mut &return_val[..])
 					.map_err(|_| Error::Execution)?;
 				Ok(return_val)
 			}
 			sandbox_primitives::ERR_EXECUTION => Err(Error::Execution),
 			_ => unreachable!(),
 		}
+	}
+
+	pub fn get_global_val(&self, name: &str) -> Option<Value> {
+		sandbox::get_global_val(self.instance_idx, name)
 	}
 }
 

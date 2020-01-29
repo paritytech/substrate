@@ -127,11 +127,10 @@ impl From<SimpleDispatchInfo> for DispatchClass {
 		match tx {
 			SimpleDispatchInfo::FixedOperational(_) => DispatchClass::Operational,
 			SimpleDispatchInfo::MaxOperational => DispatchClass::Operational,
-			SimpleDispatchInfo::FreeOperational => DispatchClass::Operational,
 
 			SimpleDispatchInfo::FixedNormal(_) => DispatchClass::Normal,
 			SimpleDispatchInfo::MaxNormal => DispatchClass::Normal,
-			SimpleDispatchInfo::FreeNormal => DispatchClass::Normal,
+			SimpleDispatchInfo::InsecureFreeNormal => DispatchClass::Normal,
 		}
 	}
 }
@@ -178,14 +177,12 @@ pub enum SimpleDispatchInfo {
 	FixedNormal(Weight),
 	/// A normal dispatch with the maximum weight.
 	MaxNormal,
-	/// A normal dispatch with no weight.
-	FreeNormal,
+	/// A normal dispatch with no weight. Base and bytes fees still need to be paid.
+	InsecureFreeNormal,
 	/// An operational dispatch with fixed weight.
 	FixedOperational(Weight),
 	/// An operational dispatch with the maximum weight.
 	MaxOperational,
-	/// An operational dispatch with no weight.
-	FreeOperational,
 }
 
 impl<T> WeighData<T> for SimpleDispatchInfo {
@@ -193,11 +190,10 @@ impl<T> WeighData<T> for SimpleDispatchInfo {
 		match self {
 			SimpleDispatchInfo::FixedNormal(w) => *w,
 			SimpleDispatchInfo::MaxNormal => Bounded::max_value(),
-			SimpleDispatchInfo::FreeNormal => Bounded::min_value(),
+			SimpleDispatchInfo::InsecureFreeNormal => Bounded::min_value(),
 
 			SimpleDispatchInfo::FixedOperational(w) => *w,
 			SimpleDispatchInfo::MaxOperational => Bounded::max_value(),
-			SimpleDispatchInfo::FreeOperational => Bounded::min_value(),
 		}
 	}
 }
@@ -213,11 +209,10 @@ impl<T> PaysFee<T> for SimpleDispatchInfo {
 		match self {
 			SimpleDispatchInfo::FixedNormal(_) => true,
 			SimpleDispatchInfo::MaxNormal => true,
-			SimpleDispatchInfo::FreeNormal => true,
+			SimpleDispatchInfo::InsecureFreeNormal => true,
 
 			SimpleDispatchInfo::FixedOperational(_) => true,
 			SimpleDispatchInfo::MaxOperational => true,
-			SimpleDispatchInfo::FreeOperational => false,
 		}
 	}
 }

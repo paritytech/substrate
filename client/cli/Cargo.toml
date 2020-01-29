@@ -4,6 +4,7 @@ version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate CLI interface."
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 clap = "2.33.0"
