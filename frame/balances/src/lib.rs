@@ -379,11 +379,11 @@ decl_storage! {
 			build(|config: &GenesisConfig<T, I>| config.balances.iter()
 				.map(|&(ref who, free)| (who.clone(), AccountData { free, .. Default::default() }))
 				.collect::<Vec<_>>()
-			): map T::AccountId => AccountData<T::Balance>;
+			): map hasher(blake2_256) T::AccountId => AccountData<T::Balance>;
 
 		/// Any liquidity locks on some account balances.
 		/// NOTE: Should only be accessed when setting, changing and freeing a lock.
-		pub Locks get(fn locks): map T::AccountId => Vec<BalanceLock<T::Balance>>;
+		pub Locks get(fn locks): map hasher(blake2_256) T::AccountId => Vec<BalanceLock<T::Balance>>;
 
 		/// True if network has been upgraded to this version.
 		IsUpgraded: bool;

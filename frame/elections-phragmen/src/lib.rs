@@ -157,9 +157,9 @@ decl_storage! {
 		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
 
 		/// Votes of a particular voter, with the round index of the votes.
-		pub VotesOf get(fn votes_of): linked_map T::AccountId => Vec<T::AccountId>;
+		pub VotesOf get(fn votes_of): linked_map hasher(blake2_256) T::AccountId => Vec<T::AccountId>;
 		/// Locked stake of a voter.
-		pub StakeOf get(fn stake_of): map T::AccountId => BalanceOf<T>;
+		pub StakeOf get(fn stake_of): map hasher(blake2_256) T::AccountId => BalanceOf<T>;
 
 		/// The present candidate list. Sorted based on account-id. A current member or a runner can
 		/// never enter this vector and is always implicitly assumed to be a candidate.

@@ -362,21 +362,7 @@ decl_module! {
 		/// Create a new kind of asset.
 		fn create(origin, options: AssetOptions<T::Balance, T::AccountId>) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let id = Self::next_asset_id();
-
-			let permissions: PermissionVersions<T::AccountId> = options.permissions.clone().into();
-
-			// The last available id serves as the overflow mark and won't be used.
-			let next_id = id.checked_add(&One::one()).ok_or_else(|| Error::<T>::NoIdAvailable)?;
-
-			<NextAssetId<T>>::put(next_id);
-			<TotalIssuance<T>>::insert(id, &options.initial_issuance);
-			<FreeBalance<T>>::insert(&id, &origin, &options.initial_issuance);
-			<Permissions<T>>::insert(&id, permissions);
-
-			Self::deposit_event(RawEvent::Created(id, origin, options));
-
-			Ok(())
+			Self::create_asset(None, Some(origin), options)
 		}
 
 		/// Transfer some liquid free balance to another account.
@@ -453,22 +439,26 @@ decl_storage! {
 		pub TotalIssuance get(fn total_issuance) build(|config: &GenesisConfig<T>| {
 			let issuance = config.initial_balance * (config.endowed_accounts.len() as u32).into();
 			config.assets.iter().map(|id| (id.clone(), issuance)).collect::<Vec<_>>()
-		}): map T::AssetId => T::Balance;
+		}): map hasher(blake2_256) T::AssetId => T::Balance;
 
 		/// The free balance of a given asset under an account.
-		pub FreeBalance: double_map T::AssetId, hasher(twox_128) T::AccountId => T::Balance;
+		pub FreeBalance:
+			double_map hasher(blake2_256) T::AssetId, hasher(twox_128) T::AccountId => T::Balance;
 
 		/// The reserved balance of a given asset under an account.
-		pub ReservedBalance: double_map T::AssetId, hasher(twox_128) T::AccountId => T::Balance;
+		pub ReservedBalance:
+			double_map hasher(blake2_256) T::AssetId, hasher(twox_128) T::AccountId => T::Balance;
 
 		/// Next available ID for user-created asset.
 		pub NextAssetId get(fn next_asset_id) config(): T::AssetId;
 
 		/// Permission options for a given asset.
-		pub Permissions get(fn get_permission): map T::AssetId => PermissionVersions<T::AccountId>;
+		pub Permissions get(fn get_permission):
+			map hasher(blake2_256) T::AssetId => PermissionVersions<T::AccountId>;
 
 		/// Any liquidity locks on some account balances.
-		pub Locks get(fn locks): map T::AccountId => Vec<BalanceLock<T::Balance>>;
+		pub Locks get(fn locks):
+			map hasher(blake2_256) T::AccountId => Vec<BalanceLock<T::Balance>>;
 
 		/// The identity of the asset which is the one that is designated for the chain's staking system.
 		pub StakingAssetId get(fn staking_asset_id) config(): T::AssetId;

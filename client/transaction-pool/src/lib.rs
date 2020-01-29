@@ -22,8 +22,8 @@
 mod api;
 pub mod error;
 
-#[cfg(test)]
-mod tests;
+#[cfg(any(feature = "test-helpers", test))]
+pub mod testing;
 
 pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
@@ -112,7 +112,8 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		&self.pool
 	}
 
-	#[cfg(test)]
+	/// Get reference to the inner chain api, for tests only.
+	#[cfg(any(feature = "test-helpers", test))]
 	pub fn api(&self) -> &Arc<PoolApi> {
 		&self.api
 	}
@@ -179,7 +180,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		Box::new(self.pool.ready())
 	}
 
-	fn import_notification_stream(&self) -> ImportNotificationStream {
+	fn import_notification_stream(&self) -> ImportNotificationStream<TxHash<Self>> {
 		self.pool.import_notification_stream()
 	}
 
@@ -189,6 +190,10 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 
 	fn on_broadcasted(&self, propagations: HashMap<TxHash<Self>, Vec<String>>) {
 		self.pool.on_broadcasted(propagations)
+	}
+
+	fn ready_transaction(&self, hash: &TxHash<Self>) -> Option<Arc<Self::InPoolTransaction>> {
+		self.pool.ready_transaction(hash)
 	}
 }
 

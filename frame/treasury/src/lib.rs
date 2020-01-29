@@ -200,7 +200,7 @@ decl_storage! {
 		ProposalCount get(fn proposal_count): ProposalIndex;
 
 		/// Proposals that have been made.
-		Proposals get(fn proposals): map ProposalIndex => Option<Proposal<T::AccountId, BalanceOf<T>>>;
+		Proposals get(fn proposals): map hasher(blake2_256) ProposalIndex => Option<Proposal<T::AccountId, BalanceOf<T>>>;
 
 		/// Proposal indices that have been approved but not yet awarded.
 		Approvals get(fn approvals): Vec<ProposalIndex>;

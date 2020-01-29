@@ -377,16 +377,19 @@ pub struct RegistrarInfo<
 decl_storage! {
 	trait Store for Module<T: Trait> as Sudo {
 		/// Information that is pertinent to identify the entity behind an account.
-		pub IdentityOf get(fn identity): map T::AccountId => Option<Registration<BalanceOf<T>>>;
+		pub IdentityOf get(fn identity):
+			map hasher(blake2_256) T::AccountId => Option<Registration<BalanceOf<T>>>;
 
 		/// The super-identity of an alternative "sub" identity together with its name, within that
 		/// context. If the account is not some other account's sub-identity, then just `None`.
-		pub SuperOf get(fn super_of): map T::AccountId => Option<(T::AccountId, Data)>;
+		pub SuperOf get(fn super_of):
+			map hasher(blake2_256) T::AccountId => Option<(T::AccountId, Data)>;
 
 		/// Alternative "sub" identities of this account.
 		///
 		/// The first item is the deposit, the second is a vector of the accounts.
-		pub SubsOf get(fn subs): map T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
+		pub SubsOf get(fn subs):
+			map hasher(blake2_256) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
 		/// The set of registrars. Not expected to get very big as can only be added through a
 		/// special origin (likely a council motion).

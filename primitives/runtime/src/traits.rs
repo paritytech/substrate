@@ -1216,6 +1216,12 @@ pub trait Printable {
 	fn print(&self);
 }
 
+impl<T: Printable> Printable for &T {
+	fn print(&self) {
+		(*self).print()
+	}
+}
+
 impl Printable for u8 {
 	fn print(&self) {
 		(*self as u64).print()
