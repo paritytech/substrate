@@ -265,7 +265,7 @@ where
 {
 	init(&mut config, spec_factory, &subcommand.get_shared_params(), version)?;
 
-	subcommand.run(config, builder, version)
+	subcommand.run(config, builder)
 }
 
 /// Initialize substrate and its configuration
