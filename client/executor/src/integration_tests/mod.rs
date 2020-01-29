@@ -72,7 +72,7 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-    match call_in_wasm(
+	match call_in_wasm(
 		"test_calling_missing_external",
 		&[],
 		wasm_method,
