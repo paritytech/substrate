@@ -334,7 +334,7 @@ where
 {
 	info!("{}", version.name);
 	info!("  version {}", config.full_version());
-	info!("  by {}, 2017-2020", version.author);
+	info!("  by {}", version.author);
 	info!("Chain specification: {}", config.expect_chain_spec().name());
 	info!("Node name: {}", config.name);
 	info!("Roles: {}", display_role(&config));
