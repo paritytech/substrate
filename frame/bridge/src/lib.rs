@@ -38,7 +38,7 @@ mod storage_proof;
 
 use crate::storage_proof::{StorageProof, StorageProofChecker};
 use codec::{Encode, Decode};
-use sp_finality_grandpa::{AuthorityId, AuthorityWeight};
+use sp_finality_grandpa::{AuthorityId, AuthorityWeight, GRANDPA_AUTHORITIES_KEY};
 use sp_runtime::traits::Header;
 use frame_support::{
 	dispatch::{DispatchResult, DispatchError},
@@ -146,21 +146,14 @@ impl<T: Trait> Module<T> {
 			proof.clone()
 		);
 
-		// TODO: Remove once I can impl From<StorageError> for DispatchError
-		let checker = match checker {
-			Ok(c) => c,
-			Err(e) => return Self::map_storage_err(e).into()
-		};
+		let checker = checker.map_err(Self::map_storage_err)?;
 
 		// By encoding the given set we should have an easy way to compare
 		// with the stuff we get out of storage via `read_value`
 		let encoded_validator_set = validator_set.encode();
 
-		// TODO: Remove once I can impl From<StorageError> for DispatchError
-		let actual_validator_set = match checker.read_value(b":grandpa_authorities") {
-			Ok(c) => c.ok_or(Error::<T>::StorageValueUnavailable)?,
-			Err(e) => return Self::map_storage_err(e).into()
-		};
+		let c = checker.read_value(GRANDPA_AUTHORITIES_KEY).map_err(Self::map_storage_err)?;
+		let actual_validator_set = c.ok_or(Error::<T>::StorageValueUnavailable)?;
 
 		if encoded_validator_set == actual_validator_set {
 			Ok(())
@@ -196,12 +189,11 @@ impl<T: Trait> Module<T> {
 		Err(Error::<T>::InvalidAncestryProof.into())
 	}
 
-	// TODO: Remove once I can impl From<StorageError> for DispatchError
 	fn map_storage_err(e: StorageError) -> DispatchError {
 		match e {
-			StorageError::StorageRootMismatch => Error::<T>::StorageRootMismatch.into(),
-			StorageError::StorageValueUnavailable => Error::<T>::StorageValueUnavailable.into(),
-		}
+			StorageError::StorageRootMismatch => Error::<T>::StorageRootMismatch,
+			StorageError::StorageValueUnavailable => Error::<T>::StorageValueUnavailable,
+		}.into()
 	}
 }
 
@@ -287,12 +279,12 @@ mod tests {
 
 		// construct storage proof
 		let backend = <InMemoryBackend<Blake2Hasher>>::from(vec![
-			(None, vec![(b":grandpa_authorities".to_vec(), Some(encoded_set))]),
+			(None, vec![(GRANDPA_AUTHORITIES_KEY.to_vec(), Some(encoded_set))]),
 		]);
 		let root = backend.storage_root(std::iter::empty()).0;
 
 		// Generates a storage read proof
-		let proof: StorageProof = prove_read(backend, &[&b":grandpa_authorities"[..]])
+		let proof: StorageProof = prove_read(backend, &[&GRANDPA_AUTHORITIES_KEY[..]])
 			.unwrap()
 			.iter_nodes()
 			.collect();
