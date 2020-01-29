@@ -36,13 +36,14 @@ use sp_runtime::traits::{
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
-use message::generic::{Message as GenericMessage, ConsensusMessage};
+use message::generic::Message as GenericMessage;
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
 use specialization::NetworkSpecialization;
 use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::{BoxFinalityProofRequestBuilder, Roles};
 use rustc_hex::ToHex;
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use std::fmt::Write;
@@ -143,8 +144,10 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: GenericProto<Substream<StreamMuxerBox>>,
-	/// List of notification protocols that have been registered.
-	registered_notif_protocols: HashSet<ConsensusEngineId>,
+	/// For each legacy gossiping engine ID, the corresponding new protocol name.
+	protocol_name_by_engine: HashMap<ConsensusEngineId, Cow<'static, [u8]>>,
+	/// For each protocol name, the legacy gossiping engine ID.
+	protocol_engine_by_name: HashMap<Cow<'static, [u8]>, ConsensusEngineId>,
 }
 
 #[derive(Default)]
@@ -447,7 +450,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			finality_proof_provider,
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
-			registered_notif_protocols: HashSet::new(),
+			protocol_name_by_engine: HashMap::new(),
+			protocol_engine_by_name: HashMap::new(),
 		};
 
 		Ok((protocol, peerset_handle))
@@ -630,7 +634,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteReadChildRequest(request) =>
 				self.on_remote_read_child_request(who, request),
 			GenericMessage::Consensus(msg) =>
-				return if self.registered_notif_protocols.contains(&msg.engine_id) {
+				return if self.protocol_name_by_engine.contains_key(&msg.engine_id) {
 					CustomMessageOutcome::NotificationsReceived {
 						remote: who.clone(),
 						messages: vec![(msg.engine_id, From::from(msg.data))],
@@ -643,7 +647,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				let messages = messages
 					.into_iter()
 					.filter_map(|msg| {
-						if self.registered_notif_protocols.contains(&msg.engine_id) {
+						if self.protocol_name_by_engine.contains_key(&msg.engine_id) {
 							Some((msg.engine_id, From::from(msg.data)))
 						} else {
 							warn!(target: "sync", "Received message on non-registered protocol: {:?}", msg.engine_id);
@@ -1046,7 +1050,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		// Notify all the notification protocols as open.
 		CustomMessageOutcome::NotificationStreamOpened {
 			remote: who,
-			protocols: self.registered_notif_protocols.iter().cloned().collect(),
+			protocols: self.protocol_name_by_engine.keys().cloned().collect(),
 			roles: info.roles,
 		}
 	}
@@ -1061,18 +1065,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		engine_id: ConsensusEngineId,
 		message: impl Into<Vec<u8>>
 	) {
-		if !self.registered_notif_protocols.contains(&engine_id) {
+		if let Some(proto_name) = self.protocol_name_by_engine.get(&engine_id) {
+			self.behaviour.write_notification(&target, proto_name.clone(), engine_id, message);
+		} else {
 			error!(
 				target: "sub-libp2p",
 				"Sending a notification with a protocol that wasn't registered: {:?}",
 				engine_id
 			);
 		}
-
-		self.send_message(&target, GenericMessage::Consensus(ConsensusMessage {
-			engine_id,
-			data: message.into(),
-		}));
 	}
 
 	/// Registers a new notifications protocol.
@@ -1082,9 +1083,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	pub fn register_notifications_protocol(
 		&mut self,
 		engine_id: ConsensusEngineId,
+		protocol_name: impl Into<Cow<'static, [u8]>>,
 	) -> Vec<event::Event> {
-		if !self.registered_notif_protocols.insert(engine_id) {
-			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", engine_id);
+		let protocol_name = protocol_name.into();
+		if self.protocol_name_by_engine.insert(engine_id, protocol_name.clone()).is_some() {
+			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", protocol_name);
+		} else {
+			self.behaviour.register_notif_protocol(protocol_name.clone(), Vec::new());
+			self.protocol_engine_by_name.insert(protocol_name, engine_id);
 		}
 
 		// Registering a protocol while we already have open connections isn't great, but for now
@@ -1949,7 +1955,7 @@ Protocol<B, S, H> {
 				// Notify all the notification protocols as closed.
 				CustomMessageOutcome::NotificationStreamClosed {
 					remote: peer_id,
-					protocols: self.registered_notif_protocols.iter().cloned().collect(),
+					protocols: self.protocol_name_by_engine.keys().cloned().collect(),
 				}
 			},
 			GenericProtoOut::CustomMessage { peer_id, message } =>

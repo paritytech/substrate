@@ -24,7 +24,7 @@ use futures::{prelude::*, channel::mpsc, compat::Compat01As03, task::SpawnExt as
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
-use std::{sync::Arc, time::Duration};
+use std::{borrow::Cow, sync::Arc, time::Duration};
 
 /// Wraps around an implementation of the `Network` crate and provides gossiping capabilities on
 /// top of it.
@@ -44,6 +44,7 @@ impl<B: BlockT> GossipEngine<B> {
 		mut network: N,
 		executor: &impl futures::task::Spawn,
 		engine_id: ConsensusEngineId,
+		protocol_name: impl Into<Cow<'static, [u8]>>,
 		validator: Arc<dyn Validator<B>>,
 	) -> Self where B: 'static {
 		let mut state_machine = ConsensusGossip::new();
@@ -52,7 +53,7 @@ impl<B: BlockT> GossipEngine<B> {
 		// might miss events.
 		let event_stream = network.event_stream();
 
-		network.register_notifications_protocol(engine_id);
+		network.register_notifications_protocol(engine_id, protocol_name.into());
 		state_machine.register_validator(&mut network, engine_id, validator);
 
 		let inner = Arc::new(Mutex::new(GossipEngineInner {
