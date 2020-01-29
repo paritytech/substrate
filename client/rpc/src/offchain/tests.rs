@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,17 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use wasm_builder_runner::WasmBuilder;
+use super::*;
+use assert_matches::assert_matches;
+use sp_core::{Bytes, offchain::storage::InMemOffchainStorage};
 
-fn main() {
-	WasmBuilder::new()
-		.with_current_project()
-		.with_wasm_builder_from_crates_or_path("1.0.9", "../../utils/wasm-builder")
-		.export_heap_base()
-		// Note that we set the stack-size to 1MB explicitly even though it is set
-		// to this value by default. This is because some of our tests (`restoration_of_globals`)
-		// depend on the stack-size.
-		.append_to_rust_flags("-Clink-arg=-zstack-size=1048576")
-		.import_memory()
-		.build()
+#[test]
+fn local_storage_should_work() {
+	let storage = InMemOffchainStorage::default();
+	let offchain = Offchain::new(storage);
+	let key = Bytes(b"offchain_storage".to_vec());
+	let value = Bytes(b"offchain_value".to_vec());
+
+	assert_matches!(
+		offchain.set_local_storage(StorageKind::PERSISTENT, key.clone(), value.clone()),
+		Ok(())
+	);
+	assert_matches!(
+		offchain.get_local_storage(StorageKind::PERSISTENT, key),
+		Ok(Some(ref v)) if *v == value
+	);
 }
