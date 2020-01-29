@@ -21,6 +21,7 @@ use sc_service::{AbstractService, Configuration};
 use crate::error;
 use crate::informant;
 
+#[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> Result<(), Box<dyn std::error::Error>>
 where
 	F: Future<Output = Result<(), E>> + future::FusedFuture,
@@ -41,6 +42,27 @@ where
 		_ = t1 => println!("Caught SIGINT"),
 		_ = t2 => println!("Caught SIGTERM"),
 		res = t3 => res?,
+	}
+
+	Ok(())
+}
+
+#[cfg(target_family = "windows")]
+async fn main<F, E>(func: F) -> Result<(), Box<dyn std::error::Error>>
+where
+	F: Future<Output = Result<(), E>> + future::FusedFuture,
+	E: 'static + std::error::Error,
+{
+	use tokio::signal::ctrl_c;
+
+	let t1 = ctrl_c().fuse();
+	let t2 = func;
+
+	pin_mut!(t1, t2);
+
+	select! {
+		_ = t1 => println!("Caught CTRL-C"),
+		res = t2 => res?,
 	}
 
 	Ok(())
