@@ -242,13 +242,32 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(keys)
 	}
 
-	/// Given a `BlockId` and a key, return the next key in storage after the given one in lexicographic order.
-	pub fn storage_next_key(&self, id: &BlockId<Block>, key: &StorageKey) -> sp_blockchain::Result<Option<StorageKey>> {
-		Ok(self.state_at(id)?
-			.next_storage_key(&key.0)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
-			.map(StorageKey)
-		)
+	/// Paged version of `storage_keys`. Only return up to `count` keys after `start_key` or `prefix`.
+	pub fn storage_keys_paged(
+		&self,
+		id: &BlockId<Block>,
+		prefix: &StorageKey,
+		count: u32,
+		start_key: &Option<StorageKey>
+	) -> sp_blockchain::Result<Vec<StorageKey>> {
+		let state = self.state_at(id)?;
+		let mut result = Vec::<StorageKey>::with_capacity(count as usize);
+		let start_key = start_key.as_ref().unwrap_or(prefix);
+		let prefix = &prefix.0[..];
+
+		let mut current_key = start_key.0.clone();
+		loop {
+			let maybe_next_key = state.next_storage_key(&current_key[..])
+				.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+				.filter(|v| v.starts_with(prefix));
+			if let Some(next_key) = maybe_next_key {
+				result.push(StorageKey(next_key.clone()));
+				current_key = next_key;
+			} else {
+				break
+			}
+		}
+		Ok(result)
 	}
 
 	/// Given a `BlockId` and a key, return the value under the key in that block.

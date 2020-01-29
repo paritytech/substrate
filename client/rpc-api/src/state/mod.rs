@@ -39,13 +39,19 @@ pub trait StateApi<Hash> {
 	#[rpc(name = "state_call", alias("state_callAt"))]
 	fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> FutureResult<Bytes>;
 
-	/// Returns the keys with prefix, leave empty to get all the keys
+	/// Returns the keys with prefix, leave empty to get all the keys.
 	#[rpc(name = "state_getKeys")]
 	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<StorageKey>>;
 
-	/// Returns the next key in storage after the given one in lexicographic order.
-	#[rpc(name = "state_getNextKey")]
-	fn storage_next_key(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<StorageKey>>;
+	/// Returns the keys with prefix with pagination support. Max count is 10 000.
+	#[rpc(name = "state_getKeysPaged", alias("state_getKeysPagedAt"))]
+	fn storage_keys_paged(
+		&self,
+		prefix: StorageKey,
+		count: u32,
+		start_key: Option<StorageKey>,
+		hash: Option<Hash>,
+	) -> FutureResult<Vec<StorageKey>>;
 
 	/// Returns a storage entry at a specific block's state.
 	#[rpc(name = "state_getStorage", alias("state_getStorageAt"))]

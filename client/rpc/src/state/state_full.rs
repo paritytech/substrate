@@ -257,14 +257,18 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 				.map_err(client_err)))
 	}
 
-	fn storage_next_key(
+	fn storage_keys_paged(
 		&self,
 		block: Option<Block::Hash>,
-		key: StorageKey,
-	) -> FutureResult<Option<StorageKey>> {
+		prefix: StorageKey,
+		count: u32,
+		start_key: Option<StorageKey>,
+	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.storage_next_key(&BlockId::Hash(block), &key))
+				.and_then(|block| self.client.storage_keys_paged(
+					&BlockId::Hash(block), &prefix, count, &start_key
+				))
 				.map_err(client_err)))
 	}
 

@@ -199,11 +199,13 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 
-	fn storage_next_key(
+	fn storage_keys_paged(
 		&self,
 		_block: Option<Block::Hash>,
-		_key: StorageKey,
-	) -> FutureResult<Option<StorageKey>> {
+		_prefix: StorageKey,
+		_count: u32,
+		_start_key: Option<StorageKey>,
+	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 

@@ -24,7 +24,7 @@ mod tests;
 
 use std::sync::Arc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use rpc::{Result as RpcResult, futures::Future};
+use rpc::{Result as RpcResult, futures::{Future, future::result}};
 
 use sc_rpc_api::Subscriptions;
 use sc_client::{Client, CallExecutor, light::{blockchain::RemoteBlockchain, fetcher::Fetcher}};
@@ -37,6 +37,8 @@ use sp_api::{Metadata, ProvideRuntimeApi};
 use self::error::{Error, FutureResult};
 
 pub use sc_rpc_api::state::*;
+
+const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 10_000;
 
 /// State backend API.
 pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
@@ -61,12 +63,14 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>>;
 
-	/// Returns the next key in storage after the given one in lexicographic order.
-	fn storage_next_key(
+	/// Returns the keys with prefix with pagination support.
+	fn storage_keys_paged(
 		&self,
 		block: Option<Block::Hash>,
-		key: StorageKey,
-	) -> FutureResult<Option<StorageKey>>;
+		prefix: StorageKey,
+		count: u32,
+		start_key: Option<StorageKey>,
+	) -> FutureResult<Vec<StorageKey>>;
 
 	/// Returns a storage entry at a specific block's state.
 	fn storage(
@@ -251,12 +255,25 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		self.backend.storage_keys(block, key_prefix)
 	}
 
-	fn storage_next_key(
+	fn storage_keys_paged(
 		&self,
-		key: StorageKey,
+		prefix: StorageKey,
+		count: u32,
+		start_key: Option<StorageKey>,
 		block: Option<Block::Hash>,
-	) -> FutureResult<Option<StorageKey>> {
-		self.backend.storage_next_key(block, key)
+	) -> FutureResult<Vec<StorageKey>> {
+		if count > STORAGE_KEYS_PAGED_MAX_COUNT {
+			return Box::new(result(Err(client_err(
+				sp_blockchain::Error::Msg(
+					format!(
+						"count exceeds maximum value. value: {}, max: {}",
+						count,
+						STORAGE_KEYS_PAGED_MAX_COUNT,
+					)
+				)
+			))));
+		}
+		self.backend.storage_keys_paged(block, prefix, count, start_key)
 	}
 
 	fn storage(&self, key: StorageKey, block: Option<Block::Hash>) -> FutureResult<Option<StorageData>> {
