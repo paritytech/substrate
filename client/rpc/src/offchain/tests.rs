@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,22 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Substrate RPC interfaces.
-//!
-//! A collection of RPC methods and subscriptions supported by all substrate clients.
+use super::*;
+use assert_matches::assert_matches;
+use sp_core::{Bytes, offchain::storage::InMemOffchainStorage};
 
-#![warn(missing_docs)]
+#[test]
+fn local_storage_should_work() {
+	let storage = InMemOffchainStorage::default();
+	let offchain = Offchain::new(storage);
+	let key = Bytes(b"offchain_storage".to_vec());
+	let value = Bytes(b"offchain_value".to_vec());
 
-mod errors;
-mod helpers;
-mod subscriptions;
-
-pub use jsonrpc_core::IoHandlerExtension as RpcExtension;
-pub use subscriptions::{Subscriptions, TaskExecutor};
-pub use helpers::Receiver;
-
-pub mod author;
-pub mod chain;
-pub mod offchain;
-pub mod state;
-pub mod system;
+	assert_matches!(
+		offchain.set_local_storage(StorageKind::PERSISTENT, key.clone(), value.clone()),
+		Ok(())
+	);
+	assert_matches!(
+		offchain.get_local_storage(StorageKind::PERSISTENT, key),
+		Ok(Some(ref v)) if *v == value
+	);
+}

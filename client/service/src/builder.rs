@@ -863,7 +863,7 @@ ServiceBuilder<
 		let network_status_sinks = Arc::new(Mutex::new(status_sinks::StatusSinks::new()));
 
 		let offchain_storage = backend.offchain_storage();
-		let offchain_workers = match (config.offchain_worker, offchain_storage) {
+		let offchain_workers = match (config.offchain_worker, offchain_storage.clone()) {
 			(true, Some(db)) => {
 				Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone(), db)))
 			},
@@ -1008,7 +1008,7 @@ ServiceBuilder<
 		// RPC
 		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
 		let gen_handler = || {
-			use sc_rpc::{chain, state, author, system};
+			use sc_rpc::{chain, state, author, system, offchain};
 
 			let system_info = sc_rpc::system::SystemInfo {
 				chain_name: config.chain_spec.name().into(),
@@ -1054,13 +1054,26 @@ ServiceBuilder<
 			);
 			let system = system::System::new(system_info, system_rpc_tx.clone());
 
-			sc_rpc_server::rpc_handler((
-				state::StateApi::to_delegate(state),
-				chain::ChainApi::to_delegate(chain),
-				author::AuthorApi::to_delegate(author),
-				system::SystemApi::to_delegate(system),
-				rpc_extensions.clone(),
-			))
+			match offchain_storage.clone() {
+				Some(storage) => {
+					let offchain = sc_rpc::offchain::Offchain::new(storage);
+					sc_rpc_server::rpc_handler((
+						state::StateApi::to_delegate(state),
+						chain::ChainApi::to_delegate(chain),
+						offchain::OffchainApi::to_delegate(offchain),
+						author::AuthorApi::to_delegate(author),
+						system::SystemApi::to_delegate(system),
+						rpc_extensions.clone(),
+					))
+				},
+				None => sc_rpc_server::rpc_handler((
+					state::StateApi::to_delegate(state),
+					chain::ChainApi::to_delegate(chain),
+					author::AuthorApi::to_delegate(author),
+					system::SystemApi::to_delegate(system),
+					rpc_extensions.clone(),
+				))
+			}
 		};
 		let rpc_handlers = gen_handler();
 		let rpc = start_rpc_servers(&config, gen_handler)?;
