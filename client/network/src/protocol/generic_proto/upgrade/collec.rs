@@ -78,8 +78,8 @@ impl<T: ProtocolName> ProtocolName for ProtoNameWithUsize<T> {
 	}
 }
 
-/// Equivalent to `fut.map_ok(|v| (v, num))`, where `fut` and `num` are the two fields of this
-/// struct.
+/// Equivalent to `fut.map_ok(|v| (v, num)).map_err(|e| (e, num))`, where `fut` and `num` are
+/// the two fields of this struct.
 #[pin_project::pin_project]
 pub struct FutWithUsize<T>(#[pin] T, usize);
 
@@ -89,8 +89,8 @@ impl<T: Future<Output = Result<O, E>>, O, E> Future for FutWithUsize<T> {
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = self.project();
 		match Future::poll(this.0, cx) {
-			Poll::Ready(Ok(v)) => Poll::Ready(Ok((v, self.1))),
-			Poll::Ready(Err(e)) => Poll::Ready(Err((e, self.1))),
+			Poll::Ready(Ok(v)) => Poll::Ready(Ok((v, *this.1))),
+			Poll::Ready(Err(e)) => Poll::Ready(Err((e, *this.1))),
 			Poll::Pending => Poll::Pending,
 		}
 	}

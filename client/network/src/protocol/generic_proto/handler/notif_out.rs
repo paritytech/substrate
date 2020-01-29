@@ -275,7 +275,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 		}
 	}
 
-	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<ReadOneError>) {
+	fn inject_dial_upgrade_error(&mut self, _: (), _: ProtocolsHandlerUpgrErr<ReadOneError>) {
 		match mem::replace(&mut self.state, State::Poisoned) {
 			State::Disabled => {},
 			State::DisabledOpen(_) | State::Refused | State::Open(_) =>

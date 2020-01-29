@@ -159,20 +159,20 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 	type Item = Result<BytesMut, io::Error>;
 
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		let this = self.project();
+		let mut this = self.project();
 
 		// This `Stream` implementation first tries to send back the handshake if necessary.
 		loop {
 			match mem::replace(this.handshake, NotificationsInSubstreamHandshake::Sent) {
 				NotificationsInSubstreamHandshake::Sent =>
-					return Stream::poll_next(this.socket, cx),
+					return Stream::poll_next(this.socket.as_mut(), cx),
 				NotificationsInSubstreamHandshake::NotSent =>
 					return Poll::Pending,
 				NotificationsInSubstreamHandshake::PendingSend(msg) =>
-					match Sink::poll_ready(this.socket, cx) {
+					match Sink::poll_ready(this.socket.as_mut(), cx) {
 						Poll::Ready(_) => {
 							*this.handshake = NotificationsInSubstreamHandshake::Close;
-							match Sink::start_send(this.socket, msg) {
+							match Sink::start_send(this.socket.as_mut(), msg.into_iter().collect()) { // TODO: cloning
 								Ok(()) => {},
 								Err(err) => return Poll::Ready(Some(Err(err))),
 							}
@@ -181,7 +181,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 							*this.handshake = NotificationsInSubstreamHandshake::PendingSend(msg),
 					},
 				NotificationsInSubstreamHandshake::Close =>
-					match Sink::poll_close(this.socket, cx)? {
+					match Sink::poll_close(this.socket.as_mut(), cx)? {
 						Poll::Ready(()) =>
 							*this.handshake = NotificationsInSubstreamHandshake::Sent,
 						Poll::Pending =>
@@ -219,7 +219,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 
 	fn upgrade_outbound(
 		self,
-		socket: TSubstream,
+		mut socket: TSubstream,
 		proto_name: Self::Info,
 	) -> Self::Future {
 		Box::pin(async move {
@@ -237,22 +237,22 @@ impl<TSubstream> NotificationsOutSubstream<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
 	/// Pushes a message to the queue of messages.
-	pub fn push_message(&mut self, message: Vec<u8>) {
+	pub fn push_message(&mut self, message: impl Into<VecDeque<u8>>) {
 		// TODO: limit the size of the queue
-		self.messages_queue.push_back(message);
+		self.messages_queue.push_back(message.into());
 	}
 
 	/// Processes the substream.
 	pub fn process(self: Pin<&mut Self>, cx: &mut Context) -> Result<(), io::Error> {
-		let this = self.project();
+		let mut this = self.project();
 
 		while !this.messages_queue.is_empty() {
-			match Sink::poll_ready(this.socket, cx) {
+			match Sink::poll_ready(this.socket.as_mut(), cx) {
 				Poll::Ready(Err(err)) => return Err(err),
 				Poll::Ready(Ok(())) => {
 					let msg = this.messages_queue.pop_front()
 						.expect("checked for !is_empty above; qed");
-					Sink::start_send(this.socket, msg)?;
+					Sink::start_send(this.socket.as_mut(), msg)?;
 					*this.need_flush = true;
 				},
 				Poll::Pending => return Ok(()),
@@ -260,7 +260,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 		}
 
 		if *this.need_flush {
-			match Sink::poll_flush(this.socket, cx) {
+			match Sink::poll_flush(this.socket.as_mut(), cx) {
 				Poll::Ready(Err(err)) => return Err(err),
 				Poll::Ready(Ok(())) => *this.need_flush = false,
 				Poll::Pending => {},

@@ -201,7 +201,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + 'static {
 		}
 	}
 
-	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<void::Void>) {
+	fn inject_dial_upgrade_error(&mut self, _: (), _: ProtocolsHandlerUpgrErr<void::Void>) {
 		error!(target: "sub-libp2p", "Received dial upgrade error in inbound-only handler");
 	}
 

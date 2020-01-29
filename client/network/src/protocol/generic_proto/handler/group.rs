@@ -372,6 +372,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 				match ev {
 					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
 						error!("Incoming substream handler tried to open a substream"),
+					ProtocolsHandlerEvent::Close(err) => void::unreachable(err),
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest) =>
 						match self.enabled {
 							EnabledState::Initial => self.pending_in.push(handler_num),
@@ -400,6 +401,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 							protocol: protocol.map_upgrade(EitherUpgrade::A),
 							info: Some(handler_num),
 						}),
+					ProtocolsHandlerEvent::Close(err) => void::unreachable(err),
 					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake }) => {},		// TODO:
 					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed) => {},		// TODO:
 					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused) => {},		// TODO:
@@ -412,7 +414,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 				ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
 					return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 						protocol: protocol.map_upgrade(EitherUpgrade::B),
-						io: None,
+						info: None,
 					}),
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { .. }) =>
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(
