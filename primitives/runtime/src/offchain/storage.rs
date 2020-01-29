@@ -65,32 +65,32 @@ impl<'a> StorageValueRef<'a> {
 	///
 	/// Function `f` should return a new value that we should attempt to write to storage.
 	/// This function returns:
-	/// 1. `Ok(T)` in case the value has been succesfuly set.
-	/// 2. `Err(Some(T))` in case the value was returned, but it couldn't have been set.
-	/// 3. `Err(None)` in case mutation was not requested.
-	pub fn mutate<T: codec::Decode + codec::Encode>(
+	/// 1. `Ok(Ok(T))` in case the value has been succesfuly set.
+	/// 2. `Ok(Err(T))` in case the value was returned, but it couldn't have been set.
+	/// 3. `Err(_)` in case `f` returns an error.
+	pub fn mutate<T: codec::Decode + codec::Encode, E>(
 		&self,
-		f: impl FnOnce(Option<Option<T>>) -> Option<T>
-	) -> Result<T, Option<T>> {
+		f: impl FnOnce(Option<Option<T>>) -> Result<T, E>
+	) -> Result<
+		Result<T, T>,
+		E
+	> {
 		let value = sp_io::offchain::local_storage_get(self.kind, self.key);
 		let decoded = value.as_deref().map(|mut v| T::decode(&mut v).ok());
-		match f(decoded) {
-			None => Err(None),
-			Some(val) => {
-				let set = val.using_encoded(|new_val| {
-					sp_io::offchain::local_storage_compare_and_set(
-						self.kind,
-						self.key,
-						value,
-						new_val,
-					)
-				});
-				if set {
-					Ok(val)
-				} else {
-					Err(Some(val))
-				}
-			}
+		let val = f(decoded)?;
+		let set = val.using_encoded(|new_val| {
+			sp_io::offchain::local_storage_compare_and_set(
+				self.kind,
+				self.key,
+				value,
+				new_val,
+			)
+		});
+
+		if set {
+			Ok(Ok(val))
+		} else {
+			Ok(Err(val))
 		}
 	}
 }

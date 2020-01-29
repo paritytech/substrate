@@ -72,11 +72,12 @@ mod tests;
 
 use sp_application_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
-use sp_core::offchain::{OpaqueNetworkState, StorageKind};
+use sp_core::offchain::OpaqueNetworkState;
 use sp_std::prelude::*;
 use sp_std::convert::TryInto;
 use pallet_session::historical::IdentificationTuple;
 use sp_runtime::{
+	offchain::storage::StorageValueRef,
 	RuntimeDebug,
 	traits::{Convert, Member, Saturating, SimpleArithmetic}, Perbill,
 	transaction_validity::{
@@ -447,11 +448,6 @@ impl<T: Trait> Module<T> {
 
 		if Self::is_online(authority_index) {
 			return Err(OffchainErr::AlreadyOnline(authority_index));
-			// debug::debug!(
-			// 	target: "imonline",
-			// 	authority_index,
-			// 	block_number
-			// );
 		}
 
 		// acquire lock for that authority at current heartbeat to make sure we don't
@@ -505,37 +501,28 @@ impl<T: Trait> Module<T> {
 			key.extend(authority_index.encode());
 			key
 		};
-		let current_lock = sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, &key);
-		// Check if there is already a lock for that particular block.
-		// This means that the heartbeat has already been sent, and we are just waiting
-		// for it to be included. However if it doesn't get included for INCLUDE_THRESHOLD
-		// we will re-send it.
-		let status = current_lock.as_deref()
-			.and_then(|mut v| <HeartbeatStatus<T::BlockNumber>>::decode(&mut v).ok());
-		match status {
-			// we are still waiting for inclusion.
-			Some(status) if status.is_recent(heartbeat_at, now) => {
-				return Err(OffchainErr::WaitingForInclusion(status.sent_at));
-			},
-			_ => {},
-		}
-		let mut new_status = HeartbeatStatus {
-			heartbeat_at,
-			sent_at: now,
-		};
-		let lock_acquired = new_status.using_encoded(|new_lock| {
-			// now let's try to acquire the lock and send heartbeat.
-			sp_io::offchain::local_storage_compare_and_set(
-				StorageKind::PERSISTENT,
-				&key,
-				current_lock,
-				new_lock,
-			)
-		});
+		let storage = StorageValueRef::persistent(&key);
+		let res = storage.mutate(|status: Option<Option<HeartbeatStatus<T::BlockNumber>>>| {
+			// Check if there is already a lock for that particular block.
+			// This means that the heartbeat has already been sent, and we are just waiting
+			// for it to be included. However if it doesn't get included for INCLUDE_THRESHOLD
+			// we will re-send it.
+			match status {
+				// we are still waiting for inclusion.
+				Some(Some(status)) if status.is_recent(heartbeat_at, now) => {
+					return Err(OffchainErr::WaitingForInclusion(status.sent_at));
+				},
+				_ => {},
+			}
 
-		if !lock_acquired {
-			return Err(OffchainErr::FailedToAcquireLock);
-		}
+			// attempt to set new status
+			Ok(HeartbeatStatus {
+				heartbeat_at,
+				sent_at: now,
+			})
+		})?;
+
+		let mut new_status = res.map_err(|_| OffchainErr::FailedToAcquireLock)?;
 
 		// we got the lock, let's try to send the heartbeat.
 		let res = f();
@@ -543,9 +530,7 @@ impl<T: Trait> Module<T> {
 		// clear the lock in case we have failed to send transaction.
 		if res.is_err() {
 			new_status.sent_at = 0.into();
-			new_status.using_encoded(|new_lock| {
-				sp_io::offchain::local_storage_set(StorageKind::PERSISTENT, &key, new_lock)
-			});
+			storage.set(&new_status);
 		}
 
 		res
