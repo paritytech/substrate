@@ -29,14 +29,14 @@ pub fn impl_getters(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStrea
 		let attrs = &line.doc_attrs;
 
 		let storage_struct = &line.storage_struct;
-		let storage_trait = &line.storage_trait;
+		let storage_generator_trait = &line.storage_generator_trait;
 
 		let getter = match &line.storage_type {
 			StorageLineTypeDef::Simple(value) => {
 				quote!{
 					#( #[ #attrs ] )*
 					pub fn #get_fn() -> #value {
-						<#storage_struct as #scrate::#storage_trait>::get()
+						<#storage_struct as #scrate::#storage_generator_trait>::get()
 					}
 				}
 			},
@@ -46,7 +46,7 @@ pub fn impl_getters(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStrea
 				quote!{
 					#( #[ #attrs ] )*
 					pub fn #get_fn<K: #scrate::codec::EncodeLike<#key>>(key: K) -> #value {
-						<#storage_struct as #scrate::#storage_trait>::get(key)
+						<#storage_struct as #scrate::#storage_generator_trait>::get(key)
 					}
 				}
 			},
@@ -60,7 +60,7 @@ pub fn impl_getters(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStrea
 						KArg1: #scrate::codec::EncodeLike<#key1>,
 						KArg2: #scrate::codec::EncodeLike<#key2>,
 					{
-						<#storage_struct as #scrate::#storage_trait>::get(k1, k2)
+						<#storage_struct as #scrate::#storage_generator_trait>::get(k1, k2)
 					}
 				}
 			},

@@ -69,7 +69,7 @@ pub mod weights;
 pub use self::hash::{
 	Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Blake2_128Concat, Hashable
 };
-pub use self::storage::{
+pub use self::storage::generator::{
 	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap, StoragePrefixedMap
 };
 pub use self::dispatch::{Parameter, Callable, IsSubType};

@@ -17,9 +17,11 @@
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
 use codec::{FullCodec, Encode, EncodeAppend, EncodeLike, Decode};
-use crate::{storage::{self, unhashed}, hash::{Twox128, StorageHasher}, traits::Len};
+use crate::{storage::top, hash::{Twox128, StorageHasher}, traits::Len};
 
-/// Generator for `StorageValue` used by `decl_storage`.
+/// A trait for working with macro-generated storage values under the substrate storage API.
+///
+/// Store a value at some key in the top trie.
 ///
 /// By default value is stored at:
 /// ```nocompile
@@ -41,74 +43,102 @@ pub trait StorageValue<T: FullCodec> {
 	/// Convert a query to an optional value into storage.
 	fn from_query_to_optional_value(v: Self::Query) -> Option<T>;
 
-	/// Generate the full key used in top storage.
+	#[deprecated(note="Use `top_trie_key` instead")]
 	fn storage_value_final_key() -> [u8; 32] {
+		Self::top_trie_key()
+	}
+
+	#[deprecated(note="Use `top_trie_key` instead")]
+	fn hashed_key() -> [u8; 32] {
+		Self::top_trie_key()
+	}
+
+	/// Generate the full key used in top storage.
+	fn top_trie_key() -> [u8; 32] {
 		let mut final_key = [0u8; 32];
 		final_key[0..16].copy_from_slice(&Twox128::hash(Self::module_prefix()));
 		final_key[16..32].copy_from_slice(&Twox128::hash(Self::storage_prefix()));
 		final_key
 	}
-}
 
-impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
-	type Query = G::Query;
-
-	fn hashed_key() -> [u8; 32] {
-		Self::storage_value_final_key()
-	}
-
+	/// Does the value (explicitly) exist in storage?
 	fn exists() -> bool {
-		unhashed::exists(&Self::storage_value_final_key())
+		top::exists(&Self::top_trie_key())
 	}
 
+	/// Load the value from the provided storage instance.
 	fn get() -> Self::Query {
-		let value = unhashed::get(&Self::storage_value_final_key());
-		G::from_optional_value_to_query(value)
+		let value = top::get(&Self::top_trie_key());
+		Self::from_optional_value_to_query(value)
 	}
 
+	/// Translate a value from some previous type (`O`) to the current type.
+	///
+	/// `f: F` is the translation function.
+	///
+	/// Returns `Err` if the storage item could not be interpreted as the old type, and Ok, along
+	/// with the new value if it could.
+	///
+	/// NOTE: This operates from and to `Option<_>` types; no effort is made to respect the default
+	/// value of the original type.
+	///
+	/// # Warning
+	///
+	/// This function must be used with care, before being updated the storage still contains the
+	/// old type, thus other calls (such as `get`) will fail at decoding it.
+	///
+	/// # Usage
+	///
+	/// This would typically be called inside the module implementation of on_initialize, while
+	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
+	/// precisely prior initialized modules doesn't make use of this storage).
 	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<T>>(f: F) -> Result<Option<T>, ()> {
-		let key = Self::storage_value_final_key();
+		let key = Self::top_trie_key();
 
 		// attempt to get the length directly.
-		let maybe_old = match unhashed::get_raw(&key) {
+		let maybe_old = match top::get_raw(&key) {
 			Some(old_data) => Some(O::decode(&mut &old_data[..]).map_err(|_| ())?),
 			None => None,
 		};
 		let maybe_new = f(maybe_old);
 		if let Some(new) = maybe_new.as_ref() {
-			new.using_encoded(|d| unhashed::put_raw(&key, d));
+			new.using_encoded(|d| top::put_raw(&key, d));
 		} else {
-			unhashed::kill(&key);
+			top::kill(&key);
 		}
 		Ok(maybe_new)
 	}
 
+	/// Store a value under this key into the provided storage instance.
 	fn put<Arg: EncodeLike<T>>(val: Arg) {
-		unhashed::put(&Self::storage_value_final_key(), &val)
+		top::put(&Self::top_trie_key(), &val)
 	}
 
+	/// Clear the storage value.
 	fn kill() {
-		unhashed::kill(&Self::storage_value_final_key())
+		top::kill(&Self::top_trie_key())
 	}
 
-	fn mutate<R, F: FnOnce(&mut G::Query) -> R>(f: F) -> R {
-		let mut val = G::get();
+	/// Mutate the value
+	fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(f: F) -> R {
+		let mut val = Self::get();
 
 		let ret = f(&mut val);
-		match G::from_query_to_optional_value(val) {
-			Some(ref val) => G::put(val),
-			None => G::kill(),
+		match Self::from_query_to_optional_value(val) {
+			Some(ref val) => Self::put(val),
+			None => Self::kill(),
 		}
 		ret
 	}
 
-	fn take() -> G::Query {
-		let key = Self::storage_value_final_key();
-		let value = unhashed::get(&key);
+	/// Take a value from storage, removing it afterwards.
+	fn take() -> Self::Query {
+		let key = Self::top_trie_key();
+		let value = top::get(&key);
 		if value.is_some() {
-			unhashed::kill(&key)
+			top::kill(&key)
 		}
-		G::from_optional_value_to_query(value)
+		Self::from_optional_value_to_query(value)
 	}
 
 	/// Append the given items to the value in the storage.
@@ -122,10 +152,10 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 		Items: IntoIterator<Item=EncodeLikeItem>,
 		Items::IntoIter: ExactSizeIterator,
 	{
-		let key = Self::storage_value_final_key();
-		let encoded_value = unhashed::get_raw(&key)
+		let key = Self::top_trie_key();
+		let encoded_value = top::get_raw(&key)
 			.unwrap_or_else(|| {
-				match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
+				match Self::from_query_to_optional_value(Self::from_optional_value_to_query(None)) {
 					Some(value) => value.encode(),
 					None => Vec::new(),
 				}
@@ -135,14 +165,23 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 			encoded_value,
 			items,
 		).map_err(|_| "Could not append given item")?;
-		unhashed::put_raw(&key, &new_val);
+		top::put_raw(&key, &new_val);
 		Ok(())
 	}
 
-	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
-	/// old (presumably corrupt) value is replaced with the given `items`.
-	///
 	/// `T` is required to implement `codec::EncodeAppend`.
+	///
+	/// Append the given items to the value in the storage.
+	///
+	/// `T` is required to implement `Codec::EncodeAppend`.
+	///
+	/// Upon any failure, it replaces `items` as the new value (assuming that the previous stored
+	/// data is simply corrupt and no longer usable).
+	///
+	/// ### WARNING
+	///
+	/// use with care; if your use-case is not _exactly_ as what this function is doing,
+	/// you should use append and sensibly handle failure within the runtime code if it happens.
 	fn append_or_put<Items, Item, EncodeLikeItem>(items: Items) where
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
@@ -161,13 +200,13 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
 	/// function for this purpose.
 	fn decode_len() -> Result<usize, &'static str> where T: codec::DecodeLength, T: Len {
-		let key = Self::storage_value_final_key();
+		let key = Self::top_trie_key();
 
 		// attempt to get the length directly.
-		if let Some(k) = unhashed::get_raw(&key) {
+		if let Some(k) = top::get_raw(&key) {
 			<T as codec::DecodeLength>::len(&k).map_err(|e| e.what())
 		} else {
-			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
+			let len = Self::from_query_to_optional_value(Self::from_optional_value_to_query(None))
 				.map(|v| v.len())
 				.unwrap_or(0);
 

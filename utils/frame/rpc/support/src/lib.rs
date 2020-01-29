@@ -100,7 +100,7 @@ impl<V: FullCodec> StorageQuery<V> {
 	/// Create a storage query for a StorageValue.
 	pub fn value<St: StorageValue<V>>() -> Self {
 		Self {
-			key: StorageKey(St::storage_value_final_key().to_vec()),
+			key: StorageKey(St::top_trie_key().to_vec()),
 			_spook: PhantomData,
 		}
 	}
@@ -108,7 +108,7 @@ impl<V: FullCodec> StorageQuery<V> {
 	/// Create a storage query for a value in a StorageMap.
 	pub fn map<St: StorageMap<K, V>, K: FullEncode>(key: K) -> Self {
 		Self {
-			key: StorageKey(St::storage_map_final_key(key)),
+			key: StorageKey(St::top_trie_key(key)),
 			_spook: PhantomData,
 		}
 	}
@@ -116,7 +116,7 @@ impl<V: FullCodec> StorageQuery<V> {
 	/// Create a storage query for a value in a StorageLinkedMap.
 	pub fn linked_map<St: StorageLinkedMap<K, V>, K: FullCodec>(key: K) -> Self {
 		Self {
-			key: StorageKey(St::storage_linked_map_final_key(key)),
+			key: StorageKey(St::top_trie_key(key)),
 			_spook: PhantomData,
 		}
 	}
@@ -127,7 +127,7 @@ impl<V: FullCodec> StorageQuery<V> {
 		key2: K2,
 	) -> Self {
 		Self {
-			key: StorageKey(St::storage_double_map_final_key(key1, key2)),
+			key: StorageKey(St::top_trie_key(key1, key2)),
 			_spook: PhantomData,
 		}
 	}

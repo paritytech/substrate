@@ -84,7 +84,7 @@ pub mod inner {
 		if *version != 1 { return }
 		*version += 1;
 
-		let prefix = <Module<T> as Store>::SlashingSpans::final_prefix();
+		let prefix = <Module<T> as Store>::SlashingSpans::top_trie_prefix();
 		let mut current_key = prefix.to_vec();
 		loop {
 			let maybe_next_key = sp_io::storage::next_key(&current_key[..])

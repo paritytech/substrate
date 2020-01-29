@@ -14,32 +14,65 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Generators are a set of trait on which storage traits are implemented.
-//!
-//! (i.e. implementing the generator for StorageValue on a type will automatically derive the
-//! implementation of StorageValue for this type).
+//! Generators are a set of trait that implement some abstraction over top trie.
 //!
 //! They are used by `decl_storage`.
-//!
-//! This is internal api and is subject to change.
 
 mod linked_map;
 mod map;
 mod double_map;
 mod value;
+mod prefixed_map;
 
 pub use linked_map::{StorageLinkedMap, Enumerator, Linkage, KeyFormat as LinkedMapKeyFormat};
 pub use map::StorageMap;
 pub use double_map::StorageDoubleMap;
 pub use value::StorageValue;
+pub use prefixed_map::StoragePrefixedMap;
 
+use sp_std::{prelude::*, marker::PhantomData};
+use crate::storage::top;
+use codec::Decode;
+
+/// Iterator over all keys after a prefix in top trie.
+pub struct PrefixIterator<Value> {
+	prefix: Vec<u8>,
+	previous_key: Vec<u8>,
+	phantom_data: PhantomData<Value>,
+}
+
+impl<Value: Decode> Iterator for PrefixIterator<Value> {
+	type Item = Value;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		match sp_io::storage::next_key(&self.previous_key)
+			.filter(|n| n.starts_with(&self.prefix[..]))
+		{
+			Some(next_key) => {
+				let value = top::get(&next_key);
+
+				if value.is_none() {
+					runtime_print!(
+						"ERROR: returned next_key has no value:\nkey is {:?}\nnext_key is {:?}",
+						&self.previous_key, &next_key,
+					);
+				}
+
+				self.previous_key = next_key;
+
+				value
+			},
+			_ => None,
+		}
+	}
+}
 
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
 	use sp_io::TestExternalities;
 	use codec::{Encode, Decode};
-	use crate::storage::{unhashed, generator::{StorageValue, StorageLinkedMap}};
+	use crate::storage::{top, generator::{StorageValue, StorageLinkedMap}};
 
 	struct Runtime {}
 	pub trait Trait {
@@ -74,8 +107,8 @@ mod tests {
 		let t = GenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			// put the old value `1111u32` in the storage.
-			let key = Value::storage_value_final_key();
-			unhashed::put_raw(&key, &1111u32.encode());
+			let key = Value::top_trie_key();
+			top::put_raw(&key, &1111u32.encode());
 
 			// translate
 			let translate_fn = |old: Option<u32>| -> Option<(u64, u64)> {
@@ -98,10 +131,10 @@ mod tests {
 		TestExternalities::new(t).execute_with(|| {
 			// start with a map of u32 -> u32.
 			for i in 0u32..100u32 {
-				let final_key = <Format as KeyFormat>::storage_linked_map_final_key(&i);
+				let final_key = <Format as KeyFormat>::top_trie_key(&i);
 
 				let linkage = linked_map::new_head_linkage::<_, u32, u32, Format>(&i);
-				unhashed::put(final_key.as_ref(), &(&i, linkage));
+				top::put(final_key.as_ref(), &(&i, linkage));
 			}
 
 			let head = linked_map::read_head::<u32, Format>().unwrap();

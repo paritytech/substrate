@@ -268,12 +268,12 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// Get the current set of authorities, along with their respective weights.
 	pub fn grandpa_authorities() -> AuthorityList {
-		storage::unhashed::get_or_default::<VersionedAuthorityList>(GRANDPA_AUTHORITIES_KEY).into()
+		storage::top::get_or_default::<VersionedAuthorityList>(GRANDPA_AUTHORITIES_KEY).into()
 	}
 
 	/// Set the current set of authorities, along with their respective weights.
 	fn set_grandpa_authorities(authorities: &AuthorityList) {
-		storage::unhashed::put(
+		storage::top::put(
 			GRANDPA_AUTHORITIES_KEY,
 			&VersionedAuthorityList::from(authorities),
 		);

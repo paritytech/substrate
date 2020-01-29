@@ -23,7 +23,7 @@ use crate::rent;
 use sp_std::prelude::*;
 use sp_runtime::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
 use frame_support::{
-	storage::unhashed, dispatch::DispatchError,
+	storage::top, dispatch::DispatchError,
 	traits::{WithdrawReason, Currency, Time, Randomness},
 };
 
@@ -809,7 +809,7 @@ where
 	}
 
 	fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		unhashed::get_raw(&key)
+		top::get_raw(&key)
 	}
 }
 
