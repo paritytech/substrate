@@ -178,7 +178,7 @@ pub enum SimpleDispatchInfo {
 	/// A normal dispatch with the maximum weight.
 	MaxNormal,
 	/// A normal dispatch with no weight. Base and bytes fees still need to be paid.
-	FreeNormal,
+	InsecureFreeNormal,
 	/// An operational dispatch with fixed weight.
 	FixedOperational(Weight),
 	/// An operational dispatch with the maximum weight.
