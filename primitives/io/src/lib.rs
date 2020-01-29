@@ -850,6 +850,13 @@ pub trait Sandbox {
 	fn instance_teardown(&mut self, instance_idx: u32) {
 		self.sandbox().instance_teardown(instance_idx).expect("Failed to teardown sandbox instance")
 	}
+
+	/// Get a global variable with `name` from the given `instance_idx` instance.
+	///
+	/// Returns `Some(_)` when the requested global variable could be found.
+	fn get_global(&mut self, instance_idx: u32, name: &str) -> Option<sp_wasm_interface::Value> {
+		self.sandbox().get_global(instance_idx, name).expect("Failed to get global from sandbox")
+	}
 }
 
 /// Allocator used by Substrate when executing the Wasm runtime.
