@@ -66,7 +66,7 @@ pub fn create<C, P, M, F>(
 	C: sc_client::blockchain::HeaderBackend<Block>,
 	C: Send + Sync + 'static,
 	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
-	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, BlockNumber, AccountId, Balance>,
+	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance, BlockNumber>,
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance, UncheckedExtrinsic>,
 	F: sc_client::light::fetcher::Fetcher<Block> + 'static,
 	P: TransactionPool + 'static,
