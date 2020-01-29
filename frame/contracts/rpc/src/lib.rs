@@ -245,7 +245,7 @@ where
 
 		Ok(match result {
 			pallet_contracts_common::RentProjection::NoEviction => None,
-			pallet_contracts_common::RentProjection::EvictionDate(block_num) => Some(block_num),
+			pallet_contracts_common::RentProjection::EvictionAt(block_num) => Some(block_num),
 		})
 	}
 }

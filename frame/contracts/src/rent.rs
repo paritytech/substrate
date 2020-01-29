@@ -370,7 +370,7 @@ pub fn compute_rent_projection<T: Trait>(
 	};
 
 	let blocks_left = blocks_left.saturated_into::<u32>().into();
-	Ok(RentProjection::EvictionDate(
+	Ok(RentProjection::EvictionAt(
 		current_block_number + blocks_left,
 	))
 }

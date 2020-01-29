@@ -38,7 +38,7 @@ pub type RentProjectionResult<BlockNumber> = Result<RentProjection<BlockNumber>,
 #[derive(Eq, PartialEq, codec::Encode, codec::Decode, sp_runtime::RuntimeDebug)]
 pub enum RentProjection<BlockNumber> {
 	/// Eviction is projected to happen at the specified block number.
-	EvictionDate(BlockNumber),
+	EvictionAt(BlockNumber),
 	/// No eviction is scheduled.
 	///
 	/// E.g. because the contract accumulated enough funds to offset the rent storage costs.
