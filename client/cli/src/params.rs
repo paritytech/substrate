@@ -1150,7 +1150,7 @@ impl PurgeChainCmd {
 		}
 
 		match fs::remove_dir_all(&db_path) {
-			Result::Ok(_) => {
+			Ok(_) => {
 				println!("{:?} removed.", &db_path);
 				Ok(())
 			},
