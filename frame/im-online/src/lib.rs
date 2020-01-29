@@ -163,6 +163,7 @@ impl<BlockNumber: PartialEq + SimpleArithmetic + Copy> HeartbeatStatus<BlockNumb
 }
 
 /// Error which may occur while executing the off-chain code.
+#[cfg_attr(test, derive(PartialEq))]
 enum OffchainErr<BlockNumber> {
 	TooEarly(BlockNumber),
 	WaitingForInclusion(BlockNumber),
@@ -328,13 +329,15 @@ decl_module! {
 
 			// Only send messages if we are a potential validator.
 			if sp_io::offchain::is_validator() {
-				if let Err(err) = Self::offchain(now) {
-					debug::debug!(
-						target: "imonline",
-						"Skipping heartbeat at {:?}: {:?}",
-						now,
-						err
-					)
+				for res in Self::offchain(now).into_iter().flatten() {
+					if let Err(e) = res {
+						debug::debug!(
+							target: "imonline",
+							"Skipping heartbeat at {:?}: {:?}",
+							now,
+							e,
+						)
+					}
 				}
 			} else {
 				debug::trace!(
@@ -346,6 +349,8 @@ decl_module! {
 		}
 	}
 }
+
+type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Trait>::BlockNumber>>;
 
 /// Keep track of number of authored blocks per authority, uncles are counted as
 /// well since they're a valid proof of onlineness.
@@ -404,19 +409,18 @@ impl<T: Trait> Module<T> {
 		);
 	}
 
-	pub(crate) fn offchain(block_number: T::BlockNumber) -> Result<(), OffchainErr<T::BlockNumber>> {
+	pub(crate) fn offchain(block_number: T::BlockNumber)
+		-> OffchainResult<T, impl Iterator<Item=OffchainResult<T, ()>>>
+	{
 		let heartbeat_at = <HeartbeatAt<T>>::get();
 		if block_number < heartbeat_at {
 			return Err(OffchainErr::TooEarly(heartbeat_at))
 		}
 
-		Self::local_authority_keys()
-			.map(|(authority_index, key)|
+		Ok(Self::local_authority_keys()
+			.map(move |(authority_index, key)|
 				Self::send_heartbeat(authority_index, key, heartbeat_at, block_number)
-			)
-			// fail only after trying all keys.
-			.collect::<Result<Vec<_>, OffchainErr<T::BlockNumber>>>()
-			.map(|_| ())
+			))
 	}
 
 
@@ -425,9 +429,9 @@ impl<T: Trait> Module<T> {
 		key: T::AuthorityId,
 		heartbeat_at: T::BlockNumber,
 		block_number: T::BlockNumber
-	) -> Result<(), OffchainErr<T::BlockNumber>> {
+	) -> OffchainResult<T, ()> {
 		// A helper function to prepare hearbeat call.
-		let prepare_heartbeat = || -> Result<Call<T>, OffchainErr<T::BlockNumber>> {
+		let prepare_heartbeat = || -> OffchainResult<T, Call<T>> {
 			let network_state = sp_io::offchain::network_state()
 				.map_err(|_| OffchainErr::NetworkState)?;
 			let session_index = <pallet_session::Module<T>>::current_index();
@@ -494,8 +498,8 @@ impl<T: Trait> Module<T> {
 		authority_index: u32,
 		heartbeat_at: T::BlockNumber,
 		now: T::BlockNumber,
-		f: impl FnOnce() -> Result<R, OffchainErr<T::BlockNumber>>,
-	) -> Result<R, OffchainErr<T::BlockNumber>> {
+		f: impl FnOnce() -> OffchainResult<T, R>,
+	) -> OffchainResult<T, R> {
 		let key = {
 			let mut key = DB_PREFIX.to_vec();
 			key.extend(authority_index.encode());
