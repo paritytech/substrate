@@ -77,10 +77,14 @@ where
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
+		let changes_trie = backend::changes_tries_state_at_block(
+			id, self.backend.changes_trie_storage()
+		)?;
+		// make sure to destroy state before exiting this function
 		let state = self.backend.state_at(*id)?;
 		let return_data = StateMachine::new(
 			&state,
-			backend::changes_tries_state_at_block(id, self.backend.changes_trie_storage())?,
+			changes_trie,
 			&mut changes,
 			&self.executor,
 			method,
@@ -89,12 +93,12 @@ where
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			None,
-		)?;
+		);
 		{
 			let _lock = self.backend.get_import_lock().read();
 			self.backend.destroy_state(state)?;
 		}
-		Ok(return_data.into_encoded())
+		Ok(return_data?.into_encoded())
 	}
 
 	fn contextual_call<
@@ -131,37 +135,36 @@ where
 			_ => {},
 		}
 
-		let mut state = self.backend.state_at(*at)?;
 		let changes_trie_state = backend::changes_tries_state_at_block(at, self.backend.changes_trie_storage())?;
-
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
+		// make sure to destroy state before exiting this function
+		let mut state = self.backend.state_at(*at)?;
 		let result = match recorder {
-			Some(recorder) => {
-				let trie_state = state.as_trie_backend()
-					.ok_or_else(||
-						Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
-							as Box<dyn sp_state_machine::Error>
-					)?;
-
-				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
-					trie_state,
-					recorder.clone(),
-				);
-
-				StateMachine::new(
-					&backend,
-					changes_trie_state,
-					&mut *changes.borrow_mut(),
-					&self.executor,
-					method,
-					call_data,
-					extensions.unwrap_or_default(),
+			Some(recorder) => state.as_trie_backend()
+				.ok_or_else(||
+					Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
+						as Box<dyn sp_state_machine::Error>
 				)
-				// TODO: https://github.com/paritytech/substrate/issues/4455
-				// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
-				.execute_using_consensus_failure_handler(execution_manager, native_call)
-			}
+				.and_then(|trie_state| {
+					let backend = sp_state_machine::ProvingBackend::new_with_recorder(
+						trie_state,
+						recorder.clone(),
+					);
+
+					StateMachine::new(
+						&backend,
+						changes_trie_state,
+						&mut *changes.borrow_mut(),
+						&self.executor,
+						method,
+						call_data,
+						extensions.unwrap_or_default(),
+					)
+					// TODO: https://github.com/paritytech/substrate/issues/4455
+					// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
+					.execute_using_consensus_failure_handler(execution_manager, native_call)
+				}),
 			None => StateMachine::new(
 				&state,
 				changes_trie_state,
@@ -173,18 +176,19 @@ where
 			)
 			.with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
 			.execute_using_consensus_failure_handler(execution_manager, native_call)
-		}?;
+		};
 		{
 			let _lock = self.backend.get_import_lock().read();
 			self.backend.destroy_state(state)?;
 		}
-		Ok(result)
+		result.map_err(Into::into)
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
-		let state = self.backend.state_at(*id)?;
 		let changes_trie_state = backend::changes_tries_state_at_block(id, self.backend.changes_trie_storage())?;
+		// make sure to destroy state before exiting this function
+		let state = self.backend.state_at(*id)?;
 		let mut cache = StorageTransactionCache::<Block, B::State>::default();
 		let mut ext = Ext::new(
 			&mut overlay,

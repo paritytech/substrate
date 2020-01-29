@@ -158,8 +158,8 @@ fn do_phragmen(
 macro_rules! phragmen_benches {
 	($($name:ident: $tup:expr,)*) => {
 	$(
-        #[bench]
-        fn $name(b: &mut Bencher) {
+		#[bench]
+		fn $name(b: &mut Bencher) {
 			let (v, n, t, e, eq_iter, eq_tol) = $tup;
 			println!("----------------------");
 			println!(
@@ -168,8 +168,8 @@ macro_rules! phragmen_benches {
 				v, n, e, e * n, t, eq_iter, eq_tol,
 			);
 			do_phragmen(b, v, n, t, e, eq_iter, eq_tol);
-        }
-    )*
+		}
+	)*
 	}
 }
 

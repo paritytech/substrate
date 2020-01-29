@@ -451,10 +451,8 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 				storage_changes: Some(storage_changes),
 				finalized: false,
 				auxiliary: Vec::new(), // block-weight is written in block import.
-				// TODO: block-import handles fork choice and this shouldn't even have the
-				// option to specify one.
-				// https://github.com/paritytech/substrate/issues/3623
-				fork_choice: ForkChoiceStrategy::LongestChain,
+				intermediates: Default::default(),
+				fork_choice: None,
 				allow_missing_state: false,
 				import_existing: false,
 			}
@@ -807,10 +805,8 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					finalized: false,
 					justification,
 					auxiliary: Vec::new(),
-					// TODO: block-import handles fork choice and this shouldn't even have the
-					// option to specify one.
-					// https://github.com/paritytech/substrate/issues/3623
-					fork_choice: ForkChoiceStrategy::LongestChain,
+					intermediates: Default::default(),
+					fork_choice: None,
 					allow_missing_state: false,
 					import_existing: false,
 				};
@@ -1085,13 +1081,13 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 					)?
 			};
 
-			ForkChoiceStrategy::Custom(if total_weight > last_best_weight {
+			Some(ForkChoiceStrategy::Custom(if total_weight > last_best_weight {
 				true
 			} else if total_weight == last_best_weight {
 				number > last_best_number
 			} else {
 				false
-			})
+			}))
 		};
 
 		let import_result = self.inner.import_block(block, new_cache);

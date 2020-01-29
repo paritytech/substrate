@@ -3,6 +3,7 @@ name = "sc-client-db"
 version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 parking_lot = "0.9.0"
@@ -32,7 +33,7 @@ substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/ru
 env_logger = "0.7.0"
 quickcheck = "0.9"
 kvdb-rocksdb = "0.4"
-tempdir = "0.3"
+tempfile = "3"
 
 [features]
 default = []
