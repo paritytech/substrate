@@ -865,8 +865,8 @@ decl_module! {
 }
 
 impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
-	const STEPS: u32 = 100;
-	const REPEATS: u32 = 10;
+	const STEPS: u32 = 10;
+	const REPEATS: u32 = 100;
 
 	fn run_benchmarks() -> Vec<BenchmarkResults> {
 		// first one is set_identity.
@@ -888,12 +888,16 @@ impl<T: Trait> Benchmarking<BenchmarkResults> for Module<T> {
 						(*n, if n == name { component_value } else { (h - l) / 2 + l })
 					).collect();
 
-				for _r in 0..Self::REPEATS {
-					let instance = benchmarking::set_identity::instance::<T>(&c);
+				for r in 0..Self::REPEATS {
+					sp_std::if_std!{
+						println!("STEP {:?} REPEAT {:?}", s, r);
+					}
+					let (call, caller) = benchmarking::set_identity::instance::<T>(&c);
 					let start = sp_io::benchmarking::current_time();
-					assert_eq!(instance.dispatch(frame_system::RawOrigin::Signed(benchmarking::account::<T>(0)).into()), Ok(()));
+					assert_eq!(call.dispatch(frame_system::RawOrigin::Signed(caller).into()), Ok(()));
 					let finish = sp_io::benchmarking::current_time();
 					let elapsed = finish - start;
+					benchmarking::set_identity::clean::<T>();
 					results.push((c.clone(), elapsed));
 				}
 			}
@@ -1252,6 +1256,14 @@ mod tests {
 			assert_ok!(Identity::set_account_id(Origin::signed(3), 0, 4));
 			// account 4 can now, because that's their new ID.
 			assert_ok!(Identity::set_account_id(Origin::signed(4), 0, 3));
+		});
+	}
+
+	#[test]
+	fn run_benchmarks() {
+		new_test_ext().execute_with(|| {
+			let result = Identity::run_benchmarks();
+			println!("{:?}", result);
 		});
 	}
 }

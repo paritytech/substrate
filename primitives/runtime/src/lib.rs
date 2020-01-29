@@ -679,7 +679,7 @@ pub fn print(print: impl traits::Printable) {
 }
 
 /// Parameters for this module.
-#[derive(Encode, Decode, Clone, Copy, PartialEq)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
 pub enum BenchmarkParameter {
 	/// Registrar Count
 	R,

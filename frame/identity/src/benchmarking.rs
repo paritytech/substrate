@@ -18,10 +18,9 @@
 
 use super::*;
 
-use sp_runtime::traits::SaturatedConversion;
-
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
+use sp_runtime::traits::Bounded;
 
 use crate::Module as Identity;
 
@@ -49,15 +48,19 @@ pub mod set_identity {
 	///
 	/// Sets up state randomly and returns a randomly generated `set_identity` with sensible (fixed)
 	/// values for all complexity components except those mentioned in the identity.
-	pub fn instance<T: Trait>(components: &[(BenchmarkParameter, u32)]) -> crate::Call<T>
+	pub fn instance<T: Trait>(components: &[(BenchmarkParameter, u32)]) -> (crate::Call<T>, T::AccountId)
 	{
-
 		// Add r registrars
 		let r = components.iter().find(|&c| c.0 == BenchmarkParameter::R).unwrap();
-		let _ = T::Currency::deposit_creating(&account::<T>(0), 1_000_000_000_000_000_000u128.saturated_into());
 		for i in 0..r.1 {
-			let _ = T::Currency::deposit_creating(&account::<T>(i), 1_000_000_000_000_000u128.saturated_into());
+			sp_std::if_std!{
+				println!("Components {:?} Index {:?}", components, i);
+			}
+			let _ = T::Currency::make_free_balance_be(&account::<T>(i), BalanceOf::<T>::max_value());
 			assert_eq!(Identity::<T>::add_registrar(RawOrigin::Root.into(), account::<T>(i)), Ok(()));
+			sp_std::if_std!{
+				println!("# Registrars {:?}", Registrars::<T>::get().len());
+			}
 			assert_eq!(Identity::<T>::set_fee(RawOrigin::Signed(account::<T>(i)).into(), i.into(), 10.into()), Ok(()));
 			let fields = IdentityFields(IdentityField::Display | IdentityField::Legal);
 			assert_eq!(Identity::<T>::set_fields(RawOrigin::Signed(account::<T>(i)).into(), i.into(), fields), Ok(()));
@@ -79,7 +82,17 @@ pub mod set_identity {
 			twitter: data.clone(),
 		};
 
+		let caller = account::<T>(r.1 + 1);
+		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+
 		// Return the `set_identity` call
-		crate::Call::<T>::set_identity(info)
+		(crate::Call::<T>::set_identity(info), caller)
+	}
+
+	pub fn clean<T: Trait>() {
+		IdentityOf::<T>::remove_all();
+		SuperOf::<T>::remove_all();
+		SubsOf::<T>::remove_all();
+		Registrars::<T>::kill();
 	}
 }
