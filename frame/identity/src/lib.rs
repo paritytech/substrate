@@ -1279,12 +1279,4 @@ mod tests {
 			assert_ok!(Identity::set_account_id(Origin::signed(4), 0, 3));
 		});
 	}
-
-	#[test]
-	fn run_benchmarks() {
-		new_test_ext().execute_with(|| {
-			let result = Identity::run_benchmarks();
-			println!("{:?}", result);
-		});
-	}
 }
