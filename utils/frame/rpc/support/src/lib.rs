@@ -22,7 +22,7 @@
 use core::marker::PhantomData;
 use futures::compat::Future01CompatExt;
 use jsonrpc_client_transports::RpcError;
-use codec::{DecodeAll, FullCodec, FullEncode};
+use codec::{DecodeAll, FullCodec};
 use serde::{de::DeserializeOwned, Serialize};
 use frame_support::storage::generator::{
 	StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue
@@ -98,7 +98,7 @@ pub struct StorageQuery<V> {
 
 impl<V: FullCodec> StorageQuery<V> {
 	/// Create a storage query for a StorageValue.
-	pub fn value<St: StorageValue<V>>() -> Self {
+	pub fn value<St: StorageValue<Value=V>>() -> Self {
 		Self {
 			key: StorageKey(St::storage_value_final_key().to_vec()),
 			_spook: PhantomData,
@@ -106,7 +106,7 @@ impl<V: FullCodec> StorageQuery<V> {
 	}
 
 	/// Create a storage query for a value in a StorageMap.
-	pub fn map<St: StorageMap<K, V>, K: FullEncode>(key: K) -> Self {
+	pub fn map<St: StorageMap<Value=V>>(key: St::Key) -> Self {
 		Self {
 			key: StorageKey(St::storage_map_final_key(key)),
 			_spook: PhantomData,
@@ -114,7 +114,7 @@ impl<V: FullCodec> StorageQuery<V> {
 	}
 
 	/// Create a storage query for a value in a StorageLinkedMap.
-	pub fn linked_map<St: StorageLinkedMap<K, V>, K: FullCodec>(key: K) -> Self {
+	pub fn linked_map<St: StorageLinkedMap<Value=V>>(key: St::Key) -> Self {
 		Self {
 			key: StorageKey(St::storage_linked_map_final_key(key)),
 			_spook: PhantomData,
@@ -122,10 +122,7 @@ impl<V: FullCodec> StorageQuery<V> {
 	}
 
 	/// Create a storage query for a value in a StorageDoubleMap.
-	pub fn double_map<St: StorageDoubleMap<K1, K2, V>, K1: FullEncode, K2: FullEncode>(
-		key1: K1,
-		key2: K2,
-	) -> Self {
+	pub fn double_map<St: StorageDoubleMap<Value=V>>(key1: St::Key1, key2: St::Key2) -> Self {
 		Self {
 			key: StorageKey(St::storage_double_map_final_key(key1, key2)),
 			_spook: PhantomData,

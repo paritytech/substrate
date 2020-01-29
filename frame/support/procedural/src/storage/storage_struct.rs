@@ -99,6 +99,7 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 					impl<#impl_trait> #scrate::#storage_generator_trait for #storage_struct
 					#optional_storage_where_clause
 					{
+						type Value = #value_type;
 						type Query = #query_type;
 
 						fn module_prefix() -> &'static [u8] {
@@ -120,11 +121,13 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 				)
 			},
 			StorageLineTypeDef::Map(map) => {
+				let key = &map.key;
 				let hasher = map.hasher.to_storage_hasher_struct();
 				quote!(
-					impl<#impl_trait> #scrate::StoragePrefixedMap<#value_type>
+					impl<#impl_trait> #scrate::StoragePrefixedMap
 						for #storage_struct #optional_storage_where_clause
 					{
+						type Value = #value_type;
 						fn module_prefix() -> &'static [u8] {
 							#instance_or_inherent::PREFIX.as_bytes()
 						}
@@ -137,6 +140,8 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 					impl<#impl_trait> #scrate::#storage_generator_trait for #storage_struct
 					#optional_storage_where_clause
 					{
+						type Key = #key;
+						type Value = #value_type;
 						type Query = #query_type;
 						type Hasher = #scrate::#hasher;
 
@@ -159,6 +164,7 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 				)
 			},
 			StorageLineTypeDef::LinkedMap(map) => {
+				let key = &map.key;
 				let hasher = map.hasher.to_storage_hasher_struct();
 
 				let head_prefix_str = syn::LitStr::new(
@@ -167,9 +173,10 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 				);
 
 				quote!(
-					impl<#impl_trait> #scrate::StoragePrefixedMap<#value_type>
+					impl<#impl_trait> #scrate::StoragePrefixedMap
 						for #storage_struct #optional_storage_where_clause
 					{
+						type Value = #value_type;
 						fn module_prefix() -> &'static [u8] {
 							#instance_or_inherent::PREFIX.as_bytes()
 						}
@@ -182,6 +189,8 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 					impl<#impl_trait> #scrate::#storage_generator_trait for #storage_struct
 					#optional_storage_where_clause
 					{
+						type Key = #key;
+						type Value = #value_type;
 						type Query = #query_type;
 						type KeyFormat = Self;
 
@@ -212,12 +221,15 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 				)
 			},
 			StorageLineTypeDef::DoubleMap(map) => {
+				let key1 = &map.key1;
+				let key2 = &map.key2;
 				let hasher1 = map.hasher1.to_storage_hasher_struct();
 				let hasher2 = map.hasher2.to_storage_hasher_struct();
 				quote!(
-					impl<#impl_trait> #scrate::StoragePrefixedMap<#value_type>
+					impl<#impl_trait> #scrate::StoragePrefixedMap
 						for #storage_struct #optional_storage_where_clause
 					{
+						type Value = #value_type;
 						fn module_prefix() -> &'static [u8] {
 							#instance_or_inherent::PREFIX.as_bytes()
 						}
@@ -230,6 +242,9 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 					impl<#impl_trait> #scrate::#storage_generator_trait for #storage_struct
 					#optional_storage_where_clause
 					{
+						type Key1 = #key1;
+						type Key2 = #key2;
+						type Value = #value_type;
 						type Query = #query_type;
 
 						type Hasher1 = #scrate::#hasher1;

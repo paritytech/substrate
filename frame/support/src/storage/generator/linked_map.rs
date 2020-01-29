@@ -291,7 +291,13 @@ where
 /// Similar to `StorageMap` but allows to enumerate other elements and doesn't implement append.
 ///
 /// By default final key generation rely on `KeyFormat`.
-pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
+pub trait StorageLinkedMap {
+	/// The type of the key.
+	type Key: FullCodec;
+
+	/// The type of the value stored in storage.
+	type Value: FullCodec;
+
 	/// The type that get/take returns.
 	type Query;
 
@@ -299,15 +305,15 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	type KeyFormat: KeyFormat;
 
 	/// Convert an optional value retrieved from storage to the type queried.
-	fn from_optional_value_to_query(v: Option<V>) -> Self::Query;
+	fn from_optional_value_to_query(v: Option<Self::Value>) -> Self::Query;
 
 	/// Convert a query to an optional value into storage.
-	fn from_query_to_optional_value(v: Self::Query) -> Option<V>;
+	fn from_query_to_optional_value(v: Self::Query) -> Option<Self::Value>;
 
 	/// Generate the full key used in top storage.
 	fn storage_linked_map_final_key<KeyArg>(key: KeyArg) -> Vec<u8>
 	where
-		KeyArg: EncodeLike<K>,
+		KeyArg: EncodeLike<Self::Key>,
 	{
 		<Self::KeyFormat as KeyFormat>::storage_linked_map_final_key::<KeyArg>(&key)
 	}
@@ -318,22 +324,22 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	}
 
 	/// Does the value (explicitly) exist in storage?
-	fn exists<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool {
+	fn exists<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> bool {
 		top::exists(Self::storage_linked_map_final_key(key).as_ref())
 	}
 
 	/// Load the value associated with the given key from the map.
-	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query {
+	fn get<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> Self::Query {
 		let val = top::get(Self::storage_linked_map_final_key(key).as_ref());
 		Self::from_optional_value_to_query(val)
 	}
 
 	/// Swap the values of two keys.
-	fn swap<KeyArg1: EncodeLike<K>, KeyArg2: EncodeLike<K>>(key1: KeyArg1, key2: KeyArg2) {
+	fn swap<KeyArg1: EncodeLike<Self::Key>, KeyArg2: EncodeLike<Self::Key>>(key1: KeyArg1, key2: KeyArg2) {
 		let final_key1 = Self::storage_linked_map_final_key(Ref::from(&key1));
 		let final_key2 = Self::storage_linked_map_final_key(Ref::from(&key2));
-		let full_value_1 = read_with_linkage::<K, V>(final_key1.as_ref());
-		let full_value_2 = read_with_linkage::<K, V>(final_key2.as_ref());
+		let full_value_1 = read_with_linkage::<Self::Key, Self::Value>(final_key1.as_ref());
+		let full_value_2 = read_with_linkage::<Self::Key, Self::Value>(final_key2.as_ref());
 
 		match (full_value_1, full_value_2) {
 			// Just keep linkage in order and only swap values.
@@ -344,13 +350,13 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 			// Remove key and insert the new one.
 			(Some((value, _linkage)), None) => {
 				Self::remove(key1);
-				let linkage = new_head_linkage::<_, _, V, Self::KeyFormat>(key2);
+				let linkage = new_head_linkage::<_, _, Self::Value, Self::KeyFormat>(key2);
 				top::put(final_key2.as_ref(), &(value, linkage));
 			}
 			// Remove key and insert the new one.
 			(None, Some((value, _linkage))) => {
 				Self::remove(key2);
-				let linkage = new_head_linkage::<_, _, V, Self::KeyFormat>(key1);
+				let linkage = new_head_linkage::<_, _, Self::Value, Self::KeyFormat>(key1);
 				top::put(final_key1.as_ref(), &(value, linkage));
 			}
 			// No-op.
@@ -359,27 +365,27 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	}
 
 	/// Store a value to be associated with the given key from the map.
-	fn insert<KeyArg: EncodeLike<K>, ValArg: EncodeLike<V>>(key: KeyArg, val: ValArg) {
+	fn insert<KeyArg: EncodeLike<Self::Key>, ValArg: EncodeLike<Self::Value>>(key: KeyArg, val: ValArg) {
 		let final_key = Self::storage_linked_map_final_key(Ref::from(&key));
-		let linkage = match read_with_linkage::<_, V>(final_key.as_ref()) {
+		let linkage = match read_with_linkage::<_, Self::Value>(final_key.as_ref()) {
 			// overwrite but reuse existing linkage
 			Some((_data, linkage)) => linkage,
 			// create new linkage
-			None => new_head_linkage::<_, _, V, Self::KeyFormat>(key),
+			None => new_head_linkage::<_, _, Self::Value, Self::KeyFormat>(key),
 		};
 		top::put(final_key.as_ref(), &(val, linkage))
 	}
 
 	/// Remove the value under a key.
-	fn remove<KeyArg: EncodeLike<K>>(key: KeyArg) {
+	fn remove<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) {
 		Self::take(key);
 	}
 
 	/// Mutate the value under a key.
-	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
+	fn mutate<KeyArg: EncodeLike<Self::Key>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
 		let final_key = Self::storage_linked_map_final_key(Ref::from(&key));
 
-		let (mut val, _linkage) = read_with_linkage::<K, V>(final_key.as_ref())
+		let (mut val, _linkage) = read_with_linkage::<Self::Key, Self::Value>(final_key.as_ref())
 			.map(|(data, linkage)| (Self::from_optional_value_to_query(Some(data)), Some(linkage)))
 			.unwrap_or_else(|| (Self::from_optional_value_to_query(None), None));
 
@@ -392,13 +398,13 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	}
 
 	/// Take the value under a key.
-	fn take<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query {
+	fn take<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> Self::Query {
 		let final_key = Self::storage_linked_map_final_key(key);
 
-		let full_value: Option<(V, Linkage<K>)> = top::take(final_key.as_ref());
+		let full_value: Option<(Self::Value, Linkage<Self::Key>)> = top::take(final_key.as_ref());
 
 		let value = full_value.map(|(data, linkage)| {
-			remove_linkage::<K, V, Self::KeyFormat>(linkage);
+			remove_linkage::<Self::Key, Self::Value, Self::KeyFormat>(linkage);
 			data
 		});
 
@@ -406,7 +412,7 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	}
 
 	/// Enumerate all elements in the map.
-	fn enumerate() -> Enumerator<K, V, Self::KeyFormat> {
+	fn enumerate() -> Enumerator<Self::Key, Self::Value, Self::KeyFormat> {
 		Enumerator::<_, _, Self::KeyFormat> {
 			next: read_head::<_, Self::KeyFormat>(),
 			_phantom: Default::default(),
@@ -414,7 +420,7 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	}
 
 	/// Return current head element.
-	fn head() -> Option<K> {
+	fn head() -> Option<Self::Key> {
 		read_head::<_, Self::KeyFormat>()
 	}
 
@@ -425,12 +431,12 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
 	/// function for this purpose.
-	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength + Len
+	fn decode_len<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> Result<usize, &'static str>
+		where Self::Value: codec::DecodeLength + Len
 	{
 		let key = Self::storage_linked_map_final_key(key);
 		if let Some(v) = top::get_raw(key.as_ref()) {
-			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
+			<Self::Value as codec::DecodeLength>::len(&v).map_err(|e| e.what())
 		} else {
 			let len = Self::from_query_to_optional_value(Self::from_optional_value_to_query(None))
 				.map(|v| v.len())
@@ -459,16 +465,16 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
 	/// precisely prior initialized modules doesn't make use of this storage).
 	fn translate<K2, V2, TK, TV>(translate_key: TK, translate_val: TV) -> Result<(), Option<K2>>
-		where K2: FullCodec + Clone, V2: Decode, TK: Fn(K2) -> K, TV: Fn(V2) -> V
+		where K2: FullCodec + Clone, V2: Decode, TK: Fn(K2) -> Self::Key, TV: Fn(V2) -> Self::Value
 	{
 		let head_key = read_head::<K2, Self::KeyFormat>().ok_or(None)?;
 
 		let mut last_key = None;
 		let mut current_key = head_key.clone();
 
-		write_head::<&K, K, Self::KeyFormat>(Some(&translate_key(head_key)));
+		write_head::<&Self::Key, Self::Key, Self::KeyFormat>(Some(&translate_key(head_key)));
 
-		let translate_linkage = |old: Linkage<K2>| -> Linkage<K> {
+		let translate_linkage = |old: Linkage<K2>| -> Linkage<Self::Key> {
 			Linkage {
 				previous: old.previous.map(&translate_key),
 				next: old.next.map(&translate_key),
@@ -486,7 +492,7 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 					if let Some(last_key) = last_key {
 						let last_raw_key = Self::storage_linked_map_final_key(&last_key);
 						if let Some((val, mut linkage))
-							= read_with_linkage::<K, V>(last_raw_key.as_ref())
+							= read_with_linkage::<Self::Key, Self::Value>(last_raw_key.as_ref())
 						{
 							// defensive: should always happen, since it was just written
 							// in the last iteration of the loop.

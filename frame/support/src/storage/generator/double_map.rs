@@ -42,7 +42,16 @@ use crate::{storage::{top, generator::PrefixIterator}, hash::{StorageHasher, Two
 /// If the key2s are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
 /// `blake2_256` must be used for Hasher2. Otherwise, other items in storage with the same first
 /// key can be compromised.
-pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
+pub trait StorageDoubleMap {
+	/// The type of the first key.
+	type Key1: FullEncode;
+
+	/// The type of the second key.
+	type Key2: FullEncode;
+
+	/// The type of the value stored in storage.
+	type Value: FullCodec;
+
 	/// The type that get/take returns.
 	type Query;
 
@@ -59,15 +68,15 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	fn storage_prefix() -> &'static [u8];
 
 	/// Convert an optional value retrieved from storage to the type queried.
-	fn from_optional_value_to_query(v: Option<V>) -> Self::Query;
+	fn from_optional_value_to_query(v: Option<Self::Value>) -> Self::Query;
 
 	/// Convert a query to an optional value into storage.
-	fn from_query_to_optional_value(v: Self::Query) -> Option<V>;
+	fn from_query_to_optional_value(v: Self::Query) -> Option<Self::Value>;
 
 	/// Generate the first part of the key used in top storage.
 	fn storage_double_map_final_key1<KArg1>(k1: KArg1) -> Vec<u8>
 	where
-		KArg1: EncodeLike<K1>,
+		KArg1: EncodeLike<Self::Key1>,
 	{
 		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
 		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
@@ -87,8 +96,8 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// Generate the full key used in top storage.
 	fn storage_double_map_final_key<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Vec<u8>
 	where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
+		KArg1: EncodeLike<Self::Key1>,
+		KArg2: EncodeLike<Self::Key2>,
 	{
 		let mut final_key = Self::storage_double_map_final_key1(k1);
 		final_key.extend_from_slice(k2.using_encoded(Self::Hasher2::hash).as_ref());
@@ -97,24 +106,24 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 	fn exists<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> bool
 	where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
+		KArg1: EncodeLike<Self::Key1>,
+		KArg2: EncodeLike<Self::Key2>,
 	{
 		top::exists(&Self::storage_double_map_final_key(k1, k2))
 	}
 
 	fn get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
 	where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
+		KArg1: EncodeLike<Self::Key1>,
+		KArg2: EncodeLike<Self::Key2>,
 	{
 		Self::from_optional_value_to_query(top::get(&Self::storage_double_map_final_key(k1, k2)))
 	}
 
 	fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
 	where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
+		KArg1: EncodeLike<Self::Key1>,
+		KArg2: EncodeLike<Self::Key2>,
 	{
 		let final_key = Self::storage_double_map_final_key(k1, k2);
 
@@ -125,10 +134,10 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// Swap the values of two key-pairs.
 	fn swap<XKArg1, XKArg2, YKArg1, YKArg2>(x_k1: XKArg1, x_k2: XKArg2, y_k1: YKArg1, y_k2: YKArg2)
 	where
-		XKArg1: EncodeLike<K1>,
-		XKArg2: EncodeLike<K2>,
-		YKArg1: EncodeLike<K1>,
-		YKArg2: EncodeLike<K2>
+		XKArg1: EncodeLike<Self::Key1>,
+		XKArg2: EncodeLike<Self::Key2>,
+		YKArg1: EncodeLike<Self::Key1>,
+		YKArg2: EncodeLike<Self::Key2>
 	{
 		let final_x_key = Self::storage_double_map_final_key(x_k1, x_k2);
 		let final_y_key = Self::storage_double_map_final_key(y_k1, y_k2);
@@ -148,30 +157,30 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 	fn insert<KArg1, KArg2, VArg>(k1: KArg1, k2: KArg2, val: VArg)
 	where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
-		VArg: EncodeLike<V>,
+		KArg1: EncodeLike<Self::Key1>,
+		KArg2: EncodeLike<Self::Key2>,
+		VArg: EncodeLike<Self::Value>,
 	{
 		top::put(&Self::storage_double_map_final_key(k1, k2), &val.borrow())
 	}
 
 	fn remove<KArg1, KArg2>(k1: KArg1, k2: KArg2)
 	where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
+		KArg1: EncodeLike<Self::Key1>,
+		KArg2: EncodeLike<Self::Key2>,
 	{
 		top::kill(&Self::storage_double_map_final_key(k1, k2))
 	}
 
-	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: EncodeLike<K1> {
+	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: EncodeLike<Self::Key1> {
 		top::kill_prefix(Self::storage_double_map_final_key1(k1).as_ref())
 	}
 
-	fn iter_prefix<KArg1>(k1: KArg1) -> PrefixIterator<V>
-		where KArg1: ?Sized + EncodeLike<K1>
+	fn iter_prefix<KArg1>(k1: KArg1) -> PrefixIterator<Self::Value>
+		where KArg1: ?Sized + EncodeLike<Self::Key1>
 	{
 		let prefix = Self::storage_double_map_final_key1(k1);
-		PrefixIterator::<V> {
+		PrefixIterator::<Self::Value> {
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			phantom_data: Default::default(),
@@ -180,8 +189,8 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
 	where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
+		KArg1: EncodeLike<Self::Key1>,
+		KArg2: EncodeLike<Self::Key2>,
 		F: FnOnce(&mut Self::Query) -> R,
 	{
 		let final_key = Self::storage_double_map_final_key(k1, k2);
@@ -201,11 +210,11 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		items: Items,
 	) -> Result<(), &'static str>
 	where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
+		KArg1: EncodeLike<Self::Key1>,
+		KArg2: EncodeLike<Self::Key2>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
+		Self::Value: EncodeAppend<Item=Item>,
 		Items: IntoIterator<Item=EncodeLikeItem>,
 		Items::IntoIter: ExactSizeIterator
 	{
@@ -219,7 +228,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 				}
 			});
 
-		let new_val = V::append_or_new(
+		let new_val = Self::Value::append_or_new(
 			encoded_value,
 			items,
 		).map_err(|_| "Could not append given item")?;
@@ -234,12 +243,12 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		items: Items,
 	)
 	where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
+		KArg1: EncodeLike<Self::Key1>,
+		KArg2: EncodeLike<Self::Key2>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
+		Self::Value: EncodeAppend<Item=Item>,
+		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<Self::Value>,
 		Items::IntoIter: ExactSizeIterator
 	{
 		Self::append(Ref::from(&k1), Ref::from(&k2), items.clone())
@@ -248,19 +257,19 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
-	/// `V` is required to implement `Codec::DecodeLength`.
+	/// `Self::Value` is required to implement `Codec::DecodeLength`.
 	///
 	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
 	/// function for this purpose.
 	fn decode_len<KArg1, KArg2>(key1: KArg1, key2: KArg2) -> Result<usize, &'static str>
-		where KArg1: EncodeLike<K1>,
-		      KArg2: EncodeLike<K2>,
-		      V: codec::DecodeLength + Len,
+		where KArg1: EncodeLike<Self::Key1>,
+		      KArg2: EncodeLike<Self::Key2>,
+		      Self::Value: codec::DecodeLength + Len,
 	{
 		let final_key = Self::storage_double_map_final_key(key1, key2);
 		if let Some(v) = top::get_raw(&final_key) {
-			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
+			<Self::Value as codec::DecodeLength>::len(&v).map_err(|e| e.what())
 		} else {
 			let len = Self::from_query_to_optional_value(Self::from_optional_value_to_query(None))
 				.map(|v| v.len())
@@ -281,7 +290,10 @@ mod test {
 	fn iter_prefix_works() {
 		TestExternalities::default().execute_with(|| {
 			struct MyStorage;
-			impl storage::generator::StorageDoubleMap<u64, u64, u64> for MyStorage {
+			impl storage::generator::StorageDoubleMap for MyStorage {
+				type Key1 = u64;
+				type Key2 = u64;
+				type Value = u64;
 				type Query = Option<u64>;
 				fn module_prefix() -> &'static [u8] { b"MyModule" }
 				fn storage_prefix() -> &'static [u8] { b"MyStorage" }

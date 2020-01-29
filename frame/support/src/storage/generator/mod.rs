@@ -125,7 +125,7 @@ mod tests {
 	fn linked_map_translate_works() {
 		use super::linked_map::{self, Enumerator, KeyFormat};
 
-		type Format = <NumberMap as StorageLinkedMap<NumberNumber, u64>>::KeyFormat;
+		type Format = <NumberMap as StorageLinkedMap>::KeyFormat;
 
 		let t = GenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {

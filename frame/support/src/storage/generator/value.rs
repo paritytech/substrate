@@ -27,7 +27,10 @@ use crate::{storage::top, hash::{Twox128, StorageHasher}, traits::Len};
 /// ```nocompile
 /// Twox128(module_prefix) ++ Twox128(storage_prefix)
 /// ```
-pub trait StorageValue<T: FullCodec> {
+pub trait StorageValue {
+	/// The type of the value stored in storage.
+	type Value: FullCodec;
+
 	/// The type that get/take returns.
 	type Query;
 
@@ -38,10 +41,10 @@ pub trait StorageValue<T: FullCodec> {
 	fn storage_prefix() -> &'static [u8];
 
 	/// Convert an optional value retrieved from storage to the type queried.
-	fn from_optional_value_to_query(v: Option<T>) -> Self::Query;
+	fn from_optional_value_to_query(v: Option<Self::Value>) -> Self::Query;
 
 	/// Convert a query to an optional value into storage.
-	fn from_query_to_optional_value(v: Self::Query) -> Option<T>;
+	fn from_query_to_optional_value(v: Self::Query) -> Option<Self::Value>;
 
 	/// Generate the full key used in top storage.
 	fn storage_value_final_key() -> [u8; 32] {
@@ -82,7 +85,7 @@ pub trait StorageValue<T: FullCodec> {
 	/// This would typically be called inside the module implementation of on_initialize, while
 	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
 	/// precisely prior initialized modules doesn't make use of this storage).
-	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<T>>(f: F) -> Result<Option<T>, ()> {
+	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<Self::Value>>(f: F) -> Result<Option<Self::Value>, ()> {
 		let key = Self::storage_value_final_key();
 
 		// attempt to get the length directly.
@@ -100,7 +103,7 @@ pub trait StorageValue<T: FullCodec> {
 	}
 
 	/// Store a value under this key into the provided storage instance.
-	fn put<Arg: EncodeLike<T>>(val: Arg) {
+	fn put<Arg: EncodeLike<Self::Value>>(val: Arg) {
 		top::put(&Self::storage_value_final_key(), &val)
 	}
 
@@ -133,12 +136,12 @@ pub trait StorageValue<T: FullCodec> {
 
 	/// Append the given items to the value in the storage.
 	///
-	/// `T` is required to implement `codec::EncodeAppend`.
+	/// `Self::Value` is required to implement `codec::EncodeAppend`.
 	fn append<Items, Item, EncodeLikeItem>(items: Items) -> Result<(), &'static str>
 	where
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		T: EncodeAppend<Item=Item>,
+		Self::Value: EncodeAppend<Item=Item>,
 		Items: IntoIterator<Item=EncodeLikeItem>,
 		Items::IntoIter: ExactSizeIterator,
 	{
@@ -151,7 +154,7 @@ pub trait StorageValue<T: FullCodec> {
 				}
 			});
 
-		let new_val = T::append_or_new(
+		let new_val = Self::Value::append_or_new(
 			encoded_value,
 			items,
 		).map_err(|_| "Could not append given item")?;
@@ -159,11 +162,11 @@ pub trait StorageValue<T: FullCodec> {
 		Ok(())
 	}
 
-	/// `T` is required to implement `codec::EncodeAppend`.
+	/// `Self::Value` is required to implement `codec::EncodeAppend`.
 	///
 	/// Append the given items to the value in the storage.
 	///
-	/// `T` is required to implement `Codec::EncodeAppend`.
+	/// `Self::Value` is required to implement `Codec::EncodeAppend`.
 	///
 	/// Upon any failure, it replaces `items` as the new value (assuming that the previous stored
 	/// data is simply corrupt and no longer usable).
@@ -175,8 +178,8 @@ pub trait StorageValue<T: FullCodec> {
 	fn append_or_put<Items, Item, EncodeLikeItem>(items: Items) where
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		T: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<T>,
+		Self::Value: EncodeAppend<Item=Item>,
+		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<Self::Value>,
 		Items::IntoIter: ExactSizeIterator
 	{
 		Self::append(items.clone()).unwrap_or_else(|_| Self::put(items));
@@ -184,17 +187,17 @@ pub trait StorageValue<T: FullCodec> {
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
-	/// `T` is required to implement `Codec::DecodeLength`.
+	/// `Self::Value` is required to implement `Codec::DecodeLength`.
 	///
 	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
 	/// function for this purpose.
-	fn decode_len() -> Result<usize, &'static str> where T: codec::DecodeLength, T: Len {
+	fn decode_len() -> Result<usize, &'static str> where Self::Value: codec::DecodeLength, Self::Value: Len {
 		let key = Self::storage_value_final_key();
 
 		// attempt to get the length directly.
 		if let Some(k) = top::get_raw(&key) {
-			<T as codec::DecodeLength>::len(&k).map_err(|e| e.what())
+			<Self::Value as codec::DecodeLength>::len(&k).map_err(|e| e.what())
 		} else {
 			let len = Self::from_query_to_optional_value(Self::from_optional_value_to_query(None))
 				.map(|v| v.len())

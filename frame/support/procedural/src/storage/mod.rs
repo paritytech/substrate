@@ -283,20 +283,16 @@ impl StorageLineDefExt {
 
 		let storage_trait_trunkated = match &storage_def.storage_type {
 			StorageLineTypeDef::Simple(_) => {
-				quote!( StorageValue<#value_type> )
+				quote!( StorageValue )
 			},
-			StorageLineTypeDef::Map(map) => {
-				let key = &map.key;
-				quote!( StorageMap<#key, #value_type> )
+			StorageLineTypeDef::Map(_) => {
+				quote!( StorageMap )
 			},
-			StorageLineTypeDef::LinkedMap(map) => {
-				let key = &map.key;
-				quote!( StorageLinkedMap<#key, #value_type> )
+			StorageLineTypeDef::LinkedMap(_) => {
+				quote!( StorageLinkedMap )
 			},
-			StorageLineTypeDef::DoubleMap(map) => {
-				let key1 = &map.key1;
-				let key2 = &map.key2;
-				quote!( StorageDoubleMap<#key1, #key2, #value_type> )
+			StorageLineTypeDef::DoubleMap(_) => {
+				quote!( StorageDoubleMap )
 			},
 		};
 

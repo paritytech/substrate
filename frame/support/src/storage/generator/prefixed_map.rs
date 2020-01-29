@@ -24,7 +24,9 @@ use crate::{storage::{generator::PrefixIterator, top}, hash::{Twox128, StorageHa
 /// ```nocompile
 /// Twox128(module_prefix) ++ Twox128(storage_prefix)
 /// ```
-pub trait StoragePrefixedMap<Value: FullCodec> {
+pub trait StoragePrefixedMap {
+	/// The type of the value stored in storage.
+	type Value: FullCodec;
 
 	/// Module prefix. Used for generating final key.
 	fn module_prefix() -> &'static [u8];
@@ -46,7 +48,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	}
 
 	/// Iter over all value of the storage.
-	fn iter() -> PrefixIterator<Value> {
+	fn iter() -> PrefixIterator<Self::Value> {
 		let prefix = Self::final_prefix();
 		PrefixIterator {
 			prefix: prefix.to_vec(),
@@ -74,7 +76,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
 	/// precisely prior initialized modules doesn't make use of this storage).
 	fn translate_values<OldValue, TV>(translate_val: TV) -> Result<(), u32>
-		where OldValue: Decode, TV: Fn(OldValue) -> Value
+		where OldValue: Decode, TV: Fn(OldValue) -> Self::Value
 	{
 		let prefix = Self::final_prefix();
 		let mut previous_key = prefix.to_vec();
@@ -111,7 +113,9 @@ mod test {
 	fn prefixed_map_works() {
 		TestExternalities::default().execute_with(|| {
 			struct MyStorage;
-			impl StoragePrefixedMap<u64> for MyStorage {
+			impl StoragePrefixedMap for MyStorage {
+				type Value = u64;
+
 				fn module_prefix() -> &'static [u8] {
 					b"MyModule"
 				}

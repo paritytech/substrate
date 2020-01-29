@@ -17,7 +17,7 @@
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
-use codec::{FullCodec, FullEncode, Encode, EncodeLike, Ref, EncodeAppend};
+use codec::{FullCodec, Encode, EncodeLike, Ref, EncodeAppend};
 use crate::{storage::top, hash::{StorageHasher, Twox128}, traits::Len};
 
 /// A strongly-typed map in storage.
@@ -31,7 +31,13 @@ use crate::{storage::top, hash::{StorageHasher, Twox128}, traits::Len};
 ///
 /// If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
 /// `blake2_256` must be used.  Otherwise, other values in storage can be compromised.
-pub trait StorageMap<K: FullEncode, V: FullCodec> {
+pub trait StorageMap {
+	/// The type of the key.
+	type Key: FullCodec;
+
+	/// The type of the value stored in storage.
+	type Value: FullCodec;
+
 	/// The type that get/take returns.
 	type Query;
 
@@ -45,15 +51,15 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	fn storage_prefix() -> &'static [u8];
 
 	/// Convert an optional value retrieved from storage to the type queried.
-	fn from_optional_value_to_query(v: Option<V>) -> Self::Query;
+	fn from_optional_value_to_query(v: Option<Self::Value>) -> Self::Query;
 
 	/// Convert a query to an optional value into storage.
-	fn from_query_to_optional_value(v: Self::Query) -> Option<V>;
+	fn from_query_to_optional_value(v: Self::Query) -> Option<Self::Value>;
 
 	/// Generate the full key used in top storage.
 	fn storage_map_final_key<KeyArg>(key: KeyArg) -> Vec<u8>
 	where
-		KeyArg: EncodeLike<K>,
+		KeyArg: EncodeLike<Self::Key>,
 	{
 		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
 		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
@@ -71,7 +77,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	}
 
 	/// Swap the values of two keys.
-	fn swap<KeyArg1: EncodeLike<K>, KeyArg2: EncodeLike<K>>(key1: KeyArg1, key2: KeyArg2) {
+	fn swap<KeyArg1: EncodeLike<Self::Key>, KeyArg2: EncodeLike<Self::Key>>(key1: KeyArg1, key2: KeyArg2) {
 		let k1 = Self::storage_map_final_key(key1);
 		let k2 = Self::storage_map_final_key(key2);
 
@@ -89,27 +95,27 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	}
 
 	/// Does the value (explicitly) exist in storage?
-	fn exists<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool {
+	fn exists<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> bool {
 		top::exists(Self::storage_map_final_key(key).as_ref())
 	}
 
 	/// Load the value associated with the given key from the map.
-	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query {
+	fn get<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> Self::Query {
 		Self::from_optional_value_to_query(top::get(Self::storage_map_final_key(key).as_ref()))
 	}
 
 	/// Store a value to be associated with the given key from the map.
-	fn insert<KeyArg: EncodeLike<K>, ValArg: EncodeLike<V>>(key: KeyArg, val: ValArg) {
+	fn insert<KeyArg: EncodeLike<Self::Key>, ValArg: EncodeLike<Self::Value>>(key: KeyArg, val: ValArg) {
 		top::put(Self::storage_map_final_key(key).as_ref(), &val.borrow())
 	}
 
 	/// Remove the value under a key.
-	fn remove<KeyArg: EncodeLike<K>>(key: KeyArg) {
+	fn remove<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) {
 		top::kill(Self::storage_map_final_key(key).as_ref())
 	}
 
 	/// Mutate the value under a key.
-	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
+	fn mutate<KeyArg: EncodeLike<Self::Key>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
 		let final_key = Self::storage_map_final_key(key);
 		let mut val = Self::from_optional_value_to_query(top::get(final_key.as_ref()));
 
@@ -122,7 +128,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	}
 
 	/// Take the value under a key.
-	fn take<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query {
+	fn take<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> Self::Query {
 		let key = Self::storage_map_final_key(key);
 		let value = top::take(key.as_ref());
 		Self::from_optional_value_to_query(value)
@@ -130,13 +136,13 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 
 	/// Append the given items to the value in the storage.
 	///
-	/// `V` is required to implement `codec::EncodeAppend`.
+	/// `Self::Value` is required to implement `codec::EncodeAppend`.
 	fn append<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) -> Result<(), &'static str>
 	where
-		KeyArg: EncodeLike<K>,
+		KeyArg: EncodeLike<Self::Key>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
+		Self::Value: EncodeAppend<Item=Item>,
 		Items: IntoIterator<Item=EncodeLikeItem>,
 		Items::IntoIter: ExactSizeIterator,
 	{
@@ -149,7 +155,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 				}
 			});
 
-		let new_val = V::append_or_new(
+		let new_val = Self::Value::append_or_new(
 			encoded_value,
 			items,
 		).map_err(|_| "Could not append given item")?;
@@ -160,14 +166,14 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
 	/// old (presumably corrupt) value is replaced with the given `items`.
 	///
-	/// `V` is required to implement `codec::EncodeAppend`.
+	/// `Self::Value` is required to implement `codec::EncodeAppend`.
 	fn append_or_insert<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items)
 	where
-		KeyArg: EncodeLike<K>,
+		KeyArg: EncodeLike<Self::Key>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
+		Self::Value: EncodeAppend<Item=Item>,
+		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<Self::Value>,
 		Items::IntoIter: ExactSizeIterator,
 	{
 		Self::append(Ref::from(&key), items.clone())
@@ -181,12 +187,12 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
 	/// function for this purpose.
-	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength + Len
+	fn decode_len<KeyArg: EncodeLike<Self::Key>>(key: KeyArg) -> Result<usize, &'static str>
+		where Self::Value: codec::DecodeLength + Len
 	{
 		let key = Self::storage_map_final_key(key);
 		if let Some(v) = top::get_raw(key.as_ref()) {
-			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
+			<Self::Value as codec::DecodeLength>::len(&v).map_err(|e| e.what())
 		} else {
 			let len = Self::from_query_to_optional_value(Self::from_optional_value_to_query(None))
 				.map(|v| v.len())
