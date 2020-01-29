@@ -891,7 +891,6 @@ impl Subcommand {
 		self,
 		config: Configuration<G, E>,
 		builder: B,
-		version: &VersionInfo,
 	) -> error::Result<()>
 	where
 		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
