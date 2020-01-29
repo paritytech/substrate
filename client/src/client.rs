@@ -256,7 +256,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let prefix = &prefix.0[..];
 
 		let mut current_key = start_key.0.clone();
-		loop {
+		while result.len() < (count as usize) {
 			let maybe_next_key = state.next_storage_key(&current_key[..])
 				.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 				.filter(|v| v.starts_with(prefix));
