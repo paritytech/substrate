@@ -567,7 +567,7 @@ pub struct RunCmd {
 	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "one", "two"])]
 	pub ferdie: bool,
 
-	/// Shortcut for `--name one --validator` with session keys for `one` added to keystore.
+	/// Shortcut for `--name One --validator` with session keys for `One` added to keystore.
 	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "ferdie", "two"])]
 	pub one: bool,
 
