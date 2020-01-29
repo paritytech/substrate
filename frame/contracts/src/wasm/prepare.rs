@@ -76,7 +76,7 @@ impl<'a> ContractModule<'a> {
 
 	/// Ensures that tables declared in the module are not too big.
 	fn ensure_table_size_limit(&self, limit: u32) -> Result<(), &'static str> {
-        if let Some(table_section) = self.module.table_section() {
+		if let Some(table_section) = self.module.table_section() {
 			// In Wasm MVP spec, there may be at most one table declared. Double check this
 			// explicitly just in case the Wasm version changes.
 			if table_section.entries().len() > 1 {
