@@ -300,6 +300,9 @@ const MAX_NOMINATIONS: usize = 16;
 const MAX_UNLOCKING_CHUNKS: usize = 32;
 const STAKING_ID: LockIdentifier = *b"staking ";
 
+// ------------- IMPORTANT NOTE: must be the same as `MAX_NOMINATIONS`.
+generate_compact_solution_type!(pub CompactAssignments, 16);
+
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
 
@@ -581,8 +584,7 @@ pub struct ElectionResult<AccountId, Balance: HasCompact> {
 /// The status of the upcoming (offchain) election.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum ElectionStatus<BlockNumber> {
-	/// Nothing has and will happen for now. We don't have a solution for next era, and submission
-	/// window is also not open.
+	/// Nothing has and will happen for now. submission window is not open.
 	None,
 	/// The submission window has been open since the contained block number.
 	Open(BlockNumber),
@@ -593,9 +595,6 @@ impl<BlockNumber> Default for ElectionStatus<BlockNumber> {
 		Self::None
 	}
 }
-
-// ------------- IMPORTANT NOTE: must be the same as `MAX_NOMINATIONS`.
-generate_compact_solution_type!(pub CompactAssignments, 16);
 
 pub type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -723,7 +722,7 @@ pub trait Trait: frame_system::Trait {
 	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
 	/// Key type used to sign and verify transaction.
-	// TODO: this cen be fetched from `SubmitTransaction` as well, but for now both me and @todr
+	// TODO: this can be fetched from `SubmitTransaction` as well, but for now both me and @todr
 	// gave up.
 	type KeyType: RuntimeAppPublic + Member + Parameter;
 }
@@ -1006,7 +1005,7 @@ decl_module! {
 		fn offchain_worker(now: T::BlockNumber) {
 			// runs only once.
 			if Self::era_election_status() == ElectionStatus::<T::BlockNumber>::Open(now) {
-				offchain_election::compute_offchain_election::<T>().map_err(|e| {
+				let _ = offchain_election::compute_offchain_election::<T>().map_err(|e| {
 					debug::native::warn!(
 						target: "staking",
 						"{:?}", e
@@ -1727,7 +1726,7 @@ impl<T: Trait> Module<T> {
 		// voting for valid candidates. All we have to check is if they actually come from the
 		// claimed nominator or not.
 
-		// Endlich alles Ok. Exposures and store the result.
+		// At last, alles Ok. Exposures and store the result.
 		let to_balance = |e: ExtendedBalance|
 			<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 		let mut slot_stake: BalanceOf<T> = Bounded::max_value();

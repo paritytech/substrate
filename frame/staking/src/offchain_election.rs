@@ -21,9 +21,9 @@ use codec::Encode;
 use frame_system::offchain::{SubmitUnsignedTransaction};
 use sp_phragmen::{reduce, ExtendedBalance, PhragmenResult, StakedAssignment};
 use sp_std::{prelude::*, cmp::Ordering};
-use sp_runtime::RuntimeAppPublic;
+use sp_runtime::{RuntimeAppPublic, RuntimeDebug};
 
-#[derive(Debug)]
+#[derive(RuntimeDebug)]
 pub(crate) enum OffchainElectionError {
 	/// No signing key has been found on the current node that maps to a validators. This node
 	/// should not run the offchain election code.
@@ -37,7 +37,7 @@ pub(crate) enum OffchainElectionError {
 /// better `this`.
 ///
 /// Evaluation is done in a lexicographic manner.
-pub(super) fn is_score_better(this: [ExtendedBalance; 3], that: [ExtendedBalance; 3]) -> bool {
+pub(crate) fn is_score_better(this: [ExtendedBalance; 3], that: [ExtendedBalance; 3]) -> bool {
 	match that
 		.iter()
 		.enumerate()

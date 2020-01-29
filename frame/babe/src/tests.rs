@@ -132,6 +132,6 @@ fn can_predict_next_epoch_change() {
 
 		// next epoch change will be at
 		assert_eq!(Babe::current_epoch_start(), 9); // next change will be 12, 2 slots from now
-		assert_eq!(Babe::next_epoch_change(System::block_number()), 5 + 2);
+		assert_eq!(Babe::next_expected_epoch_change(System::block_number()), 5 + 2);
 	})
 }
