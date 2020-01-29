@@ -477,7 +477,7 @@ mod tests {
 
 			let len = 100;
 
-			// like a FreeOperational
+			// like a InsecureFreeOperational
 			let operational_transaction = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
@@ -489,7 +489,7 @@ mod tests {
 					.is_ok()
 			);
 
-			// like a FreeNormal
+			// like a InsecureFreeNormal
 			let free_transaction = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Normal,
