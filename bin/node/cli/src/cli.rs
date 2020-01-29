@@ -200,7 +200,7 @@ where
 
 	let _ = exit_send.send(());
 
-	runtime.block_on(handle);
+	runtime.block_on(handle).map_err(|err| error::Error::Other(err.to_string()))?;
 
 	match service_res {
 		Either::Left((res, _)) => res.map_err(error::Error::Service),

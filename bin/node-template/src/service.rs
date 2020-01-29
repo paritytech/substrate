@@ -11,7 +11,6 @@ use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
-use futures::{FutureExt, compat::Future01CompatExt};
 
 // Our native executor instance.
 native_executor_instance!(

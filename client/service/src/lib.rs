@@ -129,8 +129,11 @@ type Boxed01Future01 = Box<dyn futures01::Future<Item = (), Error = ()> + Send +
 
 impl futures01::future::Executor<Boxed01Future01> for SpawnTaskHandle {
 	fn execute(&self, future: Boxed01Future01) -> Result<(), futures01::future::ExecuteError<Boxed01Future01>>{
-		self.spawn(future.compat().map(drop));
-		Ok(())
+		self.spawn(future.compat().map(drop))
+			.map_err(|_| futures01::future::ExecuteError::new(
+				futures01::future::ExecuteErrorKind::Shutdown,
+				Box::new(futures01::future::ok::<_, ()>(())) as Boxed01Future01
+			))
 	}
 }
 
