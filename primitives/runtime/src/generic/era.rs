@@ -47,14 +47,14 @@ pub enum Era {
 }
 
 /*
-E.g. with period == 4:
-0         10        20        30        40
-0123456789012345678901234567890123456789012
-             |...|
-   authored -/   \- expiry
-phase = 1
-n = Q(current - phase, period) + phase
-*/
+ * E.g. with period == 4:
+ * 0         10        20        30        40
+ * 0123456789012345678901234567890123456789012
+ *              |...|
+ *    authored -/   \- expiry
+ * phase = 1
+ * n = Q(current - phase, period) + phase
+ */
 impl Era {
 	/// Create a new era based on a period (which should be a power of two between 4 and 65536 inclusive)
 	/// and a block number on which it should start (or, for long periods, be shortly after the start).
