@@ -302,3 +302,26 @@ fn start_fn_traps(wasm_method: WasmExecutionMethod) {
 		2u8.encode(),
 	);
 }
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn get_global_val_works(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	let code = wabt::wat2wasm(r#"
+		(module
+			(global (export "test_global") i64 (i64.const 500))
+		)
+		"#).unwrap().encode();
+
+	assert_eq!(
+		call_in_wasm(
+			"test_sandbox_get_global_val",
+			&code,
+			wasm_method,
+			&mut ext,
+		).unwrap(),
+		500i64.encode(),
+	);
+}

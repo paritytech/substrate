@@ -23,9 +23,7 @@ use crate::exec::{
 use crate::gas::{Gas, GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use sp_sandbox;
 use frame_system;
-use sp_std::prelude::*;
-use sp_std::convert::TryInto;
-use sp_std::mem;
+use sp_std::{prelude::*, mem, convert::TryInto};
 use codec::{Decode, Encode};
 use sp_runtime::traits::{Bounded, SaturatedConversion};
 
@@ -89,7 +87,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 			buffer.clear();
 			Ok(ExecReturnValue { status: STATUS_SUCCESS, data: buffer })
 		}
-		Ok(sp_sandbox::ReturnValue::Value(sp_sandbox::TypedValue::I32(exit_code))) => {
+		Ok(sp_sandbox::ReturnValue::Value(sp_sandbox::Value::I32(exit_code))) => {
 			let status = (exit_code & 0xFF).try_into()
 				.expect("exit_code is masked into the range of a u8; qed");
 			Ok(ExecReturnValue { status, data: runtime.scratch_buf })

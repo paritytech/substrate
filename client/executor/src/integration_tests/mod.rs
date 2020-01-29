@@ -72,7 +72,7 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-    match call_in_wasm(
+	match call_in_wasm(
 		"test_calling_missing_external",
 		&[],
 		wasm_method,
@@ -88,7 +88,7 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled => assert_eq!(
 					&format!("{:?}", e),
-					"Other(\"call to undefined external function with index 67\")"
+					"Other(\"call to undefined external function with index 68\")"
 				),
 			}
 		}
@@ -117,7 +117,7 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled => assert_eq!(
 					&format!("{:?}", e),
-					"Other(\"call to undefined external function with index 68\")"
+					"Other(\"call to undefined external function with index 69\")"
 				),
 			}
 		}
