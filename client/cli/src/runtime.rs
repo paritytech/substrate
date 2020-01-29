@@ -47,7 +47,7 @@ where
 	Ok(())
 }
 
-#[cfg(target_family = "windows")]
+#[cfg(not(unix))]
 async fn main<F, E>(func: F) -> Result<(), Box<dyn std::error::Error>>
 where
 	F: Future<Output = Result<(), E>> + future::FusedFuture,
