@@ -29,6 +29,7 @@ fn main() -> Result<(), sc_cli::error::Error> {
 		author: "Parity Technologies <admin@parity.io>",
 		description: "Generic substrate node",
 		support_url: "https://github.com/paritytech/substrate/issues/new",
+		copyright_start_year: 2017,
 	};
 
 	node_cli::run(std::env::args(), version)

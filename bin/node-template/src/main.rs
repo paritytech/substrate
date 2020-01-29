@@ -18,6 +18,7 @@ fn main() -> Result<(), error::Error> {
 		author: "Anonymous",
 		description: "Template Node",
 		support_url: "support.anonymous.an",
+		copyright_start_year: 2017,
 	};
 
 	command::run(version)

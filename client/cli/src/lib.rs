@@ -67,6 +67,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 pub use crate::runtime::{run_until_exit, run_service_until_exit};
 use execution_strategy::*;
 use names::{Generator, Name};
+use chrono::prelude::*;
 
 /// default sub directory to store network config
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
@@ -95,6 +96,8 @@ pub struct VersionInfo {
 	pub author: &'static str,
 	/// Support URL.
 	pub support_url: &'static str,
+	/// Copyright starting year (x-current year)
+	pub copyright_start_year: i32,
 }
 
 fn get_chain_key(cli: &SharedParams) -> String {
@@ -334,7 +337,7 @@ where
 {
 	info!("{}", version.name);
 	info!("  version {}", config.full_version());
-	info!("  by {}", version.author);
+	info!("  by {}, {}-{}", version.author, version.copyright_start_year, Local::today().year());
 	info!("Chain specification: {}", config.expect_chain_spec().name());
 	info!("Node name: {}", config.name);
 	info!("Roles: {}", display_role(&config));
