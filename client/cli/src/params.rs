@@ -1158,7 +1158,7 @@ impl PurgeChainCmd {
 				eprintln!("{:?} did not exist.", &db_path);
 				Ok(())
 			},
-			Result::Err(err) => Result::Err(err.into())
+			Err(err) => Result::Err(err.into())
 		}
 	}
 }
