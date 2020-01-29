@@ -27,7 +27,7 @@ use codec::{Encode, Decode};
 use crate::{CommitSet, Error, MetaDb, to_meta_key, Hash};
 use log::{trace, warn};
 use sp_core::storage::OwnedChildInfo;
-use super::{ChildTrieChangeSet, ChangeSet};
+use super::ChangeSet;
 
 const LAST_PRUNED: &[u8] = b"last_pruned";
 const OLD_PRUNING_JOURNAL: &[u8] = b"pruning_journal";
@@ -219,14 +219,14 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			trace!(target: "state-db", "Pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
 			let index = self.pending_number + self.pending_prunings as u64;
 
-			commit.data.extend(pruned.deleted.iter()
-				.map(|(ct, keys)| ChildTrieChangeSet {
-					info: ct.clone(),
-					data: ChangeSet {
+			crate::extend_change_sets(&mut commit.data, pruned.deleted.iter()
+				.map(|(ct, keys)| (
+					ct.clone(),
+					ChangeSet {
 						inserted: Vec::new(),
 						deleted: keys.iter().cloned().collect(),
 					},
-				}));
+				)));
 
 			commit.meta.inserted.push((to_meta_key(LAST_PRUNED, &()), index.encode()));
 			commit.meta.deleted.push(pruned.journal_key.clone());
@@ -246,12 +246,12 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			commit.deleted_len(),
 		);
 		let inserted = commit.data.iter().map(|changeset| (
-			changeset.info.clone(),
-			changeset.data.inserted.iter().map(|(k, _)| k.clone()).collect(),
+			changeset.0.clone(),
+			changeset.1.inserted.iter().map(|(k, _)| k.clone()).collect(),
 		)).collect();
 		let deleted = commit.data.iter_mut().map(|changeset| (
-			changeset.info.clone(),
-			::std::mem::replace(&mut changeset.data.deleted, Vec::new()),
+			changeset.0.clone(),
+			::std::mem::replace(&mut changeset.1.deleted, Vec::new()),
 		)).collect();
 
 		let journal_record = JournalRecordV1 {

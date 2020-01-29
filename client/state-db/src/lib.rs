@@ -36,7 +36,7 @@ mod pruning;
 use std::fmt;
 use parking_lot::RwLock;
 use codec::Codec;
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::{BTreeMap, HashMap, hash_map::Entry, btree_map::Entry as BEntry};
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 use log::trace;
@@ -122,6 +122,7 @@ pub struct ChangeSet<H: Hash> {
 }
 
 /// A set of state node changes for a child trie.
+/// TODO remove??
 #[derive(Debug, Clone)]
 pub struct ChildTrieChangeSet<H: Hash> {
 	/// Change set of this element.
@@ -131,11 +132,28 @@ pub struct ChildTrieChangeSet<H: Hash> {
 	pub info: Option<OwnedChildInfo>,
 }
 
+/// Change sets of all child trie (top is key None).
+pub type ChildTrieChangeSets<H> = BTreeMap<Option<OwnedChildInfo>, ChangeSet<H>>;
+
+/// Extends for `ChildTrieChangeSets` is merging.
+fn extend_change_sets<H: Hash>(set: &mut ChildTrieChangeSets<H>, other: impl Iterator<Item = (Option<OwnedChildInfo>, ChangeSet<H>)>) {
+	for (ci, o_cs) in other {
+		match set.entry(ci) {
+			BEntry::Occupied(mut e) => {
+				let entry = e.get_mut();
+				entry.inserted.extend(o_cs.inserted);
+				entry.deleted.extend(o_cs.deleted);
+			},
+			BEntry::Vacant(e) => { e.insert(o_cs); },
+		}
+	}
+}
+
 /// A set of changes to the backing database.
 #[derive(Default, Debug, Clone)]
 pub struct CommitSet<H: Hash> {
 	/// State node changes.
-	pub data: Vec<ChildTrieChangeSet<H>>,
+	pub data: ChildTrieChangeSets<H>,
 	/// Metadata changes.
 	pub meta: ChangeSet<Vec<u8>>,
 }
@@ -143,12 +161,12 @@ pub struct CommitSet<H: Hash> {
 impl<H:Hash> CommitSet<H> {
 	/// Number of inserted key value element in the set.
 	pub fn inserted_len(&self) -> usize {
-		self.data.iter().map(|set| set.data.inserted.len()).sum()
+		self.data.iter().map(|set| set.1.inserted.len()).sum()
 	}
 
 	/// Number of deleted key value element in the set.
 	pub fn deleted_len(&self) -> usize {
-		self.data.iter().map(|set| set.data.deleted.len()).sum()
+		self.data.iter().map(|set| set.1.deleted.len()).sum()
 	}
 }
 
@@ -261,7 +279,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		hash: &BlockHash,
 		number: u64,
 		parent_hash: &BlockHash,
-		mut changeset: Vec<ChildTrieChangeSet<Key>>,
+		mut changeset: ChildTrieChangeSets<Key>,
 	) -> Result<CommitSet<Key>, Error<E>> {
 		let mut meta = ChangeSet::default();
 		if number == 0 {
@@ -272,7 +290,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		match self.mode {
 			PruningMode::ArchiveAll => {
 				for changeset in changeset.iter_mut() {
-					changeset.data.deleted.clear();
+					changeset.1.deleted.clear();
 				}
 				// write changes immediately
 				Ok(CommitSet {
@@ -299,7 +317,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 			Ok(()) => {
 				if self.mode == PruningMode::ArchiveCanonical {
 					for commit in commit.data.iter_mut() {
-						commit.data.deleted.clear();
+						commit.1.deleted.clear();
 					}
 				}
 			}
@@ -451,7 +469,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 		hash: &BlockHash,
 		number: u64,
 		parent_hash: &BlockHash,
-		changeset: Vec<ChildTrieChangeSet<Key>>,
+		changeset: ChildTrieChangeSets<Key>,
 	) -> Result<CommitSet<Key>, Error<E>> {
 		self.db.write().insert_block(hash, number, parent_hash, changeset)
 	}

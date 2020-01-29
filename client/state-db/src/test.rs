@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 use sp_core::H256;
-use crate::{DBValue, ChangeSet, CommitSet, MetaDb, NodeDb, ChildTrieChangeSet};
+use crate::{DBValue, ChangeSet, CommitSet, MetaDb, NodeDb, ChildTrieChangeSets};
 use sp_core::storage::OwnedChildInfo;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
@@ -47,13 +47,13 @@ impl NodeDb for TestDb {
 impl TestDb {
 	pub fn commit(&mut self, commit: &CommitSet<H256>) {
 		for ct in commit.data.iter() {
-			self.data.entry(ct.info.clone()).or_default()
-				.extend(ct.data.inserted.iter().cloned())
+			self.data.entry(ct.0.clone()).or_default()
+				.extend(ct.1.inserted.iter().cloned())
 		}
 		self.meta.extend(commit.meta.inserted.iter().cloned());
 		for ct in commit.data.iter() {
-			if let Some(self_data) = self.data.get_mut(&ct.info) {
-				for k in ct.data.deleted.iter() {
+			if let Some(self_data) = self.data.get_mut(&ct.0) {
+				for k in ct.1.deleted.iter() {
 					self_data.remove(k);
 				}
 			}
@@ -81,11 +81,10 @@ pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
 	}
 }
 
-pub fn make_childchangeset(inserted: &[u64], deleted: &[u64]) -> Vec<ChildTrieChangeSet<H256>> {
-	vec![ChildTrieChangeSet {
-		info: None,
-		data: make_changeset(inserted, deleted),
-	}]
+pub fn make_childchangeset(inserted: &[u64], deleted: &[u64]) -> ChildTrieChangeSets<H256> {
+	let mut result = ChildTrieChangeSets::new();
+	result.insert(None, make_changeset(inserted, deleted));
+	result
 }
 
 pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {

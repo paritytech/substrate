@@ -41,7 +41,7 @@ mod stats;
 use std::sync::Arc;
 use std::path::PathBuf;
 use std::io;
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{HashMap, BTreeMap, btree_map::Entry};
 
 use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo};
 use sc_client_api::backend::NewBlockState;
@@ -1107,7 +1107,7 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			let finalized = if operation.commit_state {
-				let mut changesets = Vec::new();
+				let mut changesets = BTreeMap::new();
 				let mut ops: u64 = 0;
 				let mut bytes: u64 = 0;
 				for (info, mut updates) in operation.db_updates.into_iter() {
@@ -1125,7 +1125,14 @@ impl<Block: BlockT> Backend<Block> {
 							data.deleted.push(key);
 						}
 					}
-					changesets.push(sc_state_db::ChildTrieChangeSet{ info, data });
+					match changesets.entry(info) {
+						Entry::Vacant(e) => { e.insert(data); },
+						Entry::Occupied(mut e) => {
+							let e = e.get_mut();
+							e.inserted.extend(data.inserted);
+							e.deleted.extend(data.deleted);
+						},
+					}
 				}
 				self.state_usage.tally_writes(ops, bytes);
 
@@ -1316,31 +1323,31 @@ impl<Block: BlockT> Backend<Block> {
 }
 
 fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::CommitSet<Vec<u8>>) {
-	let mut key_buffer = Vec::new(); 
+	let mut key_buffer = Vec::new();
 	for child_data in commit.data.into_iter() {
-		if let Some(child_info) = child_data.info {
+		if let Some(child_info) = child_data.0 {
 			// children tries with prefixes
 			let child_info = child_info.as_ref();
 			let keyspace = child_info.keyspace();
 			let keyspace_len = keyspace.len();
 			key_buffer.resize(keyspace_len, 0);
 			key_buffer[..keyspace_len].copy_from_slice(keyspace);
-			for (key, val) in child_data.data.inserted.into_iter() {
+			for (key, val) in child_data.1.inserted.into_iter() {
 				key_buffer.resize(keyspace_len + key.len(), 0);
 				key_buffer[keyspace_len..].copy_from_slice(&key[..]);
 				transaction.put(columns::STATE, &key_buffer[..], &val);
 			}
-			for key in child_data.data.deleted.into_iter() {
+			for key in child_data.1.deleted.into_iter() {
 				key_buffer.resize(keyspace_len + key.len(), 0);
 				key_buffer[keyspace_len..].copy_from_slice(&key[..]);
 				transaction.delete(columns::STATE, &key_buffer[..]);
 			}
 		} else {
 			// top trie without prefixes
-			for (key, val) in child_data.data.inserted.into_iter() {
+			for (key, val) in child_data.1.inserted.into_iter() {
 				transaction.put(columns::STATE, &key[..], &val);
 			}
-			for key in child_data.data.deleted.into_iter() {
+			for key in child_data.1.deleted.into_iter() {
 				transaction.delete(columns::STATE, &key[..]);
 			}
 		}

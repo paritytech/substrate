@@ -22,7 +22,7 @@
 
 use std::fmt;
 use std::collections::{HashMap, VecDeque, hash_map::Entry};
-use super::{Error, DBValue, ChildTrieChangeSet, CommitSet, MetaDb, Hash, to_meta_key, ChangeSet};
+use super::{Error, DBValue, ChildTrieChangeSets, CommitSet, MetaDb, Hash, to_meta_key, ChangeSet};
 use codec::{Encode, Decode};
 use log::trace;
 use sp_core::storage::OwnedChildInfo;
@@ -232,7 +232,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		hash: &BlockHash,
 		number: u64,
 		parent_hash: &BlockHash,
-		changeset: Vec<ChildTrieChangeSet<Key>>,
+		changeset: ChildTrieChangeSets<Key>,
 	) -> Result<CommitSet<Key>, Error<E>> {
 		let mut commit = CommitSet::default();
 		let front_block_number = self.front_block_number();
@@ -275,16 +275,16 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		let mut deleted = Vec::with_capacity(changeset.len());
 		for changeset in changeset.into_iter() {
 			inserted_block.push((
-				changeset.info.clone(),
-				changeset.data.inserted.iter().map(|(k, _)| k.clone()).collect(),
+				changeset.0.clone(),
+				changeset.1.inserted.iter().map(|(k, _)| k.clone()).collect(),
 			));
 			inserted.push((
-				changeset.info.clone(),
-				changeset.data.inserted,
+				changeset.0.clone(),
+				changeset.1.inserted,
 			));
 			deleted.push((
-				changeset.info,
-				changeset.data.deleted,
+				changeset.0,
+				changeset.1.deleted,
 			));
 		}
 
@@ -383,10 +383,10 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 		// get the one we need to canonicalize
 		let overlay = &level[index];
-		commit.data.extend(overlay.inserted.iter()
-			.map(|(ct, keys)| ChildTrieChangeSet {
-				info: ct.clone(),
-				data: ChangeSet {
+		crate::extend_change_sets(&mut commit.data, overlay.inserted.iter()
+			.map(|(ct, keys)| (
+				ct.clone(),
+				ChangeSet {
 					inserted: keys.iter().map(|k| (
 						k.clone(),
 						self.values.get(k)
@@ -394,15 +394,15 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					)).collect(),
 					deleted: Vec::new(),
 				},
-			}));
-		commit.data.extend(overlay.deleted.iter().cloned()
-			.map(|(ct, keys)| ChildTrieChangeSet {
-				info: ct,
-				data: ChangeSet {
+			)));
+		crate::extend_change_sets(&mut commit.data, overlay.deleted.iter().cloned()
+			.map(|(ct, keys)| (
+				ct,
+				ChangeSet {
 					inserted: Vec::new(),
 					deleted: keys,
 				},
-			}));
+			)));
 
 		commit.meta.deleted.append(&mut discarded_journals);
 		let canonicalized = (hash.clone(), self.front_block_number() + self.pending_canonicalizations.len() as u64);
@@ -639,8 +639,8 @@ mod tests {
 		db.commit(&insertion);
 		let mut finalization = CommitSet::default();
 		overlay.canonicalize::<io::Error>(&h1, &mut finalization).unwrap();
-		let inserted_len = changeset.iter().map(|set| set.data.inserted.len()).sum();
-		let deleted_len = changeset.iter().map(|set| set.data.deleted.len()).sum();
+		let inserted_len = changeset.iter().map(|set| set.1.inserted.len()).sum();
+		let deleted_len = changeset.iter().map(|set| set.1.deleted.len()).sum();
 		assert_eq!(finalization.inserted_len(), inserted_len);
 		assert_eq!(finalization.deleted_len(), deleted_len);
 		assert_eq!(finalization.meta.inserted.len(), 1);
