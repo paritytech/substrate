@@ -216,7 +216,6 @@ macro_rules! new_full {
 					grandpa_link,
 					service.network(),
 					service.on_exit(),
-					service.spawn_task_handle(),
 				)?);
 			},
 			(true, false) => {
@@ -229,7 +228,6 @@ macro_rules! new_full {
 					on_exit: service.on_exit(),
 					telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 					voting_rule: grandpa::VotingRulesBuilder::default().build(),
-					executor: service.spawn_task_handle(),
 				};
 				// the GRANDPA voter task is considered infallible, i.e.
 				// if it fails we take down the service with it.

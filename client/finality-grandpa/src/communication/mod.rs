@@ -178,7 +178,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
-		executor: &impl futures::task::Spawn,
 	) -> Self {
 		let (validator, report_stream) = GossipValidator::new(
 			config,
@@ -186,7 +185,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		);
 
 		let validator = Arc::new(validator);
-		let gossip_engine = GossipEngine::new(service.clone(), executor, GRANDPA_ENGINE_ID, validator.clone());
+		let gossip_engine = GossipEngine::new(service.clone(), GRANDPA_ENGINE_ID, validator.clone());
 
 		{
 			// register all previous votes with the gossip service so that they're
@@ -374,10 +373,9 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 
-		let service = self.gossip_engine.clone();
 		let topic = global_topic::<B>(set_id.0);
 		let incoming = incoming_global(
-			service,
+			self.gossip_engine.clone(),
 			topic,
 			voters,
 			self.validator.clone(),
@@ -419,7 +417,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 impl<B: BlockT, N: Network<B>> Future for NetworkBridge<B, N> {
 	type Output = Result<(), Error>;
 
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		loop {
 			match self.neighbor_packet_worker.lock().poll_next_unpin(cx) {
 				Poll::Ready(Some((to, packet))) => {
@@ -442,6 +440,12 @@ impl<B: BlockT, N: Network<B>> Future for NetworkBridge<B, N> {
 				),
 				Poll::Pending => break,
 			}
+		}
+
+		match self.gossip_engine.poll_unpin(cx) {
+			// The gossip engine future finished. We should do the same.
+			Poll::Ready(()) => return Poll::Ready(Ok(())),
+			Poll::Pending => {},
 		}
 
 		Poll::Pending

@@ -150,12 +150,11 @@ fn grandpa_observer<B, E, Block: BlockT, RA, S, F>(
 /// listening for and validating GRANDPA commits instead of following the full
 /// protocol. Provide configuration and a link to a block import worker that has
 /// already been instantiated with `block_import`.
-pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
+pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA, SC>,
 	network: N,
 	on_exit: impl futures::Future<Output=()> + Clone + Send + Unpin + 'static,
-	executor: Sp,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
@@ -163,7 +162,6 @@ pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: Send + Sync + 'static,
-	Sp: futures::task::Spawn + 'static,
 	Client<B, E, Block, RA>: AuxStore,
 {
 	let LinkHalf {
@@ -177,7 +175,6 @@ pub fn run_grandpa_observer<B, E, Block: BlockT, N, RA, SC, Sp>(
 		network,
 		config.clone(),
 		persistent_data.set_state.clone(),
-		&executor,
 	);
 
 	let observer_work = ObserverWork::new(
@@ -336,10 +333,8 @@ where
 {
 	type Output = Result<(), Error>;
 
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let this = Pin::into_inner(self);
-
-		match Future::poll(Pin::new(&mut this.observer), cx) {
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		match Future::poll(Pin::new(&mut self.observer), cx) {
 			Poll::Pending => {}
 			Poll::Ready(Ok(())) => {
 				// observer commit stream doesn't conclude naturally; this could reasonably be an error.
@@ -351,12 +346,12 @@ where
 			}
 			Poll::Ready(Err(CommandOrError::VoterCommand(command))) => {
 				// some command issued internally
-				this.handle_voter_command(command)?;
+				self.handle_voter_command(command)?;
 				cx.waker().wake_by_ref();
 			}
 		}
 
-		match Stream::poll_next(Pin::new(&mut this.voter_commands_rx), cx) {
+		match Stream::poll_next(Pin::new(&mut self.voter_commands_rx), cx) {
 			Poll::Pending => {}
 			Poll::Ready(None) => {
 				// the `voter_commands_rx` stream should never conclude since it's never closed.
@@ -364,11 +359,11 @@ where
 			}
 			Poll::Ready(Some(command)) => {
 				// some command issued externally
-				this.handle_voter_command(command)?;
+				self.handle_voter_command(command)?;
 				cx.waker().wake_by_ref();
 			}
 		}
 
-		Poll::Pending
+		Future::poll(Pin::new(&mut self.network), cx)
 	}
 }
