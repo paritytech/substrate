@@ -98,23 +98,24 @@ where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
 		let light_nodes = self.light_nodes.clone();
 		let interval = interval(Duration::from_millis(100))
 			.take_while(move |_| {
-				let full_ready = full_nodes.iter().all(|&(ref id, ref service, _, _)|
+				let num_full_ready = full_nodes.iter().filter(|&(ref id, ref service, _, _)|
 					full_predicate(*id, service)
-				);
+				).count();
 
-				if !full_ready {
-					return ready(true);
-				}
-
-				let light_ready = light_nodes.iter().all(|&(ref id, ref service, _)|
+				let num_light_ready = light_nodes.iter().filter(|&(ref id, ref service, _)|
 					light_predicate(*id, service)
+				).count();
+
+				info!(
+					"Full nodes ready: {}/{}; Light nodes ready: {}/{}",
+					num_full_ready, full_nodes.len(),
+					num_light_ready, light_nodes.len(),
 				);
 
-				if !light_ready {
-					ready(true)
-				} else {
-					ready(false)
-				}
+				let full_ready = num_full_ready == full_nodes.len();
+				let light_ready = num_light_ready == light_nodes.len();
+
+				ready(!(light_ready && full_ready))
 			})
 			.for_each(|_| ready(()))
 			.timeout(MAX_WAIT_TIME);
@@ -349,43 +350,41 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	}
 	{
 		let temp = tempdir_with_prefix("substrate-connectivity-test");
-		{
-			let mut network = TestNet::new(
-				&temp,
-				spec,
-				(0..NUM_FULL_NODES).map(|_| { |cfg| full_builder(cfg).map(|s| (s, ())) }),
-				(0..NUM_LIGHT_NODES).map(|_| { |cfg| light_builder(cfg) }),
-				// Note: this iterator is empty but we can't just use `iter::empty()`, otherwise
-				// the type of the closure cannot be inferred.
-				(0..0).map(|_| (String::new(), { |cfg| full_builder(cfg).map(|s| (s, ())) })),
-				30400,
-			);
-			info!("Checking linked topology");
-			let mut address = network.full_nodes[0].3.clone();
-			let max_nodes = std::cmp::max(NUM_FULL_NODES, NUM_LIGHT_NODES);
-			for i in 0..max_nodes {
-				if i != 0 {
-					if let Some((_, service, _, node_id)) = network.full_nodes.get(i) {
-						service.get().network().add_reserved_peer(address.to_string())
-							.expect("Error adding reserved peer");
-						address = node_id.clone();
-					}
-				}
-
-				if let Some((_, service, node_id)) = network.light_nodes.get(i) {
+		let mut network = TestNet::new(
+			&temp,
+			spec,
+			(0..NUM_FULL_NODES).map(|_| { |cfg| full_builder(cfg).map(|s| (s, ())) }),
+			(0..NUM_LIGHT_NODES).map(|_| { |cfg| light_builder(cfg) }),
+			// Note: this iterator is empty but we can't just use `iter::empty()`, otherwise
+			// the type of the closure cannot be inferred.
+			(0..0).map(|_| (String::new(), { |cfg| full_builder(cfg).map(|s| (s, ())) })),
+			30400,
+		);
+		info!("Checking linked topology");
+		let mut address = network.full_nodes[0].3.clone();
+		let max_nodes = std::cmp::max(NUM_FULL_NODES, NUM_LIGHT_NODES);
+		for i in 0..max_nodes {
+			if i != 0 {
+				if let Some((_, service, _, node_id)) = network.full_nodes.get(i) {
 					service.get().network().add_reserved_peer(address.to_string())
 						.expect("Error adding reserved peer");
 					address = node_id.clone();
 				}
 			}
 
-			network.run_until_all_full(
-				move |_index, service| service.get().network().num_connected()
-					== expected_full_connections,
-				move |_index, service| service.get().network().num_connected()
-					== expected_light_connections,
-			);
+			if let Some((_, service, node_id)) = network.light_nodes.get(i) {
+				service.get().network().add_reserved_peer(address.to_string())
+					.expect("Error adding reserved peer");
+				address = node_id.clone();
+			}
 		}
+
+		network.run_until_all_full(
+			move |_index, service| service.get().network().num_connected()
+				== expected_full_connections,
+			move |_index, service| service.get().network().num_connected()
+				== expected_light_connections,
+		);
 		temp.close().expect("Error removing temp dir");
 	}
 }
