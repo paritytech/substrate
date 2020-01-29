@@ -122,7 +122,7 @@ pub enum NotifsHandlerIn {
 	Disable,
 
 	/// Sends a message through the custom protocol substream.
-	Send {
+	SendLegacy {
 		/// The message to send.
 		message: Vec<u8>,
 	},
@@ -269,7 +269,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 					self.in_handlers[num].inject_event(NotifsInHandlerIn::Refuse);
 				}
 			},
-			NotifsHandlerIn::Send { message } =>
+			NotifsHandlerIn::SendLegacy { message } =>
 				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message }),
 			NotifsHandlerIn::SendNotification { message, engine_id, proto_name } => {
 				for handler in &mut self.out_handlers {

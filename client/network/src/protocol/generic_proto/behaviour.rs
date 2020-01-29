@@ -25,11 +25,27 @@ use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use log::{debug, error, trace, warn};
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
+use sp_runtime::ConsensusEngineId;
 use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, pin::Pin};
 use std::time::{Duration, Instant};
 use std::task::{Context, Poll};
 
 /// Network behaviour that handles opening substreams for custom protocols with other nodes.
+///
+/// ## Legacy vs new protocol
+///
+/// The `GenericProto` behaves as following:
+///
+/// - Whenever a connection is established, we open a single substream (called "legay protocol" in
+/// the source code). This substream name depends on the `protocol_id` and `versions` passed at
+/// initialization. If the remote refuses this substream, we close the connection.
+///
+/// - For each registered protocol, we also open an additional substream for this protocol. If the
+/// remote refuses this substream, then it's fine.
+///
+/// - Whenever we want to send a message, we pass either `None` to force the legacy substream, or
+/// `Some` to indicate a registered protocol. If the registered protocol was refused by the remote,
+/// we use the legacy instead.
 ///
 /// ## How it works
 ///
@@ -60,8 +76,11 @@ use std::task::{Context, Poll};
 /// us, we accept the connection. The "banning" system is only about delaying dialing attempts.
 ///
 pub struct GenericProto< TSubstream> {
-	/// List of protocols to open with peers. Never modified.
-	protocol: RegisteredProtocol,
+	/// Legacy protocol to open with peers. Never modified.
+	legacy_protocol: RegisteredProtocol,
+
+	/// Notification protocols. Entries are only ever added and not removed.
+	notif_protocols: Vec<(Cow<'static, [u8]>, Vec<u8>)>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
 	peerset: sc_peerset::Peerset,
@@ -342,6 +361,36 @@ impl<TSubstream> GenericProto<TSubstream> {
 		}
 	}
 
+	/// Sends a notification to a peer.
+	///
+	/// Has no effect if the custom protocol is not open with the given peer.
+	///
+	/// Also note that even we have a valid open substream, it may in fact be already closed
+	/// without us knowing, in which case the packet will not be received.
+	pub fn write_notification(
+		&mut self,
+		target: &PeerId,
+		proto_name: Cow<'static, [u8]>,
+		engine_id: ConsensusEngineId,
+		message: impl Into<Vec<u8>>,
+	) {
+		if !self.is_open(target) {
+			return;
+		}
+
+		trace!(target: "sub-libp2p", "External API => Notification for {:?} with protocol {:?}", target, proto_name);
+		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
+
+		self.events.push(NetworkBehaviourAction::SendEvent {
+			peer_id: target.clone(),
+			event: NotifsHandlerIn::SendNotification {
+				message: message.into(),
+				proto_name,
+				engine_id,
+			},
+		});
+	}
+
 	/// Sends a message to a peer.
 	///
 	/// Has no effect if the custom protocol is not open with the given peer.
@@ -357,7 +406,7 @@ impl<TSubstream> GenericProto<TSubstream> {
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: target.clone(),
-			event: NotifsHandlerIn::SendNotification {
+			event: NotifsHandlerIn::SendLegacy {
 				message,
 			}
 		});
