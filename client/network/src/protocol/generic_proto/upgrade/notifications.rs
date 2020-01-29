@@ -225,7 +225,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 		Box::pin(async move {
 			let handshake = upgrade::read_one(&mut socket, 1024).await?;
 			Ok((handshake, NotificationsOutSubstream {
-				socket,
+				socket: Framed::new(socket, UviBytes::default()),
 				messages_queue: VecDeque::new(),
 				need_flush: false,
 			}))
