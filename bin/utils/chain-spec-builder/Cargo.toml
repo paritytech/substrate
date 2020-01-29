@@ -7,7 +7,6 @@ build = "build.rs"
 license = "GPL-3.0"
 
 [dependencies]
-
 ansi_term = "0.12.1"
 sc-keystore = { version = "2.0.0", path = "../../../client/keystore" }
 node-cli = { version = "2.0.0", path = "../../node/cli" }
