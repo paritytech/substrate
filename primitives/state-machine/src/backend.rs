@@ -22,11 +22,11 @@ use codec::Encode;
 
 use sp_core::storage::{ChildInfo, OwnedChildInfo};
 use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
-
+use std::collections::{BTreeMap, btree_map::Entry};
 use crate::{
 	trie_backend::TrieBackend,
 	trie_backend_essence::TrieBackendStorage,
-	UsageInfo, StorageKey, StorageValue,
+	UsageInfo, StorageKey, StorageValue, StorageCollection,
 };
 
 /// A state backend is used to read state data and can have changes committed
@@ -325,9 +325,35 @@ impl Consolidate for () {
 	}
 }
 
-impl<V> Consolidate for Vec<V> {
+impl Consolidate for Vec<(
+		Option<(StorageKey, OwnedChildInfo)>,
+		StorageCollection,
+	)> {
 	fn consolidate(&mut self, mut other: Self) {
 		self.append(&mut other);
+	}
+}
+
+impl<K: Ord, V: Consolidate> Consolidate for BTreeMap<K, V> {
+	fn consolidate(&mut self, other: Self) {
+		for (k, v) in other.into_iter() {
+			match self.entry(k) {
+				Entry::Occupied(mut e) => e.get_mut().consolidate(v),
+				Entry::Vacant(e) => { e.insert(v); },
+			}
+		}
+	}
+}
+
+impl<V: Consolidate> Consolidate for Option<V> {
+	fn consolidate(&mut self, other: Self) {
+		if let Some(v) = self.as_mut() {
+			if let Some(other) = other {
+				v.consolidate(other);
+			}
+		} else {
+			*self = other;
+		}
 	}
 }
 

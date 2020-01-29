@@ -268,7 +268,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		H::Out: Ord + Codec,
 {
 	type Error = String;
-	type Transaction = S::Overlay;
+	type Transaction = Option<S::Overlay>;
 	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -345,11 +345,8 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		let (root, mut tx) = self.0.storage_root(delta);
-		// This is hacky, it supposes we return a single child
-		// transaction. Next move should be to change proving backend
-		// transaction to not merge the child trie datas and use
-		// separate proof for each trie.
-		(root, tx.remove(0).1)
+		// We may rather want to return a btreemap
+		(root, tx.remove(&None))
 	}
 
 	fn child_storage_root<I>(
@@ -363,7 +360,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		H::Out: Ord
 	{
 		let (root, is_empty, mut tx) = self.0.child_storage_root(storage_key, child_info, delta);
-		(root, is_empty, tx.remove(0).1)
+		(root, is_empty, tx.remove(&Some(child_info.to_owned())))
 	}
 }
 
@@ -449,10 +446,10 @@ mod tests {
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
 		let (trie_root, mut trie_mdb) = trie_backend.storage_root(::std::iter::empty());
-		let (proving_root, mut proving_mdb) = proving_backend.storage_root(::std::iter::empty());
+		let (proving_root, proving_mdb) = proving_backend.storage_root(::std::iter::empty());
 		assert_eq!(trie_root, proving_root);
-		let mut trie_mdb = trie_mdb.remove(0).1;
-		assert_eq!(trie_mdb.drain(), proving_mdb.drain());
+		let mut trie_mdb = trie_mdb.remove(&None).unwrap();
+		assert_eq!(trie_mdb.drain(), proving_mdb.unwrap().drain());
 	}
 
 	#[test]

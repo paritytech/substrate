@@ -21,6 +21,7 @@ use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use sp_core::storage::{ChildInfo, OwnedChildInfo};
+use std::collections::BTreeMap;
 use codec::{Codec, Decode};
 use crate::{
 	StorageKey, StorageValue, Backend,
@@ -72,7 +73,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	H::Out: Ord + Codec,
 {
 	type Error = String;
-	type Transaction = Vec<(Option<OwnedChildInfo>, S::Overlay)>;
+	type Transaction = BTreeMap<Option<OwnedChildInfo>, S::Overlay>;
 	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
@@ -170,7 +171,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		collect_all().map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e)).unwrap_or_default()
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Vec<(Option<OwnedChildInfo>, S::Overlay)>)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, BTreeMap<Option<OwnedChildInfo>, S::Overlay>)
 		where I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>
 	{
 		let mut write_overlay = S::Overlay::default();
@@ -187,8 +188,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}
 		}
-
-		(root, vec![(None, write_overlay)])
+		let mut tx = BTreeMap::new();
+		tx.insert(None, write_overlay);
+		(root, tx)
 	}
 
 	fn child_storage_root<I>(
@@ -234,7 +236,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 		let is_default = root == default_root;
 
-		(root, is_default, vec![(Some(child_info.to_owned()), write_overlay)])
+		let mut tx = BTreeMap::new();
+		tx.insert(Some(child_info.to_owned()), write_overlay);
+		(root, is_default, tx)
 	}
 
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {

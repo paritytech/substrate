@@ -41,7 +41,7 @@ mod stats;
 use std::sync::Arc;
 use std::path::PathBuf;
 use std::io;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 
 use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo};
 use sc_client_api::backend::NewBlockState;
@@ -514,7 +514,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT> {
 	old_state: CachingState<RefTrackingState<Block>, Block>,
-	db_updates: Vec<(Option<OwnedChildInfo>, PrefixedMemoryDB<HasherFor<Block>>)>,
+	db_updates: BTreeMap<Option<OwnedChildInfo>, PrefixedMemoryDB<HasherFor<Block>>>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	changes_trie_updates: MemoryDB<HasherFor<Block>>,
@@ -571,7 +571,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 
 	fn update_db_storage(
 		&mut self,
-		update: Vec<(Option<OwnedChildInfo>, PrefixedMemoryDB<HasherFor<Block>>)>,
+		update: BTreeMap<Option<OwnedChildInfo>, PrefixedMemoryDB<HasherFor<Block>>>,
 	) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
@@ -1908,9 +1908,7 @@ pub(crate) mod tests {
 				children: Default::default(),
 			}).unwrap();
 
-			let mut map: PrefixedMemoryDB<HasherFor<Block>> = Default::default();
-			key = map.insert(EMPTY_PREFIX, b"hello");
-			op.db_updates.push((None, map));
+			key = op.db_updates.entry(None).or_insert_with(Default::default).insert(EMPTY_PREFIX, b"hello");
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -1946,11 +1944,8 @@ pub(crate) mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			let mut map: PrefixedMemoryDB<HasherFor<Block>> = Default::default();
-			map.insert(EMPTY_PREFIX, b"hello");
-			op.db_updates.iter_mut().for_each(|(ct, map)| if ct.is_none() {
-				map.remove(&key, EMPTY_PREFIX);
-			});
+			op.db_updates.entry(None).or_insert_with(Default::default).insert(EMPTY_PREFIX, b"hello");
+			op.db_updates.entry(None).or_insert_with(Default::default).remove(&key, EMPTY_PREFIX);
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -1986,9 +1981,7 @@ pub(crate) mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.db_updates.iter_mut().for_each(|(ct, map)| if ct.is_none() {
-				map.remove(&key, EMPTY_PREFIX);
-			});
+			op.db_updates.entry(None).or_insert_with(Default::default).remove(&key, EMPTY_PREFIX);
 			op.set_block_data(
 				header,
 				Some(vec![]),
