@@ -543,35 +543,35 @@ pub struct RunCmd {
 	#[structopt(flatten)]
 	pub pool_config: TransactionPoolParams,
 
-	#[allow(missing_docs)]
+	/// Shortcut for `--name alice --validator` with session keys for `alice` added to keystore.
 	#[structopt(long, conflicts_with_all = &["bob", "charlie", "dave", "eve", "ferdie", "one", "two"])]
 	pub alice: bool,
 
-	#[allow(missing_docs)]
+	/// Shortcut for `--name bob --validator` with session keys for `bob` added to keystore.
 	#[structopt(long, conflicts_with_all = &["alice", "charlie", "dave", "eve", "ferdie", "one", "two"])]
 	pub bob: bool,
 
-	#[allow(missing_docs)]
+	/// Shortcut for `--name charlie --validator` with session keys for `charlie` added to keystore.
 	#[structopt(long, conflicts_with_all = &["alice", "bob", "dave", "eve", "ferdie", "one", "two"])]
 	pub charlie: bool,
 
-	#[allow(missing_docs)]
+	/// Shortcut for `--name dave --validator` with session keys for `dave` added to keystore.
 	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "eve", "ferdie", "one", "two"])]
 	pub dave: bool,
 
-	#[allow(missing_docs)]
+	/// Shortcut for `--name eve --validator` with session keys for `eve` added to keystore.
 	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "ferdie", "one", "two"])]
 	pub eve: bool,
 
-	#[allow(missing_docs)]
+	/// Shortcut for `--name ferdie --validator` with session keys for `ferdie` added to keystore.
 	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "one", "two"])]
 	pub ferdie: bool,
 
-	#[allow(missing_docs)]
+	/// Shortcut for `--name one --validator` with session keys for `one` added to keystore.
 	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "ferdie", "two"])]
 	pub one: bool,
 
-	#[allow(missing_docs)]
+	/// Shortcut for `--name two --validator` with session keys for `two` added to keystore.
 	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "ferdie", "one"])]
 	pub two: bool,
 
