@@ -18,15 +18,16 @@
 
 use std::sync::Arc;
 
-use sp_blockchain::HeaderBackend;
 use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use sp_core::{H256, Bytes};
-use sp_rpc::number;
+use pallet_contracts_common::RentProjection;
 use serde::{Deserialize, Serialize};
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_api::ProvideRuntimeApi;
+use sp_blockchain::HeaderBackend;
+use sp_core::{Bytes, H256};
+use sp_rpc::number;
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
 pub use self::gen_client::Client as ContractsClient;
 pub use pallet_contracts_rpc_runtime_api::{
@@ -61,7 +62,7 @@ impl From<GetStorageError> for Error {
 				code: ErrorCode::ServerError(CONTRACT_IS_A_TOMBSTONE),
 				message: "The contract is a tombstone and doesn't have any storage.".into(),
 				data: None,
-			}
+			},
 		}
 	}
 }
@@ -97,12 +98,11 @@ pub enum RpcContractExecResult {
 impl From<ContractExecResult> for RpcContractExecResult {
 	fn from(r: ContractExecResult) -> Self {
 		match r {
-			ContractExecResult::Success { status, data } => {
-				RpcContractExecResult::Success { status, data: data.into() }
+			ContractExecResult::Success { status, data } => RpcContractExecResult::Success {
+				status,
+				data: data.into(),
 			},
-			ContractExecResult::Error => {
-				RpcContractExecResult::Error(())
-			},
+			ContractExecResult::Error => RpcContractExecResult::Error(()),
 		}
 	}
 }
@@ -244,8 +244,8 @@ where
 			.map_err(GetStorageError)?;
 
 		Ok(match result {
-			pallet_contracts_common::RentProjection::NoEviction => None,
-			pallet_contracts_common::RentProjection::EvictionAt(block_num) => Some(block_num),
+			RentProjection::NoEviction => None,
+			RentProjection::EvictionAt(block_num) => Some(block_num),
 		})
 	}
 }
@@ -259,7 +259,6 @@ fn runtime_error_into_rpc_err(err: impl std::fmt::Debug) -> Error {
 	}
 }
 
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -267,7 +266,7 @@ mod tests {
 	#[test]
 	fn should_serialize_deserialize_properly() {
 		fn test(expected: &str) {
-			let res: RpcContractExecResult  = serde_json::from_str(expected).unwrap();
+			let res: RpcContractExecResult = serde_json::from_str(expected).unwrap();
 			let actual = serde_json::to_string(&res).unwrap();
 			assert_eq!(actual, expected);
 		}
