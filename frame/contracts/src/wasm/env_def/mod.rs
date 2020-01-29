@@ -17,7 +17,7 @@
 use super::Runtime;
 use crate::exec::Ext;
 
-use sp_sandbox::{self, TypedValue};
+use sp_sandbox::Value;
 use parity_wasm::elements::{FunctionType, ValueType};
 
 #[macro_use]
@@ -26,28 +26,28 @@ pub(crate) mod macros;
 pub trait ConvertibleToWasm: Sized {
 	const VALUE_TYPE: ValueType;
 	type NativeType;
-	fn to_typed_value(self) -> TypedValue;
-	fn from_typed_value(_: TypedValue) -> Option<Self>;
+	fn to_typed_value(self) -> Value;
+	fn from_typed_value(_: Value) -> Option<Self>;
 }
 impl ConvertibleToWasm for i32 {
 	type NativeType = i32;
 	const VALUE_TYPE: ValueType = ValueType::I32;
-	fn to_typed_value(self) -> TypedValue {
-		TypedValue::I32(self)
+	fn to_typed_value(self) -> Value {
+		Value::I32(self)
 	}
-	fn from_typed_value(v: TypedValue) -> Option<Self> {
+	fn from_typed_value(v: Value) -> Option<Self> {
 		v.as_i32()
 	}
 }
 impl ConvertibleToWasm for u32 {
 	type NativeType = u32;
 	const VALUE_TYPE: ValueType = ValueType::I32;
-	fn to_typed_value(self) -> TypedValue {
-		TypedValue::I32(self as i32)
+	fn to_typed_value(self) -> Value {
+		Value::I32(self as i32)
 	}
-	fn from_typed_value(v: TypedValue) -> Option<Self> {
+	fn from_typed_value(v: Value) -> Option<Self> {
 		match v {
-			TypedValue::I32(v) => Some(v as u32),
+			Value::I32(v) => Some(v as u32),
 			_ => None,
 		}
 	}
@@ -55,12 +55,12 @@ impl ConvertibleToWasm for u32 {
 impl ConvertibleToWasm for u64 {
 	type NativeType = u64;
 	const VALUE_TYPE: ValueType = ValueType::I64;
-	fn to_typed_value(self) -> TypedValue {
-		TypedValue::I64(self as i64)
+	fn to_typed_value(self) -> Value {
+		Value::I64(self as i64)
 	}
-	fn from_typed_value(v: TypedValue) -> Option<Self> {
+	fn from_typed_value(v: Value) -> Option<Self> {
 		match v {
-			TypedValue::I64(v) => Some(v as u64),
+			Value::I64(v) => Some(v as u64),
 			_ => None,
 		}
 	}
@@ -69,7 +69,7 @@ impl ConvertibleToWasm for u64 {
 pub(crate) type HostFunc<E> =
 	fn(
 		&mut Runtime<E>,
-		&[sp_sandbox::TypedValue]
+		&[sp_sandbox::Value]
 	) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError>;
 
 pub(crate) trait FunctionImplProvider<E: Ext> {
