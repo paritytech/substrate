@@ -543,7 +543,7 @@ pub struct RunCmd {
 	#[structopt(flatten)]
 	pub pool_config: TransactionPoolParams,
 
-	/// Shortcut for `--name alice --validator` with session keys for `alice` added to keystore.
+	/// Shortcut for `--name Alice --validator` with session keys for `Alice` added to keystore.
 	#[structopt(long, conflicts_with_all = &["bob", "charlie", "dave", "eve", "ferdie", "one", "two"])]
 	pub alice: bool,
 
