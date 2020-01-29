@@ -287,7 +287,7 @@ impl<T> Instance<T> {
 		}
 	}
 
-	pub fn get_global(&self, name: &str) -> Option<Value> {
+	pub fn get_global_val(&self, name: &str) -> Option<Value> {
 		let global = self.instance
 			.export_by_name(name)?
 			.as_global()?

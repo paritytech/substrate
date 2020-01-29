@@ -364,10 +364,10 @@ impl<FR> SandboxInstance<FR> {
 		)
 	}
 
-	/// Get a global with the given `name`.
+	/// Get the value from a global with the given `name`.
 	///
 	/// Returns `Some(_)` if the global could be found.
-	pub fn get_global(&self, name: &str) -> Option<sp_wasm_interface::Value> {
+	pub fn get_global_val(&self, name: &str) -> Option<sp_wasm_interface::Value> {
 		let global = self.instance
 			.export_by_name(name)?
 			.as_global()?

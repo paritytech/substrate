@@ -168,7 +168,7 @@ sp_core::wasm_export_functions! {
 	}
 
 
-	fn test_sandbox_get_global(code: Vec<u8>) -> i64 {
+	fn test_sandbox_get_global_val(code: Vec<u8>) -> i64 {
 		let env_builder = sp_sandbox::EnvironmentDefinitionBuilder::new();
 		let instance = if let Ok(i) = sp_sandbox::Instance::new(&code, &env_builder, &mut ()) {
 			i
@@ -176,7 +176,7 @@ sp_core::wasm_export_functions! {
 			return 20;
 		};
 
-		match instance.get_global("test_global") {
+		match instance.get_global_val("test_global") {
 			Some(sp_sandbox::Value::I64(val)) => val,
 			None => 30,
 			val => 40,

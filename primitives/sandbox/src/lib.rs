@@ -204,10 +204,10 @@ impl<T> Instance<T> {
 		self.inner.invoke(name, args, state)
 	}
 
-	/// Get a global with `name`.
+	/// Get the value from a global with the given `name`.
 	///
 	/// Returns `Some(_)` if the global could be found.
-	pub fn get_global(&self, name: &str) -> Option<Value> {
-		self.inner.get_global(name)
+	pub fn get_global_val(&self, name: &str) -> Option<Value> {
+		self.inner.get_global_val(name)
 	}
 }

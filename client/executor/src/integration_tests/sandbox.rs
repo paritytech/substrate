@@ -305,7 +305,7 @@ fn start_fn_traps(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
-fn get_global_works(wasm_method: WasmExecutionMethod) {
+fn get_global_val_works(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
@@ -317,7 +317,7 @@ fn get_global_works(wasm_method: WasmExecutionMethod) {
 
 	assert_eq!(
 		call_in_wasm(
-			"test_sandbox_get_global",
+			"test_sandbox_get_global_val",
 			&code,
 			wasm_method,
 			&mut ext,

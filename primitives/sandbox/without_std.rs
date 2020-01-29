@@ -270,8 +270,8 @@ impl<T> Instance<T> {
 		}
 	}
 
-	pub fn get_global(&self, name: &str) -> Option<Value> {
-		sandbox::get_global(self.instance_idx, name)
+	pub fn get_global_val(&self, name: &str) -> Option<Value> {
+		sandbox::get_global_val(self.instance_idx, name)
 	}
 }
 

@@ -270,14 +270,14 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		Ok(instance_idx_or_err_code as u32)
 	}
 
-	fn get_global(
+	fn get_global_val(
 		&self,
 		instance_idx: u32,
 		name: &str,
 	) -> WResult<Option<sp_wasm_interface::Value>> {
 		self.sandbox_store
 			.instance(instance_idx)
-			.map(|i| i.get_global(name))
+			.map(|i| i.get_global_val(name))
 			.map_err(|e| e.to_string())
 	}
 }

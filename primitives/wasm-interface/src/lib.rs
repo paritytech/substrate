@@ -332,10 +332,11 @@ pub trait Sandbox {
 		state: u32,
 	) -> Result<u32>;
 
-	/// Get the value of a global variable with `name` from the given `instance_idx` instance.
+	/// Get the value from a global with the given `name`. The sandbox is determined by the
+	/// given `instance_idx` instance.
 	///
 	/// Returns `Some(_)` when the requested global variable could be found.
-	fn get_global(&self, instance_idx: u32, name: &str) -> Result<Option<Value>>;
+	fn get_global_val(&self, instance_idx: u32, name: &str) -> Result<Option<Value>>;
 }
 
 /// Something that provides implementations for host functions.
