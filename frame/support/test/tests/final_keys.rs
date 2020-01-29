@@ -112,13 +112,11 @@ fn final_keys_no_instance() {
 		k.extend(1u32.using_encoded(blake2_256).to_vec());
 		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 		assert_eq!(unhashed::get::<u32>(&head), Some(1u32));
-		assert_eq!(&k[..32], &<no_instance::LinkedMap>::final_prefix());
 
 		no_instance::LinkedMap2::insert(1, 2);
 		let mut k = [twox_128(b"FinalKeysNone"), twox_128(b"LinkedMap2")].concat();
 		k.extend(1u32.using_encoded(twox_128).to_vec());
 		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
-		assert_eq!(&k[..32], &<no_instance::LinkedMap2>::final_prefix());
 
 		no_instance::DoubleMap::insert(&1, &2, &3);
 		let mut k = [twox_128(b"FinalKeysNone"), twox_128(b"DoubleMap")].concat();
@@ -163,13 +161,11 @@ fn final_keys_default_instance() {
 		k.extend(1u32.using_encoded(blake2_256).to_vec());
 		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 		assert_eq!(unhashed::get::<u32>(&head), Some(1u32));
-		assert_eq!(&k[..32], &<instance::LinkedMap<instance::DefaultInstance>>::final_prefix());
 
 		<instance::LinkedMap2<instance::DefaultInstance>>::insert(1, 2);
 		let mut k = [twox_128(b"FinalKeysSome"), twox_128(b"LinkedMap2")].concat();
 		k.extend(1u32.using_encoded(twox_128).to_vec());
 		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
-		assert_eq!(&k[..32], &<instance::LinkedMap2<instance::DefaultInstance>>::final_prefix());
 
 		<instance::DoubleMap<instance::DefaultInstance>>::insert(&1, &2, &3);
 		let mut k = [twox_128(b"FinalKeysSome"), twox_128(b"DoubleMap")].concat();
@@ -214,13 +210,11 @@ fn final_keys_instance_2() {
 		k.extend(1u32.using_encoded(blake2_256).to_vec());
 		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 		assert_eq!(unhashed::get::<u32>(&head), Some(1u32));
-		assert_eq!(&k[..32], &<instance::LinkedMap<instance::Instance2>>::final_prefix());
 
 		<instance::LinkedMap2<instance::Instance2>>::insert(1, 2);
 		let mut k = [twox_128(b"Instance2FinalKeysSome"), twox_128(b"LinkedMap2")].concat();
 		k.extend(1u32.using_encoded(twox_128).to_vec());
 		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
-		assert_eq!(&k[..32], &<instance::LinkedMap2<instance::Instance2>>::final_prefix());
 
 		<instance::DoubleMap<instance::Instance2>>::insert(&1, &2, &3);
 		let mut k = [twox_128(b"Instance2FinalKeysSome"), twox_128(b"DoubleMap")].concat();
