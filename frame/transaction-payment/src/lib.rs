@@ -477,7 +477,7 @@ mod tests {
 
 			let len = 100;
 
-			// like a InsecureFreeOperational
+			// This is a completely free (and thus wholly insecure/DoS-ridden) transaction.
 			let operational_transaction = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,

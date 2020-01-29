@@ -127,7 +127,6 @@ impl From<SimpleDispatchInfo> for DispatchClass {
 		match tx {
 			SimpleDispatchInfo::FixedOperational(_) => DispatchClass::Operational,
 			SimpleDispatchInfo::MaxOperational => DispatchClass::Operational,
-			SimpleDispatchInfo::InsecureFreeOperational => DispatchClass::Operational,
 
 			SimpleDispatchInfo::FixedNormal(_) => DispatchClass::Normal,
 			SimpleDispatchInfo::MaxNormal => DispatchClass::Normal,
@@ -178,26 +177,12 @@ pub enum SimpleDispatchInfo {
 	FixedNormal(Weight),
 	/// A normal dispatch with the maximum weight.
 	MaxNormal,
-	/// A normal dispatch with no weight.
-	///
-	/// WARNING: This causes a dispatchable call (i.e. transaction type) to be placed in the chain
-	/// an arbitrary number of times by any account (even a non-existence account) for no cost. IT
-	/// IS A DOS VECTOR. To use it correctly, there must be customised transaction validation logic
-	/// which limits inclusion of the transaction in some other way. If you do not do this, then
-	/// your chain WILL BE INSECURE.
-	InsecureFreeNormal,
+	/// A normal dispatch with no weight. Base and bytes fees still need to be paid.
+	FreeNormal,
 	/// An operational dispatch with fixed weight.
 	FixedOperational(Weight),
 	/// An operational dispatch with the maximum weight.
 	MaxOperational,
-	/// An operational dispatch with no weight.
-	///
-	/// WARNING: This causes a dispatchable call (i.e. transaction type) to be placed in the chain
-	/// an arbitrary number of times by any account (even a non-existence account) for no cost. IT
-	/// IS A DOS VECTOR. To use it correctly, there must be customised transaction validation logic
-	/// which limits inclusion of the transaction in some other way. If you do not do this, then
-	/// your chain WILL BE INSECURE.
-	InsecureFreeOperational,
 }
 
 impl<T> WeighData<T> for SimpleDispatchInfo {
@@ -209,7 +194,6 @@ impl<T> WeighData<T> for SimpleDispatchInfo {
 
 			SimpleDispatchInfo::FixedOperational(w) => *w,
 			SimpleDispatchInfo::MaxOperational => Bounded::max_value(),
-			SimpleDispatchInfo::InsecureFreeOperational => Bounded::min_value(),
 		}
 	}
 }
@@ -229,7 +213,6 @@ impl<T> PaysFee<T> for SimpleDispatchInfo {
 
 			SimpleDispatchInfo::FixedOperational(_) => true,
 			SimpleDispatchInfo::MaxOperational => true,
-			SimpleDispatchInfo::InsecureFreeOperational => false,
 		}
 	}
 }
