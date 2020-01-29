@@ -21,7 +21,7 @@ use crate::{
 use frame_support::storage::child;
 use frame_support::traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReason};
 use frame_support::StorageMap;
-use pallet_contracts_common::{GetStorageError, RentProjection, RentProjectionResult};
+use pallet_contracts_common::{ContractAccessError, RentProjection, RentProjectionResult};
 use sp_runtime::traits::{Bounded, CheckedDiv, CheckedMul, SaturatedConversion, Saturating, Zero};
 
 /// The amount to charge.
@@ -326,7 +326,7 @@ pub fn compute_rent_projection<T: Trait>(
 ) -> RentProjectionResult<T::BlockNumber> {
 	let contract_info = <ContractInfoOf<T>>::get(account);
 	let alive_contract_info = match contract_info {
-		None | Some(ContractInfo::Tombstone(_)) => return Err(GetStorageError::IsTombstone),
+		None | Some(ContractInfo::Tombstone(_)) => return Err(ContractAccessError::IsTombstone),
 		Some(ContractInfo::Alive(contract)) => contract,
 	};
 	let current_block_number = <frame_system::Module<T>>::block_number();
@@ -341,7 +341,7 @@ pub fn compute_rent_projection<T: Trait>(
 
 	// Check what happened after enaction of the verdict.
 	let alive_contract_info = match new_contract_info {
-		None | Some(ContractInfo::Tombstone(_)) => return Err(GetStorageError::IsTombstone),
+		None | Some(ContractInfo::Tombstone(_)) => return Err(ContractAccessError::IsTombstone),
 		Some(ContractInfo::Alive(contract)) => contract,
 	};
 

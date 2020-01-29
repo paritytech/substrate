@@ -128,6 +128,7 @@ use frame_support::{
 use frame_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get, Time, Randomness};
 use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
 use sp_core::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
+use pallet_contracts_common::{RentProjection, ContractAccessError};
 
 pub type CodeHash<T> = <T as frame_system::Trait>::Hash;
 pub type TrieId = Vec<u8>;
@@ -702,11 +703,11 @@ impl<T: Trait> Module<T> {
 	pub fn get_storage(
 		address: T::AccountId,
 		key: [u8; 32],
-	) -> sp_std::result::Result<Option<Vec<u8>>, pallet_contracts_common::GetStorageError> {
+	) -> sp_std::result::Result<Option<Vec<u8>>, ContractAccessError> {
 		let contract_info = <ContractInfoOf<T>>::get(&address)
-			.ok_or(pallet_contracts_common::GetStorageError::ContractDoesntExist)?
+			.ok_or(ContractAccessError::DoesntExist)?
 			.get_alive()
-			.ok_or(pallet_contracts_common::GetStorageError::IsTombstone)?;
+			.ok_or(ContractAccessError::IsTombstone)?;
 
 		let maybe_value = AccountDb::<T>::get_storage(
 			&DirectAccountDb,
@@ -719,10 +720,7 @@ impl<T: Trait> Module<T> {
 
 	pub fn rent_projection(
 		address: T::AccountId,
-	) -> sp_std::result::Result<
-		pallet_contracts_common::RentProjection<T::BlockNumber>,
-		pallet_contracts_common::GetStorageError,
-	> {
+	) -> sp_std::result::Result<RentProjection<T::BlockNumber>, ContractAccessError> {
 		rent::compute_rent_projection::<T>(&address)
 	}
 }

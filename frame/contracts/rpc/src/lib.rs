@@ -47,13 +47,13 @@ const CONTRACT_IS_A_TOMBSTONE: i64 = 3;
 /// https://docs.google.com/spreadsheets/d/1h0RqncdqiWI4KgxO0z9JIpZEJESXjX_ZCK6LFX6veDo/view
 const GAS_PER_SECOND: u64 = 1_000_000_000;
 
-/// A private newtype for converting `GetStorageError` into an RPC error.
-struct GetStorageError(pallet_contracts_common::GetStorageError);
-impl From<GetStorageError> for Error {
-	fn from(e: GetStorageError) -> Error {
-		use pallet_contracts_common::GetStorageError::*;
+/// A private newtype for converting `ContractAccessError` into an RPC error.
+struct ContractAccessError(pallet_contracts_common::ContractAccessError);
+impl From<ContractAccessError> for Error {
+	fn from(e: ContractAccessError) -> Error {
+		use pallet_contracts_common::ContractAccessError::*;
 		match e.0 {
-			ContractDoesntExist => Error {
+			DoesntExist => Error {
 				code: ErrorCode::ServerError(CONTRACT_DOESNT_EXIST),
 				message: "The specified contract doesn't exist.".into(),
 				data: None,
@@ -222,7 +222,7 @@ where
 		let result = api
 			.get_storage(&at, address, key.into())
 			.map_err(|e| runtime_error_into_rpc_err(e))?
-			.map_err(GetStorageError)?
+			.map_err(ContractAccessError)?
 			.map(Bytes);
 
 		Ok(result)
@@ -241,7 +241,7 @@ where
 		let result = api
 			.rent_projection(&at, address)
 			.map_err(|e| runtime_error_into_rpc_err(e))?
-			.map_err(GetStorageError)?;
+			.map_err(ContractAccessError)?;
 
 		Ok(match result {
 			RentProjection::NoEviction => None,
