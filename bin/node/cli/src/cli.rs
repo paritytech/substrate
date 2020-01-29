@@ -200,7 +200,9 @@ where
 
 	let _ = exit_send.send(());
 
-	runtime.block_on(handle);
+	if let Err(e) = runtime.block_on(handle) {
+		log::error!("Error running node: {:?}", e);
+	}
 
 	match service_res {
 		Either::Left((res, _)) => res.map_err(error::Error::Service),
