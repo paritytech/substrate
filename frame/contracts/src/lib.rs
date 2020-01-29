@@ -1103,6 +1103,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for CheckBlockGasLimit<T> {
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
+	const IDENTIFIER: &'static str = "CheckBlockGasLimit";
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = ();
