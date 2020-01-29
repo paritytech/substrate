@@ -1940,11 +1940,7 @@ Protocol<B, S, H> {
 		};
 
 		let outcome = match event {
-			GenericProtoOut::CustomProtocolOpen { peer_id, version, .. } => {
-				debug_assert!(
-					version <= CURRENT_VERSION as u8
-					&& version >= MIN_VERSION as u8
-				);
+			GenericProtoOut::CustomProtocolOpen { peer_id, .. } => {
 				self.on_peer_connected(peer_id.clone());
 				CustomMessageOutcome::None
 			}

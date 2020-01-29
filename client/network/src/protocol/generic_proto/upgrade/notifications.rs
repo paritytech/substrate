@@ -65,7 +65,7 @@ pub struct NotificationsOut {
 #[pin_project::pin_project]
 pub struct NotificationsInSubstream<TSubstream> {
 	#[pin]
-	socket: Framed<TSubstream, UviBytes<Vec<u8>>>,
+	socket: Framed<TSubstream, UviBytes<VecDeque<u8>>>,
 	handshake: NotificationsInSubstreamHandshake,
 }
 
@@ -86,9 +86,9 @@ enum NotificationsInSubstreamHandshake {
 pub struct NotificationsOutSubstream<TSubstream> {
 	/// Substream where to send messages.
 	#[pin]
-	socket: Framed<TSubstream, UviBytes<Vec<u8>>>,
+	socket: Framed<TSubstream, UviBytes<VecDeque<u8>>>,
 	/// Queue of messages waiting to be sent.
-	messages_queue: VecDeque<Vec<u8>>,
+	messages_queue: VecDeque<VecDeque<u8>>,
 	/// If true, we need to flush `socket`.
 	need_flush: bool,
 }

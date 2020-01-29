@@ -35,7 +35,7 @@ use libp2p::swarm::{
 };
 use log::error;
 use smallvec::SmallVec;
-use std::{borrow::Cow, fmt, io, marker::PhantomData, mem, pin::Pin, task::{Context, Poll}, time::{Duration, Instant}};
+use std::{borrow::Cow, fmt, marker::PhantomData, mem, pin::Pin, task::{Context, Poll}, time::{Duration, Instant}};
 
 /// Maximum duration to open a substream and receive the handshake message. After that, we
 /// consider that we failed to open the substream.

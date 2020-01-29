@@ -209,8 +209,6 @@ struct IncomingPeer {
 pub enum GenericProtoOut {
 	/// Opened a custom protocol with the remote.
 	CustomProtocolOpen {
-		/// Version of the protocol that has been opened.
-		version: u8,
 		/// Id of the node we have opened a connection with.
 		peer_id: PeerId,
 		/// Endpoint used for this custom protocol.
@@ -250,10 +248,11 @@ impl<TSubstream> GenericProto<TSubstream> {
 		versions: &[u8],
 		peerset: sc_peerset::Peerset,
 	) -> Self {
-		let protocol = RegisteredProtocol::new(protocol, versions);
+		let legacy_protocol = RegisteredProtocol::new(protocol, versions);
 
 		GenericProto {
-			protocol,
+			legacy_protocol,
+			notif_protocols: Vec::new(),
 			peerset,
 			peers: FnvHashMap::default(),
 			incoming: SmallVec::new(),
@@ -261,6 +260,23 @@ impl<TSubstream> GenericProto<TSubstream> {
 			events: SmallVec::new(),
 			marker: PhantomData,
 		}
+	}
+
+	/// Registers a new notifications protocol.
+	///
+	/// You are very strongly encouraged to call this method very early on. Any connection open
+	/// will retain the protocols that were registered then, and not any new one.
+	pub fn register_notif_protocol(
+		&mut self,
+		proto_name: impl Into<Cow<'static, [u8]>>,
+		handshake_msg: impl Into<Vec<u8>>
+	) {
+		self.notif_protocols.push((proto_name.into(), handshake_msg.into()));
+	}
+
+	/// Returns a list of all the notification protocols that have been registered.
+	pub fn notif_protocols_names(&self) -> impl ExactSizeIterator<Item = &[u8]> {
+		self.notif_protocols.iter().map(|(n, _)| &**n)
 	}
 
 	/// Returns the list of all the peers we have an open channel to.
@@ -670,7 +686,7 @@ where
 	type OutEvent = GenericProtoOut;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
-		NotifsHandlerProto::new(self.protocol.clone())
+		NotifsHandlerProto::new(self.legacy_protocol.clone(), self.notif_protocols.clone())
 	}
 
 	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {
@@ -943,7 +959,6 @@ where
 
 				debug!(target: "sub-libp2p", "External API <= Open({:?})", source);
 				let event = GenericProtoOut::CustomProtocolOpen {
-					version,
 					peer_id: source,
 					endpoint,
 				};
@@ -951,7 +966,7 @@ where
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 			}
 
-			NotifsHandlerOut::CustomMessage { message } => {
+			NotifsHandlerOut::CustomMessage { proto_name, message } => {
 				debug_assert!(self.is_open(&source));
 				trace!(target: "sub-libp2p", "Handler({:?}) => Message", source);
 				trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
