@@ -51,12 +51,12 @@ use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer};
 use sp_blockchain;
-use prometheus_exporter::{register, Gauge, Counter, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
+use prometheus_exporter::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
 
 struct ServiceMetrics {
 	block_height_number: GaugeVec<U64>,
 	peers_count: Gauge<U64>,
-	transactions_total: Counter<U64>,
+	ready_transactions_number: Gauge<U64>,
 	memory_usage_bytes: Gauge<U64>,
 	cpu_usage_percentage: Gauge<F64>,
 	network_per_sec_bytes: GaugeVec<U64>,
@@ -72,8 +72,8 @@ impl ServiceMetrics {
 			peers_count: register(Gauge::new(
 				"peers_count", "Number of network gossip peers",
 			)?, registry)?,
-			transactions_total: register(Counter::new(
-				"transactions_total", "Total number of transactions",
+			ready_transactions_number: register(Gauge::new(
+				"ready_transactions_number", "Number of transactions in the ready queue",
 			)?, registry)?,
 			memory_usage_bytes: register(Gauge::new(
 				"memory_usage_bytes", "Node memory usage",
@@ -1061,7 +1061,7 @@ ServiceBuilder<
 			if let Some(metrics) = metrics.as_ref() {
 				metrics.memory_usage_bytes.set(memory);
 				metrics.cpu_usage_percentage.set(f64::from(cpu_usage));
-				metrics.transactions_total.inc_by(txpool_status.ready as u64);
+				metrics.ready_transactions_number.set(txpool_status.ready as u64);
 				metrics.peers_count.set(num_peers as u64);
 
 				metrics.network_per_sec_bytes.with_label_values(&["download"]).set(net_status.average_download_per_sec);
