@@ -1163,7 +1163,7 @@ ServiceBuilder<
 			).map(drop);
 
 			let _ = to_spawn_tx.unbounded_send((Box::pin(future), From::from("grafana-server")));
-    	}
+		}
 
 		// Instrumentation
 		if let Some(tracing_targets) = config.tracing_targets.as_ref() {

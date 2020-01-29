@@ -21,42 +21,42 @@ use std::time::{Instant, Duration};
 /// Measured count of operations and total bytes.
 #[derive(Clone, Debug, Default)]
 pub struct UsageUnit {
-    /// Number of operations.
-    pub ops: u64,
-    /// Number of bytes.
-    pub bytes: u64,
+	/// Number of operations.
+	pub ops: u64,
+	/// Number of bytes.
+	pub bytes: u64,
 }
 
 /// Usage statistics for state backend.
 #[derive(Clone, Debug)]
 pub struct UsageInfo {
-    /// Read statistics (total).
-    pub reads: UsageUnit,
-    /// Write statistics.
-    pub writes: UsageUnit,
-    /// Cache read statistics.
-    pub cache_reads: UsageUnit,
-    /// Memory used.
-    pub memory: usize,
+	/// Read statistics (total).
+	pub reads: UsageUnit,
+	/// Write statistics.
+	pub writes: UsageUnit,
+	/// Cache read statistics.
+	pub cache_reads: UsageUnit,
+	/// Memory used.
+	pub memory: usize,
 
-    /// Moment at which current statistics has been started being collected.
-    pub started: Instant,
-    /// Timespan of the statistics.
-    pub span: Duration,
+	/// Moment at which current statistics has been started being collected.
+	pub started: Instant,
+	/// Timespan of the statistics.
+	pub span: Duration,
 }
 
 impl UsageInfo {
-    /// Empty statistics.
-    ///
-    /// Means no data was collected.
-    pub fn empty() -> Self {
-        Self {
-            reads: UsageUnit::default(),
-            writes: UsageUnit::default(),
-            cache_reads: UsageUnit::default(),
-            memory: 0,
-            started: Instant::now(),
-            span: Default::default(),
-        }
-    }
+	/// Empty statistics.
+	///
+	/// Means no data was collected.
+	pub fn empty() -> Self {
+		Self {
+			reads: UsageUnit::default(),
+			writes: UsageUnit::default(),
+			cache_reads: UsageUnit::default(),
+			memory: 0,
+			started: Instant::now(),
+			span: Default::default(),
+		}
+	}
 }

@@ -708,7 +708,7 @@ fn ignore_error<F, T>(future: F) -> impl std::future::Future<Output=Result<Optio
 mod tests {
 	use rpc::futures::stream::futures_ordered;
 	use substrate_test_runtime_client::runtime::Block;
-    use sp_core::H256;
+	use sp_core::H256;
 	use super::*;
 
 	#[test]
