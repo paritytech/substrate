@@ -998,9 +998,11 @@ where
 	fill_config_keystore_password_and_path(&mut config, &cli)?;
 
 	let is_dev = cli.shared_params.dev;
-	let is_authority = cli.validator || cli.sentry || is_dev || cli.keyring.account.is_some();
+	let is_light = cli.light;
+	let is_authority = (cli.validator || cli.sentry || is_dev || cli.keyring.account.is_some())
+		&& !is_light;
 	let role =
-		if cli.light {
+		if is_light {
 			sc_service::Roles::LIGHT
 		} else if is_authority {
 			sc_service::Roles::AUTHORITY
@@ -1056,7 +1058,7 @@ where
 
 	config.dev_key_seed = cli.keyring.account
 		.map(|a| format!("//{}", a)).or_else(|| {
-			if is_dev {
+			if is_dev && !is_light {
 				Some("//Alice".into())
 			} else {
 				None

@@ -3,6 +3,7 @@ name = "node-template-runtime"
 version = "2.0.0"
 authors = ["Anonymous"]
 edition = "2018"
+license = "Unlicense"
 
 [dependencies]
 aura = { version = "2.0.0", default-features = false, package = "pallet-aura", path = "../../../frame/aura" }
