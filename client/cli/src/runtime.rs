@@ -39,8 +39,8 @@ where
 	pin_mut!(t1, t2, t3);
 
 	select! {
-		_ = t1 => println!("Caught SIGINT"),
-		_ = t2 => println!("Caught SIGTERM"),
+		_ = t1 => {},
+		_ = t2 => {},
 		res = t3 => res?,
 	}
 
@@ -61,7 +61,7 @@ where
 	pin_mut!(t1, t2);
 
 	select! {
-		_ = t1 => println!("Caught CTRL-C"),
+		_ = t1 => {},
 		res = t2 => res?,
 	}
 
