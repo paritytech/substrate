@@ -307,7 +307,7 @@ decl_storage! {
 
 		/// Accounts for which there are locks in action which may be removed at some point in the
 		/// future. The value is the block number at which the lock expires and may be removed.
-		pub Locks get(locks): map T::AccountId => Option<T::BlockNumber>;
+		pub Locks get(locks): map hasher(blake2_256) T::AccountId => Option<T::BlockNumber>;
 
 		/// True if the last referendum tabled was submitted externally. False if it was a public
 		/// proposal.

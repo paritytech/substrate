@@ -110,7 +110,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Vesting {
 		/// Information regarding the vesting of a given account.
 		pub Vesting get(fn vesting):
-			map T::AccountId => Option<VestingInfo<BalanceOf<T>, T::BlockNumber>>;
+			map hasher(blake2_256) T::AccountId => Option<VestingInfo<BalanceOf<T>, T::BlockNumber>>;
 	}
 	add_extra_genesis {
 		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber, BalanceOf<T>)>;
