@@ -26,6 +26,11 @@ extern "C" {
 	fn yet_another_missing_external();
 }
 
+#[cfg(not(feature = "std"))]
+/// Mutable static variables should be always observed to have
+/// the initialized value at the start of a runtime call.
+static mut MUTABLE_STATIC: u64 = 32;
+
 sp_core::wasm_export_functions! {
 	fn test_calling_missing_external() {
 		unsafe { missing_external() }
@@ -216,6 +221,41 @@ sp_core::wasm_export_functions! {
 	// Just some test to make sure that `sp-allocator` compiles on `no_std`.
 	fn test_sp_allocator_compiles() {
 		sp_allocator::FreeingBumpHeapAllocator::new(0);
+	}
+
+	fn returns_mutable_static() -> u64 {
+		unsafe {
+			MUTABLE_STATIC += 1;
+			MUTABLE_STATIC
+		}
+	}
+
+	fn allocates_huge_stack_array(trap: bool) -> Vec<u8> {
+		// Allocate a stack frame that is approx. 75% of the stack (assuming it is 1MB).
+		// This will just decrease (stacks in wasm32-u-u grow downwards) the stack
+		// pointer. This won't trap on the current compilers.
+		let mut data = [0u8; 1024 * 768];
+
+		// Then make sure we actually write something to it.
+		//
+		// If:
+		// 1. the stack area is placed at the beginning of the linear memory space, and
+		// 2. the stack pointer points to out-of-bounds area, and
+		// 3. a write is performed around the current stack pointer.
+		//
+		// then a trap should happen.
+		//
+		for (i, v) in data.iter_mut().enumerate() {
+			*v = i as u8; // deliberate truncation
+		}
+
+		if trap {
+			// There is a small chance of this to be pulled up in theory. In practice
+			// the probability of that is rather low.
+			panic!()
+		}
+
+		data.to_vec()
 	}
  }
 

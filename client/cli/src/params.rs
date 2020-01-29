@@ -417,7 +417,10 @@ pub struct RunCmd {
 	pub no_grandpa: bool,
 
 	/// Experimental: Run in light client mode.
-	#[structopt(long = "light")]
+	#[structopt(
+		long = "light",
+		conflicts_with_all = &[ "validator" ]
+	)]
 	pub light: bool,
 
 	/// Listen to all RPC interfaces.
