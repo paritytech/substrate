@@ -36,15 +36,16 @@
 
 mod storage_proof;
 
-use crate::storage_proof::StorageProofChecker;
+use crate::storage_proof::{StorageProof, StorageProofChecker};
 use codec::{Encode, Decode};
-use fg_primitives::{AuthorityId, AuthorityWeight};
+use sp_finality_grandpa::{AuthorityId, AuthorityWeight, GRANDPA_AUTHORITIES_KEY};
 use sp_runtime::traits::Header;
-use state_machine::StorageProof;
-use support::{
+use frame_support::{
+	dispatch::{DispatchResult, DispatchError},
 	decl_error, decl_module, decl_storage,
 };
-use system::{ensure_signed};
+use frame_system::{self as system, ensure_signed};
+use storage_proof::Error as StorageError;
 
 #[derive(Encode, Decode, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -90,6 +91,8 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		fn initialize_bridge(
 			origin,
 			block_header: T::Header,
@@ -121,7 +124,7 @@ decl_module! {
 
 decl_error! {
 	// Error for the Bridge module
-	pub enum Error {
+	pub enum Error for Module<T: Trait> {
 		InvalidStorageProof,
 		StorageRootMismatch,
 		StorageValueUnavailable,
@@ -136,67 +139,76 @@ impl<T: Trait> Module<T> {
 		state_root: &T::Hash,
 		proof: StorageProof,
 		validator_set: &Vec<(AuthorityId, AuthorityWeight)>,
-	) -> Result<(), Error> {
+	) -> DispatchResult {
 
 		let checker = <StorageProofChecker<<T::Hashing as sp_runtime::traits::Hash>::Hasher>>::new(
 			*state_root,
 			proof.clone()
-		)?;
+		);
+
+		let checker = checker.map_err(Self::map_storage_err)?;
 
 		// By encoding the given set we should have an easy way to compare
 		// with the stuff we get out of storage via `read_value`
 		let encoded_validator_set = validator_set.encode();
-		let actual_validator_set = checker
-			.read_value(b":grandpa_authorities")?
-			.ok_or(Error::StorageValueUnavailable)?;
+
+		let c = checker.read_value(GRANDPA_AUTHORITIES_KEY).map_err(Self::map_storage_err)?;
+		let actual_validator_set = c.ok_or(Error::<T>::StorageValueUnavailable)?;
 
 		if encoded_validator_set == actual_validator_set {
 			Ok(())
 		} else {
-			Err(Error::ValidatorSetMismatch)
-		}
-	}
-}
-
-// A naive way to check whether a `child` header is a decendent
-// of an `ancestor` header. For this it requires a proof which
-// is a chain of headers between (but not including) the `child`
-// and `ancestor`. This could be updated to use something like
-// Log2 Ancestors (#2053) in the future.
-fn verify_ancestry<H>(proof: Vec<H>, ancestor_hash: H::Hash, child: H) -> Result<(), Error>
-where
-	H: Header
-{
-	let mut parent_hash = child.parent_hash();
-
-	// If we find that the header's parent hash matches our ancestor's hash we're done
-	for header in proof.iter() {
-		// Need to check that blocks are actually related
-		if header.hash() != *parent_hash {
-			break;
-		}
-
-		parent_hash = header.parent_hash();
-		if *parent_hash == ancestor_hash {
-			return Ok(())
+			Err(Error::<T>::ValidatorSetMismatch.into())
 		}
 	}
 
-	Err(Error::InvalidAncestryProof)
+	// A naive way to check whether a `child` header is a decendent
+	// of an `ancestor` header. For this it requires a proof which
+	// is a chain of headers between (but not including) the `child`
+	// and `ancestor`. This could be updated to use something like
+	// Log2 Ancestors (#2053) in the future.
+	fn verify_ancestry<H>(proof: Vec<H>, ancestor_hash: H::Hash, child: H) -> DispatchResult
+	where
+		H: Header,
+	{
+		let mut parent_hash = child.parent_hash();
+
+		// If we find that the header's parent hash matches our ancestor's hash we're done
+		for header in proof.iter() {
+			// Need to check that blocks are actually related
+			if header.hash() != *parent_hash {
+				break;
+			}
+
+			parent_hash = header.parent_hash();
+			if *parent_hash == ancestor_hash {
+				return Ok(())
+			}
+		}
+
+		Err(Error::<T>::InvalidAncestryProof.into())
+	}
+
+	fn map_storage_err(e: StorageError) -> DispatchError {
+		match e {
+			StorageError::StorageRootMismatch => Error::<T>::StorageRootMismatch,
+			StorageError::StorageValueUnavailable => Error::<T>::StorageValueUnavailable,
+		}.into()
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 
-	use primitives::{Blake2Hasher, H256, Public};
+	use sp_core::{Blake2Hasher, H256, Public};
 	use sp_runtime::{
 		Perbill, traits::{Header as HeaderT, IdentityLookup}, testing::Header, generic::Digest,
 	};
-	use support::{assert_ok, assert_err, impl_outer_origin, parameter_types};
+	use frame_support::{assert_ok, assert_err, impl_outer_origin, parameter_types};
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test  where system = frame_system {}
 	}
 
 	#[derive(Clone, PartialEq, Eq, Debug)]
@@ -232,6 +244,7 @@ mod tests {
 		type AvailableBlockRatio = ();
 		type MaximumBlockLength = ();
 		type Version = ();
+		type ModuleToIndex = ();
 	}
 
 	impl Trait for Test {}
@@ -260,18 +273,21 @@ mod tests {
 	}
 
 	fn create_dummy_validator_proof(validator_set: Vec<(AuthorityId, AuthorityWeight)>) -> (H256, StorageProof) {
-		use state_machine::{prove_read, backend::{Backend, InMemory}};
+		use sp_state_machine::{prove_read, backend::Backend, InMemoryBackend};
 
 		let encoded_set = validator_set.encode();
 
 		// construct storage proof
-		let backend = <InMemory<Blake2Hasher>>::from(vec![
-			(None, b":grandpa_authorities".to_vec(), Some(encoded_set)),
+		let backend = <InMemoryBackend<Blake2Hasher>>::from(vec![
+			(None, vec![(GRANDPA_AUTHORITIES_KEY.to_vec(), Some(encoded_set))]),
 		]);
 		let root = backend.storage_root(std::iter::empty()).0;
 
 		// Generates a storage read proof
-		let proof = prove_read(backend, &[&b":grandpa_authorities"[..]]).unwrap();
+		let proof: StorageProof = prove_read(backend, &[&GRANDPA_AUTHORITIES_KEY[..]])
+			.unwrap()
+			.iter_nodes()
+			.collect();
 
 		(root, proof)
 	}
@@ -295,7 +311,7 @@ mod tests {
 
 		assert_err!(
 			MockBridge::check_validator_set_proof(&root, proof, &invalid_authorities),
-			Error::ValidatorSetMismatch
+			Error::<Test>::ValidatorSetMismatch
 		);
 	}
 
@@ -374,7 +390,7 @@ mod tests {
 		let mut proof = build_header_chain(ancestor.clone(), 10);
 		let child = proof.remove(0);
 
-		assert_ok!(verify_ancestry(proof, ancestor.hash(), child));
+		assert_ok!(MockBridge::verify_ancestry(proof, ancestor.hash(), child));
 	}
 
 	#[test]
@@ -400,8 +416,8 @@ mod tests {
 		};
 
 		assert_err!(
-			verify_ancestry(proof, fake_ancestor.hash(), child),
-			Error::InvalidAncestryProof
+			MockBridge::verify_ancestry(proof, fake_ancestor.hash(), child),
+			Error::<Test>::InvalidAncestryProof
 		);
 	}
 
@@ -430,8 +446,8 @@ mod tests {
 		invalid_proof.insert(5, fake_ancestor);
 
 		assert_err!(
-			verify_ancestry(invalid_proof, ancestor.hash(), child),
-			Error::InvalidAncestryProof
+			MockBridge::verify_ancestry(invalid_proof, ancestor.hash(), child),
+			Error::<Test>::InvalidAncestryProof
 		);
 	}
 }

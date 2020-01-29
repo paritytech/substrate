@@ -17,10 +17,10 @@
 //! Logic for checking Substrate storage proofs.
 
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX};
-use state_machine::StorageProof;
 use sp_trie::{MemoryDB, Trie, trie_types::TrieDB};
+use sp_runtime::RuntimeDebug;
 
-use crate::Error;
+pub(crate) type StorageProof = Vec<Vec<u8>>;
 
 /// This struct is used to read storage values from a subset of a Merklized database. The "proof"
 /// is a subset of the nodes in the Merkle structure of the database, so that it provides
@@ -40,7 +40,7 @@ impl<H> StorageProofChecker<H>
 	/// This returns an error if the given proof is invalid with respect to the given root.
 	pub fn new(root: H::Out, proof: StorageProof) -> Result<Self, Error> {
 		let mut db = MemoryDB::default();
-		for item in proof.iter_nodes() {
+		for item in proof {
 			db.insert(EMPTY_PREFIX, &item);
 		}
 		let checker = StorageProofChecker {
@@ -57,7 +57,7 @@ impl<H> StorageProofChecker<H>
 	pub fn read_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Error> {
 		self.trie()?
 			.get(key)
-			.map(|value| value.map(|value| value.into_vec()))
+			.map(|value| value.map(|value| value.to_vec()))
 			.map_err(|_| Error::StorageValueUnavailable)
 	}
 
@@ -67,26 +67,34 @@ impl<H> StorageProofChecker<H>
 	}
 }
 
+#[derive(RuntimeDebug, PartialEq)]
+pub enum Error {
+	StorageRootMismatch,
+	StorageValueUnavailable,
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 
-	use primitives::{Blake2Hasher, H256};
-	use state_machine::{prove_read, backend::{Backend, InMemory}};
-	// use trie::{PrefixedMemoryDB, TrieDBMut};
+	use sp_core::{Blake2Hasher, H256};
+	use sp_state_machine::{prove_read, backend::Backend, InMemoryBackend};
 
 	#[test]
 	fn storage_proof_check() {
 		// construct storage proof
-		let backend = <InMemory<Blake2Hasher>>::from(vec![
-			(None, b"key1".to_vec(), Some(b"value1".to_vec())),
-			(None, b"key2".to_vec(), Some(b"value2".to_vec())),
-			(None, b"key3".to_vec(), Some(b"value3".to_vec())),
+		let backend = <InMemoryBackend<Blake2Hasher>>::from(vec![
+			(None, vec![(b"key1".to_vec(), Some(b"value1".to_vec()))]),
+			(None, vec![(b"key2".to_vec(), Some(b"value2".to_vec()))]),
+			(None, vec![(b"key3".to_vec(), Some(b"value3".to_vec()))]),
 			// Value is too big to fit in a branch node
-			(None, b"key11".to_vec(), Some(vec![0u8; 32])),
+			(None, vec![(b"key11".to_vec(), Some(vec![0u8; 32]))]),
 		]);
 		let root = backend.storage_root(std::iter::empty()).0;
-		let proof = prove_read(backend, &[&b"key1"[..], &b"key2"[..], &b"key22"[..]]).unwrap();
+		let proof: StorageProof = prove_read(backend, &[&b"key1"[..], &b"key2"[..], &b"key22"[..]])
+			.unwrap()
+			.iter_nodes()
+			.collect();
 
 		// check proof in runtime
 		let checker = <StorageProofChecker<Blake2Hasher>>::new(root, proof.clone()).unwrap();
