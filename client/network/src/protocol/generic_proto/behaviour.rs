@@ -357,7 +357,7 @@ impl<TSubstream> GenericProto<TSubstream> {
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: target.clone(),
-			event: NotifsHandlerIn::SendCustomMessage {
+			event: NotifsHandlerIn::SendNotification {
 				message,
 			}
 		});

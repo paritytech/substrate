@@ -14,10 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Implementations of the `IntoProtocolsHandler` and `ProtocolsHandler` traits for ingoing
+//! substreams a single gossiping protocol.
+//!
+//! > **Note**: Each instance corresponds to a single protocol. In order to support multiple
+//! >			protocols, you need to create multiple instances.
+//!
+
 use crate::protocol::generic_proto::upgrade::{NotificationsIn, NotificationsInSubstream};
 use bytes::BytesMut;
 use futures::prelude::*;
-use libp2p::core::{ConnectedPoint, PeerId};
+use libp2p::core::{ConnectedPoint, Negotiated, PeerId};
 use libp2p::core::upgrade::{DeniedUpgrade, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
@@ -28,7 +35,7 @@ use libp2p::swarm::{
 };
 use log::{error, warn};
 use smallvec::SmallVec;
-use std::{borrow::Cow, fmt, marker::PhantomData, task::{Context, Poll}};
+use std::{borrow::Cow, fmt, marker::PhantomData, pin::Pin, task::{Context, Poll}};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
@@ -81,7 +88,7 @@ pub struct NotifsInHandler<TSubstream> {
 	in_protocol: NotificationsIn,
 
 	/// Substream that is open with the remote.
-	substream: Option<NotificationsInSubstream<TSubstream>>,
+	substream: Option<NotificationsInSubstream<Negotiated<TSubstream>>>,
 
 	/// If the substream is opened and closed rapidly, we can emit several `OpenRequest` messages
 	/// without the handler having time to respond with `Accept` or `Refuse`. Every time an
@@ -150,7 +157,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + 'static {
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		proto: <Self::InboundProtocol as InboundUpgrade<TSubstream>>::Output
+		proto: <Self::InboundProtocol as InboundUpgrade<Negotiated<TSubstream>>>::Output
 	) {
 		if self.substream.is_some() {
 			warn!(target: "sub-libp2p", "Received duplicate inbound substream");
@@ -164,7 +171,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + 'static {
 
 	fn inject_fully_negotiated_outbound(
 		&mut self,
-		out: <Self::OutboundProtocol as OutboundUpgrade<TSubstream>>::Output,
+		out: <Self::OutboundProtocol as OutboundUpgrade<Negotiated<TSubstream>>>::Output,
 		_: Self::OutboundOpenInfo
 	) {
 		// We never emit any outgoing substream.

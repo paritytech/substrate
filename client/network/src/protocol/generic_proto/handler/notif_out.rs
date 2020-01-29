@@ -14,11 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Implementations of the `IntoProtocolsHandler` and `ProtocolsHandler` traits for outgoing
+//! substreams of a single gossiping protocol.
+//!
+//! > **Note**: Each instance corresponds to a single protocol. In order to support multiple
+//! >			protocols, you need to create multiple instances.
+//!
+
 use crate::protocol::generic_proto::upgrade::{NotificationsOut, NotificationsOutSubstream};
 use bytes::BytesMut;
 use futures::prelude::*;
-use libp2p::core::{ConnectedPoint, PeerId};
-use libp2p::core::upgrade::{DeniedUpgrade, InboundUpgrade, OutboundUpgrade};
+use libp2p::core::{ConnectedPoint, Negotiated, PeerId};
+use libp2p::core::upgrade::{DeniedUpgrade, InboundUpgrade, ReadOneError, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
 	IntoProtocolsHandler,
@@ -28,7 +35,7 @@ use libp2p::swarm::{
 };
 use log::error;
 use smallvec::SmallVec;
-use std::{borrow::Cow, fmt, io, marker::PhantomData, mem, task::{Context, Poll}, time::{Duration, Instant}};
+use std::{borrow::Cow, fmt, io, marker::PhantomData, mem, pin::Pin, task::{Context, Poll}, time::{Duration, Instant}};
 
 /// Maximum duration to open a substream and receive the handshake message. After that, we
 /// consider that we failed to open the substream.
@@ -115,7 +122,7 @@ enum State<TSubstream> {
 	Disabled,
 
 	/// The handler is disabled. A substream is open and needs to be closed.
-	DisabledOpen(NotificationsOutSubstream<TSubstream>),
+	DisabledOpen(NotificationsOutSubstream<Negotiated<TSubstream>>),
 
 	/// The handler is disabled but we are still trying to open a substream with the remote.
 	///
@@ -130,7 +137,7 @@ enum State<TSubstream> {
 	Refused,
 
 	/// The handler is enabled and substream is open.
-	Open(NotificationsOutSubstream<TSubstream>),
+	Open(NotificationsOutSubstream<Negotiated<TSubstream>>),
 
 	/// Poisoned state. Shouldn't be found in the wild.
 	Poisoned,
@@ -206,7 +213,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		proto: <Self::InboundProtocol as InboundUpgrade<TSubstream>>::Output
+		proto: <Self::InboundProtocol as InboundUpgrade<Negotiated<TSubstream>>>::Output
 	) {
 		// We should never reach here. `proto` is a `Void`.
 		void::unreachable(proto)
@@ -214,7 +221,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 
 	fn inject_fully_negotiated_outbound(
 		&mut self,
-		(handshake_msg, sub): <Self::OutboundProtocol as OutboundUpgrade<TSubstream>>::Output,
+		(handshake_msg, sub): <Self::OutboundProtocol as OutboundUpgrade<Negotiated<TSubstream>>>::Output,
 		_: ()
 	) {
 		match mem::replace(&mut self.state, State::Poisoned) {
@@ -269,7 +276,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 		}
 	}
 
-	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<io::Error>) {
+	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<ReadOneError>) {
 		match mem::replace(&mut self.state, State::Poisoned) {
 			State::Disabled => {},
 			State::DisabledOpen(_) | State::Refused | State::Open(_) =>
@@ -294,7 +301,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	}
 
 	fn poll(
-		self: Pin<&mut Self>,
+		&mut self,
 		cx: &mut Context,
 	) -> Poll<ProtocolsHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::OutEvent, Self::Error>> {
 		// Flush the events queue if necessary.
@@ -304,7 +311,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 		}
 
 		match &mut self.state {
-			State::Open(sub) => match NotificationsOutSubstream::process(sub, cx) {
+			State::Open(sub) => match NotificationsOutSubstream::process(Pin::new(sub), cx) {
 				Ok(()) => {},
 				Err(err) => {
 					// We try to re-open a substream.

@@ -24,9 +24,9 @@ use crate::protocol::message::generic::ConsensusMessage;
 use bytes::BytesMut;
 use codec::Encode as _;
 use futures::prelude::*;
-use libp2p::core::{ConnectedPoint, PeerId};
+use libp2p::core::{ConnectedPoint, Negotiated, PeerId};
 use libp2p::core::either::{EitherError, EitherOutput};
-use libp2p::core::upgrade::{EitherUpgrade, UpgradeError, InboundUpgrade, OutboundUpgrade};
+use libp2p::core::upgrade::{EitherUpgrade, ReadOneError, UpgradeError, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
 	IntoProtocolsHandler,
@@ -203,10 +203,10 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	type Substream = TSubstream;
 	type Error = EitherError<
 		EitherError<
-			<NotifsInHandler<TSubstream> as ProtocolsHandler>::Error,
-			<NotifsOutHandler<TSubstream> as ProtocolsHandler>::Error,
+			<NotifsInHandler<Negotiated<TSubstream>> as ProtocolsHandler>::Error,
+			<NotifsOutHandler<Negotiated<TSubstream>> as ProtocolsHandler>::Error,
 		>,
-		<LegacyProtoHandler<TSubstream> as ProtocolsHandler>::Error,
+		<LegacyProtoHandler<Negotiated<TSubstream>> as ProtocolsHandler>::Error,
 	>;
 	type InboundProtocol = SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol>;
 	type OutboundProtocol = EitherUpgrade<NotificationsOut, RegisteredProtocol>;
@@ -223,7 +223,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		out: <Self::InboundProtocol as InboundUpgrade<TSubstream>>::Output
+		out: <Self::InboundProtocol as InboundUpgrade<Negotiated<TSubstream>>>::Output
 	) {
 		match out {
 			EitherOutput::First((out, num)) =>
@@ -235,7 +235,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 
 	fn inject_fully_negotiated_outbound(
 		&mut self,
-		out: <Self::OutboundProtocol as OutboundUpgrade<TSubstream>>::Output,
+		out: <Self::OutboundProtocol as OutboundUpgrade<Negotiated<TSubstream>>>::Output,
 		num: Self::OutboundOpenInfo
 	) {
 		match (out, num) {
@@ -292,7 +292,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 	fn inject_dial_upgrade_error(
 		&mut self,
 		num: Option<usize>,
-		err: ProtocolsHandlerUpgrErr<EitherError<io::Error, io::Error>>
+		err: ProtocolsHandlerUpgrErr<EitherError<ReadOneError, io::Error>>
 	) {
 		log::error!("Dial upgrade error: {:?}", err);
 		match (err, num) {
@@ -368,7 +368,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 		ProtocolsHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::OutEvent, Self::Error>
 	> {
 		for (handler_num, handler) in self.in_handlers.iter_mut().enumerate() {
-			if let Poll::Ready(ev) = handler.poll(cx).map_err(|e| EitherError::A(EitherError::A(e)))? {
+			if let Poll::Ready(ev) = handler.poll(cx) {
 				match ev {
 					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
 						error!("Incoming substream handler tried to open a substream"),
@@ -393,7 +393,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 		}
 
 		for (handler_num, handler) in self.out_handlers.iter_mut().enumerate() {
-			if let Poll::Ready(ev) = handler.poll(cx).map_err(|e| EitherError::A(EitherError::B(e)))? {
+			if let Poll::Ready(ev) = handler.poll(cx) {
 				match ev {
 					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
 						return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
@@ -407,7 +407,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 			}
 		}
 
-		if let Poll::Ready(ev) = self.legacy.poll(cx).map_err(EitherError::B)? {
+		if let Poll::Ready(ev) = self.legacy.poll(cx) {
 			match ev {
 				ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
 					return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {

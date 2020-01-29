@@ -213,30 +213,23 @@ impl UpgradeInfo for NotificationsOut {
 impl<TSubstream> OutboundUpgrade<TSubstream> for NotificationsOut
 where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-	type Output = (BytesMut, NotificationsOutSubstream<TSubstream>);
+	type Output = (Vec<u8>, NotificationsOutSubstream<TSubstream>);
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
-	type Error = io::Error;
+	type Error = upgrade::ReadOneError;
 
 	fn upgrade_outbound(
 		self,
 		socket: TSubstream,
 		proto_name: Self::Info,
 	) -> Self::Future {
-		Box::new(Framed::new(socket, UviBytes::default())
-			.into_future()
-			.map_err(|(err, _)| err)
-			.and_then(|(handshake, socket)| {
-				if let Some(handshake) = handshake {
-					let sub = NotificationsOutSubstream {
-						socket,
-						messages_queue: VecDeque::new(),
-						need_flush: false,
-					};
-					Ok((handshake, sub))
-				} else {
-					Err(io::Error::from(io::ErrorKind::UnexpectedEof))
-				}
+		Box::pin(async move {
+			let handshake = upgrade::read_one(&mut socket, 1024).await?;
+			Ok((handshake, NotificationsOutSubstream {
+				socket,
+				messages_queue: VecDeque::new(),
+				need_flush: false,
 			}))
+		})
 	}
 }
 
