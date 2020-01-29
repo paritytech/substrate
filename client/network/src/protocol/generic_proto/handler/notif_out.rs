@@ -22,7 +22,6 @@
 //!
 
 use crate::protocol::generic_proto::upgrade::{NotificationsOut, NotificationsOutSubstream};
-use bytes::BytesMut;
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, Negotiated, PeerId};
 use libp2p::core::upgrade::{DeniedUpgrade, InboundUpgrade, ReadOneError, OutboundUpgrade};
@@ -165,7 +164,7 @@ pub enum NotifsOutHandlerOut {
 	/// The notifications substream has been accepted by the remote.
 	Open {
 		/// Handshake message sent by the remote after we opened the substream.
-		handshake: BytesMut,
+		handshake: Vec<u8>,
 	},
 
 	/// The notifications substream has been closed by the remote.
@@ -325,7 +324,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static {
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(ev));
 				}
 			},
-			State::DisabledOpen(sub) => match sub.process(cx) {
+			State::DisabledOpen(sub) => match NotificationsOutSubstream::process(Pin::new(sub), cx) {
 				Ok(()) => {},
 				Err(_) => {
 					self.state = State::Disabled;

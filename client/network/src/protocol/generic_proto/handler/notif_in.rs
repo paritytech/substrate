@@ -225,11 +225,11 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + 'static {
 			return Poll::Ready(event)
 		}
 
-		match self.substream.as_mut().map(|s| s.poll(cx)) {
+		match self.substream.as_mut().map(|s| Stream::poll_next(Pin::new(s), cx)) {
 			None | Some(Poll::Pending) => {},
-			Some(Poll::Ready(Some(msg))) =>
+			Some(Poll::Ready(Some(Ok(msg)))) =>
 				return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(msg))),
-			Some(Poll::Ready(None)) => {
+			Some(Poll::Ready(None)) | Some(Poll::Ready(Some(Err(_)))) => {
 				self.substream = None;
 				return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed));
 			},
