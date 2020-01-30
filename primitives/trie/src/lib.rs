@@ -218,34 +218,6 @@ pub fn default_child_trie_root<L: TrieConfiguration>(
 }
 
 /// Call `f` for all keys in a child trie.
-pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
-	_storage_key: &[u8],
-	keyspace: &[u8],
-	db: &DB,
-	root_slice: &[u8],
-	mut f: F
-) -> Result<(), Box<TrieError<L>>>
-	where
-		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
-			+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
-{
-	let mut root = TrieHash::<L>::default();
-	// root is fetched from DB, not writable by runtime, so it's always valid.
-	root.as_mut().copy_from_slice(root_slice);
-
-	let db = KeySpacedDB::new(&*db, keyspace);
-	let trie = TrieDB::<L>::new(&db, &root)?;
-	let iter = trie.iter()?;
-
-	for x in iter {
-		let (key, _) = x?;
-		f(&key);
-	}
-
-	Ok(())
-}
-
-/// Call `f` for all keys in a child trie.
 pub fn for_keys_in_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
 	db: &DB,
 	root: &TrieHash<L>,

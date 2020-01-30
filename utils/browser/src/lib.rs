@@ -34,25 +34,24 @@ pub use console_log::init_with_level as init_console_log;
 /// Create a service configuration from a chain spec and the websocket transport.
 ///
 /// This configuration contains good defaults for a browser light client.
-pub async fn browser_configuration<C, G, E>(
+pub async fn browser_configuration<G, E>(
 	transport: Transport,
 	chain_spec: ChainSpec<G, E>,
-) -> Result<Configuration<C, G, E>, Box<dyn std::error::Error>>
+) -> Result<Configuration<G, E>, Box<dyn std::error::Error>>
 where
-	C: Default,
 	G: RuntimeGenesis,
 	E: Extension,
 {
 	let name = chain_spec.name().to_string();
 
 	let transport = ExtTransport::new(transport);
-	let mut config = Configuration::default_with_spec_and_base_path(chain_spec, None);
+	let mut config = Configuration::default();
 	config.network.transport = network::config::TransportConfig::Normal {
 		wasm_external_transport: Some(transport.clone()),
 		allow_private_ipv4: true,
 		enable_mdns: false,
 	};
-	config.tasks_executor = Some(Box::new(move |fut| {
+	config.task_executor = Some(Box::new(move |fut| {
 		wasm_bindgen_futures::spawn_local(fut)
 	}));
 	config.telemetry_external_transport = Some(transport);

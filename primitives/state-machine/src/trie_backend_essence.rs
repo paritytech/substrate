@@ -346,7 +346,7 @@ impl<'a, S, H, O> hash_db::HashDBRef<H, DBValue> for Ephemeral<'a, S, H, O> wher
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
 		if let Some(val) = hash_db::HashDB::get(self.overlay, key, prefix) {
 			Some(val)
-		} else {	
+		} else {
 			match self.storage.get(&key, prefix) {
 				Ok(x) => x,
 				Err(e) => {
