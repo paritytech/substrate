@@ -12,4 +12,4 @@ sc-keystore = { version = "2.0.0", path = "../../../client/keystore" }
 node-cli = { version = "2.0.0", path = "../../node/cli" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 rand = "0.7.2"
-structopt = "=0.3.7"
+structopt = "0.3.8"

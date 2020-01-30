@@ -4,8 +4,8 @@
 
 set -e
 
-cargo build --release
-./target/release/substrate --dev &
+cargo build
+./target/debug/substrate --dev &
 PID=$!
 
 # Let the chain running for 60 seconds
