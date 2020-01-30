@@ -44,12 +44,13 @@ use sp_runtime::traits::{
 use sp_api::ProvideRuntimeApi;
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
+	borrow::Cow,
 	io::{Read, Write, Seek},
 	marker::PhantomData, sync::Arc, time::SystemTime, pin::Pin
 };
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer};
+use sp_transaction_pool::MaintainedTransactionPool;
 use sp_blockchain;
 use grafana_data_source::{self, record_metrics};
 
@@ -740,9 +741,7 @@ ServiceBuilder<
 	TSc: Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TNetP: NetworkSpecialization<TBl>,
-	TExPool: 'static
-		+ TransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>
-		+ TransactionPoolMaintainer<Block=TBl, Hash = <TBl as BlockT>::Hash>,
+	TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata> + Clone,
 {
 
@@ -793,7 +792,7 @@ ServiceBuilder<
 
 		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
 		let (to_spawn_tx, to_spawn_rx) =
-			mpsc::unbounded::<Pin<Box<dyn Future<Output = ()> + Send>>>();
+			mpsc::unbounded::<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>();
 
 		// A side-channel for essential tasks to communicate shutdown.
 		let (essential_failed_tx, essential_failed_rx) = mpsc::unbounded();
@@ -818,7 +817,7 @@ ServiceBuilder<
 			imports_external_transactions: !config.roles.is_light(),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
-			executor: Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone(), on_exit: exit.clone() }),
+			executor: SpawnTaskHandle { sender: to_spawn_tx.clone(), on_exit: exit.clone() },
 		});
 
 		let protocol_id = {
@@ -839,6 +838,14 @@ ServiceBuilder<
 
 		let network_params = sc_network::config::Params {
 			roles: config.roles,
+			executor: {
+				let to_spawn_tx = to_spawn_tx.clone();
+				Some(Box::new(move |fut| {
+					if let Err(e) = to_spawn_tx.unbounded_send((fut, From::from("libp2p-node"))) {
+						error!("Failed to spawn libp2p background task: {:?}", e);
+					}
+				}))
+			},
 			network_config: config.network.clone(),
 			chain: client.clone(),
 			finality_proof_provider,
@@ -857,7 +864,7 @@ ServiceBuilder<
 		let network_status_sinks = Arc::new(Mutex::new(status_sinks::StatusSinks::new()));
 
 		let offchain_storage = backend.offchain_storage();
-		let offchain_workers = match (config.offchain_worker, offchain_storage) {
+		let offchain_workers = match (config.offchain_worker, offchain_storage.clone()) {
 			(true, Some(db)) => {
 				Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone(), db)))
 			},
@@ -885,7 +892,10 @@ ServiceBuilder<
 							&BlockId::hash(notification.hash),
 							&notification.retracted,
 						);
-						let _ = to_spawn_tx_.unbounded_send(Box::pin(future));
+						let _ = to_spawn_tx_.unbounded_send((
+							Box::pin(future),
+							From::from("txpool-maintain")
+						));
 					}
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
@@ -895,12 +905,18 @@ ServiceBuilder<
 							network_state_info.clone(),
 							is_validator
 						);
-						let _ = to_spawn_tx_.unbounded_send(Box::pin(future));
+						let _ = to_spawn_tx_.unbounded_send((
+							Box::pin(future),
+							From::from("offchain-on-block")
+						));
 					}
 
 					ready(())
 				});
-			let _ = to_spawn_tx.unbounded_send(Box::pin(select(events, exit.clone()).map(drop)));
+			let _ = to_spawn_tx.unbounded_send((
+				Box::pin(select(events, exit.clone()).map(drop)),
+				From::from("txpool-and-offchain-notif")
+			));
 		}
 
 		{
@@ -908,9 +924,9 @@ ServiceBuilder<
 			let network = Arc::downgrade(&network);
 			let transaction_pool_ = transaction_pool.clone();
 			let events = transaction_pool.import_notification_stream()
-				.for_each(move |_| {
+				.for_each(move |hash| {
 					if let Some(network) = network.upgrade() {
-						network.trigger_repropagate();
+						network.propagate_extrinsic(hash);
 					}
 					let status = transaction_pool_.status();
 					telemetry!(SUBSTRATE_INFO; "txpool.import";
@@ -920,7 +936,10 @@ ServiceBuilder<
 					ready(())
 				});
 
-			let _ = to_spawn_tx.unbounded_send(Box::pin(select(events, exit.clone()).map(drop)));
+			let _ = to_spawn_tx.unbounded_send((
+				Box::pin(select(events, exit.clone()).map(drop)),
+				From::from("telemetry-on-block")
+			));
 		}
 
 		// Periodically notify the telemetry.
@@ -984,7 +1003,10 @@ ServiceBuilder<
 
 			ready(())
 		});
-		let _ = to_spawn_tx.unbounded_send(Box::pin(select(tel_task, exit.clone()).map(drop)));
+		let _ = to_spawn_tx.unbounded_send((
+			Box::pin(select(tel_task, exit.clone()).map(drop)),
+			From::from("telemetry-periodic-send")
+		));
 
 		// Periodically send the network state to the telemetry.
 		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
@@ -997,12 +1019,15 @@ ServiceBuilder<
 			);
 			ready(())
 		});
-		let _ = to_spawn_tx.unbounded_send(Box::pin(select(tel_task_2, exit.clone()).map(drop)));
+		let _ = to_spawn_tx.unbounded_send((
+			Box::pin(select(tel_task_2, exit.clone()).map(drop)),
+			From::from("telemetry-periodic-network-state")
+		));
 
 		// RPC
 		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
 		let gen_handler = || {
-			use sc_rpc::{chain, state, author, system};
+			use sc_rpc::{chain, state, author, system, offchain};
 
 			let system_info = sc_rpc::system::SystemInfo {
 				chain_name: config.chain_spec.name().into(),
@@ -1048,28 +1073,44 @@ ServiceBuilder<
 			);
 			let system = system::System::new(system_info, system_rpc_tx.clone());
 
-			sc_rpc_server::rpc_handler((
-				state::StateApi::to_delegate(state),
-				chain::ChainApi::to_delegate(chain),
-				author::AuthorApi::to_delegate(author),
-				system::SystemApi::to_delegate(system),
-				rpc_extensions.clone(),
-			))
+			match offchain_storage.clone() {
+				Some(storage) => {
+					let offchain = sc_rpc::offchain::Offchain::new(storage);
+					sc_rpc_server::rpc_handler((
+						state::StateApi::to_delegate(state),
+						chain::ChainApi::to_delegate(chain),
+						offchain::OffchainApi::to_delegate(offchain),
+						author::AuthorApi::to_delegate(author),
+						system::SystemApi::to_delegate(system),
+						rpc_extensions.clone(),
+					))
+				},
+				None => sc_rpc_server::rpc_handler((
+					state::StateApi::to_delegate(state),
+					chain::ChainApi::to_delegate(chain),
+					author::AuthorApi::to_delegate(author),
+					system::SystemApi::to_delegate(system),
+					rpc_extensions.clone(),
+				))
+			}
 		};
 		let rpc_handlers = gen_handler();
 		let rpc = start_rpc_servers(&config, gen_handler)?;
 
 
-		let _ = to_spawn_tx.unbounded_send(Box::pin(select(build_network_future(
-			config.roles,
-			network_mut,
-			client.clone(),
-			network_status_sinks.clone(),
-			system_rpc_rx,
-			has_bootnodes,
-		), exit.clone()).map(drop)));
+		let _ = to_spawn_tx.unbounded_send((
+			Box::pin(select(build_network_future(
+				config.roles,
+				network_mut,
+				client.clone(),
+				network_status_sinks.clone(),
+				system_rpc_rx,
+				has_bootnodes,
+			), exit.clone()).map(drop)),
+			From::from("network-worker")
+		));
 
-		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
+		let telemetry_connection_sinks: Arc<Mutex<Vec<futures::channel::mpsc::UnboundedSender<()>>>> = Default::default();
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
@@ -1108,9 +1149,9 @@ ServiceBuilder<
 					});
 					ready(())
 				});
-			let _ = to_spawn_tx.unbounded_send(Box::pin(select(
+			let _ = to_spawn_tx.unbounded_send((Box::pin(select(
 				future, exit.clone()
-			).map(drop)));
+			).map(drop)), From::from("telemetry-worker")));
 			telemetry
 		});
 
@@ -1121,8 +1162,8 @@ ServiceBuilder<
 				exit.clone()
 			).map(drop);
 
-			let _ = to_spawn_tx.unbounded_send(Box::pin(future));
-    	}
+			let _ = to_spawn_tx.unbounded_send((Box::pin(future), From::from("grafana-server")));
+		}
 
 		// Instrumentation
 		if let Some(tracing_targets) = config.tracing_targets.as_ref() {
@@ -1147,7 +1188,11 @@ ServiceBuilder<
 			essential_failed_rx,
 			to_spawn_tx,
 			to_spawn_rx,
-			to_poll: Vec::new(),
+			tasks_executor: if let Some(exec) = config.tasks_executor {
+				exec
+			} else {
+				return Err(Error::TasksExecutorRequired);
+			},
 			rpc_handlers,
 			_rpc: rpc,
 			_telemetry: telemetry,

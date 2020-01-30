@@ -20,20 +20,20 @@
 //! parts:
 //!
 //! - A database containing the blocks and chain state, generally referred to as
-//! the [`Backend`](backend::Backend).
+//! the [`Backend`](sc_client_api::backend::Backend).
 //! - A runtime environment, generally referred to as the [`Executor`](CallExecutor).
 //!
 //! # Initialization
 //!
 //! Creating a [`Client`] is done by calling the `new` method and passing to it a
-//! [`Backend`](backend::Backend) and an [`Executor`](CallExecutor).
+//! [`Backend`](sc_client_api::backend::Backend) and an [`Executor`](CallExecutor).
 //!
 //! The former is typically provided by the `sc-client-db` crate.
 //!
 //! The latter typically requires passing one of:
 //!
 //! - A [`LocalCallExecutor`] running the runtime locally.
-//! - A [`RemoteCallExecutor`](light::call_executor::RemoteCallExecutor) that will ask a
+//! - A [`RemoteCallExecutor`](light::call_executor::RemoteCallRequest) that will ask a
 //! third-party to perform the executions.
 //! - A [`RemoteOrLocalCallExecutor`](light::call_executor::RemoteOrLocalCallExecutor), combination
 //! of the two.
@@ -83,6 +83,7 @@ pub mod light;
 pub mod leaves;
 mod call_executor;
 mod client;
+mod block_rules;
 
 pub use sc_client_api::{
 	blockchain,

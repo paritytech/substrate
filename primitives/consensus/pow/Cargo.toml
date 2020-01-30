@@ -4,6 +4,7 @@ version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for Aura consensus"
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 sp-api = { version = "2.0.0", default-features = false, path = "../../api" }

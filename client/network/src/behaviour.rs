@@ -144,9 +144,9 @@ Behaviour<B, S, H> {
 						roles,
 					}));
 				},
-			CustomMessageOutcome::NotificationsStreamClosed { remote, protocols } =>
+			CustomMessageOutcome::NotificationStreamClosed { remote, protocols } =>
 				for engine_id in protocols {
-					self.events.push(BehaviourOut::Event(Event::NotificationsStreamClosed {
+					self.events.push(BehaviourOut::Event(Event::NotificationStreamClosed {
 						remote: remote.clone(),
 						engine_id,
 					}));

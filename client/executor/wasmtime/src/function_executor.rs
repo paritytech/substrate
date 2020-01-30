@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_executor_common::allocator::FreeingBumpHeapAllocator;
+use sp_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::error::{Error, Result};
 use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
 use crate::util::{
@@ -127,11 +127,11 @@ impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 	}
 
 	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>> {
-		self.heap.allocate(self.memory, len)
+		self.heap.allocate(self.memory, len).map_err(Into::into)
 	}
 
 	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<()> {
-		self.heap.deallocate(self.memory, ptr)
+		self.heap.deallocate(self.memory, ptr).map_err(Into::into)
 	}
 
 	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<()> {
@@ -286,7 +286,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		trace!(target: "sp-sandbox", "invoke, instance_idx={}", instance_id);
 
 		// Deserialize arguments and convert them into wasmi types.
-		let args = Vec::<sandbox_primitives::TypedValue>::decode(&mut &args[..])
+		let args = Vec::<sp_wasm_interface::Value>::decode(&mut &args[..])
 			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
 			.map(Into::into)
@@ -299,7 +299,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			Ok(None) => Ok(sandbox_primitives::ERR_OK),
 			Ok(Some(val)) => {
 				// Serialize return value and write it back into the memory.
-				sandbox_primitives::ReturnValue::Value(val.into()).using_encoded(|val| {
+				sp_wasm_interface::ReturnValue::Value(val.into()).using_encoded(|val| {
 					if val.len() > return_val_len as usize {
 						Err("Return value buffer is too small")?;
 					}
@@ -336,6 +336,17 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			};
 
 		Ok(instance_idx_or_err_code as u32)
+	}
+
+	fn get_global_val(
+		&self,
+		instance_idx: u32,
+		name: &str,
+	) -> WResult<Option<sp_wasm_interface::Value>> {
+		self.sandbox_store
+			.instance(instance_idx)
+			.map(|i| i.get_global_val(name))
+			.map_err(|e| e.to_string())
 	}
 }
 

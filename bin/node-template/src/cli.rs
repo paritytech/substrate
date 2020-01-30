@@ -18,7 +18,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 	type Config<T> = Configuration<(), T>;
 	match parse_and_prepare::<NoCustom, NoCustom, _>(&version, "substrate-node", args) {
 		ParseAndPrepare::Run(cmd) => cmd.run(load_spec, exit,
-		|exit, _cli_args, _custom_args, config: Config<_>| {
+		|exit, _cli_args, _custom_args, mut config: Config<_>| {
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
 			info!("  by {}, 2017, 2018", version.author);
@@ -26,6 +26,10 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 			info!("Node name: {}", config.name);
 			info!("Roles: {}", display_role(&config));
 			let runtime = Runtime::new().map_err(|e| format!("{:?}", e))?;
+			config.tasks_executor = {
+				let runtime_handle = runtime.handle().clone();
+				Some(Box::new(move |fut| { runtime_handle.spawn(fut); }))
+			};
 			match config.roles {
 				ServiceRoles::LIGHT => run_until_exit(
 					runtime,
@@ -86,7 +90,9 @@ where
 
 	let _ = exit_send.send(());
 
-	runtime.block_on(handle);
+	if let Err(e) = runtime.block_on(handle) {
+		log::error!("Error running node: {:?}", e);
+	}
 
 	match service_res {
 		Either::Left((res, _)) => res.map_err(error::Error::Service),
