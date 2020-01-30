@@ -678,18 +678,15 @@ pub fn print(print: impl traits::Printable) {
 	print.print();
 }
 
-/// Parameters for this module.
+/// An alphabet of possible parameters to use for benchmarking.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
 pub enum BenchmarkParameter {
-	/// Registrar Count
-	R,
-	/// Additional Field Count
-	X,
+	A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
 }
 
 /// Results from running benchmarks on a FRAME pallet.
-/// Contains the parameters used when running the benchmark, and the duration of the function call in nanoseconds.
-pub type BenchmarkResults = (Vec<(BenchmarkParameter, u32)>, u128);
+/// Contains duration of the function call in nanoseconds after executing the same function multiple times.
+pub type BenchmarkResult = u128;
 
 #[cfg(test)]
 mod tests {
