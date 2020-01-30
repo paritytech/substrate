@@ -18,7 +18,7 @@
 
 use std::collections::BTreeMap;
 use std::cmp::Reverse;
-use kvdb::{KeyValueDB, DBTransaction};
+use kvdb::DBTransaction;
 use kvdb_async::AsyncKeyValueDB;
 use futures::prelude::*;
 use sp_runtime::traits::SimpleArithmetic;

@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use kvdb::{KeyValueDB, DBTransaction};
+use kvdb::DBTransaction;
 use kvdb_async::AsyncKeyValueDB;
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};

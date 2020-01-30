@@ -17,7 +17,7 @@ hash-db = "0.15.2"
 parity-util-mem = { git = "https://github.com/paritytech/parity-common", branch = "ashley-kvdb-async", default-features = false, features = ["std"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 futures = "0.3.1"
-async-std = "*"
+async-std = "1.4"
 
 sc-client-api = { version = "2.0.0", path = "../api" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }

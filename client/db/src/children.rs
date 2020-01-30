@@ -16,7 +16,7 @@
 
 //! Functionality for reading and storing children hashes from db.
 
-use kvdb::{KeyValueDB, DBTransaction};
+use kvdb::DBTransaction;
 use kvdb_async::AsyncKeyValueDB;
 use codec::{Encode, Decode};
 use sp_blockchain;

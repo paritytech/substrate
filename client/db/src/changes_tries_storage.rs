@@ -19,7 +19,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use hash_db::Prefix;
-use kvdb::{KeyValueDB, DBTransaction};
+use kvdb::DBTransaction;
 use kvdb_async::AsyncKeyValueDB;
 use codec::{Decode, Encode};
 use parking_lot::RwLock;

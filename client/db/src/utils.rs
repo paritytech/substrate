@@ -20,7 +20,7 @@
 use std::sync::Arc;
 use std::{io, convert::TryInto, pin::Pin};
 
-use kvdb::{KeyValueDB, DBTransaction};
+use kvdb::DBTransaction;
 use kvdb_async::AsyncKeyValueDB;
 #[cfg(any(feature = "kvdb-rocksdb", test))]
 use kvdb_rocksdb::{Database, DatabaseConfig};

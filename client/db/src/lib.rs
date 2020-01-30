@@ -42,7 +42,6 @@ use std::sync::Arc;
 use std::path::PathBuf;
 use std::io;
 use std::collections::HashMap;
-use std::pin::Pin;
 
 use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo};
 use sc_client_api::backend::NewBlockState;
@@ -53,7 +52,7 @@ use sp_blockchain::{
 };
 use codec::{Decode, Encode};
 use hash_db::Prefix;
-use kvdb::{KeyValueDB, DBTransaction};
+use kvdb::DBTransaction;
 use kvdb_async::AsyncKeyValueDB;
 use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::RwLock;
@@ -72,9 +71,7 @@ use sp_state_machine::{
 	StorageCollection, ChildStorageCollection,
 	backend::Backend as StateBackend,
 };
-use crate::utils::{DatabaseType, Meta, db_err, meta_keys, read_db,
-
-};
+use crate::utils::{DatabaseType, Meta, db_err, meta_keys, read_db, read_meta};
 use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction};
 use sc_client::leaves::{LeafSet, FinalizationDisplaced};
 use sc_state_db::StateDb;
@@ -85,7 +82,6 @@ use log::{trace, debug, warn};
 pub use sc_state_db::PruningMode;
 use futures::prelude::*;
 use async_std::task::block_on;
-use crate::utils::read_meta;
 
 #[cfg(feature = "test-helpers")]
 use sc_client::in_mem::Backend as InMemoryBackend;
@@ -351,10 +347,8 @@ struct StateMetaDb<'a>(&'a dyn AsyncKeyValueDB);
 impl<'a> sc_state_db::MetaDb for StateMetaDb<'a> {
 	type Error = io::Error;
 
-	fn get_meta(&self, key: &[u8]) -> Pin<Box<dyn Future<Output = Result<Option<Vec<u8>>, Self::Error>>>> {
-		self.0.get(columns::STATE_META, key)
-			.map(|r| r.map(|o| o.map(|v| v.to_vec())))
-			.boxed()
+	fn get_meta(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		block_on(self.0.get(columns::STATE_META, key)).map(|r| r.map(|v| v.to_vec()))
 	}
 }
 
@@ -799,7 +793,6 @@ impl<Block: BlockT> Backend<Block> {
 			format!("State database error: {:?}", e)
 		);
 		let state_db: StateDb<_, _> = StateDb::new(config.pruning.clone(), &StateMetaDb(&*db))
-			.await
 			.map_err(map_e)?;
 		let storage_db = StorageDb {
 			db: db.clone(),
