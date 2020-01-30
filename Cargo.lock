@@ -5613,6 +5613,7 @@ dependencies = [
 name = "sc-network"
 version = "0.8.0"
 dependencies = [
+ "async-std 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bitflags 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.5.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "derive_more 0.99.2 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -270,3 +270,87 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 		Ok(())
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::{NotificationsIn, NotificationsOut};
+
+	use async_std::net::{TcpListener, TcpStream};
+	use futures::{prelude::*, channel::oneshot};
+	use libp2p::core::upgrade;
+	use std::{collections::VecDeque, pin::Pin, task::Poll};
+
+	#[test]
+	fn basic_works() {
+		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
+		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
+
+		async_std::task::spawn(async move {
+			let socket = TcpStream::connect(listener_addr_rx.await.unwrap()).await.unwrap();
+			let (handshake, mut substream) = upgrade::apply_outbound(
+				socket,
+				NotificationsOut::new(PROTO_NAME),
+				upgrade::Version::V1
+			).await.unwrap();
+
+			assert_eq!(handshake, b"hello world");
+			substream.push_message(b"test message".iter().cloned().collect::<VecDeque<_>>());
+			// TODO: ugly
+			future::poll_fn(|cx| {
+				Pin::new(&mut substream).process(cx).unwrap();
+				Poll::Ready(())
+			}).await;
+		});
+
+		async_std::task::block_on(async move {
+			let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+			listener_addr_tx.send(listener.local_addr().unwrap()).unwrap();
+
+			let (socket, _) = listener.accept().await.unwrap();
+			let mut substream = upgrade::apply_inbound(
+				socket,
+				NotificationsIn::new(PROTO_NAME)
+			).await.unwrap();
+
+			substream.send_handshake(&b"hello world"[..]);
+
+			let msg = substream.next().await.unwrap().unwrap();
+			assert_eq!(msg.as_ref(), b"test message");
+		});
+	}
+
+	#[test]
+	fn refused() {
+		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
+		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
+
+		async_std::task::spawn(async move {
+			let socket = TcpStream::connect(listener_addr_rx.await.unwrap()).await.unwrap();
+			let outcome = upgrade::apply_outbound(
+				socket,
+				NotificationsOut::new(PROTO_NAME),
+				upgrade::Version::V1
+			).await;
+
+			// Despite the protocol negotiation being successfully conducted on the listener
+			// side, we get an error here because the listener didn't send the handshake.
+			assert!(outcome.is_err());
+		});
+
+		async_std::task::block_on(async move {
+			let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+			listener_addr_tx.send(listener.local_addr().unwrap()).unwrap();
+
+			let (socket, _) = listener.accept().await.unwrap();
+			let substream = upgrade::apply_inbound(
+				socket,
+				NotificationsIn::new(PROTO_NAME)
+			).await.unwrap();
+
+			// We successfully upgrade to the protocol, but then close the substream.
+			drop(substream);
+		});
+	}
+
+	// TODO: more testing around queue of messages and all
+}
