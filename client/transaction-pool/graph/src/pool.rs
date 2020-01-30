@@ -35,7 +35,8 @@ use sp_runtime::{
 };
 use sp_transaction_pool::{error, PoolStatus};
 
-use crate::validated_pool::{ValidatedPool, ValidatedTransaction};
+use crate::validated_pool::ValidatedPool;
+pub use crate::validated_pool::ValidatedTransaction;
 
 /// Modification notification event stream type;
 pub type EventStream<H> = mpsc::UnboundedReceiver<H>;
@@ -170,40 +171,18 @@ impl<B: ChainApi> Pool<B> {
 		self.validated_pool.submit_and_watch(tx)
 	}
 
-	/// Revalidate all ready transactions.
-	///
-	/// Returns future that performs validation of all ready transactions and
-	/// then resubmits all transactions back to the pool.
-	pub async fn revalidate_ready(
+	/// Resubmit some transaction that were validated elsewhere.
+	pub fn resubmit(
 		&self,
-		at: &BlockId<B::Block>,
-		max: Option<usize>,
-	) -> Result<(), B::Error> {
-		use std::time::Instant;
-		log::debug!(target: "txpool",
-			"Fetching ready transactions (up to: {})",
-			max.map(|x| format!("{}", x)).unwrap_or_else(|| "all".into())
-		);
-		let validated_pool = self.validated_pool.clone();
-		let ready = self.validated_pool.ready()
-			.map(|tx| tx.data.clone())
-			.take(max.unwrap_or_else(usize::max_value));
-
-		let now = Instant::now();
-		let revalidated_transactions = self.verify(at, ready, false).await?;
-		log::debug!(target: "txpool",
-			"Re-verified transactions, took {} ms. Resubmitting.",
-			now.elapsed().as_millis()
-		);
-
-		let now = Instant::now();
+		revalidated_transactions: HashMap<ExHash<B>, ValidatedTransactionFor<B>>,
+	) {
+		let now = std::time::Instant::now();
 		self.validated_pool.resubmit(revalidated_transactions);
 		log::debug!(target: "txpool",
 			"Resubmitted. Took {} ms. Status: {:?}",
 			now.elapsed().as_millis(),
-			validated_pool.status()
+			self.validated_pool.status()
 		);
-		Ok(())
 	}
 
 	/// Prunes known ready transactions.

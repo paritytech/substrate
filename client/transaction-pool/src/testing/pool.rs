@@ -176,6 +176,10 @@ fn should_revalidate_during_maintenance() {
 	pool.api.push_block(1, vec![xt1.clone()]);
 
 	block_on(pool.maintain(&BlockId::number(1), &[]));
+
+	// maintaince is in background
+	block_on(futures_timer::Delay::new(std::time::Duration::from_millis(10)));
+
 	assert_eq!(pool.status().ready, 1);
 	// test that pool revalidated transaction that left ready and not included in the block
 	assert_eq!(pool.api.validation_requests().len(), 3);
@@ -213,5 +217,9 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 	pool.api.add_invalid(&xt);
 
 	block_on(pool.maintain(&BlockId::number(1), &[retracted_hash]));
+
+	// maintaince is in background
+	block_on(futures_timer::Delay::new(std::time::Duration::from_millis(10)));
+
 	assert_eq!(pool.status().ready, 0);
 }
